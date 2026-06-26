@@ -1,11 +1,13 @@
-# Holden base U-Boot environment
-# Source: Holden firmware package uboot-env.bin
+# Prado U-Boot environment
+# Source: live NAND MTD3 dump (mtd3_env.bin) + UART printenv capture
+# Base:   Holden firmware package uboot-env.bin
 
 baudrate=115200
 backlight=30
 bootcmd=run nandboot
-bootdelay=0
+bootdelay=9
 bootfile=zImage
+carback_camera_mode=0
 loadaddr=0x1000000
 mmcboot=run setbootargs ; fatload mmc ${mmcdev} ${loadaddr} ${bootfile}; bootz ${loadaddr}
 mmcdev=1
@@ -14,7 +16,26 @@ mtddevnum=0
 mtdids=nand0=ark1680-nand
 mtdparts=mtdparts=ark1680-nand:128k(S-Loader),512k(U-boot),512k(U-boot_back),256K(U-boot-Env),256K(arkdata),4m(kernel),106m(rootfs),6m(userdata),512K(bootlogo),3m(bootanimation),3m(reversingtrack),256K(Unicode)
 nandboot=run setbootargs ; bootnand
+nand_erasesize=20000
+nand_oobsize=40
+nand_writesize=800
+partition=nand0,0
 screen=0
 setbootargs=setenv bootargs console=ttyS0,115200n8 mem=180M earlyprintk=serial ubi.mtd=6 root=ubi0:rootfs rootfstype=ubifs rootwait ro ${mtdparts} screen=${screen}
 spiboot=run setbootargs ; bootspi
+stderr=serial
+stdin=serial
+stdout=serial
 updatereset=yes
+
+# Size tracking variables — recorded from live device, written by update tool at flash time
+# These are informational; not required for the env to function
+# U-boot_back_size=0x5bc88
+# U-boot_size=0x5bc88
+# arkdata_size=0x1a0f
+# bootanimation_size=0x511c
+# bootlogo_size=0x6c1f
+# kernel_size=0x305130
+# reversingtrack_size=0x96a58
+# rootfs_size=0x5aa0000
+# userdata_size=0x1e0000

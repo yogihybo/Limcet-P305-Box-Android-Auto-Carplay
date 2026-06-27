@@ -32,10 +32,10 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-USERDATA_SRC="$SCRIPT_DIR/Prado reconstructed/mtd7_userdata/userdata"
+USERDATA_SRC="$SCRIPT_DIR/Prado firmware reconstructed/mtd7_userdata/userdata"
 BUILD_DIR="$(mktemp -d)"
-UBIFS_IMAGE="$SCRIPT_DIR/Prado reconstructed/mtd7_userdata/userdata.ubifs"
-UBI_IMAGE="$SCRIPT_DIR/Prado reconstructed/mtd7_userdata/userdata.img"
+UBIFS_IMAGE="$SCRIPT_DIR/Prado firmware reconstructed/mtd7_userdata/userdata.ubifs"
+UBI_IMAGE="$SCRIPT_DIR/Prado firmware reconstructed/mtd7_userdata/userdata.img"
 UBI_CFG="$BUILD_DIR/ubi.cfg"
 
 MIN_IO=2048
@@ -69,7 +69,7 @@ echo "=== Building UBI image ==="
 cat > "$UBI_CFG" << 'EOF'
 [userdata]
 mode=ubi
-image=Prado reconstructed/mtd7_userdata/userdata.ubifs
+image=Prado firmware reconstructed/mtd7_userdata/userdata.ubifs
 vol_id=0
 vol_type=dynamic
 vol_name=userdata

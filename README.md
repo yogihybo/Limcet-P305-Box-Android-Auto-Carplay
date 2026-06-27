@@ -29,7 +29,7 @@ Prado firmware dump/                  Raw MTD partition dumps from the live devi
   mtd6_rootfs/               Root filesystem UBIFS dump (raw)
   mtd6_rootfs_raw/           Raw MTD6 bin (Git LFS)
 
-Prado reconstructed/         Reconstructed firmware for flashing
+Prado firmware reconstructed/         Reconstructed firmware for flashing
   mtd0_sloader/              Nboot.bin, Stepldr.bin
   mtd1-mtd2_uboot/           uboot.bin
   mtd6_rootfs/
@@ -156,7 +156,7 @@ The ARK1680 USB gadget stack is configured to use CDC-NCM (`g_ncm.ko`), which cr
 - **macOS / Linux** — CDC-NCM supported natively; interface appears automatically
 - **Windows** — may require the CDC-NCM host driver from Windows Update
 
-`g_zero.ko` has been removed from `Prado reconstructed/mtd6_rootfs/rootfs/etc/all.sh` — it was overriding the NCM gadget registration and breaking both USB host mode and the network interface.
+`g_zero.ko` has been removed from `Prado firmware reconstructed/mtd6_rootfs/rootfs/etc/all.sh` — it was overriding the NCM gadget registration and breaking both USB host mode and the network interface.
 
 ## Build & Flash Tool
 

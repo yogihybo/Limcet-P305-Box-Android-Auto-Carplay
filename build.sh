@@ -20,13 +20,13 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # ── Paths ────────────────────────────────────────────────────────────────────
 
-ROOTFS_DIR="$SCRIPT_DIR/Prado reconstructed/mtd6_rootfs/rootfs"
-ROOTFS_UBIFS="$SCRIPT_DIR/Prado reconstructed/mtd6_rootfs/rootfs.ubifs"
-ROOTFS_IMG="$SCRIPT_DIR/Prado reconstructed/mtd6_rootfs/rootfs.img"
+ROOTFS_DIR="$SCRIPT_DIR/Prado firmware reconstructed/mtd6_rootfs/rootfs"
+ROOTFS_UBIFS="$SCRIPT_DIR/Prado firmware reconstructed/mtd6_rootfs/rootfs.ubifs"
+ROOTFS_IMG="$SCRIPT_DIR/Prado firmware reconstructed/mtd6_rootfs/rootfs.img"
 
-USERDATA_SRC="$SCRIPT_DIR/Prado reconstructed/mtd7_userdata/userdata"
-USERDATA_UBIFS="$SCRIPT_DIR/Prado reconstructed/mtd7_userdata/userdata.ubifs"
-USERDATA_IMG="$SCRIPT_DIR/Prado reconstructed/mtd7_userdata/userdata.img"
+USERDATA_SRC="$SCRIPT_DIR/Prado firmware reconstructed/mtd7_userdata/userdata"
+USERDATA_UBIFS="$SCRIPT_DIR/Prado firmware reconstructed/mtd7_userdata/userdata.ubifs"
+USERDATA_IMG="$SCRIPT_DIR/Prado firmware reconstructed/mtd7_userdata/userdata.img"
 
 OUTPUT_DIR="$SCRIPT_DIR/sd_update/output"
 
@@ -197,13 +197,13 @@ done
 find_src() {
     local filename="$1"
     local candidates=(
-        "$SCRIPT_DIR/Prado reconstructed/mtd6_rootfs/$filename"
-        "$SCRIPT_DIR/Prado reconstructed/mtd7_userdata/$filename"
-        "$SCRIPT_DIR/Prado reconstructed/mtd0_sloader/$filename"
-        "$SCRIPT_DIR/Prado reconstructed/mtd1-mtd2_uboot/$filename"
-        "$SCRIPT_DIR/Prado reconstructed/mtd4_arkdata/$filename"
-        "$SCRIPT_DIR/Prado reconstructed/mtd8_bootlogo/$filename"
-        "$SCRIPT_DIR/Prado reconstructed/mtd10_reversingtrack/$filename"
+        "$SCRIPT_DIR/Prado firmware reconstructed/mtd6_rootfs/$filename"
+        "$SCRIPT_DIR/Prado firmware reconstructed/mtd7_userdata/$filename"
+        "$SCRIPT_DIR/Prado firmware reconstructed/mtd0_sloader/$filename"
+        "$SCRIPT_DIR/Prado firmware reconstructed/mtd1-mtd2_uboot/$filename"
+        "$SCRIPT_DIR/Prado firmware reconstructed/mtd4_arkdata/$filename"
+        "$SCRIPT_DIR/Prado firmware reconstructed/mtd8_bootlogo/$filename"
+        "$SCRIPT_DIR/Prado firmware reconstructed/mtd10_reversingtrack/$filename"
         "$SCRIPT_DIR/kernel/$filename"
         "$SCRIPT_DIR/env/$filename"
         "$SCRIPT_DIR/display/$filename"

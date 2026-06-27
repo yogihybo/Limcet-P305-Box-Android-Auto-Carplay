@@ -87,3 +87,5 @@ fi
 #Launcher -qws &
 mkdir -p /var/run/sshd
 /usr/bin/sshd &
+
+/etc/wifi_ap.sh &

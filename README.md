@@ -30,12 +30,15 @@ Prado dump/                  Raw MTD partition dumps from the live device
   mtd6_rootfs_raw/           Raw MTD6 bin (Git LFS)
 
 Prado reconstructed/         Reconstructed firmware for flashing
+  mtd0_sloader/              Nboot.bin, Stepldr.bin
+  mtd1-mtd2_uboot/           uboot.bin
   mtd6_rootfs/
     rootfs/                  Modified rootfs tree (Prado libs + SSH + WiFi AP)
   mtd7_userdata/
     userdata/                Userdata tree (Prado settings overlay)
+  mtd8_bootlogo/             bootlogo
+  mtd10_reversingtrack/      reversingtrack
 
-bootloaders/       Nboot.bin, Stepldr.bin, uboot.bin, bootlogo, reversingtrack
 kernel/            zImage (from Holden base — identical kernel_size to Prado dump)
 display/
   arkdata_prado.ini          Prado panel config (from MTD4 live dump)
@@ -47,11 +50,16 @@ msn_factory_configs/
 env/
   uboot-env.txt              Reconstructed env (bootdelay=9, 106m/6m layout)
   mtd3_env_prado_dump.bin    Raw env from live device (gitignored)
+sd_update/
+  UpConfig                   SD update trigger file
+  output/                    Generated SD card package (gitignored)
 docs/
   SOURCES.md                 Where each file came from and why
   PARTITION_LAYOUT.md        NAND offsets, sizes, flash commands
-UpConfig                     Triggers full reflash on boot (from Holden base)
-update                       Partition write order script
+build.sh                     Combined interactive build and flash tool
+build_rootfs.sh              Standalone rootfs UBI image builder
+build_userdata.sh            Standalone userdata UBI image builder
+generate_update.sh           Standalone SD card update script generator
 ```
 
 ## Key Differences vs Holden Base Firmware
@@ -135,6 +143,69 @@ The ARK1680 USB gadget stack is configured to use CDC-NCM (`g_ncm.ko`), which cr
 - **Windows** — may require the CDC-NCM host driver from Windows Update
 
 `g_zero.ko` has been removed from `Prado reconstructed/mtd6_rootfs/rootfs/etc/all.sh` — it was overriding the NCM gadget registration and breaking both USB host mode and the network interface.
+
+## Build & Flash Tool
+
+`build.sh` is an interactive terminal tool that combines building firmware images and generating an SD card update package into a single workflow. Run it under Linux or WSL:
+
+```bash
+bash build.sh
+```
+
+### Menu layout
+
+```
+  BUILD
+  ─────
+  9  [ ]  Build rootfs image      Compiles source tree → rootfs.img (~106 MB)
+  10 [ ]  Build userdata image    Overlays Prado settings → userdata.img (~6 MB)
+
+  SD CARD PARTITIONS
+  ──────────────────
+  1  [X]  Root Filesystem         rootfs.img       0x5a0000   106 MB
+  2  [X]  User Data               userdata.img     0x6fa0000    6 MB
+  3  [ ]  Linux Kernel            zImage           0x1a0000     4 MB
+  4  [ ]  Display Config (arkdata) arkdata.ini     0x160000   256 KB
+  5  [ ]  U-Boot Env              uboot-env.bin    0x120000   256 KB
+  6  [ ]  U-Boot                  uboot.bin        0x020000   512 KB  ⚠ brick risk
+  7  [ ]  Boot Logo               bootlogo         0x75a0000  512 KB
+  8  [ ]  Reversing Audio         reversingtrack   0x7920000    3 MB
+```
+
+**Defaults:** rootfs and userdata are selected by default. Kernel, U-Boot, arkdata, and other early-boot partitions default to off — they must be explicitly enabled to avoid accidental reflash.
+
+### Commands
+
+| Key | Action |
+|-----|--------|
+| `1`–`8` | Toggle SD partition on/off |
+| `9`–`10` | Toggle build step on/off |
+| `a` | Select all partitions |
+| `n` | Deselect all partitions |
+| `g` | Go — run selected builds then generate SD package |
+| `q` | Quit |
+
+### Output
+
+Generated files land in `sd_update/output/`. Copy all files to the root of a FAT32 SD card to flash.
+
+### Standalone scripts
+
+The individual scripts are retained for use without the interactive menu:
+
+| Script | Purpose |
+|--------|---------|
+| `build_rootfs.sh` | Build rootfs UBI image only |
+| `build_userdata.sh` | Build userdata UBI image only |
+| `generate_update.sh` | Generate SD package for selected partitions |
+
+### Requirements
+
+Build steps require `mkfs.ubifs` and `ubinize`:
+
+```bash
+sudo apt install mtd-utils   # Debian / Ubuntu / WSL
+```
 
 ## Flashing via SD Card
 

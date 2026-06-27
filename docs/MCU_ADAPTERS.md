@@ -329,8 +329,8 @@ overwrite the MCU firmware. The MCU chip should still contain `Limcet-V1.0-1302`
 
 ## MCU role — touch AND key events
 
-The Limcet MCU is a multi-function controller (STM32 or STM8 on the DC_LIMCET_MB_REV_003
-board) that handles:
+The Limcet MCU is an **STM32F105RBT6** (ARM Cortex-M3, 72MHz, 128KB Flash, LQFP64)
+on the DC_LIMCET_MB_REV_003 board. It handles:
 - **Touchscreen input** — the advanced factory menu MCU Monitor shows raw touch events
 - **Steering wheel buttons** — ADC voltage divider from SWC input wire
 - **Panel buttons** — physical buttons on the head unit bezel
@@ -380,9 +380,16 @@ of the `getAdapterInstance()` switch statement to confirm.
 
 ## Prado SWC — ADC key learning (not CAN bus)
 
-The Limcet MCU reads an ADC voltage divider on the SWC input wire from the steering
-wheel harness. Different buttons produce different resistance values → different voltages.
-The MCU maps these to key codes and sends them to the ARK1668 via `/dev/ttyHS0`.
+The STM32F105RBT6 MCU reads an ADC voltage divider on the SWC input wire from the
+steering wheel harness. Different buttons produce different resistance values → different
+voltages. The 12-bit ADC (16 channels) maps these to key codes sent to the ARK1668
+via `/dev/ttyHS0`.
+
+**CAN bus possibility:** The STM32F105 also has 2× hardware bxCAN controllers. If a
+CAN transceiver IC (TJA1050 or similar) is populated on the board near the MCU, the
+MCU firmware could read Toyota Prado SWC button messages directly from the CAN bus.
+Worth checking the board — if a small SOIC-8 chip is connected to the MCU's CAN pins
+(PA11/PA12 or PB8/PB9), CAN is wired up.
 
 Because touch events already work (proving MCU↔ARK comms is active), the SWC failure
 is a **key mapping / learning issue**, not a hardware or protocol problem.

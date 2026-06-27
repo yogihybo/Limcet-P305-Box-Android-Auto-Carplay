@@ -90,6 +90,42 @@ Photo: `PXL_20260626_035822389.jpg`
 
 ---
 
+### MCU — STM32F105RBT6
+
+| Field | Value |
+|-------|-------|
+| Part | STM32F105RBT6 |
+| Manufacturer | STMicroelectronics |
+| Core | ARM Cortex-M3, up to 72 MHz |
+| Flash | 128 KB |
+| RAM | 64 KB |
+| Package | LQFP64 |
+| Firmware | Limcet-V1.0-1302 (from version screen) |
+| UART to ARK1668 | `/dev/ttyHS0` |
+
+**Key peripherals on the STM32F105RBT6:**
+- **2× bxCAN** — hardware CAN bus controllers (CAN 2.0B active). CAN capable if a transceiver IC is present on the board.
+- **12-bit ADC, 16 channels** — used to read the SWC (steering wheel control) resistor ladder voltage
+- **USB OTG full-speed** — may be used for MCU firmware updates
+- **3× USART** — one used for `/dev/ttyHS0` link to ARK1668
+- **GPIO** — ACC/IGN detection, reverse trigger input, panel button inputs
+
+The MCU runs the `Limcet-V1.0-1302` custom firmware which handles:
+- Touch events (forwarded to ARK1668 — confirmed via MCU Monitor in advanced factory menu)
+- Steering wheel button presses (ADC voltage divider on SWC input wire)
+- Panel button inputs
+- ACC/IGN signal processing
+- Reverse trigger detection
+- Firmware version reporting to the about screen
+
+**CAN bus note:** The STM32F105 has built-in CAN controllers. Whether a CAN transceiver
+(e.g. TJA1050, SN65HVD230) is populated on the DC_LIMCET_MB_REV_003 board determines
+if CAN connectivity is physically available. Check the board near the MCU for a CAN
+transceiver IC. If present, the MCU firmware could decode Toyota Prado steering wheel
+messages directly from the CAN bus rather than via the SWC ADC wire.
+
+---
+
 ### Serial Console Access
 
 | Field | Value |

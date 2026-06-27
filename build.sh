@@ -158,7 +158,7 @@ PARTITIONS=(
     "rootfs|Root Filesystem|rootfs.img|0x5a0000|0x6a00000|ubi|Reconstructed rootfs UBI image (build below if needed)|ON"
     "userdata|User Data|userdata.img|0x6fa0000|0x600000|ubi|Prado settings / userdata UBI image (build below if needed)|ON"
     "kernel|Linux Kernel|zImage|0x1a0000|0x400000|raw|Linux 3.4.0 zImage|OFF"
-    "arkdata|Display Config|arkdata.ini|0x160000|0x040000|raw|TvoutType, display init parameters|OFF"
+    "arkdata|Display Config (arkdata)|arkdata.ini|0x160000|0x040000|raw|TvoutType, display init parameters|OFF"
     "uboot-env|U-Boot Env|uboot-env.bin|0x120000|0x040000|env|U-Boot environment variables|OFF"
     "uboot|U-Boot|uboot.bin|0x020000|0x080000|uboot|2nd-stage bootloader — written to both slots|OFF"
     "bootlogo|Boot Logo|bootlogo|0x75a0000|0x080000|raw|Splash screen image|OFF"

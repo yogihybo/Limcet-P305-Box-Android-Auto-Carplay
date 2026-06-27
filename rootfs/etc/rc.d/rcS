@@ -85,6 +85,5 @@ fi
 #DV695 -qws -display directfb &
 #mirrordemo &
 #Launcher -qws &
-#/usr/local/sbin/sshd &
-
-
+mkdir -p /var/run/sshd
+/usr/bin/sshd &

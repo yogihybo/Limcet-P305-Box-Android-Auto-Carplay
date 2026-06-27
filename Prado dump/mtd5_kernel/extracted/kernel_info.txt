@@ -1,0 +1,40 @@
+zImage — Prado Prado Firmware Reconstruction
+=============================================
+
+Source:     mtd5_kernel.bin  (MTD5, offset 0x1A0000, size 4MB)
+File:       zImage
+Size:       3,166,512 bytes (3MB)
+Format:     Standard ARM Linux zImage (self-decompressing)
+
+--- zImage header (offset 0x24) ---
+Magic:      0x016F2818  (ARM zImage)
+Start addr: 0x00000000
+End addr:   0x00305130
+
+--- Build info (from strings) ---
+Kernel:     Linux 3.4.0
+Build host: flyound@build-server  (matches U-Boot "flyound20211230")
+Boot proto: ATAG_INITRD  (legacy ARM ATAG, not device tree)
+
+--- Compression ---
+Decompressor includes: XZ decoder ("xz_de" string present)
+Decompressor messages:
+  "Uncompressing Linux..."
+  "done, booting the kernel."
+  "decompressor returned an error"
+  "Compressed data violation"
+
+Binwalk signature scan ran but all gzip/lzma/xz hits were false positives
+(compression method byte not 0x08 for gzip; XZ stream header FD 37 7A 58 5A 00
+not found at any offset). The compressed payload is not separately addressable
+without running the decompressor.
+
+--- Kernel config fragments (from strings) ---
+CONFIG_E
+CONFIG_FB_BZ  (framebuffer)
+3.4.0
+
+--- Notes ---
+Kernel is NOT separately extractable on Windows without Linux kernel build tools
+(scripts/extract-vmlinux or objdump). The zImage is the correct artifact for
+flashing to MTD5 (offset 0x1A0000, max size 4MB).

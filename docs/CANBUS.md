@@ -58,9 +58,29 @@ Toyota Prado 150 series (2009–2021) uses the body CAN bus for steering wheel c
 | Frame type | Standard (11-bit ID) |
 | Update rate | ~10–20 ms while button held |
 
-**Note:** Toyota CAN IDs and byte layouts are not publicly standardised and can vary
-between model years and markets. The values above are common references from community
-reverse-engineering. Verify against a live capture for the specific vehicle.
+### SWC frame layout (Toyota — community reference)
+
+Frame ID `0x3C4` (may vary by model year and market):
+
+| Byte 0 | Byte 1 | Button |
+|--------|--------|--------|
+| `0x00` | `0x00` | No button pressed (idle) |
+| `0x80` | `0x00` | Volume Up |
+| `0x40` | `0x00` | Volume Down |
+| `0x04` | `0x00` | Mode / Source |
+| `0x10` | `0x00` | Next Track |
+| `0x08` | `0x00` | Previous Track |
+| `0x00` | `0x80` | Phone pick-up |
+| `0x00` | `0x04` | Enter / OK |
+
+Byte 0 and Byte 1 are bitmask fields — multiple bits can be set simultaneously for
+combo presses. The idle frame (`0x00 0x00`) is broadcast at ~10–20 ms intervals while
+no button is held.
+
+**Verify against your vehicle:** Toyota CAN IDs and byte layouts are not publicly
+standardised and vary by model year and market. The table above is a community
+reference. Capture live frames from the Prado harness to confirm the exact ID and
+byte layout for this specific vehicle before programming any MCU firmware.
 
 ---
 
@@ -172,11 +192,89 @@ the decoded key codes.
 
 ---
 
+## Root cause — Holden firmware stripped CAN SWC support
+
+SWC was confirmed working with the original Prado firmware (Limcet-P306 V3.10.3.0212).
+After installing the Holden base firmware the SWC stopped working.
+
+### What the library comparison revealed
+
+Binary diff of the two `libMcuCenter.so` files (Prado: 721,912 bytes vs Holden: 586,384 bytes)
+and `libCanBus.so` (Prado: 787,256 bytes vs Holden: 704,868 bytes) and `libSetting.so`
+(Prado: 735,336 bytes vs Holden: 656,932 bytes) revealed the Holden firmware **deliberately
+stripped the CAN SWC subsystem** and replaced it with IR remote learning:
+
+| Feature | Prado original | Holden firmware |
+|---------|---------------|-----------------|
+| `MCUAdapter_RuiYuanSWC` class | ✅ Present | ❌ Removed |
+| CAN key code tables (`0x7`,`0x8`,`0x9`…) | ✅ Present | ❌ Removed |
+| `CanBusKeyManager` with `loadConfigs()` | ✅ Present | ❌ Removed |
+| `CanBusKey.config` / `CanBusKeyMaps-%1` | ✅ Present | ❌ Removed |
+| `on_btnCanBusSetting_clicked()` factory UI | ✅ Present | ❌ Removed |
+| `radioCanBusBtn` / `radioMCUBtn` toggle | ✅ Present | ❌ Removed |
+| `"Learning CanBus key:"` prompt | ✅ Present | ❌ Removed |
+| `CanBus_Raise_Volkswagen` / `_Jeep` adapters | ✅ Present | ❌ Removed |
+| `on_btnIRKeyLearn_clicked()` (IR remote) | ❌ Not present | ✅ Added |
+| FM Transmitter (`qnd_*` chip commands) | ❌ Not present | ✅ Added |
+
+The Holden firmware variant was built for a vehicle that uses an IR blaster SWC (not CAN bus).
+The Prado uses CAN bus SWC, so the Holden firmware was entirely incompatible.
+
+### Fix applied — Prado libraries restored
+
+Three libraries from the Prado original rootfs (`mtd6_rootfs.bin`) have been copied into
+the reconstruction rootfs:
+
+| Library | Prado size | Holden size | Key restoration |
+|---------|-----------|-------------|-----------------|
+| `libMcuCenter.so` | 721,912 B | 586,384 B | `MCUAdapter_RuiYuanSWC`, CAN key tables |
+| `libCanBus.so` | 787,256 B | 704,868 B | `CanBusKeyManager`, `CanBusKey.config` loader |
+| `libSetting.so` | 735,336 B | 656,932 B | Full CAN SWC factory UI |
+
+### Confirming the MCU is sending events (before FK Learn)
+
+Use the MCU Monitor in the factory menu to confirm the MCU side is working:
+
+1. **Settings → Factory → MCU Monitor** (advanced menu)
+2. With the vehicle running and CAN connected, press a steering wheel button
+3. Watch for changing byte values in the monitor display
+
+| Monitor result | Interpretation |
+|----------------|---------------|
+| Bytes change on button press | MCU is decoding CAN and forwarding key events — issue is in ARK1668 app handling |
+| No change at all | CAN wiring issue, CAN ID mismatch, or MCU not initialised |
+
+If the monitor shows no change, diagnose the CAN layer first (see Step 3 above, CAN capture).
+
+### Enable MCU debug logging
+
+For deeper diagnosis via serial console or ADB shell:
+
+```sh
+touch /data/mcudebug_flag
+# Reboot or restart the MCU application
+# libMcuCenter.so logs MCU UART traffic to the system log
+```
+
+Raw UART capture:
+
+```sh
+cat /dev/ttyHS0 | hexdump -C &
+# Press SWC buttons and observe hex output for key event packets
+```
+
+---
+
 ## Summary — why SWC buttons don't work
 
-| Cause | How to verify | Fix |
-|-------|---------------|-----|
-| CANH/CANL harness wires not connected | Visual inspection of harness connector | Connect the twisted-pair CAN wires |
-| MCU firmware wrong Toyota CAN IDs | CAN capture shows SWC messages; MCU Monitor shows nothing | Reflash STM32 with correct firmware |
-| CAN bus speed mismatch | Capture shows garbled/no frames | Verify MCU firmware baud rate = 500 kbit/s |
-| Key code not mapped in ARK1668 | MCU Monitor shows changing data on button press | Check McuType=6 key mapping in libMcuCenter.so |
+| Cause | Priority | How to verify | Fix |
+|-------|----------|---------------|-----|
+| **MCU protocol / init mismatch** — Holden libMcuCenter.so may not initialise Limcet-V1.0-1302 correctly | **1st** | MCU Monitor shows no change on button press; raw /dev/ttyHS0 capture shows no key events | Restore original Prado libMcuCenter.so or capture UART to diagnose init sequence |
+| CANH/CANL harness wires not connected | 2nd | MCU Monitor shows no change; CAN capture shows no SWC frames | Connect the twisted-pair CAN wires from harness |
+| MCU firmware wrong Toyota CAN IDs | 3rd | CAN capture shows SWC frames at expected IDs; MCU Monitor still shows nothing | Reflash STM32 with correct Limcet firmware |
+| Key code mapping broken in ARK1668 app | 4th | MCU Monitor shows bytes changing on button press; no UI action results | Run FK Learn or investigate libMcuCenter.so key handler |
+| CAN bus speed mismatch | check alongside 3rd | Capture shows garbled/no frames | Verify MCU firmware baud rate = 500 kbit/s |
+
+**Note on FK Learn:** The original Prado userdata had no FK Learn entries in `carsetting.ini`
+yet SWC worked — confirming the key mapping is hard-coded in libMcuCenter.so, not learned.
+FK Learn is NOT the primary fix path.

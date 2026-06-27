@@ -58,6 +58,39 @@ update                       Partition write order script
 | BT pair code | 0000 | **8362** |
 | Vehicle branding | HOLDEN | **TOYOTA** |
 
+## SSH Access
+
+SSH is enabled in the reconstructed rootfs and starts automatically on boot.
+
+| Item | Value |
+|------|-------|
+| Binary | `/usr/bin/sshd` (OpenSSH 4.6p1) |
+| Config | `/etc/ssh/sshd_config` |
+| Host keys | `/etc/ssh/ssh_host_rsa_key` (RSA 2048), `/etc/ssh/ssh_host_dsa_key` |
+| Login | `root` with existing password hash from `/etc/shadow` |
+
+**To connect:**
+
+```sh
+ssh root@192.168.7.1
+```
+
+## USB Networking
+
+The ARK1680 USB gadget stack is configured to use CDC-NCM (`g_ncm.ko`), which creates a `usb0` network interface when connected to a host PC.
+
+| Item | Value |
+|------|-------|
+| Device IP | `192.168.7.1` |
+| Subnet | `255.255.255.0` |
+| Set PC address to | `192.168.7.2` (static) |
+
+**Platform notes:**
+- **macOS / Linux** — CDC-NCM supported natively; interface appears automatically
+- **Windows** — may require the CDC-NCM host driver from Windows Update
+
+`g_zero.ko` has been removed from `rootfs/etc/all.sh` — it was overriding the NCM gadget registration and breaking both USB host mode and the network interface.
+
 ## Flash Method
 
 The device uses the `UpConfig` mechanism: placing `UpConfig` in the root of a FAT32 SD card causes U-Boot to run `arkupdate` on boot, which reads the `update` script and flashes each partition in sequence.

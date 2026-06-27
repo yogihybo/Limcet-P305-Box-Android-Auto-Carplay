@@ -64,6 +64,18 @@ build_userdata.sh            Standalone userdata UBI image builder
 generate_update.sh           Standalone SD card update script generator
 ```
 
+## Holden Firmware Compatibility
+
+The Holden update package (`HOLDEN_KS_Auto_DSP(BT)_0219`) has been confirmed to boot successfully on the Prado device. This validates that the Holden firmware is a compatible base — the SoC, bootloader, and kernel are interoperable.
+
+Known glitches when running stock Holden firmware on the Prado hardware:
+
+- **Screen hue** — caused by mismatched LCD timings in `arkdata.ini` (`CLKDIV1=10`, `VBP=3`, `HBP=20` vs Prado values). Fixed by flashing the Prado `arkdata.ini` to mtd4.
+- **Touch keys** — Holden `arkdata.ini` defines 5 side touch keys that do not exist on the Prado hardware.
+- **Product identity** — `FactoryConfig.ini` and `MsnProductInfo.ini` reference Holden-specific IDs (`Ksmart_DSP`, `Box-C211`, `McuType=16`).
+
+These are all corrected in the reconstructed firmware. See [Key Differences vs Holden Base Firmware](#key-differences-vs-holden-base-firmware) below.
+
 ## Key Differences vs Holden Base Firmware
 
 | Item | Holden | Prado |

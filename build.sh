@@ -162,7 +162,8 @@ PARTITIONS=(
     "uboot-env|U-Boot Env|uboot-env.bin|0x120000|0x040000|env|U-Boot environment variables|OFF"
     "uboot|U-Boot|uboot.bin|0x020000|0x080000|uboot|2nd-stage bootloader — written to both slots|OFF"
     "bootlogo|Boot Logo|bootlogo|0x75a0000|0x080000|raw|Splash screen image|OFF"
-    "reversingtrack|Reversing Audio|reversingtrack|0x7920000|0x300000|raw|Reversing camera audio track|OFF"
+    "bootanimation|Boot Animation|bootanimation|0x7620000|0x300000|raw|Boot animation sequence|OFF"
+    "reversingtrack|Reversing Track|reversingtrack|0x7920000|0x300000|raw|Reversing camera audio track|OFF"
 )
 
 BUILD_ITEMS=(
@@ -281,7 +282,7 @@ print_menu() {
     echo -e "  ${DIM}──────────────────────────────────────────────────────${NC}"
     echo ""
     echo -e "  ${BOLD}Commands:${NC}"
-    echo -e "    ${BOLD}1–${#PARTITIONS[@]}${NC}  toggle partition     ${BOLD}${#PARTITIONS[@]}+${NC}  toggle build step"
+    echo -e "    ${BOLD}1–${#PARTITIONS[@]}${NC}   toggle partition     ${BOLD}$((${#PARTITIONS[@]}+1))–$((${#PARTITIONS[@]}+${#BUILD_ITEMS[@]}))${NC}  toggle build step"
     echo -e "    ${BOLD}a${NC}    select all partitions   ${BOLD}n${NC}   deselect all partitions"
     echo -e "    ${BOLD}g${NC}    go (build selected, generate SD package)"
     echo -e "    ${BOLD}q${NC}    quit"

@@ -37,6 +37,7 @@ Prado reconstructed/         Reconstructed firmware for flashing
   mtd7_userdata/
     userdata/                Userdata tree (Prado settings overlay)
   mtd8_bootlogo/             bootlogo
+  mtd9_bootanimation/        (placeholder — no content yet)
   mtd10_reversingtrack/      reversingtrack
 
 kernel/            zImage (from Holden base — identical kernel_size to Prado dump)
@@ -169,7 +170,8 @@ bash build.sh
   5  [ ]  U-Boot Env              uboot-env.bin    0x120000   256 KB
   6  [ ]  U-Boot                  uboot.bin        0x020000   512 KB  ⚠ brick risk
   7  [ ]  Boot Logo               bootlogo         0x75a0000  512 KB
-  8  [ ]  Reversing Audio         reversingtrack   0x7920000    3 MB
+  8  [ ]  Boot Animation          bootanimation    0x7620000    3 MB
+  9  [ ]  Reversing Track         reversingtrack   0x7920000    3 MB
 ```
 
 **Defaults:** rootfs and userdata are selected by default. Kernel, U-Boot, arkdata, and other early-boot partitions default to off — they must be explicitly enabled to avoid accidental reflash.
@@ -178,8 +180,8 @@ bash build.sh
 
 | Key | Action |
 |-----|--------|
-| `1`–`8` | Toggle SD partition on/off |
-| `9`–`10` | Toggle build step on/off |
+| `1`–`9` | Toggle SD partition on/off |
+| `10`–`11` | Toggle build step on/off |
 | `a` | Select all partitions |
 | `n` | Deselect all partitions |
 | `g` | Go — run selected builds then generate SD package |

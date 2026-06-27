@@ -21,7 +21,7 @@ The Prado unit uses Holden firmware as its base but requires hardware-specific o
 ## Repository Structure
 
 ```
-Prado dump/                  Raw MTD partition dumps from the live device
+Prado firmware dump/                  Raw MTD partition dumps from the live device
   mtd1-mtd2_uboot/           U-Boot binaries (raw + extracted)
   mtd3_env/                  U-Boot environment (raw + extracted)
   mtd4_arkdata/              Panel/hardware config (raw + extracted)
@@ -40,7 +40,7 @@ Prado reconstructed/         Reconstructed firmware for flashing
   mtd9_bootanimation/        (placeholder — no content yet)
   mtd10_reversingtrack/      reversingtrack
 
-kernel/            zImage (from Holden base — identical kernel_size to Prado dump)
+kernel/            zImage (from Holden base — identical kernel_size to Prado firmware dump)
 display/
   arkdata_prado.ini          Prado panel config (from MTD4 live dump)
   arkdata_holden.ini         Holden standard reference
@@ -50,7 +50,7 @@ msn_factory_configs/
   MsnProductInfo.ini         Hardware identity (Limcet-P306)
 env/
   uboot-env.txt              Reconstructed env (bootdelay=9, 106m/6m layout)
-  mtd3_env_prado_dump.bin    Raw env from live device (gitignored)
+  mtd3_env_prado_firmware_dump.bin    Raw env from live device (gitignored)
 sd_update/
   UpConfig                   SD update trigger file
   update.example             Static reference script (generated version goes to output/)

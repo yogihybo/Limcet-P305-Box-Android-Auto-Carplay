@@ -58,6 +58,39 @@ update                       Partition write order script
 | BT pair code | 0000 | **8362** |
 | Vehicle branding | HOLDEN | **TOYOTA** |
 
+## WiFi Access Point
+
+A WPA2 access point starts automatically on boot via `/etc/wifi_ap.sh`, providing network access for SSH without needing a physical connection.
+
+| Item | Value |
+|------|-------|
+| SSID | `carplay_wifi` |
+| Password | `88888888` |
+| AP IP | `192.168.43.1` |
+| DHCP range | `192.168.43.20 – 192.168.43.254` |
+| Config | `/etc/hostapd/hostapd.conf`, `/etc/udhcpd.conf` |
+
+**To connect:**
+
+```sh
+# Connect to carplay_wifi (WPA2, password: 88888888)
+ssh root@192.168.43.1
+```
+
+### WiFi module detection
+
+Five Realtek drivers are bundled in `/lib/modules/3.4.0/`. At early boot, `wifi_ap.sh` probes them in order until one loads successfully:
+
+| Priority | Module | Chip | Interface |
+|----------|--------|------|-----------|
+| 1 | `wlan_rtl8821cs.ko` | RTL8821CS | SDIO (most likely — Feasycom BT+WiFi combo) |
+| 2 | `wlan_rtl8822cs.ko` | RTL8822CS | SDIO |
+| 3 | `wlan_rtl8189fs.ko` | RTL8189FS | SDIO |
+| 4 | `wlan_rtl8821cu.ko` | RTL8821CU | USB |
+| 5 | `wlan_rtl8811cu.ko` | RTL8811CU | USB |
+
+If the main app (`MsnCoreApp`) has already placed the correct driver at `/tmp/wlan.ko`, that is used instead. If `wlan0` does not come up, check `dmesg` on the serial console to identify which chip is present and adjust the probe order in `wifi_ap.sh`.
+
 ## SSH Access
 
 SSH is enabled in the reconstructed rootfs and starts automatically on boot.

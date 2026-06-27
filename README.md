@@ -171,7 +171,6 @@ On power-on, U-Boot checks for a FAT32 SD card. If a file named `UpConfig` is pr
 **Step 2 — Generate the update script**
 
 ```bash
-cd sd_update/
 bash generate_update.sh
 ```
 

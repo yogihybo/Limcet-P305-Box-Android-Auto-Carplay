@@ -1,0 +1,220 @@
+# Prado Userdata Partition Review
+
+**Source file:** `Prado Msnconfig/filesystem dumps/userdata.img`
+**File size:** 12,582,912 bytes (12 MB)
+**Image magic:** `55 42 49 23` = `UBI#` — raw UBI volume image
+**Fill level:** 73.96% (9,306,658 / 12,582,912 bytes are non-0xFF)
+
+## Size Anomaly
+
+The live Prado device reports `userdata_size=0x1e0000` = ~2MB. This dump is 12MB. The
+explanation is partition layout history:
+
+| Layout     | rootfs | userdata | Devices using it              |
+|------------|--------|----------|-------------------------------|
+| Alfa pkg   | 100m   | 12m      | Alfa package (uboot-env.bin)  |
+| Holden/Prado | 106m | 6m       | Live Prado, Holden package    |
+| Alfa live  | 112m   | 6m       | Live Alfa device              |
+
+**Conclusion:** This dump was taken when the Prado had a 12m userdata partition —
+before the Holden firmware was flashed. UBI PEB size is 128KB, giving 96 PEBs in 12MB.
+
+---
+
+## Filesystem Content
+
+Extracted via ubireader from `filesystem dumps/ubifs-root/786415897/userdata/`.
+
+### Product Identity (`msncfg/MsnProductInfo.ini`)
+
+```ini
+ProductId=Limcet-P306
+ResourceName=Box-P301
+McuType=6
+BlueToothType=6
+SoundType=0
+MSNEryPortName=/dev/ttyS2
+MCUPortName=/dev/ttyHS0
+```
+
+Confirms the hardware is **P306**, not P305. Consistent with Holden rootfs `MsnProductInfo.ini`.
+
+### User Settings
+
+| File | Key values |
+|------|-----------|
+| `msncfg/Setting.config` | Brightness=128, Contrast=128, Saturation=64, Volume=32, AutoStartCarLink=true |
+| `msncfg/carsetting.ini` | SetItem0=1 (front cam enable), SetItem7=1, SetItem8=1 |
+| `msncfg/AndroidMirrorLink.ini` | PhoneConnectType=2 (WiFi) |
+| `msncfg/StartupApp.config` | NaviVolume=19 |
+| `msncfg/DiskIdentify.config` | /media/udisk/p1/ — 718152/979936 free blocks at 4096 = ~2.9GB/3.8GB USB disk |
+
+### Touchscreen Calibration (`pointercal`)
+
+```
+61020 -1079 1304546 -410 60393 2309346 65536
+```
+
+tslib 7-integer calibration matrix (a, b, c, d, e, f, s — affine transform coefficients).
+Active matrix, suggesting the touchscreen was calibrated on this device.
+
+### Bluetooth Module Config (`feasycom/bw_conf0.db`, `bw_conf1.db`)
+
+Both files are identical, 1712 bytes, header `01 01 18 20`. Key strings extracted:
+
+| Field | Value |
+|-------|-------|
+| BT device name | `Limcet Box_fc9f` |
+| Module profile | `FSC-CARKIT-LE` |
+| Paired phone model | `Pixel 9 Pro` |
+
+The `_fc9f` suffix is the last 4 nibbles of the device's Bluetooth MAC address.
+`FSC-CARKIT-LE` is Feasycom's in-car BLE hands-free profile identifier.
+
+### Bluetooth Call History
+
+Two phones were paired and used for hands-free calls. Personal identifiers (phone numbers,
+device MACs) are not documented here.
+
+#### Device 1 (OUI: Feasycom — may be module or debug device)
+
+| Type | Count |
+|------|-------|
+| Received (CallType-0) | 30 |
+| Dialled (CallType-1) | 25 |
+| Missed (CallType-2) | 19 |
+
+Timestamps: ~Unix ms 1644657xxx = **12 February 2022**.
+All numbers are Australian format (04xx mobile, +61 prefix).
+
+#### Device 2 (OUI: Huawei)
+
+| Type | Count |
+|------|-------|
+| Received (CallType-0) | 23 |
+| Dialled (CallType-1) | 27 |
+| Missed (CallType-2) | 21 |
+
+Same February 2022 epoch. One number appears in both devices' histories —
+likely a frequently contacted party.
+
+The two devices represent **two different phones** paired to the car at different times
+or by different users.
+
+### Apple AirPlay / CarPlay Keychain (`Keychains/default.keychain`)
+
+Format: Apple binary plist (`bplist00`), 870 bytes.
+
+| Item | Value |
+|------|-------|
+| AirPlay Identity UUID | [redacted — head unit identity] |
+| AirPlay Identity key | 32-byte Ed25519 private key |
+| Paired Accessory UUID | [redacted — paired iPhone identifier] |
+| Accessory key | 32-byte public key |
+| Security class | `kSecAttrAccessibleAlways` |
+
+The AirPlay Identity UUID is the **head unit's own identity** as presented to Apple devices
+during CarPlay pairing. The Paired Accessory UUID is the iPhone that was paired for CarPlay.
+
+`CarPlayPairList` (in `msncfg/`) was empty (0 bytes) — pairing state in the keychain is the
+authoritative record.
+
+### WiFi / Android Auto DHCP Lease (`udhcpd.leases`)
+
+44 bytes binary (udhcpd lease record format).
+
+| Field | Value |
+|-------|-------|
+| Leased IP | [redacted — 192.168.43.x subnet] |
+| Client MAC | [redacted — randomised WiFi MAC] |
+| Hostname | `Pixel-9-Pro` |
+| Subnet | 192.168.43.x = msnwifi0 (Android Auto WiFi AP) |
+
+The head unit runs a DHCP server on its WiFi AP interface for Android Auto wireless
+connections. The client MAC uses a locally-administered (randomised) prefix — normal for
+Android phones in WiFi connecting mode.
+
+### Media File Databases (`*.sqlite`)
+
+Three SQLite databases, 24576 bytes each:
+- `ImageFileList.sqlite` — empty table, no images ever indexed
+- `MusicFileList.sqlite` — empty table, no music files ever indexed
+- `VideoFileList.sqlite` — empty table, but schema retained BOOTSTAT.DAT paths:
+
+```
+/media/udisk/p1/EFI/Microsoft/Boot/BOOTSTAT.DAT
+/media/udisk/p1/Boot/BOOTSTAT.DAT
+```
+
+A USB stick containing a Windows boot partition was connected at some point. The media
+scanner found no playable files on it (only Windows boot artifacts), but the paths were
+retained in the schema creation SQL.
+
+### Other Files
+
+| File | Notes |
+|------|-------|
+| `msndatadef` | Empty (0 bytes) — custom data definitions, never written |
+| `msncfg/CarPlayPairList` | Empty (0 bytes) — no CarPlay pair record persisted here |
+
+---
+
+## Device History Summary
+
+We do not have the original shipped firmware for this device. The Alfa firmware package is a
+reference only. What follows is based solely on the dump evidence — not any assumption about
+factory state.
+
+Based on the userdata content, a partial timeline can be inferred:
+
+1. **At time of dump — 12m userdata partition** — the dump is 12MB, consistent with a 12m
+   userdata partition (as seen in the Alfa reference package env: 100m/12m layout). We cannot
+   determine what firmware was originally shipped or how the device reached this partition
+   layout. ProductId=Limcet-P306, Box-P301 confirmed from MsnProductInfo.ini.
+
+2. **Active use period (circa Feb 2022)** — two phones were paired for BT hands-free.
+   Significant call volume (74 calls across two devices). Australian market device.
+   CarPlay pairing occurred with at least one iPhone (keychain populated).
+   Android Auto WiFi used with a Pixel 9 Pro.
+
+3. **Holden firmware flash (date unknown)** — rootfs and kernel overwritten with Holden package.
+   MTD4 (arkdata) partition was **not** updated, leaving TvoutType=1 (original value).
+   Partition layout changed to 106m/6m; old 12MB userdata content preserved at time of dump.
+
+4. **This dump** — captured after Holden flash but the userdata partition still reflects the
+   prior 12MB allocation, suggesting the dump was taken before the partition table was
+   also updated, or the dump tool read the full 12MB regardless of the active partition size.
+
+---
+
+## Reconstruction Implications
+
+- The `MsnProductInfo.ini` from this userdata is the ground truth for hardware identity.
+  It is used as the basis for `msn_factory_configs/MsnProductInfo.ini` in this repo.
+- The Feasycom BT device name (`Limcet Box_fc9f`) confirms `DeviceName=Limcet Box` in
+  `FactoryConfig.ini` is correct. The `_fc9f` suffix is appended by the BT module firmware.
+- The `pointercal` values are device-specific and **should not be flashed** — they are
+  calibrated to the specific touchscreen panel on this unit.
+- The keychain and call history contain personal data and are not included in this repo.
+- A clean userdata image for a fresh flash should be generated with `mkfs.ubifs` containing
+  only the factory `MsnProductInfo.ini`. The userdata partition initialises itself on first boot.
+
+---
+
+## Flash Notes
+
+To write a clean userdata partition (erases all paired devices, call history, settings):
+
+```
+# Prado live device — 6m userdata at 0x6FA0000
+nand erase 0x6FA0000 0x600000
+# Leave blank — the rootfs init scripts will recreate defaults on first boot
+```
+
+To preserve existing userdata (normal reflash):
+
+```
+# Skip the userdata nand erase step in the update script
+```
+
+See [`PARTITION_LAYOUT.md`](PARTITION_LAYOUT.md) for complete offset table.

@@ -136,11 +136,99 @@ The ARK1680 USB gadget stack is configured to use CDC-NCM (`g_ncm.ko`), which cr
 
 `g_zero.ko` has been removed from `Prado reconstructed/mtd6_rootfs/rootfs/etc/all.sh` — it was overriding the NCM gadget registration and breaking both USB host mode and the network interface.
 
-## Flash Method
+## Flashing via SD Card
 
-The device uses the `UpConfig` mechanism: placing `UpConfig` in the root of a FAT32 SD card causes U-Boot to run `arkupdate` on boot, which reads the `update` script and flashes each partition in sequence.
+On power-on, U-Boot checks for a FAT32 SD card. If a file named `UpConfig` is present in the SD root, U-Boot runs `arkupdate`, which reads the `update` script and flashes each listed partition in sequence. After completion the unit reboots — remove the SD card so it doesn't re-flash.
 
-See [`docs/PARTITION_LAYOUT.md`](docs/PARTITION_LAYOUT.md) for offsets and individual flash commands.
+### Partition layout
+
+| Partition | Start | Size | Contents |
+|-----------|-------|------|----------|
+| S-Loader | `0x000000` | 128 KB | Nboot (do NOT update via SD) |
+| U-Boot | `0x020000` | 512 KB | 2nd-stage bootloader |
+| U-Boot_back | `0x0A0000` | 512 KB | U-Boot backup slot |
+| U-Boot-Env | `0x120000` | 256 KB | U-Boot environment variables |
+| arkdata | `0x160000` | 256 KB | Display / TvoutType config |
+| kernel | `0x1A0000` | 4 MB | Linux 3.4.0 zImage |
+| rootfs | `0x5A0000` | 106 MB | Root filesystem (UBIFS/UBI) |
+| userdata | `0x6FA0000` | 6 MB | User settings / BT pairs (UBI) |
+| bootlogo | `0x75A0000` | 512 KB | Boot splash screen |
+| bootanimation | `0x7620000` | 3 MB | Boot animation |
+| reversingtrack | `0x7920000` | 3 MB | Reversing camera audio |
+| Unicode | `0x7C20000` | 256 KB | Unicode font data |
+
+**Known bad block at 0x5FA0000** — inside the rootfs partition. `nand scrub` handles this automatically.
+
+### Quick start
+
+**Step 1 — Build firmware images**
+
+| Image | Command | Notes |
+|-------|---------|-------|
+| `rootfs.img` | `bash build_rootfs.sh` (Linux/WSL) | ~106 MB UBI image |
+| `userdata.img` | `bash build_userdata.sh` (Linux/WSL) | ~6 MB UBI image |
+
+**Step 2 — Generate the update script**
+
+```bash
+cd sd_update/
+bash generate_update.sh
+```
+
+Toggle partitions with number keys, press `g` to generate. Output lands in `sd_update/output/`.
+
+**Step 3 — Prepare SD card**
+
+Format as FAT32 (max 32 GB). Copy everything from `sd_update/output/` to the SD root.
+
+**Step 4 — Flash**
+
+1. Power off the head unit
+2. Insert the SD card
+3. Power on — update progress shown on screen
+4. Wait for automatic reboot (do **not** interrupt power)
+5. Remove the SD card
+
+### Manual update script
+
+The `update` file is plain U-Boot commands, one per line:
+
+```
+fatload mmc 0 4000000 zImage
+nand scrub 0x1a0000 0x400000 0x1a0000 0x400000
+nand write 0x4000000 0x1a0000 ${filesize}
+
+fatload mmc 0 4000000 userdata.img
+nand scrub 0x6fa0000 0x600000 0x6fa0000 0x600000
+nand write 0x4000000 0x6fa0000 ${filesize}
+```
+
+`nand scrub` takes `offset size offset size` (repeated — ARK1680-specific behaviour).
+
+### Safety notes
+
+- **Never flash S-Loader (Nboot) via SD** — corruption bricks the board (requires JTAG to recover)
+- **U-Boot** writes to both primary (`0x20000`) and backup (`0xA0000`) slots with the same binary
+- **userdata flash** erases all paired BT devices, call history, and user settings — recreated on first boot
+- **rootfs flash** replaces the entire filesystem; bad block at 0x5FA0000 is handled automatically
+
+### Serial console (recovery / monitoring)
+
+Connect via the UART header near the SD card slot. Settings: **115200 8N1**.
+
+| Pin | Colour |
+|-----|--------|
+| TX | Yellow |
+| RX | Blue |
+| GND | Black |
+
+Adapter: PL-2303HX USB-TTL. At the U-Boot prompt you can manually flash any partition:
+
+```
+fatload mmc 0 4000000 zImage
+nand scrub 0x1a0000 0x400000 0x1a0000 0x400000
+nand write 0x4000000 0x1a0000 ${filesize}
+```
 
 ## Sources
 

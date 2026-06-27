@@ -201,6 +201,7 @@ find_src() {
         "$SCRIPT_DIR/Prado reconstructed/mtd7_userdata/$filename"
         "$SCRIPT_DIR/Prado reconstructed/mtd0_sloader/$filename"
         "$SCRIPT_DIR/Prado reconstructed/mtd1-mtd2_uboot/$filename"
+        "$SCRIPT_DIR/Prado reconstructed/mtd4_arkdata/$filename"
         "$SCRIPT_DIR/Prado reconstructed/mtd8_bootlogo/$filename"
         "$SCRIPT_DIR/Prado reconstructed/mtd10_reversingtrack/$filename"
         "$SCRIPT_DIR/kernel/$filename"

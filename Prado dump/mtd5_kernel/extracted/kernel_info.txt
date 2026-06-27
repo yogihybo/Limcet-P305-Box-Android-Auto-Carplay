@@ -35,6 +35,27 @@ CONFIG_FB_BZ  (framebuffer)
 3.4.0
 
 --- Notes ---
-Kernel is NOT separately extractable on Windows without Linux kernel build tools
-(scripts/extract-vmlinux or objdump). The zImage is the correct artifact for
-flashing to MTD5 (offset 0x1A0000, max size 4MB).
+Kernel is NOT separately extractable on Windows without Linux kernel build tools.
+The zImage is the correct artifact for flashing to MTD5 (offset 0x1A0000, max 4MB).
+
+To extract the raw vmlinux (decompressed kernel ELF) on Linux:
+
+  Method 1 — kernel source script (preferred):
+    # From any Linux 3.4 kernel source tree:
+    scripts/extract-vmlinux zImage > vmlinux
+    file vmlinux   # should report: ELF 32-bit LSB executable, ARM
+
+  Method 2 — manual XZ extraction:
+    # The XZ stream is embedded at a non-zero offset with no standalone header.
+    # extract-vmlinux handles this by scanning for the XZ magic internally.
+    # binwalk on Linux with a full signature database may also find it.
+
+  Method 3 — WSL on Windows:
+    wsl
+    apt install binutils
+    scripts/extract-vmlinux zImage > vmlinux
+    # or: binwalk -e zImage  (requires binwalk installed in WSL)
+
+Once extracted, vmlinux can be disassembled with:
+    arm-linux-gnueabi-objdump -d vmlinux | less
+    # or loaded into Ghidra / IDA with ARM LE 32-bit processor

@@ -53,6 +53,7 @@ env/
   mtd3_env_prado_dump.bin    Raw env from live device (gitignored)
 sd_update/
   UpConfig                   SD update trigger file
+  update                     Partition write order script
   output/                    Generated SD card package (gitignored)
 docs/
   SOURCES.md                 Where each file came from and why

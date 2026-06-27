@@ -1,2 +1,2 @@
 Prado[[:space:]]dump/rootfs_raw/*.bin filter=lfs diff=lfs merge=lfs -text
-rootfs/etc/ssh/ssh_host_*_key -text
+Prado[[:space:]]reconstructed/mtd6_rootfs/rootfs/etc/ssh/ssh_host_*_key -text

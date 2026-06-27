@@ -21,10 +21,22 @@ The Prado unit uses Holden firmware as its base but requires hardware-specific o
 ## Repository Structure
 
 ```
+Prado dump/                  Raw MTD partition dumps from the live device
+  mtd1-mtd2_uboot/           U-Boot binaries (raw + extracted)
+  mtd3_env/                  U-Boot environment (raw + extracted)
+  mtd4_arkdata/              Panel/hardware config (raw + extracted)
+  mtd5_kernel/               Kernel zImage (raw + extracted)
+  mtd6_rootfs/               Root filesystem UBIFS dump (raw)
+  mtd6_rootfs_raw/           Raw MTD6 bin (Git LFS)
+
+Prado reconstructed/         Reconstructed firmware for flashing
+  mtd6_rootfs/
+    rootfs/                  Modified rootfs tree (Prado libs + SSH + WiFi AP)
+  mtd7_userdata/
+    userdata/                Userdata tree (Prado settings overlay)
+
 bootloaders/       Nboot.bin, Stepldr.bin, uboot.bin, bootlogo, reversingtrack
 kernel/            zImage (from Holden base — identical kernel_size to Prado dump)
-rootfs/            rootfs.ubifs (from Prado live NAND dump)
-userdata/          userdata.img (base; live state documented in docs/)
 display/
   arkdata_prado.ini          Prado panel config (from MTD4 live dump)
   arkdata_holden.ini         Holden standard reference
@@ -122,7 +134,7 @@ The ARK1680 USB gadget stack is configured to use CDC-NCM (`g_ncm.ko`), which cr
 - **macOS / Linux** — CDC-NCM supported natively; interface appears automatically
 - **Windows** — may require the CDC-NCM host driver from Windows Update
 
-`g_zero.ko` has been removed from `rootfs/etc/all.sh` — it was overriding the NCM gadget registration and breaking both USB host mode and the network interface.
+`g_zero.ko` has been removed from `Prado reconstructed/mtd6_rootfs/rootfs/etc/all.sh` — it was overriding the NCM gadget registration and breaking both USB host mode and the network interface.
 
 ## Flash Method
 

@@ -303,40 +303,116 @@ Has a settings panel (SetItems). `msnAppNotify` handles events from the main app
 
 ---
 
-## Prado SWC — CAN bus analysis
+## Version screen baseline (from working device)
 
-The Toyota Prado 150 series uses the **CAN bus** for steering wheel controls. The factory
-head unit reads button presses off the CAN network directly. When replacing with an
-aftermarket head unit (Limcet-P306), an external **CAN-to-SWC interface module** is
-typically required, such as:
+Captured from the device when it was working, via Settings → About:
 
-- **Connects2 CTASW002** or similar Toyota-specific CAN SWC adapter
-- **iDatalink Maestro** (if available for Prado)
-- A generic CAN SWC decoder that outputs analog voltage levels or serial key codes
+| Field | Value |
+|-------|-------|
+| BT | BT825, V5.5.0 |
+| Software | Limcet-P306 V3.10.3.0212 |
+| Hardware | 02-0006-06-00-00-00-00-00 |
+| System | Limcet 2022-02-12 |
+| MCU | Limcet-V1.0-1302 |
 
-### Current software state
-- `CanType=0` in `MsnProductInfo.ini` — CAN is disabled
-- `McuType=6` maps to a P3xx/P7xx adapter — **no CAN SWC support**
-- `McuAdapter_BoxP230` is the only adapter with CAN bus methods, but it is Honda-specific
+- **BT825, V5.5.0** — FSC-BT8251 Feasycom module, firmware V5.5.0 (matches `blueware.properties`)
+- **Software V3.10.3.0212** — the original Limcet-P306 application; the Holden base firmware is a different version
+- **System 2022-02-12** — rootfs build date
+- **MCU Limcet-V1.0-1302** — the Limcet-branded MCU firmware on the physical STM32/STM8 chip
+- **Hardware 02-0006-06-00-00-00-00-00** — board hardware revision string
 
-### Options for fixing Prado SWC
+The MCU firmware is stored on the external MCU chip (not in the ARK1668 NAND). No MCU
+update binaries are present in the Holden rootfs, so flashing a new rootfs does NOT
+overwrite the MCU firmware. The MCU chip should still contain `Limcet-V1.0-1302`.
 
-**Option A — External CAN-to-analog adapter (recommended)**  
-Use a Toyota-specific CAN SWC adapter module between the Prado CAN bus and the head
-unit's SWC/REMOTE input pin. The adapter converts CAN button messages to analog voltage
-levels. The head unit's MCU reads these as standard ADC SWC input. No firmware changes
-needed — the current McuType=6 adapter handles pre-decoded key codes from the MCU.
+---
 
-**Option B — Verify MCU ADC thresholds**  
-If an analog adapter is already connected but keys don't register, the MCU firmware may
-need reconfiguration. The MCU reads an ADC input and maps voltage ranges to key codes.
-The voltage thresholds compiled into the MCU firmware must match the output of the
-connected adapter. This requires access to the MCU firmware (separate from the ARK1668 OS).
+## MCU role — touch AND key events
 
-**Option C — Software key learning**  
-The factory menu may have a hidden SWC key learning mode. Items 1-6 are hidden by
-`DisableFactorySetItems="1,2,3,4,5,6"` in `FactoryConfig.ini`. Temporarily removing
-that line may expose a SWC key-learn screen where each button is taught individually.
+The Limcet MCU is a multi-function controller (STM32 or STM8 on the DC_LIMCET_MB_REV_003
+board) that handles:
+- **Touchscreen input** — the advanced factory menu MCU Monitor shows raw touch events
+- **Steering wheel buttons** — ADC voltage divider from SWC input wire
+- **Panel buttons** — physical buttons on the head unit bezel
+- **ACC/IGN detection** — power management
+- **Reverse signal** — triggers camera view
+
+All events arrive at the ARK1668 via `/dev/ttyHS0` using the Limcet protocol (`McuType=6`).
+Because touchscreen works, the MCU↔ARK1668 UART link is confirmed functional.
+
+---
+
+## McuType dropdown values (from libSetting.so factory menu)
+
+The factory settings menu McuType dropdown label list (0-indexed):
+
+| Index | Label | MCU chip |
+|-------|-------|----------|
+| 0 | msn_stm32 | STM32 generic |
+| 1 | msn_stm8 | STM8 generic |
+| 2 | msn_stm8_9600 | STM8 at 9600 baud |
+| 3 | LingFei | LingFei OEM |
+| 4 | Limcet | Limcet STM MCU |
+| 5 | CheKuShiDai | |
+| 6 | ZongLian | |
+| 7 | LanMo | |
+| 8 | ZhiYunLianChe | |
+| 9 | NV17 | → MCUAdapter_NV17 |
+| 10 | Bagoo | → MCUAdapter_Bagoo |
+| 11 | IMBC60 | → MCUAdapter_IM60BC |
+| 12 | ChangDao | |
+| 13 | msn_box | |
+| 14 | ziqi | |
+| 15 | che yuan yin | |
+| 16 | nfck | |
+| 17 | msn_hud | → MCUAdapter_HUD |
+| 18 | FOSP | |
+| 19 | XBS_32PIN | |
+| 20 | msn_nordic | Nordic MCU |
+
+`McuType=6` in MsnProductInfo.ini is the integer index. Based on the device
+reporting "MCU: Limcet-V1.0-1302" when working, and the label list, the Prado
+device uses the **Limcet** adapter (index 4) or a nearby variant. The exact index
+mapping to `MCUAdapter_BoxPxxx` classes in `libMcuCenter.so` requires disassembly
+of the `getAdapterInstance()` switch statement to confirm.
+
+---
+
+## Prado SWC — ADC key learning (not CAN bus)
+
+The Limcet MCU reads an ADC voltage divider on the SWC input wire from the steering
+wheel harness. Different buttons produce different resistance values → different voltages.
+The MCU maps these to key codes and sends them to the ARK1668 via `/dev/ttyHS0`.
+
+Because touch events already work (proving MCU↔ARK comms is active), the SWC failure
+is a **key mapping / learning issue**, not a hardware or protocol problem.
+
+### SWC Learning feature (found in libSetting.so)
+
+The firmware has a full SWC key-learning UI:
+- `FKLearnWindow` — "Long press the steering wheel key to complete the setup"
+- `EnableSWCSwitchHardware` — FactoryConfig flag that activates the SWC hardware path
+- `EnableFKLearn` — FactoryConfig flag that shows the FK Learn button in Settings → About
+
+**Both flags are now added to `msn_factory_configs/FactoryConfig.ini`.**
+
+### How to learn the steering wheel keys
+
+1. Flash the updated userdata (with new FactoryConfig) or edit via SSH
+2. Go to **Settings → System Info** (the About screen)
+3. The "FK Learn" button should now be visible
+4. Press each steering wheel button and long-press to teach it
+5. The learned mapping is saved to userdata
+
+### If SWC Learning screen does not appear
+
+The hidden factory menu items (1-6) may include additional SWC options. Temporarily
+set in FactoryConfig:
+```ini
+DisableFactorySetItems=""
+```
+This exposes the full factory menu. Look for "SWC Learning" or "Panel Key Learning"
+entries. Re-hide after use.
 
 ### MCU serial port
 The MCU communicates with the ARK1668 via `/dev/ttyHS0`. To monitor what key events

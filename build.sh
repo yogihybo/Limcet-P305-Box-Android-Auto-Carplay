@@ -159,7 +159,7 @@ PARTITIONS=(
     "userdata|User Data|userdata.img|0x6fa0000|0x600000|ubi|Prado settings / userdata UBI image (build below if needed)|ON"
     "kernel|Linux Kernel|zImage|0x1a0000|0x400000|raw|Linux 3.4.0 zImage|OFF"
     "arkdata|Display Config (arkdata)|arkdata.ini|0x160000|0x040000|raw|TvoutType, display init parameters|OFF"
-    "uboot-env|U-Boot Env|uboot-env.bin|0x120000|0x040000|env|U-Boot environment variables|OFF"
+    "uboot-env|U-Boot Env|uboot-env.bin|0x120000|0x040000|env|uboot-env.bin not yet built — compile from env/uboot-env.txt with mkenvimage|DISABLED"
     "uboot|U-Boot|uboot.bin|0x020000|0x080000|uboot|2nd-stage bootloader — written to both slots|OFF"
     "bootlogo|Boot Logo|bootlogo|0x75a0000|0x080000|raw|Splash screen image|OFF"
     "bootanimation|Boot Animation|bootanimation|0x7620000|0x300000|raw|Boot animation sequence|OFF"
@@ -178,7 +178,13 @@ declare -a BUILD_SEL
 
 for i in "${!PARTITIONS[@]}"; do
     IFS='|' read -r _ _ _ _ _ _ _ default <<< "${PARTITIONS[$i]}"
-    [[ "$default" == "ON" ]] && PART_SEL[$i]=1 || PART_SEL[$i]=0
+    if [[ "$default" == "ON" ]]; then
+        PART_SEL[$i]=1
+    elif [[ "$default" == "DISABLED" ]]; then
+        PART_SEL[$i]=-1
+    else
+        PART_SEL[$i]=0
+    fi
 done
 
 for i in "${!BUILD_ITEMS[@]}"; do
@@ -258,6 +264,14 @@ print_menu() {
 
     for i in "${!PARTITIONS[@]}"; do
         IFS='|' read -r key label filename offset size mode desc _ <<< "${PARTITIONS[$i]}"
+        if [[ ${PART_SEL[$i]} -eq -1 ]]; then
+            # Disabled entry — greyed out, not selectable
+            printf "  ${DIM}%d    [-]  %-22s %-18s (disabled)${NC}\n" \
+                "$((i+1))" "$label" "$filename"
+            echo -e "       ${DIM}$desc${NC}"
+            echo ""
+            continue
+        fi
         local src
         src=$(find_src "$filename")
         if [[ ${PART_SEL[$i]} -eq 1 ]]; then
@@ -270,7 +284,6 @@ print_menu() {
         else
             found="${RED}missing${NC}"
         fi
-        # Safety flag for early-boot partitions
         local caution=""
         [[ "$key" == "uboot" ]] && caution=" ${RED}⚠ brick risk${NC}"
         printf "  %d    %b  %-22s %-18s %b%b\n" \
@@ -451,6 +464,7 @@ while true; do
     if [[ "$input" =~ ^[0-9]+$ ]]; then
         if (( input >= 1 && input <= total_parts )); then
             idx=$((input - 1))
+            [[ ${PART_SEL[$idx]} -eq -1 ]] && continue
             [[ ${PART_SEL[$idx]} -eq 1 ]] && PART_SEL[$idx]=0 || PART_SEL[$idx]=1
         elif (( input > total_parts && input <= total_parts + total_build )); then
             idx=$((input - total_parts - 1))
@@ -461,10 +475,14 @@ while true; do
 
     case "$input" in
         a|A)
-            for i in "${!PARTITIONS[@]}"; do PART_SEL[$i]=1; done
+            for i in "${!PARTITIONS[@]}"; do
+                [[ ${PART_SEL[$i]} -ne -1 ]] && PART_SEL[$i]=1
+            done
             ;;
         n|N)
-            for i in "${!PARTITIONS[@]}"; do PART_SEL[$i]=0; done
+            for i in "${!PARTITIONS[@]}"; do
+                [[ ${PART_SEL[$i]} -ne -1 ]] && PART_SEL[$i]=0
+            done
             ;;
         g|G)
             echo ""

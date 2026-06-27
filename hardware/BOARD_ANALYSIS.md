@@ -118,11 +118,27 @@ The MCU runs the `Limcet-V1.0-1302` custom firmware which handles:
 - Reverse trigger detection
 - Firmware version reporting to the about screen
 
-**CAN bus note:** The STM32F105 has built-in CAN controllers. Whether a CAN transceiver
-(e.g. TJA1050, SN65HVD230) is populated on the DC_LIMCET_MB_REV_003 board determines
-if CAN connectivity is physically available. Check the board near the MCU for a CAN
-transceiver IC. If present, the MCU firmware could decode Toyota Prado steering wheel
-messages directly from the CAN bus rather than via the SWC ADC wire.
+**CAN bus confirmed:** An **NXP TJA1042** CAN transceiver is populated adjacent to the
+STM32F105 on the DC_LIMCET_MB_REV_003 board.
+
+| Field | Value |
+|-------|-------|
+| Part | NXP TJA1042 |
+| Type | High-speed CAN transceiver, ISO 11898-2 |
+| Speed | Up to 5 Mbit/s (CAN FD and Classic CAN) |
+| Package | SOIC-8 |
+| Supply | 3.3V / 5V compatible |
+| Features | Standby mode, remote wake-up via CAN |
+
+The TJA1042 bridges the STM32F105 bxCAN controller (PA11/PA12 or PB8/PB9) to the
+vehicle CANH/CANL lines. This is a complete, active CAN bus circuit. The MCU firmware
+(Limcet-V1.0-1302) reads steering wheel button presses directly from the Toyota Prado
+CAN bus — not from an ADC voltage divider on a dedicated SWC wire.
+
+**SWC implication:** The `EnableSWCSwitchHardware` / ADC key-learning path in the
+ARK1668 software is NOT what controls steering wheel buttons on this device. The MCU
+firmware decodes Toyota-specific CAN messages and translates them to key events sent
+to the ARK1668 over `/dev/ttyHS0`.
 
 ---
 

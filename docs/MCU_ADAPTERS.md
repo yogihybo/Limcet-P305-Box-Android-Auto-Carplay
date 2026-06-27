@@ -380,46 +380,75 @@ of the `getAdapterInstance()` switch statement to confirm.
 
 ## Prado SWC — ADC key learning (not CAN bus)
 
-The STM32F105RBT6 MCU reads an ADC voltage divider on the SWC input wire from the
-steering wheel harness. Different buttons produce different resistance values → different
-voltages. The 12-bit ADC (16 channels) maps these to key codes sent to the ARK1668
-via `/dev/ttyHS0`.
+**CAN bus confirmed** — an NXP TJA1042 high-speed CAN transceiver is populated
+adjacent to the STM32F105 on the board. The MCU reads Toyota Prado steering wheel
+button presses directly from the vehicle CAN bus, decodes the Toyota-specific CAN
+message IDs, and forwards key events to the ARK1668 via `/dev/ttyHS0`.
 
-**CAN bus possibility:** The STM32F105 also has 2× hardware bxCAN controllers. If a
-CAN transceiver IC (TJA1050 or similar) is populated on the board near the MCU, the
-MCU firmware could read Toyota Prado SWC button messages directly from the CAN bus.
-Worth checking the board — if a small SOIC-8 chip is connected to the MCU's CAN pins
-(PA11/PA12 or PB8/PB9), CAN is wired up.
+The ADC SWC path (resistive voltage divider) is **not used** for steering wheel
+controls on this device. The `EnableSWCSwitchHardware` / FK key-learning feature
+in the ARK1668 software does not apply.
 
 Because touch events already work (proving MCU↔ARK comms is active), the SWC failure
 is a **key mapping / learning issue**, not a hardware or protocol problem.
 
-### SWC Learning feature (found in libSetting.so)
+### Confirmed CAN bus architecture
 
-The firmware has a full SWC key-learning UI:
-- `FKLearnWindow` — "Long press the steering wheel key to complete the setup"
-- `EnableSWCSwitchHardware` — FactoryConfig flag that activates the SWC hardware path
-- `EnableFKLearn` — FactoryConfig flag that shows the FK Learn button in Settings → About
+The NXP TJA1042 CAN transceiver is physically present on the board, wired between
+the STM32F105 bxCAN controller and the vehicle harness CANH/CANL pins. This is a
+complete hardware CAN bus circuit.
 
-**Both flags are now added to `msn_factory_configs/FactoryConfig.ini`.**
-
-### How to learn the steering wheel keys
-
-1. Flash the updated userdata (with new FactoryConfig) or edit via SSH
-2. Go to **Settings → System Info** (the About screen)
-3. The "FK Learn" button should now be visible
-4. Press each steering wheel button and long-press to teach it
-5. The learned mapping is saved to userdata
-
-### If SWC Learning screen does not appear
-
-The hidden factory menu items (1-6) may include additional SWC options. Temporarily
-set in FactoryConfig:
-```ini
-DisableFactorySetItems=""
+**The SWC signal path is:**
 ```
-This exposes the full factory menu. Look for "SWC Learning" or "Panel Key Learning"
-entries. Re-hide after use.
+Toyota Prado steering wheel button press
+  → CAN bus (body CAN, typically 500 kbit/s)
+  → Harness CANH/CANL wires → head unit connector
+  → NXP TJA1042 transceiver
+  → STM32F105 bxCAN controller
+  → Limcet-V1.0-1302 MCU firmware (CAN ID decode)
+  → UART (/dev/ttyHS0)
+  → ARK1668 running libMcuCenter.so (McuType=6)
+  → application key event
+```
+
+### Why SWC doesn't work — root causes
+
+**1. Physical wiring (most likely)**  
+The CANH/CANL wires from the Toyota Prado harness connector must be plugged into
+the head unit's CAN input. On many installations these are left unconnected. Check
+the 2-wire CAN pair on the vehicle harness — typically twisted pair, often white/orange
+or green/yellow depending on region.
+
+**2. MCU firmware CAN ID table**  
+The Limcet-V1.0-1302 firmware must contain the correct Toyota Prado CAN message ID
+and byte mapping for the steering wheel buttons. Toyota Prado 150 series SWC messages
+are typically on CAN ID `0x25` or `0x026` at 500 kbit/s on the body CAN.  
+If the MCU firmware was built for a different vehicle or has the wrong IDs, keys will
+not decode even with correct wiring.
+
+**3. CAN bus speed mismatch**  
+Toyota body CAN runs at 500 kbit/s. The STM32 bxCAN must be initialised at the same
+speed. If the MCU firmware uses a different baud rate, no frames will be received.
+
+### Diagnosis via MCU Monitor
+
+The advanced factory menu MCU Monitor shows raw data arriving from the MCU on
+`/dev/ttyHS0`. With the steering wheel connected and buttons pressed:
+- If data changes in the monitor → MCU is decoding CAN and sending key codes;
+  the issue is key mapping in the ARK1668 software
+- If nothing changes → CAN frames are not being decoded by the MCU;
+  check wiring first, then consider MCU firmware
+
+### MCU firmware update
+
+The STM32F105 can be re-flashed via:
+- **USB DFU** (USB OTG port on the chip, if exposed on the board)
+- **UART bootloader** (STM32 built-in bootloader on USART1, if accessible)
+- **SWD/JTAG** debug interface (requires STLink or J-Link probe)
+
+The `mcuupdate4/` path referenced in `libMcuCenter.so` suggests the ARK1668 can push
+MCU firmware updates from the SD card or USB drive — if the MCU supports this OTA
+path over the existing `/dev/ttyHS0` link.
 
 ### MCU serial port
 The MCU communicates with the ARK1668 via `/dev/ttyHS0`. To monitor what key events

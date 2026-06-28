@@ -415,16 +415,15 @@ else:
     if eol == -1: eol = len(text2)
     symlink_block = """
 
-# Redirect MTD data partitions to SD-stored files when NAND devices are absent.
-# Symlinks are only created if the real /dev/mtdN does not exist, so NAND takes
-# priority when available. Files live in /nanddata/ on the rootfs partition.
+# Replace MTD data partition devices with symlinks to SD-stored files.
+# SD card is always authoritative for these partitions — any NAND device
+# node created by mdev is removed and replaced unconditionally.
 for mtdmap in "8:bootlogo" "9:bootanimation" "10:reversingtrack" "11:unicode"; do
 \tnum="${mtdmap%%:*}"
 \tname="${mtdmap##*:}"
-\tif [ ! -e /dev/mtd${num} ] && [ -f /nanddata/${name} ]; then
-\t\tln -sf /nanddata/${name} /dev/mtd${num}
-\t\techo "mtd${num}: redirected to /nanddata/${name}"
-\tfi
+\trm -f /dev/mtd${num}
+\tln -sf /nanddata/${name} /dev/mtd${num}
+\techo "mtd${num}: /nanddata/${name}"
 done"""
     patched2 = text2[:eol] + symlink_block + text2[eol:]
     open(path, 'w').write(patched2)

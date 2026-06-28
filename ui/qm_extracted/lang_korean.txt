@@ -1,0 +1,858 @@
+[AvinWindow]
+  source:      'External audio input'
+  translation: '외부 오디오 입력'
+
+[AvinWindow]
+  source:      'Prohibit watching video when driving'
+  translation: '주행중 동영상 시청 금지'
+
+[AvinWindow]
+  source:      'Start detecting video signals'
+  translation: 'Start detecting video signals'
+
+[AvinWindow]
+  source:      'detecting video signals failed'
+  translation: 'detecting video signals failed'
+
+[BootLogoWidnow]
+  source:      'Boot Logo'
+  translation: '부팅로고'
+
+[BootlogoWindow]
+  source:      'Set bootlogo Failed!'
+  translation: '부팅로고 설정실패'
+
+[BootlogoWindow]
+  source:      'Set bootlogo successfully!'
+  translation: '부팅로고 설정성공'
+
+[BoxP800SettingWindow]
+  source:      'Add Camera'
+  translation: 'Add Camera'
+
+[BtDialPanel]
+  source:      'Dialing...'
+  translation: '연결중'
+
+[BtDialPanel]
+  source:      'Incoming...'
+  translation: '수신중'
+
+[BtMainWindow]
+  source:      'Bluetooth is not connected!'
+  translation: '블루투스가 연결되지않았습니다'
+
+[BtMainWindow]
+  source:      'Syncing call history...'
+  translation: 'Syncing call history...'
+
+[BtMainWindow]
+  source:      'Syncing contacts (%1) ...'
+  translation: 'Syncing contacts (%1) ...'
+
+[BtMusicPanel]
+  source:      'Unkown'
+  translation: 'Unkown'
+
+[BtMusicWindow]
+  source:      'Bluetooth is not connected!'
+  translation: '블루투스가 연결되지않았습니다'
+
+[BtSettingPanel]
+  source:      '%1 is Connected'
+  translation: '%1 is Connected'
+
+[BtSettingPanel]
+  source:      'Auto Answer'
+  translation: '자동응답'
+
+[BtSettingPanel]
+  source:      'Auto Connect'
+  translation: '자동연결'
+
+[BtSettingPanel]
+  source:      'Bluetooth is not connected'
+  translation: '블루투스가 연결되지않았습니다'
+
+[BtSettingPanel]
+  source:      'CarPlay is linked, Bluetooth is disable'
+  translation: '카플레이가연결되었습니다. 블루투스를사용할수없습니다'
+
+[BtSettingPanel]
+  source:      'Connecting %1'
+  translation: 'Connecting %1'
+
+[BtSettingPanel]
+  source:      'Connection %1 failed'
+  translation: 'Connection %1 failed'
+
+[BtSettingPanel]
+  source:      'Device name:'
+  translation: '장치이름'
+
+[BtSettingPanel]
+  source:      'Pair code:'
+  translation: '핀코드'
+
+[CallingDialog]
+  source:      'Dialing...'
+  translation: '연결중...'
+
+[CallingDialog]
+  source:      'Incoming...'
+  translation: '수신중...'
+
+[CanBus_Huida_ZD]
+  source:      'Car Info'
+  translation: 'Car Info'
+
+[CanBus_XinHang]
+  source:      'Add camera'
+  translation: 'Add Camera'
+
+[CanBus_XinHang]
+  source:      'Original car'
+  translation: '차량시스템'
+
+[CanBus_XinHang]
+  source:      'Reverse camera'
+  translation: '후방카메라'
+
+[CanBus_XinHang]
+  source:      'Reversing camera'
+  translation: '후방카메라'
+
+[CarAutoWindow]
+  source:      'Android Auto failed to connect!'
+  translation: 'Android Auto failed to connect!'
+
+[CarAutoWindow]
+  source:      'Android Auto is not install!'
+  translation: 'Android Auto is not install!'
+
+[CarAutoWindow]
+  source:      'Phone does not support Android Auto!'
+  translation: 'Phone does not support Android Auto!'
+
+[CarAutoWindow]
+  source:      'Phone is not inserted!'
+  translation: 'Phone is not inserted!'
+
+[CarAutoWindow]
+  source:      'Please connect Android Bluetooth!'
+  translation: '안드로이드 블루투스를 연결하십시오'
+
+[CarAutoWindow]
+  source:      'Start connecting Android Auto...'
+  translation: 'Start connecting Android Auto...'
+
+[CarLifeWindow]
+  source:      '1.Create a hotspot on your phone:'
+  translation: '1. 전화기에서 핫스팟을 만듭니다:'
+
+[CarLifeWindow]
+  source:      'Connecting to Android phone hotspot...'
+  translation: '안드로이드 폰 핫스팟에 연결 ...'
+
+[CarLifeWindow]
+  source:      'Please connect Android Bluetooth!'
+  translation: '안드로이드 블루투스를 연결하십시오'
+
+[CarPlayWindow]
+  source:      'Please connect iphone Bluetooth!'
+  translation: '아이폰 블루투스를 연결하십시오!'
+
+[CopyFactoryConfigDialog]
+  source:      'Cancel'
+  translation: '취소'
+
+[CopyFactoryConfigDialog]
+  source:      'Ok'
+  translation: '확인'
+
+[DVRSetDialog]
+  source:      'Close'
+  translation: 'Close'
+
+[DVRSetDialog]
+  source:      'Default'
+  translation: 'Default'
+
+[DVRViewWindow]
+  source:      'detecting video signals failed'
+  translation: 'detecting video signals failed'
+
+[DigitTvWindow]
+  source:      'Prohibit watching video when driving'
+  translation: '주행중 동영상 시청 금지'
+
+[DigitTvWindow]
+  source:      'Start detecting video signals'
+  translation: 'Start detecting video signals'
+
+[DigitTvWindow]
+  source:      'detecting video signals failed'
+  translation: 'detecting video signals failed'
+
+[FKLearnWindow]
+  source:      'Apply'
+  translation: '적용'
+
+[FKLearnWindow]
+  source:      'BAND'
+  translation: 'BAND'
+
+[FKLearnWindow]
+  source:      'Bluetooth'
+  translation: 'Bluetooth'
+
+[FKLearnWindow]
+  source:      'Button voltage : '
+  translation: '버튼 전압 : '
+
+[FKLearnWindow]
+  source:      'Choose the key to set'
+  translation: '설정할 단추를 선택하십시오'
+
+[FKLearnWindow]
+  source:      'Clear'
+  translation: '초기화'
+
+[FKLearnWindow]
+  source:      'Cleared successfully!'
+  translation: '초기화 성공！'
+
+[FKLearnWindow]
+  source:      'High'
+  translation: '높은'
+
+[FKLearnWindow]
+  source:      'Long press the panel key to complete the setup'
+  translation: '설정을 완료하려면 패널 키를 길게 누릅니다.'
+
+[FKLearnWindow]
+  source:      'Long press the steering wheel key to complete the setup'
+  translation: '스티어링 휠 키를 길게 눌러 설정을 완료하십시오'
+
+[FKLearnWindow]
+  source:      'Low'
+  translation: '낮은'
+
+[FKLearnWindow]
+  source:      'Resistance:'
+  translation: '저항:'
+
+[FKLearnWindow]
+  source:      'SWC Learning'
+  translation: '핸들리모컨 입력'
+
+[FKLearnWindow]
+  source:      'Setting'
+  translation: '설정'
+
+[FKLearnWindow]
+  source:      'Successful modification, configuration has taken effect!'
+  translation: '적용 성공！'
+
+[FMMainWindow]
+  source:      'Searching For AM Stations...'
+  translation: 'Searching For AM Stations...'
+
+[FMMainWindow]
+  source:      'Searching For FM Stations...'
+  translation: 'Searching For FM Stations...'
+
+[FactorySettingWindow]
+  source:      'Apply'
+  translation: '적용'
+
+[FactorySettingWindow]
+  source:      'Are you sure to synchronize the factory configuration to the system?After synchronization, you will not be able to restore to the factory configuration!'
+  translation: '공장 구성을 시스템에 동기화 하시겠습니까? 동기화가 끝나면 공장 설정으로 복원 할 수 없습니다!'
+
+[FactorySettingWindow]
+  source:      'Export'
+  translation: 'Export'
+
+[FactorySettingWindow]
+  source:      'Export factory configuration %1 file successed!'
+  translation: 'Export factory configuration %1 file successed!'
+
+[FactorySettingWindow]
+  source:      'Export factory configuration file failed!'
+  translation: 'Export factory configuration file failed!'
+
+[FactorySettingWindow]
+  source:      'Factory Setting'
+  translation: 'Factory Setting'
+
+[FactorySettingWindow]
+  source:      'Failed to create factory configuration directory!'
+  translation: 'Failed to create factory configuration directory!'
+
+[FactorySettingWindow]
+  source:      'SD card or USB device was not found!'
+  translation: 'SD card or USB device was not found!'
+
+[FactorySettingWindow]
+  source:      'Successful change, effective after restart!'
+  translation: 'Successful change, effective after restart!'
+
+[FactorySettingWindow]
+  source:      'Sync'
+  translation: '동조'
+
+[FactoryWindow]
+  source:      'Boot Logo'
+  translation: '부팅로고'
+
+[FactoryWindow]
+  source:      'Clear'
+  translation: '초기화'
+
+[FactoryWindow]
+  source:      'Factory Mode'
+  translation: 'Factory Mode'
+
+[FactoryWindow]
+  source:      'Factory setting'
+  translation: 'Factory setting'
+
+[FactoryWindow]
+  source:      'LCD Test'
+  translation: 'LCD Test'
+
+[FactoryWindow]
+  source:      'Ok'
+  translation: '확인'
+
+[FactoryWindow]
+  source:      'Reboot'
+  translation: '재부팅'
+
+[FactoryWindow]
+  source:      'Screenshot'
+  translation: 'Screenshot'
+
+[FactoryWindow]
+  source:      'Touch calibration'
+  translation: '터치 보정'
+
+[FactoryWindow]
+  source:      'VirKey Learn'
+  translation: 'VirKey Learn'
+
+[ImageViewerWindow]
+  source:      'Loadding photo ...'
+  translation: '사진로드 중 ...'
+
+[ImageViewerWindow]
+  source:      'Set wallpaper successfully'
+  translation: '배경 화면을 성공적으로 설정하십시오.'
+
+[ImageViewerWindow]
+  source:      'Unsupported file format or photo is too large!'
+  translation: '지원되지 않는 파일 형식 또는 사진이 너무 큽니다!'
+
+[LoadingDlg]
+  source:      'Loading...'
+  translation: 'Loading...'
+
+[MCUAdapter_BoxC270]
+  source:      '360 camera'
+  translation: '360카메라'
+
+[MCUAdapter_BoxC270]
+  source:      'Original car'
+  translation: '차량시스템'
+
+[MCUAdapter_BoxC270]
+  source:      'Reversing camera'
+  translation: '후방카메라'
+
+[MCUAdapter_BoxC270]
+  source:      'Speech button'
+  translation: '음성 버튼'
+
+[MCUAdapter_BoxP200]
+  source:      'Car setting'
+  translation: 'Car setting'
+
+[MCUAdapter_BoxP200]
+  source:      'My car'
+  translation: 'My car'
+
+[MCUAdapter_BoxP210]
+  source:      '360 camera'
+  translation: '360카메라'
+
+[MCUAdapter_BoxP210]
+  source:      'Original Camera'
+  translation: '원본 카메라'
+
+[MCUAdapter_BoxP210]
+  source:      'Retrofit Camera'
+  translation: '수정 된 카메라'
+
+[MCUAdapter_BoxP210]
+  source:      'Reversing camera'
+  translation: '후방카메라'
+
+[MCUAdapter_BoxP210]
+  source:      'Speech button'
+  translation: '음성 버튼'
+
+[MCUAdapter_BoxP300]
+  source:      '12V Active'
+  translation: '12V Active'
+
+[MCUAdapter_BoxP300]
+  source:      '360 camera'
+  translation: '360카메라'
+
+[MCUAdapter_BoxP300]
+  source:      'CAN Active'
+  translation: 'CAN Active'
+
+[MCUAdapter_BoxP300]
+  source:      'Car Setting'
+  translation: 'Car Setting'
+
+[MCUAdapter_BoxP300]
+  source:      'DVR'
+  translation: 'DVR'
+
+[MCUAdapter_BoxP300]
+  source:      'Front camera'
+  translation: 'Front camera'
+
+[MCUAdapter_BoxP300]
+  source:      'Front camera time'
+  translation: 'Front camera time'
+
+[MCUAdapter_BoxP300]
+  source:      'Left Camera'
+  translation: 'Left Camera'
+
+[MCUAdapter_BoxP300]
+  source:      'Off'
+  translation: 'Off'
+
+[MCUAdapter_BoxP300]
+  source:      'On'
+  translation: 'On'
+
+[MCUAdapter_BoxP300]
+  source:      'P Key Active'
+  translation: 'P Key Active'
+
+[MCUAdapter_BoxP300]
+  source:      'Radar'
+  translation: 'Radar'
+
+[MCUAdapter_BoxP300]
+  source:      'Reversing camera'
+  translation: '후방카메라'
+
+[MCUAdapter_BoxP300]
+  source:      'Reversing mode'
+  translation: 'Reversing mode'
+
+[MCUAdapter_BoxP300]
+  source:      'Right Camera'
+  translation: 'Right Camera'
+
+[MCUAdapter_BoxP300]
+  source:      'Speech button'
+  translation: '음성 버튼'
+
+[MCUAdapter_MsnDecoder]
+  source:      'CVBS'
+  translation: 'CVBS'
+
+[MCUAdapter_MsnDecoder]
+  source:      'Off'
+  translation: 'Off'
+
+[MCUAdapter_MsnDecoder]
+  source:      'On'
+  translation: 'On'
+
+[MCUAdapter_MsnDecoder]
+  source:      'Reverse camera'
+  translation: '후방카메라'
+
+[MCUAdapter_MsnDecoder]
+  source:      'VGA'
+  translation: 'VGA'
+
+[McuAdapter_BoxP230]
+  source:      'Reversing camera'
+  translation: '후방카메라'
+
+[MirrLinkWindow]
+  source:      '1.Create a hotspot on your phone:'
+  translation: '1. 전화기에서 핫스팟을 만듭니다:'
+
+[MirrLinkWindow]
+  source:      '1.Use your phone to connect to this wireless network:'
+  translation: '1. 휴대 전화를 사용하여이 무선 네트워크에 연결하십시오.'
+
+[MirrLinkWindow]
+  source:      '1:Open the developer options\n2:Enable usb debug\n3:Allow usb debuging'
+  translation: '1 : 개발자 옵션을 엽니 다\n2 : USB 디버그 활성화\n3 : USB 디버깅 허용'
+
+[MirrLinkWindow]
+  source:      '2.Open the MLink app on the phone'
+  translation: '2. 휴대 전화에서 MLink 앱을 엽니 다'
+
+[MirrLinkWindow]
+  source:      'Connecting to Android phone hotspot...'
+  translation: '안드로이드 폰 핫스팟에 연결 ...'
+
+[MirrLinkWindow]
+  source:      'Please connect Android Bluetooth!'
+  translation: '안드로이드 블루투스를 연결하십시오'
+
+[MirrLinkWindow]
+  source:      'Start connecting Android Mirroring...'
+  translation: 'Android 미러링 연결 시작 ...'
+
+[MirrLinkWindow]
+  source:      'Waiting for iPhone Screen Mirroring to connection...'
+  translation: 'iPhone 화면 미러링이 연결될 때까지 기다리는 중 ...'
+
+[MsnChooseDialog]
+  source:      'Cancel'
+  translation: '취소'
+
+[MsnChooseDialog]
+  source:      'Ok'
+  translation: '확인'
+
+[MsnCoreApp]
+  source:      'Copy factory configuration file %1 successed %2 failed!'
+  translation: 'Copy factory configuration file %1 successed %2 failed!'
+
+[MsnCoreApp]
+  source:      'Factory configuration upgrade is successful, is it restarted?'
+  translation: '공장 구성 업그레이드가 성공적입니까? 다시 시작됩니까?'
+
+[MsnCoreApp]
+  source:      'Find the factory configuration file, do you upgrade it?'
+  translation: 'Find the factory configuration file, do you upgrade it?'
+
+[MsnCoreApp]
+  source:      'Ok (%1)'
+  translation: 'Ok (%1)'
+
+[OptionListDialog]
+  source:      'Cancel'
+  translation: '취소'
+
+[PlayListDlg]
+  source:      'No USB Device Insert!'
+  translation: 'No USB Device Insert!'
+
+[PlayListDlg]
+  source:      'Scanning media files...'
+  translation: 'Scanning media files...'
+
+[QObject]
+  source:      'AUX'
+  translation: 'AUX'
+
+[QObject]
+  source:      'AV in'
+  translation: 'AV in'
+
+[QObject]
+  source:      'Android Auto'
+  translation: 'Android Auto'
+
+[QObject]
+  source:      'BlueTooth'
+  translation: '블루투스'
+
+[QObject]
+  source:      'CarLife'
+  translation: 'CarLife'
+
+[QObject]
+  source:      'CarPlay'
+  translation: 'CarPlay'
+
+[QObject]
+  source:      'DTV'
+  translation: 'DTV'
+
+[QObject]
+  source:      'DVD'
+  translation: 'DVD'
+
+[QObject]
+  source:      'DVR'
+  translation: 'DVR'
+
+[QObject]
+  source:      'Document'
+  translation: '조작'
+
+[QObject]
+  source:      'Exit'
+  translation: '출구'
+
+[QObject]
+  source:      'Factory Mode'
+  translation: 'Factory Mode'
+
+[QObject]
+  source:      'Launcher'
+  translation: '런처'
+
+[QObject]
+  source:      'Media'
+  translation: 'Media'
+
+[QObject]
+  source:      'Music'
+  translation: '음악'
+
+[QObject]
+  source:      'Panel Key Learning'
+  translation: 'Panel Key Learning'
+
+[QObject]
+  source:      'Photo'
+  translation: '사진'
+
+[QObject]
+  source:      'Radio'
+  translation: '라디오'
+
+[QObject]
+  source:      'SWC Learning'
+  translation: '핸들리모컨 입력'
+
+[QObject]
+  source:      'Setting'
+  translation: '설정'
+
+[QObject]
+  source:      'TPMS'
+  translation: 'TPMS'
+
+[QObject]
+  source:      'Version'
+  translation: '버젼'
+
+[QObject]
+  source:      'Video'
+  translation: '비디오'
+
+[QObject]
+  source:      'Video in'
+  translation: 'Video in'
+
+[QObject]
+  source:      'Virtual Key Learning'
+  translation: '키 입력'
+
+[RDSSettingDlg]
+  source:      'Cancel'
+  translation: '취소'
+
+[RDSSettingDlg]
+  source:      'Ok'
+  translation: '확인'
+
+[SelectDialog]
+  source:      'Cancel'
+  translation: '취소'
+
+[SelectDialog]
+  source:      'Ok'
+  translation: '확인'
+
+[SetCommonPanel]
+  source:      'Auto start phone link app'
+  translation: '폰링크 자동실행'
+
+[SetCommonPanel]
+  source:      'Beep'
+  translation: 'Beep'
+
+[SetCommonPanel]
+  source:      'Mute'
+  translation: 'Mute'
+
+[SetCommonPanel]
+  source:      'Navigation Volume'
+  translation: '내비게이션 볼륨'
+
+[SetCommonPanel]
+  source:      'Prohibit video when driving'
+  translation: '주행중 비디오시청 금지'
+
+[SetCommonPanel]
+  source:      'Volume'
+  translation: 'Volume'
+
+[SetDateTimePanel]
+  source:      '12-hour clock'
+  translation: '12시간 '
+
+[SetDateTimePanel]
+  source:      'DateTime'
+  translation: '시간 날짜'
+
+[SetDateTimePanel]
+  source:      'Day'
+  translation: 'Day'
+
+[SetDateTimePanel]
+  source:      'Hour'
+  translation: 'Hour'
+
+[SetDateTimePanel]
+  source:      'Minute'
+  translation: 'Minute'
+
+[SetDateTimePanel]
+  source:      'Month'
+  translation: 'Month'
+
+[SetDateTimePanel]
+  source:      'Ok'
+  translation: '확인'
+
+[SetDateTimePanel]
+  source:      'Year'
+  translation: 'Year'
+
+[SetSysInfoPanel]
+  source:      'BlueTooth :'
+  translation: '블루투스 ：'
+
+[SetSysInfoPanel]
+  source:      'CAN :'
+  translation: 'CAN :'
+
+[SetSysInfoPanel]
+  source:      'Factory Mode'
+  translation: 'Factory Mode'
+
+[SetSysInfoPanel]
+  source:      'Factory reset'
+  translation: '초기화'
+
+[SetSysInfoPanel]
+  source:      'Hardware :'
+  translation: '하드웨어：'
+
+[SetSysInfoPanel]
+  source:      'MCU :'
+  translation: 'MCU :'
+
+[SetSysInfoPanel]
+  source:      'SWC Learning'
+  translation: '핸들리모컨 입력'
+
+[SetSysInfoPanel]
+  source:      'Software :'
+  translation: '소프트웨어 ：'
+
+[SetSysInfoPanel]
+  source:      'System : '
+  translation: 'System : '
+
+[SettingWindow]
+  source:      'Common'
+  translation: '일반'
+
+[SettingWindow]
+  source:      'DateTime'
+  translation: '시간 날짜'
+
+[SettingWindow]
+  source:      'Display'
+  translation: '디스플레이'
+
+[SettingWindow]
+  source:      'Language'
+  translation: '언어'
+
+[SettingWindow]
+  source:      'Restore the system to factory settings?'
+  translation: '시스템을 초기 설정으로 복원 하시겠습니까?'
+
+[SettingWindow]
+  source:      'Sound'
+  translation: '소리'
+
+[SettingWindow]
+  source:      'SysInfo'
+  translation: '시스템'
+
+[SettingWindow]
+  source:      'Wallpaper'
+  translation: '배경화면'
+
+[UpdateDialog]
+  source:      'Cancel'
+  translation: '취소'
+
+[UpdateDialog]
+  source:      'Ok'
+  translation: '확인'
+
+[VKLearnWindow]
+  source:      'Apply'
+  translation: '적용'
+
+[VKLearnWindow]
+  source:      'Clear'
+  translation: '초기화'
+
+[VKLearnWindow]
+  source:      'Cleared successfully!'
+  translation: '초기화 성공!'
+
+[VKLearnWindow]
+  source:      'Successful modification, configuration has taken effect!'
+  translation: '적용 성공!'
+
+[VKLearnWindow]
+  source:      'Virtual Key Learning'
+  translation: '키 입력'
+
+[VersionDialog]
+  source:      'App Version'
+  translation: 'App Version'
+
+[VersionDialog]
+  source:      'Close'
+  translation: 'Close'
+
+[VersionDialog]
+  source:      'Hardware Info'
+  translation: 'Hardware Info'
+
+[VersionDialog]
+  source:      'MCU Version'
+  translation: 'MCU 버젼'
+
+[VersionDialog]
+  source:      'System Version'
+  translation: 'System Version'
+
+[VersionDialog]
+  source:      'Version'
+  translation: '버젼'
+
+[VideoPlayerWindow]
+  source:      'Prohibit watching video when driving'
+  translation: '주행중 동영상 시청 금지'
+
+  source:      ''
+  translation: ''

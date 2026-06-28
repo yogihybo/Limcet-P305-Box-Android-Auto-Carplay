@@ -1,0 +1,1262 @@
+[AvinWindow]
+  source:      'External audio input'
+  translation: 'Entrada de áudio externo'
+
+[AvinWindow]
+  source:      'Prohibit watching video when driving'
+  translation: 'Proibido assistir vídeos ao dirigir'
+
+[AvinWindow]
+  source:      'Start detecting video signals'
+  translation: 'Detectando sinal de video'
+
+[AvinWindow]
+  source:      'detecting video signals failed'
+  translation: 'Sem sinal'
+
+[BootLogoWidnow]
+  source:      'Boot Logo'
+  translation: 'Logo inicial'
+
+[BootlogoWindow]
+  source:      'Set bootlogo Failed!'
+  translation: 'Falha ao alterar a Logo!'
+
+[BootlogoWindow]
+  source:      'Set bootlogo successfully!'
+  translation: 'Logo alterada com sucesso!'
+
+[BoxP800SettingWindow]
+  source:      'Add Camera'
+  translation: 'Add Câmera'
+
+[BtDialPanel]
+  source:      'Dialing...'
+  translation: 'Discando...'
+
+[BtDialPanel]
+  source:      'Incoming...'
+  translation: 'Recebendo...'
+
+[BtMainWindow]
+  source:      'Bluetooth is not connected!'
+  translation: 'Buetooth desconectado'
+
+[BtMainWindow]
+  source:      'Syncing call history...'
+  translation: 'Sincronizando historico de chamadas...'
+
+[BtMainWindow]
+  source:      'Syncing contacts (%1) ...'
+  translation: 'Sincronizando contatos (%1)...'
+
+[BtMusicPanel]
+  source:      'Unkown'
+  translation: 'Desconhecido'
+
+[BtMusicWindow]
+  source:      'Bluetooth is not connected!'
+  translation: 'Buetooth desconectado'
+
+[BtMusicWindow]
+  source:      'Unkown'
+  translation: 'Desconhecido'
+
+[BtSettingPanel]
+  source:      '%1 is Connected'
+  translation: '%1 está Conectado'
+
+[BtSettingPanel]
+  source:      'Auto Answer'
+  translation: 'Atendimento Automático'
+
+[BtSettingPanel]
+  source:      'Auto Connect'
+  translation: 'Conexão automática'
+
+[BtSettingPanel]
+  source:      'Bluetooth is not connected'
+  translation: 'Buetooth desconectado'
+
+[BtSettingPanel]
+  source:      'CarPlay is linked, Bluetooth is disable'
+  translation: 'CarPlay Conectado, Bluetooth desabilitado'
+
+[BtSettingPanel]
+  source:      'Connecting %1'
+  translation: 'Conectando %1'
+
+[BtSettingPanel]
+  source:      'Connecting %1 Please try again later'
+  translation: 'Conectando %1 Por favor tente novamente'
+
+[BtSettingPanel]
+  source:      'Connection %1 failed'
+  translation: 'Conexão %1 falhou'
+
+[BtSettingPanel]
+  source:      'Device name:'
+  translation: 'Nome do dispositivo:'
+
+[BtSettingPanel]
+  source:      'Pair code:'
+  translation: 'Senha de conexão:'
+
+[CallingDialog]
+  source:      'Dialing...'
+  translation: 'Discando...'
+
+[CallingDialog]
+  source:      'Incoming...'
+  translation: 'Recebendo...'
+
+[CanBus_Huida_ZD]
+  source:      'Car Info'
+  translation: 'Informação do veículo'
+
+[CanBus_XinHang]
+  source:      'Add camera'
+  translation: 'Add Câmera'
+
+[CanBus_XinHang]
+  source:      'AfterMarket Camera'
+  translation: 'Depois de carregar a Faixa'
+
+[CanBus_XinHang]
+  source:      'Off'
+  translation: 'Desligar'
+
+[CanBus_XinHang]
+  source:      'On'
+  translation: 'Liga'
+
+[CanBus_XinHang]
+  source:      'Reverse camera'
+  translation: 'Câmera Traseira'
+
+[CanBus_XinHang]
+  source:      'Reversing camera'
+  translation: 'Câmera Traseira'
+
+[CanBus_XinHang]
+  source:      'Reversing track'
+  translation: 'Depois de carregar a Faixa'
+
+[CarAutoWindow]
+  source:      'Android Auto failed to connect!'
+  translation: 'Falha na conexão Android Auto!'
+
+[CarAutoWindow]
+  source:      'Android Auto is not install!'
+  translation: 'O Android Auto não foi instalado!'
+
+[CarAutoWindow]
+  source:      'Phone does not support Android Auto!'
+  translation: 'O telefone não suporta o Android Auto!'
+
+[CarAutoWindow]
+  source:      'Phone is not inserted!'
+  translation: 'Telefone não está conectado!'
+
+[CarAutoWindow]
+  source:      'Please connect Android Bluetooth!'
+  translation: 'Por favor, conecte o Android Bluetooth'
+
+[CarAutoWindow]
+  source:      'Start connecting Android Auto...'
+  translation: 'Iniciando conexão Android Auto...'
+
+[CarLifeWindow]
+  source:      '1.Create a hotspot on your phone:'
+  translation: '1. Crie um ponto de acesso no seu telefone:'
+
+[CarLifeWindow]
+  source:      'Carlife failed to connect!'
+  translation: 'Carlife não conseguiu se conectar!'
+
+[CarLifeWindow]
+  source:      'Carlife is not install!'
+  translation: 'Carlife não está instalado!'
+
+[CarLifeWindow]
+  source:      'Connecting to Android phone hotspot...'
+  translation: 'A ligar ao ponto de acesso do telefone Android ...'
+
+[CarLifeWindow]
+  source:      'Phone does not support carlife!'
+  translation: 'Telefone não suporta carlife!'
+
+[CarLifeWindow]
+  source:      'Phone is not inserted!'
+  translation: 'Telefone não está inserido!'
+
+[CarLifeWindow]
+  source:      'Please connect Android Bluetooth!'
+  translation: 'Por favor, conecte o Android Bluetooth'
+
+[CarLifeWindow]
+  source:      'Please unlock your phone and keep carlife in the foreground!'
+  translation: 'Por favor, desbloquear o seu telefone e manter carlife em primeiro plano!'
+
+[CarLifeWindow]
+  source:      'Start connecting CarLife...'
+  translation: 'Iniciando Conexão CarLife...'
+
+[CarPlayWindow]
+  source:      'Carplay failed to connect!'
+  translation: 'falha de conexão carplay!'
+
+[CarPlayWindow]
+  source:      'Phone is not inserted!'
+  translation: 'Telefone não está inserido!'
+
+[CarPlayWindow]
+  source:      'Please connect iphone Bluetooth!'
+  translation: 'Por favor, conecte o iphone Bluetooth!'
+
+[CarPlayWindow]
+  source:      'Please unlock your phone!'
+  translation: 'Por favor desbloqueie o seu telefone!'
+
+[CarPlayWindow]
+  source:      'Start connecting carplay...'
+  translation: 'Iniciando conexão carplay...'
+
+[CopyFactoryConfigDialog]
+  source:      'Cancel'
+  translation: 'Cancelar'
+
+[CopyFactoryConfigDialog]
+  source:      'Ok'
+  translation: 'Ok'
+
+[DVRSetDialog]
+  source:      'Close'
+  translation: 'Close'
+
+[DVRSetDialog]
+  source:      'Default'
+  translation: 'Padrão'
+
+[DVRViewWindow]
+  source:      'detecting video signals failed'
+  translation: 'detecting video signals failed'
+
+[DigitTvWindow]
+  source:      'Prohibit watching video when driving'
+  translation: 'Proibido assistir vídeos ao dirigir'
+
+[DigitTvWindow]
+  source:      'Start detecting video signals'
+  translation: 'Inicia detecção de sinais de vídeo'
+
+[DigitTvWindow]
+  source:      'detecting video signals failed'
+  translation: 'detecção de sinal de video falhou'
+
+[FKLearnWindow]
+  source:      'Apply'
+  translation: 'Aplicar'
+
+[FKLearnWindow]
+  source:      'BAND'
+  translation: 'BAND'
+
+[FKLearnWindow]
+  source:      'Bluetooth'
+  translation: 'Bluetooth'
+
+[FKLearnWindow]
+  source:      'Button voltage : '
+  translation: 'Voltagem da tecla ：'
+
+[FKLearnWindow]
+  source:      'Choose the key to set'
+  translation: 'Escolha o botão para definir'
+
+[FKLearnWindow]
+  source:      'Clear'
+  translation: 'Limpar'
+
+[FKLearnWindow]
+  source:      'Cleared successfully!'
+  translation: 'Limpo com sucesso!'
+
+[FKLearnWindow]
+  source:      'High'
+  translation: 'Alto'
+
+[FKLearnWindow]
+  source:      'Long press the panel key to complete the setup'
+  translation: 'Pressione e segure a tecla do painel para concluir a configuração'
+
+[FKLearnWindow]
+  source:      'Long press the steering wheel key to complete the setup'
+  translation: 'Long pressione o Volante chave para concluir a configuração'
+
+[FKLearnWindow]
+  source:      'Low'
+  translation: 'baixo'
+
+[FKLearnWindow]
+  source:      'Resistance:'
+  translation: 'Resistência:'
+
+[FKLearnWindow]
+  source:      'SWC Learning'
+  translation: 'SWC Aprendendo'
+
+[FKLearnWindow]
+  source:      'Setting'
+  translation: 'Configuração'
+
+[FKLearnWindow]
+  source:      'Successful modification, configuration has taken effect!'
+  translation: 'Modificação bem sucedida, a configuração entrou em vigor!'
+
+[FMMainWindow]
+  source:      'Searching For AM Stations...'
+  translation: 'Procurando por estações AM...'
+
+[FMMainWindow]
+  source:      'Searching For FM Stations...'
+  translation: 'Procurando por estações FM...'
+
+[FactorySettingWindow]
+  source:      'Android Link Type'
+  translation: 'Android Link Tipo'
+
+[FactorySettingWindow]
+  source:      'Apply'
+  translation: 'Aplicar'
+
+[FactorySettingWindow]
+  source:      'Are you sure to synchronize the factory configuration to the system?After synchronization, you will not be able to restore to the factory configuration!'
+  translation: 'Tem certeza de sincronizar a configuração de fábrica com o sistema? Após a sincronização, você não poderá restaurar a configuração de fábrica!'
+
+[FactorySettingWindow]
+  source:      'BlueTooth Type'
+  translation: 'BlueTooth Tipo'
+
+[FactorySettingWindow]
+  source:      'Default Language'
+  translation: 'Idioma padrão'
+
+[FactorySettingWindow]
+  source:      'Export'
+  translation: 'Exportar'
+
+[FactorySettingWindow]
+  source:      'Export factory configuration %1 file successed!'
+  translation: 'Exportar configuração de fábrica %1 arquivos bem sucedidos!'
+
+[FactorySettingWindow]
+  source:      'Export factory configuration file failed!'
+  translation: 'Falha ao exportar o arquivo de configuração de fábrica!'
+
+[FactorySettingWindow]
+  source:      'Factory Setting'
+  translation: 'Configuração de fábrica'
+
+[FactorySettingWindow]
+  source:      'Failed to create factory configuration directory!'
+  translation: 'Falha ao criar o diretório de configuração de fábrica!'
+
+[FactorySettingWindow]
+  source:      'IPhone Link Type'
+  translation: 'IPhone Link Tipo'
+
+[FactorySettingWindow]
+  source:      'Radio Type'
+  translation: 'Radio tipo'
+
+[FactorySettingWindow]
+  source:      'SD card or USB device was not found!'
+  translation: 'Cartão SD ou dispositivo USB não foi encontrado!'
+
+[FactorySettingWindow]
+  source:      'Sound Type'
+  translation: 'Sound tipo'
+
+[FactorySettingWindow]
+  source:      'Successful change, effective after restart!'
+  translation: 'Mudança bem sucedida, após o reinício!'
+
+[FactorySettingWindow]
+  source:      'Sync'
+  translation: 'Sincronizar'
+
+[FactoryWindow]
+  source:      'Backspace'
+  translation: 'Backspace'
+
+[FactoryWindow]
+  source:      'Boot Logo'
+  translation: 'Logo de inicio'
+
+[FactoryWindow]
+  source:      'Clear'
+  translation: 'Limpar'
+
+[FactoryWindow]
+  source:      'Factory Mode'
+  translation: 'Modo de fábrica'
+
+[FactoryWindow]
+  source:      'Factory setting'
+  translation: 'Configuração de fábrica'
+
+[FactoryWindow]
+  source:      'LCD Test'
+  translation: 'Teste de tela'
+
+[FactoryWindow]
+  source:      'Ok'
+  translation: 'Sim'
+
+[FactoryWindow]
+  source:      'Reboot'
+  translation: 'Reinicialização'
+
+[FactoryWindow]
+  source:      'Screenshot'
+  translation: 'Screenshot'
+
+[FactoryWindow]
+  source:      'Tab 1'
+  translation: 'Tab 1'
+
+[FactoryWindow]
+  source:      'Touch calibration'
+  translation: 'Calibração por toque'
+
+[FactoryWindow]
+  source:      'VirKey Learn'
+  translation: 'Virkey aprender'
+
+[HuidaZdBetteryWindow]
+  source:      'Battery state'
+  translation: 'Estado da bateria'
+
+[HuidaZdBetteryWindow]
+  source:      'Cell'
+  translation: 'Telefone'
+
+[HuidaZdBetteryWindow]
+  source:      'Cell temp max : '
+  translation: 'Temperatura máxima Telefone : '
+
+[HuidaZdBetteryWindow]
+  source:      'Cell vol max : '
+  translation: 'Volume máximo telefone : '
+
+[HuidaZdBetteryWindow]
+  source:      'Cell vol min : '
+  translation: 'Volume minimo Telefone : '
+
+[HuidaZdBetteryWindow]
+  source:      'Fault'
+  translation: 'Falha'
+
+[HuidaZdBetteryWindow]
+  source:      'High Vol'
+  translation: 'Volume Alto'
+
+[HuidaZdBetteryWindow]
+  source:      'High temp'
+  translation: 'Alta temperatura'
+
+[HuidaZdBetteryWindow]
+  source:      'Large current'
+  translation: 'Corrente Alta'
+
+[HuidaZdBetteryWindow]
+  source:      'Low Vol'
+  translation: 'Volume Baixo'
+
+[HuidaZdBetteryWindow]
+  source:      'Low battery'
+  translation: 'Bateria baixa'
+
+[HuidaZdBetteryWindow]
+  source:      'Low insulation'
+  translation: 'Isolamento baixo'
+
+[HuidaZdBetteryWindow]
+  source:      'Low temp'
+  translation: 'Baixa temperatura'
+
+[HuidaZdBetteryWindow]
+  source:      'Number : '
+  translation: 'Número : '
+
+[HuidaZdBetteryWindow]
+  source:      'Single Battery state'
+  translation: 'Estado da Bateria'
+
+[HuidaZdBetteryWindow]
+  source:      'Temp too high'
+  translation: 'Temperatura muito alta'
+
+[HuidaZdBetteryWindow]
+  source:      'Vol imbalance'
+  translation: 'Desequilibrio de volume'
+
+[HuidaZdBetteryWindow]
+  source:      'Vol too high'
+  translation: 'Volume muito alto'
+
+[HuidaZdBetteryWindow]
+  source:      'Vol too low'
+  translation: 'Volume muito baixo'
+
+[HuidaZdChargingWindow]
+  source:      'Charging Status'
+  translation: 'Status da Carga'
+
+[HuidaZdMainWindow]
+  source:      'Car Info'
+  translation: 'Informação do veículo'
+
+[ImageViewerWindow]
+  source:      'Loadding photo ...'
+  translation: 'Carregando foto ...'
+
+[ImageViewerWindow]
+  source:      'Set wallpaper successfully'
+  translation: 'Definir papel de parede com sucesso'
+
+[ImageViewerWindow]
+  source:      'Unsupported file format or photo is too large!'
+  translation: 'Formato de arquivo não suportado ou foto é muito grande!'
+
+[LoadingDlg]
+  source:      'Loading...'
+  translation: 'Carregando...'
+
+[MCUAdapter_BoxC270]
+  source:      '12V Active'
+  translation: '12V Ativo'
+
+[MCUAdapter_BoxC270]
+  source:      'After loading Track'
+  translation: 'Depois de carregar a Faixa'
+
+[MCUAdapter_BoxC270]
+  source:      'After loading overall'
+  translation: 'Após o carregamento geral'
+
+[MCUAdapter_BoxC270]
+  source:      'CAN Active'
+  translation: 'CAN Ativo'
+
+[MCUAdapter_BoxC270]
+  source:      'DVR'
+  translation: 'DVR'
+
+[MCUAdapter_BoxC270]
+  source:      'Off'
+  translation: 'Desligar'
+
+[MCUAdapter_BoxC270]
+  source:      'On'
+  translation: 'Liga'
+
+[MCUAdapter_BoxC270]
+  source:      'Reversing camera'
+  translation: 'Câmera Traseira'
+
+[MCUAdapter_BoxC270]
+  source:      'Reversing mode'
+  translation: 'Modo Câmera trazeira'
+
+[MCUAdapter_BoxC270]
+  source:      'Speech button'
+  translation: 'botão de fala'
+
+[MCUAdapter_BoxC270]
+  source:      'Trajectory'
+  translation: 'Trajetória'
+
+[MCUAdapter_BoxP200]
+  source:      'Car setting'
+  translation: 'Car setting'
+
+[MCUAdapter_BoxP200]
+  source:      'My car'
+  translation: 'Meu Veículo'
+
+[MCUAdapter_BoxP210]
+  source:      '12V Active'
+  translation: '12V Ativo'
+
+[MCUAdapter_BoxP210]
+  source:      'CAN Active'
+  translation: 'CAN Ativo'
+
+[MCUAdapter_BoxP210]
+  source:      'DVR'
+  translation: 'DVR'
+
+[MCUAdapter_BoxP210]
+  source:      'Off'
+  translation: 'Desligar'
+
+[MCUAdapter_BoxP210]
+  source:      'On'
+  translation: 'Liga'
+
+[MCUAdapter_BoxP210]
+  source:      'Original Camera'
+  translation: 'Câmera original'
+
+[MCUAdapter_BoxP210]
+  source:      'Retrofit Camera'
+  translation: 'add Camera'
+
+[MCUAdapter_BoxP210]
+  source:      'Reversing camera'
+  translation: 'Câmera Traseira'
+
+[MCUAdapter_BoxP210]
+  source:      'Reversing mode'
+  translation: 'Modo Câmera trazeira'
+
+[MCUAdapter_BoxP210]
+  source:      'Speech button'
+  translation: 'botão de fala'
+
+[MCUAdapter_BoxP210]
+  source:      'Trajectory'
+  translation: 'Trajetória'
+
+[MCUAdapter_BoxP300]
+  source:      '12V Active'
+  translation: '12V Ativo'
+
+[MCUAdapter_BoxP300]
+  source:      '360 camera'
+  translation: '360 camera'
+
+[MCUAdapter_BoxP300]
+  source:      'AfterMarket Camera'
+  translation: 'Câmera aftermarket'
+
+[MCUAdapter_BoxP300]
+  source:      'CAN Active'
+  translation: 'CAN Ativo'
+
+[MCUAdapter_BoxP300]
+  source:      'Car Setting'
+  translation: 'Car Setting'
+
+[MCUAdapter_BoxP300]
+  source:      'DVR'
+  translation: 'DVR'
+
+[MCUAdapter_BoxP300]
+  source:      'Factory Camera'
+  translation: 'Câmera de fábrica'
+
+[MCUAdapter_BoxP300]
+  source:      'Front camera'
+  translation: 'Front camera'
+
+[MCUAdapter_BoxP300]
+  source:      'Front camera time'
+  translation: 'Front camera time'
+
+[MCUAdapter_BoxP300]
+  source:      'Left Camera'
+  translation: 'Left Camera'
+
+[MCUAdapter_BoxP300]
+  source:      'Off'
+  translation: 'Desligar'
+
+[MCUAdapter_BoxP300]
+  source:      'On'
+  translation: 'Liga'
+
+[MCUAdapter_BoxP300]
+  source:      'P Key Active'
+  translation: 'P Key Active'
+
+[MCUAdapter_BoxP300]
+  source:      'Radar'
+  translation: 'Radar'
+
+[MCUAdapter_BoxP300]
+  source:      'Reversing camera'
+  translation: 'Câmera Traseira'
+
+[MCUAdapter_BoxP300]
+  source:      'Reversing mode'
+  translation: 'Modo Câmera trazeira'
+
+[MCUAdapter_BoxP300]
+  source:      'Right Camera'
+  translation: 'Right Camera'
+
+[MCUAdapter_BoxP300]
+  source:      'Speech button'
+  translation: 'botão de fala'
+
+[MCUAdapter_BoxP300]
+  source:      'Trajectory'
+  translation: 'Trajetória'
+
+[MCUAdapter_BoxP900]
+  source:      'AfterMarket Camera'
+  translation: 'Depois de carregar a Faixa'
+
+[MCUAdapter_BoxP900]
+  source:      'Off'
+  translation: 'Desligar'
+
+[MCUAdapter_BoxP900]
+  source:      'On'
+  translation: 'Liga'
+
+[MCUAdapter_IM60BC]
+  source:      'Off'
+  translation: 'Desligar'
+
+[MCUAdapter_IM60BC]
+  source:      'On'
+  translation: 'Liga'
+
+[MCUAdapter_MsnDecoder]
+  source:      '12V Active'
+  translation: '12V Ativo'
+
+[MCUAdapter_MsnDecoder]
+  source:      'AfterMarket Camera'
+  translation: 'Depois de carregar a Faixa'
+
+[MCUAdapter_MsnDecoder]
+  source:      'CAN Active'
+  translation: 'CAN Ativo'
+
+[MCUAdapter_MsnDecoder]
+  source:      'CVBS'
+  translation: 'CVBS'
+
+[MCUAdapter_MsnDecoder]
+  source:      'Off'
+  translation: 'Desligar'
+
+[MCUAdapter_MsnDecoder]
+  source:      'On'
+  translation: 'Liga'
+
+[MCUAdapter_MsnDecoder]
+  source:      'Reverse camera'
+  translation: 'Câmera Traseira'
+
+[MCUAdapter_MsnDecoder]
+  source:      'VGA'
+  translation: 'VGA'
+
+[McuAdapter_BoxP230]
+  source:      'AfterMarket Camera'
+  translation: 'Depois de carregar a Faixa'
+
+[McuAdapter_BoxP230]
+  source:      'Off'
+  translation: 'Desligar'
+
+[McuAdapter_BoxP230]
+  source:      'On'
+  translation: 'Liga'
+
+[McuAdapter_BoxP230]
+  source:      'Reversing camera'
+  translation: 'Câmera Traseira'
+
+[McuAdapter_BoxP230]
+  source:      'Trajectory'
+  translation: 'Trajetória'
+
+[MirrLinkWindow]
+  source:      '1.Create a hotspot on your phone:'
+  translation: '1. Crie um ponto de acesso no seu telefone:'
+
+[MirrLinkWindow]
+  source:      '1.Use your phone to connect to this wireless network:'
+  translation: '1. Use seu telefone para conectar-se a esta rede sem fio:'
+
+[MirrLinkWindow]
+  source:      '1:Open the developer options\n2:Enable usb debug\n3:Allow usb debuging'
+  translation: '1: Abra as opções do desenvolvedor\n2: Ativar depuração usb\n3: Permitir depuração usb'
+
+[MirrLinkWindow]
+  source:      '2.Open the MLink app on the phone'
+  translation: '2. Abra o aplicativo MLink no telefone'
+
+[MirrLinkWindow]
+  source:      'Connecting to Android phone hotspot...'
+  translation: 'A ligar ao ponto de acesso do telefone Android ...'
+
+[MirrLinkWindow]
+  source:      'Phone is not inserted'
+  translation: 'Telefone não está conectado'
+
+[MirrLinkWindow]
+  source:      'Please connect Android Bluetooth!'
+  translation: 'Por favor, conecte o Android Bluetooth'
+
+[MirrLinkWindow]
+  source:      'Start connecting Android Mirroring...'
+  translation: 'Comece a conectar o Android Mirroring ...'
+
+[MirrLinkWindow]
+  source:      'Waiting for iPhone Screen Mirroring to connection...'
+  translation: 'Aguardando a conexão do espelhamento de tela do iPhone ...'
+
+[MsnChooseDialog]
+  source:      'Cancel'
+  translation: 'Cancel'
+
+[MsnChooseDialog]
+  source:      'Ok'
+  translation: 'Ok'
+
+[MsnCoreApp]
+  source:      'Copy factory configuration file %1 successed %2 failed!'
+  translation: 'Copia do arquivo de configuração de fábrica %1 sucesso %2 falha!'
+
+[MsnCoreApp]
+  source:      'Factory configuration upgrade is successful, is it restarted?'
+  translation: 'O upgrade da configuração de fábrica é bem-sucedido, é reiniciado?'
+
+[MsnCoreApp]
+  source:      'Find the factory configuration file, do you upgrade it?'
+  translation: 'Restaurar configuração de fabrica, tem certeza que quer atualizar?'
+
+[MsnCoreApp]
+  source:      'Ok (%1)'
+  translation: 'Ok (%1)'
+
+[MusicPlayerWindow]
+  source:      'Unkown'
+  translation: 'Desconhecido'
+
+[PlayListDlg]
+  source:      'No USB Device Insert!'
+  translation: 'Nenhum dispositivo USB inserido!'
+
+[PlayListDlg]
+  source:      'Scanning media files...'
+  translation: 'Buscanso arquivos de midia...'
+
+[QObject]
+  source:      'AUX'
+  translation: 'AUX'
+
+[QObject]
+  source:      'AV in'
+  translation: 'AV in'
+
+[QObject]
+  source:      'Android Auto'
+  translation: 'Android Auto'
+
+[QObject]
+  source:      'BlueTooth'
+  translation: 'BlueTooth'
+
+[QObject]
+  source:      'CarLife'
+  translation: 'CarLife'
+
+[QObject]
+  source:      'CarPlay'
+  translation: 'CarPlay'
+
+[QObject]
+  source:      'DTV'
+  translation: 'DTV'
+
+[QObject]
+  source:      'DVD'
+  translation: 'DVD'
+
+[QObject]
+  source:      'DVR'
+  translation: 'DVR'
+
+[QObject]
+  source:      'Document'
+  translation: 'Manual'
+
+[QObject]
+  source:      'Exit'
+  translation: 'Saída'
+
+[QObject]
+  source:      'Factory Mode'
+  translation: 'Modo de fábrica'
+
+[QObject]
+  source:      'Launcher'
+  translation: 'Launcher'
+
+[QObject]
+  source:      'Media'
+  translation: 'Media'
+
+[QObject]
+  source:      'Music'
+  translation: 'Música'
+
+[QObject]
+  source:      'Panel Key Learning'
+  translation: 'Panel Key Learning'
+
+[QObject]
+  source:      'Photo'
+  translation: 'Foto'
+
+[QObject]
+  source:      'Radio'
+  translation: 'Radio'
+
+[QObject]
+  source:      'SWC Learning'
+  translation: 'SWC Learning'
+
+[QObject]
+  source:      'Setting'
+  translation: 'Configuração'
+
+[QObject]
+  source:      'TPMS'
+  translation: 'TPMS'
+
+[QObject]
+  source:      'Version'
+  translation: 'Versão'
+
+[QObject]
+  source:      'Video'
+  translation: 'Vídeo'
+
+[QObject]
+  source:      'Video in'
+  translation: 'Vídeo in'
+
+[QObject]
+  source:      'Virtual Key Learning'
+  translation: 'Aprender teclado virtual'
+
+[RDSSettingDlg]
+  source:      'Cancel'
+  translation: 'Cancelar'
+
+[RDSSettingDlg]
+  source:      'Ok'
+  translation: 'Ok'
+
+[ScreenShotDialog]
+  source:      'SD card or USB device was not found!'
+  translation: 'Cartão SD ou dispositivo USB não foi encontrado!'
+
+[SelectDialog]
+  source:      'Cancel'
+  translation: 'Cancelar'
+
+[SelectDialog]
+  source:      'Ok'
+  translation: 'Ok'
+
+[SetCommonPanel]
+  source:      'Auto start phone link app'
+  translation: 'Inicio automático Phone link'
+
+[SetCommonPanel]
+  source:      'Beep'
+  translation: 'Beep'
+
+[SetCommonPanel]
+  source:      'Mute'
+  translation: 'Mudo'
+
+[SetCommonPanel]
+  source:      'Navigation Volume'
+  translation: 'Volume de navegação'
+
+[SetCommonPanel]
+  source:      'Prohibit video when driving'
+  translation: 'Proibe vídeo ao dirigir'
+
+[SetCommonPanel]
+  source:      'Volume'
+  translation: 'Volume'
+
+[SetDateTimePanel]
+  source:      '12-hour clock'
+  translation: 'Relógio de 12 Horas'
+
+[SetDateTimePanel]
+  source:      'DateTime'
+  translation: 'Data hora'
+
+[SetDateTimePanel]
+  source:      'Day'
+  translation: 'Dia'
+
+[SetDateTimePanel]
+  source:      'Hour'
+  translation: 'Hora'
+
+[SetDateTimePanel]
+  source:      'Minute'
+  translation: 'Minuto'
+
+[SetDateTimePanel]
+  source:      'Month'
+  translation: 'Mês'
+
+[SetDateTimePanel]
+  source:      'Ok'
+  translation: 'OK'
+
+[SetDateTimePanel]
+  source:      'Year'
+  translation: 'Ano'
+
+[SetDisplayPanel]
+  source:      'Auto Backlight'
+  translation: 'Modo noturno automático'
+
+[SetDisplayPanel]
+  source:      'Brightness'
+  translation: 'Brilho'
+
+[SetDisplayPanel]
+  source:      'Contrast'
+  translation: 'Contraste'
+
+[SetDisplayPanel]
+  source:      'Day BackLight'
+  translation: 'Iluminação dia'
+
+[SetDisplayPanel]
+  source:      'Default'
+  translation: 'Padrão'
+
+[SetDisplayPanel]
+  source:      'Night BackLight'
+  translation: 'Iluminação Noite'
+
+[SetDisplayPanel]
+  source:      'Saturation'
+  translation: 'Saturação'
+
+[SetFMZonePanel]
+  source:      'America'
+  translation: 'America'
+
+[SetFMZonePanel]
+  source:      'Japan'
+  translation: 'Japão'
+
+[SetFMZonePanel]
+  source:      'Russia, Mongolia, North Korea'
+  translation: 'Russia, Mongolia, North Korea'
+
+[SetFMZonePanel]
+  source:      'The European, Chinese, Korea, Philippines, Thailand, Goa Saipan'
+  translation: 'The European, Chinese, Korea, Philippines, Thailand, Goa Saipan'
+
+[SetSoundPanel]
+  source:      'Back'
+  translation: 'Back'
+
+[SetSoundPanel]
+  source:      'Bass'
+  translation: 'Bass'
+
+[SetSoundPanel]
+  source:      'Classical'
+  translation: 'Classical'
+
+[SetSoundPanel]
+  source:      'Driver'
+  translation: 'Driver'
+
+[SetSoundPanel]
+  source:      'Front'
+  translation: 'Frente'
+
+[SetSoundPanel]
+  source:      'Jazz'
+  translation: 'Jazz'
+
+[SetSoundPanel]
+  source:      'Median'
+  translation: 'Médio'
+
+[SetSoundPanel]
+  source:      'Original'
+  translation: 'Original'
+
+[SetSoundPanel]
+  source:      'Pop'
+  translation: 'Pop'
+
+[SetSoundPanel]
+  source:      'Reset'
+  translation: 'Restaurar'
+
+[SetSoundPanel]
+  source:      'Rock'
+  translation: 'Rock'
+
+[SetSoundPanel]
+  source:      'Scene'
+  translation: 'Cena'
+
+[SetSoundPanel]
+  source:      'Subwoofer'
+  translation: 'Subwoofer'
+
+[SetSoundPanel]
+  source:      'Treble'
+  translation: 'Agudo'
+
+[SetSoundPanel]
+  source:      'User'
+  translation: 'Usuário'
+
+[SetSoundPanel]
+  source:      'Vocal'
+  translation: 'Vocal'
+
+[SetSysInfoPanel]
+  source:      'BlueTooth :'
+  translation: 'BlueTooth :'
+
+[SetSysInfoPanel]
+  source:      'CAN :'
+  translation: 'CAN :'
+
+[SetSysInfoPanel]
+  source:      'Factory Mode'
+  translation: 'Modo de fábrica'
+
+[SetSysInfoPanel]
+  source:      'Factory reset'
+  translation: 'Reset de fábrica'
+
+[SetSysInfoPanel]
+  source:      'Hardware :'
+  translation: 'Hardware :'
+
+[SetSysInfoPanel]
+  source:      'MCU :'
+  translation: 'MCU :'
+
+[SetSysInfoPanel]
+  source:      'SWC Learning'
+  translation: 'SWC leitura'
+
+[SetSysInfoPanel]
+  source:      'Software :'
+  translation: 'Software :'
+
+[SetSysInfoPanel]
+  source:      'System : '
+  translation: 'Sistema : '
+
+[SettingWindow]
+  source:      'Common'
+  translation: 'Comum'
+
+[SettingWindow]
+  source:      'DateTime'
+  translation: 'Data hora'
+
+[SettingWindow]
+  source:      'Display'
+  translation: 'Tela'
+
+[SettingWindow]
+  source:      'Language'
+  translation: 'Idioma'
+
+[SettingWindow]
+  source:      'Restore the system to factory settings?'
+  translation: 'Restaurar o sistema para as configurações de fábrica'
+
+[SettingWindow]
+  source:      'Sound'
+  translation: 'Audio'
+
+[SettingWindow]
+  source:      'SysInfo'
+  translation: 'Infosistema'
+
+[SettingWindow]
+  source:      'Wallpaper'
+  translation: 'Papel de parede'
+
+[VKLearnWindow]
+  source:      'Apply'
+  translation: 'Aplicar'
+
+[VKLearnWindow]
+  source:      'Clear'
+  translation: 'Limpar'
+
+[VKLearnWindow]
+  source:      'Cleared successfully!'
+  translation: 'Limpo com sucesso!'
+
+[VKLearnWindow]
+  source:      'Successful modification, configuration has taken effect!'
+  translation: 'Modificação bem sucedida, a configuração entrou em vigor!'
+
+[VKLearnWindow]
+  source:      'Virtual Key Learning'
+  translation: 'Aprender teclado virtual'
+
+[VWFunctionSetting]
+  source:      'Reset'
+  translation: 'Restaurar'
+
+[VWFunctionSetting]
+  source:      'Volume'
+  translation: 'Volume'
+
+[VersionDialog]
+  source:      'App Version'
+  translation: 'Versão de aplicativo'
+
+[VersionDialog]
+  source:      'Close'
+  translation: 'Close'
+
+[VersionDialog]
+  source:      'Hardware Info'
+  translation: 'Fechar'
+
+[VersionDialog]
+  source:      'MCU Version'
+  translation: 'Versão de MCU'
+
+[VersionDialog]
+  source:      'System Version'
+  translation: 'Versão de sistema'
+
+[VersionDialog]
+  source:      'Version'
+  translation: 'Versão'
+
+[VideoPlayerWindow]
+  source:      'Prohibit watching video when driving'
+  translation: 'Proibido assistir vídeos ao dirigir'
+
+  source:      ''
+  translation: ''

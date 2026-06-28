@@ -1,0 +1,2890 @@
+[AvinWindow]
+  source:      'External audio input'
+  translation: 'יציאת שמע'
+
+[AvinWindow]
+  source:      'Prohibit watching video when driving'
+  translation: 'צפייה בוידאו אסורה במהלך נסיעה!'
+
+[AvinWindow]
+  source:      'Start detecting video signals'
+  translation: 'בודק אות וידאו'
+
+[AvinWindow]
+  source:      'detecting video signals failed'
+  translation: 'אין אות וידאו!'
+
+[BootLogoWidnow]
+  source:      'Boot Logo'
+  translation: 'לוגו הפעלה'
+
+[BootlogoWindow]
+  source:      'Set bootlogo Failed!'
+  translation: 'הגדרת לוגו הפעלה נכשל!'
+
+[BootlogoWindow]
+  source:      'Set bootlogo successfully!'
+  translation: 'הגדרת לוגו הפעלה בוצע בהצלחה!'
+
+[BoxP800SettingWindow]
+  source:      '360'
+  translation: '360'
+
+[BoxP800SettingWindow]
+  source:      'Add Camera'
+  translation: 'הוסף מצלמה'
+
+[BoxP800SettingWindow]
+  source:      'Camera type'
+  translation: 'סוג מצלמה'
+
+[BoxP800SettingWindow]
+  source:      'Car setting'
+  translation: 'הגדרות רכב'
+
+[BoxP800SettingWindow]
+  source:      'FM transmiter'
+  translation: 'משדר FM'
+
+[BoxP800SettingWindow]
+  source:      'Front camera'
+  translation: 'מצלמה קדמית'
+
+[BoxP800SettingWindow]
+  source:      'Original'
+  translation: 'מקורי'
+
+[BoxP800SettingWindow]
+  source:      'Reverse Rader'
+  translation: 'חיישן רוורס'
+
+[BoxP800SettingWindow]
+  source:      'Reverse track'
+  translation: 'מסלול רוורס'
+
+[BoxP800SettingWindow]
+  source:      'Right camera'
+  translation: 'מצלמה ימין'
+
+[BoxP800SettingWindow]
+  source:      'Transmiter'
+  translation: 'משדר FM'
+
+[BtDialPanel]
+  source:      'Dialing...'
+  translation: 'מחייג . . .'
+
+[BtDialPanel]
+  source:      'Incoming...'
+  translation: 'שיחה נכנסת...'
+
+[BtMainWindow]
+  source:      'Bluetooth is not connected!'
+  translation: 'אינו מחובר BT'
+
+[BtMainWindow]
+  source:      'Syncing call history...'
+  translation: 'מסנכרן שיחות . . .'
+
+[BtMainWindow]
+  source:      'Syncing contacts (%1) ...'
+  translation: 'מסנכרן אנשי קשר . . .'
+
+[BtMusicPanel]
+  source:      'Unkown'
+  translation: 'לא ידוע'
+
+[BtMusicWindow]
+  source:      'Bluetooth is not connected!'
+  translation: 'אינו מחובר BT'
+
+[BtMusicWindow]
+  source:      'Unkown'
+  translation: 'לא ידוע'
+
+[BtSettingPanel]
+  source:      '%1 is Connected'
+  translation: '%1  מחובר'
+
+[BtSettingPanel]
+  source:      'Auto Answer'
+  translation: "מענה אוטו'"
+
+[BtSettingPanel]
+  source:      'Auto Connect'
+  translation: "חיבור אוטו'"
+
+[BtSettingPanel]
+  source:      'Bluetooth is not connected'
+  translation: 'BT אינו מחובר'
+
+[BtSettingPanel]
+  source:      'CarPlay is linked, Bluetooth is disable'
+  translation: 'קארפליי מחובר, בלוטוס משוהה'
+
+[BtSettingPanel]
+  source:      'Connecting %1'
+  translation: '%1 מתחבר'
+
+[BtSettingPanel]
+  source:      'Connecting %1 Please try again later'
+  translation: '%1 מחובר נסה שוב מאוחר יותר'
+
+[BtSettingPanel]
+  source:      'Connection %1 failed'
+  translation: '%1 חיבור נכשל'
+
+[BtSettingPanel]
+  source:      'Device name:'
+  translation: 'שם התקן'
+
+[BtSettingPanel]
+  source:      'Pair code:'
+  translation: 'קוד צימוד'
+
+[CallingDialog]
+  source:      'Dialing...'
+  translation: 'מחייג . . .'
+
+[CallingDialog]
+  source:      'Incoming...'
+  translation: 'שיחה נכנסת....'
+
+[CanBus_Huida_ZD]
+  source:      'Car Info'
+  translation: 'מידע רכב'
+
+[CanBus_Raise_Volkswagen]
+  source:      'Car infos'
+  translation: 'מידע רכב'
+
+[CanBus_XinHang]
+  source:      '360'
+  translation: '360'
+
+[CanBus_XinHang]
+  source:      'Add camera'
+  translation: 'הוסף מצלמה '
+
+[CanBus_XinHang]
+  source:      'AfterMarket 360'
+  translation: 'מצלמת 360 מקומית'
+
+[CanBus_XinHang]
+  source:      'AfterMarket Camera'
+  translation: 'הוסף מצלמה לא מקורית'
+
+[CanBus_XinHang]
+  source:      'CVBS'
+  translation: 'CVBS'
+
+[CanBus_XinHang]
+  source:      'Car Setting'
+  translation: 'הגדרות רכב'
+
+[CanBus_XinHang]
+  source:      'Car type'
+  translation: 'סוג רכב'
+
+[CanBus_XinHang]
+  source:      'Dedicated right view'
+  translation: 'נוף ייעודי'
+
+[CanBus_XinHang]
+  source:      'Display type'
+  translation: 'מצב תצוגה'
+
+[CanBus_XinHang]
+  source:      'Front View'
+  translation: 'מבט קדמי'
+
+[CanBus_XinHang]
+  source:      'Front view after right view'
+  translation: 'מבט קדמי ואחריו אחורי'
+
+[CanBus_XinHang]
+  source:      'Front view mirror'
+  translation: 'מצב תצוגה של ראי קדמי'
+
+[CanBus_XinHang]
+  source:      'Gear Position'
+  translation: 'מצב תיבת הילוכים'
+
+[CanBus_XinHang]
+  source:      'Horizontal'
+  translation: 'אופקי'
+
+[CanBus_XinHang]
+  source:      'Horizontal and vertical'
+  translation: 'אופקי ואנכי'
+
+[CanBus_XinHang]
+  source:      'None'
+  translation: 'ללא'
+
+[CanBus_XinHang]
+  source:      'OE Camera'
+  translation: 'מצלמה מקורית'
+
+[CanBus_XinHang]
+  source:      'Off'
+  translation: 'מבוטל'
+
+[CanBus_XinHang]
+  source:      'On'
+  translation: 'מופעל'
+
+[CanBus_XinHang]
+  source:      'Original car'
+  translation: 'רכב מקורי'
+
+[CanBus_XinHang]
+  source:      'Parking Key'
+  translation: 'מפתח חניה'
+
+[CanBus_XinHang]
+  source:      'Rear video format'
+  translation: 'פורמט וידאו  אחורי'
+
+[CanBus_XinHang]
+  source:      'Rear view mirror'
+  translation: 'מצב תצוגה של ראי אחורי'
+
+[CanBus_XinHang]
+  source:      'Reverse State'
+  translation: 'מצב רוורס'
+
+[CanBus_XinHang]
+  source:      'Reverse camera'
+  translation: 'מצלמת רוורס'
+
+[CanBus_XinHang]
+  source:      'Reverse condition'
+  translation: 'מצב רוורס'
+
+[CanBus_XinHang]
+  source:      'Reverse radar'
+  translation: 'חיישן רוורס'
+
+[CanBus_XinHang]
+  source:      'Reverse track'
+  translation: 'מסלול רוורס'
+
+[CanBus_XinHang]
+  source:      'Reversing camera'
+  translation: 'מצלמת רוורס'
+
+[CanBus_XinHang]
+  source:      'Reversing front view'
+  translation: 'מבט נסיעה לאחור'
+
+[CanBus_XinHang]
+  source:      'Reversing radar'
+  translation: 'חיישן רוורס'
+
+[CanBus_XinHang]
+  source:      'Reversing track'
+  translation: 'מסלול רוורס'
+
+[CanBus_XinHang]
+  source:      'Right View'
+  translation: 'מבט ימני'
+
+[CanBus_XinHang]
+  source:      'Right camera'
+  translation: 'מצלמת ימין'
+
+[CanBus_XinHang]
+  source:      'Right view mirror'
+  translation: 'מצב תמונה ימין ראי'
+
+[CanBus_XinHang]
+  source:      'Sound type'
+  translation: 'סוג שמע'
+
+[CanBus_XinHang]
+  source:      'Starting front view'
+  translation: 'החל מבט קדמי'
+
+[CanBus_XinHang]
+  source:      'Steering front view'
+  translation: 'הגה מבט קדמי'
+
+[CanBus_XinHang]
+  source:      'VGA'
+  translation: 'VGA'
+
+[CanBus_XinHang]
+  source:      'Vertical'
+  translation: 'אנכי'
+
+[CarAutoWindow]
+  source:      'Android Auto failed to connect!'
+  translation: 'חיבור AndriodAuto נכשל'
+
+[CarAutoWindow]
+  source:      'Android Auto is not install!'
+  translation: 'אינו מותקן Android  Auto '
+
+[CarAutoWindow]
+  source:      'Phone does not support Android Auto!'
+  translation: 'הטלפון אינו תומך  Auto  Android'
+
+[CarAutoWindow]
+  source:      'Phone is not inserted!'
+  translation: 'טלפון אינו מחובר'
+
+[CarAutoWindow]
+  source:      'Please connect Android Bluetooth!'
+  translation: 'אנא חבר אנדרואיד Bluetooth'
+
+[CarAutoWindow]
+  source:      'Start connecting Android Auto...'
+  translation: 'מתבצע חיבור אל Auto  Android'
+
+[CarAutoWindow]
+  source:      'is connected, please disconnect and try again'
+  translation: 'טלפון מחובר, אנא נתק ונסה שנית'
+
+[CarLifeWindow]
+  source:      '1.Create a hotspot on your phone:'
+  translation: '1. צור נקודה חמה בטלפון שלך:'
+
+[CarLifeWindow]
+  source:      '2.Open the CarLife app on the phone'
+  translation: '2.Open the CarLife app on the phone'
+
+[CarLifeWindow]
+  source:      'Carlife failed to connect!'
+  translation: 'נכשל חיבור Carlife'
+
+[CarLifeWindow]
+  source:      'Carlife is not install!'
+  translation: 'אינו מחובר CarLife'
+
+[CarLifeWindow]
+  source:      'Connecting to Android phone hotspot...'
+  translation: 'מתחבר לנקודה חמה לטלפון אנדרואיד ...'
+
+[CarLifeWindow]
+  source:      'PSK:'
+  translation: 'PSK:'
+
+[CarLifeWindow]
+  source:      'Phone does not support carlife!'
+  translation: 'טלפון אינו תומך CarLife'
+
+[CarLifeWindow]
+  source:      'Phone is not inserted!'
+  translation: 'טלפון אינו מחובר'
+
+[CarLifeWindow]
+  source:      'Please connect Android Bluetooth!'
+  translation: 'אנא חבר אנדרואיד Bluetooth'
+
+[CarLifeWindow]
+  source:      'Please unlock your phone and keep carlife in the foreground!'
+  translation: 'אנא אפשר טלפון לחיבור ושמור CarLife  ברקע'
+
+[CarLifeWindow]
+  source:      'SSID:'
+  translation: 'SSID:'
+
+[CarLifeWindow]
+  source:      'Start connecting CarLife...'
+  translation: 'מתבצע חיבור CarLife'
+
+[CarLifeWindow]
+  source:      'is connected, please disconnect and try again'
+  translation: 'is connected, please disconnect and try again'
+
+[CarPlayWindow]
+  source:      'Carplay failed to connect!'
+  translation: 'חיבור CarPlay נכשל!'
+
+[CarPlayWindow]
+  source:      'Phone is not inserted!'
+  translation: 'טלפון אינו מחובר'
+
+[CarPlayWindow]
+  source:      'Please connect iphone Bluetooth!'
+  translation: 'אנא הפעל BT בטלפון'
+
+[CarPlayWindow]
+  source:      'Please unlock your phone!'
+  translation: 'אנא שחרר נעילת הטלפון'
+
+[CarPlayWindow]
+  source:      'Start connecting carplay...'
+  translation: 'מתחבר... ל CarPlay'
+
+[CarPlayWindow]
+  source:      'is connected, please disconnect and try again'
+  translation: 'התקן מחובר, אנא נתק ונסה שנית'
+
+[CarReportWindow_Xinri]
+  source:      'MainWindow'
+  translation: 'מסך ראשי'
+
+[CopyFactoryConfigDialog]
+  source:      'Cancel'
+  translation: 'ביטול'
+
+[CopyFactoryConfigDialog]
+  source:      'Ok'
+  translation: 'אישור'
+
+[DVRSetDialog]
+  source:      'Close'
+  translation: 'סגירה'
+
+[DVRSetDialog]
+  source:      'Default'
+  translation: 'מחדל'
+
+[DVRViewWindow]
+  source:      'detecting video signals failed'
+  translation: 'אין אות וידאו!'
+
+[DigitTvWindow]
+  source:      'Prohibit watching video when driving'
+  translation: 'איסור צפייה בוידאו בנהיגה'
+
+[DigitTvWindow]
+  source:      'Start detecting video signals'
+  translation: 'בודק אות וידאו'
+
+[DigitTvWindow]
+  source:      'detecting video signals failed'
+  translation: 'לא נמצא אות וידאו'
+
+[ECLinkWindow]
+  source:      'Device is not activated!'
+  translation: 'התקן אינו פעיל'
+
+[ECLinkWindow]
+  source:      'ECLink failed to connect!'
+  translation: 'נכשל בחיבור EClink'
+
+[ECLinkWindow]
+  source:      'ECLink is not install!'
+  translation: 'אינו מותקן EClink'
+
+[ECLinkWindow]
+  source:      'Phone does not support ECLink!'
+  translation: 'טלפון אינו תומך EClink'
+
+[ECLinkWindow]
+  source:      'Phone is not inserted!'
+  translation: 'טלפון אינו מחובר'
+
+[ECLinkWindow]
+  source:      'Please unlock your phone and keep ECLink in the foreground!'
+  translation: 'שחרר נעילת מכשיר לחיבור EClink ברקע '
+
+[ECLinkWindow]
+  source:      'Start connecting ECLink...'
+  translation: 'החל להתחבר ל EClink '
+
+[ECLinkWindow]
+  source:      'is connected, please disconnect and try again'
+  translation: 'טלפון מחובר, אנא נתק ונסה שוב!'
+
+[EchoCancellationWindow]
+  source:      'Analysis failed, please try again!'
+  translation: 'ניתוח נכשל אנא נסה שוב'
+
+[EchoCancellationWindow]
+  source:      'Analyzing the echo delay finished, '
+  translation: 'ניתוח שמע הסתיים '
+
+[EchoCancellationWindow]
+  source:      'Analyzing the echo delay, please keep quiet...'
+  translation: 'מנתח את אקו שמור על שקט כעת'
+
+[EchoCancellationWindow]
+  source:      'Do you want to modify the echo delay?'
+  translation: 'האם ברצונך לכוונן את האקו שוב'
+
+[EchoCancellationWindow]
+  source:      'Echo cancellation delay automatic correction procedure'
+  translation: 'ביטול עיקוב אקו לתיקון שמע '
+
+[EchoCancellationWindow]
+  source:      'Please increase the volume to improve the accuracy'
+  translation: 'אנא הגבר עוצמת שמע לשיפור דיוק'
+
+[EchoCancellationWindow]
+  source:      'Please keep quiet and make sure there is no external noise in the car'
+  translation: 'השקט רעשים לבדיקה האם יש רעשים חיצוניים מהרכב'
+
+[EchoCancellationWindow]
+  source:      'Start'
+  translation: 'החל'
+
+[EchoCancellationWindow]
+  source:      'accuracy:'
+  translation: 'דיוק'
+
+[EnergyRecoveryWindow_xinri]
+  source:      'MainWindow'
+  translation: 'מסך ראשי'
+
+[FKLearnWindow]
+  source:      'Apply'
+  translation: 'אישור'
+
+[FKLearnWindow]
+  source:      'BAND'
+  translation: 'ערוץ'
+
+[FKLearnWindow]
+  source:      'Bluetooth'
+  translation: 'BT'
+
+[FKLearnWindow]
+  source:      'Button voltage : '
+  translation: 'מתג מתח'
+
+[FKLearnWindow]
+  source:      'Choose the key to set'
+  translation: 'בחר מקש להגדרות'
+
+[FKLearnWindow]
+  source:      'Clear'
+  translation: 'איפוס'
+
+[FKLearnWindow]
+  source:      'Cleared successfully!'
+  translation: 'אופס בהצלחה'
+
+[FKLearnWindow]
+  source:      'High'
+  translation: 'גבוה'
+
+[FKLearnWindow]
+  source:      'Long press the panel key to complete the setup'
+  translation: 'לחיצה ארוכה על מתג המחוון להשלמת לימוד'
+
+[FKLearnWindow]
+  source:      'Long press the steering wheel key to complete the setup'
+  translation: 'לחיצה ארוכה על כפתור ההגה על מנת להשלים את ההגדרה'
+
+[FKLearnWindow]
+  source:      'Low'
+  translation: 'נמוך'
+
+[FKLearnWindow]
+  source:      'Resistance:'
+  translation: 'התנגדות'
+
+[FKLearnWindow]
+  source:      'SWC Learning'
+  translation: 'לימוד הגה'
+
+[FKLearnWindow]
+  source:      'Setting'
+  translation: 'הגדרה'
+
+[FKLearnWindow]
+  source:      'Successful modification, configuration has taken effect!'
+  translation: 'הגדרות נשמרו בהצלחה '
+
+[FMMainWindow]
+  source:      'Searching For AM Stations...'
+  translation: 'מחפש תחנות ...AM'
+
+[FMMainWindow]
+  source:      'Searching For FM Stations...'
+  translation: 'מחפש תחנות.... FM'
+
+[FMTransmitForm]
+  source:      'FM Transmitter'
+  translation: 'שידור FM'
+
+[FMTransmitForm]
+  source:      'Transmiter'
+  translation: 'שידור FM'
+
+[FactorySettingWindow]
+  source:      'AEC Delay'
+  translation: 'עיכוב AEC'
+
+[FactorySettingWindow]
+  source:      'Android Link Type'
+  translation: 'קישור Android'
+
+[FactorySettingWindow]
+  source:      'Android auto use touch'
+  translation: 'שימוש מגע Auto Android'
+
+[FactorySettingWindow]
+  source:      'Apply'
+  translation: 'אישור'
+
+[FactorySettingWindow]
+  source:      'Are you sure to synchronize the factory configuration to the system?After synchronization, you will not be able to restore to the factory configuration!'
+  translation: 'האם אתה מאשר סנכרון קובץ מערכת? לאחר סנכרון לא תוכל לשחזר הגדרות מערכת'
+
+[FactorySettingWindow]
+  source:      'BlueTooth Type'
+  translation: 'סוג BT'
+
+[FactorySettingWindow]
+  source:      'Can Type'
+  translation: 'סוג CAN'
+
+[FactorySettingWindow]
+  source:      'DVR Type'
+  translation: 'סוג הקלטה DVR'
+
+[FactorySettingWindow]
+  source:      'Default Language'
+  translation: 'שפת ברירת מחדל '
+
+[FactorySettingWindow]
+  source:      'Door prompt'
+  translation: 'סוג דלת '
+
+[FactorySettingWindow]
+  source:      'Driving radar'
+  translation: 'חיישני נסיעה '
+
+[FactorySettingWindow]
+  source:      'Enable AV in'
+  translation: 'אפשר כניסת אות וידאו '
+
+[FactorySettingWindow]
+  source:      'Enable SWC Learning'
+  translation: 'אפשר לימוד לחצני הגה'
+
+[FactorySettingWindow]
+  source:      'Enable factory mode'
+  translation: 'אפשר הגדרות יצרן'
+
+[FactorySettingWindow]
+  source:      'Export'
+  translation: 'יבוא'
+
+[FactorySettingWindow]
+  source:      'Export factory configuration %1 file successed!'
+  translation: 'יצוא קובץ הגדרות יצרן בוצע בהצלחה '
+
+[FactorySettingWindow]
+  source:      'Export factory configuration file failed!'
+  translation: 'יצוא קובץ הגדרות יצרן נכשל '
+
+[FactorySettingWindow]
+  source:      'Factory Setting'
+  translation: 'הגדרות יצרן'
+
+[FactorySettingWindow]
+  source:      'Failed to create factory configuration directory!'
+  translation: 'נכשל ביצירת תיקית קובץ יצרן '
+
+[FactorySettingWindow]
+  source:      'IPhone Link Type'
+  translation: 'קישור IPhone'
+
+[FactorySettingWindow]
+  source:      'Mcu Type'
+  translation: 'גרסאת MCU'
+
+[FactorySettingWindow]
+  source:      'Mirroring Link Type'
+  translation: 'סוג קישור שיקוף'
+
+[FactorySettingWindow]
+  source:      'Radio Area'
+  translation: 'איזור רדיו'
+
+[FactorySettingWindow]
+  source:      'Radio Type'
+  translation: 'סוג רדיו'
+
+[FactorySettingWindow]
+  source:      'Right hand car driver'
+  translation: 'הגה צד ימין '
+
+[FactorySettingWindow]
+  source:      'SD card or USB device was not found!'
+  translation: 'לא נמצא התקן USB/SD'
+
+[FactorySettingWindow]
+  source:      'Scree Aspect Ratio'
+  translation: 'יחס אות מוגן'
+
+[FactorySettingWindow]
+  source:      'Sound Type'
+  translation: 'סוג שמע'
+
+[FactorySettingWindow]
+  source:      'Successful change, effective after restart!'
+  translation: 'אנא אתחל את המערכת בכדי להחיל את השינוי!'
+
+[FactorySettingWindow]
+  source:      'Sync'
+  translation: 'סנכרון'
+
+[FactorySettingWindow]
+  source:      'TV Type'
+  translation: 'סוג TV'
+
+[FactorySettingWindow]
+  source:      'WLAN Type'
+  translation: 'WLAN Type'
+
+[FactoryWindow]
+  source:      '1'
+  translation: '1'
+
+[FactoryWindow]
+  source:      '16'
+  translation: '16'
+
+[FactoryWindow]
+  source:      '2'
+  translation: '2'
+
+[FactoryWindow]
+  source:      '32'
+  translation: '32'
+
+[FactoryWindow]
+  source:      '4'
+  translation: '4'
+
+[FactoryWindow]
+  source:      '8'
+  translation: '8'
+
+[FactoryWindow]
+  source:      'Backspace'
+  translation: 'רווח '
+
+[FactoryWindow]
+  source:      'Boot Logo'
+  translation: 'לוגו הפעלה'
+
+[FactoryWindow]
+  source:      'Clear'
+  translation: 'איפוס'
+
+[FactoryWindow]
+  source:      'Echo Cancellation'
+  translation: 'ביטול אקו'
+
+[FactoryWindow]
+  source:      'Factory Mode'
+  translation: 'ברירת מחדל מצב '
+
+[FactoryWindow]
+  source:      'Factory setting'
+  translation: 'הגדרות מערכת'
+
+[FactoryWindow]
+  source:      'LCD Test'
+  translation: 'בדיקת מסך '
+
+[FactoryWindow]
+  source:      'Ok'
+  translation: 'אישור'
+
+[FactoryWindow]
+  source:      'Panel Key Learning'
+  translation: 'מתג מחוון לימוד '
+
+[FactoryWindow]
+  source:      'Reboot'
+  translation: 'אתחול '
+
+[FactoryWindow]
+  source:      'Screenshot'
+  translation: 'צילום מסך'
+
+[FactoryWindow]
+  source:      'Tab 1'
+  translation: 'טאב 1'
+
+[FactoryWindow]
+  source:      'Touch calibration'
+  translation: 'כיול מסך מגע'
+
+[FactoryWindow]
+  source:      'VirKey Learn'
+  translation: 'לימוד VirKey'
+
+[HuidaZdBetteryWindow]
+  source:      'Battery state'
+  translation: 'מצב מצבר'
+
+[HuidaZdBetteryWindow]
+  source:      'Cell'
+  translation: 'תא'
+
+[HuidaZdBetteryWindow]
+  source:      'Cell temp max : '
+  translation: 'טמ תא מקסימלית '
+
+[HuidaZdBetteryWindow]
+  source:      'Cell vol max : '
+  translation: 'מצב תא גבוה'
+
+[HuidaZdBetteryWindow]
+  source:      'Cell vol min : '
+  translation: 'מצב תא נמוך'
+
+[HuidaZdBetteryWindow]
+  source:      'Fault'
+  translation: 'טעות '
+
+[HuidaZdBetteryWindow]
+  source:      'High Vol'
+  translation: 'ווליום גבוה '
+
+[HuidaZdBetteryWindow]
+  source:      'High temp'
+  translation: 'טמ גבוהה'
+
+[HuidaZdBetteryWindow]
+  source:      'Large current'
+  translation: 'זרם רב'
+
+[HuidaZdBetteryWindow]
+  source:      'Low Vol'
+  translation: 'ווליום נמוך'
+
+[HuidaZdBetteryWindow]
+  source:      'Low battery'
+  translation: 'מצבר חלש'
+
+[HuidaZdBetteryWindow]
+  source:      'Low insulation'
+  translation: 'העברה נמוכה '
+
+[HuidaZdBetteryWindow]
+  source:      'Low temp'
+  translation: 'טמ נמוכה'
+
+[HuidaZdBetteryWindow]
+  source:      'Number : '
+  translation: 'מספר'
+
+[HuidaZdBetteryWindow]
+  source:      'Single Battery state'
+  translation: 'אות מצב מצבר'
+
+[HuidaZdBetteryWindow]
+  source:      'Temp too high'
+  translation: 'טמ גבוהה מידי'
+
+[HuidaZdBetteryWindow]
+  source:      'Vol imbalance'
+  translation: 'איזון ווליום '
+
+[HuidaZdBetteryWindow]
+  source:      'Vol too high'
+  translation: 'ווליום גבוה מדי'
+
+[HuidaZdBetteryWindow]
+  source:      'Vol too low'
+  translation: 'ווליום נמוך מאד'
+
+[HuidaZdChargingWindow]
+  source:      'Charging Status'
+  translation: 'מצב טעינה'
+
+[HuidaZdMainWindow]
+  source:      'Car Info'
+  translation: 'מידע רכב '
+
+[ImageViewerWindow]
+  source:      'Loadding photo ...'
+  translation: 'טוען תמונה '
+
+[ImageViewerWindow]
+  source:      'Set wallpaper successfully'
+  translation: 'תמונת רקע מסך עודכנה'
+
+[ImageViewerWindow]
+  source:      'Unsupported file format or photo is too large!'
+  translation: 'קובץ תמונה לא תומך או גדול מידי'
+
+[LCDTestWindow]
+  source:      'MainWindow'
+  translation: 'מסך ראשי'
+
+[LoadingDlg]
+  source:      'Loading...'
+  translation: 'טוען ...'
+
+[MCUAdapter_BoxC270]
+  source:      '12V Active'
+  translation: 'פעיל 12V'
+
+[MCUAdapter_BoxC270]
+  source:      '360 camera'
+  translation: 'מצלמות 360'
+
+[MCUAdapter_BoxC270]
+  source:      'After loading Track'
+  translation: 'לאחר העלאה נתיב'
+
+[MCUAdapter_BoxC270]
+  source:      'After loading overall'
+  translation: 'לאחר העלאה כללית'
+
+[MCUAdapter_BoxC270]
+  source:      'CAN Active'
+  translation: 'פעיל .CAN'
+
+[MCUAdapter_BoxC270]
+  source:      'DVR'
+  translation: 'DVR'
+
+[MCUAdapter_BoxC270]
+  source:      'Front camera'
+  translation: 'מצלמה קדמית'
+
+[MCUAdapter_BoxC270]
+  source:      'Front camera time'
+  translation: 'זמן מצלמה קדמית'
+
+[MCUAdapter_BoxC270]
+  source:      'Left Camera'
+  translation: 'מצלמה שמאל'
+
+[MCUAdapter_BoxC270]
+  source:      'Off'
+  translation: 'מבוטל'
+
+[MCUAdapter_BoxC270]
+  source:      'On'
+  translation: 'מופעל'
+
+[MCUAdapter_BoxC270]
+  source:      'Original car'
+  translation: 'רכב מקורי'
+
+[MCUAdapter_BoxC270]
+  source:      'P Key Active'
+  translation: 'מתג P פעיל'
+
+[MCUAdapter_BoxC270]
+  source:      'Radar'
+  translation: 'חיישן'
+
+[MCUAdapter_BoxC270]
+  source:      'Radar Active'
+  translation: 'חיישנים מופעלים'
+
+[MCUAdapter_BoxC270]
+  source:      'Reversing camera'
+  translation: 'מצלמה אחורית'
+
+[MCUAdapter_BoxC270]
+  source:      'Reversing mode'
+  translation: 'מצב רוורס'
+
+[MCUAdapter_BoxC270]
+  source:      'Right Camera'
+  translation: 'מצלמה ימין'
+
+[MCUAdapter_BoxC270]
+  source:      'Speech button'
+  translation: 'מתג דיבור'
+
+[MCUAdapter_BoxC270]
+  source:      'Trajectory'
+  translation: 'מאובחן'
+
+[MCUAdapter_BoxP200]
+  source:      'Car setting'
+  translation: 'הגדרות רכב'
+
+[MCUAdapter_BoxP200]
+  source:      'My car'
+  translation: 'הרכב שלי '
+
+[MCUAdapter_BoxP210]
+  source:      '12V Active'
+  translation: 'פעיל 12V'
+
+[MCUAdapter_BoxP210]
+  source:      '360'
+  translation: '360'
+
+[MCUAdapter_BoxP210]
+  source:      '360 camera'
+  translation: 'מצלמה 360'
+
+[MCUAdapter_BoxP210]
+  source:      'CAN Active'
+  translation: 'פעיל CAN'
+
+[MCUAdapter_BoxP210]
+  source:      'Car Setting'
+  translation: 'הגדרות רכב'
+
+[MCUAdapter_BoxP210]
+  source:      'DVR'
+  translation: 'הקלטה DVR'
+
+[MCUAdapter_BoxP210]
+  source:      'Front camera'
+  translation: 'מצלמה קדמית'
+
+[MCUAdapter_BoxP210]
+  source:      'Front camera time'
+  translation: 'זמן מצלמה קדמית'
+
+[MCUAdapter_BoxP210]
+  source:      'Off'
+  translation: 'מבוטל'
+
+[MCUAdapter_BoxP210]
+  source:      'On'
+  translation: 'מופעל'
+
+[MCUAdapter_BoxP210]
+  source:      'Original Camera'
+  translation: 'מצלמה מקורית '
+
+[MCUAdapter_BoxP210]
+  source:      'P Key Active'
+  translation: 'מתג P פעיל'
+
+[MCUAdapter_BoxP210]
+  source:      'Radar'
+  translation: 'חיישן'
+
+[MCUAdapter_BoxP210]
+  source:      'Retrofit Camera'
+  translation: 'הוסף מצלמה'
+
+[MCUAdapter_BoxP210]
+  source:      'Reversing camera'
+  translation: 'מצלמה ברוורס'
+
+[MCUAdapter_BoxP210]
+  source:      'Reversing mode'
+  translation: 'מצב רוורס'
+
+[MCUAdapter_BoxP210]
+  source:      'Speech button'
+  translation: 'לחצן חיווי קולי'
+
+[MCUAdapter_BoxP210]
+  source:      'Trajectory'
+  translation: 'מאובחן'
+
+[MCUAdapter_BoxP300]
+  source:      '12V Active'
+  translation: 'פעיל 12V'
+
+[MCUAdapter_BoxP300]
+  source:      '360 camera'
+  translation: 'מצלמה 360'
+
+[MCUAdapter_BoxP300]
+  source:      'AfterMarket 360'
+  translation: 'התקנה מקומית 360'
+
+[MCUAdapter_BoxP300]
+  source:      'AfterMarket Camera'
+  translation: 'מצלמה מקומית'
+
+[MCUAdapter_BoxP300]
+  source:      'CAN Active'
+  translation: 'פעיל CAN'
+
+[MCUAdapter_BoxP300]
+  source:      'Car Setting'
+  translation: 'הגדרות רכב'
+
+[MCUAdapter_BoxP300]
+  source:      'DVR'
+  translation: 'DVR'
+
+[MCUAdapter_BoxP300]
+  source:      'Factory 360'
+  translation: '360 מקורי'
+
+[MCUAdapter_BoxP300]
+  source:      'Factory Camera'
+  translation: 'מצלמת מפעל'
+
+[MCUAdapter_BoxP300]
+  source:      'Front camera'
+  translation: 'מצלמה קדמית'
+
+[MCUAdapter_BoxP300]
+  source:      'Front camera time'
+  translation: 'זמן מצלמה קדמית'
+
+[MCUAdapter_BoxP300]
+  source:      'Left Camera'
+  translation: 'מצלמת שמאל'
+
+[MCUAdapter_BoxP300]
+  source:      'Off'
+  translation: 'מבוטל'
+
+[MCUAdapter_BoxP300]
+  source:      'On'
+  translation: 'מופעל'
+
+[MCUAdapter_BoxP300]
+  source:      'P Key Active'
+  translation: 'מתג P פעיל'
+
+[MCUAdapter_BoxP300]
+  source:      'Radar'
+  translation: 'חיישן'
+
+[MCUAdapter_BoxP300]
+  source:      'Radar Active'
+  translation: 'חיישן פעיל '
+
+[MCUAdapter_BoxP300]
+  source:      'Reversing camera'
+  translation: 'מצלמת רוורס'
+
+[MCUAdapter_BoxP300]
+  source:      'Reversing mode'
+  translation: 'מצב רוורס'
+
+[MCUAdapter_BoxP300]
+  source:      'Right Camera'
+  translation: 'מצלמת ימין'
+
+[MCUAdapter_BoxP300]
+  source:      'Speech button'
+  translation: 'מתג חיווי קולי'
+
+[MCUAdapter_BoxP300]
+  source:      'Trajectory'
+  translation: 'מאובחן'
+
+[MCUAdapter_BoxP900]
+  source:      '360 Display Switch'
+  translation: 'תצוגת מתג 360'
+
+[MCUAdapter_BoxP900]
+  source:      'AfterMarket 360'
+  translation: 'התקנה מקומית 360'
+
+[MCUAdapter_BoxP900]
+  source:      'AfterMarket Camera'
+  translation: 'מצלמת התקנה מקומית'
+
+[MCUAdapter_BoxP900]
+  source:      'Bench Mode'
+  translation: 'מצב קבוצה'
+
+[MCUAdapter_BoxP900]
+  source:      'Camera In Use'
+  translation: 'מצלמה בשימוש'
+
+[MCUAdapter_BoxP900]
+  source:      'Car Setting'
+  translation: 'הגדרות רכב'
+
+[MCUAdapter_BoxP900]
+  source:      'Gear Position'
+  translation: 'מצב תיבת הילוכים'
+
+[MCUAdapter_BoxP900]
+  source:      'NULL'
+  translation: 'ערך'
+
+[MCUAdapter_BoxP900]
+  source:      'None'
+  translation: 'ללא'
+
+[MCUAdapter_BoxP900]
+  source:      'OE Camera'
+  translation: 'מצלמה מקורית'
+
+[MCUAdapter_BoxP900]
+  source:      'Off'
+  translation: 'מבוטל'
+
+[MCUAdapter_BoxP900]
+  source:      'On'
+  translation: 'מופעל'
+
+[MCUAdapter_BoxP900]
+  source:      'Parking Key'
+  translation: 'מתג P'
+
+[MCUAdapter_BoxP900]
+  source:      'Porsche Diamond Key'
+  translation: 'מתג פורשה דיימונד '
+
+[MCUAdapter_BoxP900]
+  source:      'Reverse Condition'
+  translation: 'מצב רוורס'
+
+[MCUAdapter_BoxP900]
+  source:      'Reverse Radar'
+  translation: 'חיישן רוורס'
+
+[MCUAdapter_BoxP900]
+  source:      'Reverse State'
+  translation: 'החל רוורס'
+
+[MCUAdapter_BoxP900]
+  source:      'Reverse Track'
+  translation: 'מסלול רוורס'
+
+[MCUAdapter_IM60BC]
+  source:      'AMP'
+  translation: 'AMP'
+
+[MCUAdapter_IM60BC]
+  source:      'Car Setting'
+  translation: 'הגדרות רכב'
+
+[MCUAdapter_IM60BC]
+  source:      'Off'
+  translation: 'כבןי'
+
+[MCUAdapter_IM60BC]
+  source:      'On'
+  translation: 'פועל'
+
+[MCUAdapter_MsnDecoder]
+  source:      'AfterMarket 360'
+  translation: 'התקנה מקומית 360'
+
+[MCUAdapter_MsnDecoder]
+  source:      'AfterMarket Camera'
+  translation: 'מצלמה התקנה מקומית'
+
+[MCUAdapter_MsnDecoder]
+  source:      'CVBS'
+  translation: 'CVBS'
+
+[MCUAdapter_MsnDecoder]
+  source:      'Car Setting'
+  translation: 'הגדרות רכב'
+
+[MCUAdapter_MsnDecoder]
+  source:      'Car type'
+  translation: 'סוג רכב'
+
+[MCUAdapter_MsnDecoder]
+  source:      'Dedicated right view'
+  translation: 'בודק מבט ימין'
+
+[MCUAdapter_MsnDecoder]
+  source:      'Display type'
+  translation: 'מצב תצוגה'
+
+[MCUAdapter_MsnDecoder]
+  source:      'Front View'
+  translation: 'מבט קדמי'
+
+[MCUAdapter_MsnDecoder]
+  source:      'Front view after right view'
+  translation: 'מבט קדמי ואחריו אחורי'
+
+[MCUAdapter_MsnDecoder]
+  source:      'Front view mirror'
+  translation: 'מצב תמונה קדמי ראי'
+
+[MCUAdapter_MsnDecoder]
+  source:      'Gear Position'
+  translation: 'מצב תיבת הילוכים'
+
+[MCUAdapter_MsnDecoder]
+  source:      'Horizontal'
+  translation: 'אופקי'
+
+[MCUAdapter_MsnDecoder]
+  source:      'Horizontal and vertical'
+  translation: 'אופקי ואנכי'
+
+[MCUAdapter_MsnDecoder]
+  source:      'None'
+  translation: 'ללא'
+
+[MCUAdapter_MsnDecoder]
+  source:      'OE Camera'
+  translation: 'מצלמה מקורית'
+
+[MCUAdapter_MsnDecoder]
+  source:      'Off'
+  translation: 'מבוטל'
+
+[MCUAdapter_MsnDecoder]
+  source:      'On'
+  translation: 'מופעל'
+
+[MCUAdapter_MsnDecoder]
+  source:      'Parking Key'
+  translation: 'מצב חנייה P'
+
+[MCUAdapter_MsnDecoder]
+  source:      'Rear video format'
+  translation: 'פורמט וידאו  אחורי'
+
+[MCUAdapter_MsnDecoder]
+  source:      'Rear view mirror'
+  translation: 'מצב תמונה אחורי ראי'
+
+[MCUAdapter_MsnDecoder]
+  source:      'Reverse State'
+  translation: 'מצב רוורס'
+
+[MCUAdapter_MsnDecoder]
+  source:      'Reverse camera'
+  translation: 'מצלמת רוורס'
+
+[MCUAdapter_MsnDecoder]
+  source:      'Reverse condition'
+  translation: 'מצב רוורס'
+
+[MCUAdapter_MsnDecoder]
+  source:      'Reverse radar'
+  translation: 'חיישן רוורס'
+
+[MCUAdapter_MsnDecoder]
+  source:      'Reverse track'
+  translation: 'מסלול רוורס'
+
+[MCUAdapter_MsnDecoder]
+  source:      'Reversing front view'
+  translation: 'מבט נסיעה לאחור'
+
+[MCUAdapter_MsnDecoder]
+  source:      'Right View'
+  translation: 'מבט ימני'
+
+[MCUAdapter_MsnDecoder]
+  source:      'Right view mirror'
+  translation: 'מצב תמונה ימין ראי'
+
+[MCUAdapter_MsnDecoder]
+  source:      'Sound type'
+  translation: 'סוג שמע'
+
+[MCUAdapter_MsnDecoder]
+  source:      'Starting front view'
+  translation: 'החל מבט קדמי'
+
+[MCUAdapter_MsnDecoder]
+  source:      'Steering front view'
+  translation: 'הגה מבט קדמי'
+
+[MCUAdapter_MsnDecoder]
+  source:      'VGA'
+  translation: 'VGA'
+
+[MCUAdapter_MsnDecoder]
+  source:      'Vertical'
+  translation: 'אנכי'
+
+[McuAdapter_BoxP230]
+  source:      'AfterMarket 360'
+  translation: 'התקנה מקומית 360'
+
+[McuAdapter_BoxP230]
+  source:      'AfterMarket Camera'
+  translation: 'מצלמה מקומית'
+
+[McuAdapter_BoxP230]
+  source:      'Car Setting'
+  translation: 'הגדרות רכב'
+
+[McuAdapter_BoxP230]
+  source:      'OE Camera'
+  translation: 'מצלמה מקורית'
+
+[McuAdapter_BoxP230]
+  source:      'Off'
+  translation: 'מבוטל'
+
+[McuAdapter_BoxP230]
+  source:      'On'
+  translation: 'מופעל'
+
+[McuAdapter_BoxP230]
+  source:      'Radar'
+  translation: 'חיישן'
+
+[McuAdapter_BoxP230]
+  source:      'Reversing camera'
+  translation: 'מצלמת רוורס'
+
+[McuAdapter_BoxP230]
+  source:      'Trajectory'
+  translation: 'מאובחן'
+
+[MirrLinkWindow]
+  source:      '1.Create a hotspot on your phone:'
+  translation: '1. צור נקודה חמה בטלפון שלך:'
+
+[MirrLinkWindow]
+  source:      '1.Use your phone to connect to this wireless network:'
+  translation: '1. השתמש בטלפון שלך כדי להתחבר לרשת אלחוטית זו:'
+
+[MirrLinkWindow]
+  source:      '1:Open the developer options\n2:Enable usb debug\n3:Allow usb debuging'
+  translation: '1: פתח את אפשרויות המפתחים\n2: אפשר ניפוי באגים ברשת\n3: אפשר ניפוי באגים ברשת'
+
+[MirrLinkWindow]
+  source:      '2.Open the MLink app on the phone'
+  translation: '2. פתח את אפליקציית MLink בטלפון'
+
+[MirrLinkWindow]
+  source:      'Connect mirroing failed!'
+  translation: 'התחברות לשיקוף נכשלה'
+
+[MirrLinkWindow]
+  source:      'Connecting to Android phone hotspot...'
+  translation: 'מתחבר לנקודה חמה לטלפון אנדרואיד ...'
+
+[MirrLinkWindow]
+  source:      'Device is not activated!'
+  translation: 'התקן אינו פעיל'
+
+[MirrLinkWindow]
+  source:      'PSK:'
+  translation: 'PSK:'
+
+[MirrLinkWindow]
+  source:      'Phone does not support mirroring!'
+  translation: 'טלפון אינו תומך בשיקוף'
+
+[MirrLinkWindow]
+  source:      'Phone is not inserted'
+  translation: 'טלפון לא מחובר'
+
+[MirrLinkWindow]
+  source:      'Please connect Android Bluetooth!'
+  translation: 'אנא חבר אנדרואיד Bluetooth'
+
+[MirrLinkWindow]
+  source:      'SSID:'
+  translation: 'SSID:'
+
+[MirrLinkWindow]
+  source:      'Start connecting Android Mirroring...'
+  translation: 'התחל חיבור שיקוף אנדרואיד ...'
+
+[MirrLinkWindow]
+  source:      'Waiting for iPhone Screen Mirroring to connection...'
+  translation: 'ממתין לשיקוף מסך לאייפון לחיבור ...'
+
+[MirrLinkWindow]
+  source:      'is connected, please disconnect and try again'
+  translation: 'טלפון מחובר נתק ונסה שנית'
+
+[MsnChooseDialog]
+  source:      'Cancel'
+  translation: 'מבוטל'
+
+[MsnChooseDialog]
+  source:      'Ok'
+  translation: 'מאושר'
+
+[MsnCoreApp]
+  source:      'Copy factory configuration file %1 successed %2 failed!'
+  translation: 'העתק קובץ עדכון %1 בהצלחה %2 נכשל'
+
+[MsnCoreApp]
+  source:      'Factory configuration upgrade is successful, is it restarted?'
+  translation: 'עדכון בוצע בהצלחה נא לאתחל את המערכת'
+
+[MsnCoreApp]
+  source:      'Find the factory configuration file, do you upgrade it?'
+  translation: 'קובץ עדכון נמצא, האם לעדכן ?'
+
+[MsnCoreApp]
+  source:      'Ok (%1)'
+  translation: 'מאושר'
+
+[MusicPlayerWindow]
+  source:      'Unkown'
+  translation: 'לא ידוע'
+
+[OptionListDialog]
+  source:      'Cancel'
+  translation: 'ביטול'
+
+[PhoneSelectWidget]
+  source:      'Android'
+  translation: 'Andriod'
+
+[PhoneSelectWidget]
+  source:      'iPhone'
+  translation: 'iPhone'
+
+[PlayListDlg]
+  source:      'No USB Device Insert!'
+  translation: 'לא מחובר התקן USB '
+
+[PlayListDlg]
+  source:      'Scanning media files...'
+  translation: 'סורק קבצי מדייה'
+
+[QObject]
+  source:      'AUX'
+  translation: 'כניסה חיצונית AUX'
+
+[QObject]
+  source:      'AV in'
+  translation: 'כניסת וידאו'
+
+[QObject]
+  source:      'Android Auto'
+  translation: 'Android Auto'
+
+[QObject]
+  source:      'BlueTooth'
+  translation: 'BT'
+
+[QObject]
+  source:      'Bluetooth Music'
+  translation: 'שמע BT'
+
+[QObject]
+  source:      'CarLife'
+  translation: 'CarLife'
+
+[QObject]
+  source:      'CarPlay'
+  translation: 'CarPlay'
+
+[QObject]
+  source:      'DTV'
+  translation: 'הקלטה DTV'
+
+[QObject]
+  source:      'DVD'
+  translation: 'DVD'
+
+[QObject]
+  source:      'DVR'
+  translation: 'הקלטה DVR'
+
+[QObject]
+  source:      'Document'
+  translation: 'מסמכים'
+
+[QObject]
+  source:      'ECLink'
+  translation: 'קישור E'
+
+[QObject]
+  source:      'Echo Cancellation'
+  translation: 'ביטול אקו'
+
+[QObject]
+  source:      'Exit'
+  translation: 'יציאה'
+
+[QObject]
+  source:      'Factory Mode'
+  translation: 'ברירת מחדל'
+
+[QObject]
+  source:      'IR Key Learning'
+  translation: 'לימוד כפתורי אינפרא אדום'
+
+[QObject]
+  source:      'Launcher'
+  translation: 'ממשק'
+
+[QObject]
+  source:      'Media'
+  translation: 'מדיה'
+
+[QObject]
+  source:      'Mirroring'
+  translation: 'שיקוף'
+
+[QObject]
+  source:      'Music'
+  translation: 'מוזיקה'
+
+[QObject]
+  source:      'Panel Key Learning'
+  translation: 'מתג חיווי לימוד '
+
+[QObject]
+  source:      'Photo'
+  translation: 'תמונה'
+
+[QObject]
+  source:      'Radio'
+  translation: 'רדיו'
+
+[QObject]
+  source:      'SWC Learning'
+  translation: 'לימוד הגה'
+
+[QObject]
+  source:      'Setting'
+  translation: 'הגדרות'
+
+[QObject]
+  source:      'TPMS'
+  translation: 'מד לחץ אוויר TPMS'
+
+[QObject]
+  source:      'Version'
+  translation: 'גרסה'
+
+[QObject]
+  source:      'Video'
+  translation: 'וידאו'
+
+[QObject]
+  source:      'Video in'
+  translation: 'כניסת וידאו'
+
+[QObject]
+  source:      'Virtual Key Learning'
+  translation: 'מתג לימוד וירטואלי'
+
+[QextSerialPort]
+  source:      'Caught a non-blocked signal (POSIX)'
+  translation: 'Caught a non-blocked signal (POSIX)'
+
+[RDSSettingDlg]
+  source:      'Cancel'
+  translation: 'מבוטל'
+
+[RDSSettingDlg]
+  source:      'Ok'
+  translation: 'מאושר'
+
+[ScreenShotDialog]
+  source:      'Close'
+  translation: 'סגור'
+
+[ScreenShotDialog]
+  source:      'SD card or USB device was not found!'
+  translation: 'התקן לא נמצא '
+
+[ScreenShotDialog]
+  source:      'Screenshot'
+  translation: 'צילום מסך'
+
+[ScreenShotDialog]
+  source:      'save screenshot failed!'
+  translation: 'תמונת מסך לא נשמרה '
+
+[ScreenShotDialog]
+  source:      'save screenshot successed!'
+  translation: 'תמונת מסך נשמרה בהצלחה !'
+
+[SelectDialog]
+  source:      'Cancel'
+  translation: 'מבוטל'
+
+[SelectDialog]
+  source:      'Ok'
+  translation: 'מאושר'
+
+[SetCommonPanel]
+  source:      'Adjust the volume at speed'
+  translation: 'כוון עוצמת שמע לפי מהירות'
+
+[SetCommonPanel]
+  source:      'Auto start phone link app'
+  translation: 'חיבור מהיר לטלפון בעת הנעה'
+
+[SetCommonPanel]
+  source:      'Beep'
+  translation: 'ביפ'
+
+[SetCommonPanel]
+  source:      'Mute'
+  translation: 'השתק'
+
+[SetCommonPanel]
+  source:      'Navigation Volume'
+  translation: 'עוצמת שמע ניווט'
+
+[SetCommonPanel]
+  source:      'Prohibit video when driving'
+  translation: 'איסור צפייה בוידאו בעת נסיעה '
+
+[SetCommonPanel]
+  source:      'Volume'
+  translation: 'ווליום'
+
+[SetDateTimePanel]
+  source:      '12-hour clock'
+  translation: 'מחזור שעות 12'
+
+[SetDateTimePanel]
+  source:      'DateTime'
+  translation: 'זמן יום'
+
+[SetDateTimePanel]
+  source:      'Day'
+  translation: 'יום'
+
+[SetDateTimePanel]
+  source:      'Hour'
+  translation: 'שעה'
+
+[SetDateTimePanel]
+  source:      'Minute'
+  translation: 'דקה'
+
+[SetDateTimePanel]
+  source:      'Month'
+  translation: 'חודש'
+
+[SetDateTimePanel]
+  source:      'Ok'
+  translation: 'אישור'
+
+[SetDateTimePanel]
+  source:      'Year'
+  translation: 'שנה'
+
+[SetDateTimePanel]
+  source:      '������������'
+  translation: 'סנכרון רשת'
+
+[SetDisplayPanel]
+  source:      'Auto Backlight'
+  translation: 'תאורה אחורית אוטומטית'
+
+[SetDisplayPanel]
+  source:      'Backlight'
+  translation: 'תאורה אחורית'
+
+[SetDisplayPanel]
+  source:      'Brightness'
+  translation: 'בהירות'
+
+[SetDisplayPanel]
+  source:      'Contrast'
+  translation: 'ניגודיות'
+
+[SetDisplayPanel]
+  source:      'Day BackLight'
+  translation: 'תאורת יום אחורית'
+
+[SetDisplayPanel]
+  source:      'Default'
+  translation: 'מחדל'
+
+[SetDisplayPanel]
+  source:      'Night BackLight'
+  translation: 'תאורת לילה אחורית'
+
+[SetDisplayPanel]
+  source:      'Saturation'
+  translation: 'רוויה'
+
+[SetFMZonePanel]
+  source:      'America'
+  translation: 'אמריקה'
+
+[SetFMZonePanel]
+  source:      'Japan'
+  translation: 'יפן'
+
+[SetFMZonePanel]
+  source:      'Russia, Mongolia, North Korea'
+  translation: 'רוסיה, מונגוליה,צפון קוריאה'
+
+[SetFMZonePanel]
+  source:      'The European, Chinese, Korea, Philippines, Thailand, Goa Saipan'
+  translation: 'אירופה, סין, קוריאה, פיליפינים, גואה'
+
+[SetSoundPanel]
+  source:      'Back'
+  translation: 'אחורי'
+
+[SetSoundPanel]
+  source:      'Bass'
+  translation: 'באס'
+
+[SetSoundPanel]
+  source:      'Classical'
+  translation: 'קלאסי'
+
+[SetSoundPanel]
+  source:      'Driver'
+  translation: 'נהג'
+
+[SetSoundPanel]
+  source:      'Front'
+  translation: 'קדמי'
+
+[SetSoundPanel]
+  source:      'Jazz'
+  translation: "ג'אז"
+
+[SetSoundPanel]
+  source:      'Median'
+  translation: 'אמצע'
+
+[SetSoundPanel]
+  source:      'Original'
+  translation: 'מקורי'
+
+[SetSoundPanel]
+  source:      'Pop'
+  translation: 'פופ'
+
+[SetSoundPanel]
+  source:      'Reset'
+  translation: 'איפוס'
+
+[SetSoundPanel]
+  source:      'Rock'
+  translation: 'רוק '
+
+[SetSoundPanel]
+  source:      'Scene'
+  translation: 'איזור סאונד'
+
+[SetSoundPanel]
+  source:      'Subwoofer'
+  translation: 'סאבוופר'
+
+[SetSoundPanel]
+  source:      'Treble'
+  translation: 'טרבל'
+
+[SetSoundPanel]
+  source:      'User'
+  translation: 'משתמש'
+
+[SetSoundPanel]
+  source:      'Vocal'
+  translation: 'קולי'
+
+[SetSysInfoPanel]
+  source:      'BlueTooth :'
+  translation: 'BT'
+
+[SetSysInfoPanel]
+  source:      'CAN :'
+  translation: 'CAN'
+
+[SetSysInfoPanel]
+  source:      'Factory Mode'
+  translation: 'מצב מפעל'
+
+[SetSysInfoPanel]
+  source:      'Factory reset'
+  translation: 'איפוס לנתוני יצרן'
+
+[SetSysInfoPanel]
+  source:      'Hardware :'
+  translation: 'חומרה:'
+
+[SetSysInfoPanel]
+  source:      'MCU :'
+  translation: 'MCU'
+
+[SetSysInfoPanel]
+  source:      'SWC Learning'
+  translation: 'לימוד לחצני הגה'
+
+[SetSysInfoPanel]
+  source:      'Software :'
+  translation: 'תוכנה'
+
+[SetSysInfoPanel]
+  source:      'System : '
+  translation: 'מערכת'
+
+[SettingWindow]
+  source:      'Common'
+  translation: 'נפוץ'
+
+[SettingWindow]
+  source:      'DateTime'
+  translation: 'זמן יום'
+
+[SettingWindow]
+  source:      'Display'
+  translation: 'תצוגה'
+
+[SettingWindow]
+  source:      'Language'
+  translation: 'שפה'
+
+[SettingWindow]
+  source:      'Restore the system to factory settings?'
+  translation: 'לשחזר קובץ מערכת?'
+
+[SettingWindow]
+  source:      'Sound'
+  translation: 'שמע'
+
+[SettingWindow]
+  source:      'SysInfo'
+  translation: 'מידע מערכת'
+
+[SettingWindow]
+  source:      'Wallpaper'
+  translation: 'שומר מסך'
+
+[UpdateDialog]
+  source:      'Cancel'
+  translation: 'מבוטל'
+
+[UpdateDialog]
+  source:      'Find MCU upgrade file, will update MCU?'
+  translation: 'נמצא קובץ עדכון MCU, האם לעדכן?'
+
+[UpdateDialog]
+  source:      'MCU Update'
+  translation: 'עדכון MCU'
+
+[UpdateDialog]
+  source:      'No MCU upgrade file found!'
+  translation: 'לא נמצא קובץ עדכון MCU'
+
+[UpdateDialog]
+  source:      'Ok'
+  translation: 'מאושר'
+
+[UpdateDialog]
+  source:      'Read upgrade file failed!'
+  translation: 'שגיאה בקריאת קובץ עדכון'
+
+[UpdateDialog]
+  source:      'Update failed, please reboot and try again!'
+  translation: 'עדכון נכשל הדלק מחדש ונסה שוב'
+
+[UpdateDialog]
+  source:      'Upgrade MCU failed!'
+  translation: 'עדכון MCU נכשל!'
+
+[UpdateDialog]
+  source:      'Upgrading MCU, please do not power off!'
+  translation: 'מעדכן MCU נא לא לכבות את המכשיר!!!'
+
+[VKLearnWindow]
+  source:      'Apply'
+  translation: 'אשר'
+
+[VKLearnWindow]
+  source:      'Clear'
+  translation: 'אפס'
+
+[VKLearnWindow]
+  source:      'Cleared successfully!'
+  translation: 'נמחק בהצלחה!'
+
+[VKLearnWindow]
+  source:      'Successful modification, configuration has taken effect!'
+  translation: 'שינוי הגדרות בוצע בהצלחה!'
+
+[VKLearnWindow]
+  source:      'Virtual Key Learning'
+  translation: 'מתג לימוד וירטואלי'
+
+[VWFunctionSetting]
+  source:      'ACC intervention'
+  translation: 'עיכוב ACC'
+
+[VWFunctionSetting]
+  source:      'Accelerator is depressed'
+  translation: 'עיכוב האצה'
+
+[VWFunctionSetting]
+  source:      'Acoustic confirmation'
+  translation: 'אישור קולי'
+
+[VWFunctionSetting]
+  source:      'Activa automatically'
+  translation: 'הפעלה אוטומטית'
+
+[VWFunctionSetting]
+  source:      'Activated'
+  translation: 'מופעל'
+
+[VWFunctionSetting]
+  source:      'Adaptive cruise control'
+  translation: 'בקרת שיוט פעילה'
+
+[VWFunctionSetting]
+  source:      'Advance warning'
+  translation: 'הודעת אזהרה מתקדמת '
+
+[VWFunctionSetting]
+  source:      'Air conditioning'
+  translation: 'מיזוג אוויר'
+
+[VWFunctionSetting]
+  source:      'Air conditioning requires engine to be running'
+  translation: 'מיזוג אוויר דורש מנוע עובד'
+
+[VWFunctionSetting]
+  source:      'All doors'
+  translation: 'כל הדלתות'
+
+[VWFunctionSetting]
+  source:      'All light'
+  translation: 'כל התאורה'
+
+[VWFunctionSetting]
+  source:      'All settings'
+  translation: 'כל ההגדרות'
+
+[VWFunctionSetting]
+  source:      'All window'
+  translation: 'כל החלונות'
+
+[VWFunctionSetting]
+  source:      'Are you sure '
+  translation: 'האם אתה בטוח'
+
+[VWFunctionSetting]
+  source:      'Are you sure restore'
+  translation: 'האם ברצונך לאתחל ?'
+
+[VWFunctionSetting]
+  source:      'Automatic headlight control in rain'
+  translation: 'חיווי אורות אוטומטי בגשם'
+
+[VWFunctionSetting]
+  source:      'Automatic locking'
+  translation: 'נעילה אוטומטית'
+
+[VWFunctionSetting]
+  source:      'Automatic wiping in rain'
+  translation: 'הפעלת מגבים אוטומטית בגשם'
+
+[VWFunctionSetting]
+  source:      'Auxiliary heater'
+  translation: 'חימום מואץ'
+
+[VWFunctionSetting]
+  source:      'Average consumption'
+  translation: 'צריכה ממוצעת'
+
+[VWFunctionSetting]
+  source:      'Average speed'
+  translation: 'מהירות ממוצעת'
+
+[VWFunctionSetting]
+  source:      'Blue'
+  translation: 'כחול'
+
+[VWFunctionSetting]
+  source:      'Bonnet has been opened'
+  translation: 'מכסה המנוע פתוח'
+
+[VWFunctionSetting]
+  source:      'Brake requires engine to be running'
+  translation: 'בלימה דורשת מנוע פועל'
+
+[VWFunctionSetting]
+  source:      'Car Setting'
+  translation: 'הגדרות רכב'
+
+[VWFunctionSetting]
+  source:      'Climate'
+  translation: 'אקלים'
+
+[VWFunctionSetting]
+  source:      'Close'
+  translation: 'סגור'
+
+[VWFunctionSetting]
+  source:      'Comfortable'
+  translation: 'נוחות'
+
+[VWFunctionSetting]
+  source:      'Coming home function'
+  translation: 'תכונת הגעה הביתה'
+
+[VWFunctionSetting]
+  source:      'Consumption'
+  translation: 'צריכה'
+
+[VWFunctionSetting]
+  source:      'Convenience consumer'
+  translation: 'צריכה נוחה'
+
+[VWFunctionSetting]
+  source:      'Convenience consumption'
+  translation: 'צריכה מומלצת'
+
+[VWFunctionSetting]
+  source:      'Convenience opening'
+  translation: 'פתיחה נוחה'
+
+[VWFunctionSetting]
+  source:      'Current consumption'
+  translation: 'צריכת זרם'
+
+[VWFunctionSetting]
+  source:      'Daytime running lights'
+  translation: 'תאורת יום '
+
+[VWFunctionSetting]
+  source:      'Defrost function is switched on'
+  translation: 'מצב הפשרה פעיל'
+
+[VWFunctionSetting]
+  source:      'Digital speed display'
+  translation: 'תצוגת מהירות דיגיטלית'
+
+[VWFunctionSetting]
+  source:      'Direct tyres pressure monitoring'
+  translation: 'בחינת לחץ אוויר ישירה'
+
+[VWFunctionSetting]
+  source:      'Display distance warning'
+  translation: 'הודעות אזהרת מרחק'
+
+[VWFunctionSetting]
+  source:      'Distance'
+  translation: 'מרחק'
+
+[VWFunctionSetting]
+  source:      'Distance travelled'
+  translation: 'מרחק נסיעה'
+
+[VWFunctionSetting]
+  source:      'Door ambient light'
+  translation: 'תאורה הקייפית לדלת'
+
+[VWFunctionSetting]
+  source:      'Door unlocking'
+  translation: 'פתיחת דלתות'
+
+[VWFunctionSetting]
+  source:      'Down-hill assist control'
+  translation: 'ירידה במדרון עם סיוע'
+
+[VWFunctionSetting]
+  source:      'Drink holder'
+  translation: 'מתקן שתיה'
+
+[VWFunctionSetting]
+  source:      'Drive program'
+  translation: 'תוכנית נהג'
+
+[VWFunctionSetting]
+  source:      'Driver alert system'
+  translation: 'מערכת התרעה לנהג'
+
+[VWFunctionSetting]
+  source:      'Driver assistance'
+  translation: 'עזר לנהג '
+
+[VWFunctionSetting]
+  source:      'Driver door open'
+  translation: 'דלת נהג פתוחה '
+
+[VWFunctionSetting]
+  source:      'Driver seatbelt not fastened'
+  translation: 'חגורת בטיחות לא חגורה'
+
+[VWFunctionSetting]
+  source:      'Driver window'
+  translation: 'חלון נהג\n'
+
+[VWFunctionSetting]
+  source:      'Driving data'
+  translation: 'מידע נהיגה'
+
+[VWFunctionSetting]
+  source:      'Driving mode'
+  translation: 'מצב נהיגה'
+
+[VWFunctionSetting]
+  source:      'Dynamic light assist'
+  translation: 'עזרה בתאורה דינאמית'
+
+[VWFunctionSetting]
+  source:      'ECO'
+  translation: 'ECO'
+
+[VWFunctionSetting]
+  source:      'ESC is switched off'
+  translation: 'מתג ESC אינו מופעל'
+
+[VWFunctionSetting]
+  source:      'ESC sport'
+  translation: 'ספורט'
+
+[VWFunctionSetting]
+  source:      'Early'
+  translation: 'מוקדם'
+
+[VWFunctionSetting]
+  source:      'Eco'
+  translation: 'אקו'
+
+[VWFunctionSetting]
+  source:      'Eco tips'
+  translation: 'מידע לאקו'
+
+[VWFunctionSetting]
+  source:      'Emergency brake function intervention'
+  translation: 'מצב בלימת חרום פועלת'
+
+[VWFunctionSetting]
+  source:      'Engine'
+  translation: 'מנוע'
+
+[VWFunctionSetting]
+  source:      'Engine must be running'
+  translation: 'מנוע חייב לעבוד'
+
+[VWFunctionSetting]
+  source:      'Engine stop currently not possible'
+  translation: 'עצירת מנוע אינה אפשרית'
+
+[VWFunctionSetting]
+  source:      'Esc system'
+  translation: 'יציאה'
+
+[VWFunctionSetting]
+  source:      'Factory settings'
+  translation: 'הגדרות מפעל'
+
+[VWFunctionSetting]
+  source:      'Far'
+  translation: 'רחוק'
+
+[VWFunctionSetting]
+  source:      'Fold away after parking'
+  translation: 'סגור לאחר חנייה'
+
+[VWFunctionSetting]
+  source:      'Foowell light'
+  translation: 'תאורת דמדומים'
+
+[VWFunctionSetting]
+  source:      'Four-wheel drive'
+  translation: 'הנעה 4 גלגלים'
+
+[VWFunctionSetting]
+  source:      'Front assist'
+  translation: 'עזרה מלפנים'
+
+[VWFunctionSetting]
+  source:      'Front fog light'
+  translation: 'פנס ערפל קדמי'
+
+[VWFunctionSetting]
+  source:      'Front light'
+  translation: 'תאורה קדמית'
+
+[VWFunctionSetting]
+  source:      'Front lighting'
+  translation: 'תאורה קדמית'
+
+[VWFunctionSetting]
+  source:      'Front tone setting'
+  translation: 'חיווי קולי קדמי'
+
+[VWFunctionSetting]
+  source:      'Front volume'
+  translation: 'ווליום קדמי'
+
+[VWFunctionSetting]
+  source:      'Front window'
+  translation: 'חלון קדמי'
+
+[VWFunctionSetting]
+  source:      'Full load'
+  translation: 'טעינה מלאה'
+
+[VWFunctionSetting]
+  source:      'Gear is engaged'
+  translation: 'תיבת הילוכים משולבת'
+
+[VWFunctionSetting]
+  source:      'Gearbox requires engine to be running'
+  translation: 'תיבת הילוכים דורשת הפעלת מנוע'
+
+[VWFunctionSetting]
+  source:      'Gradient too steep'
+  translation: 'מעבר תלול מידי'
+
+[VWFunctionSetting]
+  source:      'Head light'
+  translation: 'תאורת פנסים ראשיים'
+
+[VWFunctionSetting]
+  source:      'Headlight illumination distance'
+  translation: 'עמעום תאורה ראשית למרחוק'
+
+[VWFunctionSetting]
+  source:      'Hill Descent Control'
+  translation: 'שליטה בירידה תלולה'
+
+[VWFunctionSetting]
+  source:      'Hill-start assist control'
+  translation: 'התחלת סיוע ירידה במדרון'
+
+[VWFunctionSetting]
+  source:      'Individual'
+  translation: 'אישי'
+
+[VWFunctionSetting]
+  source:      'Inductive rear tailgate'
+  translation: 'תאורה אחורית השראתית'
+
+[VWFunctionSetting]
+  source:      'Inspection days'
+  translation: 'ימי בדיקה '
+
+[VWFunctionSetting]
+  source:      'Inspection distance'
+  translation: 'בדיקת מרחק'
+
+[VWFunctionSetting]
+  source:      'Instrument/switch lighting'
+  translation: 'כלי הפעלה לתאורה'
+
+[VWFunctionSetting]
+  source:      'Interior environment lighting color'
+  translation: 'צבע תאורת פנים '
+
+[VWFunctionSetting]
+  source:      'Lane assist'
+  translation: 'נתיב עזרה'
+
+[VWFunctionSetting]
+  source:      'Lane change flash'
+  translation: 'חיווי שינוי נתיב'
+
+[VWFunctionSetting]
+  source:      'Lane keeping assist system'
+  translation: 'מערכת שמירת נתיב'
+
+[VWFunctionSetting]
+  source:      'Last distance selected'
+  translation: 'בחר מרחק אחרון'
+
+[VWFunctionSetting]
+  source:      'Late'
+  translation: 'מאוחר'
+
+[VWFunctionSetting]
+  source:      'Leaving home function'
+  translation: 'חיווי יציאה מהבית'
+
+[VWFunctionSetting]
+  source:      'Left head area heating'
+  translation: 'חימום משענת ראש שמאל'
+
+[VWFunctionSetting]
+  source:      'Left seat heating'
+  translation: 'חימום כיסא שמאל'
+
+[VWFunctionSetting]
+  source:      'Left seat ventilation'
+  translation: 'איוורור כסא שמאל'
+
+[VWFunctionSetting]
+  source:      'Left traffic'
+  translation: 'תנועה משמאל'
+
+[VWFunctionSetting]
+  source:      'Light'
+  translation: 'אור'
+
+[VWFunctionSetting]
+  source:      'Lower while reversing'
+  translation: 'הנמך גלגל בנסיעה לאחור'
+
+[VWFunctionSetting]
+  source:      'Manoeuvering mode'
+  translation: 'מצב תמרון'
+
+[VWFunctionSetting]
+  source:      'Maximum air conditioning requires engine to be running'
+  translation: 'מיקסום מיזוג אוויר דורש מנוע פועל'
+
+[VWFunctionSetting]
+  source:      'Medium'
+  translation: 'בנוני'
+
+[VWFunctionSetting]
+  source:      'Mirror heating'
+  translation: 'חימום מראות'
+
+[VWFunctionSetting]
+  source:      'Mirrors and wipers'
+  translation: 'שמשות ומגבים'
+
+[VWFunctionSetting]
+  source:      'Motorway light'
+  translation: 'תאורת כביש מהיר'
+
+[VWFunctionSetting]
+  source:      'Multifunction display'
+  translation: 'תצוגה משולבת'
+
+[VWFunctionSetting]
+  source:      'No driver detected'
+  translation: 'לא זוהה נהג'
+
+[VWFunctionSetting]
+  source:      'No entries available'
+  translation: 'אין אישור חיבור'
+
+[VWFunctionSetting]
+  source:      'Normal'
+  translation: 'רגיל'
+
+[VWFunctionSetting]
+  source:      'OFF'
+  translation: 'מבוטל'
+
+[VWFunctionSetting]
+  source:      'Off-road'
+  translation: 'שטח'
+
+[VWFunctionSetting]
+  source:      'Off-road individual'
+  translation: 'תנאי שטח אישי'
+
+[VWFunctionSetting]
+  source:      'Off-road mode is activated'
+  translation: 'מצב שטח מופעל'
+
+[VWFunctionSetting]
+  source:      'Oil change service days'
+  translation: 'זמן החלפת שמן מנוע'
+
+[VWFunctionSetting]
+  source:      'Oil change service distance'
+  translation: 'מרחק החלפת שמן מנוע'
+
+[VWFunctionSetting]
+  source:      'Oil temperature'
+  translation: "טמ' שמן"
+
+[VWFunctionSetting]
+  source:      'Opening and closing'
+  translation: 'פתיחה וסגירה'
+
+[VWFunctionSetting]
+  source:      'Operating temperature not maintained'
+  translation: "טמ' עבודה לא נשמרת"
+
+[VWFunctionSetting]
+  source:      'Orange'
+  translation: 'כתום'
+
+[VWFunctionSetting]
+  source:      'Park Assist is activated'
+  translation: 'סיוע בחניה מופעל'
+
+[VWFunctionSetting]
+  source:      'Parking and manoeuvring'
+  translation: 'חניה ותמרון'
+
+[VWFunctionSetting]
+  source:      'Parking assist control'
+  translation: 'עזרה בחניה '
+
+[VWFunctionSetting]
+  source:      'Parking brake function'
+  translation: 'בלימה במצב חנייה'
+
+[VWFunctionSetting]
+  source:      'Power consumption is high'
+  translation: 'יחידת כוח גבוהה'
+
+[VWFunctionSetting]
+  source:      'Power consumption is hight'
+  translation: 'פעילות עוצמת מנוע גבוהה'
+
+[VWFunctionSetting]
+  source:      'Pressure'
+  translation: 'לחץ אוויר'
+
+[VWFunctionSetting]
+  source:      'Radar sound'
+  translation: 'אות חיישן'
+
+[VWFunctionSetting]
+  source:      'Rear fog light'
+  translation: 'פנס ערפל אחורי'
+
+[VWFunctionSetting]
+  source:      'Rear seat heating'
+  translation: 'חימום כיסאות אחוריים'
+
+[VWFunctionSetting]
+  source:      'Rear seat ventilation'
+  translation: 'איוורור כיסאות אחוריים'
+
+[VWFunctionSetting]
+  source:      'Rear tone setting'
+  translation: 'חיווי קולי אחורי'
+
+[VWFunctionSetting]
+  source:      'Rear volume'
+  translation: 'ווליום אחורי'
+
+[VWFunctionSetting]
+  source:      'Rear window'
+  translation: 'חלון אחורי'
+
+[VWFunctionSetting]
+  source:      'Rear window heating'
+  translation: 'חימום חלון אחורי'
+
+[VWFunctionSetting]
+  source:      'Rear window wiping in reverse gear'
+  translation: 'הפעל מגב אחורי בעת נסיעה רוורס'
+
+[VWFunctionSetting]
+  source:      'Remote key activated'
+  translation: 'שלט רחוק מופעל'
+
+[VWFunctionSetting]
+  source:      'Remote key memory matching'
+  translation: 'שלט רחוק בהתאמה'
+
+[VWFunctionSetting]
+  source:      'Report code'
+  translation: 'דוח תקלה'
+
+[VWFunctionSetting]
+  source:      'Reset'
+  translation: 'איפוס'
+
+[VWFunctionSetting]
+  source:      'Reset "Long-term" drving data'
+  translation: 'איפוס כל נתוני הנהיגה'
+
+[VWFunctionSetting]
+  source:      'Reset "Since start" driving data'
+  translation: 'איפוס נתוני נהג'
+
+[VWFunctionSetting]
+  source:      'Reset maintenance cycle'
+  translation: 'איפוס מחזור שירות'
+
+[VWFunctionSetting]
+  source:      'Right head area heating'
+  translation: 'חימום משענת ראש ימין'
+
+[VWFunctionSetting]
+  source:      'Right seat heating'
+  translation: 'חימום כיסא ימין'
+
+[VWFunctionSetting]
+  source:      'Right seat ventilation'
+  translation: 'איוורור כיסא ימין'
+
+[VWFunctionSetting]
+  source:      'Right traffic'
+  translation: 'תנועה מימן'
+
+[VWFunctionSetting]
+  source:      'Seat driver profile'
+  translation: 'מצב הגדרות כסא נהג'
+
+[VWFunctionSetting]
+  source:      'Service'
+  translation: 'שרות'
+
+[VWFunctionSetting]
+  source:      'Single door'
+  translation: 'דלת בודדת'
+
+[VWFunctionSetting]
+  source:      'Sliding sunroof'
+  translation: 'הזזת פתיחת גג נפתח'
+
+[VWFunctionSetting]
+  source:      'Snow'
+  translation: 'שלג'
+
+[VWFunctionSetting]
+  source:      'Socket'
+  translation: 'שקע'
+
+[VWFunctionSetting]
+  source:      'Speed'
+  translation: 'מהירות'
+
+[VWFunctionSetting]
+  source:      'Speed warning'
+  translation: 'התראת מהירות'
+
+[VWFunctionSetting]
+  source:      'Sport'
+  translation: 'ספורט'
+
+[VWFunctionSetting]
+  source:      'Standard'
+  translation: 'רגיל'
+
+[VWFunctionSetting]
+  source:      'Start-stop button pressed'
+  translation: 'מתג עצור/סע  פעיל'
+
+[VWFunctionSetting]
+  source:      'Start-stop system is activated'
+  translation: 'עצור/סע מופעל'
+
+[VWFunctionSetting]
+  source:      'Start-stop system is currently not  available'
+  translation: 'מצב עצור סע לא זמין'
+
+[VWFunctionSetting]
+  source:      'Start-stop system is deactivated'
+  translation: 'עצור/סע מבוטל'
+
+[VWFunctionSetting]
+  source:      'Start-stop system requires engine to be running'
+  translation: 'מערכת סטארט/סטופ דורשת מנוע עובד '
+
+[VWFunctionSetting]
+  source:      'Starting start-stop system'
+  translation: 'החל הפעלת עצור סע'
+
+[VWFunctionSetting]
+  source:      'Steering angle too great'
+  translation: 'זווית היגוי גדולה מידי'
+
+[VWFunctionSetting]
+  source:      'Steering whell heating'
+  translation: 'חימום הגה'
+
+[VWFunctionSetting]
+  source:      'Streering'
+  translation: 'הגה'
+
+[VWFunctionSetting]
+  source:      'Switch-on time'
+  translation: 'הפעל מצב זמן'
+
+[VWFunctionSetting]
+  source:      'Synchronous adjustment'
+  translation: 'כיוונון סנכרון'
+
+[VWFunctionSetting]
+  source:      'System protection intervention Buttonlever activated too often'
+  translation: 'המערכת מתערבת להגנה לעיתים קרובות'
+
+[VWFunctionSetting]
+  source:      'TPMS SET'
+  translation: 'קבעת TPMS'
+
+[VWFunctionSetting]
+  source:      'Temperature'
+  translation: 'טמפרטורה'
+
+[VWFunctionSetting]
+  source:      'Trailer mode'
+  translation: 'מצב גרירה'
+
+[VWFunctionSetting]
+  source:      'Travel mode'
+  translation: 'מצב תנועה'
+
+[VWFunctionSetting]
+  source:      'Travelling time'
+  translation: 'זמן תיור'
+
+[VWFunctionSetting]
+  source:      'Tyres'
+  translation: 'צמיגים'
+
+[VWFunctionSetting]
+  source:      'Units'
+  translation: 'יחידות'
+
+[VWFunctionSetting]
+  source:      'Vehice status Start-stop'
+  translation: 'מצב קולי החל/עצור'
+
+[VWFunctionSetting]
+  source:      'Vehice status reports'
+  translation: 'דווח מצב רכב'
+
+[VWFunctionSetting]
+  source:      'Vehicle NO.'
+  translation: 'מספר רכב'
+
+[VWFunctionSetting]
+  source:      'Vehicle side'
+  translation: 'צד הרכב'
+
+[VWFunctionSetting]
+  source:      'Very close'
+  translation: 'מאד קרוב'
+
+[VWFunctionSetting]
+  source:      'Very far'
+  translation: 'מאד רחוק'
+
+[VWFunctionSetting]
+  source:      'Volume'
+  translation: 'ווליום'
+
+[VWFunctionSetting]
+  source:      'White'
+  translation: 'לבן'
+
+[VWFunctionSetting]
+  source:      'Windscreen could become fogged'
+  translation: 'שמשה קדמית במצב ערפל'
+
+[VWFunctionSetting]
+  source:      'Windscreen heating'
+  translation: 'חימום שמשה קדמית'
+
+[VWFunctionSetting]
+  source:      'Wiper in maintenance position'
+  translation: 'תחזוקת מצב מגב'
+
+[VWFunctionSetting]
+  source:      'Wndscreen heating is switched on'
+  translation: 'הפשרה שמשה מופעלת'
+
+[VWFunctionSetting]
+  source:      'days'
+  translation: 'ימים'
+
+[VWFunctionSetting]
+  source:      'overdue by'
+  translation: 'איחור של'
+
+[VWFunctionSetting]
+  source:      'settings'
+  translation: 'הגדרות'
+
+[VersionDialog]
+  source:      'App Version'
+  translation: 'גרסת APP'
+
+[VersionDialog]
+  source:      'Close'
+  translation: 'סגור'
+
+[VersionDialog]
+  source:      'Hardware Info'
+  translation: 'מידע תוכנה'
+
+[VersionDialog]
+  source:      'MCU Version'
+  translation: 'גרסת MCU'
+
+[VersionDialog]
+  source:      'System Version'
+  translation: 'גרסת מערכת'
+
+[VersionDialog]
+  source:      'Version'
+  translation: 'גרסה'
+
+[VideoPlayerWindow]
+  source:      'Prohibit watching video when driving'
+  translation: 'צפייה בוידאו אסורה במהלך נסיעה!'
+
+[VolkswagenWindow]
+  source:      '1 km/h'
+  translation: '1 km/h'
+
+[VolkswagenWindow]
+  source:      '2.4 km/l'
+  translation: '2.4 km/L'
+
+[VolkswagenWindow]
+  source:      '500 km'
+  translation: '500 km'
+
+[VolkswagenWindow]
+  source:      '6:38 h'
+  translation: '6:38 לשעה'
+
+[VolkswagenWindow]
+  source:      'Average consumption'
+  translation: 'צריכה ממוצעת'
+
+[VolkswagenWindow]
+  source:      'Average speed'
+  translation: 'מהירות ממוצעת'
+
+[VolkswagenWindow]
+  source:      'Car Infos'
+  translation: 'מידע רכב'
+
+[VolkswagenWindow]
+  source:      'Distance'
+  translation: 'מרחק'
+
+[VolkswagenWindow]
+  source:      'Driving data'
+  translation: 'מידע על הנסיעה'
+
+[VolkswagenWindow]
+  source:      'Hight pressure'
+  translation: 'לחץ גבוה'
+
+[VolkswagenWindow]
+  source:      'Instantaneous consumption'
+  translation: 'צריכה מידית'
+
+[VolkswagenWindow]
+  source:      'Long-term'
+  translation: 'טווח ארוך'
+
+[VolkswagenWindow]
+  source:      'Low pressure'
+  translation: 'לחץ נמוך'
+
+[VolkswagenWindow]
+  source:      'Normal pressure'
+  translation: 'לחץ נורמלי'
+
+[VolkswagenWindow]
+  source:      'Please check the tire pressure'
+  translation: 'אנא בדוק לחץ אוויר בצמיג'
+
+[VolkswagenWindow]
+  source:      'Range'
+  translation: 'טווח'
+
+[VolkswagenWindow]
+  source:      'Since refueling'
+  translation: 'מאז התדלוק האחרון'
+
+[VolkswagenWindow]
+  source:      'Since start'
+  translation: 'מהתחלה'
+
+[VolkswagenWindow]
+  source:      'Time'
+  translation: 'זמן'
+
+[VolkswagenWindow]
+  source:      'Tire pressure is normal'
+  translation: 'לחץ אוויר בצמיג תקין'
+
+[VolkswagenWindow]
+  source:      'Tire pressure is too low'
+  translation: 'לחץ אוויר נמוך מידי'
+
+[VolkswagenWindow]
+  source:      'Tire pressure loss'
+  translation: 'אובדן לחץ אוויר'
+
+[VolkswagenWindow]
+  source:      'Tire pressure status'
+  translation: 'מצב לחץ בצמיג'
+
+  source:      ''
+  translation: ''

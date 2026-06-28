@@ -307,7 +307,16 @@ Connect via the UART header near the SD card slot. Settings: **115200 8N1**.
 | RX | Blue |
 | GND | Black |
 
-Adapter: PL-2303HX USB-TTL. At the U-Boot prompt you can manually flash any partition:
+Adapter: PL-2303HX USB-TTL or Raspberry Pi GPIO UART.
+
+**Connecting via Raspberry Pi:**
+```
+minicom -D /dev/ttyS0 -b 115200
+```
+
+**To interrupt U-Boot and drop to the prompt:** hold the spacebar continuously from the moment power is applied. You have a 9-second window. U-Boot will print `Hit any key to stop autoboot` — keep holding until you see the `ark#` prompt.
+
+At the U-Boot prompt you can manually flash any partition:
 
 ```
 fatload mmc 0 4000000 zImage

@@ -337,7 +337,89 @@ sudo apt install parted dosfstools e2fsprogs rsync
 
 ---
 
-## Phase 6 — Known risks
+## Phase 6 — NAND runtime partition data
+
+Several NAND partitions are not part of the rootfs or userdata but are
+accessed by the application at runtime via `/dev/mtdN` character devices:
+
+| MTD | Partition | Size | Content | Status |
+|-----|-----------|------|---------|--------|
+| 8 | bootlogo | 512 KB | U-Boot splash image | Dumped — `mtd8_bootlogo/bootlogo` (31 KB used) |
+| 9 | bootanimation | 3 MB | Boot animation sequence | **Erased during Holden flash** — placeholder only |
+| 10 | reversingtrack | 3 MB | Reverse camera guide line overlays | Dumped — `mtd10_reversingtrack/reversingtrack` (1.2 MB) |
+| 11 | Unicode | 256 KB | Font data for UI text rendering | Dump not yet obtained — placeholder only |
+
+### Why these can be served from SD
+
+A search of all rootfs binaries for MTD ioctl constants (`MEMGETINFO`,
+`MEMERASE`) confirmed **no application binary calls `MEMGETINFO`** on
+these partitions. Access is read-only via `open()` + `read()` — plain
+file I/O. A symlink from `/dev/mtdN` to a regular file is transparent
+to the application.
+
+### RSTK format (reversingtrack)
+
+The `reversingtrack` file uses a custom **RSTK** container format:
+
+```
+Offset  Size  Content
+0x00    4     Magic: "RSTK"
+0x04    4     Total file size
+0x0C    4     Entry count (41)
+0x14    4     Steering positions (100)
+0x24    4     Image width (800)
+0x28    4     Image height (480)
+0x2C+       Guide line zone parameters (Y coordinates, widths)
+0x90+       Index table: 41 × 20-byte entries
+              [index, index, file_offset, compressed_size, flag]
+data         41 zlib-compressed overlay images
+```
+
+The 41 frames represent steering wheel positions from full-left to
+full-right. Frame sizes form a bell curve (31 KB at extremes, 17 KB at
+centre), consistent with symmetric guide line geometry at the centre
+position compressing smaller. The app decompresses the frame matching
+the current steering angle and composites it over the camera feed.
+
+### How the SD image handles these partitions
+
+`build_bootable_sdcard.sh` copies the partition files into `/nanddata/`
+on the rootfs partition (p2) during the build. The `patch_rcs()` step
+inserts the following block into `rcS` after `mdev -s`:
+
+```sh
+# Replace MTD data partition devices with symlinks to SD-stored files.
+for mtdmap in "8:bootlogo" "9:bootanimation" "10:reversingtrack" "11:unicode"; do
+    num="${mtdmap%%:*}"
+    name="${mtdmap##*:}"
+    rm -f /dev/mtd${num}
+    ln -sf /nanddata/${name} /dev/mtd${num}
+    echo "mtd${num}: /nanddata/${name}"
+done
+```
+
+The symlinks are unconditional — any NAND device node created by mdev
+is removed first. SD is always authoritative for these partitions.
+
+### Replacing placeholders
+
+When dumps are obtained, drop the raw binary into the matching folder
+and rebuild the SD image:
+
+```
+Prado firmware reconstructed/mtd9_bootanimation/bootanimation  ← replace with real dump
+Prado firmware reconstructed/mtd11_unicode/unicode              ← replace with real dump
+```
+
+To dump from a running device via serial console:
+```sh
+dd if=/dev/mtd9  of=/tmp/bootanimation && # copy via USB/SSH
+dd if=/dev/mtd11 of=/tmp/unicode
+```
+
+---
+
+## Phase 7 — Known risks
 
 | # | Risk | Likelihood | Mitigation |
 |---|------|-----------|------------|
@@ -345,7 +427,7 @@ sudo apt install parted dosfstools e2fsprogs rsync
 | 2 | Binary patch corrupts U-Boot | Medium | Keep original; test with serial console attached |
 | 3 | `ark_dw_mmc.ko` module-only — kernel can't mount SD root | Medium | Initramfs (Phase 4) |
 | 4 | MMC device index wrong (mmc 0 vs mmc 1) | Medium | Confirm from serial console |
-| 5 | App has hardcoded `/dev/ubi0` or `/dev/mtd*` paths | Low | Monitor first boot serial; patch if found |
+| 5 | App uses MTD ioctls (e.g. `MEMGETINFO`) on data partitions | Very low | Confirmed absent in all rootfs binaries — plain read() only |
 | 6 | ext4 not in kernel | Very low | ext4 built-in since Linux 2.6.28 |
 | 7 | App writes depend on /data being available | Medium | SD /data mount is first in rcS — same order as NAND |
 
@@ -374,8 +456,13 @@ sudo apt install parted dosfstools e2fsprogs rsync
 | File | Change |
 |------|--------|
 | `sd_boot.cmd` | New — U-Boot script source (compiled to `boot.scr`) |
-| `build_sdimage.sh` | New — assembles raw SD image |
-| `Prado firmware reconstructed/mtd6_rootfs/rootfs/etc/rc.d/rcS` | SD /data mount path (no NAND change) |
+| `build_bootable_sdcard.sh` | Assembles bootable SD image — interactive, patches rcS and populates /nanddata/ |
+| `patch_uboot.py` | Patches compiled-in U-Boot env for SD boot |
+| `Prado firmware reconstructed/mtd6_rootfs/rootfs/etc/rc.d/rcS` | **Not modified** — patch applied at build time to the SD copy only |
+| `Prado firmware reconstructed/mtd8_bootlogo/bootlogo` | Raw bootlogo partition dump |
+| `Prado firmware reconstructed/mtd9_bootanimation/bootanimation` | Placeholder — erased, replace when dump available |
+| `Prado firmware reconstructed/mtd10_reversingtrack/reversingtrack` | Raw reversingtrack partition dump (RSTK/zlib format) |
+| `Prado firmware reconstructed/mtd11_unicode/unicode` | Placeholder — replace when dump available |
 | `initramfs/` | New directory — only if MMC is module-only |
 | `docs/SD_BOOT_PLAN.md` | This document |
 

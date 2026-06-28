@@ -291,6 +291,107 @@ validate() {
 }
 
 # ---------------------------------------------------------------------------
+# rcS patch — applied to the copy on p2, source tree is never modified
+# ---------------------------------------------------------------------------
+patch_rcs() {
+    local target="$1"
+    echo -e "${BOLD}  Patching rcS for SD userdata mount...${RESET}"
+
+    if $DRY_RUN; then
+        echo "  [dry-run] patch rcS: replace UBIFS userdata block with SD ext4 first + NAND fallback"
+        return
+    fi
+
+    [[ -f "$target" ]] || { warn "rcS not found at $target — skipping patch"; return; }
+
+    # Replace the UBIFS-only /data mount block with SD ext4 first, NAND UBI
+    # fallback, then yaffs2 fallback. Source file is left unchanged.
+    python3 - "$target" <<'PYEOF'
+import sys, re
+
+path = sys.argv[1]
+text = open(path).read()
+
+OLD = r"""USERDATAFS=`cat /proc/mounts | grep ubifs`
+if \[ "\${USERDATAFS}" != "" \]; then
+\tmt_partition=7.*?fi
+else
+\tUSERDATAFS=`cat /proc/mounts | grep yaffs2`
+\tif \[ "\${USERDATAFS}" != "" \]; then
+\t\tmount -t yaffs2 /dev/mtdblock6 /data/
+\tfi
+fi"""
+
+NEW = """\
+# Mount userdata: SD ext4 (p3) first, NAND UBI fallback, then yaffs2
+if mount -o sync -t ext4 /dev/mmcblk0p3 /data 2>/dev/null; then
+\techo "userdata: SD ext4 (/dev/mmcblk0p3)"
+\tresetenv=$(fw_printenv factory_reset 2>/dev/null || echo "factory_reset=0")
+\tif [ "${resetenv##*=}" = "1" ]; then
+\t\techo "==============Factory reset, reformat SD userdata!==========="
+\t\tumount /data
+\t\tmkfs.ext4 -F /dev/mmcblk0p3
+\t\tmount -o sync -t ext4 /dev/mmcblk0p3 /data
+\t\tfw_setenv factory_reset 0 2>/dev/null || true
+\tfi
+else
+\tUSERDATAFS=`cat /proc/mounts | grep ubifs`
+\tif [ "${USERDATAFS}" != "" ]; then
+\t\tmtd_partition=7
+\t\tresetenv=$(fw_printenv factory_reset 2>/dev/null || echo "factory_reset=0")
+\t\tif [ "${resetenv##*=}" = "1" ]; then
+\t\t\techo "==============Factory reset, erase data partition!==========="
+\t\t\tflash_eraseall /dev/mtd$mtd_partition
+\t\t\tubiattach /dev/ubi_ctrl -m $mtd_partition
+\t\t\tubimkvol  /dev/ubi1 -N userdata -m 14
+\t\t\tubidetach /dev/ubi_ctrl -m $mtd_partition -d 1
+\t\t\tfw_setenv factory_reset 0 2>/dev/null || true
+\t\tfi
+\t\tubiattach /dev/ubi_ctrl -m $mtd_partition
+\t\tmount -o sync -t ubifs ubi1_0 /data
+\t\tif [ $? -eq 0 ]; then
+\t\t\techo "userdata: NAND UBI"
+\t\telse
+\t\t\tsync; sleep 1
+\t\t\tmount -o sync -t ubifs ubi1_0 /data
+\t\t\tif [ $? -ne 0 ]; then
+\t\t\t\techo "mount failed! then reformat the volume!"
+\t\t\t\tubidetach /dev/ubi_ctrl -m $mtd_partition -d 1
+\t\t\t\tflash_eraseall /dev/mtd$mtd_partition
+\t\t\t\tubiattach /dev/ubi_ctrl -m $mtd_partition
+\t\t\t\tubimkvol  /dev/ubi1 -N userdata -m 14
+\t\t\t\tmount -o sync -t ubifs ubi1_0 /data
+\t\t\t\tsync
+\t\t\tfi
+\t\tfi
+\telse
+\t\tUSERDATAFS=`cat /proc/mounts | grep yaffs2`
+\t\tif [ "${USERDATAFS}" != "" ]; then
+\t\t\tmount -t yaffs2 /dev/mtdblock6 /data/
+\t\tfi
+\tfi
+fi"""
+
+# Use literal string replacement rather than regex — the block is distinctive enough
+MARKER_START = 'USERDATAFS=`cat /proc/mounts | grep ubifs`'
+MARKER_END   = '\tfi\nfi\n#mount /dev/mmcblk0p1 /mnt'
+
+start = text.find(MARKER_START)
+end   = text.find('\n#mount /dev/mmcblk0p1 /mnt')
+
+if start == -1 or end == -1:
+    print(f"  WARNING: rcS userdata block not found at expected location — patch skipped")
+    sys.exit(0)
+
+patched = text[:start] + NEW + '\n' + text[end:]
+open(path, 'w').write(patched)
+print("  rcS userdata mount block patched for SD boot")
+PYEOF
+
+    success "rcS patched on p2 (source tree unchanged)"
+}
+
+# ---------------------------------------------------------------------------
 # Build
 # ---------------------------------------------------------------------------
 LOOP=""
@@ -372,6 +473,7 @@ build() {
         "$ROOTFS_DIR/" /tmp/sd_p2/
     ! $DRY_RUN && mkdir -p /tmp/sd_p2/{proc,sys,dev,tmp}
     success "Rootfs synced to p2"
+    patch_rcs /tmp/sd_p2/etc/rc.d/rcS
 
     # 8. Populate p3 — userdata
     echo -e "${BOLD}[7/7] Populating p3 (userdata)...${RESET}"

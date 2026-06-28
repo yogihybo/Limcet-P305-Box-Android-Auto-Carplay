@@ -22,44 +22,60 @@ fi
 #insmod  /lib/modules/3.4.0/kernel/drivers/input/misc/pwm-beeper.ko
 #insmod  /lib/modules/3.4.0/galcore.ko registerMemBase=0xE0F00000 irqLine=32 contiguousSize=0x400000 physSize=0x80000000 powerManagement=0
 
-USERDATAFS=`cat /proc/mounts | grep ubifs`
-if [ "${USERDATAFS}" != "" ]; then
-	mtd_partition=7
-	
-	resetenv=$(fw_printenv factory_reset)
-	if [ ${resetenv##*=} -eq 1 ]; then        
-	        echo "==============Factory reset, erase data partition!==========="
-		flash_eraseall /dev/mtd$mtd_partition        	                                         
-                ubiattach /dev/ubi_ctrl -m $mtd_partition
-                ubimkvol  /dev/ubi1 -N userdata -m 14
-		ubidetach /dev/ubi_ctrl -m $mtd_partition -d 1
-		fw_setenv factory_reset 0
-	fi       	
-	
-	ubiattach /dev/ubi_ctrl -m $mtd_partition
-	mount -o sync -t ubifs ubi1_0 /data
-	if [ $? -eq 0 ]
-	then
-		echo "mount successfully!"
-	else
-		sync
-		sleep 1
-		mount -o sync -t ubifs ubi1_0 /data
-		if [ $? -ne 0 ]
-		then
-			echo "mount failed! then reformat the volume!"
-			ubidetach /dev/ubi_ctrl -m $mtd_partition -d 1
+# Mount userdata — try SD ext4 (p3) first, fall back to NAND UBI, then yaffs2
+if mount -o sync -t ext4 /dev/mmcblk0p3 /data 2>/dev/null; then
+	echo "userdata: SD ext4 (/dev/mmcblk0p3)"
+	# Handle factory reset on SD: reformat p3 instead of erasing NAND
+	resetenv=$(fw_printenv factory_reset 2>/dev/null || echo "factory_reset=0")
+	if [ "${resetenv##*=}" = "1" ]; then
+		echo "==============Factory reset, reformat SD userdata!==========="
+		umount /data
+		mkfs.ext4 -F /dev/mmcblk0p3
+		mount -o sync -t ext4 /dev/mmcblk0p3 /data
+		fw_setenv factory_reset 0 2>/dev/null || true
+	fi
+	if [ $? -ne 0 ]; then
+		echo "SD userdata mount failed, reformatting p3..."
+		umount /data 2>/dev/null || true
+		mkfs.ext4 -F /dev/mmcblk0p3
+		mount -o sync -t ext4 /dev/mmcblk0p3 /data
+	fi
+else
+	USERDATAFS=`cat /proc/mounts | grep ubifs`
+	if [ "${USERDATAFS}" != "" ]; then
+		mtd_partition=7
+		resetenv=$(fw_printenv factory_reset 2>/dev/null || echo "factory_reset=0")
+		if [ "${resetenv##*=}" = "1" ]; then
+			echo "==============Factory reset, erase data partition!==========="
 			flash_eraseall /dev/mtd$mtd_partition
 			ubiattach /dev/ubi_ctrl -m $mtd_partition
 			ubimkvol  /dev/ubi1 -N userdata -m 14
-			mount -o sync -t ubifs ubi1_0 /data
-			sync
+			ubidetach /dev/ubi_ctrl -m $mtd_partition -d 1
+			fw_setenv factory_reset 0 2>/dev/null || true
 		fi
-	fi
-else
-	USERDATAFS=`cat /proc/mounts | grep yaffs2`
-	if [ "${USERDATAFS}" != "" ]; then
-		mount -t yaffs2 /dev/mtdblock6 /data/
+		ubiattach /dev/ubi_ctrl -m $mtd_partition
+		mount -o sync -t ubifs ubi1_0 /data
+		if [ $? -eq 0 ]; then
+			echo "userdata: NAND UBI"
+		else
+			sync
+			sleep 1
+			mount -o sync -t ubifs ubi1_0 /data
+			if [ $? -ne 0 ]; then
+				echo "mount failed! then reformat the volume!"
+				ubidetach /dev/ubi_ctrl -m $mtd_partition -d 1
+				flash_eraseall /dev/mtd$mtd_partition
+				ubiattach /dev/ubi_ctrl -m $mtd_partition
+				ubimkvol  /dev/ubi1 -N userdata -m 14
+				mount -o sync -t ubifs ubi1_0 /data
+				sync
+			fi
+		fi
+	else
+		USERDATAFS=`cat /proc/mounts | grep yaffs2`
+		if [ "${USERDATAFS}" != "" ]; then
+			mount -t yaffs2 /dev/mtdblock6 /data/
+		fi
 	fi
 fi
 #mount /dev/mmcblk0p1 /mnt

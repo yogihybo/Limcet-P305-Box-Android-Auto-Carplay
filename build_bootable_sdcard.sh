@@ -1,321 +1,423 @@
 #!/bin/bash
-# build_sdcard.sh - Build bootable SD card image for ARK1680 SD boot
+# build_bootable_sdcard.sh - Interactive bootable SD card builder for ARK1680
 #
 # Run under Linux or WSL. Requires: parted, dosfstools, e2fsprogs, rsync
 #   sudo apt install parted dosfstools e2fsprogs rsync
 #
 # Usage:
-#   ./build_sdcard.sh [options]
+#   ./build_bootable_sdcard.sh [options]
 #
-# Examples:
-#   # Build image file (default)
-#   ./build_sdcard.sh
+# All options can also be set interactively at runtime.
 #
-#   # Build image with custom output name
-#   ./build_sdcard.sh --image /tmp/prado_sd.img
-#
-#   # Write directly to SD card (will prompt for confirmation)
-#   ./build_sdcard.sh --device /dev/sdb
-#
-#   # Custom paths
-#   ./build_sdcard.sh --uboot uboot_sdboot.bin --kernel kernel/zImage
-#
-#   # Skip populating userdata partition (leave blank for first boot)
-#   ./build_sdcard.sh --no-userdata
-#
-#   # Dry run — show commands without executing
-#   ./build_sdcard.sh --dry-run
+# Options:
+#   --image PATH       Output image file path
+#   --device PATH      Write directly to block device (e.g. /dev/sdb)
+#   --size MB          Total image size in MB (default: 512)
+#   --uboot PATH       UBOOT.BIN to place on p1
+#   --kernel PATH      zImage to place on p1
+#   --rootfs-dir DIR   Rootfs source directory (mounted as /)
+#   --userdata-dir DIR Userdata source directory (mounted as /data)
+#   --no-userdata      Leave p3 formatted but empty
+#   --non-interactive  Skip all prompts, use defaults/flags only
+#   --dry-run          Show commands without executing
+#   --help             Show this help
 
 set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# ---------------------------------------------------------------------------
+# Colours
+# ---------------------------------------------------------------------------
+RED='\033[0;31m'; YELLOW='\033[1;33m'; GREEN='\033[0;32m'
+CYAN='\033[0;36m'; BOLD='\033[1m'; RESET='\033[0m'
+
+info()    { echo -e "${CYAN}  $*${RESET}"; }
+success() { echo -e "${GREEN}  ✓ $*${RESET}"; }
+warn()    { echo -e "${YELLOW}  ! $*${RESET}"; }
+die()     { echo -e "${RED}ERROR: $*${RESET}" >&2; exit 1; }
 
 # ---------------------------------------------------------------------------
 # Defaults
 # ---------------------------------------------------------------------------
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
 IMAGE=""
 DEVICE=""
 IMAGE_SIZE_MB=512
-P1_SIZE_MB=64           # FAT32 boot partition
-P2_SIZE_MB=300          # ext4 rootfs
-# p3 gets the remainder
+P1_SIZE_MB=64
+P2_SIZE_MB=300
 
-UBOOT_BIN=""            # auto-detected if empty
-KERNEL_BIN=""           # auto-detected if empty
-ROOTFS_DIR=""           # auto-detected if empty
-USERDATA_DIR=""         # auto-detected if empty
+UBOOT_BIN=""
+KERNEL_BIN=""
+ROOTFS_DIR=""
+USERDATA_DIR=""
 SKIP_USERDATA=false
+NON_INTERACTIVE=false
 DRY_RUN=false
 
 # ---------------------------------------------------------------------------
 # Argument parsing
 # ---------------------------------------------------------------------------
-
-usage() {
-    grep '^#' "$0" | grep -v '^#!/' | sed 's/^# \?//'
-    exit 0
-}
-
-die() { echo "ERROR: $*" >&2; exit 1; }
-
-run() {
-    if $DRY_RUN; then
-        echo "[dry-run] $*"
-    else
-        "$@"
-    fi
-}
+usage() { grep '^#' "$0" | grep -v '^#!/' | sed 's/^# \?//'; exit 0; }
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --image|-i)       IMAGE="$2"; shift 2 ;;
-        --device|-d)      DEVICE="$2"; shift 2 ;;
-        --size)           IMAGE_SIZE_MB="$2"; shift 2 ;;
-        --p1-size)        P1_SIZE_MB="$2"; shift 2 ;;
-        --p2-size)        P2_SIZE_MB="$2"; shift 2 ;;
-        --uboot)          UBOOT_BIN="$2"; shift 2 ;;
-        --kernel)         KERNEL_BIN="$2"; shift 2 ;;
-        --rootfs-dir)     ROOTFS_DIR="$2"; shift 2 ;;
-        --userdata-dir)   USERDATA_DIR="$2"; shift 2 ;;
-        --no-userdata)    SKIP_USERDATA=true; shift ;;
-        --dry-run|-n)     DRY_RUN=true; shift ;;
-        --help|-h)        usage ;;
+        --image|-i)        IMAGE="$2"; shift 2 ;;
+        --device|-d)       DEVICE="$2"; shift 2 ;;
+        --size)            IMAGE_SIZE_MB="$2"; shift 2 ;;
+        --uboot)           UBOOT_BIN="$2"; shift 2 ;;
+        --kernel)          KERNEL_BIN="$2"; shift 2 ;;
+        --rootfs-dir)      ROOTFS_DIR="$2"; shift 2 ;;
+        --userdata-dir)    USERDATA_DIR="$2"; shift 2 ;;
+        --no-userdata)     SKIP_USERDATA=true; shift ;;
+        --non-interactive) NON_INTERACTIVE=true; shift ;;
+        --dry-run|-n)      DRY_RUN=true; shift ;;
+        --help|-h)         usage ;;
         *) die "Unknown option: $1" ;;
     esac
 done
 
 # ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+run() {
+    if $DRY_RUN; then echo "  [dry-run] $*"; else "$@"; fi
+}
+
+prompt() {
+    local var="$1" question="$2" default="$3"
+    if $NON_INTERACTIVE; then eval "$var=\"$default\""; return; fi
+    echo -ne "${BOLD}  $question${RESET}"
+    [[ -n "$default" ]] && echo -ne " ${CYAN}[$default]${RESET}"
+    echo -ne ": "
+    local answer; read -r answer
+    eval "$var=\"${answer:-$default}\""
+}
+
+confirm() {
+    if $NON_INTERACTIVE; then return 0; fi
+    echo -ne "${BOLD}  $1 ${CYAN}[Y/n]${RESET}: "
+    local answer; read -r answer
+    [[ -z "$answer" || "$answer" =~ ^[Yy] ]]
+}
+
+# ---------------------------------------------------------------------------
 # Auto-detect paths
 # ---------------------------------------------------------------------------
-
-[[ -z "$UBOOT_BIN" ]] && {
-    for candidate in \
-        "$SCRIPT_DIR/uboot_sdboot.bin" \
-        "$SCRIPT_DIR/Prado firmware reconstructed/mtd1-mtd2_uboot/uboot.bin" \
-        "$SCRIPT_DIR/Prado firmware dump/mtd1-mtd2_uboot/extracted/uboot.bin"
-    do
-        [[ -f "$candidate" ]] && { UBOOT_BIN="$candidate"; break; }
-    done
-}
-
-[[ -z "$KERNEL_BIN" ]] && {
-    for candidate in \
-        "$SCRIPT_DIR/kernel/zImage" \
-        "$SCRIPT_DIR/Prado firmware reconstructed/mtd5_kernel/zImage"
-    do
-        [[ -f "$candidate" ]] && { KERNEL_BIN="$candidate"; break; }
-    done
-}
-
-[[ -z "$ROOTFS_DIR" ]] && {
-    candidate="$SCRIPT_DIR/Prado firmware reconstructed/mtd6_rootfs/rootfs"
-    [[ -d "$candidate" ]] && ROOTFS_DIR="$candidate"
-}
-
-[[ -z "$USERDATA_DIR" ]] && {
-    candidate="$SCRIPT_DIR/Prado firmware reconstructed/mtd7_userdata/userdata"
-    [[ -d "$candidate" ]] && USERDATA_DIR="$candidate"
-}
-
-# ---------------------------------------------------------------------------
-# Validate inputs
-# ---------------------------------------------------------------------------
-
-[[ -z "$IMAGE" && -z "$DEVICE" ]] && IMAGE="$SCRIPT_DIR/sd_boot.img"
-[[ -n "$IMAGE" && -n "$DEVICE" ]] && die "Specify --image or --device, not both"
-
-[[ -z "$UBOOT_BIN" ]]  && die "UBOOT.BIN not found. Use --uboot or run patch_uboot.py first (outputs uboot_sdboot.bin)"
-[[ -z "$KERNEL_BIN" ]] && die "zImage not found. Use --kernel to specify path"
-[[ -z "$ROOTFS_DIR" ]] && die "rootfs directory not found. Use --rootfs-dir to specify path"
-
-[[ -f "$UBOOT_BIN" ]]  || die "UBOOT.BIN not found: $UBOOT_BIN"
-[[ -f "$KERNEL_BIN" ]] || die "zImage not found: $KERNEL_BIN"
-[[ -d "$ROOTFS_DIR" ]] || die "rootfs dir not found: $ROOTFS_DIR"
-
-if ! $SKIP_USERDATA; then
-    [[ -z "$USERDATA_DIR" || ! -d "$USERDATA_DIR" ]] && {
-        echo "WARNING: userdata directory not found — p3 will be formatted but empty."
-        echo "         Use --no-userdata to suppress this warning, or --userdata-dir to specify path."
-        SKIP_USERDATA=true
+autodetect() {
+    [[ -z "$UBOOT_BIN" ]] && {
+        for c in \
+            "$SCRIPT_DIR/uboot_sdboot.bin" \
+            "$SCRIPT_DIR/Prado firmware reconstructed/mtd1-mtd2_uboot/uboot.bin" \
+            "$SCRIPT_DIR/Prado firmware dump/mtd1-mtd2_uboot/extracted/uboot.bin"
+        do [[ -f "$c" ]] && { UBOOT_BIN="$c"; break; }; done
     }
-fi
-
-# Check required tools
-for tool in parted mkfs.fat mkfs.ext4 losetup rsync; do
-    command -v "$tool" &>/dev/null || die "$tool not found. Run: sudo apt install parted dosfstools e2fsprogs rsync"
-done
-
-# ---------------------------------------------------------------------------
-# Summary
-# ---------------------------------------------------------------------------
-
-P3_START_MB=$((P1_SIZE_MB + P2_SIZE_MB + 1))
-
-echo ""
-echo "=== ARK1680 SD Card Builder ==="
-echo ""
-echo "  Output:      ${IMAGE:-$DEVICE}"
-echo "  U-Boot:      $UBOOT_BIN"
-echo "  Kernel:      $KERNEL_BIN"
-echo "  Rootfs:      $ROOTFS_DIR"
-echo "  Userdata:    ${USERDATA_DIR:-<empty>}"
-echo ""
-echo "  Partition layout:"
-echo "    p1: FAT32   1 MiB – ${P1_SIZE_MB} MiB      (UBOOT.BIN + zImage)"
-echo "    p2: ext4    $((P1_SIZE_MB+1)) MiB – $((P1_SIZE_MB+P2_SIZE_MB)) MiB    (rootfs)"
-echo "    p3: ext4    ${P3_START_MB} MiB – end              (userdata)"
-echo ""
-$DRY_RUN && echo "  *** DRY RUN — no changes will be made ***"
-echo ""
+    [[ -z "$KERNEL_BIN" ]] && {
+        for c in \
+            "$SCRIPT_DIR/kernel/zImage" \
+            "$SCRIPT_DIR/Prado firmware reconstructed/mtd5_kernel/zImage"
+        do [[ -f "$c" ]] && { KERNEL_BIN="$c"; break; }; done
+    }
+    [[ -z "$ROOTFS_DIR" ]] && {
+        local c="$SCRIPT_DIR/Prado firmware reconstructed/mtd6_rootfs/rootfs"
+        [[ -d "$c" ]] && ROOTFS_DIR="$c"
+    }
+    [[ -z "$USERDATA_DIR" ]] && {
+        local c="$SCRIPT_DIR/Prado firmware reconstructed/mtd7_userdata/userdata"
+        [[ -d "$c" ]] && USERDATA_DIR="$c"
+    }
+}
 
 # ---------------------------------------------------------------------------
-# Device write safety check
+# Interactive configuration
 # ---------------------------------------------------------------------------
+configure() {
+    echo ""
+    echo -e "${BOLD}=== ARK1680 Bootable SD Card Builder ===${RESET}"
+    echo ""
 
-if [[ -n "$DEVICE" ]]; then
-    [[ -b "$DEVICE" ]] || die "$DEVICE is not a block device"
-    echo "WARNING: This will ERASE all data on $DEVICE"
-    read -rp "Type YES to continue: " confirm
-    [[ "$confirm" == "YES" ]] || { echo "Aborted."; exit 1; }
-    TARGET="$DEVICE"
-else
-    TARGET="$IMAGE"
-fi
+    # Output target
+    echo -e "${BOLD}  Output target${RESET}"
+    if [[ -z "$IMAGE" && -z "$DEVICE" ]]; then
+        local target_type
+        prompt target_type "Write to (i)mage file or (d)evice?" "i"
+        if [[ "$target_type" =~ ^[Dd] ]]; then
+            echo ""
+            warn "Available block devices:"
+            lsblk -dpno NAME,SIZE,MODEL 2>/dev/null | grep -v loop | sed 's/^/    /' || true
+            echo ""
+            prompt DEVICE "Device path (e.g. /dev/sdb)" ""
+            [[ -z "$DEVICE" ]] && die "No device specified"
+        else
+            prompt IMAGE "Image file path" "$SCRIPT_DIR/sd_boot.img"
+        fi
+    fi
+    [[ -n "$IMAGE" && -n "$DEVICE" ]] && die "Specify --image or --device, not both"
+
+    # Image size
+    if [[ -n "$IMAGE" ]]; then
+        echo ""
+        prompt IMAGE_SIZE_MB "Image size (MB)" "$IMAGE_SIZE_MB"
+    fi
+
+    # U-Boot
+    echo ""
+    echo -e "${BOLD}  Boot files${RESET}"
+    if [[ -n "$UBOOT_BIN" ]]; then
+        info "U-Boot (auto-detected): $UBOOT_BIN"
+        if ! $NON_INTERACTIVE; then
+            local alt; prompt alt "Press Enter to accept or enter a different path" ""
+            [[ -n "$alt" ]] && UBOOT_BIN="$alt"
+        fi
+    else
+        warn "UBOOT.BIN not found. Run patch_uboot.py first to produce uboot_sdboot.bin:"
+        warn "  python patch_uboot.py -i uboot.bin -o uboot_sdboot.bin --mode sdboot --nand-offset-index 0"
+        prompt UBOOT_BIN "Path to UBOOT.BIN" ""
+        [[ -z "$UBOOT_BIN" ]] && die "UBOOT.BIN is required"
+    fi
+
+    # Kernel
+    if [[ -n "$KERNEL_BIN" ]]; then
+        info "Kernel  (auto-detected): $KERNEL_BIN"
+        if ! $NON_INTERACTIVE; then
+            local alt; prompt alt "Press Enter to accept or enter a different path" ""
+            [[ -n "$alt" ]] && KERNEL_BIN="$alt"
+        fi
+    else
+        warn "zImage not auto-detected."
+        prompt KERNEL_BIN "Path to zImage" ""
+        [[ -z "$KERNEL_BIN" ]] && die "zImage is required"
+    fi
+
+    # Rootfs
+    echo ""
+    echo -e "${BOLD}  Filesystem sources${RESET}"
+    if [[ -n "$ROOTFS_DIR" ]]; then
+        info "Rootfs   (auto-detected): $ROOTFS_DIR"
+        if ! $NON_INTERACTIVE; then
+            local alt; prompt alt "Press Enter to accept or enter a different path" ""
+            [[ -n "$alt" ]] && ROOTFS_DIR="$alt"
+        fi
+    else
+        warn "Rootfs directory not auto-detected."
+        prompt ROOTFS_DIR "Path to rootfs directory" ""
+        [[ -z "$ROOTFS_DIR" ]] && die "Rootfs directory is required"
+    fi
+
+    # Userdata
+    if ! $SKIP_USERDATA; then
+        if [[ -n "$USERDATA_DIR" ]]; then
+            info "Userdata (auto-detected): $USERDATA_DIR"
+            if ! $NON_INTERACTIVE; then
+                local alt; prompt alt "Press Enter to accept or enter a different path" ""
+                [[ -n "$alt" ]] && USERDATA_DIR="$alt"
+            fi
+        else
+            warn "Userdata directory not auto-detected."
+            if confirm "Leave p3 empty (userdata populated on first boot)?"; then
+                SKIP_USERDATA=true
+            else
+                prompt USERDATA_DIR "Path to userdata directory" ""
+                [[ -z "$USERDATA_DIR" ]] && SKIP_USERDATA=true
+            fi
+        fi
+    fi
+
+    # Partition sizes
+    echo ""
+    echo -e "${BOLD}  Partition layout${RESET}"
+    local p3_size=$(( IMAGE_SIZE_MB - P1_SIZE_MB - P2_SIZE_MB - 1 ))
+    info "p1 FAT32  ${P1_SIZE_MB} MB   — UBOOT.BIN + zImage"
+    info "p2 ext4   ${P2_SIZE_MB} MB   — rootfs (/)"
+    info "p3 ext4   ${p3_size} MB   — userdata (/data)"
+    if ! $NON_INTERACTIVE; then
+        if ! confirm "Accept this layout?"; then
+            prompt P1_SIZE_MB "p1 FAT32 size (MB)" "$P1_SIZE_MB"
+            prompt P2_SIZE_MB "p2 ext4 rootfs size (MB)" "$P2_SIZE_MB"
+            local avail=$(( IMAGE_SIZE_MB - P1_SIZE_MB - P2_SIZE_MB - 1 ))
+            info "p3 will use remaining ${avail} MB"
+        fi
+    fi
+
+    # Summary
+    local p3_start=$(( P1_SIZE_MB + P2_SIZE_MB + 1 ))
+    local p3_end=$(( IMAGE_SIZE_MB ))
+    echo ""
+    echo -e "${BOLD}  Summary${RESET}"
+    echo ""
+    printf "    %-12s %s\n" "Output:"   "${IMAGE:-$DEVICE}"
+    [[ -n "$IMAGE" ]] && printf "    %-12s %s MB\n" "Size:" "$IMAGE_SIZE_MB"
+    printf "    %-12s %s\n" "U-Boot:"   "$UBOOT_BIN"
+    printf "    %-12s %s\n" "Kernel:"   "$KERNEL_BIN"
+    printf "    %-12s %s\n" "Rootfs:"   "$ROOTFS_DIR"
+    printf "    %-12s %s\n" "Userdata:" "${USERDATA_DIR:-<empty — populated on first boot>}"
+    echo ""
+    printf "    %-6s %-8s %-20s %s\n" "Part" "Type" "Size" "Contents"
+    printf "    %-6s %-8s %-20s %s\n" "p1" "FAT32" "1–${P1_SIZE_MB} MB" "UBOOT.BIN, zImage"
+    printf "    %-6s %-8s %-20s %s\n" "p2" "ext4" "$((P1_SIZE_MB+1))–$((P1_SIZE_MB+P2_SIZE_MB)) MB" "rootfs (/)"
+    printf "    %-6s %-8s %-20s %s\n" "p3" "ext4" "${p3_start}–${p3_end} MB" "userdata (/data)"
+    echo ""
+    $DRY_RUN && warn "DRY RUN — no changes will be made"
+    echo ""
+
+    if [[ -n "$DEVICE" ]]; then
+        [[ -b "$DEVICE" ]] || die "$DEVICE is not a block device"
+        echo -e "${RED}${BOLD}  WARNING: ALL DATA ON $DEVICE WILL BE ERASED${RESET}"
+        echo ""
+        if ! $NON_INTERACTIVE; then
+            echo -ne "${BOLD}  Type YES to continue: ${RESET}"
+            local word; read -r word
+            [[ "$word" == "YES" ]] || { echo "Aborted."; exit 1; }
+        fi
+    else
+        confirm "Proceed?" || { echo "Aborted."; exit 1; }
+    fi
+}
 
 # ---------------------------------------------------------------------------
-# Create image file
+# Validate
 # ---------------------------------------------------------------------------
-
-if [[ -n "$IMAGE" ]]; then
-    echo "[1/7] Creating blank image (${IMAGE_SIZE_MB} MB)..."
-    run dd if=/dev/zero of="$IMAGE" bs=1M count="$IMAGE_SIZE_MB" status=progress
-fi
-
-# ---------------------------------------------------------------------------
-# Partition
-# ---------------------------------------------------------------------------
-
-echo "[2/7] Partitioning..."
-run parted -s "$TARGET" mklabel msdos
-run parted -s "$TARGET" mkpart primary fat32  1MiB          "${P1_SIZE_MB}MiB"
-run parted -s "$TARGET" mkpart primary ext4   "$((P1_SIZE_MB+1))MiB" "$((P1_SIZE_MB+P2_SIZE_MB))MiB"
-run parted -s "$TARGET" mkpart primary ext4   "${P3_START_MB}MiB"    "100%"
-run parted -s "$TARGET" set 1 boot on
+validate() {
+    [[ -f "$UBOOT_BIN" ]]  || die "UBOOT.BIN not found: $UBOOT_BIN"
+    [[ -f "$KERNEL_BIN" ]] || die "zImage not found: $KERNEL_BIN"
+    [[ -d "$ROOTFS_DIR" ]] || die "rootfs dir not found: $ROOTFS_DIR"
+    ! $SKIP_USERDATA && [[ -n "$USERDATA_DIR" ]] && \
+        { [[ -d "$USERDATA_DIR" ]] || die "userdata dir not found: $USERDATA_DIR"; }
+    for tool in parted mkfs.fat mkfs.ext4 losetup rsync; do
+        command -v "$tool" &>/dev/null || \
+            die "$tool not found — run: sudo apt install parted dosfstools e2fsprogs rsync"
+    done
+    local avail=$(( IMAGE_SIZE_MB - P1_SIZE_MB - P2_SIZE_MB - 1 ))
+    [[ $avail -lt 32 ]] && \
+        die "Only ${avail} MB left for p3 — increase --size or reduce partition sizes"
+}
 
 # ---------------------------------------------------------------------------
-# Setup loop device (image only)
+# Build
 # ---------------------------------------------------------------------------
-
 LOOP=""
 cleanup() {
-    if [[ -n "$LOOP" ]]; then
+    [[ -n "$LOOP" ]] && ! $DRY_RUN && {
         umount /tmp/sd_p1 /tmp/sd_p2 /tmp/sd_p3 2>/dev/null || true
         losetup -d "$LOOP" 2>/dev/null || true
-    fi
+    }
 }
 trap cleanup EXIT
 
-if [[ -n "$IMAGE" ]] && ! $DRY_RUN; then
-    echo "[3/7] Attaching loop device..."
-    LOOP=$(losetup -Pf --show "$IMAGE")
-    echo "      Loop: $LOOP"
-    P1="${LOOP}p1"
-    P2="${LOOP}p2"
-    P3="${LOOP}p3"
-elif [[ -n "$DEVICE" ]]; then
-    P1="${DEVICE}1"
-    P2="${DEVICE}2"
-    P3="${DEVICE}3"
-else
-    # dry-run
-    P1="/dev/loopXp1"
-    P2="/dev/loopXp2"
-    P3="/dev/loopXp3"
-fi
+build() {
+    local TARGET="${IMAGE:-$DEVICE}"
+    local P3_START=$(( P1_SIZE_MB + P2_SIZE_MB + 1 ))
 
-# ---------------------------------------------------------------------------
-# Format
-# ---------------------------------------------------------------------------
-
-echo "[4/7] Formatting partitions..."
-run mkfs.fat -F32 -n BOOT     "$P1"
-run mkfs.ext4 -L rootfs   -F  "$P2"
-run mkfs.ext4 -L userdata  -F  "$P3"
-
-# ---------------------------------------------------------------------------
-# Mount and populate
-# ---------------------------------------------------------------------------
-
-if ! $DRY_RUN; then
-    mkdir -p /tmp/sd_p1 /tmp/sd_p2 /tmp/sd_p3
-    mount "$P1" /tmp/sd_p1
-    mount "$P2" /tmp/sd_p2
-    mount "$P3" /tmp/sd_p3
-fi
-
-echo "[5/7] Populating p1 (boot)..."
-run cp "$UBOOT_BIN"  "${DRY_RUN:+/tmp/sd_p1/}${DRY_RUN:-/tmp/sd_p1/}UBOOT.BIN"
-run cp "$KERNEL_BIN" "${DRY_RUN:+/tmp/sd_p1/}${DRY_RUN:-/tmp/sd_p1/}zImage"
-# initramfs if present
-[[ -f "$SCRIPT_DIR/initramfs/initramfs.cpio.gz" ]] && \
-    run cp "$SCRIPT_DIR/initramfs/initramfs.cpio.gz" /tmp/sd_p1/
-
-if $DRY_RUN; then
-    echo "[dry-run] cp $UBOOT_BIN /tmp/sd_p1/UBOOT.BIN"
-    echo "[dry-run] cp $KERNEL_BIN /tmp/sd_p1/zImage"
-fi
-
-echo "[6/7] Populating p2 (rootfs)..."
-RSYNC_EXCLUDE=(
-    --exclude=/proc/
-    --exclude=/sys/
-    --exclude=/dev/
-    --exclude=/tmp/
-    --exclude='*.ubifs'
-    --exclude='rootfs.img'
-    --exclude='ubi.cfg'
-)
-run rsync -a --info=progress2 "${RSYNC_EXCLUDE[@]}" "$ROOTFS_DIR/" /tmp/sd_p2/
-
-# Recreate empty mount-point directories
-if ! $DRY_RUN; then
-    mkdir -p /tmp/sd_p2/{proc,sys,dev,tmp}
-fi
-
-echo "[7/7] Populating p3 (userdata)..."
-if $SKIP_USERDATA; then
-    echo "      Skipped — p3 left empty."
-elif ! $DRY_RUN; then
-    rsync -a --info=progress2 \
-        --exclude='*.ubifs' \
-        --exclude='userdata.img' \
-        "$USERDATA_DIR/" /tmp/sd_p3/
-else
-    echo "[dry-run] rsync $USERDATA_DIR/ /tmp/sd_p3/"
-fi
-
-# ---------------------------------------------------------------------------
-# Done
-# ---------------------------------------------------------------------------
-
-if ! $DRY_RUN; then
-    sync
-    umount /tmp/sd_p1 /tmp/sd_p2 /tmp/sd_p3
-    [[ -n "$LOOP" ]] && losetup -d "$LOOP" && LOOP=""
-fi
-
-echo ""
-echo "Done."
-if [[ -n "$IMAGE" ]]; then
-    SIZE=$(du -sh "$IMAGE" 2>/dev/null | cut -f1 || echo "?")
-    echo "  Image: $IMAGE  ($SIZE)"
     echo ""
-    echo "  Write to SD card:"
-    echo "    sudo dd if=$IMAGE of=/dev/sdX bs=4M status=progress && sync"
-    echo "  or use Etcher / Raspberry Pi Imager"
-fi
-echo ""
-echo "  Boot sequence:"
-echo "    Stepldr loads UBOOT.BIN from p1 → U-Boot loads zImage from p1"
-echo "    Kernel mounts p2 as / (ext4) → rcS mounts p3 as /data (ext4)"
+    # 1. Create image file
+    if [[ -n "$IMAGE" ]]; then
+        echo -e "${BOLD}[1/7] Creating blank image (${IMAGE_SIZE_MB} MB)...${RESET}"
+        run dd if=/dev/zero of="$IMAGE" bs=1M count="$IMAGE_SIZE_MB" status=progress
+    else
+        echo -e "${BOLD}[1/7] Using device $DEVICE${RESET}"
+    fi
+
+    # 2. Partition table
+    echo -e "${BOLD}[2/7] Partitioning...${RESET}"
+    run parted -s "$TARGET" mklabel msdos
+    run parted -s "$TARGET" mkpart primary fat32 1MiB "${P1_SIZE_MB}MiB"
+    run parted -s "$TARGET" mkpart primary ext4  "$((P1_SIZE_MB+1))MiB" "$((P1_SIZE_MB+P2_SIZE_MB))MiB"
+    run parted -s "$TARGET" mkpart primary ext4  "${P3_START}MiB" "100%"
+    run parted -s "$TARGET" set 1 boot on
+
+    # 3. Loop device (image files only)
+    local P1 P2 P3
+    if [[ -n "$IMAGE" ]] && ! $DRY_RUN; then
+        echo -e "${BOLD}[3/7] Attaching loop device...${RESET}"
+        LOOP=$(losetup -Pf --show "$IMAGE")
+        info "Loop device: $LOOP"
+        P1="${LOOP}p1"; P2="${LOOP}p2"; P3="${LOOP}p3"
+    elif [[ -n "$DEVICE" ]]; then
+        P1="${DEVICE}1"; P2="${DEVICE}2"; P3="${DEVICE}3"
+    else
+        P1="/dev/loopXp1"; P2="/dev/loopXp2"; P3="/dev/loopXp3"
+    fi
+
+    # 4. Format
+    echo -e "${BOLD}[4/7] Formatting partitions...${RESET}"
+    run mkfs.fat -F32 -n BOOT    "$P1"
+    run mkfs.ext4 -L rootfs   -F "$P2"
+    run mkfs.ext4 -L userdata -F "$P3"
+    success "p1 FAT32, p2 ext4 (rootfs), p3 ext4 (userdata)"
+
+    # 5. Mount
+    if ! $DRY_RUN; then
+        mkdir -p /tmp/sd_p1 /tmp/sd_p2 /tmp/sd_p3
+        mount "$P1" /tmp/sd_p1
+        mount "$P2" /tmp/sd_p2
+        mount "$P3" /tmp/sd_p3
+    fi
+
+    # 6. Populate p1 — boot files
+    echo -e "${BOLD}[5/7] Populating p1 (boot partition)...${RESET}"
+    run cp "$UBOOT_BIN"  /tmp/sd_p1/UBOOT.BIN
+    run cp "$KERNEL_BIN" /tmp/sd_p1/zImage
+    [[ -f "$SCRIPT_DIR/initramfs/initramfs.cpio.gz" ]] && \
+        run cp "$SCRIPT_DIR/initramfs/initramfs.cpio.gz" /tmp/sd_p1/
+    success "UBOOT.BIN + zImage written to p1"
+
+    # 7. Populate p2 — rootfs
+    echo -e "${BOLD}[6/7] Populating p2 (rootfs)...${RESET}"
+    run rsync -a --info=progress2 \
+        --exclude=/proc/ \
+        --exclude=/sys/ \
+        --exclude=/dev/ \
+        --exclude=/tmp/ \
+        --exclude='*.ubifs' \
+        --exclude='rootfs.img' \
+        --exclude='ubi.cfg' \
+        "$ROOTFS_DIR/" /tmp/sd_p2/
+    ! $DRY_RUN && mkdir -p /tmp/sd_p2/{proc,sys,dev,tmp}
+    success "Rootfs synced to p2"
+
+    # 8. Populate p3 — userdata
+    echo -e "${BOLD}[7/7] Populating p3 (userdata)...${RESET}"
+    if $SKIP_USERDATA || [[ -z "$USERDATA_DIR" ]]; then
+        warn "Skipped — p3 is empty. App will populate /data on first boot."
+    else
+        run rsync -a --info=progress2 \
+            --exclude='*.ubifs' \
+            --exclude='userdata.img' \
+            "$USERDATA_DIR/" /tmp/sd_p3/
+        success "Userdata synced to p3"
+    fi
+
+    # Unmount and detach
+    if ! $DRY_RUN; then
+        sync
+        umount /tmp/sd_p1 /tmp/sd_p2 /tmp/sd_p3
+        [[ -n "$LOOP" ]] && { losetup -d "$LOOP"; LOOP=""; }
+    fi
+
+    echo ""
+    echo -e "${GREEN}${BOLD}=== Build complete ===${RESET}"
+    echo ""
+    if [[ -n "$IMAGE" ]] && ! $DRY_RUN; then
+        local sz; sz=$(du -sh "$IMAGE" | cut -f1)
+        success "Image: $IMAGE  ($sz)"
+        echo ""
+        echo -e "${BOLD}  Write to SD card:${RESET}"
+        echo    "    sudo dd if=\"$IMAGE\" of=/dev/sdX bs=4M status=progress && sync"
+        echo    "    or use Etcher / Raspberry Pi Imager"
+    elif [[ -n "$DEVICE" ]]; then
+        success "Written directly to $DEVICE"
+    fi
+    echo ""
+    echo -e "${BOLD}  Boot sequence:${RESET}"
+    echo    "    Stepldr  → loads UBOOT.BIN from p1 (FAT32)"
+    echo    "    U-Boot   → fatload zImage from p1, sets root=/dev/mmcblk0p2"
+    echo    "    Kernel   → mounts p2 ext4 as /"
+    echo    "    rcS      → mounts p3 ext4 as /data"
+    echo ""
+}
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+autodetect
+configure
+validate
+build

@@ -49,9 +49,19 @@ UBOOT_BIN=""
 KERNEL_BIN=""
 ROOTFS_DIR=""
 USERDATA_DIR=""
+RECONSTRUCTED_DIR=""
 SKIP_USERDATA=false
 NON_INTERACTIVE=false
 DRY_RUN=false
+
+# NAND partition data — keyed by mtd number, value is relative path under RECONSTRUCTED_DIR
+# Files are copied to /nanddata/ on p2 and symlinked from /dev/mtdN at boot
+declare -A NAND_PARTS=(
+    [8]="mtd8_bootlogo/bootlogo"
+    [9]="mtd9_bootanimation/bootanimation"
+    [10]="mtd10_reversingtrack/reversingtrack"
+    [11]="mtd11_unicode/unicode"
+)
 
 # ---------------------------------------------------------------------------
 # Argument parsing
@@ -103,6 +113,10 @@ confirm() {
 # Auto-detect paths
 # ---------------------------------------------------------------------------
 autodetect() {
+    [[ -z "$RECONSTRUCTED_DIR" ]] && {
+        local c="$SCRIPT_DIR/Prado firmware reconstructed"
+        [[ -d "$c" ]] && RECONSTRUCTED_DIR="$c"
+    }
     [[ -z "$UBOOT_BIN" ]] && {
         for c in \
             "$SCRIPT_DIR/uboot_sdboot.bin" \
@@ -304,8 +318,9 @@ patch_rcs() {
 
     [[ -f "$target" ]] || { warn "rcS not found at $target — skipping patch"; return; }
 
-    # Replace the UBIFS-only /data mount block with SD ext4 first, NAND UBI
-    # fallback, then yaffs2 fallback. Source file is left unchanged.
+    # Two patches applied via a single Python pass:
+    #   1. Replace UBIFS-only /data mount with SD ext4 first + NAND fallback
+    #   2. Insert /dev/mtdN symlinks after mdev -s for SD-stored NAND partition data
     python3 - "$target" <<'PYEOF'
 import sys, re
 
@@ -386,9 +401,72 @@ if start == -1 or end == -1:
 patched = text[:start] + NEW + '\n' + text[end:]
 open(path, 'w').write(patched)
 print("  rcS userdata mount block patched for SD boot")
+
+# Patch 2: insert MTD symlink block after /sbin/mdev -s
+text2 = open(path).read()
+MDEV_LINE = '/sbin/mdev -s'
+mdev_idx = text2.find(MDEV_LINE)
+if mdev_idx == -1:
+    print("  WARNING: '/sbin/mdev -s' not found in rcS — MTD symlink patch skipped")
+else:
+    insert_at = mdev_idx + len(MDEV_LINE)
+    # Find end of that line
+    eol = text2.find('\n', insert_at)
+    if eol == -1: eol = len(text2)
+    symlink_block = """
+
+# Redirect MTD data partitions to SD-stored files when NAND devices are absent.
+# Symlinks are only created if the real /dev/mtdN does not exist, so NAND takes
+# priority when available. Files live in /nanddata/ on the rootfs partition.
+for mtdmap in "8:bootlogo" "9:bootanimation" "10:reversingtrack" "11:unicode"; do
+\tnum="${mtdmap%%:*}"
+\tname="${mtdmap##*:}"
+\tif [ ! -e /dev/mtd${num} ] && [ -f /nanddata/${name} ]; then
+\t\tln -sf /nanddata/${name} /dev/mtd${num}
+\t\techo "mtd${num}: redirected to /nanddata/${name}"
+\tfi
+done"""
+    patched2 = text2[:eol] + symlink_block + text2[eol:]
+    open(path, 'w').write(patched2)
+    print("  rcS MTD symlink block inserted after mdev -s")
 PYEOF
 
     success "rcS patched on p2 (source tree unchanged)"
+}
+
+# ---------------------------------------------------------------------------
+# NAND partition data — copy to /nanddata/ on p2
+# ---------------------------------------------------------------------------
+populate_nanddata() {
+    local dest="$1/nanddata"
+    echo -e "${BOLD}  Populating /nanddata/ (MTD partition data)...${RESET}"
+
+    if $DRY_RUN; then
+        echo "  [dry-run] mkdir /nanddata/ on p2"
+        for mtdnum in "${!NAND_PARTS[@]}"; do
+            echo "  [dry-run] copy mtd${mtdnum}: ${NAND_PARTS[$mtdnum]}"
+        done
+        return
+    fi
+
+    mkdir -p "$dest"
+
+    for mtdnum in "${!NAND_PARTS[@]}"; do
+        local relpath="${NAND_PARTS[$mtdnum]}"
+        local filename="${relpath##*/}"
+        local src="$RECONSTRUCTED_DIR/$relpath"
+        local dst="$dest/$filename"
+
+        if [[ -f "$src" ]] && [[ -s "$src" ]]; then
+            cp "$src" "$dst"
+            local sz; sz=$(du -sh "$dst" | cut -f1)
+            success "mtd${mtdnum} → /nanddata/${filename}  (${sz})"
+        else
+            # Create empty placeholder — real dump can be dropped in later
+            touch "$dst"
+            warn "mtd${mtdnum} → /nanddata/${filename}  (placeholder — no dump yet)"
+        fi
+    done
 }
 
 # ---------------------------------------------------------------------------
@@ -474,6 +552,7 @@ build() {
     ! $DRY_RUN && mkdir -p /tmp/sd_p2/{proc,sys,dev,tmp}
     success "Rootfs synced to p2"
     patch_rcs /tmp/sd_p2/etc/rc.d/rcS
+    populate_nanddata /tmp/sd_p2
 
     # 8. Populate p3 — userdata
     echo -e "${BOLD}[7/7] Populating p3 (userdata)...${RESET}"

@@ -13,7 +13,11 @@
 #   --image PATH       Output image file path
 #   --device PATH      Write directly to block device (e.g. /dev/sdb)
 #   --size MB          Total image size in MB (default: 512)
-#   --uboot PATH       UBOOT.BIN to place on p1
+#   --uboot PATH       Prebuilt UBOOT.BIN to place on p1 as-is (skips patching)
+#   --uboot-src PATH   Raw uboot.bin source — patched via patch_uboot.py, never modified
+#   --no-patch-uboot   Use the source uboot.bin as-is without patching
+#   --nand-offset-index N  NAND env offset candidate to redirect (default: 0)
+#   --root DEVICE      Root device for sdboot bootargs (default: /dev/mmcblk0p2)
 #   --kernel PATH      zImage to place on p1
 #   --rootfs-dir DIR   Rootfs source directory (mounted as /)
 #   --userdata-dir DIR Userdata source directory (mounted as /data)
@@ -45,7 +49,12 @@ IMAGE_SIZE_MB=512
 P1_SIZE_MB=64
 P2_SIZE_MB=300
 
-UBOOT_BIN=""
+UBOOT_BIN=""                                  # prebuilt binary (--uboot); used as-is
+UBOOT_SRC=""                                  # raw source uboot.bin; patched, never modified
+UBOOT_OUT="$SCRIPT_DIR/uboot_sdboot.bin"      # patched output (repo root, not source folder)
+PATCH_UBOOT=true                              # run patch_uboot.py on the source
+NAND_OFFSET_INDEX=0                            # patch_uboot.py --nand-offset-index
+ROOT_DEV="/dev/mmcblk0p2"                       # patch_uboot.py --root (matches p2 rootfs)
 KERNEL_BIN=""
 ROOTFS_DIR=""
 USERDATA_DIR=""
@@ -73,7 +82,11 @@ while [[ $# -gt 0 ]]; do
         --image|-i)        IMAGE="$2"; shift 2 ;;
         --device|-d)       DEVICE="$2"; shift 2 ;;
         --size)            IMAGE_SIZE_MB="$2"; shift 2 ;;
-        --uboot)           UBOOT_BIN="$2"; shift 2 ;;
+        --uboot)           UBOOT_BIN="$2"; PATCH_UBOOT=false; shift 2 ;;
+        --uboot-src)       UBOOT_SRC="$2"; shift 2 ;;
+        --no-patch-uboot)  PATCH_UBOOT=false; shift ;;
+        --nand-offset-index) NAND_OFFSET_INDEX="$2"; shift 2 ;;
+        --root)            ROOT_DEV="$2"; shift 2 ;;
         --kernel)          KERNEL_BIN="$2"; shift 2 ;;
         --rootfs-dir)      ROOTFS_DIR="$2"; shift 2 ;;
         --userdata-dir)    USERDATA_DIR="$2"; shift 2 ;;
@@ -117,12 +130,12 @@ autodetect() {
         local c="$SCRIPT_DIR/Prado firmware reconstructed"
         [[ -d "$c" ]] && RECONSTRUCTED_DIR="$c"
     }
-    [[ -z "$UBOOT_BIN" ]] && {
+    # Raw source u-boot — patched into UBOOT_OUT, never modified in place
+    [[ -z "$UBOOT_BIN" && -z "$UBOOT_SRC" ]] && {
         for c in \
-            "$SCRIPT_DIR/uboot_sdboot.bin" \
             "$SCRIPT_DIR/Prado firmware reconstructed/mtd1-mtd2_uboot/uboot.bin" \
             "$SCRIPT_DIR/Prado firmware dump/mtd1-mtd2_uboot/extracted/uboot.bin"
-        do [[ -f "$c" ]] && { UBOOT_BIN="$c"; break; }; done
+        do [[ -f "$c" ]] && { UBOOT_SRC="$c"; break; }; done
     }
     [[ -z "$KERNEL_BIN" ]] && {
         for c in \
@@ -177,16 +190,26 @@ configure() {
     echo ""
     echo -e "${BOLD}  Boot files${RESET}"
     if [[ -n "$UBOOT_BIN" ]]; then
-        info "U-Boot (auto-detected): $UBOOT_BIN"
+        info "U-Boot (supplied, used as-is): $UBOOT_BIN"
         if ! $NON_INTERACTIVE; then
             local alt; prompt alt "Press Enter to accept or enter a different path" ""
             [[ -n "$alt" ]] && UBOOT_BIN="$alt"
         fi
+    elif [[ -n "$UBOOT_SRC" ]]; then
+        info "U-Boot source (auto-detected): $UBOOT_SRC"
+        if $PATCH_UBOOT; then
+            info "  → patch to: $UBOOT_OUT  (sdboot, root=$ROOT_DEV)"
+        else
+            info "  → used unpatched (--no-patch-uboot)"
+        fi
+        if ! $NON_INTERACTIVE; then
+            local alt; prompt alt "Press Enter to accept or enter a different source path" ""
+            [[ -n "$alt" ]] && UBOOT_SRC="$alt"
+        fi
     else
-        warn "UBOOT.BIN not found. Run patch_uboot.py first to produce uboot_sdboot.bin:"
-        warn "  python patch_uboot.py -i uboot.bin -o uboot_sdboot.bin --mode sdboot --nand-offset-index 0"
-        prompt UBOOT_BIN "Path to UBOOT.BIN" ""
-        [[ -z "$UBOOT_BIN" ]] && die "UBOOT.BIN is required"
+        warn "No U-Boot source found."
+        prompt UBOOT_SRC "Path to raw uboot.bin (patched, not modified)" ""
+        [[ -z "$UBOOT_SRC" ]] && die "U-Boot source is required"
     fi
 
     # Kernel
@@ -260,7 +283,12 @@ configure() {
     echo ""
     printf "    %-12s %s\n" "Output:"   "${IMAGE:-$DEVICE}"
     [[ -n "$IMAGE" ]] && printf "    %-12s %s MB\n" "Size:" "$IMAGE_SIZE_MB"
-    printf "    %-12s %s\n" "U-Boot:"   "$UBOOT_BIN"
+    if [[ -n "$UBOOT_BIN" ]]; then
+        printf "    %-12s %s\n" "U-Boot:" "$UBOOT_BIN"
+    else
+        printf "    %-12s %s\n" "U-Boot src:" "$UBOOT_SRC"
+        $PATCH_UBOOT && printf "    %-12s %s\n" "U-Boot out:" "$UBOOT_OUT (patched)"
+    fi
     printf "    %-12s %s\n" "Kernel:"   "$KERNEL_BIN"
     printf "    %-12s %s\n" "Rootfs:"   "$ROOTFS_DIR"
     printf "    %-12s %s\n" "Userdata:" "${USERDATA_DIR:-<empty — populated on first boot>}"
@@ -291,7 +319,16 @@ configure() {
 # Validate
 # ---------------------------------------------------------------------------
 validate() {
-    [[ -f "$UBOOT_BIN" ]]  || die "UBOOT.BIN not found: $UBOOT_BIN"
+    if [[ -n "$UBOOT_BIN" ]]; then
+        [[ -f "$UBOOT_BIN" ]] || die "UBOOT.BIN not found: $UBOOT_BIN"
+    else
+        [[ -n "$UBOOT_SRC" ]] || die "No U-Boot source — use --uboot-src or --uboot"
+        [[ -f "$UBOOT_SRC" ]] || die "U-Boot source not found: $UBOOT_SRC"
+        if $PATCH_UBOOT; then
+            [[ -f "$SCRIPT_DIR/patch_uboot.py" ]] || die "patch_uboot.py not found in $SCRIPT_DIR"
+            command -v python3 &>/dev/null || die "python3 not found — needed to patch U-Boot"
+        fi
+    fi
     [[ -f "$KERNEL_BIN" ]] || die "zImage not found: $KERNEL_BIN"
     [[ -d "$ROOTFS_DIR" ]] || die "rootfs dir not found: $ROOTFS_DIR"
     ! $SKIP_USERDATA && [[ -n "$USERDATA_DIR" ]] && \
@@ -304,6 +341,40 @@ validate() {
     if [[ $avail -lt 32 ]]; then
         die "Only ${avail} MB left for p3 — increase --size or reduce partition sizes"
     fi
+}
+
+# ---------------------------------------------------------------------------
+# Patch U-Boot — patch_uboot.py reads the source and writes UBOOT_OUT.
+# The source uboot.bin is never modified; UBOOT_OUT lands in the repo root.
+# ---------------------------------------------------------------------------
+prepare_uboot() {
+    # Explicit prebuilt binary — use as-is.
+    if [[ -n "$UBOOT_BIN" ]]; then
+        info "U-Boot: using supplied binary $UBOOT_BIN"
+        return 0
+    fi
+
+    # --no-patch-uboot — use the untouched source directly.
+    if ! $PATCH_UBOOT; then
+        UBOOT_BIN="$UBOOT_SRC"
+        warn "U-Boot: using source unpatched — may not boot from SD: $UBOOT_BIN"
+        return 0
+    fi
+
+    echo ""
+    echo -e "${BOLD}  Patching U-Boot for SD boot...${RESET}"
+    info "Source: $UBOOT_SRC (unchanged)"
+    info "Output: $UBOOT_OUT"
+    run python3 "$SCRIPT_DIR/patch_uboot.py" \
+        -i "$UBOOT_SRC" -o "$UBOOT_OUT" \
+        --mode sdboot --root "$ROOT_DEV" \
+        --nand-offset-index "$NAND_OFFSET_INDEX"
+
+    if ! $DRY_RUN; then
+        [[ -f "$UBOOT_OUT" ]] || die "patch_uboot.py did not produce $UBOOT_OUT"
+        success "U-Boot patched: $UBOOT_OUT"
+    fi
+    UBOOT_BIN="$UBOOT_OUT"
 }
 
 # ---------------------------------------------------------------------------
@@ -603,4 +674,5 @@ build() {
 autodetect
 configure
 validate
+prepare_uboot
 build

@@ -138,6 +138,7 @@ autodetect() {
         local c="$SCRIPT_DIR/Prado firmware reconstructed/mtd7_userdata/userdata"
         [[ -d "$c" ]] && USERDATA_DIR="$c"
     }
+    return 0
 }
 
 # ---------------------------------------------------------------------------
@@ -300,8 +301,9 @@ validate() {
             die "$tool not found — run: sudo apt install parted dosfstools e2fsprogs rsync"
     done
     local avail=$(( IMAGE_SIZE_MB - P1_SIZE_MB - P2_SIZE_MB - 1 ))
-    [[ $avail -lt 32 ]] && \
+    if [[ $avail -lt 32 ]]; then
         die "Only ${avail} MB left for p3 — increase --size or reduce partition sizes"
+    fi
 }
 
 # ---------------------------------------------------------------------------
@@ -477,6 +479,7 @@ cleanup() {
         umount /tmp/sd_p1 /tmp/sd_p2 /tmp/sd_p3 2>/dev/null || true
         losetup -d "$LOOP" 2>/dev/null || true
     }
+    return 0
 }
 trap cleanup EXIT
 

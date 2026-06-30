@@ -16,7 +16,7 @@
 #   --uboot PATH       Prebuilt UBOOT.BIN to place on p1 as-is (skips patching)
 #   --uboot-src PATH   Raw uboot.bin source — patched via patch_uboot.py, never modified
 #   --no-patch-uboot   Use the source uboot.bin as-is without patching
-#   --nand-offset-index N  NAND env offset candidate to redirect (default: 0)
+#   --no-patch-nand-offset  Skip redirecting the NAND env offset (not recommended)
 #   --root DEVICE      Root device for sdboot bootargs (default: /dev/mmcblk0p2)
 #   --kernel PATH      zImage to place on p1
 #   --rootfs-dir DIR   Rootfs source directory (mounted as /)
@@ -53,8 +53,8 @@ UBOOT_BIN=""                                  # prebuilt binary (--uboot); used 
 UBOOT_SRC=""                                  # raw source uboot.bin; patched, never modified
 UBOOT_OUT="$SCRIPT_DIR/uboot_sdboot.bin"      # patched output (repo root, not source folder)
 PATCH_UBOOT=true                              # run patch_uboot.py on the source
-NAND_OFFSET_INDEX=0                            # patch_uboot.py --nand-offset-index
-ROOT_DEV="/dev/mmcblk0p2"                       # patch_uboot.py --root (matches p2 rootfs)
+PATCH_NAND_OFFSET=true                        # patch_uboot.py --patch-nand-offset
+ROOT_DEV="/dev/mmcblk0p2"                     # patch_uboot.py --root (matches p2 rootfs)
 KERNEL_BIN=""
 ROOTFS_DIR=""
 USERDATA_DIR=""
@@ -85,7 +85,7 @@ while [[ $# -gt 0 ]]; do
         --uboot)           UBOOT_BIN="$2"; PATCH_UBOOT=false; shift 2 ;;
         --uboot-src)       UBOOT_SRC="$2"; shift 2 ;;
         --no-patch-uboot)  PATCH_UBOOT=false; shift ;;
-        --nand-offset-index) NAND_OFFSET_INDEX="$2"; shift 2 ;;
+        --no-patch-nand-offset) PATCH_NAND_OFFSET=false; shift ;;
         --root)            ROOT_DEV="$2"; shift 2 ;;
         --kernel)          KERNEL_BIN="$2"; shift 2 ;;
         --rootfs-dir)      ROOTFS_DIR="$2"; shift 2 ;;
@@ -365,10 +365,12 @@ prepare_uboot() {
     echo -e "${BOLD}  Patching U-Boot for SD boot...${RESET}"
     info "Source: $UBOOT_SRC (unchanged)"
     info "Output: $UBOOT_OUT"
+    local nand_flag=""
+    $PATCH_NAND_OFFSET && nand_flag="--patch-nand-offset"
     run python3 "$SCRIPT_DIR/patch_uboot.py" \
         -i "$UBOOT_SRC" -o "$UBOOT_OUT" \
         --mode sdboot --root "$ROOT_DEV" \
-        --nand-offset-index "$NAND_OFFSET_INDEX"
+        $nand_flag
 
     if ! $DRY_RUN; then
         [[ -f "$UBOOT_OUT" ]] || die "patch_uboot.py did not produce $UBOOT_OUT"
@@ -399,16 +401,6 @@ import sys, re
 
 path = sys.argv[1]
 text = open(path).read()
-
-OLD = r"""USERDATAFS=`cat /proc/mounts | grep ubifs`
-if \[ "\${USERDATAFS}" != "" \]; then
-\tmt_partition=7.*?fi
-else
-\tUSERDATAFS=`cat /proc/mounts | grep yaffs2`
-\tif \[ "\${USERDATAFS}" != "" \]; then
-\t\tmount -t yaffs2 /dev/mtdblock6 /data/
-\tfi
-fi"""
 
 NEW = """\
 # Mount userdata: SD ext4 (p3) first, NAND UBI fallback, then yaffs2
@@ -460,9 +452,7 @@ else
 \tfi
 fi"""
 
-# Use literal string replacement rather than regex — the block is distinctive enough
 MARKER_START = 'USERDATAFS=`cat /proc/mounts | grep ubifs`'
-MARKER_END   = '\tfi\nfi\n#mount /dev/mmcblk0p1 /mnt'
 
 start = text.find(MARKER_START)
 end   = text.find('\n#mount /dev/mmcblk0p1 /mnt')

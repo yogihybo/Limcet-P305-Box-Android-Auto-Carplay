@@ -39,7 +39,7 @@ and boots from NAND anyway — SD boot never happens.
 **We cannot modify the NAND env (no NAND writes). So we must make
 the SD U-Boot not depend on the NAND env.**
 
-There are two ways to achieve this:
+There are two ways to achieve this (boot.scr auto-execute was tested and is not supported by this U-Boot build):
 
 ---
 
@@ -80,25 +80,25 @@ The approach:
 
 #### Redirecting the env read
 
-U-Boot reads its env from a fixed NAND offset (typically matching the
-mtd3 partition address from the mtdparts string, e.g. `0x60000`).
+U-Boot reads its env from a fixed NAND offset matching the mtd3
+partition start — `0x120000` on this device (128K S-Loader + 512K
+U-boot + 512K U-boot_back = 0x120000).
 The env read code in the binary contains this offset as a literal
 constant. If we can find and patch that constant to point to an
 address that is invalid or empty, the NAND env read will fail CRC and
 U-Boot will fall back to our patched compiled-in defaults.
 
 **Approach:**
-1. In the NAND env, the env partition is defined in `mtdparts`:
-   `nand0: 64k@0(nboot),320k@64k(uboot),64k@384k(env),...`
-   → env is at NAND offset `0x60000` (384 KiB).
-2. Search UBOOT.BIN for the 4-byte big-endian or little-endian
-   constant `0x00060000`. One of the matches will be in the NAND env
-   driver.
+1. The Prado NAND layout from the live `mtdparts` env variable:
+   `128k(S-Loader),512k(U-boot),512k(U-boot_back),256K(U-boot-Env),...`
+   → U-boot-Env (mtd3) starts at NAND offset `0x120000`.
+2. Search UBOOT.BIN for the 4-byte little-endian constant
+   `0x00120000`. One of the matches will be in the NAND env driver.
 3. Patch that constant to an address beyond the end of NAND (e.g.
    `0xFF000000`). The read will fail. U-Boot falls back to
    compiled-in defaults.
 
-**Risk:** this is fragile. The constant `0x00060000` may appear
+**Risk:** this is fragile. The constant `0x00120000` may appear
 multiple times in the binary. Patching the wrong one can crash U-Boot.
 
 **Mitigation:** test on a device with JTAG or where a full NAND
@@ -106,47 +106,56 @@ restore is possible before committing. Keep the original UBOOT.BIN.
 
 ---
 
-### Option 2 — Build U-Boot from source (unlikely — source not available)
+### Option 2 — Build U-Boot from source ✓ SOURCE AVAILABLE
 
-If the ARK1680 U-Boot source is obtainable (it may be in an SDK
-release or on GitHub as `ark1680-uboot`), rebuild with:
+The chip is confirmed as **ARK1668** (marked on the physical package).
+The ARK Micro BSP at `~/Downloads/linux-arkmicro` contains the exact
+U-Boot source for this SoC. This is the cleanest approach — the
+resulting UBOOT.BIN never consults the NAND env at all.
 
+#### Changes needed from the BSP defaults
+
+The BSP `ark1668_defconfig` targets a reference board with 640K
+bootloader partitions (env at 0x160000). The Prado uses 512K
+bootloader partitions (env at 0x120000). Only two things differ:
+
+1. **`CONFIG_ENV_OFFSET`** — set to `0x120000` (not `0x160000`)
+2. **`CONFIG_BOOTCOMMAND`** — replace NAND boot with SD boot
+
+In `linux-arkmicro/u-boot/include/configs/ark1668.h`, change:
+```c
+// Before:
+#define CONFIG_ENV_OFFSET  0x160000
+
+// After (Prado partition layout):
+#define CONFIG_ENV_OFFSET  0x120000
 ```
-CONFIG_ENV_IS_IN_MMC=y         (read env from SD instead of NAND)
-CONFIG_SYS_MMC_ENV_DEV=0       (SD = mmc device 0)
-CONFIG_SYS_MMC_ENV_PART=1      (env in FAT partition 1)
-CONFIG_BOOTCOMMAND="run sdboot"
-CONFIG_EXTRA_ENV_SETTINGS= \
-    "sdbootargs=setenv bootargs console=ttyS0,115200n8 mem=180M "
+
+And in `CONFIG_EXTRA_ENV_SETTINGS` / `CONFIG_BOOTCOMMAND`, add:
+```c
+"sdboot=run sdbootargs; fatload mmc 1 ${loadaddr} zImage; bootz ${loadaddr}\0"
+"sdbootargs=setenv bootargs console=ttyS0,115200n8 mem=180M "
     "root=/dev/mmcblk0p2 rootfstype=ext4 rootwait rw\0"
-    "sdboot=run sdbootargs; fatload mmc 0 1000000 zImage; bootz 1000000\0"
 ```
 
-This is the cleanest solution. The resulting UBOOT.BIN never looks at
-NAND for its env.
+SD slot is `mmc 1` — confirmed by `board_mmc_init()` in
+`board/arkmicro/ark1668/ark1668.c` which registers `ARK_MMC0`
+(internal, index 0) then `ARK_MMC1` (SD slot, index 1).
 
----
+#### Build
 
-### Option 3 — Try boot.scr first (zero risk, test quickly)
+```bash
+cd ~/Downloads/linux-arkmicro
+source env.source
+cd u-boot
+make ark1668_defconfig
+# (apply the CONFIG_ENV_OFFSET and bootcmd changes)
+make -j$(nproc)
+# Output: u-boot.bin — rename to UBOOT.BIN for Stepldr
+```
 
-Some U-Boot builds auto-execute a compiled script file `boot.scr` from
-the boot FAT partition. This is worth a 5-minute test before any
-patching:
-
-1. Install `u-boot-tools` on Linux/WSL: `sudo apt install u-boot-tools`
-2. Create `sd_boot.cmd`:
-   ```sh
-   setenv bootargs console=ttyS0,115200n8 mem=180M root=/dev/mmcblk0p2 rootfstype=ext4 rootwait rw
-   fatload mmc 0 1000000 zImage
-   bootz 1000000
-   ```
-3. Compile: `mkimage -T script -C none -A arm -n boot -d sd_boot.cmd boot.scr`
-4. Place `boot.scr` on SD p1 FAT32 alongside `UBOOT.BIN`
-5. Boot and watch serial console — if U-Boot loads and executes it,
-   the env problem is solved with no patching at all.
-
-**This should be tried first.** It is non-destructive and immediately
-tells us whether the ARK1680 U-Boot has boot.scr support.
+This is the **preferred approach** over binary patching — no risk of
+patching the wrong constant, no compiled-in env size constraints.
 
 ---
 
@@ -159,7 +168,6 @@ tells us whether the ARK1680 U-Boot has boot.scr support.
 │  p1: FAT32   64 MB                                   │
 │      UBOOT.BIN    ← Stepldr loads this               │
 │      zImage       ← U-Boot fatloads this             │
-│      boot.scr     ← Option 3: auto-executed script   │
 │      initramfs.cpio.gz  ← if MMC module-only         │
 │                                                      │
 │  p2: ext4   300 MB                                   │
@@ -200,9 +208,8 @@ to determine which index maps to the physical SD slot.
 
 ## Phase 2 — U-Boot (env strategy, in order of preference)
 
-1. **Try `boot.scr`** (Option 3 above) — 5 minutes, zero risk
-2. If not supported, **binary patch** (Option 1) — primary fallback
-3. **Build from source** (Option 2) — cleanest but unlikely; ARK1680 U-Boot source not available
+1. **Build from source** (Option 2) — preferred; `linux-arkmicro/u-boot` is our exact chip
+2. **Binary patch** (Option 1) — fallback if toolchain setup is not feasible
 
 U-Boot bootargs for SD (whichever method):
 
@@ -314,8 +321,6 @@ mount ${LOOP}p3 /tmp/sd_p3
 cp "Prado firmware reconstructed/mtd1-mtd2_uboot/uboot.bin" /tmp/sd_p1/UBOOT.BIN
 cp kernel/zImage /tmp/sd_p1/zImage
 [ -f initramfs/initramfs.cpio.gz ] && cp initramfs/initramfs.cpio.gz /tmp/sd_p1/
-[ -f sd_boot.scr ] && cp sd_boot.scr /tmp/sd_p1/boot.scr
-
 # p2: rootfs
 rsync -a --exclude=proc/ --exclude=sys/ --exclude=dev/ --exclude=tmp/ \
     "Prado firmware reconstructed/mtd6_rootfs/rootfs/" /tmp/sd_p2/
@@ -423,31 +428,27 @@ dd if=/dev/mtd11 of=/tmp/unicode
 
 | # | Risk | Likelihood | Mitigation |
 |---|------|-----------|------------|
-| 1 | boot.scr not supported → env cannot be overridden | Medium | Try binary patch or build from source |
-| 2 | Binary patch corrupts U-Boot | Medium | Keep original; test with serial console attached |
-| 3 | `ark_dw_mmc.ko` module-only — kernel can't mount SD root | Medium | Initramfs (Phase 4) |
-| 4 | MMC device index wrong (mmc 0 vs mmc 1) | Medium | Confirm from serial console |
-| 5 | App uses MTD ioctls (e.g. `MEMGETINFO`) on data partitions | Very low | Confirmed absent in all rootfs binaries — plain read() only |
-| 6 | ext4 not in kernel | Very low | ext4 built-in since Linux 2.6.28 |
-| 7 | App writes depend on /data being available | Medium | SD /data mount is first in rcS — same order as NAND |
+| 1 | Binary patch corrupts U-Boot | Medium | Keep original; test with serial console attached |
+| 2 | `ark_dw_mmc.ko` module-only — kernel can't mount SD root | Medium | Initramfs (Phase 4) |
+| 3 | MMC device index wrong (mmc 0 vs mmc 1) | Medium | Confirm from serial console |
+| 4 | App uses MTD ioctls (e.g. `MEMGETINFO`) on data partitions | Very low | Confirmed absent in all rootfs binaries — plain read() only |
+| 5 | ext4 not in kernel | Very low | ext4 built-in since Linux 2.6.28 |
+| 6 | App writes depend on /data being available | Medium | SD /data mount is first in rcS — same order as NAND |
 
 ---
 
 ## Implementation order
 
-1. **Prepare SD p1** — put existing `UBOOT.BIN` + `zImage` on FAT32;
-   try `boot.scr` approach (Option 3) — costs nothing to test
-2. **Serial console attached** — watch U-Boot output to determine:
-   - Whether boot.scr is executed
-   - Which mmc index is the SD slot
-   - Whether MMC is built-in (kernel panic or successful mount)
-3. **If boot.scr works**: write `sdbootargs` and `sdboot` in the
-   script; add ext4 rootfs to p2 and test root mount
-4. **If boot.scr fails**: proceed with Option 1 (binary patch);
-   Option 2 (source build) is unlikely without access to ARK1680 U-Boot source
-5. **Modify `rcS`** for SD /data mount (Phase 3)
-6. **Build `build_sdimage.sh`** and produce full `sd_boot.img`
-7. **Full boot test** — serial console, verify app init, BT, WiFi AP
+1. **Serial console attached** — confirm mmc device index and whether MMC
+   driver is built-in (kernel panic = module-only → add initramfs)
+2. **Binary patch U-Boot** (Option 1) — use `patch_uboot.py` to
+   invalidate the NAND env offset and patch compiled-in defaults;
+   Option 2 (source build) is unlikely without ARK1680 U-Boot source
+3. **Prepare SD p1** — write patched `UBOOT.BIN` + `zImage` to FAT32;
+   add ext4 rootfs to p2 and test root mount
+4. **Modify `rcS`** for SD /data mount (Phase 3)
+5. **Build full image** using `build_bootable_sdcard.sh` and produce `sd_boot.img`
+6. **Full boot test** — serial console, verify app init, BT, WiFi AP
 
 ---
 
@@ -455,7 +456,6 @@ dd if=/dev/mtd11 of=/tmp/unicode
 
 | File | Change |
 |------|--------|
-| `sd_boot.cmd` | New — U-Boot script source (compiled to `boot.scr`) |
 | `build_bootable_sdcard.sh` | Assembles bootable SD image — interactive, patches rcS and populates /nanddata/ |
 | `patch_uboot.py` | Patches compiled-in U-Boot env for SD boot |
 | `Prado firmware reconstructed/mtd6_rootfs/rootfs/etc/rc.d/rcS` | **Not modified** — patch applied at build time to the SD copy only |

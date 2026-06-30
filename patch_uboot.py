@@ -5,27 +5,42 @@ patch_uboot.py - Patch compiled-in environment in ARK1680 U-Boot binary
 The U-Boot binary contains a small compiled-in env block used as fallback
 when the primary env storage (NAND mtd3) fails its CRC check. This script:
   1. Finds and patches key=value pairs in that block
-  2. Optionally redirects the NAND env read offset to an invalid address,
-     forcing CRC failure so U-Boot uses the patched compiled-in defaults
+  2. Patches the ARM32 MOV instructions that load CONFIG_ENV_OFFSET (0x120000)
+     to load an invalid address (0xFF000000) instead, forcing CRC failure so
+     U-Boot uses the compiled-in defaults
+
+Background:
+  The ARK1680 U-Boot encodes CONFIG_ENV_OFFSET=0x120000 as a rotated
+  immediate in ARM32 MOV instructions (imm12=0x0812, i.e. 0x12 ROR 16).
+  A naive byte-search for \\x00\\x00\\x12\\x00 finds only non-aligned hits
+  inside unrelated instructions. The correct approach is to search for the ARM
+  instruction encoding at 4-byte-aligned addresses.
+
+  uboot_sdboot.bin is a source-compiled binary (from linux-arkmicro BSP) with
+  the sdboot preset already in CONFIG_EXTRA_ENV_SETTINGS. Run --patch-nand-offset
+  on it to disable the NAND env so the compiled-in sdboot defaults win.
 
 Examples:
   # Inspect compiled-in env
   python patch_uboot.py -i uboot.bin --dump-env
 
-  # Find NAND env offset candidates (run before --nand-offset-index)
+  # Find ARM MOV instructions that load CONFIG_ENV_OFFSET
   python patch_uboot.py -i uboot.bin --find-nand-offset
 
-  # Apply SD boot preset and force NAND env fallback (index 0 most likely)
-  python patch_uboot.py -i uboot.bin -o uboot_sdboot.bin --mode sdboot --nand-offset-index 0
+  # Source-compiled binary: only needs NAND offset disabled
+  python patch_uboot.py -i uboot_sdboot.bin -o uboot_final.bin --patch-nand-offset
+
+  # Original binary: patch compiled-in env AND disable NAND offset
+  python patch_uboot.py -i uboot.bin -o uboot_sdboot.bin --mode sdboot --patch-nand-offset
 
   # Custom root device
-  python patch_uboot.py -i uboot.bin -o uboot_sdboot.bin --mode sdboot --root /dev/mmcblk1p2 --nand-offset-index 0
+  python patch_uboot.py -i uboot.bin -o uboot_sdboot.bin --mode sdboot --root /dev/mmcblk1p2 --patch-nand-offset
 
   # Manual env patches only (no NAND offset change)
-  python patch_uboot.py -i uboot.bin -o uboot_patched.bin --set bootcmd="run mmcboot" --set bootdelay=3
+  python patch_uboot.py -i uboot.bin -o uboot_patched.bin --set bootcmd="run sdboot" --set bootdelay=3
 
   # Dry run — show what would change without writing
-  python patch_uboot.py -i uboot.bin --mode sdboot --nand-offset-index 0 --dry-run
+  python patch_uboot.py -i uboot.bin --mode sdboot --patch-nand-offset --dry-run
 """
 
 import argparse
@@ -97,42 +112,57 @@ def patch_env_block(data: bytearray, offset: int, patches: dict,
 
 
 # ---------------------------------------------------------------------------
-# NAND env offset
+# NAND env offset — ARM instruction patching
 # ---------------------------------------------------------------------------
 
-# Default NAND env partition start on Prado (mtd3, 384 KiB = 0x60000)
-DEFAULT_NAND_ENV_OFFSET = 0x00060000
-# Value that will cause the NAND read to fail (beyond any real NAND range)
+# NAND env partition start on Prado: mtd3 (U-Boot-Env) at 128K+512K+512K = 0x120000
+DEFAULT_NAND_ENV_OFFSET = 0x00120000
+
+# Replacement offset — beyond any real NAND range, guarantees CRC failure
 INVALID_NAND_OFFSET = 0xFF000000
 
+# ARM32 rotated-immediate encoding of 0x120000:
+#   0x12 ROR 16  → imm8=0x12, rot4=8 → imm12 = (8<<8)|0x12 = 0x0812
+_IMM12_VALID   = 0x0812
 
-def find_nand_offset_candidates(data: bytes,
-                                target: int = DEFAULT_NAND_ENV_OFFSET) -> list:
+# ARM32 rotated-immediate encoding of 0xFF000000:
+#   0xFF ROR 8   → imm8=0xFF, rot4=4 → imm12 = (4<<8)|0xFF = 0x04FF
+_IMM12_INVALID = 0x04FF
+
+# Instruction mask/pattern for "AL-condition MOV Rd, #0x120000" (any Rd):
+#   bits 31-28 = 1110 (AL), 27-26 = 00, 25 (I) = 1, 24-21 = 1101 (MOV),
+#   20 (S) = 0, 19-16 = 0000 (Rn ignored), 15-12 = Rd (variable), 11-0 = imm12
+_MOV_MASK    = 0xFFFF0FFF   # mask out Rd nibble (bits 15-12)
+_MOV_PATTERN = 0xE3A00000 | _IMM12_VALID   # 0xE3A00812 with Rd=0
+
+
+def find_nand_offset_candidates(data: bytes) -> list:
     """
-    Find all little-endian 32-bit occurrences of `target` in the binary.
-    Returns list of dicts with 'offset' and 'context' keys.
+    Find all 4-byte-aligned ARM32 MOV instructions that load DEFAULT_NAND_ENV_OFFSET.
+    Returns list of dicts with 'offset', 'word', and 'rd' keys.
     """
-    needle = struct.pack('<I', target)
     candidates = []
-    pos = 0
-    while True:
-        idx = data.find(needle, pos)
-        if idx == -1:
-            break
-        ctx_start = max(0, idx - 16)
-        ctx_bytes = data[ctx_start:idx + 20]
-        candidates.append({
-            'offset': idx,
-            'context': ctx_bytes.hex(' '),
-        })
-        pos = idx + 1
+    for off in range(0, len(data) - 3, 4):
+        w = struct.unpack_from('<I', data, off)[0]
+        if (w & _MOV_MASK) == _MOV_PATTERN:
+            rd = (w >> 12) & 0xF
+            candidates.append({'offset': off, 'word': w, 'rd': rd})
     return candidates
 
 
-def patch_nand_offset(data: bytearray, binary_offset: int,
-                      new_value: int = INVALID_NAND_OFFSET):
-    """Overwrite the 4-byte LE word at binary_offset with new_value."""
-    struct.pack_into('<I', data, binary_offset, new_value)
+def patch_nand_offset(data: bytearray, candidates: list,
+                      new_imm12: int = _IMM12_INVALID) -> int:
+    """
+    Patch all found MOV Rd, #0x120000 instructions to MOV Rd, #0xFF000000.
+    Returns the number of instructions patched.
+    """
+    count = 0
+    for c in candidates:
+        old_w = struct.unpack_from('<I', data, c['offset'])[0]
+        new_w = (old_w & ~0xFFF) | new_imm12
+        struct.pack_into('<I', data, c['offset'], new_w)
+        count += 1
+    return count
 
 
 # ---------------------------------------------------------------------------
@@ -143,12 +173,19 @@ PRESETS = {
     'sdboot': {
         'description': 'Boot from SD card — ext4 rootfs on /dev/mmcblk0p2',
         'env': {
-            'bootcmd':     'run mmcboot',
-            'setbootargs': (
+            'bootcmd':    'run sdboot',
+            'bootfile':   'zImage',
+            'mmcdev':     '1',
+            'bootdelay':  '3',
+            'sdboot':     (
+                'run sdbootargs; '
+                'fatload mmc ${mmcdev}:1 ${loadaddr} ${bootfile}; '
+                'bootz ${loadaddr}'
+            ),
+            'sdbootargs': (
                 'setenv bootargs console=ttyS0,115200n8 mem=180M '
                 'root=/dev/mmcblk0p2 rootfstype=ext4 rootwait rw'
             ),
-            'bootdelay':   '3',
         },
     },
 }
@@ -171,17 +208,18 @@ def main():
     ap.add_argument('--dump-env', action='store_true',
                     help='Print compiled-in env block and exit')
     ap.add_argument('--find-nand-offset', action='store_true',
-                    help='List NAND env offset candidates and exit')
+                    help='List ARM MOV instructions that load CONFIG_ENV_OFFSET and exit')
     ap.add_argument('--mode', choices=list(PRESETS.keys()),
-                    help='Apply a preset patch profile')
+                    help='Apply a preset patch profile to the compiled-in env')
     ap.add_argument('--root', default='/dev/mmcblk0p2', metavar='DEVICE',
                     help='Root device for sdboot mode (default: /dev/mmcblk0p2)')
     ap.add_argument('--set', metavar='KEY=VALUE', action='append', dest='setenv',
                     help='Set a compiled-in env variable (repeatable, applied after --mode)')
-    ap.add_argument('--nand-offset-index', type=int, metavar='N',
-                    help='Candidate index from --find-nand-offset to redirect to 0xFF000000')
-    ap.add_argument('--nand-offset-value', default='0xFF000000', metavar='HEX',
-                    help='Replacement value for NAND env offset (default: 0xFF000000)')
+    ap.add_argument('--patch-nand-offset', action='store_true',
+                    help=(
+                        'Patch all ARM MOV #0x120000 instructions to MOV #0xFF000000, '
+                        'forcing NAND env CRC failure so compiled-in defaults are used'
+                    ))
     ap.add_argument('--env-block-size', type=int, default=4096, metavar='BYTES',
                     help='Max compiled-in env block size in bytes (default: 4096)')
     ap.add_argument('--dry-run', action='store_true',
@@ -206,16 +244,21 @@ def main():
             print(f"  {k}={v}")
         return
 
-    # --find-nand-offset
+    # Always find candidates (used for --find-nand-offset and --patch-nand-offset)
     candidates = find_nand_offset_candidates(data_ro)
+
+    # --find-nand-offset
     if args.find_nand_offset:
         if not candidates:
-            print(f"\nNo occurrences of 0x{DEFAULT_NAND_ENV_OFFSET:08X} found in binary.")
+            print(f"\nNo ARM MOV #0x{DEFAULT_NAND_ENV_OFFSET:08X} instructions found.")
+            print("  (imm12=0x0812 pattern at 4-byte-aligned addresses)")
         else:
-            print(f"\nNAND env offset (0x{DEFAULT_NAND_ENV_OFFSET:08X}) candidates:")
-            for i, c in enumerate(candidates):
-                print(f"  [{i}] binary 0x{c['offset']:08X}  hex: {c['context']}")
-            print("\nPass --nand-offset-index N to patch one of these.")
+            print(f"\nARM MOV #0x{DEFAULT_NAND_ENV_OFFSET:08X} candidates "
+                  f"(imm12=0x{_IMM12_VALID:03X}):")
+            for c in candidates:
+                print(f"  {c['offset']:#010x}: {c['word']:#010x}  "
+                      f"MOV r{c['rd']}, #0x{DEFAULT_NAND_ENV_OFFSET:08X}")
+            print(f"\nRun --patch-nand-offset to redirect all to #0x{INVALID_NAND_OFFSET:08X}.")
         return
 
     # Collect env patches
@@ -225,9 +268,8 @@ def main():
         preset = PRESETS[args.mode]
         print(f"\nMode: {args.mode} — {preset['description']}")
         patches.update(preset['env'])
-        # Apply --root override to sdboot setbootargs
         if args.mode == 'sdboot' and args.root != '/dev/mmcblk0p2':
-            patches['setbootargs'] = (
+            patches['sdbootargs'] = (
                 f"setenv bootargs console=ttyS0,115200n8 mem=180M "
                 f"root={args.root} rootfstype=ext4 rootwait rw"
             )
@@ -240,8 +282,8 @@ def main():
             k, v = item.split('=', 1)
             patches[k] = v
 
-    if not patches and args.nand_offset_index is None:
-        print("\nNothing to patch. Use --mode, --set, or --nand-offset-index.")
+    if not patches and not args.patch_nand_offset:
+        print("\nNothing to patch. Use --mode, --set, or --patch-nand-offset.")
         ap.print_help()
         sys.exit(1)
 
@@ -259,21 +301,21 @@ def main():
                 sys.exit(1)
 
     # Show and apply NAND offset patch
-    if args.nand_offset_index is not None:
+    if args.patch_nand_offset:
         if not candidates:
-            print(f"\nERROR: no NAND env offset candidates found. Run --find-nand-offset first.")
-            sys.exit(1)
-        if args.nand_offset_index >= len(candidates):
-            print(f"\nERROR: index {args.nand_offset_index} out of range "
-                  f"({len(candidates)} candidates). Run --find-nand-offset to list them.")
-            sys.exit(1)
-        c = candidates[args.nand_offset_index]
-        new_val = int(args.nand_offset_value, 16)
-        print(f"\nNAND offset patch at binary 0x{c['offset']:08X}:")
-        print(f"  0x{DEFAULT_NAND_ENV_OFFSET:08X} -> 0x{new_val:08X}")
-        print(f"  (NAND env read will fail CRC; U-Boot falls back to compiled-in defaults)")
-        if not args.dry_run:
-            patch_nand_offset(data, c['offset'], new_val)
+            print(f"\nWARNING: no ARM MOV #0x{DEFAULT_NAND_ENV_OFFSET:08X} instructions found.")
+            print("  NAND env offset was NOT patched.")
+        else:
+            print(f"\nNAND offset patch — redirecting "
+                  f"#0x{DEFAULT_NAND_ENV_OFFSET:08X} → #0x{INVALID_NAND_OFFSET:08X}:")
+            for c in candidates:
+                new_w = (c['word'] & ~0xFFF) | _IMM12_INVALID
+                print(f"  {c['offset']:#010x}: {c['word']:#010x} → {new_w:#010x}  "
+                      f"(MOV r{c['rd']}, #0x{DEFAULT_NAND_ENV_OFFSET:08X} "
+                      f"→ MOV r{c['rd']}, #0x{INVALID_NAND_OFFSET:08X})")
+            print("  NAND env CRC will fail; U-Boot falls back to compiled-in defaults.")
+            if not args.dry_run:
+                patch_nand_offset(data, candidates)
 
     # Write output
     out_path = args.output or (Path(args.input).stem + '_patched.bin')

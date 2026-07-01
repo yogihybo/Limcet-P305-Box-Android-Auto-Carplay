@@ -224,6 +224,54 @@ find_src() {
     echo ""
 }
 
+# ── Navigation state ──────────────────────────────────────────────────────────
+#
+# CURSOR indexes into NAV_TYPE/NAV_IDX, a flat list built from BUILD_ITEMS
+# then PARTITIONS in display order. Disabled partitions (PART_SEL == -1)
+# are left out so the cursor can never land on them.
+
+CURSOR=0
+NAV_TYPE=()
+NAV_IDX=()
+
+build_nav_list() {
+    NAV_TYPE=(); NAV_IDX=()
+    for i in "${!BUILD_ITEMS[@]}"; do
+        NAV_TYPE+=("build"); NAV_IDX+=("$i")
+    done
+    for i in "${!PARTITIONS[@]}"; do
+        [[ ${PART_SEL[$i]} -eq -1 ]] && continue
+        NAV_TYPE+=("part"); NAV_IDX+=("$i")
+    done
+}
+
+is_current() {
+    # is_current <type> <idx> — true if the cursor is on this row
+    [[ "${NAV_TYPE[$CURSOR]}" == "$1" && "${NAV_IDX[$CURSOR]}" == "$2" ]]
+}
+
+toggle_current() {
+    local t="${NAV_TYPE[$CURSOR]}" idx="${NAV_IDX[$CURSOR]}"
+    if [[ "$t" == "build" ]]; then
+        [[ ${BUILD_SEL[$idx]} -eq 1 ]] && BUILD_SEL[$idx]=0 || BUILD_SEL[$idx]=1
+    else
+        [[ ${PART_SEL[$idx]} -eq 1 ]] && PART_SEL[$idx]=0 || PART_SEL[$idx]=1
+    fi
+}
+
+# Reads one keypress, resolving arrow-key escape sequences (\x1b[A / \x1b[B)
+# to a single token. Never fails the script under `set -e` — a lone Escape
+# or an EOF just yields an unmatched key that the caller ignores.
+read_key() {
+    local key rest
+    IFS= read -rsn1 key 2>/dev/null || true
+    if [[ "$key" == $'\x1b' ]]; then
+        IFS= read -rsn2 -t 0.05 rest 2>/dev/null || true
+        key+="$rest"
+    fi
+    printf '%s' "$key"
+}
+
 # ── Menu rendering ────────────────────────────────────────────────────────────
 
 print_menu() {
@@ -238,11 +286,8 @@ print_menu() {
     echo -e "  ${BOLD}BUILD${NC}"
     echo -e "  ${DIM}──────────────────────────────────────────────────────${NC}"
 
-    local total=${#PARTITIONS[@]}
-
     for i in "${!BUILD_ITEMS[@]}"; do
         IFS='|' read -r key label desc _ <<< "${BUILD_ITEMS[$i]}"
-        local num=$((total + i + 1))
         local img_path=""
         local status=""
         if [[ "$key" == "rootfs" ]]; then
@@ -260,7 +305,9 @@ print_menu() {
         else
             mark="${DIM}[ ]${NC}"
         fi
-        printf "  %d  %b  %-24s" "$num" "$mark" "$label"
+        local cursor="  "
+        is_current "build" "$i" && cursor="${CYAN}▶ ${NC}"
+        printf "  %b%b  %-24s" "$cursor" "$mark" "$label"
         echo -e "  $status"
         echo -e "      ${DIM}$desc${NC}"
         echo ""
@@ -271,15 +318,15 @@ print_menu() {
     echo -e "  ${DIM}Files are staged on the SD card; U-Boot copies each selected${NC}"
     echo -e "  ${DIM}partition below from the SD card into internal NAND on boot.${NC}"
     echo -e "  ${DIM}──────────────────────────────────────────────────────${NC}"
-    echo -e "  ${DIM}#    [ ]  Partition              File              Status${NC}"
+    echo -e "  ${DIM}    [ ]  Partition              File              Status${NC}"
     echo ""
 
     for i in "${!PARTITIONS[@]}"; do
         IFS='|' read -r key label filename offset size mode desc _ <<< "${PARTITIONS[$i]}"
         if [[ ${PART_SEL[$i]} -eq -1 ]]; then
-            # Disabled entry — greyed out, not selectable
-            printf "  ${DIM}%d    [-]  %-22s %-18s (disabled)${NC}\n" \
-                "$((i+1))" "$label" "$filename"
+            # Disabled entry — greyed out, not navigable
+            printf "     ${DIM}[-]  %-22s %-18s (disabled)${NC}\n" \
+                "$label" "$filename"
             echo -e "       ${DIM}$desc${NC}"
             echo ""
             continue
@@ -298,8 +345,10 @@ print_menu() {
         fi
         local caution=""
         [[ "$key" == "uboot" ]] && caution=" ${RED}⚠ brick risk${NC}"
-        printf "  %d    %b  %-22s %-18s %b%b\n" \
-            "$((i+1))" "$mark" "$label" "$filename" "$found" "$caution"
+        local cursor="  "
+        is_current "part" "$i" && cursor="${CYAN}▶ ${NC}"
+        printf "  %b%b  %-22s %-18s %b%b\n" \
+            "$cursor" "$mark" "$label" "$filename" "$found" "$caution"
         echo -e "       ${DIM}$desc   $offset  $size${NC}"
         echo ""
     done
@@ -307,7 +356,7 @@ print_menu() {
     echo -e "  ${DIM}──────────────────────────────────────────────────────${NC}"
     echo ""
     echo -e "  ${BOLD}Commands:${NC}"
-    echo -e "    ${BOLD}1–${#PARTITIONS[@]}${NC}   toggle partition     ${BOLD}$((${#PARTITIONS[@]}+1))–$((${#PARTITIONS[@]}+${#BUILD_ITEMS[@]}))${NC}  toggle build step"
+    echo -e "    ${BOLD}↑/↓${NC}  move          ${BOLD}Space${NC} / ${BOLD}Enter${NC}  toggle highlighted item"
     echo -e "    ${BOLD}a${NC}    select all partitions   ${BOLD}n${NC}   deselect all partitions"
     echo -e "    ${BOLD}g${NC}    go (build selected, generate SD package)"
     echo -e "    ${BOLD}q${NC}    quit"
@@ -464,28 +513,20 @@ print_summary() {
 }
 
 # ── Main loop ─────────────────────────────────────────────────────────────────
+#
+# Arrow keys move the highlighted row; Space/Enter toggles it. a/n/g/q act
+# immediately on keypress — no need to press Enter afterwards.
 
-total_parts=${#PARTITIONS[@]}
-total_build=${#BUILD_ITEMS[@]}
+build_nav_list
 
 while true; do
     print_menu
-    read -rp "  Selection: " input
+    key=$(read_key)
 
-    # Number keys
-    if [[ "$input" =~ ^[0-9]+$ ]]; then
-        if (( input >= 1 && input <= total_parts )); then
-            idx=$((input - 1))
-            [[ ${PART_SEL[$idx]} -eq -1 ]] && continue
-            [[ ${PART_SEL[$idx]} -eq 1 ]] && PART_SEL[$idx]=0 || PART_SEL[$idx]=1
-        elif (( input > total_parts && input <= total_parts + total_build )); then
-            idx=$((input - total_parts - 1))
-            [[ ${BUILD_SEL[$idx]} -eq 1 ]] && BUILD_SEL[$idx]=0 || BUILD_SEL[$idx]=1
-        fi
-        continue
-    fi
-
-    case "$input" in
+    case "$key" in
+        $'\x1b[A')  (( CURSOR > 0 )) && (( --CURSOR )); true ;;
+        $'\x1b[B')  (( CURSOR < ${#NAV_TYPE[@]} - 1 )) && (( ++CURSOR )); true ;;
+        ''|' ')     toggle_current ;;
         a|A)
             for i in "${!PARTITIONS[@]}"; do
                 [[ ${PART_SEL[$i]} -ne -1 ]] && PART_SEL[$i]=1

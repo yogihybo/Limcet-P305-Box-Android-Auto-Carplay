@@ -199,33 +199,35 @@ bash build.sh
 ```
   BUILD
   ─────
-  11 [ ]  Build rootfs image      Compiles source tree → rootfs.img (~106 MB)
-  12 [ ]  Build userdata image    Overlays Prado settings → userdata.img (~6 MB)
+▶ [ ]  Build rootfs image      Compiles source tree → rootfs.img (~106 MB)
+  [ ]  Build userdata image    Overlays Prado settings → userdata.img (~6 MB)
 
   NAND PARTITIONS TO FLASH (via SD update package)
   ─────────────────────────────────────────────────
   Files are staged on the SD card; U-Boot copies each selected
   partition below from the SD card into internal NAND on boot.
-  1  [X]  Root Filesystem         rootfs.img       0x5a0000   106 MB
-  2  [X]  User Data               userdata.img     0x6fa0000    6 MB
-  3  [ ]  Linux Kernel            zImage           0x1a0000     4 MB
-  4  [ ]  Display Config (arkdata) arkdata.ini     0x160000   256 KB
-  5  [ ]  U-Boot Env              uboot-env.bin    0x120000   256 KB
-  6  [ ]  U-Boot                  uboot.bin        0x020000   512 KB  ⚠ brick risk
-  7  [ ]  Boot Logo               bootlogo         0x75a0000  512 KB
-  8  [ ]  Boot Animation          bootanimation    0x7620000    3 MB
-  9  [ ]  Reversing Track         reversingtrack   0x7920000    3 MB
-  10 [ ]  Unicode Font            unicode          0x7c20000  256 KB
+  [X]  Root Filesystem         rootfs.img       0x5a0000   106 MB
+  [X]  User Data               userdata.img     0x6fa0000    6 MB
+  [ ]  Linux Kernel            zImage           0x1a0000     4 MB
+  [ ]  Display Config (arkdata) arkdata.ini     0x160000   256 KB
+  [-]  U-Boot Env              uboot-env.bin    0x120000   256 KB  (disabled)
+  [ ]  U-Boot                  uboot.bin        0x020000   512 KB  ⚠ brick risk
+  [ ]  Boot Logo               bootlogo         0x75a0000  512 KB
+  [ ]  Boot Animation          bootanimation    0x7620000    3 MB
+  [ ]  Reversing Track         reversingtrack   0x7920000    3 MB
+  [ ]  Unicode Font            unicode          0x7c20000  256 KB
 ```
 
-**Defaults:** rootfs and userdata are selected by default. Kernel, U-Boot, arkdata, and other early-boot partitions default to off — they must be explicitly enabled to avoid accidental reflash.
+The `▶` marker shows which row is highlighted — move it with the arrow keys.
+
+**Defaults:** rootfs and userdata are selected by default. Kernel, U-Boot, arkdata, and other early-boot partitions default to off — they must be explicitly enabled to avoid accidental reflash. U-Boot Env is disabled entirely (not navigable) until `uboot-env.bin` is built.
 
 ### Commands
 
 | Key | Action |
 |-----|--------|
-| `1`–`10` | Toggle SD partition on/off |
-| `11`–`12` | Toggle build step on/off |
+| `↑` / `↓` | Move the highlighted row |
+| `Space` / `Enter` | Toggle the highlighted row (partition or build step) |
 | `a` | Select all partitions |
 | `n` | Deselect all partitions |
 | `g` | Go — run selected builds then generate SD package |

@@ -342,6 +342,8 @@ print_menu() {
         local found
         if [[ -n "$src" ]]; then
             found="${GREEN}found${NC}"
+        elif [[ "$key" == "rootfs" || "$key" == "userdata" ]]; then
+            found="${RED}missing - build first${NC}"
         else
             found="${RED}missing${NC}"
         fi

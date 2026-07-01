@@ -183,8 +183,20 @@ PRESETS = {
                 'bootz ${loadaddr}'
             ),
             'sdbootargs': (
-                'setenv bootargs console=ttyS0,115200n8 mem=180M '
+                'setenv bootargs console=ttyS0,115200n8 console=tty0 mem=180M '
                 'root=/dev/mmcblk0p2 rootfstype=ext4 rootwait rw'
+            ),
+            # usbboot convenience: 'run usbboot' at U-Boot prompt to boot from USB drive
+            # USB drive layout: FAT p1 with zImage, ext4 p2 as rootfs (/dev/sda2 in kernel)
+            'usbboot':     (
+                'usb start; '
+                'fatload usb 0:1 ${loadaddr} ${bootfile}; '
+                'run usbbootargs; '
+                'bootz ${loadaddr}'
+            ),
+            'usbbootargs': (
+                'setenv bootargs console=ttyS0,115200n8 console=tty0 mem=180M '
+                'root=/dev/sda2 rootfstype=ext4 rootwait rw'
             ),
         },
     },

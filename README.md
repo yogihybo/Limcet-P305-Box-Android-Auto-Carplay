@@ -62,6 +62,10 @@ build.sh                     Combined interactive build and flash tool
 build_rootfs.sh              Standalone rootfs UBI image builder
 build_userdata.sh            Standalone userdata UBI image builder
 generate_update.sh           Standalone SD card update script generator
+patch_uboot.py               Patches compiled-in env and NAND offset in a U-Boot binary
+build_bootable_sdcard.sh     Builds a bootable SD card image (uboot_final.bin + kernel + rootfs)
+uboot_sdboot.bin             Input binary for patch_uboot.py (ARK1680 BSP source-compiled U-Boot)
+uboot_final.bin              Patched U-Boot binary — place as UBOOT.BIN on SD p1 FAT32
 ```
 
 ## Holden Firmware Compatibility
@@ -314,7 +318,33 @@ Adapter: PL-2303HX USB-TTL or Raspberry Pi GPIO UART.
 minicom -D /dev/ttyS0 -b 115200
 ```
 
-**To interrupt U-Boot and drop to the prompt:** hold the spacebar continuously from the moment power is applied. You have a 9-second window. U-Boot will print `Hit any key to stop autoboot` — keep holding until you see the `ark#` prompt.
+**To interrupt U-Boot and drop to the prompt:** hold the spacebar continuously from the moment power is applied and keep holding until you see the `ark#` prompt.
+
+The stock Prado U-Boot has a **custom boot loop** — disassembly of the binary (`TEXT_BASE=0x00030000`, function at `0x0003cf3c`) confirms the mechanism:
+
+```
+env_get("bootdelay")   → r4 = 9   (from NAND env — value is real)
+env_get("bootcmd")     → r5 = "run nandboot"
+printf("Press space key to stop autoboot: %2d", r4)  ← 9 is cosmetic only
+tstc()                 → ONE keypress poll, no sleep
+  space held → readline("> ") loop  (ark# interactive shell)
+  no key     → run_command("run nandboot")  ← immediate boot
+```
+
+`bootdelay=9` is read from the NAND env and printed in the message, but there is no countdown or sleep — the `%2d` is cosmetic. After the printf, there is one `tstc()` poll and then Linux boots immediately. You must already be holding space when that poll fires.
+
+### Boot sequence (stock NAND)
+
+1. **S-Loader (Nboot / Stepldr)** — executes from ROM; loads U-Boot from NAND `0x020000`
+2. **U-Boot** — initialises hardware; loads NAND env from `0x120000` (CRC valid — `bootdelay=9`, `bootcmd=run nandboot`, `nandboot`, `setbootargs` etc. all active)
+3. **SD update check** — inspects the SD card FAT32 partition for `UpConfig`; if present, runs `arkupdate` to flash partitions listed in the `update` script
+4. **Single keypress poll** — prints `Press space key to stop autoboot:  9`, then one `tstc()` check with no delay; if spacebar already held, drops to `ark#` interactive shell; otherwise boots immediately
+5. **`run nandboot`** — executes `nandboot` from NAND env: `run setbootargs; bootnand`
+   - `setbootargs` → `setenv bootargs console=ttyS0,115200n8 mem=180M ubi.mtd=6 root=ubi0:rootfs rootfstype=ubifs rootwait ro`
+   - `bootnand` → custom compiled-in command: `nand read 0x1000000 <kernel_offset> <kernel_size>; bootz 0x1000000`
+6. **Linux 3.4.0** starts
+
+> **Note:** `uboot_final.bin` (SD boot) replaces steps 2–5 with standard U-Boot autoboot. `bootdelay=3` is baked into the compiled-in env and the NAND env is intentionally failed, giving a proper 3-second countdown where any key tap works.
 
 At the U-Boot prompt you can manually flash any partition:
 
@@ -323,6 +353,81 @@ fatload mmc 0 4000000 zImage
 nand scrub 0x1a0000 0x400000 0x1a0000 0x400000
 nand write 0x4000000 0x1a0000 ${filesize}
 ```
+
+## Booting from SD Card or USB (non-destructive)
+
+`uboot_final.bin` is a patched U-Boot that boots a kernel and rootfs from removable media **without writing to NAND**. It is produced by `patch_uboot.py` applied to `uboot_sdboot.bin` (ARK1680 BSP source-compiled U-Boot).
+
+Two patches are applied:
+1. **Compiled-in env** — sdboot and usbboot commands baked in as fallback defaults
+2. **NAND env redirect** — the three `MOV Rx, #0x120000` ARM instructions that load `CONFIG_ENV_OFFSET` are changed to `MOV Rx, #0xFF000000`, forcing the NAND env CRC to fail so the compiled-in defaults take effect
+
+### Rebuild `uboot_final.bin`
+
+```bash
+python3 patch_uboot.py -i uboot_sdboot.bin -o uboot_final.bin --mode sdboot --patch-nand-offset
+```
+
+> **Note:** The checked-in `uboot_sdboot.bin` is the post-patch output (the pristine BSP binary was overwritten by `build_bootable_sdcard.sh`). Re-running the command above will succeed but print a warning that no NAND offset candidates were found — this is harmless because the instructions are already redirected.
+
+Place `uboot_final.bin` as `UBOOT.BIN` on the SD card FAT32 partition (p1). Stepldr loads it in preference to the NAND copy.
+
+### SD boot
+
+The compiled-in env boots automatically from the SD card:
+
+| Variable | Value |
+|----------|-------|
+| `bootcmd` | `run sdboot` |
+| `bootdelay` | 3 seconds (interrupt with any key) |
+| `bootfile` | `zImage` |
+| `mmcdev` | `1` (SD slot) |
+| `sdboot` | `run sdbootargs; fatload mmc ${mmcdev}:1 ${loadaddr} ${bootfile}; bootz ${loadaddr}` |
+| `sdbootargs` | `console=ttyS0,115200n8 console=tty0 mem=180M root=/dev/mmcblk0p2 rootfstype=ext4 rootwait rw` |
+
+**SD card layout:**
+
+| Partition | Filesystem | Contents |
+|-----------|-----------|---------|
+| p1 | FAT32 | `UBOOT.BIN`, `zImage` |
+| p2 | ext4 | rootfs |
+
+### USB boot
+
+USB mass storage is compiled in (MUSB HCD). **Unverified on Prado hardware** — run `usb start` at the U-Boot prompt to confirm the host controller and GPIO assignments work on your unit before relying on this. From the U-Boot prompt, boot from a USB drive with one command:
+
+```
+run usbboot
+```
+
+Or manually:
+
+```
+usb start
+fatload usb 0:1 0x1000000 zImage
+setenv bootargs "console=ttyS0,115200n8 console=tty0 mem=180M root=/dev/sda2 rootfstype=ext4 rootwait rw"
+bootz 0x1000000
+```
+
+The `usbboot` and `usbbootargs` env variables are baked into `uboot_final.bin` compiled-in env:
+
+| Variable | Value |
+|----------|-------|
+| `usbboot` | `usb start; fatload usb 0:1 ${loadaddr} ${bootfile}; run usbbootargs; bootz ${loadaddr}` |
+| `usbbootargs` | `console=ttyS0,115200n8 console=tty0 mem=180M root=/dev/sda2 rootfstype=ext4 rootwait rw` |
+
+**USB drive layout:**
+
+| Partition | Filesystem | Contents |
+|-----------|-----------|---------|
+| p1 | FAT32 | `zImage` |
+| p2 | ext4 | rootfs |
+
+The kernel sees the USB drive as `/dev/sda`. The ARK1668 uses MUSB (not EHCI) — USB 2.0 drives work; USB 3.0 drives that require USB 3.0 speeds will not enumerate.
+
+### Console on screen
+
+Both sdbootargs and usbbootargs include `console=tty0`. Once the kernel initialises the LCD framebuffer (`CONFIG_FB_ARK1668LCD`), boot messages and a login prompt are mirrored to the screen via `fbcon`. The U-Boot phase itself is serial-only (no video console compiled into U-Boot).
 
 ## Sources
 

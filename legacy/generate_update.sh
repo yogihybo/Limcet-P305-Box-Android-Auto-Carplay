@@ -148,6 +148,9 @@ declare -A ARKUPDATE_KEYWORD=(
 )
 
 generate_update_script() {
+    # Clean slate — otherwise a file from a previous run whose partition
+    # isn't selected this time would still ship on the SD card.
+    rm -rf "$OUTPUT_DIR"
     mkdir -p "$OUTPUT_DIR"
     local update_file="$OUTPUT_DIR/update"
     > "$update_file"

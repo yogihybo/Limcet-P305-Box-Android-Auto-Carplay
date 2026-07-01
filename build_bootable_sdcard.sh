@@ -27,11 +27,21 @@
 #   --rootfs-dir DIR   Rootfs source directory (mounted as /)
 #   --userdata-dir DIR Userdata source directory (mounted as /data)
 #   --no-userdata      Leave p3 formatted but empty
+#   --no-mtd-redirect  Leave bootlogo/bootanimation/reversingtrack/Unicode
+#                      reading from existing NAND data instead of SD
 #   --non-interactive  Skip the menu, use defaults/flags only
 #   --dry-run          Show commands without executing
 #   --help             Show this help
 
 set -euo pipefail
+
+# parted, mkfs.fat, mkfs.ext4, and losetup all install to /usr/sbin or /sbin
+# on Debian/Ubuntu, which isn't always on $PATH for non-root shells (WSL,
+# non-login shells). Without this, both the requirements check and the
+# actual build steps below would report these tools missing even when
+# installed.
+export PATH="$PATH:/usr/sbin:/sbin"
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ---------------------------------------------------------------------------
@@ -67,6 +77,7 @@ ROOTFS_DIR=""
 USERDATA_DIR=""
 RECONSTRUCTED_DIR=""
 SKIP_USERDATA=false
+SKIP_MTD_REDIRECT=false
 NON_INTERACTIVE=false
 DRY_RUN=false
 
@@ -98,6 +109,7 @@ while [[ $# -gt 0 ]]; do
         --rootfs-dir)      ROOTFS_DIR="$2"; shift 2 ;;
         --userdata-dir)    USERDATA_DIR="$2"; shift 2 ;;
         --no-userdata)     SKIP_USERDATA=true; shift ;;
+        --no-mtd-redirect) SKIP_MTD_REDIRECT=true; shift ;;
         --non-interactive) NON_INTERACTIVE=true; shift ;;
         --dry-run|-n)      DRY_RUN=true; shift ;;
         --help|-h)         usage ;;
@@ -188,6 +200,7 @@ CONFIG_ITEMS=(
     "patch_uboot|Patch U-Boot for SD boot|Bakes in sdboot/usbboot compiled-in env and redirects the NAND env offset via patch_uboot.py|ON"
     "patch_nand_offset|Patch NAND env offset redirect|Forces the NAND env CRC to fail so compiled-in sdboot defaults take effect (only applies if Patch U-Boot is on)|ON"
     "include_userdata|Include userdata (p3)|Copies the userdata dir to p3 — if off, p3 is left empty and the app populates /data on first boot|ON"
+    "redirect_mtd_data|Redirect bootlogo/bootanimation/etc to SD|Symlinks bootlogo, bootanimation, reversingtrack, and Unicode font (mtd8-11) to files under /nanddata/ on p2 — if off, the device reads these from whatever is already in NAND instead|ON"
 )
 
 declare -a CONFIG_SEL
@@ -200,6 +213,7 @@ done
 $PATCH_UBOOT       || CONFIG_SEL[0]=0
 $PATCH_NAND_OFFSET || CONFIG_SEL[1]=0
 $SKIP_USERDATA     && CONFIG_SEL[2]=0
+$SKIP_MTD_REDIRECT && CONFIG_SEL[3]=0
 
 # ---------------------------------------------------------------------------
 # Navigation state — identical pattern to build_update.sh's CURSOR/read_key.
@@ -333,6 +347,8 @@ prepare_uboot() {
         return 0
     fi
 
+    mkdir -p "$OUTPUT_DIR"
+
     echo ""
     echo -e "${BOLD}  Patching U-Boot for SD boot...${RESET}"
     info "Source: $UBOOT_SRC (unchanged)"
@@ -356,10 +372,16 @@ prepare_uboot() {
 # ---------------------------------------------------------------------------
 patch_rcs() {
     local target="$1"
+    local redirect_mtd="$2"   # "1" or "0" — CONFIG_SEL[3], redirect_mtd_data
     echo -e "${BOLD}  Patching rcS for SD userdata mount...${RESET}"
 
     if $DRY_RUN; then
         echo "  [dry-run] patch rcS: replace UBIFS userdata block with SD ext4 first + NAND fallback"
+        if [[ "$redirect_mtd" == "1" ]]; then
+            echo "  [dry-run] patch rcS: insert /dev/mtdN symlinks to /nanddata/"
+        else
+            echo "  [dry-run] patch rcS: leave /dev/mtdN pointed at existing NAND data"
+        fi
         return
     fi
 
@@ -367,11 +389,14 @@ patch_rcs() {
 
     # Two patches applied via a single Python pass:
     #   1. Replace UBIFS-only /data mount with SD ext4 first + NAND fallback
-    #   2. Insert /dev/mtdN symlinks after mdev -s for SD-stored NAND partition data
-    python3 - "$target" <<'PYEOF'
+    #   2. Insert /dev/mtdN symlinks after mdev -s for SD-stored NAND partition
+    #      data — skipped if redirect_mtd_data is off, leaving the device
+    #      reading these partitions from whatever is already in NAND
+    python3 - "$target" "$redirect_mtd" <<'PYEOF'
 import sys, re
 
 path = sys.argv[1]
+redirect_mtd = sys.argv[2] == "1"
 text = open(path).read()
 
 NEW = """\
@@ -437,18 +462,23 @@ patched = text[:start] + NEW + '\n' + text[end:]
 open(path, 'w').write(patched)
 print("  rcS userdata mount block patched for SD boot")
 
-# Patch 2: insert MTD symlink block after /sbin/mdev -s
-text2 = open(path).read()
-MDEV_LINE = '/sbin/mdev -s'
-mdev_idx = text2.find(MDEV_LINE)
-if mdev_idx == -1:
-    print("  WARNING: '/sbin/mdev -s' not found in rcS — MTD symlink patch skipped")
+# Patch 2: insert MTD symlink block after /sbin/mdev -s — only if
+# redirect_mtd_data is on; otherwise leave /dev/mtdN untouched so the
+# device reads bootlogo/bootanimation/reversingtrack/Unicode from NAND.
+if not redirect_mtd:
+    print("  rcS MTD symlink patch skipped (redirect_mtd_data is off — using existing NAND data)")
 else:
-    insert_at = mdev_idx + len(MDEV_LINE)
-    # Find end of that line
-    eol = text2.find('\n', insert_at)
-    if eol == -1: eol = len(text2)
-    symlink_block = """
+    text2 = open(path).read()
+    MDEV_LINE = '/sbin/mdev -s'
+    mdev_idx = text2.find(MDEV_LINE)
+    if mdev_idx == -1:
+        print("  WARNING: '/sbin/mdev -s' not found in rcS — MTD symlink patch skipped")
+    else:
+        insert_at = mdev_idx + len(MDEV_LINE)
+        # Find end of that line
+        eol = text2.find('\n', insert_at)
+        if eol == -1: eol = len(text2)
+        symlink_block = """
 
 # Replace MTD data partition devices with symlinks to SD-stored files.
 # SD card is always authoritative for these partitions — any NAND device
@@ -460,9 +490,9 @@ for mtdmap in "8:bootlogo" "9:bootanimation" "10:reversingtrack" "11:unicode"; d
 \tln -sf /nanddata/${name} /dev/mtd${num}
 \techo "mtd${num}: /nanddata/${name}"
 done"""
-    patched2 = text2[:eol] + symlink_block + text2[eol:]
-    open(path, 'w').write(patched2)
-    print("  rcS MTD symlink block inserted after mdev -s")
+        patched2 = text2[:eol] + symlink_block + text2[eol:]
+        open(path, 'w').write(patched2)
+        print("  rcS MTD symlink block inserted after mdev -s")
 PYEOF
 
     success "rcS patched on p2 (source tree unchanged)"
@@ -522,6 +552,7 @@ build() {
     local P3_START=$(( P1_SIZE_MB + P2_SIZE_MB + 1 ))
     local do_userdata=0
     [[ ${CONFIG_SEL[2]} -eq 1 && -n "$USERDATA_DIR" ]] && do_userdata=1
+    local do_mtd_redirect=${CONFIG_SEL[3]}
 
     echo ""
     # 1. Create image file
@@ -589,8 +620,12 @@ build() {
         "$ROOTFS_DIR/" /tmp/sd_p2/
     ! $DRY_RUN && mkdir -p /tmp/sd_p2/{proc,sys,dev,tmp}
     success "Rootfs synced to p2"
-    patch_rcs /tmp/sd_p2/etc/rc.d/rcS
-    populate_nanddata /tmp/sd_p2
+    patch_rcs /tmp/sd_p2/etc/rc.d/rcS "$do_mtd_redirect"
+    if [[ $do_mtd_redirect -eq 1 ]]; then
+        populate_nanddata /tmp/sd_p2
+    else
+        info "Skipping /nanddata/ — bootlogo/bootanimation/reversingtrack/Unicode stay on NAND"
+    fi
 
     # 8. Populate p3 — userdata
     echo -e "${BOLD}[7/7] Populating p3 (userdata)...${RESET}"

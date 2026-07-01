@@ -188,7 +188,7 @@ The ARK1680 USB gadget stack is configured to use CDC-NCM (`g_ncm.ko`), which cr
 
 ## Build & Flash Tool
 
-`build.sh` is an interactive terminal tool that combines building firmware images and generating an SD card update package into a single workflow. Run it under Linux or WSL:
+`build.sh` is an interactive terminal tool that combines building firmware images and generating a NAND flash update package staged on an SD card into a single workflow. This flashes internal NAND — it is **not** the non-destructive SD-boot image described in [Booting from SD Card or USB](#booting-from-sd-card-or-usb-non-destructive) (that's `build_bootable_sdcard.sh`). Run it under Linux or WSL:
 
 ```bash
 bash build.sh
@@ -202,8 +202,10 @@ bash build.sh
   11 [ ]  Build rootfs image      Compiles source tree → rootfs.img (~106 MB)
   12 [ ]  Build userdata image    Overlays Prado settings → userdata.img (~6 MB)
 
-  SD CARD PARTITIONS
-  ──────────────────
+  NAND PARTITIONS TO FLASH (via SD update package)
+  ─────────────────────────────────────────────────
+  Files are staged on the SD card; U-Boot copies each selected
+  partition below from the SD card into internal NAND on boot.
   1  [X]  Root Filesystem         rootfs.img       0x5a0000   106 MB
   2  [X]  User Data               userdata.img     0x6fa0000    6 MB
   3  [ ]  Linux Kernel            zImage           0x1a0000     4 MB

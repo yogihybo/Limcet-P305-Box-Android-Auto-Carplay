@@ -1,6 +1,12 @@
 #!/bin/bash
 # build.sh — Build and SD card update tool for ARK1680 (Prado / Limcet-P306)
 #
+# This builds a NAND flash update package staged on an SD card — not an
+# SD-boot image. On power-on, U-Boot detects UpConfig on the SD card and
+# copies each selected partition below from the SD card into internal NAND
+# (destructive — see "Safety notes" in README). For booting from SD/USB
+# without touching NAND, see build_bootable_sdcard.sh instead.
+#
 # Interactive workflow combining:
 #   build_rootfs.sh    — builds rootfs UBI image from source tree
 #   build_userdata.sh  — builds userdata UBI image with Prado settings overlay
@@ -261,7 +267,9 @@ print_menu() {
     done
 
     # ── Partition section ──
-    echo -e "  ${BOLD}SD CARD PARTITIONS${NC}"
+    echo -e "  ${BOLD}NAND PARTITIONS TO FLASH (via SD update package)${NC}"
+    echo -e "  ${DIM}Files are staged on the SD card; U-Boot copies each selected${NC}"
+    echo -e "  ${DIM}partition below from the SD card into internal NAND on boot.${NC}"
     echo -e "  ${DIM}──────────────────────────────────────────────────────${NC}"
     echo -e "  ${DIM}#    [ ]  Partition              File              Status${NC}"
     echo ""

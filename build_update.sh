@@ -293,7 +293,13 @@ toggle_current() {
 # or an EOF just yields an unmatched key that the caller ignores.
 read_key() {
     local key rest
-    IFS= read -rsn1 key 2>/dev/null || true
+    if ! IFS= read -rsn1 key 2>/dev/null; then
+        # read only fails like this on true EOF (stdin closed, no more input
+        # ever coming) — a real Enter keypress still reads its \n and
+        # returns 0. Signal EOF distinctly so the caller can exit instead of
+        # spinning forever redrawing the menu at full speed.
+        [[ -z "$key" ]] && { printf '__EOF__'; return; }
+    fi
     if [[ "$key" == $'\x1b' ]]; then
         IFS= read -rsn2 -t 0.05 rest 2>/dev/null || true
         key+="$rest"
@@ -622,6 +628,7 @@ build_nav_list
 while true; do
     print_menu
     key=$(read_key)
+    [[ "$key" == "__EOF__" ]] && { echo ""; echo "  No more input — exiting."; exit 0; }
 
     case "$key" in
         $'\x1b[A')  (( CURSOR > 0 )) && CURSOR=$((CURSOR - 1)) ;;

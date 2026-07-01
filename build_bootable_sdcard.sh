@@ -1,17 +1,22 @@
 #!/bin/bash
 # build_bootable_sdcard.sh - Interactive bootable SD card builder for ARK1680
 #
-# Run under Linux or WSL. Requires: parted, dosfstools, e2fsprogs, rsync
-#   sudo apt install parted dosfstools e2fsprogs rsync
+# Builds an SD card image that boots the kernel and rootfs from removable
+# media WITHOUT writing to NAND — see build_update.sh for the (destructive)
+# NAND flash update tool instead.
+#
+# Run under Linux or WSL. Requires: parted, dosfstools, e2fsprogs, rsync, python3
+#   sudo apt install parted dosfstools e2fsprogs rsync python3
 #
 # Usage:
 #   ./build_bootable_sdcard.sh [options]
 #
-# All options can also be set interactively at runtime.
+# All toggleable options can also be set in the interactive menu; paths and
+# sizes are CLI-flag-only.
 #
 # Options:
-#   --image PATH       Output image file path
-#   --device PATH      Write directly to block device (e.g. /dev/sdb)
+#   --image PATH       Output image file path (default: sd_bootable/sd_boot.img)
+#   --device PATH      Write directly to block device (e.g. /dev/sdb) instead
 #   --size MB          Total image size in MB (default: 512)
 #   --uboot PATH       Prebuilt UBOOT.BIN to place on p1 as-is (skips patching)
 #   --uboot-src PATH   Raw uboot.bin source — patched via patch_uboot.py, never modified
@@ -22,7 +27,7 @@
 #   --rootfs-dir DIR   Rootfs source directory (mounted as /)
 #   --userdata-dir DIR Userdata source directory (mounted as /data)
 #   --no-userdata      Leave p3 formatted but empty
-#   --non-interactive  Skip all prompts, use defaults/flags only
+#   --non-interactive  Skip the menu, use defaults/flags only
 #   --dry-run          Show commands without executing
 #   --help             Show this help
 
@@ -33,16 +38,18 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Colours
 # ---------------------------------------------------------------------------
 RED='\033[0;31m'; YELLOW='\033[1;33m'; GREEN='\033[0;32m'
-CYAN='\033[0;36m'; BOLD='\033[1m'; RESET='\033[0m'
+CYAN='\033[0;36m'; BOLD='\033[1m'; DIM='\033[2m'; RESET='\033[0m'
 
 info()    { echo -e "${CYAN}  $*${RESET}"; }
-success() { echo -e "${GREEN}  ✓ $*${RESET}"; }
-warn()    { echo -e "${YELLOW}  ! $*${RESET}"; }
+success() { echo -e "${GREEN}  ✔ $*${RESET}"; }
+warn()    { echo -e "${YELLOW}  ⚠ $*${RESET}"; }
 die()     { echo -e "${RED}ERROR: $*${RESET}" >&2; exit 1; }
 
 # ---------------------------------------------------------------------------
 # Defaults
 # ---------------------------------------------------------------------------
+OUTPUT_DIR="$SCRIPT_DIR/sd_bootable"
+
 IMAGE=""
 DEVICE=""
 IMAGE_SIZE_MB=512
@@ -51,7 +58,7 @@ P2_SIZE_MB=300
 
 UBOOT_BIN=""                                  # prebuilt binary (--uboot); used as-is
 UBOOT_SRC=""                                  # raw source uboot.bin; patched, never modified
-UBOOT_OUT="$SCRIPT_DIR/uboot_sdboot.bin"      # patched output (repo root, not source folder)
+UBOOT_OUT="$OUTPUT_DIR/uboot_sdboot.bin"      # patched output
 PATCH_UBOOT=true                              # run patch_uboot.py on the source
 PATCH_NAND_OFFSET=true                        # patch_uboot.py --patch-nand-offset
 ROOT_DEV="/dev/mmcblk0p2"                     # patch_uboot.py --root (matches p2 rootfs)
@@ -98,28 +105,14 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+[[ -z "$IMAGE" && -z "$DEVICE" ]] && IMAGE="$OUTPUT_DIR/sd_boot.img"
+[[ -n "$IMAGE" && -n "$DEVICE" ]] && die "Specify --image or --device, not both"
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 run() {
     if $DRY_RUN; then echo "  [dry-run] $*"; else "$@"; fi
-}
-
-prompt() {
-    local var="$1" question="$2" default="$3"
-    if $NON_INTERACTIVE; then eval "$var=\"$default\""; return; fi
-    echo -ne "${BOLD}  $question${RESET}"
-    [[ -n "$default" ]] && echo -ne " ${CYAN}[$default]${RESET}"
-    echo -ne ": "
-    local answer; read -r answer
-    eval "$var=\"${answer:-$default}\""
-}
-
-confirm() {
-    if $NON_INTERACTIVE; then return 0; fi
-    echo -ne "${BOLD}  $1 ${CYAN}[Y/n]${RESET}: "
-    local answer; read -r answer
-    [[ -z "$answer" || "$answer" =~ ^[Yy] ]]
 }
 
 # ---------------------------------------------------------------------------
@@ -139,8 +132,8 @@ autodetect() {
     }
     [[ -z "$KERNEL_BIN" ]] && {
         for c in \
-            "$SCRIPT_DIR/kernel/zImage" \
-            "$SCRIPT_DIR/Prado firmware reconstructed/mtd5_kernel/zImage"
+            "$SCRIPT_DIR/Prado firmware reconstructed/mtd5_kernel/zImage" \
+            "$SCRIPT_DIR/kernel/zImage"
         do [[ -f "$c" ]] && { KERNEL_BIN="$c"; break; }; done
     }
     [[ -z "$ROOTFS_DIR" ]] && {
@@ -155,164 +148,142 @@ autodetect() {
 }
 
 # ---------------------------------------------------------------------------
-# Interactive configuration
+# Requirements — shown once at startup, same pattern as build_update.sh.
 # ---------------------------------------------------------------------------
-configure() {
-    echo ""
-    echo -e "${BOLD}=== ARK1680 Bootable SD Card Builder ===${RESET}"
-    echo ""
+REQUIREMENTS=(
+    "parted|partition the image|parted"
+    "mkfs.fat|format p1 as FAT32|dosfstools"
+    "mkfs.ext4|format p2/p3 as ext4|e2fsprogs"
+    "losetup|attach the image as a loop device|util-linux"
+    "rsync|copy rootfs/userdata onto the image|rsync"
+    "python3|patch U-Boot and rcS|python3"
+)
 
-    # Output target
-    echo -e "${BOLD}  Output target${RESET}"
-    if [[ -z "$IMAGE" && -z "$DEVICE" ]]; then
-        local target_type
-        prompt target_type "Write to (i)mage file or (d)evice?" "i"
-        if [[ "$target_type" =~ ^[Dd] ]]; then
-            echo ""
-            warn "Available block devices:"
-            lsblk -dpno NAME,SIZE,MODEL 2>/dev/null | grep -v loop | sed 's/^/    /' || true
-            echo ""
-            prompt DEVICE "Device path (e.g. /dev/sdb)" ""
-            [[ -z "$DEVICE" ]] && die "No device specified"
+check_requirements() {
+    echo -e "${BOLD}  Requirements${RESET}"
+    local entry tool desc pkg any_missing=0
+    for entry in "${REQUIREMENTS[@]}"; do
+        IFS='|' read -r tool desc pkg <<< "$entry"
+        if command -v "$tool" &>/dev/null; then
+            success "$tool  (${desc})"
         else
-            prompt IMAGE "Image file path" "$SCRIPT_DIR/sd_boot.img"
+            warn "$tool  (${desc}) — not found, install: sudo apt install $pkg"
+            any_missing=1
         fi
-    fi
-    [[ -n "$IMAGE" && -n "$DEVICE" ]] && die "Specify --image or --device, not both"
-
-    # Image size
-    if [[ -n "$IMAGE" ]]; then
-        echo ""
-        prompt IMAGE_SIZE_MB "Image size (MB)" "$IMAGE_SIZE_MB"
-    fi
-
-    # U-Boot
+    done
     echo ""
-    echo -e "${BOLD}  Boot files${RESET}"
-    if [[ -n "$UBOOT_BIN" ]]; then
-        info "U-Boot (supplied, used as-is): $UBOOT_BIN"
-        if ! $NON_INTERACTIVE; then
-            local alt; prompt alt "Press Enter to accept or enter a different path" ""
-            [[ -n "$alt" ]] && UBOOT_BIN="$alt"
-        fi
-    elif [[ -n "$UBOOT_SRC" ]]; then
-        info "U-Boot source (auto-detected): $UBOOT_SRC"
-        if $PATCH_UBOOT; then
-            info "  → patch to: $UBOOT_OUT  (sdboot, root=$ROOT_DEV)"
+    if [[ $any_missing -eq 1 ]]; then
+        warn "Missing tools will block the build — install them before pressing g."
+        $NON_INTERACTIVE || read -rp "  Press Enter to continue..." _
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# Config toggles — the interactive menu's navigable items. Paths and sizes
+# stay CLI-flag-only (--uboot-src, --kernel, --rootfs-dir, --userdata-dir,
+# --size, --root); the menu only controls these three boolean choices.
+# Format: "key|label|description|default"
+# ---------------------------------------------------------------------------
+CONFIG_ITEMS=(
+    "patch_uboot|Patch U-Boot for SD boot|Bakes in sdboot/usbboot compiled-in env and redirects the NAND env offset via patch_uboot.py|ON"
+    "patch_nand_offset|Patch NAND env offset redirect|Forces the NAND env CRC to fail so compiled-in sdboot defaults take effect (only applies if Patch U-Boot is on)|ON"
+    "include_userdata|Include userdata (p3)|Copies the userdata dir to p3 — if off, p3 is left empty and the app populates /data on first boot|ON"
+)
+
+declare -a CONFIG_SEL
+for i in "${!CONFIG_ITEMS[@]}"; do
+    IFS='|' read -r _ _ _ default <<< "${CONFIG_ITEMS[$i]}"
+    [[ "$default" == "ON" ]] && CONFIG_SEL[$i]=1 || CONFIG_SEL[$i]=0
+done
+# CLI flags override the menu defaults up front, same as build_update.sh's
+# flags override its own PARTITIONS defaults.
+$PATCH_UBOOT       || CONFIG_SEL[0]=0
+$PATCH_NAND_OFFSET || CONFIG_SEL[1]=0
+$SKIP_USERDATA     && CONFIG_SEL[2]=0
+
+# ---------------------------------------------------------------------------
+# Navigation state — identical pattern to build_update.sh's CURSOR/read_key.
+# ---------------------------------------------------------------------------
+CURSOR=0
+
+is_current() { [[ $CURSOR -eq $1 ]]; }
+
+toggle_current() {
+    [[ ${CONFIG_SEL[$CURSOR]} -eq 1 ]] && CONFIG_SEL[$CURSOR]=0 || CONFIG_SEL[$CURSOR]=1
+}
+
+read_key() {
+    local key rest
+    if ! IFS= read -rsn1 key 2>/dev/null; then
+        # read only fails like this on true EOF (stdin closed, no more input
+        # ever coming) — a real Enter keypress still reads its \n and
+        # returns 0. Signal EOF distinctly so the caller can exit instead of
+        # spinning forever redrawing the menu at full speed.
+        [[ -z "$key" ]] && { printf '__EOF__'; return; }
+    fi
+    if [[ "$key" == $'\x1b' ]]; then
+        IFS= read -rsn2 -t 0.05 rest 2>/dev/null || true
+        key+="$rest"
+    fi
+    printf '%s' "$key"
+}
+
+# ---------------------------------------------------------------------------
+# Menu rendering — one line per item, detail line for whichever row is
+# highlighted, same layout as build_update.sh's compact menu.
+# ---------------------------------------------------------------------------
+print_detail() {
+    IFS='|' read -r _ label desc _ <<< "${CONFIG_ITEMS[$CURSOR]}"
+    echo -e "  ${DIM}${label}:${RESET} ${DIM}$desc${RESET}"
+}
+
+print_menu() {
+    clear
+    echo -e "${CYAN}${BOLD}  ARK1680 Prado — Bootable SD Card Builder${RESET}"
+    echo -e "  ${DIM}────────────────────────────────────────────────────────${RESET}"
+
+    echo -e "  ${BOLD}BUILD OPTIONS${RESET}"
+    for i in "${!CONFIG_ITEMS[@]}"; do
+        IFS='|' read -r key label desc _ <<< "${CONFIG_ITEMS[$i]}"
+        local mark
+        if [[ ${CONFIG_SEL[$i]} -eq 1 ]]; then
+            mark="${GREEN}[X]${RESET}"
         else
-            info "  → used unpatched (--no-patch-uboot)"
+            mark="${DIM}[ ]${RESET}"
         fi
-        if ! $NON_INTERACTIVE; then
-            local alt; prompt alt "Press Enter to accept or enter a different source path" ""
-            [[ -n "$alt" ]] && UBOOT_SRC="$alt"
-        fi
+        local cursor="  "
+        is_current "$i" && cursor="${CYAN}▶ ${RESET}"
+        printf "  %b%b  %s\n" "$cursor" "$mark" "$label"
+    done
+
+    echo ""
+    echo -e "  ${BOLD}SD IMAGE CONTENTS${RESET}  ${DIM}→ ${OUTPUT_DIR#$SCRIPT_DIR/}/$(basename "${IMAGE:-$DEVICE}")${RESET}"
+    printf "       ${DIM}%-4s %-22s %s${RESET}\n" "Part" "Item" "File"
+
+    local uboot_status kernel_status rootfs_status userdata_status
+    if [[ -n "$UBOOT_BIN" && -f "$UBOOT_BIN" ]] || [[ -n "$UBOOT_SRC" && -f "$UBOOT_SRC" ]]; then
+        uboot_status="${GREEN}found${RESET}"
     else
-        warn "No U-Boot source found."
-        prompt UBOOT_SRC "Path to raw uboot.bin (patched, not modified)" ""
-        [[ -z "$UBOOT_SRC" ]] && die "U-Boot source is required"
+        uboot_status="${RED}missing${RESET}"
     fi
-
-    # Kernel
-    if [[ -n "$KERNEL_BIN" ]]; then
-        info "Kernel  (auto-detected): $KERNEL_BIN"
-        if ! $NON_INTERACTIVE; then
-            local alt; prompt alt "Press Enter to accept or enter a different path" ""
-            [[ -n "$alt" ]] && KERNEL_BIN="$alt"
-        fi
+    [[ -n "$KERNEL_BIN" && -f "$KERNEL_BIN" ]] && kernel_status="${GREEN}found${RESET}" || kernel_status="${RED}missing${RESET}"
+    [[ -n "$ROOTFS_DIR" && -d "$ROOTFS_DIR" ]] && rootfs_status="${GREEN}found${RESET}" || rootfs_status="${RED}missing${RESET}"
+    if [[ ${CONFIG_SEL[2]} -eq 0 ]]; then
+        userdata_status="${DIM}skipped — populated on first boot${RESET}"
+    elif [[ -n "$USERDATA_DIR" && -d "$USERDATA_DIR" ]]; then
+        userdata_status="${GREEN}found${RESET}"
     else
-        warn "zImage not auto-detected."
-        prompt KERNEL_BIN "Path to zImage" ""
-        [[ -z "$KERNEL_BIN" ]] && die "zImage is required"
+        userdata_status="${RED}missing${RESET}"
     fi
 
-    # Rootfs
-    echo ""
-    echo -e "${BOLD}  Filesystem sources${RESET}"
-    if [[ -n "$ROOTFS_DIR" ]]; then
-        info "Rootfs   (auto-detected): $ROOTFS_DIR"
-        if ! $NON_INTERACTIVE; then
-            local alt; prompt alt "Press Enter to accept or enter a different path" ""
-            [[ -n "$alt" ]] && ROOTFS_DIR="$alt"
-        fi
-    else
-        warn "Rootfs directory not auto-detected."
-        prompt ROOTFS_DIR "Path to rootfs directory" ""
-        [[ -z "$ROOTFS_DIR" ]] && die "Rootfs directory is required"
-    fi
+    printf "       p1   %-22s %-16s %b\n" "U-Boot"   "$(basename "${UBOOT_BIN:-${UBOOT_SRC:-uboot.bin}}")" "$uboot_status"
+    printf "       p1   %-22s %-16s %b\n" "Kernel"    "$(basename "${KERNEL_BIN:-zImage}")"                "$kernel_status"
+    printf "       p2   %-22s %-16s %b\n" "Rootfs"    "$(basename "${ROOTFS_DIR:-rootfs}")"                "$rootfs_status"
+    printf "       p3   %-22s %-16s %b\n" "Userdata"  "$(basename "${USERDATA_DIR:-userdata}")"            "$userdata_status"
 
-    # Userdata
-    if ! $SKIP_USERDATA; then
-        if [[ -n "$USERDATA_DIR" ]]; then
-            info "Userdata (auto-detected): $USERDATA_DIR"
-            if ! $NON_INTERACTIVE; then
-                local alt; prompt alt "Press Enter to accept or enter a different path" ""
-                [[ -n "$alt" ]] && USERDATA_DIR="$alt"
-            fi
-        else
-            warn "Userdata directory not auto-detected."
-            if confirm "Leave p3 empty (userdata populated on first boot)?"; then
-                SKIP_USERDATA=true
-            else
-                prompt USERDATA_DIR "Path to userdata directory" ""
-                [[ -z "$USERDATA_DIR" ]] && SKIP_USERDATA=true
-            fi
-        fi
-    fi
-
-    # Partition sizes
-    echo ""
-    echo -e "${BOLD}  Partition layout${RESET}"
-    local p3_size=$(( IMAGE_SIZE_MB - P1_SIZE_MB - P2_SIZE_MB - 1 ))
-    info "p1 FAT32  ${P1_SIZE_MB} MB   — UBOOT.BIN + zImage"
-    info "p2 ext4   ${P2_SIZE_MB} MB   — rootfs (/)"
-    info "p3 ext4   ${p3_size} MB   — userdata (/data)"
-    if ! $NON_INTERACTIVE; then
-        if ! confirm "Accept this layout?"; then
-            prompt P1_SIZE_MB "p1 FAT32 size (MB)" "$P1_SIZE_MB"
-            prompt P2_SIZE_MB "p2 ext4 rootfs size (MB)" "$P2_SIZE_MB"
-            local avail=$(( IMAGE_SIZE_MB - P1_SIZE_MB - P2_SIZE_MB - 1 ))
-            info "p3 will use remaining ${avail} MB"
-        fi
-    fi
-
-    # Summary
-    local p3_start=$(( P1_SIZE_MB + P2_SIZE_MB + 1 ))
-    local p3_end=$(( IMAGE_SIZE_MB ))
-    echo ""
-    echo -e "${BOLD}  Summary${RESET}"
-    echo ""
-    printf "    %-12s %s\n" "Output:"   "${IMAGE:-$DEVICE}"
-    [[ -n "$IMAGE" ]] && printf "    %-12s %s MB\n" "Size:" "$IMAGE_SIZE_MB"
-    if [[ -n "$UBOOT_BIN" ]]; then
-        printf "    %-12s %s\n" "U-Boot:" "$UBOOT_BIN"
-    else
-        printf "    %-12s %s\n" "U-Boot src:" "$UBOOT_SRC"
-        $PATCH_UBOOT && printf "    %-12s %s\n" "U-Boot out:" "$UBOOT_OUT (patched)"
-    fi
-    printf "    %-12s %s\n" "Kernel:"   "$KERNEL_BIN"
-    printf "    %-12s %s\n" "Rootfs:"   "$ROOTFS_DIR"
-    printf "    %-12s %s\n" "Userdata:" "${USERDATA_DIR:-<empty — populated on first boot>}"
-    echo ""
-    printf "    %-6s %-8s %-20s %s\n" "Part" "Type" "Size" "Contents"
-    printf "    %-6s %-8s %-20s %s\n" "p1" "FAT32" "1–${P1_SIZE_MB} MB" "UBOOT.BIN, zImage"
-    printf "    %-6s %-8s %-20s %s\n" "p2" "ext4" "$((P1_SIZE_MB+1))–$((P1_SIZE_MB+P2_SIZE_MB)) MB" "rootfs (/)"
-    printf "    %-6s %-8s %-20s %s\n" "p3" "ext4" "${p3_start}–${p3_end} MB" "userdata (/data)"
-    echo ""
-    $DRY_RUN && warn "DRY RUN — no changes will be made"
-    echo ""
-
-    if [[ -n "$DEVICE" ]]; then
-        [[ -b "$DEVICE" ]] || die "$DEVICE is not a block device"
-        echo -e "${RED}${BOLD}  WARNING: ALL DATA ON $DEVICE WILL BE ERASED${RESET}"
-        echo ""
-        if ! $NON_INTERACTIVE; then
-            echo -ne "${BOLD}  Type YES to continue: ${RESET}"
-            local word; read -r word
-            [[ "$word" == "YES" ]] || { echo "Aborted."; exit 1; }
-        fi
-    else
-        confirm "Proceed?" || { echo "Aborted."; exit 1; }
-    fi
+    echo -e "  ${DIM}────────────────────────────────────────────────────────${RESET}"
+    print_detail
+    echo -e "  ${BOLD}↑/↓${RESET} move   ${BOLD}Space${RESET}/${BOLD}Enter${RESET} toggle   ${BOLD}a${RESET}/${BOLD}n${RESET} all/none   ${BOLD}g${RESET} go   ${BOLD}q${RESET} quit"
 }
 
 # ---------------------------------------------------------------------------
@@ -324,15 +295,16 @@ validate() {
     else
         [[ -n "$UBOOT_SRC" ]] || die "No U-Boot source — use --uboot-src or --uboot"
         [[ -f "$UBOOT_SRC" ]] || die "U-Boot source not found: $UBOOT_SRC"
-        if $PATCH_UBOOT; then
+        if [[ ${CONFIG_SEL[0]} -eq 1 ]]; then
             [[ -f "$SCRIPT_DIR/patch_uboot.py" ]] || die "patch_uboot.py not found in $SCRIPT_DIR"
             command -v python3 &>/dev/null || die "python3 not found — needed to patch U-Boot"
         fi
     fi
     [[ -f "$KERNEL_BIN" ]] || die "zImage not found: $KERNEL_BIN"
     [[ -d "$ROOTFS_DIR" ]] || die "rootfs dir not found: $ROOTFS_DIR"
-    ! $SKIP_USERDATA && [[ -n "$USERDATA_DIR" ]] && \
-        { [[ -d "$USERDATA_DIR" ]] || die "userdata dir not found: $USERDATA_DIR"; }
+    if [[ ${CONFIG_SEL[2]} -eq 1 && -n "$USERDATA_DIR" ]]; then
+        [[ -d "$USERDATA_DIR" ]] || die "userdata dir not found: $USERDATA_DIR"
+    fi
     for tool in parted mkfs.fat mkfs.ext4 losetup rsync; do
         command -v "$tool" &>/dev/null || \
             die "$tool not found — run: sudo apt install parted dosfstools e2fsprogs rsync"
@@ -345,7 +317,7 @@ validate() {
 
 # ---------------------------------------------------------------------------
 # Patch U-Boot — patch_uboot.py reads the source and writes UBOOT_OUT.
-# The source uboot.bin is never modified; UBOOT_OUT lands in the repo root.
+# The source uboot.bin is never modified; UBOOT_OUT lands in sd_bootable/.
 # ---------------------------------------------------------------------------
 prepare_uboot() {
     # Explicit prebuilt binary — use as-is.
@@ -354,8 +326,8 @@ prepare_uboot() {
         return 0
     fi
 
-    # --no-patch-uboot — use the untouched source directly.
-    if ! $PATCH_UBOOT; then
+    # Patch U-Boot toggled off — use the untouched source directly.
+    if [[ ${CONFIG_SEL[0]} -eq 0 ]]; then
         UBOOT_BIN="$UBOOT_SRC"
         warn "U-Boot: using source unpatched — may not boot from SD: $UBOOT_BIN"
         return 0
@@ -366,7 +338,7 @@ prepare_uboot() {
     info "Source: $UBOOT_SRC (unchanged)"
     info "Output: $UBOOT_OUT"
     local nand_flag=""
-    $PATCH_NAND_OFFSET && nand_flag="--patch-nand-offset"
+    [[ ${CONFIG_SEL[1]} -eq 1 ]] && nand_flag="--patch-nand-offset"
     run python3 "$SCRIPT_DIR/patch_uboot.py" \
         -i "$UBOOT_SRC" -o "$UBOOT_OUT" \
         --mode sdboot --root "$ROOT_DEV" \
@@ -545,8 +517,11 @@ cleanup() {
 trap cleanup EXIT
 
 build() {
+    mkdir -p "$OUTPUT_DIR"
     local TARGET="${IMAGE:-$DEVICE}"
     local P3_START=$(( P1_SIZE_MB + P2_SIZE_MB + 1 ))
+    local do_userdata=0
+    [[ ${CONFIG_SEL[2]} -eq 1 && -n "$USERDATA_DIR" ]] && do_userdata=1
 
     echo ""
     # 1. Create image file
@@ -619,7 +594,7 @@ build() {
 
     # 8. Populate p3 — userdata
     echo -e "${BOLD}[7/7] Populating p3 (userdata)...${RESET}"
-    if $SKIP_USERDATA || [[ -z "$USERDATA_DIR" ]]; then
+    if [[ $do_userdata -eq 0 ]]; then
         warn "Skipped — p3 is empty. App will populate /data on first boot."
     else
         run rsync -a --info=progress2 \
@@ -659,10 +634,79 @@ build() {
 }
 
 # ---------------------------------------------------------------------------
+# Non-interactive path — skip the menu, use flags/autodetected values as-is.
+# ---------------------------------------------------------------------------
+run_non_interactive() {
+    check_requirements
+    validate
+    prepare_uboot
+    build
+}
+
+# ---------------------------------------------------------------------------
+# Main loop — same interaction model as build_update.sh: arrow keys move the
+# highlighted row, Space/Enter toggles it, a/n/g/q act immediately.
+# ---------------------------------------------------------------------------
+run_interactive() {
+    clear
+    echo -e "${CYAN}${BOLD}  ARK1680 Prado — Bootable SD Card Builder${RESET}"
+    echo ""
+    check_requirements
+
+    if [[ -n "$DEVICE" ]]; then
+        [[ -b "$DEVICE" ]] || die "$DEVICE is not a block device"
+    fi
+
+    while true; do
+        print_menu
+        key=$(read_key)
+        [[ "$key" == "__EOF__" ]] && { echo ""; echo "  No more input — exiting."; exit 0; }
+
+        case "$key" in
+            $'\x1b[A')  (( CURSOR > 0 )) && CURSOR=$((CURSOR - 1)) ;;
+            $'\x1b[B')  (( CURSOR < ${#CONFIG_ITEMS[@]} - 1 )) && CURSOR=$((CURSOR + 1)) ;;
+            ''|' ')     toggle_current ;;
+            a|A)
+                for i in "${!CONFIG_ITEMS[@]}"; do CONFIG_SEL[$i]=1; done
+                ;;
+            n|N)
+                for i in "${!CONFIG_ITEMS[@]}"; do CONFIG_SEL[$i]=0; done
+                ;;
+            g|G)
+                echo ""
+                if [[ -n "$DEVICE" ]]; then
+                    echo -e "${RED}${BOLD}  WARNING: ALL DATA ON $DEVICE WILL BE ERASED${RESET}"
+                    echo ""
+                    echo -ne "${BOLD}  Type YES to continue: ${RESET}"
+                    local word; read -r word
+                    [[ "$word" == "YES" ]] || { echo "Aborted."; continue; }
+                fi
+
+                (validate && prepare_uboot && build) || {
+                    read -rp "  Press Enter to continue..." _
+                    continue
+                }
+
+                echo ""
+                read -rp "  Press Enter to return to menu, or q to quit: " done_input
+                [[ "$done_input" =~ ^[Qq]$ ]] && exit 0
+                ;;
+            q|Q)
+                echo ""
+                echo "  Exited."
+                exit 0
+                ;;
+        esac
+    done
+}
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 autodetect
-configure
-validate
-prepare_uboot
-build
+
+if $NON_INTERACTIVE; then
+    run_non_interactive
+else
+    run_interactive
+fi

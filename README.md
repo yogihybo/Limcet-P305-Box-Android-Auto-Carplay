@@ -376,16 +376,36 @@ The compiled-in env boots automatically from the SD card:
 
 ### Building the SD image with `build_bootable_sdcard.sh`
 
-`build_bootable_sdcard.sh` assembles the full bootable SD image (or writes directly to a block device) in one interactive pass: patches `uboot_sdboot.bin` via `patch_uboot.py`, partitions and formats p1/p2/p3, syncs the rootfs and userdata trees, patches `rcS` on the p2 copy only (the source tree is never modified), and populates `/nanddata/` (see below).
+`build_bootable_sdcard.sh` assembles the full bootable SD image (or writes directly to a block device): patches its own auto-detected U-Boot source via `patch_uboot.py`, partitions and formats p1/p2/p3, syncs the rootfs and userdata trees, patches `rcS` on the p2 copy only (the source tree is never modified), and populates `/nanddata/` (see below). Output lands in `sd_bootable/` (gitignored).
+
+It uses the same interactive menu as `build_update.sh` — arrow keys move the highlighted row, Space/Enter toggles it, `a`/`n` select/deselect all, `g` builds, `q` quits:
 
 ```bash
-sudo bash build_bootable_sdcard.sh                # interactive, writes sd_boot.img
-sudo bash build_bootable_sdcard.sh --device /dev/sdb --non-interactive
+sudo bash build_bootable_sdcard.sh
 ```
 
-Key options: `--image PATH` / `--device PATH` (output target), `--size MB` (default 512), `--uboot PATH` (use a prebuilt `UBOOT.BIN` as-is, skip patching), `--root DEVICE` (rootfs device for bootargs, default `/dev/mmcblk0p2`), `--no-userdata` (leave p3 empty — populated by the app on first boot), `--dry-run`. Run with `--help` for the full list.
+```
+  ARK1680 Prado — Bootable SD Card Builder
+  ────────────────────────────────────────────────────────
+  BUILD OPTIONS
+  ▶ [X]  Patch U-Boot for SD boot
+    [X]  Patch NAND env offset redirect
+    [X]  Include userdata (p3)
 
-Requirements: `parted dosfstools e2fsprogs rsync` (plus `mtd-utils` if also building rootfs/userdata images — see [Build & Flash Tool](#build--flash-tool)).
+  SD IMAGE CONTENTS  → sd_bootable/sd_boot.img
+       Part Item                   File             Status
+       p1   U-Boot                 uboot.bin        found
+       p1   Kernel                 zImage           found
+       p2   Rootfs                 rootfs           found
+       p3   Userdata               userdata         found
+  ────────────────────────────────────────────────────────
+```
+
+U-Boot, Kernel, and Rootfs aren't independently toggleable — they're required for a bootable image, and the build refuses to proceed if any is missing. Only the three **BUILD OPTIONS** are selectable; Userdata's inclusion follows the "Include userdata (p3)" toggle above.
+
+Paths and sizes stay CLI-flag-only (the menu doesn't do free-text editing): `--image PATH` / `--device PATH` (output target, default `sd_bootable/sd_boot.img`), `--size MB` (default 512), `--uboot PATH` (use a prebuilt `UBOOT.BIN` as-is, skip patching), `--uboot-src` / `--kernel` / `--rootfs-dir` / `--userdata-dir` (override auto-detected paths), `--root DEVICE` (rootfs device for bootargs, default `/dev/mmcblk0p2`), `--non-interactive` (skip the menu, use flags/autodetected values as-is — needed for `--device`), `--dry-run`. Run with `--help` for the full list.
+
+Requirements — `parted`, `mkfs.fat` (dosfstools), `mkfs.ext4` (e2fsprogs), `losetup` (util-linux), `rsync`, `python3` — are checked at startup, same as `build_update.sh`'s requirements check (plus `mtd-utils` if also building rootfs/userdata images via [Build & Flash Tool](#build--flash-tool)).
 
 ### `/data` mount on SD boot
 

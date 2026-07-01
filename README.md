@@ -4,6 +4,21 @@ Reconstructed firmware for a Toyota Prado head unit running on the **Limcet Box 
 
 The Prado unit uses Holden firmware as its base but requires hardware-specific overrides for the display panel, product identity, and U-Boot environment. This repository tracks those overrides and the reconstruction process.
 
+## Table of Contents
+
+- [Hardware](#hardware)
+- [Repository Structure](#repository-structure)
+- [Holden Firmware Compatibility](#holden-firmware-compatibility)
+- [Key Differences vs Holden Base Firmware](#key-differences-vs-holden-base-firmware)
+- [Build & Flash Tool](#build--flash-tool)
+- [Flashing via SD Card](#flashing-via-sd-card)
+- [Booting from SD Card or USB (non-destructive)](#booting-from-sd-card-or-usb-non-destructive)
+- [Device Access](#device-access)
+  - [WiFi Access Point](#wifi-access-point)
+  - [SSH Access](#ssh-access)
+  - [USB Networking](#usb-networking)
+- [Sources](#sources)
+
 ## Hardware
 
 | Item | Value |
@@ -121,72 +136,6 @@ These are all corrected in the reconstructed firmware. See [Key Differences vs H
 | BT device name | Ksmart | **Limcet Box** |
 | BT pair code | 0000 | **8362** |
 | Vehicle branding | HOLDEN | **TOYOTA** |
-
-## WiFi Access Point
-
-A WPA2 access point starts automatically on boot via `/etc/wifi_ap.sh`, providing network access for SSH without needing a physical connection.
-
-| Item | Value |
-|------|-------|
-| SSID | `carplay_wifi` |
-| Password | `88888888` |
-| AP IP | `192.168.43.1` |
-| DHCP range | `192.168.43.20 – 192.168.43.254` |
-| Config | `/etc/hostapd/hostapd.conf`, `/etc/udhcpd.conf` |
-
-**To connect:**
-
-```sh
-# Connect to carplay_wifi (WPA2, password: 88888888)
-ssh root@192.168.43.1
-```
-
-### WiFi module detection
-
-Five Realtek drivers are bundled in `/lib/modules/3.4.0/`. At early boot, `wifi_ap.sh` probes them in order until one loads successfully:
-
-| Priority | Module | Chip | Interface |
-|----------|--------|------|-----------|
-| 1 | `wlan_rtl8821cs.ko` | RTL8821CS | SDIO (most likely — Feasycom BT+WiFi combo) |
-| 2 | `wlan_rtl8822cs.ko` | RTL8822CS | SDIO |
-| 3 | `wlan_rtl8189fs.ko` | RTL8189FS | SDIO |
-| 4 | `wlan_rtl8821cu.ko` | RTL8821CU | USB |
-| 5 | `wlan_rtl8811cu.ko` | RTL8811CU | USB |
-
-If the main app (`MsnCoreApp`) has already placed the correct driver at `/tmp/wlan.ko`, that is used instead. If `wlan0` does not come up, check `dmesg` on the serial console to identify which chip is present and adjust the probe order in `wifi_ap.sh`.
-
-## SSH Access
-
-SSH is enabled in the reconstructed rootfs and starts automatically on boot.
-
-| Item | Value |
-|------|-------|
-| Binary | `/usr/bin/sshd` (OpenSSH 4.6p1) |
-| Config | `/etc/ssh/sshd_config` |
-| Host keys | `/etc/ssh/ssh_host_rsa_key` (RSA 2048), `/etc/ssh/ssh_host_dsa_key` |
-| Login | `root` with existing password hash from `/etc/shadow` |
-
-**To connect:**
-
-```sh
-ssh root@192.168.7.1
-```
-
-## USB Networking
-
-The ARK1680 USB gadget stack is configured to use CDC-NCM (`g_ncm.ko`), which creates a `usb0` network interface when connected to a host PC.
-
-| Item | Value |
-|------|-------|
-| Device IP | `192.168.7.1` |
-| Subnet | `255.255.255.0` |
-| Set PC address to | `192.168.7.2` (static) |
-
-**Platform notes:**
-- **macOS / Linux** — CDC-NCM supported natively; interface appears automatically
-- **Windows** — may require the CDC-NCM host driver from Windows Update
-
-`g_zero.ko` has been removed from `Prado firmware reconstructed/mtd6_rootfs/rootfs/etc/all.sh` — it was overriding the NCM gadget registration and breaking both USB host mode and the network interface.
 
 ## Build & Flash Tool
 
@@ -529,6 +478,74 @@ The kernel sees the USB drive as `/dev/sda`. The ARK1668 uses MUSB (not EHCI) �
 ### Console on screen
 
 Both sdbootargs and usbbootargs include `console=tty0`. Once the kernel initialises the LCD framebuffer (`CONFIG_FB_ARK1668LCD`), boot messages and a login prompt are mirrored to the screen via `fbcon`. The U-Boot phase itself is serial-only (no video console compiled into U-Boot).
+
+## Device Access
+
+### WiFi Access Point
+
+A WPA2 access point starts automatically on boot via `/etc/wifi_ap.sh`, providing network access for SSH without needing a physical connection.
+
+| Item | Value |
+|------|-------|
+| SSID | `carplay_wifi` |
+| Password | `88888888` |
+| AP IP | `192.168.43.1` |
+| DHCP range | `192.168.43.20 – 192.168.43.254` |
+| Config | `/etc/hostapd/hostapd.conf`, `/etc/udhcpd.conf` |
+
+**To connect:**
+
+```sh
+# Connect to carplay_wifi (WPA2, password: 88888888)
+ssh root@192.168.43.1
+```
+
+#### WiFi module detection
+
+Five Realtek drivers are bundled in `/lib/modules/3.4.0/`. At early boot, `wifi_ap.sh` probes them in order until one loads successfully:
+
+| Priority | Module | Chip | Interface |
+|----------|--------|------|-----------|
+| 1 | `wlan_rtl8821cs.ko` | RTL8821CS | SDIO (most likely — Feasycom BT+WiFi combo) |
+| 2 | `wlan_rtl8822cs.ko` | RTL8822CS | SDIO |
+| 3 | `wlan_rtl8189fs.ko` | RTL8189FS | SDIO |
+| 4 | `wlan_rtl8821cu.ko` | RTL8821CU | USB |
+| 5 | `wlan_rtl8811cu.ko` | RTL8811CU | USB |
+
+If the main app (`MsnCoreApp`) has already placed the correct driver at `/tmp/wlan.ko`, that is used instead. If `wlan0` does not come up, check `dmesg` on the serial console to identify which chip is present and adjust the probe order in `wifi_ap.sh`.
+
+### SSH Access
+
+SSH is enabled in the reconstructed rootfs and starts automatically on boot.
+
+| Item | Value |
+|------|-------|
+| Binary | `/usr/bin/sshd` (OpenSSH 4.6p1) |
+| Config | `/etc/ssh/sshd_config` |
+| Host keys | `/etc/ssh/ssh_host_rsa_key` (RSA 2048), `/etc/ssh/ssh_host_dsa_key` |
+| Login | `root` with existing password hash from `/etc/shadow` |
+
+**To connect:**
+
+```sh
+ssh root@192.168.7.1
+```
+
+### USB Networking
+
+The ARK1680 USB gadget stack is configured to use CDC-NCM (`g_ncm.ko`), which creates a `usb0` network interface when connected to a host PC.
+
+| Item | Value |
+|------|-------|
+| Device IP | `192.168.7.1` |
+| Subnet | `255.255.255.0` |
+| Set PC address to | `192.168.7.2` (static) |
+
+**Platform notes:**
+- **macOS / Linux** — CDC-NCM supported natively; interface appears automatically
+- **Windows** — may require the CDC-NCM host driver from Windows Update
+
+`g_zero.ko` has been removed from `Prado firmware reconstructed/mtd6_rootfs/rootfs/etc/all.sh` — it was overriding the NCM gadget registration and breaking both USB host mode and the network interface.
 
 ## Sources
 

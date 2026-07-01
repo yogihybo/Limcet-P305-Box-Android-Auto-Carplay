@@ -196,29 +196,32 @@ bash build.sh
 
 ### Menu layout
 
+The whole menu is one line per item — no per-item description text — so it fits a standard ~24-line terminal without scrolling. Full detail for whichever row is highlighted is shown once, on the detail line just above the command bar, instead of repeated for every row:
+
 ```
+  ARK1680 Prado — Build & Flash Tool
+  ────────────────────────────────────────────────────────
   BUILD
-  ─────
-▶ [ ]  Build rootfs image      Compiles source tree → rootfs.img (~106 MB)
-  [ ]  Build userdata image    Overlays Prado settings → userdata.img (~6 MB)
+    [ ]  Build rootfs image         no image yet
+    [ ]  Build userdata image       no image yet
 
-  NAND PARTITIONS TO FLASH (via SD update package)
-  ─────────────────────────────────────────────────
-  Files are staged on the SD card; U-Boot copies each selected
-  partition below from the SD card into internal NAND on boot.
-  [X]  Root Filesystem         rootfs.img       0x5a0000   106 MB
-  [X]  User Data               userdata.img     0x6fa0000    6 MB
-  [ ]  Linux Kernel            zImage           0x1a0000     4 MB
-  [ ]  Display Config (arkdata) arkdata.ini     0x160000   256 KB
-  [-]  U-Boot Env              uboot-env.bin    0x120000   256 KB  (disabled)
-  [ ]  U-Boot                  uboot.bin        0x020000   512 KB  ⚠ brick risk
-  [ ]  Boot Logo               bootlogo         0x75a0000  512 KB
-  [ ]  Boot Animation          bootanimation    0x7620000    3 MB
-  [ ]  Reversing Track         reversingtrack   0x7920000    3 MB
-  [ ]  Unicode Font            unicode          0x7c20000  256 KB
+  NAND PARTITIONS  (staged on SD, flashed to internal NAND on boot)
+    [X]  Root Filesystem        rootfs.img       missing
+  ▶ [ ]  User Data              userdata.img     missing
+    [ ]  Linux Kernel           zImage           missing
+    [ ]  Display Config (arkdata) arkdata.ini      found
+     [-]  U-Boot Env             uboot-env.bin    disabled
+    [ ]  U-Boot                 uboot.bin        found ⚠
+    [ ]  Boot Logo              bootlogo         found
+    [ ]  Boot Animation         bootanimation    found
+    [ ]  Reversing Track        reversingtrack   found
+    [ ]  Unicode Font           unicode          found
+  ────────────────────────────────────────────────────────
+  User Data: Prado settings / userdata UBI image (build below if needed)  (offset 0x6fa0000, size 0x600000)
+  ↑/↓ move   Space/Enter toggle   a/n all/none   g go   q quit
 ```
 
-The `▶` marker shows which row is highlighted — move it with the arrow keys.
+The `▶` marker shows which row is highlighted — move it with the arrow keys; the line above the command bar always shows the description, offset, and size for that row.
 
 **Defaults:** rootfs and userdata are selected by default. Kernel, U-Boot, arkdata, and other early-boot partitions default to off — they must be explicitly enabled to avoid accidental reflash. U-Boot Env is disabled entirely (not navigable) until `uboot-env.bin` is built.
 

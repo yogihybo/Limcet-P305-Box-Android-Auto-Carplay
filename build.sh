@@ -273,33 +273,44 @@ read_key() {
 }
 
 # ── Menu rendering ────────────────────────────────────────────────────────────
+#
+# One line per item — no per-item description/blank lines — so the whole
+# menu fits in a standard ~24-line terminal without scrolling. Full detail
+# for whichever row is highlighted is shown once, in the detail line below
+# the list, instead of repeated for every row.
+
+print_detail() {
+    local t="${NAV_TYPE[$CURSOR]}" idx="${NAV_IDX[$CURSOR]}"
+    if [[ "$t" == "build" ]]; then
+        IFS='|' read -r _ label desc _ <<< "${BUILD_ITEMS[$idx]}"
+        echo -e "  ${DIM}${label}:${NC} ${DIM}$desc${NC}"
+    else
+        IFS='|' read -r _ label _ offset size _ desc _ <<< "${PARTITIONS[$idx]}"
+        echo -e "  ${DIM}${label}:${NC} ${DIM}$desc  (offset $offset, size $size)${NC}"
+    fi
+}
 
 print_menu() {
     clear
-    echo ""
-    echo -e "${CYAN}${BOLD}  ╔══════════════════════════════════════════════════════╗${NC}"
-    echo -e "${CYAN}${BOLD}  ║   ARK1680 Prado — Build & Flash Tool                ║${NC}"
-    echo -e "${CYAN}${BOLD}  ╚══════════════════════════════════════════════════════╝${NC}"
+    echo -e "${CYAN}${BOLD}  ARK1680 Prado — Build & Flash Tool${NC}"
+    echo -e "  ${DIM}────────────────────────────────────────────────────────${NC}"
 
-    # ── Build section ──
-    echo ""
     echo -e "  ${BOLD}BUILD${NC}"
-    echo -e "  ${DIM}──────────────────────────────────────────────────────${NC}"
-
     for i in "${!BUILD_ITEMS[@]}"; do
         IFS='|' read -r key label desc _ <<< "${BUILD_ITEMS[$i]}"
         local img_path=""
-        local status=""
         if [[ "$key" == "rootfs" ]]; then
             img_path="$ROOTFS_IMG"
         else
             img_path="$USERDATA_IMG"
         fi
+        local status
         if [[ -f "$img_path" ]]; then
-            status="${GREEN}image exists — $(du -h "$img_path" | cut -f1)${NC}"
+            status="${GREEN}image exists ($(du -h "$img_path" | cut -f1))${NC}"
         else
             status="${YELLOW}no image yet${NC}"
         fi
+        local mark
         if [[ ${BUILD_SEL[$i]} -eq 1 ]]; then
             mark="${GREEN}[B]${NC}"
         else
@@ -307,60 +318,41 @@ print_menu() {
         fi
         local cursor="  "
         is_current "build" "$i" && cursor="${CYAN}▶ ${NC}"
-        printf "  %b%b  %-24s" "$cursor" "$mark" "$label"
-        echo -e "  $status"
-        echo -e "      ${DIM}$desc${NC}"
-        echo ""
+        printf "  %b%b  %-26s %b\n" "$cursor" "$mark" "$label" "$status"
     done
 
-    # ── Partition section ──
-    echo -e "  ${BOLD}NAND PARTITIONS TO FLASH (via SD update package)${NC}"
-    echo -e "  ${DIM}Files are staged on the SD card; U-Boot copies each selected${NC}"
-    echo -e "  ${DIM}partition below from the SD card into internal NAND on boot.${NC}"
-    echo -e "  ${DIM}──────────────────────────────────────────────────────${NC}"
-    echo -e "  ${DIM}    [ ]  Partition              File              Status${NC}"
     echo ""
-
+    echo -e "  ${BOLD}NAND PARTITIONS${NC}  ${DIM}(staged on SD, flashed to internal NAND on boot)${NC}"
     for i in "${!PARTITIONS[@]}"; do
         IFS='|' read -r key label filename offset size mode desc _ <<< "${PARTITIONS[$i]}"
         if [[ ${PART_SEL[$i]} -eq -1 ]]; then
-            # Disabled entry — greyed out, not navigable
-            printf "     ${DIM}[-]  %-22s %-18s (disabled)${NC}\n" \
-                "$label" "$filename"
-            echo -e "       ${DIM}$desc${NC}"
-            echo ""
+            printf "    ${DIM}[-]  %-22s %-16s disabled${NC}\n" "$label" "$filename"
             continue
         fi
         local src
         src=$(find_src "$filename")
+        local mark
         if [[ ${PART_SEL[$i]} -eq 1 ]]; then
             mark="${GREEN}[X]${NC}"
         else
             mark="${DIM}[ ]${NC}"
         fi
+        local found
         if [[ -n "$src" ]]; then
             found="${GREEN}found${NC}"
         else
             found="${RED}missing${NC}"
         fi
         local caution=""
-        [[ "$key" == "uboot" ]] && caution=" ${RED}⚠ brick risk${NC}"
+        [[ "$key" == "uboot" ]] && caution=" ${RED}⚠${NC}"
         local cursor="  "
         is_current "part" "$i" && cursor="${CYAN}▶ ${NC}"
-        printf "  %b%b  %-22s %-18s %b%b\n" \
-            "$cursor" "$mark" "$label" "$filename" "$found" "$caution"
-        echo -e "       ${DIM}$desc   $offset  $size${NC}"
-        echo ""
+        printf "  %b%b  %-22s %-16s %b%b\n" "$cursor" "$mark" "$label" "$filename" "$found" "$caution"
     done
 
-    echo -e "  ${DIM}──────────────────────────────────────────────────────${NC}"
-    echo ""
-    echo -e "  ${BOLD}Commands:${NC}"
-    echo -e "    ${BOLD}↑/↓${NC}  move          ${BOLD}Space${NC} / ${BOLD}Enter${NC}  toggle highlighted item"
-    echo -e "    ${BOLD}a${NC}    select all partitions   ${BOLD}n${NC}   deselect all partitions"
-    echo -e "    ${BOLD}g${NC}    go (build selected, generate SD package)"
-    echo -e "    ${BOLD}q${NC}    quit"
-    echo ""
+    echo -e "  ${DIM}────────────────────────────────────────────────────────${NC}"
+    print_detail
+    echo -e "  ${BOLD}↑/↓${NC} move   ${BOLD}Space${NC}/${BOLD}Enter${NC} toggle   ${BOLD}a${NC}/${BOLD}n${NC} all/none   ${BOLD}g${NC} go   ${BOLD}q${NC} quit"
 }
 
 # ── Pre-flight checks ─────────────────────────────────────────────────────────
@@ -524,8 +516,8 @@ while true; do
     key=$(read_key)
 
     case "$key" in
-        $'\x1b[A')  (( CURSOR > 0 )) && (( --CURSOR )); true ;;
-        $'\x1b[B')  (( CURSOR < ${#NAV_TYPE[@]} - 1 )) && (( ++CURSOR )); true ;;
+        $'\x1b[A')  (( CURSOR > 0 )) && CURSOR=$((CURSOR - 1)) ;;
+        $'\x1b[B')  (( CURSOR < ${#NAV_TYPE[@]} - 1 )) && CURSOR=$((CURSOR + 1)) ;;
         ''|' ')     toggle_current ;;
         a|A)
             for i in "${!PARTITIONS[@]}"; do

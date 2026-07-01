@@ -529,15 +529,18 @@ generate_sd() {
         local keyword="${ARKUPDATE_KEYWORD[$key]:-}"
         if [[ -z "$keyword" ]]; then
             unconfirmed+=("$label")
-            continue
+        else
+            echo "$keyword" >> "$update_file"
         fi
 
-        echo "$keyword" >> "$update_file"
+        # Copy the file regardless — even with no confirmed arkupdate
+        # keyword, it's still useful on the SD card for manual flashing
+        # from the U-Boot prompt.
         copied_files+=("$src|$filename")
     done
 
     if [[ ${#unconfirmed[@]} -gt 0 ]]; then
-        warn "Not included in update (unconfirmed arkupdate keyword): ${unconfirmed[*]}"
+        warn "Not in update (unconfirmed arkupdate keyword), copied for manual flash only: ${unconfirmed[*]}"
         warn "Flash these manually from the U-Boot prompt instead — see README."
     fi
 

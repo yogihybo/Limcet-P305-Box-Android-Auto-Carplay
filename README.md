@@ -8,8 +8,7 @@ The Prado unit uses Holden firmware as its base but requires hardware-specific o
 
 - [Hardware](#hardware)
 - [Repository Structure](#repository-structure)
-- [Holden Firmware Compatibility](#holden-firmware-compatibility)
-- [Key Differences vs Holden Base Firmware](#key-differences-vs-holden-base-firmware)
+- [NAND Partition Layout](#nand-partition-layout)
 - [Build & Flash Tool](#build--flash-tool)
 - [Flashing via SD Card](#flashing-via-sd-card)
 - [Booting from SD Card or USB (non-destructive)](#booting-from-sd-card-or-usb-non-destructive)
@@ -17,6 +16,8 @@ The Prado unit uses Holden firmware as its base but requires hardware-specific o
   - [WiFi Access Point](#wifi-access-point)
   - [SSH Access](#ssh-access)
   - [USB Networking](#usb-networking)
+- [Holden Firmware Compatibility](#holden-firmware-compatibility)
+- [Key Differences vs Holden Base Firmware](#key-differences-vs-holden-base-firmware)
 - [Sources](#sources)
 
 ## Hardware
@@ -32,6 +33,24 @@ The Prado unit uses Holden firmware as its base but requires hardware-specific o
 | Sound | None (SoundType=0) |
 | MCU type | 6 |
 | BT module | Feasycom (BlueToothType=6) |
+
+**Documentation:**
+
+- [`Limcet Hardware/BOARD_ANALYSIS.md`](Limcet%20Hardware/BOARD_ANALYSIS.md) — board/component teardown (SoC, NAND, BT, MCU, CAN bus), with photos in the same folder.
+- [`docs/SOURCES.md`](docs/SOURCES.md) — provenance of every file in this repo.
+- [`docs/PARTITION_LAYOUT.md`](docs/PARTITION_LAYOUT.md) — NAND offsets, sizes, flash commands (see also [NAND Partition Layout](#nand-partition-layout) below).
+- [`docs/SD_BOOT_PLAN.md`](docs/SD_BOOT_PLAN.md) — historical SD-boot planning doc, superseded by [Booting from SD Card or USB](#booting-from-sd-card-or-usb-non-destructive) below.
+
+### Accessing the device
+
+Three ways to reach the device, roughly in order of how destructive they are:
+
+| Method | Use for | Details |
+|--------|---------|---------|
+| Serial console (UART, 115200 8N1) | Recovery, monitoring, interrupting boot | [Serial console](#serial-console-recovery--monitoring) |
+| SD update (flashes internal NAND) | Permanently updating firmware on the unit | [Flashing via SD Card](#flashing-via-sd-card) |
+| SD/USB bootable image (non-destructive) | Testing changes without touching NAND | [Booting from SD Card or USB](#booting-from-sd-card-or-usb-non-destructive) |
+| Network (WiFi AP / USB / SSH) | Once Linux has booted — only useful if the reconstructed, SSH-patched rootfs is already running (see caveat below) | [Device Access](#device-access) |
 
 ## Repository Structure
 
@@ -109,33 +128,26 @@ legacy/
 
 > `lzop_1.04-2_amd64.deb` at the repo root is a stray downloaded package, not referenced by any build step — safe to delete.
 
-## Holden Firmware Compatibility
+## NAND Partition Layout
 
-The Holden update package (`HOLDEN_KS_Auto_DSP(BT)_0219`) has been confirmed to boot successfully on the Prado device. This validates that the Holden firmware is a compatible base — the SoC, bootloader, and kernel are interoperable.
+| Partition | Start | Size | Contents |
+|-----------|-------|------|----------|
+| S-Loader | `0x000000` | 128 KB | Nboot (do NOT update via SD) |
+| U-Boot | `0x020000` | 512 KB | 2nd-stage bootloader |
+| U-Boot_back | `0x0A0000` | 512 KB | U-Boot backup slot |
+| U-Boot-Env | `0x120000` | 256 KB | U-Boot environment variables |
+| arkdata | `0x160000` | 256 KB | Display / TvoutType config |
+| kernel | `0x1A0000` | 4 MB | Linux 3.4.0 zImage |
+| rootfs | `0x5A0000` | 106 MB | Root filesystem (UBIFS/UBI) |
+| userdata | `0x6FA0000` | 6 MB | User settings / BT pairs (UBI) |
+| bootlogo | `0x75A0000` | 512 KB | Boot splash screen |
+| bootanimation | `0x7620000` | 3 MB | Boot animation |
+| reversingtrack | `0x7920000` | 3 MB | Reversing camera audio |
+| Unicode | `0x7C20000` | 256 KB | Unicode font data |
 
-Known glitches when running stock Holden firmware on the Prado hardware:
+**Known bad block at 0x5FA0000** — inside the rootfs partition. `nand scrub` handles this automatically.
 
-- **Screen hue** — caused by mismatched LCD timings in `arkdata.ini` (`CLKDIV1=10`, `VBP=3`, `HBP=20` vs Prado values). Fixed by flashing the Prado `arkdata.ini` to mtd4.
-- **Touch keys** — Holden `arkdata.ini` defines 5 side touch keys that do not exist on the Prado hardware.
-- **Product identity** — `FactoryConfig.ini` and `MsnProductInfo.ini` reference Holden-specific IDs (`Ksmart_DSP`, `Box-C211`, `McuType=16`).
-
-These are all corrected in the reconstructed firmware. See [Key Differences vs Holden Base Firmware](#key-differences-vs-holden-base-firmware) below.
-
-## Key Differences vs Holden Base Firmware
-
-| Item | Holden | Prado |
-|------|--------|-------|
-| ProductId | Ksmart_DSP | **Limcet-P306** |
-| ResourceName | Box-C211 | **Box-P301** |
-| McuType | 16 | **6** |
-| SoundType | 4 (DSP) | **0** |
-| Panel timing (CLKDIV1) | 10 | **11** |
-| Panel VBP/HBP | 3/20 | **29/32** |
-| Touch keys | 5 | **none** |
-| bootdelay | 0 | **9** |
-| BT device name | Ksmart | **Limcet Box** |
-| BT pair code | 0000 | **8362** |
-| Vehicle branding | HOLDEN | **TOYOTA** |
+See also [`docs/PARTITION_LAYOUT.md`](docs/PARTITION_LAYOUT.md) for the same data plus flash commands.
 
 ## Build & Flash Tool
 
@@ -219,26 +231,7 @@ sudo apt install mtd-utils u-boot-tools   # Debian / Ubuntu / WSL
 
 ## Flashing via SD Card
 
-On power-on, U-Boot checks for a FAT32 SD card. If a file named `UpConfig` is present in the SD root, U-Boot runs `arkupdate`, which reads the `update` script and flashes each listed partition in sequence. After completion the unit reboots — remove the SD card so it doesn't re-flash.
-
-### Partition layout
-
-| Partition | Start | Size | Contents |
-|-----------|-------|------|----------|
-| S-Loader | `0x000000` | 128 KB | Nboot (do NOT update via SD) |
-| U-Boot | `0x020000` | 512 KB | 2nd-stage bootloader |
-| U-Boot_back | `0x0A0000` | 512 KB | U-Boot backup slot |
-| U-Boot-Env | `0x120000` | 256 KB | U-Boot environment variables |
-| arkdata | `0x160000` | 256 KB | Display / TvoutType config |
-| kernel | `0x1A0000` | 4 MB | Linux 3.4.0 zImage |
-| rootfs | `0x5A0000` | 106 MB | Root filesystem (UBIFS/UBI) |
-| userdata | `0x6FA0000` | 6 MB | User settings / BT pairs (UBI) |
-| bootlogo | `0x75A0000` | 512 KB | Boot splash screen |
-| bootanimation | `0x7620000` | 3 MB | Boot animation |
-| reversingtrack | `0x7920000` | 3 MB | Reversing camera audio |
-| Unicode | `0x7C20000` | 256 KB | Unicode font data |
-
-**Known bad block at 0x5FA0000** — inside the rootfs partition. `nand scrub` handles this automatically.
+On power-on, U-Boot checks for a FAT32 SD card. If a file named `UpConfig` is present in the SD root, U-Boot runs `arkupdate`, which reads the `update` script and flashes each listed partition in sequence. After completion the unit reboots — remove the SD card so it doesn't re-flash. See [NAND Partition Layout](#nand-partition-layout) above for offsets and sizes.
 
 ### Quick start
 
@@ -286,7 +279,7 @@ reversingtrack
 bootanimation
 ```
 
-Confirmed against the reference packages (`Holden firmware update/update`, `Prado firmware recovery holden based/update`, `sd_update/update.example` — all identical) and cross-checked against the literal `"*****Now update <name> ......"` strings compiled into `uboot.bin`. Note `filesystem` is the keyword for the rootfs partition, and `kernel` expects a file named `zImage` on the SD card, not `kernel.img` or similar — filenames must match exactly what's shown in the [partition layout](#partition-layout) table above.
+Confirmed against the reference packages (`Holden firmware update/update`, `Prado firmware recovery holden based/update`, `sd_update/update.example` — all identical) and cross-checked against the literal `"*****Now update <name> ......"` strings compiled into `uboot.bin`. Note `filesystem` is the keyword for the rootfs partition, and `kernel` expects a file named `zImage` on the SD card, not `kernel.img` or similar — filenames must match exactly what's shown in the [NAND Partition Layout](#nand-partition-layout) table above.
 
 `uboot-env` and `unicode` are deliberately left out of `build_update.sh`'s generated `update` file — neither is an independent arkupdate keyword:
 
@@ -485,6 +478,8 @@ Both sdbootargs and usbbootargs include `console=tty0`. Once the kernel initiali
 
 A WPA2 access point starts automatically on boot via `/etc/wifi_ap.sh`, providing network access for SSH without needing a physical connection.
 
+> **Note:** joining `carplay_wifi` only gets you an IP address on `192.168.43.0/24` — the AP itself doesn't expose any open ports. It's only useful for reaching SSH once the [SSH](#ssh-access)-patched reconstructed rootfs is the one actually running on the device; on stock/Holden firmware (or before flashing) there's nothing listening at `192.168.43.1`.
+
 | Item | Value |
 |------|-------|
 | SSID | `carplay_wifi` |
@@ -546,6 +541,34 @@ The ARK1680 USB gadget stack is configured to use CDC-NCM (`g_ncm.ko`), which cr
 - **Windows** — may require the CDC-NCM host driver from Windows Update
 
 `g_zero.ko` has been removed from `Prado firmware reconstructed/mtd6_rootfs/rootfs/etc/all.sh` — it was overriding the NCM gadget registration and breaking both USB host mode and the network interface.
+
+## Holden Firmware Compatibility
+
+The Holden update package (`HOLDEN_KS_Auto_DSP(BT)_0219`) has been confirmed to boot successfully on the Prado device. This validates that the Holden firmware is a compatible base — the SoC, bootloader, and kernel are interoperable.
+
+Known glitches when running stock Holden firmware on the Prado hardware:
+
+- **Screen hue** — caused by mismatched LCD timings in `arkdata.ini` (`CLKDIV1=10`, `VBP=3`, `HBP=20` vs Prado values). Fixed by flashing the Prado `arkdata.ini` to mtd4.
+- **Touch keys** — Holden `arkdata.ini` defines 5 side touch keys that do not exist on the Prado hardware.
+- **Product identity** — `FactoryConfig.ini` and `MsnProductInfo.ini` reference Holden-specific IDs (`Ksmart_DSP`, `Box-C211`, `McuType=16`).
+
+These are all corrected in the reconstructed firmware. See [Key Differences vs Holden Base Firmware](#key-differences-vs-holden-base-firmware) below.
+
+## Key Differences vs Holden Base Firmware
+
+| Item | Holden | Prado |
+|------|--------|-------|
+| ProductId | Ksmart_DSP | **Limcet-P306** |
+| ResourceName | Box-C211 | **Box-P301** |
+| McuType | 16 | **6** |
+| SoundType | 4 (DSP) | **0** |
+| Panel timing (CLKDIV1) | 10 | **11** |
+| Panel VBP/HBP | 3/20 | **29/32** |
+| Touch keys | 5 | **none** |
+| bootdelay | 0 | **9** |
+| BT device name | Ksmart | **Limcet Box** |
+| BT pair code | 0000 | **8362** |
+| Vehicle branding | HOLDEN | **TOYOTA** |
 
 ## Sources
 

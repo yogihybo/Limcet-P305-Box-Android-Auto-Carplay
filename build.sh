@@ -209,6 +209,7 @@ find_src() {
         "$SCRIPT_DIR/Prado firmware reconstructed/mtd0_sloader/$filename"
         "$SCRIPT_DIR/Prado firmware reconstructed/mtd1-mtd2_uboot/$filename"
         "$SCRIPT_DIR/Prado firmware reconstructed/mtd4_arkdata/$filename"
+        "$SCRIPT_DIR/Prado firmware reconstructed/mtd5_kernel/$filename"
         "$SCRIPT_DIR/Prado firmware reconstructed/mtd8_bootlogo/$filename"
         "$SCRIPT_DIR/Prado firmware reconstructed/mtd9_bootanimation/$filename"
         "$SCRIPT_DIR/Prado firmware reconstructed/mtd10_reversingtrack/$filename"

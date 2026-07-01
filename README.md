@@ -117,10 +117,10 @@ build_update.sh              Combined interactive build and flash tool
 build_rootfs.sh              Standalone rootfs UBI image builder
 build_userdata.sh            Standalone userdata UBI image builder
 patch_uboot.py               Patches compiled-in env and NAND offset in a U-Boot binary
-build_bootable_sdcard.sh     Builds a bootable SD card image (uboot_final.bin + kernel + rootfs + userdata)
-uboot_sdboot.bin             Input binary for patch_uboot.py (ARK1680 BSP source-compiled U-Boot)
+build_bootable_sdcard.sh     Interactive bootable SD card image builder (same arrow-key menu as build_update.sh)
+uboot_sdboot.bin             ARK1680 BSP source-compiled U-Boot — manual patch_uboot.py input (see below)
 uboot_final.bin              Patched U-Boot binary — place as UBOOT.BIN on SD p1 FAT32
-sd_boot.img                  Generated bootable SD image (gitignored — output of build_bootable_sdcard.sh)
+sd_bootable/                 Generated bootable SD image output (gitignored — sd_boot.img + patched uboot_sdboot.bin)
 legacy/
   generate_update.sh         Superseded by build_update.sh — standalone partition-selection + SD-package
                               generator only, no build steps; kept for standalone use
@@ -189,17 +189,6 @@ Rows are listed in MTD numerical order (U-Boot spans mtd1 and mtd2, since the sa
 The `▶` marker shows which row is highlighted — move it with the arrow keys; the line above the command bar always shows the description, offset, and size for that row. `rootfs.img`, `userdata.img`, and `uboot-env.bin` all have a corresponding build step above, so their missing-status hints to build first instead of just saying "missing".
 
 **Defaults:** rootfs and userdata are selected by default. Kernel, U-Boot, arkdata, U-Boot Env, and other early-boot partitions default to off — they must be explicitly enabled to avoid accidental reflash.
-
-### Commands
-
-| Key | Action |
-|-----|--------|
-| `↑` / `↓` | Move the highlighted row |
-| `Space` / `Enter` | Toggle the highlighted row (partition or build step) |
-| `a` | Select all partitions |
-| `n` | Deselect all partitions |
-| `g` | Go — run selected builds then generate SD package |
-| `q` | Quit |
 
 ### Output
 

@@ -16,6 +16,10 @@
 
 set -e
 
+# mtd-utils installs to /usr/sbin, which isn't always on $PATH (e.g. WSL,
+# non-login shells) even when the package is installed.
+export PATH="$PATH:/usr/sbin:/sbin"
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOTFS_DIR="$SCRIPT_DIR/Prado firmware reconstructed/mtd6_rootfs/rootfs"
 UBIFS_IMAGE="$SCRIPT_DIR/Prado firmware reconstructed/mtd6_rootfs/rootfs.ubifs"

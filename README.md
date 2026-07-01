@@ -79,7 +79,7 @@ docs/
   SOURCES.md                 Where each file came from and why
   PARTITION_LAYOUT.md        NAND offsets, sizes, flash commands
   SD_BOOT_PLAN.md            Historical SD-boot planning doc — superseded, see below
-build.sh                     Combined interactive build and flash tool
+build_update.sh              Combined interactive build and flash tool
 build_rootfs.sh              Standalone rootfs UBI image builder
 build_userdata.sh            Standalone userdata UBI image builder
 patch_uboot.py               Patches compiled-in env and NAND offset in a U-Boot binary
@@ -88,7 +88,7 @@ uboot_sdboot.bin             Input binary for patch_uboot.py (ARK1680 BSP source
 uboot_final.bin              Patched U-Boot binary — place as UBOOT.BIN on SD p1 FAT32
 sd_boot.img                  Generated bootable SD image (gitignored — output of build_bootable_sdcard.sh)
 legacy/
-  generate_update.sh         Superseded by build.sh — standalone partition-selection + SD-package
+  generate_update.sh         Superseded by build_update.sh — standalone partition-selection + SD-package
                               generator only, no build steps; kept for standalone use
 ```
 
@@ -190,10 +190,10 @@ The ARK1680 USB gadget stack is configured to use CDC-NCM (`g_ncm.ko`), which cr
 
 ## Build & Flash Tool
 
-`build.sh` is an interactive terminal tool that combines building firmware images and generating a NAND flash update package staged on an SD card into a single workflow. This flashes internal NAND — it is **not** the non-destructive SD-boot image described in [Booting from SD Card or USB](#booting-from-sd-card-or-usb-non-destructive) (that's `build_bootable_sdcard.sh`). Run it under Linux or WSL:
+`build_update.sh` is an interactive terminal tool that combines building firmware images and generating a NAND flash update package staged on an SD card into a single workflow. This flashes internal NAND — it is **not** the non-destructive SD-boot image described in [Booting from SD Card or USB](#booting-from-sd-card-or-usb-non-destructive) (that's `build_bootable_sdcard.sh`). Run it under Linux or WSL:
 
 ```bash
-bash build.sh
+bash build_update.sh
 ```
 
 ### Menu layout
@@ -264,7 +264,9 @@ Build steps require `mkfs.ubifs`, `ubinize` (rootfs/userdata), and `mkenvimage` 
 sudo apt install mtd-utils u-boot-tools   # Debian / Ubuntu / WSL
 ```
 
-`build.sh` checks for all three on startup and prints their status before showing the menu. Missing tools only block the build steps that need them — you can still select partitions and generate the SD package without them.
+`build_update.sh` checks for all three on startup and prints their status before showing the menu. Missing tools only block the build steps that need them — you can still select partitions and generate the SD package without them.
+
+`mtd-utils` and `u-boot-tools` install their binaries to `/usr/sbin`, which isn't always on `$PATH` for non-root shells (WSL, non-login shells). `build_update.sh`, `build_rootfs.sh`, and `build_userdata.sh` all add `/usr/sbin:/sbin` to `$PATH` themselves, so this should be transparent — but if you see "not found" for a tool `dpkg -l` shows as installed, check `which mkfs.ubifs` / `which ubinize` / `which mkenvimage` for the actual path.
 
 ## Flashing via SD Card
 
@@ -306,7 +308,7 @@ bash legacy/generate_update.sh
 
 Toggle partitions with number keys, press `g` to generate. Output lands in `sd_update/output/`.
 
-> Steps 1–2 can be replaced entirely by running `bash build.sh`, which does the build and package generation in one interactive session — see [Build & Flash Tool](#build--flash-tool) above.
+> Steps 1–2 can be replaced entirely by running `bash build_update.sh`, which does the build and package generation in one interactive session — see [Build & Flash Tool](#build--flash-tool) above.
 
 **Step 3 — Prepare SD card**
 
@@ -322,19 +324,22 @@ Format as FAT32 (max 32 GB). Copy everything from `sd_update/output/` to the SD 
 
 ### Manual update script
 
-The `update` file is plain U-Boot commands, one per line:
+The `update` file is a plain list of partition keywords, one per line — **not** raw U-Boot commands. `arkupdate` has the NAND offsets and sizes for each keyword compiled in; the SD file never states them:
 
 ```
-fatload mmc 0 4000000 zImage
-nand scrub 0x1a0000 0x400000 0x1a0000 0x400000
-nand write 0x4000000 0x1a0000 ${filesize}
-
-fatload mmc 0 4000000 userdata.img
-nand scrub 0x6fa0000 0x600000 0x6fa0000 0x600000
-nand write 0x4000000 0x6fa0000 ${filesize}
+uboot
+bootlogo
+kernel
+filesystem
+userdata
+arkdata
+reversingtrack
+bootanimation
 ```
 
-`nand scrub` takes `offset size offset size` (repeated — ARK1680-specific behaviour).
+Confirmed against the reference packages (`Holden firmware update/update`, `Prado firmware recovery holden based/update`, `sd_update/update.example` — all identical) and cross-checked against the literal `"*****Now update <name> ......"` strings compiled into `uboot.bin`. Note `filesystem` is the keyword for the rootfs partition, and `kernel` expects a file named `zImage` on the SD card, not `kernel.img` or similar — filenames must match exactly what's shown in the [partition layout](#partition-layout) table above.
+
+`uboot-env` and `unicode` are deliberately left out of `build_update.sh`'s generated `update` file: no reference package includes either, and their compiled-in update messages use a different format (`"Update U-boot-Env ......"` vs `"*****Now update X ......"` for everything above), so the actual trigger keyword for those two is unconfirmed. Flash them manually from the U-Boot prompt instead (see below) until that's verified on real hardware.
 
 ### Safety notes
 

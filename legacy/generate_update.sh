@@ -1,11 +1,11 @@
 #!/bin/bash
 # generate_update.sh — Interactive SD card update builder for ARK1680 (Prado / Limcet-P306)
 #
-# LEGACY — superseded by build.sh at the repo root, which does everything
+# LEGACY — superseded by build_update.sh at the repo root, which does everything
 # this script does (partition selection + SD package generation) plus the
 # build steps (rootfs/userdata/env images) in one interactive session with
 # a newer arrow-key UI. Kept here for standalone use; not actively developed
-# — fixes to partition paths/tables should go into build.sh first and only
+# — fixes to partition paths/tables should go into build_update.sh first and only
 # get backported here if this script is still needed.
 #
 # This script lets you choose which partitions to include in a NAND flash update,
@@ -133,17 +133,26 @@ check_sources() {
     return 0
 }
 
+# The "update" file is a plain list of arkupdate partition keywords, one per
+# line — NOT raw U-Boot nand scrub/write commands. See the matching comment
+# above ARKUPDATE_KEYWORD in build_update.sh for how this was confirmed.
+declare -A ARKUPDATE_KEYWORD=(
+    [uboot]=uboot
+    [bootlogo]=bootlogo
+    [kernel]=kernel
+    [rootfs]=filesystem
+    [userdata]=userdata
+    [arkdata]=arkdata
+    [reversingtrack]=reversingtrack
+    [bootanimation]=bootanimation
+)
+
 generate_update_script() {
     mkdir -p "$OUTPUT_DIR"
     local update_file="$OUTPUT_DIR/update"
     > "$update_file"
 
-    echo "# ARK1680 Prado NAND update script" >> "$update_file"
-    echo "# Generated: $(date)" >> "$update_file"
-    echo "# Partition layout: 106m rootfs / 6m userdata" >> "$update_file"
-    echo "" >> "$update_file"
-
-    local copied_files=()
+    local copied_files=() unconfirmed=()
 
     for i in "${!PARTITIONS[@]}"; do
         [[ ${SELECTED[$i]} -eq 0 ]] && continue
@@ -151,42 +160,20 @@ generate_update_script() {
         src_path=$(find_src "$filename" "$name")
         [[ -z "$src_path" ]] && { warn "Skipping $label — file not found"; continue; }
 
-        echo "# --- $label ---" >> "$update_file"
+        keyword="${ARKUPDATE_KEYWORD[$name]:-}"
+        if [[ -z "$keyword" ]]; then
+            unconfirmed+=("$label")
+            continue
+        fi
 
-        case "$mode" in
-            uboot)
-                # Write to U-Boot_back first (0xA0000), then U-Boot (0x20000)
-                cat >> "$update_file" << EOF
-fatload mmc 0 4000000 $filename
-nand scrub 0xa0000 0x80000 0xa0000 0x80000
-nand write 0x4000000 0xa0000 \${filesize}
-fatload mmc 0 4000000 $filename
-nand scrub 0x20000 0x80000 0x20000 0x80000
-nand write 0x4000000 0x20000 \${filesize}
-
-EOF
-                ;;
-            env)
-                # Env is fixed 4096 bytes (mkenvimage output)
-                cat >> "$update_file" << EOF
-fatload mmc 0 4000000 $filename
-nand scrub $offset $size $offset $size
-nand write 0x4000000 $offset 0x1000
-
-EOF
-                ;;
-            raw|ubi)
-                cat >> "$update_file" << EOF
-fatload mmc 0 4000000 $filename
-nand scrub $offset $size $offset $size
-nand write 0x4000000 $offset \${filesize}
-
-EOF
-                ;;
-        esac
-
+        echo "$keyword" >> "$update_file"
         copied_files+=("$src_path|$filename")
     done
+
+    if [[ ${#unconfirmed[@]} -gt 0 ]]; then
+        warn "Not included in update (unconfirmed arkupdate keyword): ${unconfirmed[*]}"
+        warn "Flash these manually from the U-Boot prompt instead — see README."
+    fi
 
     ok "Generated: $update_file"
     echo ""

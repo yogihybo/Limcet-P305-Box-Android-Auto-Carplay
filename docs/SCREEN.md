@@ -144,12 +144,12 @@ No change to rootfs, kernel, or mtd4 arkdata is required. The
 reconstructed `userdata.img` already contains the correct
 `MsnProductInfo.ini`.
 
-To flash userdata only via SD card, select item 2 in `build.sh` and
-run:
+To flash userdata only via SD card, run `build_update.sh`, deselect
+everything except User Data (mtd7), then generate:
 
 ```bash
-bash build.sh
-# Select: 2 (User Data) only, then g to generate
+bash build_update.sh
+# n to deselect all, arrow keys + Space to select only User Data, then g to generate
 ```
 
 Copy `sd_update/output/` to a FAT32 SD card and power on.

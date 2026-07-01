@@ -1,5 +1,5 @@
 #!/bin/bash
-# build.sh — Build and SD card update tool for ARK1680 (Prado / Limcet-P306)
+# build_update.sh — Build and SD card update tool for ARK1680 (Prado / Limcet-P306)
 #
 # This builds a NAND flash update package staged on an SD card — not an
 # SD-boot image. On power-on, U-Boot detects UpConfig on the SD card and
@@ -21,6 +21,12 @@
 #   LEB size   = 126976 bytes (PEB - 2 * page)
 
 set -e
+
+# mtd-utils and u-boot-tools install to /usr/sbin on Debian/Ubuntu, which
+# isn't always on $PATH for non-root shells (e.g. WSL, non-login shells).
+# Without this, both the requirements check and the actual build steps
+# below would report these tools missing even when installed.
+export PATH="$PATH:/usr/sbin:/sbin"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
@@ -475,6 +481,31 @@ check_partition_sources() {
 }
 
 # ── SD card generation ────────────────────────────────────────────────────────
+#
+# The "update" file is a plain list of arkupdate partition keywords, one per
+# line — NOT raw U-Boot nand scrub/write commands. Confirmed against the
+# reference packages (Holden firmware update/update,
+# Prado firmware recovery holden based/update, sd_update/update.example, all
+# identical) and cross-checked against the literal
+# "*****Now update <name> ......" strings compiled into uboot.bin. Offsets
+# and sizes are compiled into arkupdate itself; the SD file never states them.
+#
+# uboot-env and unicode are intentionally left out of this map: no reference
+# update file includes either, and their compiled-in messages use a
+# different format ("Update U-boot-Env ......" vs "*****Now update X
+# ......" for everything below), so the actual trigger keyword/mechanism for
+# those two is unconfirmed. They stay flashable manually from the U-Boot
+# prompt (see README) but are skipped here rather than guessed at.
+declare -A ARKUPDATE_KEYWORD=(
+    [uboot]=uboot
+    [bootlogo]=bootlogo
+    [kernel]=kernel
+    [rootfs]=filesystem
+    [userdata]=userdata
+    [arkdata]=arkdata
+    [reversingtrack]=reversingtrack
+    [bootanimation]=bootanimation
+)
 
 generate_sd() {
     hdr "Generating SD card update package..."
@@ -483,14 +514,7 @@ generate_sd() {
     local update_file="$OUTPUT_DIR/update"
     > "$update_file"
 
-    cat >> "$update_file" << EOF
-# ARK1680 Prado NAND update script
-# Generated: $(date)
-# Partition layout: 106m rootfs / 6m userdata
-
-EOF
-
-    local copied_files=()
+    local copied_files=() unconfirmed=()
 
     for i in "${!PARTITIONS[@]}"; do
         [[ ${PART_SEL[$i]} -eq 0 ]] && continue
@@ -502,40 +526,20 @@ EOF
             continue
         fi
 
-        echo "# --- $label ---" >> "$update_file"
+        local keyword="${ARKUPDATE_KEYWORD[$key]:-}"
+        if [[ -z "$keyword" ]]; then
+            unconfirmed+=("$label")
+            continue
+        fi
 
-        case "$mode" in
-            uboot)
-                cat >> "$update_file" << EOF
-fatload mmc 0 4000000 $filename
-nand scrub 0xa0000 0x80000 0xa0000 0x80000
-nand write 0x4000000 0xa0000 \${filesize}
-fatload mmc 0 4000000 $filename
-nand scrub 0x20000 0x80000 0x20000 0x80000
-nand write 0x4000000 0x20000 \${filesize}
-
-EOF
-                ;;
-            env)
-                cat >> "$update_file" << EOF
-fatload mmc 0 4000000 $filename
-nand scrub $offset $size $offset $size
-nand write 0x4000000 $offset 0x1000
-
-EOF
-                ;;
-            raw|ubi)
-                cat >> "$update_file" << EOF
-fatload mmc 0 4000000 $filename
-nand scrub $offset $size $offset $size
-nand write 0x4000000 $offset \${filesize}
-
-EOF
-                ;;
-        esac
-
+        echo "$keyword" >> "$update_file"
         copied_files+=("$src|$filename")
     done
+
+    if [[ ${#unconfirmed[@]} -gt 0 ]]; then
+        warn "Not included in update (unconfirmed arkupdate keyword): ${unconfirmed[*]}"
+        warn "Flash these manually from the U-Boot prompt instead — see README."
+    fi
 
     # Copy UpConfig trigger and all selected files to output
     cp "$SCRIPT_DIR/sd_update/UpConfig" "$OUTPUT_DIR/UpConfig"
@@ -604,9 +608,9 @@ while true; do
         g|G)
             echo ""
             check_build_tools || { read -rp "  Press Enter to continue..." _; continue; }
-            check_partition_sources || continue
 
-            # Run selected build steps
+            # Run selected build steps first, so check_partition_sources below
+            # doesn't warn about files these steps are about to create.
             for i in "${!BUILD_ITEMS[@]}"; do
                 [[ ${BUILD_SEL[$i]} -eq 0 ]] && continue
                 IFS='|' read -r key _ _ _ <<< "${BUILD_ITEMS[$i]}"
@@ -617,8 +621,10 @@ while true; do
                 esac
             done
 
+            check_partition_sources || continue
+
             # Check if any partitions selected before generating SD package
-            local any_part=0
+            any_part=0
             for i in "${!PARTITIONS[@]}"; do
                 [[ ${PART_SEL[$i]} -eq 1 ]] && any_part=1 && break
             done

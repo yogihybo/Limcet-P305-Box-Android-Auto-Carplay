@@ -4,6 +4,10 @@
 *.sh text eol=lf
 *.py text eol=lf
 
+# A stray CR in .gitignore becomes part of each pattern's literal text,
+# which then matches nothing on Linux — silently breaking every rule.
+.gitignore text eol=lf
+
 Prado[[:space:]]firmware[[:space:]]dump/mtd6_rootfs_raw/*.bin filter=lfs diff=lfs merge=lfs -text
 Holden[[:space:]]firmware[[:space:]]update/rootfs.img filter=lfs diff=lfs merge=lfs -text
 Prado[[:space:]]firmware[[:space:]]reconstructed/mtd6_rootfs/rootfs/etc/ssh/ssh_host_*_key -text

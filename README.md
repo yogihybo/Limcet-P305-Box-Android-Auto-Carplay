@@ -204,29 +204,30 @@ The whole menu is one line per item — no per-item description text — so it f
   BUILD
     [ ]  Build rootfs image         no image yet
     [ ]  Build userdata image       no image yet
+  ▶ [ ]  Build U-Boot env image     no image yet
 
   NAND PARTITIONS  (staged on SD, flashed to internal NAND on boot)
          MTD  Partition              File
     [ ]  1-2  U-Boot                 uboot.bin        found ⚠
-    [-]  3    U-Boot Env             uboot-env.bin    disabled
+    [ ]  3    U-Boot Env             uboot-env.bin    missing - build first
     [ ]  4    Display Config         arkdata.ini      found
     [ ]  5    Linux Kernel           zImage           found
-  ▶ [X]  6    Root Filesystem        rootfs.img       missing
-    [X]  7    User Data              userdata.img     missing
+    [X]  6    Root Filesystem        rootfs.img       missing - build first
+    [X]  7    User Data              userdata.img     missing - build first
     [ ]  8    Boot Logo              bootlogo         found
     [ ]  9    Boot Animation         bootanimation    found
     [ ]  10   Reversing Track        reversingtrack   found
     [ ]  11   Unicode Font           unicode          found
   ────────────────────────────────────────────────────────
-  Root Filesystem: Reconstructed rootfs UBI image (build below if needed)  (mtd6, offset 0x5a0000, size 0x6a00000)
+  Build U-Boot env image: Compiles env/uboot-env.txt into uboot-env.bin (256 KB, mkenvimage)
   ↑/↓ move   Space/Enter toggle   a/n all/none   g go   q quit
 ```
 
 Rows are listed in MTD numerical order (U-Boot spans mtd1 and mtd2, since the same binary is written to both the primary and backup slots).
 
-The `▶` marker shows which row is highlighted — move it with the arrow keys; the line above the command bar always shows the description, offset, and size for that row.
+The `▶` marker shows which row is highlighted — move it with the arrow keys; the line above the command bar always shows the description, offset, and size for that row. `rootfs.img`, `userdata.img`, and `uboot-env.bin` all have a corresponding build step above, so their missing-status hints to build first instead of just saying "missing".
 
-**Defaults:** rootfs and userdata are selected by default. Kernel, U-Boot, arkdata, and other early-boot partitions default to off — they must be explicitly enabled to avoid accidental reflash. U-Boot Env is disabled entirely (not navigable) until `uboot-env.bin` is built.
+**Defaults:** rootfs and userdata are selected by default. Kernel, U-Boot, arkdata, U-Boot Env, and other early-boot partitions default to off — they must be explicitly enabled to avoid accidental reflash.
 
 ### Commands
 
@@ -255,10 +256,10 @@ The individual scripts are retained for use without the interactive menu:
 
 ### Requirements
 
-Build steps require `mkfs.ubifs` and `ubinize`:
+Build steps require `mkfs.ubifs`, `ubinize` (rootfs/userdata), and `mkenvimage` (U-Boot env):
 
 ```bash
-sudo apt install mtd-utils   # Debian / Ubuntu / WSL
+sudo apt install mtd-utils u-boot-tools   # Debian / Ubuntu / WSL
 ```
 
 ## Flashing via SD Card

@@ -12,8 +12,8 @@
 #   build_userdata.sh  — builds userdata UBI image with Prado settings overlay
 #   generate_update.sh — selects partitions and generates SD card update package
 #
-# Requires (build steps only): mkfs.ubifs, ubinize
-#   apt install mtd-utils   (Debian/Ubuntu/WSL)
+# Requires (build steps only): mkfs.ubifs, ubinize, mkenvimage
+#   apt install mtd-utils u-boot-tools   (Debian/Ubuntu/WSL)
 #
 # ARK1680 NAND geometry:
 #   Page size  = 2048 bytes   (nand_writesize)
@@ -33,6 +33,10 @@ ROOTFS_IMG="$SCRIPT_DIR/Prado firmware reconstructed/mtd6_rootfs/rootfs.img"
 USERDATA_SRC="$SCRIPT_DIR/Prado firmware reconstructed/mtd7_userdata/userdata"
 USERDATA_UBIFS="$SCRIPT_DIR/Prado firmware reconstructed/mtd7_userdata/userdata.ubifs"
 USERDATA_IMG="$SCRIPT_DIR/Prado firmware reconstructed/mtd7_userdata/userdata.img"
+
+ENV_SRC="$SCRIPT_DIR/env/uboot-env.txt"
+ENV_BIN="$SCRIPT_DIR/env/uboot-env.bin"
+ENV_SIZE=0x40000
 
 OUTPUT_DIR="$SCRIPT_DIR/sd_update/output"
 
@@ -145,6 +149,23 @@ EOF
     warn "This image erases all BT pairs, call history, and user settings on flash."
 }
 
+# ── Build: U-Boot env ─────────────────────────────────────────────────────────
+
+build_uboot_env() {
+    hdr "Building U-Boot env image..."
+
+    echo "  Source:  $ENV_SRC"
+    echo "  Output:  $ENV_BIN"
+    echo ""
+
+    mkenvimage \
+        -s $((ENV_SIZE)) \
+        -o "$ENV_BIN" \
+        "$ENV_SRC"
+
+    ok "uboot-env.bin ready  ($(du -h "$ENV_BIN" | cut -f1))"
+}
+
 # ── Partition / source table ──────────────────────────────────────────────────
 #
 # Format: "key|mtd|label|filename|offset|size|mode|description|default"
@@ -162,7 +183,7 @@ EOF
 
 PARTITIONS=(
     "uboot|1-2|U-Boot|uboot.bin|0x020000|0x080000|uboot|2nd-stage bootloader — written to both slots|OFF"
-    "uboot-env|3|U-Boot Env|uboot-env.bin|0x120000|0x040000|env|uboot-env.bin not yet built — compile from env/uboot-env.txt with mkenvimage|DISABLED"
+    "uboot-env|3|U-Boot Env|uboot-env.bin|0x120000|0x040000|env|Reconstructed env (bootdelay=9, 106m/6m layout) — build below if needed|OFF"
     "arkdata|4|Display Config|arkdata.ini|0x160000|0x040000|raw|TvoutType, display init parameters|OFF"
     "kernel|5|Linux Kernel|zImage|0x1a0000|0x400000|raw|Linux 3.4.0 zImage|OFF"
     "rootfs|6|Root Filesystem|rootfs.img|0x5a0000|0x6a00000|ubi|Reconstructed rootfs UBI image (build below if needed)|ON"
@@ -176,6 +197,7 @@ PARTITIONS=(
 BUILD_ITEMS=(
     "rootfs|Build rootfs image|Compiles source tree into rootfs.img (~106 MB)|OFF"
     "userdata|Build userdata image|Overlays Prado settings and builds userdata.img (~6 MB)|OFF"
+    "uboot-env|Build U-Boot env image|Compiles env/uboot-env.txt into uboot-env.bin (256 KB, mkenvimage)|OFF"
 )
 
 # ── Selection state ───────────────────────────────────────────────────────────
@@ -300,11 +322,11 @@ print_menu() {
     for i in "${!BUILD_ITEMS[@]}"; do
         IFS='|' read -r key label desc _ <<< "${BUILD_ITEMS[$i]}"
         local img_path=""
-        if [[ "$key" == "rootfs" ]]; then
-            img_path="$ROOTFS_IMG"
-        else
-            img_path="$USERDATA_IMG"
-        fi
+        case "$key" in
+            rootfs)     img_path="$ROOTFS_IMG" ;;
+            userdata)   img_path="$USERDATA_IMG" ;;
+            uboot-env)  img_path="$ENV_BIN" ;;
+        esac
         local status
         if [[ -f "$img_path" ]]; then
             status="${GREEN}image exists ($(du -h "$img_path" | cut -f1))${NC}"
@@ -342,7 +364,7 @@ print_menu() {
         local found
         if [[ -n "$src" ]]; then
             found="${GREEN}found${NC}"
-        elif [[ "$key" == "rootfs" || "$key" == "userdata" ]]; then
+        elif [[ "$key" == "rootfs" || "$key" == "userdata" || "$key" == "uboot-env" ]]; then
             found="${RED}missing - build first${NC}"
         else
             found="${RED}missing${NC}"
@@ -362,19 +384,29 @@ print_menu() {
 # ── Pre-flight checks ─────────────────────────────────────────────────────────
 
 check_build_tools() {
-    local need_tools=0
+    local need_ubi=0 need_env=0
     for i in "${!BUILD_SEL[@]}"; do
-        [[ ${BUILD_SEL[$i]} -eq 1 ]] && need_tools=1 && break
+        [[ ${BUILD_SEL[$i]} -eq 0 ]] && continue
+        IFS='|' read -r key _ _ _ <<< "${BUILD_ITEMS[$i]}"
+        case "$key" in
+            rootfs|userdata) need_ubi=1 ;;
+            uboot-env)       need_env=1 ;;
+        esac
     done
-    [[ $need_tools -eq 0 ]] && return 0
+    [[ $need_ubi -eq 0 && $need_env -eq 0 ]] && return 0
 
     local missing=()
-    command -v mkfs.ubifs &>/dev/null || missing+=("mkfs.ubifs")
-    command -v ubinize    &>/dev/null || missing+=("ubinize")
+    if [[ $need_ubi -eq 1 ]]; then
+        command -v mkfs.ubifs &>/dev/null || missing+=("mkfs.ubifs")
+        command -v ubinize    &>/dev/null || missing+=("ubinize")
+    fi
+    if [[ $need_env -eq 1 ]]; then
+        command -v mkenvimage &>/dev/null || missing+=("mkenvimage")
+    fi
 
     if [[ ${#missing[@]} -gt 0 ]]; then
         err "Missing build tools: ${missing[*]}"
-        err "Install with:  sudo apt install mtd-utils"
+        err "Install with:  sudo apt install mtd-utils u-boot-tools"
         return 1
     fi
     return 0
@@ -543,8 +575,9 @@ while true; do
                 [[ ${BUILD_SEL[$i]} -eq 0 ]] && continue
                 IFS='|' read -r key _ _ _ <<< "${BUILD_ITEMS[$i]}"
                 case "$key" in
-                    rootfs)   build_rootfs   ;;
-                    userdata) build_userdata ;;
+                    rootfs)    build_rootfs    ;;
+                    userdata)  build_userdata  ;;
+                    uboot-env) build_uboot_env ;;
                 esac
             done
 

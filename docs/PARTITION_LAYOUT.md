@@ -13,7 +13,7 @@ mtdparts=mtdparts=ark1680-nand:128k(S-Loader),512k(U-boot),512k(U-boot_back),
 | 0 | S-Loader | 0x000000 | 128K | 0x020000 | `bootloaders/Nboot.bin` |
 | 1 | U-Boot | 0x020000 | 512K | 0x0A0000 | `bootloaders/uboot.bin` |
 | 2 | U-boot_back | 0x0A0000 | 512K | 0x120000 | `bootloaders/uboot.bin` (copy) |
-| 3 | U-boot-Env | 0x120000 | 256K | 0x160000 | `env/uboot-env.txt` |
+| 3 | U-boot-Env | 0x120000 | 256K | 0x160000 | `env/uboot-env.bin` (built from `env/uboot-env.txt` via `mkenvimage`) |
 | 4 | arkdata | 0x160000 | 256K | 0x1A0000 | `display/arkdata_prado.ini` |
 | 5 | kernel | 0x1A0000 | 4M | 0x5A0000 | `kernel/zImage` |
 | 6 | rootfs | 0x5A0000 | 106M | 0x6FA0000 | `rootfs/rootfs.ubifs` |

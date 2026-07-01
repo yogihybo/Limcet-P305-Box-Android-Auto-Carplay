@@ -1,6 +1,13 @@
 #!/bin/bash
 # generate_update.sh — Interactive SD card update builder for ARK1680 (Prado / Limcet-P306)
 #
+# LEGACY — superseded by build.sh at the repo root, which does everything
+# this script does (partition selection + SD package generation) plus the
+# build steps (rootfs/userdata/env images) in one interactive session with
+# a newer arrow-key UI. Kept here for standalone use; not actively developed
+# — fixes to partition paths/tables should go into build.sh first and only
+# get backported here if this script is still needed.
+#
 # This script lets you choose which partitions to include in a NAND flash update,
 # then generates the 'update' script that U-Boot's arkupdate command will execute.
 #
@@ -8,7 +15,7 @@
 
 set -e
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 OUTPUT_DIR="$SCRIPT_DIR/sd_update/output"
 
 # ─── Colour helpers ──────────────────────────────────────────────────────────

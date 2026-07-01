@@ -7,10 +7,10 @@
 # (destructive — see "Safety notes" in README). For booting from SD/USB
 # without touching NAND, see build_bootable_sdcard.sh instead.
 #
-# Interactive workflow combining:
-#   build_rootfs.sh    — builds rootfs UBI image from source tree
-#   build_userdata.sh  — builds userdata UBI image with Prado settings overlay
-#   generate_update.sh — selects partitions and generates SD card update package
+# Interactive workflow combining what build_rootfs.sh, build_userdata.sh,
+# and (legacy/generate_update.sh's) partition-selection + SD-package
+# generation do separately, in one session with build steps for rootfs,
+# userdata, and the U-Boot env image built in directly.
 #
 # Requires (build steps only): mkfs.ubifs, ubinize, mkenvimage
 #   apt install mtd-utils u-boot-tools   (Debian/Ubuntu/WSL)

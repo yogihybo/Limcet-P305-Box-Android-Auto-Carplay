@@ -82,12 +82,14 @@ docs/
 build.sh                     Combined interactive build and flash tool
 build_rootfs.sh              Standalone rootfs UBI image builder
 build_userdata.sh            Standalone userdata UBI image builder
-generate_update.sh           Standalone SD card update script generator
 patch_uboot.py               Patches compiled-in env and NAND offset in a U-Boot binary
 build_bootable_sdcard.sh     Builds a bootable SD card image (uboot_final.bin + kernel + rootfs + userdata)
 uboot_sdboot.bin             Input binary for patch_uboot.py (ARK1680 BSP source-compiled U-Boot)
 uboot_final.bin              Patched U-Boot binary — place as UBOOT.BIN on SD p1 FAT32
 sd_boot.img                  Generated bootable SD image (gitignored — output of build_bootable_sdcard.sh)
+legacy/
+  generate_update.sh         Superseded by build.sh — standalone partition-selection + SD-package
+                              generator only, no build steps; kept for standalone use
 ```
 
 > `lzop_1.04-2_amd64.deb` at the repo root is a stray downloaded package, not referenced by any build step — safe to delete.
@@ -252,7 +254,7 @@ The individual scripts are retained for use without the interactive menu:
 |--------|---------|
 | `build_rootfs.sh` | Build rootfs UBI image only |
 | `build_userdata.sh` | Build userdata UBI image only |
-| `generate_update.sh` | Generate SD package for selected partitions |
+| `legacy/generate_update.sh` | Legacy — generate SD package for selected partitions without the build steps |
 
 ### Requirements
 
@@ -299,10 +301,12 @@ On power-on, U-Boot checks for a FAT32 SD card. If a file named `UpConfig` is pr
 **Step 2 — Generate the update script**
 
 ```bash
-bash generate_update.sh
+bash legacy/generate_update.sh
 ```
 
 Toggle partitions with number keys, press `g` to generate. Output lands in `sd_update/output/`.
+
+> Steps 1–2 can be replaced entirely by running `bash build.sh`, which does the build and package generation in one interactive session — see [Build & Flash Tool](#build--flash-tool) above.
 
 **Step 3 — Prepare SD card**
 

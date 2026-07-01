@@ -382,6 +382,37 @@ print_menu() {
 }
 
 # ── Pre-flight checks ─────────────────────────────────────────────────────────
+#
+# Requirements — shown once at startup so missing tools are obvious before
+# you've picked build steps. Informational only; check_build_tools() below
+# still gates the actual build at "go" time in case something changed
+# mid-session (tool installed/removed, etc).
+
+REQUIREMENTS=(
+    "mkfs.ubifs|rootfs/userdata build steps|mtd-utils"
+    "ubinize|rootfs/userdata build steps|mtd-utils"
+    "mkenvimage|U-Boot env build step|u-boot-tools"
+)
+
+check_requirements() {
+    echo -e "${BOLD}  Requirements${NC}"
+    local entry tool desc pkg any_missing=0
+    for entry in "${REQUIREMENTS[@]}"; do
+        IFS='|' read -r tool desc pkg <<< "$entry"
+        if command -v "$tool" &>/dev/null; then
+            ok "$tool  (${desc})"
+        else
+            warn "$tool  (${desc}) — not found, install: sudo apt install $pkg"
+            any_missing=1
+        fi
+    done
+    echo ""
+    if [[ $any_missing -eq 1 ]]; then
+        warn "Missing tools only block the build steps that need them — everything"
+        warn "else (partition selection, SD package generation) still works."
+        read -rp "  Press Enter to continue..." _
+    fi
+}
 
 check_build_tools() {
     local need_ubi=0 need_env=0
@@ -544,6 +575,11 @@ print_summary() {
 #
 # Arrow keys move the highlighted row; Space/Enter toggles it. a/n/g/q act
 # immediately on keypress — no need to press Enter afterwards.
+
+clear
+echo -e "${CYAN}${BOLD}  ARK1680 Prado — Build & Flash Tool${NC}"
+echo ""
+check_requirements
 
 build_nav_list
 

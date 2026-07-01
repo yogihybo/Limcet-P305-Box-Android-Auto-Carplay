@@ -262,6 +262,8 @@ Build steps require `mkfs.ubifs`, `ubinize` (rootfs/userdata), and `mkenvimage` 
 sudo apt install mtd-utils u-boot-tools   # Debian / Ubuntu / WSL
 ```
 
+`build.sh` checks for all three on startup and prints their status before showing the menu. Missing tools only block the build steps that need them — you can still select partitions and generate the SD package without them.
+
 ## Flashing via SD Card
 
 On power-on, U-Boot checks for a FAT32 SD card. If a file named `UpConfig` is present in the SD root, U-Boot runs `arkupdate`, which reads the `update` script and flashes each listed partition in sequence. After completion the unit reboots — remove the SD card so it doesn't re-flash.

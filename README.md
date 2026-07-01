@@ -209,7 +209,7 @@ The whole menu is one line per item — no per-item description text — so it f
     [X]  Root Filesystem        rootfs.img       missing
   ▶ [ ]  User Data              userdata.img     missing
     [ ]  Linux Kernel           zImage           missing
-    [ ]  Display Config (arkdata) arkdata.ini      found
+    [ ]  Display Config         arkdata.ini      found
      [-]  U-Boot Env             uboot-env.bin    disabled
     [ ]  U-Boot                 uboot.bin        found ⚠
     [ ]  Boot Logo              bootlogo         found

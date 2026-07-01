@@ -490,12 +490,18 @@ check_partition_sources() {
 # "*****Now update <name> ......" strings compiled into uboot.bin. Offsets
 # and sizes are compiled into arkupdate itself; the SD file never states them.
 #
-# uboot-env and unicode are intentionally left out of this map: no reference
-# update file includes either, and their compiled-in messages use a
-# different format ("Update U-boot-Env ......" vs "*****Now update X
-# ......" for everything below), so the actual trigger keyword/mechanism for
-# those two is unconfirmed. They stay flashable manually from the U-Boot
-# prompt (see README) but are skipped here rather than guessed at.
+# uboot-env and unicode are intentionally left out of this map.
+#
+# Confirmed on real hardware: U-Boot Env is NOT an independent arkupdate
+# keyword — it's only flashed as a side effect of updating uboot itself
+# (matches the different compiled-in message format, "Update U-boot-Env
+# ......" vs "*****Now update X ......" for everything below — it's a
+# sub-step of the uboot routine, not its own top-level keyword). Selecting
+# U-Boot Env without also selecting U-Boot is a silent no-op on the device.
+#
+# unicode's mechanism is still unconfirmed — no reference update file
+# includes it either. Both stay flashable manually from the U-Boot prompt
+# (see README) but are skipped here rather than guessed at.
 declare -A ARKUPDATE_KEYWORD=(
     [uboot]=uboot
     [bootlogo]=bootlogo
@@ -518,6 +524,7 @@ generate_sd() {
     > "$update_file"
 
     local copied_files=() unconfirmed=()
+    local uboot_selected=0 env_selected=0
 
     for i in "${!PARTITIONS[@]}"; do
         [[ ${PART_SEL[$i]} -eq 0 ]] && continue
@@ -528,6 +535,9 @@ generate_sd() {
             warn "Skipping $label — file not found"
             continue
         fi
+
+        [[ "$key" == "uboot" ]] && uboot_selected=1
+        [[ "$key" == "uboot-env" ]] && env_selected=1
 
         local keyword="${ARKUPDATE_KEYWORD[$key]:-}"
         if [[ -z "$keyword" ]]; then
@@ -545,6 +555,15 @@ generate_sd() {
     if [[ ${#unconfirmed[@]} -gt 0 ]]; then
         warn "Not in update (unconfirmed arkupdate keyword), copied for manual flash only: ${unconfirmed[*]}"
         warn "Flash these manually from the U-Boot prompt instead — see README."
+    fi
+
+    # Set for print_summary() to show last, after everything else — easy to
+    # miss scrolled up above the rest of the output otherwise.
+    UBOOT_ENV_WARNING=""
+    if [[ $env_selected -eq 1 && $uboot_selected -eq 0 ]]; then
+        UBOOT_ENV_WARNING="U-Boot Env is only flashed as a side effect of updating U-Boot on this device — with U-Boot not selected, uboot-env.bin won't actually be applied via the SD update, even though it's copied to the output folder."
+    elif [[ $uboot_selected -eq 1 && $env_selected -eq 0 ]]; then
+        UBOOT_ENV_WARNING="Flashing U-Boot also touches U-Boot Env as a side effect on this device. U-Boot Env isn't selected, so what state env ends up in isn't confirmed — consider also selecting U-Boot Env with a freshly built uboot-env.bin."
     fi
 
     # Copy UpConfig trigger and all selected files to output
@@ -579,6 +598,13 @@ print_summary() {
     echo ""
     warn "Bad block at 0x5FA0000 in this device — nand scrub handles this automatically."
     warn "Never flash S-Loader (Nboot) via SD — brick risk with no software recovery."
+
+    # Printed last, after everything else — set by generate_sd(). Easy to
+    # miss scrolled up above the rest of the output otherwise.
+    if [[ -n "${UBOOT_ENV_WARNING:-}" ]]; then
+        echo ""
+        warn "$UBOOT_ENV_WARNING"
+    fi
 }
 
 # ── Main loop ─────────────────────────────────────────────────────────────────

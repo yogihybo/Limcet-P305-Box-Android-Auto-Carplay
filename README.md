@@ -339,12 +339,17 @@ bootanimation
 
 Confirmed against the reference packages (`Holden firmware update/update`, `Prado firmware recovery holden based/update`, `sd_update/update.example` — all identical) and cross-checked against the literal `"*****Now update <name> ......"` strings compiled into `uboot.bin`. Note `filesystem` is the keyword for the rootfs partition, and `kernel` expects a file named `zImage` on the SD card, not `kernel.img` or similar — filenames must match exactly what's shown in the [partition layout](#partition-layout) table above.
 
-`uboot-env` and `unicode` are deliberately left out of `build_update.sh`'s generated `update` file: no reference package includes either, and their compiled-in update messages use a different format (`"Update U-boot-Env ......"` vs `"*****Now update X ......"` for everything above), so the actual trigger keyword for those two is unconfirmed. Flash them manually from the U-Boot prompt instead (see below) until that's verified on real hardware.
+`uboot-env` and `unicode` are deliberately left out of `build_update.sh`'s generated `update` file — neither is an independent arkupdate keyword:
+
+- **U-Boot Env — confirmed on real hardware**: it's only flashed as a side effect of updating `uboot` itself, not addressable on its own. Matches the different compiled-in message format (`"Update U-boot-Env ......"` vs `"*****Now update X ......"` for everything above) — it's a sub-step of the uboot routine, not its own top-level keyword. Selecting U-Boot Env without also selecting U-Boot is a no-op on the device; `build_update.sh` warns about this both ways (env selected without uboot, or uboot selected without env — the latter because flashing uboot touches env regardless, so what state it ends up in without a known-good `uboot-env.bin` alongside it isn't confirmed).
+- **Unicode** — mechanism still unconfirmed; no reference package includes it either.
+
+Both stay flashable manually from the U-Boot prompt instead (see below).
 
 ### Safety notes
 
 - **Never flash S-Loader (Nboot) via SD** — corruption bricks the board (requires JTAG to recover)
-- **U-Boot** writes to both primary (`0x20000`) and backup (`0xA0000`) slots with the same binary
+- **U-Boot** writes to both primary (`0x20000`) and backup (`0xA0000`) slots with the same binary, and also touches U-Boot Env as a side effect — see above
 - **userdata flash** erases all paired BT devices, call history, and user settings — recreated on first boot
 - **rootfs flash** replaces the entire filesystem; bad block at 0x5FA0000 is handled automatically
 

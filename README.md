@@ -6,283 +6,22 @@ The Prado unit uses Holden firmware as its base but requires hardware-specific o
 
 ## Table of Contents
 
-- [Hardware](#hardware)
-- [Repository Structure](#repository-structure)
-- [NAND Partition Layout](#nand-partition-layout)
-- [Build & Flash Tool](#build--flash-tool)
-- [Flashing via SD Card](#flashing-via-sd-card)
-- [Booting from SD Card or USB (non-destructive)](#booting-from-sd-card-or-usb-non-destructive)
-- [Device Access](#device-access)
+- [1.0 Serial Console (recovery / monitoring)](#10-serial-console-recovery--monitoring)
+- [2.0 Booting from SD Card or USB (non-destructive)](#20-booting-from-sd-card-or-usb-non-destructive)
+- [3.0 Build & Flash Tool](#30-build--flash-tool)
+- [4.0 Flashing via SD Card](#40-flashing-via-sd-card)
+- [5.0 Hardware](#50-hardware)
+- [6.0 Repository Structure](#60-repository-structure)
+- [7.0 NAND Partition Layout](#70-nand-partition-layout)
+- [8.0 Device Access](#80-device-access)
   - [WiFi Access Point](#wifi-access-point)
   - [SSH Access](#ssh-access)
   - [USB Networking](#usb-networking)
-- [Holden Firmware Compatibility](#holden-firmware-compatibility)
-- [Key Differences vs Holden Base Firmware](#key-differences-vs-holden-base-firmware)
-- [Sources](#sources)
+- [9.0 Holden Firmware Compatibility](#90-holden-firmware-compatibility)
+- [10.0 Key Differences vs Holden Base Firmware](#100-key-differences-vs-holden-base-firmware)
+- [11.0 Sources](#110-sources)
 
-## Hardware
-
-| Item | Value |
-|------|-------|
-| SoC | ARK1680 (ARM Cortex-A5) |
-| OS | Linux 3.4.0 / BusyBox |
-| Bootloader | U-Boot 2012.10 |
-| Product ID | Limcet-P306 |
-| Resource | Box-P301 |
-| Display | 800×480 RGB888 |
-| Sound | None (SoundType=0) |
-| MCU type | 6 |
-| BT module | Feasycom (BlueToothType=6) |
-
-**Documentation:**
-
-- [`Limcet Hardware/BOARD_ANALYSIS.md`](Limcet%20Hardware/BOARD_ANALYSIS.md) — board/component teardown (SoC, NAND, BT, MCU, CAN bus), with photos in the same folder.
-- [`docs/SOURCES.md`](docs/SOURCES.md) — provenance of every file in this repo.
-- [`docs/PARTITION_LAYOUT.md`](docs/PARTITION_LAYOUT.md) — NAND offsets, sizes, flash commands (see also [NAND Partition Layout](#nand-partition-layout) below).
-- [`docs/SD_BOOT_PLAN.md`](docs/SD_BOOT_PLAN.md) — historical SD-boot planning doc, superseded by [Booting from SD Card or USB](#booting-from-sd-card-or-usb-non-destructive) below.
-
-### Accessing the device
-
-Three ways to reach the device, roughly in order of how destructive they are:
-
-| Method | Use for | Details |
-|--------|---------|---------|
-| Serial console (UART, 115200 8N1) | Recovery, monitoring, interrupting boot | [Serial console](#serial-console-recovery--monitoring) |
-| SD update (flashes internal NAND) | Permanently updating firmware on the unit | [Flashing via SD Card](#flashing-via-sd-card) |
-| SD/USB bootable image (non-destructive) | Testing changes without touching NAND | [Booting from SD Card or USB](#booting-from-sd-card-or-usb-non-destructive) |
-| Network (WiFi AP / USB / SSH) | Once Linux has booted — only useful if the reconstructed, SSH-patched rootfs is already running (see caveat below) | [Device Access](#device-access) |
-
-## Repository Structure
-
-```
-Prado firmware dump/                  Raw MTD partition dumps from the live device
-  mtd1-mtd2_uboot/           U-Boot binaries (raw + extracted)
-  mtd3_env/                  U-Boot environment (raw + extracted)
-  mtd4_arkdata/              Panel/hardware config (raw + extracted)
-  mtd5_kernel/               Kernel zImage (raw + extracted)
-  mtd6_rootfs/               Root filesystem UBIFS dump (raw)
-  mtd6_rootfs_raw/           Raw MTD6 bin (Git LFS)
-
-Prado firmware reconstructed/         Reconstructed firmware for flashing
-  mtd0_sloader/              Nboot.bin, Stepldr.bin
-  mtd1-mtd2_uboot/           uboot.bin
-  mtd3_env/                  (placeholder — reconstructed env lives in env/uboot-env.txt instead)
-  mtd4_arkdata/              arkdata.ini (Prado panel config — copy of display/arkdata.ini)
-  mtd5_kernel/               zImage (reconstructed kernel — see note on top-level kernel/ below)
-  mtd6_rootfs/
-    rootfs/                  Modified rootfs tree (Prado libs + SSH + WiFi AP)
-  mtd7_userdata/
-    userdata/                Userdata tree (Prado settings overlay)
-  mtd8_bootlogo/             bootlogo
-  mtd9_bootanimation/        (placeholder — no content yet)
-  mtd10_reversingtrack/      reversingtrack
-  mtd11_unicode/             unicode (placeholder — no content yet)
-
-Holden firmware update/               Stock Holden update package (reference — validated it boots on Prado hw)
-Prado firmware recovery holden based/ Stock Holden package repackaged with Prado msn_factory_configs, for recovery
-
-Limcet Hardware/
-  BOARD_ANALYSIS.md         Board/component teardown notes (SoC, NAND, BT, MCU, CAN bus)
-  *.jpg                     Board photos referenced from BOARD_ANALYSIS.md
-
-ui/                Qt 4.7.4 UI analysis and resource extraction — see ui/UI.md
-  UI.md                      Qt module layout, key binaries, /msnprofile/ filesystem layout
-  qm_extracted/              Decompiled translation strings (lang_en.txt, lang_arabic.txt, ...)
-  rcc_extracted/             Decompiled Qt resource bundles, one dir per screen/resolution
-  tools/
-    extract_qm.py            Decompiles .qm translation files to text
-    extract_rcc.py           Decompiles .rcc resource bundles
-
-kernel/            zImage (from Holden base — identical kernel_size to Prado firmware dump; gitignored, not present in every checkout — Prado firmware reconstructed/mtd5_kernel/zImage is the copy actually used for builds)
-display/
-  arkdata.ini                Prado panel config (from MTD4 live dump) — build source for mtd4
-  mtd4_arkdata_prado_dump.bin  Raw MTD4 dump the .ini was derived from
-  arkdata_holden.ini         Holden standard reference
-  arkdata_holden_0324.ini    Holden March 2024 update reference
-msn_factory_configs/
-  FactoryConfig.ini          Prado identity + Holden firmware settings
-  MsnProductInfo.ini         Hardware identity (Limcet-P306)
-env/
-  uboot-env.txt              Reconstructed env (bootdelay=9, 106m/6m layout)
-  mtd3_env_prado_firmware_dump.bin    Raw env from live device (gitignored)
-sd_update/
-  UpConfig                   SD update trigger file
-  update.example             Static reference script (generated version goes to output/)
-  output/                    Generated SD card package (gitignored)
-docs/
-  SOURCES.md                 Where each file came from and why
-  PARTITION_LAYOUT.md        NAND offsets, sizes, flash commands
-  SD_BOOT_PLAN.md            Historical SD-boot planning doc — superseded, see below
-build_update.sh              Combined interactive build and flash tool
-build_rootfs.sh              Standalone rootfs UBI image builder
-build_userdata.sh            Standalone userdata UBI image builder
-patch_uboot.py               Patches compiled-in env and NAND offset in a U-Boot binary
-build_bootable_sdcard.sh     Interactive bootable SD card image builder (same arrow-key menu as build_update.sh)
-uboot_sdboot.bin             ARK1680 BSP source-compiled U-Boot — manual patch_uboot.py input (see below)
-uboot_final.bin              Patched U-Boot binary — place as UBOOT.BIN on SD p1 FAT32
-sd_bootable/                 Generated bootable SD image output (gitignored — sd_boot.img + patched uboot_sdboot.bin)
-legacy/
-  generate_update.sh         Superseded by build_update.sh — standalone partition-selection + SD-package
-                              generator only, no build steps; kept for standalone use
-```
-
-## NAND Partition Layout
-
-| Partition | Start | Size | Contents |
-|-----------|-------|------|----------|
-| S-Loader | `0x000000` | 128 KB | Nboot (do NOT update via SD) |
-| U-Boot | `0x020000` | 512 KB | 2nd-stage bootloader |
-| U-Boot_back | `0x0A0000` | 512 KB | U-Boot backup slot |
-| U-Boot-Env | `0x120000` | 256 KB | U-Boot environment variables |
-| arkdata | `0x160000` | 256 KB | Display / TvoutType config |
-| kernel | `0x1A0000` | 4 MB | Linux 3.4.0 zImage |
-| rootfs | `0x5A0000` | 106 MB | Root filesystem (UBIFS/UBI) |
-| userdata | `0x6FA0000` | 6 MB | User settings / BT pairs (UBI) |
-| bootlogo | `0x75A0000` | 512 KB | Boot splash screen |
-| bootanimation | `0x7620000` | 3 MB | Boot animation |
-| reversingtrack | `0x7920000` | 3 MB | Reversing camera audio |
-| Unicode | `0x7C20000` | 256 KB | Unicode font data |
-
-**Known bad block at 0x5FA0000** — inside the rootfs partition. `nand scrub` handles this automatically.
-
-See also [`docs/PARTITION_LAYOUT.md`](docs/PARTITION_LAYOUT.md) for the same data plus flash commands.
-
-## Build & Flash Tool
-
-`build_update.sh` is an interactive terminal tool that combines building firmware images and generating a NAND flash update package staged on an SD card into a single workflow. This flashes internal NAND — it is **not** the non-destructive SD-boot image described in [Booting from SD Card or USB](#booting-from-sd-card-or-usb-non-destructive) (that's `build_bootable_sdcard.sh`). Run it under Linux or WSL:
-
-```bash
-bash build_update.sh
-```
-
-### Menu layout
-
-The whole menu is one line per item — no per-item description text — so it fits a standard ~24-line terminal without scrolling. Full detail for whichever row is highlighted is shown once, on the detail line just above the command bar, instead of repeated for every row:
-
-```
-  ARK1680 Prado — Build & Flash Tool
-  ────────────────────────────────────────────────────────
-  BUILD
-    [ ]  Build rootfs image         no image yet
-    [ ]  Build userdata image       no image yet
-  ▶ [ ]  Build U-Boot env image     no image yet
-
-  NAND PARTITIONS  (staged on SD, flashed to internal NAND on boot)
-         MTD  Partition              File
-    [ ]  1-2  U-Boot                 uboot.bin        found ⚠
-    [ ]  3    U-Boot Env             uboot-env.bin    missing - build first
-    [ ]  4    Display Config         arkdata.ini      found
-    [ ]  5    Linux Kernel           zImage           found
-    [X]  6    Root Filesystem        rootfs.img       missing - build first
-    [X]  7    User Data              userdata.img     missing - build first
-    [ ]  8    Boot Logo              bootlogo         found
-    [ ]  9    Boot Animation         bootanimation    found
-    [ ]  10   Reversing Track        reversingtrack   found
-    [ ]  11   Unicode Font           unicode          found
-  ────────────────────────────────────────────────────────
-  Build U-Boot env image: Compiles env/uboot-env.txt into uboot-env.bin (256 KB, mkenvimage)
-  ↑/↓ move   Space/Enter toggle   a/n all/none   g go   q quit
-```
-
-Rows are listed in MTD numerical order (U-Boot spans mtd1 and mtd2, since the same binary is written to both the primary and backup slots).
-
-The `▶` marker shows which row is highlighted — move it with the arrow keys; the line above the command bar always shows the description, offset, and size for that row. `rootfs.img`, `userdata.img`, and `uboot-env.bin` all have a corresponding build step above, so their missing-status hints to build first instead of just saying "missing".
-
-**Defaults:** rootfs and userdata are selected by default. Kernel, U-Boot, arkdata, U-Boot Env, and other early-boot partitions default to off — they must be explicitly enabled to avoid accidental reflash.
-
-### Output
-
-Generated files land in `sd_update/output/`. Copy all files to the root of a FAT32 SD card to flash.
-
-### Standalone scripts
-
-The individual scripts are retained for use without the interactive menu:
-
-| Script | Purpose |
-|--------|---------|
-| `build_rootfs.sh` | Build rootfs UBI image only |
-| `build_userdata.sh` | Build userdata UBI image only |
-| `legacy/generate_update.sh` | Legacy — generate SD package for selected partitions without the build steps |
-
-### Requirements
-
-Build steps require `mkfs.ubifs`, `ubinize` (rootfs/userdata), and `mkenvimage` (U-Boot env):
-
-```bash
-sudo apt install mtd-utils u-boot-tools   # Debian / Ubuntu / WSL
-```
-
-`build_update.sh` checks for all three on startup and prints their status before showing the menu. Missing tools only block the build steps that need them — you can still select partitions and generate the SD package without them.
-
-`mtd-utils` and `u-boot-tools` install their binaries to `/usr/sbin`, which isn't always on `$PATH` for non-root shells (WSL, non-login shells). `build_update.sh`, `build_rootfs.sh`, and `build_userdata.sh` all add `/usr/sbin:/sbin` to `$PATH` themselves, so this should be transparent — but if you see "not found" for a tool `dpkg -l` shows as installed, check `which mkfs.ubifs` / `which ubinize` / `which mkenvimage` for the actual path.
-
-## Flashing via SD Card
-
-On power-on, U-Boot checks for a FAT32 SD card. If a file named `UpConfig` is present in the SD root, U-Boot runs `arkupdate`, which reads the `update` script and flashes each listed partition in sequence. After completion the unit reboots — remove the SD card so it doesn't re-flash. See [NAND Partition Layout](#nand-partition-layout) above for offsets and sizes.
-
-### Quick start
-
-**Step 1 — Build firmware images**
-
-| Image | Command | Notes |
-|-------|---------|-------|
-| `rootfs.img` | `bash build_rootfs.sh` (Linux/WSL) | ~106 MB UBI image |
-| `userdata.img` | `bash build_userdata.sh` (Linux/WSL) | ~6 MB UBI image |
-
-**Step 2 — Generate the update script**
-
-```bash
-bash legacy/generate_update.sh
-```
-
-Toggle partitions with number keys, press `g` to generate. Output lands in `sd_update/output/`.
-
-> Steps 1–2 can be replaced entirely by running `bash build_update.sh`, which does the build and package generation in one interactive session — see [Build & Flash Tool](#build--flash-tool) above.
-
-**Step 3 — Prepare SD card**
-
-Format as FAT32 (max 32 GB). Copy everything from `sd_update/output/` to the SD root.
-
-**Step 4 — Flash**
-
-1. Power off the head unit
-2. Insert the SD card
-3. Power on — update progress shown on screen
-4. Wait for automatic reboot (do **not** interrupt power)
-5. Remove the SD card
-
-### Manual update script
-
-The `update` file is a plain list of partition keywords, one per line — **not** raw U-Boot commands. `arkupdate` has the NAND offsets and sizes for each keyword compiled in; the SD file never states them:
-
-```
-uboot
-bootlogo
-kernel
-filesystem
-userdata
-arkdata
-reversingtrack
-bootanimation
-```
-
-Confirmed against the reference packages (`Holden firmware update/update`, `Prado firmware recovery holden based/update`, `sd_update/update.example` — all identical) and cross-checked against the literal `"*****Now update <name> ......"` strings compiled into `uboot.bin`. Note `filesystem` is the keyword for the rootfs partition, and `kernel` expects a file named `zImage` on the SD card, not `kernel.img` or similar — filenames must match exactly what's shown in the [NAND Partition Layout](#nand-partition-layout) table above.
-
-`uboot-env` and `unicode` are deliberately left out of `build_update.sh`'s generated `update` file — neither is an independent arkupdate keyword:
-
-- **U-Boot Env — confirmed on real hardware**: it's only flashed as a side effect of updating `uboot` itself, not addressable on its own. Matches the different compiled-in message format (`"Update U-boot-Env ......"` vs `"*****Now update X ......"` for everything above) — it's a sub-step of the uboot routine, not its own top-level keyword. Selecting U-Boot Env without also selecting U-Boot is a no-op on the device; `build_update.sh` warns about this both ways (env selected without uboot, or uboot selected without env — the latter because flashing uboot touches env regardless, so what state it ends up in without a known-good `uboot-env.bin` alongside it isn't confirmed).
-- **Unicode** — mechanism still unconfirmed; no reference package includes it either.
-
-Both stay flashable manually from the U-Boot prompt instead (see below).
-
-### Safety notes
-
-- **Never flash S-Loader (Nboot) via SD** — corruption bricks the board (requires JTAG to recover)
-- **U-Boot** writes to both primary (`0x20000`) and backup (`0xA0000`) slots with the same binary, and also touches U-Boot Env as a side effect — see above
-- **userdata flash** erases all paired BT devices, call history, and user settings — recreated on first boot
-- **rootfs flash** replaces the entire filesystem; bad block at 0x5FA0000 is handled automatically
-
-### Serial console (recovery / monitoring)
+## 1.0 Serial Console (recovery / monitoring)
 
 Connect via the UART header near the SD card slot. Settings: **115200 8N1**.
 
@@ -335,7 +74,7 @@ nand scrub 0x1a0000 0x400000 0x1a0000 0x400000
 nand write 0x4000000 0x1a0000 ${filesize}
 ```
 
-## Booting from SD Card or USB (non-destructive)
+## 2.0 Booting from SD Card or USB (non-destructive)
 
 `uboot_final.bin` is a patched U-Boot that boots a kernel and rootfs from removable media **without writing to NAND**. It is produced by `patch_uboot.py` applied to `uboot_sdboot.bin` (ARK1680 BSP source-compiled U-Boot).
 
@@ -405,7 +144,7 @@ U-Boot, Kernel, and Rootfs aren't independently toggleable — they're required 
 
 Paths and sizes stay CLI-flag-only (the menu doesn't do free-text editing): `--image PATH` / `--device PATH` (output target, default `sd_bootable/sd_boot.img`), `--size MB` (default 512), `--uboot PATH` (use a prebuilt `UBOOT.BIN` as-is, skip patching), `--uboot-src` / `--kernel` / `--rootfs-dir` / `--userdata-dir` (override auto-detected paths), `--root DEVICE` (rootfs device for bootargs, default `/dev/mmcblk0p2`), `--non-interactive` (skip the menu, use flags/autodetected values as-is — needed for `--device`), `--dry-run`. Run with `--help` for the full list.
 
-Requirements — `parted`, `mkfs.fat` (dosfstools), `mkfs.ext4` (e2fsprogs), `losetup` (util-linux), `rsync`, `python3` — are checked at startup, same as `build_update.sh`'s requirements check (plus `mtd-utils` if also building rootfs/userdata images via [Build & Flash Tool](#build--flash-tool)).
+Requirements — `parted`, `mkfs.fat` (dosfstools), `mkfs.ext4` (e2fsprogs), `losetup` (util-linux), `rsync`, `python3` — are checked at startup, same as `build_update.sh`'s requirements check (plus `mtd-utils` if also building rootfs/userdata images via [Build & Flash Tool](#30-build--flash-tool)).
 
 ### `/data` mount on SD boot
 
@@ -479,7 +218,269 @@ The kernel sees the USB drive as `/dev/sda`. The ARK1668 uses MUSB (not EHCI) �
 
 Both sdbootargs and usbbootargs include `console=tty0`. Once the kernel initialises the LCD framebuffer (`CONFIG_FB_ARK1668LCD`), boot messages and a login prompt are mirrored to the screen via `fbcon`. The U-Boot phase itself is serial-only (no video console compiled into U-Boot).
 
-## Device Access
+## 3.0 Build & Flash Tool
+
+`build_update.sh` is an interactive terminal tool that combines building firmware images and generating a NAND flash update package staged on an SD card into a single workflow. This flashes internal NAND — it is **not** the non-destructive SD-boot image described in [Booting from SD Card or USB](#20-booting-from-sd-card-or-usb-non-destructive) (that's `build_bootable_sdcard.sh`). Run it under Linux or WSL:
+
+```bash
+bash build_update.sh
+```
+
+### Menu layout
+
+The whole menu is one line per item — no per-item description text — so it fits a standard ~24-line terminal without scrolling. Full detail for whichever row is highlighted is shown once, on the detail line just above the command bar, instead of repeated for every row:
+
+```
+  ARK1680 Prado — Build & Flash Tool
+  ────────────────────────────────────────────────────────
+  BUILD
+    [ ]  Build rootfs image         no image yet
+    [ ]  Build userdata image       no image yet
+  ▶ [ ]  Build U-Boot env image     no image yet
+
+  NAND PARTITIONS  (staged on SD, flashed to internal NAND on boot)
+         MTD  Partition              File
+    [ ]  1-2  U-Boot                 uboot.bin        found ⚠
+    [ ]  3    U-Boot Env             uboot-env.bin    missing - build first
+    [ ]  4    Display Config         arkdata.ini      found
+    [ ]  5    Linux Kernel           zImage           found
+    [X]  6    Root Filesystem        rootfs.img       missing - build first
+    [X]  7    User Data              userdata.img     missing - build first
+    [ ]  8    Boot Logo              bootlogo         found
+    [ ]  9    Boot Animation         bootanimation    found
+    [ ]  10   Reversing Track        reversingtrack   found
+    [ ]  11   Unicode Font           unicode          found
+  ────────────────────────────────────────────────────────
+  Build U-Boot env image: Compiles env/uboot-env.txt into uboot-env.bin (256 KB, mkenvimage)
+  ↑/↓ move   Space/Enter toggle   a/n all/none   g go   q quit
+```
+
+Rows are listed in MTD numerical order (U-Boot spans mtd1 and mtd2, since the same binary is written to both the primary and backup slots).
+
+The `▶` marker shows which row is highlighted — move it with the arrow keys; the line above the command bar always shows the description, offset, and size for that row. `rootfs.img`, `userdata.img`, and `uboot-env.bin` all have a corresponding build step above, so their missing-status hints to build first instead of just saying "missing".
+
+**Defaults:** rootfs and userdata are selected by default. Kernel, U-Boot, arkdata, U-Boot Env, and other early-boot partitions default to off — they must be explicitly enabled to avoid accidental reflash.
+
+### Output
+
+Generated files land in `sd_update/output/`. Copy all files to the root of a FAT32 SD card to flash.
+
+### Standalone scripts
+
+The individual scripts are retained for use without the interactive menu:
+
+| Script | Purpose |
+|--------|---------|
+| `build_rootfs.sh` | Build rootfs UBI image only |
+| `build_userdata.sh` | Build userdata UBI image only |
+| `legacy/generate_update.sh` | Legacy — generate SD package for selected partitions without the build steps |
+
+### Requirements
+
+Build steps require `mkfs.ubifs`, `ubinize` (rootfs/userdata), and `mkenvimage` (U-Boot env):
+
+```bash
+sudo apt install mtd-utils u-boot-tools   # Debian / Ubuntu / WSL
+```
+
+`build_update.sh` checks for all three on startup and prints their status before showing the menu. Missing tools only block the build steps that need them — you can still select partitions and generate the SD package without them.
+
+`mtd-utils`, `u-boot-tools`, `parted`, `dosfstools`, `e2fsprogs`, and `util-linux` all install their binaries to `/usr/sbin` or `/sbin`, which isn't always on `$PATH` for non-root shells (WSL, non-login shells). `build_update.sh`, `build_bootable_sdcard.sh`, `build_rootfs.sh`, and `build_userdata.sh` all add `/usr/sbin:/sbin` to `$PATH` themselves, so this should be transparent — but if you see "not found" for a tool `dpkg -l` shows as installed, check `which mkfs.ubifs` / `which ubinize` / `which mkenvimage` / `which parted` / `which mkfs.fat` / `which mkfs.ext4` / `which losetup` for the actual path.
+
+## 4.0 Flashing via SD Card
+
+On power-on, U-Boot checks for a FAT32 SD card. If a file named `UpConfig` is present in the SD root, U-Boot runs `arkupdate`, which reads the `update` script and flashes each listed partition in sequence. After completion the unit reboots — remove the SD card so it doesn't re-flash. See [NAND Partition Layout](#70-nand-partition-layout) below for offsets and sizes.
+
+### Quick start
+
+**Step 1 — Build firmware images**
+
+| Image | Command | Notes |
+|-------|---------|-------|
+| `rootfs.img` | `bash build_rootfs.sh` (Linux/WSL) | ~106 MB UBI image |
+| `userdata.img` | `bash build_userdata.sh` (Linux/WSL) | ~6 MB UBI image |
+
+**Step 2 — Generate the update script**
+
+```bash
+bash legacy/generate_update.sh
+```
+
+Toggle partitions with number keys, press `g` to generate. Output lands in `sd_update/output/`.
+
+> Steps 1–2 can be replaced entirely by running `bash build_update.sh`, which does the build and package generation in one interactive session — see [Build & Flash Tool](#30-build--flash-tool) above.
+
+**Step 3 — Prepare SD card**
+
+Format as FAT32 (max 32 GB). Copy everything from `sd_update/output/` to the SD root.
+
+**Step 4 — Flash**
+
+1. Power off the head unit
+2. Insert the SD card
+3. Power on — update progress shown on screen
+4. Wait for automatic reboot (do **not** interrupt power)
+5. Remove the SD card
+
+### Manual update script
+
+The `update` file is a plain list of partition keywords, one per line — **not** raw U-Boot commands. `arkupdate` has the NAND offsets and sizes for each keyword compiled in; the SD file never states them:
+
+```
+uboot
+bootlogo
+kernel
+filesystem
+userdata
+arkdata
+reversingtrack
+bootanimation
+```
+
+Confirmed against the reference packages (`Holden firmware update/update`, `Prado firmware recovery holden based/update`, `sd_update/update.example` — all identical) and cross-checked against the literal `"*****Now update <name> ......"` strings compiled into `uboot.bin`. Note `filesystem` is the keyword for the rootfs partition, and `kernel` expects a file named `zImage` on the SD card, not `kernel.img` or similar — filenames must match exactly what's shown in the [NAND Partition Layout](#70-nand-partition-layout) table below.
+
+`uboot-env` and `unicode` are deliberately left out of `build_update.sh`'s generated `update` file — neither is an independent arkupdate keyword:
+
+- **U-Boot Env — confirmed on real hardware**: it's only flashed as a side effect of updating `uboot` itself, not addressable on its own. Matches the different compiled-in message format (`"Update U-boot-Env ......"` vs `"*****Now update X ......"` for everything above) — it's a sub-step of the uboot routine, not its own top-level keyword. Selecting U-Boot Env without also selecting U-Boot is a no-op on the device; `build_update.sh` warns about this both ways (env selected without uboot, or uboot selected without env — the latter because flashing uboot touches env regardless, so what state it ends up in without a known-good `uboot-env.bin` alongside it isn't confirmed).
+- **Unicode** — mechanism still unconfirmed; no reference package includes it either.
+
+Both stay flashable manually from the U-Boot prompt instead — see [1.0 Serial Console](#10-serial-console-recovery--monitoring) above.
+
+### Safety notes
+
+- **Never flash S-Loader (Nboot) via SD** — corruption bricks the board (requires JTAG to recover)
+- **U-Boot** writes to both primary (`0x20000`) and backup (`0xA0000`) slots with the same binary, and also touches U-Boot Env as a side effect — see above
+- **userdata flash** erases all paired BT devices, call history, and user settings — recreated on first boot
+- **rootfs flash** replaces the entire filesystem; bad block at 0x5FA0000 is handled automatically
+
+## 5.0 Hardware
+
+| Item | Value |
+|------|-------|
+| SoC | ARK1680 (ARM Cortex-A5) |
+| OS | Linux 3.4.0 / BusyBox |
+| Bootloader | U-Boot 2012.10 |
+| Product ID | Limcet-P306 |
+| Resource | Box-P301 |
+| Display | 800×480 RGB888 |
+| Sound | None (SoundType=0) |
+| MCU type | 6 |
+| BT module | Feasycom (BlueToothType=6) |
+
+**Documentation:**
+
+- [`Limcet Hardware/BOARD_ANALYSIS.md`](Limcet%20Hardware/BOARD_ANALYSIS.md) — board/component teardown (SoC, NAND, BT, MCU, CAN bus), with photos in the same folder.
+- [`docs/SOURCES.md`](docs/SOURCES.md) — provenance of every file in this repo.
+- [`docs/PARTITION_LAYOUT.md`](docs/PARTITION_LAYOUT.md) — NAND offsets, sizes, flash commands (see also [NAND Partition Layout](#70-nand-partition-layout) below).
+- [`docs/SD_BOOT_PLAN.md`](docs/SD_BOOT_PLAN.md) — historical SD-boot planning doc, superseded by [Booting from SD Card or USB](#20-booting-from-sd-card-or-usb-non-destructive) above.
+
+### Accessing the device
+
+Three ways to reach the device, roughly in order of how destructive they are:
+
+| Method | Use for | Details |
+|--------|---------|---------|
+| Serial console (UART, 115200 8N1) | Recovery, monitoring, interrupting boot | [Serial console](#10-serial-console-recovery--monitoring) |
+| SD update (flashes internal NAND) | Permanently updating firmware on the unit | [Flashing via SD Card](#40-flashing-via-sd-card) |
+| SD/USB bootable image (non-destructive) | Testing changes without touching NAND | [Booting from SD Card or USB](#20-booting-from-sd-card-or-usb-non-destructive) |
+| Network (WiFi AP / USB / SSH) | Once Linux has booted — only useful if the reconstructed, SSH-patched rootfs is already running (see caveat below) | [Device Access](#80-device-access) |
+
+## 6.0 Repository Structure
+
+```
+Prado firmware dump/                  Raw MTD partition dumps from the live device
+  mtd1-mtd2_uboot/           U-Boot binaries (raw + extracted)
+  mtd3_env/                  U-Boot environment (raw + extracted)
+  mtd4_arkdata/              Panel/hardware config (raw + extracted)
+  mtd5_kernel/               Kernel zImage (raw + extracted)
+  mtd6_rootfs/               Root filesystem UBIFS dump (raw)
+  mtd6_rootfs_raw/           Raw MTD6 bin (Git LFS)
+
+Prado firmware reconstructed/         Reconstructed firmware for flashing
+  mtd0_sloader/              Nboot.bin, Stepldr.bin
+  mtd1-mtd2_uboot/           uboot.bin
+  mtd3_env/                  (placeholder — reconstructed env lives in env/uboot-env.txt instead)
+  mtd4_arkdata/              arkdata.ini (Prado panel config — copy of display/arkdata.ini)
+  mtd5_kernel/               zImage (reconstructed kernel — see note on top-level kernel/ below)
+  mtd6_rootfs/
+    rootfs/                  Modified rootfs tree (Prado libs + SSH + WiFi AP)
+  mtd7_userdata/
+    userdata/                Userdata tree (Prado settings overlay)
+  mtd8_bootlogo/             bootlogo
+  mtd9_bootanimation/        (placeholder — no content yet)
+  mtd10_reversingtrack/      reversingtrack
+  mtd11_unicode/             unicode (placeholder — no content yet)
+
+Holden firmware update/               Stock Holden update package (reference — validated it boots on Prado hw)
+Prado firmware recovery holden based/ Stock Holden package repackaged with Prado msn_factory_configs, for recovery
+
+Limcet Hardware/
+  BOARD_ANALYSIS.md         Board/component teardown notes (SoC, NAND, BT, MCU, CAN bus)
+  *.jpg                     Board photos referenced from BOARD_ANALYSIS.md
+
+ui/                Qt 4.7.4 UI analysis and resource extraction — see ui/UI.md
+  UI.md                      Qt module layout, key binaries, /msnprofile/ filesystem layout
+  qm_extracted/              Decompiled translation strings (lang_en.txt, lang_arabic.txt, ...)
+  rcc_extracted/             Decompiled Qt resource bundles, one dir per screen/resolution
+  tools/
+    extract_qm.py            Decompiles .qm translation files to text
+    extract_rcc.py           Decompiles .rcc resource bundles
+
+kernel/            zImage (from Holden base — identical kernel_size to Prado firmware dump; gitignored, not present in every checkout — Prado firmware reconstructed/mtd5_kernel/zImage is the copy actually used for builds)
+display/
+  arkdata.ini                Prado panel config (from MTD4 live dump) — build source for mtd4
+  mtd4_arkdata_prado_dump.bin  Raw MTD4 dump the .ini was derived from
+  arkdata_holden.ini         Holden standard reference
+  arkdata_holden_0324.ini    Holden March 2024 update reference
+msn_factory_configs/
+  FactoryConfig.ini          Prado identity + Holden firmware settings
+  MsnProductInfo.ini         Hardware identity (Limcet-P306)
+env/
+  uboot-env.txt              Reconstructed env (bootdelay=9, 106m/6m layout)
+  mtd3_env_prado_firmware_dump.bin    Raw env from live device (gitignored)
+sd_update/
+  UpConfig                   SD update trigger file
+  update.example             Static reference script (generated version goes to output/)
+  output/                    Generated SD card package (gitignored)
+docs/
+  SOURCES.md                 Where each file came from and why
+  PARTITION_LAYOUT.md        NAND offsets, sizes, flash commands
+  SD_BOOT_PLAN.md            Historical SD-boot planning doc — superseded, see below
+build_update.sh              Combined interactive build and flash tool
+build_rootfs.sh              Standalone rootfs UBI image builder
+build_userdata.sh            Standalone userdata UBI image builder
+patch_uboot.py               Patches compiled-in env and NAND offset in a U-Boot binary
+build_bootable_sdcard.sh     Interactive bootable SD card image builder (same arrow-key menu as build_update.sh)
+uboot_sdboot.bin             ARK1680 BSP source-compiled U-Boot — manual patch_uboot.py input (see below)
+uboot_final.bin              Patched U-Boot binary — place as UBOOT.BIN on SD p1 FAT32
+sd_bootable/                 Generated bootable SD image output (gitignored — sd_boot.img + patched uboot_sdboot.bin)
+legacy/
+  generate_update.sh         Superseded by build_update.sh — standalone partition-selection + SD-package
+                              generator only, no build steps; kept for standalone use
+```
+
+## 7.0 NAND Partition Layout
+
+| Partition | Start | Size | Contents |
+|-----------|-------|------|----------|
+| S-Loader | `0x000000` | 128 KB | Nboot (do NOT update via SD) |
+| U-Boot | `0x020000` | 512 KB | 2nd-stage bootloader |
+| U-Boot_back | `0x0A0000` | 512 KB | U-Boot backup slot |
+| U-Boot-Env | `0x120000` | 256 KB | U-Boot environment variables |
+| arkdata | `0x160000` | 256 KB | Display / TvoutType config |
+| kernel | `0x1A0000` | 4 MB | Linux 3.4.0 zImage |
+| rootfs | `0x5A0000` | 106 MB | Root filesystem (UBIFS/UBI) |
+| userdata | `0x6FA0000` | 6 MB | User settings / BT pairs (UBI) |
+| bootlogo | `0x75A0000` | 512 KB | Boot splash screen |
+| bootanimation | `0x7620000` | 3 MB | Boot animation |
+| reversingtrack | `0x7920000` | 3 MB | Reversing camera audio |
+| Unicode | `0x7C20000` | 256 KB | Unicode font data |
+
+**Known bad block at 0x5FA0000** — inside the rootfs partition. `nand scrub` handles this automatically.
+
+See also [`docs/PARTITION_LAYOUT.md`](docs/PARTITION_LAYOUT.md) for the same data plus flash commands.
+
+## 8.0 Device Access
 
 ### WiFi Access Point
 
@@ -549,7 +550,7 @@ The ARK1680 USB gadget stack is configured to use CDC-NCM (`g_ncm.ko`), which cr
 
 `g_zero.ko` has been removed from `Prado firmware reconstructed/mtd6_rootfs/rootfs/etc/all.sh` — it was overriding the NCM gadget registration and breaking both USB host mode and the network interface.
 
-## Holden Firmware Compatibility
+## 9.0 Holden Firmware Compatibility
 
 The Holden update package (`HOLDEN_KS_Auto_DSP(BT)_0219`) has been confirmed to boot successfully on the Prado device. This validates that the Holden firmware is a compatible base — the SoC, bootloader, and kernel are interoperable.
 
@@ -559,9 +560,9 @@ Known glitches when running stock Holden firmware on the Prado hardware:
 - **Touch keys** — Holden `arkdata.ini` defines 5 side touch keys that do not exist on the Prado hardware.
 - **Product identity** — `FactoryConfig.ini` and `MsnProductInfo.ini` reference Holden-specific IDs (`Ksmart_DSP`, `Box-C211`, `McuType=16`).
 
-These are all corrected in the reconstructed firmware. See [Key Differences vs Holden Base Firmware](#key-differences-vs-holden-base-firmware) below.
+These are all corrected in the reconstructed firmware. See [Key Differences vs Holden Base Firmware](#100-key-differences-vs-holden-base-firmware) below.
 
-## Key Differences vs Holden Base Firmware
+## 10.0 Key Differences vs Holden Base Firmware
 
 | Item | Holden | Prado |
 |------|--------|-------|
@@ -577,6 +578,6 @@ These are all corrected in the reconstructed firmware. See [Key Differences vs H
 | BT pair code | 0000 | **8362** |
 | Vehicle branding | HOLDEN | **TOYOTA** |
 
-## Sources
+## 11.0 Sources
 
 See [`docs/SOURCES.md`](docs/SOURCES.md) for full provenance of each file.

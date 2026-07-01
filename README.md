@@ -126,8 +126,6 @@ legacy/
                               generator only, no build steps; kept for standalone use
 ```
 
-> `lzop_1.04-2_amd64.deb` at the repo root is a stray downloaded package, not referenced by any build step — safe to delete.
-
 ## NAND Partition Layout
 
 | Partition | Start | Size | Contents |
@@ -362,7 +360,7 @@ Two patches are applied:
 python3 patch_uboot.py -i uboot_sdboot.bin -o uboot_final.bin --mode sdboot --patch-nand-offset
 ```
 
-> **Note:** The checked-in `uboot_sdboot.bin` is the post-patch output (the pristine BSP binary was overwritten by `build_bootable_sdcard.sh`). Re-running the command above will succeed but print a warning that no NAND offset candidates were found — this is harmless because the instructions are already redirected.
+> **Note:** this is a separate, manual `patch_uboot.py` invocation from the one `build_bootable_sdcard.sh` runs internally — that script patches its own auto-detected U-Boot source and writes its output to `sd_bootable/uboot_sdboot.bin`, never touching the repo-root `uboot_sdboot.bin` used here.
 
 Place `uboot_final.bin` as `UBOOT.BIN` on the SD card FAT32 partition (p1). Stepldr loads it in preference to the NAND copy.
 

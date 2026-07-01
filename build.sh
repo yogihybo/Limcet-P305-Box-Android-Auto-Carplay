@@ -164,6 +164,7 @@ PARTITIONS=(
     "bootlogo|Boot Logo|bootlogo|0x75a0000|0x080000|raw|Splash screen image|OFF"
     "bootanimation|Boot Animation|bootanimation|0x7620000|0x300000|raw|Boot animation sequence|OFF"
     "reversingtrack|Reversing Track|reversingtrack|0x7920000|0x300000|raw|Reversing camera audio track|OFF"
+    "unicode|Unicode Font|unicode|0x7c20000|0x040000|raw|Unicode font data for UI text rendering — no dump yet|OFF"
 )
 
 BUILD_ITEMS=(
@@ -203,7 +204,9 @@ find_src() {
         "$SCRIPT_DIR/Prado firmware reconstructed/mtd1-mtd2_uboot/$filename"
         "$SCRIPT_DIR/Prado firmware reconstructed/mtd4_arkdata/$filename"
         "$SCRIPT_DIR/Prado firmware reconstructed/mtd8_bootlogo/$filename"
+        "$SCRIPT_DIR/Prado firmware reconstructed/mtd9_bootanimation/$filename"
         "$SCRIPT_DIR/Prado firmware reconstructed/mtd10_reversingtrack/$filename"
+        "$SCRIPT_DIR/Prado firmware reconstructed/mtd11_unicode/$filename"
         "$SCRIPT_DIR/kernel/$filename"
         "$SCRIPT_DIR/env/$filename"
         "$SCRIPT_DIR/display/$filename"

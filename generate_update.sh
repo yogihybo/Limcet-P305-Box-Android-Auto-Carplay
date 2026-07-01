@@ -9,8 +9,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-OUTPUT_DIR="$SCRIPT_DIR/output"
+OUTPUT_DIR="$SCRIPT_DIR/sd_update/output"
 
 # ─── Colour helpers ──────────────────────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
@@ -37,6 +36,7 @@ PARTITIONS=(
     "userdata|User Data|userdata.img|0x6fa0000|0x600000|ubi|Prado userdata UBI image (built by build_userdata.sh)"
     "bootlogo|Boot Logo|bootlogo|0x75a0000|0x080000|raw|Splash screen image"
     "reversingtrack|Reversing Audio|reversingtrack|0x7920000|0x300000|raw|Reversing camera audio track"
+    "unicode|Unicode Font|unicode|0x7c20000|0x040000|raw|Unicode font data for UI text rendering — no dump yet"
 )
 
 # ─── Selection state ─────────────────────────────────────────────────────────
@@ -70,7 +70,7 @@ print_menu() {
         echo ""
     done
 
-    echo "  Commands:  1-8 toggle   a=all   n=none   g=go   q=quit"
+    echo "  Commands:  1-${#PARTITIONS[@]} toggle   a=all   n=none   g=go   q=quit"
     echo ""
 }
 
@@ -78,14 +78,19 @@ find_src() {
     local filename="$1"
     local name="$2"
     local candidates=(
-        "$REPO_ROOT/bootloaders/$filename"
-        "$REPO_ROOT/kernel/$filename"
-        "$REPO_ROOT/env/$filename"
-        "$REPO_ROOT/display/$filename"
-        "$REPO_ROOT/rootfs/$filename"
-        "$REPO_ROOT/userdata/$filename"
-        "$REPO_ROOT/$filename"
-        "$SCRIPT_DIR/firmware/$filename"
+        "$SCRIPT_DIR/Prado firmware reconstructed/mtd1-mtd2_uboot/$filename"
+        "$SCRIPT_DIR/Prado firmware reconstructed/mtd4_arkdata/$filename"
+        "$SCRIPT_DIR/Prado firmware reconstructed/mtd5_kernel/$filename"
+        "$SCRIPT_DIR/Prado firmware reconstructed/mtd6_rootfs/$filename"
+        "$SCRIPT_DIR/Prado firmware reconstructed/mtd7_userdata/$filename"
+        "$SCRIPT_DIR/Prado firmware reconstructed/mtd8_bootlogo/$filename"
+        "$SCRIPT_DIR/Prado firmware reconstructed/mtd9_bootanimation/$filename"
+        "$SCRIPT_DIR/Prado firmware reconstructed/mtd10_reversingtrack/$filename"
+        "$SCRIPT_DIR/Prado firmware reconstructed/mtd11_unicode/$filename"
+        "$SCRIPT_DIR/kernel/$filename"
+        "$SCRIPT_DIR/env/$filename"
+        "$SCRIPT_DIR/display/$filename"
+        "$SCRIPT_DIR/$filename"
     )
     for p in "${candidates[@]}"; do
         [[ -f "$p" ]] && echo "$p" && return
@@ -112,7 +117,7 @@ check_sources() {
         warn "Some source files are missing. Check:"
         warn "  rootfs.img   — run build_rootfs.sh (Linux/WSL)"
         warn "  userdata.img — run build_userdata.sh (Linux/WSL)"
-        warn "  uboot.bin    — copy from bootloaders/ or Holden firmware package"
+        warn "  uboot.bin    — copy from Prado firmware reconstructed/mtd1-mtd2_uboot/ or Holden firmware package"
         warn "  zImage       — copy from kernel/ or Holden firmware package"
         echo ""
         read -rp "Continue anyway and skip missing files? [y/N] " ans
@@ -186,7 +191,7 @@ copy_to_output() {
     mkdir -p "$OUTPUT_DIR"
 
     # Copy UpConfig trigger
-    cp "$SCRIPT_DIR/UpConfig" "$OUTPUT_DIR/UpConfig"
+    cp "$SCRIPT_DIR/sd_update/UpConfig" "$OUTPUT_DIR/UpConfig"
     ok "Copied: UpConfig"
 
     for entry in "${files_str[@]}"; do
@@ -228,8 +233,9 @@ while true; do
     read -rp "  Selection: " input
 
     case "$input" in
-        [1-8])
+        [1-9]|1[0-9])
             idx=$((input - 1))
+            (( idx < 0 || idx >= ${#PARTITIONS[@]} )) && continue
             if [[ ${SELECTED[$idx]} -eq 1 ]]; then
                 SELECTED[$idx]=0
             else

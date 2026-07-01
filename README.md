@@ -32,6 +32,9 @@ Prado firmware dump/                  Raw MTD partition dumps from the live devi
 Prado firmware reconstructed/         Reconstructed firmware for flashing
   mtd0_sloader/              Nboot.bin, Stepldr.bin
   mtd1-mtd2_uboot/           uboot.bin
+  mtd3_env/                  (placeholder — reconstructed env lives in env/uboot-env.txt instead)
+  mtd4_arkdata/              arkdata.ini (Prado panel config — copy of display/arkdata.ini)
+  mtd5_kernel/               zImage (reconstructed kernel — see note on top-level kernel/ below)
   mtd6_rootfs/
     rootfs/                  Modified rootfs tree (Prado libs + SSH + WiFi AP)
   mtd7_userdata/
@@ -48,9 +51,18 @@ Limcet Hardware/
   BOARD_ANALYSIS.md         Board/component teardown notes (SoC, NAND, BT, MCU, CAN bus)
   *.jpg                     Board photos referenced from BOARD_ANALYSIS.md
 
-kernel/            zImage (from Holden base — identical kernel_size to Prado firmware dump)
+ui/                Qt 4.7.4 UI analysis and resource extraction — see ui/UI.md
+  UI.md                      Qt module layout, key binaries, /msnprofile/ filesystem layout
+  qm_extracted/              Decompiled translation strings (lang_en.txt, lang_arabic.txt, ...)
+  rcc_extracted/             Decompiled Qt resource bundles, one dir per screen/resolution
+  tools/
+    extract_qm.py            Decompiles .qm translation files to text
+    extract_rcc.py           Decompiles .rcc resource bundles
+
+kernel/            zImage (from Holden base — identical kernel_size to Prado firmware dump; gitignored, not present in every checkout — Prado firmware reconstructed/mtd5_kernel/zImage is the copy actually used for builds)
 display/
-  arkdata_prado.ini          Prado panel config (from MTD4 live dump)
+  arkdata.ini                Prado panel config (from MTD4 live dump) — build source for mtd4
+  mtd4_arkdata_prado_dump.bin  Raw MTD4 dump the .ini was derived from
   arkdata_holden.ini         Holden standard reference
   arkdata_holden_0324.ini    Holden March 2024 update reference
 msn_factory_configs/
@@ -187,8 +199,8 @@ bash build.sh
 ```
   BUILD
   ─────
-  9  [ ]  Build rootfs image      Compiles source tree → rootfs.img (~106 MB)
-  10 [ ]  Build userdata image    Overlays Prado settings → userdata.img (~6 MB)
+  11 [ ]  Build rootfs image      Compiles source tree → rootfs.img (~106 MB)
+  12 [ ]  Build userdata image    Overlays Prado settings → userdata.img (~6 MB)
 
   SD CARD PARTITIONS
   ──────────────────
@@ -201,6 +213,7 @@ bash build.sh
   7  [ ]  Boot Logo               bootlogo         0x75a0000  512 KB
   8  [ ]  Boot Animation          bootanimation    0x7620000    3 MB
   9  [ ]  Reversing Track         reversingtrack   0x7920000    3 MB
+  10 [ ]  Unicode Font            unicode          0x7c20000  256 KB
 ```
 
 **Defaults:** rootfs and userdata are selected by default. Kernel, U-Boot, arkdata, and other early-boot partitions default to off — they must be explicitly enabled to avoid accidental reflash.
@@ -209,8 +222,8 @@ bash build.sh
 
 | Key | Action |
 |-----|--------|
-| `1`–`9` | Toggle SD partition on/off |
-| `10`–`11` | Toggle build step on/off |
+| `1`–`10` | Toggle SD partition on/off |
+| `11`–`12` | Toggle build step on/off |
 | `a` | Select all partitions |
 | `n` | Deselect all partitions |
 | `g` | Go — run selected builds then generate SD package |

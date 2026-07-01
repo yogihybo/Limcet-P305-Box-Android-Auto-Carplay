@@ -18,10 +18,10 @@ mtdparts=mtdparts=ark1680-nand:128k(S-Loader),512k(U-boot),512k(U-boot_back),
 | 5 | kernel | 0x1A0000 | 4M | 0x5A0000 | `kernel/zImage` |
 | 6 | rootfs | 0x5A0000 | 106M | 0x6FA0000 | `rootfs/rootfs.ubifs` |
 | 7 | userdata | 0x6FA0000 | 6M | 0x75A0000 | `userdata/userdata.img` |
-| 8 | bootlogo | 0x75A0000 | 512K | 0x7C20000 | `bootloaders/bootlogo` |
-| 9 | bootanimation | 0x7C20000 | 3M | 0x7F20000 | *(not in pkg)* |
-| 10 | reversingtrack | 0x7F20000 | 3M | 0x8220000 | `bootloaders/reversingtrack` |
-| 11 | Unicode | 0x8220000 | 256K | 0x8260000 | *(not in pkg)* |
+| 8 | bootlogo | 0x75A0000 | 512K | 0x7620000 | `bootloaders/bootlogo` |
+| 9 | bootanimation | 0x7620000 | 3M | 0x7920000 | *(not in pkg)* |
+| 10 | reversingtrack | 0x7920000 | 3M | 0x7C20000 | `bootloaders/reversingtrack` |
+| 11 | Unicode | 0x7C20000 | 256K | 0x7C60000 | *(not in pkg)* |
 
 ## Flash commands (from U-Boot)
 

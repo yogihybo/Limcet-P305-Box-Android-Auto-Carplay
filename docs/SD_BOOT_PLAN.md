@@ -1,3 +1,15 @@
+> **SUPERSEDED — kept for historical reference only.**
+> This was the original planning document written before SD boot was implemented.
+> The approach it recommended (Option 2, building U-Boot from source) was not
+> taken — SD boot ships today via the binary-patch approach (Option 1),
+> implemented in `patch_uboot.py` and `build_bootable_sdcard.sh`.
+> The current, accurate description of how SD boot actually works — partition
+> layout, `/nanddata/` symlinks, rcS userdata fallback, RSTK format, and
+> `build_bootable_sdcard.sh` usage — lives in the README's
+> [Booting from SD Card or USB](../README.md#booting-from-sd-card-or-usb-non-destructive)
+> section. Some details below (partition sizes, script name, env-patch
+> mechanics) no longer match the shipped implementation.
+
 # SD Boot Plan — Option B
 
 Boot the ARK1680 entirely from SD card. **NAND is never written to.**

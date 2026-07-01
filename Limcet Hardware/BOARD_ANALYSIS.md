@@ -177,4 +177,4 @@ The USB-A port on the board is a **host-mode** port for flash drives, CarPlay US
 
 The Holden base rootfs (`/etc/all.sh`) loads `g_zero.ko` — a USB gadget test driver that puts a USB controller into **device mode** at boot. This is the likely cause of the USB-A port not working as a host for flash drives or phone connections. Removing that `insmod` line from `all.sh` is the recommended fix.
 
-See [`../rootfs/etc/all.sh`](../rootfs/etc/all.sh) for the relevant line.
+See [`../Prado firmware reconstructed/mtd6_rootfs/rootfs/etc/all.sh`](../Prado%20firmware%20reconstructed/mtd6_rootfs/rootfs/etc/all.sh) for the relevant line.

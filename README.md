@@ -39,6 +39,14 @@ Prado firmware reconstructed/         Reconstructed firmware for flashing
   mtd8_bootlogo/             bootlogo
   mtd9_bootanimation/        (placeholder — no content yet)
   mtd10_reversingtrack/      reversingtrack
+  mtd11_unicode/             unicode (placeholder — no content yet)
+
+Holden firmware update/               Stock Holden update package (reference — validated it boots on Prado hw)
+Prado firmware recovery holden based/ Stock Holden package repackaged with Prado msn_factory_configs, for recovery
+
+Limcet Hardware/
+  BOARD_ANALYSIS.md         Board/component teardown notes (SoC, NAND, BT, MCU, CAN bus)
+  *.jpg                     Board photos referenced from BOARD_ANALYSIS.md
 
 kernel/            zImage (from Holden base — identical kernel_size to Prado firmware dump)
 display/
@@ -58,15 +66,19 @@ sd_update/
 docs/
   SOURCES.md                 Where each file came from and why
   PARTITION_LAYOUT.md        NAND offsets, sizes, flash commands
+  SD_BOOT_PLAN.md            Historical SD-boot planning doc — superseded, see below
 build.sh                     Combined interactive build and flash tool
 build_rootfs.sh              Standalone rootfs UBI image builder
 build_userdata.sh            Standalone userdata UBI image builder
 generate_update.sh           Standalone SD card update script generator
 patch_uboot.py               Patches compiled-in env and NAND offset in a U-Boot binary
-build_bootable_sdcard.sh     Builds a bootable SD card image (uboot_final.bin + kernel + rootfs)
+build_bootable_sdcard.sh     Builds a bootable SD card image (uboot_final.bin + kernel + rootfs + userdata)
 uboot_sdboot.bin             Input binary for patch_uboot.py (ARK1680 BSP source-compiled U-Boot)
 uboot_final.bin              Patched U-Boot binary — place as UBOOT.BIN on SD p1 FAT32
+sd_boot.img                  Generated bootable SD image (gitignored — output of build_bootable_sdcard.sh)
 ```
+
+> `lzop_1.04-2_amd64.deb` at the repo root is a stray downloaded package, not referenced by any build step — safe to delete.
 
 ## Holden Firmware Compatibility
 
@@ -390,7 +402,56 @@ The compiled-in env boots automatically from the SD card:
 | Partition | Filesystem | Contents |
 |-----------|-----------|---------|
 | p1 | FAT32 | `UBOOT.BIN`, `zImage` |
-| p2 | ext4 | rootfs |
+| p2 | ext4 | rootfs (`/`), plus `/nanddata/` — see below |
+| p3 | ext4 | userdata (`/data`) |
+
+### Building the SD image with `build_bootable_sdcard.sh`
+
+`build_bootable_sdcard.sh` assembles the full bootable SD image (or writes directly to a block device) in one interactive pass: patches `uboot_sdboot.bin` via `patch_uboot.py`, partitions and formats p1/p2/p3, syncs the rootfs and userdata trees, patches `rcS` on the p2 copy only (the source tree is never modified), and populates `/nanddata/` (see below).
+
+```bash
+sudo bash build_bootable_sdcard.sh                # interactive, writes sd_boot.img
+sudo bash build_bootable_sdcard.sh --device /dev/sdb --non-interactive
+```
+
+Key options: `--image PATH` / `--device PATH` (output target), `--size MB` (default 512), `--uboot PATH` (use a prebuilt `UBOOT.BIN` as-is, skip patching), `--root DEVICE` (rootfs device for bootargs, default `/dev/mmcblk0p2`), `--no-userdata` (leave p3 empty — populated by the app on first boot), `--dry-run`. Run with `--help` for the full list.
+
+Requirements: `parted dosfstools e2fsprogs rsync` (plus `mtd-utils` if also building rootfs/userdata images — see [Build & Flash Tool](#build--flash-tool)).
+
+### `/data` mount on SD boot
+
+The rootfs `rcS` copy on p2 is patched to try SD userdata first, falling back to the original NAND paths so the same rootfs image still boots correctly from NAND:
+
+1. Try `mount -t ext4 /dev/mmcblk0p3 /data` (SD userdata)
+2. Fall back to NAND UBIFS (`ubiattach` mtd7), then NAND yaffs2, matching the original stock `rcS` logic
+3. `factory_reset=1` reformats whichever `/data` is currently active (SD ext4 or NAND UBI) and clears the flag
+
+### Runtime NAND partition data (`/nanddata/`)
+
+Four MTD partitions (bootlogo, bootanimation, reversingtrack, Unicode) are read by the running app via `/dev/mtdN` character devices but are not part of the rootfs or userdata images. A search of all rootfs binaries for MTD ioctls (`MEMGETINFO`, `MEMERASE`) found none of them are called on these partitions — access is plain `open()`/`read()` — so a regular file works as a transparent replacement for the character device.
+
+`build_bootable_sdcard.sh` copies these into `/nanddata/` on p2:
+
+| MTD | Partition | Source file | Status |
+|-----|-----------|--------------|--------|
+| 8 | bootlogo | `mtd8_bootlogo/bootlogo` | Dumped (31 KB used of 512 KB) |
+| 9 | bootanimation | `mtd9_bootanimation/bootanimation` | Placeholder — erased during Holden flash, no dump yet |
+| 10 | reversingtrack | `mtd10_reversingtrack/reversingtrack` | Dumped (1.2 MB, RSTK format — see below) |
+| 11 | Unicode | `mtd11_unicode/unicode` | Placeholder — no dump yet |
+
+The patched `rcS` replaces each `/dev/mtdN` node unconditionally after `mdev -s`:
+
+```sh
+for mtdmap in "8:bootlogo" "9:bootanimation" "10:reversingtrack" "11:unicode"; do
+    num="${mtdmap%%:*}"; name="${mtdmap##*:}"
+    rm -f /dev/mtd${num}
+    ln -sf /nanddata/${name} /dev/mtd${num}
+done
+```
+
+To replace a placeholder once a real dump is obtained (via serial console: `dd if=/dev/mtd9 of=/tmp/bootanimation`), drop the file into the matching `mtd*_*/` folder under `Prado firmware reconstructed/` and rebuild the image.
+
+**RSTK format (reversingtrack):** the reversing-camera guide-line overlay file is a custom container — 4-byte magic `"RSTK"`, file size, entry count (41), steering-position count (100), image dimensions (800×480), guide-line zone parameters, then a 41 × 20-byte index table (`index, index, file_offset, compressed_size, flag`) followed by 41 zlib-compressed overlay images. The 41 frames span full-left to full-right steering angles; frame sizes form a bell curve (31 KB at the extremes, 17 KB at centre) consistent with symmetric guide-line geometry compressing better near centre. The app decompresses the frame matching the current steering angle and composites it over the camera feed.
 
 ### USB boot
 

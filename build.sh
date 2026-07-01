@@ -147,7 +147,7 @@ EOF
 
 # ── Partition / source table ──────────────────────────────────────────────────
 #
-# Format: "key|label|filename|offset|size|mode|description"
+# Format: "key|mtd|label|filename|offset|size|mode|description|default"
 #
 # Modes:
 #   raw   — fatload + nand scrub + nand write ${filesize}
@@ -161,16 +161,16 @@ EOF
 # Default OFF: everything else (early boot / kernel — require deliberate opt-in)
 
 PARTITIONS=(
-    "rootfs|Root Filesystem|rootfs.img|0x5a0000|0x6a00000|ubi|Reconstructed rootfs UBI image (build below if needed)|ON"
-    "userdata|User Data|userdata.img|0x6fa0000|0x600000|ubi|Prado settings / userdata UBI image (build below if needed)|ON"
-    "kernel|Linux Kernel|zImage|0x1a0000|0x400000|raw|Linux 3.4.0 zImage|OFF"
-    "arkdata|Display Config|arkdata.ini|0x160000|0x040000|raw|TvoutType, display init parameters|OFF"
-    "uboot-env|U-Boot Env|uboot-env.bin|0x120000|0x040000|env|uboot-env.bin not yet built — compile from env/uboot-env.txt with mkenvimage|DISABLED"
-    "uboot|U-Boot|uboot.bin|0x020000|0x080000|uboot|2nd-stage bootloader — written to both slots|OFF"
-    "bootlogo|Boot Logo|bootlogo|0x75a0000|0x080000|raw|Splash screen image|OFF"
-    "bootanimation|Boot Animation|bootanimation|0x7620000|0x300000|raw|Boot animation sequence|OFF"
-    "reversingtrack|Reversing Track|reversingtrack|0x7920000|0x300000|raw|Reversing camera audio track|OFF"
-    "unicode|Unicode Font|unicode|0x7c20000|0x040000|raw|Unicode font data for UI text rendering — no dump yet|OFF"
+    "uboot|1-2|U-Boot|uboot.bin|0x020000|0x080000|uboot|2nd-stage bootloader — written to both slots|OFF"
+    "uboot-env|3|U-Boot Env|uboot-env.bin|0x120000|0x040000|env|uboot-env.bin not yet built — compile from env/uboot-env.txt with mkenvimage|DISABLED"
+    "arkdata|4|Display Config|arkdata.ini|0x160000|0x040000|raw|TvoutType, display init parameters|OFF"
+    "kernel|5|Linux Kernel|zImage|0x1a0000|0x400000|raw|Linux 3.4.0 zImage|OFF"
+    "rootfs|6|Root Filesystem|rootfs.img|0x5a0000|0x6a00000|ubi|Reconstructed rootfs UBI image (build below if needed)|ON"
+    "userdata|7|User Data|userdata.img|0x6fa0000|0x600000|ubi|Prado settings / userdata UBI image (build below if needed)|ON"
+    "bootlogo|8|Boot Logo|bootlogo|0x75a0000|0x080000|raw|Splash screen image|OFF"
+    "bootanimation|9|Boot Animation|bootanimation|0x7620000|0x300000|raw|Boot animation sequence|OFF"
+    "reversingtrack|10|Reversing Track|reversingtrack|0x7920000|0x300000|raw|Reversing camera audio track|OFF"
+    "unicode|11|Unicode Font|unicode|0x7c20000|0x040000|raw|Unicode font data for UI text rendering — no dump yet|OFF"
 )
 
 BUILD_ITEMS=(
@@ -184,7 +184,7 @@ declare -a PART_SEL
 declare -a BUILD_SEL
 
 for i in "${!PARTITIONS[@]}"; do
-    IFS='|' read -r _ _ _ _ _ _ _ default <<< "${PARTITIONS[$i]}"
+    IFS='|' read -r _ _ _ _ _ _ _ _ default <<< "${PARTITIONS[$i]}"
     if [[ "$default" == "ON" ]]; then
         PART_SEL[$i]=1
     elif [[ "$default" == "DISABLED" ]]; then
@@ -286,8 +286,8 @@ print_detail() {
         IFS='|' read -r _ label desc _ <<< "${BUILD_ITEMS[$idx]}"
         echo -e "  ${DIM}${label}:${NC} ${DIM}$desc${NC}"
     else
-        IFS='|' read -r _ label _ offset size _ desc _ <<< "${PARTITIONS[$idx]}"
-        echo -e "  ${DIM}${label}:${NC} ${DIM}$desc  (offset $offset, size $size)${NC}"
+        IFS='|' read -r _ mtd label _ offset size _ desc _ <<< "${PARTITIONS[$idx]}"
+        echo -e "  ${DIM}${label}:${NC} ${DIM}$desc  (mtd$mtd, offset $offset, size $size)${NC}"
     fi
 }
 
@@ -324,10 +324,11 @@ print_menu() {
 
     echo ""
     echo -e "  ${BOLD}NAND PARTITIONS${NC}  ${DIM}(staged on SD, flashed to internal NAND on boot)${NC}"
+    printf "${DIM}%-9s%-4s %-22s %s${NC}\n" "" "MTD" "Partition" "File"
     for i in "${!PARTITIONS[@]}"; do
-        IFS='|' read -r key label filename offset size mode desc _ <<< "${PARTITIONS[$i]}"
+        IFS='|' read -r key mtd label filename offset size mode desc _ <<< "${PARTITIONS[$i]}"
         if [[ ${PART_SEL[$i]} -eq -1 ]]; then
-            printf "    ${DIM}[-]  %-22s %-16s disabled${NC}\n" "$label" "$filename"
+            printf "    ${DIM}[-]  %-4s %-22s %-16s disabled${NC}\n" "$mtd" "$label" "$filename"
             continue
         fi
         local src
@@ -348,7 +349,7 @@ print_menu() {
         [[ "$key" == "uboot" ]] && caution=" ${RED}⚠${NC}"
         local cursor="  "
         is_current "part" "$i" && cursor="${CYAN}▶ ${NC}"
-        printf "  %b%b  %-22s %-16s %b%b\n" "$cursor" "$mark" "$label" "$filename" "$found" "$caution"
+        printf "  %b%b  %-4s %-22s %-16s %b%b\n" "$cursor" "$mark" "$mtd" "$label" "$filename" "$found" "$caution"
     done
 
     echo -e "  ${DIM}────────────────────────────────────────────────────────${NC}"
@@ -384,7 +385,7 @@ check_partition_sources() {
     for i in "${!PARTITIONS[@]}"; do
         [[ ${PART_SEL[$i]} -eq 0 ]] && continue
         any_selected=1
-        IFS='|' read -r key label filename _ _ _ _ _ <<< "${PARTITIONS[$i]}"
+        IFS='|' read -r key mtd label filename _ _ _ _ _ <<< "${PARTITIONS[$i]}"
         local src
         src=$(find_src "$filename")
         if [[ -z "$src" ]]; then
@@ -428,7 +429,7 @@ EOF
 
     for i in "${!PARTITIONS[@]}"; do
         [[ ${PART_SEL[$i]} -eq 0 ]] && continue
-        IFS='|' read -r key label filename offset size mode desc _ <<< "${PARTITIONS[$i]}"
+        IFS='|' read -r key mtd label filename offset size mode desc _ <<< "${PARTITIONS[$i]}"
         local src
         src=$(find_src "$filename")
         if [[ -z "$src" ]]; then

@@ -206,20 +206,23 @@ The whole menu is one line per item — no per-item description text — so it f
     [ ]  Build userdata image       no image yet
 
   NAND PARTITIONS  (staged on SD, flashed to internal NAND on boot)
-    [X]  Root Filesystem        rootfs.img       missing
-  ▶ [ ]  User Data              userdata.img     missing
-    [ ]  Linux Kernel           zImage           missing
-    [ ]  Display Config         arkdata.ini      found
-     [-]  U-Boot Env             uboot-env.bin    disabled
-    [ ]  U-Boot                 uboot.bin        found ⚠
-    [ ]  Boot Logo              bootlogo         found
-    [ ]  Boot Animation         bootanimation    found
-    [ ]  Reversing Track        reversingtrack   found
-    [ ]  Unicode Font           unicode          found
+         MTD  Partition              File
+    [ ]  1-2  U-Boot                 uboot.bin        found ⚠
+    [-]  3    U-Boot Env             uboot-env.bin    disabled
+    [ ]  4    Display Config         arkdata.ini      found
+    [ ]  5    Linux Kernel           zImage           found
+  ▶ [X]  6    Root Filesystem        rootfs.img       missing
+    [X]  7    User Data              userdata.img     missing
+    [ ]  8    Boot Logo              bootlogo         found
+    [ ]  9    Boot Animation         bootanimation    found
+    [ ]  10   Reversing Track        reversingtrack   found
+    [ ]  11   Unicode Font           unicode          found
   ────────────────────────────────────────────────────────
-  User Data: Prado settings / userdata UBI image (build below if needed)  (offset 0x6fa0000, size 0x600000)
+  Root Filesystem: Reconstructed rootfs UBI image (build below if needed)  (mtd6, offset 0x5a0000, size 0x6a00000)
   ↑/↓ move   Space/Enter toggle   a/n all/none   g go   q quit
 ```
+
+Rows are listed in MTD numerical order (U-Boot spans mtd1 and mtd2, since the same binary is written to both the primary and backup slots).
 
 The `▶` marker shows which row is highlighted — move it with the arrow keys; the line above the command bar always shows the description, offset, and size for that row.
 

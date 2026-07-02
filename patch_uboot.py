@@ -47,6 +47,12 @@ Examples:
   # Custom root device
   python patch_uboot.py -i uboot_sdboot.bin -o uboot_final.bin --mode sdboot --root /dev/mmcblk1p2 --patch-nand-offset
 
+  # Minimal script-loading bootcmd — fits a raw/Holden-derived uboot.bin's
+  # tiny ~52 B safe capacity. --replace-env drops bootdelay/baudrate to make
+  # room. Pair with a boot script named "s" on SD p1 — see
+  # env/sdboot_script.txt and docs/UBOOT_SDBOOT_INVESTIGATION.md.
+  python patch_uboot.py -i uboot.bin -o uboot_selfcontained.bin --mode sdscript --replace-env --patch-nand-offset
+
   # Manual, single-value env patch — safe even on a raw/Holden-derived
   # uboot.bin as long as the new value is no longer than the old one
   python patch_uboot.py -i uboot.bin -o uboot_patched.bin --set bootdelay=9
@@ -145,16 +151,22 @@ def measure_env_capacity(data: bytes, offset: int, max_size: int) -> tuple:
 
 
 def patch_env_block(data: bytearray, offset: int, patches: dict,
-                    max_size: int = 4096) -> bool:
+                    max_size: int = 4096, replace: bool = False) -> bool:
     """
     Merge patches into the existing compiled-in env block and write back.
+    If replace=True, the existing env is discarded entirely and only
+    `patches` is written — useful to free up space in a tiny compiled-in
+    buffer (e.g. dropping bootdelay/baudrate to fit a longer bootcmd).
     Only ever touches bytes verified safe by measure_env_capacity() — never
     the fixed max_size window itself. Returns False if the patched env
     doesn't fit in that safe region.
     """
-    existing = parse_env(bytes(data), offset, max_size)
-    existing.update(patches)
-    serialized = serialize_env(existing)
+    if replace:
+        env = dict(patches)
+    else:
+        env = parse_env(bytes(data), offset, max_size)
+        env.update(patches)
+    serialized = serialize_env(env)
 
     original_length, safe_capacity = measure_env_capacity(bytes(data), offset, max_size)
 
@@ -264,6 +276,20 @@ PRESETS = {
             ),
         },
     },
+    'sdscript': {
+        'description': (
+            'Minimal bootcmd that loads and runs a boot script from SD p1 — '
+            'fits the ~52 B safe capacity of a raw/Holden-derived uboot.bin '
+            '(unlike sdboot above, which needs ~500 B and only fits a binary '
+            'with a real reserved env buffer). Use with --replace-env, since '
+            'dropping bootdelay/baudrate is what makes it fit. The real boot '
+            'logic (bootargs, fatload zImage, bootz) lives in the script file '
+            'itself — see env/sdboot_script.txt — not in this env entry.'
+        ),
+        'env': {
+            'bootcmd': 'fatload mmc 0:1 1000000 s;source 1000000',
+        },
+    },
 }
 
 
@@ -291,6 +317,13 @@ def main():
                     help='Root device for sdboot mode (default: /dev/mmcblk0p2)')
     ap.add_argument('--set', metavar='KEY=VALUE', action='append', dest='setenv',
                     help='Set a compiled-in env variable (repeatable, applied after --mode)')
+    ap.add_argument('--replace-env', action='store_true',
+                    help=(
+                        'Discard the existing compiled-in env entirely, using only the '
+                        '--mode/--set values, instead of merging with existing keys. '
+                        'Needed to free up space in a tiny safe-capacity binary — e.g. '
+                        'dropping bootdelay/baudrate to fit a longer bootcmd.'
+                    ))
     ap.add_argument('--patch-nand-offset', action='store_true',
                     help=(
                         'Patch all ARM MOV #0x120000 instructions to MOV #0xFF000000, '
@@ -374,8 +407,15 @@ def main():
             print(f"  {k}:")
             print(f"    before: {old}")
             print(f"    after:  {v}")
+        if args.replace_env:
+            removed = [k for k in orig if k not in patches]
+            if removed:
+                print("\n  Keys removed (--replace-env):")
+                for k in removed:
+                    print(f"    {k}={orig[k]}")
         if not args.dry_run:
-            if not patch_env_block(data, env_offset, patches, args.env_block_size):
+            if not patch_env_block(data, env_offset, patches, args.env_block_size,
+                                   replace=args.replace_env):
                 sys.exit(1)
 
     # Show and apply NAND offset patch

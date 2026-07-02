@@ -1,14 +1,18 @@
 # U-Boot SD-Boot Patch — Corruption Investigation
 
-**Status: patched-autoboot path parked, manual-command workaround adopted.**
-`uboot_sdboot.bin` and `uboot_final.bin` were confirmed corrupted and are now
-quarantined under `corrupted/` (do not use). SD/USB boot works today via a
-manual command typed at the U-Boot prompt instead — see README §4.0 "Manual
-SD Card Boot" and §5.0 "USB boot". This document records how the corruption
-was found, why the obvious workarounds (§2, §6) don't fix the underlying
-env-space problem, and what it would actually take to get a real patched
-auto-boot U-Boot (§5, §7). Written so this doesn't need to be re-derived from
-scratch next time.
+**Status: working auto-boot patch found (§8), statically verified, not yet
+tested on hardware.** A new technique — a minimal compiled-in `bootcmd` that
+loads and `source`s a boot script from SD — fits the raw/Holden-derived
+`uboot.bin`'s tiny safe capacity and needs zero NAND writes. Generated at
+`experimental_sdboot/uboot_selfcontained.bin`; do not treat as verified until
+tested on real hardware. `uboot_sdboot.bin` and `uboot_final.bin` (the
+earlier, corrupted attempt) remain quarantined under `corrupted/`. The manual
+U-Boot-prompt command (README §4.0 "Manual SD Card Boot", §5.0 "USB boot")
+remains the confirmed-working fallback. This document records how the
+corruption was found, why the obvious workarounds (§2, §6) don't fix the
+underlying env-space problem, and what it took to get a real (if untested)
+patched auto-boot U-Boot (§5, §7, §8). Written so this doesn't need to be
+re-derived from scratch next time.
 
 ---
 
@@ -271,3 +275,108 @@ If a genuine BSP-compiled U-Boot source is located later (§5, option 1), the
 patched-autoboot path can be revisited — `patch_uboot.py`'s fixed
 `measure_env_capacity()` check means it'll either work correctly or refuse
 cleanly, not corrupt anything.
+
+---
+
+## 8. Self-contained SD-boot patch — found a way that fits
+
+§2 showed the full `sdboot` preset (~500 B) can't fit in the raw
+`uboot.bin`'s ~52-byte safe capacity, even a bare, non-functional
+`fatload;bootz` with no bootargs (44 B, already over). The missing piece:
+the compiled-in `bootcmd` doesn't need to contain the *whole* boot sequence.
+U-Boot's `source` command executes a boot script loaded from any file — so
+`bootcmd` only needs to load a script and run it; the real (arbitrarily long)
+logic lives in the script file itself, on the SD card, not in the tiny
+buffer.
+
+### The patch
+
+```
+bootcmd=fatload mmc 0:1 1000000 s;source 1000000
+```
+
+40 characters. As the *only* compiled-in key (dropping `bootdelay`/
+`baudrate` — see `--replace-env` below), total serialized size is 50 bytes,
+fitting the 52-byte safe capacity with 2 bytes to spare.
+
+The script file `s` (source: `env/sdboot_script.txt`) carries the real logic:
+
+```
+setenv bootargs console=ttyS0,115200n8 console=tty0 mem=180M root=/dev/mmcblk0p2 rootfstype=ext4 rootwait rw
+fatload mmc 0:1 1000000 zImage
+bootz 1000000
+```
+
+### Why this needs zero NAND writes (better than §7's original plan)
+
+Combined with placing the patched binary as `UBOOT.BIN` on the SD card
+(Stepldr already prefers SD over NAND — existing mechanism, §"Booting from
+SD Card or USB" in the README) and `--patch-nand-offset` (forces the real
+NAND env's CRC to fail so this compiled-in env is actually used), **every
+file involved lives on the SD card** — patched U-Boot, script, kernel,
+rootfs. Nothing is written to NAND at all, not even to spare/placeholder
+space. Pull the SD card and the device is unaffected.
+
+### Tool changes
+
+`patch_uboot.py` gained:
+- **`--replace-env`**: discards the existing compiled-in env entirely
+  instead of merging, so `bootdelay`/`baudrate` can be dropped to make room.
+  Implemented as a `replace` parameter on `patch_env_block()` — when set, it
+  serializes only the given patches dict instead of `parse_env(...).update(patches)`.
+- **`sdscript` preset**: the minimal `bootcmd` above, documented as needing
+  `--replace-env` to actually fit.
+
+Generated with:
+```bash
+python patch_uboot.py -i "Prado firmware reconstructed/mtd1-mtd2_uboot/uboot.bin" \
+  -o experimental_sdboot/uboot_selfcontained.bin \
+  --mode sdscript --replace-env --patch-nand-offset
+```
+
+### Verification performed (static analysis)
+
+- `--dump-env` on the output shows exactly one key: the new `bootcmd`.
+  `bootdelay`/`baudrate` cleanly gone, as intended.
+- `--find-nand-offset` on the output reports 0 remaining valid candidates —
+  redirect applied to all three instructions.
+- Full byte-diff against the source `uboot.bin`: **6 differing regions**,
+  2–23 bytes each (~38 B for the env change, 6 B total across the three
+  2-byte NAND-offset immediate changes). Contrast with the ~2,000–4,000-byte
+  contiguous wipe from the original corruption (§1, §3) — this patch is
+  narrow and surgical, matching what `measure_env_capacity()` verified as
+  safe.
+- `set_default_env`, `env_import`, `saveenv` — the command-table strings
+  that got destroyed in the corrupted files — are all present and intact in
+  this output.
+
+### What's NOT verified — the one real unknown
+
+Whether `source` on this specific U-Boot build accepts a **plain-text**
+script file directly, or requires the `mkimage -T script`-wrapped format
+(adds an image header + CRC). `s` is currently plain text. This is a very
+common, widely-supported U-Boot feature, but which variant this build
+expects can't be confirmed without real hardware or disassembly. If plain
+text doesn't work, rebuild with:
+```bash
+mkimage -A arm -T script -C none -n "SD boot script" -d env/sdboot_script.txt s
+```
+(`mkimage` wasn't available in the environment this was developed in — Linux/WSL
+with `u-boot-tools` installed, same requirement already documented elsewhere
+in this repo, is needed to test this variant.)
+
+### Artifacts
+
+- `env/sdboot_script.txt` — the boot script source (tracked).
+- `experimental_sdboot/uboot_selfcontained.bin` — the patched U-Boot,
+  generated as shown above.
+- `experimental_sdboot/s` — copy of the script, named as U-Boot expects it
+  on the SD card.
+- `experimental_sdboot/README.md` — what this is, testing steps, status.
+
+**Not yet tested end-to-end on real hardware.** Once tested, update this
+section and `experimental_sdboot/README.md` with the actual result — if it
+boots, this becomes the recommended path and `experimental_sdboot/` should
+be promoted/renamed accordingly; if `source` needs the wrapped format,
+regenerate `s` and retest; if something more fundamental is wrong, record
+what failed here for the next attempt.

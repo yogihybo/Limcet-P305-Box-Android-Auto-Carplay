@@ -168,6 +168,8 @@ bootz ${loadaddr}
 
 `${mmcdev}`, `${loadaddr}`, and `${bootfile}` are already defined in the device's real NAND env (`mmcdev=1`, `loadaddr=0x1000000`, `bootfile=zImage` — see `env/uboot-env.txt`), so nothing needs to be `setenv`'d for those. This has to be re-typed every boot — it isn't saved to NAND env (no `saveenv` is run), so the stock boot behavior is unaffected.
 
+**Untested, auto-boot alternative:** [`experimental_sdboot/`](experimental_sdboot/README.md) contains a statically-verified (not yet hardware-tested) patched U-Boot that boots automatically from SD with no manual typing and no NAND writes at all — a minimal compiled-in `bootcmd` that loads and runs a boot script from the SD card itself. See that folder's README before trying it, and [`docs/UBOOT_SDBOOT_INVESTIGATION.md`](docs/UBOOT_SDBOOT_INVESTIGATION.md) §8 for the full technical writeup.
+
 ### Manual partition flash
 
 At the `ark#` prompt you can manually flash any partition — this example loads a kernel image from the SD card and writes it to the kernel partition (see [NAND Partition Layout](#90-nand-partition-layout) for the offsets of other partitions):
@@ -532,6 +534,7 @@ msn_factory_configs/
 env/
   uboot-env.txt              Reconstructed env (bootdelay=9, 106m/6m layout)
   mtd3_env_prado_firmware_dump.bin    Raw env from live device (gitignored)
+  sdboot_script.txt          Boot script source for experimental_sdboot/ — see docs/UBOOT_SDBOOT_INVESTIGATION.md
 sd_update/
   UpConfig                   SD update trigger file
   update.example             Static reference script (generated version goes to output/)
@@ -540,6 +543,7 @@ docs/
   SOURCES.md                 Where each file came from and why
   PARTITION_LAYOUT.md        NAND offsets, sizes, flash commands
   SD_BOOT_PLAN.md            Historical SD-boot planning doc — superseded, see below
+  UBOOT_SDBOOT_INVESTIGATION.md  U-Boot SD-boot corruption investigation and the self-contained-script fix
 build_update.sh              Combined interactive build and flash tool
 build_rootfs.sh              Standalone rootfs UBI image builder
 build_userdata.sh            Standalone userdata UBI image builder
@@ -547,6 +551,7 @@ patch_uboot.py               Patches compiled-in env and NAND offset in a U-Boot
 build_bootable_sdcard.sh     Interactive bootable SD card image builder (same arrow-key menu as build_update.sh)
 sd_bootable/                 Generated bootable SD image output (gitignored — sd_boot.img + patched uboot_sdboot.bin)
 corrupted/                   Known-corrupted uboot_sdboot.bin/uboot_final.bin — do not use, see corrupted/README.md
+experimental_sdboot/         Self-contained SD auto-boot patch — statically verified, untested on hardware, see experimental_sdboot/README.md
 legacy/
   generate_update.sh         Superseded by build_update.sh — standalone partition-selection + SD-package
                               generator only, no build steps; kept for standalone use

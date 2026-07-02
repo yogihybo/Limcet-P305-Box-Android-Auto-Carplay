@@ -104,6 +104,11 @@ Adapter: a generic USB-serial adapter (e.g. PL2303) or Raspberry Pi GPIO UART.
 ```
 minicom -D /dev/ttyS0 -b 115200
 ```
+or 
+
+```
+picocom -D /dev/ttyS0 -b 115200
+```
 
 ### U-Boot Console
 

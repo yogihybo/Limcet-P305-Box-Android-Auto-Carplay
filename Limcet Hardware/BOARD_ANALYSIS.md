@@ -17,7 +17,7 @@
 
 The silicon is marked **ARK1668**. The firmware, U-Boot, and kernel all reference `ARK1680` — this appears to be the product family name used in software while the actual silicon die is ARK1668. The two names refer to the same device.
 
-Photos: `PXL_20260626_035809498.jpg`, `PXL_20260626_035849459.MP.jpg`, `PXL_20260626_040133926.jpg`
+Photos: `board_photo_01.jpg`, `board_photo_03.jpg`, `board_photo_07.jpg`
 
 ---
 
@@ -33,7 +33,7 @@ Photos: `PXL_20260626_035809498.jpg`, `PXL_20260626_035849459.MP.jpg`, `PXL_2026
 
 Confirms U-Boot output `NAND: 128 MiB`. The NAND is on a small sub-module (the "Limcet Box" compute module) rather than mounted directly on the main PCB.
 
-Photo: `PXL_20260626_040239651.jpg`
+Photo: `board_photo_09.jpg`
 
 ---
 
@@ -50,7 +50,7 @@ Photo: `PXL_20260626_040239651.jpg`
 
 The BT module communicates with the ARK1668 over a high-speed UART (`/dev/ttyHS1`, 1.5Mbps). Voice calls use UART audio routing (`VOICE_TYPE=UART`). The module handles HFP, A2DP, AVRCP, and iAP2 profiles.
 
-Photo: `PXL_20260626_035858475.jpg`
+Photo: `board_photo_04.jpg`
 
 ---
 
@@ -78,7 +78,7 @@ Only one will be loaded at runtime depending on which chip is present. The WiFi 
 
 Decodes the CVBS composite signal from the reversing camera and feeds it to the ARK1668 via ITU-656. The `itu656_load.sh` init script and `ITU656_BYP_*` sections in `arkdata.ini` relate to this path.
 
-Photo: `PXL_20260626_035858475.jpg`
+Photo: `board_photo_04.jpg`
 
 ---
 
@@ -86,7 +86,7 @@ Photo: `PXL_20260626_035858475.jpg`
 
 A separate interposer PCB labelled **DC_FUJITSU_CON96P_REV_002** sits between the main board and the display panel. It adapts the main board's edge connector (CONN2 / CONN4) to a Fujitsu 96-pin FPC standard used by the LCD panel.
 
-Photo: `PXL_20260626_035822389.jpg`
+Photo: `board_photo_02.jpg`
 
 ---
 
@@ -153,7 +153,7 @@ to the ARK1668 over `/dev/ttyHS0`.
 
 The UART console header is a separate physical connector on the board edge — it is **not** the USB-A port. The USB-TTL adapter plugs into a PC via USB-A and connects its UART wires to this header.
 
-Photos: `PXL_20260626_044832124.jpg`, `PXL_20260626_053749292.jpg`, `PXL_20260626_053757555.jpg`
+Photos: `board_photo_12.jpg`, `board_photo_13.jpg`, `board_photo_14.jpg`
 
 ---
 
@@ -167,7 +167,7 @@ Photos: `PXL_20260626_044832124.jpg`, `PXL_20260626_053749292.jpg`, `PXL_2026062
 
 The yellow/red/white multi-wire harness carries 12V ignition, battery, reverse trigger, and audio lines from the vehicle to the head unit.
 
-Photos: `PXL_20260626_075047263.jpg`, `PXL_20260626_075106810.NIGHT.jpg`
+Photos: `board_photo_15.jpg`, `board_photo_16.jpg`
 
 ---
 

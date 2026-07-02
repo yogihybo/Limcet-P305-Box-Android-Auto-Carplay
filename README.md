@@ -354,27 +354,11 @@ USB mass storage is compiled in (MUSB HCD). **Unverified on Prado hardware** —
 ~~From the U-Boot prompt, boot from a USB drive with one command:~~
 
 ```
-# DO NOT RUN — `usbboot` only exists on a patched U-Boot, which is currently
-# corrupted (see the warning under section 5.0 above). Use the manual
-# sequence below instead — it works on the stock, unpatched U-Boot.
-run usbboot
-```
-
-Manually (works today, no patched U-Boot needed — same pattern as [Manual SD Card Boot](#manual-sd-card-boot), section 4.0):
-
-```
 usb start
 fatload usb 0:1 0x1000000 zImage
 setenv bootargs "console=ttyS0,115200n8 console=tty0 mem=180M root=/dev/sda2 rootfstype=ext4 rootwait rw"
 bootz 0x1000000
 ```
-
-~~The `usbboot` and `usbbootargs` env variables are baked into `uboot_final.bin` compiled-in env:~~
-
-| Variable | Value |
-|----------|-------|
-| ~~`usbboot`~~ | ~~`usb start; fatload usb 0:1 ${loadaddr} ${bootfile}; run usbbootargs; bootz ${loadaddr}`~~ |
-| ~~`usbbootargs`~~ | ~~`console=ttyS0,115200n8 console=tty0 mem=180M root=/dev/sda2 rootfstype=ext4 rootwait rw`~~ |
 
 **USB drive layout:**
 

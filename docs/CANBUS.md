@@ -168,19 +168,27 @@ McuType=6
 MCUPortName="/dev/ttyHS0"
 ```
 
-`CanType=0` means the ARK1668 application does not manage CAN directly — all CAN
-handling is delegated to the STM32 MCU firmware. This is correct for this hardware.
-Do not change `CanType` unless switching to a different MCU adapter that handles CAN
-at the application layer (e.g. `McuAdapter_BoxP230` for Honda XBS).
+`CanType=0` means the ARK1668 application does not run one of `libCanBus.so`'s own
+vendor CAN-decoder adapters (see below) — for this hardware, CAN decoding is done
+entirely by the STM32 MCU firmware and handed to the app as pre-decoded key codes
+over `/dev/ttyHS0` via `McuType=6`. This is correct for this hardware. Do not change
+`CanType` unless switching to a different MCU adapter that handles CAN at the
+application layer (e.g. `McuAdapter_BoxP230` for Honda XBS), or to a `libCanBus.so`
+adapter for an external CAN decoder box (see below) — this device has neither.
 
 `McuType=6` selects the Limcet protocol adapter in `libMcuCenter.so`, which matches
 the `Limcet-V1.0-1302` MCU firmware.
+
+A `CanSubType` key also exists (referenced as a string in the app binary) but is not
+set in any config file present in this rootfs dump — it's presumably a finer-grained
+selector used by other products in this OEM's lineup that do enable a `libCanBus.so`
+adapter. Not relevant to this device as currently configured.
 
 ---
 
 ## Known CAN-capable MCU adapters (libMcuCenter.so)
 
-Only one software adapter has CAN bus methods:
+Within `libMcuCenter.so` specifically, only one software adapter has CAN bus methods:
 
 | Adapter | CAN methods | Vehicle |
 |---------|-------------|---------|
@@ -188,7 +196,84 @@ Only one software adapter has CAN bus methods:
 
 This adapter is Honda-specific. For the Prado (McuType=6 / Limcet), CAN decoding is
 handled entirely within the STM32 MCU firmware — the ARK1668 software receives only
-the decoded key codes.
+the decoded key codes. (`libCanBus.so` is a separate library with its own,
+much larger set of CAN adapters — see next section.)
+
+---
+
+## `libCanBus.so` — a separate, generic multi-vendor CAN adapter SDK
+
+`libCanBus.so` is a **different library from `libMcuCenter.so`**, and turns out to be
+a generic aftermarket CAN-decoder-box SDK shared across this OEM's product line, not
+code written specifically for the Prado/Limcet unit. It selects an implementation at
+runtime through a factory function:
+
+```
+CanBusAdapter::getAdapterInstance(CanBusType)
+CanBusAdapter::getCanBusType()
+```
+
+The concrete adapter classes found by string search (one `.so`, ~787 KB in the
+restored Prado build):
+
+| Class | Likely vehicle / adapter box |
+|-------|-------------------------------|
+| `CanBus_Raise_Toyota` | Toyota — "Raise"-brand aftermarket CAN box |
+| `CanBus_Raise_Honda` | Honda |
+| `CanBus_Raise_Nissan` | Nissan |
+| `CanBus_Raise_GM` | GM |
+| `CanBus_Raise_Haval` | Haval |
+| `CanBus_Raise_GAC` | GAC |
+| `CanBus_Raise_Venucia` | Venucia |
+| `CanBus_Raise_Renault` | Renault |
+| `CanBus_Raise_Jeep` | Jeep |
+| `CanBus_Raise_Volkswagen` | Volkswagen |
+| `CanBus_XBS_Mazda` | Mazda — "XBS"-brand box |
+| `CanBus_XinHang` | XinHang-brand box |
+| `CanBus_XinRi` | XinRi-brand box |
+| `CanBus_LiHang_JMCE200N` | LiHang JMCE200N box |
+| `CanBus_Huida_ZD` | Huida ZD box |
+| `CanBus_DaoJun_Honda` | DaoJun-brand Honda box |
+
+`CanBus_Raise_Toyota` — the vehicle-correct entry for this Prado — is present, which
+at first looks like it should be the active path instead of the MCU. Two pieces of
+evidence point the other way, i.e. that it's unused on this device:
+
+1. **Same UART, not a separate CAN peripheral.** `libCanBus.so`'s own strings
+   (`CANPortName`, `"Open CanBus Serial Port "` immediately followed by
+   `/dev/ttyHS0` in the string table) show it also talks over `/dev/ttyHS0` — the
+   same port the MCU (`libMcuCenter.so`) uses. `libCanBus.so`'s "Raise/XBS/XinHang/…"
+   classes are written to drive an **external, UART-connected aftermarket CAN decoder
+   box** as an alternative to this OEM's own STM32-based Limcet MCU, not to talk to a
+   SoC CAN peripheral directly (the ARK1668 has none) or to the onboard TJA1042 (that
+   transceiver is wired to the STM32's own bxCAN pins, not to the Linux side at all —
+   see Hardware above).
+2. **`CanType=0`, not a `CanBus_Raise_*` enum value.** Given the naming pattern, a
+   nonzero `CanType` almost certainly selects one of these `CanBus_Raise_*` classes
+   via `getAdapterInstance()`. `CanType=0` on this device is consistent with "no
+   `libCanBus.so` adapter active" — decoding is left entirely to the Limcet MCU
+   firmware via `McuType=6` instead. The exact `CanType` → class enum mapping was not
+   recoverable from strings alone (would need disassembly of the factory switch/table
+   in `getAdapterInstance`).
+
+This reframes (rather than contradicts) the "Root cause" findings below: the
+`CanBusKeyManager` / `CanBusKey.config` machinery that Holden's firmware stripped
+appears to be a **generic key-code mapping layer** that both paths (MCU-relayed keys
+*and* a `libCanBus.so` adapter's decoded keys) can feed into — its presence doesn't
+imply a `libCanBus.so` adapter is actively running for this Prado configuration.
+
+One adapter, `CanBus_XinHang`, has its own `onStartUpdateMCU` method and references
+a `can_xinhang.bin` file — some of these adapter boxes are themselves updatable from
+the Linux side over UART. Not relevant to the Limcet STM32 firmware update path
+described above, since `CanType=0` means this class is never instantiated here.
+
+**`gpio34`** — found in `libCanBus.so` as literal shell commands
+(`echo 0/1 > /sys/class/gpio/gpio34/value`) — is plausibly a power/enable or
+presence-detect line for one of these *external* CAN adapter boxes, not the onboard
+TJA1042 (see point 1 above; that transceiver is enabled/controlled by the STM32, not
+by a Linux GPIO). This is inference — no string ties `gpio34` to a specific purpose,
+and it is presumably unused/floating on this device since `CanType=0`. See
+[`BOARD_ANALYSIS.md`](../Limcet%20Hardware/BOARD_ANALYSIS.md) for the full GPIO table.
 
 ---
 

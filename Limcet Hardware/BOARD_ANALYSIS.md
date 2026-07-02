@@ -47,6 +47,7 @@ Photo: `board_photo_09.jpg`
 | UART | `/dev/ttyHS1` at 1.5Mbps (from `blueware.properties`) |
 | Config | `MODULE_TYPE=BW121` in `/etc/blueware.properties` |
 | BT MAC suffix | `FC9F` (from `DC0D3014FC9F` seen in bootlog) |
+| Enable pin | Linux `gpio91` — `BTEN_INTERFACE=gpio91` in `/etc/blueware.properties` |
 
 The BT module communicates with the ARK1668 over a high-speed UART (`/dev/ttyHS1`, 1.5Mbps). Voice calls use UART audio routing (`VOICE_TYPE=UART`). The module handles HFP, A2DP, AVRCP, and iAP2 profiles.
 
@@ -139,6 +140,46 @@ CAN bus — not from an ADC voltage divider on a dedicated SWC wire.
 ARK1668 software is NOT what controls steering wheel buttons on this device. The MCU
 firmware decodes Toyota-specific CAN messages and translates them to key events sent
 to the ARK1668 over `/dev/ttyHS0`.
+
+---
+
+### GPIO Usage (ARK1668 / Linux side)
+
+No public ARK1680/ARK1668 datasheet exists (see Key Findings in `docs/KERNEL.md`), and
+neither the kernel nor U-Boot source is available in this repo — only the compiled
+`zImage` (compressed, not string-searchable) and patched U-Boot binaries. What follows
+was recovered by grepping plain-text configs and extracting ASCII strings from
+uncompressed userspace binaries/libraries in the rootfs — it identifies which Linux
+`gpioN` sysfs numbers are used and by what, but **cannot** map them to physical
+ARK1668 package pins/pads without a datasheet.
+
+| GPIO | Used by | Function | Evidence |
+|------|---------|----------|----------|
+| `gpio91` | `blueware` (Bluetooth daemon) | BT module enable | `BTEN_INTERFACE=gpio91` in `/etc/blueware.properties` |
+| `gpio34` | `libCanBus.so` | Unconfirmed — see below | Literal shell commands `echo 0 > /sys/class/gpio/gpio34/value` / `echo 1 > /sys/class/gpio/gpio34/value` found in the binary |
+
+**`gpio34` caveat:** despite being found in the CAN bus library, this is very likely
+**not** the TJA1042 transceiver's enable/standby pin — that transceiver sits on the
+MCU side (see above) and is controlled by the STM32, not by Linux. `libCanBus.so`
+turns out to be a generic multi-vendor SDK for driving *external* aftermarket CAN
+decoder boxes over UART (unused on this device — see
+[`docs/CANBUS.md`](../docs/CANBUS.md#libcanbusso--a-separate-generic-multi-vendor-can-adapter-sdk)
+for the full writeup), so `gpio34` is more plausibly a power/enable or presence-detect
+line for that kind of external box than anything related to this unit's actual
+onboard CAN circuit. Inference only — no string ties it to a specific purpose.
+
+**`MsnCoreApp`** (the main application) has its own `CarSignalsWatch` class built on a
+`GPIOOperater` abstraction (`getIONum`, `setValue`, `setEdge`, watched via
+`onWatchGPIOThreadProc()` / log string `"Start Watch Car GPIO Signal:"`) — confirming
+the Linux side does watch at least one GPIO for car-related signals directly, not
+solely via UART from the MCU. Its specific pin number wasn't recoverable by string
+search (likely a numeric literal in code, or read from a config file not present in
+this rootfs dump) — would need actual disassembly to pin down.
+
+Kernel-side: the `ark_gpio` driver and its `/proc/ark_gpio` debug interface, plus the
+`ark_sys_pad_config_gpio_mode` pinmux function, are already documented as compiled-in
+in `docs/KERNEL.md` — no specific pin assignments were recoverable from the compressed
+kernel image itself.
 
 ---
 

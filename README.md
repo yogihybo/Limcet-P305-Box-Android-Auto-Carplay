@@ -150,13 +150,9 @@ Selected commands relevant to this device — type `help` at the `ark#` prompt f
 | Command | Effect |
 |---------|--------|
 | `run nandboot` | Boots the stock NAND kernel/rootfs — `run setbootargs; bootnand` (default `bootcmd` on stock NAND, see [Boot Sequence](#30-boot-sequence-stock-nand)) |
-| ~~`run sdboot`~~ | ~~Boots kernel/rootfs from the SD card p1/p2 (`uboot_final.bin` only) — see SD boot~~ **Only exists on a patched U-Boot — the patched binaries this project shipped are corrupted, see below. Use [Manual SD Card Boot](#manual-sd-card-boot) instead.** |
-| ~~`run usbboot`~~ | ~~Boots kernel/rootfs from a USB drive (`uboot_final.bin` only) — see USB boot~~ **Same corrupted-binary caveat as `run sdboot` above.** |
-| `usb start` | Initialises the USB host controller — run this first to confirm USB works before `run usbboot` |
+| `usb start` | Initialises the USB host controller — run this first to confirm USB works before attempting to boot from USB |
 
 ### Manual SD Card Boot
-
-`run sdboot` above only exists on a patched U-Boot — and the patched binaries this project previously produced (`uboot_sdboot.bin`, `uboot_final.bin`) turned out to be corrupted (see [Booting from SD Card or USB](#50-booting-from-sd-card-or-usb-non-destructive) below and [`docs/UBOOT_SDBOOT_INVESTIGATION.md`](docs/UBOOT_SDBOOT_INVESTIGATION.md) for the full writeup). Until a genuinely safe patched U-Boot exists, boot a kernel and rootfs from SD manually instead — no patching, no corruption risk, works today on the stock U-Boot already on the device.
 
 At the `ark#` prompt, with an SD card containing `zImage` on a FAT32 partition (p1) and an ext4 rootfs on a second partition (p2):
 

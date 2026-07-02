@@ -136,11 +136,16 @@ autodetect() {
         [[ -d "$c" ]] && RECONSTRUCTED_DIR="$c"
     }
     # Raw source u-boot — patched into UBOOT_OUT, never modified in place.
-    # uboot_sdboot.bin (ARK1680 BSP source-compiled) is checked first: it has
-    # a real reserved env buffer, so the full sdboot preset fits safely. The
-    # raw NAND-dumped uboot.bin has no such buffer — patch_uboot.py will
-    # refuse (not corrupt) if the preset doesn't fit in whatever incidental
-    # padding actually exists there.
+    # A repo-root uboot_sdboot.bin is checked first: if it's a real
+    # ARK1680 BSP source-compiled binary, it has a reserved env buffer the
+    # full sdboot preset fits safely into. It won't normally exist here —
+    # the one this project previously had turned out to be corrupted (see
+    # docs/UBOOT_SDBOOT_INVESTIGATION.md, corrupted/README.md) and was
+    # removed. Without it, this falls back to the raw NAND-dumped uboot.bin,
+    # which has no reserved buffer — patch_uboot.py will refuse (not
+    # corrupt) since the preset doesn't fit in the incidental padding that
+    # actually exists there. See the README's "Manual SD Card Boot" section
+    # for a patch-free alternative.
     [[ -z "$UBOOT_BIN" && -z "$UBOOT_SRC" ]] && {
         for c in \
             "$SCRIPT_DIR/uboot_sdboot.bin" \

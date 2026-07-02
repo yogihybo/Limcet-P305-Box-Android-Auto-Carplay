@@ -150,9 +150,23 @@ Selected commands relevant to this device — type `help` at the `ark#` prompt f
 | Command | Effect |
 |---------|--------|
 | `run nandboot` | Boots the stock NAND kernel/rootfs — `run setbootargs; bootnand` (default `bootcmd` on stock NAND, see [Boot Sequence](#30-boot-sequence-stock-nand)) |
-| `run sdboot` | Boots kernel/rootfs from the SD card p1/p2 (`uboot_final.bin` only) — see [SD boot](#sd-boot) |
-| `run usbboot` | Boots kernel/rootfs from a USB drive (`uboot_final.bin` only) — see [USB boot](#usb-boot) |
+| ~~`run sdboot`~~ | ~~Boots kernel/rootfs from the SD card p1/p2 (`uboot_final.bin` only) — see SD boot~~ **Only exists on a patched U-Boot — the patched binaries this project shipped are corrupted, see below. Use [Manual SD Card Boot](#manual-sd-card-boot) instead.** |
+| ~~`run usbboot`~~ | ~~Boots kernel/rootfs from a USB drive (`uboot_final.bin` only) — see USB boot~~ **Same corrupted-binary caveat as `run sdboot` above.** |
 | `usb start` | Initialises the USB host controller — run this first to confirm USB works before `run usbboot` |
+
+### Manual SD Card Boot
+
+`run sdboot` above only exists on a patched U-Boot — and the patched binaries this project previously produced (`uboot_sdboot.bin`, `uboot_final.bin`) turned out to be corrupted (see [Booting from SD Card or USB](#50-booting-from-sd-card-or-usb-non-destructive) below and [`docs/UBOOT_SDBOOT_INVESTIGATION.md`](docs/UBOOT_SDBOOT_INVESTIGATION.md) for the full writeup). Until a genuinely safe patched U-Boot exists, boot a kernel and rootfs from SD manually instead — no patching, no corruption risk, works today on the stock U-Boot already on the device.
+
+At the `ark#` prompt, with an SD card containing `zImage` on a FAT32 partition (p1) and an ext4 rootfs on a second partition (p2):
+
+```
+setenv bootargs console=ttyS0,115200n8 console=tty0 mem=180M root=/dev/mmcblk0p2 rootfstype=ext4 rootwait rw
+fatload mmc ${mmcdev}:1 ${loadaddr} ${bootfile}
+bootz ${loadaddr}
+```
+
+`${mmcdev}`, `${loadaddr}`, and `${bootfile}` are already defined in the device's real NAND env (`mmcdev=1`, `loadaddr=0x1000000`, `bootfile=zImage` — see `env/uboot-env.txt`), so nothing needs to be `setenv`'d for those. This has to be re-typed every boot — it isn't saved to NAND env (no `saveenv` is run), so the stock boot behavior is unaffected.
 
 ### Manual partition flash
 
@@ -166,52 +180,60 @@ nand write 0x4000000 0x1a0000 ${filesize}
 
 ## 5.0 Booting from SD Card or USB (non-destructive)
 
+> **⚠ The patched-U-Boot approach below is known corrupted — do not use `uboot_sdboot.bin`/`uboot_final.bin`.** Struck-through text is kept for historical record only. Use [Manual SD Card Boot](#manual-sd-card-boot) (section 4.0) instead — it needs no patched U-Boot at all. Full investigation: [`docs/UBOOT_SDBOOT_INVESTIGATION.md`](docs/UBOOT_SDBOOT_INVESTIGATION.md); the corrupted files themselves are quarantined under [`corrupted/`](corrupted/README.md).
+
 Reflashing NAND for every kernel or rootfs change (see [Flashing via SD Card](#70-flashing-via-sd-card)) is slow. A bad image can also leave the device unbootable, with only a single-keypress recovery window (see [Boot Sequence](#30-boot-sequence-stock-nand)).
 
-`uboot_final.bin` avoids that risk. It's a patched U-Boot that boots a kernel and rootfs from removable media, **without writing to NAND** — the NAND-resident firmware stays untouched, so there's always a known-good fallback.
+~~`uboot_final.bin` avoids that risk. It's a patched U-Boot that boots a kernel and rootfs from removable media, **without writing to NAND** — the NAND-resident firmware stays untouched, so there's always a known-good fallback.~~
 
-`patch_uboot.py` produces it by directly editing the compiled `uboot_sdboot.bin` binary (ARK1680 BSP source-compiled U-Boot) — no source recompilation involved.
+~~`patch_uboot.py` produces it by directly editing the compiled `uboot_sdboot.bin` binary (believed to be ARK1680 BSP source-compiled U-Boot) — no source recompilation involved.~~ **This was wrong — `uboot_sdboot.bin` turned out to be Holden's stock `uboot.bin` with its command table wiped by a (since-fixed) `patch_uboot.py` bug, not a genuine BSP-compiled binary. See the investigation doc linked above.**
 
-Two patches are applied:
-1. **Compiled-in env** — sdboot and usbboot commands baked in as fallback defaults
-2. **NAND env redirect** — the three `MOV Rx, #0x120000` ARM instructions that load `CONFIG_ENV_OFFSET` are changed to `MOV Rx, #0xFF000000`, forcing the NAND env CRC to fail so the compiled-in defaults take effect
+~~Two patches are applied:~~
+~~1. **Compiled-in env** — sdboot and usbboot commands baked in as fallback defaults~~
+~~2. **NAND env redirect** — the three `MOV Rx, #0x120000` ARM instructions that load `CONFIG_ENV_OFFSET` are changed to `MOV Rx, #0xFF000000`, forcing the NAND env CRC to fail so the compiled-in defaults take effect~~
 
-> **Note:** `uboot_final.bin` replaces steps 2–5 of the stock [Boot Sequence](#30-boot-sequence-stock-nand) with standard U-Boot autoboot. `bootdelay=3` is baked into the compiled-in env and the NAND env is intentionally failed, giving a proper 3-second countdown where any key tap works.
+~~> **Note:** `uboot_final.bin` replaces steps 2–5 of the stock [Boot Sequence](#30-boot-sequence-stock-nand) with standard U-Boot autoboot. `bootdelay=3` is baked into the compiled-in env and the NAND env is intentionally failed, giving a proper 3-second countdown where any key tap works.~~
 
-### Rebuild `uboot_final.bin`
+### ~~Rebuild `uboot_final.bin`~~
 
 ```bash
-python3 patch_uboot.py -i uboot_sdboot.bin -o uboot_final.bin --mode sdboot --patch-nand-offset
+# DO NOT RUN — reproduces a corrupted binary, see warning above.
+# corrupted/uboot_sdboot.bin is quarantined, not a valid patch source.
+python3 patch_uboot.py -i corrupted/uboot_sdboot.bin -o uboot_final.bin --mode sdboot --patch-nand-offset
 ```
 
-> **Note:** this is a separate, manual `patch_uboot.py` invocation from the one `build_bootable_sdcard.sh` runs internally — that script patches its own auto-detected U-Boot source and writes its output to `sd_bootable/uboot_sdboot.bin`, never touching the repo-root `uboot_sdboot.bin` used here.
+~~> **Note:** this is a separate, manual `patch_uboot.py` invocation from the one `build_bootable_sdcard.sh` runs internally — that script patches its own auto-detected U-Boot source and writes its output to `sd_bootable/uboot_sdboot.bin`, never touching the repo-root `uboot_sdboot.bin` used here.~~
 
-Place `uboot_final.bin` as `UBOOT.BIN` on the SD card FAT32 partition (p1). Stepldr loads it in preference to the NAND copy.
+~~Place `uboot_final.bin` as `UBOOT.BIN` on the SD card FAT32 partition (p1). Stepldr loads it in preference to the NAND copy.~~
 
-### SD boot
+### ~~SD boot~~ (compiled-in autoboot — not currently usable)
 
-The compiled-in env boots automatically from the SD card:
+~~The compiled-in env boots automatically from the SD card:~~
 
 | Variable | Value |
 |----------|-------|
-| `bootcmd` | `run sdboot` |
-| `bootdelay` | 3 seconds (interrupt with any key) |
-| `bootfile` | `zImage` |
-| `mmcdev` | `1` (SD slot) |
-| `sdboot` | `run sdbootargs; fatload mmc ${mmcdev}:1 ${loadaddr} ${bootfile}; bootz ${loadaddr}` |
-| `sdbootargs` | `console=ttyS0,115200n8 console=tty0 mem=180M root=/dev/mmcblk0p2 rootfstype=ext4 rootwait rw` |
+| ~~`bootcmd`~~ | ~~`run sdboot`~~ |
+| ~~`bootdelay`~~ | ~~3 seconds (interrupt with any key)~~ |
+| ~~`bootfile`~~ | ~~`zImage`~~ |
+| ~~`mmcdev`~~ | ~~`1` (SD slot)~~ |
+| ~~`sdboot`~~ | ~~`run sdbootargs; fatload mmc ${mmcdev}:1 ${loadaddr} ${bootfile}; bootz ${loadaddr}`~~ |
+| ~~`sdbootargs`~~ | ~~`console=ttyS0,115200n8 console=tty0 mem=180M root=/dev/mmcblk0p2 rootfstype=ext4 rootwait rw`~~ |
+
+For the [Manual SD Card Boot](#manual-sd-card-boot) workflow, the equivalent `bootargs` value above is typed by hand each boot — see section 4.0.
 
 **SD card layout:**
 
 | Partition | Filesystem | Contents |
 |-----------|-----------|---------|
-| p1 | FAT32 | `UBOOT.BIN`, `zImage` |
+| p1 | FAT32 | ~~`UBOOT.BIN`,~~ `zImage` (`UBOOT.BIN` is only needed for the currently-unusable patched-autoboot method above — not needed for [Manual SD Card Boot](#manual-sd-card-boot)) |
 | p2 | ext4 | rootfs (`/`), plus `/nanddata/` — see below |
 | p3 | ext4 | userdata (`/data`) |
 
 ### Building the SD image with `build_bootable_sdcard.sh`
 
 `build_bootable_sdcard.sh` assembles the full bootable SD image (or writes directly to a block device): patches its own auto-detected U-Boot source via `patch_uboot.py`, partitions and formats p1/p2/p3, syncs the rootfs and userdata trees, patches `rcS` on the p2 copy only (the source tree is never modified), and populates `/nanddata/` (see below). Output lands in `sd_bootable/` (gitignored).
+
+> **U-Boot patching is currently non-functional** (see the warning at the top of this section) — the "Patch U-Boot for SD boot" toggle below will either safely refuse (raw NAND-dumped `uboot.bin`, no reserved env space) or, if given `--uboot`/a prebuilt binary, has no genuinely working source to patch. The rootfs/userdata/`/nanddata/` portions of this tool are unaffected and still useful — build with `--uboot PATH` pointing at any placeholder binary (or toggle U-Boot patching off) and rely on [Manual SD Card Boot](#manual-sd-card-boot) (section 4.0) instead of the SD card's `UBOOT.BIN`.
 
 It uses the same interactive menu as `build_update.sh` — arrow keys move the highlighted row, Space/Enter toggles it, `a`/`n` select/deselect all, `g` builds, `q` quits:
 
@@ -282,13 +304,18 @@ To replace a placeholder once a real dump is obtained (via serial console: `dd i
 
 ### USB boot
 
-USB mass storage is compiled in (MUSB HCD). **Unverified on Prado hardware** — run `usb start` at the U-Boot prompt to confirm the host controller and GPIO assignments work on your unit before relying on this. From the U-Boot prompt, boot from a USB drive with one command:
+USB mass storage is compiled in (MUSB HCD). **Unverified on Prado hardware** — run `usb start` at the U-Boot prompt to confirm the host controller and GPIO assignments work on your unit before relying on this.
+
+~~From the U-Boot prompt, boot from a USB drive with one command:~~
 
 ```
+# DO NOT RUN — `usbboot` only exists on a patched U-Boot, which is currently
+# corrupted (see the warning under section 5.0 above). Use the manual
+# sequence below instead — it works on the stock, unpatched U-Boot.
 run usbboot
 ```
 
-Or manually:
+Manually (works today, no patched U-Boot needed — same pattern as [Manual SD Card Boot](#manual-sd-card-boot), section 4.0):
 
 ```
 usb start
@@ -297,12 +324,12 @@ setenv bootargs "console=ttyS0,115200n8 console=tty0 mem=180M root=/dev/sda2 roo
 bootz 0x1000000
 ```
 
-The `usbboot` and `usbbootargs` env variables are baked into `uboot_final.bin` compiled-in env:
+~~The `usbboot` and `usbbootargs` env variables are baked into `uboot_final.bin` compiled-in env:~~
 
 | Variable | Value |
 |----------|-------|
-| `usbboot` | `usb start; fatload usb 0:1 ${loadaddr} ${bootfile}; run usbbootargs; bootz ${loadaddr}` |
-| `usbbootargs` | `console=ttyS0,115200n8 console=tty0 mem=180M root=/dev/sda2 rootfstype=ext4 rootwait rw` |
+| ~~`usbboot`~~ | ~~`usb start; fatload usb 0:1 ${loadaddr} ${bootfile}; run usbbootargs; bootz ${loadaddr}`~~ |
+| ~~`usbbootargs`~~ | ~~`console=ttyS0,115200n8 console=tty0 mem=180M root=/dev/sda2 rootfstype=ext4 rootwait rw`~~ |
 
 **USB drive layout:**
 
@@ -315,7 +342,7 @@ The kernel sees the USB drive as `/dev/sda`. The ARK1668 uses MUSB (not EHCI) �
 
 ### Console on screen
 
-Both sdbootargs and usbbootargs include `console=tty0`. Once the kernel initialises the LCD framebuffer (`CONFIG_FB_ARK1668LCD`), boot messages and a login prompt are mirrored to the screen via `fbcon`. The U-Boot phase itself is serial-only (no video console compiled into U-Boot).
+Both the [Manual SD Card Boot](#manual-sd-card-boot) and manual USB boot `bootargs` above include `console=tty0`. Once the kernel initialises the LCD framebuffer (`CONFIG_FB_ARK1668LCD`), boot messages and a login prompt are mirrored to the screen via `fbcon`. The U-Boot phase itself is serial-only (no video console compiled into U-Boot).
 
 ## 6.0 Build & Flash Tool
 
@@ -518,9 +545,8 @@ build_rootfs.sh              Standalone rootfs UBI image builder
 build_userdata.sh            Standalone userdata UBI image builder
 patch_uboot.py               Patches compiled-in env and NAND offset in a U-Boot binary
 build_bootable_sdcard.sh     Interactive bootable SD card image builder (same arrow-key menu as build_update.sh)
-uboot_sdboot.bin             ARK1680 BSP source-compiled U-Boot — manual patch_uboot.py input (see below)
-uboot_final.bin              Patched U-Boot binary — place as UBOOT.BIN on SD p1 FAT32
 sd_bootable/                 Generated bootable SD image output (gitignored — sd_boot.img + patched uboot_sdboot.bin)
+corrupted/                   Known-corrupted uboot_sdboot.bin/uboot_final.bin — do not use, see corrupted/README.md
 legacy/
   generate_update.sh         Superseded by build_update.sh — standalone partition-selection + SD-package
                               generator only, no build steps; kept for standalone use

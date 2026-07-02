@@ -30,7 +30,9 @@ sd_bootable/
 # leftover local copy from before the sd_bootable/ move doesn't get staged.
 /sd_boot.img
 
-# uboot_sdboot.bin is NOT ignored — it's the ARK1680 BSP source-compiled
-# U-Boot binary that patch_uboot.py and build_bootable_sdcard.sh use as
-# input (has a real reserved env buffer, unlike the raw NAND-dumped
-# uboot.bin), and is tracked so the SD-boot build works out of the box.
+# uboot_sdboot.bin at repo root — was briefly tracked here, believed to be an
+# ARK1680 BSP source-compiled U-Boot binary. Turned out to be corrupted (see
+# corrupted/README.md and docs/UBOOT_SDBOOT_INVESTIGATION.md) and was moved to
+# corrupted/. Ignored again here so a stray local copy (e.g. from re-running
+# build_bootable_sdcard.sh) doesn't get accidentally re-staged.
+/uboot_sdboot.bin

@@ -16,9 +16,19 @@ Background:
   inside unrelated instructions. The correct approach is to search for the ARM
   instruction encoding at 4-byte-aligned addresses.
 
-  uboot_sdboot.bin is a source-compiled binary (from linux-arkmicro BSP) with
-  the sdboot preset already in CONFIG_EXTRA_ENV_SETTINGS. Run --patch-nand-offset
-  on it to disable the NAND env so the compiled-in sdboot defaults win.
+  --mode sdboot needs ~500 bytes for its full env preset. A raw NAND-dumped
+  or Holden-derived uboot.bin has no reserved env buffer — only a handful of
+  incidental padding bytes exist before real binary data (a command table) —
+  so --mode sdboot is refused on those binaries by measure_env_capacity().
+  It only works on a binary genuinely compiled with a real CONFIG_ENV_SIZE
+  buffer (real ARK1680 BSP source, e.g. linux-arkmicro). See
+  docs/UBOOT_SDBOOT_INVESTIGATION.md for the full writeup, including a real
+  corrupted uboot_sdboot.bin this project produced by getting this wrong
+  before the safety check existed — quarantined under corrupted/, do not use.
+
+  Without a real BSP-compiled U-Boot available, boot from SD manually at the
+  U-Boot prompt instead of patching the binary at all — see the README's
+  "Manual SD Card Boot" section (no patching, no corruption risk).
 
 Examples:
   # Inspect compiled-in env
@@ -27,20 +37,22 @@ Examples:
   # Find ARM MOV instructions that load CONFIG_ENV_OFFSET
   python patch_uboot.py -i uboot.bin --find-nand-offset
 
-  # Source-compiled binary: only needs NAND offset disabled
+  # Source-compiled binary with a real env buffer: only needs NAND offset disabled
   python patch_uboot.py -i uboot_sdboot.bin -o uboot_final.bin --patch-nand-offset
 
-  # Original binary: patch compiled-in env AND disable NAND offset
-  python patch_uboot.py -i uboot.bin -o uboot_sdboot.bin --mode sdboot --patch-nand-offset
+  # Full sdboot preset — only works on a binary with a real reserved env
+  # buffer; refused (not corrupted) on a raw/Holden-derived uboot.bin
+  python patch_uboot.py -i uboot_sdboot.bin -o uboot_final.bin --mode sdboot --patch-nand-offset
 
   # Custom root device
-  python patch_uboot.py -i uboot.bin -o uboot_sdboot.bin --mode sdboot --root /dev/mmcblk1p2 --patch-nand-offset
+  python patch_uboot.py -i uboot_sdboot.bin -o uboot_final.bin --mode sdboot --root /dev/mmcblk1p2 --patch-nand-offset
 
-  # Manual env patches only (no NAND offset change)
-  python patch_uboot.py -i uboot.bin -o uboot_patched.bin --set bootcmd="run sdboot" --set bootdelay=3
+  # Manual, single-value env patch — safe even on a raw/Holden-derived
+  # uboot.bin as long as the new value is no longer than the old one
+  python patch_uboot.py -i uboot.bin -o uboot_patched.bin --set bootdelay=9
 
   # Dry run — show what would change without writing
-  python patch_uboot.py -i uboot.bin --mode sdboot --patch-nand-offset --dry-run
+  python patch_uboot.py -i uboot_sdboot.bin --mode sdboot --patch-nand-offset --dry-run
 """
 
 import argparse

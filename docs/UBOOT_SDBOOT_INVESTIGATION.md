@@ -11,8 +11,9 @@ U-Boot-prompt command (README §4.0 "Manual SD Card Boot", §5.0 "USB boot")
 remains the confirmed-working fallback. This document records how the
 corruption was found, why the obvious workarounds (§2, §6) don't fix the
 underlying env-space problem, and what it took to get a real (if untested)
-patched auto-boot U-Boot (§5, §7, §8). Written so this doesn't need to be
-re-derived from scratch next time.
+patched auto-boot U-Boot (§5, §7, §8), and why the same trick doesn't
+(yet) extend to USB (§9). Written so this doesn't need to be re-derived
+from scratch next time.
 
 ---
 
@@ -403,3 +404,47 @@ under `set -euo pipefail` at the call site. Fixed by using an explicit
 `if $WRAP_BOOTSCRIPT; then ... fi` and an explicit `return 0`. Worth
 remembering as a general pattern: never let a boolean-gated `&&` shortcut be
 the statement immediately before a bare `return` in a `set -e` script.
+
+---
+
+## 9. Extending the sdscript trick to USB — parked, doesn't fit
+
+Idea considered: apply the same `fatload ...;source ...` compiled-in
+`bootcmd` trick (§8) to auto-boot from USB instead of SD.
+
+In principle it's the same mechanism — `fatload usb` instead of
+`fatload mmc`, same length either way (`usb` and `mmc` are both 3
+characters). But USB needs an explicit `usb start` before `fatload usb`
+works, per the existing (manual, already-documented) USB boot command in
+the README — SD has no equivalent `mmc start` requirement. That prefix has
+to live in the same 52-byte compiled-in env budget:
+
+```
+SD:  fatload mmc 0:1 1000000 s;source 1000000            → 50 B total, fits
+USB: usb start;fatload usb 0:1 1000000 s;source 1000000  → 60 B total, 8 B over
+```
+
+No realistic byte-shaving closes an 8-byte gap here — the script filename
+is already a single character and the load address is already a bare
+literal instead of `${loadaddr}` (same optimisations already applied in
+§8). `usb start` also can't be moved into the boot script itself: the
+script has to be loaded *from* the USB drive, which requires the
+controller already started, so the start command must come before the
+script load, not after — a chicken-and-egg problem, similar in spirit to
+the initramfs MMC-module issue in §6.
+
+Two things this doesn't even get to test:
+- Whether `usb start` is genuinely mandatory, or `fatload usb` would
+  auto-initialise the controller if called directly. If the latter, the
+  bare `fatload usb 0:1 1000000 s;source 1000000` (no prefix) is exactly
+  50 bytes — same as the SD version — and would fit. Unverified without
+  real hardware.
+- USB itself is already flagged **"Unverified on Prado hardware"** in the
+  README's USB boot section — the host controller and GPIO assignments
+  aren't confirmed working *at all* yet, independent of this env-space
+  question.
+
+**Not implemented.** A working manual USB boot command already exists
+(README §5.0 "USB boot"). Revisit only after real hardware confirms (a)
+USB boot works at all via the manual command, and (b) whether `usb start`
+can actually be dropped from a compiled-in `bootcmd`.

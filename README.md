@@ -168,7 +168,7 @@ bootz ${loadaddr}
 
 `${mmcdev}`, `${loadaddr}`, and `${bootfile}` are already defined in the device's real NAND env (`mmcdev=1`, `loadaddr=0x1000000`, `bootfile=zImage` — see `env/uboot-env.txt`), so nothing needs to be `setenv`'d for those. This has to be re-typed every boot — it isn't saved to NAND env (no `saveenv` is run), so the stock boot behavior is unaffected.
 
-**Untested, auto-boot alternative:** [`experimental_sdboot/`](experimental_sdboot/README.md) contains a statically-verified (not yet hardware-tested) patched U-Boot that boots automatically from SD with no manual typing and no NAND writes at all — a minimal compiled-in `bootcmd` that loads and runs a boot script from the SD card itself. See that folder's README before trying it, and [`docs/UBOOT_SDBOOT_INVESTIGATION.md`](docs/UBOOT_SDBOOT_INVESTIGATION.md) §8 for the full technical writeup.
+**Untested, auto-boot alternative:** see [Self-contained SD auto-boot](#self-contained-sd-auto-boot-experimental) below (section 5.0) — no manual typing, no NAND writes at all, but not yet tested on real hardware.
 
 ### Manual partition flash
 
@@ -230,6 +230,53 @@ For the [Manual SD Card Boot](#manual-sd-card-boot) workflow, the equivalent `bo
 | p1 | FAT32 | ~~`UBOOT.BIN`,~~ `zImage` (`UBOOT.BIN` is only needed for the currently-unusable patched-autoboot method above — not needed for [Manual SD Card Boot](#manual-sd-card-boot)) |
 | p2 | ext4 | rootfs (`/`), plus `/nanddata/` — see below |
 | p3 | ext4 | userdata (`/data`) |
+
+### Self-contained SD auto-boot (experimental)
+
+**Statically verified, not yet tested on real hardware** — see [`experimental_sdboot/README.md`](experimental_sdboot/README.md) and [`docs/UBOOT_SDBOOT_INVESTIGATION.md`](docs/UBOOT_SDBOOT_INVESTIGATION.md) §8 for the full writeup. Don't rely on this without testing on your own unit first, though the fallback (just remove the SD card) is safe.
+
+A different approach from both the corrupted patched binaries above and the retype-every-boot [Manual SD Card Boot](#manual-sd-card-boot) (section 4.0) — auto-boots from SD with **zero NAND writes of any kind**, not even to spare/placeholder space.
+
+**The idea:** the raw/Holden-derived `uboot.bin`'s compiled-in env has only ~52 bytes of genuinely safe space (see the corruption warning above) — nowhere near enough for the full `sdboot` preset. But U-Boot's `source` command runs a boot script loaded from any file, so the compiled-in `bootcmd` only needs to load and run a script; the real, arbitrarily long boot logic lives in that script file on the SD card, not in the tiny buffer:
+
+```
+bootcmd=fatload mmc 0:1 1000000 s;source 1000000
+```
+
+40 characters. As the *only* compiled-in key (`bootdelay`/`baudrate` dropped to make room — see `--replace-env` below), this totals 50 bytes, fitting the 52-byte safe capacity with 2 to spare. The script file `s` (source: [`env/sdboot_script.txt`](env/sdboot_script.txt)) carries the actual logic:
+
+```
+setenv bootargs console=ttyS0,115200n8 console=tty0 mem=180M root=/dev/mmcblk0p2 rootfstype=ext4 rootwait rw
+fatload mmc 0:1 1000000 zImage
+bootz 1000000
+```
+
+Combined with `--patch-nand-offset` (forces the real NAND env's CRC to fail so the compiled-in env above is actually used) and placing the patched binary as `UBOOT.BIN` on the SD card (Stepldr already prefers SD over NAND), **every file involved lives on the SD card** — patched U-Boot, script, kernel, rootfs. Nothing touches NAND. Pull the SD card and the device boots exactly as it always has.
+
+Generated with:
+
+```bash
+python patch_uboot.py -i "Prado firmware reconstructed/mtd1-mtd2_uboot/uboot.bin" \
+  -o experimental_sdboot/uboot_selfcontained.bin \
+  --mode sdscript --replace-env --patch-nand-offset
+```
+
+**Confirmed (static analysis):** the env patch applies cleanly (`--dump-env` shows only `bootcmd`, `bootdelay`/`baudrate` cleanly dropped); the NAND-offset redirect applies (`--find-nand-offset` reports 0 remaining valid instructions); a full byte-diff against the source `uboot.bin` shows only 6 tiny differing regions (~44 bytes total) — nowhere near the ~4000-byte corruption in the quarantined [`corrupted/`](corrupted/README.md) files. The command-table strings destroyed there (`set_default_env`, `env_import`, `saveenv`) are all intact here.
+
+**Not confirmed:** whether `source` on this U-Boot build accepts the plain-text script file as-is, or needs the `mkimage -T script`-wrapped format (image header + CRC) — the one real unknown, needing real hardware to settle. If plain text doesn't work:
+
+```bash
+mkimage -A arm -T script -C none -n "SD boot script" -d env/sdboot_script.txt s
+```
+
+**SD card contents for this method:**
+
+| File | Goes where |
+|------|-----------|
+| `experimental_sdboot/uboot_selfcontained.bin` | SD p1, renamed to `UBOOT.BIN` |
+| `experimental_sdboot/s` | SD p1, as-is |
+| `Prado firmware reconstructed/mtd5_kernel/zImage` | SD p1, as `zImage` |
+| rootfs | SD p2 (ext4) |
 
 ### Building the SD image with `build_bootable_sdcard.sh`
 

@@ -178,6 +178,13 @@ nand write 0x4000000 0x1a0000 ${filesize}
 
 ## 5.0 Booting from SD Card or USB (non-destructive)
 
+| Method | Auto or manual | NAND writes | Status |
+|--------|----------------|-------------|--------|
+| [Manual SD Card Boot](#manual-sd-card-boot) (section 4.0) | Manual — retyped every boot | None | **Confirmed working** |
+| [Self-contained SD auto-boot](#self-contained-sd-auto-boot-experimental) (below) | Automatic | None | Experimental — statically verified, untested on hardware |
+| [Manual USB boot](#usb-boot) (below) | Manual — retyped every boot | None | Confirmed working (USB host controller itself unverified on this hardware) |
+| ~~Compiled-in SD autoboot~~ (`uboot_final.bin`, below) | Automatic | None (by design) | **Known corrupted — do not use** |
+
 > **⚠ The patched-U-Boot approach below is known corrupted — do not use `uboot_sdboot.bin`/`uboot_final.bin`.** Struck-through text is kept for historical record only. Use [Manual SD Card Boot](#manual-sd-card-boot) (section 4.0) instead — it needs no patched U-Boot at all. Full investigation: [`docs/UBOOT_SDBOOT_INVESTIGATION.md`](docs/UBOOT_SDBOOT_INVESTIGATION.md); the corrupted files themselves are quarantined under [`corrupted/`](corrupted/README.md).
 
 Reflashing NAND for every kernel or rootfs change (see [Flashing via SD Card](#70-flashing-via-sd-card)) is slow. A bad image can also leave the device unbootable, with only a single-keypress recovery window (see [Boot Sequence](#30-boot-sequence-stock-nand)).

@@ -237,12 +237,12 @@ mkimage -A arm -T script -C none -n "SD boot script" -d env/sdboot_script.txt s
 
 **SD card contents for this method:**
 
-| File | Goes where |
-|------|-----------|
-| `experimental_sdboot/uboot_selfcontained.bin` | SD p1, renamed to `UBOOT.BIN` |
-| `experimental_sdboot/s` | SD p1, as-is |
-| `Prado firmware reconstructed/mtd5_kernel/zImage` | SD p1, as `zImage` |
-| rootfs | SD p2 (ext4) |
+| Source file | Filename required on SD card | Partition |
+|-------------|-------------------------------|-----------|
+| `experimental_sdboot/uboot_selfcontained.bin` | `UBOOT.BIN` — exact case, Stepldr won't find it otherwise | p1 (FAT32) |
+| `experimental_sdboot/s` | `s` | p1 (FAT32) |
+| `Prado firmware reconstructed/mtd5_kernel/zImage` | `zImage` | p1 (FAT32) |
+| rootfs tree | — (copied as the partition's directory contents, not a single file) | p2 (ext4) |
 
 ### Building the SD image with `build_bootable_sdcard.sh`
 

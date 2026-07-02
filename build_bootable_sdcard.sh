@@ -5,8 +5,18 @@
 # media WITHOUT writing to NAND — see build_update.sh for the (destructive)
 # NAND flash update tool instead.
 #
+# EXPERIMENTAL, STATICALLY VERIFIED, NOT YET TESTED ON REAL HARDWARE — see
+# docs/UBOOT_SDBOOT_INVESTIGATION.md §8 and experimental_sdboot/README.md.
+# The U-Boot patch below (self-contained boot script) has been checked for
+# correctness (env patch applies cleanly, NAND-offset redirect applies, no
+# corruption vs. the source uboot.bin) but has not booted a real device yet.
+# The confirmed-working fallback if this doesn't boot is the README's
+# "Manual SD Card Boot" section (types the same logic by hand at the U-Boot
+# prompt, no patched binary needed at all).
+#
 # Run under Linux or WSL. Requires: parted, dosfstools, e2fsprogs, rsync, python3
 #   sudo apt install parted dosfstools e2fsprogs rsync python3
+# u-boot-tools (mkimage) additionally required if using --wrap-bootscript.
 #
 # Usage:
 #   ./build_bootable_sdcard.sh [options]
@@ -22,7 +32,10 @@
 #   --uboot-src PATH   Raw uboot.bin source — patched via patch_uboot.py, never modified
 #   --no-patch-uboot   Use the source uboot.bin as-is without patching
 #   --no-patch-nand-offset  Skip redirecting the NAND env offset (not recommended)
-#   --root DEVICE      Root device for sdboot bootargs (default: /dev/mmcblk0p2)
+#   --root DEVICE      Root device for the boot script's bootargs (default: /dev/mmcblk0p2)
+#   --wrap-bootscript  Wrap the boot script with mkimage (-T script) instead of
+#                      plain text — try plain text first; only needed if U-Boot's
+#                      `source` command on this build rejects an unwrapped script
 #   --kernel PATH      zImage to place on p1
 #   --rootfs-dir DIR   Rootfs source directory (mounted as /)
 #   --userdata-dir DIR Userdata source directory (mounted as /data)
@@ -68,10 +81,12 @@ P2_SIZE_MB=300
 
 UBOOT_BIN=""                                  # prebuilt binary (--uboot); used as-is
 UBOOT_SRC=""                                  # raw source uboot.bin; patched, never modified
-UBOOT_OUT="$OUTPUT_DIR/uboot_sdboot.bin"      # patched output
+UBOOT_OUT="$OUTPUT_DIR/uboot_selfcontained.bin"  # patched output
+BOOTSCRIPT_OUT="$OUTPUT_DIR/s"                 # generated boot script (see generate_bootscript)
 PATCH_UBOOT=true                              # run patch_uboot.py on the source
 PATCH_NAND_OFFSET=true                        # patch_uboot.py --patch-nand-offset
-ROOT_DEV="/dev/mmcblk0p2"                     # patch_uboot.py --root (matches p2 rootfs)
+ROOT_DEV="/dev/mmcblk0p2"                     # root= in the generated boot script (matches p2 rootfs)
+WRAP_BOOTSCRIPT=false                         # mkimage-wrap the boot script instead of plain text
 KERNEL_BIN=""
 ROOTFS_DIR=""
 USERDATA_DIR=""
@@ -105,6 +120,7 @@ while [[ $# -gt 0 ]]; do
         --no-patch-uboot)  PATCH_UBOOT=false; shift ;;
         --no-patch-nand-offset) PATCH_NAND_OFFSET=false; shift ;;
         --root)            ROOT_DEV="$2"; shift 2 ;;
+        --wrap-bootscript) WRAP_BOOTSCRIPT=true; shift ;;
         --kernel)          KERNEL_BIN="$2"; shift 2 ;;
         --rootfs-dir)      ROOTFS_DIR="$2"; shift 2 ;;
         --userdata-dir)    USERDATA_DIR="$2"; shift 2 ;;
@@ -136,19 +152,13 @@ autodetect() {
         [[ -d "$c" ]] && RECONSTRUCTED_DIR="$c"
     }
     # Raw source u-boot — patched into UBOOT_OUT, never modified in place.
-    # A repo-root uboot_sdboot.bin is checked first: if it's a real
-    # ARK1680 BSP source-compiled binary, it has a reserved env buffer the
-    # full sdboot preset fits safely into. It won't normally exist here —
-    # the one this project previously had turned out to be corrupted (see
-    # docs/UBOOT_SDBOOT_INVESTIGATION.md, corrupted/README.md) and was
-    # removed. Without it, this falls back to the raw NAND-dumped uboot.bin,
-    # which has no reserved buffer — patch_uboot.py will refuse (not
-    # corrupt) since the preset doesn't fit in the incidental padding that
-    # actually exists there. See the README's "Manual SD Card Boot" section
-    # for a patch-free alternative.
+    # The 'sdscript' patch mode (see prepare_uboot) only needs ~52 bytes of
+    # compiled-in env space, so the raw NAND-dumped uboot.bin (no reserved
+    # env buffer) works fine here — unlike the old 'sdboot' preset (~500 B),
+    # which needed a real BSP-compiled binary this project doesn't have (see
+    # docs/UBOOT_SDBOOT_INVESTIGATION.md, corrupted/README.md for why).
     [[ -z "$UBOOT_BIN" && -z "$UBOOT_SRC" ]] && {
         for c in \
-            "$SCRIPT_DIR/uboot_sdboot.bin" \
             "$SCRIPT_DIR/Prado firmware reconstructed/mtd1-mtd2_uboot/uboot.bin" \
             "$SCRIPT_DIR/Prado firmware dump/mtd1-mtd2_uboot/extracted/uboot.bin"
         do [[ -f "$c" ]] && { UBOOT_SRC="$c"; break; }; done
@@ -194,6 +204,14 @@ check_requirements() {
             any_missing=1
         fi
     done
+    if $WRAP_BOOTSCRIPT; then
+        if command -v mkimage &>/dev/null; then
+            success "mkimage  (wrap the boot script, --wrap-bootscript)"
+        else
+            warn "mkimage  (wrap the boot script, --wrap-bootscript) — not found, install: sudo apt install u-boot-tools"
+            any_missing=1
+        fi
+    fi
     echo ""
     if [[ $any_missing -eq 1 ]]; then
         warn "Missing tools will block the build — install them before pressing g."
@@ -208,8 +226,8 @@ check_requirements() {
 # Format: "key|label|description|default"
 # ---------------------------------------------------------------------------
 CONFIG_ITEMS=(
-    "patch_uboot|Patch U-Boot for SD boot|Bakes in sdboot/usbboot compiled-in env and redirects the NAND env offset via patch_uboot.py|ON"
-    "patch_nand_offset|Patch NAND env offset redirect|Forces the NAND env CRC to fail so compiled-in sdboot defaults take effect (only applies if Patch U-Boot is on)|ON"
+    "patch_uboot|Patch U-Boot for SD boot|EXPERIMENTAL, untested on hardware (see docs/UBOOT_SDBOOT_INVESTIGATION.md §8). Bakes in a minimal bootcmd that loads and runs a boot script from SD p1 (env/sdboot_script.txt), and redirects the NAND env offset via patch_uboot.py|ON"
+    "patch_nand_offset|Patch NAND env offset redirect|Forces the NAND env CRC to fail so the compiled-in bootcmd above takes effect (only applies if Patch U-Boot is on)|ON"
     "include_userdata|Include userdata (p3)|Copies the userdata dir to p3 — if off, p3 is left empty and the app populates /data on first boot|ON"
     "redirect_mtd_data|Redirect bootlogo/bootanimation/etc to SD|Symlinks bootlogo, bootanimation, reversingtrack, and Unicode font (mtd8-11) to files under /nanddata/ on p2 — if off, the device reads these from whatever is already in NAND instead|ON"
 )
@@ -301,8 +319,16 @@ print_menu() {
         userdata_status="${RED}missing${RESET}"
     fi
 
+    local bootscript_status
+    if [[ ${CONFIG_SEL[0]} -eq 1 && -z "$UBOOT_BIN" ]]; then
+        bootscript_status="${DIM}generated at build time (experimental)${RESET}"
+    else
+        bootscript_status="${DIM}n/a — U-Boot not being patched${RESET}"
+    fi
+
     printf "       p1   %-22s %-16s %b\n" "U-Boot"   "$(basename "${UBOOT_BIN:-${UBOOT_SRC:-uboot.bin}}")" "$uboot_status"
     printf "       p1   %-22s %-16s %b\n" "Kernel"    "$(basename "${KERNEL_BIN:-zImage}")"                "$kernel_status"
+    printf "       p1   %-22s %-16s %b\n" "Boot script" "s"                                                "$bootscript_status"
     printf "       p2   %-22s %-16s %b\n" "Rootfs"    "$(basename "${ROOTFS_DIR:-rootfs}")"                "$rootfs_status"
     printf "       p3   %-22s %-16s %b\n" "Userdata"  "$(basename "${USERDATA_DIR:-userdata}")"            "$userdata_status"
 
@@ -341,9 +367,53 @@ validate() {
 }
 
 # ---------------------------------------------------------------------------
+# Boot script — the real boot logic (bootargs, fatload zImage, bootz) that
+# the patched U-Boot's minimal compiled-in bootcmd loads and runs via
+# `source`. Generated (not just copied from env/sdboot_script.txt) so --root
+# is honoured. Lands in OUTPUT_DIR, copied to SD p1 as "s" in build().
+# ---------------------------------------------------------------------------
+generate_bootscript() {
+    mkdir -p "$OUTPUT_DIR"
+    local script
+    script=$(cat <<EOF
+setenv bootargs console=ttyS0,115200n8 console=tty0 mem=180M root=$ROOT_DEV rootfstype=ext4 rootwait rw
+fatload mmc 0:1 1000000 zImage
+bootz 1000000
+EOF
+)
+    if $DRY_RUN; then
+        echo "  [dry-run] would write boot script to $BOOTSCRIPT_OUT:"
+        echo "$script" | sed 's/^/    /'
+        if $WRAP_BOOTSCRIPT; then
+            echo "  [dry-run] would wrap with: mkimage -A arm -T script -C none -n \"SD boot script\" -d <script> $BOOTSCRIPT_OUT"
+        fi
+        return 0
+    fi
+
+    if $WRAP_BOOTSCRIPT; then
+        local raw="$OUTPUT_DIR/sdboot_script.txt"
+        printf '%s\n' "$script" > "$raw"
+        mkimage -A arm -T script -C none -n "SD boot script" -d "$raw" "$BOOTSCRIPT_OUT" >/dev/null
+        success "Boot script generated (mkimage-wrapped): $BOOTSCRIPT_OUT"
+    else
+        printf '%s\n' "$script" > "$BOOTSCRIPT_OUT"
+        success "Boot script generated (plain text): $BOOTSCRIPT_OUT"
+    fi
+}
+
+# ---------------------------------------------------------------------------
 # Patch U-Boot — patch_uboot.py reads the source and writes UBOOT_OUT.
 # The source uboot.bin is never modified; UBOOT_OUT lands in sd_bootable/.
+#
+# EXPERIMENTAL: statically verified, not yet tested on real hardware — see
+# docs/UBOOT_SDBOOT_INVESTIGATION.md §8. Uses the 'sdscript' patch mode: a
+# minimal compiled-in bootcmd that loads and `source`s the boot script above
+# from SD p1, instead of the old 'sdboot' preset (which needed ~500 B of
+# compiled-in env space that a raw/Holden-derived uboot.bin doesn't have —
+# patch_uboot.py safely refuses that combination rather than corrupting it).
 # ---------------------------------------------------------------------------
+UBOOT_WAS_PATCHED=false   # set true only when prepare_uboot() actually patches; read by build()'s summary
+
 prepare_uboot() {
     # Explicit prebuilt binary — use as-is.
     if [[ -n "$UBOOT_BIN" ]]; then
@@ -359,16 +429,18 @@ prepare_uboot() {
     fi
 
     mkdir -p "$OUTPUT_DIR"
+    generate_bootscript
+    UBOOT_WAS_PATCHED=true
 
     echo ""
-    echo -e "${BOLD}  Patching U-Boot for SD boot...${RESET}"
+    echo -e "${BOLD}  Patching U-Boot for SD boot (experimental, see docs/UBOOT_SDBOOT_INVESTIGATION.md §8)...${RESET}"
     info "Source: $UBOOT_SRC (unchanged)"
     info "Output: $UBOOT_OUT"
     local nand_flag=""
     [[ ${CONFIG_SEL[1]} -eq 1 ]] && nand_flag="--patch-nand-offset"
     run python3 "$SCRIPT_DIR/patch_uboot.py" \
         -i "$UBOOT_SRC" -o "$UBOOT_OUT" \
-        --mode sdboot --root "$ROOT_DEV" \
+        --mode sdscript --replace-env \
         $nand_flag
 
     if ! $DRY_RUN; then
@@ -614,9 +686,14 @@ build() {
     echo -e "${BOLD}[5/7] Populating p1 (boot partition)...${RESET}"
     run cp "$UBOOT_BIN"  /tmp/sd_p1/UBOOT.BIN
     run cp "$KERNEL_BIN" /tmp/sd_p1/zImage
+    if $UBOOT_WAS_PATCHED; then
+        run cp "$BOOTSCRIPT_OUT" /tmp/sd_p1/s
+        success "UBOOT.BIN + zImage + s (boot script) written to p1"
+    else
+        success "UBOOT.BIN + zImage written to p1"
+    fi
     [[ -f "$SCRIPT_DIR/initramfs/initramfs.cpio.gz" ]] && \
         run cp "$SCRIPT_DIR/initramfs/initramfs.cpio.gz" /tmp/sd_p1/
-    success "UBOOT.BIN + zImage written to p1"
 
     # 7. Populate p2 — rootfs
     echo -e "${BOLD}[6/7] Populating p2 (rootfs)...${RESET}"
@@ -673,10 +750,20 @@ build() {
     echo ""
     echo -e "${BOLD}  Boot sequence:${RESET}"
     echo    "    Stepldr  → loads UBOOT.BIN from p1 (FAT32)"
-    echo    "    U-Boot   → fatload zImage from p1, sets root=/dev/mmcblk0p2"
+    if $UBOOT_WAS_PATCHED; then
+        echo "    U-Boot   → fatload + source's boot script 's' from p1"
+        echo "    Script   → fatload zImage, sets root=$ROOT_DEV, bootz"
+    else
+        echo "    U-Boot   → whatever bootcmd this UBOOT.BIN was built/patched with"
+    fi
     echo    "    Kernel   → mounts p2 ext4 as /"
     echo    "    rcS      → mounts p3 ext4 as /data"
     echo ""
+    if $UBOOT_WAS_PATCHED; then
+        warn "This U-Boot patch is experimental and not yet tested on real hardware"
+        warn "  (see docs/UBOOT_SDBOOT_INVESTIGATION.md §8). Confirmed-working"
+        warn "  fallback: README \"Manual SD Card Boot\" (no patched binary needed)."
+    fi
 }
 
 # ---------------------------------------------------------------------------

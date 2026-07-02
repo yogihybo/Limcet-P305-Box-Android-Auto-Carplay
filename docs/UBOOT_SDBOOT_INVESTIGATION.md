@@ -380,3 +380,26 @@ boots, this becomes the recommended path and `experimental_sdboot/` should
 be promoted/renamed accordingly; if `source` needs the wrapped format,
 regenerate `s` and retest; if something more fundamental is wrong, record
 what failed here for the next attempt.
+
+### `build_bootable_sdcard.sh` now uses this method
+
+The build tool's "Patch U-Boot for SD boot" toggle was switched from the old
+`--mode sdboot` (needs a real BSP-compiled source, doesn't fit the raw dump)
+to `--mode sdscript --replace-env`. It also gained a `generate_bootscript()`
+step that writes the boot script (with `--root` substituted in) and copies
+it to SD p1 as `s` alongside `UBOOT.BIN` and `zImage`. New `--wrap-bootscript`
+flag runs the `mkimage`-wrapped variant if plain text doesn't work. The
+auto-detected U-Boot source list was simplified to just the raw NAND-dumped
+`uboot.bin` (no longer prefers a repo-root `uboot_sdboot.bin`, since
+`sdscript`'s tiny footprint means the raw dump works fine either way).
+
+Caught one real bug while wiring this up, unrelated to the corruption
+history above: a bare `$WRAP_BOOTSCRIPT && echo ...` immediately followed by
+a bare `return` inside `generate_bootscript()`'s dry-run branch. When
+`WRAP_BOOTSCRIPT` is false, that `&&` expression evaluates to exit status 1,
+and the bare `return` (no explicit code) inherits `$?` from it — silently
+making the *function itself* return 1, which then aborted the whole script
+under `set -euo pipefail` at the call site. Fixed by using an explicit
+`if $WRAP_BOOTSCRIPT; then ... fi` and an explicit `return 0`. Worth
+remembering as a general pattern: never let a boolean-gated `&&` shortcut be
+the statement immediately before a bare `return` in a `set -e` script.

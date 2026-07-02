@@ -135,9 +135,15 @@ autodetect() {
         local c="$SCRIPT_DIR/Prado firmware reconstructed"
         [[ -d "$c" ]] && RECONSTRUCTED_DIR="$c"
     }
-    # Raw source u-boot — patched into UBOOT_OUT, never modified in place
+    # Raw source u-boot — patched into UBOOT_OUT, never modified in place.
+    # uboot_sdboot.bin (ARK1680 BSP source-compiled) is checked first: it has
+    # a real reserved env buffer, so the full sdboot preset fits safely. The
+    # raw NAND-dumped uboot.bin has no such buffer — patch_uboot.py will
+    # refuse (not corrupt) if the preset doesn't fit in whatever incidental
+    # padding actually exists there.
     [[ -z "$UBOOT_BIN" && -z "$UBOOT_SRC" ]] && {
         for c in \
+            "$SCRIPT_DIR/uboot_sdboot.bin" \
             "$SCRIPT_DIR/Prado firmware reconstructed/mtd1-mtd2_uboot/uboot.bin" \
             "$SCRIPT_DIR/Prado firmware dump/mtd1-mtd2_uboot/extracted/uboot.bin"
         do [[ -f "$c" ]] && { UBOOT_SRC="$c"; break; }; done

@@ -145,6 +145,8 @@ Holding the interrupt key (see [Boot Sequence](#30-boot-sequence-stock-nand) abo
 
 ### Boot commands
 
+Selected commands relevant to this device — type `help` at the `ark#` prompt for the full command list built into this U-Boot.
+
 | Command | Effect |
 |---------|--------|
 | `run nandboot` | Boots the stock NAND kernel/rootfs — `run setbootargs; bootnand` (default `bootcmd` on stock NAND, see [Boot Sequence](#30-boot-sequence-stock-nand)) |
@@ -164,7 +166,11 @@ nand write 0x4000000 0x1a0000 ${filesize}
 
 ## 5.0 Booting from SD Card or USB (non-destructive)
 
-`uboot_final.bin` is a patched U-Boot that boots a kernel and rootfs from removable media **without writing to NAND**. It is produced by `patch_uboot.py` applied to `uboot_sdboot.bin` (ARK1680 BSP source-compiled U-Boot).
+Reflashing NAND for every kernel or rootfs change (see [Flashing via SD Card](#70-flashing-via-sd-card)) is slow. A bad image can also leave the device unbootable, with only a single-keypress recovery window (see [Boot Sequence](#30-boot-sequence-stock-nand)).
+
+`uboot_final.bin` avoids that risk. It's a patched U-Boot that boots a kernel and rootfs from removable media, **without writing to NAND** — the NAND-resident firmware stays untouched, so there's always a known-good fallback.
+
+`patch_uboot.py` produces it by directly editing the compiled `uboot_sdboot.bin` binary (ARK1680 BSP source-compiled U-Boot) — no source recompilation involved.
 
 Two patches are applied:
 1. **Compiled-in env** — sdboot and usbboot commands baked in as fallback defaults

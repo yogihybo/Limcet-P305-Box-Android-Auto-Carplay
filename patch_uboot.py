@@ -93,21 +93,73 @@ def serialize_env(env: dict) -> bytes:
     return b'\x00'.join(entries) + b'\x00\x00'
 
 
+def measure_env_capacity(data: bytes, offset: int, max_size: int) -> tuple:
+    """
+    Measure how many bytes from offset are safe to overwrite.
+
+    Many U-Boot binaries (e.g. a raw NAND dump) don't reserve a fixed-size
+    buffer for the compiled-in env — the env strings sit directly against
+    whatever binary data follows (command tables, code, ...), with at most a
+    few incidental zero bytes of alignment padding. Blindly clearing a fixed
+    max_size window in that case overwrites real data. Only source-compiled
+    binaries with a real CONFIG_ENV_SIZE buffer (e.g. uboot_sdboot.bin) have
+    a large genuine zero-padded region here.
+
+    Returns (original_length, safe_capacity):
+      - original_length: bytes from offset through the env block's own
+        double-null terminator (i.e. exactly what's already env content).
+      - safe_capacity: original_length plus any zero bytes immediately
+        following it (verified padding), capped at max_size. It is never
+        safe to write more than this many bytes at offset.
+    """
+    pos = offset
+    end = min(offset + max_size, len(data))
+    while pos < end:
+        null = data.find(b'\x00', pos, end)
+        if null == -1:
+            pos = end
+            break
+        if null == pos:
+            pos = null + 1
+            break
+        pos = null + 1
+    original_length = pos - offset
+
+    safe_capacity = original_length
+    while offset + safe_capacity < end and data[offset + safe_capacity] == 0:
+        safe_capacity += 1
+
+    return original_length, safe_capacity
+
+
 def patch_env_block(data: bytearray, offset: int, patches: dict,
                     max_size: int = 4096) -> bool:
     """
     Merge patches into the existing compiled-in env block and write back.
-    Returns False if the result is too large for the block.
+    Only ever touches bytes verified safe by measure_env_capacity() — never
+    the fixed max_size window itself. Returns False if the patched env
+    doesn't fit in that safe region.
     """
     existing = parse_env(bytes(data), offset, max_size)
     existing.update(patches)
     serialized = serialize_env(existing)
-    if len(serialized) > max_size:
-        print(f"ERROR: patched env ({len(serialized)} B) exceeds block size ({max_size} B)")
-        print("       Use --env-block-size if the block is larger than default 4096 B")
+
+    original_length, safe_capacity = measure_env_capacity(bytes(data), offset, max_size)
+
+    if len(serialized) > safe_capacity:
+        print(f"ERROR: patched env ({len(serialized)} B) exceeds the {safe_capacity} B "
+              f"safe to rewrite here")
+        print(f"       ({original_length} B of existing env + "
+              f"{safe_capacity - original_length} B of verified zero padding).")
+        print("       Writing more would overwrite non-zero data immediately after the")
+        print("       env block — expected for a raw/dumped uboot.bin with no reserved")
+        print("       env buffer. Use a source-compiled binary with a real env buffer")
+        print("       (e.g. uboot_sdboot.bin) instead, or reduce the env entries.")
         return False
-    padded = serialized + b'\x00' * (max_size - len(serialized))
-    data[offset:offset + max_size] = padded
+
+    write_len = max(len(serialized), original_length)
+    padded = serialized + b'\x00' * (write_len - len(serialized))
+    data[offset:offset + write_len] = padded
     return True
 
 
@@ -233,7 +285,9 @@ def main():
                         'forcing NAND env CRC failure so compiled-in defaults are used'
                     ))
     ap.add_argument('--env-block-size', type=int, default=4096, metavar='BYTES',
-                    help='Max compiled-in env block size in bytes (default: 4096)')
+                    help='Max bytes after the env offset to scan for parsing and safe '
+                         'padding (default: 4096) — not a guarantee that many bytes '
+                         'are writable; see measure_env_capacity()')
     ap.add_argument('--dry-run', action='store_true',
                     help='Show changes without writing output file')
     args = ap.parse_args()

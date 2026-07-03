@@ -692,6 +692,14 @@ present) are both confirmed directly from the binary's disassembly, not inferred
 See [`docs/MSNCOREAPP_REVIEW.md`](docs/MSNCOREAPP_REVIEW.md) for the full disassembly trace and
 [`docs/SECURITY_REVIEW.md`](docs/SECURITY_REVIEW.md) for this project's broader credential/access-path review.
 
+**Ready-to-use payload:** [`msn_autocopy_payload/`](msn_autocopy_payload/) contains a pre-built
+`msn_autocopy/` folder that installs `sshd` and autostart via `rcS` on a stock device. Copy the
+`msn_autocopy/` subfolder to the root of a FAT32 USB drive or SD card, insert it into the head
+unit, reboot — SSH is available at `root@192.168.7.1` (password `123456`). Exec bits on the
+binary and startup script are set correctly; `rcS` also runs `chmod 755 /usr/bin/sshd` at boot as
+a FAT32 exec-bit safety net. See [`msn_autocopy_payload/README.md`](msn_autocopy_payload/README.md)
+for full instructions and hardening steps.
+
 ## 11.0 Holden Firmware Compatibility
 
 The Holden update package (`HOLDEN_KS_Auto_DSP(BT)_0219`) has been confirmed to boot successfully on the Prado device. This validates that the Holden firmware is a compatible base — the SoC, bootloader, and kernel are interoperable.
@@ -751,3 +759,4 @@ See [`docs/SOURCES.md`](docs/SOURCES.md) for full provenance of each file.
 - [`linux-arkmicro Reference/README.md`](linux-arkmicro%20Reference/README.md) — provenance for the vendored ArkMicro U-Boot BSP source
 - [`experimental_sdboot/README.md`](experimental_sdboot/README.md) — self-contained SD auto-boot patch status
 - [`corrupted/README.md`](corrupted/README.md) — why the quarantined U-Boot binaries there are unsafe to use
+- [`msn_autocopy_payload/README.md`](msn_autocopy_payload/README.md) — USB payload that exploits the `msn_autocopy` auto-copy mechanism to install and autostart `sshd` on a stock device

@@ -198,9 +198,16 @@ attempt via ad-hoc byte-pattern scripting given the brick risk.
    (`CONFIG_ENV_OFFSET=0x120000`, `CONFIG_BOOTCOMMAND`/`CONFIG_EXTRA_ENV_SETTINGS`
    for sdboot) documented in full there (§"Option 2 — Build U-Boot from
    source"). That path was explicitly called "preferred" over binary patching
-   at the time, but was never taken — and the BSP source tree isn't in this
+   at the time, but was never taken, and the BSP source tree wasn't in this
    repo (was on the original author's machine only, under their `~/Downloads`).
-   **This is the correct path if the BSP source can be located again.**
+   **Update: located and pulled in.** The real repo is `RD_Software/linux-arkmicro`
+   (public Gitea instance, see [`linux-arkmicro Reference/README.md`](../linux-arkmicro%20Reference/README.md)
+   for the URL/commit); a relevant slice is copied into `linux-arkmicro Reference/`.
+   It's a later BSP generation than the Prado's actual 2012.10/ATAG/no-FDT stock
+   U-Boot (this repo's `ark1668` target is 2018.07, SPL+FDT) — not a byte-source
+   match, but the same SoC family. Full build plan, config-delta table, and an
+   SD-only test sequence (no NAND writes until proven on hardware) now live in
+   [`docs/UBOOT_BUILD_PLAN.md`](UBOOT_BUILD_PLAN.md).
 2. **ARM relocation patch** (§4) — possible in principle, but needs real
    disassembly tooling and carries meaningful brick risk. Not recommended
    without that tooling in hand.

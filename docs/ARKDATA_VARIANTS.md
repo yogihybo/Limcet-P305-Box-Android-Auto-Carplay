@@ -12,6 +12,38 @@ touch-key configuration for one panel type.
 platform family letter (corresponding broadly to the `ResourceName` in
 `MsnProductInfo.ini`, e.g. Box-P → group P, Box-V → group V).
 
+## Register-level meaning, confirmed via vendor source
+
+**Source:** [`../ArkPro Reference/`](../ArkPro%20Reference/README.md) — ASTRI's (Hong Kong Applied
+Science and Technology Research Institute) reference ARK1680 kernel/U-Boot/userspace source, copied
+into this repo from a public leak of `cphatt/ArkPro` (commit `e7437446cacc79e242d9b7a90e3724af52c33bba`).
+It's a generic reference BSP, not the Prado's actual OEM board file — see that folder's README for full
+provenance, licensing notes, and what was and wasn't pulled in. Also cross-checked against
+`docs/SOC_ARK1668_CROSSREF.md` §9.
+
+These field names (`CLKDIV1`, `VBP`, `HBP`, `VSW`, `HSW`, `IVS`) aren't RE-guessed labels — they're
+ArkMicro's own register field names for the ARK1680's LCD timing-control registers, confirmed against
+the real kernel display driver in
+[`../ArkPro Reference/kernel/drivers/ark/display/ark_display_lcd.c`](../ArkPro%20Reference/kernel/drivers/ark/display/ark_display_lcd.c):
+
+```c
+// CLCD_TIMING0
+rLCD_TIMING0 = HSW<<20 | HBP<<10 | HFP<<0;
+// CLCD_TIMING1
+rLCD_TIMING1 = VFP<<19 | VSW<<13 | (ARK_DISP_LCD_WIDTH-1)<<0;
+// CLCD_TIMING2
+rLCD_TIMING2 = IOE<<23 | IHS<<22 | IVS<<21 | (ARK_DISP_LCD_HEIGHT-1)<<10 | VBP<<0;
+```
+
+`CLKDIV1` is a separate register field, confirmed in the companion U-Boot driver
+([`../ArkPro Reference/uboot/ark_lcd.c`](../ArkPro%20Reference/uboot/ark_lcd.c)) as the
+`SYS_LCD_CLK_CFG` bits 23:19 — the "srgb_clock div factor" dividing the ~393MHz system PLL to derive
+the LCD pixel clock (`pixel_clock ≈ syspll / CLKDIV1`, e.g. a hardcoded reference-panel case comments
+`syspll/13/1 = 393/13 = 30.23MHz`). This explains the split in the tables below: the standard 800×480
+panels cluster at `CLKDIV1=11` (~35.7MHz pixel clock), while the wide-format 1280×480 LVDS panels
+(`arkdata15_D`, `arkdata19_E`) drop to `CLKDIV1=8` (~49.1MHz) — a wider panel needs more pixel
+bandwidth per refresh, hence the lower (faster) divider.
+
 ## Screen type key (ScreenType field)
 
 | Value | Interface |

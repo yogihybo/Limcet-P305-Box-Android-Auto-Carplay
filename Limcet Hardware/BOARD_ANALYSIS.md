@@ -3,6 +3,12 @@
 **Board:** DC_LIMCET_MB_REV_003
 **Photos taken:** 2026-06-26
 
+See [`ark1668-limcet-prado.dts`](ark1668-limcet-prado.dts) for a structured
+device-tree-style writeup combining this physical inspection with the kernel/
+userspace RE findings in [`docs/SOC_ARK1668_CROSSREF.md`](../docs/SOC_ARK1668_CROSSREF.md)
+— note the real firmware has no device tree at all (ATAG boot), so that file
+is a documentation reconstruction, not a real boot artifact.
+
 ---
 
 ## Component Inventory

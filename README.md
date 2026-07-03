@@ -516,6 +516,10 @@ Limcet Hardware/
   BOARD_ANALYSIS.md         Board/component teardown notes (SoC, NAND, BT, MCU, CAN bus)
   *.jpg                     Board photos referenced from BOARD_ANALYSIS.md
 
+ArkPro Reference/  Third-party ASTRI ARK1680 vendor source — see docs/ARKDATA_VARIANTS.md for provenance
+
+linux-arkmicro Reference/  Third-party ArkMicro U-Boot BSP source — see docs/UBOOT_BUILD_PLAN.md
+
 ui/                Qt 4.7.4 UI analysis and resource extraction — see ui/UI.md
   UI.md                      Qt module layout, key binaries, /msnprofile/ filesystem layout
   qm_extracted/              Decompiled translation strings (lang_en.txt, lang_arabic.txt, ...)

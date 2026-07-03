@@ -13,7 +13,13 @@ Source of: MsnProductInfo.ini (ProductId=Limcet-P306), msncfg settings, pointerc
 
 ## Reference only (not in build)
 **Alfa 5G Italian 8.8 -06 P305** — Alfa Romeo firmware package for comparison  
-**Prado Msnconfig** — Prado-specific factory config variations
+**Prado Msnconfig** — Prado-specific factory config variations  
+**`ArkPro Reference/`** — ASTRI's reference ARK1680 kernel/U-Boot/userspace source (public leak,
+`cphatt/ArkPro` commit `e743744`), used to confirm SoC-identity and register-field findings in
+`docs/SOC_ARK1668_CROSSREF.md` §9 and `docs/ARKDATA_VARIANTS.md`; see `ArkPro Reference/README.md`  
+**`linux-arkmicro Reference/`** — ArkMicro's own public U-Boot BSP (`RD_Software/linux-arkmicro`,
+a later generation than the Prado's actual stock U-Boot — see that folder's README), the starting
+point for `docs/UBOOT_BUILD_PLAN.md`'s from-source build plan
 
 ## Key differences applied vs base Holden firmware
 

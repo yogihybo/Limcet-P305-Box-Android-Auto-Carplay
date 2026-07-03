@@ -1,0 +1,345 @@
+#include <dt-bindings/pinctrl/ark-pinfunc.h>
+
+&pinctrl0 {
+	i2c0 {
+        pinctrl_i2c0: i2c0-0 {
+            ark,pins =
+                <ARK_PBANK_3 22 ARK_PVAL_1		/* i2c0 scl */
+                    ARK_PBANK_3 23 ARK_PVAL_1>;	/* i2c0 sda */
+        };
+    };
+
+	pwm {
+        pinctrl_pwm0: pwm-0 {
+            ark,pins =
+                <ARK_PBANK_1 18 ARK_PVAL_1>;
+        };
+
+        pinctrl_pwm1: pwm-1 {
+            ark,pins =
+                <ARK_PBANK_1 19 ARK_PVAL_1>;
+        };
+
+        pinctrl_pwm2: pwm-2 {
+            ark,pins =
+                <ARK_PBANK_1 20 ARK_PVAL_1>;
+        };
+
+        pinctrl_pwm3: pwm-3 {
+            ark,pins =
+                <ARK_PBANK_1 21 ARK_PVAL_1>;
+        };
+
+        pinctrl_pwm4: pwm-4 {
+            ark,pins =
+                <ARK_PBANK_3 0 ARK_PVAL_2>;
+        };
+
+        pinctrl_pwm5: pwm-5 {
+            ark,pins =
+                <ARK_PBANK_3 1 ARK_PVAL_2>;
+        };
+	};
+
+	spi {
+        pinctrl_ecspi: ecspi {
+            ark,pins =
+                <ARK_PBANK_4 30 ARK_PVAL_1		/* rxd */
+                    ARK_PBANK_4 31 ARK_PVAL_1	/* clk */
+                    ARK_PBANK_5 0 ARK_PVAL_1>;	/* txd */
+                    //ARK_PBANK_5 1 ARK_PVAL_1>;	/* cs */
+			group-mux = <0x204 19 1 1>;
+        };
+
+        pinctrl_dwssi: dwssi {
+            ark,pins =
+                <ARK_PBANK_3 2 ARK_PVAL_1		/*clk*/
+                    ARK_PBANK_3 3 ARK_PVAL_1	/*rxd*/
+                    ARK_PBANK_3 4 ARK_PVAL_1	/*txd*/
+                    /* ARK_PBANK_3 5 ARK_PVAL_1	[>cs<] */
+                    ARK_PBANK_4 18 ARK_PVAL_1	/*d2*/
+                    ARK_PBANK_4 19 ARK_PVAL_1>;	/*d3*/
+        };
+	};
+
+    uart {
+        pinctrl_uart0: uart0-0 {
+            ark,pins =
+                <ARK_PBANK_3 6 ARK_PVAL_1		/* uart0 rx */
+                    ARK_PBANK_3 7 ARK_PVAL_1>;	/* uart0 tx */
+        };
+
+        pinctrl_uart1: uart1-0 {
+            ark,pins =
+                <ARK_PBANK_3 8 ARK_PVAL_1			/* uart1 rx */
+                    ARK_PBANK_3 9 ARK_PVAL_1>;		/* uart1 tx */
+        };
+
+        pinctrl_uart2: uart2-0 {
+            ark,pins =
+                <ARK_PBANK_3 14 ARK_PVAL_1		/* uart2 rx */
+                    ARK_PBANK_3 15 ARK_PVAL_1>;		/* uart2 tx */
+        };
+
+        pinctrl_uart3: uart3-0 {
+            ark,pins =
+                <ARK_PBANK_3 18 ARK_PVAL_1		/* uart3 rx */
+                    ARK_PBANK_3 19 ARK_PVAL_1>;		/* uart3 tx */
+        };
+
+        pinctrl_hsuart0: hsuart0-0 {
+            ark,pins =
+                <ARK_PBANK_3 10 ARK_PVAL_1			/* hsuart0 rx */
+                    ARK_PBANK_3 11 ARK_PVAL_1			/* hsuart0 tx */
+                    ARK_PBANK_3 16 ARK_PVAL_1			/* hsuart0 rts */
+                    ARK_PBANK_3 17 ARK_PVAL_1>;			/* hsuart0 cts */
+        };
+
+        pinctrl_hsuart1: hsuart1-0 {
+            ark,pins =
+                <ARK_PBANK_3 12 ARK_PVAL_1			/* hsuart1 rx */
+                    ARK_PBANK_3 13 ARK_PVAL_1			/* hsuart1 tx */
+                    ARK_PBANK_3 20 ARK_PVAL_1			/* hsuart1 rts */
+                    ARK_PBANK_3 21 ARK_PVAL_1>;			/* hsuart1 cts */
+        };
+    };
+
+	lcd {
+        pinctrl_lcd_hi_impedance: lcd-hi-impedance {
+            ark,pins =
+                <ARK_PBANK_1 22 ARK_PVAL_7			/* r0 */
+                    ARK_PBANK_1 23 ARK_PVAL_7		/* r1 */
+                    ARK_PBANK_1 24 ARK_PVAL_5		/* r2 */
+                    ARK_PBANK_1 25 ARK_PVAL_5		/* r3 */
+                    ARK_PBANK_1 26 ARK_PVAL_5		/* r4 */
+                    ARK_PBANK_1 27 ARK_PVAL_5		/* r5 */
+                    ARK_PBANK_1 28 ARK_PVAL_5		/* r6 */
+                    ARK_PBANK_1 29 ARK_PVAL_5		/* r7 */
+                    ARK_PBANK_1 30 ARK_PVAL_0		/* g0 */
+                    ARK_PBANK_1 31 ARK_PVAL_0		/* g1 */
+                    ARK_PBANK_2 0 ARK_PVAL_0		/* g2 */
+                    ARK_PBANK_2 1 ARK_PVAL_0		/* g3 */
+                    ARK_PBANK_2 2 ARK_PVAL_0		/* g4 */
+                    ARK_PBANK_2 3 ARK_PVAL_0		/* g5 */
+                    ARK_PBANK_2 4 ARK_PVAL_0		/* g6 */
+                    ARK_PBANK_2 5 ARK_PVAL_0		/* g7 */
+                    ARK_PBANK_2 6 ARK_PVAL_0		/* b0 */
+                    ARK_PBANK_2 7 ARK_PVAL_0		/* b1 */
+                    ARK_PBANK_2 8 ARK_PVAL_0		/* b2 */
+                    ARK_PBANK_2 9 ARK_PVAL_0		/* b3 */
+                    ARK_PBANK_2 10 ARK_PVAL_0		/* b4 */
+                    ARK_PBANK_2 11 ARK_PVAL_0		/* b5 */
+                    ARK_PBANK_2 12 ARK_PVAL_0		/* b6 */
+                    ARK_PBANK_2 13 ARK_PVAL_0		/* b7 */
+                    ARK_PBANK_2 14 ARK_PVAL_0		/* de */
+                    ARK_PBANK_2 15 ARK_PVAL_0		/* clk */
+                    ARK_PBANK_2 16 ARK_PVAL_0		/* vsync */
+                    ARK_PBANK_2 17 ARK_PVAL_0>;		/* hsync */
+        };
+
+        pinctrl_lcd_rgb888: lcd-rgb-0 {
+            ark,pins =
+                <ARK_PBANK_1 22 ARK_PVAL_1			/* r0 */
+                    ARK_PBANK_1 23 ARK_PVAL_1		/* r1 */
+                    ARK_PBANK_1 24 ARK_PVAL_1		/* r2 */
+                    ARK_PBANK_1 25 ARK_PVAL_1		/* r3 */
+                    ARK_PBANK_1 26 ARK_PVAL_1		/* r4 */
+                    ARK_PBANK_1 27 ARK_PVAL_1		/* r5 */
+                    ARK_PBANK_1 28 ARK_PVAL_1		/* r6 */
+                    ARK_PBANK_1 29 ARK_PVAL_1		/* r7 */
+                    ARK_PBANK_1 30 ARK_PVAL_1		/* g0 */
+                    ARK_PBANK_1 31 ARK_PVAL_1		/* g1 */
+                    ARK_PBANK_2 0 ARK_PVAL_1		/* g2 */
+                    ARK_PBANK_2 1 ARK_PVAL_1		/* g3 */
+                    ARK_PBANK_2 2 ARK_PVAL_1		/* g4 */
+                    ARK_PBANK_2 3 ARK_PVAL_1		/* g5 */
+                    ARK_PBANK_2 4 ARK_PVAL_1		/* g6 */
+                    ARK_PBANK_2 5 ARK_PVAL_1		/* g7 */
+                    ARK_PBANK_2 6 ARK_PVAL_1		/* b0 */
+                    ARK_PBANK_2 7 ARK_PVAL_1		/* b1 */
+                    ARK_PBANK_2 8 ARK_PVAL_1		/* b2 */
+                    ARK_PBANK_2 9 ARK_PVAL_1		/* b3 */
+                    ARK_PBANK_2 10 ARK_PVAL_1		/* b4 */
+                    ARK_PBANK_2 11 ARK_PVAL_1		/* b5 */
+                    ARK_PBANK_2 12 ARK_PVAL_1		/* b6 */
+                    ARK_PBANK_2 13 ARK_PVAL_1		/* b7 */
+                    ARK_PBANK_2 14 ARK_PVAL_1		/* de */
+                    ARK_PBANK_2 15 ARK_PVAL_1		/* clk */
+                    ARK_PBANK_2 16 ARK_PVAL_1  		/* vsync */
+                    ARK_PBANK_2 17 ARK_PVAL_1>;		/* hsync */
+        };
+
+        pinctrl_lcd_dlvds: lcd-dlvds-0 {
+            ark,pins =
+                <ARK_PBANK_1 30 ARK_PVAL_1			/* odd_TA_OUTP */
+                    ARK_PBANK_1 31 ARK_PVAL_1		/* odd_TA_OUTN */
+                    ARK_PBANK_2 0 ARK_PVAL_1		/* odd_TB_OUTP */
+                    ARK_PBANK_2 1 ARK_PVAL_1		/* odd_TB_OUTN */
+                    ARK_PBANK_2 2 ARK_PVAL_1		/* odd_TC_OUTP */
+                    ARK_PBANK_2 3 ARK_PVAL_1		/* odd_TC_OUTN */
+                    ARK_PBANK_2 4 ARK_PVAL_1		/* odd_TD_OUTP */
+                    ARK_PBANK_2 5 ARK_PVAL_1		/* odd_TD_OUTN */
+                    ARK_PBANK_2 6 ARK_PVAL_1		/* even_TA_OUTP */
+                    ARK_PBANK_2 7 ARK_PVAL_1		/* even_TA_OUTN */
+                    ARK_PBANK_2 8 ARK_PVAL_1		/* even_TB_OUTP */
+                    ARK_PBANK_2 9 ARK_PVAL_1		/* even_TB_OUTN */
+                    ARK_PBANK_2 10 ARK_PVAL_1		/* even_TC_OUTP */
+                    ARK_PBANK_2 11 ARK_PVAL_1		/* even_TC_OUTN */
+                    ARK_PBANK_2 12 ARK_PVAL_1		/* even_TD_OUTP */
+                    ARK_PBANK_2 13 ARK_PVAL_1		/* even_TD_OUTN */
+                    ARK_PBANK_2 14 ARK_PVAL_1		/* odd_TCLK_OUTP */
+                    ARK_PBANK_2 15 ARK_PVAL_1		/* odd_TCLK_OUTN */
+                    ARK_PBANK_2 16 ARK_PVAL_1  		/* even_TCLK_OUTP */
+                    ARK_PBANK_2 17 ARK_PVAL_1>;		/* even_TCLK_OUTN */
+        };
+    };
+
+	i2s {
+		pinctrl_i2sadc_sync: i2s0-sync {
+			ark,pins =
+				<ARK_PBANK_1 7 ARK_PVAL_2>;		/* i2s0 sync */
+			group-mux = <0x204 10 1 1>;
+		};
+
+		pinctrl_i2sadc_sadata: i2s0-sadata {
+			ark,pins =
+				<ARK_PBANK_1 8 ARK_PVAL_2>;		/* i2s0 sadata */
+			group-mux = <0x204 8 1 1
+							0x204 28 1 0>;		/* sadata in */
+		};
+
+		pinctrl_i2sadc_mclk: i2s0-mclk {
+			ark,pins =
+				<ARK_PBANK_1 9 ARK_PVAL_2>;		/* i2s0 mclk */
+			group-mux = <0x14c 16 1 0>;
+		};
+
+		pinctrl_i2sadc_bclk: i2s0-bclk {
+			ark,pins =
+				<ARK_PBANK_1 10 ARK_PVAL_2>;	/* i2s0 bclk */
+				//<ARK_PBANK_1 10 ARK_PVAL_4>;	/* i2s1 bclk out (use for fpga i2s1 playback master mode) */
+			group-mux = <0x204 9 1 1
+							0x204 4 1 0>;
+		};
+
+		pinctrl_i2sdac_sync: i2s1-sync {
+			ark,pins =
+				<ARK_PBANK_1 11 ARK_PVAL_2>;	/* i2s1 sync */
+			group-mux = <0x204 14 1 1>;
+		};
+
+		pinctrl_i2sdac_sadata: i2s1-sadata {
+			ark,pins =
+				<ARK_PBANK_1 12 ARK_PVAL_2>;	/* i2s1 sadata */
+			group-mux = <0x204 29 1 1>;			/* sadata	in/out */
+		};
+
+		pinctrl_i2sdac_sadata_in: i2s1-sadata-in {
+			ark,pins =
+				<ARK_PBANK_1 12 ARK_PVAL_2>;	/* i2s1 sadata */
+			group-mux = <0x204 29 1 0>;			/* sadata	in/out */
+		};
+
+		pinctrl_i2sdac_mclk: i2s1-mclk {
+			ark,pins =
+				<ARK_PBANK_1 13 ARK_PVAL_2>;	/* i2s1 mclk */
+			group-mux = <0x14c 17 1 1>;
+		};
+
+		pinctrl_i2sdac_bclk: i2s1-bclk {
+			ark,pins =
+				<ARK_PBANK_1 14 ARK_PVAL_2>;	/* i2s1 bclk */
+			group-mux = <0x204 13 1 1
+							0x204 5 1 1>;
+		};
+
+		pinctrl_i2sdac_sadata_out: i2s1-sadata-out {
+			ark,pins =
+				<ARK_PBANK_1 15 ARK_PVAL_2>;	/* i2s1 sadata out */
+			group-mux = <0x204 12 1 0>;			/*i2s1 sadata out*/
+		};
+
+		pinctrl_i2s2dac_sync: i2s2-sync {
+			ark,pins =
+				<ARK_PBANK_4 14 ARK_PVAL_1>;		/* i2s2 sync */
+		};
+
+		pinctrl_i2s2dac_sadata_out: i2s2-sadata {
+			ark,pins =
+				<ARK_PBANK_4 15 ARK_PVAL_1>;		/* i2s2 sadata */
+			group-mux = <0x204 30 1 1>;			/* sadata out */
+		};
+
+		pinctrl_i2s2dac_mclk: i2s2-mclk {
+			ark,pins =
+				<ARK_PBANK_4 16 ARK_PVAL_1>;		/* i2s2 mclk */
+		};
+
+		pinctrl_i2s2dac_bclk: i2s2-bclk {
+			ark,pins =
+				<ARK_PBANK_4 17 ARK_PVAL_1>;	/* i2s2 bclk */
+		};
+	};
+
+	itu {
+		pinctrl_hvsync: hvsync {
+			ark,pins =
+                <ARK_PBANK_1 16 ARK_PVAL_1		/* hsync */
+					ARK_PBANK_1 17 ARK_PVAL_1>;	/* vsync */
+		};
+
+		pinctrl_itu0: itu0 {
+			ark,pins =
+                <ARK_PBANK_0 21 ARK_PVAL_1		/* d0 */
+					ARK_PBANK_0 22 ARK_PVAL_1	/* d1 */
+					ARK_PBANK_0 23 ARK_PVAL_1	/* d2 */
+					ARK_PBANK_0 24 ARK_PVAL_1	/* d3 */
+					ARK_PBANK_0 25 ARK_PVAL_1	/* d4 */
+					ARK_PBANK_0 26 ARK_PVAL_1	/* d5 */
+					ARK_PBANK_0 27 ARK_PVAL_1	/* d6 */
+					ARK_PBANK_0 28 ARK_PVAL_1	/* d7 */
+					ARK_PBANK_0 29 ARK_PVAL_1>;	/* clk */
+			group-mux = <0x204 24 0xf 0>;
+		};
+
+		pinctrl_itu1: itu1 {
+			ark,pins =
+                <ARK_PBANK_0 30 ARK_PVAL_1		/* d0 */
+					ARK_PBANK_0 31 ARK_PVAL_1	/* d1 */
+					ARK_PBANK_1 0 ARK_PVAL_1	/* d2 */
+					ARK_PBANK_1 1 ARK_PVAL_1	/* d3 */
+					ARK_PBANK_1 2 ARK_PVAL_1	/* d4 */
+					ARK_PBANK_1 3 ARK_PVAL_1	/* d5 */
+					ARK_PBANK_1 4 ARK_PVAL_1	/* d6 */
+					ARK_PBANK_1 5 ARK_PVAL_1	/* d7 */
+					ARK_PBANK_1 6 ARK_PVAL_1>;	/* clk */
+			group-mux = <0x204 24 0xf 5>;
+		};
+
+		pinctrl_itu2: itu2 {
+			ark,pins =
+                <ARK_PBANK_1 7 ARK_PVAL_1		/* d0 */
+					ARK_PBANK_1 8 ARK_PVAL_1	/* d1 */
+					ARK_PBANK_1 9 ARK_PVAL_1	/* d2 */
+					ARK_PBANK_1 10 ARK_PVAL_1	/* d3 */
+					ARK_PBANK_1 11 ARK_PVAL_1	/* d4 */
+					ARK_PBANK_1 12 ARK_PVAL_1	/* d5 */
+					ARK_PBANK_1 13 ARK_PVAL_1	/* d6 */
+					ARK_PBANK_1 14 ARK_PVAL_1	/* d7 */
+					ARK_PBANK_1 15 ARK_PVAL_1>;	/* clk */
+			group-mux = <0x204 24 0xf 0xa>;
+		};
+	};
+	can {
+		pinctrl_can0: can0{
+            ark,pins =
+                <ARK_PBANK_4 26 ARK_PVAL_1		/* can0 tx */
+			ARK_PBANK_4 27 ARK_PVAL_1>;	/* can0 rx */
+        };
+		pinctrl_can1: can1{
+            ark,pins =
+		<ARK_PBANK_4 28 ARK_PVAL_1		/* can1 tx */
+			ARK_PBANK_4 29 ARK_PVAL_1>;	/* can1 rx */
+        };
+	};
+};

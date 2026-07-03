@@ -118,12 +118,21 @@ restore is possible before committing. Keep the original UBOOT.BIN.
 
 ---
 
-### Option 2 — Build U-Boot from source ✓ SOURCE AVAILABLE
+### Option 2 — Build U-Boot from source ⚠ SOURCE LOCATED, NOT AN EXACT MATCH
+
+**Update:** the `~/Downloads/linux-arkmicro` path below was on a previous session's machine and was
+never actually in this repo — that made the "✓ SOURCE AVAILABLE" claim below unverified for a long
+time. It's since been tracked down for real (`RD_Software/linux-arkmicro`, a live public Gitea repo)
+and a relevant slice copied into [`linux-arkmicro Reference/`](../linux-arkmicro%20Reference/README.md).
+**It is not an exact source match** — it's U-Boot 2018.07 with SPL+FDT, while the Prado's actual stock
+U-Boot is 2012.10, legacy ATAG, no devicetree. Same SoC family, later BSP generation. The details below
+(largely still accurate) are superseded by the full build plan and risk list in
+[`docs/UBOOT_BUILD_PLAN.md`](UBOOT_BUILD_PLAN.md) — read that before acting on this section.
 
 The chip is confirmed as **ARK1668** (marked on the physical package).
-The ARK Micro BSP at `~/Downloads/linux-arkmicro` contains the exact
-U-Boot source for this SoC. This is the cleanest approach — the
-resulting UBOOT.BIN never consults the NAND env at all.
+This BSP contains a real U-Boot board target for this SoC family. Building it is still the cleanest
+approach in principle — the resulting UBOOT.BIN never consults the NAND env at all — but treat it as
+"a new, compatible-family U-Boot to test via SD card," not "the exact stock binary, recompiled."
 
 #### Changes needed from the BSP defaults
 
@@ -156,12 +165,16 @@ SD slot is `mmc 1` — confirmed by `board_mmc_init()` in
 
 #### Build
 
+See [`docs/UBOOT_BUILD_PLAN.md`](UBOOT_BUILD_PLAN.md) for the actual clone URL, full config-delta
+table (this section only had 2 of the several deltas that doc identifies), toolchain, and — critically
+— the SD-only test plan before any NAND flashing is considered.
+
 ```bash
-cd ~/Downloads/linux-arkmicro
-source env.source
-cd u-boot
+git clone http://121.15.164.102:3000/RD_Software/linux-arkmicro.git
+cd linux-arkmicro/u-boot
+source ../env.source
 make ark1668_defconfig
-# (apply the CONFIG_ENV_OFFSET and bootcmd changes)
+# (apply the CONFIG_ENV_OFFSET and bootcmd changes — full delta table in UBOOT_BUILD_PLAN.md)
 make -j$(nproc)
 # Output: u-boot.bin — rename to UBOOT.BIN for Stepldr
 ```

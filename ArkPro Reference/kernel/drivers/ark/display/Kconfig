@@ -1,0 +1,56 @@
+#
+# ArkMicro on-chip display control unit drivers configuration
+#
+
+menuconfig ARK_DISP
+	tristate "ArkMicro Display Control Support"
+	default y
+        select RINGPAIR
+        select MEDIA_SUPPORT
+        select FB_SYS_FILLRECT
+        select FB_SYS_COPYAREA
+        select FB_SYS_IMAGEBLIT
+        select FB_CFB_FILLRECT
+        select FB_CFB_COPYAREA
+        select FB_CFB_IMAGEBLIT
+        select FB_SYS_FOPS
+        select VIDEO_DEV
+        select VIDEO_V4L2
+        select VIDEO_V4L1
+        select VIDEO_V4L2_COMMON
+        select V4L2_MEM2MEM_DRIVERS
+        select VIDEOBUF_DMA_SG
+        select VIDEOBUF_GEN
+        select VIDEOBUF_DMA_CONTIG
+        select VIDEOBUF_VMALLOC
+	help
+	  Say y here to enable ArkMicro display control driver.
+
+if ARK_DISP
+
+config ARK_DISP_DEBUG
+	bool "Enable driver debug mode"
+	default y
+	depends on ARK_DISP
+	help
+	  Say y here to enable ArkMicro display control driver
+	  debug mode (to print debug kernel messages).
+
+config ARK_DISP_HW_EMULATION
+	bool "Enable display control unit hardware emulation support"
+	depends on ARK_DISP
+	help
+	  Say y here to enable ArkMicro display control hardware
+	  emulation (for testing).
+
+config ARK_DISP_OUTPUT_EMULATION
+	bool "Enable output stage device (i.e. deinterlacer) emulation support"
+	depends on ARK_DISP
+	help
+	  Say y here to enable ArkMicro output stage device emulation 
+          (for testing).
+
+
+endif # ARK_DISP
+
+

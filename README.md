@@ -22,6 +22,7 @@ The Prado unit uses Holden firmware as its base but requires hardware-specific o
 - [11.0 Holden Firmware Compatibility](#110-holden-firmware-compatibility)
 - [12.0 Key Differences vs Holden Base Firmware](#120-key-differences-vs-holden-base-firmware)
 - [13.0 Sources](#130-sources)
+- [14.0 Further Documentation](#140-further-documentation)
 
 ## 1.0 Hardware
 
@@ -685,3 +686,29 @@ These are all corrected in the reconstructed firmware. See [Key Differences vs H
 ## 13.0 Sources
 
 See [`docs/SOURCES.md`](docs/SOURCES.md) for full provenance of each file.
+
+## 14.0 Further Documentation
+
+**`docs/`**
+
+- [`SOURCES.md`](docs/SOURCES.md) — provenance of every firmware source used
+- [`PARTITION_LAYOUT.md`](docs/PARTITION_LAYOUT.md) — NAND offsets, sizes, flash commands
+- [`SOC_ARK1668_CROSSREF.md`](docs/SOC_ARK1668_CROSSREF.md) — SoC identity, Ghidra RE of the kernel/userspace binaries, full pin-mux table, cross-checked against real ASTRI/ArkMicro vendor source
+- [`KERNEL.md`](docs/KERNEL.md) — kernel image analysis (`mtd5_kernel/zImage`)
+- [`UBOOT_BUILD_PLAN.md`](docs/UBOOT_BUILD_PLAN.md) — plan for compiling a fresh U-Boot from `linux-arkmicro` source, with config deltas and an SD-only test sequence
+- [`UBOOT_SDBOOT_INVESTIGATION.md`](docs/UBOOT_SDBOOT_INVESTIGATION.md) — U-Boot SD-boot patch corruption investigation and the self-contained-script fix
+- [`SD_BOOT_PLAN.md`](docs/SD_BOOT_PLAN.md) — historical SD-boot planning doc (superseded, still useful background)
+- [`ARKDATA_VARIANTS.md`](docs/ARKDATA_VARIANTS.md) — panel display configuration presets and their register-level meaning
+- [`SCREEN.md`](docs/SCREEN.md) — screen configuration and hue investigation
+- [`MCU_ADAPTERS.md`](docs/MCU_ADAPTERS.md) — MCU adapter types reverse-engineered from `libMcuCenter.so`
+- [`CANBUS.md`](docs/CANBUS.md) — CAN bus investigation for this board
+- [`USERDATA_REVIEW.md`](docs/USERDATA_REVIEW.md) — userdata partition review
+
+**Elsewhere in the repo**
+
+- [`Limcet Hardware/BOARD_ANALYSIS.md`](Limcet%20Hardware/BOARD_ANALYSIS.md) — physical board/component teardown notes (SoC, NAND, BT, MCU, CAN bus)
+- [`ui/UI.md`](ui/UI.md) — Qt UI analysis and resource extraction
+- [`ArkPro Reference/README.md`](ArkPro%20Reference/README.md) — provenance for the vendored ASTRI ARK1680 source
+- [`linux-arkmicro Reference/README.md`](linux-arkmicro%20Reference/README.md) — provenance for the vendored ArkMicro U-Boot BSP source
+- [`experimental_sdboot/README.md`](experimental_sdboot/README.md) — self-contained SD auto-boot patch status
+- [`corrupted/README.md`](corrupted/README.md) — why the quarantined U-Boot binaries there are unsafe to use

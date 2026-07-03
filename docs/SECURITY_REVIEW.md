@@ -1,0 +1,125 @@
+# Security Review — Credentials, Access Paths, Update Integrity
+
+A pass over everything this project has accumulated (rootfs dump, U-Boot env, boot scripts, vendor
+source) specifically looking for anything that grants more access to the device than what's already
+documented as the intended workflow. Two genuinely new findings below; everything else confirms
+existing documentation with no new gaps.
+
+**⚠️ The single most severe finding from this whole review isn't in this file — it's in
+[`MSNCOREAPP_REVIEW.md`](MSNCOREAPP_REVIEW.md):** `MsnCoreApp`'s disk auto-mount handler runs
+`system("mount -o remount,rw / && cp -rf <media>/msn_autocopy/* /")`, unauthenticated, whenever it
+finds a folder named `msn_autocopy` on any inserted USB drive or SD card. That requires zero network
+access and zero credentials at all — just physical media insertion — making it a more direct "unlock"
+path than anything below.
+
+**Scope note:** this project's own reconstructed firmware intentionally opens up access (auto-started
+`sshd`, a WiFi AP) for research convenience — that's a deliberate feature, not a vulnerability, and is
+already documented in the README. The findings below are about what that access is actually protected
+by, and about factory-original weaknesses independent of anything this project added.
+
+---
+
+## 1. Stock root password: `123456`
+
+`/etc/shadow` on the real device (`Prado firmware dump/mtd6_rootfs/etc/shadow`) is byte-identical to
+the one shipped in `Prado firmware reconstructed/mtd6_rootfs/rootfs/etc/shadow` (confirmed via `diff`)
+— this is the actual factory-original hash, not something this project set:
+
+```
+root:$1$m.jegaqA$vA.rBTVryyUAcRvyZ2gOL1:15695:5:99999:7:5:20000:
+```
+
+Cracked: `openssl passwd -1 -salt "m.jegaqA" "123456"` reproduces this hash exactly.
+
+**Impact:** the `ssh root@192.168.7.1` command already in [README §10.0](../README.md#100-device-access)
+works out of the box with password `123456` — no serial console, no U-Boot interrupt, no physical
+teardown required, once there's network reach to the device.
+
+**Reachability, and why this matters practically:**
+
+- **Stock firmware does not auto-start sshd.** `Prado firmware dump/mtd6_rootfs/etc/rc.d/rcS` has it
+  commented out: `#/usr/local/sbin/sshd &`. So this password is a *latent* factory weakness on an
+  unmodified unit, not something remotely reachable by default.
+- **This project's own reconstructed `rcS`** (`Prado firmware reconstructed/mtd6_rootfs/rootfs/etc/rc.d/rcS`)
+  is what enables `sshd &` and `/etc/wifi_ap.sh &` (the `carplay_wifi` AP, password `88888888`, already
+  documented) at boot, for research convenience.
+- **Combined effect:** anyone within WiFi range of a Prado unit running *this project's build*
+  gets root via `88888888` (join the AP) → `123456` (SSH) with essentially no effort. The same applies
+  over the USB-NCM interface (`192.168.7.1`) if a cable is connected, no WiFi needed at all.
+
+**Recommendation if this build ever runs anywhere other than an isolated bench/test unit:**
+`sshd_config` already has `AuthorizedKeysFile /root/.ssh/authorized_keys` configured — install a key,
+then set `PasswordAuthentication no` in `/etc/ssh/sshd_config` (currently `yes`). One-line hardening,
+doesn't require touching the password itself.
+
+*(Related, lower-severity oddity: the `sshd` privilege-separation system account, normally a
+`nologin`-shell account with no real password, also decrypts to `123456` — same salt-matching method,
+salt `elylgRon`. Its `/sbin/nologin` shell means it isn't independently exploitable, but it reinforces
+that `123456` is a real, intentionally-set factory default across multiple accounts, not a fluke.)*
+
+## 2. Unresolved: a second UID-0 account, `Admin`
+
+`/etc/passwd` on the real device has two root-equivalent accounts:
+
+```
+root:x:0:0:root:/root:/bin/sh
+Admin:x:0:0:root:/root:/bin/sh
+```
+
+`Admin`'s `/etc/shadow` entry uses an **empty salt**:
+
+```
+Admin:$1$$zdlNHiCDxYDfeF4MZL.H3/:10933:0:99999:7:::
+```
+
+Tried ~50 plausible candidates against it (project-specific strings — `Limcet`, `Box-P301`, `ark1680`,
+`8362`, `88888888` — plus common IoT/embedded defaults and `123456`-family patterns) via
+`openssl passwd -1 -salt "" <candidate>`. No match.
+
+An empty salt is unusual for a real per-account MD5-crypt hash and often indicates a scripted,
+factory/production-line-generated credential rather than a genuinely random one — worth a proper
+offline `hashcat -m 500` run with a real wordlist if this is worth pursuing further. **Purpose of this
+account is unknown** — possibly a factory test-line login, possibly an OEM support backdoor. Since it's
+UID 0 with the same `/root:/bin/sh` shell as `root`, cracking it would be equivalent to cracking root
+itself, just via a different, unexplained credential.
+
+## 3. Confirmed clean / already-known, no new gaps
+
+Checked and found nothing beyond what's already documented elsewhere in this project:
+
+- **No setuid binaries** anywhere in the rootfs (`find . -perm -4000 -type f` — empty).
+- **No firmware update signature/checksum verification** anywhere in the update path
+  (`build_update.sh`, `sd_update/UpConfig`) — grepped for `signature|verify|checksum|sha256|md5sum|gpg|sign`,
+  no hits. This is the entire premise of this project already (arbitrary firmware via SD card / UpConfig),
+  not a new discovery, but confirmed explicitly here: there's no vendor-side gate stopping any signed or
+  unsigned image from being flashed.
+- **`factory_reset` U-Boot env var** — read in `rcS` via `fw_printenv factory_reset`; if `1`, wipes
+  `/data` on next boot and resets the flag. A real, root-shell-triggerable recovery/wipe lever, not
+  itself a vulnerability (requires the access already covered above).
+- **WiFi AP password (`88888888`) and Bluetooth pair code (`8362`)** — both weak, both already
+  documented (README, `docs/SOURCES.md`) as known limitations, not new.
+- **`/data/mcudebug_flag`** — already documented in `docs/MCU_ADAPTERS.md`, a benign debug-logging
+  toggle for `libMcuCenter.so`, not a privilege escalation.
+- **CAN bus** — already established (`docs/SOC_ARK1668_CROSSREF.md` §7/§10) as living entirely on the
+  companion STM32 MCU; this chip generation has no SoC-side CAN pin-mux capability at all. Nothing to
+  unlock on the SoC side.
+
+## 4. Not yet done
+
+- Didn't crack the `Admin` hash — would need a real wordlist/hashcat run, not further inline guessing.
+- ~~Didn't do a protocol-level audit of `MsnCoreApp`/`libMcuCenter.so`/other rootfs daemons for a
+  network-exposed listener with its own bugs~~ — **done, see [`MSNCOREAPP_REVIEW.md`](MSNCOREAPP_REVIEW.md).**
+  Found something more severe than anything in this file: an unauthenticated `system()` call reachable
+  by just inserting a USB drive with a specifically-named folder. No network-facing custom listener was
+  found (the remote-exposure story is still just SSH, covered above), but the physical-media path turned
+  out to be the real finding.
+
+---
+
+## Repo visibility note
+
+Checked: `yogihybo/prado-firmware-reconstruction` returns 404 to an unauthenticated GitHub API request,
+consistent with the repo being **private**. Documenting the cracked plaintext password here doesn't
+meaningfully change exposure beyond what committing the raw `/etc/shadow` dump already did (the hash
+itself has been committed since this project's early history) — but worth knowing before deciding
+whether this file should ever be pushed somewhere less private.

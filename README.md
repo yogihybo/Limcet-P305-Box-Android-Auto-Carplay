@@ -19,6 +19,7 @@ The Prado unit uses Holden firmware as its base but requires hardware-specific o
   - [WiFi Access Point](#wifi-access-point)
   - [SSH Access](#ssh-access)
   - [USB Networking](#usb-networking)
+  - [USB Auto-Update (`msn_autocopy`)](#usb-auto-update-msn_autocopy)
 - [11.0 Holden Firmware Compatibility](#110-holden-firmware-compatibility)
 - [12.0 Key Differences vs Holden Base Firmware](#120-key-differences-vs-holden-base-firmware)
 - [13.0 Sources](#130-sources)
@@ -655,6 +656,42 @@ The ARK1680 USB gadget stack is configured to use CDC-NCM (`g_ncm.ko`), which cr
 
 `g_zero.ko` has been removed from `Prado firmware reconstructed/mtd6_rootfs/rootfs/etc/all.sh` — it was overriding the NCM gadget registration and breaking both USB host mode and the network interface.
 
+### USB Auto-Update (`msn_autocopy`)
+
+`MsnCoreApp` (the main head-unit application) has a built-in, **unauthenticated** file-drop mechanism —
+almost certainly meant for factory/dealer servicing (patch the device without a full firmware reflash),
+found and traced via disassembly in [`docs/MSNCOREAPP_REVIEW.md`](docs/MSNCOREAPP_REVIEW.md). No
+password, PIN, or confirmation dialog gates it — just physically inserting the media.
+
+**How it works:** `DiskDeviceWatcher::mountDiskPartition()` runs automatically whenever the device
+auto-mounts a newly inserted USB drive or SD card (the same hotplug flow used everywhere else in this
+project). If a folder named exactly `msn_autocopy` exists at the root of that media, it runs:
+
+```
+mount -o remount,rw / && cp -rf <mountpath>msn_autocopy/* /
+```
+
+| | |
+|---|---|
+| **Copies from** | `msn_autocopy/` at the root of the inserted USB drive or SD card |
+| **Copies to** | `/` — the live root filesystem (the `rootfs` UBIFS partition, see [§9.0 NAND Partition Layout](#90-nand-partition-layout)), remounted read-write for the operation |
+| **Trigger** | Automatic, on normal disk auto-mount — no button press, no menu, no confirmation prompt |
+| **Runs as** | root (the whole userspace already runs as root on this device) |
+
+**Practical use:** put a folder named `msn_autocopy` at the root of a USB drive or SD card, with any
+files inside it laid out exactly as they should land under `/` (e.g. `msn_autocopy/usr/bin/whatever`
+lands at `/usr/bin/whatever`), insert it, and the device copies them in on its own the moment it
+auto-mounts the media. No SSH, no serial console, no U-Boot interrupt needed.
+
+**Not confirmed:** the exact runtime mount-point path the device assigns to inserted media (e.g. whether
+it's a fixed `/media/`-style prefix or something else) — `<mountpath>` above is whatever
+`DiskDeviceWatcher` resolves it to at mount time, not independently verified against a live device in
+this pass. The destination (`/`, the real rootfs) and the trigger condition (folder named `msn_autocopy`
+present) are both confirmed directly from the binary's disassembly, not inferred.
+
+See [`docs/MSNCOREAPP_REVIEW.md`](docs/MSNCOREAPP_REVIEW.md) for the full disassembly trace and
+[`docs/SECURITY_REVIEW.md`](docs/SECURITY_REVIEW.md) for this project's broader credential/access-path review.
+
 ## 11.0 Holden Firmware Compatibility
 
 The Holden update package (`HOLDEN_KS_Auto_DSP(BT)_0219`) has been confirmed to boot successfully on the Prado device. This validates that the Holden firmware is a compatible base — the SoC, bootloader, and kernel are interoperable.
@@ -694,6 +731,8 @@ See [`docs/SOURCES.md`](docs/SOURCES.md) for full provenance of each file.
 - [`SOURCES.md`](docs/SOURCES.md) — provenance of every firmware source used
 - [`PARTITION_LAYOUT.md`](docs/PARTITION_LAYOUT.md) — NAND offsets, sizes, flash commands
 - [`SOC_ARK1668_CROSSREF.md`](docs/SOC_ARK1668_CROSSREF.md) — SoC identity, Ghidra RE of the kernel/userspace binaries, full pin-mux table, cross-checked against real ASTRI/ArkMicro vendor source
+- [`SECURITY_REVIEW.md`](docs/SECURITY_REVIEW.md) — credential/access-path review: stock root password, an unresolved second UID-0 account, update-integrity check
+- [`MSNCOREAPP_REVIEW.md`](docs/MSNCOREAPP_REVIEW.md) — binary-level review of `MsnCoreApp`: an unauthenticated `system()` call reachable by inserting a USB drive with a magic folder name
 - [`KERNEL.md`](docs/KERNEL.md) — kernel image analysis (`mtd5_kernel/zImage`)
 - [`UBOOT_BUILD_PLAN.md`](docs/UBOOT_BUILD_PLAN.md) — plan for compiling a fresh U-Boot from `linux-arkmicro` source, with config deltas and an SD-only test sequence
 - [`UBOOT_SDBOOT_INVESTIGATION.md`](docs/UBOOT_SDBOOT_INVESTIGATION.md) — U-Boot SD-boot patch corruption investigation and the self-contained-script fix

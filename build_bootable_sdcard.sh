@@ -697,6 +697,10 @@ build() {
 
     # 7. Populate p2 — rootfs
     echo -e "${BOLD}[6/7] Populating p2 (rootfs)...${RESET}"
+    # rsync -a preserves source modes verbatim, so fix exec bits on the
+    # source tree first (see apply_rootfs_perms.sh) — otherwise a tree that
+    # lost them on a Windows checkout yields a p2 with no executable binaries.
+    run bash "$SCRIPT_DIR/apply_rootfs_perms.sh" "$ROOTFS_DIR"
     run rsync -a --info=progress2 \
         --exclude=/proc/ \
         --exclude=/sys/ \

@@ -73,6 +73,8 @@ build_rootfs() {
     echo "  Output:  $ROOTFS_IMG"
     echo ""
 
+    bash "$SCRIPT_DIR/apply_rootfs_perms.sh" "$ROOTFS_DIR"
+
     mkfs.ubifs \
         -r "$ROOTFS_DIR" \
         -m $MIN_IO \

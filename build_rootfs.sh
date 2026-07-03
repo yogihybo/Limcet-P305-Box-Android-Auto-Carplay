@@ -30,6 +30,9 @@ MIN_IO=2048
 LEB_SIZE=126976
 MAX_LEBS=875
 
+echo "=== Restoring rootfs exec bits ==="
+bash "$SCRIPT_DIR/apply_rootfs_perms.sh" "$ROOTFS_DIR"
+
 echo "=== Building UBIFS image ==="
 mkfs.ubifs \
     -r "$ROOTFS_DIR" \

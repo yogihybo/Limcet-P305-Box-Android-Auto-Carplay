@@ -16,12 +16,17 @@ Cross-references: [../docs/MCU_ADAPTERS.md](../docs/MCU_ADAPTERS.md),
 
 | File | Size | Notes |
 |------|------|-------|
-| `can_app.bin` | 31,996 B | The MCU **application** image (raw, links at 0x08004000). |
-| `auto_upgrade.txt` | 0 B | Empty sentinel/flag file — an update-package trigger, not config. |
+| `can_app.bin` | 31,996 B | The MCU firmware **payload** (raw app image, links at 0x08004000). |
+| `auto_upgrade.txt` | 0 B | **The MCU update trigger flag** — its presence starts the update (see §5.0). |
 
-`can_app.bin` is the *application half only*. It is effectively the payload of
-the vendor's `McuAppUpdate.img` (see §5); a resident bootloader that is **not**
-in this repo lives below it in flash.
+Together these two files **are a ready-to-deploy USB/SD MCU update package** for
+this unit: `auto_upgrade.txt` is the trigger the head unit scans for, and
+`can_app.bin` is the firmware it streams to the MCU. Both filenames are literal
+strings inside the SoC driver `libMcuCenter.so` (confirmed), adjacent to
+`onStartUpdateMCU()` / `find update file:` / `not found update file!`.
+
+`can_app.bin` is the *application half only*; a resident bootloader that is
+**not** in this repo lives below it in flash (§4).
 
 ---
 
@@ -133,13 +138,50 @@ ARK1668). **The SoC never writes STM32 flash directly.** It acts as a **YMODEM
 sender**; the resident bootloader inside the STM32 (§4) is the YMODEM *receiver*
 and is the code that erases and programs the flash.
 
-### 5.1 Update files
+### 5.0 Trigger — `auto_upgrade.txt` (the "magic file")
+The MCU update is **not** part of the SD `UpConfig`/`update` NAND-flash flow. It is
+driven at runtime by `libMcuCenter.so` and triggered by inserting removable media:
+
+1. Insert a USB stick / SD card. `DiskDeviceWatcher` mounts it under
+   `/media/udisk/` (USB) or `/media/sdisk/` (SD) and fires `onDiskStatusChange`.
+2. The P300/P307 adapter (McuType=6, this unit) scans the media for the trigger
+   file **`auto_upgrade.txt`** and the payload **`can_app.bin`**
+   (log strings: `find update file:` → `auto_upgrade.txt` → `onStartUpdateMCU()`;
+   absence logs `not found update file!`).
+3. Files are staged to `/tmp/mcuupdate/`, then `can_app.bin` is streamed to the
+   MCU over `/dev/ttyHS0` by YMODEM (§5.2).
+
+So the **magic trigger filename is `auto_upgrade.txt`**, accompanied by
+`can_app.bin`. Drop both at the root of a FAT USB stick, insert it, and the unit
+auto-flashes the MCU. (The generic base-class default name is `McuAppUpdate.img`;
+the P300/P307 override this unit uses looks for `can_app.bin` + `auto_upgrade.txt`.)
+
+**Location = partition ROOT (proven by disassembly).** In
+`MCUAdapter_BoxP300::onDiskStatusChange` the check is built as:
+```
+r1 = "auto_upgrade.txt"
+bl QString::fromAscii            ; QString("auto_upgrade.txt")
+r0 = <mounted disk path>         ; a DiskDeviceWatcher mount, e.g. /media/udisk/
+bl QString::append               ; path = <mountpoint> + "auto_upgrade.txt"
+bl QFileInfo(path)::exists()     ; existence test
+```
+The mount path is appended **directly** with `auto_upgrade.txt` — there is **no
+subfolder literal anywhere in the P300 override**. So the unit looks for
+`<mountpoint>/auto_upgrade.txt` (e.g. `/media/udisk/auto_upgrade.txt`), i.e. the
+**root of the inserted USB/SD partition**. (For contrast, the generic base class
+`MCUAdapter_BoxP200::checkMCUUpdateFile` *does* use a `mcuupdate4/` subfolder with
+`mcu_update.bin`, but the P300 adapter this unit uses never calls that path.)
+
+### 5.1 Update file names seen in `libMcuCenter.so`
 | Name | Meaning |
 |---|---|
-| `McuAppUpdate.img` | Application image (this = `can_app.bin` payload, written to 0x08004000). |
+| `auto_upgrade.txt` | **Trigger flag** for the P300/P307 adapter (this unit). |
+| `can_app.bin` | Firmware payload for the P300/P307 adapter (written to 0x08004000). |
+| `McuAppUpdate.img` | Generic base-class default application-image name. |
 | `McuSubUpdate.img` | Secondary / sub-processor image (optional). |
+| `msnmcu_update.bin` / `mcu_update.bin` | Other adapters' payload names. |
 | `mcuupdate_hud.bin` | HUD-variant image. |
-| dir `mcuupdate4/` | Where the SoC looks for MCU update files. |
+| dir `mcuupdate4/`, `/tmp/mcuupdate/` | Search / staging directories. |
 
 Config keys (from `MsnProductInfo.ini` / `FactoryConfig.ini`):
 `MCUPortName="/dev/ttyHS0"`, `MCUBaudSpeed`, `MCUUpdateName`, `McuType=6`,

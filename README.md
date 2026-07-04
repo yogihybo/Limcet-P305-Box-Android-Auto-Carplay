@@ -746,6 +746,7 @@ See [`docs/SOURCES.md`](docs/SOURCES.md) for full provenance of each file.
 - [`UBOOT_SDBOOT_INVESTIGATION.md`](docs/UBOOT_SDBOOT_INVESTIGATION.md) — U-Boot SD-boot patch corruption investigation and the self-contained-script fix
 - [`SD_BOOT_PLAN.md`](docs/SD_BOOT_PLAN.md) — historical SD-boot planning doc (superseded, still useful background)
 - [`ARKDATA_VARIANTS.md`](docs/ARKDATA_VARIANTS.md) — panel display configuration presets and their register-level meaning
+- [`SETTINGS_REFERENCE.md`](docs/SETTINGS_REFERENCE.md) — full key-by-key reference for `MsnProductInfo.ini` and `FactoryConfig.ini`: load sequence, every setting grouped by function, and cross-product value tables
 - [`SCREEN.md`](docs/SCREEN.md) — screen configuration and hue investigation
 - [`MCU_ADAPTERS.md`](docs/MCU_ADAPTERS.md) — MCU adapter types reverse-engineered from `libMcuCenter.so`
 - [`CANBUS.md`](docs/CANBUS.md) — CAN bus investigation for this board

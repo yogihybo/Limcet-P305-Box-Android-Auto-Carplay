@@ -1,11 +1,26 @@
 # MCU Adapter Types — libMcuCenter.so (ARK1680 / Limcet-P306)
 
-Reverse-engineered from `rootfs/usr/lib/libMcuCenter.so` symbol table.
+Reverse-engineered from `rootfs/usr/lib/libMcuCenter.so`.
 
 The MCU adapter is selected at runtime by `McuType` in `MsnProductInfo.ini`.
 `MCUAdapter::getAdapterInstance(McuType)` instantiates the correct subclass,
 which manages the serial protocol to the external MCU on `MCUPortName`
 (default `/dev/ttyHS0` for the P300 family).
+
+> **Evidence level — read before trusting a claim here.**
+> - **Disassembly-verified** (high confidence): the `McuType → adapter` factory
+>   map (`getAdapterInstance` jump table), `McuType=6 → BoxP300`, the Prado-vs-Holden
+>   config diff, and the `BoxP300`/`MsnDecoder` **frame layout + command dispatch**
+>   traced from `onRecvMcuProtocol`.
+> - **Symbol-table inference** (medium confidence): the per-adapter **Catalogue**
+>   below. The `SWC` / `CAN` / `Update` flags come from whether a class *defines*
+>   the relevant method (e.g. `writeCanBusData` ⇒ CAN capability compiled in) —
+>   this proves the capability exists in the binary, **not** that it is wired up or
+>   used at runtime. The prose "Type"/"Notes" are interpretation of method names
+>   and have **not** each been confirmed by disassembling the adapter's code.
+>
+> If a Catalogue conclusion is load-bearing for a decision, disassemble that
+> adapter's `onRecvMcuProtocol` / relevant method before relying on it.
 
 ---
 
@@ -67,19 +82,71 @@ two different serial protocols**. The reconstruction correctly keeps `McuType=6`
 
 ### Protocol command-code diff (why some functions carry over and some don't)
 
-Reversing each adapter's `onRecvMcuProtocol` command dispatch:
+**Verified by disassembling each adapter's `onRecvMcuProtocol` dispatch** (not by
+counting `cmp` immediates — an earlier draft did that and mis-reported the codes).
+The two adapters parse **different frame layouts** and switch on **different bytes**:
 
 | | `BoxP300` (Prado) | `MsnDecoder` (Holden) |
 |---|---|---|
-| Frame header sig | `0x2E` (overridden), min size 4 | inherits base framing |
-| Main command class | **`0x1D`** (25 handler sites) | **`0x06`** (8 sites) |
-| Other commands | `0x0F`, `0x1B`, `0x1F` | `0x13`, `0x16`, `0x32` |
+| Min frame size | 4 (`getPackageMinSize`), header sig `0x2E` (`findPackageStartSig`) | 6 (checks `size ≤ 6` → reject) |
+| **Command byte position** | **offset 1** (`ldrb r3,[data,#1]`) | **offset 3** (`ldrb r6,[data,#3]`), with a group byte at **offset 2** (`0x13`/`0x16`) |
+| **Command codes (traced switch)** | `0x00`–`0x06`, `0x0A`, `0x12`, `0x20`, `0x21`/`0x22`, `0x30`, `0x7F`, `0xE2`, `0xE4` | `0x01`–`0x04`, `0x10`, `0x11`, `0x13`, `0x14`, `0x22`, `0x32`, `0x33` |
+| Version query | cmd `0xE4` → `echo … > /tmp/mcu_version` | (different path) |
 
-The **command codes differ**, so the two protocols are incompatible at the
-command level. Where the low-level framing overlaps (both are the same DCn32/MSN
-family), simple/common messages get through — which is why reverse, illumination,
-and basic keys still work with a mismatched adapter, while anything encoded under
-the diverging command codes does not. **For the Prado, `McuType` must be `6`.**
+So the frame **structure itself differs** — BoxP300 puts the command at byte 1;
+MsnDecoder uses a group byte at byte 2 plus a sub-command at byte 3, and requires
+a longer minimum frame. Even where individual code values coincide (e.g. `0x22`),
+they sit at different offsets and mean different things. This is why a mismatched
+adapter only partially works: overlapping low-level framing lets simple messages
+through, but the command interpretation diverges. **For the Prado, `McuType` must
+be `6`.**
+
+---
+
+## BoxP300 (McuType=6) — full command dispatch (disassembly-verified)
+
+Every incoming command handler in `MCUAdapter_BoxP300::onRecvMcuProtocol`
+(`0x0370d4`) traced individually. Frame: `byte[0]` = header sig `0x2E`, `byte[1]`
+= command, min length 4. `MsnEvent` + `QCoreApplication::sendEvent` = the handler
+posts an event into the UI app; `makeProtocolPackage` = it builds a reply back to
+the MCU.
+
+| Cmd | Handler | Function (from traced calls/strings) | Confidence |
+|:--:|:--:|---|---|
+| `0x00` | `0x37348` | default / ignored | high |
+| `0x01` | `0x38584` | input event, reads `byte[3]` → posts `MsnEvent` type **`0x1013`** to app `0x191` (type in the `0x10xx` range = likely key/button) | med* |
+| `0x02` | `0x37350` | handshake / reply builder (`makeProtocolPackage`) | med |
+| `0x03` | `0x388b4` | status bitfield (`QBitArray`) | med |
+| `0x04` | `0x37790` | **reverse radar / parking-sensor level** → `transRadarLevel` → `MsnEvent` | high |
+| `0x05` | `0x38190` | status → `MsnEvent` type **`0x5018`** to app `0x191` | med* |
+| `0x06` | `0x38360` | status **bitfield** (`byte[3]` via `QBitArray`) → `MsnEvent` type **`0x501A`** to app `0x190` | med* |
+| `0x0A` | `0x37538` | **steering angle → dynamic reverse trajectory** (`"recv track:"`): `byte[3] bit0` = direction, `byte[4..5]` = 16-bit magnitude, scaled (float `vdiv`/`vmul`) to a signed angle that drives the bending guideline (`Guideline`, `CarTrackImgMaxAngle`, `GetAngle`) | high |
+| `0x12` | `0x38144` | status, reads `byte[4]` → `MsnEvent` type **`0x5026`** to app `0x191` | med* |
+| `0x20` | `0x3746c` | reply builder (`makeProtocolPackage`) | med |
+| `0x21`/`0x22` | `0x37514` | `MsnEvent` | med* |
+| `0x30` | `0x379f8` | **arkdata / display-config file I/O** (`/msnprofile/`, `arkdata/`, `QDir`, `QFileInfo`) | high |
+| `0x7F` | `0x38e00` | **MCU version report** (`echo … > /tmp/mcu_version`, `system`) + arkdata name change (`GetArkdataChangeName`) | high |
+| `0xE2` | `0x37c54` | firmware-update flow (`"End Update Mcu!"`, `GetTickCountMs`) | high |
+| `0xE4` | `0x37160` | **firmware-update data packet** (`"recv update packageid:"`, `UpdateDialog`, `QFile`) | high |
+
+\* **Input-event decode — what is and isn't resolved.** The library-side
+interpretation is `libMcuCenter.so` on the **SoC** (not the STM32): each handler
+reads its frame bytes and constructs an `MsnEvent(param, type, MsnEventType)` (ctor
+`_ZN8MsnEventC1Ejj12MsnEventType`), then posts it into the Qt app. Traced facts:
+each event command posts a **distinct type code** — `0x01→0x1013`, `0x05→0x5018`,
+`0x06→0x501A`, `0x12→0x5026` — so they are **not** interchangeable, and they read
+different frame bytes (above). `0x04` (radar) and `0x0A` (steering angle) are named
+by unique calls/strings. **Not resolved:** the human meaning of the `0x50xx` type
+codes. They aren't compared as immediates anywhere (`MsnCoreApp` routes them by
+target-app without a switch I could map), and the `MsnEventType` enum names aren't
+in the binaries — so labelling `0x05/0x06/0x12` as ACC/IGN vs reverse-flag vs
+illumination would be a guess and is deliberately left open. (An earlier draft's
+`0x1D` "main command" was a `cmp`-frequency artifact and is wrong.)
+
+**Outbound** (`makeMCUProtocol` at `0x31e60`, called by `syncSettingDataToMcu` /
+`translateApp` / etc.): the command byte is not passed as a nearby inline
+constant, so the outbound command set is **not yet enumerated** — noted here as an
+open item rather than guessed.
 
 ---
 
@@ -137,9 +204,13 @@ the diverging command codes does not. **For the Prado, `McuType` must be `6`.**
 - `syncSettingData` / `writeSettingData` — MCU settings sync  
 
 **SWC:** YES — both ADC (`processSWCKey`) and CAN bus path  
-**CAN:** YES — bidirectional CAN frame encode/decode  
+**CAN:** YES — bidirectional CAN frame encode/decode — **disassembly-verified**:
+`writeCanBusData` (`0x6c260`) → `makeCanBusProtocol` (`0x6bf88`, builds
+`[hdr][type][sub][payload][checksum]`) → `ProtocolUtils::writeDatas` (sends the
+CAN frame to the MCU over the serial port). All six CAN/SWC methods present.  
 **Update:** None  
 **Resources:** `%1resources/Box-P230.rcc` (contains `xbs_honda/` Honda-specific UI)  
+**McuType:** 22.  
 **Notes:** The **only** adapter with CAN bus SWC support. Designed for Honda vehicles with
 CAN-connected steering wheel buttons. If the Prado SWC uses CAN, this is the adapter
 that would need to be active (or a Toyota equivalent added). Note the lowercase `c` in
@@ -156,7 +227,8 @@ that would need to be active (or a Toyota equivalent added). Note the lowercase 
 **Notes:** The P300-series adapter. **Used by Limcet-P306 — `McuType=6`, confirmed
 from the factory jump table (see "Prado vs Holden" above).** No steering wheel ADC
 or CAN support. MCU sends pre-decoded key events via the serial protocol. Frame
-header sig `0x2E`, main command class `0x1D`.
+header sig `0x2E`, command byte at frame offset 1 (codes `0x00`–`0x06`, `0x0A`,
+`0x12`, `0x20`–`0x22`, `0x30`, `0x7F`, `0xE2`, `0xE4`; `0xE4` = version query).
 
 ---
 
@@ -330,10 +402,11 @@ Has a settings panel (SetItems). `msnAppNotify` handles events from the main app
 **SWC:** None  
 **CAN:** None  
 **McuType:** **16 — the Holden base config (`Ksmart_DSP` / `Box-C211`) selects this.**
-**Protocol:** inherits base framing (does not override the header sig); main command
-class **`0x06`**, others `0x13` / `0x16` / `0x32` — a **different command set from
-`BoxP300`'s `0x1D`**, so the two are not protocol-compatible (see "Prado vs Holden"
-at the top).  
+**Protocol:** requires min 6-byte frame; group byte at offset 2 (`0x13`/`0x16`),
+command byte at offset 3 (codes `0x01`–`0x04`, `0x10`, `0x11`, `0x13`, `0x14`,
+`0x22`, `0x32`, `0x33`) — a **different frame layout and command set from
+`BoxP300`** (command at offset 1), so the two are not protocol-compatible (see
+"Prado vs Holden" at the top).  
 **Notes:** Has `getDVRViewChannle` — handles a multi-channel DVR or camera matrix.
 `syncAllSettingDatasToMcu` bulk-syncs all settings at once.
 

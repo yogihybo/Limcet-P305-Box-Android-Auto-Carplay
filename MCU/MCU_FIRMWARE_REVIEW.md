@@ -1,5 +1,18 @@
 # MCU Firmware Review — `can_app.bin` (STM32F105RBT6)
 
+> ⚠️ **`can_app.bin` is NOT the firmware installed on the device.** It is a
+> **Volvo-profiled candidate** (`DCn32-VOLVO-V2.10-20240909`) that ships as a USB
+> update *payload* in this folder. The STM32 in the actual Prado unit runs the
+> **stock Toyota Prado MCU firmware**, which is **not in this repo** (it would
+> have to be dumped via SWD — there is no serial read-back, see §7). That Toyota
+> firmware is what correctly decodes the Prado's CAN (reverse, illumination, SWC).
+> **Do not flash `can_app.bin` onto the Prado** — it would overwrite the working
+> Toyota firmware with a Volvo profile. This document analyses the Volvo candidate
+> file; the *mechanisms* it describes (two-tier settings/profile, CAN TX/RX, the
+> update path) apply to the Toyota firmware too, since both are the same `DCn32`
+> codebase with a different vehicle profile compiled in — only the CAN
+> tables/filters differ.
+
 Analysis of the vehicle-side I/O co-processor firmware for the Limcet Box P306.
 The MCU is an **STM32F105RBT6** (ARM Cortex-M3, connectivity line, 128 KB flash /
 64 KB SRAM) that handles CAN bus, steering-wheel / panel keys, reverse and
@@ -88,6 +101,31 @@ UART is the SoC link (`/dev/ttyHS0`); another drives the Feasycom BT module.
 `/dev/ttyHS0` on the SoC side is a raw PL011 UART (see
 `../linux-arkmicro Reference/.../mcu_serial.c`); all framing is in software above it.
 
+### 3.1b CAN — the MCU both receives AND transmits (bidirectional node)
+The MCU is a full bidirectional CAN node on **CAN1**, not a receive-only decoder.
+
+- **Receive:** the CAN1_RX0 IRQ (`0x08007064`) reads FIFO0 into a **15-slot ×
+  20-byte software RX ring** (write index in SRAM at `0x12c`).
+- **Transmit:** there is a complete `CAN_Transmit` routine at **`0x08004cd2`**
+  (the standard STM32 StdPeriph implementation). It:
+  1. finds a free TX mailbox by testing the TSR **TME0/1/2** bits
+     (`[base+0x08]` & `0x04/08/10000000`);
+  2. loads the mailbox at `base + 0x180 + mailbox*0x10` — identifier
+     (`StdId<<21` or `ExtId<<3`) + IDE/RTR into `TIxR`, `DLC` into `TDTxR (+4)`,
+     data[0..3] into `TDLxR (+8)`, data[4..7] into `TDHxR (+0xc)`;
+  3. sets the **TXRQ** bit (`orr …,#1` at `0x08004de6`) to send the frame.
+- **It is actively used:** the caller at `0x08008080` drains a **15-slot × 20-byte
+  software TX ring** (index in SRAM at `0x12d`) and transmits each record via the
+  **CAN1** base (`0x40006400`).
+
+TX message record layout (20 bytes): `+0x00` StdId(u16), `+0x04` ExtId(u32),
+`+0x08` IDE, `+0x09` RTR, `+0x0a` DLC, `+0x0b…0x12` data[0..7].
+
+Implication: because this is the `DCn32-VOLVO` build (§3.3), the frames it *sends*
+are generated from a **Volvo** message profile. A Volvo-profiled node actively
+transmitting onto a Toyota bus is a stronger concern than a passive decoder
+mis-reading IDs — it can put unexpected frames on the Prado's bus.
+
 ### 3.2 Bluetooth AT commands (outbound to the Feasycom module)
 These strings are **sent by the MCU to the BT chip**, not the STM32's own interface:
 ```
@@ -105,8 +143,10 @@ DCn32-VOLVO-V2.10-20240909
 is **VOLVO**, dated 2024-09-09. For a Toyota Prado this is the standout concern —
 SWC key codes, reverse/ACC-IGN triggers and illumination decoding are
 vehicle-specific. A Volvo profile will not correctly decode the Toyota bus
-(Prado SWC is CAN ID `0x3C4` at 500 kbit/s per [../docs/CANBUS.md](../docs/CANBUS.md)).
-**Verify this is the intended image before flashing it to a Prado.**
+(Prado SWC is CAN ID `0x3C4` at 500 kbit/s per [../docs/CANBUS.md](../docs/CANBUS.md)),
+and — since the MCU also **transmits** on CAN1 (§3.1b) — it may put Volvo-profile
+frames onto the Toyota bus. **Verify this is the intended image before flashing it
+to a Prado.**
 
 ### 3.4 The application cannot program flash
 Searched the whole image for the STM32 flash-unlock keys `0x45670123` /
@@ -219,7 +259,70 @@ Config keys (from `MsnProductInfo.ini` / `FactoryConfig.ini`):
 
 ---
 
-## 6. Dumping the existing MCU flash
+## 6. SoC-side CAN — does the head unit command the MCU to transmit?
+
+The MCU firmware *can* transmit on CAN (§3.1b). A separate question is whether the
+**SoC software** (`libMcuCenter.so`) ever tells it to. For the Prado as
+configured: **no.**
+
+- **The Prado's MCU adapter has no CAN methods.** `McuType=6` selects
+  `MCUAdapter_BoxP300`, whose full method set is the generic MCU protocol
+  (`makeMCUProtocol`, `onRecvMcuProtocol`, `syncSettingDataToMcu`,
+  `onModeAppChanged`, settings-UI getters, update path). There is **no
+  `writeCanBusData` / `makeCanBusProtocol` / `sendCan*`** — it only exchanges
+  pre-decoded key events, mode/phone state, settings and firmware updates.
+- **`CanType=0` loads no SoC-side CAN adapter** (0 = none; same convention as
+  `SoundType=0`). So no `libCanBus` adapter is instantiated either.
+
+**Where the capability *does* live.** Only `McuAdapter_BoxP230` (Honda XBS) in
+`libMcuCenter.so` can push CAN through the MCU. Its path (disassembled):
+```
+writeCanBusData(type, data*, len)
+  → makeCanBusProtocol(...)      builds a QByteArray frame [header][type][subtype][payload][checksum]
+  → ProtocolUtils::writeDatas()  writes that frame to the MCU serial port (ttyHS0)
+```
+i.e. "send a CAN command to the MCU" = write a specially-typed serial frame over
+`ttyHS0`, which the MCU then transmits on the vehicle bus. This is wired up only
+in BoxP230, not BoxP300.
+
+### 6.1 `libCanBus.so` — external CAN-box adapters (selected by `CanType`)
+Separately, `libCanBus.so` holds per-brand adapters for **external CAN-decoder
+boxes** (not the STM32 MCU — these talk to a dedicated CAN module over their own
+serial link). `CanBusAdapter::getAdapterInstance(CanBusType)` is a jump table
+(`sub r3,type,#1; cmp r3,#0xe; addls pc,…`), so **CanType 0 = none, 1–15 valid**:
+
+| CanType | Adapter class | Vendor / protocol | Car brand |
+|:---:|---|---|---|
+| **0** | — | *(none — MCU handles CAN itself; the Prado's setting)* | — |
+| 1 | `CanBus_LiHang_JMCE200N` | LiHang JMCE200N | generic |
+| 2 | `CanBus_Huida_ZD` | Huida ZD | generic |
+| 3 | `CanBus_Raise_Volkswagen` | Raise | Volkswagen |
+| 4 | `CanBus_XinHang` | XinHang | generic |
+| 5 | `CanBus_XBS_Mazda` | XBS | Mazda |
+| 6 | `CanBus_XinRi` | XinRi | generic |
+| 7 | `CanBus_Raise_Honda` | Raise | Honda |
+| 8 | `CanBus_Raise_Nissan` | Raise | Nissan |
+| **9** | `CanBus_Raise_Toyota` | **Raise** | **Toyota** |
+| 10 | `CanBus_Raise_GM` | Raise | GM |
+| 11 | `CanBus_Raise_Haval` | Raise | Haval |
+| 12 | `CanBus_Raise_GAC` | Raise | GAC |
+| 13 | `CanBus_Raise_Venucia` | Raise | Venucia |
+| 14 | `CanBus_Raise_Renault` | Raise | Renault |
+| 15 | `CanBus_Raise_Jeep` | Raise | Jeep |
+
+`CanBus_DaoJun_Honda` is compiled in but has **no `CanType` slot** in this factory
+(selected by some other path / dead code).
+
+**Takeaways for the Prado:** the STM32 MCU is the sole CAN endpoint — it decodes
+Toyota CAN and forwards key events, and the SoC (`BoxP300` / `CanType=0`) never
+commands it to transmit. **CanType 9 (`CanBus_Raise_Toyota`)** is the SoC-side
+Toyota option, but it targets an *external Raise CAN box*, not this MCU, and is
+switched off here. Enabling SoC-driven CAN would mean either swapping the MCU
+adapter to `BoxP230` or fitting a Raise box and setting `CanType=9`.
+
+---
+
+## 7. Dumping the existing MCU flash
 
 There is **no read-back in the normal software stack**: the running app has no
 memory-read command and cannot touch flash (§3.4), and the SoC updater is a
@@ -257,10 +360,13 @@ determine RDP + BOOT0 accessibility; otherwise use SWD for a guaranteed complete
 
 ---
 
-## 7. Summary of notable findings
+## 8. Summary of notable findings
 - Structurally valid, uncorrupted STM32F105 CAN-gateway app with watchdog enabled.
-- **Volvo** vehicle profile (`DCn32-VOLVO-V2.10-20240909`) — likely wrong for a Prado; verify before flashing.
+- **Bidirectional CAN node on CAN1** — receives (CAN1_RX0 IRQ) *and* transmits
+  (`CAN_Transmit` at `0x08004cd2`, driven by a 15-slot TX ring); see §3.1b.
+- **Volvo** vehicle profile (`DCn32-VOLVO-V2.10-20240909`) — likely wrong for a Prado; and because it *transmits*, it may put Volvo-profile frames on the Toyota bus. Verify before flashing.
 - Application has **no flash-programming code**; a separate resident bootloader (0x08000000–0x08004000, not in repo) does updates.
 - MCU updates are a **YMODEM push** (`McuAppUpdate.img`) from the SoC over `/dev/ttyHS0` — CRC-protected but **unauthenticated**.
 - **No serial read-back** exists; dumping the live chip needs the ROM bootloader (BOOT0 + no RDP) or SWD.
+- **SoC does not drive CAN** — `BoxP300` (`McuType=6`) has no CAN methods and `CanType=0` loads no CAN adapter; the MCU is the sole CAN endpoint. The Toyota SoC-side option is `CanType=9` (`CanBus_Raise_Toyota`, an external Raise box), unused here. See §6.
 - BT module uses default PIN `0000`.

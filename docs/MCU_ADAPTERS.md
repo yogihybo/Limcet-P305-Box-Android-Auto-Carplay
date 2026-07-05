@@ -17,9 +17,69 @@ MCUPortName="/dev/ttyHS0"
 CanType=0
 ```
 
-McuType=6 selects one of the adapters below. Based on the product numbering and
-the P30x family, McuType=6 most likely maps to **MCUAdapter_BoxP300** or
-**MCUAdapter_BoxP700** (see notes under each).
+**`McuType=6` → `MCUAdapter_BoxP300` — CONFIRMED** by reversing the factory
+`MCUAdapter::getAdapterInstance(McuType)` at `0x025e40`, not guessed. The dispatch
+is a jump table `sub r3, McuType, #1; cmp r3, #0x1d; addls pc, pc, r3, lsl #2`, so
+**`McuType=0` = none, and 1–30 map to the table below** (index = `McuType − 1`).
+
+### Full McuType → adapter map (from the factory jump table)
+
+| McuType | Adapter | McuType | Adapter |
+|:--:|---|:--:|---|
+| 1 | CarA200 | 16 | **MsnDecoder** |
+| 2 | BoxP100 | 17 | BoxC230 |
+| 3 | CarA300 | 18 | BoxP210 |
+| 4 | BoxP200 | 19 | BoxC250 |
+| 5 | CarA301 | 20 | HUD |
+| **6** | **BoxP300** ← Prado | 21 | BoxP220 |
+| 7 | BoxP400 | 22 | BoxP230 |
+| 8 | BoxP500 | 23 | CarA301 |
+| 9 | BoxP700 | 24 | BoxC270 |
+| 10 | CarA301 | 25 | BoxP701 |
+| 11 | BoxP800 | 26 | BoxC280 |
+| 12 | NV17 | 27 | BoxC290 |
+| 13 | Bagoo | 28 | D107 |
+| 14 | IM60BC | 29 | ZhongHang |
+| 15 | BoxP900 | 30 | RuiYuanSWC |
+
+---
+
+## Prado vs Holden — same library, different adapter
+
+The `libMcuCenter.so` binary is **byte-identical** between the Prado dump and the
+Holden-derived reconstruction (MD5 `065d2cc4a3fb9ef1740e755e041db4a0`) — it ships
+all 30 adapters. The MCU behaviour difference is **entirely config-driven** via
+`McuType` in `MsnProductInfo.ini`:
+
+| Setting | Prado dump | Holden base |
+|---|---|---|
+| `ProductId` | `Limcet-P306` | `Ksmart_DSP` |
+| `ResourceName` | `Box-P301` | `Box-C211` |
+| **`McuType`** | **6 → `BoxP300`** | **16 → `MsnDecoder`** |
+| `ScreenType` | 1 | 3 |
+| `SoundType` | 0 (none) | 4 (DSP) |
+| `CanType` | 0 | 0 |
+
+So Prado and Holden drive the MCU with **two different adapter classes speaking
+two different serial protocols**. The reconstruction correctly keeps `McuType=6`
+(`BoxP300`), matching the Prado's stock MCU. Running raw Holden (`McuType=16`,
+`MsnDecoder`) points the wrong adapter at a `BoxP300`-speaking MCU.
+
+### Protocol command-code diff (why some functions carry over and some don't)
+
+Reversing each adapter's `onRecvMcuProtocol` command dispatch:
+
+| | `BoxP300` (Prado) | `MsnDecoder` (Holden) |
+|---|---|---|
+| Frame header sig | `0x2E` (overridden), min size 4 | inherits base framing |
+| Main command class | **`0x1D`** (25 handler sites) | **`0x06`** (8 sites) |
+| Other commands | `0x0F`, `0x1B`, `0x1F` | `0x13`, `0x16`, `0x32` |
+
+The **command codes differ**, so the two protocols are incompatible at the
+command level. Where the low-level framing overlaps (both are the same DCn32/MSN
+family), simple/common messages get through — which is why reverse, illumination,
+and basic keys still work with a mismatched adapter, while anything encoded under
+the diverging command codes does not. **For the Prado, `McuType` must be `6`.**
 
 ---
 
@@ -93,9 +153,10 @@ that would need to be active (or a Toyota equivalent added). Note the lowercase 
 **SWC:** None  
 **CAN:** None  
 **Update:** Yes — `onStartUpdateMCU`, `onSendUpdateReadyTimer`, `onDiskStatusChange`  
-**Notes:** The P300-series adapter. Used by Limcet-P306 (McuType likely 5 or 6).
-No steering wheel ADC or CAN support. MCU sends pre-decoded key events via
-the serial protocol.
+**Notes:** The P300-series adapter. **Used by Limcet-P306 — `McuType=6`, confirmed
+from the factory jump table (see "Prado vs Holden" above).** No steering wheel ADC
+or CAN support. MCU sends pre-decoded key events via the serial protocol. Frame
+header sig `0x2E`, main command class `0x1D`.
 
 ---
 
@@ -268,6 +329,11 @@ Has a settings panel (SetItems). `msnAppNotify` handles events from the main app
 **Features:** `getDVRViewChannle`, `msnAppNotify`, `syncAllSettingDatasToMcu`, `onModeAppChange`  
 **SWC:** None  
 **CAN:** None  
+**McuType:** **16 — the Holden base config (`Ksmart_DSP` / `Box-C211`) selects this.**
+**Protocol:** inherits base framing (does not override the header sig); main command
+class **`0x06`**, others `0x13` / `0x16` / `0x32` — a **different command set from
+`BoxP300`'s `0x1D`**, so the two are not protocol-compatible (see "Prado vs Holden"
+at the top).  
 **Notes:** Has `getDVRViewChannle` — handles a multi-channel DVR or camera matrix.
 `syncAllSettingDatasToMcu` bulk-syncs all settings at once.
 

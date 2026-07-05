@@ -150,6 +150,73 @@ open item rather than guessed.
 
 ---
 
+## Capturing the codes live on the device (to resolve the open items)
+
+The two open items above — naming the `0x50xx` `MsnEventType` codes and the
+outbound command set — can't be pinned from the binary alone but are easy to map
+on a running unit by watching `/dev/ttyHS0` while physically toggling inputs
+(Reverse, headlights/ILL, ACC, SWC buttons) and noting which command byte + event
+fires for each.
+
+**Device facts.** ARK1680 Linux/BusyBox, root over SSH (this project enables
+`sshd`). Present: BusyBox `cat`, `dd`, `hexdump`, `microcom`. **Absent:** `strace`,
+`stty`, `od`, `xxd`, `socat`. MCU link = `/dev/ttyHS0`; baud is the adapter default
+(not in `MsnProductInfo.ini`) — try **115200**, then **38400**. `MsnCoreApp` holds
+the port open, so a second reader races for bytes — plan around that.
+
+### Method A — built-in MCU debug log (preferred; reuses the app's own parser)
+The frame logging in `libMcuCenter.so` (`recvProtocolData`, `recv track:`,
+`send msn mcu code!`, `Recv change arkdata name:` …) is gated by a flag file:
+
+```sh
+touch /data/mcudebug_flag        # gates MCU-protocol frame logging
+touch /data/mcudebug_flag_msn    # gates the MSN-side logging
+```
+The app likely reads the flag at startup, so restart it (or reboot):
+```sh
+killall MsnCoreApp               # init/rcS respawns it
+```
+Then watch its debug output. Qt `qDebug` goes to stderr — on this unit that is the
+**serial debug console** (`/dev/ttyS0`, 115200 8N1 — the console in README §2),
+*unless* the launch script (`/etc/rc.d/rcS` / the MsnCoreApp start line) redirects
+it to `/dev/null`. If it does, either edit that line to
+`>> /data/msn.log 2>&1`, or run the app by hand from the SSH shell to see output:
+```sh
+killall MsnCoreApp ; cd <app dir> ; ./MsnCoreApp 2>&1 | tee /data/msn.log
+```
+Now toggle each input and record the `recv …` lines + frame bytes.
+
+### Method B — raw UART byte sniff (exact bytes, no app parsing)
+Stop the app first (otherwise it steals the bytes), then read the port. With no
+`stty`, set the baud via `microcom`:
+```sh
+killall MsnCoreApp
+busybox microcom -s 115200 /dev/ttyHS0            # interactive view; Ctrl-X to exit
+# or log to hex + file:
+busybox cat /dev/ttyHS0 | busybox hexdump -C | tee /data/ttyHS0.log
+```
+The MCU keeps sending periodic status frames with the app stopped, so you can still
+toggle Reverse/ACC/lights and see them — you just lose the on-screen correlation.
+
+### Method C — off-device hardware tap (ground truth, fully passive)
+Probe the STM32↔SoC UART TX/RX with a logic analyzer / USB-serial sniffer at the
+MCU baud. No software interference; requires opening the box.
+
+### What to record and how to map it
+Each frame is `[0x2E sig][cmd][payload…][checksum]`. For every physical action log
+the **cmd byte (offset 1)** and payload, then cross-reference the BoxP300 table
+above:
+- Reverse gear → expect `0x0A` (steering angle/trajectory) + a status command
+- Headlights/ILL, ACC on/off → one of the `0x50xx`-type status commands
+  (`0x05`/`0x06`/`0x12`); seeing which one fires **names that `MsnEventType`**.
+- SWC button → the `0x01` (`0x1013`) input-event command; the payload byte is the
+  key code.
+
+Toggling exactly one input at a time is the whole trick — it disambiguates the
+`0x50xx` codes the static disassembly could not.
+
+---
+
 ## Adapter Catalogue
 
 ### MCUAdapter_BoxP100

@@ -747,6 +747,7 @@ See [`docs/SOURCES.md`](docs/SOURCES.md) for full provenance of each file.
 - [`SD_BOOT_PLAN.md`](docs/SD_BOOT_PLAN.md) — historical SD-boot planning doc (superseded, still useful background)
 - [`ARKDATA_VARIANTS.md`](docs/ARKDATA_VARIANTS.md) — panel display configuration presets and their register-level meaning
 - [`SETTINGS_REFERENCE.md`](docs/SETTINGS_REFERENCE.md) — full key-by-key reference for `MsnProductInfo.ini` and `FactoryConfig.ini`: load sequence, every setting grouped by function, and cross-product value tables
+- [`UI_RESOURCES.md`](docs/UI_RESOURCES.md) — how the interface is skinned: `DefaultStyleSheet.xml` (colours/fonts/accent, editable QSS) and the `.rcc` sprite bundles (what loads per product, inventory, unpack/reskin/repack workflow; see also `tools/rcc_extract.py`)
 - [`SCREEN.md`](docs/SCREEN.md) — screen configuration and hue investigation
 - [`MCU_ADAPTERS.md`](docs/MCU_ADAPTERS.md) — MCU adapter types reverse-engineered from `libMcuCenter.so`
 - [`CANBUS.md`](docs/CANBUS.md) — CAN bus investigation for this board

@@ -30,6 +30,9 @@ MIN_IO=2048
 LEB_SIZE=126976
 MAX_LEBS=875
 
+echo "=== Restoring rootfs symlinks ==="
+bash "$SCRIPT_DIR/restore_rootfs_symlinks.sh" "$ROOTFS_DIR"
+
 echo "=== Restoring rootfs exec bits ==="
 bash "$SCRIPT_DIR/apply_rootfs_perms.sh" "$ROOTFS_DIR"
 

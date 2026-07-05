@@ -8,6 +8,10 @@
 # which then matches nothing on Linux — silently breaking every rule.
 .gitignore text eol=lf
 
+# The symlink manifest is TAB-separated linkpath<TAB>target. A stray CR would
+# become part of the symlink target, creating broken links at build time.
+rootfs.symlinks text eol=lf
+
 Prado[[:space:]]firmware[[:space:]]dump/mtd6_rootfs_raw/*.bin filter=lfs diff=lfs merge=lfs -text
 Holden[[:space:]]firmware[[:space:]]update/rootfs.img filter=lfs diff=lfs merge=lfs -text
 Prado[[:space:]]firmware[[:space:]]reconstructed/mtd6_rootfs/rootfs/etc/ssh/ssh_host_*_key -text

@@ -697,9 +697,12 @@ build() {
 
     # 7. Populate p2 — rootfs
     echo -e "${BOLD}[6/7] Populating p2 (rootfs)...${RESET}"
-    # rsync -a preserves source modes verbatim, so fix exec bits on the
-    # source tree first (see apply_rootfs_perms.sh) — otherwise a tree that
-    # lost them on a Windows checkout yields a p2 with no executable binaries.
+    # rsync -a copies the source tree verbatim, so repair the metadata a
+    # Windows checkout drops before copying — otherwise p2 is unbootable:
+    #   - restore_rootfs_symlinks.sh recreates the lost symlinks (/bin/sh,
+    #     /sbin/init, /lib/libc.so.6, …) — rsync -a would just copy the gap.
+    #   - apply_rootfs_perms.sh restores exec bits — else no executable binaries.
+    run bash "$SCRIPT_DIR/restore_rootfs_symlinks.sh" "$ROOTFS_DIR"
     run bash "$SCRIPT_DIR/apply_rootfs_perms.sh" "$ROOTFS_DIR"
     run rsync -a --info=progress2 \
         --exclude=/proc/ \

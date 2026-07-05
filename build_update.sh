@@ -73,6 +73,7 @@ build_rootfs() {
     echo "  Output:  $ROOTFS_IMG"
     echo ""
 
+    bash "$SCRIPT_DIR/restore_rootfs_symlinks.sh" "$ROOTFS_DIR"
     bash "$SCRIPT_DIR/apply_rootfs_perms.sh" "$ROOTFS_DIR"
 
     mkfs.ubifs \

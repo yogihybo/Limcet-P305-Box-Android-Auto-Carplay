@@ -82,6 +82,20 @@ standardised and vary by model year and market. The table above is a community
 reference. Capture live frames from the Prado harness to confirm the exact ID and
 byte layout for this specific vehicle before programming any MCU firmware.
 
+### Reference: Toyota CAN DBC
+
+A useful reference for Toyota CAN message/signal definitions (steering angle, gear,
+lights, wheel speeds, SWC, etc.) is comma.ai's opendbc database:
+
+- [`toyota_2017_ref_pt.dbc`](https://github.com/commaai/opendbc/blob/master/opendbc/dbc/toyota_2017_ref_pt.dbc)
+  — Toyota reference *powertrain* bus (191 messages, original Toyota signal names).
+
+Caveats: it's a **2017 US** reference on the **powertrain/ADAS** bus — IDs vary by
+model year/market, and body/AVN signals (SWC, illumination) may sit on a different
+bus than the one the Prado's MCU is wired to. Treat its IDs as candidates to
+confirm via live capture. (Note: `0x25` in that DBC is the **steering-angle
+sensor**, not SWC.)
+
 ---
 
 ## Diagnosis

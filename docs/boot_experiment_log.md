@@ -361,6 +361,17 @@ ships **no** register config table — it relies on the config flashed inside th
 GT911 chip (`GTP read version` / `cfg_version`), so there is nothing panel-specific
 to port from firmware beyond the pins/address above.
 
+**Stock touch bus — VERIFIED on the hardware controller (bus 0).** Disassembling
+`ark1680_machine_init` (`0x8059f1b0`) shows the GT911 `i2c_board_info`
+(`type="Goodix-TS"`, `addr=0x5d` @ `0x805b3914`) is registered via the
+**`ark1680_add_device_i2c`** wrapper, which hardcodes **bus 0 = the ARK1680
+*hardware* I²C controller**. The bit-banged wrappers (`analog_i2c_add_device_i2c*`,
+buses 1/2/3) carry other devices — bus 2 = `drv_bd37033` audio amp, bus 1 = the
+camera/DVR (per `libSetting`'s `/sys/.../i2c-gpio.1/i2c-1/1-002c/dvr`). So stock runs
+touch on **hardware i2c**; only audio/camera are bit-banged. This is hard proof (from
+the stock board code, not inference) that the 4.19 DTS is wrong to place `gt911@5d`
+on a bit-banged `i2c-gpio` bus — it belongs on the hardware `&i2c0` controller.
+
 Config is split: pin macros (`GTP_INT_IRQ`/`GTP_RST_PORT`) are compiled into the
 module; panel resolution comes from the exported kernel globals `touchinfo_param` /
 `screeninfo_param` that the module imports; the GT911 scan/threshold registers live

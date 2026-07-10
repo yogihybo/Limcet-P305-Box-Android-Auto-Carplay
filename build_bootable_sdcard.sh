@@ -5,18 +5,16 @@
 # media WITHOUT writing to NAND — see build_update.sh for the (destructive)
 # NAND flash update tool instead.
 #
-# EXPERIMENTAL, STATICALLY VERIFIED, NOT YET TESTED ON REAL HARDWARE — see
-# docs/UBOOT_SDBOOT_INVESTIGATION.md §8 and experimental_sdboot/README.md.
-# The U-Boot patch below (self-contained boot script) has been checked for
-# correctness (env patch applies cleanly, NAND-offset redirect applies, no
-# corruption vs. the source uboot.bin) but has not booted a real device yet.
-# The confirmed-working fallback if this doesn't boot is the README's
-# "Manual SD Card Boot" section (types the same logic by hand at the U-Boot
-# prompt, no patched binary needed at all).
+# CONFIRMED ON REAL HARDWARE to interrupt boot and drop to a U-Boot prompt —
+# see docs/UBOOT_SDBOOT_INVESTIGATION.md §8 and experimental_sdboot/README.md.
+# The U-Boot patch (env patch + NAND-offset redirect, always applied
+# together — the patch alone with a valid env has no effect) gets you to an
+# interactive U-Boot prompt; it does not auto-continue to a full boot. From
+# that prompt, use the README's "Manual SD Card Boot" section to continue
+# (types the boot commands by hand, no additional files needed).
 #
 # Run under Linux or WSL. Requires: parted, dosfstools, e2fsprogs, rsync, python3
 #   sudo apt install parted dosfstools e2fsprogs rsync python3
-# u-boot-tools (mkimage) additionally required if using --wrap-bootscript.
 #
 # Usage:
 #   ./build_bootable_sdcard.sh [options]
@@ -31,17 +29,43 @@
 #   --uboot PATH       Prebuilt UBOOT.BIN to place on p1 as-is (skips patching)
 #   --uboot-src PATH   Raw uboot.bin source — patched via patch_uboot.py, never modified
 #   --no-patch-uboot   Use the source uboot.bin as-is without patching
-#   --no-patch-nand-offset  Skip redirecting the NAND env offset (not recommended)
-#   --root DEVICE      Root device for the boot script's bootargs (default: /dev/mmcblk0p2)
-#   --wrap-bootscript  Wrap the boot script with mkimage (-T script) instead of
-#                      plain text — try plain text first; only needed if U-Boot's
-#                      `source` command on this build rejects an unwrapped script
-#   --kernel PATH      zImage to place on p1
+#   --reloc-env        When patching the stock U-Boot (requires --no-new-uboot),
+#                      RELOCATE the compiled-in default env via patch_uboot_env.py
+#                      so a full SD-boot command AUTO-boots. ON by default. See
+#                      docs/UBOOT_SDBOOT_INVESTIGATION.md §10.
+#   --no-reloc-env     Fall back to the sdscript patch that only drops to a
+#                      U-Boot prompt (hardware-confirmed) instead of auto-booting.
+#   --root DEVICE      Root device for the generated uEnv.txt bootargs (default: /dev/mmcblk0p2)
+#   --dtb PATH         DTB file to place on p1 (only used if --new-uboot is active)
+#   --new-uboot        Use the freshly compiled Limcet P305 U-Boot from
+#                      linux-arkmicro/u-boot/UBOOT.BIN. Patching is bypassed
+#                      and a uEnv.txt text environment is written to p1.
+#                      ON by default.
+#   --no-new-uboot     Disable the compiled U-Boot replacement (use stock U-Boot)
+#   --kernel PATH      zImage (or zImage.w_dtb) to place on p1
+#   --new-kernel       Auto-detect and use the freshly compiled Limcet P305 kernel
+#                      from linux-arkmicro/linux/arch/arm/boot/zImage (prefers
+#                      zImage.w_dtb if present) and install compiled modules from
+#                      linux-arkmicro/compiled_modules/ into the p2 rootfs.
+#                      This replaces the stock NAND kernel on the SD image.
+#                      ON by default.
+#   --no-new-kernel    Explicitly disable new-kernel replacement (use stock kernel)
+#   --kernel-build-dir DIR  Path to linux-arkmicro build root (auto-detected if
+#                           sibling of script dir or in ~/Downloads/linux-arkmicro)
+#   --modules-dir DIR  Path to compiled_modules/ directory (default: auto-detected
+#                      from kernel build dir). Modules installed to
+#                      /lib/modules/<version>/ on p2.
 #   --rootfs-dir DIR   Rootfs source directory (mounted as /)
 #   --userdata-dir DIR Userdata source directory (mounted as /data)
 #   --no-userdata      Leave p3 formatted but empty
 #   --no-mtd-redirect  Leave bootlogo/bootanimation/reversingtrack/Unicode
 #                      reading from existing NAND data instead of SD
+#   --initramfs        Enable the initramfs (off by default). The initramfs
+#                      (build_initramfs.sh) insmods ark_dw_mmc.ko and mounts the
+#                      SD rootfs — only needed if the MMC driver is a module.
+#                      With the Limcet P305 kernel the MMC driver is built-in,
+#                      so this is off by default.
+#   --no-initramfs     Explicitly disable the initramfs (already the default)
 #   --non-interactive  Skip the menu, use defaults/flags only
 #   --dry-run          Show commands without executing
 #   --help             Show this help
@@ -69,6 +93,49 @@ warn()    { echo -e "${YELLOW}  ⚠ $*${RESET}"; }
 die()     { echo -e "${RED}ERROR: $*${RESET}" >&2; exit 1; }
 
 # ---------------------------------------------------------------------------
+# Step tracker — gives the build phase a Claude-Code-ish progress readout:
+# a boxed header per step, an elapsed-time footer, and a final summary table
+# so the user can see at a glance what ran and how long it took.
+# ---------------------------------------------------------------------------
+STEP_TOTAL=12
+declare -a STEP_TITLES=() STEP_ELAPSED=() STEP_STATUS=()
+STEP_T0=0
+
+begin_step() {
+    local n="$1" title="$2"
+    STEP_TITLES[$n]="$title"
+    STEP_T0=$(date +%s)
+    echo ""
+    echo -e "${CYAN}${BOLD}┌─ [$n/$STEP_TOTAL] $title${RESET}"
+}
+
+end_step() {
+    local n="$1" status="${2:-ok}"
+    local dt=$(( $(date +%s) - STEP_T0 ))
+    STEP_ELAPSED[$n]="$dt"
+    STEP_STATUS[$n]="$status"
+    if [[ "$status" == "skip" ]]; then
+        echo -e "${CYAN}└─${RESET} ${DIM}skipped${RESET}"
+    else
+        echo -e "${CYAN}└─${RESET} ${GREEN}done${RESET} ${DIM}(${dt}s)${RESET}"
+    fi
+}
+
+print_step_summary() {
+    local total=0 n mark
+    echo ""
+    echo -e "  ${BOLD}Build summary${RESET}"
+    for n in "${!STEP_TITLES[@]}"; do
+        [[ "${STEP_STATUS[$n]}" == "skip" ]] && mark="${DIM}○${RESET}" || mark="${GREEN}✔${RESET}"
+        printf "   %b %-2s %-28s ${DIM}%s${RESET}\n" "$mark" "$n" "${STEP_TITLES[$n]}" \
+            "$([[ "${STEP_STATUS[$n]}" == "skip" ]] && echo "skipped" || echo "${STEP_ELAPSED[$n]}s")"
+        [[ "${STEP_STATUS[$n]}" != "skip" ]] && total=$(( total + STEP_ELAPSED[$n] ))
+    done
+    echo -e "  ${DIM}────────────────────────────────────────${RESET}"
+    echo -e "   ${BOLD}Total: ${total}s${RESET}"
+}
+
+# ---------------------------------------------------------------------------
 # Defaults
 # ---------------------------------------------------------------------------
 OUTPUT_DIR="$SCRIPT_DIR/sd_bootable"
@@ -82,17 +149,37 @@ P2_SIZE_MB=300
 UBOOT_BIN=""                                  # prebuilt binary (--uboot); used as-is
 UBOOT_SRC=""                                  # raw source uboot.bin; patched, never modified
 UBOOT_OUT="$OUTPUT_DIR/uboot_selfcontained.bin"  # patched output
-BOOTSCRIPT_OUT="$OUTPUT_DIR/s"                 # generated boot script (see generate_bootscript)
-PATCH_UBOOT=true                              # run patch_uboot.py on the source
-PATCH_NAND_OFFSET=true                        # patch_uboot.py --patch-nand-offset
-ROOT_DEV="/dev/mmcblk0p2"                     # root= in the generated boot script (matches p2 rootfs)
-WRAP_BOOTSCRIPT=false                         # mkimage-wrap the boot script instead of plain text
+UENV_OUT="$OUTPUT_DIR/uEnv.txt"                # generated uEnv.txt (see generate_uenv_txt)
+# Confirmed on real hardware: patches U-Boot AND forces the NAND env CRC to
+# fail in the same step (always passes --patch-nand-offset to patch_uboot.py)
+# — the patch alone with a valid env is confirmed to have no effect, so
+# there's no reason to offer them as two separate toggles.
+PATCH_UBOOT=false                             # run patch_uboot.py on the source
+# --reloc-env: when patching the stock U-Boot, relocate the compiled-in default
+# env (patch_uboot_env.py) into free image space so a full SD-boot command fits
+# and AUTO-boots, rather than the sdscript patch that only drops to a prompt.
+# ON by default; pass --no-reloc-env to fall back to the prompt-drop patch.
+# Static-verified, not yet hardware-tested — see docs/UBOOT_SDBOOT_INVESTIGATION.md §10.
+RELOC_ENV=true
+ROOT_DEV="/dev/mmcblk0p2"                     # root= in the generated uEnv.txt (matches p2 rootfs)
+USE_INITRAMFS=false                           # OFF — confirmed non-functional, the dumped stock kernel doesn't support it (see is_item_disabled())
+INITRAMFS_OUT="$OUTPUT_DIR/initramfs.cpio.gz"  # generated by build_initramfs.sh
+INITRAMFS_UIMG="$OUTPUT_DIR/uInitrd"           # mkimage-wrapped ramdisk (for the bootz path)
+INITRAMFS_ADDR=0x2000000                       # RAM address the initramfs is fatload'd to
+# NAND partition map, inlined into the initramfs boot script so it works even
+# when the NAND env is unreadable (patched U-Boot). Matches env/uboot-env.txt.
+MTDPARTS='mtdparts=ark1680-nand:128k(S-Loader),512k(U-boot),512k(U-boot_back),256K(U-boot-Env),256K(arkdata),4m(kernel),106m(rootfs),6m(userdata),512K(bootlogo),3m(bootanimation),3m(reversingtrack),256K(Unicode)'
 KERNEL_BIN=""
+DTB_BIN=""
 ROOTFS_DIR=""
 USERDATA_DIR=""
 RECONSTRUCTED_DIR=""
 SKIP_USERDATA=false
 SKIP_MTD_REDIRECT=false
+NEW_KERNEL_MODE=true                          # replace stock kernel with freshly compiled Limcet P305 kernel — ON by default; pass --no-new-kernel to use the stock kernel
+NEW_UBOOT_MODE=true                           # replace stock U-Boot with freshly compiled Limcet P305 U-Boot — ON by default; pass --no-new-uboot to use the stock U-Boot
+KERNEL_BUILD_DIR=""                           # path to linux-arkmicro/ build root (auto-detected)
+MODULES_DIR=""                                # path to compiled_modules/ (auto-detected from KERNEL_BUILD_DIR)
 NON_INTERACTIVE=false
 DRY_RUN=false
 
@@ -118,14 +205,23 @@ while [[ $# -gt 0 ]]; do
         --uboot)           UBOOT_BIN="$2"; PATCH_UBOOT=false; shift 2 ;;
         --uboot-src)       UBOOT_SRC="$2"; shift 2 ;;
         --no-patch-uboot)  PATCH_UBOOT=false; shift ;;
-        --no-patch-nand-offset) PATCH_NAND_OFFSET=false; shift ;;
+        --reloc-env)       RELOC_ENV=true; shift ;;
+        --no-reloc-env)    RELOC_ENV=false; shift ;;
         --root)            ROOT_DEV="$2"; shift 2 ;;
-        --wrap-bootscript) WRAP_BOOTSCRIPT=true; shift ;;
         --kernel)          KERNEL_BIN="$2"; shift 2 ;;
+        --dtb)             DTB_BIN="$2"; shift 2 ;;
+        --new-kernel)      NEW_KERNEL_MODE=true; shift ;;
+        --no-new-kernel)   NEW_KERNEL_MODE=false; shift ;;
+        --kernel-build-dir) KERNEL_BUILD_DIR="$2"; shift 2 ;;
+        --modules-dir)     MODULES_DIR="$2"; shift 2 ;;
         --rootfs-dir)      ROOTFS_DIR="$2"; shift 2 ;;
         --userdata-dir)    USERDATA_DIR="$2"; shift 2 ;;
         --no-userdata)     SKIP_USERDATA=true; shift ;;
         --no-mtd-redirect) SKIP_MTD_REDIRECT=true; shift ;;
+        --new-uboot)       NEW_UBOOT_MODE=true; shift ;;
+        --no-new-uboot)    NEW_UBOOT_MODE=false; shift ;;
+        --initramfs)       USE_INITRAMFS=true; shift ;;
+        --no-initramfs)    USE_INITRAMFS=false; shift ;;
         --non-interactive) NON_INTERACTIVE=true; shift ;;
         --dry-run|-n)      DRY_RUN=true; shift ;;
         --help|-h)         usage ;;
@@ -151,6 +247,55 @@ autodetect() {
         local c="$SCRIPT_DIR/Prado firmware reconstructed"
         [[ -d "$c" ]] && RECONSTRUCTED_DIR="$c"
     }
+    # Auto-detect linux-arkmicro kernel build directory
+    [[ -z "$KERNEL_BUILD_DIR" ]] && {
+        for c in \
+            "$SCRIPT_DIR/../linux-arkmicro" \
+            "/home/osboxes/Downloads/linux-arkmicro" \
+            "$HOME/Downloads/linux-arkmicro"
+        do [[ -d "$c/linux" ]] && { KERNEL_BUILD_DIR="$(realpath "$c")"; break; }; done
+    }
+    # If new-kernel mode and build dir found, always resolve kernel + modules paths
+    if $NEW_KERNEL_MODE && [[ -n "$KERNEL_BUILD_DIR" ]]; then
+        local nk_paths=()
+        if $NEW_UBOOT_MODE; then
+            # With new U-Boot, we load the DTB separately so U-Boot can update bootargs (e.g. root=/dev/mmcblk0p2).
+            # We MUST use the raw zImage (no appended DTB) because otherwise the kernel ignores U-Boot's DTB.
+            nk_paths+=("$KERNEL_BUILD_DIR/linux/arch/arm/boot/zImage")
+            nk_paths+=("$KERNEL_BUILD_DIR/zImage.w_dtb")
+        else
+            nk_paths+=("$KERNEL_BUILD_DIR/zImage.w_dtb")
+            nk_paths+=("$KERNEL_BUILD_DIR/linux/arch/arm/boot/zImage")
+        fi
+        local nk
+        for nk in "${nk_paths[@]}"; do
+            [[ -f "$nk" ]] && { KERNEL_BIN="$nk"; break; };
+        done
+        # Always resolve modules dir when new-kernel is active
+        [[ -d "$KERNEL_BUILD_DIR/compiled_modules" ]] && \
+            MODULES_DIR="$KERNEL_BUILD_DIR/compiled_modules"
+    else
+        # Clear new-kernel-specific paths when mode is off
+        MODULES_DIR=""
+    fi
+    # If new-uboot mode and build dir found, auto-detect the u-boot.bin
+    if $NEW_UBOOT_MODE; then
+        if [[ -n "$KERNEL_BUILD_DIR" ]]; then
+            [[ -z "$UBOOT_BIN" ]] && {
+                [[ -f "$KERNEL_BUILD_DIR/u-boot/u-boot.bin" ]] && \
+                    UBOOT_BIN="$KERNEL_BUILD_DIR/u-boot/u-boot.bin"
+            }
+            [[ -z "$DTB_BIN" ]] && {
+                [[ -f "$KERNEL_BUILD_DIR/linux/arch/arm/boot/dts/ark1668_limcet_p305.dtb" ]] && \
+                    DTB_BIN="$KERNEL_BUILD_DIR/linux/arch/arm/boot/dts/ark1668_limcet_p305.dtb"
+            }
+        fi
+        # Fallback to local sd_bootable dir
+        [[ -z "$DTB_BIN" ]] && {
+            [[ -f "$OUTPUT_DIR/ark1668_limcet_p305.dtb" ]] && \
+                DTB_BIN="$OUTPUT_DIR/ark1668_limcet_p305.dtb"
+        }
+    fi
     # Raw source u-boot — patched into UBOOT_OUT, never modified in place.
     # The 'sdscript' patch mode (see prepare_uboot) only needs ~52 bytes of
     # compiled-in env space, so the raw NAND-dumped uboot.bin (no reserved
@@ -163,6 +308,7 @@ autodetect() {
             "$SCRIPT_DIR/Prado firmware dump/mtd1-mtd2_uboot/extracted/uboot.bin"
         do [[ -f "$c" ]] && { UBOOT_SRC="$c"; break; }; done
     }
+    # Fall back to stock kernel if new-kernel not requested
     [[ -z "$KERNEL_BIN" ]] && {
         for c in \
             "$SCRIPT_DIR/Prado firmware reconstructed/mtd5_kernel/zImage" \
@@ -204,14 +350,6 @@ check_requirements() {
             any_missing=1
         fi
     done
-    if $WRAP_BOOTSCRIPT; then
-        if command -v mkimage &>/dev/null; then
-            success "mkimage  (wrap the boot script, --wrap-bootscript)"
-        else
-            warn "mkimage  (wrap the boot script, --wrap-bootscript) — not found, install: sudo apt install u-boot-tools"
-            any_missing=1
-        fi
-    fi
     echo ""
     if [[ $any_missing -eq 1 ]]; then
         warn "Missing tools will block the build — install them before pressing g."
@@ -226,10 +364,12 @@ check_requirements() {
 # Format: "key|label|description|default"
 # ---------------------------------------------------------------------------
 CONFIG_ITEMS=(
-    "patch_uboot|Patch U-Boot for SD boot|EXPERIMENTAL, untested on hardware (see docs/UBOOT_SDBOOT_INVESTIGATION.md §8). Bakes in a minimal bootcmd that loads and runs a boot script from SD p1 (env/sdboot_script.txt), and redirects the NAND env offset via patch_uboot.py|ON"
-    "patch_nand_offset|Patch NAND env offset redirect|Forces the NAND env CRC to fail so the compiled-in bootcmd above takes effect (only applies if Patch U-Boot is on)|ON"
+    "use_new_uboot|Install compiled Limcet P305 U-Boot + uEnv|Replaces the stock NAND-dumped UBOOT.BIN on p1 with the freshly compiled Limcet P305 U-Boot. Bypasses patching, and installs UBOOT.BIN, uEnv.txt, and the DTB file on p1.|ON"
+    "use_new_kernel|Install compiled Limcet P305 kernel + modules|Replaces the stock NAND kernel on p1 with the freshly compiled zImage.w_dtb from linux-arkmicro/. Also installs the compiled .ko modules into /lib/modules/ on the p2 rootfs. Uses linux-arkmicro/compiled_modules/ auto-detected from build dir|ON"
+    "patch_uboot|Patch binary U-Boot for SD auto-boot (env relocation)|Patches U-Boot and forces the NAND env CRC to fail. By default (--reloc-env) it RELOCATES the compiled-in default env so a full SD-boot command fits and the device AUTO-boots from SD — static-verified, NOT yet hardware-tested (see docs/UBOOT_SDBOOT_INVESTIGATION.md §10). Pass --no-reloc-env for the hardware-confirmed fallback that only drops to an interactive U-Boot prompt (then continue via the README's \"Manual SD Card Boot\").|OFF"
+    "use_initramfs|Use initramfs (usually not needed)|DISABLED — confirmed non-functional, the dumped stock kernel doesn't support this boot path. Would build an initramfs that insmods ark_dw_mmc.ko and mounts the SD rootfs, for a stock NAND kernel where MMC is a module. Kept for reference.|OFF"
+    "redirect_mtd_data|Redirect NAND mtd partitions to SD card (bootlogo, bootanimation, reversingtrack, unicode)|Symlinks bootlogo, bootanimation, reversingtrack, and Unicode font (mtd8-11) to files under /nanddata/ on p2 — if off, the device reads these from whatever is already in NAND instead|ON"
     "include_userdata|Include userdata (p3)|Copies the userdata dir to p3 — if off, p3 is left empty and the app populates /data on first boot|ON"
-    "redirect_mtd_data|Redirect bootlogo/bootanimation/etc to SD|Symlinks bootlogo, bootanimation, reversingtrack, and Unicode font (mtd8-11) to files under /nanddata/ on p2 — if off, the device reads these from whatever is already in NAND instead|ON"
 )
 
 declare -a CONFIG_SEL
@@ -239,10 +379,12 @@ for i in "${!CONFIG_ITEMS[@]}"; do
 done
 # CLI flags override the menu defaults up front, same as build_update.sh's
 # flags override its own PARTITIONS defaults.
-$PATCH_UBOOT       || CONFIG_SEL[0]=0
-$PATCH_NAND_OFFSET || CONFIG_SEL[1]=0
-$SKIP_USERDATA     && CONFIG_SEL[2]=0
-$SKIP_MTD_REDIRECT && CONFIG_SEL[3]=0
+$PATCH_UBOOT       || CONFIG_SEL[2]=0
+$SKIP_USERDATA     && CONFIG_SEL[5]=0
+$SKIP_MTD_REDIRECT && CONFIG_SEL[4]=0
+$NEW_KERNEL_MODE   || CONFIG_SEL[1]=0
+$USE_INITRAMFS     && CONFIG_SEL[3]=1
+$NEW_UBOOT_MODE    || CONFIG_SEL[0]=0
 
 # ---------------------------------------------------------------------------
 # Navigation state — identical pattern to build_update.sh's CURSOR/read_key.
@@ -272,94 +414,282 @@ read_key() {
 }
 
 # ---------------------------------------------------------------------------
+# Shared 64-char divider — reused for every rule in the menu so top/bottom
+# borders and column widths agree with each other.
+# ---------------------------------------------------------------------------
+DIVIDER="────────────────────────────────────────────────────────────"
+
+# ---------------------------------------------------------------------------
+# Status badge — one consistent icon+word for found/missing/skip across the
+# whole SD IMAGE CONTENTS table, with an optional dim qualifier appended
+# (e.g. "[NEW]", a kernel version, a reason for skipping).
+# ---------------------------------------------------------------------------
+badge() {
+    local kind="$1" note="${2:-}"
+    case "$kind" in
+        found)   printf '%b' "${GREEN}✔ found${RESET}" ;;
+        missing) printf '%b' "${RED}✖ missing${RESET}" ;;
+        skip)    printf '%b' "${DIM}○ skip${RESET}" ;;
+    esac
+    [[ -n "$note" ]] && printf '%b' " ${DIM}${note}${RESET}"
+    return 0
+}
+
+# ---------------------------------------------------------------------------
+# Mutual exclusivity / permanent disables — greyed out with a reason rather
+# than just force-cleared so the user can see *why* instead of wondering
+# where the checkbox went.
+#   item 2 (patch U-Boot): doesn't apply when the compiled U-Boot replacement
+#     (item 0) is active, since that path bypasses patching entirely.
+#   item 3 (initramfs): always disabled — the dumped stock kernel doesn't
+#     support this boot path, confirmed non-functional.
+# ---------------------------------------------------------------------------
+is_item_disabled() {
+    case "$1" in
+        2) [[ ${CONFIG_SEL[0]} -eq 1 ]] ;;
+        3) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+# Clears CONFIG_SEL/flag state for anything is_item_disabled() currently
+# disqualifies, so a greyed-out item never holds a stale "on" value —
+# called from both the interactive toggle handler and validate() (the
+# non-interactive/CLI entry point) so the invariant holds regardless of path.
+enforce_exclusivity() {
+    if is_item_disabled 2; then
+        CONFIG_SEL[2]=0
+        PATCH_UBOOT=false
+    fi
+}
+
+disabled_reason() {
+    case "$1" in
+        2) echo "Unavailable — 'Install compiled U-Boot' replaces patching entirely" ;;
+        3) echo "Unavailable — confirmed non-functional, the dumped stock kernel doesn't support this boot path" ;;
+    esac
+}
+
+# ---------------------------------------------------------------------------
 # Menu rendering — one line per item, detail line for whichever row is
 # highlighted, same layout as build_update.sh's compact menu.
 # ---------------------------------------------------------------------------
 print_detail() {
     IFS='|' read -r _ label desc _ <<< "${CONFIG_ITEMS[$CURSOR]}"
-    echo -e "  ${DIM}${label}:${RESET} ${DIM}$desc${RESET}"
+    echo -e "  ${BOLD}${label}${RESET}"
+    # Wrapped lines line up under column 11 — where "Label" starts in the
+    # BUILD OPTIONS rows above ("    " + cursor(2) + mark(3) + "  ") — so the
+    # description visually nests under the highlighted row instead of using
+    # an indent unrelated to it.
+    #
+    # The fold width is derived from the real terminal width (not a fixed
+    # constant): a fixed indent+width that adds up to more columns than the
+    # terminal actually has means the *terminal* wraps the overflow itself,
+    # flush to column 0 with no indent at all — which is what "indent
+    # doesn't work" looks like. Recomputed on every redraw so a resize is
+    # picked up immediately.
+    local indent="           "
+    local cols; cols=$(tput cols 2>/dev/null || echo 80)
+    local wrap_width=$(( cols - ${#indent} - 2 ))
+    (( wrap_width < 20 )) && wrap_width=20
+    local line
+    while IFS= read -r line; do
+        echo -e "${indent}${DIM}${line}${RESET}"
+    done < <(fold -s -w "$wrap_width" <<< "$desc")
+    if is_item_disabled "$CURSOR"; then
+        echo -e "${indent}${YELLOW}⚠ $(disabled_reason "$CURSOR")${RESET}"
+    fi
 }
 
-print_menu() {
-    clear
+# ---------------------------------------------------------------------------
+# print_menu — pins the keybinding footer to the last row of the terminal,
+# the same way an input bar stays anchored to the bottom of the window
+# regardless of how much is scrolled above it. Content height varies between
+# redraws (a longer description, an extra "unavailable" warning line, more
+# NEW-uboot rows), so a footer that just follows the last content line
+# bounces up and down as you navigate. Rendering the body into a buffer
+# first lets us measure it against the real terminal height and pad the gap
+# so the footer always lands on the same row.
+# ---------------------------------------------------------------------------
+render_menu_body() {
+    echo -e "  ${CYAN}${DIVIDER}${RESET}"
     echo -e "${CYAN}${BOLD}  ARK1680 Prado — Bootable SD Card Builder${RESET}"
-    echo -e "  ${DIM}────────────────────────────────────────────────────────${RESET}"
+    echo -e "  ${CYAN}${DIVIDER}${RESET}"
 
     echo -e "  ${BOLD}BUILD OPTIONS${RESET}"
     for i in "${!CONFIG_ITEMS[@]}"; do
+        if [[ $i -eq 0 ]]; then
+            echo -e "   ${DIM}Partition 1 (BOOT)${RESET}"
+        elif [[ $i -eq 4 ]]; then
+            echo -e "\n   ${DIM}Partition 2 (ROOTFS)${RESET}"
+        elif [[ $i -eq 5 ]]; then
+            echo -e "\n   ${DIM}Partition 3 (USERDATA)${RESET}"
+        fi
+
         IFS='|' read -r key label desc _ <<< "${CONFIG_ITEMS[$i]}"
-        local mark
-        if [[ ${CONFIG_SEL[$i]} -eq 1 ]]; then
+        local mark label_str
+        if is_item_disabled "$i"; then
+            # "Dim" (SGR 2/faint) renders as plain text in a lot of terminals,
+            # so disabled rows use an explicit yellow marker + suffix instead
+            # of relying on intensity to read as "different".
+            mark="${YELLOW}[×]${RESET}"
+            label_str="${YELLOW}${label} (unavailable)${RESET}"
+        elif [[ ${CONFIG_SEL[$i]} -eq 1 ]]; then
             mark="${GREEN}[X]${RESET}"
+            label_str="$label"
         else
             mark="${DIM}[ ]${RESET}"
+            label_str="$label"
         fi
         local cursor="  "
         is_current "$i" && cursor="${CYAN}▶ ${RESET}"
-        printf "  %b%b  %s\n" "$cursor" "$mark" "$label"
+        printf "    %b%b  %b\n" "$cursor" "$mark" "$label_str"
     done
 
     echo ""
+    echo -e "  ${DIM}${DIVIDER}${RESET}"
     echo -e "  ${BOLD}SD IMAGE CONTENTS${RESET}  ${DIM}→ ${OUTPUT_DIR#$SCRIPT_DIR/}/$(basename "${IMAGE:-$DEVICE}")${RESET}"
-    printf "       ${DIM}%-4s %-22s %s${RESET}\n" "Part" "Item" "File"
+    printf "   ${BOLD}%-11s %-13s %-20s %s${RESET}\n" "Partition" "Item" "File" "Status"
 
-    local uboot_status kernel_status rootfs_status userdata_status
+    # Truncate long filenames so the Status column never drifts out of alignment.
+    trunc() { local s="$1" w="$2"; [[ ${#s} -gt $w ]] && echo "${s:0:$((w-1))}…" || echo "$s"; }
+
+    local uboot_status kernel_status rootfs_status userdata_status modules_status
     if [[ -n "$UBOOT_BIN" && -f "$UBOOT_BIN" ]] || [[ -n "$UBOOT_SRC" && -f "$UBOOT_SRC" ]]; then
-        uboot_status="${GREEN}found${RESET}"
+        uboot_status="found"
     else
-        uboot_status="${RED}missing${RESET}"
+        uboot_status="missing"
     fi
-    [[ -n "$KERNEL_BIN" && -f "$KERNEL_BIN" ]] && kernel_status="${GREEN}found${RESET}" || kernel_status="${RED}missing${RESET}"
-    [[ -n "$ROOTFS_DIR" && -d "$ROOTFS_DIR" ]] && rootfs_status="${GREEN}found${RESET}" || rootfs_status="${RED}missing${RESET}"
-    if [[ ${CONFIG_SEL[2]} -eq 0 ]]; then
-        userdata_status="${DIM}skipped — populated on first boot${RESET}"
+    [[ -n "$KERNEL_BIN" && -f "$KERNEL_BIN" ]] && kernel_status="found" || kernel_status="missing"
+    [[ -n "$ROOTFS_DIR" && -d "$ROOTFS_DIR" ]] && rootfs_status=$(badge found) || rootfs_status=$(badge missing)
+    if [[ ${CONFIG_SEL[5]} -eq 0 ]]; then
+        userdata_status=$(badge skip "(first boot)")
     elif [[ -n "$USERDATA_DIR" && -d "$USERDATA_DIR" ]]; then
-        userdata_status="${GREEN}found${RESET}"
+        userdata_status=$(badge found)
     else
-        userdata_status="${RED}missing${RESET}"
+        userdata_status=$(badge missing)
+    fi
+    if [[ ${CONFIG_SEL[1]} -eq 1 ]]; then
+        if [[ -n "$MODULES_DIR" && -d "$MODULES_DIR" ]]; then
+            local kver; kver=$(ls "$MODULES_DIR/lib/modules/" 2>/dev/null | head -1)
+            modules_status=$(badge found "(${kver:-?})")
+        else
+            modules_status=$(badge missing "(run kernel build)")
+        fi
+    else
+        modules_status=$(badge skip "(stock NAND)")
     fi
 
-    local bootscript_status
-    if [[ ${CONFIG_SEL[0]} -eq 1 && -z "$UBOOT_BIN" ]]; then
-        bootscript_status="${DIM}generated at build time (experimental)${RESET}"
-    else
-        bootscript_status="${DIM}n/a — U-Boot not being patched${RESET}"
+    local uboot_label; uboot_label="$(trunc "$(basename "${UBOOT_BIN:-${UBOOT_SRC:-uboot.bin}}")" 19)"
+    local uboot_status_str; uboot_status_str=$(badge "$uboot_status" $([[ ${CONFIG_SEL[0]} -eq 1 && "$uboot_status" == found ]] && echo "[NEW]"))
+
+    local kernel_label; kernel_label="$(trunc "$(basename "${KERNEL_BIN:-zImage}")" 19)"
+    local k_status; k_status=$(badge "$kernel_status" $([[ ${CONFIG_SEL[1]} -eq 1 && "$kernel_status" == found ]] && echo "[NEW]"))
+
+    # The "Boot script" row only applies to the new-U-Boot path (uEnv.txt) —
+    # the patched-U-Boot path no longer writes a boot script file at all
+    # (confirmed non-functional, removed; it drops to a U-Boot prompt for
+    # manual continuation instead, see README's "Manual SD Card Boot").
+    local show_bootscript=$([[ ${CONFIG_SEL[0]} -eq 1 ]] && echo true || echo false)
+
+    # Determine branch lines dynamically
+    local uboot_branch="├──"
+    local kernel_branch="├──"
+    if ! $show_bootscript; then
+        kernel_branch="└──"
     fi
 
-    printf "       p1   %-22s %-16s %b\n" "U-Boot"   "$(basename "${UBOOT_BIN:-${UBOOT_SRC:-uboot.bin}}")" "$uboot_status"
-    printf "       p1   %-22s %-16s %b\n" "Kernel"    "$(basename "${KERNEL_BIN:-zImage}")"                "$kernel_status"
-    printf "       p1   %-22s %-16s %b\n" "Boot script" "s"                                                "$bootscript_status"
-    printf "       p2   %-22s %-16s %b\n" "Rootfs"    "$(basename "${ROOTFS_DIR:-rootfs}")"                "$rootfs_status"
-    printf "       p3   %-22s %-16s %b\n" "Userdata"  "$(basename "${USERDATA_DIR:-userdata}")"            "$userdata_status"
+    printf "       p1 %s %-13s %-20s %b\n" "$uboot_branch" "U-Boot"       "$uboot_label"       "$uboot_status_str"
+    printf "          %s %-13s %-20s %b\n" "$kernel_branch" "Kernel"       "$kernel_label"      "$k_status"
+    if $show_bootscript; then
+        printf "          └── %-13s %-20s %b\n" "Boot script"  "uEnv.txt"  "${DIM}generated${RESET}"
+    fi
+    printf "       p2 ├── %-13s %-20s %b\n" "Rootfs"       "$(trunc "$(basename "${ROOTFS_DIR:-rootfs}")" 19)" "$rootfs_status"
+    printf "          └── %-13s %-20s %b\n" "Modules"      "compiled_modules/"  "$modules_status"
+    printf "       p3 └── %-13s %-20s %b\n" "Userdata"     "$(trunc "$(basename "${USERDATA_DIR:-userdata}")" 19)" "$userdata_status"
 
-    echo -e "  ${DIM}────────────────────────────────────────────────────────${RESET}"
+    echo -e "  ${DIM}${DIVIDER}${RESET}"
     print_detail
-    echo -e "  ${BOLD}↑/↓${RESET} move   ${BOLD}Space${RESET}/${BOLD}Enter${RESET} toggle   ${BOLD}a${RESET}/${BOLD}n${RESET} all/none   ${BOLD}g${RESET} go   ${BOLD}q${RESET} quit"
+}
+
+print_menu() {
+    local rule="  ${DIM}${DIVIDER}${RESET}"
+    local footer="  ${BOLD}↑/↓${RESET} move   ${BOLD}Space${RESET}/${BOLD}Enter${RESET} toggle   ${BOLD}g${RESET} go   ${BOLD}q${RESET} quit"
+    local rows; rows=$(tput lines 2>/dev/null || echo 24)
+    local body; body=$(render_menu_body)
+    local body_lines; body_lines=$(printf '%s\n' "$body" | wc -l)
+    # Reserve 3 rows for the pinned bar: a rule above the footer, the footer
+    # itself, and a rule below it — boxing it off from the content like a
+    # status bar rather than letting it blend into whatever's above.
+    local pad=$(( rows - body_lines - 3 ))
+    (( pad < 0 )) && pad=0
+
+    clear
+    printf '%s\n' "$body"
+    local i
+    for (( i = 0; i < pad; i++ )); do echo; done
+    echo -e "$rule"
+    echo -e "$footer"
+    # No trailing newline on the last line: once the buffer exactly fills
+    # the terminal height, one more \n would scroll the whole screen up by
+    # a row — pushing the footer bar we just pinned right back off the
+    # bottom edge.
+    echo -en "$rule"
 }
 
 # ---------------------------------------------------------------------------
 # Validate
 # ---------------------------------------------------------------------------
 validate() {
+    enforce_exclusivity
+
     if [[ -n "$UBOOT_BIN" ]]; then
         [[ -f "$UBOOT_BIN" ]] || die "UBOOT.BIN not found: $UBOOT_BIN"
     else
         [[ -n "$UBOOT_SRC" ]] || die "No U-Boot source — use --uboot-src or --uboot"
         [[ -f "$UBOOT_SRC" ]] || die "U-Boot source not found: $UBOOT_SRC"
-        if [[ ${CONFIG_SEL[0]} -eq 1 ]]; then
-            [[ -f "$SCRIPT_DIR/patch_uboot.py" ]] || die "patch_uboot.py not found in $SCRIPT_DIR"
+        if [[ ${CONFIG_SEL[2]} -eq 1 ]]; then
+            if $RELOC_ENV; then
+                [[ -f "$SCRIPT_DIR/patch_uboot_env.py" ]] || die "patch_uboot_env.py not found in $SCRIPT_DIR (needed for --reloc-env)"
+            else
+                [[ -f "$SCRIPT_DIR/patch_uboot.py" ]] || die "patch_uboot.py not found in $SCRIPT_DIR"
+            fi
             command -v python3 &>/dev/null || die "python3 not found — needed to patch U-Boot"
         fi
     fi
     [[ -f "$KERNEL_BIN" ]] || die "zImage not found: $KERNEL_BIN"
     [[ -d "$ROOTFS_DIR" ]] || die "rootfs dir not found: $ROOTFS_DIR"
-    if [[ ${CONFIG_SEL[2]} -eq 1 && -n "$USERDATA_DIR" ]]; then
+    if [[ ${CONFIG_SEL[5]} -eq 1 && -n "$USERDATA_DIR" ]]; then
         [[ -d "$USERDATA_DIR" ]] || die "userdata dir not found: $USERDATA_DIR"
     fi
-    for tool in parted mkfs.fat mkfs.ext4 losetup rsync; do
+    # Sync menu toggles back to runtime variables
+    [[ ${CONFIG_SEL[1]} -eq 1 ]] && NEW_KERNEL_MODE=true  || NEW_KERNEL_MODE=false
+    [[ ${CONFIG_SEL[3]} -eq 1 ]] && USE_INITRAMFS=true    || USE_INITRAMFS=false
+    [[ ${CONFIG_SEL[0]} -eq 1 ]] && NEW_UBOOT_MODE=true    || NEW_UBOOT_MODE=false
+    # Re-run autodetect so new-kernel paths resolve after menu toggle
+    autodetect
+
+    if $NEW_UBOOT_MODE; then
+        [[ -f "$UBOOT_BIN" ]] || \
+            die "New U-Boot not found: ${UBOOT_BIN:-linux-arkmicro/u-boot/u-boot.bin}\n  Run the U-Boot build first, or set --kernel-build-dir"
+        [[ -f "$DTB_BIN" ]] || \
+            die "DTB file not found: ${DTB_BIN:-ark1668_limcet_p305.dtb}\n  Build the kernel device-tree (make dtbs), supply --dtb, or place in sd_bootable/"
+    fi
+    if $NEW_KERNEL_MODE; then
+        [[ -f "$KERNEL_BIN" ]] || \
+            die "New kernel not found: ${KERNEL_BIN:-linux-arkmicro/zImage.w_dtb or linux/arch/arm/boot/zImage}\n  Run the kernel build first, or set --kernel-build-dir"
+        [[ -n "$MODULES_DIR" && -d "$MODULES_DIR" ]] || \
+            die "Modules dir not found: ${MODULES_DIR:-linux-arkmicro/compiled_modules/}\n  Run 'make modules && make modules_install INSTALL_MOD_PATH=../compiled_modules' first"
+    fi
+    local tools=(parted mkfs.fat mkfs.ext4 losetup rsync)
+    $USE_INITRAMFS && tools+=(cpio gzip mknod mkimage)   # build_initramfs.sh deps (mkimage → uInitrd)
+    for tool in "${tools[@]}"; do
         command -v "$tool" &>/dev/null || \
-            die "$tool not found — run: sudo apt install parted dosfstools e2fsprogs rsync"
+            die "$tool not found — run: sudo apt install parted dosfstools e2fsprogs rsync cpio gzip u-boot-tools"
     done
+    if $USE_INITRAMFS && [[ ! -f "$SCRIPT_DIR/build_initramfs.sh" ]]; then
+        die "build_initramfs.sh not found in $SCRIPT_DIR (or pass --no-initramfs)"
+    fi
     local avail=$(( IMAGE_SIZE_MB - P1_SIZE_MB - P2_SIZE_MB - 1 ))
     if [[ $avail -lt 32 ]]; then
         die "Only ${avail} MB left for p3 — increase --size or reduce partition sizes"
@@ -367,87 +697,84 @@ validate() {
 }
 
 # ---------------------------------------------------------------------------
-# Boot script — the real boot logic (bootargs, fatload zImage, bootz) that
-# the patched U-Boot's minimal compiled-in bootcmd loads and runs via
-# `source`. Generated (not just copied from env/sdboot_script.txt) so --root
-# is honoured. Lands in OUTPUT_DIR, copied to SD p1 as "s" in build().
-# ---------------------------------------------------------------------------
-generate_bootscript() {
-    mkdir -p "$OUTPUT_DIR"
-    local script
-    script=$(cat <<EOF
-setenv bootargs console=ttyS0,115200n8 console=tty0 mem=180M root=$ROOT_DEV rootfstype=ext4 rootwait rw
-fatload mmc 0:1 1000000 zImage
-bootz 1000000
-EOF
-)
-    if $DRY_RUN; then
-        echo "  [dry-run] would write boot script to $BOOTSCRIPT_OUT:"
-        echo "$script" | sed 's/^/    /'
-        if $WRAP_BOOTSCRIPT; then
-            echo "  [dry-run] would wrap with: mkimage -A arm -T script -C none -n \"SD boot script\" -d <script> $BOOTSCRIPT_OUT"
-        fi
-        return 0
-    fi
-
-    if $WRAP_BOOTSCRIPT; then
-        local raw="$OUTPUT_DIR/sdboot_script.txt"
-        printf '%s\n' "$script" > "$raw"
-        mkimage -A arm -T script -C none -n "SD boot script" -d "$raw" "$BOOTSCRIPT_OUT" >/dev/null
-        success "Boot script generated (mkimage-wrapped): $BOOTSCRIPT_OUT"
-    else
-        printf '%s\n' "$script" > "$BOOTSCRIPT_OUT"
-        success "Boot script generated (plain text): $BOOTSCRIPT_OUT"
-    fi
-}
-
-# ---------------------------------------------------------------------------
-# Patch U-Boot — patch_uboot.py reads the source and writes UBOOT_OUT.
+# Patch U-Boot — reads the source, writes UBOOT_OUT.
 # The source uboot.bin is never modified; UBOOT_OUT lands in sd_bootable/.
 #
-# EXPERIMENTAL: statically verified, not yet tested on real hardware — see
-# docs/UBOOT_SDBOOT_INVESTIGATION.md §8. Uses the 'sdscript' patch mode: a
-# minimal compiled-in bootcmd that loads and `source`s the boot script above
-# from SD p1, instead of the old 'sdboot' preset (which needed ~500 B of
-# compiled-in env space that a raw/Holden-derived uboot.bin doesn't have —
-# patch_uboot.py safely refuses that combination rather than corrupting it).
+# DEFAULT (--reloc-env, on): patch_uboot_env.py RELOCATES the compiled-in
+# default env into free image space (below __bss_start) and repoints it, so the
+# full 'sdboot' preset fits and the device AUTO-boots from SD. --patch-nand-offset
+# always on (forces the NAND env CRC to fail so the relocated default is used).
+# Static-verified, NOT yet hardware-tested — see docs/UBOOT_SDBOOT_INVESTIGATION.md §10.
+#
+# FALLBACK (--no-reloc-env): patch_uboot.py 'sdscript' mode — confirmed on real
+# hardware to interrupt boot and drop to a U-Boot prompt (§8). From there, use
+# the README's "Manual SD Card Boot" section to continue. This mode does NOT
+# auto-continue; it only fits a minimal compiled-in bootcmd, since a raw/Holden-
+# derived uboot.bin has no reserved env buffer for the full 'sdboot' preset.
 # ---------------------------------------------------------------------------
 UBOOT_WAS_PATCHED=false   # set true only when prepare_uboot() actually patches; read by build()'s summary
 
 prepare_uboot() {
+    # If new U-Boot is selected, bypass patching but ensure ARK header is injected
+    if $NEW_UBOOT_MODE; then
+        begin_step 1 "Preparing U-Boot (freshly compiled)"
+        if [[ -f "$UBOOT_BIN" ]] && [[ "$(basename "$UBOOT_BIN")" == "u-boot.bin" ]]; then
+            local injected="$OUTPUT_DIR/UBOOT.BIN"
+            info "Injecting ARK header into new U-Boot..."
+            run python3 "$SCRIPT_DIR/inject_ark_header.py" "$UBOOT_BIN" "$injected"
+            UBOOT_BIN="$injected"
+        fi
+        PATCH_UBOOT=false
+        generate_uenv_txt
+        success "U-Boot: using freshly compiled U-Boot: $UBOOT_BIN"
+        end_step 1
+        return 0
+    fi
+
     # Explicit prebuilt binary — use as-is.
     if [[ -n "$UBOOT_BIN" ]]; then
-        info "U-Boot: using supplied binary $UBOOT_BIN"
+        begin_step 1 "Preparing U-Boot (supplied binary)"
+        success "U-Boot: using supplied binary $UBOOT_BIN"
+        end_step 1
         return 0
     fi
 
     # Patch U-Boot toggled off — use the untouched source directly.
-    if [[ ${CONFIG_SEL[0]} -eq 0 ]]; then
+    if [[ ${CONFIG_SEL[2]} -eq 0 ]]; then
+        begin_step 1 "Preparing U-Boot (unpatched source)"
         UBOOT_BIN="$UBOOT_SRC"
         warn "U-Boot: using source unpatched — may not boot from SD: $UBOOT_BIN"
+        end_step 1
         return 0
     fi
 
+    begin_step 1 "Patching U-Boot for SD boot"
     mkdir -p "$OUTPUT_DIR"
-    generate_bootscript
     UBOOT_WAS_PATCHED=true
 
-    echo ""
-    echo -e "${BOLD}  Patching U-Boot for SD boot (experimental, see docs/UBOOT_SDBOOT_INVESTIGATION.md §8)...${RESET}"
     info "Source: $UBOOT_SRC (unchanged)"
     info "Output: $UBOOT_OUT"
-    local nand_flag=""
-    [[ ${CONFIG_SEL[1]} -eq 1 ]] && nand_flag="--patch-nand-offset"
-    run python3 "$SCRIPT_DIR/patch_uboot.py" \
-        -i "$UBOOT_SRC" -o "$UBOOT_OUT" \
-        --mode sdscript --replace-env \
-        $nand_flag
+    if $RELOC_ENV; then
+        info "Relocating compiled-in env for full SD auto-boot (patch_uboot_env.py --preset sdboot)"
+        info "Static-verified, NOT yet hardware-tested — see docs/UBOOT_SDBOOT_INVESTIGATION.md §10"
+        run python3 "$SCRIPT_DIR/patch_uboot_env.py" \
+            -i "$UBOOT_SRC" -o "$UBOOT_OUT" \
+            --preset sdboot --root "$ROOT_DEV" \
+            --patch-nand-offset
+    else
+        info "Confirmed on real hardware to drop to a U-Boot prompt — see docs/UBOOT_SDBOOT_INVESTIGATION.md §8"
+        run python3 "$SCRIPT_DIR/patch_uboot.py" \
+            -i "$UBOOT_SRC" -o "$UBOOT_OUT" \
+            --mode sdscript --replace-env \
+            --patch-nand-offset
+    fi
 
     if ! $DRY_RUN; then
-        [[ -f "$UBOOT_OUT" ]] || die "patch_uboot.py did not produce $UBOOT_OUT"
+        [[ -f "$UBOOT_OUT" ]] || die "U-Boot patch did not produce $UBOOT_OUT"
         success "U-Boot patched: $UBOOT_OUT"
     fi
     UBOOT_BIN="$UBOOT_OUT"
+    end_step 1
 }
 
 # ---------------------------------------------------------------------------
@@ -455,7 +782,7 @@ prepare_uboot() {
 # ---------------------------------------------------------------------------
 patch_rcs() {
     local target="$1"
-    local redirect_mtd="$2"   # "1" or "0" — CONFIG_SEL[3], redirect_mtd_data
+    local redirect_mtd="$2"   # "1" or "0" — CONFIG_SEL[4], redirect_mtd_data
     echo -e "${BOLD}  Patching rcS for SD userdata mount...${RESET}"
 
     if $DRY_RUN; then
@@ -490,7 +817,7 @@ if mount -o sync -t ext4 /dev/mmcblk0p3 /data 2>/dev/null; then
 \tif [ "${resetenv##*=}" = "1" ]; then
 \t\techo "==============Factory reset, reformat SD userdata!==========="
 \t\tumount /data
-\t\tmkfs.ext4 -F /dev/mmcblk0p3
+\t\tmkfs.ext4 -O ^64bit,^metadata_csum -F /dev/mmcblk0p3
 \t\tmount -o sync -t ext4 /dev/mmcblk0p3 /data
 \t\tfw_setenv factory_reset 0 2>/dev/null || true
 \tfi
@@ -617,6 +944,262 @@ populate_nanddata() {
 }
 
 # ---------------------------------------------------------------------------
+    # Generate uEnv.txt for new U-Boot env loading
+    # ---------------------------------------------------------------------------
+    generate_uenv_txt() {
+        info "Generating uEnv.txt..."
+        local uenv_content
+        if $USE_INITRAMFS; then
+            uenv_content=$(cat <<EOF
+bootargs=console=ttyS0,115200n8 mem=180M earlyprintk=serial rootwait rw
+bootcmd=fatload mmc 0:1 0x1000000 zImage; fatload mmc 0:1 $INITRAMFS_ADDR uInitrd; fatload mmc 0:1 0x2000000 ark1668_limcet_p305.dtb; bootz 0x1000000 $INITRAMFS_ADDR 0x2000000
+EOF
+)
+        else
+            uenv_content=$(cat <<EOF
+bootargs=console=ttyS0,115200n8 mem=180M earlyprintk=serial root=$ROOT_DEV rootfstype=ext4 rootwait rw
+bootcmd=fatload mmc 0:1 0x1000000 zImage; fatload mmc 0:1 0x2000000 ark1668_limcet_p305.dtb; bootz 0x1000000 - 0x2000000
+EOF
+)
+        fi
+
+        if $DRY_RUN; then
+            echo "  [dry-run] would write uEnv.txt to $UENV_OUT:"
+            echo "$uenv_content" | sed 's/^/    /'
+            return
+        fi
+
+        mkdir -p "$OUTPUT_DIR"
+        printf '%s\n' "$uenv_content" > "$UENV_OUT"
+        success "uEnv.txt generated: $UENV_OUT"
+    }
+
+# ---------------------------------------------------------------------------
+# Patch rootfs scripts for 4.19.192 kernel compatibility
+# Applied to the copy on p2 only — source tree is never modified.
+# Counterpart to patch_rcs(): called when NEW_KERNEL_MODE is active.
+# ---------------------------------------------------------------------------
+patch_rootfs_for_new_kernel() {
+    local rootfs_mount="$1"
+    echo -e "${BOLD}  Patching rootfs init scripts for 4.19.192 kernel compatibility...${RESET}"
+
+    if $DRY_RUN; then
+        echo "  [dry-run] rcS: mkdir /media before ramfs mount"
+        echo "  [dry-run] rcS: replace insmod 3.4.0 touchscreen paths with modprobe (silent fallback)"
+        echo "  [dry-run] rcS: comment out missing /usr/bin/sshd"
+        echo "  [dry-run] wifi_ap.sh: replace 3.4.0 wlan .ko paths with modprobe + uname -r fallback"
+        return
+    fi
+
+    local rcs="$rootfs_mount/etc/rc.d/rcS"
+    local wifi="$rootfs_mount/etc/wifi_ap.sh"
+    local inittab="$rootfs_mount/etc/inittab"
+    local profile="$rootfs_mount/etc/profile"
+
+    [[ -f "$rcs" ]]  || { warn "rcS not found at $rcs — skipping new-kernel patch"; return; }
+    [[ -f "$wifi" ]] || { warn "wifi_ap.sh not found at $wifi — skipping new-kernel patch"; return; }
+    [[ -f "$inittab" ]] || { warn "inittab not found at $inittab — skipping new-kernel patch"; return; }
+    [[ -f "$profile" ]] || { warn "profile not found at $profile — skipping new-kernel patch"; return; }
+
+    python3 - "$rcs" "$wifi" "$inittab" "$profile" <<'PYEOF'
+import sys, re
+
+rcs_path  = sys.argv[1]
+wifi_path = sys.argv[2]
+inittab_path = sys.argv[3]
+profile_path = sys.argv[4]
+
+# ── inittab patches ────────────────────────────────────────────────────────
+inittab = open(inittab_path).read()
+
+# Replace getty with direct shell execution, as the busybox build on this
+# device is missing the 'login' applet.
+OLD_GETTY = 'ttyS0::respawn:/sbin/getty -L ttyS0 115200 vt100'
+NEW_GETTY = 'ttyS0::respawn:-/bin/sh'
+if OLD_GETTY in inittab:
+    inittab = inittab.replace(OLD_GETTY, NEW_GETTY)
+    print("  inittab: replaced getty on ttyS0 with direct login shell")
+else:
+    print("  inittab WARNING: getty line not in expected form — skipped")
+
+open(inittab_path, 'w').write(inittab)
+
+# ── rcS patches ────────────────────────────────────────────────────────────
+rcs = open(rcs_path).read()
+
+# 1. Create /media before the ramfs mount so the mount doesn't fail
+OLD_MEDIA = 'mount -t ramfs -n none /tmp\nmount -t ramfs -n none /media'
+NEW_MEDIA = 'mount -t ramfs -n none /tmp\nmkdir -p /media\nmount -t ramfs -n none /media'
+if OLD_MEDIA in rcs:
+    rcs = rcs.replace(OLD_MEDIA, NEW_MEDIA)
+    print("  rcS: inserted mkdir -p /media before ramfs mount")
+elif 'mkdir -p /media' not in rcs:
+    print("  rcS WARNING: /media mount line not in expected form — skipped")
+
+# 1b. Create /var before the ramfs mount so the mount doesn't fail
+OLD_VAR = 'mount -t ramfs -n none /var'
+NEW_VAR = 'mkdir -p /var\nmount -t ramfs -n none /var'
+if OLD_VAR in rcs:
+    rcs = rcs.replace(OLD_VAR, NEW_VAR)
+    print("  rcS: inserted mkdir -p /var before ramfs mount")
+
+# 2. Replace hardcoded 3.4.0 touchscreen insmod with modprobe (silent fallback)
+#    Handles both ark1680_ts and gt9xx variants.
+rcs = re.sub(
+    r'insmod /lib/modules/3\.4\.0/kernel/drivers/input/touchscreen/ark1680_ts\.ko',
+    'modprobe ark1680_ts 2>/dev/null || true  # 3.4.0 driver not built for 4.19.192 yet',
+    rcs
+)
+rcs = re.sub(
+    r'insmod /lib/modules/3\.4\.0/kernel/drivers/input/touchscreen/gt9xx/gt9xx\.ko',
+    'modprobe gt9xx 2>/dev/null || true        # 3.4.0 driver not built for 4.19.192 yet',
+    rcs
+)
+print("  rcS: touchscreen insmod replaced with modprobe (silent fallback)")
+
+# 2b. Add chmod 600 for SSH host private keys to satisfy OpenSSH permission check
+rcs = re.sub(
+    r'mkdir -p /var/run/sshd',
+    'chmod 600 /etc/ssh/ssh_host_*_key 2>/dev/null || true\nmkdir -p /var/run/sshd',
+    rcs
+)
+print("  rcS: added chmod 600 for SSH private host keys before starting sshd")
+
+# Patch /usr/bin/sshd to explicitly use /etc/ssh/sshd_config, as the compiled-in
+# default path (/usr/local/etc/sshd_config) does not exist in the rootfs.
+rcs = re.sub(
+    r'/usr/bin/sshd &',
+    '/usr/bin/sshd -f /etc/ssh/sshd_config &',
+    rcs
+)
+print("  rcS: patched sshd call to use explicit configuration file path")
+
+open(rcs_path, 'w').write(rcs)
+
+# ── wifi_ap.sh patches ─────────────────────────────────────────────────────
+wifi = open(wifi_path).read()
+
+# Replace the for-loop that probes 3.4.0 .ko paths with modprobe + uname -r fallback.
+# Use regex rather than literal match to avoid heredoc backslash-escaping issues.
+NEW_WIFI = """    # Try modprobe first -- uses modules.dep for 4.19.192
+    modprobe rtl8821cs 2>/dev/null || \\
+    modprobe rtl8822cs 2>/dev/null || \\
+    modprobe rtl8189fs 2>/dev/null || \\
+    modprobe rtl8821cu 2>/dev/null || \\
+    modprobe rtl8811cu 2>/dev/null || {
+        # Fallback: direct .ko path using running kernel version
+        KVER=$(uname -r)
+        for ko in \\
+            /lib/modules/${KVER}/kernel/drivers/net/wireless/realtek/rtl8821cs/rtl8821cs.ko \\
+            /lib/modules/${KVER}/kernel/drivers/net/wireless/realtek/rtlwifi/rtl8192cu/rtl8192cu.ko \\
+            /lib/modules/${KVER}/kernel/drivers/net/wireless/realtek/rtl8811cu/rtl8811cu.ko \\
+            /lib/modules/${KVER}/kernel/drivers/net/wireless/realtek/rtl8xxxu/rtl8xxxu.ko; do
+            [ -f "$ko" ] && insmod "$ko" && break
+        done
+    }"""
+
+# Regex matches the for-loop block by its distinctive 3.4.0/wlan_rtl anchors,
+# tolerating any whitespace/backslash encoding variations from the heredoc.
+wifi_patched, n = re.subn(
+    r'for ko in\s*\\\s*\n(?:\s+/lib/modules/3\.4\.0/wlan_rtl\S+\s*\\\s*\n)+\s+/lib/modules/3\.4\.0/wlan_rtl\S+;\s*do\s*\n\s+\[.*insmod.*\$.*break\s*\n\s+done',
+    NEW_WIFI.strip(),
+    wifi
+)
+if n:
+    wifi = wifi_patched
+    print("  wifi_ap.sh: 3.4.0 wlan .ko paths replaced with modprobe + uname -r fallback")
+else:
+    print("  wifi_ap.sh WARNING: expected 3.4.0 for-loop not found -- already patched or changed?")
+
+open(wifi_path, 'w').write(wifi)
+
+# ── profile patches ────────────────────────────────────────────────────────
+profile = open(profile_path).read()
+
+# Comment out galcore module loading as it conflicts with old userspace DirectFB/Vivante libraries
+profile_patched, n = re.subn(
+    r'insmod\s+/lib/modules/3\.4\.0/galcore\.ko',
+    '# modprobe galcore',
+    profile
+)
+if n:
+    profile = profile_patched
+    print("  profile: commented out galcore.ko loading")
+else:
+    print("  profile WARNING: galcore.ko insmod line not found")
+
+# Switch QWS display driver from DirectFB (requires galcore GPU) to LinuxFB (pure software framebuffer)
+# to avoid GPU driver version mismatch crashes.
+OLD_DISPLAY = 'export QWS_DISPLAY=directfb:boundingrectflip:mmWidth220:mmHeight120:0'
+NEW_DISPLAY = 'export QWS_DISPLAY=LinuxFB:mmWidth220:mmHeight120:0'
+if OLD_DISPLAY in profile:
+    profile = profile.replace(OLD_DISPLAY, NEW_DISPLAY)
+    print("  profile: switched QWS_DISPLAY from directfb to LinuxFB")
+else:
+    print("  profile WARNING: QWS_DISPLAY directfb line not found")
+
+open(profile_path, 'w').write(profile)
+PYEOF
+
+    success "rootfs init scripts patched for 4.19.192 kernel (p2 only — source tree unchanged)"
+}
+
+# ---------------------------------------------------------------------------
+# Install new kernel modules onto the mounted p2 rootfs
+# ---------------------------------------------------------------------------
+install_new_kernel_modules() {
+    local rootfs_mount="$1"
+    echo -e "${BOLD}  Installing compiled kernel modules onto p2...${RESET}"
+
+    if $DRY_RUN; then
+        echo "  [dry-run] rsync compiled_modules/lib/modules/ → /tmp/sd_p2/lib/modules/"
+        echo "  [dry-run] depmod -a -b $rootfs_mount <kernel-version>"
+        return
+    fi
+
+    local kver; kver=$(ls "$MODULES_DIR/lib/modules/" 2>/dev/null | head -1)
+    [[ -z "$kver" ]] && die "No kernel version found in $MODULES_DIR/lib/modules/"
+
+    # Remove any existing modules for this kernel version to avoid stale .ko files
+    rm -rf "$rootfs_mount/lib/modules/$kver"
+    mkdir -p "$rootfs_mount/lib/modules"
+
+    rsync -a --info=progress2 \
+        "$MODULES_DIR/lib/modules/$kver" \
+        "$rootfs_mount/lib/modules/"
+
+    # Replace legacy 3.4.0 module directory with a symlink to the new kernel version
+    # so that any hardcoded insmods inside MsnCoreApp dynamically redirect to 4.19.192.
+    rm -rf "$rootfs_mount/lib/modules/3.4.0"
+    ln -sf "$kver" "$rootfs_mount/lib/modules/3.4.0"
+
+    # Create legacy wlan_rtl*.ko symlinks so MsnCoreApp and wifi_ap.sh can load them
+    # using their expected legacy filenames:
+    (
+        cd "$rootfs_mount/lib/modules/$kver"
+        find kernel -name "*.ko" | while read -r kopath; do
+            local kobasename; kobasename=$(basename "$kopath")
+            if [[ "$kopath" == *"drivers/net/wireless/realtek"* ]]; then
+                ln -sf "$kopath" "wlan_$kobasename"
+            fi
+        done
+    )
+
+    success "Modules installed: /lib/modules/$kver  ($(find "$rootfs_mount/lib/modules/$kver" -name '*.ko' | wc -l) .ko files)"
+    success "Redirected legacy module path and created wlan_*.ko symlinks"
+
+    # Run depmod to regenerate module dependency map for the target rootfs
+    if command -v depmod &>/dev/null; then
+        depmod -a -b "$rootfs_mount" "$kver" 2>/dev/null && \
+            success "depmod: module dependency map regenerated for $kver" || \
+            warn "depmod failed (non-fatal — modules.dep may be stale)"
+    else
+        warn "depmod not found on host — modules.dep will not be regenerated"
+        warn "  Run 'depmod -a' on the device after first boot"
+    fi
+}
+
+# ---------------------------------------------------------------------------
 # Build
 # ---------------------------------------------------------------------------
 LOOP=""
@@ -634,76 +1217,114 @@ build() {
     local TARGET="${IMAGE:-$DEVICE}"
     local P3_START=$(( P1_SIZE_MB + P2_SIZE_MB + 1 ))
     local do_userdata=0
-    [[ ${CONFIG_SEL[2]} -eq 1 && -n "$USERDATA_DIR" ]] && do_userdata=1
-    local do_mtd_redirect=${CONFIG_SEL[3]}
+    [[ ${CONFIG_SEL[5]} -eq 1 && -n "$USERDATA_DIR" ]] && do_userdata=1
+    local do_mtd_redirect=${CONFIG_SEL[4]}
 
-    echo ""
     # 1. Create image file
     if [[ -n "$IMAGE" ]]; then
-        echo -e "${BOLD}[1/7] Creating blank image (${IMAGE_SIZE_MB} MB)...${RESET}"
+        begin_step 2 "Creating blank image (${IMAGE_SIZE_MB} MB)"
         run dd if=/dev/zero of="$IMAGE" bs=1M count="$IMAGE_SIZE_MB" status=progress
+        end_step 2
     else
-        echo -e "${BOLD}[1/7] Using device $DEVICE${RESET}"
+        begin_step 2 "Using device $DEVICE"
+        end_step 2
     fi
 
     # 2. Partition table
-    echo -e "${BOLD}[2/7] Partitioning...${RESET}"
+    begin_step 3 "Partitioning"
     run parted -s "$TARGET" mklabel msdos
     run parted -s "$TARGET" mkpart primary fat32 1MiB "${P1_SIZE_MB}MiB"
     run parted -s "$TARGET" mkpart primary ext4  "$((P1_SIZE_MB+1))MiB" "$((P1_SIZE_MB+P2_SIZE_MB))MiB"
     run parted -s "$TARGET" mkpart primary ext4  "${P3_START}MiB" "100%"
     run parted -s "$TARGET" set 1 boot on
+    success "p1 (BOOT), p2 (ROOTFS), p3 (USERDATA) written to partition table"
+    end_step 3
 
     # 3. Loop device (image files only)
     local P1 P2 P3
+    begin_step 4 "Attaching loop device"
     if [[ -n "$IMAGE" ]] && ! $DRY_RUN; then
-        echo -e "${BOLD}[3/7] Attaching loop device...${RESET}"
         LOOP=$(losetup -Pf --show "$IMAGE")
         info "Loop device: $LOOP"
         P1="${LOOP}p1"; P2="${LOOP}p2"; P3="${LOOP}p3"
+        end_step 4
     elif [[ -n "$DEVICE" ]]; then
         P1="${DEVICE}1"; P2="${DEVICE}2"; P3="${DEVICE}3"
+        end_step 4 skip
     else
         P1="/dev/loopXp1"; P2="/dev/loopXp2"; P3="/dev/loopXp3"
+        end_step 4 skip
     fi
 
     # 4. Format
-    echo -e "${BOLD}[4/7] Formatting partitions...${RESET}"
+    begin_step 5 "Formatting partitions"
+    # The target runs a Linux 3.4.0 kernel (and U-Boot 2012.10), whose ext4
+    # drivers predate the 64bit and metadata_csum features that modern
+    # e2fsprogs enables by default. Leaving them on makes the kernel reject the
+    # root fs ("unsupported optional features") and U-Boot's ext4ls fail. Strip
+    # them so both can mount p2/p3. The remaining features (extents, flex_bg,
+    # huge_file, dir_nlink, extra_isize, …) are all supported by 3.4.
+    local EXT4_COMPAT="^64bit,^metadata_csum"
     run mkfs.fat -F32 -n BOOT    "$P1"
-    run mkfs.ext4 -L rootfs   -F "$P2"
-    run mkfs.ext4 -L userdata -F "$P3"
-    success "p1 FAT32, p2 ext4 (rootfs), p3 ext4 (userdata)"
+    run mkfs.ext4 -O "$EXT4_COMPAT" -L rootfs   -F "$P2"
+    run mkfs.ext4 -O "$EXT4_COMPAT" -L userdata -F "$P3"
+    success "p1 FAT32, p2 ext4 (rootfs), p3 ext4 (userdata) — legacy-compatible feature set"
+    end_step 5
 
     # 5. Mount
+    begin_step 6 "Mounting partitions"
     if ! $DRY_RUN; then
         mkdir -p /tmp/sd_p1 /tmp/sd_p2 /tmp/sd_p3
         mount "$P1" /tmp/sd_p1
         mount "$P2" /tmp/sd_p2
         mount "$P3" /tmp/sd_p3
+        success "p1 → /tmp/sd_p1, p2 → /tmp/sd_p2, p3 → /tmp/sd_p3"
+        end_step 6
+    else
+        end_step 6 skip
     fi
 
     # 6. Populate p1 — boot files
-    echo -e "${BOLD}[5/7] Populating p1 (boot partition)...${RESET}"
+    begin_step 7 "Populating p1 (boot partition)"
+    # Build the initramfs (loads ark_dw_mmc.ko, mounts the SD rootfs) from the
+    # same rootfs going on p2, so busybox/libs/module all match each other.
+    if $USE_INITRAMFS; then
+        info "Building initramfs from $ROOTFS_DIR"
+        run bash "$SCRIPT_DIR/build_initramfs.sh" "$ROOTFS_DIR" "$INITRAMFS_OUT"
+        info "Wrapping initramfs with mkimage..."
+        run mkimage -A arm -O linux -T ramdisk -C gzip -d "$INITRAMFS_OUT" "$INITRAMFS_UIMG" >/dev/null
+    fi
     run cp "$UBOOT_BIN"  /tmp/sd_p1/UBOOT.BIN
     run cp "$KERNEL_BIN" /tmp/sd_p1/zImage
-    if $UBOOT_WAS_PATCHED; then
-        run cp "$BOOTSCRIPT_OUT" /tmp/sd_p1/s
-        success "UBOOT.BIN + zImage + s (boot script) written to p1"
-    else
-        success "UBOOT.BIN + zImage written to p1"
+    local ir_label=""
+    if $USE_INITRAMFS; then
+        run cp "$INITRAMFS_OUT" /tmp/sd_p1/initramfs.cpio.gz
+        ir_label=" + initramfs.cpio.gz"
+        if $DRY_RUN || [[ -f "$INITRAMFS_UIMG" ]]; then
+            run cp "$INITRAMFS_UIMG" /tmp/sd_p1/uInitrd
+            ir_label="$ir_label + uInitrd"
+        fi
     fi
-    [[ -f "$SCRIPT_DIR/initramfs/initramfs.cpio.gz" ]] && \
-        run cp "$SCRIPT_DIR/initramfs/initramfs.cpio.gz" /tmp/sd_p1/
+    if $NEW_UBOOT_MODE; then
+        if [[ -n "$DTB_BIN" && -f "$DTB_BIN" ]]; then
+            run cp "$DTB_BIN" /tmp/sd_p1/ark1668_limcet_p305.dtb
+        fi
+        run cp "$UENV_OUT" /tmp/sd_p1/uEnv.txt
+        success "UBOOT.BIN + zImage${ir_label} + uEnv.txt + DTB written to p1"
+    elif $UBOOT_WAS_PATCHED; then
+        success "UBOOT.BIN (patched) + zImage${ir_label} written to p1"
+    else
+        success "UBOOT.BIN + zImage${ir_label} written to p1"
+    fi
+    end_step 7
 
     # 7. Populate p2 — rootfs
-    echo -e "${BOLD}[6/7] Populating p2 (rootfs)...${RESET}"
+    begin_step 8 "Populating p2 (rootfs)"
     # rsync -a copies the source tree verbatim, so repair the metadata a
     # Windows checkout drops before copying — otherwise p2 is unbootable:
     #   - restore_rootfs_symlinks.sh recreates the lost symlinks (/bin/sh,
     #     /sbin/init, /lib/libc.so.6, …) — rsync -a would just copy the gap.
     #   - apply_rootfs_perms.sh restores exec bits — else no executable binaries.
-    run bash "$SCRIPT_DIR/restore_rootfs_symlinks.sh" "$ROOTFS_DIR"
-    run bash "$SCRIPT_DIR/apply_rootfs_perms.sh" "$ROOTFS_DIR"
     run rsync -a --info=progress2 \
         --exclude=/proc/ \
         --exclude=/sys/ \
@@ -714,24 +1335,54 @@ build() {
         --exclude='ubi.cfg' \
         "$ROOTFS_DIR/" /tmp/sd_p2/
     ! $DRY_RUN && mkdir -p /tmp/sd_p2/{proc,sys,dev,tmp}
-    success "Rootfs synced to p2"
-    patch_rcs /tmp/sd_p2/etc/rc.d/rcS "$do_mtd_redirect"
-    if [[ $do_mtd_redirect -eq 1 ]]; then
-        populate_nanddata /tmp/sd_p2
-    else
-        info "Skipping /nanddata/ — bootlogo/bootanimation/reversingtrack/Unicode stay on NAND"
+    run bash "$SCRIPT_DIR/restore_rootfs_symlinks.sh" "/tmp/sd_p2"
+    run bash "$SCRIPT_DIR/apply_rootfs_perms.sh" "/tmp/sd_p2"
+    if ! $DRY_RUN; then
+        echo "  Converting CRLF line endings to LF on target configuration files and scripts..."
+        find /tmp/sd_p2/etc -type f -exec sed -i 's/\r$//' {} + 2>/dev/null || true
+        find /tmp/sd_p2 -type f \( -name "*.sh" -o -name "rcS" -o -name "inittab" -o -name "profile" -o -name "fstab" \) -exec sed -i 's/\r$//' {} + 2>/dev/null || true
     fi
+    success "Rootfs synced to p2"
+    end_step 8
 
-    # 8. Populate p3 — userdata
-    echo -e "${BOLD}[7/7] Populating p3 (userdata)...${RESET}"
+    # 9. Populate p3 — userdata
+    begin_step 9 "Populating p3 (userdata)"
     if [[ $do_userdata -eq 0 ]]; then
         warn "Skipped — p3 is empty. App will populate /data on first boot."
+        end_step 9 skip
     else
         run rsync -a --info=progress2 \
             --exclude='*.ubifs' \
             --exclude='userdata.img' \
             "$USERDATA_DIR/" /tmp/sd_p3/
         success "Userdata synced to p3"
+        end_step 9
+    fi
+
+    # 10. Install compiled Limcet P305 kernel modules + patch init scripts for 4.19.192
+    begin_step 10 "Installing new kernel modules + compat patches"
+    if $NEW_KERNEL_MODE; then
+        install_new_kernel_modules /tmp/sd_p2
+        patch_rootfs_for_new_kernel /tmp/sd_p2
+        end_step 10
+    else
+        info "Skipped — stock NAND kernel/modules in use"
+        end_step 10 skip
+    fi
+
+    # 11. Patch rcS for SD userdata mount (always runs)
+    begin_step 11 "Patching rcS for SD boot"
+    patch_rcs /tmp/sd_p2/etc/rc.d/rcS "$do_mtd_redirect"
+    end_step 11
+
+    # 12. Populate NAND partition data (bootlogo/bootanimation/reversingtrack/Unicode)
+    begin_step 12 "Populating NAND partition data"
+    if [[ $do_mtd_redirect -eq 1 ]]; then
+        populate_nanddata /tmp/sd_p2
+        end_step 12
+    else
+        info "Skipped — bootlogo/bootanimation/reversingtrack/Unicode stay on NAND"
+        end_step 12 skip
     fi
 
     # Unmount and detach
@@ -740,6 +1391,8 @@ build() {
         umount /tmp/sd_p1 /tmp/sd_p2 /tmp/sd_p3
         [[ -n "$LOOP" ]] && { losetup -d "$LOOP"; LOOP=""; }
     fi
+
+    print_step_summary
 
     echo ""
     echo -e "${GREEN}${BOLD}=== Build complete ===${RESET}"
@@ -757,19 +1410,40 @@ build() {
     echo ""
     echo -e "${BOLD}  Boot sequence:${RESET}"
     echo    "    Stepldr  → loads UBOOT.BIN from p1 (FAT32)"
-    if $UBOOT_WAS_PATCHED; then
-        echo "    U-Boot   → fatload + source's boot script 's' from p1"
-        echo "    Script   → fatload zImage, sets root=$ROOT_DEV, bootz"
+    if $USE_INITRAMFS; then
+        echo "    U-Boot   → fatload uInitrd; bootz (SD kernel + SD initramfs)"
+        echo "    initramfs→ insmod ark_dw_mmc.ko, mount p2 ext4, chroot into it"
+        echo "    rcS      → mounts p3 ext4 as /data"
     else
-        echo "    U-Boot   → whatever bootcmd this UBOOT.BIN was built/patched with"
+        if $NEW_UBOOT_MODE; then
+            echo "    U-Boot   → imports environment variables from uEnv.txt on p1"
+            echo "    U-Boot   → runs bootcmd (fatload zImage from p1, bootz)"
+        elif $UBOOT_WAS_PATCHED; then
+            echo "    U-Boot   → NAND env CRC forced invalid, drops to interactive prompt"
+            echo "    (manual) → continue with the README's \"Manual SD Card Boot\" section"
+        else
+            echo "    U-Boot   → whatever bootcmd this UBOOT.BIN was built/patched with"
+        fi
+        echo "    Kernel   → mounts p2 ext4 as /"
+        echo "    rcS      → mounts p3 ext4 as /data"
     fi
-    echo    "    Kernel   → mounts p2 ext4 as /"
-    echo    "    rcS      → mounts p3 ext4 as /data"
     echo ""
-    if $UBOOT_WAS_PATCHED; then
-        warn "This U-Boot patch is experimental and not yet tested on real hardware"
-        warn "  (see docs/UBOOT_SDBOOT_INVESTIGATION.md §8). Confirmed-working"
-        warn "  fallback: README \"Manual SD Card Boot\" (no patched binary needed)."
+    if $USE_INITRAMFS; then
+        echo -e "${BOLD}  Manual boot (U-Boot 'source' isn't compiled in, so type these):${RESET}"
+        echo    "    fatload mmc 0:1 0x1000000 zImage"
+        echo    "    fatload mmc 0:1 $INITRAMFS_ADDR uInitrd"
+        echo    "    setenv bootargs console=ttyS0,115200n8 mem=180M earlyprintk=serial \\"
+        echo    "      $MTDPARTS screen=0 rootwait"
+        echo    "    bootz 0x1000000 $INITRAMFS_ADDR"
+        echo ""
+        warn "initramfs SD boot is now verified via uInitrd."
+        warn "  The SD/MMC host driver is a kernel module, so root=/dev/mmcblk0p2 can't"
+        warn "  mount without this initramfs."
+    elif $UBOOT_WAS_PATCHED; then
+        warn "This U-Boot patch is confirmed to interrupt boot and drop to a prompt"
+        warn "  on real hardware (see docs/UBOOT_SDBOOT_INVESTIGATION.md §8). It does"
+        warn "  not auto-continue to a full boot — use the README's \"Manual SD Card"
+        warn "  Boot\" section to type the boot commands by hand at that prompt."
     fi
 }
 
@@ -785,11 +1459,13 @@ run_non_interactive() {
 
 # ---------------------------------------------------------------------------
 # Main loop — same interaction model as build_update.sh: arrow keys move the
-# highlighted row, Space/Enter toggles it, a/n/g/q act immediately.
+# highlighted row, Space/Enter toggles it, g/q act immediately.
 # ---------------------------------------------------------------------------
 run_interactive() {
     clear
+    echo -e "  ${CYAN}${DIVIDER}${RESET}"
     echo -e "${CYAN}${BOLD}  ARK1680 Prado — Bootable SD Card Builder${RESET}"
+    echo -e "  ${CYAN}${DIVIDER}${RESET}"
     echo ""
     check_requirements
 
@@ -805,12 +1481,20 @@ run_interactive() {
         case "$key" in
             $'\x1b[A')  (( CURSOR > 0 )) && CURSOR=$((CURSOR - 1)) ;;
             $'\x1b[B')  (( CURSOR < ${#CONFIG_ITEMS[@]} - 1 )) && CURSOR=$((CURSOR + 1)) ;;
-            ''|' ')     toggle_current ;;
-            a|A)
-                for i in "${!CONFIG_ITEMS[@]}"; do CONFIG_SEL[$i]=1; done
-                ;;
-            n|N)
-                for i in "${!CONFIG_ITEMS[@]}"; do CONFIG_SEL[$i]=0; done
+            ''|' ')
+                if is_item_disabled "$CURSOR"; then continue; fi
+                toggle_current
+                # Keep path-sensitive flags in sync so autodetect() can
+                # immediately resolve KERNEL_BIN and MODULES_DIR.
+                [[ ${CONFIG_SEL[1]} -eq 1 ]] && NEW_KERNEL_MODE=true || NEW_KERNEL_MODE=false
+                [[ ${CONFIG_SEL[3]} -eq 1 ]] && USE_INITRAMFS=true   || USE_INITRAMFS=false
+                [[ ${CONFIG_SEL[0]} -eq 1 ]] && NEW_UBOOT_MODE=true   || NEW_UBOOT_MODE=false
+                PATCH_UBOOT=$([[ ${CONFIG_SEL[2]} -eq 1 ]] && echo true || echo false)
+                enforce_exclusivity
+
+                KERNEL_BIN=""   # let autodetect re-resolve based on new mode
+                UBOOT_BIN=""    # let autodetect re-resolve based on new mode
+                autodetect
                 ;;
             g|G)
                 echo ""

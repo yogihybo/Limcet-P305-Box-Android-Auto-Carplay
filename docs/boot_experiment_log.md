@@ -329,3 +329,66 @@ early (initramfs) is **compiled out** — a kernel rebuild is unavoidable for SD
 - On-SoC ArkMicro controllers built in: `ark1680_add_device_{nand,uart,hsuart,i2c,
   spi,dma,rtc,pwm,wdt,ts,gpio}`, display `ark_fb`/`ark_disp_*` (incl. TV-encoder
   `ark_disp_tvenc_cvbsss_init_nts`), audio `ark_pcm_*`.
+
+### Touch (GT911) pins, I²C address & LCD panel timing — from disassembly (2026-07-11)
+
+Recovered from `vmlinux.elf` (capstone/Ghidra) and the touch module
+`mtd6_rootfs/lib/modules/3.4.0/kernel/drivers/input/touchscreen/gt9xx/gt9xx.ko`.
+
+#### GT911 touch (module `gt9xx.ko`)
+
+Decoded the `gtp_reset_guitar` reset/probe sequence directly from ARM code:
+
+| Signal | GPIO | How derived |
+|---|---|---|
+| **INT** (`GTP_INT_IRQ`) | **GPIO 4** | driven output during reset, then `gpio_direction_input(4)`; IRQ = `gpio_to_irq(4)`, `request_threaded_irq` flags `#2` = **falling edge** |
+| **RST** (`GTP_RST_PORT`) | **GPIO 80** (`0x50`) | `gpio_direction_output(80,0)` → set INT level → `(80,1)` release → left as **input** (open-drain + external pull-up) |
+
+**I²C address select** (`gtp_reset_guitar`): reads `client->addr` (`ldrh [r4,#2]`),
+`cmp #0x14`, then drives **INT high if addr==0x14, INT low otherwise (→ 0x5d)** while
+RST is low — the standard Goodix GT911 address-strap protocol. Boot logs show the
+client at **`0x5d`** (`0-005d` / `1-005d`), i.e. INT driven **low**. To use `0x14`
+instead, register the I²C client at 0x14 (the driver then drives INT high).
+
+Reset timing: RST low → `msleep(delay)` → set INT strap → `msleep(2)` → RST high →
+`msleep(6)` → RST input → `gtp_int_sync(50)`.
+
+**Cross-check with the 4.19 DTS:** INT=`gpio0 4` (falling), RST=`gpio2 16` = bank2·16
+= **80** — the stock module and the DTS agree **exactly** on pins and IRQ polarity.
+This confirms the touch failure documented above is purely the **I²C bus** mismatch
+(bit-banged camera bus vs hardware `i2c0`), *not* the pin/reset config. The module
+ships **no** register config table — it relies on the config flashed inside the
+GT911 chip (`GTP read version` / `cfg_version`), so there is nothing panel-specific
+to port from firmware beyond the pins/address above.
+
+Config is split: pin macros (`GTP_INT_IRQ`/`GTP_RST_PORT`) are compiled into the
+module; panel resolution comes from the exported kernel globals `touchinfo_param` /
+`screeninfo_param` that the module imports; the GT911 scan/threshold registers live
+in the chip.
+
+#### LCD panel timing (built-in kernel `.init.data` @ `0x805e6190`)
+
+Consumed by `ark_disp_set_lcd_cfg` (`0x802dc138`). Raw `u32` fields:
+
+| Field | Value |
+|---|---|
+| Active resolution | **800 × 480** |
+| Horizontal blanking (FP/BP/sync) | `40, 36, 16` → **Htotal 892** |
+| Vertical blanking (FP/BP/sync) | `32, 32, 41` → **Vtotal 585** |
+| Implied pixel clock | 892 × 585 × 60 ≈ **31.3 MHz** |
+| Trailing config words | `00 01 01 00 · 08 0c 01 00 · 0d 01 07 00 · 20` — sync polarity / bus format / bpp / backlight; exact field→register order is in `ark_disp_set_lcd_cfg` |
+
+(The blanking *triples* are certain from the totals/clock sanity-check; the exact
+order within each triple, and the trailing flag semantics, would need tracing
+`ark_disp_set_lcd_cfg`'s register writes.)
+
+#### TV-encoder mode table (`.rodata` @ `0x805e65bc`)
+
+Feeds `ark_disp_tvenc_*`. Five-word entries `{w, h, htiming, vtiming, interlace}`:
+**720×480** (NTSC), **720×576** (PAL), **1280×720** (720p).
+
+#### `screeninfo_param` / `touchinfo_param`
+
+Both are **120-byte `.bss` structs** (`0x805eecd0` / `0x805eede0`), zero-initialised
+and populated at runtime (`screen_id_setup` `memcpy`s 120 bytes into `screeninfo_param`).
+They are **not** static geometry tables — the LCD geometry above is the real source.

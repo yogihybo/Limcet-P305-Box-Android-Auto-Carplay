@@ -178,3 +178,68 @@ rendering path.
 
 See [`ARKDATA_VARIANTS.md`](ARKDATA_VARIANTS.md) for the full panel
 preset library reference.
+
+---
+
+## Panel/model selection mechanism & the DIP switch (2026-07-11)
+
+Investigated how the unit selects LCD settings for different vehicle models
+(there is a physical DIP switch on the board that appears to change the panel).
+Traced across the dumped U-Boot, the stock 3.4.0 kernel (`vmlinux.elf`
+disassembly), and the userspace app.
+
+### How a panel is selected — the `screen` id
+
+The selected panel is indexed by a single **screen id**:
+
+- **Kernel:** the `screen=N` boot argument sets `g_screen_id`, which indexes a
+  built-in panel table — `screens[g_screen_id]`. Confirmed two ways: (1) the
+  vendor reference source
+  [`../ArkPro Reference/kernel/drivers/ark/display/ark_display_core.c`](../ArkPro%20Reference/kernel/drivers/ark/display/ark_display_core.c)
+  (`screen_id_setup` → `__setup("screen=")`, `struct screen_info *screen =
+  &screens[g_screen_id]`); and (2) disassembly of the dumped kernel's own
+  `screen_id_setup` (`vmlinux.elf`), which `memcpy`s a 120-byte `screen_info`
+  struct into the exported global `screeninfo_param`. Named panels in the enum:
+  `SCREEN_QUN700`, `SCREEN_CVBS_NTSC/PAL`, `SCREEN_VGA8060`, `SCREEN_YPBPR720P`,
+  `SCREEN_C101EAN`, `SCREEN_CLAA101`, `SCREEN_GM8284DD`.
+- **U-Boot:** the same `screen` value (env var) selects which `ScreenId` block of
+  **mtd4 `arkdata.ini`** to program into the display-controller registers. This is
+  the *authoritative* timing source at Stage 1 (see "Display configuration layers"
+  above); the kernel's built-in `screens[]` entry is only a fallback the app/driver
+  can re-apply later. In the dumped unit `arkdata.ini` has a single `ScreenId=0`
+  (800×480 RGB888), and the env has a static `screen=0`.
+
+So "which panel" is decided by the **`screen` value**, consumed identically by
+U-Boot (arkdata `ScreenId`) and the kernel (`screens[]` index).
+
+### The DIP switch
+
+- There is **no `dip`/`dipswitch` string** anywhere in U-Boot, the kernel, or the
+  rootfs — the switch is read as raw **GPIO strapping**, not by that name.
+- The **vendor reference BSP selects the screen purely from the `screen` env var**
+  — it contains **no** GPIO/DIP read. So a DIP-driven panel change is an **OEM
+  customisation** on this board.
+- The **userspace app does not read the DIP**: `MsnCoreApp` takes screen/resolution
+  from the static `MsnProductInfo.ini` (`ResourceName=Box-P301`, `ScreenType=1`,
+  `ResolutionType=1`); `libMsnCommons` only exposes a generic
+  `/sys/class/gpio/gpio%d/{direction,value,edge}` helper, with no model mapping.
+- Therefore the DIP is almost certainly read by the **OEM U-Boot** and used to set
+  `screen`/`ScreenId` before boot. The dumped U-Boot has the matching machinery
+  (`ScreenId`, `SubScreenType`, `disconfig ${screen}`,
+  `get screenInfo … set default screen_id = %d`). **Not yet byte-confirmed:** the
+  exact GPIO(s) the OEM U-Boot reads — would require disassembling the dumped
+  U-Boot's screen-select path (no symbols, so more involved than the kernel).
+
+### Evidence the unit is genuinely multi-panel
+
+- Rootfs ships Launcher resources at **two resolutions**: `Launcher-*-800x480.rcc`
+  and `Launcher-*-1024x600.rcc`.
+- The rootfs `msnprofile/arkdata.ini` (distinct from mtd4) is a **1024×600 LVDS**
+  profile (`ScreenId=6`, `ScreenType=4`, `LVDSCfg=0x160FD`) — a sibling-vehicle
+  panel the Prado app ignores (see section above).
+- `ARKDATA_VARIANTS.md` catalogues 30+ presets (800×480, 400×240, 960×540,
+  1280×480, 1024×480, LVDS/RGB888) selectable by this same id scheme.
+
+**Bottom line:** panel selection is a single `screen` id flowing U-Boot→kernel; the
+DIP switch is an OEM GPIO strap that (almost certainly) sets that id in the OEM
+U-Boot. Confirming the exact GPIO mapping is the one remaining open item.

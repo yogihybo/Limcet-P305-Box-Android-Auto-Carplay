@@ -1,669 +1,224 @@
-/*
- * Synthetic / reconstructed device tree — DC_LIMCET_MB_REV_003
- * Toyota Prado head unit (Holden-based, McuType=6, ProductId=Limcet-P306,
- * ResourceName=Box-P301)
- *
- * ============================== IMPORTANT ==================================
- * THIS FILE IS NOT REAL FIRMWARE. This board's actual kernel does not use a
- * device tree at all — it boots via the legacy ARM ATAG mechanism (confirmed:
- * single static `MACHINE_START(ARK1680,...)`, numeric machine ID 0x1068
- * carried in register r1, `fixup()` parsing an ATAG_CORE tag list; U-Boot's
- * `bootnand`/`bootz` paths never pass an fdt address; no FDT magic
- * (0xd00dfeed) found anywhere in either available zImage or its decompressed
- * vmlinux). See docs/SOC_ARK1668_CROSSREF.md §2 for the full evidence chain.
- *
- * This file is a *reconstruction*: a structured write-up, in real .dts
- * syntax for readability/comparability, of everything independently
- * confirmed about this specific board's hardware via two separate methods:
- *
- *   [SW-RE]  Ghidra reverse-engineering of the dumped kernel (zImage,
- *            build #353/#383) and userspace binaries (MsnCoreApp,
- *            libMcuCenter.so) — see docs/SOC_ARK1668_CROSSREF.md
- *   [HW]     Physical board inspection — chip markings, photos — see
- *            Limcet Hardware/BOARD_ANALYSIS.md
- *   [REF]    Inherited from the public `linux-arkmicro` vendor tree's
- *            ark1668.dtsi / ark1668-pinctrl.dtsi, which was shown
- *            (docs/SOC_ARK1668_CROSSREF.md §3) to share this SoC's exact
- *            peripheral register map. NOT independently confirmed for
- *            THIS board's actual PCB wiring — inherited only because the
- *            silicon is the same. Treat these as "plausible defaults",
- *            not verified facts, unless also tagged [SW-RE] or [HW].
- *
- * Every node/property below is tagged with one or more of the above. Nodes
- * with no hardware evidence at all for this specific board are omitted
- * rather than invented.
- * =============================================================================
- */
-
+// SPDX-License-Identifier: GPL-2.0
 /dts-v1/;
-
-#include <dt-bindings/pinctrl/ark-pinfunc.h>
+#include "ark1668.dtsi"
+#include "ark1668-pinctrl.dtsi"
+#include <dt-bindings/gpio/gpio.h>
 
 / {
-	model = "Toyota Prado Head Unit (Limcet DC_LIMCET_MB_REV_003)"; /* [HW] */
-	compatible = "arkmicro,ark1668-limcet-prado", "arkmicro,ark1668"; /* [HW]+[REF] */
-	#address-cells = <1>;
-	#size-cells = <1>;
-
-	/*
-	 * Silicon package is marked ARK1668 [HW: lot code G210209927N, BGA].
-	 * Software (kernel, U-Boot) self-identifies as "ARK1680" [SW-RE] —
-	 * both names refer to the same die; see SOC_ARK1668_CROSSREF.md §2.
-	 * ATAG machine ID for this board: 0x1068 (4200 decimal) [SW-RE].
-	 */
-
-	chosen {
-		/* [SW-RE] verbatim from U-Boot env `setbootargs`, mtd3_env dump */
-		bootargs = "console=ttyS0,115200n8 mem=180M earlyprintk=serial ubi.mtd=6 root=ubi0:rootfs rootfstype=ubifs rootwait ro mtdparts=ark1680-nand:128k(S-Loader),512k(U-boot),512k(U-boot_back),256K(U-boot-Env),256K(arkdata),4m(kernel),106m(rootfs),6m(userdata),512K(bootlogo),3m(bootanimation),3m(reversingtrack),256K(Unicode) screen=0";
-		stdout-path = "uart0:115200n8";
-	};
-
-	cpus {
-		#address-cells = <1>;
-		#size-cells = <0>;
-		cpu@0 {
-			device_type = "cpu";
-			compatible = "arm,cortex-a5"; /* [REF] not independently re-verified via CPUID read */
-			reg = <0>;
-			next-level-cache = <&L2>;
-		};
-	};
+	model = "Limcet P305/P306 Dashboard Head Unit";
+	compatible = "arkmicro,ark1668-limcet", "arkmicro,ark1668";
 
 	memory {
-		/* [SW-RE] U-Boot bootargs "mem=180M" for this specific unit —
-		 * NOT the 0xf000000/2Gb placeholder seen in the public ark1668.dtsi,
-		 * which is a generic dev-board default, not this board's real RAM. */
-		reg = <0x80000000 0xb400000>; /* 180 MiB @ phys base 0x80000000 [SW-RE: PAGE_OFFSET/PHYS_OFFSET] */
+		reg = <0x0 0x8000000>; // 128MB RAM
 	};
 
-	L2: cache-controller@70000000 {
-		compatible = "arm,pl310-cache"; /* [REF] */
-		reg = <0x70000000 0x1000>; /* [SW-RE] literal confirmed present (250+ raw refs) in both kernel builds */
-		cache-unified;
-		cache-level = <2>;
+	// Reversing Signal (Mapped but Prado uses UART protocol via MCUAdapter)
+	carback: carback@0 {
+		compatible = "arkmicro,ark-carback";
+		interrupt-parent = <&gpio0>;
+		interrupts = <5 IRQ_TYPE_EDGE_BOTH>;
+		detect-gpios = <&gpio0 5 GPIO_ACTIVE_HIGH>;
+		debounce-detect = <20>;
 	};
 
-	vicl: interrupt-controller@e0c00000 {
-		compatible = "arm,pl192-vic"; /* [REF] */
-		interrupt-controller;
-		reg = <0xe0c00000 0x1000>; /* [SW-RE] confirmed: ioremap() call site found directly in board bring-up code, boot string "ARK interrupt controller virtual address VICL %x VICH %x" */
-		#interrupt-cells = <1>;
+	mcu_serial: mcu-serial@0 {
+		compatible = "arkmicro,ark-mcu-serial";
 	};
 
-	vich: interrupt-controller@e0b00000 {
-		compatible = "arm,pl192-vic"; /* [REF] */
-		interrupt-controller;
-		reg = <0xe0b00000 0x1000>; /* [REF] base address not found as a bare literal in this kernel (likely computed as offset from vicl at runtime); paired VICL/VICH boot string above confirms both exist */
-		#interrupt-cells = <1>;
+	tool_serial: tool-serial@0 {
+		compatible = "arkmicro,ark-tool-serial";
 	};
 
-	sregs@e4900000 {
-		compatible = "arkmicro,ark-sregs"; /* [REF] */
-		reg = <0xe4900000 0x1000>; /* [SW-RE] confirmed literal present */
-	};
-
-	soc {
-		compatible = "simple-bus";
+	// Bit-banged I2C Bus 0 (Analog I2C)
+	i2c-gpio-0 {
 		#address-cells = <1>;
-		#size-cells = <1>;
-		ranges;
+		#size-cells = <0>;
+		compatible = "i2c-gpio";
+		gpios = <&gpio0 3 0		/* SDA (GPIO 3) */
+			 &gpio0 2 0		/* SCL (GPIO 2) */
+		>;
+		i2c-gpio,delay-us = <6>;
+		i2c-gpio,scl-output-only;
+		pinctrl-names = "default";
+		pinctrl-0 = <&i2c_touch_pins>;
 
-		pinctrl0: pinctrl@e4900000 {
-			compatible = "arkmicro,ark1668-pinctrl"; /* [REF] */
-			reg = <0xe4900000 0x1000>; /* [SW-RE] */
-
-			/*
-			 * Only THREE board-specific pin assignments are actually
-			 * confirmed for this PCB (apple_auth_reset via Ghidra RE of
-			 * customer_gpio_init(), §5 of SOC_ARK1668_CROSSREF.md; bt_en via
-			 * physical/config inspection). Every other group below is
-			 * [REF]: transcribed directly from the real
-			 * `linux-arkmicro/linux/arch/arm/boot/dts/ark1668-pinctrl.dtsi`
-			 * (now vendored at `linux-arkmicro Reference/linux/...` — see
-			 * SOC_ARK1668_CROSSREF.md §10) because the silicon is confirmed
-			 * identical (§3), but this board's actual PCB routing for them
-			 * is unconfirmed — i.e. "this pin *can* do this on this chip",
-			 * not "this pin *does* this on this PCB".
-			 */
-			apple_auth_reset {
-				pinctrl_apple_auth_rst: apple-auth-rst {
-					/* GPIO 95 = PBANK_2 pin 31 [SW-RE: gpio_request(0x5f,"apple_encpy_ic_rst"); gpio_direction_output(0x5f,1);] */
-					ark,pins = <ARK_PBANK_2 31 ARK_PVAL_0>; /* plain GPIO — no alt function claims this pin in [REF] table either */
-				};
-			};
-
-			bt_module_enable {
-				pinctrl_bt_en: bt-en {
-					/* GPIO 91 = PBANK_2 pin 27 [HW: BTEN_INTERFACE=gpio91 in /etc/blueware.properties] */
-					ark,pins = <ARK_PBANK_2 27 ARK_PVAL_0>;
-				};
-			};
-
-			lcd {
-				/* [REF] verbatim from ark1668-pinctrl.dtsi — RGB888 alt
-				 * function (ARK_PVAL_1) confirmed selected by docs/SCREEN.md's
-				 * bus-format=rgb888; the lvds-mode and hi-impedance
-				 * alternatives exist in silicon but aren't this board's panel. */
-				pinctrl_lcd_rgb888: lcd-rgb-0 {
-					ark,pins = <ARK_PBANK_0 2  ARK_PVAL_1   /* r0 */
-						    ARK_PBANK_0 3  ARK_PVAL_1   /* r1 */
-						    ARK_PBANK_0 4  ARK_PVAL_1   /* r2 */
-						    ARK_PBANK_0 5  ARK_PVAL_1   /* r3 */
-						    ARK_PBANK_0 6  ARK_PVAL_1   /* r4 */
-						    ARK_PBANK_0 7  ARK_PVAL_1   /* r5 */
-						    ARK_PBANK_0 8  ARK_PVAL_1   /* r6 */
-						    ARK_PBANK_0 9  ARK_PVAL_1   /* r7 */
-						    ARK_PBANK_0 10 ARK_PVAL_1   /* g0 */
-						    ARK_PBANK_0 11 ARK_PVAL_1   /* g1 */
-						    ARK_PBANK_0 12 ARK_PVAL_1   /* g2 */
-						    ARK_PBANK_0 13 ARK_PVAL_1   /* g3 */
-						    ARK_PBANK_0 14 ARK_PVAL_1   /* g4 */
-						    ARK_PBANK_0 15 ARK_PVAL_1   /* g5 */
-						    ARK_PBANK_0 16 ARK_PVAL_1   /* g6 */
-						    ARK_PBANK_0 17 ARK_PVAL_1   /* g7 */
-						    ARK_PBANK_0 18 ARK_PVAL_1   /* b0 */
-						    ARK_PBANK_0 19 ARK_PVAL_1   /* b1 */
-						    ARK_PBANK_0 20 ARK_PVAL_1   /* b2 */
-						    ARK_PBANK_0 21 ARK_PVAL_1   /* b3 */
-						    ARK_PBANK_0 22 ARK_PVAL_1   /* b4 */
-						    ARK_PBANK_0 23 ARK_PVAL_1   /* b5 */
-						    ARK_PBANK_0 24 ARK_PVAL_1   /* b6 */
-						    ARK_PBANK_0 25 ARK_PVAL_1>; /* b7 */
-				};
-				pinctrl_lcd_base: lcd-base-0 {
-					ark,pins = <ARK_PBANK_0 26 ARK_PVAL_1   /* de */
-						    ARK_PBANK_0 27 ARK_PVAL_1   /* clk */
-						    ARK_PBANK_0 28 ARK_PVAL_1   /* vsync */
-						    ARK_PBANK_0 29 ARK_PVAL_1>; /* hsync */
-				};
-			};
-
-			nand0 {
-				/* [REF] verbatim from ark1668-pinctrl.dtsi. */
-				pinctrl_nand: nand-0 {
-					ark,pins = <ARK_PBANK_1 7  ARK_PVAL_1   /* data0-7 */
-						    ARK_PBANK_1 8  ARK_PVAL_1
-						    ARK_PBANK_1 9  ARK_PVAL_1
-						    ARK_PBANK_1 10 ARK_PVAL_1
-						    ARK_PBANK_1 11 ARK_PVAL_1
-						    ARK_PBANK_1 12 ARK_PVAL_1
-						    ARK_PBANK_1 13 ARK_PVAL_1
-						    ARK_PBANK_1 14 ARK_PVAL_1
-						    ARK_PBANK_1 15 ARK_PVAL_1   /* cle */
-						    ARK_PBANK_1 16 ARK_PVAL_1   /* ale */
-						    ARK_PBANK_1 17 ARK_PVAL_1   /* ren */
-						    ARK_PBANK_1 18 ARK_PVAL_1   /* wen */
-						    ARK_PBANK_1 19 ARK_PVAL_1   /* rb0 */
-						    ARK_PBANK_1 20 ARK_PVAL_1>; /* cen0 */
-				};
-			};
-
-			uart {
-				/* [REF] uart0-5 pin groups, verbatim from ark1668-pinctrl.dtsi
-				 * — silicon-identical per §3 crossref. Only uart0 (console)
-				 * and hsuart0/hsuart1 (uart4/uart5 slots, see §3's memory-map
-				 * table) are confirmed in actual use on this board; uart1-3
-				 * are wired in silicon but unconfirmed/unused here. */
-				pinctrl_uart0: uart0-0 {
-					ark,pins = <ARK_PBANK_1 30 ARK_PVAL_1   /* rx */
-						    ARK_PBANK_1 31 ARK_PVAL_1>; /* tx */
-				};
-				pinctrl_uart1: uart1-0 {
-					ark,pins = <ARK_PBANK_2 0 ARK_PVAL_1    /* rx */
-						    ARK_PBANK_2 1 ARK_PVAL_1>;  /* tx */
-				};
-				pinctrl_uart2: uart2-0 {
-					ark,pins = <ARK_PBANK_2 2 ARK_PVAL_1    /* rx */
-						    ARK_PBANK_2 3 ARK_PVAL_1>;  /* tx */
-				};
-				pinctrl_uart3: uart3-0 {
-					ark,pins = <ARK_PBANK_2 4 ARK_PVAL_1    /* rx */
-						    ARK_PBANK_2 5 ARK_PVAL_1>;  /* tx */
-				};
-				pinctrl_uart4: uart4-0 {
-					/* feeds hsuart0 — the STM32 MCU link, see hsuart0 below */
-					ark,pins = <ARK_PBANK_3 24 ARK_PVAL_1   /* rx */
-						    ARK_PBANK_3 23 ARK_PVAL_1>; /* tx */
-				};
-				pinctrl_uart5: uart5-0 {
-					/* feeds hsuart1 — the Bluetooth module link, see hsuart1 below */
-					ark,pins = <ARK_PBANK_3 28 ARK_PVAL_1   /* rx */
-						    ARK_PBANK_3 27 ARK_PVAL_1>; /* tx */
-				};
-			};
-
-			pwm {
-				/* [REF] pwm1 (backlight, see &pwm-backlight below) confirmed
-				 * in use; pwm2/pwm3 wired in silicon, unconfirmed on this board. */
-				pinctrl_pwm1: pwm-1 { ark,pins = <ARK_PBANK_2 15 ARK_PVAL_1>; };
-				pinctrl_pwm2: pwm-2 { ark,pins = <ARK_PBANK_2 16 ARK_PVAL_1>; };
-				pinctrl_pwm3: pwm-3 { ark,pins = <ARK_PBANK_2 17 ARK_PVAL_1>; };
-			};
-
-			spi {
-				/* [REF] — this board's &spi0 is status="disabled" (no
-				 * confirmed SPI peripheral identified), kept for completeness. */
-				pinctrl_ecspi0: ecspi-0 {
-					ark,pins = <ARK_PBANK_3 1 ARK_PVAL_1   /* clk */
-						    ARK_PBANK_3 2 ARK_PVAL_1   /* rxd */
-						    ARK_PBANK_3 3 ARK_PVAL_1>; /* txd */
-				};
-			};
-
-			i2c0 {
-				pinctrl_i2c0: i2c0-0 {
-					ark,pins = <ARK_PBANK_2 6 ARK_PVAL_2   /* scl */
-						    ARK_PBANK_2 7 ARK_PVAL_2>; /* sda */
-				};
-			};
-
-			i2s {
-				/* [REF] — this board's audio is routed over hsuart1/BT
-				 * (VOICE_TYPE=UART per BOARD_ANALYSIS.md), not I2S; kept
-				 * for completeness since &i2s_dac/&i2s_adc nodes exist. */
-				pinctrl_i2sadc_sync: i2s1-sync { ark,pins = <ARK_PBANK_2 18 ARK_PVAL_3>; };
-				pinctrl_i2sadc_sadata: i2s1-sadata { ark,pins = <ARK_PBANK_2 19 ARK_PVAL_3>; };
-				pinctrl_i2sadc_bclk: i2s1-bclk { ark,pins = <ARK_PBANK_2 20 ARK_PVAL_3>; };
-				pinctrl_i2sadc_mclk: i2s1-mclk { ark,pins = <ARK_PBANK_3 31 ARK_PVAL_1>; };
-			};
-
-			/*
-			 * MMC0/MMC1 (SD/eMMC) are deliberately NOT here: unlike every
-			 * group above, they're not part of this SoC's named pinctrl
-			 * table at all in EITHER ark1668-pinctrl.dtsi or
-			 * ark1668e-pinctrl.dtsi. [REF, confirmed by grep across both
-			 * files finding zero mmc/sdio entries, and by neither &mmc0 nor
-			 * &mmc1 in ark1668.dtsi itself carrying a pinctrl-0 phandle.]
-			 * Real U-Boot board source instead pokes raw pad-mux registers
-			 * directly: `linux-arkmicro Reference/u-boot/board/arkmicro/ark1668/ark1668.c`
-			 * `dwmci_select_pad()` sets SYS_PAD_CTRL0B[4:0] + SYS_PAD_CTRL05[31:24]
-			 * for mmc0, and SYS_PAD_CTRL06[27:0] = 0x2222222 (alt-value 2 on
-			 * all 7 nibbles) for mmc1 — same registers/values independently
-			 * found in the ArkPro kernel's config.c
-			 * `ark_sys_pad_config(SYS_PAD_CTRL06, 0xFFFFFFF, 0, 0x2222222)`
-			 * call. Which individual physical pin each nibble corresponds to
-			 * (CLK/CMD/D0-D3) isn't named in either source — that would need
-			 * an actual datasheet, not available here.
-			 */
+		// AHD Video Input Decoder (Reset line on GPIO 0)
+		dvr_ark7116: dvr_ark7116@B2 {
+			compatible = "arkmicro,ark1668_ark7116";
+			reset-gpio = <&gpio0 0 0>;
+			reg = <0x59>;
+			carback-config = <1>;
 		};
 
-		gpio0: gpio@e4600000 {
-			compatible = "arkmicro,ark-gpio"; /* [REF] */
-			reg = <0xe4600000 0x20>; /* [SW-RE] confirmed literal + resource-struct-adjacent */
-			interrupt-parent = <&vicl>;
-			interrupt-controller;
-			#gpio-cells = <2>;
-			gpio-controller;
-		};
-		gpio1: gpio@e4600020 {
-			compatible = "arkmicro,ark-gpio"; /* [REF] */
-			reg = <0xe4600020 0x20>; /* [REF]: computed as gpio0_base + 0x20 at runtime in this kernel, not found as a bare literal — bank existence inferred from gpio91/gpio95/gpio34 all requiring banks 1 and 2 to exist */
-			gpio-controller;
-			#gpio-cells = <2>;
-		};
-		gpio2: gpio@e4600040 {
-			compatible = "arkmicro,ark-gpio"; /* [REF] */
-			reg = <0xe4600040 0x20>; /* [REF], see gpio1 note — this bank confirmed populated: GPIO 91 and 95 both fall in PBANK_2 */
-			gpio-controller;
-			#gpio-cells = <2>;
-		};
-		gpio3: gpio@e4600060 {
-			compatible = "arkmicro,ark-gpio"; /* [REF] */
-			reg = <0xe4600060 0x20>; /* [REF] */
-			gpio-controller;
-			#gpio-cells = <2>;
-		};
-
-		nfc: nand@ec000000 {
-			compatible = "arkmicro,ark-nand"; /* [REF] */
-			reg = <0xec000000 0x1000>; /* [SW-RE] confirmed literal (100+ refs, heavily used, matches NAND-boot design) */
-			pinctrl-names = "default";
-			pinctrl-0 = <&pinctrl_nand>; /* [REF] */
-			/* [HW] Toshiba TC58BVG0S3HTA00, 1Gbit/128MB SLC, on a
-			 * daughter "Limcet Box" compute module, not the main PCB.
-			 * Confirms U-Boot "NAND: 128 MiB" output. */
-		};
-
-		dwdma0: dma@e0000000 {
-			compatible = "arkmicro,ark-dw-dmac"; /* [REF] */
-			reg = <0xe0000000 0x400>; /* [SW-RE] exact struct resource{start,end,flags=IORESOURCE_MEM} match, both kernel builds */
-		};
-
-		uart0: uart@e4200000 {
-			compatible = "arkmicro,ark-uart"; /* [REF] */
-			reg = <0xe4200000 0x100>; /* [SW-RE] exact resource-struct match */
-			interrupt-parent = <&vicl>;
-			pinctrl-names = "default";
-			pinctrl-0 = <&pinctrl_uart0>;
-			status = "okay";
-			/* [SW-RE]+[HW] boot/debug console, ttyS0 115200n8 — confirmed
-			 * by both U-Boot bootargs AND a physical 3-pin UART header
-			 * near the SD slot (yellow=TX, blue=RX, black=GND). */
-		};
-
-		uart1: uart@e4e00000 {
-			compatible = "arkmicro,ark-uart"; /* [REF] */
-			reg = <0xe4e00000 0x100>; /* [SW-RE] exact resource-struct match */
-			interrupt-parent = <&vicl>;
-			pinctrl-names = "default";
-			pinctrl-0 = <&pinctrl_uart1>; /* [REF] */
-			status = "disabled"; /* [REF]: silicon present, no confirmed use on this board */
-		};
-
-		uart2: uart@e8000000 {
-			compatible = "arkmicro,ark-uart"; /* [REF] */
-			reg = <0xe8000000 0x100>; /* [SW-RE] exact resource-struct match */
-			interrupt-parent = <&vich>;
-			pinctrl-names = "default";
-			pinctrl-0 = <&pinctrl_uart2>; /* [REF] */
-			status = "disabled";
-		};
-
-		uart3: uart@e8100000 {
-			compatible = "arkmicro,ark-uart"; /* [REF] */
-			reg = <0xe8100000 0x100>; /* [SW-RE] exact resource-struct match */
-			interrupt-parent = <&vich>;
-			pinctrl-names = "default";
-			pinctrl-0 = <&pinctrl_uart3>; /* [REF] */
-			status = "disabled";
-		};
-
-		hsuart0: hsuart@e4f00000 {
-			compatible = "arkmicro,ark-hsuart"; /* [REF] */
-			reg = <0xe4f00000 0x4000>; /* [SW-RE] base confirmed as literal (uart4 slot in §3 table) */
-			pinctrl-names = "default";
-			pinctrl-0 = <&pinctrl_uart4>; /* [REF] — hsuart0 uses the uart4 register slot, so it inherits the uart4 pin group */
-			status = "okay";
-			/* [HW]+[SW-RE] /dev/ttyHS0 — link to companion STM32F105RBT6
-			 * MCU (Limcet-V1.0-1302 firmware), carrying the arktool /
-			 * "Limcet protocol" for McuType=6 (this board's confirmed
-			 * McuType, per SOC_ARK1668_CROSSREF.md §7 / docs/CANBUS.md).
-			 * The MCU — NOT this SoC — reads reverse-trigger, ACC/IGN,
-			 * and panel-button GPIOs, and decodes Toyota CAN bus SWC
-			 * messages via its own bxCAN + an onboard NXP TJA1042
-			 * transceiver, forwarding everything as key/state events
-			 * over this UART. See §7 for the full trace. */
-		};
-
-		hsuart1: hsuart@e4800000 {
-			compatible = "arkmicro,ark-hsuart"; /* [REF] */
-			reg = <0xe4800000 0x4000>; /* [SW-RE] base confirmed as literal (uart5 slot in §3 table) */
-			pinctrl-names = "default";
-			pinctrl-0 = <&pinctrl_uart5>; /* [REF] — hsuart1 uses the uart5 register slot */
-			status = "okay";
-			/* [HW] /dev/ttyHS1, 1.5Mbps — Feasycom FSC-BT8251 V1.1
-			 * Bluetooth module (Realtek RF chip). Enable line is
-			 * GPIO 91, not part of this UART (see pinctrl_bt_en above
-			 * and gpio91 alias below). Voice audio routed over UART
-			 * (VOICE_TYPE=UART in blueware.properties), not I2S. */
-		};
-
-		timer@e4a00000 {
-			compatible = "arkmicro,ark-timer"; /* [REF] */
-			reg = <0xe4a00000 0x1000>; /* [SW-RE] literal confirmed present in build #353; not re-found in #383's raw scan (likely codegen-only difference, not architectural — see §6) */
-		};
-
-		watchdog: watchdog@e4b00000 {
-			compatible = "arkmicro,ark-wdt"; /* [REF] */
-			reg = <0xe4b00000 0x20>; /* [SW-RE] literal confirmed */
-		};
-
-		rtc: rtc@e4c00000 {
-			compatible = "arkmicro,ark-rtc"; /* [REF] */
-			reg = <0xe4c00000 0x100>; /* [SW-RE] exact resource-struct match including size */
-		};
-
-		mmc0: mmc@ec400000 {
-			compatible = "arkmicro,ark-dw-mmc"; /* [REF] */
-			reg = <0xec400000 0x1000>; /* [SW-RE] literal confirmed (`dw_mmc` id=0 in platform-device roster, §5) */
-			/* No pinctrl-0 — deliberately: see the MMC0/MMC1 comment block
-			 * at the end of the pinctrl0 node above for why (raw
-			 * SYS_PAD_CTRL register pokes, not the named pinctrl scheme). */
-			/* Candidate slot for SD card (SD boot / update path per
-			 * docs/SD_BOOT_PLAN.md) — not independently pinned to a
-			 * specific physical connector here. */
-		};
-
-		mmc1: mmc@ec800000 {
-			compatible = "arkmicro,ark-dw-mmc"; /* [REF] */
-			reg = <0xec800000 0x1000>; /* [SW-RE] literal confirmed (`dw_mmc` id=1 in platform-device roster, §5), 33+ refs */
-			/* No pinctrl-0 — see MMC0/MMC1 comment block in pinctrl0 above. */
-			/* [HW] Candidate slot for WiFi if the populated chip is one
-			 * of the SDIO variants (rtl8821cs / rtl8822cs / rtl8189fs) —
-			 * five WiFi driver .ko's are carried covering both SDIO and
-			 * USB variants, so which interface is actually populated on
-			 * THIS board wasn't confirmed. See musb-ark1680 below for
-			 * the USB alternative. */
-		};
-
-		/* No gpu@e0f00000 node: [SW-RE] confirmed absent — zero
-		 * references anywhere in either kernel build. Either no GPU
-		 * driver is built for this product (a 2D compositor is enough
-		 * for a dash/camera display) or the IP block is fused off on
-		 * this SKU. Public ark1668.dtsi has this node; this board does
-		 * not use it. */
-
-		vdec0: vdec@e0900000 {
-			compatible = "arkmicro,ark-deinterlace"; /* [REF] */
-			reg = <0xe0900000 0x1000>; /* [SW-RE] literal confirmed */
-		};
-
-		itu656: itu656@e0900000 {
-			compatible = "arkmicro,ark-itu656"; /* [REF]; matches `ark-itu656` platform_device, §5 roster */
-			/* [HW]+[SW-RE] Feeds from the RN6752 CVBS→ITU-656 decoder
-			 * (see &rn6752 child node under i2c0 below). This is the
-			 * confirmed reverse-camera video path: camera → RN6752 →
-			 * ITU-656 → this block → prescaler → deinterlace →
-			 * display compositor. */
-		};
-
-		i2s_dac: i2s-dac@e4000000 {
-			compatible = "arkmicro,ark-i2s"; /* [REF] */
-			reg = <0xe4000000 0x1000>; /* [SW-RE] literal confirmed, 100+ refs */
-			/* No pinctrl-0: this DAC path's own pin group isn't in
-			 * ark1668-pinctrl.dtsi's "i2s" section (only one i2s1/"i2sadc"
-			 * group is defined there) — likely fixed/dedicated pins like
-			 * MMC, not resolvable further from this source. */
-		};
-
-		i2s_adc: i2s-adc@e8200000 {
-			compatible = "arkmicro,ark-i2s"; /* [REF] */
-			reg = <0xe8200000 0x1000>; /* [SW-RE] literal confirmed */
-			pinctrl-names = "default";
-			pinctrl-0 = <&pinctrl_i2sadc_sync>, <&pinctrl_i2sadc_sadata>,
-				    <&pinctrl_i2sadc_bclk>, <&pinctrl_i2sadc_mclk>; /* [REF] */
-		};
-
-		i2c0: i2c@e4300000 {
-			compatible = "arkmicro,ark-i2c"; /* [REF] */
-			reg = <0xe4300000 0x1000>; /* [SW-RE] literal confirmed */
-			pinctrl-names = "default";
-			pinctrl-0 = <&pinctrl_i2c0>; /* [REF] */
-			#address-cells = <1>;
-			#size-cells = <0>;
-
-			rn6752: video-decoder@4c {
-				/* [HW]+[SW-RE] RN6752 (Intersil/Renesas) CVBS→ITU-656
-				 * decoder for the reversing camera. I2C address is a
-				 * placeholder — not confirmed by either RE method, this
-				 * chip's typical default address family used for
-				 * illustration only. reset-gpios/irq-gpios intentionally
-				 * omitted: traced in the kernel (rn6752_reset/rn6752_irq
-				 * gpio_request call sites, §5) but both read their pin
-				 * number from a platform_data struct that is entirely
-				 * zero in the static kernel image — genuinely
-				 * unresolved, not guessed here. */
-				compatible = "richwave,rn6752";
-				reg = <0x4c>;
-				status = "okay";
-			};
-
-			touchscreen@14 {
-				/* [SW-RE] "Goodix-TS" driver + board-info registration
-				 * confirmed present in the kernel board bring-up
-				 * sequence (FUN_8059f188, §5). I2C address is a
-				 * Goodix-typical placeholder, not independently
-				 * confirmed; irq-gpio unresolved for the same reason
-				 * as rn6752 above. */
-				compatible = "goodix,gt9xx";
-				reg = <0x14>;
-				status = "okay";
-			};
-
-			audio-codec@8a {
-				/* [SW-RE] BD37033 (ROHM) audio DSP/tone processor,
-				 * registered as "drv_bd37033" in board bring-up.
-				 * Address is a placeholder. */
-				compatible = "rohm,bd37033";
-				reg = <0x8a>;
-				status = "okay";
-			};
-		};
-
-		musb0: usb@e0100000 {
-			/* [SW-RE] `musb-ark1680` platform_device id=0, §5 roster.
-			 * Base address per [REF] convention (0xe0100000 candidate
-			 * from the resource-struct scan; not conclusively assigned
-			 * to musb0 vs musb1 specifically). */
-			compatible = "arkmicro,musb-ark1680";
-			status = "okay";
-			/* [HW] USB-A port is host-mode: flash drives, wired CarPlay,
-			 * wired Android Auto. NOTE: Holden base rootfs's /etc/all.sh
-			 * loads g_zero.ko (USB gadget test driver) at boot, which
-			 * forces a controller into device mode — the documented
-			 * root cause of USB-A host functionality breaking on this
-			 * unit. See BOARD_ANALYSIS.md "USB Port Note". */
-		};
-
-		musb1: usb@e0400000 {
-			/* [SW-RE] `musb-ark1680` platform_device id=1, §5 roster. */
-			compatible = "arkmicro,musb-ark1680";
-			status = "okay";
-			/* [HW] Candidate interface for WiFi if a USB-variant chip
-			 * (rtl8821cu / rtl8811cu) is populated instead of an SDIO
-			 * variant — see mmc1 note above. Not disambiguated. */
-		};
-
-		spi0: spi@e4100000 {
-			/* [SW-RE] `ark1680-spi` platform_device id=0, §5 roster;
-			 * base address is the one unclaimed [0xe4100000, size
-			 * 0x1000] resource-struct candidate from §3's scan. */
-			compatible = "arkmicro,ark1668-spi";
-			pinctrl-names = "default";
-			pinctrl-0 = <&pinctrl_ecspi0>; /* [REF] */
-			status = "disabled"; /* no confirmed SPI peripheral identified on this board */
-		};
-
-		pwm-backlight {
-			/* [SW-RE] `pwm-backlight` platform_device, §5 roster.
-			 * Drives the RGB888 panel's backlight — see &panel below
-			 * for the confirmed display timing this feeds. pwm_id=1 in
-			 * the real ASTRI reference config.c (ArkPro Reference/kernel/
-			 * arch/arm/mach-ark1680/config.c) — matches pinctrl_pwm1. */
-			compatible = "pwm-backlight";
-			pinctrl-names = "default";
-			pinctrl-0 = <&pinctrl_pwm1>; /* [REF] */
-			status = "okay";
-		};
-
-		display-controller {
-			/* [SW-RE] `ark-display`+`ark-prescaler` platform_devices,
-			 * §5 roster. Panel timing below is [HW]+config-confirmed
-			 * for THIS exact unit (docs/SCREEN.md), not inherited from
-			 * the generic public reference. */
-			compatible = "arkmicro,ark-display";
-			pinctrl-names = "default";
-			pinctrl-0 = <&pinctrl_lcd_rgb888>, <&pinctrl_lcd_base>; /* [REF] */
-			status = "okay";
-
-			panel: panel {
-				/* [HW]/[config-confirmed] docs/SCREEN.md,
-				 * arkdata preset "arkdata106_V"/"arkdata107_V" */
-				compatible = "arkmicro,rgb888-panel";
-				width-mm = <154>; /* typical 7" panel, not independently measured */
-				height-mm = <86>;
-				panel-timing {
-					clock-frequency-div = <11>;  /* CLKDIV1 */
-					hactive = <800>;
-					vactive = <480>;
-					hback-porch = <32>;  /* HBP */
-					hfront-porch = <25>; /* HFP */
-					hsync-len = <54>;    /* HSW */
-					vback-porch = <29>;  /* VBP */
-					vfront-porch = <25>; /* VFP */
-					vsync-len = <16>;    /* VSW */
-				};
-				bus-format = "rgb888"; /* Format=7 (RGB_888) */
-				rgb-mode = <0>; /* RgbMode=0 (BGR) */
-			};
-		};
-
-		nec-ir-remote {
-			/* [SW-RE] `ark_nec_sw_remote` platform_device, §5 roster —
-			 * NEC-protocol IR receiver for a steering-wheel remote.
-			 * NOTE: per BOARD_ANALYSIS.md, THIS board's actual SWC
-			 * (steering wheel control) path is NOT this — the STM32
-			 * MCU decodes Toyota CAN bus SWC messages directly and
-			 * forwards them over hsuart0 instead. This node reflects a
-			 * compiled-in kernel driver whose applicability to this
-			 * specific product's real SWC path is unconfirmed/likely
-			 * unused, kept only because it's genuinely in the roster. */
-			compatible = "arkmicro,ark-nec-sw-remote";
-			status = "disabled";
+		// Goodix Touchscreen Controller (Reset pin GPIO 80, IRQ GPIO 4)
+		gt911: touchscreen@5d {
+			compatible = "goodix,gt911";
+			reg = <0x5d>;
+			interrupt-parent = <&gpio0>;
+			interrupts = <4 IRQ_TYPE_EDGE_FALLING>;
+			irq-gpios = <&gpio0 4 GPIO_ACTIVE_HIGH>;
+			reset-gpios = <&gpio2 16 GPIO_ACTIVE_HIGH>;
+			touchscreen-inverted-x;
 		};
 	};
 
-	/*
-	 * ---------------------------------------------------------------
-	 * CAN bus: NOT present on this SoC/board — and NOT even in this
-	 * chip generation's silicon, correcting an earlier draft of this file.
-	 * ---------------------------------------------------------------
-	 * An earlier version of this file tagged can0/can1 pin-mux groups
-	 * [REF] here, on the assumption they were part of ark1668-pinctrl.dtsi
-	 * like everything else in this section. Having now actually vendored
-	 * that file (`linux-arkmicro Reference/linux/arch/arm/boot/dts/
-	 * ark1668-pinctrl.dtsi`, see SOC_ARK1668_CROSSREF.md §10), that
-	 * assumption was WRONG: can0/can1 (ARK_PBANK_4 26-29) exist ONLY in
-	 * `ark1668e-pinctrl.dtsi` — the newer, architecturally-different
-	 * generation this project already ruled out as NOT matching this SoC
-	 * (§2: VIC vs GIC interrupt controller). The base ark1668/ARK1680
-	 * silicon this board actually uses has no CAN pin-mux capability
-	 * defined in ArkMicro's own reference source at all. Removed the
-	 * fabricated can0/can1 nodes from pinctrl0 above accordingly.
-	 *
-	 * This makes the existing conclusion — CAN runs entirely through the
-	 * companion STM32F105RBT6 MCU's 2x bxCAN peripheral, not this SoC —
-	 * even more solid than previously stated: it's not just "unused
-	 * capability", the capability itself isn't there on this chip
-	 * generation. The Prado's own vehicle CAN bus is still real and active
-	 * [HW: NXP TJA1042 transceiver populated], just entirely on the MCU
-	 * side. No SocketCAN driver is compiled into this kernel either
-	 * (confirmed absent in docs/KERNEL.md's driver inventory), consistent
-	 * with this. `libCanBus.so` on the Linux side is a *different*,
-	 * unrelated generic multi-vendor SDK for talking to external
-	 * UART-connected aftermarket CAN decoder boxes — unused on this unit
-	 * (see docs/CANBUS.md). GPIO 34 (PBANK_1 pin 2), found as a literal
-	 * inside libCanBus.so, is NOT confirmed to be this board's onboard CAN
-	 * circuit for the same reason — flagged with heavy caveats in
-	 * BOARD_ANALYSIS.md and omitted from pinctrl0 above as a "confirmed"
-	 * assignment.
-	 * ---------------------------------------------------------------
-	 */
+	// Bit-banged I2C Bus 1
+	i2c-gpio-1 {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		compatible = "i2c-gpio";
+		gpios = <&gpio0 9 0		/* SDA (GPIO 9) */
+			 &gpio3 25 0		/* SCL (GPIO 121) */
+		>;
+		i2c-gpio,delay-us = <6>;
+		i2c-gpio,scl-output-only;
 
-	gpio-lines {
-		/* Summary of every Linux-side GPIO number confirmed for this
-		 * board by any method, for quick reference (not a real DT
-		 * construct — informational only): */
+		// ROHM BD37033 Sound Processor
+		amp: drv_bd37033@40 {
+			status = "okay";
+			compatible = "arkmicro,drv_bd37033";
+			reg = <0x40>;
+			flout-gain = <65>;
+			frout-gain = <65>;
+			rlout-gain = <65>;
+			rrout-gain = <65>;
+			#sound-dai-cells = <0>;
+		};
+	};
 
-		/* gpio91: [HW] Bluetooth module enable, PBANK_2 pin 27,
-		 *         BTEN_INTERFACE=gpio91 in /etc/blueware.properties */
-		/* gpio95: [SW-RE] Apple/CarPlay MFi auth-chip reset, PBANK_2
-		 *         pin 31, gpio_request(0x5f,"apple_encpy_ic_rst") in
-		 *         customer_gpio_init(), driven output-high every boot */
-		/* gpio34: [HW, low confidence] found in libCanBus.so, PBANK_1
-		 *         pin 2 — likely an external-adapter-box enable/detect
-		 *         line for a generic CAN SDK unrelated to this board's
-		 *         real onboard CAN (which lives entirely on the STM32
-		 *         MCU side) — see CAN note above */
+	// Audio Card configuration
+	sound {
+		compatible = "simple-audio-card";
+		simple-audio-card,format = "i2s";
+		simple-audio-card,name = "ark1668-audio";
+
+		simple-audio-card,dai-link@0 { /* I2S ADC link */
+			cpu {
+				sound-dai = <&i2s_adc>;
+			};
+			codec {
+				sound-dai = <&sdadc>;
+			};
+		};
+		simple-audio-card,dai-link@1 { /* I2S DAC link */
+			bitclock-master = <&playback_cpu>;
+			frame-master = <&playback_cpu>;
+			playback_cpu: cpu {
+				sound-dai = <&i2s_dac>;
+			};
+			playback_codec: codec {
+				sound-dai = <&sddac>;
+			};
+		};
 	};
 };
+
+&usb0_phy {
+	compatible = "usb-nop-xceiv";
+	#phy-cells = <0>;
+	status = "okay";
+};
+
+&usb1_phy {
+	compatible = "usb-nop-xceiv";
+	#phy-cells = <0>;
+	status = "okay";
+};
+
+&usb0 {
+	status = "okay";
+};
+
+&usb1 {
+	status = "okay";
+};
+
+// Console debug UART
+&uart0 {
+	use-in-kernel;
+	use-for-tool;
+};
+
+&uart1 {
+	status = "disabled";
+};
+
+// High-speed MCU Communication UART
+&uart3 {
+	use-in-kernel;
+	use-for-mcu;
+};
+
+// LCD Framebuffer Configuration
+&lcdc {
+	display = <&display0>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lcd_base &pinctrl_lcd_rgb888>;
+
+	display0: display@0 {
+		interface-type = "TTL";
+		lvds-con = <0x160fd>;
+		bits-per-pixel = <32>;
+		power-control-gpio = <&gpio2 17 GPIO_ACTIVE_HIGH>; /* LCD power enable pin (GPIO 81) */
+		lcd-wiring-mode = "BGR";
+		lcdcon-backlight;
+		pwms = <&pwm0 1 50000>; /* Backlight PWM Channel 1 */
+		pwm-names = "backlight";
+		backlight-value = <20>;
+		backlight-delay = <200>;
+
+		display-timings {
+			native-mode = <&timing0>;
+			timing0: timing0 {
+				clock-frequency = <33000000>;
+				hactive = <800>;
+				vactive = <480>;
+				hback-porch = <16>;
+				hfront-porch = <210>;
+				vback-porch = <12>;
+				vfront-porch = <22>;
+				hsync-len = <30>;
+				vsync-len = <13>;
+				hsync-active = <1>;
+				vsync-active = <1>;
+				de-active = <0>;
+				pixelclk-active = <0>;
+			};
+		};
+	};
+};
+
+&vdec0 {
+	status = "okay";
+};
+
+// SDIO WiFi Controller
+&mmc1 {
+	status = "okay";
+	non-removable;
+	broken-cd;
+};
+
+&gpu {
+	compatible = "arkmicro,vivante-hal", "fsl,imx6q-gpu";
+	reg-names = "iobase_3d";
+	interrupt-names = "irq_3d";
+	clocks = <&gpuclk>, <&gpuclk>, <&gpuclk>, <&gpuclk>, <&gpuclk>, <&gpuclk>;
+	clock-names = "gpu3d_clk", "gpu3d_axi_clk", "gpu3d_shader_clk", "gpu2d_clk", "gpu2d_axi_clk", "openvg_axi_clk";
+	status = "okay";
+};
+
+&pinctrl0 {
+	i2c_touch_pins: i2c-gpio-touch {
+		ark,pins = <ARK_PBANK_0 2 ARK_PVAL_0
+			    ARK_PBANK_0 3 ARK_PVAL_0
+			    ARK_PBANK_0 4 ARK_PVAL_0>;
+	};
+};
+
+&gpio0 {
+	gpio-ranges = <&pinctrl0 2 2 4>, <&pinctrl0 6 6 2>, <&pinctrl0 10 10 22>;
+};
+
+
+

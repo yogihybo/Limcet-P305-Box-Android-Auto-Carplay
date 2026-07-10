@@ -2,7 +2,9 @@
 mount -t proc none /proc
 mount -t sysfs none /sys
 mount -t ramfs -n none /tmp
+mkdir -p /media
 mount -t ramfs -n none /media
+mkdir -p /var
 mount -t ramfs -n none /var
 mkdir -p /var/run/
 mkdir -p /var/lib/lockdown
@@ -85,7 +87,20 @@ fi
 #DV695 -qws -display directfb &
 #mirrordemo &
 #Launcher -qws &
+chmod 600 /etc/ssh/ssh_host_*_key
 mkdir -p /var/run/sshd
-/usr/bin/sshd &
+mkdir -p /var/empty
+chmod 755 /var/empty
+/usr/bin/sshd -f /etc/ssh/sshd_config &
+
+# Load GPU driver
+modprobe galcore contiguousSize=0x800000 physSize=0x80000000 powerManagement=0
+
+# Load USB WiFi driver
+modprobe rtl8811cu
+
+# Set up DHCP lease directory and file
+mkdir -p /data
+touch /data/udhcpd.leases
 
 /etc/wifi_ap.sh &

@@ -39,8 +39,6 @@
 		>;
 		i2c-gpio,delay-us = <6>;
 		i2c-gpio,scl-output-only;
-		pinctrl-names = "default";
-		pinctrl-0 = <&i2c_touch_pins>;
 
 		// AHD Video Input Decoder (Reset line on GPIO 0)
 		dvr_ark7116: dvr_ark7116@B2 {
@@ -48,17 +46,6 @@
 			reset-gpio = <&gpio0 0 0>;
 			reg = <0x59>;
 			carback-config = <1>;
-		};
-
-		// Goodix Touchscreen Controller (Reset pin GPIO 80, IRQ GPIO 4)
-		gt911: touchscreen@5d {
-			compatible = "goodix,gt911";
-			reg = <0x5d>;
-			interrupt-parent = <&gpio0>;
-			interrupts = <4 IRQ_TYPE_EDGE_FALLING>;
-			irq-gpios = <&gpio0 4 GPIO_ACTIVE_HIGH>;
-			reset-gpios = <&gpio2 16 GPIO_ACTIVE_HIGH>;
-			touchscreen-inverted-x;
 		};
 	};
 
@@ -208,17 +195,25 @@
 	status = "okay";
 };
 
-&pinctrl0 {
-	i2c_touch_pins: i2c-gpio-touch {
-		ark,pins = <ARK_PBANK_0 2 ARK_PVAL_0
-			    ARK_PBANK_0 3 ARK_PVAL_0
-			    ARK_PBANK_0 4 ARK_PVAL_0>;
+&i2c0 {
+	status = "okay";
+	clock-frequency = <400000>;
+
+	gt911: touchscreen@5d {
+		compatible = "goodix,gt911";
+		reg = <0x5d>;
+		interrupt-parent = <&gpio0>;
+		interrupts = <4 IRQ_TYPE_EDGE_FALLING>;
+		irq-gpios = <&gpio0 4 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&gpio2 16 GPIO_ACTIVE_HIGH>;
+		touchscreen-inverted-x;
 	};
 };
 
 &gpio0 {
-	gpio-ranges = <&pinctrl0 2 2 4>, <&pinctrl0 6 6 2>, <&pinctrl0 10 10 22>;
+	gpio-ranges = <&pinctrl0 0 0 6>, <&pinctrl0 6 6 2>, <&pinctrl0 10 10 22>;
 };
+
 
 
 

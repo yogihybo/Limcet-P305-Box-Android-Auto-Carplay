@@ -951,13 +951,13 @@ populate_nanddata() {
         local uenv_content
         if $USE_INITRAMFS; then
             uenv_content=$(cat <<EOF
-bootargs=console=ttyS0,115200n8 mem=180M earlyprintk=serial rootwait rw
+bootargs=console=ttyS0,115200n8 mem=180M earlyprintk=serial rootwait rw screen=0
 bootcmd=fatload mmc 0:1 0x1000000 zImage; fatload mmc 0:1 $INITRAMFS_ADDR uInitrd; fatload mmc 0:1 0x2000000 ark1668_limcet_p305.dtb; bootz 0x1000000 $INITRAMFS_ADDR 0x2000000
 EOF
 )
         else
             uenv_content=$(cat <<EOF
-bootargs=console=ttyS0,115200n8 mem=180M earlyprintk=serial root=$ROOT_DEV rootfstype=ext4 rootwait rw
+bootargs=console=ttyS0,115200n8 mem=180M earlyprintk=serial root=$ROOT_DEV rootfstype=ext4 rootwait rw screen=0
 bootcmd=fatload mmc 0:1 0x1000000 zImage; fatload mmc 0:1 0x2000000 ark1668_limcet_p305.dtb; bootz 0x1000000 - 0x2000000
 EOF
 )

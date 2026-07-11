@@ -47,6 +47,17 @@
 			reset-gpio = <&gpio0 0 0>;
 			carback-config = <1>;
 		};
+
+		// Goodix GT911 Touchscreen Controller
+		gt911: touchscreen@5d {
+			compatible = "goodix,gt911";
+			reg = <0x5d>;
+			interrupt-parent = <&gpio0>;
+			interrupts = <4 IRQ_TYPE_EDGE_FALLING>;
+			irq-gpios = <&gpio0 4 GPIO_ACTIVE_HIGH>;
+			reset-gpios = <&gpio2 16 GPIO_ACTIVE_HIGH>;
+			touchscreen-inverted-x;
+		};
 	};
 
 	// Bit-banged I2C Bus 1
@@ -196,18 +207,7 @@
 };
 
 &i2c0 {
-	status = "okay";
-	clock-frequency = <400000>;
-
-	gt911: touchscreen@5d {
-		compatible = "goodix,gt911";
-		reg = <0x5d>;
-		interrupt-parent = <&gpio0>;
-		interrupts = <4 IRQ_TYPE_EDGE_FALLING>;
-		irq-gpios = <&gpio0 4 GPIO_ACTIVE_HIGH>;
-		reset-gpios = <&gpio2 16 GPIO_ACTIVE_HIGH>;
-		touchscreen-inverted-x;
-	};
+	status = "disabled";
 };
 
 &gpio0 {

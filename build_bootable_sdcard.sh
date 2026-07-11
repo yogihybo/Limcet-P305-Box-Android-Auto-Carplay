@@ -1414,6 +1414,9 @@ build() {
         echo "    U-Boot   → fatload uInitrd; bootz (SD kernel + SD initramfs)"
         echo "    initramfs→ insmod ark_dw_mmc.ko, mount p2 ext4, chroot into it"
         echo "    rcS      → mounts p3 ext4 as /data"
+        if [[ ${CONFIG_SEL[4]} -eq 1 ]]; then
+            echo "    rcS      → symlinks /dev/mtd8-11 to /nanddata/ on p2 (bootlogo/bootanimation/reversingtrack/Unicode, read from SD)"
+        fi
     else
         if $NEW_UBOOT_MODE; then
             echo "    U-Boot   → imports environment variables from uEnv.txt on p1"
@@ -1426,6 +1429,9 @@ build() {
         fi
         echo "    Kernel   → mounts p2 ext4 as /"
         echo "    rcS      → mounts p3 ext4 as /data"
+        if [[ ${CONFIG_SEL[4]} -eq 1 ]]; then
+            echo "    rcS      → symlinks /dev/mtd8-11 to /nanddata/ on p2 (bootlogo/bootanimation/reversingtrack/Unicode, read from SD)"
+        fi
     fi
     echo ""
     if $USE_INITRAMFS; then

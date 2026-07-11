@@ -6,15 +6,42 @@ for the actual compile plan. Not built by anything in this repo as-is.
 
 ## Source
 
-- Repo: `RD_Software/linux-arkmicro`, hosted on ArkMicro's own public Gitea instance:
-  `http://121.15.164.102:3000/RD_Software/linux-arkmicro` (plain HTTP, no TLS — that's the server's
-  setup, not a mistake here)
+- Repo: `RD_Software/linux-arkmicro`, hosted on ArkMicro's own public **Gogs** instance (not Gitea —
+  the server's own meta tags identify it as Gogs): `http://121.15.164.102:3000/RD_Software/linux-arkmicro`
+  (plain HTTP, no TLS — that's the server's setup, not a mistake here). Description:
+  "Arkmicro Linux Platform BSP", ~2.6 GB.
 - Branch: `master` @ commit `676deb203cfcd197b099232a54fd250d56aa1454`. Checked all 5 branches
   (`master`, `luyuan`, `tianyouwei`, `weilai`, `zhonghong`) and all are the same U-Boot generation
   (see below); no tags exist.
 - This is the real repo `docs/SD_BOOT_PLAN.md` and `docs/UBOOT_SDBOOT_INVESTIGATION.md` referenced as
   `~/Downloads/linux-arkmicro` — that path was on a previous session's machine and was never actually
   in this repo. This copy replaces that unverified reference with the real, verified thing.
+
+### Live re-verification (2026-07-10)
+
+Confirmed the host is still up and the repo still anonymously pullable, and settled what kernel
+version(s) it carries:
+
+- Server reachable — `curl http://121.15.164.102:3000/` → HTTP 200. API repo endpoint returns
+  `permissions.pull: true`; `git ls-remote` works with no credentials. Repo `updated_at` was
+  2025-10-11, so it is still maintained.
+- `git ls-remote` HEAD = `676deb203cfcd197b099232a54fd250d56aa1454` — matches the commit above.
+  Same 5 branches, no tags.
+- **All 5 branches carry Linux 4.19.192** (`linux/Makefile` reads `VERSION=4 PATCHLEVEL=19
+  SUBLEVEL=192` on each). The `master` root tree has a single kernel dir, `linux/`, alongside
+  `u-boot`, `buildroot`, `bootstrap`, `tools`. **There is no `linux-3.4/` tree anywhere** — this
+  server is NOT a source for a kernel matching the Prado's stock Linux 3.4.0 dump. That 3.4 tree
+  (`/workspace/ark0618system/kernels/linux-3.4/`, per `docs/KERNEL.md`) was a separate Holden/vendor
+  build host, not this BSP repo.
+
+Two clone gotchas found while verifying:
+
+- The Gogs API is partly auth-gated: repo metadata and the git protocol are anonymous, but
+  `/api/v1/.../branches` and `/.../contents` return HTTP 401. Use `git` or the
+  `/RD_Software/linux-arkmicro/raw/<branch>/<path>` web endpoint, not the content API.
+- The API's `clone_url`/`html_url` leak the server's **internal** host `http://192.168.5.3:3000/...`,
+  which won't resolve externally. Clone via the public IP:
+  `git clone http://121.15.164.102:3000/RD_Software/linux-arkmicro.git`.
 
 ## Critical caveat: this is a later BSP generation, not a source match for the Prado's stock U-Boot
 

@@ -161,7 +161,7 @@ Selected commands relevant to this device — type `help` at the `ark#` prompt f
 
 ### Manual SD Card Boot
 
-At the `ark#` prompt, with an SD card containing `zImage` on a FAT32 partition (p1) and an ext4 rootfs on a second partition (p2):
+At the `ark#` prompt, with an SD card containing `zImage` on a FAT32 partition (p1) and an ext4 rootfs on a second partition (p2) — formatted without `64bit`/`metadata_csum`, see [ext4 filesystem constraints](#ext4-filesystem-constraints-34-kernel--u-boot-201210):
 
 ```
 setenv bootargs console=ttyS0,115200n8 console=tty0 mem=180M root=/dev/mmcblk0p2 rootfstype=ext4 rootwait rw
@@ -203,6 +203,40 @@ Reflashing NAND for every kernel or rootfs change (see [Flashing via SD Card](#7
 | p1 | FAT32 | `zImage`, plus `UBOOT.BIN` and boot script `s` if using [Self-contained SD auto-boot](#self-contained-sd-auto-boot-experimental) |
 | p2 | ext4 | rootfs (`/`), plus `/nanddata/` — see below |
 | p3 | ext4 | userdata (`/data`) |
+
+### ext4 filesystem constraints (3.4 kernel / U-Boot 2012.10)
+
+The target runs **Linux 3.4.0** and **U-Boot 2012.10**, whose ext4 drivers
+predate two features that modern `mkfs.ext4` (e2fsprogs ≥ 1.43, ~2016) enables
+**by default**:
+
+| Feature | Enabled by default by modern mkfs | Supported by Linux 3.4 / U-Boot 2012.10 |
+|---------|-----------------------------------|-----------------------------------------|
+| `64bit` | yes | **no** (kernel support added in 3.6) |
+| `metadata_csum` | yes | **no** (kernel support added ~3.18) |
+
+If either is left on, the results are:
+
+- **Kernel:** refuses to mount root — `EXT4-fs (mmcblk0p2): couldn't mount because
+  of unsupported optional features` — and the boot dies right after the rootfs
+  device appears (well after `Starting kernel …`).
+- **U-Boot:** `ext4ls` / `ext4load` fail with `Failed to mount ext2 filesystem…
+  ** Bad ext2 partition or disk **` (it may misreport the partition as `0:1`).
+
+**Fix — format the Linux partitions with those two features stripped:**
+
+```sh
+mkfs.ext4 -O ^64bit,^metadata_csum -L rootfs   /dev/sdX2
+mkfs.ext4 -O ^64bit,^metadata_csum -L userdata /dev/sdX3
+```
+
+All the remaining ext4 features 3.4 *does* support (`extents`, `flex_bg`,
+`huge_file`, `dir_nlink`, `extra_isize`, `sparse_super`, …) stay enabled, so you
+keep ext4 proper — only the incompatible checksums/64-bit addressing are removed.
+`build_bootable_sdcard.sh` applies this automatically (both at format time and in
+the on-device factory-reset reformat). To audit an existing card or image, check
+the superblock with `dumpe2fs -h /dev/sdX2 | grep 'Filesystem features'` — neither
+`64bit` nor `metadata_csum` should be listed.
 
 ### Self-contained SD auto-boot (experimental)
 
@@ -741,6 +775,7 @@ See [`docs/SOURCES.md`](docs/SOURCES.md) for full provenance of each file.
 - [`SOC_ARK1668_CROSSREF.md`](docs/SOC_ARK1668_CROSSREF.md) — SoC identity, Ghidra RE of the kernel/userspace binaries, full pin-mux table, cross-checked against real ASTRI/ArkMicro vendor source
 - [`SECURITY_REVIEW.md`](docs/SECURITY_REVIEW.md) — credential/access-path review: stock root password, an unresolved second UID-0 account, update-integrity check
 - [`MSNCOREAPP_REVIEW.md`](docs/MSNCOREAPP_REVIEW.md) — binary-level review of `MsnCoreApp`: an unauthenticated `system()` call reachable by inserting a USB drive with a magic folder name
+- [`MSNCOREAPP_DECONSTRUCTION.md`](docs/MSNCOREAPP_DECONSTRUCTION.md) — deconstructing the UI binary for editing: what's recoverable, the two layout flavours, and the geometry-patch workflow (see also `tools/msncore_analyze.py`)
 - [`KERNEL.md`](docs/KERNEL.md) — kernel image analysis (`mtd5_kernel/zImage`)
 - [`UBOOT_BUILD_PLAN.md`](docs/UBOOT_BUILD_PLAN.md) — plan for compiling a fresh U-Boot from `linux-arkmicro` source, with config deltas and an SD-only test sequence
 - [`UBOOT_SDBOOT_INVESTIGATION.md`](docs/UBOOT_SDBOOT_INVESTIGATION.md) — U-Boot SD-boot patch corruption investigation and the self-contained-script fix

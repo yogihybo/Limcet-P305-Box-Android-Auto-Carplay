@@ -122,7 +122,7 @@ restore is possible before committing. Keep the original UBOOT.BIN.
 
 **Update:** the `~/Downloads/linux-arkmicro` path below was on a previous session's machine and was
 never actually in this repo — that made the "✓ SOURCE AVAILABLE" claim below unverified for a long
-time. It's since been tracked down for real (`RD_Software/linux-arkmicro`, a live public Gitea repo)
+time. It's since been tracked down for real (`RD_Software/linux-arkmicro`, a live public Gogs repo)
 and a relevant slice copied into [`linux-arkmicro Reference/`](../linux-arkmicro%20Reference/README.md).
 **It is not an exact source match** — it's U-Boot 2018.07 with SPL+FDT, while the Prado's actual stock
 U-Boot is 2012.10, legacy ATAG, no devicetree. Same SoC family, later BSP generation. The details below
@@ -311,6 +311,45 @@ sdboot=run sdbootargs; fatload mmc 0 4000000 initramfs.cpio.gz; fatload mmc 0 10
 ```
 
 Files on SD p1: `UBOOT.BIN`, `zImage`, `initramfs.cpio.gz`.
+
+---
+
+### U-Boot direct boot (no initramfs — requires custom kernel with built-in MMC driver)
+
+If you compile a custom kernel with the DesignWare MMC driver compiled directly into the kernel (`CONFIG_MMC_DW=y` and `CONFIG_MMC_DW_PLTFM=y`), you do not need an initramfs at all. The kernel will read the SD card immediately at boot.
+
+Manual boot commands:
+```bash
+# 1. Select the SD card and load the custom kernel to RAM
+mmc dev 0
+fatload mmc 0:1 0x1000000 zImage
+
+# 2. Set bootargs targeting the SD card partition 2 (ext4) directly
+setenv bootargs console=ttyS0,115200n8 mem=180M earlyprintk=serial root=/dev/mmcblk0p2 rootfstype=ext4 rootwait rw ${mtdparts} screen=${screen}
+
+# 3. Boot the kernel
+bootz 0x1000000
+```
+
+---
+
+### U-Boot initramfs boot (requires custom kernel with initramfs support)
+
+If you keep the MMC host driver as a loadable module but compile a custom kernel with initramfs support enabled (`CONFIG_BLK_DEV_INITRD=y`), you must load the wrapped `uInitrd` alongside the kernel:
+
+Manual boot commands:
+```bash
+# 1. Select the SD card and load the custom kernel and wrapped ramdisk
+mmc dev 0
+fatload mmc 0:1 0x1000000 zImage
+fatload mmc 0:1 0x2000000 uInitrd
+
+# 2. Set the working bootargs (excluding initrd= since U-Boot passes it via ATAGs)
+setenv bootargs console=ttyS0,115200n8 mem=180M earlyprintk=serial ubi.mtd=6 root=ubi0:rootfs rootfstype=ubifs wait ro ${mtdparts} screen=${screen}
+
+# 3. Boot passing the ramdisk address to bootz
+bootz 0x1000000 0x2000000
+```
 
 ---
 

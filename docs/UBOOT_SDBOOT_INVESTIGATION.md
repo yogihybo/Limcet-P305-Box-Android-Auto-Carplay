@@ -1,19 +1,29 @@
 # U-Boot SD-Boot Patch — Corruption Investigation
 
-**Status: working auto-boot patch found (§8), statically verified, not yet
-tested on hardware.** A new technique — a minimal compiled-in `bootcmd` that
-loads and `source`s a boot script from SD — fits the raw/Holden-derived
-`uboot.bin`'s tiny safe capacity and needs zero NAND writes. Generated at
-`experimental_sdboot/uboot_selfcontained.bin`; do not treat as verified until
-tested on real hardware. `uboot_sdboot.bin` and `uboot_final.bin` (the
+**Current best in-binary path: env RELOCATION (§10), statically verified, not
+yet hardware-tested.** The `source`-a-script approach of §8 turned out not to
+work on this build, so the leading technique is now `patch_uboot_env.py`, which
+sidesteps the compiled-in env space wall entirely by *relocating* the default
+env into free image space and repointing it (a data move + a few constant
+patches, no code injection, no disassembler). Generated at
+`experimental_sdboot/uboot_relocenv.bin`. `build_bootable_sdcard.sh` uses it
+**by default** when patching the stock U-Boot (`--no-reloc-env` falls back to
+the prompt-drop patch). See §10 for the full offset map.
+
+**Earlier technique (§8), statically verified, superseded.** A minimal
+compiled-in `bootcmd` that loads and `source`s a boot script from SD — fits the
+raw/Holden-derived `uboot.bin`'s tiny safe capacity and needs zero NAND writes.
+Generated at `experimental_sdboot/uboot_selfcontained.bin`; do not treat as
+verified until tested on real hardware. `uboot_sdboot.bin` and `uboot_final.bin` (the
 earlier, corrupted attempt) remain quarantined under `corrupted/`. The manual
 U-Boot-prompt command (README §4.0 "Manual SD Card Boot", §5.0 "USB boot")
 remains the confirmed-working fallback. This document records how the
 corruption was found, why the obvious workarounds (§2, §6) don't fix the
 underlying env-space problem, and what it took to get a real (if untested)
-patched auto-boot U-Boot (§5, §7, §8), and why the same trick doesn't
-(yet) extend to USB (§9). Written so this doesn't need to be re-derived
-from scratch next time.
+patched auto-boot U-Boot (§5, §7, §8), why the same trick doesn't
+(yet) extend to USB (§9), and finally the env-relocation approach that
+removes the space wall for good (§10). Written so this doesn't need to be
+re-derived from scratch next time.
 
 ---
 
@@ -188,6 +198,15 @@ attempt via ad-hoc byte-pattern scripting given the brick risk.
 
 **Not attempted. Recommended against without proper tooling.**
 
+> **Superseded for the env case — see §10.** This section is about injecting
+> **ARM code**, which remains hard/risky. But it conflated that with a much
+> easier goal: getting a *longer boot command* to run. The default env is
+> reached by a **data pointer** (`default_environment`), not code, so you can
+> relocate the whole env into free space and repoint it — a data move plus a
+> few constant patches, **no machine code, no disassembler**. That's what §10
+> does, and it's why the "500-byte env doesn't fit" wall in §2/§3 is no longer
+> a wall.
+
 ---
 
 ## 5. Paths forward
@@ -201,7 +220,7 @@ attempt via ad-hoc byte-pattern scripting given the brick risk.
    at the time, but was never taken, and the BSP source tree wasn't in this
    repo (was on the original author's machine only, under their `~/Downloads`).
    **Update: located and pulled in.** The real repo is `RD_Software/linux-arkmicro`
-   (public Gitea instance, see [`linux-arkmicro Reference/README.md`](../linux-arkmicro%20Reference/README.md)
+   (public Gogs instance, see [`linux-arkmicro Reference/README.md`](../linux-arkmicro%20Reference/README.md)
    for the URL/commit); a relevant slice is copied into `linux-arkmicro Reference/`.
    It's a later BSP generation than the Prado's actual 2012.10/ATAG/no-FDT stock
    U-Boot (this repo's `ark1668` target is 2018.07, SPL+FDT) — not a byte-source
@@ -455,3 +474,109 @@ Two things this doesn't even get to test:
 (README §5.0 "USB boot"). Revisit only after real hardware confirms (a)
 USB boot works at all via the manual command, and (b) whether `usb start`
 can actually be dropped from a compiled-in `bootcmd`.
+
+---
+
+## 10. Env RELOCATION — removes the space wall entirely (`patch_uboot_env.py`)
+
+**Status: statically verified, not yet hardware-tested.** Everything in §1–§9
+fought the same constraint: the compiled-in default env is ~73 bytes packed
+against real data, so a full SD-boot command (bootargs + fatload + bootz,
+~150 B) can't fit *in place*. §8's `sdscript` trick shrank the *compiled-in*
+part to fit, but relied on `source`-ing a script from SD — and that path
+turned out not to work on this build. §4 assumed the only remaining option was
+injecting ARM machine code (hard, needs a disassembler, brick risk).
+
+Both framings missed a simpler fact: **the default env isn't copied into a
+fixed buffer — it's referenced by a pointer.** `set_default_env()` /
+`env_relocate()` call
+`himport_r(&env_htab, default_environment, sizeof(default_environment), …)`.
+So instead of growing the env where it sits, **relocate it** into free image
+space and repoint it. That's a data move plus a handful of constant patches —
+no code injection, no disassembler.
+
+### What was pinned on the live dump
+
+Target: `Prado firmware dump/mtd1-mtd2_uboot/extracted/uboot.bin` (375,944 B).
+All of this was found by **byte-scan only** (link base via a pointer
+histogram, cross-checked against the header):
+
+| Item | Value | Notes |
+|---|---|---|
+| `CONFIG_SYS_TEXT_BASE` | **0x30000** | histogram score 3236; the `_TEXT_BASE` word literally sits at file 0x40, image length `0x5bc88` at 0x50 |
+| `default_environment` | file **0x41F77** → va **0x71F77** | first key is `backlight=30` |
+| Pointer literals (→ `0x00071F77`) | file **0xB948, 0xB988, 0xBA38, 0xBA78, 0xBBA8** | the `env_common.c` xrefs; each is a relocated absolute pointer (`.rel.dyn` `R_ARM_RELATIVE`) |
+| `himport` size (`sizeof`, `mov r2,#0x49`) | file **0xB9D8, 0xBA54** | **two** call sites (`set_default_env` + `env_relocate`), both `bl 0x032BB0` = `himport_r`; **both** size immediates must be bumped |
+| `__bss_start` offset | **0x54EF8** | relocated env must end at/below this so it's copied+relocated, not zeroed |
+| Free zero-runs below bss | 511 B @ `0x50FDD`, 507 @ `0x4FB29`, … (10 runs, 261–511 B) | all below `__bss_start`, i.e. inside the loaded/relocated image |
+
+The two `mov r2,#0x49` sites were the one subtlety: `0xB9D8` loads its env
+pointer from a literal pool ~0x60 bytes away, so the detector's association
+window has to be ≥0x80, not 0x40, to catch both. A global scan confirms those
+are the *only* two `mov r2,#0x49` in the binary, both genuine.
+
+### The patch (`patch_uboot_env.py`, new — `patch_uboot.py` untouched)
+
+1. Write the new (arbitrarily long) env into the largest free zero-run below
+   `__bss_start` — e.g. `0x50FDD` (511 B). Refuses if the region isn't
+   genuinely all-zero or the env won't fit.
+2. Repoint all 5 pointer literals `0x00071F77` → `base + region` (e.g.
+   `0x00080FDD`).
+3. Bump both `himport` size immediates `mov r2,#0x49` → smallest single-MOV-
+   encodable value in `[env_len, region_len]` (e.g. `#0x1C0` for a 446 B env).
+   Without this, himport truncates the relocated env at the old 73 bytes.
+4. Optionally apply the same NAND-offset corruption as `patch_uboot.py`
+   (`--patch-nand-offset`) so the on-NAND env fails CRC and this relocated
+   default is the one imported.
+
+**Why it's self-consistent under runtime relocation:** the 5 pointer literals
+are fixed up at boot by adding `gd->reloc_off`. Rewriting their *link-time*
+value from `0x71F77` to `0x80FDD` (both in-image) means the same delta is
+added → the pointer still lands on the moved data after relocation. The size
+immediate is code, not relocated. The env bytes we wrote sit below
+`__bss_start`, so they're part of the copied+relocated image.
+
+### Verification performed (static)
+
+Generated with:
+```bash
+python patch_uboot_env.py \
+  -i "Prado firmware dump/mtd1-mtd2_uboot/extracted/uboot.bin" \
+  -o experimental_sdboot/uboot_relocenv.bin \
+  --preset sdboot --patch-nand-offset
+```
+- 446 B env written at `0x50FDD`; 5 pointers → `0x80FDD`; both sizes
+  `#0x49`→`#0x1C0` (`e3a02d07`); 3 NAND MOVs → `0xFF000000`.
+- **Total change: ~22 code bytes + 446 env bytes into verified-zero space.**
+  Differing regions are all tiny (2–3 B each) plus the one env write.
+- `set_default_env` / `env_import` / `saveenv` — the command-table strings
+  destroyed by the old §1/§3 corruption — are **all present and intact**.
+- `--analyze` re-derives every offset above from the binary (nothing
+  hardcoded), so it self-checks on any similar ARK1680 dump.
+
+### The one real unknown
+
+Whether `default_environment` is imported **before or after** `.rel.dyn`
+fixups run on first boot. Both the pointer literals and the moved env data
+live inside the image and share the same reloc delta, so it should be
+consistent either way — but that's the thing to watch on the first hardware
+test. Recovery if it hangs is the usual SD-only path (pull the card; nothing
+was written to NAND).
+
+### Build integration
+
+`build_bootable_sdcard.sh` gained a **`--reloc-env`** flag, **on by default**.
+When patching the stock U-Boot (`--no-new-uboot` + patch toggle on), the patch
+step runs `patch_uboot_env.py --preset sdboot --patch-nand-offset` (full SD
+auto-boot). Pass **`--no-reloc-env`** to fall back to
+`patch_uboot.py --mode sdscript` (the hardware-confirmed patch that only drops
+to a U-Boot prompt).
+
+Note the default is on **despite** being only static-verified — the reasoning
+is that the fallback is one flag away and nothing touches NAND, so a failed SD
+auto-boot costs nothing but a reflash of the card. **On the first hardware
+test, update this section** with the result: if it auto-boots, keep the
+default; if himport imports before `.rel.dyn` relocation, record what failed
+and whether writing the pointer as the *relocated* runtime address (rather than
+link-time) fixes it — and consider flipping the default back to `--no-reloc-env`
+until it's sorted.

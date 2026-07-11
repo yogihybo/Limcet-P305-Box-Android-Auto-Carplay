@@ -18,6 +18,6 @@ PasswordAuthentication yes
 PermitEmptyPasswords no
 ChallengeResponseAuthentication no
 
-UsePAM no
+# UsePAM no
 PrintLastLog no
 TCPKeepAlive yes

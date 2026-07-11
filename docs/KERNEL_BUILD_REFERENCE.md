@@ -173,16 +173,34 @@ assignments verified against the dumped kernel and drivers.
 > - Userspace confirms the address/bus: `libSetting` →
 >   `/sys/.../i2c-gpio.1/i2c-1/**1-002c**/dvr` = 7-bit **0x2c** (RN6752's 0x58 8-bit),
 >   **not** the DTS's `0x59`. Wrong chip **and** wrong address.
-> - The 4.19 `linux-arkmicro` tree in this repo ships **no** camera decoder driver at all
->   (no `ark7116.c`, no `rn6752.c`), so `CONFIG_VIDEO_ARK7116` binds to nothing here.
+> - **Good news — no driver port is required.** The 4.19 build config
+>   (`Limcet Hardware/kernel_dot_config`, Linux 4.19.192) already lists the RN6752
+>   driver as a Kconfig option — it's just switched off:
+>   ```
+>   CONFIG_VIDEO_ARK7116=y             # wrong chip, currently ENABLED
+>   # CONFIG_VIDEO_RN6752 is not set   # right driver, AVAILABLE but disabled
+>   CONFIG_VIDEO_ARK1668_VIN=y         # VIN capture — keep
+>   CONFIG_ARK_CARBACK=y               # reverse-gear detect — keep
+>   ```
+>   (`# … is not set` is only emitted for symbols the BSP's Kconfig defines, so
+>   `drivers/media/i2c/rn6752.c` exists in the full ArkMicro 4.19 tree — it is just not
+>   included in the trimmed `linux-arkmicro Reference/linux` copy here, which has only
+>   `arch/` + `include/`.)
 >
 > **Impact:** the reversing camera will not work on the 4.19 reconstruction as configured.
-> **Fix:** forward-port the stock RN6752 driver (`dvr_rn6752_*` from the 3.4.0 tree) to
-> 4.19, and change the DTS node to the RN6752 chip at **0x2c** (drop the ARK7116 node /
-> `CONFIG_VIDEO_ARK7116`). The likely origin of the error: the DTS inherited the
-> `&ark7116` node from the generic `ark1668.dtsi` rather than matching the real chip.
-> *Not yet byte-verified:* the exact reset / reverse-detect GPIO numbers (this doc's
-> earlier "reset GPIO 0 / detect GPIO 5" came from the ARK7116 assumption).
+> **Fix — config swap + DTS retarget (no code port):**
+> 1. Kernel config: `CONFIG_VIDEO_RN6752=y` and `# CONFIG_VIDEO_ARK7116 is not set`
+>    (swap the two). Keep `CONFIG_VIDEO_ARK1668_VIN=y` and `CONFIG_ARK_CARBACK=y`.
+> 2. DTS: replace the `dvr_ark7116@B2` node (`reg = <0x59>`) with an RN6752 node at
+>    **7-bit `reg = <0x2c>`** and the RN6752 compatible string. The error's likely origin:
+>    the DTS inherited the `&ark7116` node from the generic `ark1668.dtsi`.
+>
+> *GPIO note:* the RN6752 driver reads its **reset** (`ctx+0x8`) and **reverse-detect**
+> (`ctx+0x4`) GPIOs from **board platform data**, not hardcoded — detect uses **20 µs
+> debounce + falling-edge threaded IRQ**. The pin numbers live in a runtime `.bss` struct
+> (not in the static image), so they must be supplied via the DTS. The earlier
+> "reset GPIO 0 / detect GPIO 5" values in this doc were **ARK7116 guesses — do not trust
+> them** for the RN6752; confirm against the working stock unit or the board schematic.
 
 ### Display Timings
 ```
@@ -246,9 +264,13 @@ scripts/config --enable CONFIG_IP_MULTICAST    # mDNS for wireless CarPlay disco
 scripts/config --enable CONFIG_CFG80211_WEXT   # Wireless Extensions for hostapd + RTL
 
 # --- Camera & Video (V4L2 — disable legacy equivalents!) ---
-scripts/config --enable  CONFIG_VIDEO_ARK7116      # V4L2 ARK7116 AHD decoder
+# NOTE (2026-07-11): the board's decoder is RN6752, NOT ARK7116 — see the
+# "Camera decoder chip" callout above. Enable RN6752, disable ARK7116.
+scripts/config --enable  CONFIG_VIDEO_RN6752       # V4L2 RN6752 AHD decoder (CORRECT chip)
+scripts/config --disable CONFIG_VIDEO_ARK7116      # wrong chip — was enabled by mistake
 scripts/config --enable  CONFIG_VIDEO_ARK1668_VIN  # V4L2 Video Input Node
-scripts/config --disable CONFIG_ARK7116            # DISABLE — conflicts with VIDEO_ARK7116
+scripts/config --enable  CONFIG_ARK_CARBACK        # reverse-gear detect
+scripts/config --disable CONFIG_ARK7116            # DISABLE — legacy conflict
 scripts/config --disable CONFIG_ARK1668_ITU656     # DISABLE — conflicts with VIDEO_ARK1668_VIN
 
 # --- Audio ---

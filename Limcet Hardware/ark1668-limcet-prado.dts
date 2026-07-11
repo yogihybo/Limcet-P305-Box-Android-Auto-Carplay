@@ -40,7 +40,13 @@
 		i2c-gpio,delay-us = <6>;
 		i2c-gpio,scl-output-only;
 
-		// AHD Video Input Decoder (Reset line on GPIO 0)
+		// AHD Video Input Decoder
+		// !!! WRONG CHIP (2026-07-11): the stock 3.4.0 kernel proves this board uses a
+		//     Richwave RN6752 at 7-bit 0x2c, NOT an ARK7116 at 0x59. Retarget this node to
+		//     RN6752 (compatible + reg = <0x2c>) and set CONFIG_VIDEO_RN6752=y instead of
+		//     CONFIG_VIDEO_ARK7116. reset-gpio/detect GPIOs below are UNVERIFIED ARK7116
+		//     guesses. See docs/KERNEL_BUILD_REFERENCE.md "Camera decoder chip" callout and
+		//     docs/HANDOFF_kernel_build_camera_and_touch.md.
 		dvr_ark7116: dvr_ark7116@B2 {
 			compatible = "arkmicro,ark1668_ark7116";
 			reset-gpio = <&gpio0 0 0>;

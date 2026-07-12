@@ -42,6 +42,15 @@
 #                      and a uEnv.txt text environment is written to p1.
 #                      ON by default.
 #   --no-new-uboot     Disable the compiled U-Boot replacement (use stock U-Boot)
+#   --bootlogo PATH    Raw 800x480x32bpp framebuffer (see convert_bootlogo.py)
+#                      to place on p1 as bootlogo.raw, for the boot logo
+#                      shown by ark_show_bootlogo() in the compiled U-Boot.
+#   --stock-uboot PATH Stock dumped U-Boot binary to place on p1 as
+#                      stock_uboot.bin, used by the `bootstock` command to
+#                      chainload the original bootloader (bypasses this
+#                      build's NAND driver). Defaults to the dump already in
+#                      this repo; pass --no-stock-uboot to skip copying it.
+#                      Not required — boot proceeds normally without it.
 #   --kernel PATH      zImage (or zImage.w_dtb) to place on p1
 #   --new-kernel       Auto-detect and use the freshly compiled Limcet P305 kernel
 #                      from linux-arkmicro/linux/arch/arm/boot/zImage (prefers
@@ -66,6 +75,11 @@
 #                      With the Limcet P305 kernel the MMC driver is built-in,
 #                      so this is off by default.
 #   --no-initramfs     Explicitly disable the initramfs (already the default)
+#   --diag-tools PATH  Additional static ARM diagnostic binary to install
+#                      onto p2's /usr/bin, on top of the defaults
+#                      (tools/i2c-scan/i2c-scan, tools/ark1680-ts-test/ark-ts-test —
+#                      see their READMEs). Repeatable.
+#   --no-diag-tools    Don't install any diagnostic tools onto p2
 #   --non-interactive  Skip the menu, use defaults/flags only
 #   --dry-run          Show commands without executing
 #   --help             Show this help
@@ -97,7 +111,7 @@ die()     { echo -e "${RED}ERROR: $*${RESET}" >&2; exit 1; }
 # a boxed header per step, an elapsed-time footer, and a final summary table
 # so the user can see at a glance what ran and how long it took.
 # ---------------------------------------------------------------------------
-STEP_TOTAL=12
+STEP_TOTAL=14
 declare -a STEP_TITLES=() STEP_ELAPSED=() STEP_STATUS=()
 STEP_T0=0
 
@@ -170,16 +184,25 @@ INITRAMFS_ADDR=0x2000000                       # RAM address the initramfs is fa
 # when the NAND env is unreadable (patched U-Boot). Matches env/uboot-env.txt.
 MTDPARTS='mtdparts=ark1680-nand:128k(S-Loader),512k(U-boot),512k(U-boot_back),256K(U-boot-Env),256K(arkdata),4m(kernel),106m(rootfs),6m(userdata),512K(bootlogo),3m(bootanimation),3m(reversingtrack),256K(Unicode)'
 KERNEL_BIN=""
+BOOTLOGO_RAW=""                               # raw framebuffer (--bootlogo) for p1/bootlogo.raw
+STOCK_UBOOT_BIN="$SCRIPT_DIR/Prado firmware dump/mtd1-mtd2_uboot/extracted/uboot.bin"  # for p1/stock_uboot.bin, used by the `bootstock` chainload command
 DTB_BIN=""
 ROOTFS_DIR=""
 USERDATA_DIR=""
 RECONSTRUCTED_DIR=""
 SKIP_USERDATA=false
 SKIP_MTD_REDIRECT=false
+SKIP_DIAG_TOOLS=false
 NEW_KERNEL_MODE=true                          # replace stock kernel with freshly compiled Limcet P305 kernel — ON by default; pass --no-new-kernel to use the stock kernel
 NEW_UBOOT_MODE=true                           # replace stock U-Boot with freshly compiled Limcet P305 U-Boot — ON by default; pass --no-new-uboot to use the stock U-Boot
 KERNEL_BUILD_DIR=""                           # path to linux-arkmicro/ build root (auto-detected)
 MODULES_DIR=""                                # path to compiled_modules/ (auto-detected from KERNEL_BUILD_DIR)
+declare -a DIAG_TOOLS_BINS=(
+    "$SCRIPT_DIR/tools/i2c-scan/i2c-scan"                  # static ARM i2c bus scanner, see tools/i2c-scan/README.md
+    "$SCRIPT_DIR/tools/ark1680-ts-test/ark-ts-test"        # ark1680_ts touchscreen diagnostic, see tools/ark1680-ts-test/README.md
+    "$SCRIPT_DIR/tools/lcd-test/lcd-test"                  # raw /dev/fb0 LCD diagnostic, see tools/lcd-test/README.md
+    "$SCRIPT_DIR/tools/strace/strace"                      # upstream strace (static), see tools/strace/README.md
+)
 NON_INTERACTIVE=false
 DRY_RUN=false
 
@@ -209,6 +232,9 @@ while [[ $# -gt 0 ]]; do
         --no-reloc-env)    RELOC_ENV=false; shift ;;
         --root)            ROOT_DEV="$2"; shift 2 ;;
         --kernel)          KERNEL_BIN="$2"; shift 2 ;;
+        --bootlogo)        BOOTLOGO_RAW="$2"; shift 2 ;;
+        --stock-uboot)     STOCK_UBOOT_BIN="$2"; shift 2 ;;
+        --no-stock-uboot)  STOCK_UBOOT_BIN=""; shift ;;
         --dtb)             DTB_BIN="$2"; shift 2 ;;
         --new-kernel)      NEW_KERNEL_MODE=true; shift ;;
         --no-new-kernel)   NEW_KERNEL_MODE=false; shift ;;
@@ -222,6 +248,8 @@ while [[ $# -gt 0 ]]; do
         --no-new-uboot)    NEW_UBOOT_MODE=false; shift ;;
         --initramfs)       USE_INITRAMFS=true; shift ;;
         --no-initramfs)    USE_INITRAMFS=false; shift ;;
+        --diag-tools)      DIAG_TOOLS_BINS+=("$2"); shift 2 ;;
+        --no-diag-tools)   SKIP_DIAG_TOOLS=true; shift ;;
         --non-interactive) NON_INTERACTIVE=true; shift ;;
         --dry-run|-n)      DRY_RUN=true; shift ;;
         --help|-h)         usage ;;
@@ -370,6 +398,9 @@ CONFIG_ITEMS=(
     "use_initramfs|Use initramfs (usually not needed)|DISABLED — confirmed non-functional, the dumped stock kernel doesn't support this boot path. Would build an initramfs that insmods ark_dw_mmc.ko and mounts the SD rootfs, for a stock NAND kernel where MMC is a module. Kept for reference.|OFF"
     "redirect_mtd_data|Redirect NAND mtd partitions to SD card (bootlogo, bootanimation, reversingtrack, unicode)|Symlinks bootlogo, bootanimation, reversingtrack, and Unicode font (mtd8-11) to files under /nanddata/ on p2 — if off, the device reads these from whatever is already in NAND instead|ON"
     "include_userdata|Include userdata (p3)|Copies the userdata dir to p3 — if off, p3 is left empty and the app populates /data on first boot|ON"
+    "install_diag_tools|Install diagnostic tools (i2c-scan, ark-ts-test, lcd-test, strace)|Copies static ARM diagnostic binaries onto p2's /usr/bin: i2c-scan (I2C bus scanner, see tools/i2c-scan/README.md), ark-ts-test (ARK1680 touchscreen register/evdev tester, see tools/ark1680-ts-test/README.md), lcd-test (raw /dev/fb0 LCD tester, see tools/lcd-test/README.md), and strace (upstream syscall tracer, see tools/strace/README.md). Harmless to leave off.|ON"
+    "disable_msncoreapp_autolaunch|Disable MsnCoreApp auto-launch at login|Comments out 'MsnCoreApp -qws&' in /etc/profile so it doesn't auto-run (and auto-crash) on every shell login while the startup segfault is being debugged (see docs/ARK1680_TS_REVERSE_ENGINEERING.md). Run 'start_msn' manually instead to test. Turn this off once the crash is fixed and auto-launch is wanted again.|ON"
+    "fix_libgal_dynamic_section|Fix corrupted libGAL.so .dynamic section|/usr/lib/libGAL.so's .dynamic section is corrupted (just a single DT_NULL entry — no NEEDED/SYMTAB/STRTAB), which crashes the dynamic linker with a NULL+4 deref inside _dl_relocate_object() the instant MsnCoreApp tries to load it (root-caused via matched strace+dmesg PC/LR correlation, see docs/ARK1680_TS_REVERSE_ENGINEERING.md). Replaces it with libGAL.fb.so, the vendor's own software-framebuffer variant (SONAME=libGAL.so, valid .dynamic section), backing up the original as libGAL.so.corrupt-orig.|ON"
 )
 
 declare -a CONFIG_SEL
@@ -385,6 +416,7 @@ $SKIP_MTD_REDIRECT && CONFIG_SEL[4]=0
 $NEW_KERNEL_MODE   || CONFIG_SEL[1]=0
 $USE_INITRAMFS     && CONFIG_SEL[3]=1
 $NEW_UBOOT_MODE    || CONFIG_SEL[0]=0
+$SKIP_DIAG_TOOLS   && CONFIG_SEL[6]=0
 
 # ---------------------------------------------------------------------------
 # Navigation state — identical pattern to build_update.sh's CURSOR/read_key.
@@ -604,8 +636,26 @@ render_menu_body() {
     if $show_bootscript; then
         printf "          └── %-13s %-20s %b\n" "Boot script"  "uEnv.txt"  "${DIM}generated${RESET}"
     fi
+    local diag_status diag_count=0 diag_found=0 db
+    if [[ ${CONFIG_SEL[6]} -eq 1 ]]; then
+        for db in "${DIAG_TOOLS_BINS[@]}"; do
+            diag_count=$((diag_count+1))
+            [[ -f "$db" ]] && diag_found=$((diag_found+1))
+        done
+        if [[ $diag_found -eq $diag_count ]]; then
+            diag_status=$(badge found)
+        elif [[ $diag_found -gt 0 ]]; then
+            diag_status=$(badge found "(${diag_found}/${diag_count})")
+        else
+            diag_status=$(badge missing)
+        fi
+    else
+        diag_status=$(badge skip)
+    fi
+
     printf "       p2 ├── %-13s %-20s %b\n" "Rootfs"       "$(trunc "$(basename "${ROOTFS_DIR:-rootfs}")" 19)" "$rootfs_status"
-    printf "          └── %-13s %-20s %b\n" "Modules"      "compiled_modules/"  "$modules_status"
+    printf "          ├── %-13s %-20s %b\n" "Modules"      "compiled_modules/"  "$modules_status"
+    printf "          └── %-13s %-20s %b\n" "Diag tools"   "${diag_count} tool(s)" "$diag_status"
     printf "       p3 └── %-13s %-20s %b\n" "Userdata"     "$(trunc "$(basename "${USERDATA_DIR:-userdata}")" 19)" "$userdata_status"
 
     echo -e "  ${DIM}${DIVIDER}${RESET}"
@@ -661,6 +711,13 @@ validate() {
     [[ -d "$ROOTFS_DIR" ]] || die "rootfs dir not found: $ROOTFS_DIR"
     if [[ ${CONFIG_SEL[5]} -eq 1 && -n "$USERDATA_DIR" ]]; then
         [[ -d "$USERDATA_DIR" ]] || die "userdata dir not found: $USERDATA_DIR"
+    fi
+    if [[ ${CONFIG_SEL[6]} -eq 1 ]]; then
+        local db any_found=0
+        for db in "${DIAG_TOOLS_BINS[@]}"; do
+            [[ -f "$db" ]] && any_found=1 || warn "Diagnostic tool not found, will be skipped: $db"
+        done
+        [[ $any_found -eq 0 ]] && { warn "No diagnostic tool binaries found — disabling"; CONFIG_SEL[6]=0; }
     fi
     # Sync menu toggles back to runtime variables
     [[ ${CONFIG_SEL[1]} -eq 1 ]] && NEW_KERNEL_MODE=true  || NEW_KERNEL_MODE=false
@@ -951,13 +1008,13 @@ populate_nanddata() {
         local uenv_content
         if $USE_INITRAMFS; then
             uenv_content=$(cat <<EOF
-bootargs=console=ttyS0,115200n8 mem=180M earlyprintk=serial rootwait rw screen=0
+bootargs=console=ttyS0,115200n8 mem=180M earlyprintk=serial rootwait rw screen=0 user_debug=8
 bootcmd=fatload mmc 0:1 0x1000000 zImage; fatload mmc 0:1 $INITRAMFS_ADDR uInitrd; fatload mmc 0:1 0x2000000 ark1668_limcet_p305.dtb; bootz 0x1000000 $INITRAMFS_ADDR 0x2000000
 EOF
 )
         else
             uenv_content=$(cat <<EOF
-bootargs=console=ttyS0,115200n8 mem=180M earlyprintk=serial root=$ROOT_DEV rootfstype=ext4 rootwait rw screen=0
+bootargs=console=ttyS0,115200n8 mem=180M earlyprintk=serial root=$ROOT_DEV rootfstype=ext4 rootwait rw screen=0 user_debug=8
 bootcmd=fatload mmc 0:1 0x1000000 zImage; fatload mmc 0:1 0x2000000 ark1668_limcet_p305.dtb; bootz 0x1000000 - 0x2000000
 EOF
 )
@@ -981,6 +1038,7 @@ EOF
 # ---------------------------------------------------------------------------
 patch_rootfs_for_new_kernel() {
     local rootfs_mount="$1"
+    local disable_autolaunch="$2"   # "1" or "0" — CONFIG_SEL[7], disable_msncoreapp_autolaunch
     echo -e "${BOLD}  Patching rootfs init scripts for 4.19.192 kernel compatibility...${RESET}"
 
     if $DRY_RUN; then
@@ -988,6 +1046,9 @@ patch_rootfs_for_new_kernel() {
         echo "  [dry-run] rcS: replace insmod 3.4.0 touchscreen paths with modprobe (silent fallback)"
         echo "  [dry-run] rcS: comment out missing /usr/bin/sshd"
         echo "  [dry-run] wifi_ap.sh: replace 3.4.0 wlan .ko paths with modprobe + uname -r fallback"
+        if [[ "$disable_autolaunch" == "1" ]]; then
+            echo "  [dry-run] profile: comment out 'MsnCoreApp -qws&' auto-launch"
+        fi
         return
     fi
 
@@ -1001,13 +1062,14 @@ patch_rootfs_for_new_kernel() {
     [[ -f "$inittab" ]] || { warn "inittab not found at $inittab — skipping new-kernel patch"; return; }
     [[ -f "$profile" ]] || { warn "profile not found at $profile — skipping new-kernel patch"; return; }
 
-    python3 - "$rcs" "$wifi" "$inittab" "$profile" <<'PYEOF'
+    python3 - "$rcs" "$wifi" "$inittab" "$profile" "$disable_autolaunch" <<'PYEOF'
 import sys, re
 
 rcs_path  = sys.argv[1]
 wifi_path = sys.argv[2]
 inittab_path = sys.argv[3]
 profile_path = sys.argv[4]
+disable_autolaunch = sys.argv[5] == "1"
 
 # ── inittab patches ────────────────────────────────────────────────────────
 inittab = open(inittab_path).read()
@@ -1138,6 +1200,20 @@ if OLD_DISPLAY in profile:
 else:
     print("  profile WARNING: QWS_DISPLAY directfb line not found")
 
+# Disable the MsnCoreApp auto-launch on every shell login while its startup
+# segfault is being debugged (see docs/ARK1680_TS_REVERSE_ENGINEERING.md) —
+# an auto-launched instance crashing in the background on every console
+# login makes it hard to get a clean, isolated strace/dmesg capture of a
+# single manually-triggered run. Re-enable once the crash is fixed.
+if disable_autolaunch:
+    OLD_AUTOLAUNCH = 'MsnCoreApp -qws&'
+    NEW_AUTOLAUNCH = '#MsnCoreApp -qws&  # disabled by build_bootable_sdcard.sh (disable_msncoreapp_autolaunch) -- run start_msn manually'
+    if OLD_AUTOLAUNCH in profile:
+        profile = profile.replace(OLD_AUTOLAUNCH, NEW_AUTOLAUNCH)
+        print("  profile: disabled MsnCoreApp auto-launch (run start_msn manually)")
+    else:
+        print("  profile WARNING: 'MsnCoreApp -qws&' auto-launch line not found")
+
 open(profile_path, 'w').write(profile)
 PYEOF
 
@@ -1197,6 +1273,120 @@ install_new_kernel_modules() {
         warn "depmod not found on host — modules.dep will not be regenerated"
         warn "  Run 'depmod -a' on the device after first boot"
     fi
+}
+
+# ---------------------------------------------------------------------------
+# Install diagnostic tools (e.g. tools/i2c-scan, tools/ark1680-ts-test) onto
+# the mounted p2 rootfs
+# ---------------------------------------------------------------------------
+install_diag_tools() {
+    local rootfs_mount="$1"
+    local bin name
+    local -a installed=()
+    echo -e "${BOLD}  Installing diagnostic tools onto p2...${RESET}"
+
+    if $DRY_RUN; then
+        for bin in "${DIAG_TOOLS_BINS[@]}"; do
+            [[ -f "$bin" ]] && echo "  [dry-run] cp $bin → /usr/bin/$(basename "$bin")"
+        done
+        echo "  [dry-run] append diagnostic-tools banner to rcS"
+        return
+    fi
+
+    mkdir -p "$rootfs_mount/usr/bin"
+    for bin in "${DIAG_TOOLS_BINS[@]}"; do
+        [[ -f "$bin" ]] || { warn "Diagnostic tool not found, skipping: $bin"; continue; }
+        name="$(basename "$bin")"
+        cp "$bin" "$rootfs_mount/usr/bin/$name"
+        chmod +x "$rootfs_mount/usr/bin/$name"
+        installed+=("$name")
+        success "Installed $name → /usr/bin/$name"
+    done
+
+    [[ ${#installed[@]} -gt 0 ]] && append_diag_banner "$rootfs_mount" "${installed[@]}"
+}
+
+# ---------------------------------------------------------------------------
+# Append a banner listing the installed diagnostic tools to the end of rcS,
+# so it prints right before the console getty/prompt appears at boot — only
+# lists tools that were actually installed above.
+# ---------------------------------------------------------------------------
+append_diag_banner() {
+    local rootfs_mount="$1"; shift
+    local rcs="$rootfs_mount/etc/rc.d/rcS"
+    local name
+
+    [[ -f "$rcs" ]] || { warn "rcS not found at $rcs — skipping diagnostic-tools banner"; return; }
+
+    {
+        echo ''
+        echo '# --- diagnostic tools banner (build_bootable_sdcard.sh) ---'
+        echo 'echo ""'
+        echo 'echo "=== Diagnostic tools ==="'
+        for name in "$@"; do
+            case "$name" in
+                i2c-scan)
+                    echo 'echo "  i2c-scan /dev/i2c-0 /dev/i2c-1 ...   - scan I2C buses for ACKing devices"'
+                    ;;
+                ark-ts-test)
+                    echo 'echo "  ark-ts-test regs                     - dump ARK1680 touch ADC/syscon registers"'
+                    echo 'echo "  ark-ts-test events /dev/input/eventN - watch touch evdev events"'
+                    ;;
+                lcd-test)
+                    echo 'echo "  lcd-test info                        - dump /dev/fb0 + /dev/ark_display info"'
+                    echo 'echo "  lcd-test fill <red|green|blue|...>   - fill screen with a solid color"'
+                    echo 'echo "  lcd-test bars                        - draw color-bar test pattern"'
+                    echo 'echo "  lcd-test gradient                    - draw a red->green gradient"'
+                    ;;
+                strace)
+                    echo 'echo "  strace -f -o /data/x.log <cmd>       - trace syscalls (e.g. strace -f start_msn)"'
+                    ;;
+                *)
+                    echo "echo \"  $name\""
+                    ;;
+            esac
+        done
+        echo 'echo "========================="'
+        echo 'echo ""'
+    } >> "$rcs"
+
+    success "Appended diagnostic-tools banner to rcS ($*)"
+}
+
+# ---------------------------------------------------------------------------
+# Replace the corrupted /usr/lib/libGAL.so (empty .dynamic section — a single
+# DT_NULL entry, no NEEDED/SYMTAB/STRTAB) with libGAL.fb.so, the vendor's own
+# software-framebuffer variant sitting right next to it. libGAL.fb.so has a
+# complete, valid .dynamic section and SONAME=libGAL.so, so it's a proper
+# drop-in. Without this, ld.so's _dl_relocate_object() crashes on a NULL+4
+# deref while resolving libGAL.so, taking down MsnCoreApp before main() ever
+# runs — root-caused via matched strace+dmesg PC/LR correlation (see
+# docs/ARK1680_TS_REVERSE_ENGINEERING.md).
+# ---------------------------------------------------------------------------
+fix_libgal_so() {
+    local rootfs_mount="$1"
+    local libdir="$rootfs_mount/usr/lib"
+    local broken="$libdir/libGAL.so"
+    local fixed="$libdir/libGAL.fb.so"
+    local backup="$libdir/libGAL.so.corrupt-orig"
+    echo -e "${BOLD}  Fixing corrupted libGAL.so .dynamic section...${RESET}"
+
+    if $DRY_RUN; then
+        echo "  [dry-run] cp $broken → $backup (preserve corrupt original)"
+        echo "  [dry-run] cp $fixed → $broken (install valid software-framebuffer variant)"
+        return
+    fi
+
+    [[ -f "$broken" ]] || { warn "libGAL.so not found at $broken — skipping libGAL fix"; return; }
+    [[ -f "$fixed" ]]  || { warn "libGAL.fb.so not found at $fixed — skipping libGAL fix"; return; }
+
+    if [[ -f "$backup" ]]; then
+        info "libGAL.so.corrupt-orig backup already exists — leaving it in place"
+    else
+        cp "$broken" "$backup"
+    fi
+    cp "$fixed" "$broken"
+    success "Replaced corrupted libGAL.so with libGAL.fb.so (valid .dynamic section, SONAME=libGAL.so)"
 }
 
 # ---------------------------------------------------------------------------
@@ -1296,6 +1486,15 @@ build() {
     fi
     run cp "$UBOOT_BIN"  /tmp/sd_p1/UBOOT.BIN
     run cp "$KERNEL_BIN" /tmp/sd_p1/zImage
+    local bootlogo_label=""
+    if [[ -n "$BOOTLOGO_RAW" && -f "$BOOTLOGO_RAW" ]]; then
+        run cp "$BOOTLOGO_RAW" /tmp/sd_p1/bootlogo.raw
+        bootlogo_label=" + bootlogo.raw"
+    fi
+    if [[ -n "$STOCK_UBOOT_BIN" && -f "$STOCK_UBOOT_BIN" ]]; then
+        run cp "$STOCK_UBOOT_BIN" /tmp/sd_p1/stock_uboot.bin
+        bootlogo_label="$bootlogo_label + stock_uboot.bin"
+    fi
     local ir_label=""
     if $USE_INITRAMFS; then
         run cp "$INITRAMFS_OUT" /tmp/sd_p1/initramfs.cpio.gz
@@ -1310,11 +1509,11 @@ build() {
             run cp "$DTB_BIN" /tmp/sd_p1/ark1668_limcet_p305.dtb
         fi
         run cp "$UENV_OUT" /tmp/sd_p1/uEnv.txt
-        success "UBOOT.BIN + zImage${ir_label} + uEnv.txt + DTB written to p1"
+        success "UBOOT.BIN + zImage${ir_label} + uEnv.txt + DTB${bootlogo_label} written to p1"
     elif $UBOOT_WAS_PATCHED; then
-        success "UBOOT.BIN (patched) + zImage${ir_label} written to p1"
+        success "UBOOT.BIN (patched) + zImage${ir_label}${bootlogo_label} written to p1"
     else
-        success "UBOOT.BIN + zImage${ir_label} written to p1"
+        success "UBOOT.BIN + zImage${ir_label}${bootlogo_label} written to p1"
     fi
     end_step 7
 
@@ -1363,7 +1562,7 @@ build() {
     begin_step 10 "Installing new kernel modules + compat patches"
     if $NEW_KERNEL_MODE; then
         install_new_kernel_modules /tmp/sd_p2
-        patch_rootfs_for_new_kernel /tmp/sd_p2
+        patch_rootfs_for_new_kernel /tmp/sd_p2 "${CONFIG_SEL[7]}"
         end_step 10
     else
         info "Skipped — stock NAND kernel/modules in use"
@@ -1383,6 +1582,26 @@ build() {
     else
         info "Skipped — bootlogo/bootanimation/reversingtrack/Unicode stay on NAND"
         end_step 12 skip
+    fi
+
+    # 13. Install diagnostic tools (i2c-scan) onto p2
+    begin_step 13 "Installing diagnostic tools"
+    if [[ ${CONFIG_SEL[6]} -eq 1 ]]; then
+        install_diag_tools /tmp/sd_p2
+        end_step 13
+    else
+        info "Skipped — no diagnostic tools installed"
+        end_step 13 skip
+    fi
+
+    # 14. Fix corrupted libGAL.so .dynamic section (crashes MsnCoreApp at startup otherwise)
+    begin_step 14 "Fixing corrupted libGAL.so"
+    if [[ ${CONFIG_SEL[8]} -eq 1 ]]; then
+        fix_libgal_so /tmp/sd_p2
+        end_step 14
+    else
+        info "Skipped — libGAL.so left as-is"
+        end_step 14 skip
     fi
 
     # Unmount and detach

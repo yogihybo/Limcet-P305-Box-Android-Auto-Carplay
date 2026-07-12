@@ -437,6 +437,46 @@ static int ark_nand_write_page_syndrome(struct mtd_info *mtd,
 	return 0;
 }
 
+/*
+ * Real on-flash format for this chip (kernel/rootfs/bootloader-type
+ * partitions), confirmed on real hardware via U-Boot nandoobcheck/dump.oob
+ * (see docs/HANDOFF_nand_ecc_uboot_vs_kernel.md): 1024-byte ECC step (2
+ * segments per 2048-byte page), 13-byte/7-bit BCH strength, ECC bytes
+ * starting at OOB offset 3. Neither the vendor's original driver (which
+ * used 1024-byte steps but 23-byte/13-bit BCH) nor generic
+ * nand_ooblayout_lp_ops (which places ECC at the end of OOB) match this.
+ */
+static int ark_nand_ooblayout_ecc(struct mtd_info *mtd, int section,
+				   struct mtd_oob_region *oobregion)
+{
+	struct nand_chip *chip = mtd_to_nand(mtd);
+
+	if (section >= chip->ecc.steps)
+		return -ERANGE;
+
+	oobregion->offset = 3 + (section * chip->ecc.bytes);
+	oobregion->length = chip->ecc.bytes;
+
+	return 0;
+}
+
+static int ark_nand_ooblayout_free(struct mtd_info *mtd, int section,
+				    struct mtd_oob_region *oobregion)
+{
+	if (section)
+		return -ERANGE;
+
+	oobregion->offset = 32;
+	oobregion->length = 32;
+
+	return 0;
+}
+
+static const struct mtd_ooblayout_ops ark_nand_ooblayout_2seg13b_ops = {
+	.ecc = ark_nand_ooblayout_ecc,
+	.free = ark_nand_ooblayout_free,
+};
+
 static int ark_nand_hw_syndrome_ecc_ctrl_init(struct mtd_info *mtd, struct nand_ecc_ctrl *ecc)
 {
 	struct nand_chip *chip = mtd_to_nand(mtd);
@@ -448,21 +488,22 @@ static int ark_nand_hw_syndrome_ecc_ctrl_init(struct mtd_info *mtd, struct nand_
     ecc->correct = ark_nand_correct_data;
 	ecc->read_page = ark_nand_read_page_syndrome;
 	ecc->write_page = ark_nand_write_page_syndrome;
-	ecc->size = 512;
 
 	if (mtd->oobsize == 64) {
+		ecc->size = 1024;
 		ecc->bytes = BIT_7_ECC_BYTE;
 		ecc->strength = 7;
-		val = BCH_CR_SECTOR_MODE | BCH_BIT_SEL(BCH_7BIT_SEL) | BCH_CR_BCH_ENABLE;
+		val = BCH_CR_SECTOR_MODE | BCH_CR_SECTOR_LENGTH | BCH_BIT_SEL(BCH_7BIT_SEL) | BCH_CR_BCH_ENABLE;
 		writel(val, nfc->regs + rBCH_CR);
+		mtd_set_ooblayout(mtd, &ark_nand_ooblayout_2seg13b_ops);
 	} else if(mtd->oobsize >= 128) {
+		ecc->size = 512;
 		ecc->bytes = BIT_24_ECC_BYTE;
 		ecc->strength = 24;
 		val = BCH_CR_SECTOR_MODE | BCH_CR_SECTOR_LENGTH | BCH_BIT_SEL(BCH_24BIT_SEL) | BCH_CR_BCH_ENABLE;
 		writel(val, nfc->regs + rBCH_CR);
+		mtd_set_ooblayout(mtd, &nand_ooblayout_lp_ops);
 	}
-
-	mtd_set_ooblayout(mtd, &nand_ooblayout_lp_ops);
 
 	return 0;
 }

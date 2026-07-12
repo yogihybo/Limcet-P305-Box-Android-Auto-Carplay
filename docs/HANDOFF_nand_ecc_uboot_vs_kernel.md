@@ -12,6 +12,15 @@ port in this session.
 Committed: `1422e3411` (u-boot repo, whole board port + NAND fix) and
 `5f4dcfc` (main repo, `build_bootable_sdcard.sh`).
 
+**Headline result (2026-07-13, confirmed on real hardware):** `bootstock`
+works end-to-end -- this build (booted from SD) chainloads the stock
+U-Boot binary, which then successfully boots the full stock kernel +
+rootfs + UI from NAND. This is now a completely reliable path to the
+original stock system from a custom-U-Boot-on-SD setup, and it sidesteps
+the `bootnand` kernel-entry hang (section 5) entirely -- that issue no
+longer blocks getting a working NAND boot, it only blocks doing it via
+*this* fork's own `bootz` directly.
+
 ---
 
 ## 1. NAND ECC -- U-Boot side: FIXED and confirmed on real hardware
@@ -287,9 +296,13 @@ artifacts.
 
 This 3.4 kernel has only ever shipped paired with the stock 2012.10 U-Boot;
 booting it via this 2018.07 fork's `bootz` is fundamentally unproven,
-untested territory. `bootstock` (once verified working -- see below)
-sidesteps this entirely by handing the kernel boot to the binary it was
-actually built against.
+untested territory. **`bootstock` sidesteps this entirely and is confirmed
+working end-to-end** (see the headline result at the top of this doc) --
+handing the kernel boot to the binary it was actually built against boots
+the full stock UI successfully. Given that, this hang is now a
+lower-priority curiosity, not a blocker -- there's a completely reliable
+path to a working NAND boot already. Worth solving only if direct
+`bootz`-from-this-fork is specifically wanted for some other reason.
 
 ### GPIO button -- piggyback display switch
 User confirmed this works correctly already, on real hardware, by the time

@@ -231,6 +231,13 @@ Four boot commands:
      ignoring the header's `EP`. Fixed: `bootstock` now does `go 0x30000`
      instead of `go <header EP>`. **Confirmed working on real hardware**
      (2026-07-13) -- the jump-target theory was correct.
+- **`bootstockusb`** -- added after `bootstock` was confirmed working;
+  identical logic sourced from a USB stick instead of SD (`fatload usb 0:1`
+  vs `fatload mmc 0:1`). Shares `bootstock_from_block_dev(iface)`, same
+  pattern as `bootmmc`/`bootusb`'s shared `boot_from_block_dev()`. Not yet
+  hardware-tested (untested only in the sense of "USB vs SD as the
+  source" -- the actual chainload logic is identical to the confirmed-working
+  `bootstock`).
 
 `STOCK_UBOOT_LOAD_ADDR` = `0x30000`, safe to overwrite -- by the time any of
 these commands run, this build has long since relocated itself to high RAM

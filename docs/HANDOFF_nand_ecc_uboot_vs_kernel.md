@@ -220,10 +220,8 @@ Four boot commands:
      offset `0x253c`-`0x2540`) hardcodes `mov r0, #0x30000; blx r0` -- it
      jumps to the load address (the reset vector / `_start`), completely
      ignoring the header's `EP`. Fixed: `bootstock` now does `go 0x30000`
-     instead of `go <header EP>`. Not yet verified on hardware as of this
-     handoff -- the fix is built and header-injected, ready to flash and
-     test. If it still crashes (`undefined instr resetting`) after this
-     fix, the jump-target theory is wrong and needs revisiting.
+     instead of `go <header EP>`. **Confirmed working on real hardware**
+     (2026-07-13) -- the jump-target theory was correct.
 
 `STOCK_UBOOT_LOAD_ADDR` = `0x30000`, safe to overwrite -- by the time any of
 these commands run, this build has long since relocated itself to high RAM
@@ -292,16 +290,6 @@ booting it via this 2018.07 fork's `bootz` is fundamentally unproven,
 untested territory. `bootstock` (once verified working -- see below)
 sidesteps this entirely by handing the kernel boot to the binary it was
 actually built against.
-
-### `bootstock` jump-target fix -- built, not yet hardware-tested
-See section 4. Apply and flash-test before trusting this command. If the
-jump target fix doesn't resolve the `undefined instr resetting` crash, the
-"Stepldr jumps to load address not EP" finding may need re-examination --
-double check the disassembly offsets weren't misread, or consider whether
-the stock binary's `_start` path does something else that the warm-handoff
-context doesn't satisfy (e.g. expects a genuinely cold/Stepldr-clean state
-that this build's own board_init has already disturbed in some way not yet
-identified).
 
 ### GPIO button -- piggyback display switch
 User confirmed this works correctly already, on real hardware, by the time

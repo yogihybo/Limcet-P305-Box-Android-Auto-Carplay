@@ -239,6 +239,15 @@ Four boot commands:
   source" -- the actual chainload logic is identical to the confirmed-working
   `bootstock`).
 
+  **Important: USB/SD only supplies the stock U-Boot *binary itself* for
+  that one initial chainload step.** Once stock U-Boot is running, it does
+  its own completely normal boot sequence, which reads the kernel and
+  rootfs from **NAND** (via its own field-proven NAND driver), exactly like
+  the confirmed `bootstock`/SD test. `bootstock` and `bootstockusb` both
+  end up in the identical place -- stock UI booted from NAND -- the only
+  difference between them is which medium supplies the stock binary for
+  the initial handoff. Neither one boots the kernel/rootfs from USB or SD.
+
 `STOCK_UBOOT_LOAD_ADDR` = `0x30000`, safe to overwrite -- by the time any of
 these commands run, this build has long since relocated itself to high RAM
 (`bdinfo` shows ~63MB relocation address, confirmed no collision).

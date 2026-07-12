@@ -95,31 +95,71 @@ it 2-3 times back to back -- CRC32 should be identical every time.
 
 ---
 
-## 2. NAND ECC -- kernel side: separately broken, NOT fixed, NOT diagnosed
+## 2. NAND ECC -- kernel side: now patched to match U-Boot's ground truth, NOT yet hardware-tested
 
-The Linux kernel's own NAND driver (`Limcet Hardware/ark_nand_kernel.c`)
+The Linux kernel's own NAND driver (`Limcet Hardware/ark_nand_kernel.c`,
+mirrored 1:1 from the live build tree at
+`/home/osboxes/Downloads/linux-arkmicro/linux/drivers/mtd/nand/raw/ark_nand.c`)
 has known, real ECC read problems (established from prior real-hardware
 testing -- see `docs/HANDOFF_touch_and_bootargs_fix.md` "Fix C", the ~417
 false-bad-block issue and the "too weak ECC" warning), even though its
 `BCH_CR` trigger sequence looks textbook-correct in the source (it already
 sets SOFT_ECC_ENABLE|BCH_ENABLE together, matching what U-Boot needed).
 
-This means the kernel's problem is very likely the same class of bug as
-the U-Boot one was -- an OOB layout/`eccpos` mismatch, not the register
-trigger bits -- but this has not been diagnosed or fixed. Do not assume
-fixing U-Boot's ECC also fixed the kernel's; they are two independent driver
-implementations with independent bugs, and only one has been fixed tonight.
+**Update:** diagnosed and patched, same session as the U-Boot fix (section 1).
+Found in `ark_nand_hw_syndrome_ecc_ctrl_init()` (was `ark_nand.o`, builds
+clean with `make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf-
+drivers/mtd/nand/raw/ark_nand.o` -- not yet flashed/booted on real hardware):
+
+- The kernel build tree's `ark_nand.c` was already mid-edit, uncommitted,
+  from a prior (pre-U-Boot-investigation) debugging session -- `git diff`
+  in that repo showed the committed vendor original used `ecc->size = 1024`
+  (2 segments/page, right) but `BIT_13_ECC_BYTE` (23-byte ECC, 13-bit BCH
+  strength -- wrong), while the uncommitted working copy had been changed to
+  `ecc->size = 512` (4 segments/page, wrong) with `BIT_7_ECC_BYTE` (13-byte
+  ECC, 7-bit strength -- right) but had dropped `BCH_CR_SECTOR_LENGTH`.
+  Neither combination matches the real on-flash format established in
+  section 1: 1024-byte step / 13-byte / 7-bit BCH / `SECTOR_LENGTH` bit set.
+  Fixed by combining the correct half of each: `ecc->size = 1024`,
+  `ecc->bytes = BIT_7_ECC_BYTE`, `ecc->strength = 7`, and
+  `val = BCH_CR_SECTOR_MODE | BCH_CR_SECTOR_LENGTH | BCH_BIT_SEL(BCH_7BIT_SEL)
+  | BCH_CR_BCH_ENABLE` (the `mtd->oobsize == 64` branch only -- the
+  `oobsize >= 128` branch is unused/unverified for this chip and was left
+  alone apart from making its previously-implicit `ecc->size = 512` default
+  explicit).
+- Separately, `mtd_set_ooblayout(mtd, &nand_ooblayout_lp_ops)` was wrong
+  regardless of the above -- that's the generic large-page layout, which
+  places ECC bytes at the *end* of the OOB region. The real layout (per
+  section 1's `nandoobcheck` dumps) has ECC at OOB offset 3, 26 bytes total
+  (2 segments x 13 bytes), free area at offset 32/32 bytes. Added a custom
+  `mtd_ooblayout_ops` (`ark_nand_ooblayout_2seg13b_ops`,
+  `ark_nand_ooblayout_ecc`/`ark_nand_ooblayout_free`) mirroring U-Boot's
+  revived `nand_hw_eccoob_64_2seg13b` layout, wired in for the `oobsize ==
+  64` case only.
+
+This means the kernel's problem was very likely the same class of bug as
+the U-Boot one -- an OOB layout/ECC-step-size mismatch, not the register
+trigger bits, exactly as suspected. Two independent driver implementations,
+two independent (now both fixed-in-source) instances of the same underlying
+format mismatch.
+
+**Not yet verified on hardware.** The fix builds clean (`.o` compiles with no
+warnings) but has not been flash-tested. Verify the same way section 1 was
+verified: build the kernel/module, boot it, and confirm NAND partition reads
+(`kernel`, `rootfs`) succeed without `!!Read Data err`/false-bad-block
+messages, ideally cross-checked against `nandoobcheck` dumps of the same
+pages read via U-Boot. If it still fails, re-run the same raw-OOB-dump
+comparison method described below on a live kernel (e.g. via a debug read
+path or `mtd_debug`/`nanddump` from userspace) since the kernel's read path
+(`ark_nand_read_page_syndrome`) walks the OOB in a slightly different order
+than U-Boot's and could reveal a further offset/rounding difference not
+visible from static analysis alone.
 
 This is why this project's own `build_bootable_sdcard.sh` routes NAND
 partition data (bootlogo, bootanimation, reversingtrack, Unicode font)
 through SD-card symlinks (`redirect_mtd_data`) instead of trusting the
-kernel to read them from NAND directly -- that design decision already
-reflects this known unreliability.
-
-If you want to fix the kernel side: the method that worked for U-Boot
-(dump raw OOB via `nandoobcheck`/`nand dump.oob` on a few pages, compare
-against what the driver's `eccpos` array assumes, adjust) should transfer
-directly -- same chip, same physical data.
+kernel to read them from NAND directly -- keep that fallback in place until
+the fix above is confirmed working on real hardware.
 
 ---
 

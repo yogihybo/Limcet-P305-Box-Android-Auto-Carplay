@@ -38,15 +38,22 @@ echo
 echo "--- 2. BD37033 bus presence (i2c-gpio2, addr 0x41) ---"
 # Reuses the tool already built for this exact bus/address question --
 # see tools/i2c-scan/README.md and PIN_MASTER_LIST.md's driver source table.
+# Resolve i2c-scan across either layout this project ships it in: the
+# tools/i2c-scan/i2c-scan tree (manual copy), flat in the same directory as
+# this script, or flat in /usr/bin (build_bootable_sdcard.sh's
+# install_diag_tools installs everything into one flat directory, not a
+# tools/ subtree -- checked 2026-07-14 while wiring this script into it).
 I2CSCAN="$(dirname "$0")/../i2c-scan/i2c-scan"
-if [ -x "$I2CSCAN" ]; then
+[ -x "$I2CSCAN" ] || I2CSCAN="$(dirname "$0")/i2c-scan"
+[ -x "$I2CSCAN" ] || I2CSCAN="$(command -v i2c-scan 2>/dev/null)"
+if [ -n "$I2CSCAN" ] && [ -x "$I2CSCAN" ]; then
 	if "$I2CSCAN" 2>&1 | grep -q "0x41"; then
 		pass "BD37033 ACKs at 0x41 on i2c-gpio2"
 	else
 		fail "no ACK seen at 0x41 -- BD37033 not responding on the bus (i2c-scan output above)"
 	fi
 else
-	unk "tools/i2c-scan not found at $I2CSCAN -- copy it alongside this script or run it separately"
+	unk "i2c-scan not found (checked ../i2c-scan/, alongside this script, and \$PATH) -- copy it somewhere findable or run it separately"
 fi
 
 echo

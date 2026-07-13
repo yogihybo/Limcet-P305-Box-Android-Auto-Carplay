@@ -27,13 +27,27 @@ actually matches this project's DTS, not the other SoC variant.
 
 **"Confirmed by operation" column — status key** (added 2026-07-14, cross-checked
 against `docs/new kernel bootlog new uboot v11.txt`, the most recent full boot
-log, plus dedicated docs where the boot log alone wasn't enough):
+log, plus dedicated docs where the boot log alone wasn't enough).
+
+**Important caveat on the boot log itself, added after user pushback
+2026-07-14: a clean dmesg probe line is weak evidence, not proof of correct
+operation.** A driver can print a success message and register a device node
+while the actual hardware behind it is silently misbehaving — wrong data,
+no physical response, a downstream failure that never reaches the kernel
+log at all. "No error in dmesg" only means the *driver's own init path*
+didn't hit a failure condition it knows to check for; it says nothing about
+whether the peripheral is functionally correct. Treat **CONFIRMED** as the
+only status here that means "actually verified," and read **PROBES OK**
+as "unknown, leaning slightly more hopeful than NOT CONFIRMED" — not as
+"basically working."
 - **CONFIRMED** — physically observed actually working (video visibly rendering,
   audio audibly playing, a real SD card/WiFi AP/USB device enumerating), not
   just "driver loaded without an error."
-- **PROBES OK** — the driver initializes cleanly and the log shows no error, but
-  there's no evidence in this session of the *feature* being exercised
-  end-to-end (e.g. a UART node exists, but no confirmed protocol traffic).
+- **PROBES OK** — the driver initializes without a logged error, but this is
+  **not evidence of correct operation** — no functional/physical test has
+  confirmed the feature actually works, and a real problem could easily be
+  invisible to dmesg. Treat as unverified, closer to NOT CONFIRMED than to
+  CONFIRMED.
 - **NOT CONFIRMED** — no success evidence found either way; don't assume it works.
 - **DORMANT** — intentionally inactive on this hardware (nothing loads it, or
   the hardware isn't populated) — not a bug, just not in use.

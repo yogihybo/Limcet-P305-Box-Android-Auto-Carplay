@@ -19,10 +19,16 @@ Confidence tags used below:
 Note (2026-07-14): [ACTIVE] here means "wiring/pin confirmed genuinely in
 use," NOT "confirmed working end-to-end on the current 4.19 kernel build."
 Those are different claims -- see PIN_MASTER_LIST.md's "Driver source
-reference" table, whose new "Confirmed by operation" column cross-checks
-each peripheral against the actual boot log. Notably: rn6752 and BD37033
-are wiring-[ACTIVE] but NOT operationally confirmed this session (no clean
-probe-success line found in the latest boot log) -- don't conflate the two.
+reference" table, whose "Confirmed by operation" column cross-checks each
+peripheral against the actual boot log. Notably: rn6752 and BD37033 are
+wiring-[ACTIVE] but NOT operationally confirmed this session.
+
+A clean boot-log probe line is weak evidence, not proof, of correct
+operation (user correction, 2026-07-14) -- a driver can log success while
+the hardware behind it is silently wrong (no real response, bad data,
+a failure mode dmesg never surfaces). Only that table's CONFIRMED status
+means "actually verified working"; its PROBES OK status means "unverified,"
+not "probably fine" -- don't read boot-log silence as reassurance.
 
 
 Driver column key: "vendor, in-tree" = real vendor driver source already

@@ -32,6 +32,7 @@ is still just a mechanical check, not a functional guarantee).
 | Script | Covers | Notes |
 |---|---|---|
 | `tools/touch-selftest/touch-selftest.sh` | Section 1 (resistive touch) | needs a real physical touch during two timed windows |
+| `tools/uart-test/uart-test.sh` | Sections 2-3 (MCU link + MSNEry link) | passive-only; auto-tries fallback bauds |
 | `tools/audio-test/audio-test.sh` | Section 6 (BD37033 control path) | can't listen for you — only confirms the mechanical steps around an audible test |
 | `tools/bt-test/bt-test.sh` | Bluetooth (already CONFIRMED in `PIN_MASTER_LIST.md`) | regression check + traffic monitor; targets `blueware`/`ttyHS1`, not `rtkbt` |
 | `tools/usb-test/usb-test.sh` | USB (already CONFIRMED) | regression check against the known-working boot-log baseline |
@@ -39,7 +40,11 @@ is still just a mechanical check, not a functional guarantee).
 
 None of these needed a `timeout` applet — this project's busybox build
 doesn't have one, so timed windows use background process + `sleep` +
-`kill` instead. Worth knowing if you write more of these.
+`kill` instead. Worth knowing if you write more of these. Also worth
+knowing: `strings`' default 4-character minimum silently hides short
+applet names (`dd`, `wc`, `cat`, `od`, ...) when checking what a busybox
+build supports — use `strings -n 2` (or lower) to check for these, a
+mistake caught and corrected while building `uart-test.sh`.
 
 ---
 

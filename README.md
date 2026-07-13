@@ -769,13 +769,19 @@ present) are both confirmed directly from the binary's disassembly, not inferred
 See [`docs/MSNCOREAPP_REVIEW.md`](docs/MSNCOREAPP_REVIEW.md) for the full disassembly trace and
 [`docs/SECURITY_REVIEW.md`](docs/SECURITY_REVIEW.md) for this project's broader credential/access-path review.
 
-**Ready-to-use payload:** [`msn_autocopy_payload/`](msn_autocopy_payload/) contains a pre-built
-`msn_autocopy/` folder that installs `sshd` and autostart via `rcS` on a stock device. Copy the
-`msn_autocopy/` subfolder to the root of a FAT32 USB drive or SD card, insert it into the head
-unit, reboot — SSH is available at `root@192.168.7.1` (password `123456`). Exec bits on the
-binary and startup script are set correctly; `rcS` also runs `chmod 755 /usr/bin/sshd` at boot as
-a FAT32 exec-bit safety net. See [`msn_autocopy_payload/README.md`](msn_autocopy_payload/README.md)
-for full instructions and hardening steps.
+**Ready-to-use payload:** [`msn_autocopy/`](msn_autocopy/) contains a pre-built `msn_autocopy/etc/rc.d/rcS`
+— stock's own dumped `rcS` with `busybox telnetd -l /bin/sh` (already compiled into stock's busybox,
+no binary transplant needed) added as a passwordless root telnet listener on port 23. **Confirmed
+working on real hardware, 2026-07-13.** Copy the folder to the root of a FAT32 USB drive/SD card,
+insert into the head unit, reboot, then `telnet <device-ip> 23` over the `carplay_wifi` AP for an
+immediate root shell — no login prompt. See [`msn_autocopy/README.md`](msn_autocopy/README.md) for
+full deployment steps, the debugging history (why the first attempt silently failed —
+`/dev/pts` wasn't mounted), and the diagnostic-log-to-USB fallback for retrieving logs without a
+working shell.
+
+An earlier attempt, [`msn_autocopy_payload_do not use/`](msn_autocopy_payload_do%20not%20use/),
+tried transplanting `sshd` + `rcS` from the *reconstructed* rootfs instead of stock's own files and
+never worked — kept only for reference on what not to do (cross-rootfs binary/dependency mismatch).
 
 ## 11.0 Holden Firmware Compatibility
 

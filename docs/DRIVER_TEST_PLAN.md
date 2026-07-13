@@ -17,6 +17,32 @@ observation (data received, signal changes, ACK response) counts.
 
 ---
 
+## Automated test scripts (2026-07-14)
+
+Five POSIX shell scripts now automate the mechanical parts of the plans
+below — copy the whole `tools/` directory onto the device and run
+directly from the live root shell. Each prints `[PASS]`/`[FAIL]`/
+`[UNKNOWN]` per check and a summary line; each README explains exactly
+what a pass does and doesn't prove. **None of these replace the manual
+reasoning below** — a clean run is a starting point, not a substitute
+for the "what would actually prove this works" judgment calls in each
+section (per the boot-log-evidence caveat: a script reporting `[PASS]`
+is still just a mechanical check, not a functional guarantee).
+
+| Script | Covers | Notes |
+|---|---|---|
+| `tools/touch-selftest/touch-selftest.sh` | Section 1 (resistive touch) | needs a real physical touch during two timed windows |
+| `tools/audio-test/audio-test.sh` | Section 6 (BD37033 control path) | can't listen for you — only confirms the mechanical steps around an audible test |
+| `tools/bt-test/bt-test.sh` | Bluetooth (already CONFIRMED in `PIN_MASTER_LIST.md`) | regression check + traffic monitor; targets `blueware`/`ttyHS1`, not `rtkbt` |
+| `tools/usb-test/usb-test.sh` | USB (already CONFIRMED) | regression check against the known-working boot-log baseline |
+| `tools/mmc-test/mmc-test.sh` | MMC (mmc0 CONFIRMED; mmc1 = Section 8) | **read-only by design**, given the 2026-07-13 incident |
+
+None of these needed a `timeout` applet — this project's busybox build
+doesn't have one, so timed windows use background process + `sleep` +
+`kill` instead. Worth knowing if you write more of these.
+
+---
+
 ## 1. Resistive touch (`ark1680_ts`) — physical touch input
 
 **Why uncertain:** driver registers cleanly (`input: ark1680-ts as

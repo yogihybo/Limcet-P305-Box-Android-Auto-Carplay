@@ -16,7 +16,14 @@ pass() { echo "[PASS] $1"; PASS=$((PASS+1)); }
 fail() { echo "[FAIL] $1"; FAIL=$((FAIL+1)); }
 unk()  { echo "[UNKNOWN] $1"; UNKNOWN=$((UNKNOWN+1)); }
 
+# Resolve ark-ts-test across either layout this project ships it in: the
+# tools/ark1680-ts-test/ark-ts-test tree (manual copy), flat in the same
+# directory as this script, or flat in /usr/bin (build_bootable_sdcard.sh's
+# install_diag_tools installs everything into one flat directory, not a
+# tools/ subtree -- checked 2026-07-14 while wiring this script into it).
 ARKTS="$(dirname "$0")/../ark1680-ts-test/ark-ts-test"
+[ -x "$ARKTS" ] || ARKTS="$(dirname "$0")/ark-ts-test"
+[ -x "$ARKTS" ] || ARKTS="$(command -v ark-ts-test 2>/dev/null)"
 
 echo "=== touch-selftest: $(date) ==="
 
@@ -48,7 +55,7 @@ if [ -x "$ARKTS" ]; then
 		echo "    touching the panel during the 3s window."
 	fi
 else
-	unk "tools/ark1680-ts-test/ark-ts-test not found at $ARKTS"
+	unk "ark-ts-test not found (checked ../ark1680-ts-test/, alongside this script, and \$PATH)"
 fi
 
 echo

@@ -75,10 +75,12 @@
 #                      With the Limcet P305 kernel the MMC driver is built-in,
 #                      so this is off by default.
 #   --no-initramfs     Explicitly disable the initramfs (already the default)
-#   --diag-tools PATH  Additional static ARM diagnostic binary to install
-#                      onto p2's /usr/bin, on top of the defaults
-#                      (tools/i2c-scan/i2c-scan, tools/ark1680-ts-test/ark-ts-test —
-#                      see their READMEs). Repeatable.
+#   --diag-tools PATH  Additional diagnostic binary/script to install onto
+#                      p2's /usr/bin, on top of the defaults: i2c-scan,
+#                      ark-ts-test, lcd-test, strace (compiled binaries), plus
+#                      touch-selftest.sh, uart-test.sh, audio-test.sh,
+#                      bt-test.sh, usb-test.sh, mmc-test.sh (POSIX shell
+#                      scripts — see each tools/*/README.md). Repeatable.
 #   --no-diag-tools    Don't install any diagnostic tools onto p2
 #   --telnetd          Install a passwordless root telnetd (busybox telnetd
 #                      -l /bin/sh, port 23) into rcS, started right after
@@ -212,6 +214,12 @@ declare -a DIAG_TOOLS_BINS=(
     "$SCRIPT_DIR/tools/ark1680-ts-test/ark-ts-test"        # ark1680_ts touchscreen diagnostic, see tools/ark1680-ts-test/README.md
     "$SCRIPT_DIR/tools/lcd-test/lcd-test"                  # raw /dev/fb0 LCD diagnostic, see tools/lcd-test/README.md
     "$SCRIPT_DIR/tools/strace/strace"                      # upstream strace (static), see tools/strace/README.md
+    "$SCRIPT_DIR/tools/touch-selftest/touch-selftest.sh"   # automated touch pass/fail flow, see tools/touch-selftest/README.md
+    "$SCRIPT_DIR/tools/uart-test/uart-test.sh"             # passive MCU-link/MSNEry-link listener, see tools/uart-test/README.md
+    "$SCRIPT_DIR/tools/audio-test/audio-test.sh"           # sound card + BD37033 bus/mixer check, see tools/audio-test/README.md
+    "$SCRIPT_DIR/tools/bt-test/bt-test.sh"                 # GPIO91/ttyHS1/blueware check, see tools/bt-test/README.md
+    "$SCRIPT_DIR/tools/usb-test/usb-test.sh"               # USB regression check, see tools/usb-test/README.md
+    "$SCRIPT_DIR/tools/mmc-test/mmc-test.sh"               # read-only MMC/SD check, see tools/mmc-test/README.md
 )
 NON_INTERACTIVE=false
 DRY_RUN=false
@@ -410,7 +418,7 @@ CONFIG_ITEMS=(
     "use_initramfs|Use initramfs (usually not needed)|DISABLED — confirmed non-functional, the dumped stock kernel doesn't support this boot path. Would build an initramfs that insmods ark_dw_mmc.ko and mounts the SD rootfs, for a stock NAND kernel where MMC is a module. Kept for reference.|OFF"
     "redirect_mtd_data|Redirect NAND mtd partitions to SD card (bootlogo, bootanimation, reversingtrack, unicode)|Symlinks bootlogo, bootanimation, reversingtrack, and Unicode font (mtd8-11) to files under /nanddata/ on p2 — if off, the device reads these from whatever is already in NAND instead|ON"
     "include_userdata|Include userdata (p3)|Copies the userdata dir to p3 — if off, p3 is left empty and the app populates /data on first boot|ON"
-    "install_diag_tools|Install diagnostic tools (i2c-scan, ark-ts-test, lcd-test, strace)|Copies static ARM diagnostic binaries onto p2's /usr/bin: i2c-scan (I2C bus scanner, see tools/i2c-scan/README.md), ark-ts-test (ARK1680 touchscreen register/evdev tester, see tools/ark1680-ts-test/README.md), lcd-test (raw /dev/fb0 LCD tester, see tools/lcd-test/README.md), and strace (upstream syscall tracer, see tools/strace/README.md). Harmless to leave off.|ON"
+    "install_diag_tools|Install diagnostic tools (i2c-scan, ark-ts-test, lcd-test, strace, *-test.sh)|Copies diagnostic binaries and scripts onto p2's /usr/bin: i2c-scan (I2C bus scanner, see tools/i2c-scan/README.md), ark-ts-test (ARK1680 touchscreen register/evdev tester, see tools/ark1680-ts-test/README.md), lcd-test (raw /dev/fb0 LCD tester, see tools/lcd-test/README.md), strace (upstream syscall tracer, see tools/strace/README.md), and touch-selftest.sh/uart-test.sh/audio-test.sh/bt-test.sh/usb-test.sh/mmc-test.sh (automated pass/fail wrappers, one per subsystem — see each tools/*/README.md). Harmless to leave off.|ON"
     "disable_msncoreapp_autolaunch|Disable MsnCoreApp auto-launch at login|Comments out 'MsnCoreApp -qws&' in /etc/profile so it doesn't auto-run (and auto-crash) on every shell login while the startup segfault is being debugged (see docs/ARK1680_TS_REVERSE_ENGINEERING.md). Run 'start_msn' manually instead to test. Turn this off once the crash is fixed and auto-launch is wanted again.|ON"
     "fix_libgal_dynamic_section|Fix corrupted libGAL.so .dynamic section|/usr/lib/libGAL.so's .dynamic section is corrupted (just a single DT_NULL entry — no NEEDED/SYMTAB/STRTAB), which crashes the dynamic linker with a NULL+4 deref inside _dl_relocate_object() the instant MsnCoreApp tries to load it (root-caused via matched strace+dmesg PC/LR correlation, see docs/ARK1680_TS_REVERSE_ENGINEERING.md). Replaces it with libGAL.fb.so, the vendor's own software-framebuffer variant (SONAME=libGAL.so, valid .dynamic section), backing up the original as libGAL.so.corrupt-orig.|ON"
     "install_telnetd|Install passwordless root telnetd (UNAUTHENTICATED — diagnostic only)|Inserts 'mount -t devpts none /dev/pts' + 'busybox telnetd -l /bin/sh &' into rcS right after mdev -s, giving a root shell on port 23 with no login prompt to anything that can reach the device's network (WiFi AP or USB-NCM). Same mechanism validated working on stock firmware via the msn_autocopy payload (see msn_autocopy/README.md for why the devpts mount is required — telnetd fails silently without it). This is a real, if minor, exposure while active on any network the device joins — OFF by default, opt-in only.|OFF"
@@ -1354,6 +1362,24 @@ append_diag_banner() {
                     ;;
                 strace)
                     echo 'echo "  strace -f -o /data/x.log <cmd>       - trace syscalls (e.g. strace -f start_msn)"'
+                    ;;
+                touch-selftest.sh)
+                    echo 'echo "  touch-selftest.sh                    - automated touch pass/fail (needs a real touch)"'
+                    ;;
+                uart-test.sh)
+                    echo 'echo "  uart-test.sh                         - passive listen on MCU (ttyHS0) + MSNEry (ttyS2) links"'
+                    ;;
+                audio-test.sh)
+                    echo 'echo "  audio-test.sh [file.wav]             - sound card + BD37033 bus/mixer check"'
+                    ;;
+                bt-test.sh)
+                    echo 'echo "  bt-test.sh                           - GPIO91/ttyHS1/blueware check"'
+                    ;;
+                usb-test.sh)
+                    echo 'echo "  usb-test.sh                          - USB regression check vs known-good baseline"'
+                    ;;
+                mmc-test.sh)
+                    echo 'echo "  mmc-test.sh                          - read-only MMC/SD check"'
                     ;;
                 *)
                     echo "echo \"  $name\""

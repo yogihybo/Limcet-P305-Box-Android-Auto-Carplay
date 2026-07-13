@@ -80,6 +80,15 @@
 #                      (tools/i2c-scan/i2c-scan, tools/ark1680-ts-test/ark-ts-test —
 #                      see their READMEs). Repeatable.
 #   --no-diag-tools    Don't install any diagnostic tools onto p2
+#   --telnetd          Install a passwordless root telnetd (busybox telnetd
+#                      -l /bin/sh, port 23) into rcS, started right after
+#                      mdev -s. OFF by default — this is an unauthenticated
+#                      root shell reachable by anything on the network. Same
+#                      mechanism confirmed working via msn_autocopy on stock
+#                      firmware — see msn_autocopy/README.md for the
+#                      devpts-mount fix this depends on and its debugging
+#                      history.
+#   --no-telnetd       Explicitly disable telnetd (already the default)
 #   --non-interactive  Skip the menu, use defaults/flags only
 #   --dry-run          Show commands without executing
 #   --help             Show this help
@@ -111,7 +120,7 @@ die()     { echo -e "${RED}ERROR: $*${RESET}" >&2; exit 1; }
 # a boxed header per step, an elapsed-time footer, and a final summary table
 # so the user can see at a glance what ran and how long it took.
 # ---------------------------------------------------------------------------
-STEP_TOTAL=14
+STEP_TOTAL=15
 declare -a STEP_TITLES=() STEP_ELAPSED=() STEP_STATUS=()
 STEP_T0=0
 
@@ -193,6 +202,7 @@ RECONSTRUCTED_DIR=""
 SKIP_USERDATA=false
 SKIP_MTD_REDIRECT=false
 SKIP_DIAG_TOOLS=false
+INSTALL_TELNETD=false                         # unauthenticated root telnetd on port 23 — OFF by default, opt-in only
 NEW_KERNEL_MODE=true                          # replace stock kernel with freshly compiled Limcet P305 kernel — ON by default; pass --no-new-kernel to use the stock kernel
 NEW_UBOOT_MODE=true                           # replace stock U-Boot with freshly compiled Limcet P305 U-Boot — ON by default; pass --no-new-uboot to use the stock U-Boot
 KERNEL_BUILD_DIR=""                           # path to linux-arkmicro/ build root (auto-detected)
@@ -250,6 +260,8 @@ while [[ $# -gt 0 ]]; do
         --no-initramfs)    USE_INITRAMFS=false; shift ;;
         --diag-tools)      DIAG_TOOLS_BINS+=("$2"); shift 2 ;;
         --no-diag-tools)   SKIP_DIAG_TOOLS=true; shift ;;
+        --telnetd)         INSTALL_TELNETD=true; shift ;;
+        --no-telnetd)      INSTALL_TELNETD=false; shift ;;
         --non-interactive) NON_INTERACTIVE=true; shift ;;
         --dry-run|-n)      DRY_RUN=true; shift ;;
         --help|-h)         usage ;;
@@ -401,6 +413,7 @@ CONFIG_ITEMS=(
     "install_diag_tools|Install diagnostic tools (i2c-scan, ark-ts-test, lcd-test, strace)|Copies static ARM diagnostic binaries onto p2's /usr/bin: i2c-scan (I2C bus scanner, see tools/i2c-scan/README.md), ark-ts-test (ARK1680 touchscreen register/evdev tester, see tools/ark1680-ts-test/README.md), lcd-test (raw /dev/fb0 LCD tester, see tools/lcd-test/README.md), and strace (upstream syscall tracer, see tools/strace/README.md). Harmless to leave off.|ON"
     "disable_msncoreapp_autolaunch|Disable MsnCoreApp auto-launch at login|Comments out 'MsnCoreApp -qws&' in /etc/profile so it doesn't auto-run (and auto-crash) on every shell login while the startup segfault is being debugged (see docs/ARK1680_TS_REVERSE_ENGINEERING.md). Run 'start_msn' manually instead to test. Turn this off once the crash is fixed and auto-launch is wanted again.|ON"
     "fix_libgal_dynamic_section|Fix corrupted libGAL.so .dynamic section|/usr/lib/libGAL.so's .dynamic section is corrupted (just a single DT_NULL entry — no NEEDED/SYMTAB/STRTAB), which crashes the dynamic linker with a NULL+4 deref inside _dl_relocate_object() the instant MsnCoreApp tries to load it (root-caused via matched strace+dmesg PC/LR correlation, see docs/ARK1680_TS_REVERSE_ENGINEERING.md). Replaces it with libGAL.fb.so, the vendor's own software-framebuffer variant (SONAME=libGAL.so, valid .dynamic section), backing up the original as libGAL.so.corrupt-orig.|ON"
+    "install_telnetd|Install passwordless root telnetd (UNAUTHENTICATED — diagnostic only)|Inserts 'mount -t devpts none /dev/pts' + 'busybox telnetd -l /bin/sh &' into rcS right after mdev -s, giving a root shell on port 23 with no login prompt to anything that can reach the device's network (WiFi AP or USB-NCM). Same mechanism validated working on stock firmware via the msn_autocopy payload (see msn_autocopy/README.md for why the devpts mount is required — telnetd fails silently without it). This is a real, if minor, exposure while active on any network the device joins — OFF by default, opt-in only.|OFF"
 )
 
 declare -a CONFIG_SEL
@@ -417,6 +430,7 @@ $NEW_KERNEL_MODE   || CONFIG_SEL[1]=0
 $USE_INITRAMFS     && CONFIG_SEL[3]=1
 $NEW_UBOOT_MODE    || CONFIG_SEL[0]=0
 $SKIP_DIAG_TOOLS   && CONFIG_SEL[6]=0
+$INSTALL_TELNETD   && CONFIG_SEL[9]=1
 
 # ---------------------------------------------------------------------------
 # Navigation state — identical pattern to build_update.sh's CURSOR/read_key.
@@ -1390,6 +1404,65 @@ fix_libgal_so() {
 }
 
 # ---------------------------------------------------------------------------
+# Insert a passwordless root telnetd into rcS, right after mdev -s (same
+# insertion point as the MTD symlink patch above). Requires mounting
+# /dev/pts first — busybox telnetd fails silently at startup without it,
+# discovered the hard way getting the same mechanism working on stock
+# firmware via the msn_autocopy payload (see msn_autocopy/README.md for the
+# full debugging history: v1 had no devpts mount and no output redirection,
+# so it looked like rcS ran fine but nothing was ever listening on port 23).
+# UNAUTHENTICATED — `-l /bin/sh` skips /bin/login entirely, no password
+# prompt. OFF by default; this is a real network-exposed root shell while
+# active.
+# ---------------------------------------------------------------------------
+install_telnetd() {
+    local rootfs_mount="$1"
+    local rcs="$rootfs_mount/etc/rc.d/rcS"
+    echo -e "${BOLD}  Installing passwordless root telnetd into rcS...${RESET}"
+
+    if $DRY_RUN; then
+        echo "  [dry-run] insert devpts mount + busybox telnetd -l /bin/sh after mdev -s in rcS"
+        return
+    fi
+
+    [[ -f "$rcs" ]] || { warn "rcS not found at $rcs — skipping telnetd install"; return; }
+
+    python3 - "$rcs" <<'PYEOF'
+import sys
+
+path = sys.argv[1]
+text = open(path).read()
+
+MDEV_LINE = '/sbin/mdev -s'
+mdev_idx = text.find(MDEV_LINE)
+if mdev_idx == -1:
+    print("  WARNING: '/sbin/mdev -s' not found in rcS — telnetd install skipped")
+    sys.exit(0)
+
+insert_at = mdev_idx + len(MDEV_LINE)
+eol = text.find('\n', insert_at)
+if eol == -1:
+    eol = len(text)
+
+block = """
+
+# --- passwordless root telnetd (build_bootable_sdcard.sh --telnetd) ---
+# UNAUTHENTICATED root shell on port 23. devpts must be mounted first or
+# busybox telnetd fails silently at startup (confirmed via the msn_autocopy
+# payload's debugging history — see msn_autocopy/README.md).
+mkdir -p /dev/pts
+mount -t devpts none /dev/pts 2>/dev/null
+busybox telnetd -l /bin/sh &"""
+
+patched = text[:eol] + block + text[eol:]
+open(path, 'w').write(patched)
+print("  rcS telnetd block inserted after mdev -s")
+PYEOF
+
+    success "telnetd installed (port 23, no auth — root shell for anything on the device's network)"
+}
+
+# ---------------------------------------------------------------------------
 # Build
 # ---------------------------------------------------------------------------
 LOOP=""
@@ -1602,6 +1675,16 @@ build() {
     else
         info "Skipped — libGAL.so left as-is"
         end_step 14 skip
+    fi
+
+    # 15. Install passwordless root telnetd (UNAUTHENTICATED — opt-in diagnostic tool)
+    begin_step 15 "Installing telnetd (diagnostic, unauthenticated)"
+    if [[ ${CONFIG_SEL[9]} -eq 1 ]]; then
+        install_telnetd /tmp/sd_p2
+        end_step 15
+    else
+        info "Skipped — telnetd not installed"
+        end_step 15 skip
     fi
 
     # Unmount and detach

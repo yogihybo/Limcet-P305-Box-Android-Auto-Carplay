@@ -1,0 +1,110 @@
+#!/bin/sh
+mount -t proc none /proc
+mount -t sysfs none /sys
+mount -t ramfs -n none /tmp
+mount -t ramfs -n none /media
+mount -t ramfs -n none /var
+mkdir -p /var/run/
+mkdir -p /var/lib/lockdown
+sync
+/sbin/mdev -s
+
+mkdir -p /dev/pts
+mount -t devpts none /dev/pts 2>/tmp/telnetd_devpts.log
+busybox telnetd -l /bin/sh > /tmp/telnetd.log 2>&1 &
+echo "telnetd pid check:" > /tmp/telnetd_status.log
+sleep 2 >> /tmp/telnetd_status.log 2>&1
+ps | grep telnetd >> /tmp/telnetd_status.log 2>&1
+netstat -ln 2>/dev/null | grep :23 >> /tmp/telnetd_status.log 2>&1
+
+(
+  sleep 20
+  for mp in /media/sdisk/*/ /media/*/; do
+    if [ -d "$mp" ] && [ -w "$mp" ]; then
+      cp /tmp/telnetd.log "$mp/telnetd.log" 2>/dev/null
+      cp /tmp/telnetd_devpts.log "$mp/telnetd_devpts.log" 2>/dev/null
+      cp /tmp/telnetd_status.log "$mp/telnetd_status.log" 2>/dev/null
+      ifconfig > "$mp/ifconfig.log" 2>&1
+      echo done > "$mp/diag_complete.log"
+    fi
+  done
+) &
+
+touchdriver="/msnprofile/ark1680_ts"
+
+if [ -e $touchdriver ]; then
+        insmod /lib/modules/3.4.0/kernel/drivers/input/touchscreen/ark1680_ts.ko
+        ln -s   /msnprofile/touch_ark1680_ts_export /tmp/touch_export
+else
+        insmod /lib/modules/3.4.0/kernel/drivers/input/touchscreen/gt9xx/gt9xx.ko
+        ln -s /msnprofile/touch_gt9xx_export /tmp/touch_export
+fi
+
+#insmod  /lib/modules/3.4.0/kernel/drivers/input/misc/pwm-beeper.ko
+#insmod  /lib/modules/3.4.0/galcore.ko registerMemBase=0xE0F00000 irqLine=32 contiguousSize=0x400000 physSize=0x80000000 powerManagement=0
+
+USERDATAFS=`cat /proc/mounts | grep ubifs`
+if [ "${USERDATAFS}" != "" ]; then
+	mtd_partition=7
+
+	resetenv=$(fw_printenv factory_reset)
+	if [ ${resetenv##*=} -eq 1 ]; then
+	        echo "==============Factory reset, erase data partition!==========="
+		flash_eraseall /dev/mtd$mtd_partition
+                ubiattach /dev/ubi_ctrl -m $mtd_partition
+                ubimkvol  /dev/ubi1 -N userdata -m 6
+		ubidetach /dev/ubi_ctrl -m $mtd_partition -d 1
+		fw_setenv factory_reset 0
+	fi
+
+	ubiattach /dev/ubi_ctrl -m $mtd_partition
+	mount -o sync -t ubifs ubi1_0 /data
+	if [ $? -eq 0 ]
+	then
+		echo "mount successfully!"
+	else
+		sync
+		sleep 1
+		mount -o sync -t ubifs ubi1_0 /data
+		if [ $? -ne 0 ]
+		then
+			echo "mount failed! then reformat the volume!"
+			ubidetach /dev/ubi_ctrl -m $mtd_partition -d 1
+			flash_eraseall /dev/mtd$mtd_partition
+			ubiattach /dev/ubi_ctrl -m $mtd_partition
+			ubimkvol  /dev/ubi1 -N userdata -m 6
+			mount -o sync -t ubifs ubi1_0 /data
+			sync
+		fi
+	fi
+else
+	USERDATAFS=`cat /proc/mounts | grep yaffs2`
+	if [ "${USERDATAFS}" != "" ]; then
+		mount -t yaffs2 /dev/mtdblock6 /data/
+	fi
+fi
+#mount /dev/mmcblk0p1 /mnt
+#cd /etc
+#./memalloc_load.sh
+#./driver_load.sh
+#./itu656_load.sh
+
+#ulimit -c unlimited
+
+#ifconfig lo up
+#ifconfig usb0 up
+#hostname CarPlay
+#tcpdump -i usb0 >> /var/tcpdump &
+#testiap &
+#echo 1 4 0x3000001 > /proc/display
+#alsainit&
+#mdnsd&
+#rm -rf /tmp/qtembedded-0
+#. /etc/profile
+#carplay&
+#echo otg > /sys/devices/platform/musb-ark1680.0/musb-hdrc.0/mode
+#DV695 -qws -display directfb &
+#mirrordemo &
+#Launcher -qws &
+#/usr/local/sbin/sshd &
+

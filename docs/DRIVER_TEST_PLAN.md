@@ -62,28 +62,34 @@ documented `BoxP300` protocol (`MCU_ADAPTERS.md`).
 
 **Test steps (lowest risk first — this is a read of an existing wired
 link, not a new pin):**
-1. Confirm the device node exists and isn't claimed by another process:
-   `ls -l /dev/ttyHS0`, `fuser /dev/ttyHS0` (or `lsof` if available).
-2. **Passive listen first** — since the MCU is documented to send
-   periodic/idle status frames regardless of host activity: with nothing
-   else holding the port, `busybox microcom -s <baud> /dev/ttyHS0` (try
-   115200 first per `MCU_ADAPTERS.md`, note the doc flags baud as
-   unconfirmed for this exact link — if garbage, try 38400) or
-   `busybox cat /dev/ttyHS0 | busybox hexdump -C`. Watch for any bytes at
-   all before touching anything physical — this alone confirms whether
-   the UART is electrically live and the MCU is transmitting.
-3. If frames appear, cross-reference the `0x2E` header + command byte
+1. `killall MsnCoreApp` — the app holds `MCUPortName`/`MSNEryPortName`
+   open at runtime (confirmed via `grep -a` finding both literal strings
+   in `libMcuCenter.so`, 2026-07-14 — these aren't vestigial keys), so
+   stop it first to free the port for a passive listener. `rcS`
+   respawns it automatically, so this is non-destructive/temporary.
+2. Confirm the device node exists: `ls -l /dev/ttyHS0`.
+3. **Passive listen first** — since the MCU is documented to send
+   periodic/idle status frames regardless of host activity:
+   ```sh
+   busybox microcom -s 115200 /dev/ttyHS0        # try 38400 if garbage
+   # or, to capture to a file while watching hex:
+   busybox cat /dev/ttyHS0 | busybox hexdump -C | tee /data/ttyHS0.log
+   ```
+   Watch for any bytes at all before touching anything physical — this
+   alone confirms whether the UART is electrically live and the MCU is
+   transmitting.
+4. If frames appear, cross-reference the `0x2E` header + command byte
    against the `BoxP300` command table in `MCU_ADAPTERS.md` to confirm
    they parse as valid frames, not noise.
-4. If step 2 is silent, toggle one physical input at a time (reverse
+5. If step 3 is silent, toggle one physical input at a time (reverse
    gear, a steering-wheel button, ACC on/off — the exact procedure
    `MCU_ADAPTERS.md`'s "Capturing the codes live on the device" section
    already lays out) and watch for a frame appearing in response.
-5. Only once raw frames are confirmed: enable the app-level debug flag
+6. Only once raw frames are confirmed: enable the app-level debug flag
    (`touch /data/mcudebug_flag`, restart `MsnCoreApp`) to see the
    library's own parsed interpretation, per `MCU_ADAPTERS.md` Method A.
 
-**Pass condition:** step 2 or 4 shows real `0x2E`-prefixed frames with
+**Pass condition:** step 3 or 5 shows real `0x2E`-prefixed frames with
 sane checksums — proves the physical link and MCU firmware are alive.
 Full protocol correctness (right command decode) is a separate, later
 question from "is the wire even working."
@@ -94,7 +100,46 @@ of Linux/MsnCoreApp, so it's not expected to block this test.
 
 ---
 
-## 3. `ark_carback` (reverse-gear trigger, GPIO 5)
+## 3. MSNEry link (`/dev/ttyS2`) — unidentified secondary peripheral
+
+**Why uncertain:** unlike the `TOUCHSERIAL`/`COMMANDSERIAL=/dev/ttyS2`
+env vars in `/etc/profile` (already confirmed dead/vestigial — referenced
+by no binary), `MSNEryPortName="/dev/ttyS2"` **is** a real, live-read
+config key — `libMcuCenter.so` references the literal string
+`MSNEryPortName` (confirmed via `grep -a`, since a plain `grep -rl`
+without `-a` silently skips binary matches — don't repeat that mistake).
+What's actually on the other end of this link ("MSN Ery" — meaning
+unknown) has never been identified. This is a distinct, ordinary UART
+(`ttyS2`), not part of the hsuart pair — don't confuse it with the MCU
+link.
+
+**Goal:** identify whether anything is actually connected to this link,
+and if so, what.
+
+**Test steps (same passive-first approach as the MCU link above):**
+1. `killall MsnCoreApp` (same reasoning as above — this app is the one
+   confirmed to reference this port).
+2. `ls -l /dev/ttyS2`.
+3. Passive listen, baud unconfirmed — try 115200 first, then
+   9600/19200/38400:
+   ```sh
+   busybox microcom -s 115200 /dev/ttyS2
+   busybox cat /dev/ttyS2 | busybox hexdump -C | tee /data/ttyS2.log
+   ```
+4. If silent at every baud, toggle physical inputs one at a time while
+   watching **both** `ttyHS0` and `ttyS2` simultaneously (two sessions,
+   or background one to a log file with `tee`) — this disambiguates
+   which physical events route to which link, in case "MSN Ery" turns
+   out to be a second, distinct signal source rather than nothing at all.
+
+**Pass condition:** any real traffic identified and attributed to a
+specific source — even "confirmed silent/unused" is a useful, valid
+outcome here, since the goal is identification, not proving a feature
+works.
+
+---
+
+## 4. `ark_carback` (reverse-gear trigger, GPIO 5)
 
 **Why uncertain:** no `carback` probe line found in the latest boot log
 at all — unclear if the driver is even binding, separate from whether
@@ -133,7 +178,7 @@ correct. Test with the real signal source.
 
 ---
 
-## 4. `rn6752` camera decoder
+## 5. `rn6752` camera decoder
 
 **Why uncertain:** only the recurring `### rn6752_eq_work reset` boot-log
 line was found — no clear probe-success message, and no confirmation the
@@ -166,7 +211,7 @@ reaches the framebuffer/display pipeline when a camera is attached.
 
 ---
 
-## 5. `BD37033` audio codec — I2C control path
+## 6. `BD37033` audio codec — I2C control path
 
 **Why uncertain:** basic I2S audio output is confirmed working
 end-to-end (separate from this chip's own control interface), but no
@@ -203,7 +248,7 @@ data path.
 
 ---
 
-## 6. `/dev/ark_display` misc shim — full `MsnCoreApp` stability
+## 7. `/dev/ark_display` misc shim — full `MsnCoreApp` stability
 
 **Why uncertain:** the shim itself loads (`ark_display: registered
 /dev/ark_display`) and fixes the specific ioctl (`ARKDISP_GET_SCREEN_INFO`)
@@ -232,7 +277,7 @@ UI state, not just avoiding the one specific crash.
 
 ---
 
-## 7. `mmc1` — identify actual purpose
+## 8. `mmc1` — identify actual purpose
 
 **Why uncertain:** DTS comments it as "SDIO WiFi Controller," but WiFi is
 now confirmed to be the USB RTL8811CU instead — so `mmc1`'s real role on
@@ -265,7 +310,7 @@ feature works.
 
 ---
 
-## 8. GPIO 95 `apple_encpy_ic_rst` — confirm chip presence (not a driver test)
+## 9. GPIO 95 `apple_encpy_ic_rst` — confirm chip presence (not a driver test)
 
 **Why included here:** not a driver-readiness question like the others,
 but the same open item from `PIN_MASTER_LIST.md` — worth planning

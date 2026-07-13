@@ -50,6 +50,7 @@ From live `/sys/kernel/debug/gpio` (2026-07-13):
 | 3 | `i2c-gpio-0` SDA | **= LCD r1, conflicted** |
 | 5 | `detect` | **reverse-gear/carback trigger input** — confirmed via Ghidra decompile of `ark_carback_probe`, 2026-07-13 session 3 (see below) |
 | 81 | `lcd-power-control-gp` | also pwm3's pinctrl pin, dual use |
+| 91 | `BTEN`/`gpio91` | **Bluetooth module enable pin** (RTL8762BTV/BT825) — confirmed working, `docs/wireless_and_init_documentation.md` §1,4 (`BTEN_INTERFACE=gpio91` in `/etc/blueware-bw121.properties`, toggled via plain `/sys/class/gpio/gpio91` export/direction/value). **Falls inside the previously-flagged 85-96 "unverified" range — now resolved for this one pin**: 91 is a real, safe, in-use GPIO, not unknown/unsafe. |
 | 117, 126 | `usb_pwr` | USB power switch, two GPIOs |
 
 ## MMC/SD and USB — very likely dedicated, non-multiplexed pads, not in the PBANK_0-4 space at all
@@ -275,6 +276,22 @@ struct). Reading the actual 4-entry `struct resource[]` array (`0x805c86c8`, `ob
 | 3 | IRQ | 28 |
 
 **Cross-checked against the 4.9 DTS (`linux-arkmicro Reference/linux/arch/arm/boot/dts/ark1668.dtsi:488-505`) — it matches exactly**: `uart4: serial@e4f00000` and `uart5: serial@e4800000`, both `compatible = "arkmicro,ark-hsuart"` (the same custom driver, not generic 8250 — confirms `ark1680_hsuart_probe` is this driver's ancestor), aliased as `hsserial0`/`hsserial1` in the DTS's `aliases` node. **This means the 4.9 port's hsuart/MCU-UART node addressing is already correct** — `uart4` (`0xe4f00000`) is the MCU link (`/dev/ttyHS0` equivalent). If MCU communication isn't working on the 4.9 kernel, the bug is elsewhere (IRQ routing, clock setup, pinctrl group `pinctrl_uart4`, or the driver itself) — not the base address/IRQ mapping, which is now proven right.
+
+**`uart5` (hsuart port 1, `/dev/ttyHS1`) confirmed — this is the Bluetooth UART, not a spare.**
+Originally flagged here only as "very likely" Bluetooth from stock rootfs config
+(`blueware-bw121.properties`/`rtkbt.conf` referencing `/dev/ttyHS1`). That's now
+upgraded to confirmed: `docs/wireless_and_init_documentation.md` independently
+documents this exact interface **already working** on a real build (Realtek
+RTL8762BTV/BT825 module, `UART_INTERFACE=/dev/ttyHS1`, `UART_BAUDRATE=1500000`),
+plus a GPIO enable pin (**GPIO 91**, `BTEN_INTERFACE=gpio91`, toggled via plain
+`/sys/class/gpio/gpio91` export — no DTS `gpio-hog`/consumer node needed, it's
+driven entirely from userspace/the Feasycom daemon). So the full picture for
+`uart5`/`ttyHS1` is now: MMIO `0xe4800000`/IRQ 28 (Ghidra/board-file, this
+session) + `compatible = "arkmicro,ark-hsuart"` (4.9 DTS, matches exactly) +
+GPIO 91 enable (`wireless_and_init_documentation.md`, independently confirmed
+working) — all three sources agree, and Bluetooth is a fully accounted-for
+peripheral, not an open item. GPIO 91 also **resolves one pin out of the
+"unverified 85-96" unsafe range** below — see the GPIO table above.
 
 **`ark_nec_sw_remote` (IR) — not pursued further, not applicable to this unit.** Its
 platform_data GPIO wasn't found via Ghidra this session (no data cross-reference to its name

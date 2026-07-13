@@ -329,6 +329,9 @@ any further reverse-engineering time.
 
 ## Cross-references
 
+- `docs/PIN_BLOCK_DIAGRAM.txt` — plain-text block diagram of every
+  peripheral/pin/GPIO in this doc, for a quick at-a-glance view. Keep both
+  files in sync when either changes.
 - `docs/I2C_GPIO0_LCD_PIN_CONFLICT.md` — the LCD/i2c-gpio-0 conflict.
 - `docs/AUDIO_SUBSYSTEM_INVESTIGATION.md` — BD37033 investigation that
   led to all of this.

@@ -1,0 +1,165 @@
+ARK1668 / Limcet-P306 (Prado head unit) -- pin & block map, plain text
+======================================================================
+Generated 2026-07-13. Companion to PIN_MASTER_LIST.md, which has full
+sourcing/evidence detail for every line here -- this file is the quick
+at-a-glance version, kept in plain ASCII so it's easy to hand-edit as
+new pins get confirmed. Update both files together.
+
+Global pin numbering = bank*32 + offset (e.g. PBANK_2 offset 17 = 81).
+Matches /sys/class/gpio/gpioN 1:1 (confirmed live, no offset).
+
+Confidence tags used below:
+  [ACTIVE]     - confirmed in use right now (live debugfs / working feature)
+  [BOARD-FILE] - confirmed via stock 3.4 board-file disasm (name+addr only,
+                 or name+addr+resource if Ghidra-decompiled)
+  [GHIDRA]     - confirmed via decompiled driver probe code (strongest)
+  [DORMANT]    - board file registers it, but nothing loads/uses it on this unit
+  [UNSAFE]     - do not live-probe, see incident note at bottom
+
+
+ARK1668 SoC
+|
+|-- LCD controller (e0500000.lcd)                                    [ACTIVE]
+|     RGB888 data  r0-r7/g0-g7/b0-b7 ---------------- pins 2-25
+|     base (de/clk/vsync/hsync) ---------------------- pins 26-29
+|     LVDS alt-mode (defined, NOT selected) ---------- pins 72-75,77-78,128-129
+|
+|-- NAND controller ------------------------------------ pins 39-52
+|     data/cle/ale/ren/wen/rb0/cen0
+|     NOTE: not visible in live pinctrl debugfs; stock 3.4 doesn't route
+|     it through the generic pinctrl API either -- exact stock mux
+|     mechanism still unconfirmed, treat these pins as reserved/live.
+|
+|-- UART0 (console, the link this whole investigation used) -- pins 62-63
+|     NOTE: same invisibility caveat as NAND -- works, but mux path unconfirmed
+|-- UART1 ------------------------------------------------ pins 64-65
+|-- UART2 ------------------------------------------------ pins 66-67
+|-- UART3 ------------------------------------------------ pins 68-69
+|
+|-- UART4 == hsuart port 0 == MCU link (/dev/ttyHS0)     [GHIDRA] -- pins 119-120
+|     MMIO 0xe4f00000-0xe4f000ff, IRQ 22
+|     matches 4.9 DTS uart4 node exactly (ark1668.dtsi:488-496)
+|     pad mux: ark_sys_pad_config(reg=0x1f0, mask=0xf, shift=2, val=0xf)
+|
+|-- UART5 == hsuart port 1 (2nd instance, same platform_device as above)
+|     MMIO 0xe4800000-0xe48000ff, IRQ 28                 [GHIDRA] -- pins 123-124
+|     matches 4.9 DTS uart5 node exactly (ark1668.dtsi:498-505)
+|     pad mux: ark_sys_pad_config(reg=0x1f0, mask=0xf, shift=6, val=0xf)
+|
+|-- HW I2C0 (DesignWare, e4300000.i2c) ------------------- pins 70-71   [ACTIVE]
+|     pad mux: ark_sys_pad_config(reg=0x1e0, mask=0xf, shift=16, val=0xa)
+|     |-- Goodix-TS (GT911 touch), addr 0x5d      [BOARD-FILE][DORMANT]
+|     |     registered unconditionally by stock board file, but gt9xx.ko
+|     |     is never insmod'd on this unit (rcS loads ark1680_ts.ko instead)
+|     `-- unidentified devices, addr 0x10, 0x11   [live i2c-scan only, not board-file]
+|
+|-- i2c-gpio1 (bit-banged bus "1") -- shares GPIO2/GPIO3 with LCD r0/r1 --+
+|     `-- rn6752 camera decoder, addr 0x2c   [GHIDRA/BOARD-FILE][ACTIVE] |
+|         needs the recurring rn6752_eq_work reset workaround seen      |
+|         in every boot log -- plausible symptom of the pin-sharing     |
+|         below, not necessarily fatal to it working at all             |
+|                                                                        |
+|-- i2c-gpio2 (bit-banged bus "2") -- sda_pin=9, scl_pin=121 ------------+
+|     `-- BD37033 audio codec, addr 0x41    [GHIDRA/BOARD-FILE][ACTIVE]
+|         write-timeout log lines on every boot are a benign probe-time
+|         quirk present even in stock's own firmware, not a wiring bug
+|
+|-- i2c-gpio3 (bit-banged bus "3") -- registered, EMPTY (count=0) -- no devices
+|
+|-- PWM1 ------------------------------------------------- pin 79      [ACTIVE]
+|     backlight ("Open backlight pwm" logged every start_msn run)
+|     pad mux: ark_sys_pad_config(reg=0x1e4, mask=0x3, shift=18, val=1)
+|-- PWM2 ------------------------------------------------- pin 80
+|-- PWM3 ------------------------------------------------- pin 81
+|     == GPIO81 lcd-power-control-gp (same physical pin, dual use)
+|
+|-- I2S1 (audio) ------------------------------------------ pins 82-84, 127, 130   [ACTIVE]
+|     sync/sadata/bclk (82-84), mclk (127), sadata-in (130)
+|     pad mux: ark_sys_pad_config(reg=0x1e4, mask=0x3, shift=20, val=1)
+|
+|-- SPI -------------------------------------------------- pins 97-99
+|     clk/rxd/txd
+|
+|-- ark_carback (reverse-gear trigger) ------ GPIO 5       [GHIDRA]
+|     ark_carback_probe reads platform_device+0x50 as this GPIO, then
+|     gpio_get_value() + gpio_to_irq() + request_threaded_irq("carback")
+|     resolves the previously-unidentified "detect" consumer
+|
+|-- ark_nec_sw_remote (IR remote decoder) --- GPIO not resolved
+|     N/A on this hardware revision -- CONFIRMED no IR sensor populated,
+|     dead code on this unit, not worth further RE time
+|
+|-- customer_gpio_init() extra GPIOs:
+|     GPIO 95 -- "apple_encpy_ic_rst" -- reset line for a CarPlay/MFi
+|               auth chip, driven HIGH unconditionally at boot
+|               [BOARD-FILE, new 2026-07-13] -- not yet cross-checked
+|               against PBANK_2's pwm/i2s groups for pin conflicts
+|
+|-- Other plain-GPIO consumers (live /sys/kernel/debug/gpio, not pinctrl):
+|     GPIO 0        -- rn6752_reset            (camera decoder reset)
+|     GPIO 1, 76    -- usb_id                  (USB OTG ID pin x2)
+|     GPIO 2        -- i2c-gpio-0 SCL == LCD r0 pin  [CONFLICT, see below]
+|     GPIO 3        -- i2c-gpio-0 SDA == LCD r1 pin  [CONFLICT, see below]
+|     GPIO 117, 126 -- usb_pwr                 (USB power switch x2)
+|
+|-- MMC0 -- 0xec400000, 4-bit bus -- likely dedicated non-multiplexed pads,
+|           outside the PBANK_0-4 matrix entirely (no pinmux code found in
+|           either U-Boot or Linux for it) -- NOT PROVEN, just likely
+|
+`-- USB (ark_musb.c) -- same "likely dedicated pads" caveat as MMC0
+
+
+KNOWN PIN CONFLICT
+------------------
+i2c-gpio-0 (GPIO2=SCL, GPIO3=SDA) sits on the SAME physical pins as LCD
+RGB888's r0/r1 data lines (both are PBANK_0 offset 2/3). RGB888 mode is
+what's actually selected, so the LCD is constantly driving those pads
+with video data. Confirmed live via pinmux-pins debugfs during working
+video output. Practical effect: DON'T put anything new on GPIO2/GPIO3 --
+rn6752 already lives here and tolerates it via a reset workaround; the
+project's touch (GT911, dormant anyway) and BD37033 investigations both
+originally got misdiagnosed by assuming this bus was clean. Full writeup:
+docs/I2C_GPIO0_LCD_PIN_CONFLICT.md
+
+
+FOURTH PIN-MUX MECHANISM (why "not in the DTS" != "unconfigured")
+-------------------------------------------------------------------
+Stock 3.4 configures most pads via raw register pokes that are invisible
+to BOTH the 4.9 DTS's pinctrl groups AND live pinmux-pins debugfs:
+  1. ark_sys_pad_config(reg, mask, shift, val) -- multi-bit field RMW at
+     fixed offsets in the shared syscon block (0x1e0, 0x1e4, 0x1f0 seen
+     so far) -- i2c0/uart0-3/hsuart/audio/pwm1/mci all use this.
+  2. Direct ARK_SYS_PINMUX0 (offset 0x140) / ARK_SYS_PINMUX1 (0x144)
+     bit-clears -- used by touch (ark1680_ts) for its ADC pads.
+  3. Plain gpio_request()/gpio_direction_*() -- visible in live
+     /sys/kernel/debug/gpio but NOT in pinctrl debugfs (GPIO 95 etc).
+  4. The 4.9 kernel's pinctrl-ark.c + DTS ark,pins groups -- the only
+     mechanism visible in both the DTS and live debugfs, and only for
+     pins some node actually selects via pinctrl-0.
+When porting a peripheral to the 4.9 tree, check whether stock used (1)
+or (2) for it -- if so, the 4.9 driver needs an equivalent raw register
+poke; a pinctrl DT group alone won't reproduce it.
+
+
+UNSAFE / UNVERIFIED PIN RANGES -- DO NOT LIVE-PROBE
+-----------------------------------------------------
+  30-38, 53-61, 85-96, 100-116, 118, 121-122, 125
+A brute-force GPIO probing session on 2026-07-13 preceded an
+`mmc0: card e126 removed` -> EXT4 journal abort -> full filesystem
+corruption incident (recovered by power-cycle). Root cause was NOT
+conclusively identified -- MMC/USB are believed to be on dedicated pads
+outside this range, which would mean the incident's real cause is still
+unknown (electrical disturbance / marginal SD socket contact are the
+leading unproven theories). Treat "no claim found" for any pin in this
+range as "unverified," not "safe." Any future live test on these pins
+needs a backed-up SD card and one-pin-at-a-time discipline, not another
+brute-force sweep. See PIN_MASTER_LIST.md's "Open items" for status.
+
+
+SOURCES
+-------
+- PIN_MASTER_LIST.md          -- full sourcing/evidence for every line above
+- I2C_GPIO0_LCD_PIN_CONFLICT.md
+- AUDIO_SUBSYSTEM_INVESTIGATION.md
+- ARK1680_TS_REVERSE_ENGINEERING.md
+- MCU_ADAPTERS.md             -- McuType=6 (BoxP300), /dev/ttyHS0 protocol

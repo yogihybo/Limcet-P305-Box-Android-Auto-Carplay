@@ -25,30 +25,46 @@ filename) — where two similarly-named files existed for one peripheral
 (e.g. two carback drivers), the table lists the one whose compatible string
 actually matches this project's DTS, not the other SoC variant.
 
-| Peripheral | DTS `compatible` | Driver source | Notes |
-|---|---|---|---|
-| LCD framebuffer | `arkmicro,ark1668-lcdc` | `drivers/video/fbdev/arkmicro/ark1668_lcdfb.c` | vendor source, in-tree |
-| `/dev/ark_display` misc ioctl shim | `ark_display` (misc device, not a DT node) | `Limcet Hardware/ark_display.c` | **this project's own minimal reimplementation** of a vendor ioctl the stock kernel has and our tree originally lacked (root-caused the `start_msn` segfault — see the file's own header comment and `ARK1680_TS_REVERSE_ENGINEERING.md`). Not the framebuffer driver itself — a separate, small misc device. |
-| NAND | (`ark1668,nand`-style, see `ark1668.dtsi`) | `drivers/mtd/nand/raw/ark_nand.c` | vendor source; ECC/OOB-layout bug already found and fixed by this project this year — see `HANDOFF_nand_ecc_uboot_vs_kernel.md` |
-| UART0-3 | `arkmicro,ark-uart` | `drivers/tty/serial/ark_uart.c` | vendor source, in-tree |
-| hsuart (uart4=MCU link, uart5=Bluetooth) | `arkmicro,ark-hsuart` | `drivers/tty/serial/ark_hsuart.c` | vendor source, in-tree; confirmed this session (`ark1680_hsuart_probe`/`_request_port`) as the real driver behind `/dev/ttyHS0`/`/dev/ttyHS1` |
-| HW I2C0 | `snps,designware-i2c` | `drivers/i2c/busses/i2c-designware-{master,platdrv}.c` | **mainline upstream driver**, not vendor-specific — DesignWare IP is a standard block |
-| i2c-gpio1/2/3 (bit-banged) | `i2c-gpio` | `drivers/i2c/busses/i2c-gpio.c` | **mainline upstream driver**, generic bit-bang, nothing ARK-specific to port |
-| rn6752 camera decoder | `arkmicro,ark1668_rn6752` | `drivers/soc/arkmicro/itu656/rn6752.c` | vendor source, in-tree |
-| BD37033 audio codec | `arkmicro,drv_bd37033` | `sound/soc/arkmicro/BD37033.c` | vendor source, in-tree |
-| GT911 touch (dormant on this unit) | `goodix,gt911` | `drivers/input/touchscreen/goodix.c` | **mainline upstream driver** (not the stock 3.4 rootfs's vendor `gt9xx.ko` blob — the 4.9 tree uses the real upstream Goodix driver instead). Moot anyway since nothing loads/uses GT911 on this hardware. |
-| Resistive touch (actually used) | `arkmicro,ark1680-ts` | `drivers/input/touchscreen/ark1680_ts.c` | vendor source, in-tree — **identical copy also kept at `Limcet Hardware/ark1680_ts.c`** in this repo for reference; confirmed byte-for-byte identical (`diff -q`, 2026-07-14) |
-| PWM1-3 | `arkmicro,ark-pwm` | `drivers/pwm/pwm-ark.c` | vendor source, in-tree |
-| I2S1 + DAC/ADC codecs | (ark1668 sound bindings) | `sound/soc/arkmicro/ark_i2s.c`, `ark1668-sddac-codec.c`, `ark1668-sdadc-codec.c`, `ark_dac_codec.c`, `ark_adc_codec.c` | vendor source, in-tree |
-| SPI | `arkmicro,ark-ecspi` (ARK1668, non-`e` variant) | `drivers/spi/spi-ark.c` | vendor source, in-tree — don't confuse with `spi-arke.c` (ARK1668**e**, different SoC variant) |
-| `ark_carback` (reverse-gear trigger, GPIO 5) | `arkmicro,ark-carback` | `drivers/soc/arkmicro/ark-carback.c` | vendor source, in-tree — uses `devm_gpiod_get(&pdev->dev, "detect", ...)`, i.e. it reads the DTS's `detect-gpios` property directly. **This independently confirms GPIO 5 from the real 4.9 driver source itself**, on top of the Ghidra/stock-disassembly confirmation already in this doc. Don't confuse with `drivers/soc/arkmicro/carback/ark1668e_carback.c`, whose compatible is `arkmicro,ark1668e-carback` — a different SoC variant, not this one. |
-| `ark_nec_sw_remote` (IR) | n/a | n/a | **no IR sensor populated on this hardware revision** — confirmed by the user 2026-07-13; not worth a driver search |
-| GPIO 95 `apple_encpy_ic_rst` | none (no DT node) | none | stock-3.4-only board-init GPIO poke (`customer_gpio_init`); no known 4.9 driver/binding needed unless a CarPlay/MFi auth chip is confirmed populated on this unit |
-| GPIO 91 `BTEN` (Bluetooth enable) | none (plain sysfs) | none | userspace-only — toggled directly via `/sys/class/gpio/gpio91` by the Feasycom BT daemon (`wireless_and_init_documentation.md`); no kernel driver involved |
-| Bluetooth stack (RTL8762BTV/BT825 over `/dev/ttyHS1`) | n/a (userspace) | Feasycom/`rtkbt` userspace BT stack (rootfs, not kernel) | kernel side is just `ark_hsuart.c` above providing the tty; the BT protocol stack itself is userspace |
-| WiFi (RTL8811CU, USB) | n/a (USB autoload) | `drivers/net/wireless/realtek/rtl8811cu/` | vendor **out-of-tree Realtek driver, full source present and building** in this tree — not a binary-only blob |
-| MMC0 | `snps,dw-mshc` | `drivers/mmc/host/dw_mmc.c` | **mainline upstream driver**, no ARK-specific glue needed — Synopsys DW-MSHC is a standard IP block |
-| USB (MUSB) | `arkmicro,ark-musb` | `drivers/usb/musb/musb_ark.c` | vendor source, in-tree |
+**"Confirmed by operation" column — status key** (added 2026-07-14, cross-checked
+against `docs/new kernel bootlog new uboot v11.txt`, the most recent full boot
+log, plus dedicated docs where the boot log alone wasn't enough):
+- **CONFIRMED** — physically observed actually working (video visibly rendering,
+  audio audibly playing, a real SD card/WiFi AP/USB device enumerating), not
+  just "driver loaded without an error."
+- **PROBES OK** — the driver initializes cleanly and the log shows no error, but
+  there's no evidence in this session of the *feature* being exercised
+  end-to-end (e.g. a UART node exists, but no confirmed protocol traffic).
+- **NOT CONFIRMED** — no success evidence found either way; don't assume it works.
+- **DORMANT** — intentionally inactive on this hardware (nothing loads it, or
+  the hardware isn't populated) — not a bug, just not in use.
+- **N/A** — no kernel driver/operation concept applies.
+
+| Peripheral | DTS `compatible` | Driver source | Confirmed by operation | Notes |
+|---|---|---|---|---|
+| LCD framebuffer | `arkmicro,ark1668-lcdc` | `drivers/video/fbdev/arkmicro/ark1668_lcdfb.c` | **CONFIRMED** | video physically observed on screen across many sessions; boot log: `ark1668_lcdfb e0500000.lcd: fb0: Atmel LCDC at 0xe0500000... irq 25` |
+| `/dev/ark_display` misc ioctl shim | `ark_display` (misc device, not a DT node) | `Limcet Hardware/ark_display.c` | PROBES OK | boot log: `ark_display: registered /dev/ark_display` — confirms the shim loads and fixes the specific ioctl it targets; whether it also fully unblocks `MsnCoreApp` end-to-end wasn't separately re-verified this session |
+| NAND | (`ark1668,nand`-style, see `ark1668.dtsi`) | `drivers/mtd/nand/raw/ark_nand.c` | **CONFIRMED** (boot chain) | full stock UI boots from NAND via the `bootstock` U-Boot path (project memory, 2026-07-13); this specific boot log predates/differs from that ECC fix and still shows `ark_nand_correct_data: uncorrectable ECC error` spam — don't take *this log* as proof the ECC fix is deployed everywhere, only that NAND boot itself is a proven-working path |
+| UART0-3 | `arkmicro,ark-uart` | `drivers/tty/serial/ark_uart.c` | uart0: **CONFIRMED** (console); uart1-3: NOT CONFIRMED | uart0 is the serial console this entire investigation has been conducted over; uart1-3 have no evidence of any attached function being tested |
+| hsuart uart4 (MCU link, `/dev/ttyHS0`) | `arkmicro,ark-hsuart` | `drivers/tty/serial/ark_hsuart.c` | PROBES OK | boot log: `e4f00000.serial: ttyHS0 at MMIO 0xe4f00000 (irq = 38...) is a ARK HS UART` — tty node exists and driver loads; no evidence in this session of actual MCU protocol traffic (key events, `recv track:`, etc.) confirmed flowing over it on this kernel build |
+| hsuart uart5 (Bluetooth, `/dev/ttyHS1`) | `arkmicro,ark-hsuart` | `drivers/tty/serial/ark_hsuart.c` | **CONFIRMED** | boot log: `e4800000.serial: ttyHS1 at MMIO 0xe4800000 (irq = 44...) is a ARK HS UART`, plus `Bluetooth: HCI UART driver ver 2.3` loading; `wireless_and_init_documentation.md` documents this as an already-working, tested setup (RTL8762BTV/BT825) |
+| HW I2C0 | `snps,designware-i2c` | `drivers/i2c/busses/i2c-designware-{master,platdrv}.c` | PROBES OK | bus itself comes up; the only device on it in the DTS (Goodix-TS) fails to ACK (`Goodix-TS 1-005d: I2C communication failure: -6` — expected/consistent with GT911 being dormant, not a bus fault) |
+| i2c-gpio1/2/3 (bit-banged) | `i2c-gpio` | `drivers/i2c/busses/i2c-gpio.c` | PROBES OK | boot log confirms both buses register (`i2c-gpio i2c-gpio-0: using lines 3 (SDA) and 2 (SCL)...`, `i2c-gpio-1: using lines 9 (SDA) and 121 (SCL)...`) |
+| rn6752 camera decoder | `arkmicro,ark1668_rn6752` | `drivers/soc/arkmicro/itu656/rn6752.c` | NOT CONFIRMED | only evidence in the latest boot log is the recurring `### rn6752_eq_work reset` line — no clear probe-success message found; actual camera video not confirmed working on this kernel build this session |
+| BD37033 audio codec | `arkmicro,drv_bd37033` | `sound/soc/arkmicro/BD37033.c` | NOT CONFIRMED (codec control); I2S path itself CONFIRMED | no `bd37033` probe line found at all in the latest boot log (worth checking whether the module actually loaded on that boot); however basic I2S audio output has its own dedicated confirmed-working session (`new kernel audio working log v1.log`, `AUDIO_SUBSYSTEM_INVESTIGATION.md`'s dai-link fix) — so audio *plays*, but BD37033's own I2C-controlled volume/effects path status is unclear from this session's evidence |
+| GT911 touch (dormant on this unit) | `goodix,gt911` | `drivers/input/touchscreen/goodix.c` | **DORMANT** (confirmed inactive, not a failure) | boot log's `I2C communication failure: -6` is the *expected* signature of this being unpopulated hardware, consistent with prior conclusions — not evidence of a bug |
+| Resistive touch (actually used) | `arkmicro,ark1680-ts` | `drivers/input/touchscreen/ark1680_ts.c` | PROBES OK; physical touch input inconclusive | boot log: `input: ark1680-ts as .../input0`, `ARK1680 resistive touchscreen registered, irq=20` — driver probes cleanly; whether physical touches actually register as input events on *this* kernel build is not confirmed by this evidence alone (see `ARK1680_TS_REVERSE_ENGINEERING.md`'s mixed findings, largely gathered on stock firmware, not this kernel) |
+| PWM1-3 | `arkmicro,ark-pwm` | `drivers/pwm/pwm-ark.c` | **CONFIRMED** (backlight) | screen visibly lit/backlight functional across every working-video session |
+| I2S1 + DAC/ADC codecs | (ark1668 sound bindings) | `sound/soc/arkmicro/ark_i2s.c`, `ark1668-sddac-codec.c`, `ark1668-sdadc-codec.c`, `ark_dac_codec.c`, `ark_adc_codec.c` | **CONFIRMED** | dedicated working session/log (`new kernel audio working log v1.log`) plus the dai-link-order fix documented in `AUDIO_SUBSYSTEM_INVESTIGATION.md` |
+| SPI | `arkmicro,ark-ecspi` (ARK1668, non-`e` variant) | `drivers/spi/spi-ark.c` | NOT CONFIRMED | no evidence any SPI-attached device has been tested |
+| `ark_carback` (reverse-gear trigger, GPIO 5) | `arkmicro,ark-carback` | `drivers/soc/arkmicro/ark-carback.c` | NOT CONFIRMED | no `carback` probe line found in the latest boot log; GPIO 5 wiring itself is triple-confirmed (stock disasm, Ghidra, and this driver's own `devm_gpiod_get(pdev, "detect")` source), but an actual reverse-gear trigger test hasn't been evidenced this session |
+| `ark_nec_sw_remote` (IR) | n/a | n/a | **N/A** | no IR sensor populated on this hardware revision — confirmed by the user, 2026-07-13 |
+| GPIO 95 `apple_encpy_ic_rst` | none (no DT node) | none | **N/A** | stock-3.4-only board-init GPIO poke; not modeled in the 4.9 DTS at all, chip presence on this unit unconfirmed |
+| GPIO 91 `BTEN` (Bluetooth enable) | none (plain sysfs) | none | **CONFIRMED** | `wireless_and_init_documentation.md` documents this as part of an already-working, tested Bluetooth setup |
+| Bluetooth stack (RTL8762BTV/BT825 over `/dev/ttyHS1`) | n/a (userspace) | Feasycom/`rtkbt` userspace BT stack (rootfs, not kernel) | **CONFIRMED** | see uart5 row above |
+| WiFi (RTL8811CU, USB) | n/a (USB autoload) | `drivers/net/wireless/realtek/rtl8811cu/` | **CONFIRMED** | user-confirmed working; boot log: `wlan0: interface state UNINITIALIZED->ENABLED`, `wlan0: AP-ENABLED`, SSID `carplay_wifi` |
+| MMC0 (SD card slot) | `snps,dw-mshc` | `drivers/mmc/host/dw_mmc.c` | **CONFIRMED** | user-confirmed working; boot log: `mmc0: new SD card at address e126`, `mmcblk0: mmc0:e126 SU01G 969 MiB` |
+| MMC1 | `snps,dw-mshc` | `drivers/mmc/host/dw_mmc.c` | NOT CONFIRMED / purpose unclear | boot log shows bus-speed negotiation only (`mmc_host mmc1: card is non-removable`), no explicit device bind message captured this session — DTS comments it as "SDIO WiFi Controller," but the WiFi that's actually confirmed working is the USB RTL8811CU, so `mmc1`'s real role on this unit needs re-checking, not assumed from the DTS comment |
+| USB (MUSB) | `arkmicro,ark-musb` | `drivers/usb/musb/musb_ark.c` | **CONFIRMED** | user-confirmed working; boot log shows hub enumeration on both controllers and the WiFi dongle attached via USB |
 
 **Net takeaway**: almost every peripheral already has real, in-tree driver
 source in the buildable `linux-arkmicro` kernel tree — the stock 3.4
@@ -56,6 +72,18 @@ disassembly work in this doc was about recovering **wiring/pin ground
 truth** (which the 4.9 *driver* code doesn't tell you), not about missing
 driver code. The two genuine gaps are IR (hardware not populated, moot) and
 GPIO 95's CarPlay/MFi chip (presence on this unit still unconfirmed).
+
+**Second net takeaway, from the "confirmed by operation" column**: source
+existing and a driver probing cleanly is a materially weaker claim than
+something being *observed working*. Only WiFi, USB, MMC0, the LCD/backlight,
+I2S audio, uart0 console, and Bluetooth are actually confirmed operating
+end-to-end. Several other peripherals with clean driver source and a
+successful probe in the boot log — the MCU link (`ttyHS0`), carback, rn6752,
+BD37033's own I2C control path, and resistive touch's actual finger-touch
+behavior — have **not** been confirmed to functionally work on this exact
+4.19 kernel build this session, and shouldn't be assumed to just because
+their driver loads without an error. Worth prioritizing an actual functional
+test for these before treating them as "done."
 
 ## Confirmed claimed — visible in pinctrl DTS + live debugfs
 

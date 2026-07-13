@@ -16,6 +16,14 @@ Confidence tags used below:
   [DORMANT]    - board file registers it, but nothing loads/uses it on this unit
   [UNSAFE]     - do not live-probe, see incident note at bottom
 
+Note (2026-07-14): [ACTIVE] here means "wiring/pin confirmed genuinely in
+use," NOT "confirmed working end-to-end on the current 4.19 kernel build."
+Those are different claims -- see PIN_MASTER_LIST.md's "Driver source
+reference" table, whose new "Confirmed by operation" column cross-checks
+each peripheral against the actual boot log. Notably: rn6752 and BD37033
+are wiring-[ACTIVE] but NOT operationally confirmed this session (no clean
+probe-success line found in the latest boot log) -- don't conflate the two.
+
 
 Driver column key: "vendor, in-tree" = real vendor driver source already
 present in the buildable linux-arkmicro tree (path given). "mainline" =

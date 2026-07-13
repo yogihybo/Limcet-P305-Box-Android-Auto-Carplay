@@ -14,6 +14,49 @@ Global pin numbering = `bank * 32 + offset` (confirmed via
 This matches `/sys/class/gpio/gpioN` 1:1 on this board (confirmed via
 live `gpio-ranges` debugfs — direct mapping, no offset).
 
+## Driver source reference (2026-07-14)
+
+For every peripheral above/below: which driver claims it, where that driver's
+source actually lives, and how solid that is. `linux-arkmicro` paths are
+relative to `/home/osboxes/Downloads/linux-arkmicro/linux/`. **Checked
+against the tree directly this session** (grepped for each DTS `compatible`
+string against the actual driver's `of_match_table`, not assumed from
+filename) — where two similarly-named files existed for one peripheral
+(e.g. two carback drivers), the table lists the one whose compatible string
+actually matches this project's DTS, not the other SoC variant.
+
+| Peripheral | DTS `compatible` | Driver source | Notes |
+|---|---|---|---|
+| LCD framebuffer | `arkmicro,ark1668-lcdc` | `drivers/video/fbdev/arkmicro/ark1668_lcdfb.c` | vendor source, in-tree |
+| `/dev/ark_display` misc ioctl shim | `ark_display` (misc device, not a DT node) | `Limcet Hardware/ark_display.c` | **this project's own minimal reimplementation** of a vendor ioctl the stock kernel has and our tree originally lacked (root-caused the `start_msn` segfault — see the file's own header comment and `ARK1680_TS_REVERSE_ENGINEERING.md`). Not the framebuffer driver itself — a separate, small misc device. |
+| NAND | (`ark1668,nand`-style, see `ark1668.dtsi`) | `drivers/mtd/nand/raw/ark_nand.c` | vendor source; ECC/OOB-layout bug already found and fixed by this project this year — see `HANDOFF_nand_ecc_uboot_vs_kernel.md` |
+| UART0-3 | `arkmicro,ark-uart` | `drivers/tty/serial/ark_uart.c` | vendor source, in-tree |
+| hsuart (uart4=MCU link, uart5=Bluetooth) | `arkmicro,ark-hsuart` | `drivers/tty/serial/ark_hsuart.c` | vendor source, in-tree; confirmed this session (`ark1680_hsuart_probe`/`_request_port`) as the real driver behind `/dev/ttyHS0`/`/dev/ttyHS1` |
+| HW I2C0 | `snps,designware-i2c` | `drivers/i2c/busses/i2c-designware-{master,platdrv}.c` | **mainline upstream driver**, not vendor-specific — DesignWare IP is a standard block |
+| i2c-gpio1/2/3 (bit-banged) | `i2c-gpio` | `drivers/i2c/busses/i2c-gpio.c` | **mainline upstream driver**, generic bit-bang, nothing ARK-specific to port |
+| rn6752 camera decoder | `arkmicro,ark1668_rn6752` | `drivers/soc/arkmicro/itu656/rn6752.c` | vendor source, in-tree |
+| BD37033 audio codec | `arkmicro,drv_bd37033` | `sound/soc/arkmicro/BD37033.c` | vendor source, in-tree |
+| GT911 touch (dormant on this unit) | `goodix,gt911` | `drivers/input/touchscreen/goodix.c` | **mainline upstream driver** (not the stock 3.4 rootfs's vendor `gt9xx.ko` blob — the 4.9 tree uses the real upstream Goodix driver instead). Moot anyway since nothing loads/uses GT911 on this hardware. |
+| Resistive touch (actually used) | `arkmicro,ark1680-ts` | `drivers/input/touchscreen/ark1680_ts.c` | vendor source, in-tree — **identical copy also kept at `Limcet Hardware/ark1680_ts.c`** in this repo for reference; confirmed byte-for-byte identical (`diff -q`, 2026-07-14) |
+| PWM1-3 | `arkmicro,ark-pwm` | `drivers/pwm/pwm-ark.c` | vendor source, in-tree |
+| I2S1 + DAC/ADC codecs | (ark1668 sound bindings) | `sound/soc/arkmicro/ark_i2s.c`, `ark1668-sddac-codec.c`, `ark1668-sdadc-codec.c`, `ark_dac_codec.c`, `ark_adc_codec.c` | vendor source, in-tree |
+| SPI | `arkmicro,ark-ecspi` (ARK1668, non-`e` variant) | `drivers/spi/spi-ark.c` | vendor source, in-tree — don't confuse with `spi-arke.c` (ARK1668**e**, different SoC variant) |
+| `ark_carback` (reverse-gear trigger, GPIO 5) | `arkmicro,ark-carback` | `drivers/soc/arkmicro/ark-carback.c` | vendor source, in-tree — uses `devm_gpiod_get(&pdev->dev, "detect", ...)`, i.e. it reads the DTS's `detect-gpios` property directly. **This independently confirms GPIO 5 from the real 4.9 driver source itself**, on top of the Ghidra/stock-disassembly confirmation already in this doc. Don't confuse with `drivers/soc/arkmicro/carback/ark1668e_carback.c`, whose compatible is `arkmicro,ark1668e-carback` — a different SoC variant, not this one. |
+| `ark_nec_sw_remote` (IR) | n/a | n/a | **no IR sensor populated on this hardware revision** — confirmed by the user 2026-07-13; not worth a driver search |
+| GPIO 95 `apple_encpy_ic_rst` | none (no DT node) | none | stock-3.4-only board-init GPIO poke (`customer_gpio_init`); no known 4.9 driver/binding needed unless a CarPlay/MFi auth chip is confirmed populated on this unit |
+| GPIO 91 `BTEN` (Bluetooth enable) | none (plain sysfs) | none | userspace-only — toggled directly via `/sys/class/gpio/gpio91` by the Feasycom BT daemon (`wireless_and_init_documentation.md`); no kernel driver involved |
+| Bluetooth stack (RTL8762BTV/BT825 over `/dev/ttyHS1`) | n/a (userspace) | Feasycom/`rtkbt` userspace BT stack (rootfs, not kernel) | kernel side is just `ark_hsuart.c` above providing the tty; the BT protocol stack itself is userspace |
+| WiFi (RTL8811CU, USB) | n/a (USB autoload) | `drivers/net/wireless/realtek/rtl8811cu/` | vendor **out-of-tree Realtek driver, full source present and building** in this tree — not a binary-only blob |
+| MMC0 | `snps,dw-mshc` | `drivers/mmc/host/dw_mmc.c` | **mainline upstream driver**, no ARK-specific glue needed — Synopsys DW-MSHC is a standard IP block |
+| USB (MUSB) | `arkmicro,ark-musb` | `drivers/usb/musb/musb_ark.c` | vendor source, in-tree |
+
+**Net takeaway**: almost every peripheral already has real, in-tree driver
+source in the buildable `linux-arkmicro` kernel tree — the stock 3.4
+disassembly work in this doc was about recovering **wiring/pin ground
+truth** (which the 4.9 *driver* code doesn't tell you), not about missing
+driver code. The two genuine gaps are IR (hardware not populated, moot) and
+GPIO 95's CarPlay/MFi chip (presence on this unit still unconfirmed).
+
 ## Confirmed claimed — visible in pinctrl DTS + live debugfs
 
 | Pins (global) | Bank/offset | Function | Source |

@@ -11,6 +11,7 @@ The Prado unit uses Holden firmware as its base but requires hardware-specific o
 - [3.0 Boot Sequence (stock NAND)](#30-boot-sequence-stock-nand)
 - [4.0 U-Boot Prompt](#40-u-boot-prompt)
 - [5.0 Booting from SD Card or USB (non-destructive)](#50-booting-from-sd-card-or-usb-non-destructive)
+- [5.5 Custom U-Boot Boot Chain (`ark1668_limcet_p305`)](#55-custom-u-boot-boot-chain-ark1668_limcet_p305)
 - [6.0 Build & Flash Tool](#60-build--flash-tool)
 - [7.0 Flashing via SD Card](#70-flashing-via-sd-card)
 - [8.0 Repository Structure](#80-repository-structure)
@@ -383,6 +384,48 @@ The kernel sees the USB drive as `/dev/sda`. The ARK1668 uses MUSB (not EHCI) �
 ### Console on screen
 
 Both the [Manual SD Card Boot](#manual-sd-card-boot) and manual USB boot `bootargs` above include `console=tty0`. Once the kernel initialises the LCD framebuffer (`CONFIG_FB_ARK1668LCD`), boot messages and a login prompt are mirrored to the screen via `fbcon`. The U-Boot phase itself is serial-only (no video console compiled into U-Boot).
+
+## 5.5 Custom U-Boot Boot Chain (`ark1668_limcet_p305`)
+
+Everything in sections 3.0–5.0 above describes the **stock/patched-Holden-binary** era of this project. Since then, a full custom U-Boot board port (`ark1668_limcet_p305`, U-Boot 2018.07, compiled from `linux-arkmicro` source — not a patched stock binary) has been built up and is now the actively developed path. This section documents its current, confirmed-working state. Full technical/RE detail: [`docs/HANDOFF_nand_ecc_uboot_vs_kernel.md`](docs/HANDOFF_nand_ecc_uboot_vs_kernel.md) and [`docs/UBOOT_BOOTLOGO_AND_RE_PORTS.md`](docs/UBOOT_BOOTLOGO_AND_RE_PORTS.md).
+
+**Build tree:** `/home/osboxes/Downloads/linux-arkmicro/u-boot` (separate git repo from this one — see that repo's own history for board-port commits).
+
+### Boot commands
+
+| Command | Effect | Status |
+|---------|--------|--------|
+| `bootmmc` | Kernel+DTB from SD (`kernelfile`/`dtbfile` env vars), rootfs on SD (`mmcroot`, default `/dev/mmcblk0p2`) | **Confirmed working** |
+| `bootusb` | Same as `bootmmc`, kernel+DTB from a USB stick instead; rootfs still on SD | **Confirmed working** |
+| `bootstock` | Chainloads the real stock U-Boot 2012.10 binary from an SD file (`stockubootfile`, default `stock_uboot.bin`), which then boots the stock kernel+rootfs+**full UI** from NAND with its own driver | **Confirmed working end-to-end** |
+| `bootstockusb` | Same as `bootstock`, stock U-Boot binary sourced from USB instead of SD — NAND is still where the kernel/rootfs come from either way, USB/SD only supplies the stock U-Boot binary itself for that one handoff | Same code path as `bootstock`, not independently hardware-tested |
+| `bootnand` | Direct kernel boot from NAND using *this* fork's own NAND driver (`run nandboot`) | NAND read fixed and reliable; kernel entry itself hangs — see below |
+| `nandoobcheck <offset-hex>` | Diagnostic: raw OOB dump of a NAND page, bypassing ECC/BBT interpretation | Diagnostic tool, not a boot path |
+| `switchecc <0\|1\|2>` | Switch the NAND driver's ECC scheme (0=normal, 1=bootstrap, 2=this chip's real kernel/rootfs/bootloader format) | `switchecc 2` is what fixed `bootnand`'s NAND reads |
+
+**Default (non-interrupted) autoboot order:** `bootusb` → `bootstockusb` → `bootstock` → `run nandboot` (last resort). Import of `uEnv.txt` from the SD card happens first and can override this (or any env var) without recompiling.
+
+**Practical recommendation:** for a fully working boot to the real stock UI right now, use `bootstock`/`bootstockusb` (or just let default autoboot reach it) — not `bootnand`, which reads NAND correctly but hangs at kernel entry for reasons not yet found (this fork's 2018.07 U-Boot handing off to the stock 3.4 kernel is unproven territory; `bootstock` sidesteps it by handing the kernel boot to the binary it was actually built against).
+
+### NAND ECC — what was actually wrong
+
+This chip's real on-flash format for kernel/rootfs/bootloader-type partitions is a 1024-byte ECC step (2 segments/page), 13-byte/7-bit BCH strength, ECC bytes at OOB offset 3 — not what the original driver assumed. Confirmed by reading the `BCH_CR` register live off a *working* stock U-Boot prompt right after a real successful read. Fixed in both the U-Boot and kernel `ark_nand.c` drivers (kernel side patched in source, not yet hardware-tested). Full writeup: [`docs/HANDOFF_nand_ecc_uboot_vs_kernel.md`](docs/HANDOFF_nand_ecc_uboot_vs_kernel.md) §1–2.
+
+The `U-boot` NAND partition itself is a separate story — proven unreadable by *any* U-Boot-level tool (this driver, any ECC mode, or stock's own native `switchecc`). Stepldr reads it via a raw path that bypasses `BCH_CR`/ECC entirely, confirmed via `objdump` disassembly of the real `Stepldr.bin`. Not a bug — `bootstock`/`bootstockusb` correctly source the stock binary from a file instead.
+
+### `build_bootable_sdcard.sh` — current capabilities
+
+Beyond what's described in [Building the SD image with `build_bootable_sdcard.sh`](#building-the-sd-image-with-build_bootable_sdcardsh) above (which predates this board port), the script now also:
+
+| Flag | Effect |
+|------|--------|
+| `--new-uboot` (default on) / `--no-new-uboot` | Use the freshly compiled `ark1668_limcet_p305` U-Boot instead of stock |
+| `--new-kernel` (default on) / `--no-new-kernel` | Use the freshly compiled Limcet P305 kernel instead of the stock 3.4 kernel |
+| `--stock-uboot PATH` / `--no-stock-uboot` | Copy a stock U-Boot binary to `p1/stock_uboot.bin` for `bootstock`. Defaults to the dump already in this repo (`Prado firmware dump/mtd1-mtd2_uboot/extracted/uboot.bin`) |
+| `--bootlogo PATH` | Raw 800×480×32bpp framebuffer (see `convert_bootlogo.py`) copied to `p1/bootlogo.raw` for the compiled U-Boot's boot logo |
+| `--diag-tools PATH` (repeatable) / `--no-diag-tools` | Install extra static ARM diagnostic binaries to p2's `/usr/bin`, on top of the defaults (`tools/i2c-scan`, `tools/ark1680-ts-test`, `tools/lcd-test`, `tools/strace`) |
+
+All of `kernelfile`, `dtbfile`, `mmcroot`, `bootargs_common`, `stockubootfile`, `machid` are U-Boot env vars with compiled-in defaults (see [Boot commands](#boot-commands) above) — editable via `setenv` at the prompt or by dropping a `uEnv.txt` on the SD card's p1, without recompiling U-Boot or rerunning the build script.
 
 ## 6.0 Build & Flash Tool
 
@@ -779,6 +822,10 @@ See [`docs/SOURCES.md`](docs/SOURCES.md) for full provenance of each file.
 - [`KERNEL.md`](docs/KERNEL.md) — kernel image analysis (`mtd5_kernel/zImage`)
 - [`UBOOT_BUILD_PLAN.md`](docs/UBOOT_BUILD_PLAN.md) — plan for compiling a fresh U-Boot from `linux-arkmicro` source, with config deltas and an SD-only test sequence
 - [`UBOOT_SDBOOT_INVESTIGATION.md`](docs/UBOOT_SDBOOT_INVESTIGATION.md) — U-Boot SD-boot patch corruption investigation and the self-contained-script fix
+- [`UBOOT_BOOTLOGO_AND_RE_PORTS.md`](docs/UBOOT_BOOTLOGO_AND_RE_PORTS.md) — boot logo, reverse-engineered command ports (`regr`/`regw`/`gpiotest`/`jpeghw`/`itu656`), LCD timing fix, USB dual-port bring-up, and the Stepldr chainload findings for the custom `ark1668_limcet_p305` U-Boot port (see [§5.5](#55-custom-u-boot-boot-chain-ark1668_limcet_p305))
+- [`HANDOFF_nand_ecc_uboot_vs_kernel.md`](docs/HANDOFF_nand_ecc_uboot_vs_kernel.md) — the NAND ECC root cause (U-Boot fixed and confirmed, kernel fixed in source but untested), why the `U-boot` NAND partition is unreadable by any U-Boot-level tool, and every patch behind [§5.5](#55-custom-u-boot-boot-chain-ark1668_limcet_p305)
+- [`HANDOFF_touch_and_bootargs_fix.md`](docs/HANDOFF_touch_and_bootargs_fix.md) — touchscreen I2C bus fix, SD bootargs fix, and the NAND "417 false bad blocks" ECC/BBT investigation
+- [`KERNEL_BUILD_REFERENCE.md`](docs/KERNEL_BUILD_REFERENCE.md) — kernel build tree reference: DTS, I2C bus assignments, camera decoder chip
 - [`SD_BOOT_PLAN.md`](docs/SD_BOOT_PLAN.md) — historical SD-boot planning doc (superseded, still useful background)
 - [`ARKDATA_VARIANTS.md`](docs/ARKDATA_VARIANTS.md) — panel display configuration presets and their register-level meaning
 - [`SETTINGS_REFERENCE.md`](docs/SETTINGS_REFERENCE.md) — full key-by-key reference for `MsnProductInfo.ini` and `FactoryConfig.ini`: load sequence, every setting grouped by function, and cross-product value tables

@@ -41,10 +41,12 @@ ARK1668 SoC
 |     matches 4.9 DTS uart4 node exactly (ark1668.dtsi:488-496)
 |     pad mux: ark_sys_pad_config(reg=0x1f0, mask=0xf, shift=2, val=0xf)
 |
-|-- UART5 == hsuart port 1 (2nd instance, same platform_device as above)
-|     MMIO 0xe4800000-0xe48000ff, IRQ 28                 [GHIDRA] -- pins 123-124
+|-- UART5 == hsuart port 1 == Bluetooth (/dev/ttyHS1)     [ACTIVE][GHIDRA]
+|     MMIO 0xe4800000-0xe48000ff, IRQ 28 -- pins 123-124
 |     matches 4.9 DTS uart5 node exactly (ark1668.dtsi:498-505)
 |     pad mux: ark_sys_pad_config(reg=0x1f0, mask=0xf, shift=6, val=0xf)
+|     Realtek RTL8762BTV/BT825, UART_BAUDRATE=1500000, enable pin = GPIO 91
+|     confirmed working -- docs/wireless_and_init_documentation.md
 |
 |-- HW I2C0 (DesignWare, e4300000.i2c) ------------------- pins 70-71   [ACTIVE]
 |     pad mux: ark_sys_pad_config(reg=0x1e0, mask=0xf, shift=16, val=0xa)
@@ -100,6 +102,8 @@ ARK1668 SoC
 |     GPIO 1, 76    -- usb_id                  (USB OTG ID pin x2)
 |     GPIO 2        -- i2c-gpio-0 SCL == LCD r0 pin  [CONFLICT, see below]
 |     GPIO 3        -- i2c-gpio-0 SDA == LCD r1 pin  [CONFLICT, see below]
+|     GPIO 91       -- BTEN (Bluetooth enable) -- confirmed working, plain
+|                       sysfs export/direction/value, no DTS node needed
 |     GPIO 117, 126 -- usb_pwr                 (USB power switch x2)
 |
 |-- MMC0 -- 0xec400000, 4-bit bus -- likely dedicated non-multiplexed pads,
@@ -143,7 +147,8 @@ poke; a pinctrl DT group alone won't reproduce it.
 
 UNSAFE / UNVERIFIED PIN RANGES -- DO NOT LIVE-PROBE
 -----------------------------------------------------
-  30-38, 53-61, 85-96, 100-116, 118, 121-122, 125
+  30-38, 53-61, 85-96 (except 91, now confirmed BTEN), 100-116, 118,
+  121-122, 125
 A brute-force GPIO probing session on 2026-07-13 preceded an
 `mmc0: card e126 removed` -> EXT4 journal abort -> full filesystem
 corruption incident (recovered by power-cycle). Root cause was NOT
@@ -163,3 +168,4 @@ SOURCES
 - AUDIO_SUBSYSTEM_INVESTIGATION.md
 - ARK1680_TS_REVERSE_ENGINEERING.md
 - MCU_ADAPTERS.md             -- McuType=6 (BoxP300), /dev/ttyHS0 protocol
+- wireless_and_init_documentation.md -- Bluetooth (ttyHS1/GPIO91) + WiFi setup

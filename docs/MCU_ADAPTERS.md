@@ -174,11 +174,22 @@ touch /data/mcudebug_flag_msn    # gates the MSN-side logging
 ```
 The app likely reads the flag at startup, so restart it (or reboot):
 ```sh
-killall MsnCoreApp               # init/rcS respawns it
+killall MsnCoreApp
 ```
+**Correction, 2026-07-14: it is not `rcS`/`init` that respawns this app** —
+checked both this session, neither autostarts it. The actual mechanism is an
+unconditional `MsnCoreApp -qws&` in `/etc/profile`, which fires on *every new
+login shell* (every fresh SSH/serial/telnet session sources `/etc/profile`).
+So `killall` alone is durable within your current shell session, but opening
+a *new* login session will relaunch it — and this project's own reconstructed
+rootfs (`Prado firmware reconstructed/mtd6_rootfs/rootfs/etc/profile`) has
+had that line (and `MsnFirstInit`, same file) commented out as of 2026-07-14
+specifically so driver testing (`docs/DRIVER_TEST_PLAN.md`) isn't fighting
+this. Run `MsnCoreApp -qws&` by hand when you actually want it running.
+
 Then watch its debug output. Qt `qDebug` goes to stderr — on this unit that is the
 **serial debug console** (`/dev/ttyS0`, 115200 8N1 — the console in README §2),
-*unless* the launch script (`/etc/rc.d/rcS` / the MsnCoreApp start line) redirects
+*unless* the launch script (`/etc/profile` / the MsnCoreApp start line) redirects
 it to `/dev/null`. If it does, either edit that line to
 `>> /data/msn.log 2>&1`, or run the app by hand from the SSH shell to see output:
 ```sh
@@ -533,18 +544,38 @@ overwrite the MCU firmware. The MCU chip should still contain `Limcet-V1.0-1302`
 
 ---
 
-## MCU role — touch AND key events
+## MCU role — key/status events (NOT touch — see retraction below)
 
 The Limcet MCU is an **STM32F105RBT6** (ARM Cortex-M3, 72MHz, 128KB Flash, LQFP64)
 on the DC_LIMCET_MB_REV_003 board. It handles:
-- **Touchscreen input** — the advanced factory menu MCU Monitor shows raw touch events
 - **Steering wheel buttons** — ADC voltage divider from SWC input wire
 - **Panel buttons** — physical buttons on the head unit bezel
 - **ACC/IGN detection** — power management
 - **Reverse signal** — triggers camera view
 
 All events arrive at the ARK1668 via `/dev/ttyHS0` using the Limcet protocol (`McuType=6`).
-Because touchscreen works, the MCU↔ARK1668 UART link is confirmed functional.
+
+> **⚠️ RETRACTED (2026-07-11):** this section previously listed touchscreen
+> input as an MCU-forwarded event, based on the MCU Monitor factory-menu
+> screen. That's now contradicted by three independent findings — see
+> `docs/ARK1680_TS_REVERSE_ENGINEERING.md`:
+> 1. Direct on-screen observation that the MCU Monitor only shows CAN-bus
+>    activity, not touch.
+> 2. A live `/dev/ttyHS0` byte capture (`busybox cat | hexdump -C`) showing
+>    **zero traffic at all**, not even the idle status frames this doc
+>    elsewhere says should appear regardless of touch.
+> 3. The stock rootfs's own `/etc/ts.conf` (`module_raw input`) and
+>    `/etc/profile` (`TSLIB_TSDEVICE=/dev/input/event0`) authoritatively
+>    confirm tslib reads touch from a **kernel evdev device**
+>    (`gt9xx.ko`/`ark1680_ts.ko`), not any serial link. A separate pair of
+>    env vars in that same profile (`TOUCHSERIAL`/`COMMANDSERIAL=/dev/ttyS2`)
+>    turned out to be dead/vestigial — referenced by no binary anywhere in
+>    the rootfs, likely inherited from a shared SDK template used by other
+>    `ark1668` products that do have a serial touch controller.
+>
+> Net effect: the MCU↔ARK1668 UART link being "confirmed functional" via
+> touch no longer holds — that claim should be re-derived from something
+> else (e.g. SWC/CAN activity) if needed elsewhere in this doc.
 
 ---
 

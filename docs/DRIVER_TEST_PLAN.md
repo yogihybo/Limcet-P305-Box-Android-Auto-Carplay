@@ -65,8 +65,14 @@ link, not a new pin):**
 1. `killall MsnCoreApp` — the app holds `MCUPortName`/`MSNEryPortName`
    open at runtime (confirmed via `grep -a` finding both literal strings
    in `libMcuCenter.so`, 2026-07-14 — these aren't vestigial keys), so
-   stop it first to free the port for a passive listener. `rcS`
-   respawns it automatically, so this is non-destructive/temporary.
+   stop it first to free the port for a passive listener. **Not `rcS`,
+   as previously assumed** — the actual respawn mechanism was an
+   unconditional `MsnCoreApp -qws&` in `/etc/profile` firing on every new
+   login shell, now commented out in this project's own reconstructed
+   rootfs (`.../rootfs/etc/profile`, 2026-07-14) specifically so this
+   kind of test isn't fought by it. On that rootfs, `killall` is now
+   durable; on stock/unmodified `/etc/profile`, a fresh login session
+   would still relaunch it.
 2. Confirm the device node exists: `ls -l /dev/ttyHS0`.
 3. **Passive listen first** — since the MCU is documented to send
    periodic/idle status frames regardless of host activity:

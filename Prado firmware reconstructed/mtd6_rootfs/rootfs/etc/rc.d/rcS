@@ -103,4 +103,13 @@ modprobe rtl8811cu
 mkdir -p /data
 touch /data/udhcpd.leases
 
-/etc/wifi_ap.sh &
+# Switched to WiFi client (STA) mode 2026-07-14, for easier SSH/testing
+# access during development -- joins a real local network instead of
+# hosting the carplay_wifi AP. A single WiFi radio generally can't be an
+# AP and a client at once, so this replaces (doesn't run alongside) the
+# AP. etc/wifi_ap.sh is untouched and still works if run manually -- see
+# docs/DRIVER_TEST_PLAN.md and the comment at the top of each script.
+# EDIT etc/wifi_client.conf with your real SSID/password before relying
+# on this.
+#/etc/wifi_ap.sh &
+/etc/wifi_client.sh &

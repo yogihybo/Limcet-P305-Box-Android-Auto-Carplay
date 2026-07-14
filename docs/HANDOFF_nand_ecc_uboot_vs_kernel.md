@@ -334,3 +334,102 @@ informational curiosity (feature already works, on both stock and this
 build), not a bug -- pick up only if there's a specific reason to want the
 exact mechanism (e.g., porting it somewhere, or the feature breaks on a
 future change).
+
+---
+
+## 6. `bootusb` USB rootfs -- fixed in source, real USB detection issue found separately
+
+### root=/userdata device-following fix
+`bootusb` previously always used `mmcroot` for the kernel's `root=` bootarg
+regardless of which interface it was actually called with -- it loaded the
+kernel from USB but still told it to mount root from the SD card. Fixed:
+new `usbroot` env var (default `/dev/sda2`), `boot_from_block_dev()` now
+picks `mmcroot` vs `usbroot` based on the actual interface. Also fixed a
+stale status-print bug in `do_bootusb()` that kept printing the old
+`mmcroot` value regardless of the actual fix (cosmetic, not functional,
+but confusing to debug against). Separately, `build_bootable_sdcard.sh`'s
+`rcS` patch for mounting `/data` (userdata) was hardcoded to
+`/dev/mmcblk0p3` -- now derives the device at runtime from the kernel's
+own `root=` bootarg (`ROOTDEV`/`USERDATADEV` in the generated `rcS`), so
+userdata correctly follows onto `/dev/sda3` when booted via USB. Verified
+by running the actual patch logic against the real rootfs `rcS` and
+checking the result with `sh -n` -- not yet hardware-tested end-to-end.
+
+### USB storage device not detected on port 0 -- real, unresolved, separate issue
+While testing the above: the USB stick was not detected as a storage
+device, neither by this U-Boot's own `usb start` (`0 Storage Device(s)
+found`) nor by the kernel (`dmesg`/`lsmod`/`/sys/bus/usb/devices/` all
+agree nothing enumerates on bus 1). This is a **different, deeper issue**
+than the `root=` fix above and was NOT resolved tonight. What's confirmed:
+
+- This board has two independent MUSB controllers/ports (established
+  earlier this session for the U-Boot USB dual-port work): port 1
+  (`musb-hdrc.1`, GPIO `ID=1`/`PWR=117`) is hardwired to the onboard WiFi
+  module (`rtl8811cu`/`rtl8821cu`) and always enumerates successfully.
+  Port 0 (`musb-hdrc.0`, GPIO `ID=76`/`PWR=126`) is the external,
+  user-accessible port -- controller initializes cleanly
+  (`musb_ark_probe succss`), but no device has ever been seen to enumerate
+  on it under the kernel, even with a stick physically plugged in at boot.
+- `usb-storage` and the MUSB host driver are compiled directly into the
+  kernel (`CONFIG_USB_STORAGE=y`, `CONFIG_USB_MUSB_HDRC=y`, not modules --
+  confirmed via `lsmod` showing neither, and the kernel config), so this
+  isn't a missing-module problem.
+- The port itself is known-good electrically -- stock U-Boot successfully
+  read a kernel file off a USB stick on this exact port earlier in the
+  session, ruling out a simple hardware/cabling fault.
+- The WiFi module's successful detection proves the kernel's underlying
+  USB hotplug/enumeration mechanism works correctly in general (Linux's
+  hub driver treats "device already connected when the hub thread starts
+  polling" identically to a genuine hotplug event -- there's no separate
+  code path), which rules out "hotplug detection is fundamentally broken"
+  as an explanation. The issue is specific to port 0, not the driver stack
+  in general.
+- Leading unconfirmed theory: something specific to port 0's runtime
+  connect-detection (GPIO ID-pin sensing, VBUS sensing, or MUSB's
+  software-emulated root-hub status-change reporting for that specific
+  port) isn't working, even though the controller's own init/probe
+  succeeds. Not yet isolated further -- would need either comparing
+  `/sys/kernel/debug/gpio` (or a raw register read via `devmem`/`md.l` at
+  `GPIO_BASE + (2*0x20) + 0x04 = 0xE4600044`, bit 12 for pin 76) between
+  stick-plugged and stick-unplugged states, or reading the actual kernel
+  MUSB driver source for how it differs between initial-probe detection
+  and ongoing hotplug polling.
+
+---
+
+## 7. `help` command corruption -- real fix applied, did NOT resolve it, deprioritized as cosmetic
+
+On real hardware, running `help` (no arguments) on this build reproducibly
+corrupts its own printed output -- garbled `▒` characters scattered through
+the list, the `md` command missing from its expected alphabetical position,
+`mm`/`mmc` entries corrupted mid-description, the final `version` line
+truncated mid-sentence. **100% reproducible on every fresh boot** (not
+session-state-dependent), and **specific to `help`** -- other long-output
+commands don't show it, which rules out a serial/UART hardware issue.
+
+**Fix applied, ruled out as the (sole) cause:** `_do_help()`
+(`common/command.c`, core U-Boot, not board-specific) built its sorted
+command list in a stack-allocated VLA (`cmd_tbl_t *cmd_array[cmd_items]`)
+sized by the total number of registered commands, several stack frames
+deep in the command-dispatch chain, with no bound -- a real, legitimate bug
+given how large this board's command table has grown across sessions.
+Fixed by heap-allocating it instead (with proper `free()` on both return
+paths). **Corruption persisted after this fix, on real hardware** -- so
+either this wasn't the actual cause, or it's one of multiple contributing
+factors. The heap-allocation fix is still correct and worth keeping
+regardless (removes a genuine unbounded-stack-growth risk), just not a
+complete explanation.
+
+**Not yet tried:** U-Boot's `printf()` itself (`lib/vsprintf.c`) allocates
+a `~538`-byte (`CONFIG_SYS_PBSIZE`) buffer on the stack on *every single
+call* -- `_do_help()`'s print loop calls it repeatedly (once per command,
+70+ times) from deep in the dispatch chain, a pattern that doesn't occur
+elsewhere in this codebase. Flagged as a real candidate but not confirmed
+or fixed -- would need actual stack-frame/disassembly analysis to verify,
+not just static reading.
+
+**Status: deprioritized.** User confirmed this is cosmetic only -- doesn't
+affect any actual boot path or working feature (`bootstock`, the NAND ECC
+fix, `bootmmc`/`bootusb` all work regardless). Left unresolved on purpose;
+revisit only if it starts affecting something that matters, or if someone
+wants to actually chase the `printf()` stack-buffer theory to ground truth.

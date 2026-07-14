@@ -35,7 +35,7 @@ else
 fi
 
 echo
-echo "--- 2. BD37033 bus presence (i2c-gpio2, addr 0x41) ---"
+echo "--- 2. BD37033 bus presence (i2c-gpio2, addr 0x40) ---"
 # Reuses the tool already built for this exact bus/address question --
 # see tools/i2c-scan/README.md and PIN_MASTER_LIST.md's driver source table.
 # Resolve i2c-scan across either layout this project ships it in: the
@@ -47,10 +47,10 @@ I2CSCAN="$(dirname "$0")/../i2c-scan/i2c-scan"
 [ -x "$I2CSCAN" ] || I2CSCAN="$(dirname "$0")/i2c-scan"
 [ -x "$I2CSCAN" ] || I2CSCAN="$(command -v i2c-scan 2>/dev/null)"
 if [ -n "$I2CSCAN" ] && [ -x "$I2CSCAN" ]; then
-	if "$I2CSCAN" 2>&1 | grep -q "0x41"; then
-		pass "BD37033 ACKs at 0x41 on i2c-gpio2"
+	if "$I2CSCAN" 2>&1 | grep -q "0x40"; then
+		pass "BD37033 ACKs at 0x40 on i2c-gpio2"
 	else
-		fail "no ACK seen at 0x41 -- BD37033 not responding on the bus (i2c-scan output above)"
+		fail "no ACK seen at 0x40 -- BD37033 not responding on the bus (i2c-scan output above)"
 	fi
 else
 	unk "i2c-scan not found (checked ../i2c-scan/, alongside this script, and \$PATH) -- copy it somewhere findable or run it separately"
@@ -63,10 +63,15 @@ echo "--- 3. Mixer control presence (PA Volume / PA Mute) ---"
 if command -v amixer >/dev/null 2>&1; then
 	CONTROLS=$(amixer scontrols 2>&1)
 	echo "$CONTROLS"
-	if echo "$CONTROLS" | grep -qi "PA Volume"; then
-		pass "'PA Volume' control exists -- codec driver bound and exposing a control"
+	# ALSA's simple-mixer layer collapses a "<Name> Volume" element into a
+	# bare "<Name>" simple control (same as "Master Playback Volume" ->
+	# "Master"), so SOC_SINGLE_EXT("PA Volume", ...) shows up here as just
+	# 'PA' -- confirmed 2026-07-14 via a live amixer scontrols capture
+	# after the aux-devs DTS fix. Match either form.
+	if echo "$CONTROLS" | grep -qiE "'PA'|PA Volume"; then
+		pass "'PA' volume control exists -- codec driver bound and exposing a control"
 	else
-		fail "'PA Volume' control not found -- BD37033 driver likely didn't bind (cross-check dmesg | grep -i bd37033)"
+		fail "'PA'/'PA Volume' control not found -- BD37033 driver likely didn't bind (cross-check dmesg | grep -i bd37033)"
 	fi
 else
 	unk "amixer not found in PATH"
@@ -75,12 +80,12 @@ fi
 echo
 echo "--- 4. Exercise the control path (does NOT prove audible correctness --"
 echo "    you must listen) ---"
-if command -v amixer >/dev/null 2>&1 && echo "$CONTROLS" | grep -qi "PA Volume"; then
-	ORIG=$(amixer sget 'PA Volume' 2>/dev/null | grep -o '[0-9]\+' | head -1)
-	echo "Current PA Volume: ${ORIG:-unknown}"
-	echo "Setting PA Volume to 10, then back to ${ORIG:-40}..."
-	amixer sset 'PA Volume' 10 >/dev/null 2>&1
-	READBACK=$(amixer sget 'PA Volume' 2>/dev/null | grep -o '[0-9]\+' | head -1)
+if command -v amixer >/dev/null 2>&1 && echo "$CONTROLS" | grep -qiE "'PA'|PA Volume"; then
+	ORIG=$(amixer sget 'PA' 2>/dev/null | grep -o '[0-9]\+' | sed -n '1p')
+	echo "Current PA (volume): ${ORIG:-unknown}"
+	echo "Setting PA to 10, then back to ${ORIG:-40}..."
+	amixer sset 'PA' 10 >/dev/null 2>&1
+	READBACK=$(amixer sget 'PA' 2>/dev/null | grep -o '[0-9]\+' | sed -n '1p')
 	if [ "$READBACK" = "10" ]; then
 		pass "amixer read-back after set matches (10) -- ALSA's own state is consistent"
 		echo "    NOTE: this only proves ALSA's cached value round-trips correctly."
@@ -90,9 +95,9 @@ if command -v amixer >/dev/null 2>&1 && echo "$CONTROLS" | grep -qi "PA Volume";
 	else
 		fail "amixer read-back (${READBACK:-none}) doesn't match what was set (10)"
 	fi
-	[ -n "$ORIG" ] && amixer sset 'PA Volume' "$ORIG" >/dev/null 2>&1
+	[ -n "$ORIG" ] && amixer sset 'PA' "$ORIG" >/dev/null 2>&1
 else
-	unk "skipped -- 'PA Volume' control not available"
+	unk "skipped -- 'PA' control not available"
 fi
 
 echo

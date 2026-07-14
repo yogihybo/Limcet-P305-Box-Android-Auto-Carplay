@@ -122,7 +122,7 @@ die()     { echo -e "${RED}ERROR: $*${RESET}" >&2; exit 1; }
 # a boxed header per step, an elapsed-time footer, and a final summary table
 # so the user can see at a glance what ran and how long it took.
 # ---------------------------------------------------------------------------
-STEP_TOTAL=15
+STEP_TOTAL=16
 declare -a STEP_TITLES=() STEP_ELAPSED=() STEP_STATUS=()
 STEP_T0=0
 
@@ -422,6 +422,7 @@ CONFIG_ITEMS=(
     "disable_msncoreapp_autolaunch|Disable MsnCoreApp auto-launch at login|Comments out 'MsnCoreApp -qws&' in /etc/profile so it doesn't auto-run (and auto-crash) on every shell login while the startup segfault is being debugged (see docs/ARK1680_TS_REVERSE_ENGINEERING.md). Run 'start_msn' manually instead to test. Turn this off once the crash is fixed and auto-launch is wanted again.|ON"
     "fix_libgal_dynamic_section|Fix corrupted libGAL.so .dynamic section|/usr/lib/libGAL.so's .dynamic section is corrupted (just a single DT_NULL entry — no NEEDED/SYMTAB/STRTAB), which crashes the dynamic linker with a NULL+4 deref inside _dl_relocate_object() the instant MsnCoreApp tries to load it (root-caused via matched strace+dmesg PC/LR correlation, see docs/ARK1680_TS_REVERSE_ENGINEERING.md). Replaces it with libGAL.fb.so, the vendor's own software-framebuffer variant (SONAME=libGAL.so, valid .dynamic section), backing up the original as libGAL.so.corrupt-orig.|ON"
     "install_telnetd|Install passwordless root telnetd (UNAUTHENTICATED — diagnostic only)|Inserts 'mount -t devpts none /dev/pts' + 'busybox telnetd -l /bin/sh &' into rcS right after mdev -s, giving a root shell on port 23 with no login prompt to anything that can reach the device's network (WiFi AP or USB-NCM). Same mechanism validated working on stock firmware via the msn_autocopy payload (see msn_autocopy/README.md for why the devpts mount is required — telnetd fails silently without it). This is a real, if minor, exposure while active on any network the device joins — OFF by default, opt-in only.|OFF"
+    "fix_usb_port0_otg_race|Work around USB port 0 boot-time OTG detection race (DISABLED, see below)|CURRENTLY A NO-OP — the actual unbind/rebind commands are commented out in the generated rcS. Confirmed on real hardware that unbinding musb-hdrc.0 unconditionally is actively harmful when root is mounted from USB on that same controller (bootusb + usbroot) — it yanks the live root filesystem out from under the running system, causing I/O errors and an aborted journal. The kernel-level fix (musb_ark.c VBUS settle delay) has since been confirmed sufficient on its own for the boot-from-USB case. This toggle is kept for when the workaround is made conditional on root NOT already being on this bus. See docs/HANDOFF_nand_ecc_uboot_vs_kernel.md.|OFF"
 )
 
 declare -a CONFIG_SEL
@@ -1497,6 +1498,86 @@ PYEOF
 }
 
 # ---------------------------------------------------------------------------
+# Work around a real, confirmed kernel bug: USB port 0 (the external,
+# user-accessible port; musb-hdrc.0, GPIO ID=76/PWR=126) runs in OTG
+# dual-role mode, negotiated via an ID-pin GPIO read at driver-probe time.
+# If a USB device is already physically connected before/at the exact
+# moment this driver probes during boot, that negotiation can land in
+# gadget/device mode (or an inconclusive state) instead of host mode, and
+# nothing ever re-evaluates it afterward — the device just never enumerates,
+# no matter how long you wait. Confirmed live on real hardware: a manual
+# `unbind`+`bind` of musb-hdrc.0 after boot immediately finds the device
+# correctly (see docs/HANDOFF_nand_ecc_uboot_vs_kernel.md for the full
+# diagnosis, including the stock-firmware log that proves the port and
+# device are both fine — it's specifically this boot-time race). Port 1
+# (the onboard WiFi module) isn't affected, since it's hardwired and always
+# connected well before any negotiation happens.
+#
+# Forces a fresh probe of just that controller after a short settle delay,
+# every boot, so a USB stick plugged in at power-on is reliably detected
+# without needing a manual unbind/rebind each time.
+# ---------------------------------------------------------------------------
+fix_usb_port0_otg_race() {
+    local rootfs_mount="$1"
+    local rcs="$rootfs_mount/etc/rc.d/rcS"
+    echo -e "${BOLD}  Patching rcS to work around the USB port 0 OTG boot-time race...${RESET}"
+
+    if $DRY_RUN; then
+        echo "  [dry-run] insert musb-hdrc.0 unbind/rebind after mdev -s in rcS"
+        return
+    fi
+
+    [[ -f "$rcs" ]] || { warn "rcS not found at $rcs — skipping USB port 0 fix"; return; }
+
+    python3 - "$rcs" <<'PYEOF'
+import sys
+
+path = sys.argv[1]
+text = open(path).read()
+
+MDEV_LINE = '/sbin/mdev -s'
+mdev_idx = text.find(MDEV_LINE)
+if mdev_idx == -1:
+    print("  WARNING: '/sbin/mdev -s' not found in rcS — USB port 0 fix skipped")
+    sys.exit(0)
+
+insert_at = mdev_idx + len(MDEV_LINE)
+eol = text.find('\n', insert_at)
+if eol == -1:
+    eol = len(text)
+
+block = """
+
+# --- USB port 0 OTG boot-time race workaround (build_bootable_sdcard.sh) ---
+# See the comment above fix_usb_port0_otg_race() in build_bootable_sdcard.sh
+# for the full diagnosis. DISABLED for now: confirmed on real hardware
+# (docs/HANDOFF_nand_ecc_uboot_vs_kernel.md) that unbinding musb-hdrc.0
+# unconditionally is actively harmful when root itself is mounted from USB
+# on that same controller (bootusb + usbroot) — it yanks the live root
+# filesystem out from under the running system, causing I/O errors and an
+# aborted journal. The kernel-level fix (musb_ark.c VBUS settle delay) on
+# its own has since been confirmed sufficient for that case. Needs to be
+# made conditional on root NOT already being on this bus before
+# re-enabling — not yet done.
+# (
+# 	sleep 2
+# 	MUSB0=/sys/bus/platform/drivers/musb-hdrc/musb-hdrc.0
+# 	if [ -e "$MUSB0" ]; then
+# 		echo musb-hdrc.0 > /sys/bus/platform/drivers/musb-hdrc/unbind
+# 		sleep 1
+# 		echo musb-hdrc.0 > /sys/bus/platform/drivers/musb-hdrc/bind
+# 	fi
+# ) &"""
+
+patched = text[:eol] + block + text[eol:]
+open(path, 'w').write(patched)
+print("  rcS USB port 0 OTG race workaround inserted after mdev -s")
+PYEOF
+
+    success "USB port 0 OTG race workaround installed (backgrounded, ~3s after boot)"
+}
+
+# ---------------------------------------------------------------------------
 # Build
 # ---------------------------------------------------------------------------
 LOOP=""
@@ -1719,6 +1800,16 @@ build() {
     else
         info "Skipped — telnetd not installed"
         end_step 15 skip
+    fi
+
+    # 16. Work around the USB port 0 boot-time OTG detection race
+    begin_step 16 "Patching rcS for USB port 0 OTG race workaround"
+    if [[ ${CONFIG_SEL[10]} -eq 1 ]]; then
+        fix_usb_port0_otg_race /tmp/sd_p2
+        end_step 16
+    else
+        info "Skipped — USB port 0 OTG race workaround not installed"
+        end_step 16 skip
     fi
 
     # Unmount and detach

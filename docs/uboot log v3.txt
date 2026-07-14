@@ -1,0 +1,113 @@
+Launch UBOOT from sd...
+
+
+U-Boot 2018.07-linux4ark_1.0 (Jul 12 2026 - 17:03:03 +1000)
+
+DRAM:  64 MiB
+NAND:  128 MiB
+MMC:   ARK_MMC0: 0
+In:    serial
+Out:   serial
+Err:   serial
+bootlogo: ark_show_bootlogo() starting, screen_id=0
+arkdata.ini: applying LCD timing overrides for screen_id=0
+arkdata.ini: loading -> `fatload mmc 0:1 0x2900000 arkdata.ini`
+** Unable to read file arkdata.ini **
+arkdata.ini: fatload failed (ret=1) — file missing from SD card FAT partition, or mmc 0:1 not accessible; using compiled defaults
+arkdata.ini: not available, screen_id=0 keeps compiled timing (vbp=29 vfp=25 vsw=16 hbp=32 hfp=25 hsw=54)
+screen_id=0------------------->
+ScreenType:0, subType:0,Width:800, Height:480,Format:7, TvoutType:12,screen_id:0,interlace:0
+RgbMode:0 ,BPP:32 ,pad_unset:0
+HFP:25,HBP:32,HSW:54,VBP:29,VFP:25,VSW:16,HSYNCPolarity:0x1,VSYNCPolarity:0x1 ,DEPolarity:0
+CLKSource:1,CLKFreq:330000000,CLKDIV1:11,CLKDIV2:1,CLKPolarity:0,LVDSCfg:0x0,FrameRate:0,
+bootlogo: ark_display_init() done
+bootlogo: loading -> `fatload mmc 0:1 0x2700000 bootlogo.raw`
+** Unable to read file bootlogo.raw **
+bootlogo: fatload of bootlogo.raw failed (ret=1) — file missing from SD card FAT partition, or mmc 0:1 not accessible; skipping splash
+bootlogo: no splash shown this boot (see reason above)
+lcdconsole: registered, 50x30 chars on OSD2 @ 0x2500000
+Hit space to stop autoboot:  0
+=> bdinfo
+arch_number = 0x00000000
+boot_params = 0x00000000
+DRAM bank   = 0x00000000
+-> start    = 0x00000000
+-> size     = 0x04000000
+baudrate    = 115200 bps
+TLB addr    = 0x03FF0000
+relocaddr   = 0x03F6B000
+reloc off   = 0x03F3B000
+irq_sp      = 0x03DEAEF0
+sp start    = 0x03DEAEE0
+=> help
+        - ▒>d
+       - D8▒\▒
+▒F_Apj▒V▒F!4W▒ItgĿmP▒_]a▒GА~in/s,▒
+?       - alias for 'help'
+X,2XQ▒▒▒C▒▒▒▒C▒ stod ▒▒▒C▒▒▒- ▒C▒▒▒▒C▒ stod ▒▒▒C▒▒▒
+arkdatatest- look up a key in arkdata.ini (SD card) for testing
+base    - print or set address offset
+bdinfo  - print Board Info structure
+boot    - boot default, i.e., run 'bootcmd'
+bootd   - boot default, i.e., run 'bootcmd'
+bootefi - Boots an EFI payload from memory
+bootelf - Boot from an ELF image in memory
+bootlogofind- search NAND/SD for a valid bootlogo JPEG (diagnostic only)
+bootm   - boot application image from memory
+bootvx  - Boot vxWorks from an ELF image
+bootz   - boot Linux zImage image from memory
+chpah▒ - ▒
+cmp     - memory compare
+coninfo - print console devices and information
+cp      - memory copy
+crc32   - checksum calculation
+disconfig- config display
+echo    - echo args to console
+editenv - edit environment variable
+env     - environment handling commands
+erase   - erase FLASH memory
+exit    - exit script
+fatinfo - print information about filesystem
+fatload - load binary file from a dos filesystem
+fatls   - list files in a directory (default /)
+fatsize - determine a file's size
+fdt     - flattened device tree utility commands
+flinfo  - print FLASH memory information
+go      - start application at address 'addr'
+gpiotest- test gpio input | output
+help    - print command description/usage
+iminfo  - print header information for application image
+imxtract- extract a part of a multi-image
+itu656  - configure NTSC composite video input timing
+jpeghw  - decode a JPEG using the hardware codec (polling, not IRQ-driven)
+loadb   - load binary file over serial line (kermit mode)
+loads   - load S-Record file over serial line
+loadx   - load binary file over serial line (xmodem mode)
+loady   - load binary file over serial line (ymodem mode)
+loop    - infinite loop on address range
+md      - memory display
+mm      - memory modify (auto-incrementing address)
+mmc     - MMC sub system
+mmcinfo - display MMC info
+mtdparts- ▒▒▒▒
+mw      - memory write (fill)
+nboo▒ - |~
+nm      - memory modify (constant address)
+pmem    - hex dump of a memory region
+printenv- print environment variables
+protect - enable or disable FLASH write protection
+regr    - read register (LCD/SYS/ITU656/VICL/VICH/JPEG/PWM)
+regw    - write register (LCD/SYS/ITU656/VICL/VICH/JPEG/PWM)
+reset   - Perform RESET of the CPU
+rk_1.0 (Jul 12 2026 ▒▒WoX,2XQ▒▒▒C▒▒▒▒C▒ stod ▒▒▒C▒▒▒- Jul 12 2026 ▒▒WoX,2XQ▒▒▒C▒▒▒▒C▒ stod ▒▒▒C▒▒▒
+run     - run commands in an environment variable
+setenv  - set environment variables
+showvar - print local hushshell variables
+sleep   - delay execution for some time
+source  - run script from memory
+switchecc- switch or restore nand ecc to/from bootstrap setting
+test    - ▒ItgĿmP▒_]a▒GА~in/s,▒
+usb     - ▒▒
+version - print monitor, compiler and linker version
+=> <INTERRUPT>
+=>

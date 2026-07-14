@@ -1,0 +1,637 @@
+> fatload mmc 0:1 0x1000000 zImage
+reading zImage
+
+4784534 bytes read
+> setenv bootargs console=ttyS0,115200n8 mem=180M earlyprintk=serial root=/dev/mmcblk0p2 rootfstype=ext4 rootwait rw ${mtdparts} screen=${screen}
+> bootz 0x1000000
+
+Starting kernel ...
+
+Booting Linux on physical CPU 0x0
+Linux version 4.19.192 (osboxes@osboxes) (gcc version 12.2.0 (Debian 12.2.0-14)) #13 Thu Jul 9 09:30:12 AEST 2026
+CPU: ARMv7 Processor [410fc051] revision 1 (ARMv7), cr=10c53c7d
+CPU: PIPT / VIPT nonaliasing data cache, VIPT aliasing instruction cache
+OF: fdt: Machine model: Limcet P305/P306 Dashboard Head Unit
+bootconsole [earlycon0] enabled
+Memory policy: Data cache writeback
+cma: Reserved 64 MiB at 0x04000000
+CPU: All CPU(s) started in SVC mode.
+random: get_random_bytes called from start_kernel+0x94/0x34c with crng_init=0
+Built 1 zonelists, mobility grouping off.  Total pages: 45675
+Kernel command line: console=ttyS0,115200n8 mem=180M earlyprintk=serial root=/dev/mmcblk0p2 rootfstype=ext4 rootwait rw mtdparts=ark1680-nand:128k(S-Loader),512k(U-boot),512k(U-boot_back),256K(U-boot-Env),256K(arkdata),4m(kernel),106m(rootfs),6m(userdata),512K(bootlogo),3m(bootanimation),3m(reversingtrack),256K(Unicode) screen=0
+Dentry cache hash table entries: 32768 (order: 5, 131072 bytes)
+Inode-cache hash table entries: 16384 (order: 4, 65536 bytes)
+Memory: 105964K/184320K available (7168K kernel code, 215K rwdata, 1512K rodata, 1024K init, 164K bss, 12820K reserved, 65536K cma-reserved)
+Virtual kernel memory layout:
+    vector  : 0xffff0000 - 0xffff1000   (   4 kB)
+    fixmap  : 0xffc00000 - 0xfff00000   (3072 kB)
+    vmalloc : 0xcb800000 - 0xff800000   ( 832 MB)
+    lowmem  : 0xc0000000 - 0xcb400000   ( 180 MB)
+    modules : 0xbf000000 - 0xc0000000   (  16 MB)
+      .text : 0x(ptrval) - 0x(ptrval)   (8160 kB)
+      .init : 0x(ptrval) - 0x(ptrval)   (1024 kB)
+      .data : 0x(ptrval) - 0x(ptrval)   ( 216 kB)
+       .bss : 0x(ptrval) - 0x(ptrval)   ( 165 kB)
+NR_IRQS: 16, nr_irqs: 16, preallocated irqs: 16
+VIC @(ptrval): id 0x00041192, vendor 0x41
+VIC @(ptrval): id 0x00041192, vendor 0x41
+L2C-310 dynamic clock gating enabled, standby mode enabled
+L2C-310 cache controller enabled, 8 ways, 128 kB
+L2C-310: CACHE_ID 0x410060c9, AUX_CTRL 0x06020000
+clk cpupll rate 690000000.
+clk syspll rate 324000000.
+clk audpll rate 426000000.
+clk ddrclk rate 426000000.
+clk cpuclk rate 690000000.
+clk axiclk rate 324000000.
+clk ahbclk rate 162000000.
+clk pclk rate 81000000.
+clk uart4clk rate 24000000.
+clk uart5clk rate 24000000.
+clk gpuclk rate 324000000.
+clk gpiodebounceclk rate 24000000.
+clk lcdclk rate 324000000.
+clk mfcclk rate 162000000.
+clk rtc-clk rate 32768.
+clk spi-clk rate 162000000.
+clk i2s-dac-clk rate 240000000.
+clk i2s-adc-clk rate 240000000.
+clocksource: arkmicro,ark-timer: mask: 0xffffff max_cycles: 0xffffff, max_idle_ns: 92171119 ns
+sched_clock: 24 bits at 81MHz, resolution 12ns, wraps every 103563053ns
+Console: colour dummy device 80x30
+Calibrating delay loop... 457.11 BogoMIPS (lpj=2285568)
+pid_max: default: 32768 minimum: 301
+Mount-cache hash table entries: 1024 (order: 0, 4096 bytes)
+Mountpoint-cache hash table entries: 1024 (order: 0, 4096 bytes)
+CPU: Testing write buffer coherency: ok
+Setting up static identity map for 0x100000 - 0x10003c
+devtmpfs: initialized
+VFP support v0.3: implementor 41 architecture 2 part 30 variant 5 rev 1
+clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 19112604462750000 ns
+futex hash table entries: 256 (order: -1, 3072 bytes)
+pinctrl core: initialized pinctrl subsystem
+NET: Registered protocol family 16
+DMA: preallocated 256 KiB pool for atomic coherent allocations
+Serial: Arkmicro UART driver
+pinctrl-ark e4900000.pinctrl: initialized ark pinctrl driver
+e4200000.uart: ttyS0 at MMIO 0xe4200000 (irq = 36, base_baud = 1500000) is a ARK
+console [ttyS0] enabled
+console [ttyS0] enabled
+bootconsole [earlycon0] disabled
+bootconsole [earlycon0] disabled
+e8000000.uart: ttyS2 at MMIO 0xe8000000 (irq = 60, base_baud = 1500000) is a ARK
+e8100000.uart: ttyS3 at MMIO 0xe8100000 (irq = 61, base_baud = 1500000) is a ARK
+e4f00000.serial: ttyHS0 at MMIO 0xe4f00000 (irq = 38, base_baud = 0) is a ARK HS UART
+e4800000.serial: ttyHS1 at MMIO 0xe4800000 (irq = 44, base_baud = 0) is a ARK HS UART
+enable get mcu data
+clk lcdclk rate 32400000.
+ark1668_lcdfb e0500000.lcd: 16384KiB frame buffer at 0f000000 (mapped at (ptrval))
+ark1668_lcdfb e0500000.lcd: fb0: Atmel LCDC at 0xe0500000 (mapped at (ptrval)), irq 25
+SCSI subsystem initialized
+usbcore: registered new interface driver usbfs
+usbcore: registered new interface driver hub
+usbcore: registered new device driver usb
+gpio-3 (i2c-gpio-0): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+gpio-2 (i2c-gpio-0): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+i2c i2c-1: Not I2C compliant: can't read SCL
+i2c i2c-1: Bus may be unreliable
+i2c-gpio i2c-gpio-0: using lines 3 (SDA) and 2 (SCL, no clock stretching)
+gpio-9 (i2c-gpio-1): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+gpio-121 (i2c-gpio-1): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+i2c i2c-2: Not I2C compliant: can't read SCL
+i2c i2c-2: Bus may be unreliable
+i2c-gpio i2c-gpio-1: using lines 9 (SDA) and 121 (SCL, no clock stretching)
+media: Linux media interface: v0.10
+videodev: Linux video capture interface: v2.00
+Advanced Linux Sound Architecture Driver Initialized.
+Bluetooth: Core ver 2.22
+NET: Registered protocol family 31
+Bluetooth: HCI device and connection manager initialized
+Bluetooth: HCI socket layer initialized
+Bluetooth: L2CAP socket layer initialized
+Bluetooth: SCO socket layer initialized
+clocksource: Switched to clocksource arkmicro,ark-timer
+ark-vdec e0900000.vdec: VDEC controller at 0x(ptrval), irq = 40, misc_minor = 63
+ark-vdec e0900000.vdec: Product ID: 0x6731 (revision 2.57.8)
+NET: Registered protocol family 2
+tcp_listen_portaddr_hash hash table entries: 512 (order: 0, 4096 bytes)
+TCP established hash table entries: 2048 (order: 1, 8192 bytes)
+TCP bind hash table entries: 2048 (order: 1, 8192 bytes)
+TCP: Hash tables configured (established 2048 bind 2048)
+UDP hash table entries: 256 (order: 0, 4096 bytes)
+UDP-Lite hash table entries: 256 (order: 0, 4096 bytes)
+NET: Registered protocol family 1
+Initialise system trusted keyrings
+workingset: timestamp_bits=14 max_order=16 bucket_order=2
+ntfs: driver 2.1.32 [Flags: R/W DEBUG].
+jffs2: version 2.2. (NAND) © 2001-2006 Red Hat, Inc.
+fuse init (API version 7.27)
+Key type asymmetric registered
+Asymmetric key parser 'x509' registered
+io scheduler noop registered (default)
+nand: device found, Manufacturer ID: 0x98, Chip ID: 0xf1
+nand: Toshiba NAND 128MiB 3,3V 8-bit
+nand: 128 MiB, SLC, erase size: 128 KiB, page size: 2048, OOB size: 64
+nand: WARNING: ark-nand: the ECC used on your system is too weak compared to the one required by the NAND chip
+ark_nand_correct_data: uncorrectable ECC error
+ark_nand_correct_data: uncorrectable ECC error
+Bad block table not found for chip 0
+ark_nand_correct_data: uncorrectable ECC error
+ark_nand_correct_data: uncorrectable ECC error
+Bad block table not found for chip 0
+Scanning device for bad blocks
+Bad eraseblock 0 at 0x000000000000
+Bad eraseblock 1 at 0x000000020000
+Bad eraseblock 2 at 0x000000040000
+Bad eraseblock 3 at 0x000000060000
+Bad eraseblock 5 at 0x0000000a0000
+Bad eraseblock 6 at 0x0000000c0000
+Bad eraseblock 7 at 0x0000000e0000
+Bad eraseblock 9 at 0x000000120000
+Bad eraseblock 11 at 0x000000160000
+Bad eraseblock 13 at 0x0000001a0000
+Bad eraseblock 14 at 0x0000001c0000
+Bad eraseblock 15 at 0x0000001e0000
+Bad eraseblock 16 at 0x000000200000
+Bad eraseblock 17 at 0x000000220000
+Bad eraseblock 18 at 0x000000240000
+Bad eraseblock 19 at 0x000000260000
+Bad eraseblock 20 at 0x000000280000
+Bad eraseblock 21 at 0x0000002a0000
+Bad eraseblock 22 at 0x0000002c0000
+Bad eraseblock 23 at 0x0000002e0000
+Bad eraseblock 24 at 0x000000300000
+Bad eraseblock 25 at 0x000000320000
+Bad eraseblock 26 at 0x000000340000
+Bad eraseblock 27 at 0x000000360000
+Bad eraseblock 28 at 0x000000380000
+Bad eraseblock 29 at 0x0000003a0000
+Bad eraseblock 30 at 0x0000003c0000
+Bad eraseblock 31 at 0x0000003e0000
+Bad eraseblock 32 at 0x000000400000
+Bad eraseblock 33 at 0x000000420000
+Bad eraseblock 34 at 0x000000440000
+Bad eraseblock 35 at 0x000000460000
+Bad eraseblock 36 at 0x000000480000
+Bad eraseblock 37 at 0x0000004a0000
+Bad eraseblock 45 at 0x0000005a0000
+Bad eraseblock 46 at 0x0000005c0000
+Bad eraseblock 47 at 0x0000005e0000
+Bad eraseblock 48 at 0x000000600000
+Bad eraseblock 49 at 0x000000620000
+Bad eraseblock 50 at 0x000000640000
+Bad eraseblock 51 at 0x000000660000
+Bad eraseblock 52 at 0x000000680000
+Bad eraseblock 53 at 0x0000006a0000
+Bad eraseblock 54 at 0x0000006c0000
+Bad eraseblock 55 at 0x0000006e0000
+Bad eraseblock 56 at 0x000000700000
+Bad eraseblock 57 at 0x000000720000
+Bad eraseblock 80 at 0x000000a00000
+Bad eraseblock 83 at 0x000000a60000
+Bad eraseblock 96 at 0x000000c00000
+Bad eraseblock 97 at 0x000000c20000
+Bad eraseblock 101 at 0x000000ca0000
+Bad eraseblock 103 at 0x000000ce0000
+Bad eraseblock 105 at 0x000000d20000
+Bad eraseblock 108 at 0x000000d80000
+Bad eraseblock 109 at 0x000000da0000
+Bad eraseblock 111 at 0x000000de0000
+Bad eraseblock 117 at 0x000000ea0000
+Bad eraseblock 128 at 0x000001000000
+Bad eraseblock 133 at 0x0000010a0000
+Bad eraseblock 134 at 0x0000010c0000
+Bad eraseblock 137 at 0x000001120000
+Bad eraseblock 154 at 0x000001340000
+Bad eraseblock 158 at 0x0000013c0000
+Bad eraseblock 161 at 0x000001420000
+Bad eraseblock 163 at 0x000001460000
+Bad eraseblock 167 at 0x0000014e0000
+Bad eraseblock 169 at 0x000001520000
+Bad eraseblock 171 at 0x000001560000
+Bad eraseblock 172 at 0x000001580000
+Bad eraseblock 175 at 0x0000015e0000
+Bad eraseblock 177 at 0x000001620000
+Bad eraseblock 178 at 0x000001640000
+Bad eraseblock 180 at 0x000001680000
+Bad eraseblock 184 at 0x000001700000
+Bad eraseblock 202 at 0x000001940000
+Bad eraseblock 215 at 0x000001ae0000
+Bad eraseblock 243 at 0x000001e60000
+Bad eraseblock 246 at 0x000001ec0000
+Bad eraseblock 266 at 0x000002140000
+Bad eraseblock 270 at 0x0000021c0000
+Bad eraseblock 279 at 0x0000022e0000
+Bad eraseblock 283 at 0x000002360000
+Bad eraseblock 287 at 0x0000023e0000
+Bad eraseblock 288 at 0x000002400000
+Bad eraseblock 289 at 0x000002420000
+Bad eraseblock 293 at 0x0000024a0000
+Bad eraseblock 294 at 0x0000024c0000
+Bad eraseblock 299 at 0x000002560000
+Bad eraseblock 303 at 0x0000025e0000
+Bad eraseblock 304 at 0x000002600000
+Bad eraseblock 308 at 0x000002680000
+Bad eraseblock 313 at 0x000002720000
+Bad eraseblock 317 at 0x0000027a0000
+Bad eraseblock 319 at 0x0000027e0000
+Bad eraseblock 321 at 0x000002820000
+Bad eraseblock 326 at 0x0000028c0000
+Bad eraseblock 327 at 0x0000028e0000
+Bad eraseblock 328 at 0x000002900000
+Bad eraseblock 333 at 0x0000029a0000
+Bad eraseblock 334 at 0x0000029c0000
+Bad eraseblock 348 at 0x000002b80000
+Bad eraseblock 352 at 0x000002c00000
+Bad eraseblock 354 at 0x000002c40000
+Bad eraseblock 355 at 0x000002c60000
+Bad eraseblock 357 at 0x000002ca0000
+Bad eraseblock 358 at 0x000002cc0000
+Bad eraseblock 359 at 0x000002ce0000
+Bad eraseblock 360 at 0x000002d00000
+Bad eraseblock 365 at 0x000002da0000
+Bad eraseblock 375 at 0x000002ee0000
+Bad eraseblock 377 at 0x000002f20000
+Bad eraseblock 393 at 0x000003120000
+Bad eraseblock 395 at 0x000003160000
+Bad eraseblock 402 at 0x000003240000
+Bad eraseblock 403 at 0x000003260000
+Bad eraseblock 404 at 0x000003280000
+Bad eraseblock 405 at 0x0000032a0000
+Bad eraseblock 407 at 0x0000032e0000
+Bad eraseblock 409 at 0x000003320000
+Bad eraseblock 416 at 0x000003400000
+Bad eraseblock 419 at 0x000003460000
+Bad eraseblock 420 at 0x000003480000
+Bad eraseblock 421 at 0x0000034a0000
+Bad eraseblock 422 at 0x0000034c0000
+Bad eraseblock 423 at 0x0000034e0000
+Bad eraseblock 424 at 0x000003500000
+Bad eraseblock 425 at 0x000003520000
+Bad eraseblock 426 at 0x000003540000
+Bad eraseblock 427 at 0x000003560000
+Bad eraseblock 428 at 0x000003580000
+Bad eraseblock 429 at 0x0000035a0000
+Bad eraseblock 438 at 0x0000036c0000
+Bad eraseblock 449 at 0x000003820000
+Bad eraseblock 450 at 0x000003840000
+Bad eraseblock 452 at 0x000003880000
+Bad eraseblock 456 at 0x000003900000
+Bad eraseblock 464 at 0x000003a00000
+Bad eraseblock 469 at 0x000003aa0000
+Bad eraseblock 470 at 0x000003ac0000
+Bad eraseblock 474 at 0x000003b40000
+Bad eraseblock 477 at 0x000003ba0000
+Bad eraseblock 487 at 0x000003ce0000
+Bad eraseblock 497 at 0x000003e20000
+Bad eraseblock 502 at 0x000003ec0000
+Bad eraseblock 506 at 0x000003f40000
+Bad eraseblock 515 at 0x000004060000
+Bad eraseblock 517 at 0x0000040a0000
+Bad eraseblock 519 at 0x0000040e0000
+Bad eraseblock 524 at 0x000004180000
+Bad eraseblock 533 at 0x0000042a0000
+Bad eraseblock 535 at 0x0000042e0000
+Bad eraseblock 547 at 0x000004460000
+Bad eraseblock 552 at 0x000004500000
+Bad eraseblock 554 at 0x000004540000
+Bad eraseblock 556 at 0x000004580000
+Bad eraseblock 557 at 0x0000045a0000
+Bad eraseblock 559 at 0x0000045e0000
+Bad eraseblock 560 at 0x000004600000
+Bad eraseblock 563 at 0x000004660000
+Bad eraseblock 567 at 0x0000046e0000
+Bad eraseblock 568 at 0x000004700000
+Bad eraseblock 569 at 0x000004720000
+Bad eraseblock 570 at 0x000004740000
+Bad eraseblock 574 at 0x0000047c0000
+Bad eraseblock 575 at 0x0000047e0000
+Bad eraseblock 576 at 0x000004800000
+Bad eraseblock 579 at 0x000004860000
+Bad eraseblock 580 at 0x000004880000
+Bad eraseblock 582 at 0x0000048c0000
+Bad eraseblock 583 at 0x0000048e0000
+Bad eraseblock 585 at 0x000004920000
+Bad eraseblock 587 at 0x000004960000
+Bad eraseblock 588 at 0x000004980000
+Bad eraseblock 591 at 0x0000049e0000
+Bad eraseblock 593 at 0x000004a20000
+Bad eraseblock 596 at 0x000004a80000
+Bad eraseblock 598 at 0x000004ac0000
+Bad eraseblock 599 at 0x000004ae0000
+Bad eraseblock 600 at 0x000004b00000
+Bad eraseblock 602 at 0x000004b40000
+Bad eraseblock 607 at 0x000004be0000
+Bad eraseblock 608 at 0x000004c00000
+Bad eraseblock 610 at 0x000004c40000
+Bad eraseblock 612 at 0x000004c80000
+Bad eraseblock 613 at 0x000004ca0000
+Bad eraseblock 614 at 0x000004cc0000
+Bad eraseblock 615 at 0x000004ce0000
+Bad eraseblock 616 at 0x000004d00000
+Bad eraseblock 617 at 0x000004d20000
+Bad eraseblock 620 at 0x000004d80000
+Bad eraseblock 621 at 0x000004da0000
+Bad eraseblock 622 at 0x000004dc0000
+Bad eraseblock 623 at 0x000004de0000
+Bad eraseblock 624 at 0x000004e00000
+Bad eraseblock 625 at 0x000004e20000
+Bad eraseblock 631 at 0x000004ee0000
+Bad eraseblock 634 at 0x000004f40000
+Bad eraseblock 638 at 0x000004fc0000
+Bad eraseblock 642 at 0x000005040000
+Bad eraseblock 643 at 0x000005060000
+Bad eraseblock 644 at 0x000005080000
+Bad eraseblock 645 at 0x0000050a0000
+Bad eraseblock 650 at 0x000005140000
+Bad eraseblock 653 at 0x0000051a0000
+Bad eraseblock 656 at 0x000005200000
+Bad eraseblock 657 at 0x000005220000
+Bad eraseblock 659 at 0x000005260000
+Bad eraseblock 670 at 0x0000053c0000
+Bad eraseblock 673 at 0x000005420000
+Bad eraseblock 704 at 0x000005800000
+Bad eraseblock 717 at 0x0000059a0000
+Bad eraseblock 736 at 0x000005c00000
+Bad eraseblock 737 at 0x000005c20000
+Bad eraseblock 741 at 0x000005ca0000
+Bad eraseblock 742 at 0x000005cc0000
+Bad eraseblock 751 at 0x000005de0000
+Bad eraseblock 752 at 0x000005e00000
+Bad eraseblock 753 at 0x000005e20000
+Bad eraseblock 754 at 0x000005e40000
+Bad eraseblock 755 at 0x000005e60000
+Bad eraseblock 756 at 0x000005e80000
+Bad eraseblock 757 at 0x000005ea0000
+Bad eraseblock 758 at 0x000005ec0000
+Bad eraseblock 759 at 0x000005ee0000
+Bad eraseblock 760 at 0x000005f00000
+Bad eraseblock 761 at 0x000005f20000
+Bad eraseblock 762 at 0x000005f40000
+Bad eraseblock 763 at 0x000005f60000
+Bad eraseblock 764 at 0x000005f80000
+Bad eraseblock 765 at 0x000005fa0000
+Bad eraseblock 766 at 0x000005fc0000
+Bad eraseblock 767 at 0x000005fe0000
+Bad eraseblock 768 at 0x000006000000
+Bad eraseblock 769 at 0x000006020000
+Bad eraseblock 770 at 0x000006040000
+Bad eraseblock 771 at 0x000006060000
+Bad eraseblock 772 at 0x000006080000
+Bad eraseblock 773 at 0x0000060a0000
+Bad eraseblock 774 at 0x0000060c0000
+Bad eraseblock 775 at 0x0000060e0000
+Bad eraseblock 776 at 0x000006100000
+Bad eraseblock 777 at 0x000006120000
+Bad eraseblock 778 at 0x000006140000
+Bad eraseblock 779 at 0x000006160000
+Bad eraseblock 780 at 0x000006180000
+Bad eraseblock 781 at 0x0000061a0000
+Bad eraseblock 782 at 0x0000061c0000
+Bad eraseblock 783 at 0x0000061e0000
+Bad eraseblock 784 at 0x000006200000
+Bad eraseblock 785 at 0x000006220000
+Bad eraseblock 786 at 0x000006240000
+Bad eraseblock 787 at 0x000006260000
+Bad eraseblock 788 at 0x000006280000
+Bad eraseblock 789 at 0x0000062a0000
+Bad eraseblock 790 at 0x0000062c0000
+Bad eraseblock 791 at 0x0000062e0000
+Bad eraseblock 792 at 0x000006300000
+Bad eraseblock 793 at 0x000006320000
+Bad eraseblock 794 at 0x000006340000
+Bad eraseblock 795 at 0x000006360000
+Bad eraseblock 796 at 0x000006380000
+Bad eraseblock 797 at 0x0000063a0000
+Bad eraseblock 798 at 0x0000063c0000
+Bad eraseblock 799 at 0x0000063e0000
+Bad eraseblock 800 at 0x000006400000
+Bad eraseblock 801 at 0x000006420000
+Bad eraseblock 802 at 0x000006440000
+Bad eraseblock 803 at 0x000006460000
+Bad eraseblock 804 at 0x000006480000
+Bad eraseblock 805 at 0x0000064a0000
+Bad eraseblock 806 at 0x0000064c0000
+Bad eraseblock 807 at 0x0000064e0000
+Bad eraseblock 808 at 0x000006500000
+Bad eraseblock 809 at 0x000006520000
+Bad eraseblock 810 at 0x000006540000
+Bad eraseblock 811 at 0x000006560000
+Bad eraseblock 812 at 0x000006580000
+Bad eraseblock 813 at 0x0000065a0000
+Bad eraseblock 814 at 0x0000065c0000
+Bad eraseblock 815 at 0x0000065e0000
+Bad eraseblock 816 at 0x000006600000
+Bad eraseblock 817 at 0x000006620000
+Bad eraseblock 818 at 0x000006640000
+Bad eraseblock 819 at 0x000006660000
+Bad eraseblock 820 at 0x000006680000
+Bad eraseblock 821 at 0x0000066a0000
+Bad eraseblock 822 at 0x0000066c0000
+Bad eraseblock 823 at 0x0000066e0000
+Bad eraseblock 824 at 0x000006700000
+Bad eraseblock 825 at 0x000006720000
+Bad eraseblock 826 at 0x000006740000
+Bad eraseblock 827 at 0x000006760000
+Bad eraseblock 828 at 0x000006780000
+Bad eraseblock 829 at 0x0000067a0000
+Bad eraseblock 830 at 0x0000067c0000
+Bad eraseblock 831 at 0x0000067e0000
+Bad eraseblock 832 at 0x000006800000
+random: fast init done
+Bad eraseblock 833 at 0x000006820000
+Bad eraseblock 834 at 0x000006840000
+Bad eraseblock 835 at 0x000006860000
+Bad eraseblock 836 at 0x000006880000
+Bad eraseblock 837 at 0x0000068a0000
+Bad eraseblock 838 at 0x0000068c0000
+Bad eraseblock 839 at 0x0000068e0000
+Bad eraseblock 840 at 0x000006900000
+Bad eraseblock 841 at 0x000006920000
+Bad eraseblock 842 at 0x000006940000
+Bad eraseblock 843 at 0x000006960000
+Bad eraseblock 844 at 0x000006980000
+Bad eraseblock 845 at 0x0000069a0000
+Bad eraseblock 846 at 0x0000069c0000
+Bad eraseblock 847 at 0x0000069e0000
+Bad eraseblock 848 at 0x000006a00000
+Bad eraseblock 849 at 0x000006a20000
+Bad eraseblock 850 at 0x000006a40000
+Bad eraseblock 851 at 0x000006a60000
+Bad eraseblock 852 at 0x000006a80000
+Bad eraseblock 853 at 0x000006aa0000
+Bad eraseblock 854 at 0x000006ac0000
+Bad eraseblock 855 at 0x000006ae0000
+Bad eraseblock 856 at 0x000006b00000
+Bad eraseblock 857 at 0x000006b20000
+Bad eraseblock 858 at 0x000006b40000
+Bad eraseblock 859 at 0x000006b60000
+Bad eraseblock 860 at 0x000006b80000
+Bad eraseblock 861 at 0x000006ba0000
+Bad eraseblock 862 at 0x000006bc0000
+Bad eraseblock 863 at 0x000006be0000
+Bad eraseblock 864 at 0x000006c00000
+Bad eraseblock 865 at 0x000006c20000
+Bad eraseblock 866 at 0x000006c40000
+Bad eraseblock 867 at 0x000006c60000
+Bad eraseblock 868 at 0x000006c80000
+Bad eraseblock 869 at 0x000006ca0000
+Bad eraseblock 870 at 0x000006cc0000
+Bad eraseblock 871 at 0x000006ce0000
+Bad eraseblock 872 at 0x000006d00000
+Bad eraseblock 873 at 0x000006d20000
+Bad eraseblock 874 at 0x000006d40000
+Bad eraseblock 875 at 0x000006d60000
+Bad eraseblock 876 at 0x000006d80000
+Bad eraseblock 877 at 0x000006da0000
+Bad eraseblock 878 at 0x000006dc0000
+Bad eraseblock 879 at 0x000006de0000
+Bad eraseblock 880 at 0x000006e00000
+Bad eraseblock 881 at 0x000006e20000
+Bad eraseblock 882 at 0x000006e40000
+Bad eraseblock 883 at 0x000006e60000
+Bad eraseblock 884 at 0x000006e80000
+Bad eraseblock 885 at 0x000006ea0000
+Bad eraseblock 886 at 0x000006ec0000
+Bad eraseblock 887 at 0x000006ee0000
+Bad eraseblock 888 at 0x000006f00000
+Bad eraseblock 889 at 0x000006f20000
+Bad eraseblock 890 at 0x000006f40000
+Bad eraseblock 891 at 0x000006f60000
+Bad eraseblock 892 at 0x000006f80000
+Bad eraseblock 893 at 0x000006fa0000
+Bad eraseblock 894 at 0x000006fc0000
+Bad eraseblock 895 at 0x000006fe0000
+Bad eraseblock 896 at 0x000007000000
+Bad eraseblock 897 at 0x000007020000
+Bad eraseblock 898 at 0x000007040000
+Bad eraseblock 899 at 0x000007060000
+Bad eraseblock 900 at 0x000007080000
+Bad eraseblock 901 at 0x0000070a0000
+Bad eraseblock 902 at 0x0000070c0000
+Bad eraseblock 903 at 0x0000070e0000
+Bad eraseblock 904 at 0x000007100000
+Bad eraseblock 905 at 0x000007120000
+Bad eraseblock 906 at 0x000007140000
+Bad eraseblock 907 at 0x000007160000
+Bad eraseblock 908 at 0x000007180000
+Bad eraseblock 909 at 0x0000071a0000
+Bad eraseblock 910 at 0x0000071c0000
+Bad eraseblock 911 at 0x0000071e0000
+Bad eraseblock 912 at 0x000007200000
+Bad eraseblock 913 at 0x000007220000
+Bad eraseblock 914 at 0x000007240000
+Bad eraseblock 915 at 0x000007260000
+Bad eraseblock 916 at 0x000007280000
+Bad eraseblock 917 at 0x0000072a0000
+Bad eraseblock 918 at 0x0000072c0000
+Bad eraseblock 919 at 0x0000072e0000
+Bad eraseblock 920 at 0x000007300000
+Bad eraseblock 921 at 0x000007320000
+Bad eraseblock 922 at 0x000007340000
+Bad eraseblock 923 at 0x000007360000
+Bad eraseblock 924 at 0x000007380000
+Bad eraseblock 925 at 0x0000073a0000
+Bad eraseblock 926 at 0x0000073c0000
+Bad eraseblock 927 at 0x0000073e0000
+Bad eraseblock 928 at 0x000007400000
+Bad eraseblock 929 at 0x000007420000
+Bad eraseblock 930 at 0x000007440000
+Bad eraseblock 931 at 0x000007460000
+Bad eraseblock 932 at 0x000007480000
+Bad eraseblock 933 at 0x0000074a0000
+Bad eraseblock 934 at 0x0000074c0000
+Bad eraseblock 935 at 0x0000074e0000
+Bad eraseblock 936 at 0x000007500000
+Bad eraseblock 937 at 0x000007520000
+Bad eraseblock 938 at 0x000007540000
+Bad eraseblock 939 at 0x000007560000
+Bad eraseblock 940 at 0x000007580000
+Bad eraseblock 941 at 0x0000075a0000
+Bad eraseblock 969 at 0x000007920000
+Bad eraseblock 970 at 0x000007940000
+Bad eraseblock 971 at 0x000007960000
+Bad eraseblock 972 at 0x000007980000
+Bad eraseblock 973 at 0x0000079a0000
+Bad eraseblock 974 at 0x0000079c0000
+Bad eraseblock 975 at 0x0000079e0000
+Bad eraseblock 976 at 0x000007a00000
+Bad eraseblock 977 at 0x000007a20000
+Bad eraseblock 978 at 0x000007a40000
+Bad block table written to 0x000007fe0000, version 0x01
+Bad block table written to 0x000007fc0000, version 0x01
+usbcore: registered new interface driver cdc_ether
+usbcore: registered new interface driver cdc_subset
+usbcore: registered new interface driver zaurus
+usbcore: registered new interface driver ipheth
+usbcore: registered new interface driver cdc_ncm
+usbcore: registered new interface driver uas
+usbcore: registered new interface driver usb-storage
+udc-core: couldn't find an available UDC - added [g_ncm] to list of pending drivers
+Goodix-TS 0-005d: i2c test failed attempt 1: -121
+Goodix-TS 0-005d: i2c test failed attempt 2: -121
+Goodix-TS 0-005d: I2C communication failure: -121
+Goodix-TS: probe of 0-005d failed with error -121
+i2c /dev entries driver
+ark_wdt e4b00000.watchdog: initialized (timeout = 15 sec, nowayout = 0)
+Bluetooth: HCI UART driver ver 2.3
+dw_mmc ec400000.mmc: Using PIO mode.
+dw_mmc ec400000.mmc: Version ID is 220a
+dw_mmc ec400000.mmc: DW MMC controller at irq 42,32 bit host data width,32 deep fifo
+mmc_host mmc0: Bus speed (slot 0) = 24000000Hz (slot req 400000Hz, actual 400000HZ div = 30)
+dw_mmc ec800000.mmc: Using external DMA controller.
+dw_mmc ec800000.mmc: Failed to get external DMA channel.
+dw_mmc ec800000.mmc: dw_mci_init_dma: Unable to initialize DMA Controller.
+dw_mmc ec800000.mmc: Using PIO mode.
+dw_mmc ec800000.mmc: Version ID is 220a
+dw_mmc ec800000.mmc: DW MMC controller at irq 54,32 bit host data width,32 deep fifo
+mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 400000Hz, actual 400000HZ div = 30)
+usbcore: registered new interface driver snd-usb-audio
+NET: Registered protocol family 10
+Segment Routing with IPv6
+sit: IPv6, IPv4 and MPLS over IPv4 tunneling driver
+NET: Registered protocol family 17
+Loading compiled-in X.509 certificates
+cfg80211: Loading compiled-in X.509 certificates for regulatory database
+mmc_host mmc0: Bus speed (slot 0) = 24000000Hz (slot req 25000000Hz, actual 24000000HZ div = 0)
+mmc0: new SD card at address e126
+cfg80211: Loaded X.509 cert 'sforshee: 00b28ddf47aef9cea7'
+ALSA device list:
+  #0: Dummy 1
+platform regulatory.0: Direct firmware load for regulatory.db failed with error -2
+cfg80211: failed to load regulatory.db
+mmcblk0: mmc0:e126 SU01G 969 MiB
+ mmcblk0: p1 p2 p3
+EXT4-fs (mmcblk0p2): mounted filesystem with ordered data mode. Opts: (null)
+VFS: Mounted root (ext4 filesystem) on device 179:2.
+devtmpfs: mounted
+Freeing unused kernel memory: 1024K
+Run /sbin/init as init process
+random: crng init done
+mount: mounting none on /var failed: No such file or directory
+mtd8: /nanddata/bootlogo
+mtd9: /nanddata/bootanimation
+mtd10: /nanddata/reversingtrack
+mtd11: /nanddata/unicode
+/etc/ssh/sshd_config line 21: Unsupported option UsePAM
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@         WARNING: UNPROTECTED PRIVATE KEY FILE!          @
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+Permissions 0770 for '/etc/ssh/ssh_host_rsa_key' are too open.
+It is recommended that your private key files are NOT accessible by others.
+This private key will be ignored.
+bad permissions: ignore key: /etc/ssh/ssh_host_rsa_key
+Could not load host key: /etc/ssh/ssh_host_rsa_key
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@         WARNING: UNPROTECTED PRIVATE KEY FILE!          @
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+Permissions 0770 for '/etc/ssh/ssh_host_dsa_key' are too open.
+It is recommended that your private key files are NOT accessible by others.
+This private key will be ignored.
+bad permissions: ignore key: /etc/ssh/ssh_host_dsa_key
+Could not load host key: /etc/ssh/ssh_host_dsa_key
+Disabling protocol version 2. Could not load host key
+sshd: no hostkeys available -- exiting.
+ifconfig: ioctl 0x8913 failed: No such device
+set display inch: QSize(154, 86) 6.94433
+init msn firset export ticks: 45

@@ -370,3 +370,4 @@ EXT4-fs error (device sda2): __ext4_find_entry:1448: inode #32258: comm init: re
 can't run '/bin/EXT4-fs error (device sda2): __ext4_find_entry:1448: inode #2: comm init: reading directory lblock 0
 EXT4-fs error (device sda2): __ext4_find_entry:1448: inode #32258: comm init: reading directory lblock 0
 can't run '/bin/
+ 

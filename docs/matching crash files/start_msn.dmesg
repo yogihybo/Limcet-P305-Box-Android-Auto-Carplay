@@ -1,0 +1,25 @@
+MsnCoreApp: unhandled page fault (11) at 0x00000004, code 0x017
+pgd = c7f29b03
+[00000004] *pgd=02a36831, *pte=00000000, *ppte=00000000
+CPU: 0 PID: 132 Comm: MsnCoreApp Tainted: G           O      4.19.192 #23
+Hardware name: Arkmicro arm soc Family
+PC is at 0xb6f0c12c
+LR is at 0xb6f049dc
+pc : [<b6f0c12c>]    lr : [<b6f049dc>]    psr: 600d0010
+sp : be9b41f0  ip : b6f30968  fp : be9b42b4
+r10: b6f2f080  r9 : 00000019  r8 : 00000015
+r7 : 00000001  r6 : b6f31000  r5 : b6f31578  r4 : b6f2f080
+r3 : 00000000  r2 : 00000000  r1 : b6f2f238  r0 : b6f2f080
+Flags: nZCv  IRQs on  FIQs on  Mode USER_32  ISA ARM  Segment user
+Control: 10c53c7d  Table: 02a2c059  DAC: 00000055
+CPU: 0 PID: 132 Comm: MsnCoreApp Tainted: G           O      4.19.192 #23
+Hardware name: Arkmicro arm soc Family
+[<c010cc7c>] (unwind_backtrace) from [<c010a620>] (show_stack+0x10/0x14)
+[<c010a620>] (show_stack) from [<c010d428>] (__do_user_fault+0x11c/0x124)
+[<c010d428>] (__do_user_fault) from [<c010d6d8>] (do_page_fault+0x234/0x338)
+[<c010d6d8>] (do_page_fault) from [<c010d9b8>] (do_DataAbort+0x4c/0xf8)
+[<c010d9b8>] (do_DataAbort) from [<c0101cdc>] (__dabt_usr+0x3c/0x40)
+Exception stack(0xc26f7fb0 to 0xc26f7ff8)
+7fa0:                                     b6f2f080 b6f2f238 00000000 00000000
+7fc0: b6f2f080 b6f31578 b6f31000 00000001 00000015 00000019 b6f2f080 be9b42b4
+7fe0: b6f30968 be9b41f0 b6f049dc b6f0c12c 600d0010 ffffffff

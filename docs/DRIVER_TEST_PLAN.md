@@ -250,15 +250,39 @@ reaches the framebuffer/display pipeline when a camera is attached.
 
 ## 6. `BD37033` audio codec — I2C control path
 
-**Why uncertain:** basic I2S audio output is confirmed working
-end-to-end (separate from this chip's own control interface), but no
-`bd37033` probe line was found in the latest boot log, and the
-write-timeout lines documented elsewhere are a known benign quirk, not
-proof the control path (volume/tone/effects) actually works.
+**Status (2026-07-14): two separate bugs found, one fixed.**
+`tools/audio-test/audio-test.sh` and every boot log captured on
+2026-07-14 (`new kernel bootlog new uboot usb probe v12.txt`,
+`v13.txt`) showed no `PA Volume`/`PA Mute` mixer control and
+`bd37033_write_byte timeout` at probe time on the DTS-corrected
+`i2c-gpio-1` bus (GPIO9/GPIO121, addr `0x41`).
 
-**Goal:** confirm the codec responds to real register writes (e.g. a
-volume change) via I2C, not just that raw audio plays through the I2S
-data path.
+1. **Missing mixer control — root-caused and fixed.** The `sound`
+   simple-audio-card node never referenced `&amp` (`drv_bd37033`) in
+   any dai-link or `aux-devs` list, so its `PA Volume`/etc controls
+   (registered unconditionally by `bd37033_drv_probe()`, regardless of
+   I2C success) never got bound into the card and so never reached
+   `amixer`. Fixed by adding `simple-audio-card,aux-devs = <&amp>;` —
+   see `AUDIO_SUBSYSTEM_INVESTIGATION.md`. Compiles clean via `dtc`, not
+   yet kernel-rebuilt/hardware-tested.
+2. **Write timeouts — root-caused and fixed, 2026-07-14: wrong I2C
+   address.** The DTS had `reg = <0x41>`, but disassembly of the
+   vendor's own shipped userspace audio-control code
+   (`Sound_BD37033::Sound_BD37033()` in `libMsnSound.so` +
+   `arki2c_open()` in `libMsnCommons.so`) shows the real runtime control
+   path uses `ioctl(fd, I2C_SLAVE, 0x40)` — address `0x40`, matching the
+   BD37033 datasheet's public address. `0x41` was only ever supported by
+   disassembling *stock's kernel* board file plus an `i2c-scan` `XX`
+   marker, neither of which proves the chip answers there. Fixed:
+   `reg = <0x40>` (`drv_bd37033@40`) in `ark1668_limcet_p305.dts` and
+   the docs-repo reference copy. Kernel DTB rebuilt clean, not yet
+   hardware-tested. Basic I2S audio output (raw data path, no codec
+   control) is still confirmed working independently of this.
+
+**Goal:** flash and boot-test with the corrected address — confirm
+`bd37033_write_byte timeout` disappears from `dmesg`, then confirm
+`amixer sset 'PA' <n>` produces both a clean I2C transaction and an
+actual audible volume change.
 
 **Test steps (lowest risk first):**
 1. `dmesg | grep -i bd37033` — check if the driver attempts to bind at

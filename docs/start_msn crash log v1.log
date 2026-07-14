@@ -1,0 +1,1521 @@
+=~=~=~=~=~=~=~=~=~=~=~= PuTTY log 2026.07.13 14:40:56 =~=~=~=~=~=~=~=~=~=~=~=
+EXT4-fs (mmcblk0p3): mounted filesystem with ordered data mode. Opts: (null)
+userdata: SD ext4 (/dev/mmcblk0p3)
+galcore: loading out-of-tree module taints kernel.
+Galcore version 6.2.4.150331
+usbcore: registered new interface driver rtl8821cu
+
+=== Diagnostic tools ===
+  i2c-scan /dev/i2c-0 /dev/i2c-1 ...   - scan I2C buses for ACKing devices
+  ark-ts-test regs                     - dump ARK1680 touch ADC/syscon registers
+  ark-ts-test events /dev/input/eventN - watch touch evdev events
+  lcd-test info                        - dump /dev/fb0 + /dev/ark_display info
+  lcd-test fill <red|green|blue|...>   - fill screen with a solid color
+  lcd-test bars                        - draw color-bar test pattern
+  lcd-test gradient                    - draw a red->green gradient
+  strace -f -o /data/x.log <cmd>       - trace syscalls (e.g. strace -f start_msn)
+=========================
+
+IPv6: ADDRCONF(NETDEV_UP): wlan0: link is not ready
+Configuration file: /etc/hostapd/hostapd.conf
+Using interface wlan0 with hwaddr 68:b9:d3:f1:5a:43 and ssid "carplay_wifi"
+set display inch: QSize(154, 86) 6.94433 
+init msn firset export ticks: 62 
+wlan0: interface state UNINITIALIZED->ENABLED
+wlan0: AP-ENABLED 
+/ # pgd = d231af67
+[000000e0] *pgd=026b3831, *pte=00000000, *ppte=00000000
+dmesg
+Booting Linux on physical CPU 0x0
+Linux version 4.19.192 (osboxes@osboxes) (gcc version 12.2.0 (Debian 12.2.0-14)) #31 Mon Jul 13 13:54:32 AEST 2026
+CPU: ARMv7 Processor [410fc051] revision 1 (ARMv7), cr=10c53c7d
+CPU: PIPT / VIPT nonaliasing data cache, VIPT aliasing instruction cache
+OF: fdt: Machine model: Limcet P305/P306 Dashboard Head Unit
+bootconsole [earlycon0] enabled
+Memory policy: Data cache writeback
+cma: Reserved 64 MiB at 0x04000000
+On node 0 totalpages: 46080
+  Normal zone: 405 pages used for memmap
+  Normal zone: 0 pages reserved
+  Normal zone: 46080 pages, LIFO batch:15
+CPU: All CPU(s) started in SVC mode.
+random: get_random_bytes called from start_kernel+0x94/0x34c with crng_init=0
+pcpu-alloc: s0 r0 d32768 u32768 alloc=1*32768
+pcpu-alloc: [0] 0 
+Built 1 zonelists, mobility grouping off.  Total pages: 45675
+Kernel command line: root=/dev/mmcblk0p2 console=ttyS0,115200n8 mem=180M earlyprintk=serial rootfstype=ext4 rootwait rw screen=0 user_debug=8
+Dentry cache hash table entries: 32768 (order: 5, 131072 bytes)
+Inode-cache hash table entries: 16384 (order: 4, 65536 bytes)
+Memory: 105964K/184320K available (7168K kernel code, 218K rwdata, 1544K rodata, 1024K init, 166K bss, 12820K reserved, 65536K cma-reserved)
+Virtual kernel memory layout:
+    vector  : 0xffff0000 - 0xffff1000   (   4 kB)
+    fixmap  : 0xffc00000 - 0xfff00000   (3072 kB)
+    vmalloc : 0xcb800000 - 0xff800000   ( 832 MB)
+    lowmem  : 0xc0000000 - 0xcb400000   ( 180 MB)
+    modules : 0xbf000000 - 0xc0000000   (  16 MB)
+      .text : 0x(ptrval) - 0x(ptrval)   (8160 kB)
+      .init : 0x(ptrval) - 0x(ptrval)   (1024 kB)
+      .data : 0x(ptrval) - 0x(ptrval)   ( 219 kB)
+       .bss : 0x(ptrval) - 0x(ptrval)   ( 167 kB)
+NR_IRQS: 16, nr_irqs: 16, preallocated irqs: 16
+VIC @(ptrval): id 0x00041192, vendor 0x41
+VIC @(ptrval): id 0x00041192, vendor 0x41
+L2C-310 dynamic clock gating enabled, standby mode enabled
+L2C-310 cache controller enabled, 8 ways, 128 kB
+L2C-310: CACHE_ID 0x410060c9, AUX_CTRL 0x06020000
+clk cpupll rate 690000000.
+clk syspll rate 324000000.
+clk audpll rate 426000000.
+clk ddrclk rate 426000000.
+clk cpuclk rate 690000000.
+clk axiclk rate 324000000.
+clk ahbclk rate 162000000.
+clk pclk rate 81000000.
+clk uart4clk rate 24000000.
+clk uart5clk rate 24000000.
+clk gpuclk rate 324000000.
+clk gpiodebounceclk rate 24000000.
+clk lcdclk rate 324000000.
+clk mfcclk rate 162000000.
+clk rtc-clk rate 32768.
+clk spi-clk rate 162000000.
+clk i2s-dac-clk rate 240000000.
+clk i2s-adc-clk rate 240000000.
+clocksource: arkmicro,ark-timer: mask: 0xffffff max_cycles: 0xffffff, max_idle_ns: 92171119 ns
+sched_clock: 24 bits at 81MHz, resolution 12ns, wraps every 103563053ns
+Console: colour dummy device 80x30
+Calibrating delay loop... 457.11 BogoMIPS (lpj=2285568)
+pid_max: default: 32768 minimum: 301
+Mount-cache hash table entries: 1024 (order: 0, 4096 bytes)
+Mountpoint-cache hash table entries: 1024 (order: 0, 4096 bytes)
+CPU: Testing write buffer coherency: ok
+Setting up static identity map for 0x100000 - 0x10003c
+devtmpfs: initialized
+VFP support v0.3: implementor 41 architecture 2 part 30 variant 5 rev 1
+clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 19112604462750000 ns
+futex hash table entries: 256 (order: -1, 3072 bytes)
+pinctrl core: initialized pinctrl subsystem
+NET: Registered protocol family 16
+DMA: preallocated 256 KiB pool for atomic coherent allocations
+Serial: Arkmicro UART driver
+pinctrl-ark e4900000.pinctrl: initialized ark pinctrl driver
+e4200000.uart: ttyS0 at MMIO 0xe4200000 (irq = 36, base_baud = 1500000) is a ARK
+console [ttyS0] enabled
+bootconsole [earlycon0] disabled
+e8000000.uart: ttyS2 at MMIO 0xe8000000 (irq = 60, base_baud = 1500000) is a ARK
+e8100000.uart: ttyS3 at MMIO 0xe8100000 (irq = 61, base_baud = 1500000) is a ARK
+e4f00000.serial: ttyHS0 at MMIO 0xe4f00000 (irq = 38, base_baud = 0) is a ARK HS UART
+e4800000.serial: ttyHS1 at MMIO 0xe4800000 (irq = 44, base_baud = 0) is a ARK HS UART
+enable get mcu data
+clk lcdclk rate 32400000.
+ark1668_lcdfb e0500000.lcd: 16384KiB frame buffer at 0f000000 (mapped at (ptrval))
+ark1668_lcdfb e0500000.lcd: fb0: Atmel LCDC at 0xe0500000 (mapped at (ptrval)), irq 25
+dw_dmac e0000000.dma: DesignWare DMA Controller, 8 channels
+SCSI subsystem initialized
+libata version 3.00 loaded.
+usbcore: registered new interface driver usbfs
+usbcore: registered new interface driver hub
+usbcore: registered new device driver usb
+gpio-3 (i2c-gpio-0): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+gpio-2 (i2c-gpio-0): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+i2c i2c-1: Not I2C compliant: can't read SCL
+i2c i2c-1: Bus may be unreliable
+i2c-gpio i2c-gpio-0: using lines 3 (SDA) and 2 (SCL, no clock stretching)
+gpio-9 (i2c-gpio-1): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+gpio-121 (i2c-gpio-1): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+i2c i2c-2: Not I2C compliant: can't read SCL
+i2c i2c-2: Bus may be unreliable
+i2c-gpio i2c-gpio-1: using lines 9 (SDA) and 121 (SCL, no clock stretching)
+media: Linux media interface: v0.10
+videodev: Linux video capture interface: v2.00
+Advanced Linux Sound Architecture Driver Initialized.
+Bluetooth: Core ver 2.22
+NET: Registered protocol family 31
+Bluetooth: HCI device and connection manager initialized
+Bluetooth: HCI socket layer initialized
+Bluetooth: L2CAP socket layer initialized
+Bluetooth: SCO socket layer initialized
+clocksource: Switched to clocksource arkmicro,ark-timer
+ark-vdec e0900000.vdec: VDEC controller at 0x(ptrval), irq = 40, misc_minor = 63
+ark-vdec e0900000.vdec: Product ID: 0x6731 (revision 2.57.8)
+NET: Registered protocol family 2
+tcp_listen_portaddr_hash hash table entries: 512 (order: 0, 4096 bytes)
+TCP established hash table entries: 2048 (order: 1, 8192 bytes)
+TCP bind hash table entries: 2048 (order: 1, 8192 bytes)
+TCP: Hash tables configured (established 2048 bind 2048)
+UDP hash table entries: 256 (order: 0, 4096 bytes)
+UDP-Lite hash table entries: 256 (order: 0, 4096 bytes)
+NET: Registered protocol family 1
+Initialise system trusted keyrings
+workingset: timestamp_bits=14 max_order=16 bucket_order=2
+ntfs: driver 2.1.32 [Flags: R/W DEBUG].
+jffs2: version 2.2. (NAND) © 2001-2006 Red Hat, Inc.
+fuse init (API version 7.27)
+Key type asymmetric registered
+Asymmetric key parser 'x509' registered
+io scheduler noop registered (default)
+memalloc-cls memalloc: allocator with major = 250
+dvr_rn6752_probe:init done
+ark_display: registered /dev/ark_display
+nand: device found, Manufacturer ID: 0x98, Chip ID: 0xf1
+nand: Toshiba NAND 128MiB 3,3V 8-bit
+nand: 128 MiB, SLC, erase size: 128 KiB, page size: 2048, OOB size: 64
+nand: WARNING: ark-nand: the ECC used on your system is too weak compared to the one required by the NAND chip
+### rn6752_eq_work reset
+Bad block table found at page 65472, version 0x01
+Bad block table found at page 65408, version 0x01
+nand_read_bbt: 417 bad block(s) found
+usbcore: registered new interface driver cdc_ether
+usbcore: registered new interface driver cdc_subset
+usbcore: registered new interface driver zaurus
+usbcore: registered new interface driver ipheth
+usbcore: registered new interface driver cdc_ncm
+usbcore: registered new interface driver uas
+usbcore: registered new interface driver usb-storage
+musb-hdrc musb-hdrc.0: MUSB HDRC host driver
+musb-hdrc musb-hdrc.0: new USB bus registered, assigned bus number 1
+hub 1-0:1.0: USB hub found
+hub 1-0:1.0: 1 port detected
+musb-hdrc musb-hdrc.0: +++Switch OTG 76  126===+++ 
+musb_ark_probe succss
+musb-hdrc musb-hdrc.1: MUSB HDRC host driver
+musb-hdrc musb-hdrc.1: new USB bus registered, assigned bus number 2
+hub 2-0:1.0: USB hub found
+hub 2-0:1.0: 1 port detected
+musb-hdrc musb-hdrc.1: +++Switch OTG 1  117===+++ 
+musb_ark_probe succss
+using random self ethernet address
+using random host ethernet address
+usb0: HOST MAC e6:08:fe:84:ef:b2
+usb0: MAC 82:62:d4:2e:11:7c
+g_ncm gadget: NCM Gadget
+g_ncm gadget: g_ncm ready
+Goodix-TS 1-005d: i2c test failed attempt 1: -6
+Goodix-TS 1-005d: i2c test failed attempt 2: -6
+Goodix-TS 1-005d: I2C communication failure: -6
+ark1680_ts e4500000.tsc: probe: ADC/TSC MEM resource [mem 0xe4500000-0xe450003f]
+ark1680_ts e4500000.tsc: probe: irq=20
+ark1680_ts e4500000.tsc: probe: mapped syscon/pinmux block at phys 0xe4900000, size 0x200
+ark1680_ts e4500000.tsc: setup[initial           ]: ADC[en=0x00000000 cfg=0x0000ffff] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x00210016 pmux0=0xc5640003 pmux1=0x000623b8]
+ark1680_ts e4500000.tsc: setup[after clkdiv      ]: ADC[en=0x00000000 cfg=0x0000ffff] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5640003 pmux1=0x000623b8]
+ark1680_ts e4500000.tsc: setup[after clken OR    ]: ADC[en=0x00000000 cfg=0x0000ffff] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5640003 pmux1=0x000623b8]
+ark1680_ts e4500000.tsc: setup[after padcfg OR   ]: ADC[en=0x00000000 cfg=0x0000ffff] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5640003 pmux1=0x000623b8]
+ark1680_ts e4500000.tsc: setup[after pinmux0 clr ]: ADC[en=0x00000000 cfg=0x0000ffff] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5240003 pmux1=0x000623b8]
+ark1680_ts e4500000.tsc: setup[after ch_enable#1 ]: ADC[en=0x00000000 cfg=0x0000ffff] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5240003 pmux1=0x000623b8]
+ark1680_ts e4500000.tsc: setup[after cfg/irqclr  ]: ADC[en=0x00000000 cfg=0x00000007] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5240003 pmux1=0x000623b8]
+ark1680_ts e4500000.tsc: setup[after dbcnt/detint]: ADC[en=0x00000000 cfg=0x00000007] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5240003 pmux1=0x000623b8]
+ark1680_ts e4500000.tsc: setup[after pinmux1 clr ]: ADC[en=0x00000000 cfg=0x00000007] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5240003 pmux1=0x000623b8]
+ark1680_ts e4500000.tsc: setup[after ch_enable#2 ]: ADC[en=0x00000f00 cfg=0x00000007] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5240003 pmux1=0x000623b8]
+ark1680_ts e4500000.tsc: setup[final             ]: ADC[en=0x00000f04 cfg=0x00000007] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5240003 pmux1=0x000623b8]
+input: ark1680-ts as /devices/platform/e4500000.tsc/input/input0
+ark1680_ts e4500000.tsc: ARK1680 resistive touchscreen registered, irq=20, debug=0 (echo 1 > /sys/module/ark1680_ts/parameters/debug to trace samples)
+i2c /dev entries driver
+ark_wdt e4b00000.watchdog: initialized (timeout = 15 sec, nowayout = 0)
+Bluetooth: HCI UART driver ver 2.3
+dw_mmc ec400000.mmc: Using PIO mode.
+dw_mmc ec400000.mmc: Version ID is 220a
+dw_mmc ec400000.mmc: DW MMC controller at irq 42,32 bit host data width,32 deep fifo
+mmc_host mmc0: Bus speed (slot 0) = 24000000Hz (slot req 400000Hz, actual 400000HZ div = 30)
+usb 2-1: new high-speed USB device number 2 using musb-hdrc
+dw_mmc ec800000.mmc: Using external DMA controller.
+dw_mmc ec800000.mmc: Version ID is 220a
+dw_mmc ec800000.mmc: DW MMC controller at irq 54,32 bit host data width,32 deep fifo
+mmc_host mmc1: card is non-removable.
+mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 400000Hz, actual 400000HZ div = 30)
+usbcore: registered new interface driver snd-usb-audio
+start:==============[ark1668_i2s_drv_probe]:[ 483]
+dev e4000000.i2s-dac 0xe4000000.
+end:==============[ark1668_i2s_drv_probe]:[ 541]
+start:==============[ark1668_i2s_drv_probe]:[ 483]
+dev e8200000.i2s-adc 0xe8200000.
+end:==============[ark1668_i2s_drv_probe]:[ 541]
+start:================[ark_sdadc_probe]:[ 95]
+end:===============[ark_sdadc_probe]:[ 103]
+start:================[ark_sddac_probe]:[ 175]
+end:===============[ark_sddac_probe]:[ 200]
+err bd37033_write_bytes.
+err bd37033_write_byte timeout.
+err bd37033_write_byte timeout.
+err bd37033_write_byte timeout.
+random: fast init done
+mmc_host mmc0: Bus speed (slot 0) = 24000000Hz (slot req 25000000Hz, actual 24000000HZ div = 0)
+mmc0: new SD card at address e126
+mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 300000Hz, actual 300000HZ div = 40)
+err bd37033_write_byte timeout.
+err bd37033_write_byte timeout.
+mmcblk0: mmc0:e126 SU01G 969 MiB 
+err bd37033_write_byte timeout.
+mp.fl_gain = 65 mp.fr_gain = 65 mp.rl_gain = 65 mp.rr_gain = 65
+ mmcblk0: p1 p2 p3
+usb 2-1: hub_port_init:4724 speed=3 
+usb 2-1: hub_port_init:4729 speed=3
+err bd37033_write_byte timeout.
+err bd37033_write_byte timeout.
+err bd37033_write_byte timeout.
+err bd37033_write_byte timeout.
+err bd37033_write_byte timeout.
+NET: Registered protocol family 10
+mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 200000Hz, actual 200000HZ div = 60)
+Segment Routing with IPv6
+sit: IPv6, IPv4 and MPLS over IPv4 tunneling driver
+NET: Registered protocol family 17
+Loading compiled-in X.509 certificates
+asoc-simple-card sound: e4000000.sddac <-> e4000000.i2s-dac mapping ok
+asoc-simple-card sound: ahb:sdadc@0 <-> e8200000.i2s-adc mapping ok
+cfg80211: Loading compiled-in X.509 certificates for regulatory database
+cfg80211: Loaded X.509 cert 'sforshee: 00b28ddf47aef9cea7'
+ALSA device list:
+  #0: ark1668-audio
+platform regulatory.0: Direct firmware load for regulatory.db failed with error -2
+cfg80211: failed to load regulatory.db
+mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 100000Hz, actual 100000HZ div = 120)
+EXT4-fs (mmcblk0p2): mounted filesystem with ordered data mode. Opts: (null)
+VFS: Mounted root (ext4 filesystem) on device 179:2.
+devtmpfs: mounted
+Freeing unused kernel memory: 1024K
+Run /sbin/init as init process
+random: crng init done
+EXT4-fs (mmcblk0p3): mounted filesystem with ordered data mode. Opts: (null)
+galcore: loading out-of-tree module taints kernel.
+Galcore version 6.2.4.150331
+RTW: module init start
+RTW: rtl8821cu v5.12.0-16-g5229e7f95.20210118_COEX20200730-5151
+RTW: build time: Jul  9 2026 09:31:49
+RTW: rtl8821cu BT-Coex version = COEX20200730-5151
+RTW: rtw_inetaddr_notifier_register
+RTW: 
+usb_endpoint_descriptor(0):
+RTW: bLength=7
+RTW: bDescriptorType=5
+RTW: bEndpointAddress=84
+RTW: wMaxPacketSize=512
+RTW: bInterval=0
+RTW: RT_usb_endpoint_is_bulk_in = 4
+RTW: 
+usb_endpoint_descriptor(1):
+RTW: bLength=7
+RTW: bDescriptorType=5
+RTW: bEndpointAddress=5
+RTW: wMaxPacketSize=512
+RTW: bInterval=0
+RTW: RT_usb_endpoint_is_bulk_out = 5
+RTW: 
+usb_endpoint_descriptor(2):
+RTW: bLength=7
+RTW: bDescriptorType=5
+RTW: bEndpointAddress=6
+RTW: wMaxPacketSize=512
+RTW: bInterval=0
+RTW: RT_usb_endpoint_is_bulk_out = 6
+RTW: 
+usb_endpoint_descriptor(3):
+RTW: bLength=7
+RTW: bDescriptorType=5
+RTW: bEndpointAddress=87
+RTW: wMaxPacketSize=64
+RTW: bInterval=3
+RTW: RT_usb_endpoint_is_int_in = 7, Interval = 3
+RTW: 
+usb_endpoint_descriptor(4):
+RTW: bLength=7
+RTW: bDescriptorType=5
+RTW: bEndpointAddress=8
+RTW: wMaxPacketSize=512
+RTW: bInterval=0
+RTW: RT_usb_endpoint_is_bulk_out = 8
+RTW: nr_endpoint=5, in_num=2, out_num=3
+
+RTW: USB_SPEED_HIGH
+RTW: CHIP TYPE: RTL8821C
+RTW: loadparam, Select P2P interface: iface_id:1
+RTW: [HALMAC]55772M
+HALMAC_MAJOR_VER = 1
+HALMAC_PROTOTYPE_VER = 6
+HALMAC_MINOR_VER = 6
+HALMAC_PATCH_VER = 22
+RTW: Chip Version Info: CHIP_8821C_U3_1T1R_RomVer(2)
+RTW: config_chip_out_EP OutEpQueueSel(0x07), OutEpNumber(3)
+RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+RTW: is_valid_id_status: HALMAC_FEATURE_DUMP_LOGICAL_EFUSE
+RTW: HW EFUSE
+RTW: 0x000: 29 81 00 BC  09 00 21 00  6E 04 A4 10  10 00 30 0B  
+RTW: 0x010: FF FF FF FF  FF FF FF FF  FF FF FF 02  FF FF FF FF  
+RTW: 0x020: FF FF 25 25  25 25 25 23  23 22 22 23  23 23 24 25  
+RTW: 0x030: 22 FF FF FF  FF FF 10 FF  FF FF 28 28  28 28 28 28  
+RTW: 0x040: 2C 2C 2C 2C  2C 02 FF FF  FF FF FF FF  FF FF FF FF  
+RTW: 0x050: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+RTW: 0x060: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+RTW: 0x070: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+RTW: 0x080: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+RTW: 0x090: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+RTW: 0x0A0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+RTW: 0x0B0: FF FF FF FF  FF FF FF FF  7F 2D 1B 00  FF FF FF FF  
+RTW: 0x0C0: FF 01 00 41  00 00 00 00  00 FF 22 FF  FF FF FF FF  
+RTW: 0x0D0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+RTW: 0x0E0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+RTW: 0x0F0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+RTW: 0x100: DA 0B 11 C8  E3 46 02 68  B9 D3 F1 5A  43 09 03 52  
+RTW: 0x110: 65 61 6C 74  65 6B 0E 03  38 30 32 2E  31 31 61 63  
+RTW: 0x120: 20 4E 49 43  08 03 31 32  33 34 35 36  FF FF FF FF  
+RTW: 0x130: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+RTW: 0x140: FF FF FF FF  00 00 31 0F  FF FF FF FF  FF FF FF FF  
+RTW: 0x150: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+RTW: 0x160: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+RTW: 0x170: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+RTW: 0x180: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+RTW: 0x190: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+RTW: 0x1A0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+RTW: 0x1B0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+RTW: 0x1C0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+RTW: 0x1D0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+RTW: 0x1E0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+RTW: 0x1F0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+RTW: EEPROM ID = 0x8129
+RTW: EEPROM Version = 0
+RTW: EEPROM Regulatory=0x01
+RTW: EEPROM Board Type=0x00
+RTW: EEPROM Disable BT-coex, ant_num=1
+RTW: hal_com_config_channel_plan chplan:0x7F
+RTW: EEPROM crystal_cap=0x2d
+RTW: EEPROM ThermalMeter=0x1b
+RTW: EEPROM Customer ID=0x00
+RTW: EEPROM SupportRemoteWakeup=0
+RTW: EEPROM rfe_type=0x22
+RTW: EEPROM PAType_2G is 0x0, ExternalPA_2G = 0
+RTW: EEPROM PAType_5G is 0x0, external_pa_5g = 0
+RTW: EEPROM LNAType_2G is 0x0, ExternalLNA_2G = 0
+RTW: EEPROM LNAType_5G is 0x0, external_lna_5g = 0
+RTW: EEPROM TypeGPA = 0x0
+RTW: EEPROM TypeAPA = 0x0
+RTW: EEPROM TypeGLNA = 0x0
+RTW: EEPROM TypeALNA = 0x0
+RTW: EEPROM tx_bbswing_24G =0x00
+RTW: EEPROM tx_bbswing_5G =0x00
+RTW: EEPROM USB Switch=0
+RTW: EEPROM VID = 0x0BDA, PID = 0xC811
+RTW: [HALMAC][ALWAYS]shall R reg twice!!
+RTW: SetHwReg: bMacPwrCtrlOn=1
+RTW: _rtw_hal_set_fw_rsvd_page((null)) Get [ NOR ] RsvdPageNUm  ==>
+RTW: LocPsPoll: 4
+RTW: WARN Invalid rate 0x0 in MRateToHwRate
+RTW: LocNullData: 5
+RTW: WARN Invalid rate 0x0 in MRateToHwRate
+RTW: LocQosNull: 6
+RTW: WARN Invalid rate 0x0 in MRateToHwRate
+RTW: _rtw_hal_set_fw_rsvd_page((null)) Get [ NOR ] RsvdPageNUm <==
+RTW: _cfg_drv_rsvd_pg_num: request 7 pages => halmac 8 pages success
+RTW: WARN [HALMAC][WARN]the H2C ver. does not match halmac
+RTW: rtl8821c_fw_dl Download Firmware from array success
+RTW: NIC FW Version:24 SubVersion:8
+RTW: SetHwReg: bMacPwrCtrlOn=0
+RTW: hal_read_mac_hidden_rpt OK! (1, 10ms), fwdl:1, id:0x19
+RTW: EEPROM Disable BT-coex by hal_spec
+RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+RTW: is_valid_id_status: HALMAC_FEATURE_DUMP_PHYSICAL_EFUSE
+RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+RTW: is_valid_id_status: HALMAC_FEATURE_DUMP_PHYSICAL_EFUSE
+RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+RTW: is_valid_id_status: HALMAC_FEATURE_DUMP_PHYSICAL_EFUSE
+RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+RTW: is_valid_id_status: HALMAC_FEATURE_DUMP_PHYSICAL_EFUSE
+RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+RTW: is_valid_id_status: HALMAC_FEATURE_DUMP_PHYSICAL_EFUSE
+RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+RTW: is_valid_id_status: HALMAC_FEATURE_DUMP_PHYSICAL_EFUSE
+RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+RTW: is_valid_id_status: HALMAC_FEATURE_DUMP_PHYSICAL_EFUSE
+RTW: rtw_hal_read_chip_info in 250 ms
+RTW: [RF_PATH] ver_id.RF_TYPE:RF_1T1R
+RTW: [RF_PATH] HALSPEC's rf_reg_trx_path_bmp:0x11, rf_reg_path_avail_num:1, max_tx_cnt:1
+RTW: [RF_PATH] PG's trx_path_bmp:0x00, max_tx_cnt:0
+RTW: [RF_PATH] Registry's trx_path_bmp:0x00, tx_path_lmt:0, rx_path_lmt:0
+RTW: [RF_PATH] HALDATA's trx_path_bmp:0x11, max_tx_cnt:1
+RTW: [RF_PATH] HALDATA's rf_type:RF_1T1R, NumTotalRFPath:1
+RTW: rtw_hal_rfpath_init trx_path_bmp:0x11(RF_1T1R), NumTotalRFPath:1, max_tx_cnt:1
+RTW: [TRX_Nss] HALSPEC - tx_nss:1, rx_nss:1
+RTW: [TRX_Nss] Registry - tx_nss:0, rx_nss:0
+RTW: [TRX_Nss] HALDATA - tx_nss:1, rx_nss:1
+RTW: rtw_hal_trxnss_init tx_nss:1, rx_nss:1
+RTW: txpath=0x1, rxpath=0x1
+RTW: txpath_1ss:0x1, num:1
+RTW: init_mlme_default_rate_set: support CCK
+RTW: init_mlme_default_rate_set: support OFDM
+RTW: NR_RECVBUFF: 8, recvbuf_nr: 8
+RTW: MAX_RECVBUF_SZ: 32768
+RTW: NR_PREALLOC_RECV_SKB: 8
+RTW: rtw_alloc_macid((null)) if1, mac_addr:ff:ff:ff:ff:ff:ff macid:1
+RTW: rtw_init_pwrctrl_priv: IPS_mode=0, LPS_mode=0, LPS_level=0
+RTW: IQK FW offload:enable
+RTW: init_phydm_cominfo: Fv=1 Cv=2
+RTW: [A] 2G G00 CCK-1T base:45 from IC_DEF
+RTW: [A] 2G G01 CCK-1T base:45 from IC_DEF
+RTW: [A] 2G G02 CCK-1T base:45 from IC_DEF
+RTW: [A] 2G G03 CCK-1T base:45 from IC_DEF
+RTW: [A] 2G G04 CCK-1T base:45 from IC_DEF
+RTW: [A] 2G G05 CCK-1T base:45 from IC_DEF
+RTW: [A] 2G G00 BW40-1S base:45 from IC_DEF
+RTW: [A] 2G G01 BW40-1S base:45 from IC_DEF
+RTW: [A] 2G G02 BW40-1S base:45 from IC_DEF
+RTW: [A] 2G G03 BW40-1S base:45 from IC_DEF
+RTW: [A] 2G G04 BW40-1S base:45 from IC_DEF
+RTW: rtw_regsty_chk_target_tx_power_valid return _FALSE for band:0, path:0, rs:0, t:-1
+RTW: phy_ConfigBBWithPgParaFile(): No File PHY_REG_PG.txt, Load from HWImg Array!
+RTW: default power by rate loaded
+RTW: phy_txpwr_by_rate_chk_for_path_dup duplicate 2.4G [A] to [B]
+RTW: init_channel_set_from_rtk_priv((null)) ChannelPlan ID:0x7f, ch num:37
+RTW: rtw_macaddr_cfg mac addr:68:b9:d3:f1:5a:43
+RTW: bDriverStopped:True, bSurpriseRemoved:False, bup:0, hw_init_completed:0
+RTW: loadparam, Select P2P interface: iface_id:1
+RTW: init_mlme_default_rate_set: support CCK
+RTW: init_mlme_default_rate_set: support OFDM
+RTW: NR_RECVBUFF: 8, recvbuf_nr: 8
+RTW: MAX_RECVBUF_SZ: 32768
+RTW: NR_PREALLOC_RECV_SKB: 8
+RTW: rtw_alloc_macid((null)) if2, mac_addr:ff:ff:ff:ff:ff:ff macid:1
+RTW: rtw_drv_add_vir_if if2 mac_addr : 6a:b9:d3:f1:5a:43
+RTW: rtw_cfg80211_init_wiphy_band:rf_type=0
+RTW: rtw_build_vht_cap_ie, line821, Set MAX MPDU len = 11454 bytes
+RTW: [VHT] Declare supporting SGI 80MHz
+RTW: rtw_wiphy_alloc(phy0)
+RTW: rtw_wdev_alloc(padapter=e4e20071)
+RTW: rtw_wdev_alloc(padapter=28682553)
+RTW: rtw_wiphy_register(phy0)
+RTW: Register RTW cfg80211 vendor cmd(0x67) interface
+RTW: rtw_reg_notifier(phy0)
+RTW: initiator:CORE, wiphy_idx:-1, type:USER
+RTW: alpha2:00
+RTW: dfs_region:UNSET
+RTW: intersect:0
+RTW: processed:0
+RTW: country_ie_env:ANY
+RTW: rtw_ndev_init(wlan0) if1 mac_addr=68:b9:d3:f1:5a:43
+RTW: rtw_ndev_notifier_call(wlan0) state:16
+RTW: cfg80211_rtw_get_txpower(wlan0) total max: -10000 mbm
+RTW: rtw_ndev_notifier_call(wlan0) state:5
+RTW: rtw_ndev_init(wlan1) if2 mac_addr=6a:b9:d3:f1:5a:43
+RTW: rtw_ndev_notifier_call(wlan1) state:16
+RTW: cfg80211_rtw_get_txpower(wlan1) total max: -10000 mbm
+RTW: rtw_ndev_notifier_call(wlan1) state:5
+usbcore: registered new interface driver rtl8821cu
+RTW: module init ret=0
+RTW: rtw_ndev_notifier_call(wlan0) state:13
+RTW: _netdev_open(wlan0) , bup=0
+RTW: [HALMAC][ALWAYS]shall R reg twice!!
+RTW: SetHwReg: bMacPwrCtrlOn=1
+RTW: _rtw_hal_set_fw_rsvd_page(wlan0) Get [ NOR ] RsvdPageNUm  ==>
+RTW: LocPsPoll: 4
+RTW: LocNullData: 5
+RTW: LocQosNull: 6
+RTW: _rtw_hal_set_fw_rsvd_page(wlan0) Get [ NOR ] RsvdPageNUm <==
+RTW: _cfg_drv_rsvd_pg_num: request 7 pages => halmac 8 pages success
+RTW: rtw_start_drv_threads(wlan0) enter
+RTW: rtw_start_drv_threads(wlan0) start RTW_CMD_THREAD
+RTW: WARN [HALMAC][WARN]the H2C ver. does not match halmac
+RTW: FW Version:24 SubVersion:8
+RTW: rtl8821c_hal_init_main: successful
+start_addr=(0x8000), end_addr=(0x10000), buffer_size=(0x8000), smp_number_max=(4096)
+RTW: rtw_hal_set_default_port_id_cmd (wlan0) port_id :0, mad_id:0
+RTW: rtl8821cu_hal_init in 1030ms
+RTW: rtw_hal_set_macaddr_port wlan0- hw port(0) mac_addr =68:b9:d3:f1:5a:43
+RTW: rtw_hal_set_macaddr_port wlan1- hw port(1) mac_addr =6a:b9:d3:f1:5a:43
+RTW: [HW_VAR_ENABLE_RX_BAR] 0x6A2=0x500
+RTW: wlan0: hw_port(0) will set mode to 2
+RTW: rtw_hal_set_macaddr_port wlan0- hw port(0) mac_addr =68:b9:d3:f1:5a:43
+RTW: wlan0: hw_port(0) set mode=2
+RTW: rtw_hal_init: padapter->registrypriv.set_rrsr_value=0xffffffff
+RTW: MAC Address = 68:b9:d3:f1:5a:43
+RTW: _netdev_vir_if_open(wlan1) , bup=0
+RTW: rtw_start_drv_threads(wlan1) enter
+RTW: _netdev_vir_if_open(wlan1) (bup=1) exit
+RTW: -871x_drv - drv_open, bup=1
+RTW: cfg80211_rtw_set_power_mgmt(wlan0) enabled:0, timeout:-1
+IPv6: ADDRCONF(NETDEV_UP): wlan0: link is not ready
+RTW: rtw_ndev_notifier_call(wlan0) state:1
+RTW: cfg80211_rtw_get_txpower(wlan0) total max: -10000 mbm
+RTW: cfg80211_rtw_get_txpower(wlan0) total max: -10000 mbm
+RTW: cfg80211_rtw_change_iface(wlan0) type=3, hw_port:0
+RTW: cfg80211_rtw_change_iface(wlan0) call netdev_open
+RTW: _netdev_open(wlan0) , bup=1
+RTW: -871x_drv - drv_open, bup=1
+RTW: cfg80211_rtw_change_iface(wlan0) old_iftype=2, new_iftype=3
+RTW: rtw_release_macid(wlan0) if1, mac_addr:ff:ff:ff:ff:ff:ff macid:1
+RTW: rtw_alloc_macid(wlan0) if1, mac_addr:ff:ff:ff:ff:ff:ff macid:0
+RTW: wlan0: hw_port(0) will set mode to 3
+RTW: rtw_hal_set_macaddr_port wlan0- hw port(0) mac_addr =68:b9:d3:f1:5a:43
+RTW: wlan0: hw_port(0) set mode=3
+RTW: cfg80211_rtw_change_iface(wlan0) ret:0
+RTW: cfg80211_rtw_get_txpower(wlan0) total max: -10000 mbm
+RTW: +cfg80211_rtw_del_station(wlan0) mac=  (null)
+RTW: flush all sta, and cam_entry
+RTW: rtw_sta_flush(wlan0)
+RTW: issue_deauth reason(3) to ff:ff:ff:ff:ff:ff
+RTW: +cfg80211_rtw_del_station(wlan0) mac=ff:ff:ff:ff:ff:ff
+RTW: free sta macaddr =ff:ff:ff:ff:ff:ff
+RTW: cfg80211_rtw_del_key(wlan0) key_index=0, addr=  (null)
+RTW: cfg80211_rtw_del_key(wlan0) key_index=1, addr=  (null)
+RTW: cfg80211_rtw_del_key(wlan0) key_index=2, addr=  (null)
+RTW: cfg80211_rtw_del_key(wlan0) key_index=3, addr=  (null)
+RTW: cfg80211_rtw_start_ap(wlan0) hidden_ssid:0, auth_type:0
+RTW: rtw_add_beacon beacon_head_len=63, beacon_tail_len=81
+RTW: rtw_check_beacon_data, len=120
+RTW: rtw_hal_set_bssid wlan0- hw port -0 BSSID: 68:b9:d3:f1:5a:43
+RTW: hw_var_set_sec_cfg: [HW_VAR_SEC_CFG] 0x680=0x30c
+RTW: rtw_ap_chbw_decision ifbmp:0x01 excl_ifbmp:0x00 req:0,-1,-1
+RTW: rtw_ap_chbw_decision others ld_sta_num:0, lg_sta_num:0, ap_num:0, mesh_num:0
+RTW: rtw_ap_chbw_decision ifbmp:0x01 tmp union:11,0,0
+RTW: rtw_ap_chbw_decision(wlan0) 11,0,0 => 11,0,0
+RTW: rtw_ap_chbw_decision union:11,0,0
+RTW: HW_VAR_BASIC_RATE: 0x15f->0x15f->0x15f
+RTW: rtw_get_sta_tx_nss: 1 SS
+RTW: rtw_get_sta_rx_nss: 1 ss
+RTW: STA - MAC_ID:0, Tx - 1 SS, Rx - 1 SS
+RTW: STA - MAC_ID:0, SM_PS 3
+RTW: wlan0 BMC Init Tx rate - CCK_11M
+RTW: rtw_dfs_rd_en_decision(wlan0) needed:0, mlme_act:11, excl_ifbmp:0x00
+RTW: rtw_dfs_rd_en_decision(wlan0) ld_sta_num:0, lg_sta_num:0, ap_num:1, mesh_num:0, 11,0,0
+RTW: is_valid_id_status: HALMAC_FEATURE_IQK
+RTW: hw_var_set_correct_tsf(wlan0)
+RTW: [TSF_SYNC] p0 sync port = N/A
+RTW: [TSF_SYNC] timer offset = 0
+RTW: rtw_cfg80211_indicate_connect(wlan0)
+RTW: assoc success
+RTW: cfg80211_rtw_change_bss(wlan0)
+RTW: ap_isolate=0
+RTW: cfg80211_rtw_add_key(wlan0) cipher=0xfac04
+RTW: cfg80211_rtw_add_key(wlan0) key_len=16, key_index=1
+RTW: cfg80211_rtw_add_key(wlan0) pairwise=0
+RTW: rtw_cfg80211_ap_set_encryption
+RTW: rtw_cfg80211_ap_set_encryption(wlan0) set CCMP TX GTK idx:1, len:16
+RTW: rtw_ap_set_group_key
+RTW: cfg80211_rtw_set_default_key(wlan0) key_index=1, unicast=0, multicast=1
+RTW: rtw_ndev_notifier_call(wlan0) state:4
+RTW: set group key camid:0, addr:68:b9:d3:f1:5a:43, kid:1, type:AES
+RTW: rtw_ac_parm_cmd_hdl(wlan0) AC_VO = 0x002f3213
+RTW: rtw_ac_parm_cmd_hdl(wlan0) AC_VI = 0x005e4313
+RTW: rtw_ac_parm_cmd_hdl(wlan0) AC_BE = 0x00006425
+RTW: rtw_ac_parm_cmd_hdl(wlan0) AC_BK = 0x0000a449
+EffectWatch: unhandled page fault (11) at 0x000000e0, code 0x017
+pgd = d231af67
+[000000e0] *pgd=026b3831, *pte=00000000, *ppte=00000000
+CPU: 0 PID: 121 Comm: EffectWatch Tainted: G           O      4.19.192 #31
+Hardware name: Arkmicro arm soc Family
+PC is at 0xb3f2efe8
+LR is at 0xb3f48d08
+pc : [<b3f2efe8>]    lr : [<b3f48d08>]    psr: 600e0010
+sp : bef531c0  ip : b3f77034  fp : b6ca2864
+r10: b3fc6578  r9 : 0003b500  r8 : 00000000
+r7 : b3f77000  r6 : 00000000  r5 : b3f816b0  r4 : 00000000
+r3 : 00000000  r2 : b3f815e8  r1 : 00000005  r0 : 00000000
+Flags: nZCv  IRQs on  FIQs on  Mode USER_32  ISA ARM  Segment user
+Control: 10c53c7d  Table: 026d8059  DAC: 00000055
+CPU: 0 PID: 121 Comm: EffectWatch Tainted: G           O      4.19.192 #31
+Hardware name: Arkmicro arm soc Family
+[<c010cc7c>] (unwind_backtrace) from [<c010a620>] (show_stack+0x10/0x14)
+[<c010a620>] (show_stack) from [<c010d428>] (__do_user_fault+0x11c/0x124)
+[<c010d428>] (__do_user_fault) from [<c010d6d8>] (do_page_fault+0x234/0x338)
+[<c010d6d8>] (do_page_fault) from [<c010d9b8>] (do_DataAbort+0x4c/0xf8)
+[<c010d9b8>] (do_DataAbort) from [<c0101cdc>] (__dabt_usr+0x3c/0x40)
+Exception stack(0xc26bbfb0 to 0xc26bbff8)
+bfa0:                                     00000000 00000005 b3f815e8 00000000
+bfc0: 00000000 b3f816b0 00000000 b3f77000 00000000 0003b500 b3fc6578 b6ca2864
+bfe0: b3f77034 bef531c0 b3f48d08 b3f2efe8 600e0010 ffffffff
+/ # start_msn
+Setting up environment for MsnCoreApp...
+Starting MsnCoreApp (Software Framebuffer)...
+QWSTslibMouseHandlerPrivate: ts_open() failed with error: 'No such file or directory'
+Please check your tslib installation!
+QWS_ARK_TOUCH_DEVICE undefined, touch input disabled
+ALSA lib /workspace/ark0618system/build/..//apps/alsa-lib-1.1.0/src/pcm/pcm_direct.c:1093:(snd1_pcm_direct_initialize_slave) unable to start PCM stream
+ALSA lib /workspace/ark0618system/build/..//apps/alsa-lib-1.1.0/src/pcm/pcm_dmix.c:1041:(snd_pcm_dmix_open) unable to initialize slave
+ALSAMixerOpen filed, stream name: plug:softvol3  ctrl name: softmaster3 
+ALSA lib /workspace/ark0618system/build/..//apps/alsa-lib-1.1.0/src/pcm/pcm_direct.c:1093:(snd1_pcm_direct_initialize_slave) unable to start PCM stream
+ALSA lib /workspace/ark0618system/build/..//apps/alsa-lib-1.1.0/src/pcm/pcm_dmix.c:1041:(snd_pcm_dmix_open) unable to initialize slave
+ALSAMixerOpen filed, stream name: plug:softvol2  ctrl name: softmaster2 
+ALSA lib /workspace/ark0618system/build/..//apps/alsa-lib-1.1.0/src/pcm/pcm_direct.c:1093:(snd1_pcm_direct_initialize_slave) unable to start PCM stream
+ALSA lib /workspace/ark0618system/build/..//apps/alsa-lib-1.1.0/src/pcm/pcm_dmix.c:1041:(snd_pcm_dmix_open) unable to initialize slave
+ALSAMixerOpen filed, stream name: plug:softvol4  ctrl name: softmaster4 
+ALSA lib /workspace/ark0618system/build/..//apps/alsa-lib-1.1.0/src/pcm/pcm_direct.c:1093:(snd1_pcm_direct_initialize_slave) unable to start PCM stream
+ALSA lib /workspace/ark0618system/build/..//apps/alsa-lib-1.1.0/src/pcm/pcm_dmix.c:1041:(snd_pcm_dmix_open) unable to initialize slave
+ALSAMixerOpen filed, stream name: plug:softvol1  ctrl name: softmaster1 
+ALSA lib /workspace/ark0618system/build/..//apps/alsa-lib-1.1.0/src/pcm/pcm_direct.c:1093:(snd1_pcm_direct_initialize_slave) unable to start PCM stream
+ALSA lib /workspace/ark0618system/build/..//apps/alsa-lib-1.1.0/src/pcm/pcm_dmix.c:1041:(snd_pcm_dmix_open) unable to initialize slave
+ALSAMixerOpen filed, stream name: plug:softvol  ctrl name: softmaster 
+ALSA lib /workspace/ark0618system/build/..//apps/alsa-lib-1.1.0/src/pcm/pcm_direct.c:1093:(snd1_pcm_direct_initialize_slave) unable to start PCM stream
+ALSA lib /workspace/ark0618system/build/..//apps/alsa-lib-1.1.0/src/pcm/pcm_dmix.c:1041:(snd_pcm_dmix_open) unable to initialize slave
+ALSAMixerOpen filed, stream name: plug:softvol5  ctrl name: softmaster5 
+ark_display: ARKDISP_GET_SCREEN_INFO -> screen_id=0 800x480 120x72mm
+ark screen type: 0 
+display size: QSize(800, 480)  src size: QSize(120, 72) 
+set gpio: 35  value: 0  ret: 0 
+Load App Plugin 12 "/usr/lib/libCarReversing.so" 
+run thread: 0xb47ff440 
+hwclock: can't open '/dev/misc/rtc': No such file or directory
+SetTime: "2020-12-03 09:09:30" Ret: 256 
+rm: can't remove '/tmp/app-*.bmp': No such file or directory
+Load App Plugin 10 "/usr/lib/libLauncher-Box.so" 
+MsnMainWindow::setRealVisible LauncherWindow(0x10c338) true 
+DiskDeviceWatcher::startWatcher 
+Start Load Driver 
+Load App Plugin 8 "/usr/lib/libSetting.so" 
+Open backlight pwark_display: unhandled ioctl cmd=0xc004a001
+m : false 
+ioctl ARKark_display: unhandled ioctl cmd=0xc004a001
+DISP_GET_VDE_CFG fail.
+ioctl ARKDISP_GETark_display: unhandled ioctl cmd=0xc004a001
+_VDE_CFG fail.
+ioctl ARKDISP_GET_VDE_CFG fail.
+ark_display: unhandled ioctl cmd=0xc004a001
+ioctl  ARKDISP_GEark_display: unhandled ioctl cmd=0xc004a001
+T_VDE_CFG fail.
+ioctl  ARKDISP_GEark_display: unhandled ioctl cmd=0xc004a001
+T_VDE_CFG fail.
+ioctl  ARKDISP_Gark_display: unhandled ioctl cmd=0xc004a001
+ET_VDE_CFG fail.
+ioctl  ARKDISP_GEark_display: unhandled ioctl cmd=0xc004a001
+T_VDE_CFG fail.
+ioctl  ARKDISP_GEark_display: unhandled ioctl cmd=0xc004a001
+T_VDE_CFG fail.
+ioctl  ARKDISP_GEark_display: unhandled ioctl cmd=0xc004a001
+T_VDE_CFG fail.
+ioark_display: unhandled ioctl cmd=0xc004a001
+ctl  ARKDISP_GET_ark_display: unhandled ioctl cmd=0xc004a001
+VDE_CFG fail.
+ioctl  ARKDISP_GET_VDE_CFG fail.
+ioctl  ARKDISP_GET_VDE_Cark_display: unhandled ioctl cmd=0xc004a001
+FG fail.
+ioctl  ARKDISP_GEark_display: unhandled ioctl cmd=0xc004a001
+T_VDE_CFG fail.
+ioctl  ARKDISP_GEark_display: unhandled ioctl cmd=0xc004a001
+T_VDE_CFG fail.
+ark_display: unhandled ioctl cmd=0xc004a001
+ioctl  ARKDISP_GET_VDE_CFG fail.
+ioctl  ARKDISP_GEark_display: unhandled ioctl cmd=0xc004a001
+T_VDE_CFG fail.
+iark_display: unhandled ioctl cmd=0xc004a001
+octl  ARKDISP_GET_VDE_CFG fail.
+ioctl  ARKDISP_GET_VDE_CFG fail.
+set gpio: 34  value: 0  ret: 0 
+Open I2C Device: 2 "80"  FD: 16 
+Sound_BD37033::muteSpeakerAtts false true 
+musb_hdrc: exports duplicate symbol musb_dma_controller_create (owned by kernel)
+SoundAdapter Create Success, ICType: 3 
+Load App Plugin 403 "/usr/lib/libMsnSound.so" 
+set gpio: 34  value: 1  ret: 0 
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+Record Error Log: /data/minidump/err-1.log 
+AppVer:V3.7.2.1203
+SystemVer:Limcet_ 
+HardwareInfos:02-0006-05-00-00-03-00-00
+ErrorCode:11
+CallStack:
+/usr/lib/libMsnCommons.so.1(+0x54678)[0xb6cb6678]
+/lib/libc.so.6(__default_sa_restorer+0x0)[0xb5b38710]
+/usr/lib/libSetting.so(_ZN13SettingWindow13sendSoundDataEhhPKch+0xc4)[0xb374c06c]
+/usr/lib/libSetting.so(_ZN13SettingWindow15initSoundParamsEv+0x6c)[0xb3750be0]
+/usr/lib/libSetting.so(_ZN13SettingWindow11onFirstInitEv+0x6c4)[0xb3755370]
+/usr/lib/libSetting.so(_ZN13SettingWindowC1Ev+0x3d4)[0xb3756540]
+/usr/lib/libSetting.so(_ZN13SettingPlugin16createMainWindowEv+0x28)[0xb3764488]
+/usr/lib/libMsnCommons.so.1(_ZN9MsnPlugin11customEventEP6QEvent+0x358)[0xb6cb96b8]
+/usr/lib/libSetting.so(_ZN13SettingPlugin11customEventEP6QEvent+0x14)[0xb376454c]
+/usr/lib/libMsnCommons.so.1(_ZN14MsnApplication16dispatchMsnEventEP8MsnEvent+0x1ac)[0xb6ca140c]
+MsnCoreApp(_ZN10MsnCoreApp11customEventEP6QEvent+0x2c)[0x3ba0c]
+/usr/local/Qt4.7.4/lib/libQtCore.so.4(_ZN7QObject5eventEP6QEvent+0x180)[0xb5f44014]
+/usr/local/Qt4.7.4/lib/libQtGui.so.4(_ZN12QApplication5eventEP6QEvent+0x4c)[0xb6311530]
+/usr/local/Qt4.7.4/lib/libQtGui.so.4(_ZN19QApplicationPrivate13notify_helperEP7QObjectP6QEvent+0x9c)[0xb630c324]
+/usr/local/Qt4.7.4/lib/libQtGui.so.4(_ZN12QApplication6notifyEP7QObjectP6QEvent+0x470)[0xb631285c]
+MsnCoreApp(_ZN10MsnCoreApp6notifyEP7QObjectP6QEvent+0xe0)[0x3475c]
+/usr/local/Qt4.7.4/lib/libQtCore.so.4(_ZN16QCoreApplication14notifyInternalEP7QObjectP6QEvent+0x74)[0xb5f2ce44]
+MsnCoreApp(_ZN10MsnCoreApp11onFirstInitEv+0x152c)[0x31f70]
+MsnCoreApp(main+0x144)[0x22e10]
+/lib/libc.so.6(__libc_start_main+0x110)[0xb5b23174]
+Booting Linux on physical CPU 0x0
+Linux version 4.19.192 (osboxes@osboxes) (gcc version 12.2.0 (Debian 12.2.0-14)) #31 Mon Jul 13 13:54:32 AEST 2026
+CPU: ARMv7 Processor [410fc051] revision 1 (ARMv7), cr=10c53c7d
+CPU: PIPT / VIPT nonaliasing data cache, VIPT aliasing instruction cache
+OF: fdt: Machine model: Limcet P305/P306 Dashboard Head Unit
+bootconsole [earlycon0] enabled
+Memory policy: Data cache writeback
+cma: Reserved 64 MiB at 0x04000000
+On node 0 totalpages: 46080
+  Normal zone: 405 pages used for memmap
+  Normal zone: 0 pages reserved
+  Normal zone: 46080 pages, LIFO batch:15
+CPU: All CPU(s) started in SVC mode.
+random: get_random_bytes called from start_kernel+0x94/0x34c with crng_init=0
+pcpu-alloc: s0 r0 d32768 u32768 alloc=1*32768
+pcpu-alloc: [0] 0 
+Built 1 zonelists, mobility grouping off.  Total pages: 45675
+Kernel command line: root=/dev/mmcblk0p2 console=ttyS0,115200n8 mem=180M earlyprintk=serial rootfstype=ext4 rootwait rw screen=0 user_debug=8
+Dentry cache hash table entries: 32768 (order: 5, 131072 bytes)
+Inode-cache hash table entries: 16384 (order: 4, 65536 bytes)
+Memory: 105964K/184320K available (7168K kernel code, 218K rwdata, 1544K rodata, 1024K init, 166K bss, 12820K reserved, 65536K cma-reserved)
+Virtual kernel memory layout:
+    vector  : 0xffff0000 - 0xffff1000   (   4 kB)
+    fixmap  : 0xffc00000 - 0xfff00000   (3072 kB)
+    vmalloc : 0xcb800000 - 0xff800000   ( 832 MB)
+    lowmem  : 0xc0000000 - 0xcb400000   ( 180 MB)
+    modules : 0xbf000000 - 0xc0000000   (  16 MB)
+      .text : 0x(ptrval) - 0x(ptrval)   (8160 kB)
+      .init : 0x(ptrval) - 0x(ptrval)   (1024 kB)
+      .data : 0x(ptrval) - 0x(ptrval)   ( 219 kB)
+       .bss : 0x(ptrval) - 0x(ptrval)   ( 167 kB)
+NR_IRQS: 16, nr_irqs: 16, preallocated irqs: 16
+VIC @(ptrval): id 0x00041192, vendor 0x41
+VIC @(ptrval): id 0x00041192, vendor 0x41
+L2C-310 dynamic clock gating enabled, standby mode enabled
+L2C-310 cache controller enabled, 8 ways, 128 kB
+L2C-310: CACHE_ID 0x410060c9, AUX_CTRL 0x06020000
+clk cpupll rate 690000000.
+clk syspll rate 324000000.
+clk audpll rate 426000000.
+clk ddrclk rate 426000000.
+clk cpuclk rate 690000000.
+clk axiclk rate 324000000.
+clk ahbclk rate 162000000.
+clk pclk rate 81000000.
+clk uart4clk rate 24000000.
+clk uart5clk rate 24000000.
+clk gpuclk rate 324000000.
+clk gpiodebounceclk rate 24000000.
+clk lcdclk rate 324000000.
+clk mfcclk rate 162000000.
+clk rtc-clk rate 32768.
+clk spi-clk rate 162000000.
+clk i2s-dac-clk rate 240000000.
+clk i2s-adc-clk rate 240000000.
+clocksource: arkmicro,ark-timer: mask: 0xffffff max_cycles: 0xffffff, max_idle_ns: 92171119 ns
+sched_clock: 24 bits at 81MHz, resolution 12ns, wraps every 103563053ns
+Console: colour dummy device 80x30
+Calibrating delay loop... 457.11 BogoMIPS (lpj=2285568)
+pid_max: default: 32768 minimum: 301
+Mount-cache hash table entries: 1024 (order: 0, 4096 bytes)
+Mountpoint-cache hash table entries: 1024 (order: 0, 4096 bytes)
+CPU: Testing write buffer coherency: ok
+Setting up static identity map for 0x100000 - 0x10003c
+devtmpfs: initialized
+VFP support v0.3: implementor 41 architecture 2 part 30 variant 5 rev 1
+clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 19112604462750000 ns
+futex hash table entries: 256 (order: -1, 3072 bytes)
+pinctrl core: initialized pinctrl subsystem
+NET: Registered protocol family 16
+DMA: preallocated 256 KiB pool for atomic coherent allocations
+Serial: Arkmicro UART driver
+pinctrl-ark e4900000.pinctrl: initialized ark pinctrl driver
+e4200000.uart: ttyS0 at MMIO 0xe4200000 (irq = 36, base_baud = 1500000) is a ARK
+console [ttyS0] enabled
+bootconsole [earlycon0] disabled
+e8000000.uart: ttyS2 at MMIO 0xe8000000 (irq = 60, base_baud = 1500000) is a ARK
+e8100000.uart: ttyS3 at MMIO 0xe8100000 (irq = 61, base_baud = 1500000) is a ARK
+e4f00000.serial: ttyHS0 at MMIO 0xe4f00000 (irq = 38, base_baud = 0) is a ARK HS UART
+e4800000.serial: ttyHS1 at MMIO 0xe4800000 (irq = 44, base_baud = 0) is a ARK HS UART
+enable get mcu data
+clk lcdclk rate 32400000.
+ark1668_lcdfb e0500000.lcd: 16384KiB frame buffer at 0f000000 (mapped at (ptrval))
+ark1668_lcdfb e0500000.lcd: fb0: Atmel LCDC at 0xe0500000 (mapped at (ptrval)), irq 25
+dw_dmac e0000000.dma: DesignWare DMA Controller, 8 channels
+SCSI subsystem initialized
+libata version 3.00 loaded.
+usbcore: registered new interface driver usbfs
+usbcore: registered new interface driver hub
+usbcore: registered new device driver usb
+gpio-3 (i2c-gpio-0): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+gpio-2 (i2c-gpio-0): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+i2c i2c-1: Not I2C compliant: can't read SCL
+i2c i2c-1: Bus may be unreliable
+i2c-gpio i2c-gpio-0: using lines 3 (SDA) and 2 (SCL, no clock stretching)
+gpio-9 (i2c-gpio-1): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+gpio-121 (i2c-gpio-1): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+i2c i2c-2: Not I2C compliant: can't read SCL
+i2c i2c-2: Bus may be unreliable
+i2c-gpio i2c-gpio-1: using lines 9 (SDA) and 121 (SCL, no clock stretching)
+media: Linux media interface: v0.10
+videodev: Linux video capture interface: v2.00
+Advanced Linux Sound Architecture Driver Initialized.
+Bluetooth: Core ver 2.22
+NET: Registered protocol family 31
+Bluetooth: HCI device and connection manager initialized
+Bluetooth: HCI socket layer initialized
+Bluetooth: L2CAP socket layer initialized
+Bluetooth: SCO socket layer initialized
+clocksource: Switched to clocksource arkmicro,ark-timer
+ark-vdec e0900000.vdec: VDEC controller at 0x(ptrval), irq = 40, misc_minor = 63
+ark-vdec e0900000.vdec: Product ID: 0x6731 (revision 2.57.8)
+NET: Registered protocol family 2
+tcp_listen_portaddr_hash hash table entries: 512 (order: 0, 4096 bytes)
+TCP established hash table entries: 2048 (order: 1, 8192 bytes)
+TCP bind hash table entries: 2048 (order: 1, 8192 bytes)
+TCP: Hash tables configured (established 2048 bind 2048)
+UDP hash table entries: 256 (order: 0, 4096 bytes)
+UDP-Lite hash table entries: 256 (order: 0, 4096 bytes)
+NET: Registered protocol family 1
+Initialise system trusted keyrings
+workingset: timestamp_bits=14 max_order=16 bucket_order=2
+ntfs: driver 2.1.32 [Flags: R/W DEBUG].
+jffs2: version 2.2. (NAND) © 2001-2006 Red Hat, Inc.
+fuse init (API version 7.27)
+Key type asymmetric registered
+Asymmetric key parser 'x509' registered
+io scheduler noop registered (default)
+memalloc-cls memalloc: allocator with major = 250
+dvr_rn6752_probe:init done
+ark_display: registered /dev/ark_display
+nand: device found, Manufacturer ID: 0x98, Chip ID: 0xf1
+nand: Toshiba NAND 128MiB 3,3V 8-bit
+nand: 128 MiB, SLC, erase size: 128 KiB, page size: 2048, OOB size: 64
+nand: WARNING: ark-nand: the ECC used on your system is too weak compared to the one required by the NAND chip
+### rn6752_eq_work reset
+Bad block table found at page 65472, version 0x01
+Bad block table found at page 65408, version 0x01
+nand_read_bbt: 417 bad block(s) found
+usbcore: registered new interface driver cdc_ether
+usbcore: registered new interface driver cdc_subset
+usbcore: registered new interface driver zaurus
+usbcore: registered new interface driver ipheth
+usbcore: registered new interface driver cdc_ncm
+usbcore: registered new interface driver uas
+usbcore: registered new interface driver usb-storage
+musb-hdrc musb-hdrc.0: MUSB HDRC host driver
+musb-hdrc musb-hdrc.0: new USB bus registered, assigned bus number 1
+hub 1-0:1.0: USB hub found
+hub 1-0:1.0: 1 port detected
+musb-hdrc musb-hdrc.0: +++Switch OTG 76  126===+++ 
+musb_ark_probe succss
+musb-hdrc musb-hdrc.1: MUSB HDRC host driver
+musb-hdrc musb-hdrc.1: new USB bus registered, assigned bus number 2
+hub 2-0:1.0: USB hub found
+hub 2-0:1.0: 1 port detected
+musb-hdrc musb-hdrc.1: +++Switch OTG 1  117===+++ 
+musb_ark_probe succss
+using random self ethernet address
+using random host ethernet address
+usb0: HOST MAC e6:08:fe:84:ef:b2
+usb0: MAC 82:62:d4:2e:11:7c
+g_ncm gadget: NCM Gadget
+g_ncm gadget: g_ncm ready
+Goodix-TS 1-005d: i2c test failed attempt 1: -6
+Goodix-TS 1-005d: i2c test failed attempt 2: -6
+Goodix-TS 1-005d: I2C communication failure: -6
+ark1680_ts e4500000.tsc: probe: ADC/TSC MEM resource [mem 0xe4500000-0xe450003f]
+ark1680_ts e4500000.tsc: probe: irq=20
+ark1680_ts e4500000.tsc: probe: mapped syscon/pinmux block at phys 0xe4900000, size 0x200
+ark1680_ts e4500000.tsc: setup[initial           ]: ADC[en=0x00000000 cfg=0x0000ffff] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x00210016 pmux0=0xc5640003 pmux1=0x000623b8]
+ark1680_ts e4500000.tsc: setup[after clkdiv      ]: ADC[en=0x00000000 cfg=0x0000ffff] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5640003 pmux1=0x000623b8]
+ark1680_ts e4500000.tsc: setup[after clken OR    ]: ADC[en=0x00000000 cfg=0x0000ffff] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5640003 pmux1=0x000623b8]
+ark1680_ts e4500000.tsc: setup[after padcfg OR   ]: ADC[en=0x00000000 cfg=0x0000ffff] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5640003 pmux1=0x000623b8]
+ark1680_ts e4500000.tsc: setup[after pinmux0 clr ]: ADC[en=0x00000000 cfg=0x0000ffff] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5240003 pmux1=0x000623b8]
+ark1680_ts e4500000.tsc: setup[after ch_enable#1 ]: ADC[en=0x00000000 cfg=0x0000ffff] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5240003 pmux1=0x000623b8]
+ark1680_ts e4500000.tsc: setup[after cfg/irqclr  ]: ADC[en=0x00000000 cfg=0x00000007] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5240003 pmux1=0x000623b8]
+ark1680_ts e4500000.tsc: setup[after dbcnt/detint]: ADC[en=0x00000000 cfg=0x00000007] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5240003 pmux1=0x000623b8]
+ark1680_ts e4500000.tsc: setup[after pinmux1 clr ]: ADC[en=0x00000000 cfg=0x00000007] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5240003 pmux1=0x000623b8]
+ark1680_ts e4500000.tsc: setup[after ch_enable#2 ]: ADC[en=0x00000f00 cfg=0x00000007] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5240003 pmux1=0x000623b8]
+ark1680_ts e4500000.tsc: setup[final             ]: ADC[en=0x00000f04 cfg=0x00000007] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5240003 pmux1=0x000623b8]
+input: ark1680-ts as /devices/platform/e4500000.tsc/input/input0
+ark1680_ts e4500000.tsc: ARK1680 resistive touchscreen registered, irq=20, debug=0 (echo 1 > /sys/module/ark1680_ts/parameters/debug to trace samples)
+i2c /dev entries driver
+ark_wdt e4b00000.watchdog: initialized (timeout = 15 sec, nowayout = 0)
+Bluetooth: HCI UART driver ver 2.3
+dw_mmc ec400000.mmc: Using PIO mode.
+dw_mmc ec400000.mmc: Version ID is 220a
+dw_mmc ec400000.mmc: DW MMC controller at irq 42,32 bit host data width,32 deep fifo
+mmc_host mmc0: Bus speed (slot 0) = 24000000Hz (slot req 400000Hz, actual 400000HZ div = 30)
+usb 2-1: new high-speed USB device number 2 using musb-hdrc
+dw_mmc ec800000.mmc: Using external DMA controller.
+dw_mmc ec800000.mmc: Version ID is 220a
+dw_mmc ec800000.mmc: DW MMC controller at irq 54,32 bit host data width,32 deep fifo
+mmc_host mmc1: card is non-removable.
+mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 400000Hz, actual 400000HZ div = 30)
+usbcore: registered new interface driver snd-usb-audio
+start:==============[ark1668_i2s_drv_probe]:[ 483]
+dev e4000000.i2s-dac 0xe4000000.
+end:==============[ark1668_i2s_drv_probe]:[ 541]
+start:==============[ark1668_i2s_drv_probe]:[ 483]
+dev e8200000.i2s-adc 0xe8200000.
+end:==============[ark1668_i2s_drv_probe]:[ 541]
+start:================[ark_sdadc_probe]:[ 95]
+end:===============[ark_sdadc_probe]:[ 103]
+start:================[ark_sddac_probe]:[ 175]
+end:===============[ark_sddac_probe]:[ 200]
+err bd37033_write_bytes.
+err bd37033_write_byte timeout.
+err bd37033_write_byte timeout.
+err bd37033_write_byte timeout.
+random: fast init done
+mmc_host mmc0: Bus speed (slot 0) = 24000000Hz (slot req 25000000Hz, actual 24000000HZ div = 0)
+mmc0: new SD card at address e126
+mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 300000Hz, actual 300000HZ div = 40)
+err bd37033_write_byte timeout.
+err bd37033_write_byte timeout.
+mmcblk0: mmc0:e126 SU01G 969 MiB 
+err bd37033_write_byte timeout.
+mp.fl_gain = 65 mp.fr_gain = 65 mp.rl_gain = 65 mp.rr_gain = 65
+ mmcblk0: p1 p2 p3
+usb 2-1: hub_port_init:4724 speed=3 
+usb 2-1: hub_port_init:4729 speed=3
+err bd37033_write_byte timeout.
+err bd37033_write_byte timeout.
+err bd37033_write_byte timeout.
+err bd37033_write_byte timeout.
+err bd37033_write_byte timeout.
+NET: Registered protocol family 10
+mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 200000Hz, actual 200000HZ div = 60)
+Segment Routing with IPv6
+sit: IPv6, IPv4 and MPLS over IPv4 tunneling driver
+NET: Registered protocol family 17
+Loading compiled-in X.509 certificates
+asoc-simple-card sound: e4000000.sddac <-> e4000000.i2s-dac mapping ok
+asoc-simple-card sound: ahb:sdadc@0 <-> e8200000.i2s-adc mapping ok
+cfg80211: Loading compiled-in X.509 certificates for regulatory database
+cfg80211: Loaded X.509 cert 'sforshee: 00b28ddf47aef9cea7'
+ALSA device list:
+  #0: ark1668-audio
+platform regulatory.0: Direct firmware load for regulatory.db failed with error -2
+cfg80211: failed to load regulatory.db
+mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 100000Hz, actual 100000HZ div = 120)
+EXT4-fs (mmcblk0p2): mounted filesystem with ordered data mode. Opts: (null)
+VFS: Mounted root (ext4 filesystem) on device 179:2.
+devtmpfs: mounted
+Freeing unused kernel memory: 1024K
+Run /sbin/init as init process
+random: crng init done
+EXT4-fs (mmcblk0p3): mounted filesystem with ordered data mode. Opts: (null)
+galcore: loading out-of-tree module taints kernel.
+Galcore version 6.2.4.150331
+RTW: module init start
+RTW: rtl8821cu v5.12.0-16-g5229e7f95.20210118_COEX20200730-5151
+RTW: build time: Jul  9 2026 09:31:49
+RTW: rtl8821cu BT-Coex version = COEX20200730-5151
+RTW: rtw_inetaddr_notifier_register
+RTW: 
+usb_endpoint_descriptor(0):
+RTW: bLength=7
+RTW: bDescriptorType=5
+RTW: bEndpointAddress=84
+RTW: wMaxPacketSize=512
+RTW: bInterval=0
+RTW: RT_usb_endpoint_is_bulk_in = 4
+RTW: 
+usb_endpoint_descriptor(1):
+RTW: bLength=7
+RTW: bDescriptorType=5
+RTW: bEndpointAddress=5
+RTW: wMaxPacketSize=512
+RTW: bInterval=0
+RTW: RT_usb_endpoint_is_bulk_out = 5
+RTW: 
+usb_endpoint_descriptor(2):
+RTW: bLength=7
+RTW: bDescriptorType=5
+RTW: bEndpointAddress=6
+RTW: wMaxPacketSize=512
+RTW: bInterval=0
+RTW: RT_usb_endpoint_is_bulk_out = 6
+RTW: 
+usb_endpoint_descriptor(3):
+RTW: bLength=7
+RTW: bDescriptorType=5
+RTW: bEndpointAddress=87
+RTW: wMaxPacketSize=64
+RTW: bInterval=3
+RTW: RT_usb_endpoint_is_int_in = 7, Interval = 3
+RTW: 
+usb_endpoint_descriptor(4):
+RTW: bLength=7
+RTW: bDescriptorType=5
+RTW: bEndpointAddress=8
+RTW: wMaxPacketSize=512
+RTW: bInterval=0
+RTW: RT_usb_endpoint_is_bulk_out = 8
+RTW: nr_endpoint=5, in_num=2, out_num=3
+
+RTW: USB_SPEED_HIGH
+RTW: CHIP TYPE: RTL8821C
+RTW: loadparam, Select P2P interface: iface_id:1
+RTW: [HALMAC]55772M
+HALMAC_MAJOR_VER = 1
+HALMAC_PROTOTYPE_VER = 6
+HALMAC_MINOR_VER = 6
+HALMAC_PATCH_VER = 22
+RTW: Chip Version Info: CHIP_8821C_U3_1T1R_RomVer(2)
+RTW: config_chip_out_EP OutEpQueueSel(0x07), OutEpNumber(3)
+RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+RTW: is_valid_id_status: HALMAC_FEATURE_DUMP_LOGICAL_EFUSE
+RTW: HW EFUSE
+RTW: 0x000: 29 81 00 BC  09 00 21 00  6E 04 A4 10  10 00 30 0B  
+RTW: 0x010: FF FF FF FF  FF FF FF FF  FF FF FF 02  FF FF FF FF  
+RTW: 0x020: FF FF 25 25  25 25 25 23  23 22 22 23  23 23 24 25  
+RTW: 0x030: 22 FF FF FF  FF FF 10 FF  FF FF 28 28  28 28 28 28  
+RTW: 0x040: 2C 2C 2C 2C  2C 02 FF FF  FF FF FF FF  FF FF FF FF  
+RTW: 0x050: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+RTW: 0x060: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+RTW: 0x070: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+RTW: 0x080: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+RTW: 0x090: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+RTW: 0x0A0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+RTW: 0x0B0: FF FF FF FF  FF FF FF FF  7F 2D 1B 00  FF FF FF FF  
+RTW: 0x0C0: FF 01 00 41  00 00 00 00  00 FF 22 FF  FF FF FF FF  
+RTW: 0x0D0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+RTW: 0x0E0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+RTW: 0x0F0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+RTW: 0x100: DA 0B 11 C8  E3 46 02 68  B9 D3 F1 5A  43 09 03 52  
+RTW: 0x110: 65 61 6C 74  65 6B 0E 03  38 30 32 2E  31 31 61 63  
+RTW: 0x120: 20 4E 49 43  08 03 31 32  33 34 35 36  FF FF FF FF  
+RTW: 0x130: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+RTW: 0x140: FF FF FF FF  00 00 31 0F  FF FF FF FF  FF FF FF FF  
+RTW: 0x150: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+RTW: 0x160: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+RTW: 0x170: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+RTW: 0x180: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+RTW: 0x190: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+RTW: 0x1A0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+RTW: 0x1B0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+RTW: 0x1C0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+RTW: 0x1D0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+RTW: 0x1E0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+RTW: 0x1F0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+RTW: EEPROM ID = 0x8129
+RTW: EEPROM Version = 0
+RTW: EEPROM Regulatory=0x01
+RTW: EEPROM Board Type=0x00
+RTW: EEPROM Disable BT-coex, ant_num=1
+RTW: hal_com_config_channel_plan chplan:0x7F
+RTW: EEPROM crystal_cap=0x2d
+RTW: EEPROM ThermalMeter=0x1b
+RTW: EEPROM Customer ID=0x00
+RTW: EEPROM SupportRemoteWakeup=0
+RTW: EEPROM rfe_type=0x22
+RTW: EEPROM PAType_2G is 0x0, ExternalPA_2G = 0
+RTW: EEPROM PAType_5G is 0x0, external_pa_5g = 0
+RTW: EEPROM LNAType_2G is 0x0, ExternalLNA_2G = 0
+RTW: EEPROM LNAType_5G is 0x0, external_lna_5g = 0
+RTW: EEPROM TypeGPA = 0x0
+RTW: EEPROM TypeAPA = 0x0
+RTW: EEPROM TypeGLNA = 0x0
+RTW: EEPROM TypeALNA = 0x0
+RTW: EEPROM tx_bbswing_24G =0x00
+RTW: EEPROM tx_bbswing_5G =0x00
+RTW: EEPROM USB Switch=0
+RTW: EEPROM VID = 0x0BDA, PID = 0xC811
+RTW: [HALMAC][ALWAYS]shall R reg twice!!
+RTW: SetHwReg: bMacPwrCtrlOn=1
+RTW: _rtw_hal_set_fw_rsvd_page((null)) Get [ NOR ] RsvdPageNUm  ==>
+RTW: LocPsPoll: 4
+RTW: WARN Invalid rate 0x0 in MRateToHwRate
+RTW: LocNullData: 5
+RTW: WARN Invalid rate 0x0 in MRateToHwRate
+RTW: LocQosNull: 6
+RTW: WARN Invalid rate 0x0 in MRateToHwRate
+RTW: _rtw_hal_set_fw_rsvd_page((null)) Get [ NOR ] RsvdPageNUm <==
+RTW: _cfg_drv_rsvd_pg_num: request 7 pages => halmac 8 pages success
+RTW: WARN [HALMAC][WARN]the H2C ver. does not match halmac
+RTW: rtl8821c_fw_dl Download Firmware from array success
+RTW: NIC FW Version:24 SubVersion:8
+RTW: SetHwReg: bMacPwrCtrlOn=0
+RTW: hal_read_mac_hidden_rpt OK! (1, 10ms), fwdl:1, id:0x19
+RTW: EEPROM Disable BT-coex by hal_spec
+RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+RTW: is_valid_id_status: HALMAC_FEATURE_DUMP_PHYSICAL_EFUSE
+RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+RTW: is_valid_id_status: HALMAC_FEATURE_DUMP_PHYSICAL_EFUSE
+RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+RTW: is_valid_id_status: HALMAC_FEATURE_DUMP_PHYSICAL_EFUSE
+RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+RTW: is_valid_id_status: HALMAC_FEATURE_DUMP_PHYSICAL_EFUSE
+RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+RTW: is_valid_id_status: HALMAC_FEATURE_DUMP_PHYSICAL_EFUSE
+RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+RTW: is_valid_id_status: HALMAC_FEATURE_DUMP_PHYSICAL_EFUSE
+RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+RTW: is_valid_id_status: HALMAC_FEATURE_DUMP_PHYSICAL_EFUSE
+RTW: rtw_hal_read_chip_info in 250 ms
+RTW: [RF_PATH] ver_id.RF_TYPE:RF_1T1R
+RTW: [RF_PATH] HALSPEC's rf_reg_trx_path_bmp:0x11, rf_reg_path_avail_num:1, max_tx_cnt:1
+RTW: [RF_PATH] PG's trx_path_bmp:0x00, max_tx_cnt:0
+RTW: [RF_PATH] Registry's trx_path_bmp:0x00, tx_path_lmt:0, rx_path_lmt:0
+RTW: [RF_PATH] HALDATA's trx_path_bmp:0x11, max_tx_cnt:1
+RTW: [RF_PATH] HALDATA's rf_type:RF_1T1R, NumTotalRFPath:1
+RTW: rtw_hal_rfpath_init trx_path_bmp:0x11(RF_1T1R), NumTotalRFPath:1, max_tx_cnt:1
+RTW: [TRX_Nss] HALSPEC - tx_nss:1, rx_nss:1
+RTW: [TRX_Nss] Registry - tx_nss:0, rx_nss:0
+RTW: [TRX_Nss] HALDATA - tx_nss:1, rx_nss:1
+RTW: rtw_hal_trxnss_init tx_nss:1, rx_nss:1
+RTW: txpath=0x1, rxpath=0x1
+RTW: txpath_1ss:0x1, num:1
+RTW: init_mlme_default_rate_set: support CCK
+RTW: init_mlme_default_rate_set: support OFDM
+RTW: NR_RECVBUFF: 8, recvbuf_nr: 8
+RTW: MAX_RECVBUF_SZ: 32768
+RTW: NR_PREALLOC_RECV_SKB: 8
+RTW: rtw_alloc_macid((null)) if1, mac_addr:ff:ff:ff:ff:ff:ff macid:1
+RTW: rtw_init_pwrctrl_priv: IPS_mode=0, LPS_mode=0, LPS_level=0
+RTW: IQK FW offload:enable
+RTW: init_phydm_cominfo: Fv=1 Cv=2
+RTW: [A] 2G G00 CCK-1T base:45 from IC_DEF
+RTW: [A] 2G G01 CCK-1T base:45 from IC_DEF
+RTW: [A] 2G G02 CCK-1T base:45 from IC_DEF
+RTW: [A] 2G G03 CCK-1T base:45 from IC_DEF
+RTW: [A] 2G G04 CCK-1T base:45 from IC_DEF
+RTW: [A] 2G G05 CCK-1T base:45 from IC_DEF
+RTW: [A] 2G G00 BW40-1S base:45 from IC_DEF
+RTW: [A] 2G G01 BW40-1S base:45 from IC_DEF
+RTW: [A] 2G G02 BW40-1S base:45 from IC_DEF
+RTW: [A] 2G G03 BW40-1S base:45 from IC_DEF
+RTW: [A] 2G G04 BW40-1S base:45 from IC_DEF
+RTW: rtw_regsty_chk_target_tx_power_valid return _FALSE for band:0, path:0, rs:0, t:-1
+RTW: phy_ConfigBBWithPgParaFile(): No File PHY_REG_PG.txt, Load from HWImg Array!
+RTW: default power by rate loaded
+RTW: phy_txpwr_by_rate_chk_for_path_dup duplicate 2.4G [A] to [B]
+RTW: init_channel_set_from_rtk_priv((null)) ChannelPlan ID:0x7f, ch num:37
+RTW: rtw_macaddr_cfg mac addr:68:b9:d3:f1:5a:43
+RTW: bDriverStopped:True, bSurpriseRemoved:False, bup:0, hw_init_completed:0
+RTW: loadparam, Select P2P interface: iface_id:1
+RTW: init_mlme_default_rate_set: support CCK
+RTW: init_mlme_default_rate_set: support OFDM
+RTW: NR_RECVBUFF: 8, recvbuf_nr: 8
+RTW: MAX_RECVBUF_SZ: 32768
+RTW: NR_PREALLOC_RECV_SKB: 8
+RTW: rtw_alloc_macid((null)) if2, mac_addr:ff:ff:ff:ff:ff:ff macid:1
+RTW: rtw_drv_add_vir_if if2 mac_addr : 6a:b9:d3:f1:5a:43
+RTW: rtw_cfg80211_init_wiphy_band:rf_type=0
+RTW: rtw_build_vht_cap_ie, line821, Set MAX MPDU len = 11454 bytes
+RTW: [VHT] Declare supporting SGI 80MHz
+RTW: rtw_wiphy_alloc(phy0)
+RTW: rtw_wdev_alloc(padapter=e4e20071)
+RTW: rtw_wdev_alloc(padapter=28682553)
+RTW: rtw_wiphy_register(phy0)
+RTW: Register RTW cfg80211 vendor cmd(0x67) interface
+RTW: rtw_reg_notifier(phy0)
+RTW: initiator:CORE, wiphy_idx:-1, type:USER
+RTW: alpha2:00
+RTW: dfs_region:UNSET
+RTW: intersect:0
+RTW: processed:0
+RTW: country_ie_env:ANY
+RTW: rtw_ndev_init(wlan0) if1 mac_addr=68:b9:d3:f1:5a:43
+RTW: rtw_ndev_notifier_call(wlan0) state:16
+RTW: cfg80211_rtw_get_txpower(wlan0) total max: -10000 mbm
+RTW: rtw_ndev_notifier_call(wlan0) state:5
+RTW: rtw_ndev_init(wlan1) if2 mac_addr=6a:b9:d3:f1:5a:43
+RTW: rtw_ndev_notifier_call(wlan1) state:16
+RTW: cfg80211_rtw_get_txpower(wlan1) total max: -10000 mbm
+RTW: rtw_ndev_notifier_call(wlan1) state:5
+usbcore: registered new interface driver rtl8821cu
+RTW: module init ret=0
+RTW: rtw_ndev_notifier_call(wlan0) state:13
+RTW: _netdev_open(wlan0) , bup=0
+RTW: [HALMAC][ALWAYS]shall R reg twice!!
+RTW: SetHwReg: bMacPwrCtrlOn=1
+RTW: _rtw_hal_set_fw_rsvd_page(wlan0) Get [ NOR ] RsvdPageNUm  ==>
+RTW: LocPsPoll: 4
+RTW: LocNullData: 5
+RTW: LocQosNull: 6
+RTW: _rtw_hal_set_fw_rsvd_page(wlan0) Get [ NOR ] RsvdPageNUm <==
+RTW: _cfg_drv_rsvd_pg_num: request 7 pages => halmac 8 pages success
+RTW: rtw_start_drv_threads(wlan0) enter
+RTW: rtw_start_drv_threads(wlan0) start RTW_CMD_THREAD
+RTW: WARN [HALMAC][WARN]the H2C ver. does not match halmac
+RTW: FW Version:24 SubVersion:8
+RTW: rtl8821c_hal_init_main: successful
+start_addr=(0x8000), end_addr=(0x10000), buffer_size=(0x8000), smp_number_max=(4096)
+RTW: rtw_hal_set_default_port_id_cmd (wlan0) port_id :0, mad_id:0
+RTW: rtl8821cu_hal_init in 1030ms
+RTW: rtw_hal_set_macaddr_port wlan0- hw port(0) mac_addr =68:b9:d3:f1:5a:43
+RTW: rtw_hal_set_macaddr_port wlan1- hw port(1) mac_addr =6a:b9:d3:f1:5a:43
+RTW: [HW_VAR_ENABLE_RX_BAR] 0x6A2=0x500
+RTW: wlan0: hw_port(0) will set mode to 2
+RTW: rtw_hal_set_macaddr_port wlan0- hw port(0) mac_addr =68:b9:d3:f1:5a:43
+RTW: wlan0: hw_port(0) set mode=2
+RTW: rtw_hal_init: padapter->registrypriv.set_rrsr_value=0xffffffff
+RTW: MAC Address = 68:b9:d3:f1:5a:43
+RTW: _netdev_vir_if_open(wlan1) , bup=0
+RTW: rtw_start_drv_threads(wlan1) enter
+RTW: _netdev_vir_if_open(wlan1) (bup=1) exit
+RTW: -871x_drv - drv_open, bup=1
+RTW: cfg80211_rtw_set_power_mgmt(wlan0) enabled:0, timeout:-1
+IPv6: ADDRCONF(NETDEV_UP): wlan0: link is not ready
+RTW: rtw_ndev_notifier_call(wlan0) state:1
+RTW: cfg80211_rtw_get_txpower(wlan0) total max: -10000 mbm
+RTW: cfg80211_rtw_get_txpower(wlan0) total max: -10000 mbm
+RTW: cfg80211_rtw_change_iface(wlan0) type=3, hw_port:0
+RTW: cfg80211_rtw_change_iface(wlan0) call netdev_open
+RTW: _netdev_open(wlan0) , bup=1
+RTW: -871x_drv - drv_open, bup=1
+RTW: cfg80211_rtw_change_iface(wlan0) old_iftype=2, new_iftype=3
+RTW: rtw_release_macid(wlan0) if1, mac_addr:ff:ff:ff:ff:ff:ff macid:1
+RTW: rtw_alloc_macid(wlan0) if1, mac_addr:ff:ff:ff:ff:ff:ff macid:0
+RTW: wlan0: hw_port(0) will set mode to 3
+RTW: rtw_hal_set_macaddr_port wlan0- hw port(0) mac_addr =68:b9:d3:f1:5a:43
+RTW: wlan0: hw_port(0) set mode=3
+RTW: cfg80211_rtw_change_iface(wlan0) ret:0
+RTW: cfg80211_rtw_get_txpower(wlan0) total max: -10000 mbm
+RTW: +cfg80211_rtw_del_station(wlan0) mac=  (null)
+RTW: flush all sta, and cam_entry
+RTW: rtw_sta_flush(wlan0)
+RTW: issue_deauth reason(3) to ff:ff:ff:ff:ff:ff
+RTW: +cfg80211_rtw_del_station(wlan0) mac=ff:ff:ff:ff:ff:ff
+RTW: free sta macaddr =ff:ff:ff:ff:ff:ff
+RTW: cfg80211_rtw_del_key(wlan0) key_index=0, addr=  (null)
+RTW: cfg80211_rtw_del_key(wlan0) key_index=1, addr=  (null)
+RTW: cfg80211_rtw_del_key(wlan0) key_index=2, addr=  (null)
+RTW: cfg80211_rtw_del_key(wlan0) key_index=3, addr=  (null)
+RTW: cfg80211_rtw_start_ap(wlan0) hidden_ssid:0, auth_type:0
+RTW: rtw_add_beacon beacon_head_len=63, beacon_tail_len=81
+RTW: rtw_check_beacon_data, len=120
+RTW: rtw_hal_set_bssid wlan0- hw port -0 BSSID: 68:b9:d3:f1:5a:43
+RTW: hw_var_set_sec_cfg: [HW_VAR_SEC_CFG] 0x680=0x30c
+RTW: rtw_ap_chbw_decision ifbmp:0x01 excl_ifbmp:0x00 req:0,-1,-1
+RTW: rtw_ap_chbw_decision others ld_sta_num:0, lg_sta_num:0, ap_num:0, mesh_num:0
+RTW: rtw_ap_chbw_decision ifbmp:0x01 tmp union:11,0,0
+RTW: rtw_ap_chbw_decision(wlan0) 11,0,0 => 11,0,0
+RTW: rtw_ap_chbw_decision union:11,0,0
+RTW: HW_VAR_BASIC_RATE: 0x15f->0x15f->0x15f
+RTW: rtw_get_sta_tx_nss: 1 SS
+RTW: rtw_get_sta_rx_nss: 1 ss
+RTW: STA - MAC_ID:0, Tx - 1 SS, Rx - 1 SS
+RTW: STA - MAC_ID:0, SM_PS 3
+RTW: wlan0 BMC Init Tx rate - CCK_11M
+RTW: rtw_dfs_rd_en_decision(wlan0) needed:0, mlme_act:11, excl_ifbmp:0x00
+RTW: rtw_dfs_rd_en_decision(wlan0) ld_sta_num:0, lg_sta_num:0, ap_num:1, mesh_num:0, 11,0,0
+RTW: is_valid_id_status: HALMAC_FEATURE_IQK
+RTW: hw_var_set_correct_tsf(wlan0)
+RTW: [TSF_SYNC] p0 sync port = N/A
+RTW: [TSF_SYNC] timer offset = 0
+RTW: rtw_cfg80211_indicate_connect(wlan0)
+RTW: assoc success
+RTW: cfg80211_rtw_change_bss(wlan0)
+RTW: ap_isolate=0
+RTW: cfg80211_rtw_add_key(wlan0) cipher=0xfac04
+RTW: cfg80211_rtw_add_key(wlan0) key_len=16, key_index=1
+RTW: cfg80211_rtw_add_key(wlan0) pairwise=0
+RTW: rtw_cfg80211_ap_set_encryption
+RTW: rtw_cfg80211_ap_set_encryption(wlan0) set CCMP TX GTK idx:1, len:16
+RTW: rtw_ap_set_group_key
+RTW: cfg80211_rtw_set_default_key(wlan0) key_index=1, unicast=0, multicast=1
+RTW: rtw_ndev_notifier_call(wlan0) state:4
+RTW: set group key camid:0, addr:68:b9:d3:f1:5a:43, kid:1, type:AES
+RTW: rtw_ac_parm_cmd_hdl(wlan0) AC_VO = 0x002f3213
+RTW: rtw_ac_parm_cmd_hdl(wlan0) AC_VI = 0x005e4313
+RTW: rtw_ac_parm_cmd_hdl(wlan0) AC_BE = 0x00006425
+RTW: rtw_ac_parm_cmd_hdl(wlan0) AC_BK = 0x0000a449
+EffectWatch: unhandled page fault (11) at 0x000000e0, code 0x017
+pgd = d231af67
+[000000e0] *pgd=026b3831, *pte=00000000, *ppte=00000000
+CPU: 0 PID: 121 Comm: EffectWatch Tainted: G           O      4.19.192 #31
+Hardware name: Arkmicro arm soc Family
+PC is at 0xb3f2efe8
+LR is at 0xb3f48d08
+pc : [<b3f2efe8>]    lr : [<b3f48d08>]    psr: 600e0010
+sp : bef531c0  ip : b3f77034  fp : b6ca2864
+r10: b3fc6578  r9 : 0003b500  r8 : 00000000
+r7 : b3f77000  r6 : 00000000  r5 : b3f816b0  r4 : 00000000
+r3 : 00000000  r2 : b3f815e8  r1 : 00000005  r0 : 00000000
+Flags: nZCv  IRQs on  FIQs on  Mode USER_32  ISA ARM  Segment user
+Control: 10c53c7d  Table: 026d8059  DAC: 00000055
+CPU: 0 PID: 121 Comm: EffectWatch Tainted: G           O      4.19.192 #31
+Hardware name: Arkmicro arm soc Family
+[<c010cc7c>] (unwind_backtrace) from [<c010a620>] (show_stack+0x10/0x14)
+[<c010a620>] (show_stack) from [<c010d428>] (__do_user_fault+0x11c/0x124)
+[<c010d428>] (__do_user_fault) from [<c010d6d8>] (do_page_fault+0x234/0x338)
+[<c010d6d8>] (do_page_fault) from [<c010d9b8>] (do_DataAbort+0x4c/0xf8)
+[<c010d9b8>] (do_DataAbort) from [<c0101cdc>] (__dabt_usr+0x3c/0x40)
+Exception stack(0xc26bbfb0 to 0xc26bbff8)
+bfa0:                                     00000000 00000005 b3f815e8 00000000
+bfc0: 00000000 b3f816b0 00000000 b3f77000 00000000 0003b500 b3fc6578 b6ca2864
+bfe0: b3f77034 bef531c0 b3f48d08 b3f2efe8 600e0010 ffffffff
+==============[ark_i2s_startup]:[ 132]
+==============[ark_sddac_startup]:[ 93]
+==============[ark_i2s_startup]:[ 132]
+==============[ark_sddac_startup]:[ 93]
+==============[ark_i2s_startup]:[ 132]
+==============[ark_sddac_startup]:[ 93]
+==============[ark_i2s_startup]:[ 132]
+==============[ark_sddac_startup]:[ 93]
+==============[ark_i2s_startup]:[ 132]
+==============[ark_sddac_startup]:[ 93]
+==============[ark_i2s_startup]:[ 132]
+==============[ark_sddac_startup]:[ 93]
+ark_display: ARKDISP_GET_SCREEN_INFO -> screen_id=0 800x480 120x72mm
+ark_display: unhandled ioctl cmd=0xc004a001
+ark_display: unhandled ioctl cmd=0xc004a001
+ark_display: unhandled ioctl cmd=0xc004a001
+ark_display: unhandled ioctl cmd=0xc004a001
+ark_display: unhandled ioctl cmd=0xc004a001
+ark_display: unhandled ioctl cmd=0xc004a001
+ark_display: unhandled ioctl cmd=0xc004a001
+ark_display: unhandled ioctl cmd=0xc004a001
+ark_display: unhandled ioctl cmd=0xc004a001
+ark_display: unhandled ioctl cmd=0xc004a001
+ark_display: unhandled ioctl cmd=0xc004a001
+ark_display: unhandled ioctl cmd=0xc004a001
+ark_display: unhandled ioctl cmd=0xc004a001
+ark_display: unhandled ioctl cmd=0xc004a001
+ark_display: unhandled ioctl cmd=0xc004a001
+ark_display: unhandled ioctl cmd=0xc004a001
+ark_display: unhandled ioctl cmd=0xc004a001
+ark_display: unhandled ioctl cmd=0xc004a001
+musb_hdrc: exports duplicate symbol musb_dma_controller_create (owned by kernel)
+MsnCoreApp: unhandled page fault (11) at 0x00000008, code 0x017
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+CPU: 0 PID: 130 Comm: MsnCoreApp Tainted: G           O      4.19.192 #31
+Hardware name: Arkmicro arm soc Family
+PC is at 0xb374c06c
+LR is at 0xb35cde44
+pc : [<b374c06c>]    lr : [<b35cde44>]    psr: 20070010
+sp : be8b9210  ip : b35e1034  fp : b37d9000
+r10: 00000020  r9 : be8b92b5  r8 : b37d9000
+r7 : ffff0fc0  r6 : be8b9220  r5 : 00000008  r4 : 00000001
+r3 : 000576e8  r2 : 00000000  r1 : 00000001  r0 : 00000001
+Flags: nzCv  IRQs on  FIQs on  Mode USER_32  ISA ARM  Segment user
+Control: 10c53c7d  Table: 036b0059  DAC: 00000055
+CPU: 0 PID: 130 Comm: MsnCoreApp Tainted: G           O      4.19.192 #31
+Hardware name: Arkmicro arm soc Family
+[<c010cc7c>] (unwind_backtrace) from [<c010a620>] (show_stack+0x10/0x14)
+[<c010a620>] (show_stack) from [<c010d428>] (__do_user_fault+0x11c/0x124)
+[<c010d428>] (__do_user_fault) from [<c010d6d8>] (do_page_fault+0x234/0x338)
+[<c010d6d8>] (do_page_fault) from [<c010d9b8>] (do_DataAbort+0x4c/0xf8)
+[<c010d9b8>] (do_DataAbort) from [<c0101cdc>] (__dabt_usr+0x3c/0x40)
+Exception stack(0xc2739fb0 to 0xc2739ff8)
+9fa0:                                     00000001 00000001 00000000 000576e8
+9fc0: 00000001 00000008 be8b9220 ffff0fc0 b37d9000 be8b92b5 00000020 b37d9000
+9fe0: b35e1034 be8b9210 b35cde44 b374c06c 20070010 ffffffff
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+umount: can't unmount /var: Device or resource busy
+umount: can't unmount /tmp: Device or pgd = a7982cae
+resource busy
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+umount: can't unmount /dev: Device or resource bupgd = a7982cae
+sy
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+EXT4-fs (mmcblk0p2): re-mounted. Opts: (null)
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+
+The system is going down NOW!
+
+Sent SIGTERM to all processes
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000
+pgd = a7982cae
+[00000008] *pgd=027c9831, *pte=00000000, *ppte=00000000

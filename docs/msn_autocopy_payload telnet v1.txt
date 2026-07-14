@@ -1,0 +1,190 @@
+
+Starting kernel ...
+
+Uncompressing Linux... done, booting the kernel.
+machine ID r1 = 0x00001068
+[    1.350000] arktool display reg init
+## Error: "factory_reset" not defined
+sh: 1: unknown operand
+mount successfully!
+insmod: can't insert '/lib/modules/3.4.0/kernel/drivers/input/touchscreen/ark1680_ts.ko': File exists
+ln: /tmp/touch_export: File exists
+[3.817]  set display inch: QSize(120, 72) 5.50956
+[3.858]  init msn firset export ticks: 308
+[    4.270000] IrqLineVG=-1.
+/ # [5.380]  MSNCoreApp start
+[5.395]  MSNCoreApp exception init
+[5.408]  MSNCoreApp running
+[6.653]  Set Effect Process Priority -19  0
+QWS_ARK_TOUCH_DEVICE undefined, touch input disabled
+[7.273]  MsnCoreApp version: V3.21.09.0219
+[7.825]  MSNCoreApp onFirstInit
+[7.830]  ark screen type: 0
+[7.830]  display size: QSize(800, 480)  src size: QSize(800, 480)
+[7.908]  Load App Plugin 12 "/usr/lib/libCarReversing.so"
+Mon Feb 19 09:09:30 UTC 2024
+[7.991]  SetTime: "2024-02-19 09:09:30" Ret: 0
+[8.028]  Load App Plugin 10 "/usr/lib/libLauncher-Box.so"
+[8.045]  MsnMainWindow::setRealVisible LauncherWindow(0x1cc5e0) true
+[8.100]  Waite Event Ticks 12
+[8.230]  load wallpaper: "/msnprofile/wallpaper/800x480/"  size: QSize(0, 0)
+rm: can't remove '/tmp/app-*.bmp': No such file or directory
+[8.252]  MSNCoreApp show
+[8.471]  MsnWindowManager::setVisible true true
+[8.482]  endCarReversing
+get_shared_display_data May 29 2020-16:57:02.
+[8.486]  setTrackOSDVisible false
+[8.488]  set_osd1_visible true
+QMetaObject::connectSlotsByName: No matching signal for on_pushButton_clicked()
+[9.448]  DVRSetDialog visibale change: false
+[9.473]  MSNCoreApp hide boot logo
+[9.485]  MSNCoreApp onSecondInit
+[9.489]  DiskDeviceWatcher::startWatcher
+Created device discovery thread
+[9.494]  Start Load Driver
+[9.893]  Load App Plugin 8 "/usr/lib/libSetting.so"
+[9.942]  Open backlight pwm : true
+SoundAdapter Create Failed, Not Support ICType: 0
+[10.026]  Load App Plugin 403 "/usr/lib/libMsnSound.so"
+syncDatas armsetting radar visible:0 datas:0 0 0 0
+[10.474]  McuAdapter: MCUAdapter_BoxP300 6
+[10.480]  Open MCU Serial Port  "/dev/ttyHS0"  Ret: true "No such file or directory"
+
+start serialPortProcessProc
+
+[10.491]  Open MCU Serial Port  "/dev/ttyS2"  Ret: true "No such file or directory"
+[10.491]  Load App Plugin 401 "/usr/lib/libMcuCenter.so"
+[10.638]  CanBusPlugin 0 0
+[10.639]  Load App Plugin 400 "/usr/lib/libCanBus.so"
+[10.787]  Load App Plugin 3 "/usr/lib/libBlueTooth.so"
+[10.806]  open touch monitor dev: /dev/input/event0 41
+[10.849]  onLoadDriverFinished
+[10.920]  usb_device_added /dev/bus/usb/002/001
+[10.922]  usb_device_added /dev/bus/usb/001/001
+usb_device_open /dev/bus/usb/001/001
+usb_device_open open returned 30 writeable 1 errno 2
+usb_device_new /dev/bus/usb/001/001 fd: 30
+usb_device_new read returned 43 errno 2
+insert usb dev:/dev/bus/usb/001/001 vid:0x1d6b pid:0x0002
+[10.924]  arkapi_open_dvr() retry_times: 1
+net.ipv4.udp_mem = 8192 10240 16384
+net.ipv4.udp_rmem_min = 1048576
+[   10.990000] track_setting=2
+[   11.000000] track_setting=3
+[11.026]  MSN protocal type: 0  sendReadyData!
+[11.279]  MSNCoreApp onLoadStartupApp
+[11.291]  MSNCoreApp onEndInit
+[11.291]
+MsnCoreApp End init
+
+[11.703]  MsnLink StartService: "com.arkmicro.carplay"
+label2 = TOYOTA
+pcarplay_info->bridge_mode=0
+pcarplay_info->icurrent = 500
+pcarplay_info->ns_level = 1
+### ++ carplay initialize ++
+msg instance
+++ MsgEnQueue ++
+### carplay dbus initialize true
+[12.399]  MsnLink StartService ret: "com.arkmicro.carplay" true ""
+[12.412]  MSNCoreApp exec
+[12.448]  MsnLink::onServiceRegistered "com.arkmicro.carplay"
+new device /dev/bus/usb/002/002
+[12.448]  usb_device_added /dev/bus/usb/002/002
+[12.463]  MSN protocal type: 0  sendReadyData!
+x=0 y=0
+s_w=800 s_h=480
+v_w=800 v_h=480 screen_width_phy=120 screen_height_phy=72
+#pluginfo->btmac=56:fa:dd:e2:50:bf
+mDNSResponder: mDNSResponder (Engineering Build) (May 29 2020 16:56:53) starting
+carplay_plugin_set_info:1505 err=0
+carplay_plugin_start:1728
+### carplay ++ usb_reader_thread ++
+### carplay -- usb_reader_thread --
+### -- carplay initialize --
+[12.992]  start bt service:/usr/bin/blueware
+[13.127]  MSN protocal type: 0  sendReadyData!
+[13.194]  Retry Open BlueTooth Serial Port,  Ret: true
+[13.194]  Write At atCommand: "AT+DEVSTAT"
+[13.427]  Write At atCommand: "AT+BTEN=1"
+udhcpd: started, v1.25.0
+mDNSResponder: mDNS_AddDNSServer: Lock not held! mDNS_busy (0) mDNS_reentrancy (0)
+mDNSResponder: mDNSPlatformSourceAddrForDest: connect 1.1.1.1 failed errno 101 (Network is unreachable)
+unknow disk type: "DOS/MBR boot sector; partition 1 : ID=0xc, active, start-CHS (0x10,0,1), end-CHS (0x3ff,3,32), startsector 2048, 129024 sectors; partition 2 : ID=0x83, start-CHS (0x3ff,3,32), end-CHS (0x3ff,3,32), startsector 133120, 612352 sectors; partition 3 : ID=0x83, start-CHS (0x3ff,3,32), end-CHS (0x3ff,3,32), startsector 747520, 301056 sectors"
+[14.349]  mount command: "mount /dev/mmcblk0p1 -o utf8 /media/sdisk/p1/"
+[14.580]  mount command: "mount /dev/mmcblk0p2 /media/sdisk/p2/"
+[15.100]  mount command: "mount /dev/mmcblk0p3 /media/sdisk/p3/"
+[15.751]  Write At atCommand: "AT+ADDR"
+[15.751]  BlueToothAdapter_Blueware::onStartupConfig()
+[15.751]  Write At atCommand: "AT+HFPCFG"
+[15.752]  Write At atCommand: "AT+HFPDISC"
+[15.752]  Write At atCommand: "AT+ADDR"
+[15.752]  Write At atCommand: "AT+NAME"
+[15.752]  Write At atCommand: "AT+VER"
+[15.783]  Write At atCommand: "AT+PLIST"
+[15.783]  BT Local Address: "DC0D3014FC9F"
+[15.784]  Write At atCommand: "AT+NAME"
+[15.785]I msncoreapp.cpp@2964 enableHostApd start  enable: 1 timeout: 3000
+[15.786]  start  enableWLAN 0 15786
+stop wifi manager
+[15.882]  end  enableWLAN 0 15882
+[15.930]I msncoreapp.cpp@3059 enableHostApd hostapd started  true
+[15.931]  hostapd state: 2  pid: 909 ap type: 1
+[15.931]I msncoreapp.cpp@3098 enableHostApd end  1
+[15.932]  Write At atCommand: "AT+HFPCFG=0"
+[15.932]  BT Local Address: "DC0D3014FC9F"
+[15.932]  Write At atCommand: "AT+NAME"
+[17.282]  MsnCoreApp::onDiskDeviceStatusChange 1 1
+[17.290]  run thread: 0x70c8d440
+[17.290]  onScannerFiles thread start: MsnThread(0x1e0298)
+[18.303]  Load App Plugin 2 "/usr/lib/libMusicPlayer.so"
+[18.330]  MsnMainWindow::setRealVisible LauncherWindow(0x1cc5e0, name = "LauncherWindow") false
+[18.336]  MsnMainWindow::setRealVisible MusicPlayerWindow(0x54b480) true
+[18.337]  mode app change: "MsnCoreApp" -> "MusicPlayer"
+[18.337]
+======== refreshAppAudioChannel 131075 0
+[18.338]  switchToAppAudioChannel, ModeApp: "MusicPlayer"  AudioApp: "MusicPlayer"  Channel: 0 Request: false
+[18.350]  Waite Event Ticks 11
+QMetaObject::connectSlotsByName: No matching signal for on_btnBtMusic_clicked()
+[18.807]  setAppVolumeMute "MusicPlayer" true
+[18.808]
+======== refreshAppAudioChannel 131075 0
+[18.808]  switchToAppAudioChannel, ModeApp: "MusicPlayer"  AudioApp: "MusicPlayer"  Channel: 0 Request: false
+TagLib: FileRef::tag() - Called without a valid file.
+[19.147]I msncoreapp.cpp@2964 enableHostApd start  enable: 0 timeout: 100
+[19.147]  hostapd state: 2  pid: 909
+[19.305]  hostapd state: 0  pid: 0
+[19.305]I msncoreapp.cpp@3098 enableHostApd end  0
+[19.306]  Write At atCommand: "AT+HFPCONN=04006EAF29C4"
+[19.306]  Auto ConnectTime 8000
+[20.306]I msncoreapp.cpp@2964 enableHostApd start  enable: 1 timeout: 100
+[20.306]  start  enableWLAN 0 20306
+stop wifi manager
+[20.400]  end  enableWLAN 0 20401
+[20.442]I msncoreapp.cpp@3059 enableHostApd hostapd started  true
+[20.443]  hostapd state: 2  pid: 926 ap type: 1
+[20.443]I msncoreapp.cpp@3098 enableHostApd end  1
+[20.881]  onScannerFiles thread end: MsnThread(0x1e0298)
+[20.884]  onScannerFinished 1 MsnThread(0x1e0298) false
+[27.307]  Write At atCommand: "AT+HFPSTAT"
+[27.308]  Write At atCommand: "AT+HFPCONN=04006EAF29C4"
+[27.309]  Auto ConnectTime 16000
+[34.309]  Write At atCommand: "AT+HFPSTAT"
+[43.311]  Write At atCommand: "AT+HFPCONN=04006EAF29C4"
+[43.312]  Auto ConnectTime 24000
+[50.312]  Write At atCommand: "AT+HFPSTAT"
+[67.314]  Write At atCommand: "AT+HFPCONN=04006EAF29C4"
+[67.315]  Auto ConnectTime 32000
+udhcpd: sending OFFER of 192.168.43.20
+udhcpd: sending ACK to 192.168.43.20
+[74.315]  Write At atCommand: "AT+HFPSTAT"
+[99.316]  Write At atCommand: "AT+HFPCONN=04006EAF29C4"
+[99.317]  Auto ConnectTime 40000
+[107.317]  Write At atCommand: "AT+HFPSTAT"
+[139.319]  Write At atCommand: "AT+HFPCONN=04006EAF29C4"
+[139.319]  Auto ConnectTime 48000
+[147.321]  Write At atCommand: "AT+HFPSTAT"
+[187.322]  Write At atCommand: "AT+HFPCONN=04006EAF29C4"
+[187.322]  Auto ConnectTime 56000
+[195.324]  Write At atCommand: "AT+HFPSTAT"
+

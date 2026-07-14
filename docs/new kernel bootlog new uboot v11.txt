@@ -1,0 +1,258 @@
+2.
+Starting kernel ...
+
+Booting Linux on physical CPU 0x0
+Linux version 4.19.192 (osboxes@osboxes) (gcc version 12.2.0 (Debian 12.2.0-14)) #24 Sat Jul 11 22:57:00 AEST 2026
+CPU: ARMv7 Processor [410fc051] revision 1 (ARMv7), cr=10c53c7d
+CPU: PIPT / VIPT nonaliasing data cache, VIPT aliasing instruction cache
+OF: fdt: Machine model: Limcet P305/P306 Dashboard Head Unit
+bootconsole [earlycon0] enabled
+Memory policy: Data cache writeback
+cma: Reserved 64 MiB at 0x04000000
+CPU: All CPU(s) started in SVC mode.
+random: get_random_bytes called from start_kernel+0x94/0x34c with crng_init=0
+Built 1 zonelists, mobility grouping off.  Total pages: 45675
+Kernel command line: console=ttyS0,115200n8 mem=180M earlyprintk=serial root=/dev/mmcblk0p2 rootfstype=ext4 rootwait rw screen=0 user_debug=8
+Dentry cache hash table entries: 32768 (order: 5, 131072 bytes)
+Inode-cache hash table entries: 16384 (order: 4, 65536 bytes)
+Memory: 105964K/184320K available (7168K kernel code, 217K rwdata, 1536K rodata, 1024K init, 166K bss, 12820K reserved, 65536K cma-reserved)
+Virtual kernel memory layout:
+    vector  : 0xffff0000 - 0xffff1000   (   4 kB)
+    fixmap  : 0xffc00000 - 0xfff00000   (3072 kB)
+    vmalloc : 0xcb800000 - 0xff800000   ( 832 MB)
+    lowmem  : 0xc0000000 - 0xcb400000   ( 180 MB)
+    modules : 0xbf000000 - 0xc0000000   (  16 MB)
+      .text : 0x(ptrval) - 0x(ptrval)   (8160 kB)
+      .init : 0x(ptrval) - 0x(ptrval)   (1024 kB)
+      .data : 0x(ptrval) - 0x(ptrval)   ( 218 kB)
+       .bss : 0x(ptrval) - 0x(ptrval)   ( 167 kB)
+NR_IRQS: 16, nr_irqs: 16, preallocated irqs: 16
+VIC @(ptrval): id 0x00041192, vendor 0x41
+VIC @(ptrval): id 0x00041192, vendor 0x41
+L2C-310 dynamic clock gating enabled, standby mode enabled
+L2C-310 cache controller enabled, 8 ways, 128 kB
+L2C-310: CACHE_ID 0x410060c9, AUX_CTRL 0x06020000
+clk cpupll rate 690000000.
+clk syspll rate 324000000.
+clk audpll rate 426000000.
+clk ddrclk rate 426000000.
+clk cpuclk rate 690000000.
+clk axiclk rate 324000000.
+clk ahbclk rate 162000000.
+clk pclk rate 81000000.
+clk uart4clk rate 24000000.
+clk uart5clk rate 24000000.
+clk gpuclk rate 324000000.
+clk gpiodebounceclk rate 24000000.
+clk lcdclk rate 324000000.
+clk mfcclk rate 162000000.
+clk rtc-clk rate 32768.
+clk spi-clk rate 162000000.
+clk i2s-dac-clk rate 240000000.
+clk i2s-adc-clk rate 240000000.
+clocksource: arkmicro,ark-timer: mask: 0xffffff max_cycles: 0xffffff, max_idle_ns: 92171119 ns
+sched_clock: 24 bits at 81MHz, resolution 12ns, wraps every 103563053ns
+Console: colour dummy device 80x30
+Calibrating delay loop... 457.11 BogoMIPS (lpj=2285568)
+pid_max: default: 32768 minimum: 301
+Mount-cache hash table entries: 1024 (order: 0, 4096 bytes)
+Mountpoint-cache hash table entries: 1024 (order: 0, 4096 bytes)
+CPU: Testing write buffer coherency: ok
+Setting up static identity map for 0x100000 - 0x10003c
+devtmpfs: initialized
+VFP support v0.3: implementor 41 architecture 2 part 30 variant 5 rev 1
+clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 19112604462750000 ns
+futex hash table entries: 256 (order: -1, 3072 bytes)
+pinctrl core: initialized pinctrl subsystem
+NET: Registered protocol family 16
+DMA: preallocated 256 KiB pool for atomic coherent allocations
+Serial: Arkmicro UART driver
+pinctrl-ark e4900000.pinctrl: initialized ark pinctrl driver
+e4200000.uart: ttyS0 at MMIO 0xe4200000 (irq = 36, base_baud = 1500000) is a ARK
+console [ttyS0] enabled
+console [ttyS0] enabled
+bootconsole [earlycon0] disabled
+bootconsole [earlycon0] disabled
+e8000000.uart: ttyS2 at MMIO 0xe8000000 (irq = 60, base_baud = 1500000) is a ARK
+e8100000.uart: ttyS3 at MMIO 0xe8100000 (irq = 61, base_baud = 1500000) is a ARK
+e4f00000.serial: ttyHS0 at MMIO 0xe4f00000 (irq = 38, base_baud = 0) is a ARK HS UART
+e4800000.serial: ttyHS1 at MMIO 0xe4800000 (irq = 44, base_baud = 0) is a ARK HS UART
+enable get mcu data
+clk lcdclk rate 32400000.
+ark1668_lcdfb e0500000.lcd: 16384KiB frame buffer at 0f000000 (mapped at (ptrval))
+ark1668_lcdfb e0500000.lcd: fb0: Atmel LCDC at 0xe0500000 (mapped at (ptrval)), irq 25
+SCSI subsystem initialized
+usbcore: registered new interface driver usbfs
+usbcore: registered new interface driver hub
+usbcore: registered new device driver usb
+gpio-3 (i2c-gpio-0): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+gpio-2 (i2c-gpio-0): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+i2c i2c-1: Not I2C compliant: can't read SCL
+i2c i2c-1: Bus may be unreliable
+i2c-gpio i2c-gpio-0: using lines 3 (SDA) and 2 (SCL, no clock stretching)
+gpio-9 (i2c-gpio-1): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+gpio-121 (i2c-gpio-1): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+i2c i2c-2: Not I2C compliant: can't read SCL
+i2c i2c-2: Bus may be unreliable
+i2c-gpio i2c-gpio-1: using lines 9 (SDA) and 121 (SCL, no clock stretching)
+media: Linux media interface: v0.10
+videodev: Linux video capture interface: v2.00
+Advanced Linux Sound Architecture Driver Initialized.
+Bluetooth: Core ver 2.22
+NET: Registered protocol family 31
+Bluetooth: HCI device and connection manager initialized
+Bluetooth: HCI socket layer initialized
+Bluetooth: L2CAP socket layer initialized
+Bluetooth: SCO socket layer initialized
+clocksource: Switched to clocksource arkmicro,ark-timer
+ark-vdec e0900000.vdec: VDEC controller at 0x(ptrval), irq = 40, misc_minor = 63
+ark-vdec e0900000.vdec: Product ID: 0x6731 (revision 2.57.8)
+NET: Registered protocol family 2
+tcp_listen_portaddr_hash hash table entries: 512 (order: 0, 4096 bytes)
+TCP established hash table entries: 2048 (order: 1, 8192 bytes)
+TCP bind hash table entries: 2048 (order: 1, 8192 bytes)
+TCP: Hash tables configured (established 2048 bind 2048)
+UDP hash table entries: 256 (order: 0, 4096 bytes)
+UDP-Lite hash table entries: 256 (order: 0, 4096 bytes)
+NET: Registered protocol family 1
+Initialise system trusted keyrings
+workingset: timestamp_bits=14 max_order=16 bucket_order=2
+ntfs: driver 2.1.32 [Flags: R/W DEBUG].
+jffs2: version 2.2. (NAND) © 2001-2006 Red Hat, Inc.
+fuse init (API version 7.27)
+Key type asymmetric registered
+Asymmetric key parser 'x509' registered
+io scheduler noop registered (default)
+ark_display: registered /dev/ark_display
+nand: device found, Manufacturer ID: 0x98, Chip ID: 0xf1
+nand: Toshiba NAND 128MiB 3,3V 8-bit
+nand: 128 MiB, SLC, erase size: 128 KiB, page size: 2048, OOB size: 64
+nand: WARNING: ark-nand: the ECC used on your system is too weak compared to the one required by the NAND chip
+### rn6752_eq_work reset
+ark_nand_correct_data: uncorrectable ECC error
+ark_nand_correct_data: uncorrectable ECC error
+ark_nand_correct_data: uncorrectable ECC error
+Bad block table found at page 65472, version 0x01
+ark_nand_correct_data: uncorrectable ECC error
+ark_nand_correct_data: uncorrectable ECC error
+ark_nand_correct_data: uncorrectable ECC error
+Bad block table found at page 65408, version 0x01
+ark_nand_correct_data: uncorrectable ECC error
+ark_nand_correct_data: uncorrectable ECC error
+ark_nand_correct_data: uncorrectable ECC error
+nand_read_bbt: 417 bad block(s) found
+usbcore: registered new interface driver cdc_ether
+usbcore: registered new interface driver cdc_subset
+usbcore: registered new interface driver zaurus
+usbcore: registered new interface driver ipheth
+usbcore: registered new interface driver cdc_ncm
+usbcore: registered new interface driver uas
+usbcore: registered new interface driver usb-storage
+musb-hdrc musb-hdrc.0: MUSB HDRC host driver
+musb-hdrc musb-hdrc.0: new USB bus registered, assigned bus number 1
+hub 1-0:1.0: USB hub found
+hub 1-0:1.0: 1 port detected
+musb-hdrc musb-hdrc.0: +++Switch OTG 76  126===+++
+musb-hdrc musb-hdrc.1: MUSB HDRC host driver
+musb-hdrc musb-hdrc.1: new USB bus registered, assigned bus number 2
+hub 2-0:1.0: USB hub found
+hub 2-0:1.0: 1 port detected
+musb-hdrc musb-hdrc.1: +++Switch OTG 1  117===+++
+using random self ethernet address
+using random host ethernet address
+usb0: HOST MAC 2a:c7:df:4c:59:76
+usb0: MAC 12:d4:3b:45:fa:ff
+g_ncm gadget: NCM Gadget
+g_ncm gadget: g_ncm ready
+Goodix-TS 1-005d: i2c test failed attempt 1: -6
+Goodix-TS 1-005d: i2c test failed attempt 2: -6
+Goodix-TS 1-005d: I2C communication failure: -6
+ark1680_ts e4500000.tsc: probe: ADC/TSC MEM resource [mem 0xe4500000-0xe450003f]
+ark1680_ts e4500000.tsc: probe: irq=20
+ark1680_ts e4500000.tsc: probe: mapped syscon/pinmux block at phys 0xe4900000, size 0x200
+ark1680_ts e4500000.tsc: setup[initial           ]: ADC[en=0x00000000 cfg=0x0000ffff] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x00210016 pmux0=0xc5640003 pmux1=0x000623b8]
+ark1680_ts e4500000.tsc: setup[after clkdiv      ]: ADC[en=0x00000000 cfg=0x0000ffff] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5640003 pmux1=0x000623b8]
+ark1680_ts e4500000.tsc: setup[after clken OR    ]: ADC[en=0x00000000 cfg=0x0000ffff] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5640003 pmux1=0x000623b8]
+ark1680_ts e4500000.tsc: setup[after padcfg OR   ]: ADC[en=0x00000000 cfg=0x0000ffff] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5640003 pmux1=0x000623b8]
+ark1680_ts e4500000.tsc: setup[after pinmux0 clr ]: ADC[en=0x00000000 cfg=0x0000ffff] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5240003 pmux1=0x000623b8]
+ark1680_ts e4500000.tsc: setup[after ch_enable#1 ]: ADC[en=0x00000000 cfg=0x0000ffff] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5240003 pmux1=0x000623b8]
+ark1680_ts e4500000.tsc: setup[after cfg/irqclr  ]: ADC[en=0x00000000 cfg=0x00000007] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5240003 pmux1=0x000623b8]
+ark1680_ts e4500000.tsc: setup[after dbcnt/detint]: ADC[en=0x00000000 cfg=0x00000007] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5240003 pmux1=0x000623b8]
+ark1680_ts e4500000.tsc: setup[after pinmux1 clr ]: ADC[en=0x00000000 cfg=0x00000007] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5240003 pmux1=0x000623b8]
+ark1680_ts e4500000.tsc: setup[after ch_enable#2 ]: ADC[en=0x00000f00 cfg=0x00000007] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5240003 pmux1=0x000623b8]
+ark1680_ts e4500000.tsc: setup[final             ]: ADC[en=0x00000f04 cfg=0x00000007] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5240003 pmux1=0x000623b8]
+usb 2-1: new high-speed USB device number 2 using musb-hdrc
+input: ark1680-ts as /devices/platform/e4500000.tsc/input/input0
+ark1680_ts e4500000.tsc: ARK1680 resistive touchscreen registered, irq=20, debug=0 (echo 1 > /sys/module/ark1680_ts/parameters/debug to trace samples)
+i2c /dev entries driver
+ark_wdt e4b00000.watchdog: initialized (timeout = 15 sec, nowayout = 0)
+Bluetooth: HCI UART driver ver 2.3
+dw_mmc ec400000.mmc: Using PIO mode.
+dw_mmc ec400000.mmc: Version ID is 220a
+dw_mmc ec400000.mmc: DW MMC controller at irq 42,32 bit host data width,32 deep fifo
+mmc_host mmc0: Bus speed (slot 0) = 24000000Hz (slot req 400000Hz, actual 400000HZ div = 30)
+dw_mmc ec800000.mmc: Using external DMA controller.
+dw_mmc ec800000.mmc: Failed to get external DMA channel.
+dw_mmc ec800000.mmc: dw_mci_init_dma: Unable to initialize DMA Controller.
+dw_mmc ec800000.mmc: Using PIO mode.
+dw_mmc ec800000.mmc: Version ID is 220a
+dw_mmc ec800000.mmc: DW MMC controller at irq 54,32 bit host data width,32 deep fifo
+mmc_host mmc1: card is non-removable.
+mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 400000Hz, actual 400000HZ div = 30)
+usb 2-1: hub_port_init:4724 speed=3
+usb 2-1: hub_port_init:4729 speed=3
+usbcore: registered new interface driver snd-usb-audio
+NET: Registered protocol family 10
+Segment Routing with IPv6
+sit: IPv6, IPv4 and MPLS over IPv4 tunneling driver
+NET: Registered protocol family 17
+random: fast init done
+Loading compiled-in X.509 certificates
+cfg80211: Loading compiled-in X.509 certificates for regulatory database
+mmc_host mmc0: Bus speed (slot 0) = 24000000Hz (slot req 25000000Hz, actual 24000000HZ div = 0)
+mmc0: new SD card at address e126
+mmcblk0: mmc0:e126 SU01G 969 MiB
+cfg80211: Loaded X.509 cert 'sforshee: 00b28ddf47aef9cea7'
+ALSA device list:
+  #0: Dummy 1
+platform regulatory.0: Direct firmware load for regulatory.db failed with error -2
+cfg80211: failed to load regulatory.db
+mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 300000Hz, actual 300000HZ div = 40)
+ mmcblk0: p1 p2 p3
+EXT4-fs (mmcblk0p2): mounted filesystem with ordered data mode. Opts: (null)
+VFS: Mounted root (ext4 filesystem) on device 179:2.
+mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 200000Hz, actual 200000HZ div = 60)
+devtmpfs: mounted
+Freeing unused kernel memory: 1024K
+Run /sbin/init as init process
+mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 100000Hz, actual 100000HZ div = 120)
+random: crng init done
+mtd8: /nanddata/bootlogo
+mtd9: /nanddata/bootanimation
+mtd10: /nanddata/reversingtrack
+mtd11: /nanddata/unicode
+EXT4-fs (mmcblk0p3): mounted filesystem with ordered data mode. Opts: (null)
+userdata: SD ext4 (/dev/mmcblk0p3)
+galcore: loading out-of-tree module taints kernel.
+Galcore version 6.2.4.150331
+usbcore: registered new interface driver rtl8821cu
+
+=== Diagnostic tools ===
+  i2c-scan /dev/i2c-0 /dev/i2c-1 ...   - scan I2C buses for ACKing devices
+  ark-ts-test regs                     - dump ARK1680 touch ADC/syscon registers
+  ark-ts-test events /dev/input/eventN - watch touch evdev events
+  lcd-test info                        - dump /dev/fb0 + /dev/ark_display info
+  lcd-test fill <red|green|blue|...>   - fill screen with a solid color
+  lcd-test bars                        - draw color-bar test pattern
+  lcd-test gradient                    - draw a red->green gradient
+  strace -f -o /data/x.log <cmd>       - trace syscalls (e.g. strace -f start_msn)
+=========================
+
+IPv6: ADDRCONF(NETDEV_UP): wlan0: link is not ready
+Configuration file: /etc/hostapd/hostapd.conf
+Using interface wlan0 with hwaddr 68:b9:d3:f1:5a:43 and ssid "carplay_wifi"
+set display inch: QSize(154, 86) 6.94433
+init msn firset export ticks: 46
+wlan0: interface state UNINITIALIZED->ENABLED
+wlan0: AP-ENABLED
+

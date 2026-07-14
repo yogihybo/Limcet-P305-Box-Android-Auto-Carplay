@@ -20,12 +20,16 @@ Committed: `1422e3411` (u-boot repo, whole board port + NAND fix) and
   sidesteps the `bootnand` kernel-entry hang (section 5) entirely -- that
   issue no longer blocks getting a working NAND boot, it only blocks
   doing it via *this* fork's own `bootz` directly.
-- `bootusb` with `usbroot` works end-to-end -- kernel, DTB, *and* root
-  filesystem all loading and booting entirely from a USB stick, no SD
-  card or NAND involved at all for the running system. Needed a real
-  kernel driver fix (see section 6) to get there; a second bug found in
-  the same test (an rcS workaround that unbound the live root device) has
-  been disabled.
+- `bootusb` with `usbroot` works end-to-end and is now confirmed safe --
+  kernel, DTB, *and* root filesystem all loading and booting entirely
+  from a USB stick, no SD card or NAND involved at all for the running
+  system. Needed three real fixes to get fully working and safe (see
+  section 6): a kernel driver VBUS-settle-delay fix, disabling an `rcS`
+  workaround that unbound the live root device, and hardening a
+  pre-existing vendor USB recovery watchdog so it no longer disconnects
+  an already-working port. All three confirmed together on real
+  hardware -- a full boot cycle with no disconnects, I/O errors, or
+  filesystem corruption.
 
 ---
 
@@ -460,14 +464,28 @@ operation, not just at boot).
 `musb->port1_status & USB_PORT_STAT_ENABLE` before doing the disruptive
 reset -- skip it if the port already has a working, enabled connection.
 A genuinely stuck/dead port has nothing to lose from the reset; an
-already-working one has everything to lose. **Built and committed
-(`990417616`), NOT yet hardware-tested** -- unlike the VBUS-delay fix
-above, this one hasn't been proven live yet. Test `bootusb`+`usbroot`
-again with this kernel before trusting boot-from-USB as safe for anything
-that matters; if the disconnect-and-corrupt pattern still shows up, this
-fix wasn't sufficient and the actual trigger condition (what's causing
-`hub_port_init()` to fail in the first place, well into normal runtime)
-needs its own investigation.
+already-working one has everything to lose.
+
+**CONFIRMED WORKING on real hardware (`990417616`)**: booted `bootusb`+
+`usbroot` again on this kernel. Root mounted from `/dev/sda2` successfully
+(after the normal, legitimate port-enable retries -- nothing was attached
+yet at that point, so those retries were fine). Well into normal runtime,
+after `crng init done`, the watchdog fired again exactly like before --
+but this time logged `musb_recovery_usb_proc port already enabled,
+skipping disruptive VBUS reset` instead of forcing the VBUS cycle. No
+disconnect, no I/O errors, no journal abort -- boot continued straight
+through cleanly (`init`, the `mtd8-11` symlinks, `galcore`/`rtl8821cu`
+loading normally). All three USB fixes from this session (VBUS settle
+delay, the disabled `rcS` workaround, and this recovery-watchdog guard)
+are now confirmed working together. Boot-from-USB is no longer known to
+be at risk of this corruption pattern.
+
+The underlying *trigger* for `hub_port_init()` failing well into normal
+runtime (not just at boot) is still not identified -- the watchdog now
+just handles it safely instead of making it worse. Worth investigating
+further only if the recurring "Cannot enable" retries themselves become a
+practical annoyance (e.g. noticeable USB throughput hiccups); not urgent
+given the corruption risk is now closed off.
 
 ---
 

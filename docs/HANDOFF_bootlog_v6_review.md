@@ -7,8 +7,10 @@
 
 **Headline:** Major progress — this build boots an **ext4 root off the SD card** to a
 shell, the **RN6752 camera driver now loads** (the ARK7116→RN6752 config/DTS swap took
-effect), and LCD/GPU/WiFi-AP all come up. **Two blockers remain:** touch (DTS fix not yet
-applied) and a **new** `MsnCoreApp` segfault (userspace).
+effect), and LCD/GPU/WiFi-AP all come up. **Two blockers remain:** touch (bus choice has been
+flip-flopped twice by inference alone — commit `7c7ce4c` then `0be21c7` — and now needs a
+live-hardware I²C scan to settle, see `tools/i2c-scan/`) and a **new** `MsnCoreApp` segfault
+(userspace).
 
 ---
 
@@ -26,27 +28,46 @@ applied) and a **new** `MsnCoreApp` segfault (userspace).
 
 ---
 
-## ❌ Blocker 1 — Touchscreen still broken (DTS fix not applied)
+## ❌ Blocker 1 — Touchscreen still broken
+
+> **⚠️ SUPERSEDED (2026-07-11):** everything below chased the wrong device.
+> Live I²C scanning (bus placement, reset toggling, pin polarity — all
+> ruled correct/ruled out) never found a GT911 anywhere because **this
+> unit's stock firmware doesn't load GT911 at all** — it loads
+> `ark1680_ts.ko`, the SoC's built-in resistive ADC touch controller,
+> selected via a marker file (`/msnprofile/ark1680_ts`, present in the
+> live NAND dump). See `docs/boot_experiment_log.md` → "ROOT CAUSE FOUND"
+> for the full trail. The 4.19 port needs a resistive ADC/TSC driver, not
+> a GT911 I²C fix — the section below is kept for historical context only.
 
 ```
 Goodix-TS 0-005d: i2c test failed attempt 1: -6
 Goodix-TS 0-005d: I2C communication failure: -6      (-ENXIO)
 ```
 - GT911 is still a child of the **bit-bang `i2c-gpio-0`** (bus `0`, SDA gpio0 3 / SCL gpio0 2)
-  — the **camera's** bus — and `&i2c0 { status = "disabled" }` in the DTS.
+  — the **camera's** bus — and `&i2c0 { status = "disabled" }` was in the DTS at the time
+  this log was captured.
 - The log shows **no hardware I²C controller** registers; both bit-bang buses are flagged
   `Not I2C compliant: can't read SCL / Bus may be unreliable` (89–97) due to
   `i2c-gpio,scl-output-only`.
-- **This is the still-outstanding fix from `HANDOFF_kernel_build_camera_and_touch.md` (Fix 2):**
-  move `gt911@5d` onto hardware **`&i2c0`** (`status = "okay"`) and enable the controller
-  driver (`CONFIG_I2C_DESIGNWARE_PLATFORM`, since `ark1668.dtsi` declares `i2c0` as
-  `snps,designware-i2c`). Stock 3.4.0 runs GT911 on the hardware controller (bus 0) — verified.
-  - *Open caveat:* confirm whether this SoC's `i2c0` is really DesignWare vs `arkmicro,ark-i2c`;
-    if DesignWare won't probe, give touch its **own** dedicated `i2c-gpio` bus on the GT911's
-    real SDA/SCL pins rather than sharing the camera's.
+- **⚠️ Correction from initial review:** this doc originally said the fix is to move
+  `gt911@5d` onto hardware `&i2c0`, per `HANDOFF_kernel_build_camera_and_touch.md` (Fix 2) and
+  the stock 3.4.0 disassembly proof in `boot_experiment_log.md`. But that exact move was
+  **already tried and reverted same-day**: commit `7c7ce4c` moved touch to `&i2c0`; commit
+  `0be21c7` (made 25 min before this review doc, and immediately before it in the log) moved
+  it back to `i2c-gpio-0` "to match actual hardware wiring" — with **no evidence recorded**
+  anywhere for that reversal. So the disassembly-backed fix has already been tried once
+  without confirmation of the outcome, and blindly redoing it risks a third silent flip-flop.
+  - **Do not edit this DTS node again without hardware confirmation.** The DTS now enables
+    both `&i2c0` and `i2c-gpio-0` simultaneously (disjoint pins, no conflict) specifically so
+    this can be settled empirically — see `docs/boot_experiment_log.md` → "Systematic I²C bus
+    verification" and `tools/i2c-scan/` for a live-shell probe tool and procedure. Run that
+    scan on hardware, record the result, **then** attach `gt911@5d` to whichever bus actually
+    ACKs `0x5d`.
 
 Touch pins are already correct in the DTS and match stock: **INT = GPIO 4** (falling),
-**RST = GPIO 80 = gpio2[16]**, **addr 0x5d**. Only the **bus** is wrong.
+**RST = GPIO 80 = gpio2[16]**, **addr 0x5d**. Only the **bus** is in question — and it should
+be resolved by probing the live board, not by re-inferring from disassembly a third time.
 
 ---
 
@@ -86,7 +107,12 @@ Segmentation fault
   explicit "chip detected @ 0x2c"** line, and it sits on the unreliable bit-bang bus. Verify
   `/dev/video0` exists and the reverse camera actually streams at runtime.
 - **NAND ECC:** `ECC too weak` / `uncorrectable ECC error` persist — irrelevant to SD boot
-  (NAND now only backs `/nanddata` mtds).
+  (NAND now only backs `/nanddata` mtds). **Root-caused (2026-07-11), see
+  `docs/boot_experiment_log.md` "NAND ECC too weak"** — a genuine, unfixable hardware
+  mismatch (this Toshiba SLC chip's ID reports it needs 8-bit ECC; the controller's
+  discrete BCH modes jump straight from 7-bit to 13-bit, and 13-bit doesn't fit this
+  chip's 64-byte OOB) — not a misconfiguration. The verbose per-block bad-block log
+  spam (hundreds of lines) *was* fixed — patched to a one-line summary count.
 - **i2c-gpio reliability:** `scl-output-only` + no clock stretching makes **both** the touch
   and camera buses "unreliable" per the kernel — another reason to move touch to hardware i2c.
 
@@ -94,12 +120,14 @@ Segmentation fault
 
 ## Priority order
 1. **Fix `MsnCoreApp` segfault** — it's the UI blocker; start with the screen-profile lead.
-2. **Apply the touch `&i2c0` DTS fix** — outstanding from the kernel-build handoff.
+2. **Run the live I²C bus scan** (`tools/i2c-scan/`) to settle the touch bus question with
+   hardware evidence, then attach `gt911@5d` to the confirmed bus — do not guess again.
 3. **Confirm RN6752 camera** streams (`/dev/video0`, reverse-gear test).
 
 ## References
 - Log: `docs/new kernel bootlog new uboot v6.txt`
 - Kernel-build fixes: `docs/HANDOFF_kernel_build_camera_and_touch.md`
-- Touch root cause + stock-bus proof: `docs/boot_experiment_log.md`
+- Touch root cause + stock-bus proof + pending live verification: `docs/boot_experiment_log.md`
+- Live I²C bus scan tool: `tools/i2c-scan/`
 - Screen/model selection: `docs/SCREEN.md`, `docs/ARKDATA_VARIANTS.md`
 - Camera chip resolution: `docs/KERNEL_BUILD_REFERENCE.md` ("Camera decoder chip" callout)

@@ -1,0 +1,1 @@
+strace -f -o /data/crash.strace start_msn ; sync ; dmesg | tail -100 >  /data/crash.dmesg ; sync

@@ -1,0 +1,21 @@
+---- new compiled UBOOT hand off to 3.4 kernel and NAND filesystem----
+#hangs and doesn't load, revert to handing off to stock uboot.bin file first then loading the stock kernel
+setenv mtdids nand0=ark1680-nand
+setenv mtdparts mtdparts=ark1680-nand:128k(S-Loader),512k(U-boot),512k(U-boot_back),256K(U-boot-Env),256K(arkdata),4m(kernel),106m(rootfs),6m(userdata),512K(bootlogo),3m(bootanimation),3m(reversingtrack),256K(Unicode)
+setenv bootargs console=ttyS0,115200n8 mem=180M earlyprintk=serial ubi.mtd=6 root=ubi0:rootfs rootfstype=ubifs rootwait ro ${mtdparts} screen=${screen}
+setenv kerneladdr 0x1000000
+switchecc 2
+setenv machid 1068
+nand read 0x1000000 kernel
+bootz 0x1000000
+----end-------
+
+----EXT4 USB------
+#hangs and doesn't complete kernel loading on stock as USB support is not compiled into the kernel
+usb start
+fatload usb 0:1 0x1000000 zImage
+fatload usb 0:1 0x2000000 ark1668_limcet_p305.dtb
+setenv bootargs console=ttyS0,115200n8 mem=180M earlyprintk=serial root=/dev/sda2 rootfstype=ext4 rootwait rw screen=0
+bootz 0x1000000 - 0x2000000
+
+----end-------

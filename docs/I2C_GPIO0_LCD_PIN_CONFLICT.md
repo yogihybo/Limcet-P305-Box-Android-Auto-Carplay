@@ -212,8 +212,94 @@ earlier "correction":**
 **Immediate action implied:** move BD37033 back to `sda_pin=9, scl_pin=121` (this project's own
 `i2c-gpio-1`, before it was removed) — off the LCD-conflicted pins entirely — and leave rn6752 on
 GPIO2/GPIO3 (`i2c-gpio-0`) since that's confirmed to be its real, populated bus regardless of the
-LCD sharing. This directly addresses `AUDIO_SUBSYSTEM_INVESTIGATION.md`'s open BD37033 write-timeout
-issue without needing to resolve the LCD pin-mux question at all.
+LCD sharing.
+
+**Correction (same session, later): the BD37033 write-timeout symptom itself is NOT unique to our
+board's wrong-bus mistake.** A fresh stock boot dmesg (`dmesg` right after reboot, before the ring
+buffer could wrap) shows the *identical* `bd37033_write_byte timeout` errors on real stock
+hardware, on BD37033's own correct, factory-wired bus (`i2c-gpio2`, right at `[0.320000]
+bd37033_drv_probe`, immediately followed by 8 write-timeout lines). So moving BD37033 back to its
+real bus is still the architecturally correct fix (matches actual wiring), but it will not by
+itself eliminate these specific timeout log lines — they appear to be an inherent, apparently-benign
+quirk of this exact chip/driver/timing combination (most likely the driver's very first probe-time
+write racing the codec's own power-up sequence), present in the vendor's own shipped firmware. The
+`sendSoundData()` crash this investigation was chasing is a separate, distinct bug (see
+`AUDIO_SUBSYSTEM_INVESTIGATION.md`), not explained by these timeouts.
+
+## GT911 touch — resolved conclusively, real hardware fault
+
+Also resolved live, same session: `/sys/bus/i2c/devices/0-005d` shows a `Goodix-TS` client
+registered (the stock board file unconditionally declares it via `ark1680_add_device_i2c()`), but
+`i2c-scan` shows `0x5d` completely silent, not even busy — inconsistent with `rn6752`/`drv_bd37033`,
+which both correctly show `XX` matching their sysfs entries. Fresh boot dmesg resolves this: this
+unit's `rcS` checks the `/msnprofile/ark1680_ts` marker file and only ever `insmod`s
+`ark1680_ts.ko` (the resistive ADC touch driver) — `gt9xx.ko` (the driver that would actually bind
+to and probe the declared Goodix-TS client) is **never loaded** on this unit. No driver bound means
+no probe ever ran, which is why the address shows free rather than busy. Confirmed:
+`ark1680_ts_probe` succeeds (`request_irq:4 success`).
+
+**CORRECTION — the panel does work; IRQ count was the wrong signal to trust.** `/proc/interrupts`
+showed IRQ 4 (`ark1680-ts`) at 0 both at rest and immediately after a physical touch test — which
+looked like conclusive proof of a hardware fault, and was initially written up as such in this doc.
+It was wrong: the user then directly interacted with the on-screen UI on this exact unit and it
+worked. IRQ 4 stayed at 0 throughout, even during confirmed-working real touch interaction.
+
+**Corrected understanding:** `ark1680_ts` evidently does not depend on that interrupt firing for
+real touch sampling — most likely it's polling-based (a kernel timer/workqueue reading the ADC
+registers periodically) with the IRQ serving some secondary/wake-only role, or none at all in
+practice. IRQ activity count is **not a reliable signal for this driver** — don't use it again to
+judge whether touch hardware is responding, on this unit or in future testing.
+
+**This has a real implication for this project's own 4.19 kernel port.**
+`ARK1680_TS_REVERSE_ENGINEERING.md`'s conclusion that our reconstructed driver's raw-ADC/IRQ
+silence (`irq_status` pinned at 0, no conversions) meant a physical panel fault should be
+revisited — if stock's own genuinely-working driver shows the identical IRQ silence, our driver's
+problem may be a **fixable software issue** (e.g. missing the polling logic stock's driver
+actually relies on, if ours only implemented the interrupt-driven path from the disassembly) rather
+than proof the hardware is broken. Worth re-examining the stock driver's actual sampling mechanism
+(polling vs. interrupt) before writing off touch on the custom kernel as a hardware dead end.
+
+## `i2c-gpio-1` has the identical conflict (found 2026-07-14)
+
+The "find pins that are actually free" item below was never checked
+against `i2c-gpio-1` (GPIO9/GPIO121, used for BD37033) until now. It
+has the same problem as `i2c-gpio-0`:
+
+```
+# cat /sys/kernel/debug/pinctrl/e4900000.pinctrl/pinmux-pins | grep -E "pin 9 |pin 121 "
+pin 9 (pin9): e0500000.lcd (GPIO UNCLAIMED) function lcd group lcd-rgb-0
+pin 121 (pin121): (MUX UNCLAIMED) e4600060.gpio:121
+```
+
+`GPIO9` — `i2c-gpio-1`'s **SDA**, the pin carrying BD37033 traffic — is
+muxed to the LCD's RGB888 group, same as pins 2/3. `GPIO_owner` shows
+`UNCLAIMED` here (vs. an explicit owner for pins 2/3), meaning the
+`i2c-gpio` driver never got hardware-level control of the pin at all.
+`SCL` (pin 121) is unaffected, cleanly claimed as plain GPIO.
+
+This fully explains `bd37033_write_byte timeout` on every image tested
+throughout `AUDIO_SUBSYSTEM_INVESTIGATION.md` — including the fixed
+`reg = <0x40>` address (see that doc's 2026-07-14 entries) — the SDA
+line was never actually carrying I2C waveforms in the first place,
+regardless of address. It also means the "probe-time race with the
+codec's power-up sequence, apparently benign" theory recorded there
+was formed without this pinmux check and should be treated as
+superseded by this finding as the real explanation, not an independent
+confirmation.
+
+**Open puzzle:** the vendor's own real audio-control path (see
+`AUDIO_SUBSYSTEM_INVESTIGATION.md`'s `arki2c_open` disassembly) also
+uses `bus=2` = `i2c-gpio2` = these exact same GPIO9/121 pins (confirmed
+above via stock's own `/sys/class/i2c-dev/i2c-2/name: i2c-gpio2`), and
+presumably works in the field. Candidate explanations, not yet
+distinguished: (a) the LCD only drives that bit during active display,
+leaving real GPIO windows during blanking that a slow bit-banged
+transaction could land in by chance or by design; or (b) matching the
+pattern already found twice in this project (GT911 bus, BD37033
+address), `lcd-rgb-0`'s claim on pin 9 may be a stale/overbroad
+template inherited from a generic reference DTS that doesn't reflect
+what this board's actual panel needs, freeing the pin electrically
+despite the software-level mux claim.
 
 ## Open questions / next steps
 
@@ -222,7 +308,8 @@ issue without needing to resolve the LCD pin-mux question at all.
       checked against the LCD RGB888 group (`r0`-`r7`, `g0`-`g7`,
       `b0`-`b7`, `de`, `clk`, `vsync`, `hsync` — `PBANK_0` offsets
       2-29) and the LCD base group (`PBANK_0` offsets 26-29) before
-      reassigning `i2c-gpio-0`.
+      reassigning `i2c-gpio-0`. **`i2c-gpio-1`/GPIO9 confirmed to have
+      the same conflict, 2026-07-14 — see above.**
 - [x] Check whether the **hardware `&i2c0`** controller uses pins free
       of this conflict — **confirmed clean, 2026-07-13 live check.**
       `&i2c0` (`e4300000.i2c`, DesignWare) uses `PBANK_2` offset 6/7

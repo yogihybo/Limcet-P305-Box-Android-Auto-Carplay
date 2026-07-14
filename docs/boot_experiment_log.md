@@ -403,3 +403,319 @@ Feeds `ark_disp_tvenc_*`. Five-word entries `{w, h, htiming, vtiming, interlace}
 Both are **120-byte `.bss` structs** (`0x805eecd0` / `0x805eede0`), zero-initialised
 and populated at runtime (`screen_id_setup` `memcpy`s 120 bytes into `screeninfo_param`).
 They are **not** static geometry tables — the LCD geometry above is the real source.
+
+---
+
+## Systematic I²C bus verification (pending — 2026-07-11)
+
+**Why this section exists:** the GT911 touch bus has been decided twice by
+inference and reversed both times with no on-device confirmation recorded:
+`7c7ce4c` moved `gt911@5d` onto hardware `&i2c0` (backed by the stock
+3.4.0 disassembly proof above — "hard proof... not inference"); `0be21c7`
+moved it back to `i2c-gpio-0` "to match actual hardware wiring" with **no
+evidence recorded in this log or the commit body**. Bootlog v6
+(`docs/new kernel bootlog new uboot v6.txt`) was built against the
+`0be21c7` state and shows touch still failing there (`-6`/`ENXIO`), which
+is expected either way since no hardware `i2c0` controller was even
+registered in that build. Neither commit has been checked against the
+physical unit. Before touching this DTS node a third time, resolve it
+empirically instead of by inference.
+
+**Method:** `Limcet Hardware/ark1668-limcet-prado.dts` now enables
+`&i2c0` (`status = "okay"`, no child devices) *alongside* the existing
+`i2c-gpio-0` (still owns `gt911@5d` + `dvr_rn6752@2c`) — the two buses use
+disjoint pins (PBANK_2 6/7 for hw `i2c0` vs PBANK_2 2/3 for `i2c-gpio-0`,
+per `ark1668-pinctrl.dtsi`), so both can be live in one build. A static
+ARM scan tool (`tools/i2c-scan/`, since the rootfs has no i2c-tools) reads
+every address on both `/dev/i2c-*` nodes from the live `/ #` prompt.
+
+**Procedure:**
+1. Build kernel with the current DTS (both buses enabled, `CONFIG_I2C_CHARDEV`
+   / `CONFIG_I2C_DESIGNWARE_PLATFORM` / `CONFIG_I2C_GPIO` already `=y` in
+   `Limcet Hardware/kernel_dot_config`).
+2. Copy `tools/i2c-scan/i2c-scan` onto the SD rootfs.
+3. Boot to `/ #`, run `ls /sys/class/i2c-dev/*/name` to map bus numbers,
+   then `./i2c-scan /dev/i2c-0 /dev/i2c-1`.
+4. Whichever bus ACKs `0x5d` is where `gt911@5d` belongs — permanently
+   attach it there and disable/remove the other bus's touch reference.
+
+**Result — ran on hardware 2026-07-11** (`docs/i2c scan v1.txt`, raw output):
+
+Bus mapping (`/sys/class/i2c-dev/*/name`):
+
+| `/dev/i2c-N` | `name` | Identity |
+|---|---|---|
+| `i2c-0` | `Synopsys DesignWare I2C adapter` | hardware `&i2c0` |
+| `i2c-1` | `i2c-gpio-0` | bit-bang bus 0 (currently owns `dvr_rn6752@2c` + `gt911@5d`) |
+| `i2c-2` | `i2c-gpio-1` | bit-bang bus 1 |
+
+`i2c-scan /dev/i2c-0 /dev/i2c-1 /dev/i2c-2` results:
+
+| Bus | Addresses seen | `0x5d` (GT911)? |
+|---|---|---|
+| `i2c-0` (hw `&i2c0`) | `0x10`, `0x11` ACK | **no** |
+| `i2c-1` (`i2c-gpio-0`) | `0x2c` **XX** (busy — `dvr_rn6752@2c` client already bound here, expected) | **no** |
+| `i2c-2` (`i2c-gpio-1`) | nothing | **no** |
+
+**This is not the result either prior hypothesis predicted.** Neither the
+hardware `&i2c0` bus nor the `i2c-gpio-0` bus that currently owns the
+`gt911@5d` node gets an ACK (or even an `XX`/busy, which would indicate a
+kernel-registered-but-unresponsive client) at `0x5d` anywhere. Two things
+stand out:
+
+1. **`0x2c` is `XX` (busy), not a real scan result** — that's the i2c core
+   reporting the address already claimed by the `dvr_rn6752` client
+   registered from the DTS, not a live probe. It confirms the camera
+   node is bound there, nothing more.
+2. **`0x5d` doesn't even show `XX` on `i2c-1`**, even though `gt911@5d` is
+   declared in the DTS on that exact bus. If the i2c core had a client
+   registered at that address (which it should, from the DTS node)
+   `I2C_SLAVE` should have returned `-EBUSY` there the same way it did for
+   `0x2c`. That it didn't suggests the Goodix driver's failed probe
+   (`-ENXIO`, see bootlog v6) actually released/unregistered the client,
+   which is plausible kernel behavior, but it also means this scan
+   **doesn't yet rule out `i2c-gpio-0` as the right bus** — it only shows
+   nothing is currently ACKing a raw read there.
+3. **`0x10`/`0x11` ACKing on the hardware bus is unexplained** — not the
+   GT911 (wrong address) and not identified from the stock disassembly.
+   Could be a real device (some other chip sharing that hardware bus per
+   the schematic) or a false-positive from the crude read-byte probe
+   method (floating/unterminated SDA can read back as an ACK on some
+   controllers). Needs a targeted `i2cget`-style single-byte read to
+   confirm, not just the quick scan.
+
+**Conclusion: inconclusive for touch.** GT911 did not answer on any bus at
+`0x5d` at all — the bus question isn't answered by this run; instead it
+points at something more fundamental: reset/power/pin-level correctness
+for the "read after `I2C_SLAVE`" probe to get *any* response requires the
+chip to actually be running (RST released, INT idle) *before* the ioctl
+scan runs, and this scan was likely taken with GT911 sitting in whatever
+state its last (failed) kernel probe left it in.
+
+**Next steps (do not touch the DTS bus placement yet):**
+1. Manually toggle GT911 RST (GPIO 80) and INT (GPIO 4) via `/sys/class/gpio`
+   before re-running the scan, to put the chip through its address-strap
+   power-up sequence (see the `gtp_reset_guitar` timing recovered above),
+   then re-scan `0x5d` on both `i2c-0` and `i2c-1` immediately after.
+2. Also scan `0x14` (the alternate GT911 strap address) on both buses in
+   case INT strapped high during the last failed probe.
+3. Confirm the `0x10`/`0x11` hits on `i2c-0` aren't a probe artifact —
+   re-run with a single targeted address (`i2c-scan` limited to just
+   `0x10`) and cross-check against the board schematic/photos in
+   `Limcet Hardware/board_photo_*.jpg` for what else might be on that bus.
+
+### Reset-toggle follow-up (`docs/i2c scan v2.txt`, `v3.txt`) — still no `0x5d`, ruled out one theory
+
+**v2** — ran the RST/INT toggle sequence (§ above) then re-scanned all three
+buses: **byte-for-byte identical to v1.** Still nothing at `0x5d`/`0x14` on
+any bus, `0x2c` still busy on `i2c-1`, `0x10`/`0x11` still ACK on `i2c-0`.
+
+**v3** — checked whether the toggle actually took effect (rather than
+silently failing, e.g. `EBUSY` from the kernel `gt911` driver still holding
+the pins):
+
+```
+/sys/class/gpio/gpio80 -> .../e4600040.gpio/gpiochip2/gpio/gpio80   (RST)
+/sys/class/gpio/gpio4  -> .../e4600000.gpio/gpiochip0/gpio/gpio4    (INT)
+gpio80: direction=out, value=1   (RST high/released — end state of our sequence)
+gpio4:  direction=in,  value=1
+dmesg | grep -i goodix:
+  Goodix-TS 1-005d: i2c test failed attempt 1: -6
+  Goodix-TS 1-005d: i2c test failed attempt 2: -6
+  Goodix-TS 1-005d: I2C communication failure: -6
+```
+
+**Export/toggle genuinely worked** — no `EBUSY`, both GPIOs show up as real
+sysfs nodes backed by actual gpiochips, and read back the values our
+sequence left them in. So **the "driver is holding the pins" theory is
+ruled out**: userspace had real control of RST/INT, drove GT911 through a
+reset, and it still never answered at `0x5d` (or the busy-marker `XX`) on
+any bus. (The `dmesg` hit is stale — `Goodix-TS 1-005d` is the *kernel's own*
+boot-time probe on adapter `i2c-1`/`i2c-gpio-0` from the DTS node, confirming
+bus numbering, not a result of our manual toggle.)
+
+This now looks less like a bus-selection or reset-timing problem and more
+like: (a) the panel/FPC on **this specific unit** isn't actually connected/
+seated, (b) `active_low` on `gpio80`/`gpio4` differs from what we assumed
+(not yet checked — `cat /sys/class/gpio/gpio80/active_low` and `gpio4/active_low`),
+or (c) this exact board revision's touch wiring genuinely differs from both
+the stock disassembly and the current DTS pin assignment.
+
+**Polarity check (2026-07-11):** `active_low` = `0` for both `gpio80` (RST)
+and `gpio4` (INT) — no inversion. Our reset sequence asserted exactly as
+intended (RST really did go low then high; INT really did go low then
+back to input). This rules out the polarity theory too.
+
+**Status: software/DTS avenues exhausted for this round.** Bus placement,
+reset timing/control, and pin polarity have all now been verified correct
+or ruled out as the cause, and GT911 still never answers at `0x5d` (or
+`0x14`) on any of the three I²C buses. This points at a hardware-level
+cause rather than a kernel/DTS one:
+
+**Next steps (hardware, not software):** *(superseded — see below, root cause found)*
+
+---
+
+### ROOT CAUSE FOUND (2026-07-11): this unit's stock firmware doesn't use GT911 at all
+
+All the above I²C debugging was chasing the wrong device. The stock
+rootfs ships **two** touchscreen kernel modules, and picks between them
+at boot with a marker-file check —
+`Prado firmware dump/mtd6_rootfs/rootfs/etc/rc.d/rcS`:
+
+```sh
+touchdriver="/msnprofile/ark1680_ts"
+if [ -e $touchdriver ]; then
+        insmod .../ark1680_ts.ko                     # on-SoC resistive ADC touch
+        ln -s /msnprofile/touch_ark1680_ts_export /tmp/touch_export
+else
+        insmod .../gt9xx/gt9xx.ko                     # I2C capacitive GT911
+        ln -s /msnprofile/touch_gt9xx_export /tmp/touch_export
+fi
+```
+
+**The marker file `/msnprofile/ark1680_ts` exists** in the live NAND dump
+(`Prado firmware dump/mtd6_rootfs/msnprofile/ark1680_ts`, 0 bytes — a pure
+existence flag) and in the reconstructed rootfs. This is a direct dump
+from the physical Prado unit (`docs/SOURCES.md`), not a generic vendor
+image — so this reflects **this exact unit's factory configuration**.
+
+That means stock firmware on this unit loads `ark1680_ts.ko` — the
+**ARK1668/1680 SoC's built-in resistive ADC touchscreen controller**
+(`description=ARK1680 TS Driver`, functions `ark1680_setup_tsc`,
+`TSP_GetXY`, `SetDBCNT`, register field `ADCValue`) — and **never loads
+`gt9xx.ko` at all**. It's not an I²C device; it's a memory-mapped
+ADC/IRQ block on the SoC. The two drivers' export configs confirm the
+split: `touch_ark1680_ts_export` sets `QWS_MOUSE_PROTO=tslib:...` (tslib
+= classic resistive-touch calibration/filtering), `touch_gt9xx_export`
+sets a multi-touch device path for the capacitive path. `arkdata.ini`'s
+`TouchPanelX=0,1024` / `TouchPanelY=0,600` are raw ADC-style ranges, not
+GT911 panel-resolution reporting.
+
+**This fully explains the entire I²C investigation above:** bus
+placement, reset timing, and pin polarity were all correctly ruled
+in/out — because there was never a GT911 on the bus to find in the first
+place. The exhaustive scanning wasn't wasted (it rigorously eliminated
+the wrong hypothesis) but the DTS `gt911@5d` node itself is the wrong
+approach for this unit.
+
+**Consequence for the 4.19 kernel port:** the 4.19 DTS/`kernel_dot_config`
+have **no** ADC/TSC touchscreen node or driver at all — `ark1668.dtsi` has
+no `tsc`/ADC-touch node (only unrelated `i2s-adc`/`sdadc` audio ADC nodes),
+and `ark1680_ts.ko`'s source isn't in this repo, only the compiled stock
+3.4.0 `.ko`. Porting touch for this unit means either:
+1. Reverse-engineer `ark1680_ts.ko` (disassembly, same approach as the
+   GT911 pin/timing recovery above) to find the SoC's ADC/TSC MMIO base,
+   IRQ, and register layout, then write a new 4.19 driver + DTS node —
+   **done, see `docs/ARK1680_TS_REVERSE_ENGINEERING.md`**: MMIO base
+   `0xe4500000` (+0x40), IRQ 4, full init-sequence, register-offset map,
+   the `TSP_GetXY` median-of-4 coordinate filter, and the input event
+   protocol all recovered from the stock `.ko` and `vmlinux.elf`
+   board-file registration. Driver ported to 4.19
+   (`Limcet Hardware/ark1680_ts.c`), wired into the build tree's
+   Kconfig/Makefile, `CONFIG_TOUCHSCREEN_ARK1680=y`, DTS node added —
+   compiles clean. **Hardware-tested** (v7: `docs/new kernel bootlog new
+   uboot v7.txt`, v8 with per-write tracing: `docs/new kernel bootlog new
+   uboot v8.txt`): probe succeeds, input device registers, ADC block
+   registers read back correctly. Syscon `CLKEN`/`PADCFG` read
+   `0xffffffff` — v8's per-write trace showed this is true even
+   *before* the driver writes anything (cold-boot state), while
+   `clkdiv`/`pmux0`/`pmux1` at the same block read sane and change
+   correctly — so it's not a broken write or clock-gating issue, most
+   likely those two are write-only/strobe registers the stock driver
+   never reads either. Not a bug. **Live raw-ADC test
+   (`docs/ark ts scan v1.txt`): `raw_x`/`raw_y`/`irq_status` stay pinned
+   at `0x00000000` across 10 runs, including while touching the panel**
+   — the ADC never produces a conversion or signals a touch-detect
+   event. Combined with the earlier GT911 I²C investigation also finding
+   zero response, two independent touch technologies on this unit both
+   show no hardware response — the leading hypothesis is now a physical
+   issue (panel not wired/seated/present), not remaining software work.
+   One cheap check left before concluding that: confirm with `debug=1` +
+   `dmesg -w` whether the IRQ ever fires at all (rules out the polling
+   snapshots missing a narrow window). See
+   `docs/ARK1680_TS_REVERSE_ENGINEERING.md` for full analysis.
+2. Physically confirm whether a GT911 (or any I²C touch chip) is actually
+   populated on the board despite the firmware flag — if not populated,
+   option 1 is the only path; if it is populated, the marker file could
+   be wrong/stale for this specific board and GT911 wiring should be
+   revisited (unlikely given this is a live dump, but worth a 30-second
+   visual check against `Limcet Hardware/board_photo_*.jpg`).
+3. **Do not spend further effort on the GT911 I²C bus/DTS placement** —
+   that variable is now correctly understood to be moot for this unit.
+
+---
+
+## `MsnCoreApp` segfault — likely root cause found (2026-07-11)
+
+Traced the `start_msn` segfault (Blocker 2 since the original bootlog-v6
+review) via static disassembly: `MsnCoreApp` depends on `/dev/ark_display`
+(a vendor misc device from the stock kernel's `ark_display_drv.c`) for
+its very first startup step, and that driver was never ported into our
+4.19 kernel tree. Fix implemented as `Limcet Hardware/ark_display.c` +
+`CONFIG_ARK_DISPLAY=y`. **v9 test:** device registered correctly but
+`MsnCoreApp`/`MsnFirstInit` behavior was completely unchanged — turned
+out to be a bug in the fix itself (wrong `_IOWR()` macro argument
+silently produced the wrong ioctl command number, so it never matched
+userspace's call). Fixed and kernel rebuilt again — **re-flash and
+re-test needed**. Full trail in
+`docs/ARK1680_TS_REVERSE_ENGINEERING.md` → "`MsnCoreApp` segfault —
+likely root cause found and fixed".
+
+---
+
+## NAND "ECC too weak" / bad-block spam — root-caused, log noise fixed (2026-07-11)
+
+Every boot log has `nand: WARNING: ark-nand: the ECC used on your
+system is too weak compared to the one required by the NAND chip`
+followed by hundreds of `nand_read_bbt: bad block at 0x...` lines and
+scattered `ark_nand_correct_data: uncorrectable ECC error`. Traced this
+to its root cause rather than just silencing it blind.
+
+**The chip genuinely requires stronger ECC than this hardware can
+provide — this is not a misconfiguration.** `drivers/mtd/nand/raw/nand_toshiba.c`
+decodes bits 0-2 of the 6th NAND ID byte to determine the datasheet
+required ECC strength for Toshiba SLC chips: `0x4`→1-bit, `0x5`→4-bit,
+`0x6`→8-bit. This chip (`Manufacturer ID: 0x98, Chip ID: 0xf1`, matches
+the boot log) decodes to the `0x6` case — **8-bit required**.
+
+The NAND controller (`Limcet Hardware/ark_nand_kernel.c`,
+`ark_nand_hw_syndrome_ecc_ctrl_init`) only has discrete BCH modes: 7,
+13, 24, 30, or 48-bit — nothing in between — and which mode fits is
+capped by available OOB space:
+- 7-bit BCH needs 13 ECC bytes/512B sector × 4 sectors = 52 bytes —
+  fits this chip's 64-byte OOB.
+- 13-bit BCH needs 23 ECC bytes/512B sector × 4 sectors = 92 bytes —
+  **does not fit** in 64 bytes of OOB.
+
+So **7-bit is the strongest ECC this exact chip+controller pairing can
+ever provide**, one step short of the chip's 8-bit requirement. Stock
+firmware runs the identical chip on the identical controller and
+almost certainly hits the same shortfall (no full stock kernel dmesg
+capture exists to directly confirm — every stock log on hand starts
+mid-boot, see `docs/boot log.txt`/`docs/bootlog_prado_holden_firmware.txt`).
+
+**Practical impact:** low. `nand_ecc_strength_good()`'s check is a
+conservative datasheet-vs-configured comparison, not proof of actual
+data loss — most reads have far fewer real bit-errors than the chip's
+worst-case-rated requirement. The `uncorrectable ECC error`/bad-block
+entries are genuine failures in *specific* worn blocks (≥8 real bit
+errors in that 512B sector), consistent with a used chip from a
+vehicle that's been power-cycled for years — not a wholesale failure.
+NAND now only backs non-critical `/nanddata` assets (bootlogo,
+bootanimation, reversingtrack, Unicode font); real rootfs/kernel boot
+from SD. MTD correctly identifying and avoiding worn blocks is the
+*correct* behavior here, not a malfunction.
+
+**Not fixable, but the log spam was.** Patched
+`drivers/mtd/nand/raw/nand_bbt.c`'s `read_bbt()`: the per-block
+`nand_read_bbt: bad block at 0x...` print (upstream already had a
+comment noting *"if it's matured we can move this message to
+pr_debug"*) is now `pr_debug` instead of `pr_info`, with a `bad_count`
+counter added and a single `nand_read_bbt: %d bad block(s) found`
+summary line printed once at the end of each BBT read instead. Compiles
+clean (`W=1`, zero new warnings), kernel rebuilt, `read_bbt` confirmed
+present in the built `vmlinux`. Since `read_bbt()` runs twice (primary
++ mirror BBT, matching the two `Bad block table found at page ...`
+lines already in every log), expect two summary lines total instead of
+hundreds of individual addresses. Not yet hardware-tested.

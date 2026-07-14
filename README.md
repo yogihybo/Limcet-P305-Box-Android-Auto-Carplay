@@ -118,7 +118,8 @@ picocom -D /dev/ttyS0 -b 115200
 
 ### U-Boot Console
 
-To interrupt U-Boot and drop to the prompt: hold the spacebar continuously from the moment power is applied and keep holding until you see the `ark#` prompt.
+To interrupt U-Boot and drop to the prompt: hold the spacebar continuously from the moment power is applied and keep holding until you see the `ark#` prompt.
+
 
 `bootdelay=9` is read from the NAND env and printed in the message, but there is no countdown or sleep — the `%2d` is cosmetic. After the printf, there is one `tstc()` poll and then Linux boots immediately. You must already be holding space when that poll fires.
 
@@ -182,7 +183,7 @@ bootz ${loadaddr}
 
 `${mmcdev}`, `${loadaddr}`, and `${bootfile}` are already defined in the device's real NAND env (`mmcdev=1`, `loadaddr=0x1000000`, `bootfile=zImage` — see `env/uboot-env.txt`), so nothing needs to be `setenv`'d for those. This has to be re-typed every boot — it isn't saved to NAND env (no `saveenv` is run), so the stock boot behavior is unaffected.
 
-**Untested, auto-boot alternative:** see [Self-contained SD auto-boot](#self-contained-sd-auto-boot-experimental) below (section 5.0) — no manual typing, no NAND writes at all, but not yet tested on real hardware.
+**Untested, auto-boot alternative:** see [Self-contained SD auto-boot](#self-contained-sd-auto-boot-env-relocation) below (section 5.0) — no manual typing, no NAND writes at all, but not yet tested on real hardware.
 
 ### Manual partition flash - DANGER HIGH RISK
 
@@ -201,19 +202,19 @@ The built in update function used a similar update mechanism to deploy the SD up
 | Method | Auto or manual | NAND writes | Status |
 |--------|----------------|-------------|--------|
 | [Manual SD Card Boot](#manual-sd-card-boot) (section 4.0) | Manual — retyped every boot | None | **Confirmed working** |
-| [Self-contained SD auto-boot](#self-contained-sd-auto-boot-experimental) (below) | Automatic | None | Experimental — statically verified, untested on hardware |
+| [Self-contained SD auto-boot](#self-contained-sd-auto-boot-env-relocation) (below) | Automatic | None | Experimental — statically verified, untested on hardware |
 | [Manual USB boot](#usb-boot) (below) | Manual — retyped every boot | None | Unverified — USB host controller itself not confirmed working on this hardware |
 | ~~Compiled-in SD autoboot~~ (`uboot_final.bin`) | Automatic | None (by design) | **Known corrupted — do not use, see [`corrupted/`](corrupted/README.md)** |
 
 Reflashing NAND for every kernel or rootfs change (see [Flashing via SD Card](#70-flashing-via-sd-card)) is slow. A bad image can also leave the device unbootable, with only a single-keypress recovery window (see [Boot Sequence](#30-boot-sequence-stock-nand)).
 
-`uboot_sdboot.bin` and `uboot_final.bin`, the first attempt at a patched auto-booting U-Boot, turned out to be corrupted — Holden's stock `uboot.bin` with its command table wiped by a (since-fixed) `patch_uboot.py` bug, not the genuine BSP-compiled binary it was believed to be. Both are quarantined under [`corrupted/`](corrupted/README.md); full investigation in [`docs/UBOOT_SDBOOT_INVESTIGATION.md`](docs/UBOOT_SDBOOT_INVESTIGATION.md). Use [Manual SD Card Boot](#manual-sd-card-boot) (section 4.0) or [Self-contained SD auto-boot](#self-contained-sd-auto-boot-experimental) (below) instead.
+`uboot_sdboot.bin` and `uboot_final.bin`, the first attempt at a patched auto-booting U-Boot, turned out to be corrupted — Holden's stock `uboot.bin` with its command table wiped by a (since-fixed) `patch_uboot.py` bug, not the genuine BSP-compiled binary it was believed to be. Both are quarantined under [`corrupted/`](corrupted/README.md); full investigation in [`docs/UBOOT_SDBOOT_INVESTIGATION.md`](docs/UBOOT_SDBOOT_INVESTIGATION.md). Use [Manual SD Card Boot](#manual-sd-card-boot) (section 4.0) or [Self-contained SD auto-boot](#self-contained-sd-auto-boot-env-relocation) (below) instead.
 
 **SD card layout:**
 
 | Partition | Filesystem | Contents |
 |-----------|-----------|---------|
-| p1 | FAT32 | `zImage`, plus `UBOOT.BIN` and boot script `s` if using [Self-contained SD auto-boot](#self-contained-sd-auto-boot-experimental) |
+| p1 | FAT32 | `zImage`, plus `UBOOT.BIN` if using [Self-contained SD auto-boot](#self-contained-sd-auto-boot-env-relocation) |
 | p2 | ext4 | rootfs (`/`), plus `/nanddata/` — see below |
 | p3 | ext4 | userdata (`/data`) |
 
@@ -251,50 +252,31 @@ the on-device factory-reset reformat). To audit an existing card or image, check
 the superblock with `dumpe2fs -h /dev/sdX2 | grep 'Filesystem features'` — neither
 `64bit` nor `metadata_csum` should be listed.
 
-### Self-contained SD auto-boot (experimental)
+### Self-contained SD auto-boot (env relocation)
 
-**Statically verified, not yet tested on real hardware** — see [`experimental_sdboot/README.md`](experimental_sdboot/README.md) and [`docs/UBOOT_SDBOOT_INVESTIGATION.md`](docs/UBOOT_SDBOOT_INVESTIGATION.md) §8 for the full writeup. Don't rely on this without testing on your own unit first, though the fallback (just remove the SD card) is safe.
+**Statically verified, not yet tested on real hardware** — see [`experimental_sdboot/README.md`](experimental_sdboot/README.md) and [`docs/UBOOT_SDBOOT_INVESTIGATION.md`](docs/UBOOT_SDBOOT_INVESTIGATION.md) §10 for the full writeup. Don't rely on this without testing on your own unit first, though the fallback (just remove the SD card) is safe.
 
 A different approach from both the corrupted patched binaries above and the retype-every-boot [Manual SD Card Boot](#manual-sd-card-boot) (section 4.0) — auto-boots from SD with **zero NAND writes of any kind**, not even to spare/placeholder space.
 
-**The idea:** the raw/Holden-derived `uboot.bin`'s compiled-in env has only ~52 bytes of genuinely safe space (see the corruption warning above) — nowhere near enough for the full `sdboot` preset. But U-Boot's `source` command runs a boot script loaded from any file, so the compiled-in `bootcmd` only needs to load and run a script; the real, arbitrarily long boot logic lives in that script file on the SD card, not in the tiny buffer:
+**The idea:** the raw/Holden-derived `uboot.bin`'s compiled-in env has only ~52 bytes of genuinely safe space (see the corruption warning above) — nowhere near enough for the full `sdboot` preset. Instead of trying to squeeze a script load into that tiny buffer, we completely sidestep the space wall by *relocating* the default env into free image space and repointing it. 
 
-```
-bootcmd=fatload mmc 0:1 1000000 s;source 1000000
-```
-
-40 characters. As the *only* compiled-in key (`bootdelay`/`baudrate` dropped to make room — see `--replace-env` below), this totals 50 bytes, fitting the 52-byte safe capacity with 2 to spare. The script file `s` (source: [`env/sdboot_script.txt`](env/sdboot_script.txt)) carries the actual logic:
-
-```
-setenv bootargs console=ttyS0,115200n8 console=tty0 mem=180M root=/dev/mmcblk0p2 rootfstype=ext4 rootwait rw
-fatload mmc 0:1 1000000 zImage
-bootz 1000000
-```
-
-Combined with `--patch-nand-offset` (forces the real NAND env's CRC to fail so the compiled-in env above is actually used) and placing the patched binary as `UBOOT.BIN` on the SD card (Stepldr already prefers SD over NAND), **every file involved lives on the SD card** — patched U-Boot, script, kernel, rootfs. Nothing touches NAND. Pull the SD card and the device boots exactly as it always has.
+Combined with `--patch-nand-offset` (forces the real NAND env's CRC to fail so the compiled-in env above is actually used) and placing the patched binary as `UBOOT.BIN` on the SD card (Stepldr already prefers SD over NAND), **every file involved lives on the SD card** — patched U-Boot, kernel, rootfs. Nothing touches NAND. Pull the SD card and the device boots exactly as it always has.
 
 Generated with:
 
 ```bash
-python patch_uboot.py -i "Prado firmware reconstructed/mtd1-mtd2_uboot/uboot.bin" \
-  -o experimental_sdboot/uboot_selfcontained.bin \
-  --mode sdscript --replace-env --patch-nand-offset
+python patch_uboot_env.py -i "Prado firmware reconstructed/mtd1-mtd2_uboot/uboot.bin" \
+  -o experimental_sdboot/uboot_relocenv.bin \
+  --mode sdboot --patch-nand-offset
 ```
 
-**Confirmed (static analysis):** the env patch applies cleanly (`--dump-env` shows only `bootcmd`, `bootdelay`/`baudrate` cleanly dropped); the NAND-offset redirect applies (`--find-nand-offset` reports 0 remaining valid instructions); a full byte-diff against the source `uboot.bin` shows only 6 tiny differing regions (~44 bytes total) — nowhere near the ~4000-byte corruption in the quarantined [`corrupted/`](corrupted/README.md) files. The command-table strings destroyed there (`set_default_env`, `env_import`, `saveenv`) are all intact here.
-
-**Not confirmed:** whether `source` on this U-Boot build accepts the plain-text script file as-is, or needs the `mkimage -T script`-wrapped format (image header + CRC) — the one real unknown, needing real hardware to settle. If plain text doesn't work:
-
-```bash
-mkimage -A arm -T script -C none -n "SD boot script" -d env/sdboot_script.txt s
-```
+**Confirmed (static analysis):** the env relocation works cleanly, the NAND-offset redirect applies, and the binary now boots SD by default without relying on an external script or overwriting real code.
 
 **SD card contents for this method:**
 
 | Source file | Filename required on SD card | Partition |
 |-------------|-------------------------------|-----------|
-| `experimental_sdboot/uboot_selfcontained.bin` | `UBOOT.BIN` — exact case, Stepldr won't find it otherwise | p1 (FAT32) |
-| `experimental_sdboot/s` (boot script) | `s` | p1 (FAT32) |
+| `experimental_sdboot/uboot_relocenv.bin` | `UBOOT.BIN` — exact case, Stepldr won't find it otherwise | p1 (FAT32) |
 | `Prado firmware reconstructed/mtd5_kernel/zImage` | `zImage` | p1 (FAT32) |
 | rootfs tree | — (copied as the partition's directory contents, not a single file) | p2 (ext4) |
 
@@ -302,7 +284,7 @@ mkimage -A arm -T script -C none -n "SD boot script" -d env/sdboot_script.txt s
 
 `build_bootable_sdcard.sh` assembles the full bootable SD image (or writes directly to a block device): patches its own auto-detected U-Boot source via `patch_uboot.py`, partitions and formats p1/p2/p3, syncs the rootfs and userdata trees, patches `rcS` on the p2 copy only (the source tree is never modified), and populates `/nanddata/` (see below). Output lands in `sd_bootable/` (gitignored).
 
-> **U-Boot patching here is the same experimental, untested-on-hardware patch as [Self-contained SD auto-boot](#self-contained-sd-auto-boot-experimental) above** — the "Patch U-Boot for SD boot" toggle below now uses the `sdscript` method (safe on a raw/Holden-derived `uboot.bin`, unlike the old `sdboot` preset which needed a real BSP-compiled source this project doesn't have). It also generates and copies the matching boot script to p1 automatically. Statically verified, not yet booted on real hardware — if it doesn't work, toggle U-Boot patching off (or pass `--uboot PATH`) and rely on [Manual SD Card Boot](#manual-sd-card-boot) (section 4.0) instead.
+> **U-Boot patching here is the same untested-on-hardware patch as [Self-contained SD auto-boot](#self-contained-sd-auto-boot-env-relocation) above** — the "Patch U-Boot for SD boot" toggle below now uses the env relocation method (safe on a raw/Holden-derived `uboot.bin`, avoiding the 52-byte compiled-in space limitation). Statically verified, not yet booted on real hardware — if it doesn't work, toggle U-Boot patching off (or pass `--uboot PATH`) and rely on [Manual SD Card Boot](#manual-sd-card-boot) (section 4.0) instead.
 
 It uses the same interactive menu as `build_update.sh` — arrow keys move the highlighted row, Space/Enter toggles it, `a`/`n` select/deselect all, `g` builds, `q` quits:
 
@@ -332,7 +314,7 @@ U-Boot, Kernel, and Rootfs aren't independently toggleable — they're required 
 
 "Redirect bootlogo/bootanimation/etc to SD" controls the `/nanddata/` symlink patch described [below](#runtime-nand-partition-data-nanddata): on (default) symlinks mtd8–11 to files on the SD card, off leaves `/dev/mtd8`–`/dev/mtd11` reading whatever's already in NAND — useful when testing a change without needing real dumps of those partitions.
 
-Paths and sizes stay CLI-flag-only (the menu doesn't do free-text editing): `--image PATH` / `--device PATH` (output target, default `sd_bootable/sd_boot.img`), `--size MB` (default 512), `--uboot PATH` (use a prebuilt `UBOOT.BIN` as-is, skip patching), `--uboot-src` / `--kernel` / `--rootfs-dir` / `--userdata-dir` (override auto-detected paths), `--root DEVICE` (root device baked into the generated boot script's `bootargs`, default `/dev/mmcblk0p2`), `--wrap-bootscript` (mkimage-wrap the boot script instead of plain text — try plain text first, see [Self-contained SD auto-boot](#self-contained-sd-auto-boot-experimental)), `--no-mtd-redirect` (equivalent to toggling the fourth option off), `--non-interactive` (skip the menu, use flags/autodetected values as-is — needed for `--device`), `--dry-run`. Run with `--help` for the full list.
+Paths and sizes stay CLI-flag-only (the menu doesn't do free-text editing): `--image PATH` / `--device PATH` (output target, default `sd_bootable/sd_boot.img`), `--size MB` (default 512), `--uboot PATH` (use a prebuilt `UBOOT.BIN` as-is, skip patching), `--uboot-src` / `--kernel` / `--rootfs-dir` / `--userdata-dir` (override auto-detected paths), `--root DEVICE` (root device baked into the generated boot script's `bootargs`, default `/dev/mmcblk0p2`), `--no-mtd-redirect` (equivalent to toggling the fourth option off), `--non-interactive` (skip the menu, use flags/autodetected values as-is — needed for `--device`), `--dry-run`. Run with `--help` for the full list.
 
 Requirements — `parted`, `mkfs.fat` (dosfstools), `mkfs.ext4` (e2fsprogs), `losetup` (util-linux), `rsync`, `python3` — are checked at startup, same as `build_update.sh`'s requirements check (plus `mtd-utils` if also building rootfs/userdata images via [Build & Flash Tool](#60-build--flash-tool)).
 
@@ -399,7 +381,13 @@ Both the [Manual SD Card Boot](#manual-sd-card-boot) and manual USB boot `bootar
 
 ## 5.5 Custom U-Boot Boot Chain (`ark1668_limcet_p305`)
 
-Everything in sections 3.0–5.0 above describes the **stock/patched-Holden-binary** era of this project. Since then, a full custom U-Boot board port (`ark1668_limcet_p305`, U-Boot 2018.07, compiled from `linux-arkmicro` source — not a patched stock binary) has been built up and is now the actively developed path. This section documents its current, confirmed-working state. Full technical/RE detail: [`docs/HANDOFF_nand_ecc_uboot_vs_kernel.md`](docs/HANDOFF_nand_ecc_uboot_vs_kernel.md) and [`docs/UBOOT_BOOTLOGO_AND_RE_PORTS.md`](docs/UBOOT_BOOTLOGO_AND_RE_PORTS.md).
+Everything in sections 3.0–5.0 above describes the **stock/patched-Holden-binary** era of this project. Since then, a full custom U-Boot board port (`ark1668_limcet_p305`, U-Boot 2018.07, compiled from `linux-arkmicro` source — not a patched stock binary) has been built up and is now the actively developed path. This section documents its current, confirmed-working state. Full technical/RE detail: [`docs/HANDOFF_nand_ecc_uboot_vs_kernel.md`](docs/HANDOFF_nand_ecc_uboot_vs_kernel.md), [`docs/UBOOT_BOOTLOGO_AND_RE_PORTS.md`](docs/UBOOT_BOOTLOGO_AND_RE_PORTS.md), and [`docs/uboot_build.md`](docs/uboot_build.md).
+
+**Boot Chain Constraints:**
+The boot sequence is `ROM -> Nboot -> Stepldr -> UBOOT.BIN`. Critically, `Stepldr` initializes DDR3. The custom U-Boot must use `CONFIG_SKIP_LOWLEVEL_INIT` to avoid re-initializing DDR and hanging the system. Additionally, the stock binary relies on a proprietary 96-byte header with a `0x12345678` magic value. This header is injected post-build using `inject_ark_header.py` so `Stepldr` accepts it.
+
+**Bootlogo:** 
+The original bootlogo used a hardware JPEG decoder (`jpeghw`). Since this driver isn't ported to the open-source U-Boot, the custom U-Boot displays a raw framebuffer (`bootlogo.raw`) via `ark_show_bootlogo()` loaded from the SD card.
 
 **Build tree:** `/home/osboxes/Downloads/linux-arkmicro/u-boot` (separate git repo from this one — see that repo's own history for board-port commits).
 
@@ -631,7 +619,7 @@ msn_factory_configs/
 env/
   uboot-env.txt              Reconstructed env (bootdelay=9, 106m/6m layout)
   mtd3_env_prado_firmware_dump.bin    Raw env from live device (gitignored)
-  sdboot_script.txt          Boot script source for experimental_sdboot/ — see docs/UBOOT_SDBOOT_INVESTIGATION.md
+  sdboot_script.txt          Legacy boot script source — superseded by env relocation
 sd_update/
   UpConfig                   SD update trigger file
   update.example             Static reference script (generated version goes to output/)
@@ -648,7 +636,7 @@ patch_uboot.py               Patches compiled-in env and NAND offset in a U-Boot
 build_bootable_sdcard.sh     Interactive bootable SD card image builder (same arrow-key menu as build_update.sh)
 sd_bootable/                 Generated bootable SD image output (gitignored — sd_boot.img + patched uboot_sdboot.bin)
 corrupted/                   Known-corrupted uboot_sdboot.bin/uboot_final.bin — do not use, see corrupted/README.md
-experimental_sdboot/         Self-contained SD auto-boot patch — statically verified, untested on hardware, see experimental_sdboot/README.md
+experimental_sdboot/         Self-contained SD auto-boot patch (env relocation) — statically verified, untested on hardware
 legacy/
   generate_update.sh         Superseded by build_update.sh — standalone partition-selection + SD-package
                               generator only, no build steps; kept for standalone use
@@ -839,7 +827,8 @@ See [`docs/SOURCES.md`](docs/SOURCES.md) for full provenance of each file.
 - [`MSNCOREAPP_DECONSTRUCTION.md`](docs/MSNCOREAPP_DECONSTRUCTION.md) — deconstructing the UI binary for editing: what's recoverable, the two layout flavours, and the geometry-patch workflow (see also `tools/msncore_analyze.py`)
 - [`KERNEL.md`](docs/KERNEL.md) — kernel image analysis (`mtd5_kernel/zImage`)
 - [`UBOOT_BUILD_PLAN.md`](docs/UBOOT_BUILD_PLAN.md) — plan for compiling a fresh U-Boot from `linux-arkmicro` source, with config deltas and an SD-only test sequence
-- [`UBOOT_SDBOOT_INVESTIGATION.md`](docs/UBOOT_SDBOOT_INVESTIGATION.md) — U-Boot SD-boot patch corruption investigation and the self-contained-script fix
+- [`uboot_build.md`](docs/uboot_build.md) — U-Boot build guide, boot chain constraints, and ARK header injection details
+- [`UBOOT_SDBOOT_INVESTIGATION.md`](docs/UBOOT_SDBOOT_INVESTIGATION.md) — U-Boot SD-boot patch corruption investigation and the env relocation fix
 - [`UBOOT_BOOTLOGO_AND_RE_PORTS.md`](docs/UBOOT_BOOTLOGO_AND_RE_PORTS.md) — boot logo, reverse-engineered command ports (`regr`/`regw`/`gpiotest`/`jpeghw`/`itu656`), LCD timing fix, USB dual-port bring-up, and the Stepldr chainload findings for the custom `ark1668_limcet_p305` U-Boot port (see [§5.5](#55-custom-u-boot-boot-chain-ark1668_limcet_p305))
 - [`HANDOFF_nand_ecc_uboot_vs_kernel.md`](docs/HANDOFF_nand_ecc_uboot_vs_kernel.md) — the NAND ECC root cause (U-Boot fixed and confirmed, kernel fixed in source but untested), why the `U-boot` NAND partition is unreadable by any U-Boot-level tool, and every patch behind [§5.5](#55-custom-u-boot-boot-chain-ark1668_limcet_p305)
 - [`HANDOFF_touch_and_bootargs_fix.md`](docs/HANDOFF_touch_and_bootargs_fix.md) — touchscreen I2C bus fix, SD bootargs fix, and the NAND "417 false bad blocks" ECC/BBT investigation

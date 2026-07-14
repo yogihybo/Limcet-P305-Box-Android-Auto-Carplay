@@ -118,18 +118,7 @@ picocom -D /dev/ttyS0 -b 115200
 
 ### U-Boot Console
 
-To interrupt U-Boot and drop to the prompt: hold the spacebar continuously from the moment power is applied and keep holding until you see the `ark#` prompt.
-
-The stock Prado U-Boot has a **custom boot loop** — disassembly of the binary (`TEXT_BASE=0x00030000`, function at `0x0003cf3c`) confirms the mechanism:
-
-```
-env_get("bootdelay")   → r4 = 9   (from NAND env — value is real)
-env_get("bootcmd")     → r5 = "run nandboot"
-printf("Press space key to stop autoboot: %2d", r4)  ← 9 is cosmetic only
-tstc()                 → ONE keypress poll, no sleep
-  space held → readline("> ") loop  (ark# interactive shell)
-  no key     → run_command("run nandboot")  ← immediate boot
-```
+To interrupt U-Boot and drop to the prompt: hold the spacebar continuously from the moment power is applied and keep holding until you see the `ark#` prompt.
 
 `bootdelay=9` is read from the NAND env and printed in the message, but there is no countdown or sleep — the `%2d` is cosmetic. After the printf, there is one `tstc()` poll and then Linux boots immediately. You must already be holding space when that poll fires.
 
@@ -167,6 +156,17 @@ Two specific commands that are useful:
 |---------|--------|
 | `run nandboot` | Boots the stock NAND kernel/rootfs — `run setbootargs; bootnand` (default `bootcmd` on stock NAND, see [Boot Sequence](#30-boot-sequence-stock-nand)) |
 | `usb start` | Initialises the USB host controller — run this first to confirm USB works before attempting to boot from USB |
+
+The stock U-Boot has a **custom boot loop** — disassembly of the binary (`TEXT_BASE=0x00030000`, function at `0x0003cf3c`) confirms the mechanism:
+
+```
+env_get("bootdelay")   → r4 = 9   (from NAND env — value is real but doesn't work)
+env_get("bootcmd")     → r5 = "run nandboot"
+printf("Press space key to stop autoboot: %2d", r4)  ← 9 is cosmetic only
+tstc()                 → ONE keypress poll, no sleep
+  space held → readline("> ") loop  (ark# interactive shell)
+  no key     → run_command("run nandboot")  ← immediate boot
+```
 
 ### Manual SD Card Boot
 

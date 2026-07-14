@@ -424,6 +424,51 @@ whether root is already on this same USB bus before touching it, which
 has not been implemented. Don't re-enable this toggle without adding that
 check first.
 
+### A third bug, found in the *same* log, after disabling the second one
+Disabling the `rcS` workaround didn't fully stop the disconnect-and-corrupt
+pattern -- the same log also shows it happening again, later, well into
+normal runtime (after `crng init done`, long past boot), with no `rcS`
+script involved at all this time:
+```
+musb_reset_timer_handler
+musb_recovery_usb_proc reset otg.
+musb-hdrc musb-hdrc.0: +Switch peripheral 76  126===
+musb-hdrc musb-hdrc.0: +++Switch OTG 76  126===+++
+usb 1-1: USB disconnect, device number 5
+sd 0:0:0:0: [sda] tag#0 UNKNOWN(0x2003) ...
+print_req_error: I/O error, dev sda, ...
+```
+
+**Root cause**: `musb_recovery_usb_proc()`/`musb_reset_timer_handler()`
+(`drivers/usb/musb/musb_core.c`) are a **pre-existing, vendor-written
+watchdog**, unrelated to anything from this session's own changes. It's
+armed by `musb_reset_usb_controller()` (`musb_host.c`), which is a
+`hc_driver.reset_usb_controller` callback invoked from **generic upstream
+Linux USB core code** (`drivers/usb/core/hub.c`'s `hub_port_init()` retry
+loop) whenever a port-enable attempt fails for *any* reason -- including a
+transient signal glitch during otherwise-normal runtime, not just at
+initial connect. When it fires, the recovery work unconditionally forces
+a `MUSB_PERIPHERAL` → wait 1s → `MUSB_OTG` mode-switch cycle, which routes
+through the *same* `ark_musb_set_mode()` VBUS power-cycle patched above --
+turning a possibly-minor, possibly-self-recovering glitch into a real,
+physical disconnect of whatever's currently attached. If that's the
+device serving as root, same corruption cascade as before, just from a
+different, harder-to-predict trigger (can fire at any time during normal
+operation, not just at boot).
+
+**Fix applied** (`musb_recovery_usb_proc()`, `musb_core.c`): check
+`musb->port1_status & USB_PORT_STAT_ENABLE` before doing the disruptive
+reset -- skip it if the port already has a working, enabled connection.
+A genuinely stuck/dead port has nothing to lose from the reset; an
+already-working one has everything to lose. **Built and committed
+(`990417616`), NOT yet hardware-tested** -- unlike the VBUS-delay fix
+above, this one hasn't been proven live yet. Test `bootusb`+`usbroot`
+again with this kernel before trusting boot-from-USB as safe for anything
+that matters; if the disconnect-and-corrupt pattern still shows up, this
+fix wasn't sufficient and the actual trigger condition (what's causing
+`hub_port_init()` to fail in the first place, well into normal runtime)
+needs its own investigation.
+
 ---
 
 ## 7. `help` command corruption -- real fix applied, did NOT resolve it, deprioritized as cosmetic

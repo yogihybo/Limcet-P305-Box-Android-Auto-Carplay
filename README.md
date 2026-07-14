@@ -184,7 +184,7 @@ bootz ${loadaddr}
 
 **Untested, auto-boot alternative:** see [Self-contained SD auto-boot](#self-contained-sd-auto-boot-experimental) below (section 5.0) — no manual typing, no NAND writes at all, but not yet tested on real hardware.
 
-### Manual partition flash
+### Manual partition flash - DANGER HIGH RISK
 
 At the `ark#` prompt you can manually flash any partition — this example loads a kernel image from the SD card and writes it to the kernel partition (see [NAND Partition Layout](#90-nand-partition-layout) for the offsets of other partitions):
 
@@ -193,6 +193,8 @@ fatload mmc 0 4000000 zImage
 nand scrub 0x1a0000 0x400000 0x1a0000 0x400000
 nand write 0x4000000 0x1a0000 ${filesize}
 ```
+
+The built in update function used a similar update mechanism to deploy the SD update packages to each NAND partition.
 
 ## 5.0 Booting from SD Card or USB (non-destructive)
 

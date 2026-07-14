@@ -118,7 +118,16 @@ Photo: `board_photo_02.jpg`
 - **GPIO** — ACC/IGN detection, reverse trigger input, panel button inputs
 
 The MCU runs the `Limcet-V1.0-1302` custom firmware which handles:
-- Touch events (forwarded to ARK1668 — confirmed via MCU Monitor in advanced factory menu)
+- ~~Touch events (forwarded to ARK1668 — confirmed via MCU Monitor in advanced
+  factory menu)~~ — **retracted (2026-07-11), see `docs/ARK1680_TS_REVERSE_ENGINEERING.md`.**
+  Contradicted by: (1) direct on-screen observation that the MCU Monitor only
+  shows CAN-bus activity; (2) a live `/dev/ttyHS0` byte capture showing zero
+  traffic at all, not even the idle status frames expected regardless of
+  touch; (3) `/etc/ts.conf` + `TSLIB_TSDEVICE=/dev/input/event0` in the stock
+  rootfs, which authoritatively confirms tslib reads touch from a kernel
+  evdev device (`gt9xx.ko`/`ark1680_ts.ko`), not any serial link. The
+  MCU-forwards-touch claim was likely a misattribution from an earlier
+  session and should not be relied on.
 - Steering wheel button presses (ADC voltage divider on SWC input wire)
 - Panel button inputs
 - ACC/IGN signal processing

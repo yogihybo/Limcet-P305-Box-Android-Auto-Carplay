@@ -21,6 +21,17 @@
 		debounce-detect = <20>;
 	};
 
+	// ARK1680 on-SoC resistive ADC touchscreen — this is the touch path
+	// this unit's stock firmware actually selects (see
+	// docs/boot_experiment_log.md "ROOT CAUSE FOUND" and
+	// docs/ARK1680_TS_REVERSE_ENGINEERING.md), not the GT911 node below.
+	tsc: tsc@e4500000 {
+		compatible = "arkmicro,ark1680-ts";
+		reg = <0xe4500000 0x40>;
+		interrupt-parent = <&vicl>;
+		interrupts = <4>;
+	};
+
 	mcu_serial: mcu-serial@0 {
 		compatible = "arkmicro,ark-mcu-serial";
 	};
@@ -72,6 +83,21 @@
 		i2c-gpio,scl-output-only;
 
 		// ROHM BD37033 Sound Processor
+		// Address corrected 0x40 -> 0x41 (2026-07-13), then back to 0x40
+		// (2026-07-14). The 0x41 value came only from stock's *kernel*
+		// board file (i2c_board_info struct) + an i2c-scan XX marker --
+		// both just prove a kernel i2c_client got registered there, not
+		// that the chip answers (see docs/I2C_GPIO0_LCD_PIN_CONFLICT.md).
+		// Ground truth is the vendor's own shipped userspace audio-control
+		// code: disassembly of libMsnSound.so's Sound_BD37033 constructor
+		// + libMsnCommons.so's arki2c_open() shows it does
+		// `ioctl(fd, I2C_SLAVE, 0x80 >> 1)` = address 0x40 at runtime --
+		// matching the BD37033 datasheet's public 7-bit address. This also
+		// explains the persistent bd37033_write_byte timeout seen
+		// throughout this investigation: the kernel-level i2c_client was
+		// always misaddressed, it just never mattered because stock's real
+		// control path bypasses the kernel driver entirely. See
+		// docs/AUDIO_SUBSYSTEM_INVESTIGATION.md.
 		amp: drv_bd37033@40 {
 			status = "okay";
 			compatible = "arkmicro,drv_bd37033";
@@ -90,15 +116,24 @@
 		simple-audio-card,format = "i2s";
 		simple-audio-card,name = "ark1668-audio";
 
-		simple-audio-card,dai-link@0 { /* I2S ADC link */
-			cpu {
-				sound-dai = <&i2s_adc>;
-			};
-			codec {
-				sound-dai = <&sdadc>;
-			};
-		};
-		simple-audio-card,dai-link@1 { /* I2S DAC link */
+		// BD37033 (&amp) has no I2S DAI stream of its own -- it's
+		// control-only (I2C-driven mixer controls, see
+		// sound/soc/arkmicro/BD37033.c's "PA Volume" etc). Without
+		// listing it as an aux-dev, its ASoC component never gets bound
+		// into this card, so its controls never reach `amixer` even
+		// when the I2S data path and I2C bus are both fine (found
+		// 2026-07-14 via tools/audio-test/audio-test.sh -- see
+		// docs/AUDIO_SUBSYSTEM_INVESTIGATION.md).
+		simple-audio-card,aux-devs = <&amp>;
+
+		// DAC/playback link listed FIRST (2026-07-13) so it lands on
+		// PCM device 0, matching /etc/asound.conf's hardcoded
+		// dmix slave "hw:0,0" -- simple-audio-card assigns device
+		// numbers by dai-link order, and with ADC first the playback
+		// device landed on hw:0,1 instead, causing every dmix/softvol
+		// PCM to fail with "unable to open slave" at MsnCoreApp
+		// startup (see docs/AUDIO_SUBSYSTEM_INVESTIGATION.md).
+		simple-audio-card,dai-link@0 { /* I2S DAC link */
 			bitclock-master = <&playback_cpu>;
 			frame-master = <&playback_cpu>;
 			playback_cpu: cpu {
@@ -106,6 +141,14 @@
 			};
 			playback_codec: codec {
 				sound-dai = <&sddac>;
+			};
+		};
+		simple-audio-card,dai-link@1 { /* I2S ADC link */
+			cpu {
+				sound-dai = <&i2s_adc>;
+			};
+			codec {
+				sound-dai = <&sdadc>;
 			};
 		};
 	};
@@ -206,8 +249,15 @@
 	status = "okay";
 };
 
+// DIAGNOSTIC: enabled with no child devices so both this controller and
+// i2c-gpio-0 (which still owns the gt911@5d + dvr_rn6752@2c nodes above) are
+// live simultaneously. Lets a userspace i2c scan on /dev/i2c-* determine,
+// empirically, which physical bus the GT911 actually ACKs on — see
+// docs/boot_experiment_log.md "Systematic I2C bus verification" and
+// tools/i2c-scan/. Do not attach gt911 here until that scan confirms it.
 &i2c0 {
-	status = "disabled";
+	status = "okay";
+	clock-frequency = <100000>;
 };
 
 &gpio0 {

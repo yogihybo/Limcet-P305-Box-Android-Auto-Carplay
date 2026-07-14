@@ -60,7 +60,7 @@ Hardware on the device has been identified by opening the device and reviewing t
 
 - A multi-pin wiring harness is used to intercept the existing harness and connect some of the wiring to the Limcet board. 
 - Steering wheel controls are not believed to be read via an ADC voltage divider on a dedicated SWC wire, despite the `EnableSWCSwitchHardware` option in the ARK1668 config. The STM32F105 MCU instead decodes Toyota-specific messages directly off the vehicle's **CAN bus** (through the TJA1042 transceiver) and forwards translated key events to the ARK1668 over UART.
-- The reversing camera connects as a standard CVBS composite feed, decoded by the RN6752 into digital video for the SoC.
+- The reversing camera connects as a standard CVBS composite feed, decoded by the RN6752 into digital video for the SoC. It's believed that this route is used for early camera loading (with 2s of boot) while the rest of the system is still initialising.
 
 Full teardown details and board photos are in `Limcet Hardware/BOARD_ANALYSIS.md` (linked below).
 
@@ -84,17 +84,18 @@ Four ways to reach the device:
 
 ## 2.0 Serial Console (recovery / monitoring)
 
-Connect via the UART header near the SD card slot. Settings: **115200 8N1**.
+Connect via the UART header near the SD card slot. See the photos in the Limcet Hardware Folder. Serial Settings: **115200 8N1**.
 
+Colours of the attached wires and corresponding pin:
 | Pin | Color |
 |-----|--------|
 | TX | Yellow |
 | RX | Blue |
 | GND | Black |
 
-Adapter: a generic USB-serial adapter (e.g. PL2303) or Raspberry Pi GPIO UART.
+A generic USB-serial adapter (e.g. PL2303) or Raspberry Pi GPIO UART can be used to read the serial lines.
 
-**Output vs input:** console output is available over serial through both U-Boot and the Linux kernel (boot log, `dmesg`, kernel messages). Keystroke input, however, only works at the U-Boot prompt — once Linux has booted, the serial line is view-only, with no login shell or interactive input on it.
+In stock configuration, the console output is available over serial through both U-Boot and the Linux kernel (boot log, `dmesg`, kernel messages). Keystroke input, however, only works at the U-Boot prompt. Once Linux has booted, the serial line is view-only, with no login shell or interactive input on it as the system doesn't load an interactive console by default. Refer to telnet payload for details on how to active a terminal using the existing wifi.
 
 **Connecting via USB-serial adapter (Windows / PuTTY):**
 
@@ -132,11 +133,13 @@ tstc()                 → ONE keypress poll, no sleep
 
 `bootdelay=9` is read from the NAND env and printed in the message, but there is no countdown or sleep — the `%2d` is cosmetic. After the printf, there is one `tstc()` poll and then Linux boots immediately. You must already be holding space when that poll fires.
 
+Access to the u-boot console can provide interface for dumping firmware, read env config or manually loading a different kernel.
+
 ### Kernel Console
 
-Once U-Boot hands off, the same UART carries the Linux kernel's boot log and `dmesg` output — enabled via the `console=ttyS0,115200n8` kernel bootarg (see [Boot Sequence](#30-boot-sequence-stock-nand) below). This is receive-only, as noted above: there is no login shell or interactive input on this console once Linux is running. It's still the fastest way to see what's happening early in boot — e.g. checking which WiFi driver bound to `wlan0` (see [WiFi module detection](#wifi-module-detection)) or diagnosing a hang before userspace and SSH come up.
+Once U-Boot hands off, the same serial UART carries the Linux kernel's boot log and `dmesg` output — enabled via the `console=ttyS0,115200n8` kernel bootarg (see [Boot Sequence](#30-boot-sequence-stock-nand) below). This is receive-only, as noted above: there is no login shell or interactive input on this console once Linux is running. It's still the fastest way to see what's happening early in boot — e.g. checking which WiFi driver bound to `wlan0` (see [WiFi module detection](#wifi-module-detection)) or diagnosing a hang before userspace and SSH come up.
 
-On SD/USB boot, `console=tty0` is also set, so the same messages are mirrored to the physical screen via `fbcon` — see [Console on screen](#console-on-screen).
+The same serial console is active during SD/USB boot and can be interactive if modifications have been made to the rootfs. A framebuffer Console output to the LCD was tried but not successful - see [Console on screen](#console-on-screen).
 
 ## 3.0 Boot Sequence (stock NAND)
 

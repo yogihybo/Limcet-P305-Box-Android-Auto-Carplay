@@ -12,14 +12,20 @@ port in this session.
 Committed: `1422e3411` (u-boot repo, whole board port + NAND fix) and
 `5f4dcfc` (main repo, `build_bootable_sdcard.sh`).
 
-**Headline result (2026-07-13, confirmed on real hardware):** `bootstock`
-works end-to-end -- this build (booted from SD) chainloads the stock
-U-Boot binary, which then successfully boots the full stock kernel +
-rootfs + UI from NAND. This is now a completely reliable path to the
-original stock system from a custom-U-Boot-on-SD setup, and it sidesteps
-the `bootnand` kernel-entry hang (section 5) entirely -- that issue no
-longer blocks getting a working NAND boot, it only blocks doing it via
-*this* fork's own `bootz` directly.
+**Headline results (2026-07-13/14, confirmed on real hardware):**
+- `bootstock` works end-to-end -- this build (booted from SD) chainloads
+  the stock U-Boot binary, which then successfully boots the full stock
+  kernel + rootfs + UI from NAND. This is now a completely reliable path
+  to the original stock system from a custom-U-Boot-on-SD setup, and it
+  sidesteps the `bootnand` kernel-entry hang (section 5) entirely -- that
+  issue no longer blocks getting a working NAND boot, it only blocks
+  doing it via *this* fork's own `bootz` directly.
+- `bootusb` with `usbroot` works end-to-end -- kernel, DTB, *and* root
+  filesystem all loading and booting entirely from a USB stick, no SD
+  card or NAND involved at all for the running system. Needed a real
+  kernel driver fix (see section 6) to get there; a second bug found in
+  the same test (an rcS workaround that unbound the live root device) has
+  been disabled.
 
 ---
 
@@ -337,7 +343,7 @@ future change).
 
 ---
 
-## 6. `bootusb` USB rootfs -- fixed in source, real USB detection issue found separately
+## 6. `bootusb` USB rootfs -- FIXED and confirmed working end-to-end, one bug found and disabled along the way
 
 ### root=/userdata device-following fix
 `bootusb` previously always used `mmcroot` for the kernel's `root=` bootarg
@@ -351,49 +357,72 @@ but confusing to debug against). Separately, `build_bootable_sdcard.sh`'s
 `rcS` patch for mounting `/data` (userdata) was hardcoded to
 `/dev/mmcblk0p3` -- now derives the device at runtime from the kernel's
 own `root=` bootarg (`ROOTDEV`/`USERDATADEV` in the generated `rcS`), so
-userdata correctly follows onto `/dev/sda3` when booted via USB. Verified
-by running the actual patch logic against the real rootfs `rcS` and
-checking the result with `sh -n` -- not yet hardware-tested end-to-end.
+userdata correctly follows onto `/dev/sda3` when booted via USB.
 
-### USB storage device not detected on port 0 -- real, unresolved, separate issue
-While testing the above: the USB stick was not detected as a storage
-device, neither by this U-Boot's own `usb start` (`0 Storage Device(s)
-found`) nor by the kernel (`dmesg`/`lsmod`/`/sys/bus/usb/devices/` all
-agree nothing enumerates on bus 1). This is a **different, deeper issue**
-than the `root=` fix above and was NOT resolved tonight. What's confirmed:
+### USB storage not detected on port 0 -- root-caused and FIXED (kernel driver)
+Initially: the USB stick was not detected as a storage device, neither by
+this U-Boot's own `usb start` (`0 Storage Device(s) found`) nor by the
+kernel (`dmesg`/`lsmod`/`/sys/bus/usb/devices/` all agreed nothing
+enumerated on bus 1), even with the stick physically plugged in at boot.
+Ruled out along the way: missing kernel module (both `usb-storage` and the
+MUSB host driver are compiled directly into the kernel, confirmed via
+`lsmod` and the kernel config); a broken/dead port (stock U-Boot
+successfully read a kernel file off this exact port); a fundamentally
+broken hotplug mechanism (the onboard WiFi module on port 1 enumerates
+fine via the identical code path -- Linux's hub driver treats "already
+connected when polling starts" the same as a live hotplug event, so if
+that path were broken, the WiFi module wouldn't work either).
 
-- This board has two independent MUSB controllers/ports (established
-  earlier this session for the U-Boot USB dual-port work): port 1
-  (`musb-hdrc.1`, GPIO `ID=1`/`PWR=117`) is hardwired to the onboard WiFi
-  module (`rtl8811cu`/`rtl8821cu`) and always enumerates successfully.
-  Port 0 (`musb-hdrc.0`, GPIO `ID=76`/`PWR=126`) is the external,
-  user-accessible port -- controller initializes cleanly
-  (`musb_ark_probe succss`), but no device has ever been seen to enumerate
-  on it under the kernel, even with a stick physically plugged in at boot.
-- `usb-storage` and the MUSB host driver are compiled directly into the
-  kernel (`CONFIG_USB_STORAGE=y`, `CONFIG_USB_MUSB_HDRC=y`, not modules --
-  confirmed via `lsmod` showing neither, and the kernel config), so this
-  isn't a missing-module problem.
-- The port itself is known-good electrically -- stock U-Boot successfully
-  read a kernel file off a USB stick on this exact port earlier in the
-  session, ruling out a simple hardware/cabling fault.
-- The WiFi module's successful detection proves the kernel's underlying
-  USB hotplug/enumeration mechanism works correctly in general (Linux's
-  hub driver treats "device already connected when the hub thread starts
-  polling" identically to a genuine hotplug event -- there's no separate
-  code path), which rules out "hotplug detection is fundamentally broken"
-  as an explanation. The issue is specific to port 0, not the driver stack
-  in general.
-- Leading unconfirmed theory: something specific to port 0's runtime
-  connect-detection (GPIO ID-pin sensing, VBUS sensing, or MUSB's
-  software-emulated root-hub status-change reporting for that specific
-  port) isn't working, even though the controller's own init/probe
-  succeeds. Not yet isolated further -- would need either comparing
-  `/sys/kernel/debug/gpio` (or a raw register read via `devmem`/`md.l` at
-  `GPIO_BASE + (2*0x20) + 0x04 = 0xE4600044`, bit 12 for pin 76) between
-  stick-plugged and stick-unplugged states, or reading the actual kernel
-  MUSB driver source for how it differs between initial-probe detection
-  and ongoing hotplug polling.
+**Root cause, found by reading the actual kernel driver source**
+(`linux/drivers/usb/musb/musb_ark.c`, `ark_musb_set_mode()`, the
+`MUSB_OTG` case): port 0 runs in OTG dual-role mode, and every driver
+init power-cycles the port's VBUS (`gpio_pwr`) as part of setup -- with
+only a **10ms** gap between turning it off and back on, and **no
+wait-for-connect check at all** afterward (unlike `ark_musb_set_vbus()`,
+a few dozen lines below in the same file, which already has the right
+pattern -- poll a status bit with a timeout -- for a similar problem). If
+a device is already plugged in when this runs, it loses power and needs
+real time to fully re-initialize internally before it can respond to
+enumeration again. Confirmed via the **stock application's own log**
+(`MsnCoreApp`, a genuine real-hardware capture): even stock shows several
+seconds between "new device" and the device being usable, plus explicit
+`open()` retry logic on the userspace side for exactly this reason.
+
+**Fix**: bumped the post-restore-VBUS delay from 10ms to 300ms
+(`mdelay(300)`) in `ark_musb_set_mode()`. **Confirmed working on real
+hardware**: after this fix, `bootusb` with `usbroot` successfully
+detected the stick (via the driver's own existing `musb_recovery_usb_proc`
+retry logic, which now had enough settle time to succeed within a couple
+of automatic retries), mounted `/dev/sda2` as root, and reached
+`Run /sbin/init as init process`. **This is the headline result of this
+section: booting the kernel, DTB, and root filesystem entirely from a USB
+stick now works.**
+
+### A second, more serious bug found in the same test -- since disabled
+The same boot log that proved the kernel fix works also caught a real,
+actively harmful bug in the *other* fix from this session (the `rcS`
+unbind/rebind workaround, section 6 as originally written, meant to force
+a fresh USB probe after boot for the SD/NAND-root case). That workaround
+ran unconditionally, including when root itself was already mounted from
+USB on that exact same controller (`musb-hdrc.0`) -- unbinding the driver
+serving your *live root filesystem* yanks it out from under the running
+system. The log shows exactly this cascade: `musb-hdrc.0: remove` →
+`USB disconnect` → I/O errors on `sda` → `Aborting journal on device
+sda2` → `EXT4-fs (sda2): Remounting filesystem read-only` → every
+subsequent `rcS` command failing with `Input/output error` (`ln`, `cat`,
+`sed`, `chmod`, `mkdir`, `modprobe`, `sshd` all failed).
+
+**Fix applied**: the unbind/rebind commands in the generated `rcS` block
+are now commented out (see `fix_usb_port0_otg_race()` in
+`build_bootable_sdcard.sh`), and the corresponding `CONFIG_ITEMS` toggle
+default flipped to `OFF`. The kernel-level VBUS-delay fix above has been
+confirmed sufficient on its own for the boot-from-USB case, so this
+workaround is not currently needed for that scenario -- and doing it
+safely for the *other* scenario (root on SD/NAND, want to also detect a
+separate USB drive at runtime) would need the workaround to first check
+whether root is already on this same USB bus before touching it, which
+has not been implemented. Don't re-enable this toggle without adding that
+check first.
 
 ---
 

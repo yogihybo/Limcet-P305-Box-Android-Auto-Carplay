@@ -143,14 +143,15 @@ The same serial console is active during SD/USB boot and can be interactive if m
 
 ## 3.0 Boot Sequence (stock NAND)
 
+This is the default factory boot sequence:
 1. **S-Loader (Nboot / Stepldr)** — executes from ROM; checks the SD card FAT32 partition (p1) for a `UBOOT.BIN` file and loads that in preference if present, otherwise loads U-Boot from NAND `0x020000` (see [Booting from SD Card or USB](#50-booting-from-sd-card-or-usb-non-destructive))
 2. **U-Boot** — initialises hardware; loads NAND env from `0x120000` (CRC valid — `bootdelay=9`, `bootcmd=run nandboot`, `nandboot`, `setbootargs` etc. all active)
 3. **SD update check** — inspects the SD card FAT32 partition for `UpConfig`; if present, runs `arkupdate` to flash partitions listed in the `update` script
 4. **Single keypress poll** — prints `Press space key to stop autoboot:  9`, then one `tstc()` check with no delay; if spacebar already held, drops to `ark#` interactive shell; otherwise boots immediately
-5. **`run nandboot`** — executes `nandboot` from NAND env: `run setbootargs; bootnand`
+5. **`runs nandboot`** — executes `nandboot` from NAND env: `run setbootargs; bootnand`
    - `setbootargs` → `setenv bootargs console=ttyS0,115200n8 mem=180M ubi.mtd=6 root=ubi0:rootfs rootfstype=ubifs rootwait ro`
    - `bootnand` → custom compiled-in command: `nand read 0x1000000 <kernel_offset> <kernel_size>; bootz 0x1000000`
-6. **Linux 3.4.0** starts
+6. **Linux 3.4.0** hands off to kernel and starts Linux loading process.
 
 ## 4.0 U-Boot Prompt
 
@@ -160,12 +161,16 @@ Holding the interrupt key (see [Boot Sequence](#30-boot-sequence-stock-nand) abo
 
 Selected commands relevant to this device — type `help` at the `ark#` prompt for the full command list built into this U-Boot.
 
+Two specific commands that are useful:
+
 | Command | Effect |
 |---------|--------|
 | `run nandboot` | Boots the stock NAND kernel/rootfs — `run setbootargs; bootnand` (default `bootcmd` on stock NAND, see [Boot Sequence](#30-boot-sequence-stock-nand)) |
 | `usb start` | Initialises the USB host controller — run this first to confirm USB works before attempting to boot from USB |
 
 ### Manual SD Card Boot
+
+Manually booting an SD card image is possible but is challenging as the stock 3.4 kernel doesn't have the MMC drivers compiled in (they are external module) meaning that a filesystem can't be loaded from MMC during early boot. support for initramfs is also disabled in the stock kernel. Booting kernel from SD fat partition is possible but loading the file system the filesystem is the problem.
 
 At the `ark#` prompt, with an SD card containing `zImage` on a FAT32 partition (p1) and an ext4 rootfs on a second partition (p2) — formatted without `64bit`/`metadata_csum`, see [ext4 filesystem constraints](#ext4-filesystem-constraints-34-kernel--u-boot-201210):
 

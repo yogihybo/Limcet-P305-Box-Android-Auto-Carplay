@@ -36,3 +36,6 @@ sd_bootable/
 # corrupted/. Ignored again here so a stray local copy (e.g. from re-running
 # build_bootable_sdcard.sh) doesn't get accidentally re-staged.
 /uboot_sdboot.bin
+Holden firmware update/rootfs.img
+CarSyncTech Toyota/CSTech-202511-IP17/rootfs.img
+Holden firmware update/rootfs.img

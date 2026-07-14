@@ -862,10 +862,10 @@ prepare_uboot() {
 patch_rcs() {
     local target="$1"
     local redirect_mtd="$2"   # "1" or "0" — CONFIG_SEL[4], redirect_mtd_data
-    echo -e "${BOLD}  Patching rcS for SD userdata mount...${RESET}"
+    echo -e "${BOLD}  Patching rcS for SD/USB userdata mount...${RESET}"
 
     if $DRY_RUN; then
-        echo "  [dry-run] patch rcS: replace UBIFS userdata block with SD ext4 first + NAND fallback"
+        echo "  [dry-run] patch rcS: replace UBIFS userdata block with root-device-relative ext4 (p3) first + NAND fallback"
         if [[ "$redirect_mtd" == "1" ]]; then
             echo "  [dry-run] patch rcS: insert /dev/mtdN symlinks to /nanddata/"
         else
@@ -877,7 +877,9 @@ patch_rcs() {
     [[ -f "$target" ]] || { warn "rcS not found at $target — skipping patch"; return; }
 
     # Two patches applied via a single Python pass:
-    #   1. Replace UBIFS-only /data mount with SD ext4 first + NAND fallback
+    #   1. Replace UBIFS-only /data mount with an ext4 (p3) mount derived
+    #      from the kernel's own root= device (works for both bootmmc's
+    #      /dev/mmcblk0pN and bootusb's /dev/sdaN) + NAND fallback
     #   2. Insert /dev/mtdN symlinks after mdev -s for SD-stored NAND partition
     #      data — skipped if redirect_mtd_data is off, leaving the device
     #      reading these partitions from whatever is already in NAND
@@ -889,15 +891,21 @@ redirect_mtd = sys.argv[2] == "1"
 text = open(path).read()
 
 NEW = """\
-# Mount userdata: SD ext4 (p3) first, NAND UBI fallback, then yaffs2
-if mount -o sync -t ext4 /dev/mmcblk0p3 /data 2>/dev/null; then
-\techo "userdata: SD ext4 (/dev/mmcblk0p3)"
+# Mount userdata: ext4 p3 (SD or USB, whichever root actually came from)
+# first, NAND UBI fallback, then yaffs2. ROOTDEV is derived from the
+# kernel's own root= bootarg rather than hardcoded to /dev/mmcblk0p3, so
+# the same rcS works for both bootmmc (root=/dev/mmcblk0pN) and bootusb
+# (root=/dev/sdaN) without needing separate rootfs builds.
+ROOTDEV=$(cat /proc/cmdline | sed -n 's/.*root=\\([^ ]*\\).*/\\1/p')
+USERDATADEV="${ROOTDEV%?}3"
+if mount -o sync -t ext4 "$USERDATADEV" /data 2>/dev/null; then
+\techo "userdata: ext4 ($USERDATADEV)"
 \tresetenv=$(fw_printenv factory_reset 2>/dev/null || echo "factory_reset=0")
 \tif [ "${resetenv##*=}" = "1" ]; then
-\t\techo "==============Factory reset, reformat SD userdata!==========="
+\t\techo "==============Factory reset, reformat userdata!==========="
 \t\tumount /data
-\t\tmkfs.ext4 -O ^64bit,^metadata_csum -F /dev/mmcblk0p3
-\t\tmount -o sync -t ext4 /dev/mmcblk0p3 /data
+\t\tmkfs.ext4 -O ^64bit,^metadata_csum -F "$USERDATADEV"
+\t\tmount -o sync -t ext4 "$USERDATADEV" /data
 \t\tfw_setenv factory_reset 0 2>/dev/null || true
 \tfi
 else
@@ -949,7 +957,7 @@ if start == -1 or end == -1:
 
 patched = text[:start] + NEW + '\n' + text[end:]
 open(path, 'w').write(patched)
-print("  rcS userdata mount block patched for SD boot")
+print("  rcS userdata mount block patched (follows root device, SD or USB)")
 
 # Patch 2: insert MTD symlink block after /sbin/mdev -s — only if
 # redirect_mtd_data is on; otherwise leave /dev/mtdN untouched so the

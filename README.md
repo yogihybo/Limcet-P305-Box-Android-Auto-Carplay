@@ -195,18 +195,15 @@ nand write 0x4000000 0x1a0000 ${filesize}
 
 The built in update function used a similar update mechanism to deploy the SD update packages to each NAND partition.
 
-## 5.0 Booting from SD Card or USB (non-destructive)
+## 5.0 Booting Stock Kernel from SD Card or USB (non-destructive)
 
 | Method | Auto or manual | NAND writes | Status |
 |--------|----------------|-------------|--------|
-| [Manual SD Card Boot](#manual-sd-card-boot) (section 4.0) | Manual — retyped every boot | None | **Confirmed working** |
-| [Self-contained SD auto-boot](#self-contained-sd-auto-boot-env-relocation) (below) | Automatic | None | Experimental — statically verified, untested on hardware |
-| [Manual USB boot](#usb-boot) (below) | Manual — retyped every boot | None | Unverified — USB host controller itself not confirmed working on this hardware |
-| ~~Compiled-in SD autoboot~~ (`uboot_final.bin`) | Automatic | None (by design) | **Known corrupted — do not use, see [`corrupted/`](corrupted/README.md)** |
+| [Manual SD Card Boot](#manual-sd-card-boot) (section 4.0) | Manual — retyped every boot | None | **Confirmed working but can only fatload kernel from USB as MMC support is not compiled into the kernel** |
+| [U-boot patching](#self-contained-sd-auto-boot-env-relocation) (below) | Automatic | None | Experimental — statically verified, untested on hardware |
+| [Manual USB boot](#usb-boot) (below) | Manual — retyped every boot | None | **Confirmed working but can only fatload kernel from USB as MMC support is not compiled into the kernel** |
 
 Reflashing NAND for every kernel or rootfs change (see [Flashing via SD Card](#70-flashing-via-sd-card)) is slow. A bad image can also leave the device unbootable, with only a single-keypress recovery window (see [Boot Sequence](#30-boot-sequence-stock-nand)).
-
-`uboot_sdboot.bin` and `uboot_final.bin`, the first attempt at a patched auto-booting U-Boot, turned out to be corrupted — Holden's stock `uboot.bin` with its command table wiped by a (since-fixed) `patch_uboot.py` bug, not the genuine BSP-compiled binary it was believed to be. Both are quarantined under [`corrupted/`](corrupted/README.md); full investigation in [`docs/UBOOT_SDBOOT_INVESTIGATION.md`](docs/UBOOT_SDBOOT_INVESTIGATION.md). Use [Manual SD Card Boot](#manual-sd-card-boot) (section 4.0) or [Self-contained SD auto-boot](#self-contained-sd-auto-boot-env-relocation) (below) instead.
 
 **SD card layout:**
 

@@ -1,8 +1,8 @@
-# Prado Firmware Reconstruction
+# Limcet P305 Toyota carplay & Android Auto piggy back module.
 
-Reconstructed firmware for a Toyota Prado head unit running on the **Limcet Box P306** (ARK1680 SoC).
+Limcet modules are available fairly cheaply through AliExpress and add support for android auto and carplay to the existing factory head unit. They work reasonably well but there is limit information avaliable on how they work or how to update.
 
-The Prado unit uses Holden firmware as its base but requires hardware-specific overrides for the display panel, product identity, and U-Boot environment. This repository tracks those overrides and the reconstruction process.
+Following a falled updated,this repo was developed to test device and identify how it operates. Serial access allow for dumping of the original partitions then the Holden firmware was flashed to the device via SD card and found to the work. The reconstructed firmware for typically uses the Holden base as that is a more recent build with hardware-specific overrides for the display panel, product identity. 
 
 ## Table of Contents
 
@@ -42,7 +42,9 @@ The Prado unit uses Holden firmware as its base but requires hardware-specific o
 
 ### Limcet Board (DC_LIMCET_MB_REV_003)
 
-The board running this firmware is a third-party **Limcet Box P306** aftermarket module, not a Toyota-made assembly — it's a piggyback module that ties into the existing factory head unit's harness and vehicle bus rather than replacing it outright.
+The board running this firmware is a third-party **Limcet Box P306** aftermarket module, not a Toyota-made assembly — it's a piggyback module that ties into the existing factory head unit's harness and vehicle bus rather than replacing it outright. The existing factory LCD cable is connected to the board and then a second cable connects the device to the factory head unit (where the LCD cable originally connected) effectively intercepting the LCD display path.
+
+Hardware on the device has been identified by opening the device and reviewing the board and ICs.
 
 | Component | Part | Role |
 |-----------|------|------|
@@ -56,8 +58,8 @@ The board running this firmware is a third-party **Limcet Box P306** aftermarket
 
 **Connecting to the existing car wiring:**
 
-- A multi-pin wiring harness (yellow/red/white connectors along the board's bottom edge, plus a red power connector) carries 12V ignition, battery, reverse-trigger, and audio lines from the vehicle into the piggyback board.
-- Steering wheel controls are **not** read via an ADC voltage divider on a dedicated SWC wire, despite the `EnableSWCSwitchHardware` option in the ARK1668 config. The STM32F105 MCU instead decodes Toyota-specific messages directly off the vehicle's **CAN bus** (through the TJA1042 transceiver) and forwards translated key events to the ARK1668 over UART.
+- A multi-pin wiring harness is used to intercept the existing harness and connect some of the wiring to the Limcet board. 
+- Steering wheel controls are not believed to be read via an ADC voltage divider on a dedicated SWC wire, despite the `EnableSWCSwitchHardware` option in the ARK1668 config. The STM32F105 MCU instead decodes Toyota-specific messages directly off the vehicle's **CAN bus** (through the TJA1042 transceiver) and forwards translated key events to the ARK1668 over UART.
 - The reversing camera connects as a standard CVBS composite feed, decoded by the RN6752 into digital video for the SoC.
 
 Full teardown details and board photos are in `Limcet Hardware/BOARD_ANALYSIS.md` (linked below).
@@ -75,16 +77,16 @@ Four ways to reach the device:
 
 | Method | Use for | Details |
 |--------|---------|---------|
-| Serial console (UART, 115200 8N1) | Recovery, monitoring, interrupting boot | [Serial console](#20-serial-console-recovery--monitoring) |
-| SD/USB bootable image (non-destructive) | Testing changes without touching NAND | [Booting from SD Card or USB](#50-booting-from-sd-card-or-usb-non-destructive) |
-| Network (WiFi AP / USB / SSH) | Once Linux has booted — only useful if the reconstructed, SSH-patched rootfs is already running (see caveat below) | [Device Access](#100-device-access) |
-| SD update (flashes internal NAND) | Permanently updating firmware on the unit | [Flashing via SD Card](#70-flashing-via-sd-card) |
+| Serial console (UART, 115200 8N1) | Recovery, monitoring, interrupting boot, low risk | [Serial console, requires physical access and aoldering](#20-serial-console-recovery--monitoring) |
+| SD bootable image (non-destructive) | Testing changes without touching NAND (low risk) | [Booting from SD Card or USB](#50-booting-from-sd-card-or-usb-non-destructive) |
+| Network (WiFi AP / USB / telnet) | Using the auto update function,a modified file can be side loaded onto the device to enable telnet access via the existing carplay wifi.(medium risk)| [Device Access](#100-device-access) |
+| SD update package(flashes internal NAND) | Permanently updating firmware on the unit (high risk)| [Flashing via SD Card](#70-flashing-via-sd-card) |
 
 ## 2.0 Serial Console (recovery / monitoring)
 
 Connect via the UART header near the SD card slot. Settings: **115200 8N1**.
 
-| Pin | Colour |
+| Pin | Color |
 |-----|--------|
 | TX | Yellow |
 | RX | Blue |

@@ -169,20 +169,6 @@ tstc()                 → ONE keypress poll, no sleep
   no key     → run_command("run nandboot")  ← immediate boot
 ```
 
-### Manual SD Card Boot
-
-Manually booting an SD card image is possible but is challenging as the stock 3.4 kernel doesn't have the MMC drivers compiled in (they are external module) meaning that a filesystem can't be loaded from MMC during early boot. support for initramfs is also disabled in the stock kernel. Booting kernel from SD fat partition is possible but loading the file system the filesystem is the problem.
-
-At the `ark#` prompt, with an SD card containing `zImage` on a FAT32 partition (p1) and an ext4 rootfs on a second partition (p2) — formatted without `64bit`/`metadata_csum`, see [ext4 filesystem constraints](#ext4-filesystem-constraints-34-kernel--u-boot-201210):
-
-```
-setenv bootargs console=ttyS0,115200n8 console=tty0 mem=180M root=/dev/mmcblk0p2 rootfstype=ext4 rootwait rw
-fatload mmc ${mmcdev}:1 ${loadaddr} ${bootfile}
-bootz ${loadaddr}
-```
-
-`${mmcdev}`, `${loadaddr}`, and `${bootfile}` are already defined in the device's real NAND env (`mmcdev=1`, `loadaddr=0x1000000`, `bootfile=zImage` — see `env/uboot-env.txt`), so nothing needs to be `setenv`'d for those. This has to be re-typed every boot — it isn't saved to NAND env (no `saveenv` is run), so the stock boot behavior is unaffected.
-
 ### Manual partition flash - DANGER HIGH RISK
 
 At the `ark#` prompt you can manually flash any partition — this example loads a kernel image from the SD card and writes it to the kernel partition (see [NAND Partition Layout](#90-nand-partition-layout) for the offsets of other partitions):
@@ -246,6 +232,20 @@ keep ext4 proper — only the incompatible checksums/64-bit addressing are remov
 the on-device factory-reset reformat). To audit an existing card or image, check
 the superblock with `dumpe2fs -h /dev/sdX2 | grep 'Filesystem features'` — neither
 `64bit` nor `metadata_csum` should be listed.
+
+### Manual SD Card Boot
+
+Manually booting an SD card image is possible but is challenging as the stock 3.4 kernel doesn't have the MMC drivers compiled in (they are external module) meaning that a filesystem can't be loaded from MMC during early boot. support for initramfs is also disabled in the stock kernel. Booting kernel from SD fat partition is possible but loading the file system the filesystem is the problem.
+
+At the `ark#` prompt, with an SD card containing `zImage` on a FAT32 partition (p1) and an ext4 rootfs on a second partition (p2) — formatted without `64bit`/`metadata_csum`, see [ext4 filesystem constraints](#ext4-filesystem-constraints-34-kernel--u-boot-201210):
+
+```
+setenv bootargs console=ttyS0,115200n8 console=tty0 mem=180M root=/dev/mmcblk0p2 rootfstype=ext4 rootwait rw
+fatload mmc ${mmcdev}:1 ${loadaddr} ${bootfile}
+bootz ${loadaddr}
+```
+
+`${mmcdev}`, `${loadaddr}`, and `${bootfile}` are already defined in the device's real NAND env (`mmcdev=1`, `loadaddr=0x1000000`, `bootfile=zImage` — see `env/uboot-env.txt`), so nothing needs to be `setenv`'d for those. This has to be re-typed every boot — it isn't saved to NAND env (no `saveenv` is run), so the stock boot behavior is unaffected.
 
 ### Self-contained SD auto-boot (env relocation)
 

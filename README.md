@@ -183,8 +183,6 @@ bootz ${loadaddr}
 
 `${mmcdev}`, `${loadaddr}`, and `${bootfile}` are already defined in the device's real NAND env (`mmcdev=1`, `loadaddr=0x1000000`, `bootfile=zImage` — see `env/uboot-env.txt`), so nothing needs to be `setenv`'d for those. This has to be re-typed every boot — it isn't saved to NAND env (no `saveenv` is run), so the stock boot behavior is unaffected.
 
-**Untested, auto-boot alternative:** see [Self-contained SD auto-boot](#self-contained-sd-auto-boot-env-relocation) below (section 5.0) — no manual typing, no NAND writes at all, but not yet tested on real hardware.
-
 ### Manual partition flash - DANGER HIGH RISK
 
 At the `ark#` prompt you can manually flash any partition — this example loads a kernel image from the SD card and writes it to the kernel partition (see [NAND Partition Layout](#90-nand-partition-layout) for the offsets of other partitions):

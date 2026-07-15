@@ -69,7 +69,7 @@ Four ways to reach the device in the stock firmware:
 
 | Method | Use for | Details |
 |--------|---------|---------|
-| Serial console | Recovery, monitoring, interrupting boot, low risk | [Serial console, requires physical access and aoldering](#20-serial-console-recovery--monitoring) |
+| Serial console | Recovery, monitoring, interrupting boot, low risk | [Serial console, requires physical access and soldering](#20-serial-console-recovery--monitoring) |
 | Boot UBOOT from SD | Testing changes without touching NAND (low risk) | [Booting from SD Card or USB](#50-booting-from-sd-card-or-usb-non-destructive) |
 | Update payload to enable telnet) via USB Drive | Using the auto update function,a modified file can be side loaded onto the device to enable telnet access via the existing carplay wifi.(medium risk)| [Device Access](#100-device-access) |
 | Update package (flashes internal NAND) via SD | Permanently updating firmware on the unit (high risk)| [Flashing via SD Card](#70-flashing-via-sd-card) |
@@ -85,7 +85,7 @@ Colours of the attached wires and corresponding pin:
 | RX | Blue |
 | GND | Black |
 
-A generic USB-serial adapter (e.g. PL2303) or Raspberry Pi GPIO UART can be used to read the serial lines.
+A generic USB-serial adapter (e.g. PL2303) or Raspberry Pi GPIO UART can be used to read the serial lines. A header or wiring can be soldered to the used pins on the board. The solder mask may need scraping to expose the metal for solder to adhere.
 
 In stock configuration, the console output is available over serial through both U-Boot and the Linux kernel (boot log, `dmesg`, kernel messages). Keystroke input, however, only works at the U-Boot prompt. Once Linux has booted, the serial line is view-only, with no login shell or interactive input on it as the system doesn't load an interactive console by default. Refer to telnet payload for details on how to active a terminal using the existing wifi.
 

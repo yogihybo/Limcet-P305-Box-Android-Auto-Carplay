@@ -1,4 +1,9 @@
-# Security Review — Credentials, Access Paths, Update Integrity
+# Security Review
+
+**Status:** Reference
+**Last Updated:** 2026-07-15
+
+## Overview
 
 A pass over everything this project has accumulated (rootfs dump, U-Boot env, boot scripts, vendor
 source) specifically looking for anything that grants more access to the device than what's already
@@ -6,7 +11,7 @@ documented as the intended workflow. Two genuinely new findings below; everythin
 existing documentation with no new gaps.
 
 **⚠️ The single most severe finding from this whole review isn't in this file — it's in
-[`MSNCOREAPP_REVIEW.md`](MSNCOREAPP_REVIEW.md):** `MsnCoreApp`'s disk auto-mount handler runs
+[`MSNCOREAPP_REVIEW.md`](UI_AND_APP_ANALYSIS.md):** `MsnCoreApp`'s disk auto-mount handler runs
 `system("mount -o remount,rw / && cp -rf <media>/msn_autocopy/* /")`, unauthenticated, whenever it
 finds a folder named `msn_autocopy` on any inserted USB drive or SD card. That requires zero network
 access and zero credentials at all — just physical media insertion — making it a more direct "unlock"
@@ -100,7 +105,7 @@ Checked and found nothing beyond what's already documented elsewhere in this pro
   documented (README, `docs/SOURCES.md`) as known limitations, not new.
 - **`/data/mcudebug_flag`** — already documented in `docs/MCU_ADAPTERS.md`, a benign debug-logging
   toggle for `libMcuCenter.so`, not a privilege escalation.
-- **CAN bus** — already established (`docs/SOC_ARK1668_CROSSREF.md` §7/§10) as living entirely on the
+- **CAN bus** — already established (`docs/HARDWARE_AND_SOC_REFERENCE.md` §7/§10) as living entirely on the
   companion STM32 MCU; this chip generation has no SoC-side CAN pin-mux capability at all. Nothing to
   unlock on the SoC side.
 
@@ -108,7 +113,7 @@ Checked and found nothing beyond what's already documented elsewhere in this pro
 
 - Didn't crack the `Admin` hash — would need a real wordlist/hashcat run, not further inline guessing.
 - ~~Didn't do a protocol-level audit of `MsnCoreApp`/`libMcuCenter.so`/other rootfs daemons for a
-  network-exposed listener with its own bugs~~ — **done, see [`MSNCOREAPP_REVIEW.md`](MSNCOREAPP_REVIEW.md).**
+  network-exposed listener with its own bugs~~ — **done, see [`MSNCOREAPP_REVIEW.md`](UI_AND_APP_ANALYSIS.md).**
   Found something more severe than anything in this file: an unauthenticated `system()` call reachable
   by just inserting a USB drive with a specifically-named folder. No network-facing custom listener was
   found (the remote-exposure story is still just SSH, covered above), but the physical-media path turned

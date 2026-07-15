@@ -1,0 +1,423 @@
+
+
+ARK1680 SoC Booter V 1.00
+SDMMC card successfully
+                       Not found ARKSDLDR.bin.
+check_loaderfile fail.
+FlashId: 0x98f18015
+
+ Device In The Table!!
+
+                      ChipSize: 0x00000080
+
+BlkSize: 0x00020000
+
+PageSize: 0x00000800
+
+SpareSize: 0x00000080
+
+BlkNum: 0x00000400
+
+PagePerBlk: 0x00000040
+
+ColCyc: 0x00000002
+
+RowCyc: 0x00000002
+
+EccCodeSize: 0x0000000d
+
+SegSize: 0x00000200
+NandOS_Loader...
+ARK169 2Gb 20180412-6-5-10_330_430_nboot: 0xc0000783
+DDR3 Data training successful
+samsung DDR3_128MX16
+
+Ark1680 SoC Remapped And DDR Init End . . .
+Launch Stepldr...
+NandStepLoader...
+change_clk enable clock successful
+SD get card RCA:0x%x
+change_clk enable clock successful
+Not found UBOOT.BIN.
+check_loaderfile fail.
+NO Device in Table
+
+ ECC 7 bit !!
+blk value is : 0x00000001
+sparedata0 value is : 0x55aa55aa
+sparedata1 value is : 0x55bb55bb
+ECC Error.
+Lauch uboot...
+
+
+U-Boot 2012.10 (root2023120611 - 11:46:47)
+
+DRAM:  64 MiB
+NAND:  128 MiB
+MMC:   ARK_MMC0: 0, ARK_MMC1: 1
+In:    serial
+Out:   serial
+Err:   serial
+###not back car ...
+=============== usb_lowlevel_init 1000000 us timeout===============
+reading update
+FAT: Misaligned buffer address (03d94db0)
+
+ *****Now update uboot ......
+
+
+ *****Update U-boot-Env ......
+
+cmd=fatload mmc 0 4000000 uboot-env.bin
+reading uboot-env.bin
+
+4096 bytes read
+cmd=nand scrub 0x120000 0x40000 0x120000 0x40000
+
+NAND scrub: device 0 offset 0x120000, size 0x40000
+Erasing at 0x140000 -- 100% complete.
+OK
+cmd=nand write 0x4000000 0x120000 0x1000
+
+NAND write: device 0 offset 0x120000, size 0x1000
+ 4096 bytes written: OK
+cmd=nand info
+
+Device 0: nand0, sector size 128 KiB
+  Page size      2048 b
+  OOB size         64 b
+  Erase size   131072 b
+cmd=nand read.oob 0x2000000 0x20000 0x40
+
+NAND read: device 0 offset 0x20000, size 0x40
+ 64 bytes read: OK
+cmd=nand read.oob 0x3000000 0xA0000 0x40
+
+NAND read: device 0 offset 0xa0000, size 0x40
+ 64 bytes read: OK
+
+ *****Now update uboot back ......
+
+cmd=fatload mmc 0 4000000 uboot.bin
+reading uboot.bin
+
+376364 bytes read
+cmd=nand scrub 0xa0000 0x80000 0xa0000 0x80000
+
+NAND scrub: device 0 offset 0xa0000, size 0x80000
+Erasing at 0x100000 -- 100% complete.
+OK
+cmd=nand write 0x4000000 0xa0000 0x5be2c
+
+NAND write: device 0 offset 0xa0000, size 0x5be2c
+ 376364 bytes written: OK
+SetTheBootbackFlag cmd=nand write.oob 0x3000000 0xa0000 0x40
+
+NAND write: device 0 offset 0xa0000, size 0x40
+ 64 bytes written: OK
+
+ *****Now update uboot ......
+
+cmd=fatload mmc 0 4000000 uboot.bin
+reading uboot.bin
+
+376364 bytes read
+cmd=nand scrub 0x20000 0x80000 0x20000 0x80000
+
+NAND scrub: device 0 offset 0x20000, size 0x80000
+Erasing at 0x80000 -- 100% complete.
+OK
+cmd=nand write 0x4000000 0x20000 0x5be2c
+
+NAND write: device 0 offset 0x20000, size 0x5be2c
+ 376364 bytes written: OK
+SetTheBootbackFlag cmd=nand write.oob 0x2000000 0x20000 0x40
+
+NAND write: device 0 offset 0x20000, size 0x40
+ 64 bytes written: OK
+updatereset=no.
+
+ *****Now update arkdata ......
+
+cmd=fatload mmc 0 4000000 arkdata.ini
+reading arkdata.ini
+
+** Unable to read "arkdata.ini" from mmc 0:1 **
+
+NAND read: device 0 offset 0x160000, size 0x1a0f
+ 6671 bytes read: OK
+ark ini updata, get arkdata.ini file_size = 6671.
+parse arkdata.ini end
+convert success, screen_type=0, subformat=0, tvenc=8.
+get clk_freq=330(MHZ)
+get Gamma_en != 3
+screeninfo check ok
+itu656bypinfo check ok
+vpinfo check ok.
+gammainfo use default.
+touchinfo check ok.
+ScreenType:0, subType:0,Width:800, Height:480,Format:7 RgbMode:0 ,BPP:32 ,Tvout0
+src_width:0, src_height:0,dithering:0, video_hfz:0x0,video_vfz:0x0
+get backlight success, val=30.
+
+NAND read: device 0 offset 0x7620000, size 0x511c
+ 20764 bytes read: OK
+Not found boot animation file addr.
+
+NAND read: device 0 offset 0x7920000, size 0x8
+ 8 bytes read: OK
+
+NAND read: device 0 offset 0x7920000, size 0x96a58
+ 617048 bytes read: OK
+
+ *****Now update bootlogo ......
+
+cmd=fatload mmc 0 4000000 bootlogo
+reading bootlogo
+
+** Unable to read "bootlogo" from mmc 0:1 **
+
+ *****Now update bootanimation ......
+
+
+NAND scrub: device 0 offset 0x7620000, size 0x300000
+Erasing at 0x7900000 -- 100% complete.
+OK
+cmd=fatload mmc 0 4000000 bootanimation
+reading bootanimation
+
+** Unable to read "bootanimation" from mmc 0:1 **
+
+ *****Now update reversingtrack ......
+
+
+NAND scrub: device 0 offset 0x7920000, size 0x300000
+Erasing at 0x7c00000 -- 100% complete.
+OK
+cmd=fatload mmc 0 4000000 reversingtrack
+reading reversingtrack
+
+1291700 bytes read
+cmd=nand scrub 0x7920000 0x300000 0x7920000 0x300000
+
+NAND scrub: device 0 offset 0x7920000, size 0x300000
+Erasing at 0x7c00000 -- 100% complete.
+OK
+cmd=nand write 0x4000000 0x7920000 0x13b5b4
+
+NAND write: device 0 offset 0x7920000, size 0x13b5b4
+ 1291700 bytes written: OK
+
+ *****Now update kernel ......
+
+cmd=fatload mmc 0 4000000 zImage
+reading zImage
+
+3255536 bytes read
+cmd=nand scrub 0x1a0000 0x400000 0x1a0000 0x400000
+
+NAND scrub: device 0 offset 0x1a0000, size 0x400000
+Erasing at 0x580000 -- 100% complete.
+OK
+cmd=nand write 0x4000000 0x1a0000 0x31acf0
+
+NAND write: device 0 offset 0x1a0000, size 0x31acf0
+ 3255536 bytes written: OK
+
+ *****Now update filesystem......
+
+cmd=fatload mmc 0 4000000 rootfs.img
+reading rootfs.img
+
+92667904 bytes read
+cmd=nand scrub 0x5a0000 0x6a00000 0x5a0000 0x6a00000
+
+NAND scrub: device 0 offset 0x5a0000, size 0x6a00000
+Erasing at 0x5fa0000 --  85% complete.
+nand0: MTD Erase failure: -5
+Erasing at 0x6f80000 -- 100% complete.
+OK
+cmd=nand write 0x4000000 0x5a0000 0x5860000
+
+NAND write: device 0 offset 0x5a0000, size 0x5860000
+ 92667904 bytes written: OK
+
+ *****Now update userdata......
+
+cmd=fatload mmc 0 4000000 userdata.img
+reading userdata.img
+
+1966080 bytes read
+cmd=nand scrub 0x6fa0000 0x600000 0x6fa0000 0x600000
+
+NAND scrub: device 0 offset 0x6fa0000, size 0x600000
+Erasing at 0x7580000 -- 100% complete.
+OK
+cmd=nand write 0x4000000 0x6fa0000 0x1e0000
+
+NAND write: device 0 offset 0x6fa0000, size 0x1e0000
+ 1966080 bytes written: OK
+Erasing Nand...
+Erasing at 0x120000 -- 100% complete.
+Writing to Nand... done
+
+NAND read: device 0 offset 0x75a0000, size 0x6c1f
+ 27679 bytes read: OK
+Press space key to stop autoboot:  0
+
+NAND read: device 0 offset 0x1a0000, size 0x31acf0
+ 3255536 bytes read: OK
+
+Starting kernel ...
+
+Uncompressing Linux... done, booting the kernel.
+machine ID r1 = 0x00001068
+[    1.290000] arktool display reg init
+## Error: "factory_reset" not defined
+sh: 1: unknown operand
+mount successfully!
+[3.924]  set display inch: QSize(120, 72) 5.50956
+[3.950]  init msn firset export ticks: 331
+[    4.370000] IrqLineVG=-1.
+/ # [5.461]  MSNCoreApp start
+[5.476]  MSNCoreApp exception init
+[5.492]  MSNCoreApp running
+[6.711]  Set Effect Process Priority -19  0
+QWS_ARK_TOUCH_DEVICE undefined, touch input disabled
+[7.337]  MsnCoreApp version: V3.21.09.0219
+[7.885]  MSNCoreApp onFirstInit
+[7.889]  ark screen type: 0
+[7.890]  display size: QSize(800, 480)  src size: QSize(800, 480)
+[7.964]  Load App Plugin 12 "/usr/lib/libCarReversing.so"
+Mon Feb 19 09:09:30 UTC 2024
+[8.046]  SetTime: "2024-02-19 09:09:30" Ret: 0
+[8.082]  Load App Plugin 10 "/usr/lib/libLauncher-Box.so"
+[8.099]  MsnMainWindow::setRealVisible LauncherWindow(0x1f3ed8) true
+[8.153]  Waite Event Ticks 11
+[8.282]  load wallpaper: "/msnprofile/wallpaper/800x480/"  size: QSize(0, 0)
+rm: can't remove '/tmp/app-*.bmp': No such file or directory
+[8.304]  MSNCoreApp show
+[8.521]  MsnWindowManager::setVisible true true
+[8.532]  endCarReversing
+get_shared_display_data May 29 2020-16:57:02.
+[8.536]  setTrackOSDVisible false
+[8.538]  set_osd1_visible true
+QMetaObject::connectSlotsByName: No matching signal for on_pushButton_clicked()
+[9.265]  DVRSetDialog visibale change: false
+[9.290]  MSNCoreApp hide boot logo
+[9.302]  MSNCoreApp onSecondInit
+[9.306]  DiskDeviceWatcher::startWatcher
+Created device discovery thread
+[9.311]  Start Load Driver
+[9.709]  Load App Plugin 8 "/usr/lib/libSetting.so"
+[9.736]  Open backlight pwm : true
+SoundAdapter Create Failed, Not Support ICType: 0
+[9.837]  Load App Plugin 403 "/usr/lib/libMsnSound.so"
+syncDatas armsetting radar visible:0 datas:0 0 0 0
+[10.295]  McuAdapter: MCUAdapter_MsnDecoder 16
+[10.302]  Open MCU Serial Port  "/dev/ttyHS0"  Ret: true "No such file or direc
+
+start serialPortProcessProc
+
+[10.308]  Open MCU Serial Port  "/dev/ttyS2"  Ret: true "No such file or direct
+[10.309]  Load App Plugin 401 "/usr/lib/libMcuCenter.so"
+[10.456]  CanBusPlugin 0 0
+[10.456]  Load App Plugin 400 "/usr/lib/libCanBus.so"
+[10.583]  Load App Plugin 3 "/usr/lib/libBlueTooth.so"
+[10.601]  Touch Calibrate is disable!
+Open touch input event failed!
+[10.659]  onLoadDriverFinished
+[10.741]  usb_device_added /dev/bus/usb/002/001
+[10.743]  usb_device_added /dev/bus/usb/001/001
+usb_device_open /dev/bus/usb/001/001
+usb_device_open open returned 32 writeable 1 errno 2
+usb_device_new /dev/bus/usb/001/001 fd: 32
+usb_device_new read returned 43 errno 2
+insert usb dev:/dev/bus/usb/001/001 vid:0x1d6b pid:0x0002
+[10.746]  arkapi_open_dvr() retry_times: 1
+net.ipv4.udp_mem = 8192 10240 16384
+net.ipv4.udp_rmem_min = 1048576
+[10.765]  MSN protocal type: 16  sendReadyData!
+[10.813]  Recv reverse track max img angle: 20
+[   10.840000] track_setting=1
+[   10.840000] track_setting=3
+[10.882]  MSN protocal type: 0  sendReadyData!
+[11.205]  MSNCoreApp onLoadStartupApp
+[11.205]  MSNCoreApp onEndInit
+[11.205]
+MsnCoreApp End init
+
+[11.650]  MsnLink StartService: "com.arkmicro.carplay"
+label2 = Home
+pcarplay_info->bridge_mode=0
+pcarplay_info->icurrent = 500
+pcarplay_info->ns_level = 1
+### ++ carplay initialize ++
+msg instance
+++ MsgEnQueue ++
+### carplay dbus initialize true
+[12.270]  MsnLink StartService ret: "com.arkmicro.carplay" true ""
+[12.273]  MSNCoreApp exec
+[12.302]  MsnLink::onServiceRegistered "com.arkmicro.carplay"
+new device /dev/bus/usb/002/002
+[12.303]  usb_device_added /dev/bus/usb/002/002
+[12.320]  MSN protocal type: 16  sendReadyData!
+[12.321]  MSN protocal type: 0  sendReadyData!
+x=0 y=0
+s_w=800 s_h=480
+v_w=800 v_h=480 screen_width_phy=120 screen_height_phy=72
+#pluginfo->btmac=56:fa:dd:e2:50:bf
+carplay_plugin_set_info:1505 err=0
+mDNSResponder: mDNSResponder (Engineering Build) (May 29 2020 16:56:53) starting
+carplay_plugin_start:1728
+### carplay ++ usb_reader_thread ++
+### carplay -- usb_reader_thread --
+### -- carplay initialize --
+[12.895]  start bt service:/usr/bin/blueware
+[13.097]  Retry Open BlueTooth Serial Port,  Ret: true
+[13.098]  Write At atCommand: "AT+DEVSTAT"
+[13.319]  Write At atCommand: "AT+BTEN=1"
+udhcpd: started, v1.25.0
+mDNSResponder: mDNS_AddDNSServer: Lock not held! mDNS_busy (0) mDNS_reentrancy )
+mDNSResponder: mDNSPlatformSourceAddrForDest: connect 1.1.1.1 failed errno 101 )
+unknow disk type: "DOS/MBR boot sector; partition 1 : ID=0xc, start-CHS (0x4,4,
+[14.258]  mount command: "mount /dev/mmcblk0p1 -o utf8 /media/sdisk/p1/"
+[15.616]  Write At atCommand: "AT+ADDR"
+[15.618]  BlueToothAdapter_Blueware::onStartupConfig()
+[15.618]  Write At atCommand: "AT+HFPCFG"
+[15.620]  Write At atCommand: "AT+HFPDISC"
+[15.620]  Write At atCommand: "AT+ADDR"
+[15.620]  Write At atCommand: "AT+NAME"
+[15.620]  Write At atCommand: "AT+VER"
+[15.649]  Write At atCommand: "AT+PLIST"
+[15.649]  BT Local Address: "DC0D3014FC9F"
+[15.649]  Write At atCommand: "AT+NAME"
+[15.651]I msncoreapp.cpp@2964 enableHostApd start  enable: 1 timeout: 3000
+[15.652]  start  enableWLAN 0 15652
+stop wifi manager
+[15.743]  end  enableWLAN 0 15743
+[15.792]I msncoreapp.cpp@3059 enableHostApd hostapd started  true
+[15.792]  hostapd state: 2  pid: 890 ap type: 1
+[15.793]I msncoreapp.cpp@3098 enableHostApd end  1
+[15.793]  Write At atCommand: "AT+HFPCFG=0"
+[15.794]  BT Local Address: "DC0D3014FC9F"
+[15.794]  Write At atCommand: "AT+NAME"
+[15.797]  Write At atCommand: "AT+NAME=Car Audio_fc9f"
+[15.799]  Write At atCommand: "AT+LENAME=Car Audio_fc9f"
+[15.837]  Write At atCommand: "AT+NAME=Car Audio_fc9f"
+[15.837]  Write At atCommand: "AT+LENAME=Car Audio_fc9f"
+[15.838]  Write At atCommand: "AT+NAME=Car Audio_fc9f"
+[15.838]  Write At atCommand: "AT+LENAME=Car Audio_fc9f"
+[16.289]  MsnCoreApp::onDiskDeviceStatusChange 1 1
+[17.793]I msncoreapp.cpp@2964 enableHostApd start  enable: 0 timeout: 100
+[17.793]  hostapd state: 2  pid: 890
+[17.944]  hostapd state: 0  pid: 0
+[17.944]I msncoreapp.cpp@3098 enableHostApd end  0
+[18.945]I msncoreapp.cpp@2964 enableHostApd start  enable: 1 timeout: 100
+[18.945]  start  enableWLAN 0 18945
+stop wifi manager
+[19.028]  end  enableWLAN 0 19028
+[19.067]I msncoreapp.cpp@3059 enableHostApd hostapd started  true
+[19.067]  hostapd state: 2  pid: 905 ap type: 1
+[19.068]I msncoreapp.cpp@3098 enableHostApd end  1
+[36.414]  remount rootfs rw: 0

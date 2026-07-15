@@ -1,4 +1,9 @@
-# Wireless Interface & Boot Init Documentation
+# Wireless And Init
+
+**Status:** Reference
+**Last Updated:** 2026-07-15
+
+## Overview
 
 This document explains the physical pin mapping, modules, and commands required to initialize WiFi and Bluetooth on the Prado Limcet P305 board running the 4.19.192 kernel.
 

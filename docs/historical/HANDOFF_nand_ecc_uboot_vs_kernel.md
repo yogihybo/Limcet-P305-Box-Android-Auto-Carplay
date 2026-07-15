@@ -120,7 +120,7 @@ The Linux kernel's own NAND driver (`Limcet Hardware/ark_nand_kernel.c`,
 mirrored 1:1 from the live build tree at
 `/home/osboxes/Downloads/linux-arkmicro/linux/drivers/mtd/nand/raw/ark_nand.c`)
 has known, real ECC read problems (established from prior real-hardware
-testing -- see `docs/HANDOFF_touch_and_bootargs_fix.md` "Fix C", the ~417
+testing -- see `docs/historical/HANDOFF_touch_and_bootargs_fix.md` "Fix C", the ~417
 false-bad-block issue and the "too weak ECC" warning), even though its
 `BCH_CR` trigger sequence looks textbook-correct in the source (it already
 sets SOFT_ECC_ENABLE|BCH_ENABLE together, matching what U-Boot needed).

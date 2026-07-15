@@ -5,7 +5,7 @@ flashes U-Boot + kernel to the device. This is self-contained — you do not nee
 any prior conversation. Two independent fixes, both derived from analysis of the
 `docs/new kernel bootlog*.txt` serial captures (Linux 4.19.192, `#7`→`#15`).
 
-**Build tree (per `docs/KERNEL_BUILD_REFERENCE.md`):**
+**Build tree (per `docs/KERNEL_REFERENCE.md`):**
 `/home/osboxes/Downloads/linux-arkmicro/` with `linux/`, `u-boot/`, `env.source`.
 Kernel DTS: `linux/arch/arm/boot/dts/ark1668_limcet_p305.dts`.
 Boot image: `zImage` + appended DTB → `zImage.w_dtb`.
@@ -29,7 +29,7 @@ No touch input. And **no hardware I2C controller ever appears** in the log
 In `ark1668_limcet_p305.dts` the `gt911` node is a **child of the bit-banged
 `i2c-gpio-0` bus (GPIO 3 = SDA, GPIO 2 = SCL)** — which is the **ARK7116 camera
 decoder's** I2C bus. The GT911 is physically wired to the **hardware I2C
-controller `&i2c0` (`i2c@e4300000`)** (see `docs/KERNEL_BUILD_REFERENCE.md` §4:
+controller `&i2c0` (`i2c@e4300000`)** (see `docs/KERNEL_REFERENCE.md` §4:
 "Goodix GT911 — Hardware I2C `&i2c0`"; §8: GPIO 2/3 = ARK7116 bus). So the
 kernel drives touch transactions out the camera's pins and the panel never
 answers.
@@ -39,8 +39,8 @@ answers.
 > `0x2c` (proven from the stock 3.4.0 kernel). This does **not** change the touch
 > fix below (touch belongs on hardware `&i2c0` regardless of which decoder sits on
 > the bit-bang bus), but the camera node itself needs retargeting. See
-> `docs/HANDOFF_kernel_build_camera_and_touch.md` and the "Camera decoder chip"
-> callout in `docs/KERNEL_BUILD_REFERENCE.md`.
+> `docs/historical/HANDOFF_kernel_build_camera_and_touch.md` and the "Camera decoder chip"
+> callout in `docs/KERNEL_REFERENCE.md`.
 
 Compounding: the board `#include`s `ark1668.dtsi`, whose `i2c0` is
 `compatible = "snps,designware-i2c"`, but the config enabled `CONFIG_I2C_ARK`

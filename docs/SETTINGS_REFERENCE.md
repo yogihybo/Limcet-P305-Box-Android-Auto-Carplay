@@ -1,4 +1,9 @@
-# Settings Reference — `MsnProductInfo.ini` & `FactoryConfig.ini`
+# Settings Reference
+
+**Status:** Reference
+**Last Updated:** 2026-07-15
+
+## Overview
 
 Complete key-by-key reference for the two INI files that configure an
 Arkmicro "MSN" head‑unit / CarPlay box (Limcet‑P306, Box‑C235, Ksmart, etc.).
@@ -39,7 +44,7 @@ then again on every power‑up:
    (`ScreenType`, `ResolutionType`, `McuType`, `BlueToothType`, port names…).
 4. Use `ScreenType` + `ResolutionType` to select and apply the matching
    **`arkdata` display preset** → panel comes up (see
-   [`ARKDATA_VARIANTS.md`](ARKDATA_VARIANTS.md)).
+   [`ARKDATA_VARIANTS.md`](DISPLAY_SUBSYSTEM.md)).
 5. Use `McuType` to load the matching **MCU adapter** and its `KeyMaps-NN` /
    `Knob-NN` blocks (see [`MCU_ADAPTERS.md`](MCU_ADAPTERS.md)); use
    `BlueToothType` to bring up the BT stack per `/usr/config.ini`.
@@ -249,7 +254,7 @@ These blocks are indexed by `McuType`: `KeyMaps-16` / `Knob-22` apply when
 
 | File | Purpose | Reference |
 |------|---------|-----------|
-| `/msnprofile/arkdata.ini` + `arkdata/arkdataNN_X.ini` | LCD panel timing, clock dividers, touch‑key ranges. Selected via `ScreenType`/`ResolutionType`. The file carries its own inline enum legend. | [`ARKDATA_VARIANTS.md`](ARKDATA_VARIANTS.md) |
+| `/msnprofile/arkdata.ini` + `arkdata/arkdataNN_X.ini` | LCD panel timing, clock dividers, touch‑key ranges. Selected via `ScreenType`/`ResolutionType`. The file carries its own inline enum legend. | [`ARKDATA_VARIANTS.md`](DISPLAY_SUBSYSTEM.md) |
 | `/usr/config.ini` | Bluetooth "BC6" module AT‑command / indicator protocol map. **Identical across all 2025 products**; the 2025 build adds BLE (`SPP_BLE_ADV`, `IND_DEVICE_VENDOR_NAME`). Header marks it read‑only (此文件禁止更改). | — |
 | `msn_factory_configs/MsnProductInfo.ini` etc. | Provisioning overrides applied at flash time (see top of this doc). | — |
 

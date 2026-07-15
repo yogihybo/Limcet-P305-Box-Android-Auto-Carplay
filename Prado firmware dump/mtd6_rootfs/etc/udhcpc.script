@@ -1,6 +1,0 @@
-#!/bin/sh
-if [ "$ip" != "" ] ; then
-        /sbin/ifconfig $interface $ip broadcast $broadcast up
-        route add default gw $router dev $interface
-        echo "leaseip:$ip,$router"
-fi

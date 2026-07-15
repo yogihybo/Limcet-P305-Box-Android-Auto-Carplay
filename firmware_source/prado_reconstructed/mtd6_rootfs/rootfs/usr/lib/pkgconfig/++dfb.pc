@@ -1,0 +1,11 @@
+prefix=/workspace/ark0618system/build/..//out/rootfs-msn5g.optbuild/usr
+exec_prefix=${prefix}
+libdir=/workspace/ark0618system/build/..//out/rootfs-msn5g.build/usr/lib
+includedir=/workspace/ark0618system/build/..//out/rootfs-msn5g.build/usr/include
+
+Name: ++DFB
+Description: C++ binding for DirectFB
+Version: 1.7.4
+Requires: directfb
+Libs: -L${libdir} -l++dfb
+Cflags: -I/workspace/ark0618system/build/..//out/rootfs-msn5g.build/usr/include/++dfb

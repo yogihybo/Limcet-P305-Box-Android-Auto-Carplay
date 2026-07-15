@@ -1,3 +1,0 @@
-[D-BUS Service]
-Name=com.arkmicro.auto
-Exec=/usr/bin/sink

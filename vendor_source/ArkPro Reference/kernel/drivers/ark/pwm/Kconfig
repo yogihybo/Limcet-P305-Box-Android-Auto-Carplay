@@ -1,0 +1,32 @@
+#
+# ArkMicro on-chip pulse width modualtion control driver configuration
+#
+
+menuconfig ARK_PWM
+	tristate "ArkMicro PWM Control Support"
+	default y
+	help
+	  Say y here to enable ArkMicro pwm control driver.
+
+if ARK_PWM
+
+config ARK_PWM_DEBUG
+	bool "Enable driver debug mode"
+	depends on ARK_PWM
+	help
+	  Say y here to enable ArkMicro pwm control driver
+	  debug mode (to print debug kernel messages).
+
+config ARK_PWM_HW_EMULATION
+        bool "Enable pwm control unit hardware emulation support"
+        depends on ARK_PWM
+        help
+          Say y here to enable ArkMicro pwm control hardware
+          emulation (for testing).
+
+
+endif # ARK_PWM
+
+
+
+

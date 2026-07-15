@@ -32,19 +32,19 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # ── Paths ────────────────────────────────────────────────────────────────────
 
-ROOTFS_DIR="$SCRIPT_DIR/Prado firmware reconstructed/mtd6_rootfs/rootfs"
-ROOTFS_UBIFS="$SCRIPT_DIR/Prado firmware reconstructed/mtd6_rootfs/rootfs.ubifs"
-ROOTFS_IMG="$SCRIPT_DIR/Prado firmware reconstructed/mtd6_rootfs/rootfs.img"
+ROOTFS_DIR="$SCRIPT_DIR/firmware_source/prado_reconstructed/mtd6_rootfs/rootfs"
+ROOTFS_UBIFS="$SCRIPT_DIR/firmware_source/prado_reconstructed/mtd6_rootfs/rootfs.ubifs"
+ROOTFS_IMG="$SCRIPT_DIR/firmware_source/prado_reconstructed/mtd6_rootfs/rootfs.img"
 
-USERDATA_SRC="$SCRIPT_DIR/Prado firmware reconstructed/mtd7_userdata/userdata"
-USERDATA_UBIFS="$SCRIPT_DIR/Prado firmware reconstructed/mtd7_userdata/userdata.ubifs"
-USERDATA_IMG="$SCRIPT_DIR/Prado firmware reconstructed/mtd7_userdata/userdata.img"
+USERDATA_SRC="$SCRIPT_DIR/firmware_source/prado_reconstructed/mtd7_userdata/userdata"
+USERDATA_UBIFS="$SCRIPT_DIR/firmware_source/prado_reconstructed/mtd7_userdata/userdata.ubifs"
+USERDATA_IMG="$SCRIPT_DIR/firmware_source/prado_reconstructed/mtd7_userdata/userdata.img"
 
-ENV_SRC="$SCRIPT_DIR/env/uboot-env.txt"
-ENV_BIN="$SCRIPT_DIR/env/uboot-env.bin"
+ENV_SRC="$SCRIPT_DIR/firmware_source/env/uboot-env.txt"
+ENV_BIN="$SCRIPT_DIR/firmware_source/env/uboot-env.bin"
 ENV_SIZE=0x40000
 
-OUTPUT_DIR="$SCRIPT_DIR/sd_update/output"
+OUTPUT_DIR="$SCRIPT_DIR/firmware_source/sd_update_template/output"
 
 # ── NAND geometry ─────────────────────────────────────────────────────────────
 
@@ -73,8 +73,8 @@ build_rootfs() {
     echo "  Output:  $ROOTFS_IMG"
     echo ""
 
-    bash "$SCRIPT_DIR/restore_rootfs_symlinks.sh" "$ROOTFS_DIR"
-    bash "$SCRIPT_DIR/apply_rootfs_perms.sh" "$ROOTFS_DIR"
+    bash "$SCRIPT_DIR/build_tools/restore_rootfs_symlinks.sh" "$ROOTFS_DIR"
+    bash "$SCRIPT_DIR/build_tools/apply_rootfs_perms.sh" "$ROOTFS_DIR"
 
     mkfs.ubifs \
         -r "$ROOTFS_DIR" \
@@ -120,8 +120,8 @@ build_userdata() {
 
     cp -r "$USERDATA_SRC/." "$build_dir/fs/"
     mkdir -p "$build_dir/fs/msncfg"
-    cp "$SCRIPT_DIR/msn_factory_configs/MsnProductInfo.ini" "$build_dir/fs/msncfg/"
-    cp "$SCRIPT_DIR/msn_factory_configs/FactoryConfig.ini"  "$build_dir/fs/msncfg/"
+    cp "$SCRIPT_DIR/firmware_source/msn_factory_configs/MsnProductInfo.ini" "$build_dir/fs/msncfg/"
+    cp "$SCRIPT_DIR/firmware_source/msn_factory_configs/FactoryConfig.ini"  "$build_dir/fs/msncfg/"
 
     echo "  Userdata tree:"
     find "$build_dir/fs" -type f | sed "s|$build_dir/fs/||" | sort | sed 's/^/    /'
@@ -206,7 +206,7 @@ PARTITIONS=(
 BUILD_ITEMS=(
     "rootfs|Build rootfs image|Compiles source tree into rootfs.img (~106 MB)|OFF"
     "userdata|Build userdata image|Overlays Prado settings and builds userdata.img (~6 MB)|OFF"
-    "uboot-env|Build U-Boot env image|Compiles env/uboot-env.txt into uboot-env.bin (256 KB, mkenvimage)|OFF"
+    "uboot-env|Build U-Boot env image|Compiles firmware_source/env/uboot-env.txt into uboot-env.bin (256 KB, mkenvimage)|OFF"
 )
 
 # ── Selection state ───────────────────────────────────────────────────────────
@@ -235,19 +235,19 @@ done
 find_src() {
     local filename="$1"
     local candidates=(
-        "$SCRIPT_DIR/Prado firmware reconstructed/mtd6_rootfs/$filename"
-        "$SCRIPT_DIR/Prado firmware reconstructed/mtd7_userdata/$filename"
-        "$SCRIPT_DIR/Prado firmware reconstructed/mtd0_sloader/$filename"
-        "$SCRIPT_DIR/Prado firmware reconstructed/mtd1-mtd2_uboot/$filename"
-        "$SCRIPT_DIR/Prado firmware reconstructed/mtd4_arkdata/$filename"
-        "$SCRIPT_DIR/Prado firmware reconstructed/mtd5_kernel/$filename"
-        "$SCRIPT_DIR/Prado firmware reconstructed/mtd8_bootlogo/$filename"
-        "$SCRIPT_DIR/Prado firmware reconstructed/mtd9_bootanimation/$filename"
-        "$SCRIPT_DIR/Prado firmware reconstructed/mtd10_reversingtrack/$filename"
-        "$SCRIPT_DIR/Prado firmware reconstructed/mtd11_unicode/$filename"
-        "$SCRIPT_DIR/kernel/$filename"
-        "$SCRIPT_DIR/env/$filename"
-        "$SCRIPT_DIR/display/$filename"
+        "$SCRIPT_DIR/firmware_source/prado_reconstructed/mtd6_rootfs/$filename"
+        "$SCRIPT_DIR/firmware_source/prado_reconstructed/mtd7_userdata/$filename"
+        "$SCRIPT_DIR/firmware_source/prado_reconstructed/mtd0_sloader/$filename"
+        "$SCRIPT_DIR/firmware_source/prado_reconstructed/mtd1-mtd2_uboot/$filename"
+        "$SCRIPT_DIR/firmware_source/prado_reconstructed/mtd4_arkdata/$filename"
+        "$SCRIPT_DIR/firmware_source/prado_reconstructed/mtd5_firmware_source/kernel/$filename"
+        "$SCRIPT_DIR/firmware_source/prado_reconstructed/mtd8_bootlogo/$filename"
+        "$SCRIPT_DIR/firmware_source/prado_reconstructed/mtd9_bootanimation/$filename"
+        "$SCRIPT_DIR/firmware_source/prado_reconstructed/mtd10_reversingtrack/$filename"
+        "$SCRIPT_DIR/firmware_source/prado_reconstructed/mtd11_unicode/$filename"
+        "$SCRIPT_DIR/firmware_source/kernel/$filename"
+        "$SCRIPT_DIR/firmware_source/env/$filename"
+        "$SCRIPT_DIR/firmware_source/display/$filename"
         "$SCRIPT_DIR/$filename"
     )
     for p in "${candidates[@]}"; do
@@ -379,7 +379,7 @@ print_menu() {
         local found
         if [[ -n "$src" ]]; then
             found="${GREEN}found${NC}"
-        elif [[ "$key" == "rootfs" || "$key" == "userdata" || "$key" == "uboot-env" ]]; then
+        elif [[ "$key" == "rootfs" || "$key" == "userdata" || "$key" == "uboot-firmware_source/env" ]]; then
             found="${RED}missing - build first${NC}"
         else
             found="${RED}missing${NC}"
@@ -494,7 +494,7 @@ check_partition_sources() {
 # The "update" file is a plain list of arkupdate partition keywords, one per
 # line — NOT raw U-Boot nand scrub/write commands. Confirmed against the
 # reference packages (Holden firmware update/update,
-# Prado firmware recovery holden based/update, sd_update/update.example, all
+# Prado firmware recovery holden based/update, firmware_source/sd_update_template/update.example, all
 # identical) and cross-checked against the literal
 # "*****Now update <name> ......" strings compiled into uboot.bin. Offsets
 # and sizes are compiled into arkupdate itself; the SD file never states them.
@@ -546,7 +546,7 @@ generate_sd() {
         fi
 
         [[ "$key" == "uboot" ]] && uboot_selected=1
-        [[ "$key" == "uboot-env" ]] && env_selected=1
+        [[ "$key" == "uboot-firmware_source/env" ]] && env_selected=1
 
         local keyword="${ARKUPDATE_KEYWORD[$key]:-}"
         if [[ -z "$keyword" ]]; then
@@ -576,7 +576,7 @@ generate_sd() {
     fi
 
     # Copy UpConfig trigger and all selected files to output
-    cp "$SCRIPT_DIR/sd_update/UpConfig" "$OUTPUT_DIR/UpConfig"
+    cp "$SCRIPT_DIR/firmware_source/sd_update_template/UpConfig" "$OUTPUT_DIR/UpConfig"
     ok "UpConfig"
 
     for entry in "${copied_files[@]}"; do
@@ -598,7 +598,7 @@ print_summary() {
     echo ""
     echo -e "  ${BOLD}Next steps:${NC}"
     echo "    1. Format SD card as FAT32 (≤32 GB)"
-    echo "    2. Copy ALL files from sd_update/output/ to the SD card root"
+    echo "    2. Copy ALL files from firmware_source/sd_update_template/output/ to the SD card root"
     echo "    3. Safely eject the SD card"
     echo "    4. Insert SD into head unit SD slot"
     echo "    5. Power on — U-Boot detects UpConfig and runs arkupdate"

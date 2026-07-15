@@ -16,7 +16,7 @@ Following a falled updated,this repo was developed to test device and identify h
 - [8.0 Build & Flash Tool](#80-build--flash-tool)
 - [9.0 Update Mechanisms](#90-update-mechanisms)
   - [Flashing via SD Card](#flashing-via-sd-card)
-  - [USB Auto-Update (`msn_autocopy`)](#usb-auto-update-msn_autocopy)
+  - [USB Auto-Update (`payloads/msn_autocopy`)](#usb-auto-update-payloads/msn_autocopy)
 - [10.0 Device Access](#100-device-access)
   - [WiFi Access Point](#wifi-access-point)
   - [SSH Access](#ssh-access)
@@ -55,11 +55,11 @@ Hardware on the device has been identified by opening the device and reviewing t
 - Steering wheel controls are not believed to be read via an ADC voltage divider on a dedicated SWC wire, despite the `EnableSWCSwitchHardware` option in the ARK1668 config. The STM32F105 MCU instead decodes Toyota-specific messages directly off the vehicle's **CAN bus** (through the TJA1042 transceiver) and forwards translated key events to the ARK1668 over UART.
 - The reversing camera connects as a standard CVBS composite feed, decoded by the RN6752 into digital video for the SoC. It's believed that this route is used for early camera loading (with 2s of boot) while the rest of the system is still initialising.
 
-Full teardown details and board photos are in `Limcet Hardware/BOARD_ANALYSIS.md` (linked below).
+Full teardown details and board photos are in `hardware/BOARD_ANALYSIS.md` (linked below).
 
 **Documentation:**
 
-- [`Limcet Hardware/BOARD_ANALYSIS.md`](Limcet%20Hardware/BOARD_ANALYSIS.md) — board/component teardown (SoC, NAND, BT, MCU, CAN bus), with photos in the same folder.
+- [`hardware/BOARD_ANALYSIS.md`](Limcet%20Hardware/BOARD_ANALYSIS.md) — board/component teardown (SoC, NAND, BT, MCU, CAN bus), with photos in the same folder.
 - [`docs/SOURCES.md`](docs/SOURCES.md) — provenance of every file in this repo.
 - [`docs/PARTITION_LAYOUT.md`](docs/PARTITION_LAYOUT.md) — NAND offsets, sizes, flash commands (see also [NAND Partition Layout](#30-nand-partition-layout) below).
 - [`docs/historical/SD_BOOT_PLAN.md`](docs/historical/SD_BOOT_PLAN.md) — historical SD-boot planning doc, superseded by [Booting from SD Card or USB](#50-booting-from-sd-card-or-usb-non-destructive) below.
@@ -77,7 +77,7 @@ Four ways to reach the device in the stock firmware:
 
 ## 2.0 Serial Console (recovery / monitoring)
 
-Connect via the UART header near the SD card slot. See the photos in the Limcet Hardware Folder. Serial Settings: **115200 8N1**.
+Connect via the UART header near the SD card slot. See the photos in the hardware Folder. Serial Settings: **115200 8N1**.
 
 Colours of the attached wires and corresponding pin:
 | Pin | Color |
@@ -169,7 +169,7 @@ Two specific commands that are useful:
 
 | Command | Effect |
 |---------|--------|
-| `run nandboot` | Boots the stock NAND kernel/rootfs — `run setbootargs; bootnand` (default `bootcmd` on stock NAND, see [Boot Sequence](#40-boot-sequence-stock-nand)) |
+| `run nandboot` | Boots the stock NAND firmware_source/kernel/rootfs — `run setbootargs; bootnand` (default `bootcmd` on stock NAND, see [Boot Sequence](#40-boot-sequence-stock-nand)) |
 | `usb start` | Initialises the USB host controller — run this first to confirm USB works before attempting to boot from USB |
 
 The stock U-Boot has a **custom boot loop** — disassembly of the binary (`TEXT_BASE=0x00030000`, function at `0x0003cf3c`) confirms the mechanism:
@@ -259,11 +259,11 @@ fatload mmc ${mmcdev}:1 ${loadaddr} ${bootfile}
 bootz ${loadaddr}
 ```
 
-`${mmcdev}`, `${loadaddr}`, and `${bootfile}` are already defined in the device's real NAND env (`mmcdev=1`, `loadaddr=0x1000000`, `bootfile=zImage` — see `env/uboot-env.txt`), so nothing needs to be `setenv`'d for those. This has to be re-typed every boot — it isn't saved to NAND env (no `saveenv` is run), so the stock boot behavior is unaffected.
+`${mmcdev}`, `${loadaddr}`, and `${bootfile}` are already defined in the device's real NAND env (`mmcdev=1`, `loadaddr=0x1000000`, `bootfile=zImage` — see `firmware_source/env/uboot-env.txt`), so nothing needs to be `setenv`'d for those. This has to be re-typed every boot — it isn't saved to NAND env (no `saveenv` is run), so the stock boot behavior is unaffected.
 
 ### Self-contained SD auto-boot (env relocation)
 
-**Statically verified, not yet tested on real hardware** — see [`experimental_sdboot/README.md`](experimental_sdboot/README.md) and [`docs/UBOOT_REVERSE_ENGINEERING.md`](docs/UBOOT_REVERSE_ENGINEERING.md) §10 for the full writeup. Don't rely on this without testing on your own unit first, though the fallback (just remove the SD card) is safe.
+**Statically verified, not yet tested on real hardware** — see [`payloads/experimental_sdboot/README.md`](payloads/experimental_sdboot/README.md) and [`docs/UBOOT_REVERSE_ENGINEERING.md`](docs/UBOOT_REVERSE_ENGINEERING.md) §10 for the full writeup. Don't rely on this without testing on your own unit first, though the fallback (just remove the SD card) is safe.
 
 A different approach from both the corrupted patched binaries above and the retype-every-boot [Manual SD Card Boot](#manual-sd-card-boot) (section 8.0) — auto-boots from SD with **zero NAND writes of any kind**, not even to spare/placeholder space.
 
@@ -274,8 +274,8 @@ Combined with `--patch-nand-offset` (forces the real NAND env's CRC to fail so t
 Generated with:
 
 ```bash
-python patch_uboot_env.py -i "Prado firmware reconstructed/mtd1-mtd2_uboot/uboot.bin" \
-  -o experimental_sdboot/uboot_relocenv.bin \
+python build_tools/patch_uboot_env.py -i "firmware_source/prado_reconstructed/mtd1-mtd2_uboot/uboot.bin" \
+  -o payloads/experimental_sdboot/uboot_relocenv.bin \
   --mode sdboot --patch-nand-offset
 ```
 
@@ -285,13 +285,13 @@ python patch_uboot_env.py -i "Prado firmware reconstructed/mtd1-mtd2_uboot/uboot
 
 | Source file | Filename required on SD card | Partition |
 |-------------|-------------------------------|-----------|
-| `experimental_sdboot/uboot_relocenv.bin` | `UBOOT.BIN` — exact case, Stepldr won't find it otherwise | p1 (FAT32) |
-| `Prado firmware reconstructed/mtd5_kernel/zImage` | `zImage` | p1 (FAT32) |
+| `payloads/experimental_sdboot/uboot_relocenv.bin` | `UBOOT.BIN` — exact case, Stepldr won't find it otherwise | p1 (FAT32) |
+| `firmware_source/prado_reconstructed/mtd5_firmware_source/kernel/zImage` | `zImage` | p1 (FAT32) |
 | rootfs tree | — (copied as the partition's directory contents, not a single file) | p2 (ext4) |
 
 ### Building the SD image with `build_bootable_sdcard.sh`
 
-`build_bootable_sdcard.sh` assembles the full bootable SD image (or writes directly to a block device): patches its own auto-detected U-Boot source via `patch_uboot.py`, partitions and formats p1/p2/p3, syncs the rootfs and userdata trees, patches `rcS` on the p2 copy only (the source tree is never modified), and populates `/nanddata/` (see below). Output lands in `sd_bootable/` (gitignored).
+`build_bootable_sdcard.sh` assembles the full bootable SD image (or writes directly to a block device): patches its own auto-detected U-Boot source via `build_tools/patch_uboot.py`, partitions and formats p1/p2/p3, syncs the rootfs and userdata trees, patches `rcS` on the p2 copy only (the source tree is never modified), and populates `/nanddata/` (see below). Output lands in `sd_bootable/` (gitignored).
 
 > **U-Boot patching here is the same untested-on-hardware patch as [Self-contained SD auto-boot](#self-contained-sd-auto-boot-env-relocation) above** — the "Patch U-Boot for SD boot" toggle below now uses the env relocation method (safe on a raw/Holden-derived `uboot.bin`, avoiding the 52-byte compiled-in space limitation). Statically verified, not yet booted on real hardware — if it doesn't work, toggle U-Boot patching off (or pass `--uboot PATH`) and rely on [Manual SD Card Boot](#manual-sd-card-boot) (section 8.0) instead.
 
@@ -358,7 +358,7 @@ for mtdmap in "8:bootlogo" "9:bootanimation" "10:reversingtrack" "11:unicode"; d
 done
 ```
 
-To replace a placeholder once a real dump is obtained (via serial console: `dd if=/dev/mtd9 of=/tmp/bootanimation`), drop the file into the matching `mtd*_*/` folder under `Prado firmware reconstructed/` and rebuild the image.
+To replace a placeholder once a real dump is obtained (via serial console: `dd if=/dev/mtd9 of=/tmp/bootanimation`), drop the file into the matching `mtd*_*/` folder under `firmware_source/prado_reconstructed/` and rebuild the image.
 
 **RSTK format (reversingtrack):** the reversing-camera guide-line overlay file is a custom container — 4-byte magic `"RSTK"`, file size, entry count (41), steering-position count (100), image dimensions (800×480), guide-line zone parameters, then a 41 × 20-byte index table (`index, index, file_offset, compressed_size, flag`) followed by 41 zlib-compressed overlay images. The 41 frames span full-left to full-right steering angles; frame sizes form a bell curve (31 KB at the extremes, 17 KB at centre) consistent with symmetric guide-line geometry compressing better near centre. The app decompresses the frame matching the current steering angle and composites it over the camera feed.
 
@@ -392,7 +392,7 @@ Everything in sections 4.0–6.0 above describes the **stock or stocked & patche
 A custom working u-boot has been built from source and replicated the functionality of the original uboot with the benefit of additional commands and boot options. The main limitation of the new uboot build is that is can't boot the original stock kernel (reason unknown) and instead boots stock by chainloading the stock uboot binary which then loads the stock kernel.
 
 **Boot Chain Constraints:**
-The boot sequence is `ROM -> Nboot -> Stepldr -> UBOOT.BIN`. Critically, `Stepldr` initializes DDR3. The custom U-Boot must use `CONFIG_SKIP_LOWLEVEL_INIT` to avoid re-initializing DDR and hanging the system. Additionally, the stock binary relies on a proprietary 96-byte header with a `0x12345678` magic value. This header is injected post-build using `inject_ark_header.py` so `Stepldr` accepts it.
+The boot sequence is `ROM -> Nboot -> Stepldr -> UBOOT.BIN`. Critically, `Stepldr` initializes DDR3. The custom U-Boot must use `CONFIG_SKIP_LOWLEVEL_INIT` to avoid re-initializing DDR and hanging the system. Additionally, the stock binary relies on a proprietary 96-byte header with a `0x12345678` magic value. This header is injected post-build using `build_tools/inject_ark_header.py` so `Stepldr` accepts it.
 
 **Bootlogo:** 
 The original bootlogo used a hardware JPEG decoder (`jpeghw`). Since this driver isn't ported to the open-source U-Boot, the custom U-Boot displays a raw framebuffer (`bootlogo.raw`) via `ark_show_bootlogo()` loaded from the SD card.
@@ -406,10 +406,10 @@ The original bootlogo used a hardware JPEG decoder (`jpeghw`). Since this driver
 | `bootmmc` | Kernel+DTB from SD (`kernelfile`/`dtbfile` env vars), rootfs on SD (`mmcroot`, default `/dev/mmcblk0p2`) | **Confirmed working** |
 | `bootusb` | Kernel+DTB+rootfs all from USB (`usbroot`, default `/dev/sda2`) — needs a two-partition USB stick, FAT (p1, `zImage`+DTB) + ext4 (p2, rootfs), same layout as the SD card. `rcS`'s userdata mount also follows the actual root device (see [`build_bootable_sdcard.sh`](#build_bootable_sdcardsh--current-capabilities) below), so `/data` lands on `/dev/sda3` too | Kernel-load-from-USB confirmed working; the `root=`/userdata device-following fix is newly built, not yet hardware-tested |
 | `bootstock` | Chainloads the real stock U-Boot 2012.10 binary from an SD file (`stockubootfile`, default `stock_uboot.bin`), which then boots the stock kernel+rootfs+**full UI** from NAND with its own driver | **Confirmed working end-to-end** |
-| `bootstockusb` | Same as `bootstock`, stock U-Boot binary sourced from USB instead of SD — NAND is still where the kernel/rootfs come from either way, USB/SD only supplies the stock U-Boot binary itself for that one handoff | Same code path as `bootstock`, not independently hardware-tested |
+| `bootstockusb` | Same as `bootstock`, stock U-Boot binary sourced from USB instead of SD — NAND is still where the firmware_source/kernel/rootfs come from either way, USB/SD only supplies the stock U-Boot binary itself for that one handoff | Same code path as `bootstock`, not independently hardware-tested |
 | `bootnand` | Direct kernel boot from NAND using *this* fork's own NAND driver (`run nandboot`) | NAND read fixed and reliable; kernel entry itself hangs — see below |
 | `nandoobcheck <offset-hex>` | Diagnostic: raw OOB dump of a NAND page, bypassing ECC/BBT interpretation | Diagnostic tool, not a boot path |
-| `switchecc <0\|1\|2>` | Switch the NAND driver's ECC scheme (0=normal, 1=bootstrap, 2=this chip's real kernel/rootfs/bootloader format) | `switchecc 2` is what fixed `bootnand`'s NAND reads |
+| `switchecc <0\|1\|2>` | Switch the NAND driver's ECC scheme (0=normal, 1=bootstrap, 2=this chip's real firmware_source/kernel/rootfs/bootloader format) | `switchecc 2` is what fixed `bootnand`'s NAND reads |
 
 **Default (non-interrupted) autoboot order:** `bootusb` → `bootstockusb` → `bootstock` → `run nandboot` (last resort). Import of `uEnv.txt` from the SD card happens first and can override this (or any env var) without recompiling.
 
@@ -417,7 +417,7 @@ The original bootlogo used a hardware JPEG decoder (`jpeghw`). Since this driver
 
 ### NAND ECC — needs review and confirmation. 
 
-This chip's real on-flash format for kernel/rootfs/bootloader-type partitions is a 1024-byte ECC step (2 segments/page), 13-byte/7-bit BCH strength, ECC bytes at OOB offset 3 — not what the original driver assumed. Confirmed by reading the `BCH_CR` register live off a *working* stock U-Boot prompt right after a real successful read. Fixed in both the U-Boot and kernel `ark_nand.c` drivers (kernel side patched in source, not yet hardware-tested). Full writeup: [`docs/historical/HANDOFF_nand_ecc_uboot_vs_kernel.md`](docs/historical/HANDOFF_nand_ecc_uboot_vs_kernel.md) §1–2.
+This chip's real on-flash format for firmware_source/kernel/rootfs/bootloader-type partitions is a 1024-byte ECC step (2 segments/page), 13-byte/7-bit BCH strength, ECC bytes at OOB offset 3 — not what the original driver assumed. Confirmed by reading the `BCH_CR` register live off a *working* stock U-Boot prompt right after a real successful read. Fixed in both the U-Boot and kernel `ark_nand.c` drivers (kernel side patched in source, not yet hardware-tested). Full writeup: [`docs/historical/HANDOFF_nand_ecc_uboot_vs_kernel.md`](docs/historical/HANDOFF_nand_ecc_uboot_vs_kernel.md) §1–2.
 
 The actual`U-boot` NAND partition itself has proven unreadable by *any* U-Boot-level tool (this driver, any ECC mode, or stock's own native `switchecc`). Stepldr reads it via a raw path that bypasses `BCH_CR`/ECC entirely, confirmed via `objdump` disassembly of the real `Stepldr.bin`. Not a bug — `bootstock`/`bootstockusb` correctly source the stock U-boot binary from a file located on the mmc or usb drive instead then load the kernel from NAND.
 
@@ -429,8 +429,8 @@ Beyond what's described in [Building the SD image with `build_bootable_sdcard.sh
 |------|--------|
 | `--new-uboot` (default on) / `--no-new-uboot` | Use the freshly compiled `ark1668_limcet_p305` U-Boot instead of stock |
 | `--new-kernel` (default on) / `--no-new-kernel` | Use the freshly compiled Limcet P305 kernel instead of the stock 3.4 kernel |
-| `--stock-uboot PATH` / `--no-stock-uboot` | Copy a stock U-Boot binary to `p1/stock_uboot.bin` for `bootstock`. Defaults to the dump already in this repo (`Prado firmware dump/mtd1-mtd2_uboot/extracted/uboot.bin`) |
-| `--bootlogo PATH` | Raw 800×480×32bpp framebuffer (see `convert_bootlogo.py`) copied to `p1/bootlogo.raw` for the compiled U-Boot's boot logo |
+| `--stock-uboot PATH` / `--no-stock-uboot` | Copy a stock U-Boot binary to `p1/stock_uboot.bin` for `bootstock`. Defaults to the dump already in this repo (`firmware_dumps/Prado firmware dump/mtd1-mtd2_uboot/extracted/uboot.bin`) |
+| `--bootlogo PATH` | Raw 800×480×32bpp framebuffer (see `build_tools/convert_bootlogo.py`) copied to `p1/bootlogo.raw` for the compiled U-Boot's boot logo |
 | `--diag-tools PATH` (repeatable) / `--no-diag-tools` | Install extra static ARM diagnostic binaries to p2's `/usr/bin`, on top of the defaults (`tools/i2c-scan`, `tools/ark1680-ts-test`, `tools/lcd-test`, `tools/strace`) |
 
 All of `kernelfile`, `dtbfile`, `mmcroot`, `bootargs_common`, `stockubootfile`, `machid` are U-Boot env vars with compiled-in defaults (see [Boot commands](#boot-commands) above) — editable via `setenv` at the prompt or by dropping a `uEnv.txt` on the SD card's p1, without recompiling U-Boot or rerunning the build script.
@@ -469,7 +469,7 @@ The whole menu is one line per item — no per-item description text — so it f
     [ ]  10   Reversing Track        reversingtrack   found
     [ ]  11   Unicode Font           unicode          found
   ────────────────────────────────────────────────────────
-  Build U-Boot env image: Compiles env/uboot-env.txt into uboot-env.bin (256 KB, mkenvimage)
+  Build U-Boot env image: Compiles firmware_source/env/uboot-env.txt into uboot-env.bin (256 KB, mkenvimage)
   ↑/↓ move   Space/Enter toggle   a/n all/none   g go   q quit
 ```
 
@@ -481,7 +481,7 @@ The `▶` marker shows which row is highlighted — move it with the arrow keys;
 
 ### Output
 
-Generated files land in `sd_update/output/`. Copy all files to the root of a FAT32 SD card to flash.
+Generated files land in `firmware_source/sd_update_template/output/`. Copy all files to the root of a FAT32 SD card to flash.
 
 ### Standalone scripts
 
@@ -526,13 +526,13 @@ On power-on, U-Boot checks for a FAT32 SD card. If a file named `UpConfig` is pr
 bash legacy/generate_update.sh
 ```
 
-Toggle partitions with number keys, press `g` to generate. Output lands in `sd_update/output/`.
+Toggle partitions with number keys, press `g` to generate. Output lands in `firmware_source/sd_update_template/output/`.
 
 > Steps 1–2 can be replaced entirely by running `bash build_update.sh`, which does the build and package generation in one interactive session — see [Build & Flash Tool](#80-build--flash-tool) above.
 
 **Step 3 — Prepare SD card**
 
-Format as FAT32 (max 32 GB). Copy everything from `sd_update/output/` to the SD root.
+Format as FAT32 (max 32 GB). Copy everything from `firmware_source/sd_update_template/output/` to the SD root.
 
 **Step 4 — Flash**
 
@@ -557,7 +557,7 @@ reversingtrack
 bootanimation
 ```
 
-Confirmed against the reference packages (`Holden firmware update/update`, `Prado firmware recovery holden based/update`, `sd_update/update.example` — all identical) and cross-checked against the literal `"*****Now update <name> ......"` strings compiled into `uboot.bin`. Note `filesystem` is the keyword for the rootfs partition, and `kernel` expects a file named `zImage` on the SD card, not `kernel.img` or similar — filenames must match exactly what's shown in the [NAND Partition Layout](#30-nand-partition-layout) table below.
+Confirmed against the reference packages (`firmware_dumps/Holden firmware update/update`, `firmware_dumps/Prado firmware recovery holden based/update`, `firmware_source/sd_update_template/update.example` — all identical) and cross-checked against the literal `"*****Now update <name> ......"` strings compiled into `uboot.bin`. Note `filesystem` is the keyword for the rootfs partition, and `kernel` expects a file named `zImage` on the SD card, not `kernel.img` or similar — filenames must match exactly what's shown in the [NAND Partition Layout](#30-nand-partition-layout) table below.
 
 `uboot-env` and `unicode` are deliberately left out of `build_update.sh`'s generated `update` file — neither is an independent arkupdate keyword:
 
@@ -573,7 +573,7 @@ Both stay flashable manually from the U-Boot prompt instead — see [4.0 U-Boot 
 - **userdata flash** erases all paired BT devices, call history, and user settings — recreated on first boot
 - **rootfs flash** replaces the entire filesystem; bad block at 0x5FA0000 is handled automatically
 
-### USB Auto-Update (`msn_autocopy`)
+### USB Auto-Update (`payloads/msn_autocopy`)
 
 `MsnCoreApp` (the main head-unit application) has a built-in, **unauthenticated** file-drop mechanism —
 almost certainly meant for factory/dealer servicing (patch the device without a full firmware reflash),
@@ -582,44 +582,44 @@ password, PIN, or confirmation dialog gates it — just physically inserting the
 
 **How it works:** `DiskDeviceWatcher::mountDiskPartition()` runs automatically whenever the device
 auto-mounts a newly inserted USB drive or SD card (the same hotplug flow used everywhere else in this
-project). If a folder named exactly `msn_autocopy` exists at the root of that media, it runs:
+project). If a folder named exactly `payloads/msn_autocopy` exists at the root of that media, it runs:
 
 ```
-mount -o remount,rw / && cp -rf <mountpath>msn_autocopy/* /
+mount -o remount,rw / && cp -rf <mountpath>payloads/msn_autocopy/* /
 ```
 
 | | |
 |---|---|
-| **Copies from** | `msn_autocopy/` at the root of the inserted USB drive or SD card |
+| **Copies from** | `payloads/msn_autocopy/` at the root of the inserted USB drive or SD card |
 | **Copies to** | `/` — the live root filesystem (the `rootfs` UBIFS partition, see [§9.0 NAND Partition Layout](#30-nand-partition-layout)), remounted read-write for the operation |
 | **Trigger** | Automatic, on normal disk auto-mount — no button press, no menu, no confirmation prompt |
 | **Runs as** | root (the whole userspace already runs as root on this device) |
 
-**Practical use:** put a folder named `msn_autocopy` at the root of a USB drive or SD card, with any
-files inside it laid out exactly as they should land under `/` (e.g. `msn_autocopy/usr/bin/whatever`
+**Practical use:** put a folder named `payloads/msn_autocopy` at the root of a USB drive or SD card, with any
+files inside it laid out exactly as they should land under `/` (e.g. `payloads/msn_autocopy/usr/bin/whatever`
 lands at `/usr/bin/whatever`), insert it, and the device copies them in on its own the moment it
 auto-mounts the media. No SSH, no serial console, no U-Boot interrupt needed.
 
 **Not confirmed:** the exact runtime mount-point path the device assigns to inserted media (e.g. whether
 it's a fixed `/media/`-style prefix or something else) — `<mountpath>` above is whatever
 `DiskDeviceWatcher` resolves it to at mount time, not independently verified against a live device in
-this pass. The destination (`/`, the real rootfs) and the trigger condition (folder named `msn_autocopy`
+this pass. The destination (`/`, the real rootfs) and the trigger condition (folder named `payloads/msn_autocopy`
 present) are both confirmed directly from the binary's disassembly, not inferred.
 
 See [`docs/UI_AND_APP_ANALYSIS.md`](docs/UI_AND_APP_ANALYSIS.md) for the full disassembly trace and
 [`docs/SECURITY_REVIEW.md`](docs/SECURITY_REVIEW.md) for this project's broader credential/access-path review.
 
-**Ready-to-use payload:** [`msn_autocopy/`](msn_autocopy/) contains a pre-built `msn_autocopy/etc/rc.d/rcS`
+**Ready-to-use payload:** [`payloads/msn_autocopy/`](payloads/msn_autocopy/) contains a pre-built `payloads/msn_autocopy/etc/rc.d/rcS`
 — stock's own dumped `rcS` with `busybox telnetd -l /bin/sh` (already compiled into stock's busybox,
 no binary transplant needed) added as a passwordless root telnet listener on port 23. **Confirmed
 working on real hardware, 2026-07-13.** Copy the folder to the root of a FAT32 USB drive/SD card,
 insert into the head unit, reboot, then `telnet <device-ip> 23` over the `carplay_wifi` AP for an
-immediate root shell — no login prompt. See [`msn_autocopy/README.md`](msn_autocopy/README.md) for
+immediate root shell — no login prompt. See [`payloads/msn_autocopy/README.md`](payloads/msn_autocopy/README.md) for
 full deployment steps, the debugging history (why the first attempt silently failed —
 `/dev/pts` wasn't mounted), and the diagnostic-log-to-USB fallback for retrieving logs without a
 working shell.
 
-An earlier attempt, [`msn_autocopy_payload_do not use/`](msn_autocopy_payload_do%20not%20use/),
+An earlier attempt, [`payloads/payloads/deprecated/msn_autocopy_payload_do not use/`](payloads/msn_autocopy_payload_do%20not%20use/),
 tried transplanting `sshd` + `rcS` from the *reconstructed* rootfs instead of stock's own files and
 never worked — kept only for reference on what not to do (cross-rootfs binary/dependency mismatch).
 
@@ -691,25 +691,25 @@ The ARK1680 USB gadget stack is configured to use CDC-NCM (`g_ncm.ko`), which cr
 - **macOS / Linux** — CDC-NCM supported natively; interface appears automatically
 - **Windows** — may require the CDC-NCM host driver from Windows Update
 
-`g_zero.ko` has been removed from `Prado firmware reconstructed/mtd6_rootfs/rootfs/etc/all.sh` — it was overriding the NCM gadget registration and breaking both USB host mode and the network interface.
+`g_zero.ko` has been removed from `firmware_source/prado_reconstructed/mtd6_rootfs/rootfs/etc/all.sh` — it was overriding the NCM gadget registration and breaking both USB host mode and the network interface.
 
 ## 11.0 Repository Structure
 
 ```
-Prado firmware dump/                  Raw MTD partition dumps from the live device
+firmware_dumps/Prado firmware dump/                  Raw MTD partition dumps from the live device
   mtd1-mtd2_uboot/           U-Boot binaries (raw + extracted)
-  mtd3_env/                  U-Boot environment (raw + extracted)
+  mtd3_firmware_source/env/                  U-Boot environment (raw + extracted)
   mtd4_arkdata/              Panel/hardware config (raw + extracted)
-  mtd5_kernel/               Kernel zImage (raw + extracted)
+  mtd5_firmware_source/kernel/               Kernel zImage (raw + extracted)
   mtd6_rootfs/               Root filesystem UBIFS dump (raw)
   mtd6_rootfs_raw/           Raw MTD6 bin (Git LFS)
 
-Prado firmware reconstructed/         Reconstructed firmware for flashing
+firmware_source/prado_reconstructed/         Reconstructed firmware for flashing
   mtd0_sloader/              Nboot.bin, Stepldr.bin
   mtd1-mtd2_uboot/           uboot.bin
-  mtd3_env/                  (placeholder — reconstructed env lives in env/uboot-env.txt instead)
-  mtd4_arkdata/              arkdata.ini (Prado panel config — copy of display/arkdata.ini)
-  mtd5_kernel/               zImage (reconstructed kernel — see note on top-level kernel/ below)
+  mtd3_firmware_source/env/                  (placeholder — reconstructed env lives in firmware_source/env/uboot-env.txt instead)
+  mtd4_arkdata/              arkdata.ini (Prado panel config — copy of firmware_source/display/arkdata.ini)
+  mtd5_firmware_source/kernel/               zImage (reconstructed kernel — see note on top-level firmware_source/kernel/ below)
   mtd6_rootfs/
     rootfs/                  Modified rootfs tree (Prado libs + SSH + WiFi AP)
   mtd7_userdata/
@@ -719,16 +719,16 @@ Prado firmware reconstructed/         Reconstructed firmware for flashing
   mtd10_reversingtrack/      reversingtrack
   mtd11_unicode/             unicode (placeholder — no content yet)
 
-Holden firmware update/               Stock Holden update package (reference — validated it boots on Prado hw)
-Prado firmware recovery holden based/ Stock Holden package repackaged with Prado msn_factory_configs, for recovery
+firmware_dumps/Holden firmware update/               Stock Holden update package (reference — validated it boots on Prado hw)
+firmware_dumps/Prado firmware recovery holden based/ Stock Holden package repackaged with Prado msn_factory_configs, for recovery
 
-Limcet Hardware/
+hardware/
   BOARD_ANALYSIS.md         Board/component teardown notes (SoC, NAND, BT, MCU, CAN bus)
   *.jpg                     Board photos referenced from BOARD_ANALYSIS.md
 
-ArkPro Reference/  Third-party ASTRI ARK1680 vendor source — see docs/DISPLAY_SUBSYSTEM.md for provenance
+vendor_source/ArkPro Reference/  Third-party ASTRI ARK1680 vendor source — see docs/DISPLAY_SUBSYSTEM.md for provenance
 
-linux-arkmicro Reference/  Third-party ArkMicro U-Boot BSP source — see docs/UBOOT_BUILD_GUIDE.md
+vendor_source/linux-arkmicro Reference/  Third-party ArkMicro U-Boot BSP source — see docs/UBOOT_BUILD_GUIDE.md
 
 ui/                Qt 4.7.4 UI analysis and resource extraction — see ui/UI.md
   UI.md                      Qt module layout, key binaries, /msnprofile/ filesystem layout
@@ -738,20 +738,20 @@ ui/                Qt 4.7.4 UI analysis and resource extraction — see ui/UI.md
     extract_qm.py            Decompiles .qm translation files to text
     extract_rcc.py           Decompiles .rcc resource bundles
 
-kernel/            zImage (from Holden base — identical kernel_size to Prado firmware dump; gitignored, not present in every checkout — Prado firmware reconstructed/mtd5_kernel/zImage is the copy actually used for builds)
-display/
+firmware_source/kernel/            zImage (from Holden base — identical kernel_size to firmware_dumps/Prado firmware dump; gitignored, not present in every checkout — firmware_source/prado_reconstructed/mtd5_firmware_source/kernel/zImage is the copy actually used for builds)
+firmware_source/display/
   arkdata.ini                Prado panel config (from MTD4 live dump) — build source for mtd4
   mtd4_arkdata_prado_dump.bin  Raw MTD4 dump the .ini was derived from
   arkdata_holden.ini         Holden standard reference
   arkdata_holden_0324.ini    Holden March 2024 update reference
-msn_factory_configs/
+firmware_source/msn_factory_configs/
   FactoryConfig.ini          Prado identity + Holden firmware settings
   MsnProductInfo.ini         Hardware identity (Limcet-P306)
-env/
+firmware_source/env/
   uboot-env.txt              Reconstructed env (bootdelay=9, 106m/6m layout)
   mtd3_env_prado_firmware_dump.bin    Raw env from live device (gitignored)
   sdboot_script.txt          Legacy boot script source — superseded by env relocation
-sd_update/
+firmware_source/sd_update_template/
   UpConfig                   SD update trigger file
   update.example             Static reference script (generated version goes to output/)
   output/                    Generated SD card package (gitignored)
@@ -763,11 +763,11 @@ docs/
 build_update.sh              Combined interactive build and flash tool
 build_rootfs.sh              Standalone rootfs UBI image builder
 build_userdata.sh            Standalone userdata UBI image builder
-patch_uboot.py               Patches compiled-in env and NAND offset in a U-Boot binary
+build_tools/patch_uboot.py               Patches compiled-in env and NAND offset in a U-Boot binary
 build_bootable_sdcard.sh     Interactive bootable SD card image builder (same arrow-key menu as build_update.sh)
 sd_bootable/                 Generated bootable SD image output (gitignored — sd_boot.img + patched uboot_sdboot.bin)
 corrupted/                   Known-corrupted uboot_sdboot.bin/uboot_final.bin — do not use, see corrupted/README.md
-experimental_sdboot/         Self-contained SD auto-boot patch (env relocation) — statically verified, untested on hardware
+payloads/experimental_sdboot/         Self-contained SD auto-boot patch (env relocation) — statically verified, untested on hardware
 legacy/
   generate_update.sh         Superseded by build_update.sh — standalone partition-selection + SD-package
                               generator only, no build steps; kept for standalone use
@@ -811,11 +811,11 @@ See [`docs/SOURCES.md`](docs/SOURCES.md) for full provenance of each file.
 
 - [`SOURCES.md`](docs/SOURCES.md) — provenance of every firmware source used
 - [`PARTITION_LAYOUT.md`](docs/PARTITION_LAYOUT.md) — NAND offsets, sizes, flash commands
-- [`SOC_ARK1668_CROSSREF.md`](docs/HARDWARE_AND_SOC_REFERENCE.md) — SoC identity, Ghidra RE of the kernel/userspace binaries, full pin-mux table, cross-checked against real ASTRI/ArkMicro vendor source
+- [`SOC_ARK1668_CROSSREF.md`](docs/HARDWARE_AND_SOC_REFERENCE.md) — SoC identity, Ghidra RE of the firmware_source/kernel/userspace binaries, full pin-mux table, cross-checked against real ASTRI/ArkMicro vendor source
 - [`SECURITY_REVIEW.md`](docs/SECURITY_REVIEW.md) — credential/access-path review: stock root password, an unresolved second UID-0 account, update-integrity check
 - [`MSNCOREAPP_REVIEW.md`](docs/UI_AND_APP_ANALYSIS.md) — binary-level review of `MsnCoreApp`: an unauthenticated `system()` call reachable by inserting a USB drive with a magic folder name
 - [`MSNCOREAPP_DECONSTRUCTION.md`](docs/UI_AND_APP_ANALYSIS.md) — deconstructing the UI binary for editing: what's recoverable, the two layout flavours, and the geometry-patch workflow (see also `tools/msncore_analyze.py`)
-- [`KERNEL.md`](docs/KERNEL_REFERENCE.md) — kernel image analysis (`mtd5_kernel/zImage`)
+- [`KERNEL.md`](docs/KERNEL_REFERENCE.md) — kernel image analysis (`mtd5_firmware_source/kernel/zImage`)
 - [`UBOOT_BUILD_PLAN.md`](docs/UBOOT_BUILD_GUIDE.md) — plan for compiling a fresh U-Boot from `linux-arkmicro` source, with config deltas and an SD-only test sequence
 - [`uboot_build.md`](docs/UBOOT_BUILD_GUIDE.md) — U-Boot build guide, boot chain constraints, and ARK header injection details
 - [`UBOOT_SDBOOT_INVESTIGATION.md`](docs/UBOOT_REVERSE_ENGINEERING.md) — U-Boot SD-boot patch corruption investigation and the env relocation fix
@@ -834,10 +834,10 @@ See [`docs/SOURCES.md`](docs/SOURCES.md) for full provenance of each file.
 
 **Elsewhere in the repo**
 
-- [`Limcet Hardware/BOARD_ANALYSIS.md`](Limcet%20Hardware/BOARD_ANALYSIS.md) — physical board/component teardown notes (SoC, NAND, BT, MCU, CAN bus)
+- [`hardware/BOARD_ANALYSIS.md`](Limcet%20Hardware/BOARD_ANALYSIS.md) — physical board/component teardown notes (SoC, NAND, BT, MCU, CAN bus)
 - [`ui/UI.md`](ui/UI.md) — Qt UI analysis and resource extraction
-- [`ArkPro Reference/README.md`](ArkPro%20Reference/README.md) — provenance for the vendored ASTRI ARK1680 source
-- [`linux-arkmicro Reference/README.md`](linux-arkmicro%20Reference/README.md) — provenance for the vendored ArkMicro U-Boot BSP source
-- [`experimental_sdboot/README.md`](experimental_sdboot/README.md) — self-contained SD auto-boot patch status
+- [`vendor_source/ArkPro Reference/README.md`](ArkPro%20Reference/README.md) — provenance for the vendored ASTRI ARK1680 source
+- [`vendor_source/linux-arkmicro Reference/README.md`](linux-arkmicro%20Reference/README.md) — provenance for the vendored ArkMicro U-Boot BSP source
+- [`payloads/experimental_sdboot/README.md`](payloads/experimental_sdboot/README.md) — self-contained SD auto-boot patch status
 - [`corrupted/README.md`](corrupted/README.md) — why the quarantined U-Boot binaries there are unsafe to use
-- [`msn_autocopy_payload/README.md`](msn_autocopy_payload/README.md) — USB payload that exploits the `msn_autocopy` auto-copy mechanism to install and autostart `sshd` on a stock device
+- [`payloads/msn_autocopy_payload/README.md`](payloads/msn_autocopy_payload/README.md) — USB payload that exploits the `payloads/msn_autocopy` auto-copy mechanism to install and autostart `sshd` on a stock device

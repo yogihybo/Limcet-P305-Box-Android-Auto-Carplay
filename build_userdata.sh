@@ -16,7 +16,7 @@
 # Userdata layout:
 #   msndatadef            — empty marker file (Holden base)
 #   msncfg/               — Prado-specific settings overlay
-#     MsnProductInfo.ini  — hardware identity (copied from msn_factory_configs/)
+#     MsnProductInfo.ini  — hardware identity (copied from firmware_source/msn_factory_configs/)
 #     FactoryConfig.ini   — device branding and link settings
 #     Setting.config      — screen brightness, volume defaults
 #     carsetting.ini      — car-specific enables
@@ -36,10 +36,10 @@ set -e
 export PATH="$PATH:/usr/sbin:/sbin"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-USERDATA_SRC="$SCRIPT_DIR/Prado firmware reconstructed/mtd7_userdata/userdata"
+USERDATA_SRC="$SCRIPT_DIR/firmware_source/prado_reconstructed/mtd7_userdata/userdata"
 BUILD_DIR="$(mktemp -d)"
-UBIFS_IMAGE="$SCRIPT_DIR/Prado firmware reconstructed/mtd7_userdata/userdata.ubifs"
-UBI_IMAGE="$SCRIPT_DIR/Prado firmware reconstructed/mtd7_userdata/userdata.img"
+UBIFS_IMAGE="$SCRIPT_DIR/firmware_source/prado_reconstructed/mtd7_userdata/userdata.ubifs"
+UBI_IMAGE="$SCRIPT_DIR/firmware_source/prado_reconstructed/mtd7_userdata/userdata.img"
 UBI_CFG="$BUILD_DIR/ubi.cfg"
 
 MIN_IO=2048
@@ -52,8 +52,8 @@ cp -r "$USERDATA_SRC/." "$BUILD_DIR/fs/"
 
 # Overlay: copy Prado MsnProductInfo and FactoryConfig into msncfg
 mkdir -p "$BUILD_DIR/fs/msncfg"
-cp "$SCRIPT_DIR/msn_factory_configs/MsnProductInfo.ini" "$BUILD_DIR/fs/msncfg/"
-cp "$SCRIPT_DIR/msn_factory_configs/FactoryConfig.ini"  "$BUILD_DIR/fs/msncfg/"
+cp "$SCRIPT_DIR/firmware_source/msn_factory_configs/MsnProductInfo.ini" "$BUILD_DIR/fs/msncfg/"
+cp "$SCRIPT_DIR/firmware_source/msn_factory_configs/FactoryConfig.ini"  "$BUILD_DIR/fs/msncfg/"
 
 echo "  userdata tree:"
 find "$BUILD_DIR/fs" -type f | sed "s|$BUILD_DIR/fs/||" | sort | sed 's/^/    /'
@@ -73,7 +73,7 @@ echo "=== Building UBI image ==="
 cat > "$UBI_CFG" << 'EOF'
 [userdata]
 mode=ubi
-image=Prado firmware reconstructed/mtd7_userdata/userdata.ubifs
+image=firmware_source/prado_reconstructed/mtd7_userdata/userdata.ubifs
 vol_id=0
 vol_type=dynamic
 vol_name=userdata

@@ -1,0 +1,12 @@
+if TARGET_ARK1668_TYW_ZKSW
+
+config SYS_BOARD
+	default "ark1668_tyw_zksw"
+
+config SYS_VENDOR
+	default "arkmicro"
+
+config SYS_CONFIG_NAME
+	default "ark1668_tyw_zksw"
+
+endif

@@ -27,9 +27,9 @@
 # and ark_dw_mmc.ko all match each other and the running kernel's vermagic.
 set -euo pipefail
 
-ROOTFS_DIR="${1:-Prado firmware reconstructed/mtd6_rootfs/rootfs}"
+ROOTFS_DIR="${1:-firmware_source/prado_reconstructed/mtd6_rootfs/rootfs}"
 OUT="${2:-sd_bootable/initramfs.cpio.gz}"
-MODULE_REL="lib/modules/3.4.0/kernel/drivers/ark/sdmmc/ark_dw_mmc.ko"
+MODULE_REL="lib/modules/3.4.0/firmware_source/kernel/drivers/ark/sdmmc/ark_dw_mmc.ko"
 
 # mknod (device nodes inside the cpio) needs root — same as build_bootable_sdcard.sh
 if [ "$(id -u)" -ne 0 ]; then
@@ -58,8 +58,8 @@ done
 
 # --- dynamic loader + libs busybox needs --------------------------------------
 # Resolve each by SONAME, but don't depend on the SONAME symlink existing: a
-# Windows checkout drops symlinks (restore_rootfs_symlinks.sh recreates them
-# from rootfs.symlinks, but we may run before that). So if the symlink is
+# Windows checkout drops symlinks (build_tools/restore_rootfs_symlinks.sh recreates them
+# from build_tools/rootfs.symlinks, but we may run before that). So if the symlink is
 # present follow it; otherwise glob the versioned real file (e.g. libc-2.27.so),
 # then copy the real file into the initramfs and create the SONAME symlink there.
 copy_lib() {

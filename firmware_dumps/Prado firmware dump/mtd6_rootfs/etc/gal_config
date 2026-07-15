@@ -1,0 +1,7 @@
+fillrectangle=xor,blend
+drawrectangle=blend
+drawline=blend
+filltrapezoid=xor,blend
+filltriangle=xor,blend
+blit=none,xor,alphachannel,coloralpha,colorize,src_colorkey,dst_colorkey,rotate180,src_premultiply,src_premulticolor
+stretchblit=none,xor,alphachannel,coloralpha,colorize,src_colorkey,dst_colorkey,rotate180,src_premultiply,src_premulticolor

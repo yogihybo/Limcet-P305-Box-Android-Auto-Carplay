@@ -1,0 +1,3 @@
+[D-BUS Service]
+Name=com.masnuo.carlife
+Exec=/usr/bin/msncarlife

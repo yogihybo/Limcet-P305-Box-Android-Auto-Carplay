@@ -1,0 +1,55 @@
+#
+# Audio Kconfig
+#
+
+menu "ALSA audio controller support"
+
+comment "Sound card support - ALSA is needed"
+
+config SND_ARK_SOC
+	tristate "SoC Audio for the ARK SoC"
+	depends on SND_SOC
+	help
+		Say Y or M if you want to add support for codecs attached to the
+		ARK interface. You will also need to select the audio interfaces
+		to support below.
+
+config SND_ARK_SOC_DMA
+	tristate "SOC DMA set for Audio"
+	depends on SND_ARK_SOC
+	select SND_SOC_DMAENGINE_PCM
+
+config SND_ARK_SOC_I2S
+	tristate "I2S driver for Audio"
+	depends on SND_ARK_SOC
+
+config SND_SDDAC
+	tristate "DAC for Audio out"
+	depends on SND_ARK_SOC
+
+config SND_ARK_SOC_ARK_CS4270
+	tristate "SoC Audio support for CS4270-based board"
+	depends on SND_ARK_SOC && ARK_AHB_DW_DMAC
+	select SND_ARK_SOC_DMA
+	select SND_ARK_SOC_I2S
+	select SND_SOC_CS4270
+	help
+		Say Y if you want to add ALSA sound driver for 
+		CS4270-based board.
+
+config SND_ARK_SOC_ARK_SDDAC
+	tristate "SoC Audio support for Arkmicro SDDAC"
+	depends on SND_ARK_SOC && ARK_AHB_DW_DMAC
+	select SND_ARK_SOC_DMA
+	select SND_ARK_SOC_I2S
+	select SND_ARK_SDDAC
+	help
+		Say Y if you want to add ALSA aound driver for 
+		Arkmicro SDDAC
+config FM1288_Driver
+	tristate "FM1288_Driver"
+	help
+		Say Y if you want to add ALSA FM1288_Driver 
+
+endmenu
+

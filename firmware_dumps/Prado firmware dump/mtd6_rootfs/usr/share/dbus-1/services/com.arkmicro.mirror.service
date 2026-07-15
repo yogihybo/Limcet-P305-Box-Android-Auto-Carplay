@@ -1,0 +1,3 @@
+[D-BUS Service]
+Name=com.arkmicro.mirror
+Exec=/usr/bin/mirrordemo

@@ -1,0 +1,263 @@
+if ARCH_ARKMICRO
+
+config ARK1668FAMILY
+	bool
+
+config ARKN141FAMILY
+	bool
+
+config ARCH_ARKE
+	bool
+
+config ARK1668EFAMILY
+	bool
+
+config AMT630HFAMILY
+	bool
+
+choice
+	prompt "Arkmicro board select"
+	optional
+
+config TARGET_ARK1668_DONGLE_SIM
+	bool "ark1668_dongle_sim board"
+	select ARK1668FAMILY
+	select CPU_V7A
+	select BOARD_LATE_INIT
+	select SUPPORT_SPL
+	select BOARD_EARLY_INIT_F
+
+config TARGET_XINSHIYU
+	bool "xinshiyu board"
+	select ARK1668FAMILY
+	select CPU_V7A
+	select BOARD_LATE_INIT
+	select SUPPORT_SPL
+	select BOARD_EARLY_INIT_F
+
+config TARGET_TYW_DASHBOARD
+	bool "tyw-dashboard board"
+	select ARK1668FAMILY
+	select CPU_V7A
+	select BOARD_LATE_INIT
+	select SUPPORT_SPL
+	select BOARD_EARLY_INIT_F
+
+config TARGET_ARK1668_TYW_ZKSW
+	bool "ark1668_tyw_zksw board"
+	select ARK1668FAMILY
+	select CPU_V7A
+	select BOARD_LATE_INIT
+	select SUPPORT_SPL
+	select BOARD_EARLY_INIT_F
+
+config TARGET_ARK1668
+	bool "ark1668 board"
+	select ARK1668FAMILY
+	select CPU_V7A
+	select BOARD_LATE_INIT
+	select SUPPORT_SPL
+	select BOARD_EARLY_INIT_F
+
+config TARGET_ARK1668_AOFAN
+	bool "ark1668 aofan board"
+	select ARK1668FAMILY
+	select CPU_V7A
+	select BOARD_LATE_INIT
+	select SUPPORT_SPL
+	select BOARD_EARLY_INIT_F
+
+config TARGET_ARKN141
+	bool "arkn141 board"
+	select ARKN141FAMILY
+	select CPU_V7A
+	select BOARD_LATE_INIT
+
+config TARGET_ARKN141_SQWF
+	bool "arkn141 shangqqi car-dvr wifi board"
+	select ARKN141FAMILY
+	select CPU_V7A
+	select BOARD_LATE_INIT
+
+config TARGET_AMT630H
+	bool "amt630h board"
+	select AMT630HFAMILY
+	select CPU_V7A
+	select BOARD_LATE_INIT
+	select ARCH_ARKE
+
+config TARGET_ARKN141_HJYB
+	bool "arkn141 hongjing dashboard board"
+	select ARKN141FAMILY
+	select CPU_V7A
+	select BOARD_LATE_INIT
+
+config TARGET_ARKN141_SHOULANG
+	bool "arkn141 shoulang car-dvr wifi board"
+	select ARKN141FAMILY
+	select CPU_V7A
+	select BOARD_LATE_INIT
+
+config TARGET_ARKN141S_FPGA
+	bool "arkn141s fpga board"
+	select ARCH_ARKE
+	select CPU_V7A
+	select BOARD_LATE_INIT
+	select BOARD_EARLY_INIT_F
+
+config TARGET_ARK1668E_DEVB_DASHBOARD
+	bool "ark1668e_devb_dashboard board"
+	select ARCH_ARKE
+	select ARK1668EFAMILY
+	select CPU_V7A
+	select BOARD_LATE_INIT
+	select SUPPORT_SPL
+	select BOARD_EARLY_INIT_F
+
+config TARGET_ARK1668E_DEVB
+	bool "ark1668e_devb board"
+	select ARCH_ARKE
+	select ARK1668EFAMILY
+	select CPU_V7A
+	select BOARD_LATE_INIT
+	select SUPPORT_SPL
+	select BOARD_EARLY_INIT_F
+
+config TARGET_ARK1668E_DEVB_EMMC
+	bool "ark1668e_devb_emmc board"
+	select ARCH_ARKE
+	select ARK1668EFAMILY
+	select CPU_V7A
+	select BOARD_LATE_INIT
+	select SUPPORT_SPL
+	select BOARD_EARLY_INIT_F
+
+config TARGET_ARK1668E_FPGA
+	bool "ark1668e fpga board"
+	select ARCH_ARKE
+	select CPU_V7A
+	select BOARD_LATE_INIT
+	select SUPPORT_SPL
+	select BOARD_EARLY_INIT_F
+
+config TARGET_ARK1668_FT
+	bool "ark1668-ft board"
+	select ARK1668FAMILY
+	select CPU_V7A
+	select BOARD_LATE_INIT
+	select SUPPORT_SPL
+	select BOARD_EARLY_INIT_F
+
+config TARGET_ARKN141_DONGLE
+	bool "arkn141-dongle board"
+	select ARKN141FAMILY
+	select CPU_V7A
+	select BOARD_LATE_INIT
+
+config TARGET_ARKN141_ZHONGHONG
+	bool "arkn141_zhonghong board"
+	select ARKN141FAMILY
+	select CPU_V7A
+	select BOARD_LATE_INIT
+
+config TARGET_ARKN141_DONGLE_XINSHIYU
+	bool "arkn141_dongle_xinshiyu board"
+	select ARKN141FAMILY
+	select CPU_V7A
+	select BOARD_LATE_INIT
+
+config TARGET_ARKN141_DONGLE_SIM
+	bool "arkn141_dongle-sim board"
+	select ARKN141FAMILY
+	select CPU_V7A
+	select BOARD_LATE_INIT
+
+endchoice
+
+config SYS_SOC
+	default "arkmicro"
+
+config GPIO_BASEADDR
+	default 0xe4600000 if ARK1668FAMILY || ARK1668EFAMILY
+	default 0x40409000 if ARKN141FAMILY
+	hex "GPIO Controller Base"
+
+config PWM_BASEADDR
+	default 0xe4d00000 if ARK1668FAMILY || ARK1668EFAMILY
+	hex "PWM Controller Base"
+
+config PWM_CLKFREQ
+	default 24000000
+	int "PWM Source Clock Freq"
+
+config SPI_CS0_GPIO
+	default 88 if ARK1668FAMILY
+	default 88 if ARKN141FAMILY
+	int "SPI CS0 GPIO"
+
+config SD_DEV_PART
+	default "0"
+	string "sd dev part"
+
+config EMMC_DEV_PART
+	default "0"
+	string "emmc dev part"
+
+config EMMCPARTS_DEFAULT
+	string "Default EMMC partition scheme"
+	help
+	  Defines a default EMMC partitioning scheme in the Linux BLKDEV command
+	  line partitions format
+
+config ARK_MUSB
+    bool "usb support"
+
+if ARK_MUSB
+config USB_DEV_PART
+    default "0"
+    string "usb dev part"
+
+config USB_GPIO_PWR
+    default 126
+    int "usb power gpio"
+
+config USB_GPIO_ID
+    default 76
+    int "usb id gpio"
+
+config USB_GPIO_SW
+    default -1
+    int "usb sw gpio"
+endif
+
+config MCU_SERIAL_PORT
+	default 2
+	int "mcu serial port"
+
+config MCU_SERIAL_BAUDRATE
+	default 115200
+	int "mcu serial baud rate"
+
+source "board/arkmicro/ark1668_dongle_sim/Kconfig"
+source "board/arkmicro/xinshiyu/Kconfig"
+source "board/arkmicro/tyw-dashboard/Kconfig"
+source "board/arkmicro/ark1668_tyw_zksw/Kconfig"
+source "board/arkmicro/ark1668/Kconfig"
+source "board/arkmicro/ark1668_aofan/Kconfig"
+source "board/arkmicro/arkn141/Kconfig"
+source "board/arkmicro/arkn141s_fpga/Kconfig"
+source "board/arkmicro/arkn141-sqwf/Kconfig"
+source "board/arkmicro/arkn141-shoulang/Kconfig"
+source "board/arkmicro/amt630h/Kconfig"
+source "board/arkmicro/arkn141-hjyb/Kconfig"
+source "board/arkmicro/ark1668e_devb_dashboard/Kconfig"
+source "board/arkmicro/ark1668e_devb/Kconfig"
+source "board/arkmicro/ark1668e_devb_emmc/Kconfig"
+source "board/arkmicro/ark1668e_fpga/Kconfig"
+source "board/arkmicro/ark1668-ft/Kconfig"
+source "board/arkmicro/arkn141-dongle/Kconfig"
+source "board/arkmicro/arkn141_zhonghong/Kconfig"
+source "board/arkmicro/arkn141_dongle_xinshiyu/Kconfig"
+source "board/arkmicro/arkn141_dongle_sim/Kconfig"
+
+endif

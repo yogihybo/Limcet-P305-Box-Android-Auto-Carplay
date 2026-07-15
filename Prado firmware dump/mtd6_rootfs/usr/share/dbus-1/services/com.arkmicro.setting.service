@@ -1,3 +1,0 @@
-[D-BUS Service]
-Name=com.arkmicro.setting
-Exec=/usr/bin/Launcher -t -setting

@@ -1,3 +1,0 @@
-[D-BUS Service]
-Name=com.arkmicro.audio
-Exec=/usr/bin/Launcher -t -audio

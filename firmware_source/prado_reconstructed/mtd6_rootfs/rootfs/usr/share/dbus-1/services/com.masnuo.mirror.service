@@ -1,0 +1,3 @@
+[D-BUS Service]
+Name=com.masnuo.mirror
+Exec=/usr/bin/mirrlink

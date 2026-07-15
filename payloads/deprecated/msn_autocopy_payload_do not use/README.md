@@ -1,4 +1,5 @@
-# msn_autocopy SSH payload
+# msn_autocopy SSH payload - DO NOT USE AS IT WILL LOCK UP DEVICE ON REBOOT AND REQUIRE HARD RECOVERY
+#USE TELNET PAYLOAD
 
 A USB/SD payload that exploits the `msn_autocopy` auto-update mechanism discovered in `MsnCoreApp`
 to install and autostart `sshd` on a **stock, unmodified** Prado head unit without any serial

@@ -1107,3 +1107,71 @@ boards) is real and not in question.
   tested; would need to correlate LCD timing (`hactive`/`vactive`/
   porches in `ark1668_limcet_p305.dts`'s `display0` node) against
   transaction duration.
+
+
+## First genuine audible confirmation, and a new architectural lead: `softmaster` (2026-07-14)
+
+**Milestone: audio is now confirmed audibly working on stock hardware for
+the first time in this entire investigation** — `aplay -D hw:0,0 -f
+S16_LE -r 44100 -c 2 /dev/urandom` (and the `softvol`-routed variant)
+produce real, audible noise through the physical speakers on stock. Every
+prior "confirmation" in this project (boot logs, `i2c-scan` `XX` markers,
+register dumps) was explicitly flagged as *not* proof of correct
+operation per this project's own standing caution
+(`feedback_bootlog_evidence_weak`) — this is the first time that caveat
+has actually been resolved with a real listen. Confirms the physical
+speaker wiring, amp, and SDDAC data path are genuine and functional on
+this exact unit.
+
+**Not yet tested: whether any volume control actually changes the audible
+level.** Sound plays at a fixed level so far; `amixer sset` while
+playback runs hasn't been tried yet (needs backgrounding — `aplay ... &`
+then `amixer sset ...` in the same shell, since only one terminal is
+available on this unit). This is the next, decisive test — pending.
+
+### `softmaster`: a third, previously-unnoticed control path
+
+Captured `amixer controls` (the raw/uncollapsed control list, unlike
+`scontrols`'s simple-mixer view) on stock (`docs/audio log stock.txt`).
+Confirms:
+
+- Stock uses **one unified card**, `ARK-SDDAC`, with BD37033's controls
+  bound onto it alongside SDDAC's own — architecturally the same pattern
+  as this project's `aux-devs` fix, not just a workaround that happens to
+  produce a similar-looking result.
+- The raw name really is `'PA Volume'` (numid=23), confirming
+  `scontrols`' bare `'PA'` is ALSA's simple-mixer collapsing
+  `"<X> Volume"` into `"<X>"` — independently confirms that theory from
+  earlier in this doc, not just plausible.
+- **Six controls never seen in any of this project's own captures:
+  `softmaster`, `softmaster1`-`softmaster5`.** Traced to `asound.conf`'s
+  `softvol`/`softvol1`-`softvol5` PCM plugins — confirmed byte-identical
+  between stock and this project's own `asound.conf` (only an unrelated
+  `max_dB` value differs on one entry), so this isn't a stock-only
+  feature we're missing, it's a **userspace ALSA-lib control that's
+  created lazily**, the first time some process actually opens that
+  specific `pcm.softvolN` device — not a persistent kernel control
+  visible at boot. Every one of this project's own captures was taken
+  before anything had opened it, which is why it never showed up before.
+
+`pcm.softvol`'s slave is `dmix` (→ `hw:0,0`, SDDAC), applying `-51dB` to
+`0dB` of **digital gain in userspace**, upstream of both SDDAC's own
+hardware volume and BD37033 entirely — and `asound.conf`'s default
+playback PCM routes through it. This makes `softmaster` a strong
+candidate for what the factory head unit's actual volume knob/UI
+controls in practice: a pure software attenuator that doesn't depend on
+any I2C-controlled chip cooperating, which would elegantly explain
+reliable field volume control regardless of whatever's actually going on
+with BD37033's I2C path.
+
+**Next steps:**
+- [ ] With playback backgrounded, test `amixer sset softmaster <n>` for
+      an audible change — the single most decisive open test right now,
+      and should be tried before `PA Volume` since it's the more likely
+      candidate for what real-world volume control actually uses.
+- [ ] Then test `PA Volume` the same way, to separately determine
+      whether BD37033 itself does anything audible.
+- [ ] Then test `Left/Right Playback Volume` (SDDAC's own hardware
+      volume, bypassing `softvol` via `hw:0,0` directly) for
+      completeness — three independent, testable volume paths now
+      identified on this one card.

@@ -1,4 +1,9 @@
-# Driver test plan — peripherals not yet confirmed working (2026-07-14)
+# Driver Test Plan
+
+**Status:** Reference
+**Last Updated:** 2026-07-15
+
+## Overview
 
 Companion to `PIN_MASTER_LIST.md`'s "Driver source reference" table. That
 table's "Confirmed by operation" column has several `PROBES OK` /
@@ -76,7 +81,7 @@ lowest risk first):**
 **Pass condition:** step 4 prints `ABS_X`/`ABS_Y`/`BTN_TOUCH`/`SYN_REPORT`
 events that track real finger position during a physical touch.
 
-**Record findings in:** `docs/boot_experiment_log.md` (this tool's own
+**Record findings in:** `docs/historical/boot_experiment_log.md` (this tool's own
 README asks for this) and update `PIN_MASTER_LIST.md`'s status row.
 
 ---

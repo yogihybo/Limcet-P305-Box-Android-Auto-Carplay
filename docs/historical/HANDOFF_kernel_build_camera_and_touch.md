@@ -47,8 +47,8 @@ the camera chip *and* the touch bus wrong.
 ### Why
 The reconstruction assumes an **ARK7116** decoder; the board actually has a
 **Richwave RN6752**. Full evidence + origin analysis:
-`docs/KERNEL_BUILD_REFERENCE.md` → "⚠️ Camera decoder chip" callout. Also note
-`docs/KERNEL.md` already identified RN6752 correctly.
+`docs/KERNEL_REFERENCE.md` → "⚠️ Camera decoder chip" callout. Also note
+`docs/KERNEL_REFERENCE.md` already identified RN6752 correctly.
 
 The current 4.19 config (`Limcet Hardware/kernel_dot_config`) has it backwards:
 ```
@@ -112,7 +112,7 @@ The DTS makes `gt911@5d` a child of the bit-banged `i2c-gpio-0` (SDA `gpio0 3`,
 SCL `gpio0 2`) — the **camera's** bus. The stock kernel puts GT911 on the
 **hardware controller (bus 0)**. On the bit-bang bus the panel NAKs (`-EREMOTEIO`
 / `-ENXIO`), and no hardware I²C controller registers at all. Full analysis:
-`docs/boot_experiment_log.md` → "Touch root cause" and the verified-bus note.
+`docs/historical/boot_experiment_log.md` → "Touch root cause" and the verified-bus note.
 
 ### Config change
 `ark1668.dtsi` declares `i2c0` as `compatible = "snps,designware-i2c"`, so enable
@@ -162,9 +162,9 @@ leave it sharing `gpio0 2/3` with the camera.
 - `Prado firmware dump/mtd5_kernel/extracted/System.map` — 34,116-symbol map (recovered)
 - `Prado firmware dump/mtd5_kernel/extracted/vmlinux.elf` — loadable ELF for re-disassembly
 - `Limcet Hardware/kernel_dot_config` — the 4.19.192 build config (shows the wrong camera symbol)
-- `docs/KERNEL_BUILD_REFERENCE.md` — camera callout + full build recipe
-- `docs/boot_experiment_log.md` — touch bus proof, initramfs/driver inventory
-- `docs/KERNEL.md` — already-correct RN6752 identification
+- `docs/KERNEL_REFERENCE.md` — camera callout + full build recipe
+- `docs/historical/boot_experiment_log.md` — touch bus proof, initramfs/driver inventory
+- `docs/KERNEL_REFERENCE.md` — already-correct RN6752 identification
 
 ## Open / unverified
 - Exact RN6752 **reset** and **reverse-detect** GPIO pin numbers (see caveat).

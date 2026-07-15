@@ -1,4 +1,9 @@
-# MCU Adapter Types — libMcuCenter.so (ARK1680 / Limcet-P306)
+# Mcu Adapters
+
+**Status:** Reference
+**Last Updated:** 2026-07-15
+
+## Overview
 
 Reverse-engineered from `rootfs/usr/lib/libMcuCenter.so`.
 

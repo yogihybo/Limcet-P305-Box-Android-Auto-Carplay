@@ -1,0 +1,521 @@
+# Ui And App Analysis
+
+**Status:** Investigation
+**Last Updated:** 2026-07-15
+
+## Overview
+Consolidated document containing: MSNCOREAPP_REVIEW.md, MSNCOREAPP_DECONSTRUCTION.md, UI_RESOURCES.md, LIBMCUCENTER_UNPACK.md
+
+
+
+## MSNCOREAPP_REVIEW.md
+
+# MsnCoreApp / Associated Libraries — Security Review
+
+Follow-on to [`SECURITY_REVIEW.md`](SECURITY_REVIEW.md)'s "not yet done" item: a protocol/binary-level
+look at `MsnCoreApp` and its linked libraries (`libMcuCenter.so`, `libBlueTooth.so`, `libCanBus.so`) for
+network-exposed listeners or command-injection-style bugs, as opposed to just the SSH credential path.
+
+**Method:** `MsnCoreApp` is a non-stripped ELF with full DWARF/symtab (confirmed in
+`docs/HARDWARE_AND_SOC_REFERENCE.md` §7 already) — 5040 `.symtab` entries. No `objdump`/`nm`/`readelf`
+available in this environment, so used `pyelftools` (symbol table, relocations, PLT resolution) and
+`capstone` (ARM disassembly) directly via Python instead. Both pulled from PyPI for this session.
+
+## Finding: unauthenticated arbitrary root-filesystem write via any inserted USB drive or SD card
+
+**Severity: high — this is a more directly usable "unlock" mechanism than the SSH credentials in
+`SECURITY_REVIEW.md`.** No network access, no password, no serial console, no U-Boot interrupt needed
+— just physical insertion of removable media.
+
+### The mechanism, traced precisely
+
+`DiskDeviceWatcher::mountDiskPartition(DiskDeviceType, QString, QString&)` — the function that runs
+automatically whenever the device auto-mounts a newly inserted disk partition (USB drive or SD card;
+this is the same hotplug-driven auto-mount flow already documented for the SD-boot/update workflow
+elsewhere in this project) — contains this exact sequence, confirmed via disassembly at
+`0x428d4`–`0x42950` in the live device's `MsnCoreApp` binary:
+
+```
+LockRebootSystem()                                              ; @0x428d4, prevents reboot mid-operation
+cmd = "mount -o remount,rw / && cp -rf %1msn_autocopy/* /"       ; @0x428d8, loaded from .rodata
+cmd = cmd.arg(mountPath)                                         ; @0x42908, QString::arg — %1 substituted
+                                                                  ;   with the mount path, NO shell escaping
+localBytes = cmd.toLocal8Bit()                                   ; @0x42944
+system(localBytes.data())                                        ; @0x42950 — confirmed direct PLT call
+```
+
+Immediately before this (`0x42824`–`0x428d0`), the function builds `<mountPath> + "msn_autocopy"` as a
+`QFileInfo` and checks `.exists()` — **the copy only fires if a folder named `msn_autocopy` is present
+at the root of the inserted media**, gating the mechanism, but not authenticating it in any way.
+
+### What this means practically
+
+Format any USB drive or SD card, create a folder named `msn_autocopy` at its root, put any files in it
+(a replacement `/usr/bin/sshd`, a modified `/etc/passwd` or `/etc/shadow`, a cron job, an init script, an
+SSH authorized_keys file, anything), insert it into the device. On normal auto-mount — which happens
+automatically for any inserted media, no user interaction — the device will:
+
+1. Remount its own root filesystem read-write (`mount -o remount,rw /`)
+2. Recursively copy every file from `<media>/msn_autocopy/` onto `/`, overwriting anything at matching
+   paths, as root (the whole userspace runs as root on this device already)
+
+No PIN, no password, no confirmation dialog (the confirmation string `"Find the factory configuration
+file, do you upgrade it?"` seen nearby in `.rodata` belongs to a *different*, separate code path —
+the `msn_factory_configs/` upgrade flow this project's own Holden→Prado conversion process already
+relies on — not this one). `gAutoCopyDlg`/`gAutoCopyTimerCount` globals exist but nothing in the traced
+call path shows a user-confirmation gate before the `system()` call fires.
+
+This is very likely an intentional factory/dealer-service feature (push a patch to the device without a
+full firmware reflash) rather than a deliberately malicious backdoor, but it is completely
+unauthenticated as shipped.
+
+### Secondary note: not shell-escaped
+
+`mountPath` is substituted into the command string via plain `QString::arg()`, not sanitized for shell
+metacharacters, before reaching `system()`. The primary exploitation path above doesn't need this (just
+naming the folder correctly is already sufficient), but if the mount path is ever derived from anything
+attacker-influenceable (e.g. a volume label rather than a fixed `/media/sdX/`-style device path — not
+confirmed either way here), this would be a second, independent command-injection route into the same
+`system()` call. Not verified further in this pass.
+
+### Not yet done
+
+- Didn't trace exactly how `mountPath` itself is constructed (fixed device-path pattern vs.
+  volume-label-influenced) — relevant to the secondary injection note above.
+- Checked `libMcuCenter.so`, `libBlueTooth.so`, `libCanBus.so` for direct `bl` calls to their own
+  imported `system` PLT stub — found none in a straightforward scan of each `.text` section. All three
+  do import `system` (confirmed in their `.dynsym`), so it's called from somewhere, likely via an
+  indirect call pattern this pass didn't specifically hunt for. Left as an open item rather than
+  claiming these three are clean.
+- No raw TCP/UDP listener (`QTcpServer`, `QUdpSocket`, direct `socket()`/`bind()`/`listen()`) found in
+  any of the four binaries beyond Qt/Qt-Embedded internals (`QSocketNotifier`, `QWSServer` — the
+  Qt/Embedded windowing server, not network-facing) and a netlink socket in `DiskDeviceWatcher` used for
+  kernel hotplug (`uevent`) messages — not attacker-reachable over any network interface. So the
+  network-facing-daemon angle raised in `SECURITY_REVIEW.md` §4 appears to be a dead end: this
+  binary's remote exposure is via SSH (already covered there), not a custom protocol listener of its
+  own. Didn't do the same pass against every other rootfs daemon (`AudioService`, `SettingService`,
+  etc.) — those are internal D-Bus session-bus services, same threat-model caveat as always with D-Bus
+  (local IPC, not network-reachable unless something bridges it to TCP, which nothing here appears to).
+
+### Tooling note
+
+`pyelftools` and `capstone` were installed via `pip install` for this session (not committed anywhere,
+not a repo dependency) since no `binutils`/disassembler was available in this environment. Anyone
+reproducing this: `pip install pyelftools capstone`, then resolve PLT stubs from `.rel.plt` +
+`.dynsym` manually (ARM `.plt`: 20-byte PLT0 header, then one 12-byte stub per relocation, in
+relocation order) since there's no higher-level tooling shortcut for that mapping in `pyelftools` itself.
+
+
+## MSNCOREAPP_DECONSTRUCTION.md
+
+# Deconstructing `MsnCoreApp` for UI editing
+
+Goal: make the compiled UI editable. This documents how far that can go, what
+tooling does it, and the concrete workflow for changing a screen's layout.
+
+**Honest verdict up front:** the application cannot be turned back into editable
+source. It ships as machine code, and only the *bundled WebRTC library* was
+built with debug info — the vendor's own code has none. What you **can** do is
+treat the unstripped build as a **map**, locate any screen's layout code, read
+the literal geometry constants, and **patch** them. Styling and images stay
+fully data-editable (see [`UI_RESOURCES.md`](UI_AND_APP_ANALYSIS.md)).
+
+## What the binary actually is
+
+The vendor left two unstripped builds in the image — `MsnCoreApp-original` and
+`MsnCoreApp-auth` (byte-identical, 4.8 MB, symbol table intact) — alongside the
+stripped 664 KB `MsnCoreApp` that actually runs. Composition of the unstripped
+build (1854 functions):
+
+| Part | Functions | Notes |
+|------|-----------|-------|
+| **WebRTC audio** (AEC/AGC/NS/VAD/resampler/ISAC) | ~880 | Hands-free echo cancellation; the only part with **DWARF debug info** (120 `.c/.cc` source files). Explains the 4.8 MB. |
+| **`MsnCoreApp`** | ~96 | The main app/UI controller |
+| **Dialog classes** | ~90 | `CalibrateDialog`, `VersionDialog`, `CopyFactoryConfigDialog`, `ModeSwitchDialog`, `MsnDialog`, … |
+| Helpers | rest | `TouchKeyMonitor`, `SimulateCtrlKey`, `DiskDeviceWatcher`, `MediaFileScanner`, `MsnBeep`, … |
+
+So the debug info is a red herring for UI work (it's all DSP). The UI is
+recoverable only at the **symbol-table** level: every C++ method has a name,
+address, and size — but no types, parameters, or line numbers.
+
+## Two flavours of layout, both patchable
+
+1. **uic-generated dialogs** — classes named `Ui_*` (e.g. `Ui_VersionDialog`,
+   `Ui_CopyFactoryConfigDialog`). Their `setupUi()` is a mechanical 1:1
+   translation of an original `.ui` file: it news each widget, calls
+   `setGeometry(QRect(x,y,w,h))`, builds `QVBoxLayout`/`QHBoxLayout`, and wires
+   text. The literal coordinates are right there.
+2. **Hand-coded screens** — the main `MsnCoreApp` UI and the home grid, built in
+   C++ with the same `QWidget::setGeometry` / `QBoxLayout` calls but not from a
+   `.ui`. Same patch surface, just no `.ui` correspondence.
+
+Neither is loaded from disk (there are **no `.ui`/`.qml` files** and no
+`QUiLoader` in the binary) — layout is compiled in, which is why it takes a
+binary patch to change.
+
+## Tooling: `tools/msncore_analyze.py`
+
+Reads the unstripped ELF with pyelftools + capstone and:
+
+```
+python tools/msncore_analyze.py MsnCoreApp-original --list CalibrateDialog
+python tools/msncore_analyze.py MsnCoreApp-original --func Ui_VersionDialog::setupUi
+```
+
+- `--list [substr]` — every app function with address, size, demangled name (a
+  built-in mini-demangler recovers `Class::method`; `cxxfilt` used if present).
+- `--func <symbol>` — disassembles one function, **resolves every Qt call through
+  the PLT** (so you see `QWidget::setGeometry`, `QLabel::QLabel`, …), and dumps
+  the immediate constants it loads (the candidate x/y/w/h/spacing values).
+
+The PLT-resolution + immediate-dump also works on the **stripped** shipped
+binary — you just navigate by address instead of name.
+
+## Worked example — `Ui_VersionDialog::setupUi` @ `0x55248`
+
+`--func` resolves the call sequence and constants, which decode to:
+
+- Dialog `resize(480, 320)` — the dialog is **480×320**.
+- A `QVBoxLayout` with `setGeometry(QRect(...))` at `(20, …)`, width `261`.
+- A `QLabel` (title), a `QListView` with `setGridSize(QSize(126, 42))`, and a
+  `QPushButton` row (`QHBoxLayout`), with margins/spacing among the constants
+  `20, 48, 132, 113, 126, 42, 36, 16`.
+
+To make the version list two columns wider, or move the button row, you change
+the relevant `QRect`/`QSize` immediates.
+
+## Patch workflow (move / resize a control)
+
+1. `--list` to find the screen's class; `--func <Class>::setupUi` (or the
+   constructor / an `onXxx` builder for hand-coded screens).
+2. In the disassembly, find the `setGeometry` / `resize` / `setGridSize` call and
+   the `mov`/`movw` immediates feeding it (ARM passes `QRect(x,y,w,h)` via
+   r1–r3 + stack right before the `bl`).
+3. Patch those immediate bytes in `.text` (a `movw` encodes the constant in-place;
+   for values that share a literal-pool entry, edit the pool word). Keep the
+   instruction length identical — **never** grow the function.
+4. Repack the rootfs (`build_rootfs.sh`) and flash.
+
+Adding/removing widgets or new screens is **not** feasible by patching (it needs
+new code and relocations) — that requires the vendor's source, which is not in
+the firmware.
+
+## What's editable, summarised
+
+| Change | How | Feasible |
+|--------|-----|----------|
+| Colours, fonts, accent, borders | `msnprofile/DefaultStyleSheet.xml` (QSS) | ✅ easy, data |
+| Icons, tiles, artwork | `msnprofile/resources/*.rcc` (`tools/rcc_extract.py`) | ✅ easy, data |
+| Move / resize existing controls | patch `setGeometry`/`QRect` immediates | ⚠️ binary patch |
+| Add / remove widgets, new screens | needs source | ❌ not without vendor source |
+
+See also [`MSNCOREAPP_REVIEW.md`](UI_AND_APP_ANALYSIS.md) (earlier behavioural /
+security disassembly) and [`UI_RESOURCES.md`](UI_AND_APP_ANALYSIS.md) (style + sprites).
+
+
+## UI_RESOURCES.md
+
+# UI Resources & Reskinning (`.rcc` sprites + `DefaultStyleSheet.xml`)
+
+The head unit's look comes from **two** sources:
+
+1. **`msnprofile/DefaultStyleSheet.xml`** — colours, fonts, focus highlight,
+   borders and the gold accent (Qt Style Sheets in XML). Plain text, loaded from
+   disk, **directly editable — no repack** ([see below](#colours--fonts-defaultstylesheetxml)).
+2. **`msnprofile/resources/*.rcc`** — the **PNG sprites** (icons, tiles,
+   artwork), Qt binary resource bundles ([see below](#sprite-bundles-rcc)).
+
+Neither carries layout: widget positions and sizes are compiled into the Qt
+binaries (`MsnCoreApp`, `Launcher-*`), so reskinning can change the look but
+cannot move or resize controls.
+
+See [`SETTINGS_REFERENCE.md`](SETTINGS_REFERENCE.md) for how `ResourceName` /
+`LauncherName` / `ScreenType` select which resources load, and
+[`SCREEN.md`](DISPLAY_SUBSYSTEM.md) for the panel resolution.
+
+## Colours & fonts: `DefaultStyleSheet.xml`
+
+`MsnCoreApp` reads `msnprofile/DefaultStyleSheet.xml` at startup, selects the
+`<Screen_WxH>` block matching the panel, and applies each named fragment via
+`QApplication::setStyleSheet` / `QWidget::setStyleSheet`. The fragments are Qt
+Style Sheets (QSS, CSS-like) wrapped in XML.
+
+- **Per-resolution blocks** with a `fontsize`: `Screen_400x240`, `Screen_800x480`,
+  `Screen_1280x480`, `Screen_1024x600`, `Screen_1280x720`. **The Prado (800×480)
+  uses `Screen_800x480`, `fontsize="22"`.**
+- **Fragments per block:**
+
+| Fragment | Controls |
+|----------|----------|
+| `WidgetStyleSheet` | Base `QWidget` — transparent bg, white text `#fff` |
+| `FocusStyleSheet` | Focus/selection outline — blue `rgba(0,128,250,230)` |
+| `ButtonStyleSheet` | Buttons; pressed/checked = the **gold gradient** `rgba(255,114,2)`→`rgba(255,251,0)` |
+| `SliderStyleSheet` | `QSlider` (handle = `:/images/hd2_yuan.png`) |
+| `ScrollBarStyleSheet` | `QScrollBar` (arrows = `:/images/hd_shang_n.png` / `hd_xia_n.png`) |
+| `CheckBoxStyleSheet` / `RadioBoxStyleSheet` | Indicators (`checked.png` / `unchecked.png`) |
+| `MsnDialogStyleSheet` | Popups — `rgba(0,0,0,155)` bg, grey border |
+
+**To recolour the UI** (e.g. change the gold accent, focus colour, or text
+colour): edit the `rgba(...)` / `#hex` values in the matching `Screen_` block and
+rebuild the rootfs — no `rcc` repack. The `url(:/images/...)` references point
+into the `.rcc` bundles, so image swaps still go through those. `MsnCoreApp` also
+probes a dash-suffixed `DefaultStyleSheet-<...>.xml` before the default — a hook
+for a per-skin override, though only the base file ships. (Note the vendor file
+carries a harmless typo, `height:32x;`, in the 1024×600/1280×720 slider handle.)
+
+## Sprite bundles (`.rcc`)
+
+The icons, tiles and artwork live in Qt binary resource files (`.rcc`) under
+`msnprofile/resources/`. There is **no stylesheet, font, or layout data** in
+these bundles — only images.
+
+See [`SETTINGS_REFERENCE.md`](SETTINGS_REFERENCE.md) for how `ResourceName` /
+`LauncherName` / `ScreenType` select *which* bundle loads, and
+[`SCREEN.md`](DISPLAY_SUBSYSTEM.md) for the panel resolution.
+
+## What `.rcc` is
+
+A `.rcc` is the output of Qt's `rcc -binary` — the `qres` container format: a
+header, a resource *tree*, a *name* pool, and a *data* pool. Qt ships the packer
+(`rcc`) but **no unpacker**, so this repo includes one:
+[`../tools/rcc_extract.py`](../tools/rcc_extract.py). This firmware uses qres
+**version 1**; the tool also handles v2/v3 and zlib/zstd-compressed entries.
+
+## Bundle inventory (P306 2025 rootfs)
+
+23 bundles, ~1,150 PNGs total. Most ship in three resolutions
+(`400x240`, `800x480`, `1024x600`); the device loads the one matching its panel.
+
+| Bundle | Role |
+|--------|------|
+| `Launcher-Box-*` | Full home screen (source tiles, clock, nav bar) — used when `LauncherName=Launcher-Box` (e.g. Box-C235) |
+| `Launcher-Box-P301-*` | Slim home screen (22 sprites) — used when `ResourceName=Box-P301` (**the Prado/P306**) |
+| `Launcher-Car-*` | Alternate "car" home layout |
+| `StatusBar` | Global top bar / chrome (single resolution) |
+| `Setting` | Settings screen (steering-wheel key icons, region tiles, toggles) |
+| `BlueTooth-*` | Phone/BT UI (dial pad, contacts, call screen) |
+| `FMRadio-*` | Radio UI |
+| `MusicPlayer-* / VideoPlayer-* / Photo-*` | Media app skins |
+
+**The Prado (P306)** is `ResourceName=Box-P301` on an **800×480** panel, so its
+active skin is `Launcher-Box-P301-800x480.rcc` + `StatusBar.rcc` +
+`Setting.rcc` + the `-800x480` media/BT bundles.
+
+### Home-screen sprite naming (`launcher/…`)
+`*_di_h` / `*_di_n` are the per-source tiles (pressed / normal): `carplay`,
+`androidauto`, `hicar`, `bt`, `radio`, `music`, `video`, `photo`, `avin`, `dvr`,
+`dtv`, `mirror`, `hulian` (互联/link), `file`, `mycar`, `carinfo`, `set`.
+`nm_0`–`nm_9` + `nm_dian` are clock digit glyphs; `baitian` (白天) is day mode;
+`guanpin` (关屏) is screen-off; `top_back` / `top_home` are the nav buttons.
+
+## Unpack
+
+```
+python tools/rcc_extract.py msnprofile/resources/Setting.rcc  out/Setting
+python tools/rcc_extract.py --list msnprofile/resources/Setting.rcc   # list only
+```
+
+Extraction also writes a matching `<name>.qrc` next to the output, listing every
+path — ready to feed back to `rcc`.
+
+## Reskin & repack
+
+1. Edit the PNGs in the extracted `out/<bundle>/` — **keep each filename and its
+   pixel dimensions** (the compiled layout expects them).
+2. Repack with a Qt `rcc` (not included — needs a Qt install):
+   ```
+   rcc -binary out/Setting/Setting.qrc -o Setting.rcc          # Qt4 rcc → qres v1
+   rcc --binary --format-version 1 out/Setting/Setting.qrc -o Setting.rcc   # Qt5 rcc
+   ```
+   Qt 4.7.4 on the device reads **version-1** qres — make sure the repacked file
+   is v1 (Qt4's `rcc` defaults to it; for Qt5 pass `--format-version 1`).
+3. Drop the new `.rcc` back into `msnprofile/resources/` and rebuild the rootfs
+   (`build_rootfs.sh` / `build_update.sh`).
+
+
+## LIBMCUCENTER_UNPACK.md
+
+# libMcuCenter.so — full structural unpack
+
+Complete structural reverse-engineering of the SoC-side MCU driver
+`rootfs/usr/lib/libMcuCenter.so` (ARK1680 / Limcet-P306). This is the companion
+reference to [MCU_ADAPTERS.md](MCU_ADAPTERS.md) (adapter catalogue, McuType factory
+map, BoxP300 command dispatch, live-capture guide) and
+[../MCU/MCU_FIRMWARE_REVIEW.md](../MCU/MCU_FIRMWARE_REVIEW.md) (the STM32 side).
+
+> **Scope / honesty.** "Full unpack" here = the complete **structure**: every class
+> and its methods, the class hierarchy, the wire protocol (frame format + checksum,
+> disassembly-verified), and the config/string surface. It is **not** a line-by-line
+> decompilation of all 978 functions — most are Qt/UI boilerplate. Behaviour that is
+> disassembly-verified is marked; the rest is symbol-level structure.
+
+---
+
+## 1. Binary overview
+
+| Property | Value |
+|---|---|
+| Format | ELF32, ARM (EABI), shared object |
+| `.text` | 470,572 B |
+| Defined functions | 978 |
+| Classes (typeinfo) | 39 (48 incl. `Ui_*`/support) |
+| Toolkit | Qt 4 (`QtGui`, `QtCore`, `QtNetwork`) |
+| Key deps | `libMsnCommons.so`, `libQtGui/Core/Network.so.4`, `libts-0.0` (touch), `libpng15`, `libjpeg.9`, `libz`, `libstdc++`, `libdl` |
+| Entry (plugin) | `McuCenterPlugin::createMainWindow` |
+
+The library is a **plugin** loaded by `MsnCoreApp`; `McuCenterPlugin` is the entry
+point, and `MCUAdapter::getAdapterInstance(McuType)` (`0x025e40`) builds the
+concrete adapter selected by `MsnProductInfo.ini`.
+
+---
+
+## 2. Wire protocol — frame format (disassembly-verified for the P300 family)
+
+Decoded from `findPackageStartSig` / `getPackageSize` / `getPackageCheckSum`:
+
+```
+byte[0]        = 0x2E              start signature ('.')  (findPackageStartSig searches for this)
+byte[1]        = command code      dispatch key (see BoxP300 table in MCU_ADAPTERS.md)
+byte[2]        = payload length N   (getPackageSize returns N + 4)
+byte[3 .. 3+N-1] = payload
+byte[3+N]      = checksum
+total frame     = N + 4 bytes       (4 = sig + cmd + len + checksum)
+```
+
+**Checksum algorithm** (`getPackageCheckSum`, `0x31c18`):
+```c
+uint8_t sum = 0;
+for (i = start; i < start+count; i++) sum += data[i];
+checksum = (~sum) & 0xFF;          // one's-complement 8-bit sum
+```
+
+Notes:
+- The framing is **per-adapter (virtual)**. The above is the P300/BoxP200 family.
+  `MsnDecoder` (McuType 16, Holden) uses a **different** layout — min 6 bytes, a
+  group byte at offset 2 and command at offset 3 (see MCU_ADAPTERS.md).
+- Dual-framing adapters (`BoxP100`, `BoxP500`, `D107`) implement a **second** parser
+  (`*2`-suffixed: `findPackageStartSig2`, `getPackageSize2`, …) for two frame types.
+- Outbound frames are built by `makeMCUProtocol` / `makeMcuProtocol(Package)` and the
+  checksum by `getMcuProtocolCheckSum` / `makeMcuProtocolCheckSum`.
+
+---
+
+## 3. Class architecture
+
+```
+QObject
+ └─ MCUAdapter                     abstract base + factory (getAdapterInstance)
+     │   getMcuType, getPortName/Settings, initAdapter,
+     │   onParentRecvMcuProtocol, sendProtocolToCoreApp / sendProtocolToMsgCenter
+     │
+     ├─ MCUAdapter_BoxP200         "fat" base: full framing + update + settings
+     │   (most Box* adapters inherit this machinery)
+     │
+     ├─ MCUAdapter_BoxP300         ← Prado (McuType 6): overrides framing (sig 0x2E),
+     │                               onRecvMcuProtocol dispatch, makeMCUProtocol
+     ├─ MCUAdapter_MsnDecoder      ← Holden (McuType 16): different framing, DVR/camera
+     ├─ McuAdapter_BoxP230         only CAN/SWC adapter (Honda XBS)
+     ├─ MCUAdapter_Box_Encryption  encrypted-link variant (thin)
+     ├─ MCUAdapter_HUD             head-up display (backlight, instrument)
+     ├─ MCUAdapter_{Bagoo,NV17,IM60BC,ZhongHang,RuiYuanSWC}   pre-decoded key-event MCUs
+     ├─ MCUAdapter_{BoxP400..P900, BoxC230..C290, BoxP210/220, D107}   product variants
+     └─ MCUAdapter_{CarA200,CarA300,CarA301}   minimal car adapters
+```
+
+**The common adapter interface** (virtuals every adapter overrides some of):
+- **Framing:** `findPackageStartSig`, `getPackageSize`, `getPackageMinSize`,
+  `getPackageCheckSum`, `isAvaliablePackage` [sic].
+- **Protocol I/O:** `onRecvMcuProtocol` (inbound dispatch), `onRecvAppProtocol`,
+  `makeMCUProtocol`/`makeMcuProtocol`, `sendMcuProtocolData`, `sendReadyPackage`.
+- **Settings UI (SetItems):** `getSetItemText`, `getSetItemValueTexts`,
+  `getSetItemValueIndex`, `getSetItemDefValueIndex`, `syncSettingDataToMcu`,
+  `showSelectDialog`, `onItemListViewClicked`.
+- **Firmware update:** `onStartUpdateMCU`, `onDiskStatusChange`, `tryOpenUpdateFile`,
+  `checkMCUUpdateFile`, `readyToUpdateMCU`, `sendUpdateFileInfo`/`Data`,
+  `sendYModemDatas`, `statrtUpdateMCUFile` [sic].
+- **App integration:** `msnAppNotify`, `msnAppStateChange`, `onModeAppChange(d)`,
+  `showApp`, `translateApp`.
+
+**Capability by method presence** (reliable — a method exists ⇒ compiled in):
+- **CAN/SWC:** only `BoxP230` (`makeCanBusProtocol`, `writeCanBusData`,
+  `recvCanDatas`, `processSWCKey`, `sendCanBusKeyData`).
+- **Pre-decoded key events (`onKeyEvent`):** `Bagoo`, `NV17`, `IM60BC`, `ZhongHang`,
+  `RuiYuanSWC`, `BoxP230`.
+- **Firmware update (`onStartUpdateMCU`/YModem):** `BoxP200`, `BoxP300`, `BoxP400..P900`,
+  `BoxC270/280/290`, `BoxP701`, `CarA300`.
+- **Dual-framing (`*2`):** `BoxP100`, `BoxP500`, `D107`.
+- **DVR/camera matrix:** `MsnDecoder` (`getDVRViewChannle`).
+- **HUD:** `MCUAdapter_HUD` (`setBackLightValue`, `filterKey`, `isCallState`).
+
+---
+
+## 4. App-event interface (how inbound frames reach the UI)
+
+`onRecvMcuProtocol` handlers construct an **`MsnEvent`** and post it into the Qt app:
+- Ctors: `MsnEvent(uint, MsnEventType)` and `MsnEvent(uint, uint, MsnEventType)`.
+- Params: `setParams(u64,u64)`, `setVariantParam`, `setStringParams`,
+  `setByteArrayParams`, `setTargetApp(uint)`; getters mirror these.
+- Delivered via `QCoreApplication::sendEvent`/`postEvent` →
+  `MsnApplication::dispatchMsnEvent` → `MsnMainWindow::msnAppNotify`.
+- Direct keypress path: `MsnApplication::simulateKey(keyCode, isPress, isAutoRepeat)`.
+
+The concrete `MsnEventType` codes traced for BoxP300 (`0x01→0x1013`, `0x05→0x5018`,
+`0x06→0x501A`, `0x12→0x5026`) are listed in MCU_ADAPTERS.md; their human meanings
+require the on-device capture in that doc's capture-guide section.
+
+---
+
+## 5. Config / string surface
+
+**Config keys** (read from `MsnProductInfo.ini` / `FactoryConfig.ini`):
+`ProductId`, `ScreenType`, `CameraType`, `LauncherName`, `McuType`, `CanType`,
+`MCUPortName`, `MCUBaudSpeed`, `MCUUpdateName`, `MSNEryPortName`.
+
+**Ports/paths:** `MCUPortName="/dev/ttyHS0"`, `MSNEryPortName="/dev/ttyS2"`,
+`/dev/ttyS1`, `/msnprofile/`, `/tmp/`, `/tmp/mcuupdate/`, `mcuupdate4/`.
+
+**Debug flags:** `/data/mcudebug_flag`, `/data/mcudebug_flag_msn` — gate frame
+logging (`recvProtocolData`, `send msn mcu code!`, `recv track:`, …). See the
+capture guide in MCU_ADAPTERS.md.
+
+**MCU BT module AT strings** (outbound to the Feasycom chip, handled MCU-side):
+covered in [../MCU/MCU_FIRMWARE_REVIEW.md](../MCU/MCU_FIRMWARE_REVIEW.md).
+
+---
+
+## 6. Full class → method inventory
+
+All 48 classes with public/member methods (ctors/dtors omitted; `[sic]` typos are the
+vendor's). Ordered by method count.
+
+_MCU adapters:_
+
+- **MCUAdapter_BoxP200 (41)** — the fat base: `checkMCUUpdateFile, findPackageStartSig, getMcuProtocolCheckSum, getPackageCheckSum, getPackageMinSize, getPackageSize, getPortSettings, getSetItemDefValueIndex, getSetItemText, getSetItemValueIndex, getSetItemValueTexts, isAvaliablePackage, makeMcuProtocolPackage, msnAppStateChange, onAcceptUpdate, onDiskStatusChange, onInited, onItemListViewClicked, onModeAppChange, onReadDeviceDatas, onRecvAppProtocol, onRecvMcuProtocol, onRejectUpdate, readyToUpdateMCU, resetListTexts, sendMcuProtocolData, sendPhoneConnectState, sendReadyPackage, sendUpdateFileData, sendUpdateFileInfo, sendYModemDatas, showApp, showSelectDialog, statrtUpdateMCUFile, syncSettingDataToMcu, translateApp, tryOpenUpdateFile`
+- **McuAdapter_BoxP230 (40)** — CAN/SWC (Honda): `findPackageStartSig, getPackageCheckSum, getPackageMinSize, getPackageSize, getPortSettings, getSetItem*, isAvaliablePackage, makeCanBusProtocol, msnAppNotify, onKeyEvent, onModeAppChanged, onModeSelectChange, onRecvAppProtocol, onRecvMcuProtocol, onSendReadyTimer, onSwitchReversingView, processSWCKey, recvCanDatas, sendCanBusKeyData, showModeSelectDialg, switchSpeeker, syncData, syncSettingData, writeCanBusData, writeSettingData`
+- **MCUAdapter_BoxP300 (29)** — Prado: `findPackageStartSig, getPackageCheckSum, getPackageMinSize, getPackageSize, getPortSettings, getSetItem*, isAvaliablePackage, makeMCUProtocol, msnAppStateChange, onDiskStatusChange, onInited, onItemListViewClicked, onModeAppChanged, onRecvAppProtocol, onRecvMcuProtocol, onSendUpdateReadyTimer, onStartUpdateMCU, resetListTexts, showApp, showSelectDialog, syncSettingDataToMcu, translateApp`
+- **MCUAdapter_MsnDecoder (24)** — Holden: `getDVRViewChannle, getPortSettings, getSetItem*, msnAppNotify, onDiskStatusChange, onModeAppChange, onRecvAppProtocol, onRecvMcuProtocol, showApp, showSelectDialog, syncAllSettingDatasToMcu, syncSettingDataToMcu, translateApp`
+- **MCUAdapter_BoxC270 (31)**, **BoxP900 (31)** (`getUpdateFilePath, retryOpenUpdateFile, updateFileEnd`), **BoxC280 (29)**, **BoxP210 (25)**, **BoxP701 (25)** (`onSendUpdateDatasToMCU, writeReplayPackage`), **BoxC290 (21)**, **BoxP800 (21)** (`onSettingChange, retrySendStartupStatus`), **BoxP400 (20)**, **BoxP700 (20)** (`onLEDTimer, onLongPressTimeout`), **BoxC250 (19)** (`onHeartbeatTimer`), **BoxC230 (18)**, **BoxP220 (12)**.
+- **Dual-framing:** **D107 (29)**, **BoxP500 (27)**, **BoxP100 (18)** — each with `*2` parser methods + `sendData`/`sendData2`/`showUpdateDialog`.
+- **Key-event MCUs:** **IM60BC (28)** (`switchSpeeker/2`), **ZhongHang (17)** (`onLEDTimeout`), **Bagoo (16)**, **NV17 (14)**, **RuiYuanSWC (20)** (`onKeyPressTimeout`).
+- **HUD (16)** — `filterKey, isCallState, onAutoBacklightTimer, setBackLightValue`.
+- **CarA300 (13)** — `initAdapter, onDiskStatusChange_super, onSendReadyTimer, sendReadyData`; **CarA301 (6)**; **CarA200 (2)**.
+- **Box_Encryption (3)** — `getPortName, getPortSettings, onInited` (thin; encrypted link).
+- **MCUAdapter (20, base)** — `getAdapterInstance, getMcuType, getPortName, getPortSettings, initAdapter, isInited, msnAppNotify, msnAppStateChange, onParentRecvMcuProtocol, sendProtocolToCoreApp, sendProtocolToMsgCenter, setCaptureEnable, showApp, timerEvent, translateApp`.
+
+_UI / support classes:_
+
+- **HondaRadioWindow (31)** — Honda radio UI (`on_btnAM/FM/AUX/Navi/Num1-6…`).
+- **BoxP800SettingWindow (24)** — camera/FM-transmitter settings panel.
+- **HUDInstrumentWindow (15)** — `drawEngineSpeedWidget, drawFuel, drawVehicleSpeedWidget, paintEvent`.
+- **ModeSelectDialog (14)** — source/mode selector popup.
+- **MsnKnobButton (11)** — rotary knob widget (`rotateStep, setRotatePixmap`).
+- **McuCenterPlugin (2)** — `createMainWindow, customEvent` (plugin entry).
+- **OptionListDelegate (4)**, **Ui_BoxP800SettingWindow / Ui_HondaRadioWindow / Ui_ModeSelectDialog (setupUi)**, and imported-type stubs (`MsnEvent`, `ProtocolUtils`, `QByteArray`, `QString`, `QDebug`, `TableViewItemDatas`, `TableViewModel`).
+
+---
+
+## 7. Open items (need on-device capture — see MCU_ADAPTERS.md capture guide)
+
+- Human meaning of the `MsnEventType` codes (`0x5018`/`0x501A`/`0x5026`).
+- The **outbound** command byte set (`makeMCUProtocol` callers).
+- Exact MCU link baud (adapter default; not in config — try 115200 then 38400).

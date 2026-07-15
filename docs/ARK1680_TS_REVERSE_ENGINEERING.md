@@ -1,7 +1,12 @@
-# `ark1680_ts.ko` reverse engineering — resistive ADC touchscreen driver
+# Ark1680 Ts Reverse Engineering
+
+**Status:** Reference
+**Last Updated:** 2026-07-15
+
+## Overview
 
 **Why:** stock firmware on this unit selects `ark1680_ts.ko` at boot, not
-GT911 (see `docs/boot_experiment_log.md` → "ROOT CAUSE FOUND"). No source
+GT911 (see `docs/historical/boot_experiment_log.md` → "ROOT CAUSE FOUND"). No source
 exists anywhere in this repo or the vendor kernel trees under
 `~/Downloads/` — only the compiled 3.4.0 `.ko` in the firmware dump and
 its board-registration code in the stock `vmlinux`. Recovered by static
@@ -396,7 +401,7 @@ best-effort panel geometry.
 `misc_register()`, same pattern as the stock driver) implementing just
 `ARKDISP_GET_SCREEN_INFO`, returning `screen_id=0` (matches this unit's
 `arkdata.ini` `ScreenId=0`) and `800×480`/`120×72mm` geometry (matches
-`docs/SCREEN.md`'s `ScreenId=0` entry and the ~5.5" real panel size).
+`docs/DISPLAY_SUBSYSTEM.md`'s `ScreenId=0` entry and the ~5.5" real panel size).
 Wired into the build tree (`drivers/misc/`, new `CONFIG_ARK_DISPLAY=y`
 Kconfig/Makefile entries) — compiles clean (`W=1`, zero warnings), full
 `zImage` rebuild succeeded.
@@ -511,7 +516,7 @@ mount** — genuinely early kernel boot. Traced it in `vmlinux.elf`:
   yet) is first opened. Not tied to the LCD driver's own probe at all.
 - Paired with `ark_tool_handle()` right next to it — checksummed
   framing, `store_com_data`, tasklet scheduling — matching
-  `docs/KERNEL.md`'s already-documented **"arktool" binary protocol**:
+  `docs/KERNEL_REFERENCE.md`'s already-documented **"arktool" binary protocol**:
   boot-animation sync, backcar signal enable/disable, MCU health
   monitoring.
 

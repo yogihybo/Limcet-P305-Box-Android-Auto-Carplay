@@ -62,7 +62,7 @@ Full teardown details and board photos are in `Limcet Hardware/BOARD_ANALYSIS.md
 - [`Limcet Hardware/BOARD_ANALYSIS.md`](Limcet%20Hardware/BOARD_ANALYSIS.md) — board/component teardown (SoC, NAND, BT, MCU, CAN bus), with photos in the same folder.
 - [`docs/SOURCES.md`](docs/SOURCES.md) — provenance of every file in this repo.
 - [`docs/PARTITION_LAYOUT.md`](docs/PARTITION_LAYOUT.md) — NAND offsets, sizes, flash commands (see also [NAND Partition Layout](#30-nand-partition-layout) below).
-- [`docs/SD_BOOT_PLAN.md`](docs/SD_BOOT_PLAN.md) — historical SD-boot planning doc, superseded by [Booting from SD Card or USB](#50-booting-from-sd-card-or-usb-non-destructive) below.
+- [`docs/historical/SD_BOOT_PLAN.md`](docs/historical/SD_BOOT_PLAN.md) — historical SD-boot planning doc, superseded by [Booting from SD Card or USB](#50-booting-from-sd-card-or-usb-non-destructive) below.
 
 ### Ways to access the device
 
@@ -263,7 +263,7 @@ bootz ${loadaddr}
 
 ### Self-contained SD auto-boot (env relocation)
 
-**Statically verified, not yet tested on real hardware** — see [`experimental_sdboot/README.md`](experimental_sdboot/README.md) and [`docs/UBOOT_SDBOOT_INVESTIGATION.md`](docs/UBOOT_SDBOOT_INVESTIGATION.md) §10 for the full writeup. Don't rely on this without testing on your own unit first, though the fallback (just remove the SD card) is safe.
+**Statically verified, not yet tested on real hardware** — see [`experimental_sdboot/README.md`](experimental_sdboot/README.md) and [`docs/UBOOT_REVERSE_ENGINEERING.md`](docs/UBOOT_REVERSE_ENGINEERING.md) §10 for the full writeup. Don't rely on this without testing on your own unit first, though the fallback (just remove the SD card) is safe.
 
 A different approach from both the corrupted patched binaries above and the retype-every-boot [Manual SD Card Boot](#manual-sd-card-boot) (section 8.0) — auto-boots from SD with **zero NAND writes of any kind**, not even to spare/placeholder space.
 
@@ -386,7 +386,7 @@ The kernel sees the USB drive as `/dev/sda`. The ARK1668 uses MUSB (not EHCI) �
 
 ## 7.0 Custom U-Boot Boot Chain (`ark1668_limcet_p305`)
 
-Everything in sections 4.0–6.0 above describes the **stock or stocked & patched binary**  of this project. Since then, a full custom U-Boot board port (`ark1668_limcet_p305`, U-Boot 2018.07, compiled from `linux-arkmicro` source — not a patched stock binary) has been built up and is now the actively developed path. This section documents its current, confirmed-working state. Full technical/RE detail: [`docs/HANDOFF_nand_ecc_uboot_vs_kernel.md`](docs/HANDOFF_nand_ecc_uboot_vs_kernel.md), [`docs/UBOOT_BOOTLOGO_AND_RE_PORTS.md`](docs/UBOOT_BOOTLOGO_AND_RE_PORTS.md), and [`docs/uboot_build.md`](docs/uboot_build.md).
+Everything in sections 4.0–6.0 above describes the **stock or stocked & patched binary**  of this project. Since then, a full custom U-Boot board port (`ark1668_limcet_p305`, U-Boot 2018.07, compiled from `linux-arkmicro` source — not a patched stock binary) has been built up and is now the actively developed path. This section documents its current, confirmed-working state. Full technical/RE detail: [`docs/historical/HANDOFF_nand_ecc_uboot_vs_kernel.md`](docs/historical/HANDOFF_nand_ecc_uboot_vs_kernel.md), [`docs/UBOOT_REVERSE_ENGINEERING.md`](docs/UBOOT_REVERSE_ENGINEERING.md), and [`docs/UBOOT_BUILD_GUIDE.md`](docs/UBOOT_BUILD_GUIDE.md).
 
 **Build u-boot from source:**
 A custom working u-boot has been built from source and replicated the functionality of the original uboot with the benefit of additional commands and boot options. The main limitation of the new uboot build is that is can't boot the original stock kernel (reason unknown) and instead boots stock by chainloading the stock uboot binary which then loads the stock kernel.
@@ -417,7 +417,7 @@ The original bootlogo used a hardware JPEG decoder (`jpeghw`). Since this driver
 
 ### NAND ECC — needs review and confirmation. 
 
-This chip's real on-flash format for kernel/rootfs/bootloader-type partitions is a 1024-byte ECC step (2 segments/page), 13-byte/7-bit BCH strength, ECC bytes at OOB offset 3 — not what the original driver assumed. Confirmed by reading the `BCH_CR` register live off a *working* stock U-Boot prompt right after a real successful read. Fixed in both the U-Boot and kernel `ark_nand.c` drivers (kernel side patched in source, not yet hardware-tested). Full writeup: [`docs/HANDOFF_nand_ecc_uboot_vs_kernel.md`](docs/HANDOFF_nand_ecc_uboot_vs_kernel.md) §1–2.
+This chip's real on-flash format for kernel/rootfs/bootloader-type partitions is a 1024-byte ECC step (2 segments/page), 13-byte/7-bit BCH strength, ECC bytes at OOB offset 3 — not what the original driver assumed. Confirmed by reading the `BCH_CR` register live off a *working* stock U-Boot prompt right after a real successful read. Fixed in both the U-Boot and kernel `ark_nand.c` drivers (kernel side patched in source, not yet hardware-tested). Full writeup: [`docs/historical/HANDOFF_nand_ecc_uboot_vs_kernel.md`](docs/historical/HANDOFF_nand_ecc_uboot_vs_kernel.md) §1–2.
 
 The actual`U-boot` NAND partition itself has proven unreadable by *any* U-Boot-level tool (this driver, any ECC mode, or stock's own native `switchecc`). Stepldr reads it via a raw path that bypasses `BCH_CR`/ECC entirely, confirmed via `objdump` disassembly of the real `Stepldr.bin`. Not a bug — `bootstock`/`bootstockusb` correctly source the stock U-boot binary from a file located on the mmc or usb drive instead then load the kernel from NAND.
 
@@ -577,7 +577,7 @@ Both stay flashable manually from the U-Boot prompt instead — see [4.0 U-Boot 
 
 `MsnCoreApp` (the main head-unit application) has a built-in, **unauthenticated** file-drop mechanism —
 almost certainly meant for factory/dealer servicing (patch the device without a full firmware reflash),
-found and traced via disassembly in [`docs/MSNCOREAPP_REVIEW.md`](docs/MSNCOREAPP_REVIEW.md). No
+found and traced via disassembly in [`docs/UI_AND_APP_ANALYSIS.md`](docs/UI_AND_APP_ANALYSIS.md). No
 password, PIN, or confirmation dialog gates it — just physically inserting the media.
 
 **How it works:** `DiskDeviceWatcher::mountDiskPartition()` runs automatically whenever the device
@@ -606,7 +606,7 @@ it's a fixed `/media/`-style prefix or something else) — `<mountpath>` above i
 this pass. The destination (`/`, the real rootfs) and the trigger condition (folder named `msn_autocopy`
 present) are both confirmed directly from the binary's disassembly, not inferred.
 
-See [`docs/MSNCOREAPP_REVIEW.md`](docs/MSNCOREAPP_REVIEW.md) for the full disassembly trace and
+See [`docs/UI_AND_APP_ANALYSIS.md`](docs/UI_AND_APP_ANALYSIS.md) for the full disassembly trace and
 [`docs/SECURITY_REVIEW.md`](docs/SECURITY_REVIEW.md) for this project's broader credential/access-path review.
 
 **Ready-to-use payload:** [`msn_autocopy/`](msn_autocopy/) contains a pre-built `msn_autocopy/etc/rc.d/rcS`
@@ -726,9 +726,9 @@ Limcet Hardware/
   BOARD_ANALYSIS.md         Board/component teardown notes (SoC, NAND, BT, MCU, CAN bus)
   *.jpg                     Board photos referenced from BOARD_ANALYSIS.md
 
-ArkPro Reference/  Third-party ASTRI ARK1680 vendor source — see docs/ARKDATA_VARIANTS.md for provenance
+ArkPro Reference/  Third-party ASTRI ARK1680 vendor source — see docs/DISPLAY_SUBSYSTEM.md for provenance
 
-linux-arkmicro Reference/  Third-party ArkMicro U-Boot BSP source — see docs/UBOOT_BUILD_PLAN.md
+linux-arkmicro Reference/  Third-party ArkMicro U-Boot BSP source — see docs/UBOOT_BUILD_GUIDE.md
 
 ui/                Qt 4.7.4 UI analysis and resource extraction — see ui/UI.md
   UI.md                      Qt module layout, key binaries, /msnprofile/ filesystem layout
@@ -811,23 +811,23 @@ See [`docs/SOURCES.md`](docs/SOURCES.md) for full provenance of each file.
 
 - [`SOURCES.md`](docs/SOURCES.md) — provenance of every firmware source used
 - [`PARTITION_LAYOUT.md`](docs/PARTITION_LAYOUT.md) — NAND offsets, sizes, flash commands
-- [`SOC_ARK1668_CROSSREF.md`](docs/SOC_ARK1668_CROSSREF.md) — SoC identity, Ghidra RE of the kernel/userspace binaries, full pin-mux table, cross-checked against real ASTRI/ArkMicro vendor source
+- [`SOC_ARK1668_CROSSREF.md`](docs/HARDWARE_AND_SOC_REFERENCE.md) — SoC identity, Ghidra RE of the kernel/userspace binaries, full pin-mux table, cross-checked against real ASTRI/ArkMicro vendor source
 - [`SECURITY_REVIEW.md`](docs/SECURITY_REVIEW.md) — credential/access-path review: stock root password, an unresolved second UID-0 account, update-integrity check
-- [`MSNCOREAPP_REVIEW.md`](docs/MSNCOREAPP_REVIEW.md) — binary-level review of `MsnCoreApp`: an unauthenticated `system()` call reachable by inserting a USB drive with a magic folder name
-- [`MSNCOREAPP_DECONSTRUCTION.md`](docs/MSNCOREAPP_DECONSTRUCTION.md) — deconstructing the UI binary for editing: what's recoverable, the two layout flavours, and the geometry-patch workflow (see also `tools/msncore_analyze.py`)
-- [`KERNEL.md`](docs/KERNEL.md) — kernel image analysis (`mtd5_kernel/zImage`)
-- [`UBOOT_BUILD_PLAN.md`](docs/UBOOT_BUILD_PLAN.md) — plan for compiling a fresh U-Boot from `linux-arkmicro` source, with config deltas and an SD-only test sequence
-- [`uboot_build.md`](docs/uboot_build.md) — U-Boot build guide, boot chain constraints, and ARK header injection details
-- [`UBOOT_SDBOOT_INVESTIGATION.md`](docs/UBOOT_SDBOOT_INVESTIGATION.md) — U-Boot SD-boot patch corruption investigation and the env relocation fix
-- [`UBOOT_BOOTLOGO_AND_RE_PORTS.md`](docs/UBOOT_BOOTLOGO_AND_RE_PORTS.md) — boot logo, reverse-engineered command ports (`regr`/`regw`/`gpiotest`/`jpeghw`/`itu656`), LCD timing fix, USB dual-port bring-up, and the Stepldr chainload findings for the custom `ark1668_limcet_p305` U-Boot port (see [§7.0](#70-custom-u-boot-boot-chain-ark1668_limcet_p305))
-- [`HANDOFF_nand_ecc_uboot_vs_kernel.md`](docs/HANDOFF_nand_ecc_uboot_vs_kernel.md) — the NAND ECC root cause (U-Boot fixed and confirmed, kernel fixed in source but untested), why the `U-boot` NAND partition is unreadable by any U-Boot-level tool, and every patch behind [§7.0](#70-custom-u-boot-boot-chain-ark1668_limcet_p305)
-- [`HANDOFF_touch_and_bootargs_fix.md`](docs/HANDOFF_touch_and_bootargs_fix.md) — touchscreen I2C bus fix, SD bootargs fix, and the NAND "417 false bad blocks" ECC/BBT investigation
-- [`KERNEL_BUILD_REFERENCE.md`](docs/KERNEL_BUILD_REFERENCE.md) — kernel build tree reference: DTS, I2C bus assignments, camera decoder chip
-- [`SD_BOOT_PLAN.md`](docs/SD_BOOT_PLAN.md) — historical SD-boot planning doc (superseded, still useful background)
-- [`ARKDATA_VARIANTS.md`](docs/ARKDATA_VARIANTS.md) — panel display configuration presets and their register-level meaning
+- [`MSNCOREAPP_REVIEW.md`](docs/UI_AND_APP_ANALYSIS.md) — binary-level review of `MsnCoreApp`: an unauthenticated `system()` call reachable by inserting a USB drive with a magic folder name
+- [`MSNCOREAPP_DECONSTRUCTION.md`](docs/UI_AND_APP_ANALYSIS.md) — deconstructing the UI binary for editing: what's recoverable, the two layout flavours, and the geometry-patch workflow (see also `tools/msncore_analyze.py`)
+- [`KERNEL.md`](docs/KERNEL_REFERENCE.md) — kernel image analysis (`mtd5_kernel/zImage`)
+- [`UBOOT_BUILD_PLAN.md`](docs/UBOOT_BUILD_GUIDE.md) — plan for compiling a fresh U-Boot from `linux-arkmicro` source, with config deltas and an SD-only test sequence
+- [`uboot_build.md`](docs/UBOOT_BUILD_GUIDE.md) — U-Boot build guide, boot chain constraints, and ARK header injection details
+- [`UBOOT_SDBOOT_INVESTIGATION.md`](docs/UBOOT_REVERSE_ENGINEERING.md) — U-Boot SD-boot patch corruption investigation and the env relocation fix
+- [`UBOOT_BOOTLOGO_AND_RE_PORTS.md`](docs/UBOOT_REVERSE_ENGINEERING.md) — boot logo, reverse-engineered command ports (`regr`/`regw`/`gpiotest`/`jpeghw`/`itu656`), LCD timing fix, USB dual-port bring-up, and the Stepldr chainload findings for the custom `ark1668_limcet_p305` U-Boot port (see [§7.0](#70-custom-u-boot-boot-chain-ark1668_limcet_p305))
+- [`HANDOFF_nand_ecc_uboot_vs_kernel.md`](docs/historical/HANDOFF_nand_ecc_uboot_vs_kernel.md) — the NAND ECC root cause (U-Boot fixed and confirmed, kernel fixed in source but untested), why the `U-boot` NAND partition is unreadable by any U-Boot-level tool, and every patch behind [§7.0](#70-custom-u-boot-boot-chain-ark1668_limcet_p305)
+- [`HANDOFF_touch_and_bootargs_fix.md`](docs/historical/HANDOFF_touch_and_bootargs_fix.md) — touchscreen I2C bus fix, SD bootargs fix, and the NAND "417 false bad blocks" ECC/BBT investigation
+- [`KERNEL_BUILD_REFERENCE.md`](docs/KERNEL_REFERENCE.md) — kernel build tree reference: DTS, I2C bus assignments, camera decoder chip
+- [`SD_BOOT_PLAN.md`](docs/historical/SD_BOOT_PLAN.md) — historical SD-boot planning doc (superseded, still useful background)
+- [`ARKDATA_VARIANTS.md`](docs/DISPLAY_SUBSYSTEM.md) — panel display configuration presets and their register-level meaning
 - [`SETTINGS_REFERENCE.md`](docs/SETTINGS_REFERENCE.md) — full key-by-key reference for `MsnProductInfo.ini` and `FactoryConfig.ini`: load sequence, every setting grouped by function, and cross-product value tables
-- [`UI_RESOURCES.md`](docs/UI_RESOURCES.md) — how the interface is skinned: `DefaultStyleSheet.xml` (colours/fonts/accent, editable QSS) and the `.rcc` sprite bundles (what loads per product, inventory, unpack/reskin/repack workflow; see also `tools/rcc_extract.py`)
-- [`SCREEN.md`](docs/SCREEN.md) — screen configuration and hue investigation
+- [`UI_RESOURCES.md`](docs/UI_AND_APP_ANALYSIS.md) — how the interface is skinned: `DefaultStyleSheet.xml` (colours/fonts/accent, editable QSS) and the `.rcc` sprite bundles (what loads per product, inventory, unpack/reskin/repack workflow; see also `tools/rcc_extract.py`)
+- [`SCREEN.md`](docs/DISPLAY_SUBSYSTEM.md) — screen configuration and hue investigation
 - [`MCU_ADAPTERS.md`](docs/MCU_ADAPTERS.md) — MCU adapter types reverse-engineered from `libMcuCenter.so`
 - [`CANBUS.md`](docs/CANBUS.md) — CAN bus investigation for this board
 - [`USERDATA_REVIEW.md`](docs/USERDATA_REVIEW.md) — userdata partition review

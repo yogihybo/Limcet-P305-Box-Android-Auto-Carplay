@@ -1,4 +1,9 @@
-# NAND Partition Layout — Prado
+# Partition Layout
+
+**Status:** Reference
+**Last Updated:** 2026-07-15
+
+## Overview
 
 Confirmed from live device `printenv mtdparts`:
 

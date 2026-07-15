@@ -36,7 +36,7 @@ live-hardware I²C scan to settle, see `tools/i2c-scan/`) and a **new** `MsnCore
 > unit's stock firmware doesn't load GT911 at all** — it loads
 > `ark1680_ts.ko`, the SoC's built-in resistive ADC touch controller,
 > selected via a marker file (`/msnprofile/ark1680_ts`, present in the
-> live NAND dump). See `docs/boot_experiment_log.md` → "ROOT CAUSE FOUND"
+> live NAND dump). See `docs/historical/boot_experiment_log.md` → "ROOT CAUSE FOUND"
 > for the full trail. The 4.19 port needs a resistive ADC/TSC driver, not
 > a GT911 I²C fix — the section below is kept for historical context only.
 
@@ -60,7 +60,7 @@ Goodix-TS 0-005d: I2C communication failure: -6      (-ENXIO)
   without confirmation of the outcome, and blindly redoing it risks a third silent flip-flop.
   - **Do not edit this DTS node again without hardware confirmation.** The DTS now enables
     both `&i2c0` and `i2c-gpio-0` simultaneously (disjoint pins, no conflict) specifically so
-    this can be settled empirically — see `docs/boot_experiment_log.md` → "Systematic I²C bus
+    this can be settled empirically — see `docs/historical/boot_experiment_log.md` → "Systematic I²C bus
     verification" and `tools/i2c-scan/` for a live-shell probe tool and procedure. Run that
     scan on hardware, record the result, **then** attach `gt911@5d` to whichever bus actually
     ACKs `0x5d`.
@@ -93,8 +93,8 @@ Segmentation fault
 1. Get a backtrace: run `MsnCoreApp -qws` under `gdb` (`gdb --args MsnCoreApp -qws`, then
    `bt`) or `strace -f MsnCoreApp -qws 2>&1 | tail -40` to see the last syscall before SIGSEGV.
 2. Check the SD rootfs's `msnprofile/MsnProductInfo.ini` — `ScreenType` / `ResolutionType` /
-   `ResourceName` — against what this unit expects (see `docs/SCREEN.md` and
-   `docs/ARKDATA_VARIANTS.md`). The 6.94″ figure suggests a wrong `ResolutionType`.
+   `ResourceName` — against what this unit expects (see `docs/DISPLAY_SUBSYSTEM.md` and
+   `docs/DISPLAY_SUBSYSTEM.md`). The 6.94″ figure suggests a wrong `ResolutionType`.
 3. Verify the SD ext4 rootfs libraries/resources match build #18 (mismatched `libLauncher-*`
    / missing `.rcc` for the active resolution can crash the launcher).
 4. Confirm `QWS_ARK_TOUCH_DEVICE` / framebuffer env is set (touch being down shouldn't crash
@@ -108,7 +108,7 @@ Segmentation fault
   `/dev/video0` exists and the reverse camera actually streams at runtime.
 - **NAND ECC:** `ECC too weak` / `uncorrectable ECC error` persist — irrelevant to SD boot
   (NAND now only backs `/nanddata` mtds). **Root-caused (2026-07-11), see
-  `docs/boot_experiment_log.md` "NAND ECC too weak"** — a genuine, unfixable hardware
+  `docs/historical/boot_experiment_log.md` "NAND ECC too weak"** — a genuine, unfixable hardware
   mismatch (this Toshiba SLC chip's ID reports it needs 8-bit ECC; the controller's
   discrete BCH modes jump straight from 7-bit to 13-bit, and 13-bit doesn't fit this
   chip's 64-byte OOB) — not a misconfiguration. The verbose per-block bad-block log
@@ -126,8 +126,8 @@ Segmentation fault
 
 ## References
 - Log: `docs/new kernel bootlog new uboot v6.txt`
-- Kernel-build fixes: `docs/HANDOFF_kernel_build_camera_and_touch.md`
-- Touch root cause + stock-bus proof + pending live verification: `docs/boot_experiment_log.md`
+- Kernel-build fixes: `docs/historical/HANDOFF_kernel_build_camera_and_touch.md`
+- Touch root cause + stock-bus proof + pending live verification: `docs/historical/boot_experiment_log.md`
 - Live I²C bus scan tool: `tools/i2c-scan/`
-- Screen/model selection: `docs/SCREEN.md`, `docs/ARKDATA_VARIANTS.md`
-- Camera chip resolution: `docs/KERNEL_BUILD_REFERENCE.md` ("Camera decoder chip" callout)
+- Screen/model selection: `docs/DISPLAY_SUBSYSTEM.md`, `docs/DISPLAY_SUBSYSTEM.md`
+- Camera chip resolution: `docs/KERNEL_REFERENCE.md` ("Camera decoder chip" callout)

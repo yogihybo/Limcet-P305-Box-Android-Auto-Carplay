@@ -1,4 +1,9 @@
-# CAN Bus — Prado / Limcet-P306 (DC_LIMCET_MB_REV_003)
+# Canbus
+
+**Status:** Reference
+**Last Updated:** 2026-07-15
+
+## Overview
 
 ---
 

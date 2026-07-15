@@ -127,7 +127,7 @@ and a relevant slice copied into [`linux-arkmicro Reference/`](../linux-arkmicro
 **It is not an exact source match** — it's U-Boot 2018.07 with SPL+FDT, while the Prado's actual stock
 U-Boot is 2012.10, legacy ATAG, no devicetree. Same SoC family, later BSP generation. The details below
 (largely still accurate) are superseded by the full build plan and risk list in
-[`docs/UBOOT_BUILD_PLAN.md`](UBOOT_BUILD_PLAN.md) — read that before acting on this section.
+[`docs/UBOOT_BUILD_GUIDE.md`](UBOOT_BUILD_GUIDE.md) — read that before acting on this section.
 
 The chip is confirmed as **ARK1668** (marked on the physical package).
 This BSP contains a real U-Boot board target for this SoC family. Building it is still the cleanest
@@ -165,7 +165,7 @@ SD slot is `mmc 1` — confirmed by `board_mmc_init()` in
 
 #### Build
 
-See [`docs/UBOOT_BUILD_PLAN.md`](UBOOT_BUILD_PLAN.md) for the actual clone URL, full config-delta
+See [`docs/UBOOT_BUILD_GUIDE.md`](UBOOT_BUILD_GUIDE.md) for the actual clone URL, full config-delta
 table (this section only had 2 of the several deltas that doc identifies), toolchain, and — critically
 — the SD-only test plan before any NAND flashing is considered.
 
@@ -528,6 +528,6 @@ dd if=/dev/mtd11 of=/tmp/unicode
 | `Prado firmware reconstructed/mtd10_reversingtrack/reversingtrack` | Raw reversingtrack partition dump (RSTK/zlib format) |
 | `Prado firmware reconstructed/mtd11_unicode/unicode` | Placeholder — replace when dump available |
 | `initramfs/` | New directory — only if MMC is module-only |
-| `docs/SD_BOOT_PLAN.md` | This document |
+| `docs/historical/SD_BOOT_PLAN.md` | This document |
 
 **NAND is never written to at any stage.**

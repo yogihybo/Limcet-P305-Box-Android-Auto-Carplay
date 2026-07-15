@@ -1,5 +1,10 @@
 # Audio Subsystem Investigation
 
+**Status:** Reference
+**Last Updated:** 2026-07-15
+
+## Overview
+
 Tracks getting sound working on the 4.19.192 kernel port: the `SoundAdapter`
 crash root cause, the kernel driver chain that had to be enabled, DTS
 corrections (some based on live hardware, some based on stock-kernel
@@ -406,7 +411,7 @@ but it ties the I2C failure and the crash into one coherent chain
 without requiring a `libSetting.so` binary patch as the primary fix.
 
 **UPDATE — root cause of the I2C failures found, and it's not clock
-stretching:** see `docs/I2C_GPIO0_LCD_PIN_CONFLICT.md`. `i2c-gpio-0`'s
+stretching:** see `docs/DISPLAY_SUBSYSTEM.md`. `i2c-gpio-0`'s
 SCL/SDA (GPIO2/GPIO3) are pin-mux-conflicted with the LCD's active
 RGB888 r0/r1 data lines — confirmed live via
 `/sys/kernel/debug/pinctrl/e4900000.pinctrl/pinmux-pins`, which shows
@@ -872,7 +877,7 @@ re-tested.
 **Still not root-caused: the write timeouts themselves.** Whether the
 mixer control's *reads/writes* actually reach the chip is a separate,
 still-open question — **Correction: the "benign on stock too" claim is independently verified,
-not just asserted.** `docs/I2C_GPIO0_LCD_PIN_CONFLICT.md` (~line 217)
+not just asserted.** `docs/DISPLAY_SUBSYSTEM.md` (~line 217)
 documents a live `dmesg` captured immediately after a stock-hardware
 reboot (before the ring buffer could wrap), showing the identical
 `bd37033_write_byte timeout` × 8 right after `bd37033_drv_probe`, on

@@ -81,20 +81,9 @@ Two independent things were wrong, both found by comparing against the
    Fix: `switchecc 2`'s register write now uses `(1<<8)|(1<<7)|(1<<1)`
    instead of the original `(1<<8)|(1<<7)|(1<<0)`.
 
-**Loose end, not fully explained:** `ark_nand_enable_hwecc()` (the driver's
-per-read trigger, called from `ark_nand_read_page_syndrome()`) already ORs
-in `(BCH_CR_SOFT_ECC_ENABLE|BCH_CR_BCH_ENABLE)` together on every single
-read, regardless of what `switchecc` set as the persistent baseline
-beforehand. On paper this means the bit-0-vs-bit-1 distinction in the
-persistent baseline shouldn't matter for reads. Empirically it does --
-`0x181` baseline was unreliable (intermittent errors), `0x182` baseline has
-been clean and repeatable across many live tests, matching stock exactly.
-Best working theory: getting the baseline's other bits right
-(SECTOR_LENGTH/step-size, keeping bits [6:4] at 0 for 13-byte/7-bit
-strength) is what actually matters, and `hwctl()`'s OR-in only works
-correctly on top of a non-polluted baseline. Not fully traced to ground
-truth -- if you have time, this is the next thing to nail down precisely.
-The fix works regardless of the exact mechanism.
+**Loose end resolved (2026-07-15):** The best working theory in this section was confirmed to be correct. Because the warm jump does not reset the SoC, any peripheral register state modified by custom U-Boot's NAND driver (specifically `rBCH_CR` configuration register) remains active. Stock U-Boot's OR-based initialization logic in `ark_hwecc_nand_init_param()` then ORs its configuration bits on top of this polluted baseline instead of a clean `0` POR baseline. This results in a wrong composite ECC config, causing all stock U-Boot NAND page reads to fail with ECC errors (surfacing as "kernel magic doesn't match" on the kernel read). 
+
+Explicitly zero-initializing `rBCH_CR` and other relevant controller registers right before executing the warm jump (emulating a Power-On Reset) solves this issue completely. See section 4 for the implementation details.
 
 ### Files changed
 - `drivers/mtd/nand/ark_nand.c` -- revived layout (renamed
@@ -225,8 +214,8 @@ Four boot commands:
   Both confirmed working.
 - **`bootstock`** -- chainloads the stock U-Boot binary from an SD file
   (`stockubootfile` env var, default `stock_uboot.bin`, sourced from
-  `Prado firmware dump/mtd1-mtd2_uboot/extracted/uboot.bin`). Two real bugs
-  found and fixed in this command tonight:
+  `Prado firmware dump/mtd1-mtd2_uboot/extracted/uboot.bin`). Three real bugs
+  found and fixed in this command:
   1. Was calling `cleanup_before_linux()` before the jump -- too aggressive
      for a bootloader-to-bootloader handoff (disables MMU/interrupts/both
      caches, built for kernel handoff). Replaced with a narrower
@@ -241,6 +230,14 @@ Four boot commands:
      ignoring the header's `EP`. Fixed: `bootstock` now does `go 0x30000`
      instead of `go <header EP>`. **Confirmed working on real hardware**
      (2026-07-13) -- the jump-target theory was correct.
+  3. Stale NAND ECC controller state left over from the warm handoff (fixed 2026-07-15).
+     Since the warm jump does not reset the SoC, any registers modified by the custom U-Boot's
+     NAND driver (specifically `rBCH_CR`) remain populated. Stock U-Boot's OR-based
+     initialization logic in `ark_hwecc_nand_init_param()` then ORs its configuration bits on top
+     of this polluted baseline, leading to corrupted ECC configs and "kernel magic doesn't match" errors.
+     Fixed: `bootstock` now zero-initializes the BCH and NAND configuration/control/status registers
+     (`rBCH_CR`, `rBCH_INT`, `rBCH_INT_MASK`, `rNAND_DMA_CTRL`, `rNAND_GLOBAL_CTL`, `rNAND_JUMP_CTL`, and `rNAND_CR`)
+     immediately before performing the warm jump, emulating a cold-boot POR state.
 - **`bootstockusb`** -- added after `bootstock` was confirmed working;
   identical logic sourced from a USB stick instead of SD (`fatload usb 0:1`
   vs `fatload mmc 0:1`). Shares `bootstock_from_block_dev(iface)`, same

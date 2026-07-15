@@ -138,7 +138,7 @@ The same serial console is active during SD/USB boot and can be interactive if m
 | userdata | `0x6FA0000` | 6 MB | User settings / BT pairs (UBI) |
 | bootlogo | `0x75A0000` | 512 KB | Boot splash screen |
 | bootanimation | `0x7620000` | 3 MB | Boot animation |
-| reversingtrack | `0x7920000` | 3 MB | Reversing camera audio |
+| reversingtrack | `0x7920000` | 3 MB | Reversing-camera guide-line overlay |
 | Unicode | `0x7C20000` | 256 KB | Unicode font data |
 
 **Known bad block at 0x5FA0000** — inside the rootfs partition. `nand scrub` handles this automatically.
@@ -199,9 +199,9 @@ The built in update function used a similar update mechanism to deploy the SD up
 
 | Method | Auto or manual | NAND writes | Status |
 |--------|----------------|-------------|--------|
-| [Manual SD Card Boot](#manual-sd-card-boot) (section 8.0) | Manual — retyped every boot | None | **Confirmed working but can only fatload kernel from USB as MMC support is not compiled into the kernel** |
+| [Manual SD Card Boot](#manual-sd-card-boot) (section 8.0) | Manual — retyped every boot | None | **Confirmed working: fatload kernel from MMC works but loading of rootfs from MMC is not supported because the MMC drivers are not compiled into the kernel** |
 | [U-boot patching](#self-contained-sd-auto-boot-env-relocation) (below) | Automatic | None | Experimental — statically verified, untested on hardware |
-| [Manual USB boot](#usb-boot) (below) | Manual — retyped every boot | None | **Confirmed working but can only fatload kernel from USB as MMC support is not compiled into the kernel** |
+| [Manual USB boot](#usb-boot) (below) | Manual — retyped every boot | None | **Confirmed working: fatload kernel from USB works but loading of rootfs from MMC is not supported because the MMC drivers are not compiled into the kernel** |
 
 Reflashing NAND for every kernel or rootfs change (see [Flashing via SD Card](#90-flashing-via-sd-card)) is slow. A bad image can also leave the device unbootable, with only a single-keypress recovery window (see [Boot Sequence](#40-boot-sequence-stock-nand)).
 

@@ -196,7 +196,7 @@ INITRAMFS_ADDR=0x2000000                       # RAM address the initramfs is fa
 MTDPARTS='mtdparts=ark1680-nand:128k(S-Loader),512k(U-boot),512k(U-boot_back),256K(U-boot-Env),256K(arkdata),4m(kernel),106m(rootfs),6m(userdata),512K(bootlogo),3m(bootanimation),3m(reversingtrack),256K(Unicode)'
 KERNEL_BIN=""
 BOOTLOGO_RAW=""                               # raw framebuffer (--bootlogo) for p1/bootlogo.raw
-STOCK_UBOOT_BIN="$SCRIPT_DIR/Prado firmware dump/mtd1-mtd2_uboot/extracted/uboot.bin"  # for p1/stock_uboot.bin, used by the `bootstock` chainload command
+STOCK_UBOOT_BIN="$SCRIPT_DIR/firmware_dumps/Prado firmware dump/mtd1-mtd2_uboot/extracted/uboot.bin"  # for p1/stock_uboot.bin, used by the `bootstock` chainload command
 DTB_BIN=""
 ROOTFS_DIR=""
 USERDATA_DIR=""
@@ -353,7 +353,7 @@ autodetect() {
     [[ -z "$UBOOT_BIN" && -z "$UBOOT_SRC" ]] && {
         for c in \
             "$SCRIPT_DIR/firmware_source/prado_reconstructed/mtd1-mtd2_uboot/uboot.bin" \
-            "$SCRIPT_DIR/Prado firmware dump/mtd1-mtd2_uboot/extracted/uboot.bin"
+            "$SCRIPT_DIR/firmware_dumps/Prado firmware dump/mtd1-mtd2_uboot/extracted/uboot.bin"
         do [[ -f "$c" ]] && { UBOOT_SRC="$c"; break; }; done
     }
     # Fall back to stock kernel if new-kernel not requested

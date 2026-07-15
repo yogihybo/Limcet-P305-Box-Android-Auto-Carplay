@@ -16,7 +16,7 @@ FONT_BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 FONT_REG = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
 OUT = sys.argv[1] if len(sys.argv) > 1 else "touch2_bootlogo.png"
 EMBLEM_PATH = (
-    "Prado firmware dump/mtd6_rootfs/msnprofile/bootlogo/logo17.jpg"
+    "firmware_dumps/Prado firmware dump/mtd6_rootfs/msnprofile/bootlogo/logo17.jpg"
 )
 
 BG_TOP = (14, 16, 20)

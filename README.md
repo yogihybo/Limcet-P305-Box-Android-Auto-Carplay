@@ -28,18 +28,6 @@ Following a falled updated,this repo was developed to test device and identify h
 
 ## 1.0 Hardware
 
-| Item | Value |
-|------|-------|
-| SoC | ARK1680 (ARM Cortex-A5) |
-| OS | Linux 3.4.0 / BusyBox |
-| Bootloader | U-Boot 2012.10 |
-| Product ID | Limcet-P306 |
-| Resource | Box-P301 |
-| Display | 800×480 RGB888 |
-| Sound | None (SoundType=0) |
-| MCU type | 6 |
-| BT module | Feasycom (BlueToothType=6) |
-
 ### Limcet Board (DC_LIMCET_MB_REV_003)
 
 The board running this firmware is a third-party **Limcet Box P306** aftermarket module, not a Toyota-made assembly — it's a piggyback module that ties into the existing factory head unit's harness and vehicle bus rather than replacing it outright. The existing factory LCD cable is connected to the board and then a second cable connects the device to the factory head unit (where the LCD cable originally connected) effectively intercepting the LCD display path.
@@ -48,13 +36,17 @@ Hardware on the device has been identified by opening the device and reviewing t
 
 | Component | Part | Role |
 |-----------|------|------|
-| SoC | ARK1668 (die marking; ARK1680 in firmware/software — same device) | Main applications processor |
+| Product ID | Limcet-P306 | |
+| SoC | ARK1668 (die marking; ARK1680 in firmware/software — same device) ARK1680 (ARM Cortex-A5) | Main applications processor |
 | NAND | Toshiba TC58BVG0S3HTA00, 128 MB SLC | Firmware/rootfs storage, on a soldered daughter module (the "Limcet Box" compute module) |
 | MCU | STM32F105RBT6 (ARM Cortex-M3) | Vehicle-side I/O — CAN bus, touch/button/reverse/ACC-IGN signals — talks to the ARK1668 over `/dev/ttyHS0` |
 | CAN transceiver | NXP TJA1042 | Bridges the MCU's CAN controller to the vehicle CANH/CANL lines |
 | BT/WiFi module | Feasycom FSC-BT8251 V1.1 (Realtek RF) | Bluetooth + WiFi AP, over `/dev/ttyHS1` |
 | Rear camera decoder | RN6752 | CVBS composite → ITU-656 digital video for the reversing camera feed |
 | Display adapter | DC_FUJITSU_CON96P_REV_002 (interposer) | Adapts the main board's edge connector to the LCD panel's 96-pin Fujitsu FPC |
+| LCD Display | 800×480 RGB888 | Part of the factory head unit |
+| Bootloader | U-Boot 2012.10 | Stock Bootloader |
+| OS | Linux 3.4.0 / BusyBox | Stock Linux Build |
 
 **Connecting to the existing car wiring:**
 
@@ -71,16 +63,16 @@ Full teardown details and board photos are in `Limcet Hardware/BOARD_ANALYSIS.md
 - [`docs/PARTITION_LAYOUT.md`](docs/PARTITION_LAYOUT.md) — NAND offsets, sizes, flash commands (see also [NAND Partition Layout](#90-nand-partition-layout) below).
 - [`docs/SD_BOOT_PLAN.md`](docs/SD_BOOT_PLAN.md) — historical SD-boot planning doc, superseded by [Booting from SD Card or USB](#50-booting-from-sd-card-or-usb-non-destructive) below.
 
-### Accessing the device
+### Ways to access the device
 
-Four ways to reach the device:
+Four ways to reach the device in the stock firmware:
 
 | Method | Use for | Details |
 |--------|---------|---------|
-| Serial console (UART, 115200 8N1) | Recovery, monitoring, interrupting boot, low risk | [Serial console, requires physical access and aoldering](#20-serial-console-recovery--monitoring) |
-| SD bootable image (non-destructive) | Testing changes without touching NAND (low risk) | [Booting from SD Card or USB](#50-booting-from-sd-card-or-usb-non-destructive) |
-| Network (WiFi AP / USB / telnet) | Using the auto update function,a modified file can be side loaded onto the device to enable telnet access via the existing carplay wifi.(medium risk)| [Device Access](#100-device-access) |
-| SD update package(flashes internal NAND) | Permanently updating firmware on the unit (high risk)| [Flashing via SD Card](#70-flashing-via-sd-card) |
+| Serial console | Recovery, monitoring, interrupting boot, low risk | [Serial console, requires physical access and aoldering](#20-serial-console-recovery--monitoring) |
+| Boot UBOOT from SD | Testing changes without touching NAND (low risk) | [Booting from SD Card or USB](#50-booting-from-sd-card-or-usb-non-destructive) |
+| Update payload to enable telnet) via USB Drive | Using the auto update function,a modified file can be side loaded onto the device to enable telnet access via the existing carplay wifi.(medium risk)| [Device Access](#100-device-access) |
+| Update package (flashes internal NAND) via SD | Permanently updating firmware on the unit (high risk)| [Flashing via SD Card](#70-flashing-via-sd-card) |
 
 ## 2.0 Serial Console (recovery / monitoring)
 

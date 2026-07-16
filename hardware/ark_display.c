@@ -68,6 +68,9 @@
  * but ioctl() still failed because of exactly this mismatch. */
 #define ARK_DISPLAY_IOC_MAGIC		0xa0
 #define ARKDISP_GET_SCREEN_INFO		_IOWR(ARK_DISPLAY_IOC_MAGIC, 29, unsigned long)
+#define ARKDISP_GET_VDE_CFG		_IOWR(ARK_DISPLAY_IOC_MAGIC, 1, unsigned long)
+#define ARKDISP_SET_VDE_CFG		_IOW(ARK_DISPLAY_IOC_MAGIC, 2, unsigned long)
+#define ARK_DISPLAY_LAYER_NUM		5
 
 struct ark_screen_info {
 	__u32 screen_id;	/* must be 0-7 -- the only field arkapi_get_screen_info() validates */
@@ -77,6 +80,14 @@ struct ark_screen_info {
 	__u32 mm_height;
 };
 
+struct ark_disp_vde_cfg_arg {
+	__u32 layer_id;
+	__u32 hue;
+	__u32 saturation;
+	__u32 brightness;
+	__u32 contrast;
+};
+
 /* ScreenId=0, 800x480 RGB888, ~5.5" -- see docs/SCREEN.md */
 static const struct ark_screen_info ark_display_screen0 = {
 	.screen_id  = 0,
@@ -84,6 +95,14 @@ static const struct ark_screen_info ark_display_screen0 = {
 	.height_px  = 480,
 	.mm_width   = 120,
 	.mm_height  = 72,
+};
+
+static struct ark_disp_vde_cfg_arg ark_display_layers[ARK_DISPLAY_LAYER_NUM] = {
+	{ .layer_id = 0, .hue = 0, .saturation = 128, .brightness = 128, .contrast = 128 },
+	{ .layer_id = 1, .hue = 0, .saturation = 128, .brightness = 128, .contrast = 128 },
+	{ .layer_id = 2, .hue = 0, .saturation = 128, .brightness = 128, .contrast = 128 },
+	{ .layer_id = 3, .hue = 0, .saturation = 128, .brightness = 128, .contrast = 128 },
+	{ .layer_id = 4, .hue = 0, .saturation = 128, .brightness = 128, .contrast = 128 },
 };
 
 static long ark_display_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
@@ -101,6 +120,57 @@ static long ark_display_ioctl(struct file *file, unsigned int cmd, unsigned long
 			ark_display_screen0.height_px, ark_display_screen0.mm_width,
 			ark_display_screen0.mm_height);
 		return 0;
+	case ARKDISP_GET_VDE_CFG:
+		{
+			struct ark_disp_vde_cfg_arg input_arg;
+
+			if (copy_from_user(&input_arg, (void __user *)arg, sizeof(input_arg)))
+				return -EFAULT;
+
+			if (input_arg.layer_id >= ARK_DISPLAY_LAYER_NUM) {
+				pr_err("ark_display: ARKDISP_GET_VDE_CFG invalid layer_id=%u\n",
+				       input_arg.layer_id);
+				return -EINVAL;
+			}
+
+			input_arg = ark_display_layers[input_arg.layer_id];
+
+			if (copy_to_user((void __user *)arg, &input_arg, sizeof(input_arg)))
+				return -EFAULT;
+
+			pr_info("ark_display: ARKDISP_GET_VDE_CFG -> layer_id=%u hue=%u saturation=%u brightness=%u contrast=%u\n",
+				input_arg.layer_id, input_arg.hue, input_arg.saturation,
+				input_arg.brightness, input_arg.contrast);
+			return 0;
+		}
+	case ARKDISP_SET_VDE_CFG:
+		{
+			struct ark_disp_vde_cfg_arg input_arg;
+
+			if (copy_from_user(&input_arg, (void __user *)arg, sizeof(input_arg)))
+				return -EFAULT;
+
+			if (input_arg.layer_id >= ARK_DISPLAY_LAYER_NUM) {
+				pr_err("ark_display: ARKDISP_SET_VDE_CFG invalid layer_id=%u\n",
+				       input_arg.layer_id);
+				return -EINVAL;
+			}
+
+			if (input_arg.hue > 255 || input_arg.saturation > 255 ||
+			    input_arg.brightness > 255 || input_arg.contrast > 255) {
+				pr_err("ark_display: ARKDISP_SET_VDE_CFG invalid values (hue=%u, sat=%u, bri=%u, con=%u)\n",
+				       input_arg.hue, input_arg.saturation, input_arg.brightness,
+				       input_arg.contrast);
+				return -EINVAL;
+			}
+
+			ark_display_layers[input_arg.layer_id] = input_arg;
+
+			pr_info("ark_display: ARKDISP_SET_VDE_CFG -> layer_id=%u hue=%u saturation=%u brightness=%u contrast=%u\n",
+				input_arg.layer_id, input_arg.hue, input_arg.saturation,
+				input_arg.brightness, input_arg.contrast);
+			return 0;
+		}
 	default:
 		pr_info("ark_display: unhandled ioctl cmd=0x%08x\n", cmd);
 		return -ENOTTY;

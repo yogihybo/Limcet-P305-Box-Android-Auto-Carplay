@@ -935,3 +935,142 @@ despite the software-level mux claim.
   investigation that led here.
 - `docs/historical/boot_experiment_log.md` — "Systematic I2C bus verification"
   section, the GT911 investigation this retroactively explains.
+
+---
+
+## The `/dev/ark_display` Character Device and Mock Shim
+
+### Role in the Subsystem
+The `/dev/ark_display` character device is registered as a Linux miscellaneous device. It is used by stock userspace applications (like `MsnCoreApp` and `MsnFirstInit`) to query panel dimensions, obtain screen IDs, and perform layer-level Video Display Engine (VDE) adjustments (brightness, contrast, hue, saturation).
+
+### Original BSP Driver vs. Mock Shim
+Although the original C source code of the stock BSP display driver is available under [vendor_source/ArkPro Reference/kernel/drivers/ark/display/](file:///media/sf_GitHub/prado-firmware-reconstruction/vendor_source/ArkPro%20Reference/kernel/drivers/ark/display/), we choose to implement and maintain a targeted mock shim (`hardware/ark_display.c`) instead of porting the original code.
+
+#### Reasons for Not Porting the Original Driver:
+1. **API Mismatches & Legacy Code:** The original driver was written for older kernels (Linux 2.6.x to 3.4.0). It relies heavily on deprecated/removed kernel APIs and proprietary vendor headers/interfaces like `<linux/ark/ringpair.h>` (ring buffer support) and `<mach/va_map.h>`.
+2. **Physical Display Control Path:** In the reconstructed kernel, physical display timings, clock division, and framebuffer output are handled cleanly by:
+   - **Stage 1 (U-Boot):** Reads NAND `arkdata` on boot and configures the LCD controller timing registers.
+   - **Stage 2 (Framebuffer):** The modern device-tree-enabled framebuffer driver `ark1668_lcdfb` controls `/dev/fb0` scanout.
+3. **No Direct Hardware Access Required:** The userspace apps use `/dev/ark_display` purely for parameters and adjustments. The mock driver does not need to touch physical SoC hardware registers to function; it is sufficient to track these states in-memory.
+
+### Supported IOCTLs
+The mock driver implements only the subset of ioctl commands queried by userspace to unblock application startup and settings:
+* **`ARKDISP_GET_SCREEN_INFO` (`0xc004a01d`)**: Decoupled macro using `unsigned long` as payload size to match userspace library encoding. Returns `screen_id = 0`, resolution `800x480`, and physical dimensions `120x72mm`.
+* **`ARKDISP_GET_VDE_CFG` (`0xc004a001`)**: Reads VDE configs (brightness, contrast, saturation, hue) for a given `layer_id` (< 5) from a static, in-memory array.
+* **`ARKDISP_SET_VDE_CFG` (`0x4004a002`)**: Validates input bounds (values `<= 255`) and stores VDE adjustments in RAM, printing a log statement so settings changes can be verified.
+
+---
+
+## Framebuffer `mmap` Cache Coherency (Resolved)
+
+### Symptoms
+Writing directly to `/dev/fb0` using sequential write calls (e.g. `dd if=/dev/urandom of=/dev/fb0`) successfully displays random noise on the screen. However, running user space diagnostic tools that map the framebuffer via memory mapping (e.g., `lcd-test bars`, `lcd-test gradient` using `mmap`) reports successful writes but results in **no visible output** on the screen.
+
+### Root Cause
+The `ark1668_lcdfb` driver allocates its video memory buffer using Write-Combining DMA allocation:
+```c
+info->screen_base = dma_alloc_wc(info->device, info->fix.smem_len, &info->fix.smem_start, GFP_KERNEL);
+```
+However, the driver's `fb_ops` structure did **not** implement a custom `.fb_mmap` handler. As a result:
+1. When a user space process called `mmap` on `/dev/fb0`, the kernel's default `fb_mmap` helper was invoked.
+2. The default helper mapped the memory without the correct write-combining DMA attributes, setting up standard cacheable page tables instead.
+3. CPU writes to the memory mapping were buffered in the CPU cache and did not get flushed to physical RAM.
+4. Because the LCD controller's DMA scanout fetches display data directly from physical RAM, it could not see the modified pixels in the CPU cache.
+
+### Solution
+We implemented a custom `.fb_mmap` operation inside [linux/drivers/video/fbdev/arkmicro/ark1668_lcdfb.c](file:///home/osboxes/Downloads/linux-arkmicro/linux/drivers/video/fbdev/arkmicro/ark1668_lcdfb.c) that delegates page remapping to `dma_mmap_wc`:
+```c
+static int ark1668_lcdfb_mmap(struct fb_info *info, struct vm_area_struct *vma)
+{
+	unsigned int offset = vma->vm_pgoff << PAGE_SHIFT;
+
+	if (offset < info->fix.smem_len) {
+		return dma_mmap_wc(info->device, vma, info->screen_base,
+				   info->fix.smem_start, info->fix.smem_len);
+	}
+
+	return -EINVAL;
+}
+```
+This maps the user space memory region with the identical write-combining and non-cached caching flags used by the kernel, ensuring cache coherency and making all `mmap` writes immediately visible on screen.
+
+---
+
+## Device Tree LCD Pinmux Overrides (RGB666 vs RGB888)
+
+### Symptoms
+Bit-banged I2C buses `i2c-gpio-0` (camera decoder `rn6752` and touchscreen `gt911`) and `i2c-gpio-1` (audio processor `BD37033`) experienced persistent register write timeouts and communication failures.
+
+### Root Cause
+The default device tree utilized `pinctrl_lcd_rgb888` which claimed all 24 color pins (`r0-r7`, `g0-g7`, `b0-b7`). 
+1. **`i2c-gpio-0` Collision:** Claimed Pins 2 & 3 (GPIO2/GPIO3) which were simultaneously claimed by the LCD as `r0`/`r1` (red LSBs).
+2. **`i2c-gpio-1` Collision:** Claimed Pin 9 (GPIO9) as SDA, which was simultaneously claimed by the LCD as `r7` (red MSB).
+
+Because the pinctrl driver locked these pins to the LCD function, the GPIO driver's requests for SCL/SDA bit-bang operations were ignored at the hardware pad level.
+
+### Solution
+Since the physical Prado board only routes 18 color traces (RGB666 mode) to the LCD panel, Pins 2, 3, and 9 are not electrically connected to the screen and can be used for I2C. 
+
+We overrode the LCD pinctrl configuration in [ark1668_limcet_p305.dts](file:///home/osboxes/Downloads/linux-arkmicro/linux/arch/arm/boot/dts/ark1668_limcet_p305.dts) by defining a custom `pinctrl_lcd_prado` group that explicitly excludes pins 2, 3, and 9:
+
+```dts
+&pinctrl0 {
+	pinctrl_lcd_prado: lcd-prado {
+		ark,pins =
+			<ARK_PBANK_0 4 ARK_PVAL_1		/* r2 */
+			 ARK_PBANK_0 5 ARK_PVAL_1		/* r3 */
+			 ARK_PBANK_0 6 ARK_PVAL_1		/* r4 */
+			 ARK_PBANK_0 7 ARK_PVAL_1		/* r5 */
+			 ARK_PBANK_0 8 ARK_PVAL_1		/* r6 */
+			 /* Exclude r0, r1 (pins 2, 3) and r7 (pin 9) for I2C use */
+			 ARK_PBANK_0 10 ARK_PVAL_1		/* g0 */
+			 ARK_PBANK_0 11 ARK_PVAL_1		/* g1 */
+			 ARK_PBANK_0 12 ARK_PVAL_1		/* g2 */
+			 ARK_PBANK_0 13 ARK_PVAL_1		/* g3 */
+			 ARK_PBANK_0 14 ARK_PVAL_1		/* g4 */
+			 ARK_PBANK_0 15 ARK_PVAL_1		/* g5 */
+			 ARK_PBANK_0 16 ARK_PVAL_1		/* g6 */
+			 ARK_PBANK_0 17 ARK_PVAL_1		/* g7 */
+			 ARK_PBANK_0 18 ARK_PVAL_1		/* b0 */
+			 ARK_PBANK_0 19 ARK_PVAL_1		/* b1 */
+			 ARK_PBANK_0 20 ARK_PVAL_1		/* b2 */
+			 ARK_PBANK_0 21 ARK_PVAL_1		/* b3 */
+			 ARK_PBANK_0 22 ARK_PVAL_1		/* b4 */
+			 ARK_PBANK_0 23 ARK_PVAL_1		/* b5 */
+			 ARK_PBANK_0 24 ARK_PVAL_1		/* b6 */
+			 ARK_PBANK_0 25 ARK_PVAL_1>;	/* b7 */
+	};
+};
+```
+
+We then mapped the `&lcdc` controller to use this custom group:
+```dts
+&lcdc {
+	pinctrl-0 = <&pinctrl_lcd_base &pinctrl_lcd_prado>;
+};
+```
+This frees up SCL/SDA pins at the pinctrl level, allowing bit-banged I2C commands to propagate to the physical peripherals.
+
+---
+
+### Update: Resolving the Persistent I2C Mux Timeout (2026-07-15)
+
+Even after overriding the LCD pinctrl configuration, write timeouts to the BD37033 audio processor (`bd37033_write_byte timeout`) persisted because the hardware pad register for Pin 9 was not dynamically switching to GPIO mode.
+
+**Root Cause**: The pinctrl-to-gpio mapping was incomplete. In the device tree, the `&gpio0` controller defines the mapped ranges using the `gpio-ranges` property. In the stock configuration, this property was missing the mapping for GPIOs 8 and 9:
+```dts
+gpio-ranges = <&pinctrl0 0 0 6>, <&pinctrl0 6 6 2>, <&pinctrl0 10 10 22>;
+```
+Because of this gap, when the `i2c-gpio-1` driver requested GPIO 9, the kernel failed to find a valid pinctrl mapping. Consequently, it skipped calling the pinctrl driver's `.gpio_request_enable` callback, and Pin 9 remained stuck in its boot-time function (`lcd-rgb-0`).
+
+**Fix**: We corrected the `gpio-ranges` property in [hardware/ark1668-limcet-prado.dts](file:///media/sf_GitHub/prado-firmware-reconstruction/hardware/ark1668-limcet-prado.dts#L264) to map the entire 32-pin GPIO bank:
+```dts
+&gpio0 {
+	gpio-ranges = <&pinctrl0 0 0 32>;
+};
+```
+This forces the kernel to successfully invoke the pinctrl driver and reprogram the hardware register `0xe49001c0` (bits `[31:28]`) to GPIO mode (`PVAL=0`) during driver initialization.
+
+
+
+

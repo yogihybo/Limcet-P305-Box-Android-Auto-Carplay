@@ -52,6 +52,15 @@ fi
 
 echo
 echo "--- 3. USB power switch GPIOs (117, 126) ---"
+# Mount debugfs if not already present to check GPIO status
+DEBUGFS_MOUNTED=0
+if [ ! -e "/sys/kernel/debug/gpio" ]; then
+	mkdir -p /sys/kernel/debug 2>/dev/null
+	if mount -t debugfs none /sys/kernel/debug 2>/dev/null; then
+		DEBUGFS_MOUNTED=1
+	fi
+fi
+
 for GPIO in 117 126; do
 	if [ -e "/sys/kernel/debug/gpio" ] && grep -q "gpio-$GPIO" /sys/kernel/debug/gpio 2>/dev/null; then
 		pass "GPIO $GPIO (usb_pwr) shows as claimed in /sys/kernel/debug/gpio"
@@ -59,6 +68,10 @@ for GPIO in 117 126; do
 		unk "GPIO $GPIO (usb_pwr) not found in /sys/kernel/debug/gpio -- may still be fine if claimed via a different debug path"
 	fi
 done
+
+if [ "$DEBUGFS_MOUNTED" -eq 1 ]; then
+	umount /sys/kernel/debug 2>/dev/null || true
+fi
 
 echo
 echo "=== Summary: $PASS pass, $FAIL fail, $UNKNOWN unknown ==="

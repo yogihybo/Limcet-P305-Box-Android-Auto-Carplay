@@ -1,0 +1,2 @@
+aplay -D hw:0,0 -f S16_LE -r 44100 -c 2 /dev/urandom
+

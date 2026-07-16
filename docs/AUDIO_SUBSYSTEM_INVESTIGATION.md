@@ -1175,3 +1175,44 @@ with BD37033's I2C path.
       volume, bypassing `softvol` via `hw:0,0` directly) for
       completeness — three independent, testable volume paths now
       identified on this one card.
+
+---
+
+### Update: Resolving the Persistent Mux Timeout (2026-07-15)
+
+The root cause of the persistent `bd37033_write_byte timeout` has been identified and fixed.
+
+#### Root Cause
+Although `pinctrl_lcd_prado` excluded Pin 9 (GPIO9/SDA) from the LCD's pinmux group, the hardware multiplexing register for Pin 9 (`0xe49001c0`) remained statically configured as `lcd-rgb-0` (`PVAL=1`). 
+
+This happened because the `&gpio0` controller node's `gpio-ranges` property was missing the mapping for GPIOs 8 and 9. When the bit-banged I2C driver called `gpio_request(9)` to allocate the SDA line, the generic gpiolib framework couldn't find a corresponding pinctrl range. Therefore, the pinctrl driver's `.gpio_request_enable` callback was never invoked, leaving Pin 9 driven by the LCD controller at the physical hardware level.
+
+#### Resolution
+We modified `gpio-ranges` in `&gpio0` to map the full 32-pin GPIO bank:
+```dts
+&gpio0 {
+	gpio-ranges = <&pinctrl0 0 0 32>;
+};
+```
+Now, when the `i2c-gpio-1` driver initializes and requests GPIO 9, the kernel successfully calls `ark_gpio_request_enable` to reprogram the pad register `0xe49001c0` (bits `[31:28]`) to GPIO mode (`PVAL=0`), freeing SCL and SDA electrically to talk to the BD37033.
+
+
+### Update: Releasing External I²S Playback Reset and Pinmux Gating (2026-07-16)
+
+#### Problem
+After adding the CS4334 stereo I²S DAC to the simple-audio-card configuration in the device tree, attempts to play audio via `aplay -D hw:0,0` failed immediately with `write error: Input/output error` (EIO) on the first PCM write.
+
+#### Root Causes
+1. **Controller Software Reset Gating**:
+   The physical CS4334 DAC is wired to the SoC's second I²S controller (`i2s_adc` / `ark_i2s_dev.1` at `0xe8200000`). This controller was held in soft reset at the hardware level by register `0xe490006c` (bit 0), which was never cleared by the 4.19 kernel.
+2. **Startup Pinmux and Clock Gating**:
+   The I²S driver (`sound/soc/arkmicro/ark1668_i2s.c`) hardcoded pad configurations inside `ark_i2s_startup` based on stream type (`PLAYBACK` vs `CAPTURE`). Since playback on the external I²S port was never anticipated by the vendor's driver structure, the `PLAYBACK` branch only set clock outputs for `I2S1` (internal DAC), neglecting to map the `I2S2` pin multiplexer (`PAD_CTRL09`/`PAD_CTRL0A`) or toggle the data direction pin (`PAD_CTRL06`) to output mode. Without BCLK/SYNC and data routing enabled, the controller could never assert DMA requests (DREQ).
+
+#### Resolution
+1. **Reset Release**:
+   Modified `ark1668_i2s_drv_probe` to inspect `mem->start` and release the soft-reset for the targeted I²S controller (bit 0 for external I2S2/ADC at `0xe8200000`, bit 2 for internal I2S1/DAC at `0xe4000000`) by writing to `0xe490006c`.
+2. **Dynamic Startup Configuration**:
+   Refactored `ark_i2s_startup` to dynamically configure the pinmuxes (`PAD_CTRL09`/`PAD_CTRL0A`), clocks (`PAD_CTRL0C`), and data direction (`PAD_CTRL06`) based on the active controller's physical base address instead of a hardcoded stream direction:
+   * If base is `0xe8200000`, it now always maps the BCLK, SYNC, and SADATA pinmuxes, and dynamically configures the data direction register `PAD_CTRL06` to output mode for `PLAYBACK` or input mode for `CAPTURE`.
+
+

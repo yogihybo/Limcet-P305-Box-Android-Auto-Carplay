@@ -27,7 +27,7 @@ echo "=== audio-test: $(date) ==="
 
 echo
 echo "--- 1. Sound card registration ---"
-if [ -r /proc/asound/cards ] && [ -s /proc/asound/cards ]; then
+if [ -r /proc/asound/cards ] && grep -q "." /proc/asound/cards; then
 	cat /proc/asound/cards
 	pass "at least one ALSA sound card registered"
 else
@@ -47,10 +47,13 @@ I2CSCAN="$(dirname "$0")/../i2c-scan/i2c-scan"
 [ -x "$I2CSCAN" ] || I2CSCAN="$(dirname "$0")/i2c-scan"
 [ -x "$I2CSCAN" ] || I2CSCAN="$(command -v i2c-scan 2>/dev/null)"
 if [ -n "$I2CSCAN" ] && [ -x "$I2CSCAN" ]; then
-	if "$I2CSCAN" 2>&1 | grep -q "0x40"; then
-		pass "BD37033 ACKs at 0x40 on i2c-gpio2"
+	# The ROHM BD37033 is on the second bit-banged I2C bus: /dev/i2c-2.
+	# We pass the bus device node and verify if the address 0x40 (which is
+	# the first column in row 40:) ACKs (reports 40 or 40*).
+	if "$I2CSCAN" /dev/i2c-2 2>&1 | grep -E "^40:" | grep -q -E "(40|40\*)"; then
+		pass "BD37033 ACKs at 0x40 on i2c-gpio2 (/dev/i2c-2)"
 	else
-		fail "no ACK seen at 0x40 -- BD37033 not responding on the bus (i2c-scan output above)"
+		fail "no ACK seen at 0x40 -- BD37033 not responding on the bus (/dev/i2c-2)"
 	fi
 else
 	unk "i2c-scan not found (checked ../i2c-scan/, alongside this script, and \$PATH) -- copy it somewhere findable or run it separately"

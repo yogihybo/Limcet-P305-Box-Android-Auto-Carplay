@@ -1,6 +1,6 @@
 /*
  * lcd-test — live LCD/framebuffer diagnostic tool, same purpose/style as
- * tools/i2c-scan and tools/ark1680-ts-test: a static ARM binary to run at
+ * tools/i2c-scan and tools/touch-test: a static ARM binary to run at
  * the live root shell, testing the raw kernel framebuffer (/dev/fb0)
  * directly -- no Qt/QWS server involved, so it works even though
  * MsnCoreApp/LCDTest -qws currently segfault (see
@@ -149,16 +149,7 @@ static void put_pixel(unsigned char *fbmem, const struct fb_var_screeninfo *v,
 		       const struct fb_fix_screeninfo *f, int x, int y, unsigned int pixel)
 {
 	int bypp = v->bits_per_pixel / 8;
-	/* Must account for the currently panned page (xoffset/yoffset) -- on a
-	 * double/triple-buffered fb (yres_virtual > yres), the visible page
-	 * is not necessarily at mmap offset 0. Writing without this offset
-	 * silently lands on an off-screen back buffer: the write succeeds,
-	 * the tool reports success, but nothing appears on the panel. This
-	 * was a real bug here (2026-07-14) -- open_fb() now force-pans to
-	 * (0,0) so v->xoffset/v->yoffset are 0 by the time we get here, but
-	 * keep using them (not literal 0) in case a future caller skips that
-	 * step or panning isn't supported and the fallback below is hit. */
-	unsigned char *p = fbmem + (y + v->yoffset) * f->line_length + (x + v->xoffset) * bypp;
+	unsigned char *p = fbmem + y * f->line_length + x * bypp;
 
 	memcpy(p, &pixel, bypp);
 }
@@ -183,11 +174,11 @@ static int open_fb(int *out_fd, unsigned char **out_mem, struct fb_var_screeninf
 		close(fd);
 		return -1;
 	}
+
 	/* Force the visible page to (0,0) so our writes are guaranteed to
 	 * land where they're actually displayed, regardless of whatever page
 	 * a compositor/QWS server last panned to. If panning isn't supported
-	 * by this driver, fall through and rely on put_pixel()'s use of the
-	 * offset actually reported by FBIOGET_VSCREENINFO instead. */
+	 * by this driver, fall through and rely on writing at the current offset. */
 	if (v->xoffset != 0 || v->yoffset != 0) {
 		struct fb_var_screeninfo pv = *v;
 		pv.xoffset = 0;
@@ -195,25 +186,29 @@ static int open_fb(int *out_fd, unsigned char **out_mem, struct fb_var_screeninf
 		if (ioctl(fd, FBIOPAN_DISPLAY, &pv) == 0) {
 			v->xoffset = 0;
 			v->yoffset = 0;
-		} else {
-			fprintf(stderr,
-				"warning: fb reports xoffset=%u yoffset=%u (panned/"
-				"double-buffered) and FBIOPAN_DISPLAY to (0,0) failed: %s "
-				"-- writing at the current offset instead, but if something "
-				"else pans the display afterwards this write may become "
-				"invisible again\n",
-				v->xoffset, v->yoffset, strerror(errno));
 		}
 	}
-	mem = mmap(NULL, f->smem_len, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-	if (mem == MAP_FAILED) {
-		fprintf(stderr, "mmap /dev/fb0 failed: %s\n", strerror(errno));
+
+	mem = malloc(f->smem_len);
+	if (!mem) {
+		fprintf(stderr, "malloc local fb buffer failed\n");
 		close(fd);
 		return -1;
 	}
+	memset(mem, 0, f->smem_len);
+
 	*out_fd = fd;
 	*out_mem = mem;
 	return 0;
+}
+
+static void close_fb(int fd, unsigned char *mem, const struct fb_var_screeninfo *v, const struct fb_fix_screeninfo *f)
+{
+	int bypp = v->bits_per_pixel / 8;
+	lseek(fd, v->yoffset * f->line_length + v->xoffset * bypp, SEEK_SET);
+	write(fd, mem, f->line_length * v->yres);
+	free(mem);
+	close(fd);
 }
 
 static int cmd_fill(const char *colorspec)
@@ -245,8 +240,7 @@ static int cmd_fill(const char *colorspec)
 			put_pixel(mem, &v, &f, x, y, pixel);
 
 	printf("Filled %ux%u @ %ubpp with (%u,%u,%u)\n", v.xres, v.yres, v.bits_per_pixel, r, g, b);
-	munmap(mem, f.smem_len);
-	close(fd);
+	close_fb(fd, mem, &v, &f);
 	return 0;
 }
 
@@ -274,8 +268,7 @@ static int cmd_bars(void)
 	}
 
 	printf("Drew %d-bar color pattern on %ux%u @ %ubpp\n", nbars, v.xres, v.yres, v.bits_per_pixel);
-	munmap(mem, f.smem_len);
-	close(fd);
+	close_fb(fd, mem, &v, &f);
 	return 0;
 }
 
@@ -299,27 +292,140 @@ static int cmd_gradient(void)
 	}
 
 	printf("Drew red->green gradient on %ux%u @ %ubpp\n", v.xres, v.yres, v.bits_per_pixel);
-	munmap(mem, f.smem_len);
+	close_fb(fd, mem, &v, &f);
+	return 0;
+}
+
+static int cmd_run(void)
+{
+	int fd;
+	unsigned char *mem;
+	struct fb_var_screeninfo v;
+	struct fb_fix_screeninfo f;
+	int x, y;
+	unsigned int pixel;
+	int bypp;
+
+	/* 1. Output the info message first */
+	cmd_info();
+	printf("\nStarting automated LCD test sequence...\n");
+
+	if (open_fb(&fd, &mem, &v, &f) < 0)
+		return 1;
+
+	bypp = v.bits_per_pixel / 8;
+
+	/* --- Phase 1: Random Noise --- */
+	printf("1. Displaying random noise (2 seconds)...\n");
+	for (y = 0; y < (int)v.yres; y++) {
+		for (x = 0; x < (int)v.xres; x++) {
+			unsigned char r = rand() % 256;
+			unsigned char g = rand() % 256;
+			unsigned char b = rand() % 256;
+			pixel = pack_rgb(&v, r, g, b);
+			put_pixel(mem, &v, &f, x, y, pixel);
+		}
+	}
+	lseek(fd, v.yoffset * f.line_length + v.xoffset * bypp, SEEK_SET);
+	if (write(fd, mem, f.line_length * v.yres) < 0) {
+		fprintf(stderr, "write failed\n");
+	}
+	sleep(2);
+
+	/* --- Phase 2: Solid Colors --- */
+	static const struct {
+		const char *name;
+		unsigned char r, g, b;
+	} colors[] = {
+		{"Red", 255, 0, 0},
+		{"Green", 0, 255, 0},
+		{"Blue", 0, 0, 255},
+		{"White", 255, 255, 255},
+		{"Black", 0, 0, 0}
+	};
+	int ncolors = sizeof(colors) / sizeof(colors[0]);
+	int i;
+	for (i = 0; i < ncolors; i++) {
+		printf("2.%d Displaying solid %s (1 second)...\n", i + 1, colors[i].name);
+		pixel = pack_rgb(&v, colors[i].r, colors[i].g, colors[i].b);
+		for (y = 0; y < (int)v.yres; y++)
+			for (x = 0; x < (int)v.xres; x++)
+				put_pixel(mem, &v, &f, x, y, pixel);
+		lseek(fd, v.yoffset * f.line_length + v.xoffset * bypp, SEEK_SET);
+		if (write(fd, mem, f.line_length * v.yres) < 0) {
+			fprintf(stderr, "write failed\n");
+		}
+		sleep(1);
+	}
+
+	/* --- Phase 3: Color Bars --- */
+	printf("3. Displaying vertical color bars (2 seconds)...\n");
+	static const unsigned char bars[][3] = {
+		{255,255,255}, {255,255,0}, {0,255,255}, {0,255,0},
+		{255,0,255}, {255,0,0}, {0,0,255}, {0,0,0},
+	};
+	int nbars = sizeof(bars) / sizeof(bars[0]);
+	for (x = 0; x < (int)v.xres; x++) {
+		int bar = x * nbars / v.xres;
+		pixel = pack_rgb(&v, bars[bar][0], bars[bar][1], bars[bar][2]);
+		for (y = 0; y < (int)v.yres; y++)
+			put_pixel(mem, &v, &f, x, y, pixel);
+	}
+	lseek(fd, v.yoffset * f.line_length + v.xoffset * bypp, SEEK_SET);
+	if (write(fd, mem, f.line_length * v.yres) < 0) {
+		fprintf(stderr, "write failed\n");
+	}
+	sleep(2);
+
+	/* --- Phase 4: Red-to-Green Gradient --- */
+	printf("4. Displaying red-to-green gradient (2 seconds)...\n");
+	for (x = 0; x < (int)v.xres; x++) {
+		unsigned char r = (unsigned char)(255 * x / (int)v.xres);
+		unsigned char g = (unsigned char)(255 - r);
+		pixel = pack_rgb(&v, r, g, 0);
+		for (y = 0; y < (int)v.yres; y++)
+			put_pixel(mem, &v, &f, x, y, pixel);
+	}
+	lseek(fd, v.yoffset * f.line_length + v.xoffset * bypp, SEEK_SET);
+	if (write(fd, mem, f.line_length * v.yres) < 0) {
+		fprintf(stderr, "write failed\n");
+	}
+	sleep(2);
+
+	/* --- Clear Screen to Black --- */
+	pixel = pack_rgb(&v, 0, 0, 0);
+	for (y = 0; y < (int)v.yres; y++)
+		for (x = 0; x < (int)v.xres; x++)
+			put_pixel(mem, &v, &f, x, y, pixel);
+	lseek(fd, v.yoffset * f.line_length + v.xoffset * bypp, SEEK_SET);
+	if (write(fd, mem, f.line_length * v.yres) < 0) {
+		fprintf(stderr, "write failed\n");
+	}
+
+	free(mem);
 	close(fd);
+	printf("LCD test sequence complete.\n");
 	return 0;
 }
 
 static void usage(const char *argv0)
 {
 	fprintf(stderr,
-		"usage: %s info\n"
-		"       %s fill <red|green|blue|white|black|r,g,b>\n"
-		"       %s bars\n"
-		"       %s gradient\n",
-		argv0, argv0, argv0, argv0);
+		"usage: %s [run|test]                     - print info and cycle through all test patterns\n"
+		"       %s info                           - print framebuffer and display info\n"
+		"       %s fill <red|green|blue|...|r,g,b> - fill screen with solid color\n"
+		"       %s bars                           - draw color-bars pattern\n"
+		"       %s gradient                       - draw red->green gradient\n",
+		argv0, argv0, argv0, argv0, argv0);
 }
 
 int main(int argc, char **argv)
 {
 	if (argc < 2) {
-		usage(argv[0]);
-		return 1;
+		return cmd_run();
 	}
+	if (strcmp(argv[1], "run") == 0 || strcmp(argv[1], "test") == 0)
+		return cmd_run();
 	if (strcmp(argv[1], "info") == 0)
 		return cmd_info();
 	if (strcmp(argv[1], "fill") == 0 && argc >= 3)

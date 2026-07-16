@@ -30,7 +30,7 @@ set -e
 
 ROOT="${1:?usage: build_tools/restore_rootfs_symlinks.sh <rootfs-dir> [manifest]}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-MANIFEST="${2:-$SCRIPT_DIR/build_tools/rootfs.symlinks}"
+MANIFEST="${2:-$SCRIPT_DIR/rootfs.symlinks}"
 
 [ -d "$ROOT" ]     || { echo "restore_rootfs_symlinks: not a directory: $ROOT" >&2; exit 1; }
 [ -f "$MANIFEST" ] || { echo "restore_rootfs_symlinks: manifest not found: $MANIFEST" >&2; exit 1; }

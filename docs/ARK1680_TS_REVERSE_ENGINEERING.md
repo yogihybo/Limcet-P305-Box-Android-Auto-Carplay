@@ -1,7 +1,7 @@
 # Ark1680 Ts Reverse Engineering
 
 **Status:** Reference
-**Last Updated:** 2026-07-15
+**Last Updated:** 2026-07-16
 
 ## Overview
 
@@ -337,6 +337,85 @@ the leading hypothesis.
 3. Decode `TSP_GetXY` before trusting reported coordinates — the above is
    enough to get raw ADC IRQs firing and confirm the hardware responds,
    but not enough for calibrated touch output yet.
+
+---
+
+## The userspace consumer: `tslib`'s `input.so` (2026-07-16)
+
+**Why:** `/etc/ts.conf` (`module_raw input`) means every touch event, from
+either kernel driver above, is read by this plugin before reaching
+`tslib`'s filter chain (`pthres`→`variance`→`dejitter`→`linear`) and
+then `MsnCoreApp`. Decompiled to rule it out as a source of the touch
+problem and to document the exact stderr diagnostic it prints if a
+kernel driver's evdev capability bits are wrong.
+
+**File:** `mtd6_rootfs/usr/lib/ts/input.so` (8 KB ARM32 shared object,
+**not stripped** — full symbol table). `arm-linux-gnueabihf-objdump -d`
++ `readelf -sW` used for recovery.
+
+**Finding: this is stock, unpatched tslib source, not vendor code.**
+The symbol table names the original source file `input-raw.c`, exposes
+`ts_input_read`/`ts_input_fini`/`mod_init`/`__ts_input_ops` (tslib's
+raw-`evdev` plugin), and its `.rodata` contains tslib's stock diagnostic
+strings verbatim (`"selected device is not a touchscreen I understand"`,
+`"tslib: dropped x = 0"`, `"tslib: dropped y = 0"`,
+`"tslib: Unknown event type %d"`). `usr/lib/pkgconfig/tslib-0.0.pc`
+confirms the build (`Version: 0.0.2`). No custom logic, no vendor
+patches — this binary can be treated as a known quantity; any touch
+misbehavior originates upstream of it (kernel driver / evdev bitmap) or
+downstream of it (the filter chain / `MsnCoreApp`), not in this plugin.
+
+### `mod_init` (`0xc8c`)
+
+`malloc(36)`, zeroes the module's cached-state fields (offsets
+`+16/+20/+24/+28/+32` — last-known x/y/pressure, "checked" flag, "grab"
+flag), and wires field `+12` to the plugin's ops vtable (`__ts_input_ops`
+— `{ read = ts_input_read, fini = ts_input_fini }`, matching tslib's
+generic `struct tslib_module_info { next, ops }` layout).
+
+### `ts_input_read` (`0x790`) — capability probe (first call only)
+
+State field `+28` is a tristate cache (`0` = unchecked, `-1` = "already
+rejected, don't retry", else = normal). On the very first call it probes
+the fd with three `ioctl()`s against `/dev/input/eventN`:
+
+| Call | Request code | Meaning |
+|---|---|---|
+| `ioctl(fd, EVIOCGVERSION, &ver)` | `0x80044501` | evdev driver version sanity check |
+| `ioctl(fd, EVIOCGBIT(0, 32), bits)` | `0x80204520` | bitmap of supported **event types** (`EV_SYN`/`EV_KEY`/`EV_ABS`/…) |
+| `ioctl(fd, EVIOCGBIT(EV_ABS, 64), bits)` | `0x80404523` | bitmap of supported **absolute axes** |
+
+It then requires, from the `EV_ABS` bitmap: bit 0 (`ABS_X`) **and** bit 1
+(`ABS_Y`) **and** bit 24 (`ABS_PRESSURE`) all set. If any `ioctl` fails
+or any bit is missing, it prints `"selected device is not a touchscreen
+I understand"` to stderr, permanently caches `-1` in `+28` (so every
+later call is a silent instant no-op returning 0 samples), and the
+plugin is effectively dead for that fd for the rest of the process.
+
+**Practical upshot for this investigation:** if touch is ever tested live
+again, grepping stderr/dmesg-adjacent app logs for that exact string is
+a fast, unambiguous way to tell "kernel driver never advertises
+`ABS_X`/`ABS_Y`/`ABS_PRESSURE` capability bits" apart from "kernel driver
+advertises them fine but never posts events" — the former fails here in
+userspace on the very first read, the latter passes this check and just
+blocks in `read()` forever. Neither `ark1680_ts.ko` nor `gt9xx.ko`'s
+capability-bit setup has been checked against this specific requirement
+yet.
+
+### `ts_input_read` — steady state
+
+Once the probe passes, each call loops `read(fd, buf, 16)` (one
+`struct input_event`: `sec, usec, type, code, value`) up to the
+caller-requested sample count, updating cached x/y/pressure on
+`EV_ABS` events (`ABS_X`, `ABS_Y`, `ABS_PRESSURE`/code `0x18`) and
+emitting a `struct ts_sample` on `EV_KEY`/`SYN`-driven boundaries. Unknown
+event types produce the `"tslib: Unknown event type %d"` stderr message
+(the only reachable `fprintf` in the function) but do not abort the
+read loop.
+
+### `ts_input_fini` (`0x780`)
+
+`free()`s the module struct, returns 0. Trivial, no surprises.
 
 ---
 

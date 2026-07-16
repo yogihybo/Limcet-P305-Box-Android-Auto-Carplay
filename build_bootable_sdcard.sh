@@ -221,7 +221,7 @@ declare -a DIAG_TOOLS_BINS=(
     "$SCRIPT_DIR/tools/bt-test/bt-test.sh"                 # GPIO91/ttyHS1/blueware check, see tools/bt-test/README.md
     "$SCRIPT_DIR/tools/usb-test/usb-test.sh"               # USB regression check, see tools/usb-test/README.md
     "$SCRIPT_DIR/tools/mmc-test/mmc-test.sh"               # read-only MMC/SD check, see tools/mmc-test/README.md
-    "$SCRIPT_DIR/tools/mcu-handshake/mcu-handshake.py"     # manual MCU handshake daemon, see tools/mcu-handshake/README.md
+    "$SCRIPT_DIR/tools/mcu-handshake/mcu-handshake"        # manual MCU handshake daemon, see tools/mcu-handshake/README.md
 )
 NON_INTERACTIVE=false
 DRY_RUN=false
@@ -1396,8 +1396,8 @@ append_diag_banner() {
                 mmc-test.sh)
                     echo 'echo "  mmc-test.sh                          - read-only MMC/SD check"'
                     ;;
-                mcu-handshake.py)
-                    echo 'echo "  mcu-handshake.py                     - manual MCU handshake daemon to enable touch panel"'
+                mcu-handshake)
+                    echo 'echo "  mcu-handshake                        - manual MCU handshake daemon to enable touch panel"'
                     ;;
                 *)
                     echo "echo \"  $name\""

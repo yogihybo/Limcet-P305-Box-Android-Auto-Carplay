@@ -27,6 +27,28 @@ ARKTS="$(dirname "$0")/../ark1680-ts-test/ark-ts-test"
 
 echo "=== touch-selftest: $(date) ==="
 
+# Ensure MCU handshake is running so the CBT16211A bus switch is closed
+STARTED_HANDSHAKE=0
+if ! pgrep mcu-handshake >/dev/null 2>&1; then
+	if pgrep MsnCoreApp >/dev/null 2>&1; then
+		echo "MsnCoreApp is running (which handles the handshake itself)."
+	else
+		echo "MCU handshake daemon is not running -- launching it in the background..."
+		# Try local tool path or standard /usr/bin path
+		HANDSHAKE_TOOL="$(dirname "$0")/../mcu-handshake/mcu-handshake"
+		[ -f "$HANDSHAKE_TOOL" ] || HANDSHAKE_TOOL="$(dirname "$0")/mcu-handshake"
+		[ -f "$HANDSHAKE_TOOL" ] || HANDSHAKE_TOOL="/usr/bin/mcu-handshake"
+		if [ -f "$HANDSHAKE_TOOL" ]; then
+			"$HANDSHAKE_TOOL" >/tmp/mcu_handshake_temp.log 2>&1 &
+			HANDSHAKEPID=$!
+			STARTED_HANDSHAKE=1
+			sleep 2 # Give it a moment to complete the first handshake
+		else
+			echo "WARNING: mcu-handshake not found. Touch switch might remain open."
+		fi
+	fi
+fi
+
 echo
 echo "--- 1. dmesg probe check ---"
 if dmesg | grep -qi "ark1680.*touchscreen registered"; then
@@ -116,6 +138,12 @@ if command -v ts_print_raw >/dev/null 2>&1; then
 	fi
 else
 	unk "ts_print_raw not found in PATH"
+fi
+
+if [ "$STARTED_HANDSHAKE" -eq 1 ]; then
+	echo "Stopping temporary background MCU handshake daemon..."
+	kill "$HANDSHAKEPID" 2>/dev/null
+	wait "$HANDSHAKEPID" 2>/dev/null
 fi
 
 echo

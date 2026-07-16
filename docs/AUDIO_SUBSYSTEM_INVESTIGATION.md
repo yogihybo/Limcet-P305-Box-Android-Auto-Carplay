@@ -1766,12 +1766,46 @@ QString::~QString()`). Verified via `objdump` that the branch lands
 correctly and the earlier `sendSoundData()` patch (`0x35064`) is still
 intact in the same file.
 
+**Live-tested (2026-07-16): landing point was itself broken — corrected.**
+First attempt branched to `0x3a298` (`add r0, sp, #440; bl
+QString::~QString()`), reasoning it was "the next legitimate destructor
+call" purely because it was the next sequential instruction. Wrong: a
+fresh crash capture (`docs/logs/msn app err-7.log`) showed the exact
+same defect one instruction further in — `QString::~QString()` itself
+crashing, PC inside `MsnCoreApp`'s own copy of the destructor
+(`_ZN7QStringD1Ev+0x14`), fault value `1` this time, called from
+`initSoundParams()+0x72c` (one call further than the first crash's
+`+0x6f8`). Systematically grepped the full function disassembly for
+every stack offset referenced in this trailing block:
+
+| Offset | Written anywhere in the function? | Verdict |
+|---|---|---|
+| `sp+444` (`0x1bc`) | No — only its own broken cleanup | broken (already patched) |
+| `sp+440` (`0x1b8`) | No — only its own destructor call | **broken** |
+| `sp+424` (`0x1a8`) | No — only its own destructor call | **broken** |
+| `sp+20` | Yes, `0x39e98` (real `getSettingValue`/`toStringList()` code) | safe |
+| `sp+60` (`0x3c`) | Yes, `0x39e04` (real empty-QByteArray init) | safe |
+
+Three broken locals in a row in the same trailing block, not one —
+"next instruction after the crash" is not a valid heuristic for
+"safe landing point" on its own; each candidate needs the same
+grep-for-any-`str`-to-that-offset check before trusting it.
+
+**Fix corrected:** the same `0x3a26c` patch now branches to `0x3a2a8`
+(`mov r0, r6; bl QEvent::~QEvent()`) instead of `0x3a298` — skipping
+past both `sp+440` and `sp+424`'s broken destructor calls in addition
+to the original `sp+444` one, landing on the destructor for `r6` (the
+genuinely-constructed `MsnEvent` from earlier in this same function),
+confirmed untouched between construction and this point. Everything
+downstream of that (the `QList<QString>` destructor on `sp+20`, the
+`QByteArray` cleanup on `sp+60`, and the final `sendSoundData(17, 80,
+...)` call + epilogue) all checked out as legitimately initialized.
+
 **Not yet hardware-tested.** Needs the rootfs image repackaged
-(`build_bootable_sdcard.sh`) and reflashed, then a live retest.
-Given this is the *second* instance of this exact defect class found
-in `libSetting.so`, it's worth treating as a possibility that more
-exist elsewhere in the same binary (or others) rather than assuming
-this is the last one — if `MsnCoreApp` crashes again with fault address
-`00000008`, get a fresh `err-N.log`/register dump (not just terminal
-output) and repeat this same disassembly process at the new crash
-offset.
+(`build_bootable_sdcard.sh`) and reflashed, then a live retest. Given
+three broken locals turned up in one trailing block alone, treat this
+as a strong prior that more exist elsewhere in this binary (or others)
+— if `MsnCoreApp` crashes again, get a fresh `err-N.log`/register dump
+and, critically, **verify the chosen landing point itself** by grepping
+for writes to every stack offset the trailing code touches, not just
+the one at the immediate crash site.

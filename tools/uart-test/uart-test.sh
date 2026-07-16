@@ -46,7 +46,7 @@ listen_port() {
 		echo "error $(head -1 "$log")"
 		return
 	fi
-	SZ=$(wc -c < "$log" 2>/dev/null | tr -d ' ')
+	SZ=$(wc -c < "$log" 2>/dev/null | busybox tr -d ' ')
 	if [ "${SZ:-0}" -gt 0 ]; then
 		echo "data $SZ"
 	else

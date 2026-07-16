@@ -36,23 +36,35 @@ tar xzf ncurses-6.1.tar.gz && cd ncurses-6.1
   --with-terminfo-dirs=/usr/share/terminfo
 make -j$(nproc) && make install
 
-# 2. nano, static, linked against the ncurses build above
+# 2. nano, static, linked against the ncurses build above, with NSS calls
+#    stubbed out -- see tools/nss-stub/README.md for why this is required,
+#    not optional (confirmed on real hardware, see below)
+arm-linux-gnueabihf-gcc -c -O2 -o nss_stub.o ../nss-stub/nss_stub.c
 tar xf nano-7.2.tar.xz && cd nano-7.2
+WRAP="-Wl,--wrap=getpwnam,--wrap=getpwuid,--wrap=getpwnam_r,--wrap=getpwuid_r,--wrap=getpwent,--wrap=setpwent,--wrap=endpwent"
 ./configure --host=arm-linux-gnueabihf --build=x86_64-linux-gnu \
   --prefix=/tmp/nano-install \
   --disable-nls --disable-utf8 --disable-libmagic --disable-speller \
   CPPFLAGS="-I/tmp/ncurses-install/include -I/tmp/ncurses-install/include/ncurses" \
-  LDFLAGS="-L/tmp/ncurses-install/lib -static" \
+  LDFLAGS="-L/tmp/ncurses-install/lib -static $WRAP ../nss_stub.o" \
   LIBS="-lncurses"
 make -j$(nproc)
 arm-linux-gnueabihf-strip -o nano src/nano
 ```
 
-The usual glibc-static-linking warnings about `getpwent`/`getpwuid`/
-`getpwnam_r` (NSS) at link time are expected and harmless here -- this
-rootfs only ever does local flat-file `/etc/passwd` lookups, which
-glibc's statically-linked "files" backend handles fine; there's no NSS
-module loading involved.
+**Corrected 2026-07-16 -- this NSS stubbing is required, not just
+noise-reduction.** An earlier version of this README claimed the
+glibc-static-linking warnings about `getpwent`/`getpwuid`/`getpwnam_r`
+at link time ("Using 'X' in statically linked applications requires...")
+were harmless. **That was wrong, confirmed on real hardware**: without
+the `--wrap` treatment above, `nano` crashed on *every* invocation with
+`dl-call-libc-early-init.c:37: _dl_call_libc_early_init: Assertion
+'sym != NULL' failed` -- glibc >= 2.34's dlopen-based static NSS
+machinery genuinely doesn't work on this toolchain/target combination.
+See `tools/nss-stub/README.md` for the full root cause and why merely
+not *calling* these functions isn't enough (the crash happens at
+process startup regardless of whether the code path is ever
+exercised -- it's about what gets linked in, not what runs).
 
 `--disable-utf8` and `--disable-speller` keep the build simpler/smaller
 since this rootfs has no locale/spell-check data anyway; nothing here

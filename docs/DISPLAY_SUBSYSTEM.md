@@ -91,17 +91,77 @@ before the existing panning fix and `mmap`. Matches what DirectFB's
 (`arm-linux-gnueabihf-gcc -static -O2`, stripped) — binary and README
 updated.
 
+**`FBIOPUT_VSCREENINFO` theory refuted (2026-07-16) — root cause found in
+`ark1668_lcdfb_set_par()` itself, not in `lcd-test`.** Confirmed on
+real hardware that the 2026-07-16 fix above still didn't make `lcd-test`
+visible. Reading `ark1668_lcdfb_set_par()` line-by-line explains why —
+and corrects two things the hypothesis above got wrong:
+
+1. **Wrong register.** The OSD1 enable bit lives in `ARK1668_LCDC_CONTROL`
+   (offset `0x04` from the LCDC's `0xe0500000` base, bit 7 —
+   `ARK1668_LCDC_OSD1_EN_OFFSET`), not `ARK1668_LCDC_OSD1_CTL` (offset
+   `0x74`, which only holds format/size fields).
+2. **`FBIOPUT_VSCREENINFO` can never re-trigger it, by design — not just
+   "in practice."** The enable write is inside a `static int set_par = 0;`
+   local to the function — a one-shot latch shared across **every**
+   caller for the entire life of the kernel, not per-caller/per-fd state:
+
+   ```c
+   static int ark1668_lcdfb_set_par(struct fb_info *info)
+   {
+       ...
+       static int set_par = 0;          // persists across ALL calls, any caller
+       ...
+       if (!set_par) {                  // wiring-mode/interrupt init (unrelated to OSD1)
+           value = (6 << 23) | (1 << 0);
+           ...
+           lcdc_writel(sinfo, ARK1668_LCDC_CONTROL, value);   // full overwrite, not RMW
+       }
+       ...
+       if (!set_par) {                  // <-- THE ACTUAL OSD1 ENABLE
+           value = lcdc_readl(sinfo, ARK1668_LCDC_CONTROL);
+           value |= (1 << ARK1668_LCDC_OSD1_EN_OFFSET);
+           lcdc_writel(sinfo, ARK1668_LCDC_CONTROL, value);
+       }
+       ...
+       set_par = 1;                      // latched forever after the FIRST call, from ANY caller
+   }
+   ```
+
+   Only the very first `.fb_set_par` call of the boot — from *any*
+   source: probe-time init, DirectFB's mode-set, or `lcd-test`'s own
+   `FBIOPUT_VSCREENINFO` — can ever run the OSD1-enable block. Every
+   subsequent call, forever, silently no-ops it, regardless of what
+   caused it or what state `ARK1668_LCDC_CONTROL` bit 7 is actually in
+   at that moment. This is exactly why `LCDTest -qws` worked (its
+   mode-set happened to be the first `.fb_set_par` call that boot) while
+   `lcd-test` — run afterward, once anything else had already triggered
+   one `set_par` call — could never re-enable OSD1 even with the
+   `FBIOPUT_VSCREENINFO` fix in place.
+
+   (The first `if (!set_par)` block, for wiring-mode/interrupt config,
+   genuinely does need to stay one-shot as written — it's a full
+   register overwrite, not a read-modify-write, so running it again
+   would itself clobber the OSD1 enable bit set elsewhere. Only the
+   second block needed the guard removed.)
+
+**Fix applied (2026-07-16):** removed the `if (!set_par)` guard around
+the OSD1-enable block in `ark1668_lcdfb_set_par()` (`linux-arkmicro`
+repo, `linux/drivers/video/fbdev/arkmicro/ark1668_lcdfb.c`) — it's
+already a read-modify-write of a single bit, so making it unconditional
+is harmless and guarantees OSD1 is re-asserted on every `fb_set_par`
+call, from any caller, regardless of prior state. Requires a kernel
+rebuild + reflash; `tools/lcd-test`'s own `FBIOPUT_VSCREENINFO` call
+(from the earlier fix) is what will now actually matter, since the
+kernel side can finally act on it more than once.
+
 **Next steps:**
-- [ ] Live-test on real hardware: `killall MsnCoreApp` first (rule out
-      the simpler "something else repainting over it" explanation too),
-      then `lcd-test fill red` — not yet independently re-confirmed
-      since this change.
-- [ ] If still invisible: the `FBIOPUT_VSCREENINFO` theory is refuted;
-      fall back to live register inspection of the OSD1 control
-      register itself (`ARK1668_LCDC_OSD1_CTL`, via `devmem` at the
-      LCDC's mapped base) immediately after a `lcd-test fill` to check
-      the enable bit directly, rather than inferring it from ioctl
-      behavior alone.
+- [ ] Rebuild `linux-arkmicro`, reflash, retest `lcd-test` on real
+      hardware (`killall MsnCoreApp` first, same precondition as before).
+- [ ] If still invisible after this: the OSD1-enable-latch theory is
+      refuted too; fall back to live register inspection via `devmem`
+      at `0xe0500004` (`ARK1668_LCDC_CONTROL`) immediately after a
+      `lcd-test fill`, to check bit 7 directly rather than inferring it.
 
 
 

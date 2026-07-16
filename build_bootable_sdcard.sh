@@ -66,6 +66,26 @@
 #                      /lib/modules/<version>/ on p2.
 #   --rootfs-dir DIR   Rootfs source directory (mounted as /)
 #   --userdata-dir DIR Userdata source directory (mounted as /data)
+#   --cstech-rootfs    Use the CarSyncTech CSTech-202511-IP17 rootfs instead of
+#                      the Prado reconstructed one — a newer MsnCoreApp build
+#                      that boots the UI cleanly without the crash patches this
+#                      project applies to the older Prado dump's libSetting.so.
+#                      Auto-extracts from firmware_dumps/CarSyncTech Toyota/
+#                      CSTech-202511-IP17/extracted/rootfs.tar.gz into a local
+#                      (non-vboxsf) dir on first use — see --cstech-dir. OFF by
+#                      default; only takes effect if --rootfs-dir isn't
+#                      explicitly given (same deference every other
+#                      auto-detected path in this script already follows).
+#   --no-cstech-rootfs Explicitly disable (already the default)
+#   --cstech-userdata  Use the matching CSTech userdata instead of the Prado one.
+#                      Same auto-extraction, from extracted/userdata.tar.gz.
+#                      OFF by default; same --userdata-dir deference as above.
+#   --no-cstech-userdata  Explicitly disable (already the default)
+#   --cstech-dir DIR   Local (non-vboxsf) dir for the extracted CSTech rootfs/
+#                      userdata trees (auto-detected: sibling of script dir,
+#                      or ~/Downloads/cstech-ip17-rootfs). Must NOT be on a
+#                      VirtualBox shared folder (vboxsf silently drops the
+#                      1133 symlinks this rootfs contains).
 #   --no-userdata      Leave p3 formatted but empty
 #   --no-mtd-redirect  Leave bootlogo/bootanimation/reversingtrack/Unicode
 #                      reading from existing NAND data instead of SD
@@ -209,6 +229,11 @@ NEW_KERNEL_MODE=true                          # replace stock kernel with freshl
 NEW_UBOOT_MODE=true                           # replace stock U-Boot with freshly compiled Limcet P305 U-Boot — ON by default; pass --no-new-uboot to use the stock U-Boot
 KERNEL_BUILD_DIR=""                           # path to linux-arkmicro/ build root (auto-detected)
 MODULES_DIR=""                                # path to compiled_modules/ (auto-detected from KERNEL_BUILD_DIR)
+USE_CSTECH_ROOTFS=false                       # use the CarSyncTech CSTech-202511-IP17 rootfs instead of the Prado reconstructed one — OFF by default
+USE_CSTECH_USERDATA=false                     # use the CarSyncTech CSTech-202511-IP17 userdata instead of the Prado one — OFF by default
+CSTECH_DIR=""                                 # local (non-vboxsf) dir holding the extracted CSTech rootfs/userdata trees (auto-detected/auto-extracted)
+ROOTFS_DIR_EXPLICIT=false                     # true only if --rootfs-dir was passed — autodetect()/CSTech toggle must never overwrite an explicit choice
+USERDATA_DIR_EXPLICIT=false                   # true only if --userdata-dir was passed
 declare -a DIAG_TOOLS_BINS=(
     "$SCRIPT_DIR/tools/i2c-scan/i2c-scan"                  # static ARM i2c bus scanner, see tools/i2c-scan/README.md
     "$SCRIPT_DIR/tools/i2c-dump/i2c-dump"                  # static ARM i2c register dumper, see tools/i2c-dump/README.md
@@ -266,8 +291,13 @@ while [[ $# -gt 0 ]]; do
         --no-new-kernel)   NEW_KERNEL_MODE=false; shift ;;
         --kernel-build-dir) KERNEL_BUILD_DIR="$2"; shift 2 ;;
         --modules-dir)     MODULES_DIR="$2"; shift 2 ;;
-        --rootfs-dir)      ROOTFS_DIR="$2"; shift 2 ;;
-        --userdata-dir)    USERDATA_DIR="$2"; shift 2 ;;
+        --rootfs-dir)      ROOTFS_DIR="$2"; ROOTFS_DIR_EXPLICIT=true; shift 2 ;;
+        --userdata-dir)    USERDATA_DIR="$2"; USERDATA_DIR_EXPLICIT=true; shift 2 ;;
+        --cstech-rootfs)   USE_CSTECH_ROOTFS=true; shift ;;
+        --no-cstech-rootfs) USE_CSTECH_ROOTFS=false; shift ;;
+        --cstech-userdata) USE_CSTECH_USERDATA=true; shift ;;
+        --no-cstech-userdata) USE_CSTECH_USERDATA=false; shift ;;
+        --cstech-dir)      CSTECH_DIR="$2"; shift 2 ;;
         --no-userdata)     SKIP_USERDATA=true; shift ;;
         --no-mtd-redirect) SKIP_MTD_REDIRECT=true; shift ;;
         --new-uboot)       NEW_UBOOT_MODE=true; shift ;;
@@ -298,6 +328,50 @@ run() {
 # ---------------------------------------------------------------------------
 # Auto-detect paths
 # ---------------------------------------------------------------------------
+# Resolves CSTECH_DIR (a local, non-vboxsf directory) and auto-extracts the
+# rootfs/userdata tarballs from firmware_dumps/CarSyncTech Toyota/
+# CSTech-202511-IP17/extracted/ into it if not already present. Those
+# tarballs exist specifically because this repo checkout may itself live on
+# a VirtualBox shared folder (vboxsf), which silently drops symlinks — the
+# CSTech rootfs has 1133 of them (busybox applets, Qt versioned .so links,
+# etc.), so extracting straight onto vboxsf would produce a broken tree with
+# no error. CSTECH_DIR must always be somewhere else.
+resolve_cstech_dir() {
+    [[ -z "$CSTECH_DIR" ]] && {
+        for c in \
+            "$SCRIPT_DIR/../cstech-ip17-rootfs" \
+            "/home/osboxes/Downloads/cstech-ip17-rootfs" \
+            "$HOME/Downloads/cstech-ip17-rootfs"
+        do [[ -d "$c" ]] && { CSTECH_DIR="$(realpath "$c")"; break; }; done
+    }
+    # Nothing found yet — pick the same default location fresh extraction
+    # would use, so the check below can create it.
+    [[ -z "$CSTECH_DIR" ]] && CSTECH_DIR="$HOME/Downloads/cstech-ip17-rootfs"
+
+    if $USE_CSTECH_ROOTFS && [[ ! -d "$CSTECH_DIR/rootfs" ]]; then
+        local tarball="$SCRIPT_DIR/firmware_dumps/CarSyncTech Toyota/CSTech-202511-IP17/extracted/rootfs.tar.gz"
+        if [[ -f "$tarball" ]]; then
+            info "Extracting CSTech rootfs to $CSTECH_DIR (preserving symlinks — see firmware_dumps/CarSyncTech Toyota/CSTech-202511-IP17/extracted/ROOTFS_INFO.md)..."
+            mkdir -p "$CSTECH_DIR"
+            run tar xzf "$tarball" -C "$CSTECH_DIR"
+        else
+            warn "CSTech rootfs requested but neither $CSTECH_DIR/rootfs nor the source tarball ($tarball) exist — disabling"
+            USE_CSTECH_ROOTFS=false
+        fi
+    fi
+    if $USE_CSTECH_USERDATA && [[ ! -d "$CSTECH_DIR/userdata" ]]; then
+        local tarball="$SCRIPT_DIR/firmware_dumps/CarSyncTech Toyota/CSTech-202511-IP17/extracted/userdata.tar.gz"
+        if [[ -f "$tarball" ]]; then
+            info "Extracting CSTech userdata to $CSTECH_DIR..."
+            mkdir -p "$CSTECH_DIR"
+            run tar xzf "$tarball" -C "$CSTECH_DIR"
+        else
+            warn "CSTech userdata requested but neither $CSTECH_DIR/userdata nor the source tarball ($tarball) exist — disabling"
+            USE_CSTECH_USERDATA=false
+        fi
+    fi
+}
+
 autodetect() {
     [[ -z "$RECONSTRUCTED_DIR" ]] && {
         local c="$SCRIPT_DIR/firmware_source/prado_reconstructed"
@@ -371,14 +445,25 @@ autodetect() {
             "$SCRIPT_DIR/firmware_source/kernel/zImage"
         do [[ -f "$c" ]] && { KERNEL_BIN="$c"; break; }; done
     }
-    [[ -z "$ROOTFS_DIR" ]] && {
-        local c="$SCRIPT_DIR/firmware_source/prado_reconstructed/mtd6_rootfs/rootfs"
-        [[ -d "$c" ]] && ROOTFS_DIR="$c"
-    }
-    [[ -z "$USERDATA_DIR" ]] && {
-        local c="$SCRIPT_DIR/firmware_source/prado_reconstructed/mtd7_userdata/userdata"
-        [[ -d "$c" ]] && USERDATA_DIR="$c"
-    }
+    if $USE_CSTECH_ROOTFS || $USE_CSTECH_USERDATA; then
+        resolve_cstech_dir
+    fi
+    if ! $ROOTFS_DIR_EXPLICIT; then
+        if $USE_CSTECH_ROOTFS && [[ -d "$CSTECH_DIR/rootfs" ]]; then
+            ROOTFS_DIR="$CSTECH_DIR/rootfs"
+        else
+            local c="$SCRIPT_DIR/firmware_source/prado_reconstructed/mtd6_rootfs/rootfs"
+            [[ -d "$c" ]] && ROOTFS_DIR="$c"
+        fi
+    fi
+    if ! $USERDATA_DIR_EXPLICIT; then
+        if $USE_CSTECH_USERDATA && [[ -d "$CSTECH_DIR/userdata" ]]; then
+            USERDATA_DIR="$CSTECH_DIR/userdata"
+        else
+            local c="$SCRIPT_DIR/firmware_source/prado_reconstructed/mtd7_userdata/userdata"
+            [[ -d "$c" ]] && USERDATA_DIR="$c"
+        fi
+    fi
     return 0
 }
 
@@ -422,10 +507,12 @@ check_requirements() {
 CONFIG_ITEMS=(
     "use_new_uboot|Install compiled Limcet P305 U-Boot + uEnv|Replaces the stock NAND-dumped UBOOT.BIN on p1 with the freshly compiled Limcet P305 U-Boot. Bypasses patching, and installs UBOOT.BIN, uEnv.txt, and the DTB file on p1.|ON"
     "use_new_kernel|Install compiled Limcet P305 kernel + modules|Replaces the stock NAND kernel on p1 with the freshly compiled zImage.w_dtb from linux-arkmicro/. Also installs the compiled .ko modules into /lib/modules/ on the p2 rootfs. Uses linux-arkmicro/compiled_modules/ auto-detected from build dir|ON"
+    "use_cstech_rootfs|[p2] Use CarSyncTech CSTech-202511-IP17 rootfs instead of Prado reconstructed|A newer MsnCoreApp build (Nov 2025) confirmed to boot the UI cleanly on real hardware, without the SettingWindow::sendSoundData()/initSoundParams() uninitialized-stack crashes this project has been binary-patching around in the older Prado dump's libSetting.so (see docs/AUDIO_SUBSYSTEM_INVESTIGATION.md). Auto-extracts from firmware_dumps/CarSyncTech Toyota/CSTech-202511-IP17/extracted/rootfs.tar.gz into a local non-vboxsf directory on first use (see --cstech-dir) — the rootfs contains 1133 symlinks that a VirtualBox shared folder silently drops. 'Fix corrupted libGAL.so' below is still needed with this rootfs too — confirmed on real hardware to segfault without it, despite the locally-extracted copy's .dynamic section looking structurally valid under readelf (2026-07-16, see docs/AUDIO_SUBSYSTEM_INVESTIGATION.md); leave that toggle on.|OFF"
     "patch_uboot|Patch binary U-Boot for SD auto-boot (env relocation)|Patches U-Boot and forces the NAND env CRC to fail. By default (--reloc-env) it RELOCATES the compiled-in default env so a full SD-boot command fits and the device AUTO-boots from SD — static-verified, NOT yet hardware-tested (see docs/UBOOT_SDBOOT_INVESTIGATION.md §10). Pass --no-reloc-env for the hardware-confirmed fallback that only drops to an interactive U-Boot prompt (then continue via the README's \"Manual SD Card Boot\").|OFF"
     "use_initramfs|Use initramfs (usually not needed)|DISABLED — confirmed non-functional, the dumped stock kernel doesn't support this boot path. Would build an initramfs that insmods ark_dw_mmc.ko and mounts the SD rootfs, for a stock NAND kernel where MMC is a module. Kept for reference.|OFF"
     "redirect_mtd_data|Redirect NAND mtd partitions to SD card (bootlogo, bootanimation, reversingtrack, unicode)|Symlinks bootlogo, bootanimation, reversingtrack, and Unicode font (mtd8-11) to files under /nanddata/ on p2 — if off, the device reads these from whatever is already in NAND instead|ON"
     "include_userdata|Include userdata (p3)|Copies the userdata dir to p3 — if off, p3 is left empty and the app populates /data on first boot|ON"
+    "use_cstech_userdata|[p3] Use matching CarSyncTech CSTech-202511-IP17 userdata|Pairs with the rootfs option above — same auto-extraction, from extracted/userdata.tar.gz. Independent toggle in case you want the newer rootfs with the Prado userdata (or vice versa).|OFF"
     "install_diag_tools|Install diagnostic tools (i2c-scan, i2c-dump, touch-test, lcd-test, strace, nano, less, htop, tmux, gdbserver, *-test.sh)|Copies diagnostic binaries and scripts onto p2's /usr/bin: i2c-scan (I2C bus scanner, see tools/i2c-scan/README.md), i2c-dump (I2C register dumper, see tools/i2c-dump/README.md), touch-test (ARK1680 touchscreen register/evdev tester, see tools/touch-test/README.md), lcd-test (raw /dev/fb0 LCD tester, see tools/lcd-test/README.md), strace (upstream syscall tracer, see tools/strace/README.md), nano (static text editor, see tools/nano/README.md), less (static pager, see tools/less/README.md), htop (static process viewer, see tools/htop/README.md), tmux (static terminal multiplexer, see tools/tmux/README.md), gdbserver (static remote debugging, see tools/gdbserver/README.md), and touch-selftest.sh/uart-test.sh/audio-test.sh/bt-test.sh/usb-test.sh/mmc-test.sh (automated pass/fail wrappers, one per subsystem — see each tools/*/README.md). Harmless to leave off.|ON"
     "disable_msncoreapp_autolaunch|Disable MsnCoreApp auto-launch at login|Comments out 'MsnCoreApp -qws&' in /etc/profile so it doesn't auto-run (and auto-crash) on every shell login while the startup segfault is being debugged (see docs/ARK1680_TS_REVERSE_ENGINEERING.md). Run 'start_msn' manually instead to test. Turn this off once the crash is fixed and auto-launch is wanted again.|ON"
     "fix_libgal_dynamic_section|Fix corrupted libGAL.so .dynamic section|/usr/lib/libGAL.so's .dynamic section is corrupted (just a single DT_NULL entry — no NEEDED/SYMTAB/STRTAB), which crashes the dynamic linker with a NULL+4 deref inside _dl_relocate_object() the instant MsnCoreApp tries to load it (root-caused via matched strace+dmesg PC/LR correlation, see docs/ARK1680_TS_REVERSE_ENGINEERING.md). Replaces it with libGAL.fb.so, the vendor's own software-framebuffer variant (SONAME=libGAL.so, valid .dynamic section), backing up the original as libGAL.so.corrupt-orig.|ON"
@@ -440,14 +527,16 @@ for i in "${!CONFIG_ITEMS[@]}"; do
 done
 # CLI flags override the menu defaults up front, same as build_update.sh's
 # flags override its own PARTITIONS defaults.
-$PATCH_UBOOT       || CONFIG_SEL[2]=0
-$SKIP_USERDATA     && CONFIG_SEL[5]=0
-$SKIP_MTD_REDIRECT && CONFIG_SEL[4]=0
+$PATCH_UBOOT       || CONFIG_SEL[3]=0
+$SKIP_USERDATA     && CONFIG_SEL[6]=0
+$SKIP_MTD_REDIRECT && CONFIG_SEL[5]=0
 $NEW_KERNEL_MODE   || CONFIG_SEL[1]=0
-$USE_INITRAMFS     && CONFIG_SEL[3]=1
+$USE_INITRAMFS     && CONFIG_SEL[4]=1
 $NEW_UBOOT_MODE    || CONFIG_SEL[0]=0
-$SKIP_DIAG_TOOLS   && CONFIG_SEL[6]=0
-$INSTALL_TELNETD   && CONFIG_SEL[9]=1
+$SKIP_DIAG_TOOLS   && CONFIG_SEL[8]=0
+$INSTALL_TELNETD   && CONFIG_SEL[11]=1
+$USE_CSTECH_ROOTFS   && CONFIG_SEL[2]=1
+$USE_CSTECH_USERDATA && CONFIG_SEL[7]=1
 
 # ---------------------------------------------------------------------------
 # Navigation state — identical pattern to build_update.sh's CURSOR/read_key.
@@ -502,15 +591,15 @@ badge() {
 # Mutual exclusivity / permanent disables — greyed out with a reason rather
 # than just force-cleared so the user can see *why* instead of wondering
 # where the checkbox went.
-#   item 2 (patch U-Boot): doesn't apply when the compiled U-Boot replacement
+#   item 3 (patch U-Boot): doesn't apply when the compiled U-Boot replacement
 #     (item 0) is active, since that path bypasses patching entirely.
-#   item 3 (initramfs): always disabled — the dumped stock kernel doesn't
+#   item 4 (initramfs): always disabled — the dumped stock kernel doesn't
 #     support this boot path, confirmed non-functional.
 # ---------------------------------------------------------------------------
 is_item_disabled() {
     case "$1" in
-        2) [[ ${CONFIG_SEL[0]} -eq 1 ]] ;;
-        3) return 0 ;;
+        3) [[ ${CONFIG_SEL[0]} -eq 1 ]] ;;
+        4) return 0 ;;
         *) return 1 ;;
     esac
 }
@@ -520,16 +609,16 @@ is_item_disabled() {
 # called from both the interactive toggle handler and validate() (the
 # non-interactive/CLI entry point) so the invariant holds regardless of path.
 enforce_exclusivity() {
-    if is_item_disabled 2; then
-        CONFIG_SEL[2]=0
+    if is_item_disabled 3; then
+        CONFIG_SEL[3]=0
         PATCH_UBOOT=false
     fi
 }
 
 disabled_reason() {
     case "$1" in
-        2) echo "Unavailable — 'Install compiled U-Boot' replaces patching entirely" ;;
-        3) echo "Unavailable — confirmed non-functional, the dumped stock kernel doesn't support this boot path" ;;
+        3) echo "Unavailable — 'Install compiled U-Boot' replaces patching entirely" ;;
+        4) echo "Unavailable — confirmed non-functional, the dumped stock kernel doesn't support this boot path" ;;
     esac
 }
 
@@ -625,7 +714,7 @@ render_menu_body() {
     fi
     [[ -n "$KERNEL_BIN" && -f "$KERNEL_BIN" ]] && kernel_status="found" || kernel_status="missing"
     [[ -n "$ROOTFS_DIR" && -d "$ROOTFS_DIR" ]] && rootfs_status=$(badge found) || rootfs_status=$(badge missing)
-    if [[ ${CONFIG_SEL[5]} -eq 0 ]]; then
+    if [[ ${CONFIG_SEL[6]} -eq 0 ]]; then
         userdata_status=$(badge skip "(first boot)")
     elif [[ -n "$USERDATA_DIR" && -d "$USERDATA_DIR" ]]; then
         userdata_status=$(badge found)
@@ -668,7 +757,7 @@ render_menu_body() {
         printf "          └── %-13s %-20s %b\n" "Boot script"  "uEnv.txt"  "${DIM}generated${RESET}"
     fi
     local diag_status diag_count=0 diag_found=0 db
-    if [[ ${CONFIG_SEL[6]} -eq 1 ]]; then
+    if [[ ${CONFIG_SEL[8]} -eq 1 ]]; then
         for db in "${DIAG_TOOLS_BINS[@]}"; do
             diag_count=$((diag_count+1))
             [[ -f "$db" ]] && diag_found=$((diag_found+1))
@@ -729,7 +818,7 @@ validate() {
     else
         [[ -n "$UBOOT_SRC" ]] || die "No U-Boot source — use --uboot-src or --uboot"
         [[ -f "$UBOOT_SRC" ]] || die "U-Boot source not found: $UBOOT_SRC"
-        if [[ ${CONFIG_SEL[2]} -eq 1 ]]; then
+        if [[ ${CONFIG_SEL[3]} -eq 1 ]]; then
             if $RELOC_ENV; then
                 [[ -f "$SCRIPT_DIR/build_tools/patch_uboot_env.py" ]] || die "build_tools/patch_uboot_env.py not found in $SCRIPT_DIR (needed for --reloc-env)"
             else
@@ -740,21 +829,25 @@ validate() {
     fi
     [[ -f "$KERNEL_BIN" ]] || die "zImage not found: $KERNEL_BIN"
     [[ -d "$ROOTFS_DIR" ]] || die "rootfs dir not found: $ROOTFS_DIR"
-    if [[ ${CONFIG_SEL[5]} -eq 1 && -n "$USERDATA_DIR" ]]; then
+    if [[ ${CONFIG_SEL[6]} -eq 1 && -n "$USERDATA_DIR" ]]; then
         [[ -d "$USERDATA_DIR" ]] || die "userdata dir not found: $USERDATA_DIR"
     fi
-    if [[ ${CONFIG_SEL[6]} -eq 1 ]]; then
+    if [[ ${CONFIG_SEL[8]} -eq 1 ]]; then
         local db any_found=0
         for db in "${DIAG_TOOLS_BINS[@]}"; do
             [[ -f "$db" ]] && any_found=1 || warn "Diagnostic tool not found, will be skipped: $db"
         done
-        [[ $any_found -eq 0 ]] && { warn "No diagnostic tool binaries found — disabling"; CONFIG_SEL[6]=0; }
+        [[ $any_found -eq 0 ]] && { warn "No diagnostic tool binaries found — disabling"; CONFIG_SEL[8]=0; }
     fi
     # Sync menu toggles back to runtime variables
     [[ ${CONFIG_SEL[1]} -eq 1 ]] && NEW_KERNEL_MODE=true  || NEW_KERNEL_MODE=false
-    [[ ${CONFIG_SEL[3]} -eq 1 ]] && USE_INITRAMFS=true    || USE_INITRAMFS=false
+    [[ ${CONFIG_SEL[4]} -eq 1 ]] && USE_INITRAMFS=true    || USE_INITRAMFS=false
     [[ ${CONFIG_SEL[0]} -eq 1 ]] && NEW_UBOOT_MODE=true    || NEW_UBOOT_MODE=false
-    # Re-run autodetect so new-kernel paths resolve after menu toggle
+    [[ ${CONFIG_SEL[2]} -eq 1 ]] && USE_CSTECH_ROOTFS=true   || USE_CSTECH_ROOTFS=false
+    [[ ${CONFIG_SEL[7]} -eq 1 ]] && USE_CSTECH_USERDATA=true || USE_CSTECH_USERDATA=false
+    enforce_exclusivity
+    # Re-run autodetect so new-kernel paths (and ROOTFS_DIR/USERDATA_DIR,
+    # unless explicitly set) resolve after menu toggle
     autodetect
 
     if $NEW_UBOOT_MODE; then
@@ -828,7 +921,7 @@ prepare_uboot() {
     fi
 
     # Patch U-Boot toggled off — use the untouched source directly.
-    if [[ ${CONFIG_SEL[2]} -eq 0 ]]; then
+    if [[ ${CONFIG_SEL[3]} -eq 0 ]]; then
         begin_step 1 "Preparing U-Boot (unpatched source)"
         UBOOT_BIN="$UBOOT_SRC"
         warn "U-Boot: using source unpatched — may not boot from SD: $UBOOT_BIN"
@@ -870,7 +963,7 @@ prepare_uboot() {
 # ---------------------------------------------------------------------------
 patch_rcs() {
     local target="$1"
-    local redirect_mtd="$2"   # "1" or "0" — CONFIG_SEL[4], redirect_mtd_data
+    local redirect_mtd="$2"   # "1" or "0" — CONFIG_SEL[5], redirect_mtd_data
     echo -e "${BOLD}  Patching rcS for SD/USB userdata mount...${RESET}"
 
     if $DRY_RUN; then
@@ -1077,7 +1170,7 @@ EOF
 # ---------------------------------------------------------------------------
 patch_rootfs_for_new_kernel() {
     local rootfs_mount="$1"
-    local disable_autolaunch="$2"   # "1" or "0" — CONFIG_SEL[7], disable_msncoreapp_autolaunch
+    local disable_autolaunch="$2"   # "1" or "0" — CONFIG_SEL[9], disable_msncoreapp_autolaunch
     echo -e "${BOLD}  Patching rootfs init scripts for 4.19.192 kernel compatibility...${RESET}"
 
     if $DRY_RUN; then
@@ -1624,8 +1717,8 @@ build() {
     local TARGET="${IMAGE:-$DEVICE}"
     local P3_START=$(( P1_SIZE_MB + P2_SIZE_MB + 1 ))
     local do_userdata=0
-    [[ ${CONFIG_SEL[5]} -eq 1 && -n "$USERDATA_DIR" ]] && do_userdata=1
-    local do_mtd_redirect=${CONFIG_SEL[4]}
+    [[ ${CONFIG_SEL[6]} -eq 1 && -n "$USERDATA_DIR" ]] && do_userdata=1
+    local do_mtd_redirect=${CONFIG_SEL[5]}
 
     # 1. Create image file
     if [[ -n "$IMAGE" ]]; then
@@ -1779,7 +1872,7 @@ build() {
     begin_step 10 "Installing new kernel modules + compat patches"
     if $NEW_KERNEL_MODE; then
         install_new_kernel_modules /tmp/sd_p2
-        patch_rootfs_for_new_kernel /tmp/sd_p2 "${CONFIG_SEL[7]}"
+        patch_rootfs_for_new_kernel /tmp/sd_p2 "${CONFIG_SEL[9]}"
         end_step 10
     else
         info "Skipped — stock NAND firmware_source/kernel/modules in use"
@@ -1803,7 +1896,7 @@ build() {
 
     # 13. Install diagnostic tools (i2c-scan) onto p2
     begin_step 13 "Installing diagnostic tools"
-    if [[ ${CONFIG_SEL[6]} -eq 1 ]]; then
+    if [[ ${CONFIG_SEL[8]} -eq 1 ]]; then
         install_diag_tools /tmp/sd_p2
         end_step 13
     else
@@ -1813,7 +1906,7 @@ build() {
 
     # 14. Fix corrupted libGAL.so .dynamic section (crashes MsnCoreApp at startup otherwise)
     begin_step 14 "Fixing corrupted libGAL.so"
-    if [[ ${CONFIG_SEL[8]} -eq 1 ]]; then
+    if [[ ${CONFIG_SEL[10]} -eq 1 ]]; then
         fix_libgal_so /tmp/sd_p2
         end_step 14
     else
@@ -1823,7 +1916,7 @@ build() {
 
     # 15. Install passwordless root telnetd (UNAUTHENTICATED — opt-in diagnostic tool)
     begin_step 15 "Installing telnetd (diagnostic, unauthenticated)"
-    if [[ ${CONFIG_SEL[9]} -eq 1 ]]; then
+    if [[ ${CONFIG_SEL[11]} -eq 1 ]]; then
         install_telnetd /tmp/sd_p2
         end_step 15
     else
@@ -1833,7 +1926,7 @@ build() {
 
     # 16. Work around the USB port 0 boot-time OTG detection race
     begin_step 16 "Patching rcS for USB port 0 OTG race workaround"
-    if [[ ${CONFIG_SEL[10]} -eq 1 ]]; then
+    if [[ ${CONFIG_SEL[12]} -eq 1 ]]; then
         fix_usb_port0_otg_race /tmp/sd_p2
         end_step 16
     else
@@ -1870,7 +1963,7 @@ build() {
         echo "    U-Boot   → fatload uInitrd; bootz (SD kernel + SD initramfs)"
         echo "    initramfs→ insmod ark_dw_mmc.ko, mount p2 ext4, chroot into it"
         echo "    rcS      → mounts p3 ext4 as /data"
-        if [[ ${CONFIG_SEL[4]} -eq 1 ]]; then
+        if [[ ${CONFIG_SEL[5]} -eq 1 ]]; then
             echo "    rcS      → symlinks /dev/mtd8-11 to /nanddata/ on p2 (bootlogo/bootanimation/reversingtrack/Unicode, read from SD)"
         fi
     else
@@ -1885,7 +1978,7 @@ build() {
         fi
         echo "    Kernel   → mounts p2 ext4 as /"
         echo "    rcS      → mounts p3 ext4 as /data"
-        if [[ ${CONFIG_SEL[4]} -eq 1 ]]; then
+        if [[ ${CONFIG_SEL[5]} -eq 1 ]]; then
             echo "    rcS      → symlinks /dev/mtd8-11 to /nanddata/ on p2 (bootlogo/bootanimation/reversingtrack/Unicode, read from SD)"
         fi
     fi
@@ -1949,9 +2042,11 @@ run_interactive() {
                 # Keep path-sensitive flags in sync so autodetect() can
                 # immediately resolve KERNEL_BIN and MODULES_DIR.
                 [[ ${CONFIG_SEL[1]} -eq 1 ]] && NEW_KERNEL_MODE=true || NEW_KERNEL_MODE=false
-                [[ ${CONFIG_SEL[3]} -eq 1 ]] && USE_INITRAMFS=true   || USE_INITRAMFS=false
+                [[ ${CONFIG_SEL[4]} -eq 1 ]] && USE_INITRAMFS=true   || USE_INITRAMFS=false
                 [[ ${CONFIG_SEL[0]} -eq 1 ]] && NEW_UBOOT_MODE=true   || NEW_UBOOT_MODE=false
-                PATCH_UBOOT=$([[ ${CONFIG_SEL[2]} -eq 1 ]] && echo true || echo false)
+                [[ ${CONFIG_SEL[2]} -eq 1 ]] && USE_CSTECH_ROOTFS=true   || USE_CSTECH_ROOTFS=false
+                [[ ${CONFIG_SEL[7]} -eq 1 ]] && USE_CSTECH_USERDATA=true || USE_CSTECH_USERDATA=false
+                PATCH_UBOOT=$([[ ${CONFIG_SEL[3]} -eq 1 ]] && echo true || echo false)
                 enforce_exclusivity
 
                 KERNEL_BIN=""   # let autodetect re-resolve based on new mode

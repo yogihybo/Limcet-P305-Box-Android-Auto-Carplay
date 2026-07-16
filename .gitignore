@@ -37,5 +37,6 @@ sd_bootable/
 # build_bootable_sdcard.sh) doesn't get accidentally re-staged.
 /uboot_sdboot.bin
 Holden firmware update/rootfs.img
-CarSyncTech Toyota/CSTech-202511-IP17/rootfs.img
+firmware_dumps/CarSyncTech Toyota/CSTech-202511-IP17/rootfs.img
+firmware_dumps/CarSyncTech Toyota/CSTech-202511-IP17/userdata.img
 Holden firmware update/rootfs.img

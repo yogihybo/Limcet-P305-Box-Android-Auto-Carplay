@@ -21,6 +21,7 @@ Following a falled updated,this repo was developed to test device and identify h
   - [WiFi Access Point](#wifi-access-point)
   - [SSH Access](#ssh-access)
   - [USB Networking](#usb-networking)
+  - [10.1 Diagnostic & On-Device Utility Tools](#101-diagnostic--on-device-utility-tools)
 - [11.0 Repository Structure](#110-repository-structure)
 - [12.0 Holden Firmware Compatibility](#120-holden-firmware-compatibility)
 - [13.0 Key Differences vs Holden Base Firmware](#130-key-differences-vs-holden-base-firmware)
@@ -59,7 +60,7 @@ Full teardown details and board photos are in `hardware/BOARD_ANALYSIS.md` (link
 
 **Documentation:**
 
-- [`hardware/BOARD_ANALYSIS.md`](Limcet%20Hardware/BOARD_ANALYSIS.md) — board/component teardown (SoC, NAND, BT, MCU, CAN bus), with photos in the same folder.
+- [`hardware/BOARD_ANALYSIS.md`](hardware/BOARD_ANALYSIS.md) — board/component teardown (SoC, NAND, BT, MCU, CAN bus), with photos in the same folder.
 - [`docs/SOURCES.md`](docs/SOURCES.md) — provenance of every file in this repo.
 - [`docs/PARTITION_LAYOUT.md`](docs/PARTITION_LAYOUT.md) — NAND offsets, sizes, flash commands (see also [NAND Partition Layout](#30-nand-partition-layout) below).
 - [`docs/historical/SD_BOOT_PLAN.md`](docs/historical/SD_BOOT_PLAN.md) — historical SD-boot planning doc, superseded by [Booting from SD Card or USB](#50-booting-from-sd-card-or-usb-non-destructive) below.
@@ -693,6 +694,37 @@ The ARK1680 USB gadget stack is configured to use CDC-NCM (`g_ncm.ko`), which cr
 
 `g_zero.ko` has been removed from `firmware_source/prado_reconstructed/mtd6_rootfs/rootfs/etc/all.sh` — it was overriding the NCM gadget registration and breaking both USB host mode and the network interface.
 
+### 10.1 Diagnostic & On-Device Utility Tools
+
+`tools/` holds static ARM binaries (and a few POSIX shell wrappers), each with its own `README.md`, that get installed onto the target's `/usr/bin` via `build_bootable_sdcard.sh`'s `install_diag_tools` option (on by default — see [§7.0](#build_bootable_sdcardsh--current-capabilities)). All statically linked, no dependency on anything else in the rootfs — they work even while chasing a boot/crash problem elsewhere in the system.
+
+**Hardware diagnostics:**
+
+| Tool | Purpose |
+|------|---------|
+| `i2c-scan` | Scan I2C buses for ACKing devices |
+| `i2c-dump` | Dump registers off a specific I2C address |
+| `i2c-write` | Raw single-register I2C write, bypassing any kernel driver bound to that address |
+| `touch-test` | ARK1680 touchscreen ADC/syscon register dump + evdev event watcher |
+| `lcd-test` | Raw `/dev/fb0` framebuffer test — info dump, then cycles fills/bars/gradient |
+| `pin-dump` | Live SoC pinmux register dump, cross-checked against the pinctrl driver's table |
+| `gpio-i2c-probe` | Bit-bang GPIO/I2C probing, independent of the kernel's own i2c-gpio driver |
+| `mcu-handshake` | Native C reimplementation of the MCU UART handshake protocol |
+| `strace` | Upstream syscall tracer (static build) |
+| `audio-test.sh` / `touch-selftest.sh` / `uart-test.sh` / `bt-test.sh` / `usb-test.sh` / `mmc-test.sh` | Automated pass/fail wrapper scripts, one per subsystem |
+
+**General shell utilities** (not diagnostic-specific, but this rootfs's busybox lacks them):
+
+| Tool | Purpose |
+|------|---------|
+| `nano` | Text editor, for editing config/log files directly on the device |
+| `less` | Proper pager (busybox only has a bare `more`) |
+| `htop` | Interactive process/CPU/memory viewer |
+| `tmux` | Terminal multiplexer — sessions survive a dropped serial/telnet connection |
+| `gdbserver` | Live remote debugging — attach a host `gdb`/`gdb-multiarch` over TCP for real register/stack/memory state, instead of reconstructing it from a post-mortem minidump and disassembly (see `docs/AUDIO_SUBSYSTEM_INVESTIGATION.md` for exactly the kind of investigation this replaces) |
+
+`nano`/`less`/`htop`/`tmux` are linked against a static `ncurses` build with `vt100`/`linux`/`xterm`/`ansi` terminal descriptions compiled directly in, since this rootfs has no terminfo database — the serial console's `TERM=vt100` (`/etc/inittab`) is covered. `tmux` additionally links a static `libevent`. Both persisted in the separate `linux-arkmicro` repo (`buildroot-external/arm-static-libs/`) so future tool builds don't need to rebuild them from source.
+
 ## 11.0 Repository Structure
 
 ```
@@ -726,9 +758,10 @@ hardware/
   BOARD_ANALYSIS.md         Board/component teardown notes (SoC, NAND, BT, MCU, CAN bus)
   *.jpg                     Board photos referenced from BOARD_ANALYSIS.md
 
-vendor_source/ArkPro Reference/  Third-party ASTRI ARK1680 vendor source — see docs/DISPLAY_SUBSYSTEM.md for provenance
-
-vendor_source/linux-arkmicro Reference/  Third-party ArkMicro U-Boot BSP source — see docs/UBOOT_BUILD_GUIDE.md
+vendor_source/README.md    Pointer only — the ASTRI ARK1680 vendor source and ArkMicro U-Boot/kernel BSP
+                            that used to be vendored directly into this repo now live in the separate
+                            linux-arkmicro repo (https://github.com/yogihybo/linux-arkmicro) — the
+                            actual buildable U-Boot/kernel source tree, see §7.0
 
 ui/                Qt 4.7.4 UI analysis and resource extraction — see ui/UI.md
   UI.md                      Qt module layout, key binaries, /msnprofile/ filesystem layout
@@ -737,6 +770,10 @@ ui/                Qt 4.7.4 UI analysis and resource extraction — see ui/UI.md
   tools/
     extract_qm.py            Decompiles .qm translation files to text
     extract_rcc.py           Decompiles .rcc resource bundles
+
+tools/              On-device diagnostic/utility binaries — static ARM builds installed onto the
+                    target rootfs via build_bootable_sdcard.sh's install_diag_tools option, one
+                    subdirectory per tool with its own README.md. See §10.1 below for the full list.
 
 firmware_source/kernel/            zImage (from Holden base — identical kernel_size to firmware_dumps/Prado firmware dump; gitignored, not present in every checkout — firmware_source/prado_reconstructed/mtd5_firmware_source/kernel/zImage is the copy actually used for builds)
 firmware_source/display/
@@ -834,10 +871,9 @@ See [`docs/SOURCES.md`](docs/SOURCES.md) for full provenance of each file.
 
 **Elsewhere in the repo**
 
-- [`hardware/BOARD_ANALYSIS.md`](Limcet%20Hardware/BOARD_ANALYSIS.md) — physical board/component teardown notes (SoC, NAND, BT, MCU, CAN bus)
+- [`hardware/BOARD_ANALYSIS.md`](hardware/BOARD_ANALYSIS.md) — physical board/component teardown notes (SoC, NAND, BT, MCU, CAN bus)
 - [`ui/UI.md`](ui/UI.md) — Qt UI analysis and resource extraction
-- [`vendor_source/ArkPro Reference/README.md`](ArkPro%20Reference/README.md) — provenance for the vendored ASTRI ARK1680 source
-- [`vendor_source/linux-arkmicro Reference/README.md`](linux-arkmicro%20Reference/README.md) — provenance for the vendored ArkMicro U-Boot BSP source
+- [`vendor_source/README.md`](vendor_source/README.md) — the ASTRI ARK1680 vendor source and ArkMicro U-Boot/kernel BSP that used to be vendored directly into this repo now live in the separate [`linux-arkmicro`](https://github.com/yogihybo/linux-arkmicro) repo (the actual buildable U-Boot/kernel source tree — see [§7.0](#70-custom-u-boot-boot-chain-ark1668_limcet_p305)); this file is a pointer, not a copy
 - [`payloads/experimental_sdboot/README.md`](payloads/experimental_sdboot/README.md) — self-contained SD auto-boot patch status
 - [`corrupted/README.md`](corrupted/README.md) — why the quarantined U-Boot binaries there are unsafe to use
 - [`payloads/msn_autocopy_payload/README.md`](payloads/msn_autocopy_payload/README.md) — USB payload that exploits the `payloads/msn_autocopy` auto-copy mechanism to install and autostart `sshd` on a stock device

@@ -212,6 +212,7 @@ MODULES_DIR=""                                # path to compiled_modules/ (auto-
 declare -a DIAG_TOOLS_BINS=(
     "$SCRIPT_DIR/tools/i2c-scan/i2c-scan"                  # static ARM i2c bus scanner, see tools/i2c-scan/README.md
     "$SCRIPT_DIR/tools/i2c-dump/i2c-dump"                  # static ARM i2c register dumper, see tools/i2c-dump/README.md
+    "$SCRIPT_DIR/tools/i2c-write/i2c-write"                # static ARM raw i2c register writer, see tools/i2c-write/README.md
     "$SCRIPT_DIR/tools/touch-test/touch-test"              # ark1680_ts touchscreen diagnostic, see tools/touch-test/README.md
     "$SCRIPT_DIR/tools/lcd-test/lcd-test"                  # raw /dev/fb0 LCD diagnostic, see tools/lcd-test/README.md
     "$SCRIPT_DIR/tools/strace/strace"                      # upstream strace (static), see tools/strace/README.md
@@ -1363,6 +1364,9 @@ append_diag_banner() {
                     ;;
                 i2c-dump)
                     echo 'echo "  i2c-dump /dev/i2c-N slave_addr [num] - dump registers of an I2C device"'
+                    ;;
+                i2c-write)
+                    echo 'echo "  i2c-write /dev/i2c-N addr reg val    - raw single-register i2c write (bypasses kernel client)"'
                     ;;
                 touch-test)
                     echo 'echo "  touch-test regs                      - dump ARK1680 touch ADC/syscon registers"'

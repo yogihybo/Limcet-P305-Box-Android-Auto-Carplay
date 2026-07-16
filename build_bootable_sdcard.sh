@@ -796,15 +796,38 @@ validate() {
 # ---------------------------------------------------------------------------
 UBOOT_WAS_PATCHED=false   # set true only when prepare_uboot() actually patches; read by build()'s summary
 
+# ---------------------------------------------------------------------------
+# Checks the actual file content (not the filename) for the ARK magic at
+# offset 0x3c, so a freshly compiled u-boot.bin (no header yet) and an
+# already-injected UBOOT.BIN (e.g. produced by linux-arkmicro's own
+# build_uboot.sh, which now runs inject_ark_header.py itself) are told apart
+# correctly regardless of what either happens to be named. Read-only, so it
+# runs even under --dry-run — this is a check, not a build action.
+# ---------------------------------------------------------------------------
+uboot_has_ark_header() {
+    local bin="$1"
+    [[ -f "$bin" ]] || return 1
+    python3 -c "
+import struct, sys
+with open('$bin', 'rb') as f:
+    data = f.read(0x40)
+sys.exit(0 if len(data) >= 0x40 and struct.unpack_from('<I', data, 0x3c)[0] == 0x12345678 else 1)
+" 2>/dev/null
+}
+
 prepare_uboot() {
     # If new U-Boot is selected, bypass patching but ensure ARK header is injected
     if $NEW_UBOOT_MODE; then
         begin_step 1 "Preparing U-Boot (freshly compiled)"
-        if [[ -f "$UBOOT_BIN" ]] && [[ "$(basename "$UBOOT_BIN")" == "u-boot.bin" ]]; then
-            local injected="$OUTPUT_DIR/UBOOT.BIN"
-            info "Injecting ARK header into new U-Boot..."
-            run python3 "$SCRIPT_DIR/build_tools/inject_ark_header.py" "$UBOOT_BIN" "$injected"
-            UBOOT_BIN="$injected"
+        if [[ -f "$UBOOT_BIN" ]]; then
+            if uboot_has_ark_header "$UBOOT_BIN"; then
+                info "ARK header already present in $UBOOT_BIN (magic found at 0x3c) — using as-is, skipping inject_ark_header.py"
+            else
+                local injected="$OUTPUT_DIR/UBOOT.BIN"
+                info "No ARK header found in $UBOOT_BIN — injecting via inject_ark_header.py..."
+                run python3 "$SCRIPT_DIR/build_tools/inject_ark_header.py" "$UBOOT_BIN" "$injected"
+                UBOOT_BIN="$injected"
+            fi
         fi
         PATCH_UBOOT=false
         generate_uenv_txt

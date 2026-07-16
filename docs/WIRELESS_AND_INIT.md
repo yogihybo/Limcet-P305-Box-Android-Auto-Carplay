@@ -140,6 +140,66 @@ mkdir /dev/socket/ && ln -s /dev/bw_iap /dev/socket/goc_rfcom
   in `docs/UI_AND_APP_ANALYSIS.md:481`, just now confirmed from the app
   side too.
 
+### Who actually launches `/usr/bin/blueware`, and a diagnostic dead-end this creates (2026-07-17)
+
+Neither `rcS`, `/etc/profile`, nor `inittab` in either rootfs (Prado
+reconstructed or CSTech) ever invokes `blueware` — grepped both trees
+for the literal string, zero hits outside `libBlueTooth.so` itself and
+its two `.properties` config files. It's launched entirely from app
+code: `BlueToothAdapter_Blueware::initBlueToothAdapter()` (`0x47728`,
+**not** `onStartupConfig()` — that one only runs the `mkdir`/`ln -s`
+`/dev/socket/goc_rfcom` setup shown above) contains two `system()`
+calls, gated by a flag byte at `object+31` presumably selecting
+board/config variant:
+
+```
+0x47824: system("blueware /etc/blueware-bw121.properties > /dev/null 2>&1 &")
+0x47a04: system("blueware /etc/blueware-bw123.properties > /dev/null 2>&1 &")
+```
+
+(Both string addresses hand-computed and confirmed from the PC-relative
+literal loads feeding each `system@plt` call — `0x47828 + 0x171e8 =
+0x5ea10` and `0x47a08 + 0x17070 = 0x5ea78`, matching the `.rodata`
+strings exactly.) This board's `bw121` config (section 4) means the
+first of these two is the one that actually runs here.
+
+**The `> /dev/null 2>&1` matters a lot.** `/usr/bin/blueware` itself
+turns out to be far better instrumented than the `libMsnCommons.so`
+GPIO helper documented for the BD37033's GPIO34 enable line
+(`docs/BD37033.md` §2) — `strings`/`.rodata` on `blueware` show a
+generic `bpio_init`-prefixed GPIO helper with a distinct, specific
+error message for *every* step: `"bpio_init open(%s) for export
+failed: %s (%d)"`, `"...for dir failed..."`, `"...for val
+failed..."`, plus matching `"...success: fd (%d)"` messages — i.e. if
+the `BTEN_INTERFACE=gpio91` sequence (`export`/`direction`/`value`,
+section 4) fails at any step, `blueware` **does** print a clear,
+specific, `errno`-annotated message about it. But because
+`initBlueToothAdapter()` launches it with `> /dev/null 2>&1`, none of
+that ever reaches anywhere visible — not a log file, not dmesg, nothing.
+If GPIO91 is failing (pinmux, permissions, a sysfs export race, or
+anything else in that same family of issues we already confirmed for
+GPIO34), there is currently **no way to observe it** short of
+intercepting the daemon's own output directly.
+
+**Concrete on-device test, no code changes needed:**
+```
+/ # killall blueware 2>/dev/null
+/ # /usr/bin/blueware /etc/blueware-bw121.properties    # no redirect -- watch stdout live
+```
+Also worth checking directly, same pattern as the GPIO34 checks in
+`docs/BD37033.md`:
+```
+/ # ls /sys/class/gpio/ | grep gpio91
+/ # cat /sys/class/gpio/gpio91/direction
+/ # cat /sys/class/gpio/gpio91/value
+```
+If `blueware` run this way prints one of the `bpio_init ... failed`
+lines, that's the root cause, directly confirmed rather than inferred.
+If it starts cleanly and `gpio91` reads back `out`/`1` as expected, the
+GPIO path is very likely fine and the "no response" issue is downstream
+of it — the `/dev/bw_serial` AT-command layer or the RTL8762BTV module
+itself.
+
 ### `writeCommand(const QString&)` (`0x45304`) — outgoing frame format
 
 Every outgoing command is built as the literal template `"AT+%1\r\n"`

@@ -1,7 +1,7 @@
 # Wireless And Init
 
 **Status:** Reference
-**Last Updated:** 2026-07-15
+**Last Updated:** 2026-07-16
 
 ## Overview
 
@@ -78,3 +78,119 @@ echo 91 > /sys/class/gpio/export
 echo out > /sys/class/gpio/gpio91/direction
 echo 1 > /sys/class/gpio/gpio91/value
 ```
+
+---
+
+## 5. Application-side Bluetooth protocol: `libBlueTooth.so` (2026-07-16)
+
+**Why:** section 4 documents the `/usr/bin/blueware` daemon's own
+config; this section covers how `MsnCoreApp`'s Qt UI (`libBlueTooth.so`,
+`usr/lib/libBlueTooth.so`, 450 KB ARM32, **stripped** — recovered via
+mangled C++ names still present in `.dynsym`/`.dynstr`, so
+`arm-linux-gnueabihf-objdump -d` + `c++filt` were enough without a
+`.symtab`) actually talks to that daemon, and what the wire commands
+look like. Unlike `input.so` this is genuine vendor C++/Qt code (classes
+`BtMainWindow`, `BtSettingPanel`, `BtDialPanel`, `BtContactPanel`,
+`BtMusicPanel`, `BtHistoryPanel`, `CallingDialog`, `ContactDialog`, plus
+the panel adapter classes below), not a stock open-source library.
+
+### Adapter class hierarchy — confirmed active variant
+
+`BlueToothAdapter` is an abstract base with three concrete
+implementations, each with an identical 67-method vtable shape:
+`BlueToothAdapter_SD851`, `BlueToothAdapter_HD6956`,
+`BlueToothAdapter_Blueware`. A singleton factory,
+`BlueToothAdapter::getBlueToothAdapter(BlueToothAdapterType)` (`0x360a0`),
+switches on the enum via a bitmask test (`1 << (type-2)`):
+
+| Enum value(s) | Mask bit(s) | Class instantiated |
+|---|---|---|
+| 2, 3, 4, 7 | `0x27` | `BlueToothAdapter_SD851` |
+| 5, 6 | `0x18` | `BlueToothAdapter_Blueware` |
+| 8 | `0x40` | `BlueToothAdapter_HD6956` |
+
+`.rodata` ties types 5/6 directly to the two config variants seen in
+section 4: `blueware /etc/blueware-bw121.properties &` and
+`blueware /etc/blueware-bw123.properties &` — i.e. **this board's
+config (`bw121`) selects `BlueToothAdapter_Blueware`**, the class
+documented below. `SD851`/`HD6956` are alternate chip profiles for other
+product variants sharing this same binary; not exercised on this unit.
+
+### Transport chain — not a direct UART open
+
+`libBlueTooth.so` does **not** open `/dev/ttyHS1` itself. Startup
+strings in `BlueToothAdapter_Blueware::onStartupConfig()` (`0x472ec`)
+reveal the real chain:
+
+```
+mkdir /dev/socket/ && ln -s /dev/bw_iap /dev/socket/goc_rfcom
+```
+
+- `/usr/bin/blueware` (the daemon from section 4) owns the physical
+  `/dev/ttyHS1` UART to the RTL8762BTV module and exposes two virtual
+  nodes: `/dev/bw_serial` (AT-command channel) and `/dev/bw_iap`
+  (raw RFCOMM/SPP passthrough, symlinked to `/dev/socket/goc_rfcom` for
+  phone-side accessory protocols — an `"AppleInc."` string and
+  `getPhoneTypeFromUUID(QString&)` nearby suggest this is used for
+  Apple iAP as well as generic SPP).
+- `BlueToothAdapter_Blueware` opens `/dev/bw_serial` via a
+  `MsnSerialPort` wrapper (`isOpen()`/`write()`) and speaks a plain
+  line-based **AT command / `+PREFIX=` response** protocol over it —
+  the same style already known from the MCU-side AT strings documented
+  in `docs/UI_AND_APP_ANALYSIS.md:481`, just now confirmed from the app
+  side too.
+
+### `writeCommand(const QString&)` (`0x45304`) — outgoing frame format
+
+Every outgoing command is built as the literal template `"AT+%1\r\n"`
+(recovered from `.rodata @ 0x5e7e8`) with the caller-supplied token
+substituted for `%1`, then written to `/dev/bw_serial` via
+`MsnSerialPort::write()` (only if `isOpen()` first). No further framing,
+checksum, or length prefix — a bare newline-terminated AT-command line.
+
+### Recovered command/response vocabulary (from `.rodata`, `0x5e7e0`–`0x5f200`)
+
+Outgoing (`AT+<token>` sent by `libBlueTooth.so`):
+
+```
+DEVSTAT          ADDR             REBOOT           HFPSTAT
+A2DPSTAT         HFPDIAL=<num>    HFPANSW          HFPCHUP
+HFPMCAL=0/1/2    HFPDTMF          HFPDISC          A2DPDISC
+BTEN=0 / BTEN=1  MICMUTE=%1       A2DPMUTE=%1      HFPADTS=1/2
+PBDOWN=1/2/3/4   PBABORT          PLAYPAUSE        PLAY
+STOP             FORWARD          BACKWARD         PLIST / PLIST=0
+HFPCONN / HFPCONN=%1              VER              NAME=%1
+PIN=%1           SCAN=1           HFPCFG
+```
+
+Incoming (`+PREFIX=` lines parsed by `onReadLine(QByteArray)` — 8.8 KB,
+not fully hand-disassembled; prefixes below recovered from string
+cross-references, exact field grammar not yet decoded):
+
+```
++DEVSTAT=   +HFPSTAT=   +HFPDEV=    +HFPAUDIO=0 / +HFPAUDIO=1
++ADDR=      +PLIST=     +TRACKINFO= +A2DPSTAT=
++VER=       +PBDATA=  / +PBDATA=E   +HFPCFG (also seen as HFPCFG=0)
++NAME=      +PIN=       +PAIRED=0   +HFPMANU=
+```
+
+### Qt signal/slot surface (from the moc metaobject string table)
+
+`BlueToothAdapter`'s public signals cover: `bluetoothEnableChange(bool)`,
+`onConnected(QString)` / `onDisconnected()`,
+`onHFPStatusChange(HFPStatus)` / `onA2DPStatusChange(A2DPStatus)`,
+`onRecvContacts(QStringList,bool)` / `onRecvCallHistorys(QStringList,bool)`,
+`onOutgoingCall`/`onIncomingCall`/`onTalkingCall`/`onNewIncomingCall(QString)`,
+`onRecvUUID(QString)`, and `contactsDataChange()` /
+`callHistoryDataChange_{Incoming,Outgoing,Missed}()` /
+`favoriteDataChange()`. This is the internal API surface the `Bt*Panel`
+UI classes (`BtMainWindow`, `BtDialPanel`, `BtContactPanel`,
+`BtMusicPanel`, `BtHistoryPanel`) consume — useful map if a future task
+needs to trace a specific UI misbehavior (e.g. contacts not syncing)
+back to a specific AT command/response pair above.
+
+**Not yet decompiled:** the 8.8 KB `onReadLine` bodies (all three
+adapter classes) that parse the `+PREFIX=` lines field-by-field, and
+`libBTSender.so`/`libbt_stack.so` (the latter is almost certainly a
+stock Bluedroid/BlueZ HCI stack judging by its size and generic name,
+not vendor code — lower priority for hand disassembly).

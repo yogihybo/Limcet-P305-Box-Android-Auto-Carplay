@@ -35,7 +35,16 @@ a WAV file of its own. Copy it alongside the script:
    `bd37033_controls[]`, not guessed).
 4. Sets `PA Volume`, reads it back via `amixer` — proves ALSA's own state
    round-trips, but **does not** prove the I2C write reached the chip.
-5. Optional `aplay` playback, if a WAV path is given.
+5. Static noise, cycled across every real playback device found. Before each
+   device's playback, pulses GPIO34 (the BD37033 enable/reset line, see
+   `docs/BD37033.md` section 2) high-then-low rather than trusting whatever
+   state `MsnCoreApp` already left it in — a flat re-write of the same value
+   is a no-op if the app already drove it there once, so this forces a real
+   edge on every run regardless of prior state. Each device gets an explicit
+   `sleep 3` listening window after playback, independent of whether `aplay`'s
+   own `-d 3` duration flag actually blocks for the full 3 seconds.
+6. Optional `aplay` playback of a given WAV file — also pulses GPIO34 first
+   and sleeps 3s afterward.
 
 ## Important caveat
 

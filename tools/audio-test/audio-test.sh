@@ -23,6 +23,31 @@ pass() { echo "[PASS] $1"; PASS=$((PASS+1)); }
 fail() { echo "[FAIL] $1"; FAIL=$((FAIL+1)); }
 unk()  { echo "[UNKNOWN] $1"; UNKNOWN=$((UNKNOWN+1)); }
 
+# GPIO34 -- BD37033 enable/reset line, driven low once (and only once) at
+# Sound_BD37033 construction with zero error checking anywhere in the call
+# chain (gpio_export()/gpio_set_dir()/gpio_set_value() in libMsnCommons.so
+# all discard write()'s return value; Sound_BD37033's ctor never checks
+# setDir()/setValue()'s return either) -- see docs/BD37033.md section 2.
+# Re-asserted here as a HIGH-then-LOW pulse (not just a flat low write)
+# before every sound test below, since if the app already left it sitting
+# at 0 from a previous run, re-writing 0 is a no-op with no edge -- this
+# guarantees a real transition regardless of whatever state it was already in.
+GPIO34_PATH=/sys/class/gpio/gpio34
+gpio34_toggle() {
+	if [ ! -d "$GPIO34_PATH" ]; then
+		echo 34 > /sys/class/gpio/export 2>/dev/null
+	fi
+	if [ -d "$GPIO34_PATH" ]; then
+		echo out > "$GPIO34_PATH/direction" 2>/dev/null
+		echo 1 > "$GPIO34_PATH/value" 2>/dev/null
+		sleep 1
+		echo 0 > "$GPIO34_PATH/value" 2>/dev/null
+		echo "  gpio34: pulsed high->low (BD37033 enable/reset, see docs/BD37033.md sec 2)"
+	else
+		echo "  gpio34: could not export -- skipping pulse (check /sys/class/gpio/export permissions)"
+	fi
+}
+
 echo "=== audio-test: $(date) ==="
 
 echo
@@ -139,11 +164,17 @@ if [ -n "$DEVICES" ] && command -v aplay >/dev/null 2>&1; then
 		d=${pair#*,}
 		NOISE_DEV="hw:${c},${d}"
 		echo
+		gpio34_toggle
 		echo "Playing 3s of noise on ${NOISE_DEV} -- listen for actual sound output..."
 		echo "  aplay -D ${NOISE_DEV} -f S16_LE -r 44100 -c 2 -d 3 /dev/urandom"
 		OUT=$(aplay -D "$NOISE_DEV" -f S16_LE -r 44100 -c 2 -d 3 /dev/urandom 2>&1)
 		RC=$?
 		echo "$OUT"
+		# aplay's own -d 3 duration flag is not trusted to actually block for
+		# the full 3 real-time seconds on this device (observed returning
+		# near-instantly) -- sleep explicitly so there's always a real
+		# listening window per device, regardless of aplay's behavior.
+		sleep 3
 		if [ "$RC" -eq 0 ]; then
 			pass "aplay exited cleanly on ${NOISE_DEV} (does not by itself prove audible output -- confirm you heard it)"
 		else
@@ -164,6 +195,7 @@ if [ -n "$WAV" ] && [ -r "$WAV" ]; then
 	if command -v aplay >/dev/null 2>&1; then
 		WAV_DEV=""
 		[ -n "$CARD" ] && WAV_DEV="hw:${CARD},${DEV}"
+		gpio34_toggle
 		echo "Playing $WAV via aplay${WAV_DEV:+ -D $WAV_DEV} -- listen for actual sound output..."
 		if [ -n "$WAV_DEV" ]; then
 			aplay -D "$WAV_DEV" "$WAV" && pass "aplay exited cleanly on ${WAV_DEV} (does not by itself prove audible output -- confirm you heard it)" \
@@ -172,6 +204,9 @@ if [ -n "$WAV" ] && [ -r "$WAV" ]; then
 			aplay "$WAV" && pass "aplay exited cleanly (does not by itself prove audible output -- confirm you heard it)" \
 				|| fail "aplay reported an error"
 		fi
+		# Give a consistent listening window here too, in case the WAV is
+		# short or aplay returns before playback is actually audible.
+		sleep 3
 	else
 		unk "aplay not found in PATH"
 	fi

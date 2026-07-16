@@ -26,12 +26,36 @@ unk()  { echo "[UNKNOWN] $1"; UNKNOWN=$((UNKNOWN+1)); }
 echo "=== audio-test: $(date) ==="
 
 echo
-echo "--- 1. Sound card registration ---"
-if [ -r /proc/asound/cards ] && [ -s /proc/asound/cards ]; then
-	cat /proc/asound/cards
-	pass "at least one ALSA sound card registered"
+echo "--- 1. Sound card / device enumeration ---"
+CARD=""
+DEV=0
+DEVICES=""
+if command -v aplay >/dev/null 2>&1; then
+	AP_L=$(aplay -l 2>&1)
+	echo "$AP_L"
+	# Build the full list of real (non-Dummy) "card,device" pairs directly
+	# from aplay -l -- this is the canonical, always-current source (unlike
+	# /proc/asound/cards, which only lists cards, not their playback
+	# devices, and doesn't reflect dai-link ordering the way aplay -l does).
+	# A "Dummy" entry alone means no real card ever registered -- this
+	# project hit exactly that state early on (see
+	# docs/AUDIO_SUBSYSTEM_INVESTIGATION.md, "aplay -l before any fixes").
+	DEVICES=$(echo "$AP_L" | sed -n 's/^card \([0-9]\+\): \([^[]*\).*device \([0-9]\+\):.*/\1 \2 \3/p' | \
+		while read -r c name d; do
+			case "$name" in
+				*Dummy*) ;;
+				*) echo "${c},${d}" ;;
+			esac
+		done)
+	if [ -n "$DEVICES" ]; then
+		pass "real ALSA playback device(s) found: $(echo "$DEVICES" | tr '\n' ' ')"
+		CARD=$(echo "$DEVICES" | sed -n '1p' | cut -d, -f1)
+		DEV=$(echo "$DEVICES" | sed -n '1p' | cut -d, -f2)
+	else
+		fail "no real (non-Dummy) playback device in aplay -l output above"
+	fi
 else
-	fail "/proc/asound/cards missing or empty -- no sound card registered at all"
+	unk "aplay not found in PATH -- cannot enumerate devices"
 fi
 
 echo
@@ -101,13 +125,53 @@ else
 fi
 
 echo
-echo "--- 5. Playback test (requires a WAV file and your ears) ---"
+echo "--- 5. Static noise playback, cycled across every device found (requires your ears) ---"
+if [ -n "$DEVICES" ] && command -v aplay >/dev/null 2>&1; then
+	# Split on newlines with a `for` loop (not `... | while read`) so this
+	# runs in the current shell, not a subshell -- pass()/fail() need to
+	# update this shell's PASS/FAIL counters, which a piped subshell can't do.
+	OLD_IFS=$IFS
+	IFS='
+'
+	for pair in $DEVICES; do
+		IFS=$OLD_IFS
+		c=${pair%,*}
+		d=${pair#*,}
+		NOISE_DEV="hw:${c},${d}"
+		echo
+		echo "Playing 3s of noise on ${NOISE_DEV} -- listen for actual sound output..."
+		echo "  aplay -D ${NOISE_DEV} -f S16_LE -r 44100 -c 2 -d 3 /dev/urandom"
+		OUT=$(aplay -D "$NOISE_DEV" -f S16_LE -r 44100 -c 2 -d 3 /dev/urandom 2>&1)
+		RC=$?
+		echo "$OUT"
+		if [ "$RC" -eq 0 ]; then
+			pass "aplay exited cleanly on ${NOISE_DEV} (does not by itself prove audible output -- confirm you heard it)"
+		else
+			fail "aplay on ${NOISE_DEV} exited with error (rc=$RC) -- see output above"
+		fi
+		IFS='
+'
+	done
+	IFS=$OLD_IFS
+else
+	unk "skipped -- no real device/aplay available"
+fi
+
+echo
+echo "--- 6. Playback test (requires a WAV file and your ears) ---"
 WAV="${1:-}"
 if [ -n "$WAV" ] && [ -r "$WAV" ]; then
 	if command -v aplay >/dev/null 2>&1; then
-		echo "Playing $WAV via aplay -- listen for actual sound output..."
-		aplay "$WAV" && pass "aplay exited cleanly (does not by itself prove audible output -- confirm you heard it)" \
-			|| fail "aplay reported an error"
+		WAV_DEV=""
+		[ -n "$CARD" ] && WAV_DEV="hw:${CARD},${DEV}"
+		echo "Playing $WAV via aplay${WAV_DEV:+ -D $WAV_DEV} -- listen for actual sound output..."
+		if [ -n "$WAV_DEV" ]; then
+			aplay -D "$WAV_DEV" "$WAV" && pass "aplay exited cleanly on ${WAV_DEV} (does not by itself prove audible output -- confirm you heard it)" \
+				|| fail "aplay on ${WAV_DEV} reported an error"
+		else
+			aplay "$WAV" && pass "aplay exited cleanly (does not by itself prove audible output -- confirm you heard it)" \
+				|| fail "aplay reported an error"
+		fi
 	else
 		unk "aplay not found in PATH"
 	fi

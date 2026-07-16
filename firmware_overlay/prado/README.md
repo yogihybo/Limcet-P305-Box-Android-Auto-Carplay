@@ -46,6 +46,9 @@ surface immediately.
 | `etc/inittab` | `getty` on `ttyS0` replaced with a direct login shell | This busybox build has no `login` applet — `getty` alone can't provide a shell |
 | `etc/wifi_ap.sh` | 3.4.0 `wlan_rtl*.ko` hardcoded paths replaced with `modprobe` + a real-kernel-version fallback path | 4.19.192 kernel compat |
 | `usr/lib/libGAL.so` | Replaced with the content of `libGAL.fb.so` (the vendor's own software-framebuffer variant) | The original's `.dynamic` section is corrupted (single `DT_NULL` entry) — crashes the dynamic linker the instant `MsnCoreApp` tries to load it. See `docs/BD37033.md`/`docs/ARK1680_TS_REVERSE_ENGINEERING.md`. Confirmed still required even for the newer CSTech rootfs's own `libGAL.so` (2026-07-16) — always applied, no toggle. |
+| `usr/bin/*` | All 19 default diagnostic tools/scripts (`i2c-scan`, `i2c-dump`, `i2c-write`, `ark-ts-test`, `lcd-test`, `strace`, `nano`, `less`, `htop`, `tmux`, `gdbserver`, `dmesg`, `touch-selftest.sh`, `uart-test.sh`, `audio-test.sh`, `bt-test.sh`, `usb-test.sh`, `mmc-test.sh`, `mcu-handshake`) — synced from `tools/*/`, kept in sync manually if a tool changes | 2026-07-17: moved here from a build-time `install_diag_tools()` copy step (`--diag-tools`/`--no-diag-tools`, `install_diag_tools` toggle — all removed) so the tools are just part of the shipped rootfs, not a conditional install |
+| `etc/rc.d/rcS` (banner) | The "=== Diagnostic tools ===" banner listing all of the above, appended to the end of the file | Previously generated at build time by `append_diag_banner()`, one `echo` per tool actually installed — now static since every tool above is always present |
+| `etc/profile` (dmesg alias) | `alias dmesg='/usr/bin/dmesg -T -x --color=always'` | BusyBox's own `dmesg` applet (earlier in `$PATH`) lacks `-T`/`-x`/`--color` — see `tools/dmesg/README.md`. Previously appended conditionally at build time only if `dmesg` was installed; now unconditional since `usr/bin/dmesg` above is always present |
 
 ## What's still applied by the build script, not this overlay
 
@@ -64,6 +67,10 @@ opt-in/opt-out per build rather than "always wanted":
 - **telnetd** (`install_telnetd` toggle, OFF by default) — inserts an
   unauthenticated root telnetd into `rcS`. Deliberately opt-in only,
   never baked into a shipped default.
+
+Diagnostic tools themselves are **not** a toggle anymore (see the table
+above) — to skip one, delete it from `usr/bin/` here directly, same as
+any other overlay file.
 
 `fix_usb_port0_otg_race` was dropped entirely during this migration —
 it had been a pure no-op (all its actual commands commented out,

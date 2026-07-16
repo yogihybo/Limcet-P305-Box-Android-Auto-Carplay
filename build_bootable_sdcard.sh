@@ -97,7 +97,7 @@
 #   --no-initramfs     Explicitly disable the initramfs (already the default)
 #   --diag-tools PATH  Additional diagnostic binary/script to install onto
 #                      p2's /usr/bin, on top of the defaults: i2c-scan,
-#                      touch-test, lcd-test, strace (compiled binaries), plus
+#                      ark-ts-test, lcd-test, strace (compiled binaries), plus
 #                      touch-selftest.sh, uart-test.sh, audio-test.sh,
 #                      bt-test.sh, usb-test.sh, mmc-test.sh (POSIX shell
 #                      scripts — see each tools/*/README.md). Repeatable.
@@ -238,7 +238,7 @@ declare -a DIAG_TOOLS_BINS=(
     "$SCRIPT_DIR/tools/i2c-scan/i2c-scan"                  # static ARM i2c bus scanner, see tools/i2c-scan/README.md
     "$SCRIPT_DIR/tools/i2c-dump/i2c-dump"                  # static ARM i2c register dumper, see tools/i2c-dump/README.md
     "$SCRIPT_DIR/tools/i2c-write/i2c-write"                # static ARM raw i2c register writer, see tools/i2c-write/README.md
-    "$SCRIPT_DIR/tools/touch-test/touch-test"              # ark1680_ts touchscreen diagnostic, see tools/touch-test/README.md
+    "$SCRIPT_DIR/tools/ark1680-ts-test/ark-ts-test"        # ark1680_ts touchscreen diagnostic, see tools/ark1680-ts-test/README.md
     "$SCRIPT_DIR/tools/lcd-test/lcd-test"                  # raw /dev/fb0 LCD diagnostic, see tools/lcd-test/README.md
     "$SCRIPT_DIR/tools/strace/strace"                      # upstream strace (static), see tools/strace/README.md
     "$SCRIPT_DIR/tools/nano/nano"                          # static text editor for on-device config/log editing, see tools/nano/README.md
@@ -514,7 +514,7 @@ CONFIG_ITEMS=(
     "redirect_mtd_data|Redirect NAND mtd partitions to SD card (bootlogo, bootanimation, reversingtrack, unicode)|Symlinks bootlogo, bootanimation, reversingtrack, and Unicode font (mtd8-11) to files under /nanddata/ on p2 — if off, the device reads these from whatever is already in NAND instead|ON"
     "include_userdata|Include userdata (p3)|Copies the userdata dir to p3 — if off, p3 is left empty and the app populates /data on first boot|ON"
     "use_cstech_userdata|[p3] Use matching CarSyncTech CSTech-202511-IP17 userdata|Pairs with the rootfs option above — same auto-extraction, from extracted/userdata.tar.gz. Independent toggle in case you want the newer rootfs with the Prado userdata (or vice versa).|OFF"
-    "install_diag_tools|Install diagnostic tools (i2c-scan, i2c-dump, touch-test, lcd-test, strace, nano, less, htop, tmux, gdbserver, *-test.sh)|Copies diagnostic binaries and scripts onto p2's /usr/bin: i2c-scan (I2C bus scanner, see tools/i2c-scan/README.md), i2c-dump (I2C register dumper, see tools/i2c-dump/README.md), touch-test (ARK1680 touchscreen register/evdev tester, see tools/touch-test/README.md), lcd-test (raw /dev/fb0 LCD tester, see tools/lcd-test/README.md), strace (upstream syscall tracer, see tools/strace/README.md), nano (static text editor, see tools/nano/README.md), less (static pager, see tools/less/README.md), htop (static process viewer, see tools/htop/README.md), tmux (static terminal multiplexer, see tools/tmux/README.md), gdbserver (static remote debugging, see tools/gdbserver/README.md), and touch-selftest.sh/uart-test.sh/audio-test.sh/bt-test.sh/usb-test.sh/mmc-test.sh (automated pass/fail wrappers, one per subsystem — see each tools/*/README.md). Harmless to leave off.|ON"
+    "install_diag_tools|Install diagnostic tools (i2c-scan, i2c-dump, ark-ts-test, lcd-test, strace, nano, less, htop, tmux, gdbserver, dmesg, *-test.sh)|Copies diagnostic binaries and scripts onto p2's /usr/bin: i2c-scan (I2C bus scanner, see tools/i2c-scan/README.md), i2c-dump (I2C register dumper, see tools/i2c-dump/README.md), ark-ts-test (ARK1680 touchscreen register/evdev tester, see tools/ark1680-ts-test/README.md), lcd-test (raw /dev/fb0 LCD tester, see tools/lcd-test/README.md), strace (upstream syscall tracer, see tools/strace/README.md), nano (static text editor, see tools/nano/README.md), less (static pager, see tools/less/README.md), htop (static process viewer, see tools/htop/README.md), tmux (static terminal multiplexer, see tools/tmux/README.md), gdbserver (static remote debugging, see tools/gdbserver/README.md), dmesg (static util-linux dmesg with -T/-x/--color, see tools/dmesg/README.md), and touch-selftest.sh/uart-test.sh/audio-test.sh/bt-test.sh/usb-test.sh/mmc-test.sh (automated pass/fail wrappers, one per subsystem — see each tools/*/README.md). Harmless to leave off.|ON"
     "disable_msncoreapp_autolaunch|Disable MsnCoreApp auto-launch at login|Comments out 'MsnCoreApp -qws&' in /etc/profile so it doesn't auto-run (and auto-crash) on every shell login while the startup segfault is being debugged (see docs/ARK1680_TS_REVERSE_ENGINEERING.md). Run 'start_msn' manually instead to test. Turn this off once the crash is fixed and auto-launch is wanted again.|ON"
     "fix_libgal_dynamic_section|Fix corrupted libGAL.so .dynamic section|/usr/lib/libGAL.so's .dynamic section is corrupted (just a single DT_NULL entry — no NEEDED/SYMTAB/STRTAB), which crashes the dynamic linker with a NULL+4 deref inside _dl_relocate_object() the instant MsnCoreApp tries to load it (root-caused via matched strace+dmesg PC/LR correlation, see docs/ARK1680_TS_REVERSE_ENGINEERING.md). Replaces it with libGAL.fb.so, the vendor's own software-framebuffer variant (SONAME=libGAL.so, valid .dynamic section), backing up the original as libGAL.so.corrupt-orig.|ON"
     "install_telnetd|Install passwordless root telnetd (UNAUTHENTICATED — diagnostic only)|Inserts 'mount -t devpts none /dev/pts' + 'busybox telnetd -l /bin/sh &' into rcS right after mdev -s, giving a root shell on port 23 with no login prompt to anything that can reach the device's network (WiFi AP or USB-NCM). Same mechanism validated working on stock firmware via the msn_autocopy payload (see msn_autocopy/README.md for why the devpts mount is required — telnetd fails silently without it). This is a real, if minor, exposure while active on any network the device joins — OFF by default, opt-in only.|OFF"
@@ -1409,7 +1409,7 @@ install_new_kernel_modules() {
 }
 
 # ---------------------------------------------------------------------------
-# Install diagnostic tools (e.g. tools/i2c-scan, tools/touch-test) onto
+# Install diagnostic tools (e.g. tools/i2c-scan, tools/ark1680-ts-test) onto
 # the mounted p2 rootfs
 # ---------------------------------------------------------------------------
 install_diag_tools() {
@@ -1485,9 +1485,9 @@ append_diag_banner() {
                 i2c-write)
                     echo 'echo "  i2c-write /dev/i2c-N addr reg val    - raw single-register i2c write (bypasses kernel client)"'
                     ;;
-                touch-test)
-                    echo 'echo "  touch-test regs                      - dump ARK1680 touch ADC/syscon registers"'
-                    echo 'echo "  touch-test events /dev/input/eventN  - watch touch evdev events"'
+                ark-ts-test)
+                    echo 'echo "  ark-ts-test regs                      - dump ARK1680 touch ADC/syscon registers"'
+                    echo 'echo "  ark-ts-test events /dev/input/eventN  - watch touch evdev events"'
                     ;;
                 lcd-test)
                     echo 'echo "  lcd-test                             - print fb/display info, then cycle through solid fills, bars, and gradient"'

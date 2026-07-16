@@ -58,50 +58,55 @@ else
 fi
 
 echo
-echo "--- 3. blueware process ---"
+echo "--- 3. Passive traffic listen on ttyHS1 (5s window) ---"
+# Check if blueware is running, and temporarily stop it to release ttyHS1
 if pgrep blueware >/dev/null 2>&1 || ps | grep -v grep | grep -q blueware; then
-	pass "blueware already running"
-	STARTED_BY_US=0
+	echo "blueware is running -- temporarily stopping it to prevent it from blocking UART RX..."
+	killall blueware 2>/dev/null || true
+	WAS_RUNNING=1
+	sleep 1
 else
-	echo "blueware not running -- attempting to start it (best effort, no confirmed"
-	echo "CLI usage found in the binary -- if this is wrong, start it manually and"
-	echo "re-run just the traffic-monitoring step below)"
-	blueware >/tmp/blueware.log 2>&1 &
-	BTPID=$!
-	STARTED_BY_US=1
-	sleep 2
-	if kill -0 "$BTPID" 2>/dev/null; then
-		pass "blueware started and is still running after 2s (pid $BTPID)"
-	else
-		fail "blueware exited immediately -- check /tmp/blueware.log:"
-		cat /tmp/blueware.log 2>/dev/null
-	fi
+	WAS_RUNNING=0
 fi
 
-echo
-echo "--- 4. Passive traffic listen on ttyHS1 (5s window) ---"
+# Reset BT module via GPIO 91 to trigger boot-up initialization frames
+echo "Resetting BT module via GPIO 91 (BTEN)..."
+echo 0 > /sys/class/gpio/gpio91/value 2>/dev/null
+sleep 1
+echo 1 > /sys/class/gpio/gpio91/value 2>/dev/null
+sleep 1
+
 echo "Reading /dev/ttyHS1 for 5 seconds -- any bytes at all confirm the link"
-echo "is electrically live and the module is transmitting (idle/heartbeat"
-echo "frames are expected on most BT modules even with nothing paired)."
+echo "is electrically live and the module is transmitting boot-up frames."
 # No 'timeout' applet in this busybox build -- background + sleep + kill instead.
 busybox hexdump -C /dev/ttyHS1 >/tmp/bt_traffic.log 2>/dev/null &
 HPID=$!
 sleep 5
 kill "$HPID" 2>/dev/null
 TRAFFIC=$(cat /tmp/bt_traffic.log 2>/dev/null)
+
 if [ -n "$TRAFFIC" ]; then
 	echo "$TRAFFIC" | head -20
 	pass "traffic observed on /dev/ttyHS1"
 else
-	fail "no traffic observed in 5s -- try again with blueware freshly (re)started,"
-	echo "    or check baud rate (blueware-bw121.properties says 1500000) if a raw"
-	echo "    listener rather than blueware itself is expected to show anything"
+	fail "no traffic observed in 5s -- checking if the physical link is silent"
 fi
 
-if [ "${STARTED_BY_US:-0}" = "1" ]; then
-	echo
-	echo "(leaving the blueware instance this script started running --"
-	echo " kill it manually with 'killall blueware' if you don't want it up)"
+echo
+echo "--- 4. blueware process (re)start ---"
+if [ "$WAS_RUNNING" = "1" ] || [ "${FORCE_START:-1}" = "1" ]; then
+	echo "Attempting to start/restart blueware..."
+	blueware >/tmp/blueware.log 2>&1 &
+	BTPID=$!
+	sleep 2
+	if kill -0 "$BTPID" 2>/dev/null; then
+		pass "blueware started and is running (pid $BTPID)"
+	else
+		fail "blueware exited immediately -- check /tmp/blueware.log:"
+		cat /tmp/blueware.log 2>/dev/null
+	fi
+else
+	echo "blueware was not running and FORCE_START is disabled -- skipping start"
 fi
 
 echo

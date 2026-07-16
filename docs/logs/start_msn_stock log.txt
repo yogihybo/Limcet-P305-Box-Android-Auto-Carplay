@@ -1,0 +1,276 @@
+start_msn
+Setting up environment for MsnCoreApp...
+Starting MsnCoreApp (Software Framebuffer)...
+[263.428]  MSNCoreApp start
+[263.432]  MSNCoreApp exception init
+[263.441]  MSNCoreApp running
+QWS_ARK_TOUCH_DEVICE undefined, touch input disabled
+ALSA lib /workspace/ark0618system/build/..//apps/alsa-lib-1.1.0/src/pcm/pcm_dmix.c:1029:(snd_pcm_dmix_open) unable to open slave
+[263.686]  ALSAMixerOpen filed, stream name: plug:softvol5  ctrl name: softmaster5
+Create -> No implementation for this interface or content type has been found
+[263.787]  "MsnCoreApp"  is exist, will bring app to top!
+terminate called after throwing an instance of 'DFBException*'
+stop wifi manager
+[263.947]  Record Error Log: /data/minidump/err-1.log
+AppVer:V3.21.09.0219
+SystemVer:Linux_3.4.0_ 2023-12-05
+HardwareInfos:00-0000-00-00-00-00-00-00
+ErrorCode:11
+CallStack:
+/usr/lib/libMsnCommons.so(+0x5d7d0)[0x7649a7d0]
+/lib/libc.so.6(__default_sa_restorer+0x0)[0x752f2710]
+/usr/local/Qt4.7.4/lib/libQtGui.so.4(_ZN19QApplicationPrivate21cleanupMultitouch_sysEv+0xc)[0x75b19228]
+/usr/local/Qt4.7.4/lib/libQtGui.so.4(_ZN19QApplicationPrivate17cleanupMultitouchEv+0x10)[0x75ac6970]
+/usr/local/Qt4.7.4/lib/libQtGui.so.4(_ZN12QApplicationD2Ev+0x5c4)[0x75ac7164]
+/usr/lib/libMsnCommons.so(_ZN14MsnApplicationD2Ev+0x138)[0x7647df1c]
+MsnCoreApp[0x25f70]
+MsnCoreApp[0x20230]
+/lib/libc.so.6(__libc_start_main+0x110)[0x752dd174]
+rt: no DMA platform data
+[    0.350000] ark1680-uart ark1680-uart: no DMA platform data
+[    0.350000] ark1680-hsuart ark1680-hsuart: no TX DMA channel!
+[    0.350000] ark1680-hsuart ark1680-hsuart: no TX DMA channel!
+[    0.350000] ark1680-spi ark1680-spi.0: master is unqueued, this is deprecated
+[    0.350000] ark1680-spi ark1680-spi.0: probed
+[    0.350000] NAND device: Manufacturer ID: 0x98, Chip ID: 0xf1 (Toshiba NAND 128MiB 3,3V 8-bit)
+[    0.360000] Bad block table not found for chip 0
+[    0.360000] Bad block table not found for chip 0
+[    0.360000] Scanning device for bad blocks
+[    0.490000] Bad eraseblock 768 at 0x000006000000
+[    0.530000] Bad block table written to 0x000007fe0000, version 0x01
+[    0.530000] Bad block table written to 0x000007fc0000, version 0x01
+[    0.530000] 12 cmdlinepart partitions found on MTD device ark1680-nand
+[    0.550000] charvar register success
+[    0.550000] ark1680-rtc ark1680-rtc: rtc core: registered ark1680-rtc as rtc0
+[    0.550000] rtc_init rtc_base 0x8b888000.
+[    0.550000] val=0x0.
+[    0.550000] rRTC_STA = 0x2
+[    0.550000] ark1680-rtc ark1680-rtc: ark internal Real Time Clock
+[    0.550000] soc-audio soc-audio.0: ASoC machine ARK-SDDAC should use snd_soc_register_card()
+[    0.560000] asoc: sddac-hifi <-> ark_i2s_dev.0 mapping ok
+[    0.560000] asoc: cs4334 <-> ark_i2s_dev.1 mapping ok
+[    0.560000] GACT probability NOT on
+[    0.560000] Mirror/redirect action on
+[    0.560000] TCP: highspeed registered
+[    0.560000] NET: Registered protocol family 10
+[    0.560000] NET: Registered protocol family 17
+[    0.560000] lib80211: common routines for IEEE802.11 drivers
+[    0.560000] lib80211_crypt: registered algorithm 'NULL'
+[    0.560000] VFP support v0.3: implementor 41 architecture 2 part 30 variant 5 rev 1
+[    0.570000] UBI: attaching mtd6 to ubi0
+[    0.570000] UBI: physical eraseblock size:   131072 bytes (128 KiB)
+[    0.570000] UBI: logical eraseblock size:    126976 bytes
+[    0.570000] UBI: smallest flash I/O unit:    2048
+[    0.570000] UBI: VID header offset:          2048 (aligned 2048)
+[    0.570000] UBI: data offset:                4096
+[    1.500000] UBI: max. sequence number:       192
+[    1.520000] UBI: attached mtd6 to ubi0
+[    1.520000] UBI: MTD device name:            "rootfs"
+[    1.520000] UBI: MTD device size:            106 MiB
+[    1.520000] UBI: number of good PEBs:        847
+[    1.520000] UBI: number of bad PEBs:         1
+[    1.520000] UBI: number of corrupted PEBs:   0
+[    1.520000] UBI: max. allowed volumes:       128
+[    1.520000] UBI: wear-leveling threshold:    4096
+[    1.520000] UBI: number of internal volumes: 1
+[    1.520000] UBI: number of user volumes:     1
+[    1.520000] UBI: available PEBs:             0
+[    1.520000] UBI: total number of reserved PEBs: 847
+[    1.520000] UBI: number of PEBs reserved for bad PEB handling: 8
+[    1.520000] UBI: max/mean erase counter: 2/0
+[    1.520000] UBI: image sequence number:  791543826
+[    1.520000] UBI error: ubi_init: cannot attach mtd6
+[    1.520000] ark1680-rtc ark1680-rtc: setting system clock to 1970-01-01 00:00:00 UTC (0)
+[    1.520000] ALSA device list:
+[    1.520000]   #0: ARK-SDDAC
+[    1.520000] arktool display reg init
+[    1.560000] UBI: background thread "ubi_bgt0d" started, PID 653
+[    1.680000] VFS: Mounted root (ubifs filesystem) readonly on device 0:12.
+[    1.680000] devtmpfs: mounted
+[    1.680000] Freeing init memory: 124K
+[    2.260000] pid = 0x886ea840ark1680_ts_probe 683: request_irq:4 success
+[    2.300000] input: ark1680-ts as /devices/platform/ark1680-ts/input/input0
+[    2.390000] UBI: attaching mtd7 to ubi1
+[    2.390000] UBI: physical eraseblock size:   131072 bytes (128 KiB)
+[    2.390000] UBI: logical eraseblock size:    126976 bytes
+[    2.390000] UBI: smallest flash I/O unit:    2048
+[    2.390000] UBI: VID header offset:          2048 (aligned 2048)
+[    2.390000] UBI: data offset:                4096
+[    2.450000] UBI: max. sequence number:       778
+[    2.460000] UBI: attached mtd7 to ubi1
+[    2.460000] UBI: MTD device name:            "userdata"
+[    2.460000] UBI: MTD device size:            6 MiB
+[    2.460000] UBI: number of good PEBs:        48
+[    2.460000] UBI: number of bad PEBs:         0
+[    2.460000] UBI: number of corrupted PEBs:   0
+[    2.460000] UBI: max. allowed volumes:       128
+[    2.460000] UBI: wear-leveling threshold:    4096
+[    2.460000] UBI: number of internal volumes: 1
+[    2.460000] UBI: number of user volumes:     1
+[    2.460000] UBI: available PEBs:             0
+[    2.460000] UBI: total number of reserved PEBs: 48
+[    2.460000] UBI: number of PEBs reserved for bad PEB handling: 2
+[    2.460000] UBI: max/mean erase counter: 24/16
+[    2.460000] UBI: image sequence number:  421938153
+[    2.470000] UBI: background thread "ubi_bgt1d" started, PID 682
+[    3.870000] pid = 0x886eb340pid = 0x886eb080
+[    4.320000] Galcore version 5.0.11.28018
+[    4.360000] IrqLineVG=-1.
+[    5.500000] pid = 0x8433c580ark_audio_mute:76 mute=1 reg=0x00000000
+[    7.080000] ark_audio_mute:80 mute=0 reg=0x00007f7f 127 127
+[    7.120000] ark_audio_mute:76 mute=1 reg=0x00007f7f
+[    7.130000] ark_audio_mute:76 mute=1 reg=0x00000000
+[    7.130000] ark_audio_mute:80 mute=0 reg=0x00007f7f 127 127
+[    7.130000] ark_audio_mute:76 mute=1 reg=0x00007f7f
+[    7.150000] ark_audio_mute:76 mute=1 reg=0x00000000
+[    7.150000] ark_audio_mute:80 mute=0 reg=0x00007f7f 127 127
+[    7.160000] ark_audio_mute:76 mute=1 reg=0x00007f7f
+[    7.160000] ark_audio_mute:76 mute=1 reg=0x00000000
+[    7.160000] ark_audio_mute:80 mute=0 reg=0x00007f7f 127 127
+[    7.160000] ark_audio_mute:76 mute=1 reg=0x00007f7f
+[    7.170000] ark_audio_mute:76 mute=1 reg=0x00000000
+[    7.170000] ark_audio_mute:80 mute=0 reg=0x00007f7f 127 127
+[    7.170000] ark_audio_mute:76 mute=1 reg=0x00007f7f
+[    7.180000] ark_audio_mute:76 mute=1 reg=0x00000000
+[    7.180000] ark_audio_mute:80 mute=0 reg=0x00007f7f 127 127
+[    7.180000] ark_audio_mute:76 mute=1 reg=0x00007f7f
+[    7.190000] ark_audio_mute:76 mute=1 reg=0x00000000
+[    7.190000] ark_audio_mute:80 mute=0 reg=0x00007f7f 127 127
+[    7.190000] ark_audio_mute:76 mute=1 reg=0x00007f7f
+[    7.190000] ark_audio_mute:76 mute=1 reg=0x00000000
+[    7.190000] ark_audio_mute:80 mute=0 reg=0x00007f7f 127 127
+[    7.200000] ark_audio_mute:76 mute=1 reg=0x00007f7f
+[    7.200000] ark_audio_mute:76 mute=1 reg=0x00000000
+[    7.200000] ark_audio_mute:80 mute=0 reg=0x00007f7f 127 127
+[    7.210000] ark_audio_mute:76 mute=1 reg=0x00007f7f
+[    7.210000] ark_audio_mute:76 mute=1 reg=0x00000000
+[    7.210000] ark_audio_mute:80 mute=0 reg=0x00007f7f 127 127
+[    7.210000] ark_audio_mute:76 mute=1 reg=0x00007f7f
+[    7.220000] ark_audio_mute:76 mute=1 reg=0x00000000
+[    7.220000] ark_audio_mute:80 mute=0 reg=0x00007f7f 127 127
+[    7.220000] ark_audio_mute:76 mute=1 reg=0x00007f7f
+[    7.230000] ark_audio_mute:76 mute=1 reg=0x00000000
+[    7.230000] ark_audio_mute:80 mute=0 reg=0x00007f7f 127 127
+[    7.230000] ark_audio_mute:76 mute=1 reg=0x00007f7f
+[    8.580000] vbox track close
+[   10.110000] hx170dec: module license 'Proprietary' taints kernel.
+[   10.110000] Disabling lock debugging due to kernel taint
+[   10.110000] hx170dec: Compatible HW found at 0xe0900000
+[   10.340000] musb-hdrc: version 6.0, ?dma?, otg (peripheral+host)
+[   10.390000] musb-hdrc musb-hdrc.0: && usb hdrc dma request_irq 13 success ! &&
+[   10.400000] musb-hdrc musb-hdrc.0: USB OTG mode controller at 8ba70000 using DMA, IRQ 14
+[   10.420000] musb-hdrc musb-hdrc.1: && usb hdrc dma request_irq 39 success ! &&
+[   10.430000] musb-hdrc musb-hdrc.1: USB OTG mode controller at 8ba72000 using DMA, IRQ 40
+[   10.470000]  gadget: using random self ethernet address
+[   10.470000]  gadget: using random host ethernet address
+[   10.470000] usb0: MAC 72:fe:32:fc:b9:12
+[   10.470000] usb0: HOST MAC 62:89:46:09:a4:d8
+[   10.470000]  gadget: NCM Gadget
+[   10.470000]  gadget: g_ncm ready
+[   10.470000] musb-hdrc musb-hdrc.0: MUSB HDRC host driver
+[   10.470000] musb-hdrc musb-hdrc.0: new USB bus registered, assigned bus number 1
+[   10.470000] hub 1-0:1.0: USB hub found
+[   10.470000] hub 1-0:1.0: 1 port detected
+[   10.510000]  gadget: Gadget Zero, version: Cinco de Mayo 2008
+[   10.510000]  gadget: zero ready
+[   10.510000] musb-hdrc musb-hdrc.1: MUSB HDRC host driver
+[   10.510000] musb-hdrc musb-hdrc.1: new USB bus registered, assigned bus number 2
+[   10.530000] hub 2-0:1.0: USB hub found
+[   10.530000] hub 2-0:1.0: 1 port detected
+[   10.530000] /workspace/ark0618system/kernels/linux-3.4/drivers/usb/musb/ark1680_musb.c ark1680_musb_enable: dma not reactivated
+[   10.550000] musb-hdrc musb-hdrc.0: +++Switch OTG 76  99===+++
+[   10.570000] ark1680_hsuart_set_termios 1523 hsuart0 baud:9600 c_cflag:0xcbd
+[   10.570000] ark1680_hsuart_set_termios 1523 hsuart0 baud:38400 c_cflag:0xcbf
+[   10.700000] musb-hdrc musb-hdrc.1: +++Switch OTG 1  117===+++
+[   10.760000] musb-hdrc musb-hdrc.0:
+[   10.760000]
+[   10.760000] <==*===start===*===> Power=60, DevCtl=5d, int_usb=0x10 a_host
+[   10.880000] ADDRCONF(NETDEV_UP): usb0: link is not ready
+[   10.910000] musb-hdrc musb-hdrc.1:
+[   10.910000]
+[   10.910000] <==*===start===*===> Power=60, DevCtl=5d, int_usb=0x10 a_host
+[   10.920000] -------------- host-regs:0x8ba96000 irq:26
+[   10.920000] dw_mmc dw_mmc.0: Using external DMA controller.
+[   10.920000] dw_mmc dw_mmc.0: Version ID is 220a
+[   10.920000] dw_mmc dw_mmc.0: DW MMC controller at irq 26, 32 bit host data width, 32 deep fifo
+[   10.920000] -------------- host-regs:0x8ba98000 irq:38
+[   10.920000] dw_mmc dw_mmc.1: Using external DMA controller.
+[   10.920000] ++++++++++++++++++++
+[   10.920000] Card0 Inserted!
+[   10.920000] -------------------
+[   10.920000] dw_mmc dw_mmc.1: Version ID is 220a
+[   10.920000] dw_mmc dw_mmc.1: DW MMC controller at irq 38, 32 bit host data width, 32 deep fifo
+[   10.920000] ++++++++++++++++++++
+[   10.920000] -------------------
+[   10.960000] mmc_host mmc0: Bus speed (slot 0) = 24000000Hz (slot req 400000Hz, actual 400000HZ div = 30)
+[   10.960000] ============= mmc_attach_sdio  1072  mmc_host name mmc0
+[   11.010000] mmc_host mmc0: Bus speed (slot 0) = 24000000Hz (slot req 24000000Hz, actual 24000000HZ div = 0)
+[   11.010000] mmc0: new SD card at address e126
+[   11.010000] mmcblk0: mmc0:e126 SU01G 968 MiB
+[   11.010000]  mmcblk0: p1 p2 p3
+[   11.040000] usb 1-1: new high-speed USB device number 2 using musb-hdrc
+[   11.060000] mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 400000Hz, actual 400000HZ div = 30)
+[   11.060000] ============= mmc_attach_sdio  1072  mmc_host name mmc1
+[   11.110000] mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 300000Hz, actual 300000HZ div = 40)
+[   11.110000] ============= mmc_attach_sdio  1072  mmc_host name mmc1
+[   11.160000] mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 200000Hz, actual 200000HZ div = 60)
+[   11.160000] ============= mmc_attach_sdio  1072  mmc_host name mmc1
+[   11.180000] scsi0 : usb-storage 1-1:1.0
+[   11.210000] track_setting=2
+[   11.210000] track_setting=3
+[   11.220000] mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 100000Hz, actual 100000HZ div = 120)
+[   11.230000] ============= mmc_attach_sdio  1072  mmc_host name mmc1
+[   11.470000] usb 2-1: new high-speed USB device number 2 using musb-hdrc
+[   12.070000] pid = 0x84a95080pid = 0x84a95340
+[   12.190000] scsi 0:0:0:0: Direct-Access     SanDisk  Cruzer Blade     8.02 PQ: 0 ANSI: 0 CCS
+[   12.190000] sd 0:0:0:0: [sda] 7856127 512-byte logical blocks: (4.02 GB/3.74 GiB)
+[   12.190000] sd 0:0:0:0: [sda] Write Protect is off
+[   12.190000] sd 0:0:0:0: [sda] Mode Sense: 45 00 00 08
+[   12.190000] sd 0:0:0:0: [sda] No Caching mode page present
+[   12.190000] sd 0:0:0:0: [sda] Assuming drive cache: write through
+[   12.190000] sd 0:0:0:0: Attached scsi generic sg0 type 0
+[   12.190000] sd 0:0:0:0: [sda] No Caching mode page present
+[   12.190000] sd 0:0:0:0: [sda] Assuming drive cache: write through
+[   12.200000]  sda: sda1 sda2 sda3
+[   12.220000] sd 0:0:0:0: [sda] No Caching mode page present
+[   12.220000] sd 0:0:0:0: [sda] Assuming drive cache: write through
+[   12.220000] sd 0:0:0:0: [sda] Attached SCSI removable disk
+[   12.710000] pid = 0x84ee4580ark1680_hsuart_set_termios 1523 hsuart1 baud:9600 c_cflag:0xcbd
+[   13.790000] ark1680_hsuart_set_termios 1523 hsuart1 baud:9600 c_cflag:0xdbd
+[   13.790000] ark1680_hsuart_set_termios 1523 hsuart1 baud:115200 c_cflag:0x1db2
+[   13.940000] usbcore: registered new interface driver rtl8821cu
+[   13.940000] ark1680_hsuart_set_termios 1523 hsuart1 baud:1500000 c_cflag:0x1dba
+[   14.580000] EXT4-fs (mmcblk0p2): couldn't mount as ext3 due to feature incompatibilities
+[   14.580000] EXT4-fs (mmcblk0p2): couldn't mount as ext2 due to feature incompatibilities
+[   14.630000] EXT4-fs (mmcblk0p2): recovery complete
+[   14.630000] EXT4-fs (mmcblk0p2): mounted filesystem with ordered data mode. Opts: (null)
+[   14.860000] EXT4-fs (mmcblk0p3): couldn't mount as ext3 due to feature incompatibilities
+[   14.860000] EXT4-fs (mmcblk0p3): couldn't mount as ext2 due to feature incompatibilities
+[   15.020000] EXT4-fs (mmcblk0p3): recovery complete
+[   15.020000] EXT4-fs (mmcblk0p3): mounted filesystem with ordered data mode. Opts: (null)
+[   15.110000] start_addr=(0x8000), end_addr=(0x10000), buffer_size=(0x8000), smp_number_max=(4096)
+[   15.150000] ADDRCONF(NETDEV_UP): wlan0: link is not ready
+[   15.170000] pid = 0x87fa4b00
+[   15.660000] EXT4-fs (sda2): couldn't mount as ext3 due to feature incompatibilities
+[   15.660000] EXT4-fs (sda2): couldn't mount as ext2 due to feature incompatibilities
+[   15.670000] EXT4-fs (sda2): mounted filesystem with ordered data mode. Opts: (null)
+[   15.840000] EXT4-fs (sda3): couldn't mount as ext3 due to feature incompatibilities
+[   15.840000] EXT4-fs (sda3): couldn't mount as ext2 due to feature incompatibilities
+[   15.850000] EXT4-fs (sda3): mounted filesystem with ordered data mode. Opts: (null)
+[   16.510000] ADDRCONF(NETDEV_CHANGE): wlan0: link becomes ready
+[   21.150000] ADDRCONF(NETDEV_UP): wlan0: link is not ready
+[   21.400000] ADDRCONF(NETDEV_CHANGE): wlan0: link becomes ready
+[   31.620000] ark_audio_mute:76 mute=1 reg=0x00000000
+[   31.620000] ark_audio_mute:80 mute=0 reg=0x00007777 119 119
+[   57.930000] pid = 0x8a178840pid = 0x8a178b00pid = 0x8a178dc0ark1680_hsuart_set_termios 1523 hsuart1 baud:1500000 c_cflag:0x1dba
+[  144.030000] pid = 0x8a178dc0pid = 0x8a1798c0pid = 0x8a179600pid = 0x8a179340pid = 0x8a179340pid = 0x8a179340pid = 0x8a179080pid = 0x8a179080pid = 0x8a179080pid = 0x8a179340pid = 0x8a179080ark1680_hsuart_set_termios 1523 hsuart0 baud:115200 c_cflag:0x1cb2
+[  231.510000] ark1680_hsuart_set_termios 1523 hsuart0 baud:38400 c_cflag:0xcbf
+[  231.530000] pid = 0x8a179080ark1680_hsuart_set_termios 1523 hsuart0 baud:9600 c_cflag:0xcbd
+[  234.650000] ark1680_hsuart_set_termios 1523 hsuart0 baud:38400 c_cflag:0xcbf
+[  234.670000] pid = 0x8a179080pid = 0x8a1798c0ark1680_hsuart_set_termios 1523 hsuart1 baud:1500000 c_cflag:0x1dba
+[  238.870000] ark1680_hsuart_set_termios 1523 hsuart1 baud:1500000 c_cflag:0x1cba
+[  241.870000] ark1680_hsuart_set_termios 1523 hsuart1 baud:1500000 c_cflag:0x1dba
+[  241.990000] pid = 0x8a1798c0ark1680_hsuart_set_termios 1523 hsuart1 baud:1500000 c_cflag:0x1dba
+[  242.060000] ark1680_hsuart_set_termios 1523 hsuart1 baud:115200 c_cflag:0x1cb2
+[  245.050000] ark1680_hsuart_set_termios 1523 hsuart1 baud:1500000 c_cflag:0x1dba
+[  245.170000] pid = 0x8a1798c0pid = 0x8a179600

@@ -1,8 +1,8 @@
 #!/bin/sh
 # touch-selftest.sh -- automated wrapper around this project's existing touch
-# test tools (tools/ark1680-ts-test/, plus the rootfs's own tslib binaries),
+# test tools (tools/touch-test/, plus the rootfs's own tslib binaries),
 # following the debug flow already documented in
-# tools/ark1680-ts-test/README.md, with pass/fail parsing instead of
+# tools/touch-test/README.md, with pass/fail parsing instead of
 # requiring the operator to manually run and interpret each command.
 # POSIX/ash-compatible (busybox sh). Run on-device. Requires a real physical
 # touch during the timed windows below -- this cannot simulate one for you.
@@ -16,16 +16,38 @@ pass() { echo "[PASS] $1"; PASS=$((PASS+1)); }
 fail() { echo "[FAIL] $1"; FAIL=$((FAIL+1)); }
 unk()  { echo "[UNKNOWN] $1"; UNKNOWN=$((UNKNOWN+1)); }
 
-# Resolve ark-ts-test across either layout this project ships it in: the
-# tools/ark1680-ts-test/ark-ts-test tree (manual copy), flat in the same
+# Resolve touch-test across either layout this project ships it in: the
+# tools/touch-test/touch-test tree (manual copy), flat in the same
 # directory as this script, or flat in /usr/bin (build_bootable_sdcard.sh's
 # install_diag_tools installs everything into one flat directory, not a
 # tools/ subtree -- checked 2026-07-14 while wiring this script into it).
-ARKTS="$(dirname "$0")/../ark1680-ts-test/ark-ts-test"
-[ -x "$ARKTS" ] || ARKTS="$(dirname "$0")/ark-ts-test"
-[ -x "$ARKTS" ] || ARKTS="$(command -v ark-ts-test 2>/dev/null)"
+ARKTS="$(dirname "$0")/../touch-test/touch-test"
+[ -x "$ARKTS" ] || ARKTS="$(dirname "$0")/touch-test"
+[ -x "$ARKTS" ] || ARKTS="$(command -v touch-test 2>/dev/null)"
 
 echo "=== touch-selftest: $(date) ==="
+
+# Ensure MCU handshake is running so the CBT16211A bus switch is closed
+STARTED_HANDSHAKE=0
+if ! pgrep -f mcu-handshake.py >/dev/null 2>&1; then
+	if pgrep MsnCoreApp >/dev/null 2>&1; then
+		echo "MsnCoreApp is running (which handles the handshake itself)."
+	else
+		echo "MCU handshake daemon is not running -- launching it in the background..."
+		# Try local tool path or standard /usr/bin path
+		HANDSHAKE_TOOL="$(dirname "$0")/../mcu-handshake/mcu-handshake.py"
+		[ -f "$HANDSHAKE_TOOL" ] || HANDSHAKE_TOOL="$(dirname "$0")/mcu-handshake.py"
+		[ -f "$HANDSHAKE_TOOL" ] || HANDSHAKE_TOOL="/usr/bin/mcu-handshake.py"
+		if [ -f "$HANDSHAKE_TOOL" ]; then
+			python3 "$HANDSHAKE_TOOL" >/tmp/mcu_handshake_temp.log 2>&1 &
+			HANDSHAKEPID=$!
+			STARTED_HANDSHAKE=1
+			sleep 2 # Give it a moment to complete the first handshake
+		else
+			echo "WARNING: mcu-handshake.py not found. Touch switch might remain open."
+		fi
+	fi
+fi
 
 echo
 echo "--- 1. dmesg probe check ---"
@@ -55,7 +77,7 @@ if [ -x "$ARKTS" ]; then
 		echo "    touching the panel during the 3s window."
 	fi
 else
-	unk "ark-ts-test not found (checked ../ark1680-ts-test/, alongside this script, and \$PATH)"
+	unk "touch-test not found (checked ../touch-test/, alongside this script, and \$PATH)"
 fi
 
 echo
@@ -91,7 +113,7 @@ if [ -n "$EVENTNODE" ]; then
 			echo "    gathered on stock firmware, not necessarily this kernel build)."
 		fi
 	else
-		unk "ark-ts-test not found -- can't read the event node"
+		unk "touch-test not found -- can't read the event node"
 	fi
 else
 	fail "no ark1680-ts entry found in /proc/bus/input/devices -- input device not registered"
@@ -116,6 +138,12 @@ if command -v ts_print_raw >/dev/null 2>&1; then
 	fi
 else
 	unk "ts_print_raw not found in PATH"
+fi
+
+if [ "$STARTED_HANDSHAKE" -eq 1 ]; then
+	echo "Stopping temporary background MCU handshake daemon..."
+	kill "$HANDSHAKEPID" 2>/dev/null
+	wait "$HANDSHAKEPID" 2>/dev/null
 fi
 
 echo

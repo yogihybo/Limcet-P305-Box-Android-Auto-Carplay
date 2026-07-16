@@ -35,6 +35,11 @@ if [ -d /sys/class/mmc_host/mmc0 ]; then
 		echo "Card present: $CARD"
 		[ -r "/sys/class/mmc_host/mmc0/$CARD/type" ] && echo "  type: $(cat /sys/class/mmc_host/mmc0/$CARD/type)"
 		[ -r "/sys/class/mmc_host/mmc0/$CARD/name" ] && echo "  name: $(cat /sys/class/mmc_host/mmc0/$CARD/name)"
+		PARTS=""
+		for p in /dev/mmcblk0p*; do
+			[ -e "$p" ] && PARTS="$PARTS ${p##*/}"
+		done
+		echo "  partitions: ${PARTS:-(none)}"
 		pass "mmc0 has a card enumerated"
 	else
 		fail "mmc0 host exists but no card enumerated under it -- is a card inserted?"

@@ -1,11 +1,11 @@
 # touch-selftest
 
 Automated wrapper around this project's existing touch test tooling
-(`tools/ark1680-ts-test/`, plus the rootfs's own `tslib` binaries —
+(`tools/touch-test/`, plus the rootfs's own `tslib` binaries —
 `ts_print_raw` etc., discovered already present in
 `Prado firmware reconstructed/mtd6_rootfs/rootfs/usr/bin/` this session) —
 runs the debug flow already documented in
-`tools/ark1680-ts-test/README.md`'s "Suggested debug flow" with automated
+`tools/touch-test/README.md`'s "Suggested debug flow" with automated
 pass/fail parsing, instead of requiring the operator to run and interpret
 each command by hand.
 
@@ -18,7 +18,7 @@ simulate one for you. Have a finger ready on the panel before running it.
 / # touch-selftest.sh
 ```
 
-Expects `tools/ark1680-ts-test/ark-ts-test` to exist one directory up from
+Expects `tools/touch-test/touch-test` to exist one directory up from
 this script (adjust the path inside if you copy it elsewhere on-device).
 
 ## What it checks

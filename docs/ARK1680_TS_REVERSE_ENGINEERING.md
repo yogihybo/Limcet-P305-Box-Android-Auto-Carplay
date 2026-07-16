@@ -318,25 +318,22 @@ The remaining open question is purely why the real hardware behind
 keeps "panel not physically connected/populated on this bench unit" as
 the leading hypothesis.
 
-## Next steps for a 4.19 port
+## Implementation of the 4.19 Port (Completed)
 
-1. Add a DTS node:
-   ```
-   tsc@e4500000 {
-       compatible = "arkmicro,ark1680-ts";  /* new driver, no upstream match */
-       reg = <0xe4500000 0x40>;
-       interrupt-parent = <&vicl>;
-       interrupts = <4>;
-   };
-   ```
-2. Write a new platform driver replicating the register sequence above
-   (`ark1680_setup_tsc` init sequence, IRQ handler reading `+0x0c`/`+0x14`,
-   debounce/detect constants `40000`/`130`) — either raw-`ioremap` the
-   syscon block like the stock driver, or resolve it via the existing
-   `pinctrl0`/`sregs@e4900000` node.
-3. Decode `TSP_GetXY` before trusting reported coordinates — the above is
-   enough to get raw ADC IRQs firing and confirm the hardware responds,
-   but not enough for calibrated touch output yet.
+The 4.19 port has been fully implemented in [ark1680_ts.c](file:///media/sf_GitHub/prado-firmware-reconstruction/hardware/ark1680_ts.c) matching the stock decompilation logic:
+
+1. **DTS Node Added**: The `tsc@e4500000` node is configured with compatibility `"arkmicro,ark1680-ts"`.
+2. **State Machine IRQ Handling**: Reimplemented the stock state machine which handles specific interrupt status bits:
+   - `0x1000` / `0x3000` (Pen Down): Clears the filter sample count and warms up.
+   - `0x2000` (Pen Up): Resets the filter and reports coordinate release events to input subsystem (`ABS_PRESSURE = 0`, `BTN_TOUCH = 0`).
+   - `0x4000` (Conversion Ready): Indexes coordinate samples, applies the 4-sample median filter via `TSP_GetXY` / `ark1680_ts_get_xy`, and if stable, reports coordinates (`ABS_X` range `0..800`, `ABS_Y` range `0..480`, `ABS_PRESSURE = 4095`, `BTN_TOUCH = 1`).
+3. **Calibration & Geometry**: Confirmed that `input_set_abs_params` maps coordinates directly within the `0..800` (X) and `0..480` (Y) screen boundaries.
+
+### Critical Testing & Hardware Gating (MCU Handshake)
+When testing, the resistive touchscreen hardware will appear unresponsive (raw ADC values read as all-zeros and no interrupts fire) unless the physical signals are connected.
+- **CBT16211A Bus Switch**: The touch signals are routed through a CBT16211A bus switch controlled by the MCU.
+- **Handshake Flow**: The MCU only closes this switch once it performs a successful handshake with the userspace application `MsnCoreApp`.
+- **Display Driver Dependency**: For `MsnCoreApp` to complete this handshake, the dummy `/dev/ark_display` driver must be loaded. Otherwise, `MsnCoreApp` segfaults immediately at boot, leaving the touch switch permanently open. Always ensure `/dev/ark_display` is registered and functional before testing.
 
 ---
 

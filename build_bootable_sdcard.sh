@@ -246,6 +246,7 @@ declare -a DIAG_TOOLS_BINS=(
     "$SCRIPT_DIR/tools/htop/htop"                          # static interactive process viewer, see tools/htop/README.md
     "$SCRIPT_DIR/tools/tmux/tmux"                          # static terminal multiplexer (survives dropped connections), see tools/tmux/README.md
     "$SCRIPT_DIR/tools/gdbserver/gdbserver"                # static gdbserver -- live remote debugging from a host gdb, see tools/gdbserver/README.md
+    "$SCRIPT_DIR/tools/dmesg/dmesg"                        # static util-linux dmesg -- busybox's applet lacks -T/-x/--color, see tools/dmesg/README.md
     "$SCRIPT_DIR/tools/touch-selftest/touch-selftest.sh"   # automated touch pass/fail flow, see tools/touch-selftest/README.md
     "$SCRIPT_DIR/tools/uart-test/uart-test.sh"             # passive MCU-link/MSNEry-link listener, see tools/uart-test/README.md
     "$SCRIPT_DIR/tools/audio-test/audio-test.sh"           # sound card + BD37033 bus/mixer check, see tools/audio-test/README.md
@@ -1422,6 +1423,7 @@ install_diag_tools() {
             [[ -f "$bin" ]] && echo "  [dry-run] cp $bin → /usr/bin/$(basename "$bin")"
         done
         echo "  [dry-run] append diagnostic-tools banner to rcS"
+        echo "  [dry-run] alias dmesg='/usr/bin/dmesg -T -x --color=always' in /etc/profile (if dmesg installed)"
         return
     fi
 
@@ -1434,6 +1436,23 @@ install_diag_tools() {
         installed+=("$name")
         success "Installed $name → /usr/bin/$name"
     done
+
+    # BusyBox's dmesg applet (/bin/dmesg, earlier in $PATH than /usr/bin) lacks
+    # -T/-x/--color, so alias the bare command to the full util-linux build by
+    # absolute path rather than relying on PATH order — see tools/dmesg/README.md.
+    if [[ " ${installed[*]} " == *" dmesg "* ]]; then
+        local profile="$rootfs_mount/etc/profile"
+        if [[ -f "$profile" ]]; then
+            if grep -q "^alias dmesg=" "$profile" 2>/dev/null; then
+                info "dmesg alias already present in /etc/profile — leaving it in place"
+            else
+                printf "\nalias dmesg='/usr/bin/dmesg -T -x --color=always'\n" >> "$profile"
+                success "Added 'dmesg' alias (/usr/bin/dmesg -T -x --color=always) to /etc/profile"
+            fi
+        else
+            warn "/etc/profile not found at $profile — dmesg alias skipped"
+        fi
+    fi
 
     [[ ${#installed[@]} -gt 0 ]] && append_diag_banner "$rootfs_mount" "${installed[@]}"
 }
@@ -1511,6 +1530,9 @@ append_diag_banner() {
                     ;;
                 mcu-handshake)
                     echo 'echo "  mcu-handshake                        - manual MCU handshake daemon to enable touch panel"'
+                    ;;
+                dmesg)
+                    echo 'echo "  dmesg                                - now aliased to /usr/bin/dmesg -T -x --color=always (busybox lacks these)"'
                     ;;
                 *)
                     echo "echo \"  $name\""

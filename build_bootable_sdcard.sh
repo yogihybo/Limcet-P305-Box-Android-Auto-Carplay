@@ -1373,11 +1373,7 @@ append_diag_banner() {
                     echo 'echo "  touch-test events /dev/input/eventN  - watch touch evdev events"'
                     ;;
                 lcd-test)
-                    echo 'echo "  lcd-test                             - print info and cycle through all test patterns (noise, solids, bars, gradient)"'
-                    echo 'echo "  lcd-test info                        - print framebuffer and display info"'
-                    echo 'echo "  lcd-test fill <red|green|blue|...>   - fill screen with a solid color"'
-                    echo 'echo "  lcd-test bars                        - draw color-bars pattern"'
-                    echo 'echo "  lcd-test gradient                    - draw red->green gradient"'
+                    echo 'echo "  lcd-test                             - print fb/display info, then cycle through solid fills, bars, and gradient"'
                     ;;
                 strace)
                     echo 'echo "  strace -f -o /data/x.log <cmd>       - trace syscalls (e.g. strace -f start_msn)"'

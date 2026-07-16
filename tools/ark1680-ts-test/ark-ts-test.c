@@ -116,8 +116,6 @@ static int cmd_regs(void)
 	       "run this a few times while touching the panel to sanity-check\n"
 	       "the hardware is responding before debugging the driver.\n");
 
-	munmap((void *)adc, MAP_SIZE);
-	munmap((void *)sys, MAP_SIZE);
 	close(fd);
 	return 0;
 }
@@ -150,13 +148,6 @@ static int cmd_events(const char *devpath)
 
 	if (fd < 0) {
 		fprintf(stderr, "open %s failed: %s\n", devpath, strerror(errno));
-		return 1;
-	}
-
-	int version;
-	if (ioctl(fd, EVIOCGVERSION, &version) < 0) {
-		fprintf(stderr, "error: %s is not a valid evdev input device\n", devpath);
-		close(fd);
 		return 1;
 	}
 

@@ -110,12 +110,6 @@
 		};
 	};
 
-	// External Cirrus Logic CS4334 I2S DAC
-	cs4334_codec: cs4334-codec {
-		compatible = "arkmicro,ark1668e_cs4334_codec";
-		#sound-dai-cells = <0>;
-	};
-
 	// Audio Card configuration
 	sound {
 		compatible = "simple-audio-card";
@@ -143,18 +137,18 @@
 			bitclock-master = <&playback_cpu>;
 			frame-master = <&playback_cpu>;
 			playback_cpu: cpu {
-				sound-dai = <&i2s_adc>; /* Use external I2S port (ark_i2s_dev.1) */
+				sound-dai = <&i2s_dac>;
 			};
 			playback_codec: codec {
-				sound-dai = <&cs4334_codec>; /* External DAC */
+				sound-dai = <&sddac>;
 			};
 		};
 		simple-audio-card,dai-link@1 { /* I2S ADC link */
 			cpu {
-				sound-dai = <&i2s_dac>; /* Internal I2S port for capture */
+				sound-dai = <&i2s_adc>;
 			};
 			codec {
-				sound-dai = <&sdadc>; /* Internal ADC */
+				sound-dai = <&sdadc>;
 			};
 		};
 	};
@@ -177,7 +171,6 @@
 };
 
 &usb1 {
-	interrupts = <40>, <39>; /* Correct IRQs for ark1668e architectural layout on Prado */
 	status = "okay";
 };
 
@@ -268,7 +261,7 @@
 };
 
 &gpio0 {
-	gpio-ranges = <&pinctrl0 0 0 32>;
+	gpio-ranges = <&pinctrl0 0 0 6>, <&pinctrl0 6 6 2>, <&pinctrl0 10 10 22>;
 };
 
 

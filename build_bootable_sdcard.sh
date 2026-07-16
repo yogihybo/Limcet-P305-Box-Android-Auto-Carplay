@@ -24,7 +24,11 @@
 # rootfs sync. See firmware_overlay/prado/README.md for what's there and
 # why. CarSyncTech CSTech-202511-IP17 rootfs support and the (confirmed
 # non-functional) initramfs boot path were both dropped in this rewrite —
-# see the archived script if either is needed again.
+# see the archived script if either is needed again. The default
+# diagnostic tools (i2c-scan, ark-ts-test, lcd-test, nano, htop, dmesg,
+# *-test.sh, etc.) also moved into firmware_overlay/prado/usr/bin/ and are
+# now unconditionally part of the rootfs — no more install_diag_tools
+# toggle or --diag-tools/--no-diag-tools flags.
 #
 # Usage:
 #   ./build_bootable_sdcard.sh [options]
@@ -82,13 +86,6 @@
 #   --no-userdata      Leave p3 formatted but empty
 #   --no-mtd-redirect  Leave bootlogo/bootanimation/reversingtrack/Unicode
 #                      reading from existing NAND data instead of SD
-#   --diag-tools PATH  Additional diagnostic binary/script to install onto
-#                      p2's /usr/bin, on top of the defaults: i2c-scan,
-#                      ark-ts-test, lcd-test, strace (compiled binaries), plus
-#                      touch-selftest.sh, uart-test.sh, audio-test.sh,
-#                      bt-test.sh, usb-test.sh, mmc-test.sh (POSIX shell
-#                      scripts — see each tools/*/README.md). Repeatable.
-#   --no-diag-tools    Don't install any diagnostic tools onto p2
 #   --telnetd          Install a passwordless root telnetd (busybox telnetd
 #                      -l /bin/sh, port 23) into rcS, started right after
 #                      mdev -s. OFF by default — this is an unauthenticated
@@ -129,7 +126,7 @@ die()     { echo -e "${RED}ERROR: $*${RESET}" >&2; exit 1; }
 # a boxed header per step, an elapsed-time footer, and a final summary table
 # so the user can see at a glance what ran and how long it took.
 # ---------------------------------------------------------------------------
-STEP_TOTAL=14
+STEP_TOTAL=13
 declare -a STEP_TITLES=() STEP_ELAPSED=() STEP_STATUS=()
 STEP_T0=0
 
@@ -204,33 +201,11 @@ RECONSTRUCTED_DIR=""
 OVERLAY_DIR="$SCRIPT_DIR/firmware_overlay/prado"  # already-patched files rsynced onto p2 after the main rootfs sync — see firmware_overlay/prado/README.md
 SKIP_USERDATA=false
 SKIP_MTD_REDIRECT=false
-SKIP_DIAG_TOOLS=false
 INSTALL_TELNETD=false                         # unauthenticated root telnetd on port 23 — OFF by default, opt-in only
 NEW_KERNEL_MODE=true                          # replace stock kernel with freshly compiled Limcet P305 kernel — ON by default; pass --no-new-kernel to use the stock kernel
 NEW_UBOOT_MODE=true                           # replace stock U-Boot with freshly compiled Limcet P305 U-Boot — ON by default; pass --no-new-uboot to use the stock U-Boot
 KERNEL_BUILD_DIR=""                           # path to linux-arkmicro/ build root (auto-detected)
 MODULES_DIR=""                                # path to compiled_modules/ (auto-detected from KERNEL_BUILD_DIR)
-declare -a DIAG_TOOLS_BINS=(
-    "$SCRIPT_DIR/tools/i2c-scan/i2c-scan"                  # static ARM i2c bus scanner, see tools/i2c-scan/README.md
-    "$SCRIPT_DIR/tools/i2c-dump/i2c-dump"                  # static ARM i2c register dumper, see tools/i2c-dump/README.md
-    "$SCRIPT_DIR/tools/i2c-write/i2c-write"                # static ARM raw i2c register writer, see tools/i2c-write/README.md
-    "$SCRIPT_DIR/tools/ark1680-ts-test/ark-ts-test"        # ark1680_ts touchscreen diagnostic, see tools/ark1680-ts-test/README.md
-    "$SCRIPT_DIR/tools/lcd-test/lcd-test"                  # raw /dev/fb0 LCD diagnostic, see tools/lcd-test/README.md
-    "$SCRIPT_DIR/tools/strace/strace"                      # upstream strace (static), see tools/strace/README.md
-    "$SCRIPT_DIR/tools/nano/nano"                          # static text editor for on-device config/log editing, see tools/nano/README.md
-    "$SCRIPT_DIR/tools/less/less"                          # static pager (busybox only has bare 'more'), see tools/less/README.md
-    "$SCRIPT_DIR/tools/htop/htop"                          # static interactive process viewer, see tools/htop/README.md
-    "$SCRIPT_DIR/tools/tmux/tmux"                          # static terminal multiplexer (survives dropped connections), see tools/tmux/README.md
-    "$SCRIPT_DIR/tools/gdbserver/gdbserver"                # static gdbserver -- live remote debugging from a host gdb, see tools/gdbserver/README.md
-    "$SCRIPT_DIR/tools/dmesg/dmesg"                        # static util-linux dmesg -- busybox's applet lacks -T/-x/--color, see tools/dmesg/README.md
-    "$SCRIPT_DIR/tools/touch-selftest/touch-selftest.sh"   # automated touch pass/fail flow, see tools/touch-selftest/README.md
-    "$SCRIPT_DIR/tools/uart-test/uart-test.sh"             # passive MCU-link/MSNEry-link listener, see tools/uart-test/README.md
-    "$SCRIPT_DIR/tools/audio-test/audio-test.sh"           # sound card + BD37033 bus/mixer check, see tools/audio-test/README.md
-    "$SCRIPT_DIR/tools/bt-test/bt-test.sh"                 # GPIO91/ttyHS1/blueware check, see tools/bt-test/README.md
-    "$SCRIPT_DIR/tools/usb-test/usb-test.sh"               # USB regression check, see tools/usb-test/README.md
-    "$SCRIPT_DIR/tools/mmc-test/mmc-test.sh"               # read-only MMC/SD check, see tools/mmc-test/README.md
-    "$SCRIPT_DIR/tools/mcu-handshake/mcu-handshake"        # manual MCU handshake daemon, see tools/mcu-handshake/README.md
-)
 NON_INTERACTIVE=false
 DRY_RUN=false
 
@@ -274,8 +249,6 @@ while [[ $# -gt 0 ]]; do
         --no-mtd-redirect) SKIP_MTD_REDIRECT=true; shift ;;
         --new-uboot)       NEW_UBOOT_MODE=true; shift ;;
         --no-new-uboot)    NEW_UBOOT_MODE=false; shift ;;
-        --diag-tools)      DIAG_TOOLS_BINS+=("$2"); shift 2 ;;
-        --no-diag-tools)   SKIP_DIAG_TOOLS=true; shift ;;
         --telnetd)         INSTALL_TELNETD=true; shift ;;
         --no-telnetd)      INSTALL_TELNETD=false; shift ;;
         --non-interactive) NON_INTERACTIVE=true; shift ;;
@@ -425,7 +398,6 @@ CONFIG_ITEMS=(
     "patch_uboot|Patch binary U-Boot for SD auto-boot (env relocation)|Patches U-Boot and forces the NAND env CRC to fail. By default (--reloc-env) it RELOCATES the compiled-in default env so a full SD-boot command fits and the device AUTO-boots from SD — static-verified, NOT yet hardware-tested (see docs/UBOOT_SDBOOT_INVESTIGATION.md §10). Pass --no-reloc-env for the hardware-confirmed fallback that only drops to an interactive U-Boot prompt (then continue via the README's \"Manual SD Card Boot\").|OFF"
     "redirect_mtd_data|Redirect NAND mtd partitions to SD card (bootlogo, bootanimation, reversingtrack, unicode)|Symlinks bootlogo, bootanimation, reversingtrack, and Unicode font (mtd8-11) to files under /nanddata/ on p2 — if off, the device reads these from whatever is already in NAND instead|ON"
     "include_userdata|Include userdata (p3)|Copies the userdata dir to p3 — if off, p3 is left empty and the app populates /data on first boot|ON"
-    "install_diag_tools|Install diagnostic tools (i2c-scan, i2c-dump, ark-ts-test, lcd-test, strace, nano, less, htop, tmux, gdbserver, dmesg, *-test.sh)|Copies diagnostic binaries and scripts onto p2's /usr/bin: i2c-scan (I2C bus scanner, see tools/i2c-scan/README.md), i2c-dump (I2C register dumper, see tools/i2c-dump/README.md), ark-ts-test (ARK1680 touchscreen register/evdev tester, see tools/ark1680-ts-test/README.md), lcd-test (raw /dev/fb0 LCD tester, see tools/lcd-test/README.md), strace (upstream syscall tracer, see tools/strace/README.md), nano (static text editor, see tools/nano/README.md), less (static pager, see tools/less/README.md), htop (static process viewer, see tools/htop/README.md), tmux (static terminal multiplexer, see tools/tmux/README.md), gdbserver (static remote debugging, see tools/gdbserver/README.md), dmesg (static util-linux dmesg with -T/-x/--color, see tools/dmesg/README.md), and touch-selftest.sh/uart-test.sh/audio-test.sh/bt-test.sh/usb-test.sh/mmc-test.sh (automated pass/fail wrappers, one per subsystem — see each tools/*/README.md). Harmless to leave off.|ON"
     "disable_msncoreapp_autolaunch|Disable MsnCoreApp auto-launch at login|firmware_overlay/prado/etc/profile already ships with 'MsnCoreApp -qws&' commented out (see docs/ARK1680_TS_REVERSE_ENGINEERING.md) so it doesn't auto-run on every shell login. Turning this OFF re-enables the auto-launch line instead. Run 'start_msn' manually when this is on.|ON"
     "install_telnetd|Install passwordless root telnetd (UNAUTHENTICATED — diagnostic only)|Inserts 'mount -t devpts none /dev/pts' + 'busybox telnetd -l /bin/sh &' into rcS right after mdev -s, giving a root shell on port 23 with no login prompt to anything that can reach the device's network (WiFi AP or USB-NCM). Same mechanism validated working on stock firmware via the msn_autocopy payload (see msn_autocopy/README.md for why the devpts mount is required — telnetd fails silently without it). This is a real, if minor, exposure while active on any network the device joins — OFF by default, opt-in only.|OFF"
 )
@@ -438,15 +410,13 @@ done
 # CLI flags override the menu defaults up front, same as build_update.sh's
 # flags override its own PARTITIONS defaults.
 # Indices: 0 use_new_uboot, 1 use_new_kernel, 2 patch_uboot, 3 redirect_mtd_data,
-#          4 include_userdata, 5 install_diag_tools, 6 disable_msncoreapp_autolaunch,
-#          7 install_telnetd
+#          4 include_userdata, 5 disable_msncoreapp_autolaunch, 6 install_telnetd
 $PATCH_UBOOT       || CONFIG_SEL[2]=0
 $SKIP_USERDATA     && CONFIG_SEL[4]=0
 $SKIP_MTD_REDIRECT && CONFIG_SEL[3]=0
 $NEW_KERNEL_MODE   || CONFIG_SEL[1]=0
 $NEW_UBOOT_MODE    || CONFIG_SEL[0]=0
-$SKIP_DIAG_TOOLS   && CONFIG_SEL[5]=0
-$INSTALL_TELNETD   && CONFIG_SEL[7]=1
+$INSTALL_TELNETD   && CONFIG_SEL[6]=1
 
 # ---------------------------------------------------------------------------
 # Navigation state — identical pattern to build_update.sh's CURSOR/read_key.
@@ -662,26 +632,8 @@ render_menu_body() {
     if $show_bootscript; then
         printf "          └── %-13s %-20s %b\n" "Boot script"  "uEnv.txt"  "${DIM}generated${RESET}"
     fi
-    local diag_status diag_count=0 diag_found=0 db
-    if [[ ${CONFIG_SEL[5]} -eq 1 ]]; then
-        for db in "${DIAG_TOOLS_BINS[@]}"; do
-            diag_count=$((diag_count+1))
-            [[ -f "$db" ]] && diag_found=$((diag_found+1))
-        done
-        if [[ $diag_found -eq $diag_count ]]; then
-            diag_status=$(badge found)
-        elif [[ $diag_found -gt 0 ]]; then
-            diag_status=$(badge found "(${diag_found}/${diag_count})")
-        else
-            diag_status=$(badge missing)
-        fi
-    else
-        diag_status=$(badge skip)
-    fi
-
     printf "       p2 ├── %-13s %-20s %b\n" "Rootfs"       "$(trunc "$(basename "${ROOTFS_DIR:-rootfs}")" 19)" "$rootfs_status"
-    printf "          ├── %-13s %-20s %b\n" "Modules"      "compiled_modules/"  "$modules_status"
-    printf "          └── %-13s %-20s %b\n" "Diag tools"   "${diag_count} tool(s)" "$diag_status"
+    printf "          └── %-13s %-20s %b\n" "Modules"      "compiled_modules/"  "$modules_status"
     printf "       p3 └── %-13s %-20s %b\n" "Userdata"     "$(trunc "$(basename "${USERDATA_DIR:-userdata}")" 19)" "$userdata_status"
 
     echo -e "  ${DIM}${DIVIDER}${RESET}"
@@ -737,13 +689,6 @@ validate() {
     [[ -d "$ROOTFS_DIR" ]] || die "rootfs dir not found: $ROOTFS_DIR"
     if [[ ${CONFIG_SEL[4]} -eq 1 && -n "$USERDATA_DIR" ]]; then
         [[ -d "$USERDATA_DIR" ]] || die "userdata dir not found: $USERDATA_DIR"
-    fi
-    if [[ ${CONFIG_SEL[5]} -eq 1 ]]; then
-        local db any_found=0
-        for db in "${DIAG_TOOLS_BINS[@]}"; do
-            [[ -f "$db" ]] && any_found=1 || warn "Diagnostic tool not found, will be skipped: $db"
-        done
-        [[ $any_found -eq 0 ]] && { warn "No diagnostic tool binaries found — disabling"; CONFIG_SEL[5]=0; }
     fi
     if [[ ${CONFIG_SEL[1]} -eq 1 && ! -d "$OVERLAY_DIR" ]]; then
         die "firmware_overlay/prado not found at $OVERLAY_DIR — needed when the new kernel is selected"
@@ -1101,144 +1046,6 @@ install_new_kernel_modules() {
 }
 
 # ---------------------------------------------------------------------------
-# Install diagnostic tools (e.g. tools/i2c-scan, tools/ark1680-ts-test) onto
-# the mounted p2 rootfs
-# ---------------------------------------------------------------------------
-install_diag_tools() {
-    local rootfs_mount="$1"
-    local bin name
-    local -a installed=()
-    echo -e "${BOLD}  Installing diagnostic tools onto p2...${RESET}"
-
-    if $DRY_RUN; then
-        for bin in "${DIAG_TOOLS_BINS[@]}"; do
-            [[ -f "$bin" ]] && echo "  [dry-run] cp $bin → /usr/bin/$(basename "$bin")"
-        done
-        echo "  [dry-run] append diagnostic-tools banner to rcS"
-        echo "  [dry-run] alias dmesg='/usr/bin/dmesg -T -x --color=always' in /etc/profile (if dmesg installed)"
-        return
-    fi
-
-    mkdir -p "$rootfs_mount/usr/bin"
-    for bin in "${DIAG_TOOLS_BINS[@]}"; do
-        [[ -f "$bin" ]] || { warn "Diagnostic tool not found, skipping: $bin"; continue; }
-        name="$(basename "$bin")"
-        cp "$bin" "$rootfs_mount/usr/bin/$name"
-        chmod +x "$rootfs_mount/usr/bin/$name"
-        installed+=("$name")
-        success "Installed $name → /usr/bin/$name"
-    done
-
-    # BusyBox's dmesg applet (/bin/dmesg, earlier in $PATH than /usr/bin) lacks
-    # -T/-x/--color, so alias the bare command to the full util-linux build by
-    # absolute path rather than relying on PATH order — see tools/dmesg/README.md.
-    if [[ " ${installed[*]} " == *" dmesg "* ]]; then
-        local profile="$rootfs_mount/etc/profile"
-        if [[ -f "$profile" ]]; then
-            if grep -q "^alias dmesg=" "$profile" 2>/dev/null; then
-                info "dmesg alias already present in /etc/profile — leaving it in place"
-            else
-                printf "\nalias dmesg='/usr/bin/dmesg -T -x --color=always'\n" >> "$profile"
-                success "Added 'dmesg' alias (/usr/bin/dmesg -T -x --color=always) to /etc/profile"
-            fi
-        else
-            warn "/etc/profile not found at $profile — dmesg alias skipped"
-        fi
-    fi
-
-    [[ ${#installed[@]} -gt 0 ]] && append_diag_banner "$rootfs_mount" "${installed[@]}"
-}
-
-# ---------------------------------------------------------------------------
-# Append a banner listing the installed diagnostic tools to the end of rcS,
-# so it prints right before the console getty/prompt appears at boot — only
-# lists tools that were actually installed above.
-# ---------------------------------------------------------------------------
-append_diag_banner() {
-    local rootfs_mount="$1"; shift
-    local rcs="$rootfs_mount/etc/rc.d/rcS"
-    local name
-
-    [[ -f "$rcs" ]] || { warn "rcS not found at $rcs — skipping diagnostic-tools banner"; return; }
-
-    {
-        echo ''
-        echo '# --- diagnostic tools banner (build_bootable_sdcard.sh) ---'
-        echo 'echo ""'
-        echo 'echo "=== Diagnostic tools ==="'
-        for name in "$@"; do
-            case "$name" in
-                i2c-scan)
-                    echo 'echo "  i2c-scan /dev/i2c-0 /dev/i2c-1 ...   - scan I2C buses for ACKing devices"'
-                    ;;
-                i2c-dump)
-                    echo 'echo "  i2c-dump /dev/i2c-N slave_addr [num] - dump registers of an I2C device"'
-                    ;;
-                i2c-write)
-                    echo 'echo "  i2c-write /dev/i2c-N addr reg val    - raw single-register i2c write (bypasses kernel client)"'
-                    ;;
-                ark-ts-test)
-                    echo 'echo "  ark-ts-test regs                      - dump ARK1680 touch ADC/syscon registers"'
-                    echo 'echo "  ark-ts-test events /dev/input/eventN  - watch touch evdev events"'
-                    ;;
-                lcd-test)
-                    echo 'echo "  lcd-test                             - print fb/display info, then cycle through solid fills, bars, and gradient"'
-                    ;;
-                strace)
-                    echo 'echo "  strace -f -o /data/x.log <cmd>       - trace syscalls (e.g. strace -f start_msn)"'
-                    ;;
-                nano)
-                    echo 'echo "  nano <file>                          - edit a file (e.g. nano /msnprofile/MsnProductInfo.ini)"'
-                    ;;
-                less)
-                    echo 'echo "  less <file>                          - page through a file/log (e.g. dmesg | less)"'
-                    ;;
-                htop)
-                    echo 'echo "  htop                                 - interactive process/CPU/memory viewer"'
-                    ;;
-                tmux)
-                    echo 'echo "  tmux new -s <name>                   - start a session that survives a dropped connection"'
-                    ;;
-                gdbserver)
-                    echo 'echo "  gdbserver :2345 --attach <pid>       - live remote debugging from a host gdb, see tools/gdbserver/README.md"'
-                    ;;
-                touch-selftest.sh)
-                    echo 'echo "  touch-selftest.sh                    - automated touch pass/fail (needs a real touch)"'
-                    ;;
-                uart-test.sh)
-                    echo 'echo "  uart-test.sh                         - passive listen on MCU (ttyHS0) + MSNEry (ttyS2) links"'
-                    ;;
-                audio-test.sh)
-                    echo 'echo "  audio-test.sh [file.wav]             - sound card + BD37033 bus/mixer check"'
-                    ;;
-                bt-test.sh)
-                    echo 'echo "  bt-test.sh                           - GPIO91/ttyHS1/blueware check"'
-                    ;;
-                usb-test.sh)
-                    echo 'echo "  usb-test.sh                          - USB regression check vs known-good baseline"'
-                    ;;
-                mmc-test.sh)
-                    echo 'echo "  mmc-test.sh                          - read-only MMC/SD check"'
-                    ;;
-                mcu-handshake)
-                    echo 'echo "  mcu-handshake                        - manual MCU handshake daemon to enable touch panel"'
-                    ;;
-                dmesg)
-                    echo 'echo "  dmesg                                - now aliased to /usr/bin/dmesg -T -x --color=always (busybox lacks these)"'
-                    ;;
-                *)
-                    echo "echo \"  $name\""
-                    ;;
-            esac
-        done
-        echo 'echo "========================="'
-        echo 'echo ""'
-    } >> "$rcs"
-
-    success "Appended diagnostic-tools banner to rcS ($*)"
-}
-
-# ---------------------------------------------------------------------------
 # Insert a passwordless root telnetd into rcS, right after mdev -s (same
 # insertion point as the MTD symlink patch above). Requires mounting
 # /dev/pts first — busybox telnetd fails silently at startup without it,
@@ -1471,7 +1278,7 @@ build() {
     if [[ "$do_mtd_redirect" != "1" ]]; then
         info "MTD redirect symlinks skipped (redirect_mtd_data is off — using existing NAND data)"
     fi
-    toggle_msncoreapp_autolaunch /tmp/sd_p2 "$([[ ${CONFIG_SEL[6]} -eq 1 ]] && echo 0 || echo 1)"
+    toggle_msncoreapp_autolaunch /tmp/sd_p2 "$([[ ${CONFIG_SEL[5]} -eq 1 ]] && echo 0 || echo 1)"
     end_step 11
 
     # 11. Populate NAND partition data (bootlogo/bootanimation/reversingtrack/Unicode)
@@ -1484,24 +1291,17 @@ build() {
         end_step 12 skip
     fi
 
-    # 12. Install diagnostic tools
-    begin_step 13 "Installing diagnostic tools"
-    if [[ ${CONFIG_SEL[5]} -eq 1 ]]; then
-        install_diag_tools /tmp/sd_p2
+    # 12. Install passwordless root telnetd (UNAUTHENTICATED — opt-in diagnostic tool)
+    # Diagnostic tools themselves are no longer a build step — they're baked
+    # into firmware_overlay/prado/usr/bin/ unconditionally, see that
+    # directory's README.
+    begin_step 13 "Installing telnetd (diagnostic, unauthenticated)"
+    if [[ ${CONFIG_SEL[6]} -eq 1 ]]; then
+        install_telnetd /tmp/sd_p2
         end_step 13
     else
-        info "Skipped — no diagnostic tools installed"
-        end_step 13 skip
-    fi
-
-    # 13. Install passwordless root telnetd (UNAUTHENTICATED — opt-in diagnostic tool)
-    begin_step 14 "Installing telnetd (diagnostic, unauthenticated)"
-    if [[ ${CONFIG_SEL[7]} -eq 1 ]]; then
-        install_telnetd /tmp/sd_p2
-        end_step 14
-    else
         info "Skipped — telnetd not installed"
-        end_step 14 skip
+        end_step 13 skip
     fi
 
     # Unmount and detach

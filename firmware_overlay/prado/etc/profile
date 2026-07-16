@@ -123,5 +123,14 @@ eval `dbus-launch --auto-syntax`
 #MsnCoreApp -qws&
 export SDL_NOMOUSE=1
 
+# BusyBox's dmesg applet (/bin/dmesg, earlier in $PATH than /usr/bin) lacks
+# -T/-x/--color, so alias the bare command to the full util-linux build
+# installed by install_diag_tools() -- see tools/dmesg/README.md. Only
+# useful if that tool is actually installed (install_diag_tools's
+# "install_diag_tools" toggle, ON by default); build_bootable_sdcard.sh
+# removes this alias at build time if dmesg wasn't installed, so it never
+# points at a missing binary and shadows BusyBox's own dmesg for nothing.
+alias dmesg='/usr/bin/dmesg -T -x --color=always'
+
 
 

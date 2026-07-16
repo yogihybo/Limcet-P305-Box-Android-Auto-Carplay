@@ -432,7 +432,11 @@ Beyond what's described in [Building the SD image with `build_bootable_sdcard.sh
 | `--new-kernel` (default on) / `--no-new-kernel` | Use the freshly compiled Limcet P305 kernel instead of the stock 3.4 kernel |
 | `--stock-uboot PATH` / `--no-stock-uboot` | Copy a stock U-Boot binary to `p1/stock_uboot.bin` for `bootstock`. Defaults to the dump already in this repo (`firmware_dumps/Prado firmware dump/mtd1-mtd2_uboot/extracted/uboot.bin`) |
 | `--bootlogo PATH` | Raw 800×480×32bpp framebuffer (see `build_tools/convert_bootlogo.py`) copied to `p1/bootlogo.raw` for the compiled U-Boot's boot logo |
-| `--diag-tools PATH` (repeatable) / `--no-diag-tools` | Install extra static ARM diagnostic binaries to p2's `/usr/bin`, on top of the defaults (`tools/i2c-scan`, `tools/ark1680-ts-test`, `tools/lcd-test`, `tools/strace`) |
+
+Diagnostic tools are no longer a build-time install step — they ship as
+part of `firmware_overlay/prado/usr/bin/` (see that directory's
+`README.md`), unconditionally present on every build. To skip one,
+delete it from `firmware_overlay/prado/usr/bin/` directly.
 
 All of `kernelfile`, `dtbfile`, `mmcroot`, `bootargs_common`, `stockubootfile`, `machid` are U-Boot env vars with compiled-in defaults (see [Boot commands](#boot-commands) above) — editable via `setenv` at the prompt or by dropping a `uEnv.txt` on the SD card's p1, without recompiling U-Boot or rerunning the build script.
 
@@ -696,7 +700,7 @@ The ARK1680 USB gadget stack is configured to use CDC-NCM (`g_ncm.ko`), which cr
 
 ### 10.1 Diagnostic & On-Device Utility Tools
 
-`tools/` holds static ARM binaries (and a few POSIX shell wrappers), each with its own `README.md`, that get installed onto the target's `/usr/bin` via `build_bootable_sdcard.sh`'s `install_diag_tools` option (on by default — see [§7.0](#build_bootable_sdcardsh--current-capabilities)). All statically linked, no dependency on anything else in the rootfs — they work even while chasing a boot/crash problem elsewhere in the system.
+`tools/` holds static ARM binaries (and a few POSIX shell wrappers), each with its own `README.md`. Synced into `firmware_overlay/prado/usr/bin/`, so they're unconditionally part of every build's rootfs (see that directory's `README.md`) — no separate install step or toggle. All statically linked, no dependency on anything else in the rootfs — they work even while chasing a boot/crash problem elsewhere in the system.
 
 **Hardware diagnostics:**
 
@@ -771,9 +775,10 @@ ui/                Qt 4.7.4 UI analysis and resource extraction — see ui/UI.md
     extract_qm.py            Decompiles .qm translation files to text
     extract_rcc.py           Decompiles .rcc resource bundles
 
-tools/              On-device diagnostic/utility binaries — static ARM builds installed onto the
-                    target rootfs via build_bootable_sdcard.sh's install_diag_tools option, one
-                    subdirectory per tool with its own README.md. See §10.1 below for the full list.
+tools/              On-device diagnostic/utility binaries — static ARM builds, one subdirectory
+                    per tool with its own README.md, synced into firmware_overlay/prado/usr/bin/
+                    so every build's rootfs has them unconditionally. See §10.1 below for the
+                    full list.
 
 firmware_source/kernel/            zImage (from Holden base — identical kernel_size to firmware_dumps/Prado firmware dump; gitignored, not present in every checkout — firmware_source/prado_reconstructed/mtd5_firmware_source/kernel/zImage is the copy actually used for builds)
 firmware_source/display/

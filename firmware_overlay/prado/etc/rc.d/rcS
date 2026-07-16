@@ -127,3 +127,29 @@ touch /data/udhcpd.leases
 # on this.
 #/etc/wifi_ap.sh &
 /etc/wifi_client.sh &
+
+# --- diagnostic tools banner (firmware_overlay/prado) ---
+echo ""
+echo "=== Diagnostic tools ==="
+echo "  i2c-scan /dev/i2c-0 /dev/i2c-1 ...   - scan I2C buses for ACKing devices"
+echo "  i2c-dump /dev/i2c-N slave_addr [num] - dump registers of an I2C device"
+echo "  i2c-write /dev/i2c-N addr reg val    - raw single-register i2c write (bypasses kernel client)"
+echo "  ark-ts-test regs                      - dump ARK1680 touch ADC/syscon registers"
+echo "  ark-ts-test events /dev/input/eventN  - watch touch evdev events"
+echo "  lcd-test                             - print fb/display info, then cycle through solid fills, bars, and gradient"
+echo "  strace -f -o /data/x.log <cmd>       - trace syscalls (e.g. strace -f start_msn)"
+echo "  nano <file>                          - edit a file (e.g. nano /msnprofile/MsnProductInfo.ini)"
+echo "  less <file>                          - page through a file/log (e.g. dmesg | less)"
+echo "  htop                                 - interactive process/CPU/memory viewer"
+echo "  tmux new -s <name>                   - start a session that survives a dropped connection"
+echo "  gdbserver :2345 --attach <pid>       - live remote debugging from a host gdb, see tools/gdbserver/README.md"
+echo "  touch-selftest.sh                    - automated touch pass/fail (needs a real touch)"
+echo "  uart-test.sh                         - passive listen on MCU (ttyHS0) + MSNEry (ttyS2) links"
+echo "  audio-test.sh [file.wav]             - sound card + BD37033 bus/mixer check"
+echo "  bt-test.sh                           - GPIO91/ttyHS1/blueware check"
+echo "  usb-test.sh                          - USB regression check vs known-good baseline"
+echo "  mmc-test.sh                          - read-only MMC/SD check"
+echo "  mcu-handshake                        - manual MCU handshake daemon to enable touch panel"
+echo "  dmesg                                - now aliased to /usr/bin/dmesg -T -x --color=always (busybox lacks these)"
+echo "========================="
+echo ""

@@ -1,0 +1,3 @@
+::sysinit:/etc/rc.d/rcS
+ttyS0::respawn:-/bin/sh
+::shutdown:/bin/umount -a

@@ -1,0 +1,129 @@
+#!/bin/sh
+mount -t proc none /proc
+mount -t sysfs none /sys
+mount -t ramfs -n none /tmp
+mkdir -p /media
+mount -t ramfs -n none /media
+mkdir -p /var
+mount -t ramfs -n none /var
+mkdir -p /var/run/
+mkdir -p /var/lib/lockdown
+sync
+/sbin/mdev -s
+
+touchdriver="/msnprofile/ark1680_ts"
+
+if [ -e $touchdriver ]; then
+        modprobe ark1680_ts 2>/dev/null || true  # 3.4.0 driver not built for 4.19.192 yet
+        ln -s   /msnprofile/touch_ark1680_ts_export /tmp/touch_export
+else
+        modprobe gt9xx 2>/dev/null || true        # 3.4.0 driver not built for 4.19.192 yet
+        ln -s /msnprofile/touch_gt9xx_export /tmp/touch_export
+fi
+
+#insmod  /lib/modules/3.4.0/kernel/drivers/input/misc/pwm-beeper.ko
+#insmod  /lib/modules/3.4.0/galcore.ko registerMemBase=0xE0F00000 irqLine=32 contiguousSize=0x400000 physSize=0x80000000 powerManagement=0
+
+# Mount userdata: ext4 p3 (SD or USB, whichever root actually came from)
+# first, NAND UBI fallback, then yaffs2. ROOTDEV is derived from the
+# kernel's own root= bootarg rather than hardcoded to /dev/mmcblk0p3, so
+# the same rcS works for both bootmmc (root=/dev/mmcblk0pN) and bootusb
+# (root=/dev/sdaN) without needing separate rootfs builds.
+ROOTDEV=$(cat /proc/cmdline | sed -n 's/.*root=\([^ ]*\).*/\1/p')
+USERDATADEV="${ROOTDEV%?}3"
+if mount -o sync -t ext4 "$USERDATADEV" /data 2>/dev/null; then
+	echo "userdata: ext4 ($USERDATADEV)"
+	resetenv=$(fw_printenv factory_reset 2>/dev/null || echo "factory_reset=0")
+	if [ "${resetenv##*=}" = "1" ]; then
+		echo "==============Factory reset, reformat userdata!==========="
+		umount /data
+		mkfs.ext4 -O ^64bit,^metadata_csum -F "$USERDATADEV"
+		mount -o sync -t ext4 "$USERDATADEV" /data
+		fw_setenv factory_reset 0 2>/dev/null || true
+	fi
+else
+	USERDATAFS=`cat /proc/mounts | grep ubifs`
+	if [ "${USERDATAFS}" != "" ]; then
+		mtd_partition=7
+		resetenv=$(fw_printenv factory_reset 2>/dev/null || echo "factory_reset=0")
+		if [ "${resetenv##*=}" = "1" ]; then
+			echo "==============Factory reset, erase data partition!==========="
+			flash_eraseall /dev/mtd$mtd_partition
+			ubiattach /dev/ubi_ctrl -m $mtd_partition
+			ubimkvol  /dev/ubi1 -N userdata -m 14
+			ubidetach /dev/ubi_ctrl -m $mtd_partition -d 1
+			fw_setenv factory_reset 0 2>/dev/null || true
+		fi
+		ubiattach /dev/ubi_ctrl -m $mtd_partition
+		mount -o sync -t ubifs ubi1_0 /data
+		if [ $? -eq 0 ]; then
+			echo "userdata: NAND UBI"
+		else
+			sync; sleep 1
+			mount -o sync -t ubifs ubi1_0 /data
+			if [ $? -ne 0 ]; then
+				echo "mount failed! then reformat the volume!"
+				ubidetach /dev/ubi_ctrl -m $mtd_partition -d 1
+				flash_eraseall /dev/mtd$mtd_partition
+				ubiattach /dev/ubi_ctrl -m $mtd_partition
+				ubimkvol  /dev/ubi1 -N userdata -m 14
+				mount -o sync -t ubifs ubi1_0 /data
+				sync
+			fi
+		fi
+	else
+		USERDATAFS=`cat /proc/mounts | grep yaffs2`
+		if [ "${USERDATAFS}" != "" ]; then
+			mount -t yaffs2 /dev/mtdblock6 /data/
+		fi
+	fi
+fi
+#mount /dev/mmcblk0p1 /mnt
+#cd /etc
+#./memalloc_load.sh
+#./driver_load.sh
+#./itu656_load.sh
+
+#ulimit -c unlimited
+
+#ifconfig lo up
+#ifconfig usb0 up
+#hostname CarPlay
+#tcpdump -i usb0 >> /var/tcpdump &
+#testiap &
+#echo 1 4 0x3000001 > /proc/display
+#alsainit&
+#mdnsd&
+#rm -rf /tmp/qtembedded-0
+#. /etc/profile
+#carplay&
+#echo otg > /sys/devices/platform/musb-ark1680.0/musb-hdrc.0/mode
+#DV695 -qws -display directfb &
+#mirrordemo &
+#Launcher -qws &
+chmod 600 /etc/ssh/ssh_host_*_key
+mkdir -p /var/run/sshd
+mkdir -p /var/empty
+chmod 755 /var/empty
+/usr/bin/sshd -f /etc/ssh/sshd_config &
+
+# Load GPU driver
+modprobe galcore contiguousSize=0x800000 physSize=0x80000000 powerManagement=0
+
+# Load USB WiFi driver
+modprobe rtl8811cu
+
+# Set up DHCP lease directory and file
+mkdir -p /data
+touch /data/udhcpd.leases
+
+# Switched to WiFi client (STA) mode 2026-07-14, for easier SSH/testing
+# access during development -- joins a real local network instead of
+# hosting the carplay_wifi AP. A single WiFi radio generally can't be an
+# AP and a client at once, so this replaces (doesn't run alongside) the
+# AP. etc/wifi_ap.sh is untouched and still works if run manually -- see
+# docs/DRIVER_TEST_PLAN.md and the comment at the top of each script.
+# EDIT etc/wifi_client.conf with your real SSID/password before relying
+# on this.
+#/etc/wifi_ap.sh &
+/etc/wifi_client.sh &

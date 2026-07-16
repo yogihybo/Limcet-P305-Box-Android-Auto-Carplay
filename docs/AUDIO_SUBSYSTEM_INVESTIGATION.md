@@ -1734,8 +1734,44 @@ constructed in the first place, so there is nothing correct being
 skipped; those two blocks had no valid work to do regardless of
 `SoundType`/call path.
 
+**Live-tested (2026-07-16): real progress, but a second instance of the
+same bug found.** With `SoundType=3` restored and the `sendSoundData()`
+patch applied, `MsnCoreApp` gets dramatically further before crashing —
+`SoundAdapter Create Success, ICType: 3`, GPIO mute toggling, balance,
+subwoofer setup all complete — before hitting a new crash, fault address
+`00000008` again. This time a real kernel-level register dump was
+available (`docs/logs/msn app err-4.log.txt`), not just a Qt minidump,
+giving an exact call stack: `SettingWindow::initSoundParams()+0x6f8` ←
+`onFirstInit()+0x6c4` ← `SettingWindowC1()+0x3d4`. Register state at
+fault matches the same signature as the first bug exactly:
+`r7=0xffff0fc0` (`__kuser_cmpxchg`, the same Qt atomic-refcount helper),
+`r5=0x00000008` (the "pointer" actually dereferenced).
+
+Disassembled `initSoundParams()` (base `0x39b74`, crash at
+`+0x6f8` = `0x3a26c`): `ldr r5, [sp, #444]` two instructions earlier,
+then `ldr r0, [r5]` — dereferencing a stack slot (`sp+444`/`0x1bc`)
+that, confirmed by grepping the disassembly of the entire function, is
+referenced in exactly two places: this crash site and the conditional
+`qFree()` inside the same broken cleanup block — **never written by a
+constructor anywhere in the function.** Identical defect pattern to
+`sendSoundData()`: a local `QByteArray`/`QString`-like object whose
+construction is missing from the compiled output, but whose
+refcount-decrement-then-maybe-free cleanup still runs unconditionally.
+
+**Fix applied (2026-07-16):** same technique as before — single 4-byte
+instruction change at file offset `0x3a26c` (== vaddr):
+`ldr r0, [r5]` → `b 0x3a298`, branching past the broken block straight
+to the next legitimate cleanup (`add r0, sp, #440; bl
+QString::~QString()`). Verified via `objdump` that the branch lands
+correctly and the earlier `sendSoundData()` patch (`0x35064`) is still
+intact in the same file.
+
 **Not yet hardware-tested.** Needs the rootfs image repackaged
-(`build_bootable_sdcard.sh`) and reflashed, then a live retest of
-`MsnCoreApp` startup through Settings-window init (`start_msn` in the
-foreground, or just normal boot) to confirm the crash is actually
-gone.
+(`build_bootable_sdcard.sh`) and reflashed, then a live retest.
+Given this is the *second* instance of this exact defect class found
+in `libSetting.so`, it's worth treating as a possibility that more
+exist elsewhere in the same binary (or others) rather than assuming
+this is the last one — if `MsnCoreApp` crashes again with fault address
+`00000008`, get a fresh `err-N.log`/register dump (not just terminal
+output) and repeat this same disassembly process at the new crash
+offset.

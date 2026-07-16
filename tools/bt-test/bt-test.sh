@@ -11,13 +11,29 @@
 # "shared SDK template, not necessarily used on this unit" pattern already
 # found for other vestigial config (TOUCHSERIAL/COMMANDSERIAL, see
 # ARK1680_TS_REVERSE_ENGINEERING.md). This script targets blueware/ttyHS1,
-# the one docs/wireless_and_init_documentation.md documents as actually
-# working, and does NOT assume rtkbt is in play.
+# the one docs/WIRELESS_AND_INIT.md documents as actually working, and
+# does NOT assume rtkbt is in play.
 #
-# Nothing in rcS/profile/msnexport launches `blueware` automatically in
-# this rootfs (checked 2026-07-14) -- it needs to be started manually,
-# which this script does as a best-effort test step since no confirmed
-# CLI usage was found in the binary's strings.
+# Nothing in rcS/profile launches `blueware` automatically -- confirmed
+# 2026-07-17 the real launch site is app code, not init:
+# BlueToothAdapter_Blueware::initBlueToothAdapter() in libBlueTooth.so
+# runs system("blueware /etc/blueware-bwNNN.properties > /dev/null 2>&1 &")
+# -- note the redirect. blueware itself has well-instrumented,
+# errno-annotated error messages for every step of the BTEN (GPIO91)
+# export/direction/value sequence ("bpio_init open(%s) for export
+# failed: %s (%d)", etc.), but MsnCoreApp's launch throws all of that
+# away. This script always (re)starts blueware itself WITHOUT that
+# redirect (captured to a log file instead) specifically so those
+# messages are visible, and greps for them explicitly -- see
+# docs/WIRELESS_AND_INIT.md section 5 ("Who actually launches
+# /usr/bin/blueware") for the full trace.
+#
+# Also confirmed from libBlueTooth.so: the app-level transport isn't a
+# direct /dev/ttyHS1 open -- it's /dev/bw_serial (AT-command channel,
+# what this script now round-trips an AT+DEVSTAT over) and /dev/bw_iap
+# (raw SPP/iAP passthrough, symlinked to /dev/socket/goc_rfcom), both
+# created by blueware once it successfully attaches to the module.
+# /dev/ttyHS1 itself is only ever opened by blueware, not the app.
 
 set -u
 PASS=0
@@ -58,32 +74,90 @@ else
 fi
 
 echo
-echo "--- 3. blueware process ---"
+echo "--- 3. blueware process (relaunched fresh, WITHOUT the > /dev/null redirect"
+echo "    MsnCoreApp normally launches it with, so its own GPIO91 error"
+echo "    messages -- if any -- are actually visible for once) ---"
 if pgrep blueware >/dev/null 2>&1 || ps | grep -v grep | grep -q blueware; then
-	pass "blueware already running"
-	STARTED_BY_US=0
+	echo "blueware already running -- killing it so we get a fresh, captured launch"
+	killall blueware 2>/dev/null
+	sleep 1
+fi
+BW_CONF=/etc/blueware-bw121.properties
+[ -f "$BW_CONF" ] || BW_CONF=/etc/blueware-bw123.properties
+if [ ! -f "$BW_CONF" ]; then
+	fail "no blueware-bwNNN.properties config found in /etc -- can't start blueware"
 else
-	echo "blueware not running -- attempting to start it (best effort, no confirmed"
-	echo "CLI usage found in the binary -- if this is wrong, start it manually and"
-	echo "re-run just the traffic-monitoring step below)"
-	blueware >/tmp/blueware.log 2>&1 &
+	blueware "$BW_CONF" >/tmp/blueware.log 2>&1 &
 	BTPID=$!
-	STARTED_BY_US=1
 	sleep 2
 	if kill -0 "$BTPID" 2>/dev/null; then
-		pass "blueware started and is still running after 2s (pid $BTPID)"
+		pass "blueware started (pid $BTPID, config $BW_CONF) and is still running after 2s"
 	else
 		fail "blueware exited immediately -- check /tmp/blueware.log:"
 		cat /tmp/blueware.log 2>/dev/null
 	fi
+	if grep -q "bpio_init.*failed" /tmp/blueware.log 2>/dev/null; then
+		fail "blueware itself reported a GPIO failure (was previously hidden by MsnCoreApp's > /dev/null launch):"
+		grep "bpio_init.*failed" /tmp/blueware.log
+	elif grep -q "bpio_init" /tmp/blueware.log 2>/dev/null; then
+		pass "blueware's own bpio_init GPIO log lines show no failures"
+	else
+		unk "no bpio_init log lines seen at all -- either GPIO setup logging changed, or it ran too fast to capture"
+	fi
 fi
 
 echo
-echo "--- 4. Passive traffic listen on ttyHS1 (5s window) ---"
+echo "--- 4. App-level transport nodes (/dev/bw_serial, /dev/bw_iap) ---"
+echo "These, not /dev/ttyHS1 directly, are what libBlueTooth.so actually"
+echo "talks to -- created by blueware once it attaches to the module."
+if [ -e /dev/bw_serial ]; then
+	pass "/dev/bw_serial exists (AT-command channel)"
+else
+	fail "/dev/bw_serial missing -- blueware hasn't created it (module attach failure?)"
+fi
+if [ -e /dev/bw_iap ]; then
+	pass "/dev/bw_iap exists (SPP/iAP passthrough)"
+else
+	fail "/dev/bw_iap missing -- blueware hasn't created it (module attach failure?)"
+fi
+if [ -L /dev/socket/goc_rfcom ]; then
+	pass "/dev/socket/goc_rfcom symlink exists (set up by BlueToothAdapter_Blueware::onStartupConfig())"
+else
+	unk "/dev/socket/goc_rfcom symlink not present -- only created by the app itself, not blueware, so this is expected unless MsnCoreApp has run its Bluetooth init this boot"
+fi
+
+echo
+echo "--- 5. AT command round-trip on /dev/bw_serial (AT+DEVSTAT) ---"
+echo "Sends the exact wire format recovered from libBlueTooth.so's"
+echo "writeCommand(): literal template \"AT+%1\\r\\n\". DEVSTAT is a"
+echo "read-only status query -- side-effect-free."
+if [ -c /dev/bw_serial ]; then
+	# No 'timeout' applet in this busybox build -- background + sleep + kill.
+	busybox hexdump -C /dev/bw_serial >/tmp/bt_at_response.log 2>/dev/null &
+	RPID=$!
+	sleep 1
+	printf 'AT+DEVSTAT\r\n' > /dev/bw_serial 2>/dev/null
+	if [ $? -ne 0 ]; then
+		fail "write to /dev/bw_serial failed"
+	fi
+	sleep 2
+	kill "$RPID" 2>/dev/null
+	RESPONSE=$(cat /tmp/bt_at_response.log 2>/dev/null)
+	if [ -n "$RESPONSE" ]; then
+		echo "$RESPONSE" | head -10
+		pass "got a response on /dev/bw_serial after AT+DEVSTAT (module is answering)"
+	else
+		fail "no response on /dev/bw_serial within 2s of AT+DEVSTAT -- module not answering the AT channel"
+	fi
+else
+	unk "skipped -- /dev/bw_serial not present (see step 4)"
+fi
+
+echo
+echo "--- 6. Passive traffic listen on ttyHS1 (5s window) ---"
 echo "Reading /dev/ttyHS1 for 5 seconds -- any bytes at all confirm the link"
 echo "is electrically live and the module is transmitting (idle/heartbeat"
 echo "frames are expected on most BT modules even with nothing paired)."
-# No 'timeout' applet in this busybox build -- background + sleep + kill instead.
 busybox hexdump -C /dev/ttyHS1 >/tmp/bt_traffic.log 2>/dev/null &
 HPID=$!
 sleep 5
@@ -93,16 +167,14 @@ if [ -n "$TRAFFIC" ]; then
 	echo "$TRAFFIC" | head -20
 	pass "traffic observed on /dev/ttyHS1"
 else
-	fail "no traffic observed in 5s -- try again with blueware freshly (re)started,"
-	echo "    or check baud rate (blueware-bw121.properties says 1500000) if a raw"
-	echo "    listener rather than blueware itself is expected to show anything"
+	fail "no traffic observed in 5s -- if step 5 already got a response on /dev/bw_serial"
+	echo "    this is expected (blueware owns ttyHS1 directly and mediates via bw_serial/bw_iap,"
+	echo "    so idle ttyHS1 doesn't necessarily mean anything is wrong)"
 fi
 
-if [ "${STARTED_BY_US:-0}" = "1" ]; then
-	echo
-	echo "(leaving the blueware instance this script started running --"
-	echo " kill it manually with 'killall blueware' if you don't want it up)"
-fi
+echo
+echo "(leaving this script's blueware instance running -- kill it manually"
+echo " with 'killall blueware' if you don't want it up)"
 
 echo
 echo "=== Summary: $PASS pass, $FAIL fail, $UNKNOWN unknown ==="

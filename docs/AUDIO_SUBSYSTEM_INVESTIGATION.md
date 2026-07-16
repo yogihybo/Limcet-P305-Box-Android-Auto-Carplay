@@ -1175,3 +1175,567 @@ with BD37033's I2C path.
       volume, bypassing `softvol` via `hw:0,0` directly) for
       completeness — three independent, testable volume paths now
       identified on this one card.
+
+## Architecture pivot: playback routed through external CS4334, not internal SDDAC (2026-07-16)
+
+All prior sections of this doc assumed playback goes through the
+internal `ark_sddac` sigma-delta DAC (`i2s_dac` DAI link). That
+assumption was wrong for this board. `docs/KERNEL_REFERENCE.md`
+(`ark_cs4334_dev` in the stock module table) and stock's own boot log
+(`docs/logs/dmesg live device kernel 3.4 dmeg.txt`: `asoc: cs4334 <->
+ark_i2s_dev.1 mapping ok`) both show stock's *actual* playback path uses
+an **external Cirrus Logic CS4334 I2S DAC**, driven off the SoC's second
+I2S instance (`ark_i2s_dev.1`, the "external I2S2" block) — not the
+internal SDDAC. Everything through "First genuine audible confirmation"
+above was real, but was exercising a DAC stock apparently doesn't
+actually use for its own playback path in this configuration; that
+internal-SDDAC audible test result doesn't tell us anything about
+whether the CS4334 path stock really uses will work.
+
+Commit `2f518ca4f` (build-tree repo, 2026-07-16) re-pointed the DTS at
+CS4334:
+
+- Playback `dai-link@0` now uses `i2s_adc` (the DT node with
+  `external-i2s;`, physical base `0xe8200000` — this is the SoC's
+  second/external I2S instance, matching stock's `ark_i2s_dev.1`) as CPU
+  DAI, and a new `cs4334_codec` node (`compatible =
+  "arkmicro,ark1668e_cs4334_codec"`) as codec DAI.
+- Capture `dai-link@1` now uses the internal `i2s_dac`/`sdadc` pair.
+- `ark1668_i2s.c`'s `ark_i2s_startup()` gained pinmux writes
+  (`ARK_SYS_PAD_CTRL09`/`0A`/`0C`/`06`) specific to the external I2S2
+  block when `physical_base == 0xe8200000`, plus a soft-reset release at
+  `SYS_BASE (0xe4900000) + 0x6c` (bit 0 for I2S2, bit 2 for I2S1) in
+  `ark1668_i2s_drv_probe()`.
+
+Live result after this commit: **the CS4334 platform device now probes
+and the ASoC card links up** ("chip now detected" — i.e. the DAI/card
+registration stock hardware also gets), but **no audible output**.
+
+### CS4334 codec driver itself is not the problem — verified against stock disassembly
+
+Disassembled stock's `cs4334_*` functions from `vmlinux.elf`
+(`arm-linux-gnueabihf-objdump -C -d`, symbols unstripped,
+`cs4334_startup`/`_hw_params`/`_set_dai_sysclk`/`_set_dai_fmt` all at
+`0x802f6604`-`0x802f6624`, `cs4334_probe` at `0x802f6680`). **Every one
+of these is a trivial stub in stock too** — `mov r0,#0; bx lr`, or a bare
+`kmem_cache_alloc` for private data with no register/GPIO access
+anywhere. This project's own `linux/sound/soc/codecs/cs4334.c` is the
+same kind of stub (`DBG()`-only bodies). **This is expected, not a bug**:
+CS4334 is a control-less, hardware-strapped serial DAC (no I2C/SPI
+register interface) — the codec driver's only job is to exist so ASoC's
+DAI-link machinery has something to bind to. The CS4334 codec side is
+therefore not a suspect for the "no audio" symptom; whatever's wrong is
+upstream, in how the SoC's external I2S2 peripheral itself is clocked/
+enabled.
+
+(Also checked `ark1668e_audio_codec.c`/`ark1668e_i2s.c` in the same
+directory — these implement a real DAPM mute/GPIO-control codec, but
+they're gated behind `CONFIG_SND_SOC_ARK1668E_INTERNAL_ADAC`/
+`SOC_ARK1668E`, a different SoC variant than this board's
+`SOC_ARK1668`. Dead code for this build, not a missing wire-up.)
+
+### Root cause candidate found: a second, previously-untouched SoC register block gates the external I2S2 clock domain
+
+Disassembled stock's `ark_i2s_init_cfg()` (`0x802f5b4c`, called from
+`ark_i2s_startup()` — the vendor equivalent of the pinmux/reset work this
+project's own `ark_i2s_startup()` reimplemented inline) and the
+`setup_i2s2()` helper it calls (`0x802f5aa0`) for the external-I2S
+(`id==1`) path.
+
+Both functions do register I/O against a **third address region**, at
+constant `0xf6300000` (`movt r3, #0xf630`, offsets `0x1d8`-`0x1f0`) —
+distinct from both `SYS_BASE` (`0xe4900000`, pinctrl/pad-config, already
+patched via the soft-reset-release change above) and the I2S
+peripheral's own register block (`i2s->base`, `0xe4000000`/`0xe8200000`).
+`0xf6300000` isn't a physical address — decoded stock's io-descriptor
+table (`ark1680_map_io` → `iotable_init(0x805b376c, 19)` →
+`arm-linux-gnueabihf-objdump -s` on that literal-pool range) and it
+resolves to **physical `0xe4a00000`**, length `0x1000` — the exact page
+`ark1668.dtsi` already maps as `timer@e4a00000`. The offsets stock
+touches (`0x1d8`-`0x1f4`) sit well above where a simple timer's own
+counter/compare registers would live, so this is read as a shared
+SoC-level page hosting both the timer *and* clock-gate/mux control bits
+for other blocks, audio included — a common pattern on this era of SoC
+(cf. `SYS_BASE`'s page already being shared between pinmux and the I2S
+soft-reset bits used above).
+
+**Exact bits, decoded from the disassembly:**
+- `setup_i2s2()` (external I2S2 / CS4334 path only): `+0x1e4 |=
+  0x3f000000`, `+0x1e8 |= 0x700`, `+0x1f0 |= 0x400`.
+- `ark_i2s_init_cfg(..., id=1)` (external, after calling `setup_i2s2()`):
+  additionally `+0x1d8 &= ~0x80000000`.
+- `ark_i2s_init_cfg(..., id=0)` (internal I2S1/SDDAC path): only `+0x1f0
+  |= 0x400` — the one bit common to both paths, consistent with it being
+  a shared "audio block clock enable" rather than something instance-
+  specific.
+
+**None of this is touched anywhere in this project's kernel** — neither
+the pre-existing pinmux/soft-reset patch nor anything earlier in this
+doc's history reaches physical `0xe4a00000` at all. This fully explains
+the "probes clean, DMA/ASoC layer reports success, chip detected, but
+silent" symptom in a way nothing upstream of it does: if the external
+I2S2 block's own clock/mux domain is still gated off at this SoC-global
+level, the peripheral itself never asserts real bit-clock/data toward
+CS4334 regardless of what the pad-mux or soft-reset-release bits (both
+already fixed) or the ALSA/DMA layer (probe/hw_params/trigger, already
+confirmed clean from the earlier SDDAC-path DMA work) are doing.
+
+**Fix applied (2026-07-16, not yet hardware-tested):**
+`ark1668_i2s_drv_probe()` in `ark1668_i2s.c` now `ioremap()`s
+`0xe4a00000` (separately from `SYS_BASE`) and, for the external-I2S2
+instance (`mem->start == 0xe8200000`), applies the four bits above; for
+the internal-I2S1 instance (`mem->start == 0xe4000000`), applies just
+the shared `+0x1f0 |= 0x400` bit. Placed in probe (one-time, matches
+stock's own call site inside `ark_i2s_startup`/`init_cfg`, which in
+practice only needs to run once per instance) rather than fleshing out
+the pre-existing-but-dead `ark_i2s_init_cfg()`/`setup_i2s2()` stub
+functions already in this file (found empty and unused during this
+investigation — leftover vendor skeleton, called from nowhere; left
+as-is, not part of this fix). Compiles clean (`make ... zImage`, only
+pre-existing unrelated warnings). Kernel rebuild in progress as of this
+writing.
+
+**Caution — register semantics inferred, not confirmed via documentation
+or datasheet.** The `0xf6300000`→`0xe4a00000` physical resolution is
+solid (io-descriptor table, byte-exact). The *meaning* of bits
+`0x3f000000`/`0x700`/`0x400`/`bit31` is inferred purely from "stock sets
+them, nothing else in the driver graph does, and they're on a page also
+used for the timer" — plausible (clock-gate/mux-select bits are exactly
+the kind of thing vendors tuck into a spare corner of an otherwise-
+unrelated peripheral's register page) but **not decoded against a
+register-level datasheet**. This page is shared with the live timer
+peripheral (`arkmicro,ark-timer`, currently in active use as the kernel
+clocksource) — the offsets touched (`0x1d8`-`0x1f4`) are far from where
+a low counter/compare register would typically sit, but this has not
+been independently confirmed safe. **Needs a live boot test before
+trusting further**: watch for clocksource instability/hangs (a broken
+timer clocksource would likely manifest as boot hangs or wildly wrong
+`jiffies`-based timing, not silent audio failure) in addition to
+checking for actual sound.
+
+**Live-tested (2026-07-16): no change.** Flashed and booted the kernel
+with the `0xe4a00000` clock-gate patch above (CS4334 still the primary
+playback dai-link at this point). Still silent — but the boot-time
+"pop" (present since well before today, see "Test 3" earlier in this
+doc) *was* heard, so the internal SDDAC block itself was still getting
+probed/initialized at boot even with CS4334 as the nominal playback
+link — a hint something was off in the whole premise, not just the
+clock-gate bits.
+
+## CS4334 pivot reverted — stock's own aplay -l proves SDDAC is the real (only) playback path (2026-07-16)
+
+Live `aplay -l` on **stock** hardware (`docs/logs/audio log stock.txt`):
+
+```
+card 0: ARKSDDAC [ARK-SDDAC], device 0: SDDAC sddac-hifi-0 []
+```
+
+**Exactly one playback device, and it's SDDAC — not CS4334.** Stock's
+`dmesg` (`docs/logs/dmesg live device kernel 3.4 dmeg.txt`) does show
+both dai-links mapping at the ASoC level (`asoc: sddac-hifi <->
+ark_i2s_dev.0 mapping ok` *and* `asoc: cs4334 <-> ark_i2s_dev.1 mapping
+ok`), so CS4334 is a real, board-file-registered dai-link on stock too —
+but it evidently never produces a usable PCM device, since `aplay -l`
+never lists a second one. This is the same category of mistake this
+project has hit before and has a standing caution about
+(`feedback_bootlog_evidence_weak`): a "mapping ok" printk is DAI-link
+*binding* success, not proof of a working playback path — exactly like
+an I2C `XX` marker proving a driver bound, not that the chip answers.
+The 2026-07-16 pivot to CS4334 (the "Architecture pivot" section above)
+was built on that log line plus a `KERNEL_REFERENCE.md` module-table
+entry, without checking `aplay -l` first. It shouldn't have been trusted
+over the card's actual live playback-device enumeration, and the
+live no-audio re-test (immediately above) is consistent with that: it's
+very plausible CS4334's dai-link on stock is present in the driver graph
+but genuinely dead for playback (why is still unknown — possibly a
+capture-only or disabled-stream config on that specific dai-link in
+stock's board file that this project's DTS pivot didn't replicate
+either), same class of "registered but never actually exercised" vendor
+code already found elsewhere in this firmware (BD37033, the
+`sendSoundData()` fallback branch).
+
+**Reverted** (`ark1668_limcet_p305.dts`): `dai-link@0` (playback) back
+to `i2s_dac` (internal, physical `0xe4000000`) + `sddac` — the exact
+configuration that produced this investigation's only prior confirmed
+audible result ("First genuine audible confirmation... (2026-07-14)"
+above). `dai-link@1` (capture) back to `i2s_adc` + `sdadc`. Also set
+`simple-audio-card,name = "ARK-SDDAC"` and
+`simple-audio-card,stream-name = "sddac-hifi"` on the playback link to
+match stock's card/device naming exactly (cosmetic/diagnostic parity
+only, not functionally required). `cs4334_codec` DT node left defined
+but unreferenced by any dai-link — harmless, and stock's own driver
+graph still includes an equivalent dead link, so this isn't asymmetric
+with stock. The `0xe4a00000` clock-gate patch in `ark1668_i2s.c` is kept
+(keyed off physical base address of the I2S *hardware instance*, not
+which DT node/purpose is assigned to it, so it still applies correctly
+to whichever direction now uses the external I2S2 instance — capture,
+post-revert). Kernel rebuild in progress.
+
+**Open question worth confirming, not yet investigated:** why does
+CS4334's dai-link map fine but never expose a PCM on stock? If it turns
+out to be genuinely inert on stock too (not just on this
+reconstruction), that closes the loop cleanly. If instead it's a
+capture-only or otherwise-restricted link on stock that this project's
+DTS pivot got wrong in a fixable way, revisiting it later could still be
+worthwhile — but that's speculative, and SDDAC being stock's actual
+working path makes it the correct priority now regardless.
+
+**Next steps:**
+- [ ] Flash the reverted+rebuilt kernel, confirm no boot regression.
+- [ ] Live audible test: `aplay -l` to confirm device index/naming now
+      matches stock (`ARK-SDDAC`/`SDDAC sddac-hifi-0`), then `aplay -D
+      hw:0,0 -f S16_LE -r 44100 -c 2 /dev/urandom` — this exact command
+      on this exact dai-link configuration was the one confirmed-audible
+      result in this whole investigation (2026-07-14, before the CS4334
+      detour), so if it stays silent now, something regressed between
+      then and now (the cyclic-DMA fixes, TDMAENA/RDMAENA, or something
+      in today's soft-reset/clock-gate additions) rather than being a
+      new problem to diagnose from scratch.
+- [ ] If audible: retest `start_msn`/`MsnCoreApp` end-to-end, and the
+      three volume-control paths (`softmaster`, `PA Volume`,
+      `Left/Right Playback Volume`) queued up before the CS4334 detour.
+
+## Live-tested (2026-07-16): reverted SDDAC path still silent — found the real blocker, printk starvation from the DMA debug instrumentation itself
+
+Flashed the reverted build. Still no audio, but `aplay` now loops
+cleanly: `dw_dma_cyclic_start ret=0` (channel really starts) followed
+almost immediately (0.08-0.13ms later — far faster than one real
+44.1kHz/1024-frame period) by `dwc_terminate_all` and an ALSA
+`underrun!!!`, repeating every attempt. **Zero `dw_dma_interrupt`/
+`dwc_handle_cyclic` lines appear during any of these live attempts.**
+
+The decisive clue: hitting Ctrl-C immediately produced a *burst* of
+`dw_dma_interrupt status=0x2` / `dwc_handle_cyclic chan_mask=0x40
+block=0x40` lines, back-to-back, with no new prep/start calls in
+between. Real hardware interrupts were firing (or at least pending) the
+whole time — they just weren't being serviced during actual playback,
+only draining once the process died.
+
+**Root cause: the `ARKDMA_DBG` printk instrumentation added on
+2026-07-13 to diagnose the *original* cyclic-DMA wiring (see "Live
+IRQ-trace test run" above) was still live in this build and never
+removed once its job was done.** Two of its printk sites are especially
+bad:
+
+- `dwc_handle_cyclic()`'s printk ran **"with dwc->lock held and all
+  DMAC interrupts disabled"** (the function's own pre-existing comment)
+  — i.e. every period-boundary interrupt blocked on a synchronous
+  115200-baud UART write while IRQs were masked.
+- `dwc_terminate_all()`'s cyclic path called **`dump_stack()`** (a
+  15-30 line kernel backtrace) unconditionally on every single
+  terminate — and terminate fires on every underrun, so every failed
+  ~0.1ms attempt was immediately followed by a full stack dump over
+  serial.
+
+On this single-core SoC (`BogoMIPS 457`), that's enough synchronous
+serial I/O to starve the CPU past the point where a ~23ms audio period
+window can complete — ALSA's own software xrun/timeout logic gives up
+and calls `dwc_terminate_all()` (triggering *another* `dump_stack()`)
+long before the real DMA hardware ever gets a quiet enough window to
+raise and have its interrupt serviced, even though the transfer really
+is armed and running. This is a self-inflicted instrumentation bug, not
+a hardware or clocking problem — consistent with the interrupts
+existing (RAW status latched) but only draining in a backlog once the
+debug-logging pressure stopped (process killed).
+
+**Fix applied (2026-07-16):** removed all `ARKDMA_DBG` printks and the
+`dump_stack()` call from `drivers/dma/ark-dma.c`
+(`dwc_tx_submit`/`dwc_handle_cyclic`/`dw_dma_interrupt`/
+`dwc_prep_dma_cyclic`/`dwc_terminate_all`/`dwc_issue_pending`) — pure
+debug-log removal, no functional/logic changes to any of the cyclic-DMA
+code paths those functions implement. Compiles clean. Kernel rebuild in
+progress.
+
+**Next steps:**
+- [ ] Flash and re-test `aplay -D hw:0,0 -f S16_LE -r 44100 -c 2
+      /dev/urandom` — if the printk-starvation theory is correct this
+      should now run continuously without looping/underrunning, and
+      produce audible noise.
+- [ ] If still silent but no longer looping/underrunning: capture a
+      clean `dmesg` during a several-second run and check whether
+      `dw_dma_interrupt`/`dwc_handle_cyclic` fire at a steady ~23ms
+      cadence (22 periods per buffer) — that would mean the DMA path is
+      now fully healthy and the remaining problem is downstream
+      (SDDAC/amp muted, wrong I2S format, etc.), not DMA/IRQ timing.
+- [ ] If it still loops/underruns even without the debug prints: the
+      printk-starvation theory is wrong or incomplete — fall back to the
+      original live IRQ-trace methodology (this time without leaving the
+      instrumentation in place afterward) to re-isolate where the
+      remaining latency/blocking is coming from.
+
+## Live-tested (2026-07-16): printk removal alone did not fix it — found the real bug, an inverted residue calculation
+
+Flashed the printk-stripped build. `aplay -D hw:0,0 -f S16_LE -r 44100
+-c 2 /dev/urandom` still underruns continuously — but now in a *tight*
+loop with no debug output slowing it down: dozens of `underrun!!! (at
+least 0.02-0.07 ms long)` lines per second, each one **far faster than
+the ~23ms real period** (`set_params` reports `period_time=23219`,
+`chunk_size=1024`). Printk starvation was real (confirmed by the
+delayed interrupt burst after Ctrl-C in the previous test) but was
+masking a second, actual logic bug underneath — removing the prints
+didn't fix playback, it just made the same broken loop run faster.
+
+**Root cause found in `dwc_tx_status()`'s cyclic branch** (added
+2026-07-13, see "Live IRQ-trace test run" above — this is the same code
+that fixed the *previous* cyclic bug, but introduced this one in the
+process). It set:
+
+```c
+residue = dwc_get_sent(dwc);
+```
+
+`dwc_get_sent()` returns **bytes already transferred** out of the
+current period — its own name and comment say so, and the pre-existing
+one-shot path (`dwc_get_residue()`, a few lines above in the same file)
+uses it correctly: `residue = desc->residue - dwc_get_sent(dwc)` —
+i.e. *subtracted from* the total to get what's left. The cyclic branch
+instead assigned the raw "sent" count directly as the residue, with no
+subtraction. `dma_set_residue()` feeds this to the generic
+`dmaengine_pcm` framework's `.pointer()` callback (what
+`ark1668_i2s.c`'s playback path polls to report the ALSA hardware
+pointer) — since residue is supposed to mean "bytes *remaining*", and
+right after a period starts almost nothing has been sent yet, this bug
+reported a near-zero residue **immediately**, which reads as "the
+hardware pointer is already at/past the end of the buffer" — an
+instant, spurious underrun on literally every single check, before any
+real data could ever move. This fully explains the observed pattern:
+`dw_dma_cyclic_start()` genuinely succeeds (`ret=0`, confirmed
+repeatedly across every capture in this investigation) and real
+interrupts do fire (confirmed by the Ctrl-C backlog in the previous
+test) — the transfer itself was never the problem; every single
+`.pointer()` poll was lying about where the hardware actually was.
+
+**Fix applied (2026-07-16):** added a `period_len` field to `struct
+dw_cyclic_desc` (`ark-dma.h`), populated from `dw_dma_cyclic_prep()`'s
+existing `period_len` parameter, and changed the cyclic branch of
+`dwc_tx_status()` to `residue = period_len - sent` (clamped to 0),
+matching the subtraction pattern the one-shot path already used
+correctly. Compiles clean. Kernel rebuild in progress.
+
+**Next steps:**
+- [ ] Flash and re-test `aplay -D hw:0,0 -f S16_LE -r 44100 -c 2
+      /dev/urandom` — expect either sustained playback with real
+      audible noise, or (if still broken) underruns no faster than the
+      real ~23ms period instead of sub-millisecond, which would at
+      least prove the residue fix is directionally correct even if
+      something else still needs tuning.
+- [ ] If audible: this closes the entire cyclic-DMA chapter of this
+      investigation (started 2026-07-13) as fully resolved. Move on to
+      re-testing `start_msn`/`MsnCoreApp` and the volume-control paths
+      queued up earlier.
+
+**Live-tested (2026-07-16): residue fix confirmed the DMA path is fully
+healthy — `aplay -D hw:0,0 -f S16_LE -r 44100 -c 2 -d 5 /dev/urandom`
+now runs clean for the full 5 seconds, no underruns at all.** Still
+completely silent though (just the known startup pop) — this cleanly
+separates the two problems that had been tangled together all session:
+the digital I2S/DMA path (now provably correct) and something further
+downstream in the analog chain (still broken). BD37033 remains
+confirmed dead (`audio-test.sh`: no I2C ACK at 0x40, `PA` mixer value
+doesn't even round-trip in ALSA's own cache) but per the "no volume
+control in the UI, only overall in Settings" clarification and
+MsnCoreApp not currently starting at all, BD37033 isn't the immediate
+blocker for getting *any* signal out — SDDAC's own analog output is.
+
+## Found the analog blocker: DAC/vref left powered down during playback (2026-07-16)
+
+`ARK_I2SSDDAC_SACR0` has `DAC_PD` (bit 22) and `VREF_PD` (bit 21) —
+power-down control for the DAC and its voltage reference. The
+**capture** branch of `ark_i2s_startup()` explicitly sets both (correct
+— DAC/vref aren't needed while recording) as part of its clear-then-set
+sequence. The **playback** branch, immediately above it in the same
+function, only ever `|=`s in unrelated bits (`I2SEN`/`TFTH`/
+`SARADC_DATA`, all via read-modify-write) — it never clears `DAC_PD`/
+`VREF_PD` back off. So whatever those two bits were left at (from a
+prior capture stream, or possibly the hardware's power-on-reset
+default) stays untouched through every playback attempt this entire
+investigation has run. This fully explains the "digitally perfect,
+completely silent" result: no amount of correct I2S/DMA/DMA-IRQ timing
+can produce analog output if the DAC and its reference are powered off
+at the analog stage itself. Same category as this project's other
+found-late incomplete-vendor-stub bugs (TDMAENA/RDMAENA never
+re-enabled, `device_prep_dma_cyclic` never wired up) — this one was
+simply invisible until the DMA-timing bugs hiding it were fixed first.
+
+**Fix applied (2026-07-16):** playback branch of `ark_i2s_startup()`
+(`ark1668_i2s.c`) now explicitly clears `DAC_PD`/`VREF_PD` in the same
+read-modify-write that sets `I2SEN`/`TFTH`/`SARADC_DATA`. Kernel rebuild
+in progress.
+
+**Next steps:**
+- [ ] Flash and re-test `aplay -D hw:0,0 -f S16_LE -r 44100 -c 2
+      /dev/urandom` — this is the single most likely fix to finally
+      produce real audible noise, since it directly targets the last
+      unexplained gap between "digital path proven correct" and
+      "complete silence."
+- [ ] If still silent: check `VREF_PD`'s wider blast radius — it may be
+      shared between the DAC and SDADC's own reference (worth confirming
+      capture still works correctly after this change, i.e. this fix
+      didn't accidentally leave something in a bad state for the ADC
+      path), and re-examine `left-volume`/`right-volume` DTS values
+      (currently `112`) as the next most likely remaining attenuator.
+
+## Found a real regression: `SoundType=3` fix had silently reverted to stock's `0` (2026-07-16)
+
+Live crash capture from `MsnCoreApp` (`ark_display: ARKDISP_SET_VDE_CFG
+-> ...` immediately followed by `SoundAdapter Create Failed, Not
+Support ICType: 0`, `Load App Plugin 403 "/usr/lib/libMsnSound.so"`,
+then a segfault with fault address `00000008`) matches this doc's own
+already-root-caused `sendSoundData()` uninitialized-stack-local bug
+(`0x3506c` in `libSetting.so`) byte-for-byte — but `ICType: 0` shouldn't
+have been reachable at all, since `SoundType=0 → SoundType=3` was
+already fixed and documented earlier in this file ("`MsnProductInfo.ini`"
+section above).
+
+Checked `firmware_source/prado_reconstructed/mtd6_rootfs/rootfs/
+msnprofile/MsnProductInfo.ini` directly: it had
+
+```
+#SoundType=3
+SoundType=0
+```
+
+i.e. the fix had been silently reverted back to stock's original value.
+Almost certainly a side effect of commit `00825d0` ("change MsnProduct
+info in reconstructed firmware to match original Prado dump") —
+resyncing this file against the stock dump for unrelated reasons
+clobbered this specific deliberate change without anyone noticing,
+since nothing about that commit's stated purpose mentioned audio.
+
+**Fix applied (2026-07-16):** restored `SoundType=3` (commented out the
+stock `0` instead, matching the file's existing convention). This is a
+plain rootfs text file, not a kernel change — needs the rootfs image
+repackaged (`build_bootable_sdcard.sh`) and reflashed, no kernel
+rebuild required.
+
+**Process note for future sessions:** any future "resync configs
+against the stock dump" pass needs to explicitly check for and
+re-apply this project's own deliberate config deviations from stock
+(`SoundType`, and likely others found elsewhere in this investigation)
+rather than blindly overwriting with stock's values — this is the kind
+of silent regression that's easy to reintroduce exactly this way again.
+
+**Important caveat, established the same session:** fixing `SoundType`
+alone does not stop the crash. It only changes *which* call path
+reaches the buggy line in `sendSoundData()` (the normal EQ-init path
+instead of the abbreviated fallback path) — see the full disassembly
+below for why the crash is unconditional once you reach that function
+at all, regardless of `SoundType`.
+
+## `sendSoundData()` fully traced: what it does, why the "second message" crashes, and why stock doesn't (2026-07-16)
+
+`libSetting.so` is unstripped (full C++ symbols/mangled names intact),
+so this was traced precisely via `objdump -C -d` rather than inferred.
+
+**Signature:** `SettingWindow::sendSoundData(unsigned char cmd,
+unsigned char subcmd, const char *data, unsigned char len)` at
+`0x34fa8`.
+
+**What it actually does (the real, working part):**
+1. Constructs an `MsnEvent(8, 403, 0xc73d)` on the stack — event type
+   `8`, target plugin ID `403` (matches `libMsnSound.so`'s own plugin
+   ID from the boot log's `Load App Plugin 403 "/usr/lib/libMsnSound.so"`
+   line), event-type enum `0xc73d`.
+2. Calls `makeProtocolPackage(0, cmd, subcmd, data, len)` — builds a
+   `QByteArray`: header byte `0`, then `cmd`/`subcmd`, then the
+   `data`/`len` payload. This **is** the actual sound/EQ command being
+   built.
+3. `MsnEvent::setByteArrayParams()` attaches that packet to the event.
+4. `MsnApplication::dispatchMsnEvent()` — the real "send": hands the
+   event synchronously to whatever's registered for plugin 403. This
+   call itself completes without fault (confirmed by the 2026-07-13
+   live re-test, where this exact dispatch round-trips synchronously
+   into `Sound_BD37033::onRecvSoundProtocol()` before crashing).
+
+**What crashes, precisely:** immediately after that dispatch returns
+(`0x35050` onward), the function runs what *looks* like cleanup code
+for two more local objects — Qt's standard implicit-sharing
+refcount-decrement pattern (`__kuser_cmpxchg` at the fixed ARM helper
+address `0xffff0fc0`, then a conditional `qFree()`/`QString::free()`)
+— reading their data pointers from stack slots `[sp+68]` (crash site,
+`0x3506c`) and `[sp+64]` (`0x350a4`, same pattern, would have crashed
+next if the first one hadn't). **Neither slot is written anywhere in
+the function.** There is no second `makeProtocolPackage()` call at
+all — despite it looking like "building a second message" from the
+crash-site call stack alone, the actual disassembly shows only cleanup
+code, for objects whose construction is simply missing.
+
+**Evidence this is a genuine binary/toolchain defect, not just a
+logic bug:** the function has a real ARM EHABI exception-unwinding
+landing pad at its end (`bl __cxa_end_cleanup` + a loop back through
+`QByteArray::~QByteArray()`/`MsnEvent::~MsnEvent()`, `0x350e8`-`0x350fc`)
+— a second, parallel copy of the same destructor sequence used if a
+C++ exception unwinds through this function. The compiler only emits
+that when it believes real RAII-managed objects exist at those stack
+slots on every exit path. So the compiler *believed* `[sp+64]`/`[sp+68]`
+held constructed objects needing destruction — the constructor calls
+for them are just absent from the compiled output. This is more
+consistent with a codegen/optimizer defect (an old ARM GCC + Qt4 + C++
+exception-handling interaction dropping a constructor while keeping
+its paired destructor) than a hand-written source bug, though the
+original source isn't available to fully confirm which.
+
+For contrast: `[sp+16]` (a separate local, visibly initialized at
+`0x35050`-`0x35060` by loading Qt's `shared_null` sentinel + 8 — the
+standard inlined default-`QString`/`QByteArray` construction pattern)
+and `[sp+48]` (destructed via `QVariant::~QVariant()` at the very end,
+which is safe to call on a zero-initialized/Invalid `QVariant` even
+without an explicit constructor call, since Qt's `QVariant` dtor type-
+checks before freeing) are both fine — only `[sp+64]`/`[sp+68]`
+specifically are read-without-being-written in a way that actually
+crashes.
+
+**Why the identical binary boots fine on stock:** this is plain
+uninitialized-stack-memory undefined behavior, not a deterministic
+fault. `sub sp, sp, #84` reserves the frame but doesn't zero it —
+`[sp+68]`'s "value" is whatever bytes were left over from whatever
+function last used that exact stack region before `sendSoundData()`
+was called. That depends on the full call history leading up to this
+point (which is different between stock's 3.4 kernel/toolchain-built
+Qt/libc and this reconstruction's 4.19 kernel/build), plus stack
+layout/ASLR differences between kernel versions. On stock, whatever
+ends up there apparently doesn't crash on dereference (most likely
+`0`/NULL, which Qt's free helpers can no-op on safely, or some other
+already-mapped address). On this reconstruction, the live crash
+register dump confirms the same slot reliably holds the literal
+integer `8` (traceable to a stray `mov r1, #8` used earlier in the
+same function for an unrelated purpose, apparently left on the stack
+at that offset) — `0x00000008` is unmapped, so it segfaults every time.
+Same code, genuinely different garbage, not a difference in logic.
+
+## Binary patch applied (2026-07-16)
+
+Patched `firmware_source/prado_reconstructed/mtd6_rootfs/rootfs/usr/lib/libSetting.so`
+only (the deployed copy — `firmware_dumps/Prado firmware dump/...`
+reference copy left untouched for byte-for-byte comparison purposes).
+
+Single 4-byte instruction change at file offset `0x35064` (== vaddr,
+first `LOAD` segment has file-offset-equals-vaddr):
+
+```
+0x35064: e59d5044  ldr r5, [sp, #68]      -- was: start of the crash block
+      -> ea000019  b   0x350d0            -- now: skip straight past both
+                                              broken cleanup blocks
+```
+
+`0x350d0` is `add r0, sp, #48` / `bl QVariant::~QVariant()` — the next
+*legitimate* destructor call after both broken blocks (`[sp+68]`'s and
+`[sp+64]`'s). Verified via `objdump -C -d` post-patch: the branch lands
+exactly there, `QVariant`/`QEvent` destructors and the normal function
+epilogue (`add sp, sp, #84; pop {r4,r5,r6,r7,r8,r9,pc}`) are unaffected
+and still run. File size unchanged (in-place single-instruction swap,
+no relocation/offset shifts elsewhere in the file).
+
+This does not touch the *working* part of the function (the real
+message: `MsnEvent` construction, `makeProtocolPackage`,
+`setByteArrayParams`, `dispatchMsnEvent`) — only removes the
+unconditional dereference of two local objects that were never
+constructed in the first place, so there is nothing correct being
+skipped; those two blocks had no valid work to do regardless of
+`SoundType`/call path.
+
+**Not yet hardware-tested.** Needs the rootfs image repackaged
+(`build_bootable_sdcard.sh`) and reflashed, then a live retest of
+`MsnCoreApp` startup through Settings-window init (`start_msn` in the
+foreground, or just normal boot) to confirm the crash is actually
+gone.

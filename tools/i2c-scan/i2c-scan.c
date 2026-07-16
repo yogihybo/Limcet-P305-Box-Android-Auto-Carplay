@@ -42,25 +42,15 @@ static void scan_bus(const char *path)
 				printf("   ");
 				continue;
 			}
-			int busy = (ioctl(fd, I2C_SLAVE, addr) < 0);
-			if (busy) {
-				if (ioctl(fd, I2C_SLAVE_FORCE, addr) < 0) {
-					printf("XX ");
-					continue;
-				}
+			if (ioctl(fd, I2C_SLAVE, addr) < 0) {
+				printf("XX ");
+				continue;
 			}
 			unsigned char buf;
-			if (read(fd, &buf, 1) == 1) {
-				if (busy)
-					printf("%02x* ", addr);
-				else
-					printf("%02x  ", addr);
-			} else {
-				if (busy)
-					printf("XX  ");
-				else
-					printf("--  ");
-			}
+			if (read(fd, &buf, 1) == 1)
+				printf("%02x ", addr);
+			else
+				printf("-- ");
 		}
 		printf("\n");
 	}

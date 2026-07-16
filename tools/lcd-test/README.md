@@ -1,7 +1,7 @@
 # lcd-test
 
 Live LCD/framebuffer diagnostic tool — same purpose/style as
-`tools/i2c-scan/` and `tools/touch-test/`: a static ARM binary to
+`tools/i2c-scan/` and `tools/ark1680-ts-test/`: a static ARM binary to
 run at the live `/ #` root shell. Tests the raw kernel framebuffer
 (`/dev/fb0`) directly, with no Qt/QWS server involved — so it works even
 while `MsnCoreApp`/`LCDTest -qws` are segfaulting (see
@@ -25,15 +25,6 @@ just wrote within the next frame or two, making a real, successful write
 look like nothing happened. This is the other likely explanation (besides
 the panning bug noted below) if `fill`/`bars`/`gradient` report success
 but the panel doesn't visibly change.
-
-### `lcd-test` (or `lcd-test run` / `lcd-test test`)
-
-Dumps the screen/framebuffer info to the console first, and then automatically cycles through all test patterns:
-1. **Random Noise** (2 seconds)
-2. **Solid Colors** (Red, Green, Blue, White, Black - 1 second each)
-3. **Color Bars** (2 seconds)
-4. **Red-to-Green Gradient** (2 seconds)
-Finally, clears the screen to black.
 
 ### `lcd-test info`
 

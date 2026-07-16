@@ -86,14 +86,7 @@ struct ark1680_ts {
 	u32 point_x[4];
 	u32 point_y[4];
 	unsigned int count;
-
-	/* State variables matching stock global symbols */
-	unsigned int cnt;
-	unsigned int tspsta;
-	int tmp_x;
-	int tmp_y;
-	int prev_x;
-	int prev_y;
+	bool pressed;
 };
 
 static void ark1680_ts_sys_setbits(struct ark1680_ts *ts, unsigned int off, u32 bits)
@@ -184,93 +177,32 @@ static irqreturn_t ark1680_ts_interrupt(int irq, void *dev_id)
 {
 	struct ark1680_ts *ts = dev_id;
 	u32 status = readl(ts->adc_base + ARK_TS_IRQ_STATUS);
-	u32 active_bits = status;
+	int x, y;
 
 	if (!status)
 		return IRQ_HANDLED;
 
 	ark_ts_dbg(ts, "ark1680_ts: irq status=0x%08x\n", status);
 
-	/* Bits 12 and 13 set together (0x3000) */
-	if ((active_bits & 0x3000) == 0x3000) {
-		ts->cnt = 0;
-		ark1680_ts_get_xy(ts, false, &ts->tmp_x, &ts->tmp_y);
-		if (ts->tspsta == 0) {
-			writel(readl(ts->adc_base + ARK_TS_IRQ_STATUS) & ~0x1000,
-			       ts->adc_base + ARK_TS_IRQ_STATUS);
-			active_bits &= ~0x1000;
-			ts->tspsta = 1;
-		} else {
-			writel(readl(ts->adc_base + ARK_TS_IRQ_STATUS) & ~0x2000,
-			       ts->adc_base + ARK_TS_IRQ_STATUS);
-			active_bits &= ~0x2000;
+	/* Ack every asserted cause bit. */
+	writel(readl(ts->adc_base + ARK_TS_IRQ_STATUS) & ~status,
+	       ts->adc_base + ARK_TS_IRQ_STATUS);
 
-			input_report_abs(ts->input, ABS_PRESSURE, 0);
-			input_report_key(ts->input, BTN_TOUCH, 0);
-			input_sync(ts->input);
-
-			ts->tspsta = 0;
-		}
-	}
-
-	/* Bit 12 (0x1000) */
-	if (active_bits & 0x1000) {
-		writel(readl(ts->adc_base + ARK_TS_IRQ_STATUS) & ~0x1000,
-		       ts->adc_base + ARK_TS_IRQ_STATUS);
-		active_bits &= ~0x1000;
-		ts->cnt = 0;
-		ark1680_ts_get_xy(ts, false, &ts->tmp_x, &ts->tmp_y);
-		if (ts->tspsta == 0) {
-			ts->tspsta = 1;
-		} else {
-			input_report_abs(ts->input, ABS_PRESSURE, 0);
-			input_report_key(ts->input, BTN_TOUCH, 0);
-			input_sync(ts->input);
-			ts->tspsta = 0;
-		}
-	}
-
-	/* Bit 13 (0x2000) */
-	if (active_bits & 0x2000) {
-		writel(readl(ts->adc_base + ARK_TS_IRQ_STATUS) & ~0x2000,
-		       ts->adc_base + ARK_TS_IRQ_STATUS);
-		active_bits &= ~0x2000;
-		ts->cnt = 0;
-		ark1680_ts_get_xy(ts, false, &ts->tmp_x, &ts->tmp_y);
-		ts->tspsta = 0;
-
+	if (ark1680_ts_get_xy(ts, true, &x, &y)) {
+		ts->pressed = true;
+		ark_ts_dbg(ts, "ark1680_ts: DOWN x=%d y=%d\n", x, y);
+		input_report_abs(ts->input, ABS_X, x);
+		input_report_abs(ts->input, ABS_Y, y);
+		input_report_abs(ts->input, ABS_PRESSURE, 4095);
+		input_report_key(ts->input, BTN_TOUCH, 1);
+		input_sync(ts->input);
+	} else if (ts->pressed) {
+		ts->pressed = false;
+		ark_ts_dbg(ts, "ark1680_ts: UP\n");
+		ark1680_ts_get_xy(ts, false, &x, &y);
 		input_report_abs(ts->input, ABS_PRESSURE, 0);
 		input_report_key(ts->input, BTN_TOUCH, 0);
 		input_sync(ts->input);
-	}
-
-	/* Bit 14 (0x4000) */
-	if (active_bits & 0x4000) {
-		writel(readl(ts->adc_base + ARK_TS_IRQ_STATUS) & ~0x4000,
-		       ts->adc_base + ARK_TS_IRQ_STATUS);
-		active_bits &= ~0x4000;
-		ts->cnt++;
-		if (ts->cnt < 1) {
-			ark1680_ts_get_xy(ts, false, &ts->tmp_x, &ts->tmp_y);
-		} else {
-			if (ark1680_ts_get_xy(ts, true, &ts->tmp_x, &ts->tmp_y)) {
-				ts->prev_x = ts->tmp_x;
-				ts->prev_y = ts->tmp_y;
-
-				input_report_abs(ts->input, ABS_X, ts->prev_x);
-				input_report_abs(ts->input, ABS_Y, ts->prev_y);
-				input_report_abs(ts->input, ABS_PRESSURE, 4095);
-				input_report_key(ts->input, BTN_TOUCH, 1);
-				input_sync(ts->input);
-			}
-		}
-		ts->tspsta = 2;
-	}
-
-	/* Clear any other leftover bits that were set (bits 0..11, 15) */
-	if (active_bits) {
-		writel(readl(ts->adc_base + ARK_TS_IRQ_STATUS) & ~active_bits,
-		       ts->adc_base + ARK_TS_IRQ_STATUS);
 	}
 
 	return IRQ_HANDLED;
@@ -407,9 +339,9 @@ static int ark1680_ts_probe(struct platform_device *pdev)
 	__set_bit(EV_ABS, ts->input->evbit);
 	__set_bit(EV_KEY, ts->input->evbit);
 	__set_bit(BTN_TOUCH, ts->input->keybit);
-	input_set_abs_params(ts->input, ABS_X, 0, 800, 0, 0);
-	input_set_abs_params(ts->input, ABS_Y, 0, 480, 0, 0);
-	input_set_abs_params(ts->input, ABS_PRESSURE, 0, 4095, 0, 0);
+	input_set_abs_params(ts->input, ABS_X, 0, 4095, 5, 0);
+	input_set_abs_params(ts->input, ABS_Y, 0, 4095, 5, 0);
+	input_set_abs_params(ts->input, ABS_PRESSURE, 0, 4095, 5, 0);
 
 	input_set_drvdata(ts->input, ts);
 	platform_set_drvdata(pdev, ts);

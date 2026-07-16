@@ -96,7 +96,7 @@ export PROTOCOL_ID=ark169
 # this ran unconditionally on every login shell (every SSH/serial/telnet
 # session sources /etc/profile), silently undoing any `killall MsnCoreApp`
 # done in a previous session and fighting live framebuffer/driver tests
-# (tools/lcd-test, tools/touch-test, etc.) that expect the compositor
+# (tools/lcd-test, tools/ark1680-ts-test, etc.) that expect the compositor
 # to stay down. Run manually (`MsnFirstInit`) when you actually want it.
 #MsnFirstInit
 

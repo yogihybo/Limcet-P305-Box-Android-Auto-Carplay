@@ -62,9 +62,9 @@ actually produces input events on this exact kernel build.
 **Goal:** confirm `ABS_X`/`ABS_Y`/`BTN_TOUCH` events actually arrive when
 the panel is touched.
 
-**Test steps (already-built tooling exists — `tools/touch-test/`,
+**Test steps (already-built tooling exists — `tools/ark1680-ts-test/`,
 lowest risk first):**
-1. `touch-test regs` — dumps the ADC/TSC block directly via `/dev/mem`,
+1. `ark-ts-test regs` — dumps the ADC/TSC block directly via `/dev/mem`,
    independent of the driver. Touch the panel while re-running it a few
    times; `raw_x`/`raw_y` should visibly change. **If they never move,
    the fault is upstream of software** (pinmux/clock bits, or the panel
@@ -74,7 +74,7 @@ lowest risk first):**
 3. `echo 1 > /sys/module/ark1680_ts/parameters/debug` then `dmesg -w` —
    turn on per-IRQ tracing (raw samples, filtered coordinates,
    stable/unstable verdict) while touching the panel.
-4. `touch-test events /dev/input/eventN` (find N via
+4. `ark-ts-test events /dev/input/eventN` (find N via
    `cat /proc/bus/input/devices | grep -A5 ark1680-ts`) — confirms
    userspace actually receives real evdev events.
 
@@ -406,6 +406,6 @@ populated on this hardware revision, same as was done for the IR sensor.
 - `MCU_ADAPTERS.md` — `BoxP300` protocol detail for the MCU UART test.
 - `ARK1680_TS_REVERSE_ENGINEERING.md` — prior touch findings (mostly
   gathered on stock firmware, not this kernel — see test 1 above).
-- `tools/i2c-scan/`, `tools/touch-test/`, `tools/lcd-test/`,
+- `tools/i2c-scan/`, `tools/ark1680-ts-test/`, `tools/lcd-test/`,
   `tools/strace/`, `tools/gpio-i2c-probe/` — existing test tooling this
   plan reuses rather than duplicating.

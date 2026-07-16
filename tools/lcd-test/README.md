@@ -23,45 +23,29 @@ respawns it automatically). If a Qt/QWS process is still actively
 repainting the screen, it will simply redraw over whatever `lcd-test`
 just wrote within the next frame or two, making a real, successful write
 look like nothing happened. This is the other likely explanation (besides
-the panning bug noted below) if `fill`/`bars`/`gradient` report success
-but the panel doesn't visibly change.
+the panning bug noted below) if the panel doesn't visibly change.
 
-### `lcd-test info`
-
-Dumps `FBIOGET_VSCREENINFO`/`FBIOGET_FSCREENINFO` from `/dev/fb0`
-(resolution, bpp, pixel field layout, physical mm size, memory
-layout) — and, if `/dev/ark_display` exists (see
-`Limcet Hardware/ark_display.c`), its `ARKDISP_GET_SCREEN_INFO` reply
-too, so the two can be cross-checked against each other. Useful for
-confirming the panel's real geometry independent of anything
-userspace/Qt reports.
+No arguments, no subcommands — just run it:
 
 ```
-/ # lcd-test info
+/ # lcd-test
 ```
 
-### `lcd-test fill <red|green|blue|white|black|r,g,b>`
+It dumps `FBIOGET_VSCREENINFO`/`FBIOGET_FSCREENINFO` from `/dev/fb0`
+(resolution, bpp, pixel field layout, physical mm size, memory layout)
+and, if `/dev/ark_display` exists (see `Limcet Hardware/ark_display.c`),
+its `ARKDISP_GET_SCREEN_INFO` reply too, so the two can be cross-checked
+against each other — then cycles through the whole test sequence on its
+own, pausing 2 seconds between each step and printing what it just drew
+so the console log and the panel can be watched side by side:
 
-Fills the entire visible framebuffer with a solid color — the simplest
-possible "is the panel actually displaying anything" test, bypassing
-all userspace UI entirely.
-
-```
-/ # lcd-test fill red
-/ # lcd-test fill 128,64,200
-```
-
-### `lcd-test bars`
-
-Draws classic vertical color bars (white/yellow/cyan/green/magenta/
-red/blue/black) across the full width — good for spotting stuck
-channels, wrong bit-depth/field-order, or panel timing issues that a
-single solid fill won't reveal.
-
-### `lcd-test gradient`
-
-Draws a horizontal red→green gradient — useful for spotting banding
-or bit-depth truncation.
+1. Solid fills: red, green, blue, white, black — the simplest possible
+   "is the panel actually displaying anything" test.
+2. Vertical color bars (white/yellow/cyan/green/magenta/red/blue/black)
+   — good for spotting stuck channels, wrong bit-depth/field-order, or
+   panel timing issues a single solid fill won't reveal.
+3. A horizontal red→green gradient — useful for spotting banding or
+   bit-depth truncation.
 
 ## Notes
 
@@ -88,3 +72,21 @@ or bit-depth truncation.
   at the reported offset, with a warning, if panning isn't supported),
   and `info` now prints `xoffset`/`yoffset` directly so this is visible
   at a glance next time.
+- **Updated 2026-07-16 — match stock `LCDTest`'s init sequence.** Even
+  after the panning fix above, this tool's writes were still never
+  confirmed visible on real hardware — while the factory `LCDTest -qws`
+  binary (Qt + DirectFB) *did* render correctly, see
+  `docs/DISPLAY_SUBSYSTEM.md`'s 2026-07-16 milestone entry. Traced the
+  difference: DirectFB's `fbdev` system module applies its mode via
+  `FBIOPUT_VSCREENINFO`, which is what actually invokes the kernel
+  driver's `.fb_set_par` hook (`ark1668_lcdfb_set_par()` in
+  `ark1668_lcdfb.c`) — the function that programs *and enables* the
+  OSD1 display layer. This tool previously only ever called
+  `FBIOGET_VSCREENINFO` and (for the panning fix) `FBIOPAN_DISPLAY`
+  (`.fb_pan_display`, a different hook that only repoints the OSD1
+  address, doesn't touch the enable bit) — never `FBIOPUT_VSCREENINFO`.
+  `open_fb()` now re-issues `FBIOPUT_VSCREENINFO` with the info it just
+  read back (not changing the mode, just re-applying it) before writing,
+  matching the one userspace path already confirmed to work. Not yet
+  independently re-confirmed against real hardware with this exact
+  change — see the open item in `docs/DISPLAY_SUBSYSTEM.md`.

@@ -6,28 +6,11 @@
  * MsnCoreApp/LCDTest -qws currently segfault (see
  * docs/ARK1680_TS_REVERSE_ENGINEERING.md "MsnCoreApp segfault").
  *
- * Modes:
- *
- *   lcd-test info
- *       Dumps FBIOGET_VSCREENINFO / FBIOGET_FSCREENINFO from /dev/fb0
- *       (resolution, bpp, line length, mem size, pixel field layout),
- *       and — if present — /dev/ark_display's ARKDISP_GET_SCREEN_INFO
- *       reply (see Limcet Hardware/ark_display.c), so the two can be
- *       cross-checked against each other.
- *
- *   lcd-test fill <red|green|blue|white|black|r,g,b>
- *       Fills the whole visible framebuffer with a solid color -- the
- *       simplest possible "is the panel actually showing anything"
- *       test, independent of any userspace UI stack.
- *
- *   lcd-test bars
- *       Draws vertical color-bars (white/yellow/cyan/green/magenta/red/
- *       blue/black), classic test-pattern style, across the full width.
- *
- *   lcd-test gradient
- *       Draws a horizontal red->green gradient, useful for spotting
- *       banding/bit-depth or panel-timing artifacts a solid fill won't
- *       show.
+ * No arguments, no subcommands -- run it and it dumps /dev/fb0 and
+ * /dev/ark_display's reported info to the console, then cycles through
+ * solid-color fills, a color-bar pattern, and a gradient, pausing between
+ * each and printing what it just drew so the whole sequence can be
+ * watched on the panel while reading the console log alongside it.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -41,6 +24,8 @@
 
 #define ARK_DISPLAY_IOC_MAGIC	0xa0
 #define ARKDISP_GET_SCREEN_INFO	_IOWR(ARK_DISPLAY_IOC_MAGIC, 29, unsigned long)
+
+#define STEP_DELAY_SEC	2
 
 struct ark_screen_info {
 	unsigned int screen_id;
@@ -101,35 +86,6 @@ static void print_ark_display(void)
 	close(fd);
 }
 
-static int cmd_info(void)
-{
-	int fd = open("/dev/fb0", O_RDWR);
-	struct fb_var_screeninfo vinfo;
-	struct fb_fix_screeninfo finfo;
-
-	if (fd < 0) {
-		fprintf(stderr, "open /dev/fb0 failed: %s\n", strerror(errno));
-		return 1;
-	}
-	if (ioctl(fd, FBIOGET_VSCREENINFO, &vinfo) < 0) {
-		fprintf(stderr, "FBIOGET_VSCREENINFO failed: %s\n", strerror(errno));
-		close(fd);
-		return 1;
-	}
-	if (ioctl(fd, FBIOGET_FSCREENINFO, &finfo) < 0) {
-		fprintf(stderr, "FBIOGET_FSCREENINFO failed: %s\n", strerror(errno));
-		close(fd);
-		return 1;
-	}
-	print_vinfo(&vinfo);
-	printf("\n");
-	print_finfo(&finfo);
-	printf("\n");
-	print_ark_display();
-	close(fd);
-	return 0;
-}
-
 /* Maps an fb_bitfield (offset/length within the pixel) to a packed pixel
  * value for an 8-bit channel value -- works for any bpp/field layout
  * FBIOGET_VSCREENINFO reports, no hardcoded RGB565/888 assumption. */
@@ -183,6 +139,27 @@ static int open_fb(int *out_fd, unsigned char **out_mem, struct fb_var_screeninf
 		close(fd);
 		return -1;
 	}
+	/* Follow the same init step the stock LCDTest/Qt/DirectFB stack takes
+	 * (docs/DISPLAY_SUBSYSTEM.md's 2026-07-16 milestone entry): DirectFB's
+	 * fbdev system module applies its chosen mode via FBIOPUT_VSCREENINFO,
+	 * which is what actually invokes the kernel driver's .fb_set_par hook
+	 * (ark1668_lcdfb_set_par()) -- the function that programs *and enables*
+	 * the OSD1 display layer (ARK1668_LCDC_OSD1_CTL, the EN bit). It runs
+	 * once at kernel probe time too, so in principle OSD1 should already
+	 * be enabled by the time this tool runs -- but this tool's own writes
+	 * were never confirmed visible even after the panning fix below, so
+	 * re-issuing FBIOPUT_VSCREENINFO here (with the info we just read back
+	 * -- not changing the mode, just re-applying it) cheaply rules out any
+	 * state where OSD1 ended up disabled/never-enabled by the time we get
+	 * here, exactly mirroring what the one userspace path known to work
+	 * (Qt/DirectFB) actually does that a bare open()+mmap() does not. */
+	if (ioctl(fd, FBIOPUT_VSCREENINFO, v) < 0) {
+		fprintf(stderr,
+			"warning: FBIOPUT_VSCREENINFO failed: %s -- continuing anyway, "
+			"but this is the step that re-triggers the kernel driver's "
+			"OSD1 layer enable, so writes may still be invisible\n",
+			strerror(errno));
+	}
 	/* Force the visible page to (0,0) so our writes are guaranteed to
 	 * land where they're actually displayed, regardless of whatever page
 	 * a compositor/QWS server last panned to. If panning isn't supported
@@ -216,46 +193,24 @@ static int open_fb(int *out_fd, unsigned char **out_mem, struct fb_var_screeninf
 	return 0;
 }
 
-static int cmd_fill(const char *colorspec)
+static void draw_fill(unsigned char *mem, const struct fb_var_screeninfo *v,
+		       const struct fb_fix_screeninfo *f,
+		       unsigned char r, unsigned char g, unsigned char b, const char *name)
 {
-	int fd;
-	unsigned char *mem;
-	struct fb_var_screeninfo v;
-	struct fb_fix_screeninfo f;
-	unsigned char r, g, b;
-	unsigned int pixel;
+	unsigned int pixel = pack_rgb(v, r, g, b);
 	int x, y;
 
-	if (strcmp(colorspec, "red") == 0) { r = 255; g = 0; b = 0; }
-	else if (strcmp(colorspec, "green") == 0) { r = 0; g = 255; b = 0; }
-	else if (strcmp(colorspec, "blue") == 0) { r = 0; g = 0; b = 255; }
-	else if (strcmp(colorspec, "white") == 0) { r = 255; g = 255; b = 255; }
-	else if (strcmp(colorspec, "black") == 0) { r = 0; g = 0; b = 0; }
-	else if (sscanf(colorspec, "%hhu,%hhu,%hhu", &r, &g, &b) != 3) {
-		fprintf(stderr, "unknown color '%s' (use red/green/blue/white/black or r,g,b)\n", colorspec);
-		return 1;
-	}
+	for (y = 0; y < (int)v->yres; y++)
+		for (x = 0; x < (int)v->xres; x++)
+			put_pixel(mem, v, f, x, y, pixel);
 
-	if (open_fb(&fd, &mem, &v, &f) < 0)
-		return 1;
-
-	pixel = pack_rgb(&v, r, g, b);
-	for (y = 0; y < (int)v.yres; y++)
-		for (x = 0; x < (int)v.xres; x++)
-			put_pixel(mem, &v, &f, x, y, pixel);
-
-	printf("Filled %ux%u @ %ubpp with (%u,%u,%u)\n", v.xres, v.yres, v.bits_per_pixel, r, g, b);
-	munmap(mem, f.smem_len);
-	close(fd);
-	return 0;
+	printf("Filled %ux%u @ %ubpp with %s (%u,%u,%u)\n",
+	       v->xres, v->yres, v->bits_per_pixel, name, r, g, b);
 }
 
-static int cmd_bars(void)
+static void draw_bars(unsigned char *mem, const struct fb_var_screeninfo *v,
+		       const struct fb_fix_screeninfo *f)
 {
-	int fd;
-	unsigned char *mem;
-	struct fb_var_screeninfo v;
-	struct fb_fix_screeninfo f;
 	static const unsigned char bars[][3] = {
 		{255,255,255}, {255,255,0}, {0,255,255}, {0,255,0},
 		{255,0,255}, {255,0,0}, {0,0,255}, {0,0,0},
@@ -263,72 +218,86 @@ static int cmd_bars(void)
 	int nbars = sizeof(bars) / sizeof(bars[0]);
 	int x, y;
 
-	if (open_fb(&fd, &mem, &v, &f) < 0)
-		return 1;
-
-	for (x = 0; x < (int)v.xres; x++) {
-		int bar = x * nbars / v.xres;
-		unsigned int pixel = pack_rgb(&v, bars[bar][0], bars[bar][1], bars[bar][2]);
-		for (y = 0; y < (int)v.yres; y++)
-			put_pixel(mem, &v, &f, x, y, pixel);
+	for (x = 0; x < (int)v->xres; x++) {
+		int bar = x * nbars / v->xres;
+		unsigned int pixel = pack_rgb(v, bars[bar][0], bars[bar][1], bars[bar][2]);
+		for (y = 0; y < (int)v->yres; y++)
+			put_pixel(mem, v, f, x, y, pixel);
 	}
 
-	printf("Drew %d-bar color pattern on %ux%u @ %ubpp\n", nbars, v.xres, v.yres, v.bits_per_pixel);
-	munmap(mem, f.smem_len);
-	close(fd);
-	return 0;
+	printf("Drew %d-bar color pattern on %ux%u @ %ubpp\n",
+	       nbars, v->xres, v->yres, v->bits_per_pixel);
 }
 
-static int cmd_gradient(void)
+static void draw_gradient(unsigned char *mem, const struct fb_var_screeninfo *v,
+			   const struct fb_fix_screeninfo *f)
+{
+	int x, y;
+
+	for (x = 0; x < (int)v->xres; x++) {
+		unsigned char r = (unsigned char)(255 * x / (int)v->xres);
+		unsigned char g = (unsigned char)(255 - r);
+		unsigned int pixel = pack_rgb(v, r, g, 0);
+		for (y = 0; y < (int)v->yres; y++)
+			put_pixel(mem, v, f, x, y, pixel);
+	}
+
+	printf("Drew red->green gradient on %ux%u @ %ubpp\n",
+	       v->xres, v->yres, v->bits_per_pixel);
+}
+
+int main(void)
 {
 	int fd;
 	unsigned char *mem;
 	struct fb_var_screeninfo v;
 	struct fb_fix_screeninfo f;
-	int x, y;
+	static const struct { unsigned char r, g, b; const char *name; } colors[] = {
+		{255, 0, 0, "red"}, {0, 255, 0, "green"}, {0, 0, 255, "blue"},
+		{255, 255, 255, "white"}, {0, 0, 0, "black"},
+	};
+	int i;
+
+	{
+		int info_fd = open("/dev/fb0", O_RDWR);
+		struct fb_var_screeninfo vi;
+		struct fb_fix_screeninfo fi;
+
+		if (info_fd < 0) {
+			fprintf(stderr, "open /dev/fb0 failed: %s\n", strerror(errno));
+			return 1;
+		}
+		if (ioctl(info_fd, FBIOGET_VSCREENINFO, &vi) < 0 ||
+		    ioctl(info_fd, FBIOGET_FSCREENINFO, &fi) < 0) {
+			fprintf(stderr, "FBIOGET_*SCREENINFO failed: %s\n", strerror(errno));
+			close(info_fd);
+			return 1;
+		}
+		print_vinfo(&vi);
+		printf("\n");
+		print_finfo(&fi);
+		printf("\n");
+		print_ark_display();
+		printf("\n");
+		close(info_fd);
+	}
 
 	if (open_fb(&fd, &mem, &v, &f) < 0)
 		return 1;
 
-	for (x = 0; x < (int)v.xres; x++) {
-		unsigned char r = (unsigned char)(255 * x / (int)v.xres);
-		unsigned char g = (unsigned char)(255 - r);
-		unsigned int pixel = pack_rgb(&v, r, g, 0);
-		for (y = 0; y < (int)v.yres; y++)
-			put_pixel(mem, &v, &f, x, y, pixel);
+	for (i = 0; i < (int)(sizeof(colors) / sizeof(colors[0])); i++) {
+		draw_fill(mem, &v, &f, colors[i].r, colors[i].g, colors[i].b, colors[i].name);
+		sleep(STEP_DELAY_SEC);
 	}
 
-	printf("Drew red->green gradient on %ux%u @ %ubpp\n", v.xres, v.yres, v.bits_per_pixel);
+	draw_bars(mem, &v, &f);
+	sleep(STEP_DELAY_SEC);
+
+	draw_gradient(mem, &v, &f);
+	sleep(STEP_DELAY_SEC);
+
+	printf("Done.\n");
 	munmap(mem, f.smem_len);
 	close(fd);
 	return 0;
-}
-
-static void usage(const char *argv0)
-{
-	fprintf(stderr,
-		"usage: %s info\n"
-		"       %s fill <red|green|blue|white|black|r,g,b>\n"
-		"       %s bars\n"
-		"       %s gradient\n",
-		argv0, argv0, argv0, argv0);
-}
-
-int main(int argc, char **argv)
-{
-	if (argc < 2) {
-		usage(argv[0]);
-		return 1;
-	}
-	if (strcmp(argv[1], "info") == 0)
-		return cmd_info();
-	if (strcmp(argv[1], "fill") == 0 && argc >= 3)
-		return cmd_fill(argv[2]);
-	if (strcmp(argv[1], "bars") == 0)
-		return cmd_bars();
-	if (strcmp(argv[1], "gradient") == 0)
-		return cmd_gradient();
-
-	usage(argv[0]);
-	return 1;
 }

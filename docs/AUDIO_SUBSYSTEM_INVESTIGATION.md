@@ -1809,3 +1809,35 @@ as a strong prior that more exist elsewhere in this binary (or others)
 and, critically, **verify the chosen landing point itself** by grepping
 for writes to every stack offset the trailing code touches, not just
 the one at the immediate crash site.
+
+## Superseded by CSTech-202511-IP17 rootfs (2026-07-16)
+
+The binary-patching approach above chased individual uninitialized-stack
+crashes one at a time in the Prado dump's `libSetting.so`. A newer
+MsnCoreApp build extracted from a CarSyncTech Toyota unit
+(`firmware_dumps/CarSyncTech Toyota/CSTech-202511-IP17/`, Nov 2025) was
+found to boot the UI cleanly on real hardware with none of the
+`sendSoundData()`/`initSoundParams()` crashes seen above — it appears to
+be a later vendor build where these defects were already fixed upstream.
+`build_bootable_sdcard.sh` now supports this rootfs (and its matching
+userdata) as an alternative to the Prado reconstructed one, via the
+`[p2] Use CarSyncTech CSTech-202511-IP17 rootfs` / `[p3] Use matching
+CarSyncTech CSTech-202511-IP17 userdata` toggles (`--cstech-rootfs`,
+`--cstech-userdata`). Both auto-extract from the checked-in
+`rootfs.tar.gz`/`userdata.tar.gz` into a local non-vboxsf directory under
+`~/Downloads/cstech-ip17-rootfs/` on first use, since the rootfs contains
+1133 symlinks that a VirtualBox shared folder silently drops.
+
+**libGAL.so fix is still required with this rootfs.** Initial `readelf
+-d` inspection of the locally-extracted `libGAL.so` showed a complete,
+structurally valid 29-entry `.dynamic` section, leading to an incorrect
+assumption that `fix_libgal_dynamic_section` could be auto-disabled for
+this rootfs. Live hardware testing contradicted this — MsnCoreApp still
+segfaults on this rootfs without the fix applied. The auto-disable logic
+was removed; the toggle now stays independently available (default ON)
+for both rootfs sources. Lesson: static analysis of a library file in
+isolation (readelf, objdump) doesn't rule out a runtime defect that only
+manifests through the actual dynamic linker/loader path — same category
+of mistake as the "next instruction after crash" heuristic above, just
+one level up (verifying a *fix's applicability* by inspection instead of
+verifying a *patch target* by inspection).

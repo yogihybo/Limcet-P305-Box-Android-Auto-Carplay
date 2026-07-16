@@ -1,10 +1,107 @@
 # Display Subsystem
 
 **Status:** Reference
-**Last Updated:** 2026-07-15
+**Last Updated:** 2026-07-16
 
 ## Overview
 Consolidated document containing: SCREEN.md, ARKDATA_VARIANTS.md, I2C_GPIO0_LCD_PIN_CONFLICT.md
+
+## Milestone: factory `LCDTest -qws` renders its test pattern on real hardware (2026-07-16)
+
+**First confirmed end-to-end working LCD test-pattern output on this
+reconstructed kernel.** Running the stock firmware's own `LCDTest`
+binary (`/usr/bin/LCDTest`, from the original Prado dump) with `-qws`
+on this project's reconstructed kernel/rootfs produced a visible test
+pattern on the real panel.
+
+This independently confirms the full display pipeline is genuinely
+working end-to-end on this reconstruction, not just individually-tested
+pieces: kernel `ark1668_lcdfb` driver → `/dev/fb0` → `mmap` →
+DirectFB's `fbdev` system module → Qt's DirectFB QWS screen driver
+(`libqdirectfbscreen.so`) → Qt QWS → the app's own paint/draw calls. All
+of LCD panel timing, pinmux, DMA-buffer addressing, and OSD1 layer
+enable (see `ark1668_lcdfb_set_par()`/`ark1668_lcdfb_pan_display()`)
+have to be correct simultaneously for this to render, so this is
+significantly stronger evidence than any prior individual signal (boot
+log probe messages, `lcd-test info` register dumps) — matching this
+project's own standing caution
+(`feedback_bootlog_evidence_weak`) that only an actual observed result,
+not a clean log line, counts as confirmation.
+
+**Traced what actually draws the pixels, for the record:**
+`LCDTest` itself is a plain Qt widget app (`QMainWindow`/`QPushButton`)
+with no `/dev/`, `ioctl`, or framebuffer symbols of its own — confirmed
+via `nm -D`/`strings` on the stripped binary. It delegates entirely to
+Qt's QWS backend. `/etc/directfbrc` (`system=fbdev`) confirms DirectFB
+uses the generic upstream `libdirectfb_fbdev.so` system module (plain
+`/dev/fb0` + `FBIOGET/PUT_VSCREENINFO` + `mmap`), not any vendor-custom
+low-level display code; the only vendor-specific userspace piece is
+`libdirectfb_gal.so`, which is a Vivante GPU 2D-acceleration backend
+(`galBlit`/`galFillRectangle`/`galStretchBlit`), not a panel-timing
+driver. **The real vendor-specific hardware-driving logic lives entirely
+in the kernel** (`ark1668_lcdfb.c`, already part of this project's own
+`linux-arkmicro` tree) — there is no separate userspace "secret sauce"
+left to reverse-engineer for basic panel output; `LCDTest` succeeding is
+really a confirmation of this project's own kernel driver work, not of
+anything in the stock userspace binary.
+
+## Open bug: this project's own `tools/lcd-test` still doesn't show anything
+
+Despite the `LCDTest -qws` success above proving the kernel `/dev/fb0`
+path genuinely works, this project's own minimal C diagnostic
+(`tools/lcd-test`, no Qt/DirectFB involved — raw `open`/`mmap`/`ioctl`
+on `/dev/fb0`) has **never** produced a visible result, even after the
+2026-07-14 panning/double-buffering fix (`open_fb()` now force-pans to
+`(0,0)` via `FBIOPAN_DISPLAY`).
+
+**Leading hypothesis, not yet live-tested:** `ark1668_lcdfb_set_par()`
+(`ark1668_lcdfb.c`) is what actually programs and **enables the OSD1
+display layer** (`ARK1668_LCDC_OSD1_CTL`, `1 <<
+ARK1668_LCDC_OSD1_EN_OFFSET`) — it's called once at probe time (before
+`register_framebuffer()`), so OSD1 should already be enabled by the
+time any userspace program runs. `lcd-test`'s `open_fb()` only ever
+calls `FBIOGET_VSCREENINFO` and, to fix the panning bug,
+`FBIOPAN_DISPLAY` — which maps to `.fb_pan_display`
+(`ark1668_lcdfb_pan_display()`, just repoints `OSD1_ADDR`), **never**
+`.fb_set_par` (`FBIOPUT_VSCREENINFO`, the one that touches the OSD1
+enable bit). Qt/DirectFB's mode-setting path does call
+`FBIOPUT_VSCREENINFO`. If OSD1 somehow isn't actually enabled at the
+point `lcd-test` runs (e.g. something later in boot re-disables it, or
+probe-time `set_par()` is failing/being skipped silently), `lcd-test`'s
+writes would land in the correct DMA buffer but never actually be
+scanned out — while anything that goes through `FBIOPUT_VSCREENINFO`
+first (like Qt/DirectFB) would incidentally re-trigger the OSD1-enable
+path and work. Not yet confirmed against real hardware.
+
+**Also worth checking first, simpler explanation:** `lcd-test`'s own
+README already documents that if `MsnCoreApp` (or any other QWS/
+DirectFB-owning process) is still running and actively repainting, it
+will simply redraw over whatever `lcd-test` just wrote within the next
+frame or two — a real, successful write that looks like nothing
+happened. Since `LCDTest -qws` likely required stopping whatever else
+owned the display first (only one QWS server can own `/dev/fb0` at a
+time), this precondition may not have been met on prior `lcd-test`
+attempts. Cheapest thing to rule out before chasing the OSD1 theory.
+
+**Fix applied (2026-07-16):** `tools/lcd-test/lcd-test.c`'s `open_fb()`
+now unconditionally calls `FBIOPUT_VSCREENINFO` (re-applying the mode
+it just read back via `FBIOGET_VSCREENINFO`, not changing anything)
+before the existing panning fix and `mmap`. Matches what DirectFB's
+`fbdev` module does that this tool previously never did. Rebuilt
+(`arm-linux-gnueabihf-gcc -static -O2`, stripped) — binary and README
+updated.
+
+**Next steps:**
+- [ ] Live-test on real hardware: `killall MsnCoreApp` first (rule out
+      the simpler "something else repainting over it" explanation too),
+      then `lcd-test fill red` — not yet independently re-confirmed
+      since this change.
+- [ ] If still invisible: the `FBIOPUT_VSCREENINFO` theory is refuted;
+      fall back to live register inspection of the OSD1 control
+      register itself (`ARK1668_LCDC_OSD1_CTL`, via `devmem` at the
+      LCDC's mapped base) immediately after a `lcd-test fill` to check
+      the enable bit directly, rather than inferring it from ioctl
+      behavior alone.
 
 
 

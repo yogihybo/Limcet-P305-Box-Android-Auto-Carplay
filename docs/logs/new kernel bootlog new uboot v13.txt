@@ -1,0 +1,1030 @@
+
+[bootusb] booting kernel+DTB+rootfs from USB stick (usb 0:1), root=/dev/sda2
+4838240 bytes read in 1658 ms (2.8 MiB/s)
+18855 bytes read in 39 ms (471.7 KiB/s)
+stopping USB..
+Kernel image @ 0x1000000 [ 0x000000 - 0x49d360 ]
+## Flattened Device Tree blob at 02000000
+   Booting using the fdt blob at 0x2000000
+   Loading Device Tree to 03de2000, end 03de99a6 ... OK
+Using machid 0x1068 from environment
+
+Starting kernel ...
+
+[    0.000000] Booting Linux on physical CPU 0x0
+[    0.000000] Linux version 4.19.192 (osboxes@osboxes) (gcc version 7.3.1 20180425 [linaro-7.3-2018.05 revision d29120a424ecfbc167ef90065c0eeb7f91977701] (Linaro GCC 7.3-2018.05)) #54 Fri Jul 17 09:25:27 AEST 2026
+[    0.000000] CPU: ARMv7 Processor [410fc051] revision 1 (ARMv7), cr=10c53c7d
+[    0.000000] CPU: PIPT / VIPT nonaliasing data cache, VIPT aliasing instruction cache
+[    0.000000] OF: fdt: Machine model: Limcet P305/P306 Dashboard Head Unit
+[    0.000000] bootconsole [earlycon0] enabled
+[    0.000000] Memory policy: Data cache writeback
+[    0.000000] cma: Reserved 64 MiB at 0x04000000
+[    0.000000] CPU: All CPU(s) started in SVC mode.
+[    0.000000] random: get_random_bytes called from start_kernel+0x9c/0x340 with crng_init=0
+[    0.000000] Built 1 zonelists, mobility grouping off.  Total pages: 45675
+[    0.000000] Kernel command line: root=/dev/sda2 console=ttyS0,115200n8 mem=180M earlyprintk=serial rootfstype=ext4 rootwait rw screen=0 user_debug=8
+[    0.000000] Dentry cache hash table entries: 32768 (order: 5, 131072 bytes)
+[    0.000000] Inode-cache hash table entries: 16384 (order: 4, 65536 bytes)
+[    0.000000] Memory: 105964K/184320K available (7168K kernel code, 218K rwdata, 1536K rodata, 1024K init, 167K bss, 12820K reserved, 65536K cma-reserved)
+[    0.000000] Virtual kernel memory layout:
+[    0.000000]     vector  : 0xffff0000 - 0xffff1000   (   4 kB)
+[    0.000000]     fixmap  : 0xffc00000 - 0xfff00000   (3072 kB)
+[    0.000000]     vmalloc : 0xcb800000 - 0xff800000   ( 832 MB)
+[    0.000000]     lowmem  : 0xc0000000 - 0xcb400000   ( 180 MB)
+[    0.000000]     modules : 0xbf000000 - 0xc0000000   (  16 MB)
+[    0.000000]       .text : 0x(ptrval) - 0x(ptrval)   (8160 kB)
+[    0.000000]       .init : 0x(ptrval) - 0x(ptrval)   (1024 kB)
+[    0.000000]       .data : 0x(ptrval) - 0x(ptrval)   ( 219 kB)
+[    0.000000]        .bss : 0x(ptrval) - 0x(ptrval)   ( 168 kB)
+[    0.000000] NR_IRQS: 16, nr_irqs: 16, preallocated irqs: 16
+[    0.000000] VIC @(ptrval): id 0x00041192, vendor 0x41
+[    0.000000] VIC @(ptrval): id 0x00041192, vendor 0x41
+[    0.000000] L2C-310 dynamic clock gating enabled, standby mode enabled
+[    0.000000] L2C-310 cache controller enabled, 8 ways, 128 kB
+[    0.000000] L2C-310: CACHE_ID 0x410060c9, AUX_CTRL 0x06020000
+[    0.000000] clk cpupll rate 690000000.
+[    0.000000] clk syspll rate 324000000.
+[    0.000000] clk audpll rate 426000000.
+[    0.000000] clk ddrclk rate 426000000.
+[    0.000000] clk cpuclk rate 690000000.
+[    0.000000] clk axiclk rate 324000000.
+[    0.000000] clk ahbclk rate 162000000.
+[    0.000000] clk pclk rate 81000000.
+[    0.000000] clk uart4clk rate 24000000.
+[    0.000000] clk uart5clk rate 24000000.
+[    0.000000] clk gpuclk rate 324000000.
+[    0.000000] clk gpiodebounceclk rate 24000000.
+[    0.000000] clk lcdclk rate 324000000.
+[    0.000000] clk mfcclk rate 162000000.
+[    0.000000] clk rtc-clk rate 32768.
+[    0.000000] clk spi-clk rate 162000000.
+[    0.000000] clk i2s-dac-clk rate 240000000.
+[    0.000000] clk i2s-adc-clk rate 240000000.
+[    0.000000] clocksource: arkmicro,ark-timer: mask: 0xffffff max_cycles: 0xffffff, max_idle_ns: 92171119 ns
+[    0.000012] sched_clock: 24 bits at 81MHz, resolution 12ns, wraps every 103563053ns
+[    0.008183] Console: colour dummy device 80x30
+[    0.012743] Calibrating delay loop... 457.11 BogoMIPS (lpj=2285568)
+[    0.076588] pid_max: default: 32768 minimum: 301
+[    0.081577] Mount-cache hash table entries: 1024 (order: 0, 4096 bytes)
+[    0.088242] Mountpoint-cache hash table entries: 1024 (order: 0, 4096 bytes)
+[    0.096406] CPU: Testing write buffer coherency: ok
+[    0.102414] Setting up static identity map for 0x100000 - 0x10003c
+[    0.109774] devtmpfs: initialized
+[    0.120680] VFP support v0.3: implementor 41 architecture 2 part 30 variant 5 rev 1
+[    0.128619] clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 19112604462750000 ns
+[    0.138572] futex hash table entries: 256 (order: -1, 3072 bytes)
+[    0.151529] pinctrl core: initialized pinctrl subsystem
+[    0.157517] NET: Registered protocol family 16
+[    0.179955] DMA: preallocated 256 KiB pool for atomic coherent allocations
+[    0.191130] Serial: Arkmicro UART driver
+[    0.196961] pinctrl-ark e4900000.pinctrl: initialized ark pinctrl driver
+[    0.214963] e4200000.uart: ttyS0 at MMIO 0xe4200000 (irq = 36, base_baud = 1500000) is a ARK
+[    0.223582] console [ttyS0] enabled
+[    0.223582] console [ttyS0] enabled
+[    0.230606] bootconsole [earlycon0] disabled
+[    0.230606] bootconsole [earlycon0] disabled
+[    0.240170] e8000000.uart: ttyS2 at MMIO 0xe8000000 (irq = 60, base_baud = 1500000) is a ARK
+[    0.249530] e8100000.uart: ttyS3 at MMIO 0xe8100000 (irq = 61, base_baud = 1500000) is a ARK
+[    0.258950] e4f00000.serial: ttyHS0 at MMIO 0xe4f00000 (irq = 38, base_baud = 0) is a ARK HS UART
+[    0.268771] e4800000.serial: ttyHS1 at MMIO 0xe4800000 (irq = 44, base_baud = 0) is a ARK HS UART
+[    0.283336] enable get mcu data
+[    0.300372] clk lcdclk rate 32400000.
+[    0.305643] ark1668_lcdfb e0500000.lcd: 16384KiB frame buffer at 0f000000 (mapped at (ptrval))
+[    0.314707] ark1668_lcdfb e0500000.lcd: fb0: Atmel LCDC at 0xe0500000 (mapped at (ptrval)), irq 25
+[    0.325911] dw_dmac e0000000.dma: DesignWare DMA Controller, 8 channels
+[    0.333388] SCSI subsystem initialized
+[    0.337490] usbcore: registered new interface driver usbfs
+[    0.343181] usbcore: registered new interface driver hub
+[    0.348592] usbcore: registered new device driver usb
+[    0.355426] gpio-3 (i2c-gpio-0): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+[    0.364980] gpio-2 (i2c-gpio-0): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+[    0.374800] i2c i2c-1: Not I2C compliant: can't read SCL
+[    0.380121] i2c i2c-1: Bus may be unreliable
+[    0.384444] i2c-gpio i2c-gpio-0: using lines 3 (SDA) and 2 (SCL, no clock stretching)
+[    0.392482] gpio-9 (i2c-gpio-1): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+[    0.401984] gpio-121 (i2c-gpio-1): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+[    0.411826] i2c i2c-2: Not I2C compliant: can't read SCL
+[    0.417143] i2c i2c-2: Bus may be unreliable
+[    0.421458] i2c-gpio i2c-gpio-1: using lines 9 (SDA) and 121 (SCL, no clock stretching)
+[    0.429563] media: Linux media interface: v0.10
+[    0.434221] videodev: Linux video capture interface: v2.00
+[    0.440061] Advanced Linux Sound Architecture Driver Initialized.
+[    0.446947] Bluetooth: Core ver 2.22
+[    0.450703] NET: Registered protocol family 31
+[    0.455153] Bluetooth: HCI device and connection manager initialized
+[    0.461565] Bluetooth: HCI socket layer initialized
+[    0.466450] Bluetooth: L2CAP socket layer initialized
+[    0.471583] Bluetooth: SCO socket layer initialized
+[    0.477426] clocksource: Switched to clocksource arkmicro,ark-timer
+[    0.484834] ark-vdec e0900000.vdec: VDEC controller at 0x(ptrval), irq = 40, misc_minor = 63
+[    0.493357] ark-vdec e0900000.vdec: Product ID: 0x6731 (revision 2.57.8)
+[    0.513007] NET: Registered protocol family 2
+[    0.518498] tcp_listen_portaddr_hash hash table entries: 512 (order: 0, 4096 bytes)
+[    0.526207] TCP established hash table entries: 2048 (order: 1, 8192 bytes)
+[    0.533304] TCP bind hash table entries: 2048 (order: 1, 8192 bytes)
+[    0.539738] TCP: Hash tables configured (established 2048 bind 2048)
+[    0.546263] UDP hash table entries: 256 (order: 0, 4096 bytes)
+[    0.552176] UDP-Lite hash table entries: 256 (order: 0, 4096 bytes)
+[    0.558803] NET: Registered protocol family 1
+[    0.565315] Initialise system trusted keyrings
+[    0.570159] workingset: timestamp_bits=14 max_order=16 bucket_order=2
+[    0.577520] ntfs: driver 2.1.32 [Flags: R/W DEBUG].
+[    0.582586] jffs2: version 2.2. (NAND) © 2001-2006 Red Hat, Inc.
+[    0.589090] fuse init (API version 7.27)
+[    0.601588] Key type asymmetric registered
+[    0.605705] Asymmetric key parser 'x509' registered
+[    0.610674] io scheduler noop registered (default)
+[    0.618445] rn6752: dvr_rn6752_probe:init done
+[    0.628926] ark_display: registered /dev/ark_display
+[    0.634787] nand: device found, Manufacturer ID: 0x98, Chip ID: 0xf1
+[    0.641240] nand: Toshiba NAND 128MiB 3,3V 8-bit
+[    0.645862] nand: 128 MiB, SLC, erase size: 128 KiB, page size: 2048, OOB size: 64
+[    0.653503] nand: WARNING: ark-nand: the ECC used on your system is too weak compared to the one required by the NAND chip
+[    0.664881] Bad block table found at page 65472, version 0x01
+[    0.670842] Bad block table found at page 65408, version 0x01
+[    0.676755] nand_read_bbt: 417 bad block(s) found
+[    0.683245] usbcore: registered new interface driver cdc_ether
+[    0.689259] usbcore: registered new interface driver cdc_subset
+[    0.695257] usbcore: registered new interface driver zaurus
+[    0.700980] usbcore: registered new interface driver ipheth
+[    0.706637] usbcore: registered new interface driver cdc_ncm
+[    0.712784] usbcore: registered new interface driver uas
+[    0.718294] usbcore: registered new interface driver usb-storage
+[    0.747609] musb-hdrc musb-hdrc.0: MUSB HDRC host driver
+[    0.753018] musb-hdrc musb-hdrc.0: new USB bus registered, assigned bus number 1
+[    0.761879] hub 1-0:1.0: USB hub found
+[    0.765718] hub 1-0:1.0: 1 port detected
+[    0.770417] musb-hdrc musb-hdrc.0: +++Switch OTG 76  126===+++
+[    1.087639] musb-ark e0400000.usb: Failed to get irq.
+[    1.092738] musb-ark: probe of e0400000.usb failed with error -22
+[    1.119613] using random self ethernet address
+[    1.124078] using random host ethernet address
+[    1.129379] usb0: HOST MAC 56:76:16:49:f1:2d
+[    1.133764] usb0: MAC e2:bc:20:40:18:60
+[    1.137736] g_ncm gadget: NCM Gadget
+[    1.141319] g_ncm gadget: g_ncm ready
+[    1.258123] Goodix-TS 1-005d: i2c test failed attempt 1: -6
+[    1.298106] Goodix-TS 1-005d: i2c test failed attempt 2: -6
+[    1.337456] Goodix-TS 1-005d: I2C communication failure: -6
+[    1.343611] ark1680_ts e4500000.tsc: probe: ADC/TSC MEM resource [mem 0xe4500000-0xe450003f]
+[    1.352191] ark1680_ts e4500000.tsc: probe: irq=20
+[    1.357036] ark1680_ts e4500000.tsc: probe: mapped syscon/pinmux block at phys 0xe4900000, size 0x200
+[    1.366358] ark1680_ts e4500000.tsc: setup[initial           ]: ADC[en=0x00000000 cfg=0x0000ffff] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x00210016 pmux0=0xc5640003 pmux1=0x000623b8]
+[    1.383284] ark1680_ts e4500000.tsc: setup[after clkdiv      ]: ADC[en=0x00000000 cfg=0x0000ffff] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5640003 pmux1=0x000623b8]
+[    1.400201] ark1680_ts e4500000.tsc: setup[after clken OR    ]: ADC[en=0x00000000 cfg=0x0000ffff] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5640003 pmux1=0x000623b8]
+[    1.417108] ark1680_ts e4500000.tsc: setup[after padcfg OR   ]: ADC[en=0x00000000 cfg=0x0000ffff] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5640003 pmux1=0x000623b8]
+[    1.434014] ark1680_ts e4500000.tsc: setup[after pinmux0 clr ]: ADC[en=0x00000000 cfg=0x0000ffff] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5240003 pmux1=0x000623b8]
+[    1.450920] ark1680_ts e4500000.tsc: setup[after ch_enable#1 ]: ADC[en=0x00000000 cfg=0x0000ffff] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5240003 pmux1=0x000623b8]
+[    1.467831] ark1680_ts e4500000.tsc: setup[after cfg/irqclr  ]: ADC[en=0x00000000 cfg=0x00000007] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5240003 pmux1=0x000623b8]
+[    1.484733] ark1680_ts e4500000.tsc: setup[after dbcnt/detint]: ADC[en=0x00000000 cfg=0x00000007] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5240003 pmux1=0x000623b8]
+[    1.501638] ark1680_ts e4500000.tsc: setup[after pinmux1 clr ]: ADC[en=0x00000000 cfg=0x00000007] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5240003 pmux1=0x000623b8]
+[    1.518544] ark1680_ts e4500000.tsc: setup[after ch_enable#2 ]: ADC[en=0x00000f00 cfg=0x00000007] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5240003 pmux1=0x000623b8]
+[    1.535446] ark1680_ts e4500000.tsc: setup[final             ]: ADC[en=0x00000f04 cfg=0x00000007] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5240003 pmux1=0x000623b8]
+[    1.553009] input: ark1680-ts as /devices/platform/e4500000.tsc/input/input0
+[    1.560560] ark1680_ts e4500000.tsc: ARK1680 resistive touchscreen registered, irq=20, debug=0 (echo 1 > /sys/module/ark1680_ts/parameters/debug to trace samples)
+[    1.575291] i2c /dev entries driver
+[    1.580379] ark_wdt e4b00000.watchdog: initialized (timeout = 15 sec, nowayout = 0)
+[    1.588317] Bluetooth: HCI UART driver ver 2.3
+[    1.593577] dw_mmc ec400000.mmc: Using PIO mode.
+[    1.598269] dw_mmc ec400000.mmc: Version ID is 220a
+[    1.603202] dw_mmc ec400000.mmc: DW MMC controller at irq 42,32 bit host data width,32 deep fifo
+[    1.624946] mmc_host mmc0: Bus speed (slot 0) = 24000000Hz (slot req 400000Hz, actual 400000HZ div = 30)
+[    1.647526] dw_mmc ec800000.mmc: Using external DMA controller.
+[    1.653535] dw_mmc ec800000.mmc: Version ID is 220a
+[    1.658507] dw_mmc ec800000.mmc: DW MMC controller at irq 54,32 bit host data width,32 deep fifo
+[    1.667459] mmc_host mmc1: card is non-removable.
+[    1.682750] mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 400000Hz, actual 400000HZ div = 30)
+[    1.692279] random: fast init done
+[    1.709315] usbcore: registered new interface driver snd-usb-audio
+[    1.716909] ark1668-i2s e4000000.i2s-dac: mem resource at 0xe4000000
+[    1.723382] ark1668-i2s e4000000.i2s-dac: releasing soft reset for I2S1 (DAC/internal I2S) at 0xe4000000
+[    1.732934] ark1668-i2s e4000000.i2s-dac: enabled internal I2S1 clock-gate bit at 0xe4a00000+0x1f0
+[    1.742523] ark1668-i2s e8200000.i2s-adc: mem resource at 0xe8200000
+[    1.748981] ark1668-i2s e8200000.i2s-adc: releasing soft reset for I2S2 (ADC/external I2S) at 0xe8200000
+[    1.758525] ark1668-i2s e8200000.i2s-adc: enabled external I2S2/CS4334 clock-gate bits at 0xe4a00000
+[    1.772699] drv_bd37033 2-0040: bd37033_write_bytes: i2c_transfer failed
+[    1.783056] drv_bd37033 2-0040: bd37033_write_byte: i2c_transfer timeout
+[    1.793410] drv_bd37033 2-0040: bd37033_write_byte: i2c_transfer timeout
+[    1.802178] mmc_host mmc0: Bus speed (slot 0) = 24000000Hz (slot req 25000000Hz, actual 24000000HZ div = 0)
+[    1.811991] mmc0: new SD card at address e126
+[    1.818551] drv_bd37033 2-0040: bd37033_write_byte: i2c_transfer timeout
+[    1.828051] mmcblk0: mmc0:e126 SU01G 969 MiB
+[    1.833858] drv_bd37033 2-0040: bd37033_write_byte: i2c_transfer timeout
+[    1.840890] mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 300000Hz, actual 300000HZ div = 40)
+[    1.854038]  mmcblk0: p1 p2 p3
+[    1.859775] drv_bd37033 2-0040: bd37033_write_byte: i2c_transfer timeout
+[    1.870006] drv_bd37033 2-0040: bd37033_write_byte: i2c_transfer timeout
+[    1.880114] drv_bd37033 2-0040: bd37033_write_byte: i2c_transfer timeout
+[    1.890220] drv_bd37033 2-0040: bd37033_write_byte: i2c_transfer timeout
+[    1.900277] drv_bd37033 2-0040: bd37033_write_byte: i2c_transfer timeout
+[    1.910372] drv_bd37033 2-0040: bd37033_write_byte: i2c_transfer timeout
+[    1.920406] drv_bd37033 2-0040: bd37033_write_byte: i2c_transfer timeout
+[    1.927968] NET: Registered protocol family 10
+[    1.933275] mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 200000Hz, actual 200000HZ div = 60)
+[    1.943768] Segment Routing with IPv6
+[    1.947640] sit: IPv6, IPv4 and MPLS over IPv4 tunneling driver
+[    1.954636] NET: Registered protocol family 17
+[    1.960528] Loading compiled-in X.509 certificates
+[    1.971614] asoc-simple-card sound: e4000000.sddac <-> e4000000.i2s-dac mapping ok
+[    1.981029] asoc-simple-card sound: ahb:sdadc@0 <-> e8200000.i2s-adc mapping ok
+[    1.990637] cfg80211: Loading compiled-in X.509 certificates for regulatory database
+[    2.003730] cfg80211: Loaded X.509 cert 'sforshee: 00b28ddf47aef9cea7'
+[    2.010402] ALSA device list:
+[    2.013376]   #0: ARK-SDDAC
+[    2.016526] platform regulatory.0: Direct firmware load for regulatory.db failed with error -2
+[    2.025256] cfg80211: failed to load regulatory.db
+[    2.030410] Waiting for root device /dev/sda2...
+[    2.057491] mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 100000Hz, actual 100000HZ div = 120)
+[    5.727500] usb usb1-port1: Cannot enable. Maybe the USB cable is bad?
+[    8.797440] [musb] musb_reset_timer_handler: reset timer fired
+[    8.803303] [musb] musb_recovery_usb_proc: reset otg
+[    8.808335] musb-hdrc musb-hdrc.0: +Switch peripheral 76  126===
+[    9.837460] musb-hdrc musb-hdrc.0: +++Switch OTG 76  126===+++
+[   10.157509] usb usb1-port1: Cannot enable. Maybe the USB cable is bad?
+[   10.164134] usb usb1-port1: attempt power cycle
+[   13.197439] [musb] musb_reset_timer_handler: reset timer fired
+[   13.203312] [musb] musb_recovery_usb_proc: reset otg
+[   13.208342] musb-hdrc musb-hdrc.0: +Switch peripheral 76  126===
+[   14.237464] musb-hdrc musb-hdrc.0: +++Switch OTG 76  126===+++
+[   14.847523] usb usb1-port1: Cannot enable. Maybe the USB cable is bad?
+[   15.217464] usb 1-1: new high-speed USB device number 5 using musb-hdrc
+[   15.249312] usb-storage 1-1:1.0: USB Mass Storage device detected
+[   15.256355] scsi host0: usb-storage 1-1:1.0
+[   16.318292] scsi 0:0:0:0: Direct-Access     SanDisk  Cruzer Blade     8.02 PQ: 0 ANSI: 0 CCS
+[   16.328513] sd 0:0:0:0: Attached scsi generic sg0 type 0
+[   16.334693] sd 0:0:0:0: [sda] 7856127 512-byte logical blocks: (4.02 GB/3.75 GiB)
+[   16.342687] sd 0:0:0:0: [sda] Write Protect is off
+[   16.347963] sd 0:0:0:0: [sda] No Caching mode page found
+[   16.353291] sd 0:0:0:0: [sda] Assuming drive cache: write through
+[   16.365907]  sda: sda1 sda2 sda3
+[   16.372514] sd 0:0:0:0: [sda] Attached SCSI removable disk
+[   16.400254] EXT4-fs (sda2): mounted filesystem with ordered data mode. Opts: (null)
+[   16.408086] VFS: Mounted root (ext4 filesystem) on device 8:2.
+[   16.432275] devtmpfs: mounted
+[   16.437648] Freeing unused kernel memory: 1024K
+[   16.442344] Run /sbin/init as init process
+mtd8: /nanddata/bootlogo
+mtd9: /nanddata/bootanimation
+mtd10: /nanddata/reversingtrack
+mtd11: /nanddata/unicode
+[   17.151894] random: crng init done
+[   17.173285] EXT4-fs (sda3): mounted filesystem with ordered data mode. Opts: (null)
+userdata: ext4 (/dev/sda3)
+modprobe: module 'galcore' not found
+[   17.917507] [musb] musb_reset_timer_handler: reset timer fired
+[   17.949537] usbcore: registered new interface driver rtl8821cu
+[   17.955568] [musb] musb_recovery_usb_proc: port already enabled, skipping disruptive VBUS reset
+
+=== Diagnostic tools ===
+  i2c-scan /dev/i2c-0 /dev/i2c-1 ...   - scan I2C buses for ACKing devices
+  i2c-dump /dev/i2c-N slave_addr [num] - dump registers of an I2C device
+  i2c-write /dev/i2c-N addr reg val    - raw single-register i2c write (bypasses kernel client)
+  ark-ts-test regs                      - dump ARK1680 touch ADC/syscon registers
+  ark-ts-test events /dev/input/eventN  - watch touch evdev events
+  lcd-test                             - print fb/display info, then cycle through solid fills, bars, and gradient
+  strace -f -o /data/x.log <cmd>       - trace syscalls (e.g. strace -f start_msn)
+  nano <file>                          - edit a file (e.g. nano /msnprofile/MsnProductInfo.ini)
+  less <file>                          - page through a file/log (e.g. dmesg | less)
+  htop                                 - interactive process/CPU/memory viewer
+  tmux new -s <name>                   - start a session that survives a dropped connection
+  gdbserver :2345 --attach <pid>       - live remote debugging from a host gdb, see tools/gdbserver/README.md
+  touch-selftest.sh                    - automated touch pass/fail (needs a real touch)
+  uart-test.sh                         - passive listen on MCU (ttyHS0) + MSNEry (ttyS2) links
+  audio-test.sh [file.wav]             - sound card + BD37033 bus/mixer check
+  bt-test.sh                           - GPIO91/ttyHS1/blueware check
+  usb-test.sh                          - USB regression check vs known-good baseline
+  mmc-test.sh                          - read-only MMC/SD check
+  mcu-handshake                        - manual MCU handshake daemon to enable touch panel
+  dmesg                                - now aliased to /usr/bin/dmesg --color=always (busybox lacks --color)
+=========================
+
+/etc/wifi_client.sh: line 31: tee: not found
+/etc/wifi_client.sh: line 31: tee: not found
+/ #
+/ # start_msn
+Setting up environment for MsnCoreApp...
+Starting MsnCoreApp (Software Framebuffer)...
+QWS_ARK_TOUCH_DEVICE undefined, touch input disabled
+[   85.305759] ark_display: ARKDISP_GET_SCREEN_INFO -> screen_id=0 800x480 120x72mm
+ark screen type: 0
+display size: QSize(800, 480)  src size: QSize(120, 72)
+set gpio: 35  value: 0  ret: 0
+Load App Plugin 12 "/usr/lib/libCarReversing.so"
+run thread: 0xb4785440
+hwclock: can't open '/dev/misc/rtc': No such file or directory
+SetTime: "2020-12-03 09:09:30" Ret: 256
+rm: can't remove '/tmp/app-*.bmp': No such file or directory
+Load App Plugin 10 "/usr/lib/libLauncher-Box.so"
+MsnMainWindow::setRealVisible LauncherWindow(0x142608) true
+DiskDeviceWatcher::startWatcher
+Start Load Driver
+Load App Plugin 8 "/usr/lib/libSetting.so"
+Open backlight pw[   85.791371] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+m : false
+[   85.817670] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   85.837722] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   85.858591] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   85.875692] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   85.897627] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=1 hue=0 saturation=128 brightness=128 contrast=128
+[   85.907388] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=1 hue=0 saturation=128 brightness=128 contrast=128
+[   85.937684] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=2 hue=0 saturation=128 brightness=128 contrast=128
+[   85.957602] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=2 hue=0 saturation=128 brightness=128 contrast=128
+[   85.977661] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=3 hue=0 saturation=128 brightness=128 contrast=128
+[   85.995939] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=3 hue=0 saturation=128 brightness=128 contrast=128
+[   86.017664] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=4 hue=0 saturation=128 brightness=128 contrast=128
+[   86.037614] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=4 hue=0 saturation=128 brightness=128 contrast=128
+[   86.057882] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   86.077605] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   86.097683] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=1 hue=0 saturation=128 brightness=128 contrast=128
+[   86.116171] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=1 hue=0 saturation=128 brightness=128 contrast=128
+[   86.133613] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=2 hue=0 saturation=128 brightness=128 contrast=128
+[   86.145433] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=2 hue=0 saturation=128 brightness=128 contrast=128
+[   86.164215] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=3 hue=0 saturation=128 brightness=128 contrast=128
+[   86.183741] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=3 hue=0 saturation=128 brightness=128 contrast=128
+[   86.204366] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=4 hue=0 saturation=128 brightness=128 contrast=128
+[   86.216180] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=4 hue=0 saturation=128 brightness=128 contrast=128
+[   86.235185] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   86.253601] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=0 hue=0 saturation=64 brightness=128 contrast=128
+[   86.276717] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=1 hue=0 saturation=128 brightness=128 contrast=128
+[   86.296015] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=1 hue=0 saturation=64 brightness=128 contrast=128
+[   86.315228] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=2 hue=0 saturation=128 brightness=128 contrast=128
+[   86.354322] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=2 hue=0 saturation=64 brightness=128 contrast=128
+[   86.373893] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=3 hue=0 saturation=128 brightness=128 contrast=128
+[   86.397573] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=3 hue=0 saturation=64 brightness=128 contrast=128
+[   86.407379] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=4 hue=0 saturation=128 brightness=128 contrast=128
+[   86.437670] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=4 hue=0 saturation=64 brightness=128 contrast=128
+set gpio: 34  value: 0  ret: 0
+Open I2C Device: 2 "80"  FD: -1
+Sound_BD37033::muteSpeakerAtts false true
+SoundAdapter Create Success, ICType: 3
+Load App Plugin 403 "/usr/lib/libMsnSound.so"
+set gpio: 34  value: 1  ret: 0
+Blance: 32 32 32 32
+set subwoofer value 8 134
+Use Default NavKey Map, Key Channel:0x10!
+Read CtrlKeyMap: "10" Size: 22
+Use Default KnobMap: "16"
+Use Default KnobMap: "17"
+McuAdapter: MCUAd[   86.778728] ark-hsuart e4f00000.serial: no TX platform data
+apter_BoxP300 6
+Open MCU Serial Port  "[   86.787891] ark-uart e8000000.uart: no TX platform data
+/dev/ttyHS0"  Ret: true "No such file or directory"
+
+start serialPortProcessProc
+
+Open MCU Serial Port  "/dev/ttyS2"  Ret: true "No such file or directory"
+Load App Plugin 401 "/usr/lib/libMcuCenter.so"
+CanBusPlugin 0 0
+Load App Plugin 400 "/usr/lib/libCanBus.so"
+Load App Plugin 3 "/usr/lib/libBlueTooth.so"
+open touch monitor dev: /dev/input/event0 39
+MsnWindowManager::setVisible true true
+[   86.981841] ark_display: ARKDISP_GET_SCREEN_INFO -> screen_id=0 800x480 120x72mm
+
+get_shared_display_data May 29 2020-16:57:02.
+setTrackOSDVisible false
+CARBACK_IOCTL_STRACK_OSD ioctl failed! false
+set_osd1_visible true
+open dvr device /tmp/dev/dvr failure.
+QMetaObject::connectSlotsByName: No matching signal for on_pushButton_clicked()
+net.ipv4.udp_mem = 8192 10240 16384
+net.ipv4.udp_rmem_min = 1048576
+insmod: can't read '/tmp/wlan.ko': No such file or directory
+DVRSetDialog visibale change: false
+[   87.883394] pgd = 134b2838
+[   87.886167] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+Record Error Log: /data/minidump/err-8.log
+ifconfig: ioctl 0x8913 failed: No such device
+ifconfig: SIOCSIFADDR: No such device
+/etc/hostapd.sh: line 23: can't create /proc/sys/net/ipv6/conf/wlan0/disable_ipv6: nonexistent directory
+/etc/hostapd.sh: line 24: can't create /proc/sys/net/ipv6/conf/wlan1/disable_ipv6: nonexistent directory
+udhcpd: started, v1.25.0
+udhcpd: is interface wlan0 up and configured?: No such device
+AppVer:V3.7.2.1203
+SystemVer:Limcet_
+HardwareInfos:02-0006-06-00-00-03-00-00
+ErrorCode:11
+CallStack:
+/usr/lib/libMsnCommons.so.1(+0x54678)[0xb6c96678]
+/lib/libc.so.6(__default_sa_restorer+0x0)[0xb5b18710]
+/usr/lib/libMsnCommons.so.1(_ZN13ProtocolUtils10writeDatasERK10QByteArray+0x1c)[0xb6c981e0]
+/usr/lib/libMcuCenter.so(_ZN18MCUAdapter_BoxP3008onInitedEv+0x48)[0xb34aff98]
+/usr/lib/libMcuCenter.so(_ZN10MCUAdapter10timerEventEP11QTimerEvent+0x24)[0xb34a0d0c]
+/usr/local/Qt4.7.4/lib/libQtCore.so.4(_ZN7QObject5eventEP6QEvent+0x180)[0xb5f24014]
+/usr/local/Qt4.7.4/lib/libQtGui.so.4(_ZN19QApplicationPrivate13notify_helperEP7QObjectP6QEvent+0x9c)[0xb62ec324]
+/usr/local/Qt4.7.4/lib/libQtGui.so.4(_ZN12QApplication6notifyEP7QObjectP6QEvent+0x470)[0xb62f285c]
+MsnCoreApp(_ZN10MsnCoreApp6notifyEP7QObjectP6QEvent+0xe0)[0x3475c]
+/usr/local/Qt4.7.4/lib/libQtCore.so.4(_ZN16QCoreApplication14notifyInternalEP7QObjectP6QEvent+0x74)[0xb5f0ce44]
+/usr/local/Qt4.7.4/lib/libQtCore.so.4(+0x17637c)[0xb5f3b37c]
+/usr/local/Qt4.7.4/lib/libQtCore.so.4(_ZN20QEventDispatcherUNIX13processEventsE6QFlagsIN10QEventLoop17ProcessEventsFlagEE+0x104)[0xb5f3bca0]
+/usr/local/Qt4.7.4/lib/libQtGui.so.4(+0x1cd680)[0xb6350680]
+/usr/local/Qt4.7.4/lib/libQtCore.so.4(_ZN16QCoreApplication13processEventsE6QFlagsIN10QEventLoop17ProcessEventsFlagEE+0x40)[0xb5f105b0]
+MsnCoreApp(main+0x178)[0x22e44]
+/lib/libc.so.6(__libc_start_main+0x110)[0xb5b03174]
+[    0.000000] Booting Linux on physical CPU 0x0
+[    0.000000] Linux version 4.19.192 (osboxes@osboxes) (gcc version 7.3.1 20180425 [linaro-7.3-2018.05 revision d29120a424ecfbc167ef90065c0eeb7f91977701] (Linaro GCC 7.3-2018.05)) #54 Fri Jul 17 09:25:27 AEST 2026
+[    0.000000] CPU: ARMv7 Processor [410fc051] revision 1 (ARMv7), cr=10c53c7d
+[    0.000000] CPU: PIPT / VIPT nonaliasing data cache, VIPT aliasing instruction cache
+[    0.000000] OF: fdt: Machine model: Limcet P305/P306 Dashboard Head Unit
+[    0.000000] bootconsole [earlycon0] enabled
+[    0.000000] Memory policy: Data cache writeback
+[    0.000000] cma: Reserved 64 MiB at 0x04000000
+[    0.000000] On node 0 totalpages: 46080
+[    0.000000]   Normal zone: 405 pages used for memmap
+[    0.000000]   Normal zone: 0 pages reserved
+[    0.000000]   Normal zone: 46080 pages, LIFO batch:15
+[    0.000000] CPU: All CPU(s) started in SVC mode.
+[    0.000000] random: get_random_bytes called from start_kernel+0x9c/0x340 with crng_init=0
+[    0.000000] pcpu-alloc: s0 r0 d32768 u32768 alloc=1*32768
+[    0.000000] pcpu-alloc: [0] 0
+[    0.000000] Built 1 zonelists, mobility grouping off.  Total pages: 45675
+[    0.000000] Kernel command line: root=/dev/sda2 console=ttyS0,115200n8 mem=180M earlyprintk=serial rootfstype=ext4 rootwait rw screen=0 user_debug=8
+[    0.000000] Dentry cache hash table entries: 32768 (order: 5, 131072 bytes)
+[    0.000000] Inode-cache hash table entries: 16384 (order: 4, 65536 bytes)
+[    0.000000] Memory: 105964K/184320K available (7168K kernel code, 218K rwdata, 1536K rodata, 1024K init, 167K bss, 12820K reserved, 65536K cma-reserved)
+[    0.000000] Virtual kernel memory layout:
+[    0.000000]     vector  : 0xffff0000 - 0xffff1000   (   4 kB)
+[    0.000000]     fixmap  : 0xffc00000 - 0xfff00000   (3072 kB)
+[    0.000000]     vmalloc : 0xcb800000 - 0xff800000   ( 832 MB)
+[    0.000000]     lowmem  : 0xc0000000 - 0xcb400000   ( 180 MB)
+[    0.000000]     modules : 0xbf000000 - 0xc0000000   (  16 MB)
+[    0.000000]       .text : 0x(ptrval) - 0x(ptrval)   (8160 kB)
+[    0.000000]       .init : 0x(ptrval) - 0x(ptrval)   (1024 kB)
+[    0.000000]       .data : 0x(ptrval) - 0x(ptrval)   ( 219 kB)
+[    0.000000]        .bss : 0x(ptrval) - 0x(ptrval)   ( 168 kB)
+[    0.000000] NR_IRQS: 16, nr_irqs: 16, preallocated irqs: 16
+[    0.000000] VIC @(ptrval): id 0x00041192, vendor 0x41
+[    0.000000] VIC @(ptrval): id 0x00041192, vendor 0x41
+[    0.000000] L2C-310 dynamic clock gating enabled, standby mode enabled
+[    0.000000] L2C-310 cache controller enabled, 8 ways, 128 kB
+[    0.000000] L2C-310: CACHE_ID 0x410060c9, AUX_CTRL 0x06020000
+[    0.000000] clk cpupll rate 690000000.
+[    0.000000] clk syspll rate 324000000.
+[    0.000000] clk audpll rate 426000000.
+[    0.000000] clk ddrclk rate 426000000.
+[    0.000000] clk cpuclk rate 690000000.
+[    0.000000] clk axiclk rate 324000000.
+[    0.000000] clk ahbclk rate 162000000.
+[    0.000000] clk pclk rate 81000000.
+[    0.000000] clk uart4clk rate 24000000.
+[    0.000000] clk uart5clk rate 24000000.
+[    0.000000] clk gpuclk rate 324000000.
+[    0.000000] clk gpiodebounceclk rate 24000000.
+[    0.000000] clk lcdclk rate 324000000.
+[    0.000000] clk mfcclk rate 162000000.
+[    0.000000] clk rtc-clk rate 32768.
+[    0.000000] clk spi-clk rate 162000000.
+[    0.000000] clk i2s-dac-clk rate 240000000.
+[    0.000000] clk i2s-adc-clk rate 240000000.
+[    0.000000] clocksource: arkmicro,ark-timer: mask: 0xffffff max_cycles: 0xffffff, max_idle_ns: 92171119 ns
+[    0.000012] sched_clock: 24 bits at 81MHz, resolution 12ns, wraps every 103563053ns
+[    0.008183] Console: colour dummy device 80x30
+[    0.012743] Calibrating delay loop... 457.11 BogoMIPS (lpj=2285568)
+[    0.076588] pid_max: default: 32768 minimum: 301
+[    0.081577] Mount-cache hash table entries: 1024 (order: 0, 4096 bytes)
+[    0.088242] Mountpoint-cache hash table entries: 1024 (order: 0, 4096 bytes)
+[    0.096406] CPU: Testing write buffer coherency: ok
+[    0.102414] Setting up static identity map for 0x100000 - 0x10003c
+[    0.109774] devtmpfs: initialized
+[    0.120680] VFP support v0.3: implementor 41 architecture 2 part 30 variant 5 rev 1
+[    0.128619] clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 19112604462750000 ns
+[    0.138572] futex hash table entries: 256 (order: -1, 3072 bytes)
+[    0.151529] pinctrl core: initialized pinctrl subsystem
+[    0.157517] NET: Registered protocol family 16
+[    0.179955] DMA: preallocated 256 KiB pool for atomic coherent allocations
+[    0.191130] Serial: Arkmicro UART driver
+[    0.196961] pinctrl-ark e4900000.pinctrl: initialized ark pinctrl driver
+[    0.214963] e4200000.uart: ttyS0 at MMIO 0xe4200000 (irq = 36, base_baud = 1500000) is a ARK
+[    0.223582] console [ttyS0] enabled
+[    0.230606] bootconsole [earlycon0] disabled
+[    0.240170] e8000000.uart: ttyS2 at MMIO 0xe8000000 (irq = 60, base_baud = 1500000) is a ARK
+[    0.249530] e8100000.uart: ttyS3 at MMIO 0xe8100000 (irq = 61, base_baud = 1500000) is a ARK
+[    0.258950] e4f00000.serial: ttyHS0 at MMIO 0xe4f00000 (irq = 38, base_baud = 0) is a ARK HS UART
+[    0.268771] e4800000.serial: ttyHS1 at MMIO 0xe4800000 (irq = 44, base_baud = 0) is a ARK HS UART
+[    0.283336] enable get mcu data
+[    0.300372] clk lcdclk rate 32400000.
+[    0.305643] ark1668_lcdfb e0500000.lcd: 16384KiB frame buffer at 0f000000 (mapped at (ptrval))
+[    0.314707] ark1668_lcdfb e0500000.lcd: fb0: Atmel LCDC at 0xe0500000 (mapped at (ptrval)), irq 25
+[    0.325911] dw_dmac e0000000.dma: DesignWare DMA Controller, 8 channels
+[    0.333388] SCSI subsystem initialized
+[    0.337234] libata version 3.00 loaded.
+[    0.337490] usbcore: registered new interface driver usbfs
+[    0.343181] usbcore: registered new interface driver hub
+[    0.348592] usbcore: registered new device driver usb
+[    0.355426] gpio-3 (i2c-gpio-0): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+[    0.364980] gpio-2 (i2c-gpio-0): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+[    0.374800] i2c i2c-1: Not I2C compliant: can't read SCL
+[    0.380121] i2c i2c-1: Bus may be unreliable
+[    0.384444] i2c-gpio i2c-gpio-0: using lines 3 (SDA) and 2 (SCL, no clock stretching)
+[    0.392482] gpio-9 (i2c-gpio-1): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+[    0.401984] gpio-121 (i2c-gpio-1): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+[    0.411826] i2c i2c-2: Not I2C compliant: can't read SCL
+[    0.417143] i2c i2c-2: Bus may be unreliable
+[    0.421458] i2c-gpio i2c-gpio-1: using lines 9 (SDA) and 121 (SCL, no clock stretching)
+[    0.429563] media: Linux media interface: v0.10
+[    0.434221] videodev: Linux video capture interface: v2.00
+[    0.440061] Advanced Linux Sound Architecture Driver Initialized.
+[    0.446947] Bluetooth: Core ver 2.22
+[    0.450703] NET: Registered protocol family 31
+[    0.455153] Bluetooth: HCI device and connection manager initialized
+[    0.461565] Bluetooth: HCI socket layer initialized
+[    0.466450] Bluetooth: L2CAP socket layer initialized
+[    0.471583] Bluetooth: SCO socket layer initialized
+[    0.477426] clocksource: Switched to clocksource arkmicro,ark-timer
+[    0.484834] ark-vdec e0900000.vdec: VDEC controller at 0x(ptrval), irq = 40, misc_minor = 63
+[    0.493357] ark-vdec e0900000.vdec: Product ID: 0x6731 (revision 2.57.8)
+[    0.513007] NET: Registered protocol family 2
+[    0.518498] tcp_listen_portaddr_hash hash table entries: 512 (order: 0, 4096 bytes)
+[    0.526207] TCP established hash table entries: 2048 (order: 1, 8192 bytes)
+[    0.533304] TCP bind hash table entries: 2048 (order: 1, 8192 bytes)
+[    0.539738] TCP: Hash tables configured (established 2048 bind 2048)
+[    0.546263] UDP hash table entries: 256 (order: 0, 4096 bytes)
+[    0.552176] UDP-Lite hash table entries: 256 (order: 0, 4096 bytes)
+[    0.558803] NET: Registered protocol family 1
+[    0.565315] Initialise system trusted keyrings
+[    0.570159] workingset: timestamp_bits=14 max_order=16 bucket_order=2
+[    0.577520] ntfs: driver 2.1.32 [Flags: R/W DEBUG].
+[    0.582586] jffs2: version 2.2. (NAND) © 2001-2006 Red Hat, Inc.
+[    0.589090] fuse init (API version 7.27)
+[    0.601588] Key type asymmetric registered
+[    0.605705] Asymmetric key parser 'x509' registered
+[    0.610674] io scheduler noop registered (default)
+[    0.616793] memalloc-cls memalloc: allocator with major = 250
+[    0.618445] rn6752: dvr_rn6752_probe:init done
+[    0.628926] ark_display: registered /dev/ark_display
+[    0.634787] nand: device found, Manufacturer ID: 0x98, Chip ID: 0xf1
+[    0.641240] nand: Toshiba NAND 128MiB 3,3V 8-bit
+[    0.645862] nand: 128 MiB, SLC, erase size: 128 KiB, page size: 2048, OOB size: 64
+[    0.653503] nand: WARNING: ark-nand: the ECC used on your system is too weak compared to the one required by the NAND chip
+[    0.664881] Bad block table found at page 65472, version 0x01
+[    0.670842] Bad block table found at page 65408, version 0x01
+[    0.676755] nand_read_bbt: 417 bad block(s) found
+[    0.683245] usbcore: registered new interface driver cdc_ether
+[    0.689259] usbcore: registered new interface driver cdc_subset
+[    0.695257] usbcore: registered new interface driver zaurus
+[    0.700980] usbcore: registered new interface driver ipheth
+[    0.706637] usbcore: registered new interface driver cdc_ncm
+[    0.712784] usbcore: registered new interface driver uas
+[    0.718294] usbcore: registered new interface driver usb-storage
+[    0.747609] musb-hdrc musb-hdrc.0: MUSB HDRC host driver
+[    0.753018] musb-hdrc musb-hdrc.0: new USB bus registered, assigned bus number 1
+[    0.761879] hub 1-0:1.0: USB hub found
+[    0.765718] hub 1-0:1.0: 1 port detected
+[    0.770417] musb-hdrc musb-hdrc.0: +++Switch OTG 76  126===+++
+[    1.087382] musb_ark_probe succss
+[    1.087639] musb-ark e0400000.usb: Failed to get irq.
+[    1.092738] musb-ark: probe of e0400000.usb failed with error -22
+[    1.119613] using random self ethernet address
+[    1.124078] using random host ethernet address
+[    1.129379] usb0: HOST MAC 56:76:16:49:f1:2d
+[    1.133764] usb0: MAC e2:bc:20:40:18:60
+[    1.137736] g_ncm gadget: NCM Gadget
+[    1.141319] g_ncm gadget: g_ncm ready
+[    1.258123] Goodix-TS 1-005d: i2c test failed attempt 1: -6
+[    1.298106] Goodix-TS 1-005d: i2c test failed attempt 2: -6
+[    1.337456] Goodix-TS 1-005d: I2C communication failure: -6
+[    1.343611] ark1680_ts e4500000.tsc: probe: ADC/TSC MEM resource [mem 0xe4500000-0xe450003f]
+[    1.352191] ark1680_ts e4500000.tsc: probe: irq=20
+[    1.357036] ark1680_ts e4500000.tsc: probe: mapped syscon/pinmux block at phys 0xe4900000, size 0x200
+[    1.366358] ark1680_ts e4500000.tsc: setup[initial           ]: ADC[en=0x00000000 cfg=0x0000ffff] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x00210016 pmux0=0xc5640003 pmux1=0x000623b8]
+[    1.383284] ark1680_ts e4500000.tsc: setup[after clkdiv      ]: ADC[en=0x00000000 cfg=0x0000ffff] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5640003 pmux1=0x000623b8]
+[    1.400201] ark1680_ts e4500000.tsc: setup[after clken OR    ]: ADC[en=0x00000000 cfg=0x0000ffff] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5640003 pmux1=0x000623b8]
+[    1.417108] ark1680_ts e4500000.tsc: setup[after padcfg OR   ]: ADC[en=0x00000000 cfg=0x0000ffff] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5640003 pmux1=0x000623b8]
+[    1.434014] ark1680_ts e4500000.tsc: setup[after pinmux0 clr ]: ADC[en=0x00000000 cfg=0x0000ffff] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5240003 pmux1=0x000623b8]
+[    1.450920] ark1680_ts e4500000.tsc: setup[after ch_enable#1 ]: ADC[en=0x00000000 cfg=0x0000ffff] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5240003 pmux1=0x000623b8]
+[    1.467831] ark1680_ts e4500000.tsc: setup[after cfg/irqclr  ]: ADC[en=0x00000000 cfg=0x00000007] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5240003 pmux1=0x000623b8]
+[    1.484733] ark1680_ts e4500000.tsc: setup[after dbcnt/detint]: ADC[en=0x00000000 cfg=0x00000007] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5240003 pmux1=0x000623b8]
+[    1.501638] ark1680_ts e4500000.tsc: setup[after pinmux1 clr ]: ADC[en=0x00000000 cfg=0x00000007] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5240003 pmux1=0x000623b8]
+[    1.518544] ark1680_ts e4500000.tsc: setup[after ch_enable#2 ]: ADC[en=0x00000f00 cfg=0x00000007] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5240003 pmux1=0x000623b8]
+[    1.535446] ark1680_ts e4500000.tsc: setup[final             ]: ADC[en=0x00000f04 cfg=0x00000007] SYS[clken=0xffffffff padcfg=0xffffffff clkdiv=0x002101de pmux0=0xc5240003 pmux1=0x000623b8]
+[    1.553009] input: ark1680-ts as /devices/platform/e4500000.tsc/input/input0
+[    1.560560] ark1680_ts e4500000.tsc: ARK1680 resistive touchscreen registered, irq=20, debug=0 (echo 1 > /sys/module/ark1680_ts/parameters/debug to trace samples)
+[    1.575291] i2c /dev entries driver
+[    1.580379] ark_wdt e4b00000.watchdog: initialized (timeout = 15 sec, nowayout = 0)
+[    1.588317] Bluetooth: HCI UART driver ver 2.3
+[    1.593577] dw_mmc ec400000.mmc: Using PIO mode.
+[    1.598269] dw_mmc ec400000.mmc: Version ID is 220a
+[    1.603202] dw_mmc ec400000.mmc: DW MMC controller at irq 42,32 bit host data width,32 deep fifo
+[    1.624946] mmc_host mmc0: Bus speed (slot 0) = 24000000Hz (slot req 400000Hz, actual 400000HZ div = 30)
+[    1.647526] dw_mmc ec800000.mmc: Using external DMA controller.
+[    1.653535] dw_mmc ec800000.mmc: Version ID is 220a
+[    1.658507] dw_mmc ec800000.mmc: DW MMC controller at irq 54,32 bit host data width,32 deep fifo
+[    1.667459] mmc_host mmc1: card is non-removable.
+[    1.682750] mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 400000Hz, actual 400000HZ div = 30)
+[    1.692279] random: fast init done
+[    1.709315] usbcore: registered new interface driver snd-usb-audio
+[    1.716909] ark1668-i2s e4000000.i2s-dac: mem resource at 0xe4000000
+[    1.723382] ark1668-i2s e4000000.i2s-dac: releasing soft reset for I2S1 (DAC/internal I2S) at 0xe4000000
+[    1.732934] ark1668-i2s e4000000.i2s-dac: enabled internal I2S1 clock-gate bit at 0xe4a00000+0x1f0
+[    1.742523] ark1668-i2s e8200000.i2s-adc: mem resource at 0xe8200000
+[    1.748981] ark1668-i2s e8200000.i2s-adc: releasing soft reset for I2S2 (ADC/external I2S) at 0xe8200000
+[    1.758525] ark1668-i2s e8200000.i2s-adc: enabled external I2S2/CS4334 clock-gate bits at 0xe4a00000
+[    1.768170] start:================[ark_sdadc_probe]:[ 95]
+[    1.768212] end:===============[ark_sdadc_probe]:[ 103]
+[    1.768488] start:================[ark_sddac_probe]:[ 175]
+[    1.768534] end:===============[ark_sddac_probe]:[ 200]
+[    1.772699] drv_bd37033 2-0040: bd37033_write_bytes: i2c_transfer failed
+[    1.783056] drv_bd37033 2-0040: bd37033_write_byte: i2c_transfer timeout
+[    1.793410] drv_bd37033 2-0040: bd37033_write_byte: i2c_transfer timeout
+[    1.802178] mmc_host mmc0: Bus speed (slot 0) = 24000000Hz (slot req 25000000Hz, actual 24000000HZ div = 0)
+[    1.811991] mmc0: new SD card at address e126
+[    1.818551] drv_bd37033 2-0040: bd37033_write_byte: i2c_transfer timeout
+[    1.828051] mmcblk0: mmc0:e126 SU01G 969 MiB
+[    1.833858] drv_bd37033 2-0040: bd37033_write_byte: i2c_transfer timeout
+[    1.840890] mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 300000Hz, actual 300000HZ div = 40)
+[    1.854038]  mmcblk0: p1 p2 p3
+[    1.859775] drv_bd37033 2-0040: bd37033_write_byte: i2c_transfer timeout
+[    1.870006] drv_bd37033 2-0040: bd37033_write_byte: i2c_transfer timeout
+[    1.880114] drv_bd37033 2-0040: bd37033_write_byte: i2c_transfer timeout
+[    1.890220] drv_bd37033 2-0040: bd37033_write_byte: i2c_transfer timeout
+[    1.900277] drv_bd37033 2-0040: bd37033_write_byte: i2c_transfer timeout
+[    1.910372] drv_bd37033 2-0040: bd37033_write_byte: i2c_transfer timeout
+[    1.920406] drv_bd37033 2-0040: bd37033_write_byte: i2c_transfer timeout
+[    1.927968] NET: Registered protocol family 10
+[    1.933275] mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 200000Hz, actual 200000HZ div = 60)
+[    1.943768] Segment Routing with IPv6
+[    1.947640] sit: IPv6, IPv4 and MPLS over IPv4 tunneling driver
+[    1.954636] NET: Registered protocol family 17
+[    1.960528] Loading compiled-in X.509 certificates
+[    1.971614] asoc-simple-card sound: e4000000.sddac <-> e4000000.i2s-dac mapping ok
+[    1.981029] asoc-simple-card sound: ahb:sdadc@0 <-> e8200000.i2s-adc mapping ok
+[    1.990637] cfg80211: Loading compiled-in X.509 certificates for regulatory database
+[    2.003730] cfg80211: Loaded X.509 cert 'sforshee: 00b28ddf47aef9cea7'
+[    2.010402] ALSA device list:
+[    2.013376]   #0: ARK-SDDAC
+[    2.016526] platform regulatory.0: Direct firmware load for regulatory.db failed with error -2
+[    2.025256] cfg80211: failed to load regulatory.db
+[    2.030410] Waiting for root device /dev/sda2...
+[    2.057491] mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 100000Hz, actual 100000HZ div = 120)
+[    5.727500] usb usb1-port1: Cannot enable. Maybe the USB cable is bad?
+[    8.797440] [musb] musb_reset_timer_handler: reset timer fired
+[    8.803303] [musb] musb_recovery_usb_proc: reset otg
+[    8.808335] musb-hdrc musb-hdrc.0: +Switch peripheral 76  126===
+[    9.837460] musb-hdrc musb-hdrc.0: +++Switch OTG 76  126===+++
+[   10.157509] usb usb1-port1: Cannot enable. Maybe the USB cable is bad?
+[   10.164134] usb usb1-port1: attempt power cycle
+[   13.197439] [musb] musb_reset_timer_handler: reset timer fired
+[   13.203312] [musb] musb_recovery_usb_proc: reset otg
+[   13.208342] musb-hdrc musb-hdrc.0: +Switch peripheral 76  126===
+[   14.237464] musb-hdrc musb-hdrc.0: +++Switch OTG 76  126===+++
+[   14.847523] usb usb1-port1: Cannot enable. Maybe the USB cable is bad?
+[   15.217464] usb 1-1: new high-speed USB device number 5 using musb-hdrc
+[   15.249312] usb-storage 1-1:1.0: USB Mass Storage device detected
+[   15.256355] scsi host0: usb-storage 1-1:1.0
+[   16.318292] scsi 0:0:0:0: Direct-Access     SanDisk  Cruzer Blade     8.02 PQ: 0 ANSI: 0 CCS
+[   16.328513] sd 0:0:0:0: Attached scsi generic sg0 type 0
+[   16.334693] sd 0:0:0:0: [sda] 7856127 512-byte logical blocks: (4.02 GB/3.75 GiB)
+[   16.342687] sd 0:0:0:0: [sda] Write Protect is off
+[   16.347578] sd 0:0:0:0: [sda] Mode Sense: 45 00 00 08
+[   16.347963] sd 0:0:0:0: [sda] No Caching mode page found
+[   16.353291] sd 0:0:0:0: [sda] Assuming drive cache: write through
+[   16.365907]  sda: sda1 sda2 sda3
+[   16.372514] sd 0:0:0:0: [sda] Attached SCSI removable disk
+[   16.400254] EXT4-fs (sda2): mounted filesystem with ordered data mode. Opts: (null)
+[   16.408086] VFS: Mounted root (ext4 filesystem) on device 8:2.
+[   16.432275] devtmpfs: mounted
+[   16.437648] Freeing unused kernel memory: 1024K
+[   16.442344] Run /sbin/init as init process
+[   17.151894] random: crng init done
+[   17.173285] EXT4-fs (sda3): mounted filesystem with ordered data mode. Opts: (null)
+[   17.917507] [musb] musb_reset_timer_handler: reset timer fired
+[   17.949232] RTW: module init start
+[   17.949249] RTW: rtl8821cu v5.12.0-16-g5229e7f95.20210118_COEX20200730-5151
+[   17.949256] RTW: build time: Jul 16 2026 23:10:05
+[   17.949262] RTW: rtl8821cu BT-Coex version = COEX20200730-5151
+[   17.949355] RTW: rtw_inetaddr_notifier_register
+[   17.949537] usbcore: registered new interface driver rtl8821cu
+[   17.955384] RTW: module init ret=0
+[   17.955568] [musb] musb_recovery_usb_proc: port already enabled, skipping disruptive VBUS reset
+[   84.913388] ==============[ark_sddac_startup]:[ 93]
+[   84.933676] ==============[ark_sddac_startup]:[ 93]
+[   84.946902] ==============[ark_sddac_startup]:[ 93]
+[   84.954749] ==============[ark_sddac_startup]:[ 93]
+[   84.966112] ==============[ark_sddac_startup]:[ 93]
+[   84.973950] ==============[ark_sddac_startup]:[ 93]
+[   84.985313] ==============[ark_sddac_startup]:[ 93]
+[   84.993240] ==============[ark_sddac_startup]:[ 93]
+[   85.004720] ==============[ark_sddac_startup]:[ 93]
+[   85.012060] ==============[ark_sddac_startup]:[ 93]
+[   85.023541] ==============[ark_sddac_startup]:[ 93]
+[   85.031415] ==============[ark_sddac_startup]:[ 93]
+[   85.305759] ark_display: ARKDISP_GET_SCREEN_INFO -> screen_id=0 800x480 120x72mm
+[   85.791371] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   85.817670] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   85.837722] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   85.858591] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   85.875692] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   85.897627] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=1 hue=0 saturation=128 brightness=128 contrast=128
+[   85.907388] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=1 hue=0 saturation=128 brightness=128 contrast=128
+[   85.937684] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=2 hue=0 saturation=128 brightness=128 contrast=128
+[   85.957602] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=2 hue=0 saturation=128 brightness=128 contrast=128
+[   85.977661] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=3 hue=0 saturation=128 brightness=128 contrast=128
+[   85.995939] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=3 hue=0 saturation=128 brightness=128 contrast=128
+[   86.017664] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=4 hue=0 saturation=128 brightness=128 contrast=128
+[   86.037614] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=4 hue=0 saturation=128 brightness=128 contrast=128
+[   86.057882] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   86.077605] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   86.097683] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=1 hue=0 saturation=128 brightness=128 contrast=128
+[   86.116171] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=1 hue=0 saturation=128 brightness=128 contrast=128
+[   86.133613] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=2 hue=0 saturation=128 brightness=128 contrast=128
+[   86.145433] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=2 hue=0 saturation=128 brightness=128 contrast=128
+[   86.164215] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=3 hue=0 saturation=128 brightness=128 contrast=128
+[   86.183741] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=3 hue=0 saturation=128 brightness=128 contrast=128
+[   86.204366] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=4 hue=0 saturation=128 brightness=128 contrast=128
+[   86.216180] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=4 hue=0 saturation=128 brightness=128 contrast=128
+[   86.235185] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   86.253601] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=0 hue=0 saturation=64 brightness=128 contrast=128
+[   86.276717] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=1 hue=0 saturation=128 brightness=128 contrast=128
+[   86.296015] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=1 hue=0 saturation=64 brightness=128 contrast=128
+[   86.315228] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=2 hue=0 saturation=128 brightness=128 contrast=128
+[   86.354322] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=2 hue=0 saturation=64 brightness=128 contrast=128
+[   86.373893] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=3 hue=0 saturation=128 brightness=128 contrast=128
+[   86.397573] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=3 hue=0 saturation=64 brightness=128 contrast=128
+[   86.407379] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=4 hue=0 saturation=128 brightness=128 contrast=128
+[   86.437670] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=4 hue=0 saturation=64 brightness=128 contrast=128
+[   86.778728] ark-hsuart e4f00000.serial: no TX platform data
+[   86.785223] ark_hsuart_set_termios 1567 hsuart0 baud:9600 c_cflag:0xcbd
+[   86.785341] ark_hsuart_set_termios 1567 hsuart0 baud:38400 c_cflag:0xcbf
+[   86.787891] ark-uart e8000000.uart: no TX platform data
+[   86.981841] ark_display: ARKDISP_GET_SCREEN_INFO -> screen_id=0 800x480 120x72mm
+[   86.991508] ark_carback_ioctl 217: undefined cmd (0x9A0B)
+[   87.883369] MsnCoreApp: unhandled page fault (11) at 0x0000000c, code 0x017
+[   87.883394] pgd = 134b2838
+[   87.886167] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   87.892537] CPU: 0 PID: 119 Comm: MsnCoreApp Not tainted 4.19.192 #54
+[   87.892545] Hardware name: Arkmicro arm soc Family
+[   87.892560] PC is at 0xb6c981e0
+[   87.892566] LR is at 0xb34aff98
+[   87.892575] pc : [<b6c981e0>]    lr : [<b34aff98>]    psr: 200f0010
+[   87.892581] sp : bebcca90  ip : b353a9b4  fp : 0024c080
+[   87.892587] r10: b353a000  r9 : 0009a1a7  r8 : bebccb30
+[   87.892594] r7 : bebcced0  r6 : 00000000  r5 : 0024c080  r4 : bebccb30
+[   87.892600] r3 : 00000000  r2 : 007511b8  r1 : bebccb30  r0 : 0024c080
+[   87.892609] Flags: nzCv  IRQs on  FIQs on  Mode USER_32  ISA ARM  Segment user
+[   87.892617] Control: 10c53c7d  Table: 03c24059  DAC: 00000055
+[   87.892627] CPU: 0 PID: 119 Comm: MsnCoreApp Not tainted 4.19.192 #54
+[   87.892631] Hardware name: Arkmicro arm soc Family
+[   87.892677] [<c010d1d4>] (unwind_backtrace) from [<c010ab60>] (show_stack+0x10/0x14)
+[   87.892700] [<c010ab60>] (show_stack) from [<c010da88>] (__do_user_fault+0x114/0x118)
+[   87.892720] [<c010da88>] (__do_user_fault) from [<c010dc58>] (do_page_fault+0x1cc/0x2b8)
+[   87.892738] [<c010dc58>] (do_page_fault) from [<c010dec4>] (do_DataAbort+0x4c/0xec)
+[   87.892756] [<c010dec4>] (do_DataAbort) from [<c0101cdc>] (__dabt_usr+0x3c/0x40)
+[   87.892764] Exception stack(0xc0ceffb0 to 0xc0cefff8)
+[   87.892778] ffa0:                                     0024c080 bebccb30 007511b8 00000000
+[   87.892792] ffc0: bebccb30 0024c080 00000000 bebcced0 bebccb30 0009a1a7 b353a000 0024c080
+[   87.892804] ffe0: b353a9b4 bebcca90 b34aff98 b6c981e0 200f0010 ffffffff
+[   92.184433] pgd = 134b2838
+[   92.187151] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.201412] pgd = 134b2838
+[   92.204129] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.212208] pgd = 134b2838
+[   92.214985] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.222154] pgd = 134b2838
+[   92.224919] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.231973] pgd = 134b2838
+[   92.234731] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.242106] pgd = 134b2838
+[   92.244868] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+umount: can't unmount /tmp: Device or resource busy
+[   92.258719] pgd = 134b2838
+[   92.261436] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+umount: can't unmount /dev: Device or res[   92.274227] pgd = 134b2838
+ource busy
+[   92.277930] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.286151] pgd = 134b2838
+[   92.288932] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.295630] pgd = 134b2838
+[   92.298390] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.305657] pgd = 134b2838
+[   92.308437] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.315136] pgd = 134b2838
+[   92.317911] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.324953] pgd = 134b2838
+[   92.327764] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.334580] pgd = 134b2838
+[   92.337290] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.344125] pgd = 134b2838
+[   92.346835] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.353931] pgd = 134b2838
+[   92.356686] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.363729] pgd = 134b2838
+[   92.366482] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.373200] EXT4-fs (sda2): re-mounted. Opts: (null)
+The system is going down NOW!
+Sent SIGTERM to all [   92.384932] pgd = 134b2838
+processes
+[   92.388653] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.396807] pgd = 134b2838
+[   92.399666] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.408078] pgd = 134b2838
+[   92.410794] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.417390] pgd = 134b2838
+[   92.420182] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.426794] pgd = 134b2838
+[   92.429549] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.436115] pgd = 134b2838
+[   92.438888] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.445468] pgd = 134b2838
+[   92.448216] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.454807] pgd = 134b2838
+[   92.457553] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.464102] pgd = 134b2838
+[   92.466807] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.473438] pgd = 134b2838
+[   92.476143] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.482729] pgd = 134b2838
+[   92.485434] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.492053] pgd = 134b2838
+[   92.494759] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.501345] pgd = 134b2838
+[   92.504050] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.510676] pgd = 134b2838
+[   92.513382] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.519972] pgd = 134b2838
+[   92.522678] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.529304] pgd = 134b2838
+[   92.532009] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.538592] pgd = 134b2838
+[   92.541318] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.547932] pgd = 134b2838
+[   92.550638] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.557222] pgd = 134b2838
+[   92.559970] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.566517] pgd = 134b2838
+[   92.569261] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.575852] pgd = 134b2838
+[   92.578595] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.585141] pgd = 134b2838
+[   92.587883] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.594475] pgd = 134b2838
+[   92.597180] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.603771] pgd = 134b2838
+[   92.606477] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.613105] pgd = 134b2838
+[   92.615810] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.622397] pgd = 134b2838
+[   92.625102] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.631728] pgd = 134b2838
+[   92.634433] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.641068] pgd = 134b2838
+[   92.643795] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.650409] pgd = 134b2838
+[   92.653115] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.659701] pgd = 134b2838
+[   92.662432] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.669042] pgd = 134b2838
+[   92.671748] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.678371] pgd = 134b2838
+[   92.681076] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.687661] pgd = 134b2838
+[   92.690366] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.696950] pgd = 134b2838
+[   92.699698] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.706244] pgd = 134b2838
+[   92.708990] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.715592] pgd = 134b2838
+[   92.718341] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.724889] pgd = 134b2838
+[   92.727634] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.734226] pgd = 134b2838
+[   92.736933] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.743516] pgd = 134b2838
+[   92.746243] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.752848] pgd = 134b2838
+[   92.755555] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.762136] pgd = 134b2838
+[   92.764865] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.771475] pgd = 134b2838
+[   92.774180] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.780801] pgd = 134b2838
+[   92.783506] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.790091] pgd = 134b2838
+[   92.792796] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.799420] pgd = 134b2838
+[   92.802125] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.808708] pgd = 134b2838
+[   92.811435] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.818055] pgd = 134b2838
+[   92.820760] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.827295] pgd = 134b2838
+[   92.830040] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.836627] pgd = 134b2838
+[   92.839370] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.845915] pgd = 134b2838
+[   92.848658] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.855248] pgd = 134b2838
+[   92.857992] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.864537] pgd = 134b2838
+[   92.867263] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.873868] pgd = 134b2838
+[   92.876573] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.883155] pgd = 134b2838
+[   92.885884] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.892491] pgd = 134b2838
+[   92.895197] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.901815] pgd = 134b2838
+[   92.904522] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.911102] pgd = 134b2838
+[   92.913830] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.920448] pgd = 134b2838
+[   92.923153] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.929733] pgd = 134b2838
+[   92.932438] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.939060] pgd = 134b2838
+[   92.941765] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.948354] pgd = 134b2838
+[   92.951059] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.957692] pgd = 134b2838
+[   92.960399] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.966934] pgd = 134b2838
+[   92.969695] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.976264] pgd = 134b2838
+[   92.979010] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.985554] pgd = 134b2838
+[   92.988312] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   92.994879] pgd = 134b2838
+[   92.997624] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   93.004211] pgd = 134b2838
+[   93.006916] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   93.013495] pgd = 134b2838
+[   93.016202] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   93.022830] pgd = 134b2838
+[   93.025536] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   93.032124] pgd = 134b2838
+[   93.034830] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   93.041449] pgd = 134b2838
+[   93.044154] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   93.050734] pgd = 134b2838
+[   93.053439] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   93.060060] pgd = 134b2838
+[   93.062766] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   93.069349] pgd = 134b2838
+[   93.072054] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   93.078678] pgd = 134b2838
+[   93.081383] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   93.087959] pgd = 134b2838
+[   93.090688] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   93.097248] pgd = 134b2838
+[   93.099991] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   93.106538] pgd = 134b2838
+[   93.109305] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   93.115874] pgd = 134b2838
+[   93.118621] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   93.125223] pgd = 134b2838
+[   93.127967] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   93.134512] pgd = 134b2838
+[   93.137217] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   93.143838] pgd = 134b2838
+[   93.146543] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   93.153125] pgd = 134b2838
+[   93.155829] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   93.162448] pgd = 134b2838
+[   93.165154] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   93.171736] pgd = 134b2838
+[   93.174440] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   93.181055] pgd = 134b2838
+[   93.183759] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   93.190343] pgd = 134b2838
+[   93.193069] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   93.199673] pgd = 134b2838
+[   93.202379] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   93.208961] pgd = 134b2838
+[   93.211689] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   93.218295] pgd = 134b2838
+[   93.221000] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   93.227645] pgd = 134b2838
+[   93.230350] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   93.236884] pgd = 134b2838
+[   93.239630] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   93.246216] pgd = 134b2838
+[   93.248960] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   93.255501] pgd = 134b2838
+[   93.258246] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   93.264829] pgd = 134b2838
+[   93.267572] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   93.274118] pgd = 134b2838
+[   93.276823] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   93.283445] pgd = 134b2838
+[   93.286151] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   93.292734] pgd = 134b2838
+[   93.295440] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   93.302058] pgd = 134b2838
+[   93.304763] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   93.311341] pgd = 134b2838
+[   93.314068] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   93.320678] pgd = 134b2838
+[   93.323383] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   93.329966] pgd = 134b2838
+[   93.332693] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   93.339298] pgd = 134b2838
+[   93.342004] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   93.348619] pgd = 134b2838
+[   93.351325] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   93.357906] pgd = 134b2838
+[   93.360611] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   93.367195] pgd = 134b2838
+[   93.369940] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+[   93.376484] pgd = 134b2838
+[   93.379230] [0000000c] *pgd=00af2831, *pte=00000000, *ppte=00000000
+Sent SIGKILL to a[   94.391209] drv_bd37033 2-0040: bd37033_write_byte: i2c_transfer timeout
+[   94.398145] reboot: Restarting system

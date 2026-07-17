@@ -194,6 +194,7 @@ ROOT_DEV="/dev/mmcblk0p2"                     # root= in the generated uEnv.txt 
 KERNEL_BIN=""
 BOOTLOGO_RAW=""                               # raw framebuffer (--bootlogo) for p1/bootlogo.raw
 STOCK_UBOOT_BIN="$SCRIPT_DIR/firmware_dumps/Prado firmware dump/mtd1-mtd2_uboot/extracted/uboot.bin"  # for p1/stock_uboot.bin, used by the `bootstock` chainload command
+ARKDATA_INI="$SCRIPT_DIR/firmware_dumps/Prado firmware dump/mtd4_arkdata/extracted/arkdata.ini"  # for p1/arkdata.ini -- real calibrated LCD timing/panel config, dumped from the NAND "arkdata" partition. Without this, ark1668_arkdata_ini.c's fatload always fails and every screen_info field falls back to compiled defaults instead of this unit's real calibration -- see docs/DISPLAY_SUBSYSTEM.md
 DTB_BIN=""
 ROOTFS_DIR=""
 USERDATA_DIR=""
@@ -1197,6 +1198,10 @@ build() {
     if [[ -n "$BOOTLOGO_RAW" && -f "$BOOTLOGO_RAW" ]]; then
         run cp "$BOOTLOGO_RAW" /tmp/sd_p1/bootlogo.raw
         bootlogo_label=" + bootlogo.raw"
+    fi
+    if [[ -n "$ARKDATA_INI" && -f "$ARKDATA_INI" ]]; then
+        run cp "$ARKDATA_INI" /tmp/sd_p1/arkdata.ini
+        bootlogo_label="$bootlogo_label + arkdata.ini"
     fi
     if [[ -n "$STOCK_UBOOT_BIN" && -f "$STOCK_UBOOT_BIN" ]]; then
         run cp "$STOCK_UBOOT_BIN" /tmp/sd_p1/stock_uboot.bin

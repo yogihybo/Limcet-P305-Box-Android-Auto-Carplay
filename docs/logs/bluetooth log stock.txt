@@ -1,0 +1,157 @@
+etc # ls
+RingTone.wav               inittab
+airplay.conf               issue
+all.sh                     itu656_load.sh
+alsa.conf                  memalloc_load.sh
+asound.conf                nsswitch.conf
+bluetooth                  passwd
+blueware-bw121.properties  pointercal
+blueware-bw123.properties  profile
+directfbrc                 rc.d
+driver_load.sh             resolv.conf
+fstab                      rtkbt.conf
+fw_env.config              rtl8761bt_fw
+gal_config                 securetty
+group                      services
+host.conf                  shadow
+hostapd                    switchotg.sh
+hostapd.sh                 sysctl.conf
+hostapd.sh.bak             ts.conf
+hostname                   udhcpc.script
+hosts                      udhcpd.conf
+icon_120x120.png           version
+/etc # killall blueware
+/etc # /usr/bin/blueware /etc/blueware-bw121.properties
+blueware        :[BUILD][FEASYCOM-BT-DRIVER-ARK1668-LINUX3.4-BT825B-R116-V566][20221012T001153]
+blueware        :symlink:/dev/pts/3->/dev/bw_serial
+blueware        :blueware_started 2527
+blueware        :father_thread 2527
+blueware        :child_thread 2528
+blueware        :nvm_init,path:/data/feasycom/bw_conf0.db,/data/feasycom/bw_conf1.db
+blueware        :swver:[566]
+blueware        :parse config file      : [/etc/blueware-bw121.properties]
+blueware        :MODULE_TYPE            : [BW121]
+blueware        :MODULE_CFG             : []
+blueware        :CACHE_PATH             : [/data/feasycom/]
+blueware        :LOGCAT_PATH            : []
+blueware        :BTEN_INTERFACE         : [gpio91]
+blueware        :UART_INTERFACE         : [/dev/ttyHS1]
+blueware        :UART_BAUDRATE          : [1500000]
+blueware        :UART_FLOWCTL           : [0]
+blueware        :VOICE_TYPE             : [UART]
+blueware        :VOICE_ROUTE_DELAY      : [800]
+blueware        :PAIR_MODE              : [2]
+blueware        :CONSOLE_ENABLE         : [0]
+blueware        :BT_ENABLE              : [1]
+blueware        :HFP_ENABLE             : [1]
+blueware        :HFP_NREC               : [3]
+blueware        :HFP_RESAMPLER          : [2]
+blueware        :HFP_RING_PATH          : [/etc/RingTone.wav]
+blueware        :A2DP_ENABLE            : [1]
+blueware        :A2DP_DECODER           : [1]
+blueware        :AVRCP_ENABLE           : [1]
+blueware        :AVRCP_ID3              : [1]
+blueware        :AVRCP_PLAYPROGRESS     : [0]
+blueware        :AVRCP_BROWSING         : [0]
+blueware        :AVRCP_COVERART         : [0]
+blueware        :PB_ENABLE              : [1]
+blueware        :PB_DATABASE            : [0]
+blueware        :PB_DUMP                : [0]
+blueware        :SPP_ENABLE             : [0]
+blueware        :IAP2_ENABLE            : [1]
+blueware        :AAP_ENABLE             : [1]
+blueware        :GATT_ENABLE            : [0]
+blueware        :nvm_write_database /data/feasycom/bw_conf1.db success
+blueware        :nvm_write_database /data/feasycom/bw_conf0.db success
+blueware        :bpio_init open(91) success: fd (5)
+blueware        :audio_control_init,inf:8,sel:8
+blueware        :bpio_reset
+blueware        :huart open success 3
+blueware        :lib_serial_port_init,inst:1,slots:0
+blueware        :lib_serial_port_init,inst:2,slots:0
+blueware        :lib_serial_port_init,inst:3,slots:0
+blueware        :lib_serial_port_init,inst:4,slots:0
+blueware        :[AT]   +A2DPMUTED=0
+blueware        :pb-photo set path:[/data/feasycom/photo/]
+blueware        :[AT]   +DEVSTAT=0
+blueware        :boot_reason = 0
+blueware        :EventBTChipsetPowerOn
+blueware        :[AT]   +PWRSTAT=1
+blueware        :nvm_write_database /data/feasycom/bw_conf1.db success
+blueware        :nvm_write_database /data/feasycom/bw_conf0.db success
+blueware        :bpio_reset
+blueware        :bpio_set
+blueware        :bpio_reset
+blueware        :bpio_set
+blueware        :realtek selected
+blueware        :openning librtkvnd.so
+blueware        :TAG:f3,OFFSET:0,SIZE:1
+blueware        :TAG:f4,OFFSET:0,SIZE:8
+blueware        :TAG:0c,OFFSET:0,SIZE:16
+blueware        :TAG:d9,OFFSET:0,SIZE:1
+blueware        :TAG:e4,OFFSET:0,SIZE:1
+blueware        :TAG:5b,OFFSET:1,SIZE:4
+blueware        :set:fwdir=/etc/
+FIRMWARE_DIRECTORY:/etc/
+blueware        :set:cfgdir=/data/feasycom/
+CONFIG_DIRECTORY:/data/feasycom/
+blueware        :set:cfgfile=/data/feasycom/rtkbt.conf
+RTKBT_CONF_FILE:/data/feasycom/rtkbt.conf
+blueware        :bt_chipset_vnd_init serial port:8
+blueware        :creat-thread:0x73594
+blueware        :start-thread:0x73c2e450,0
+blueware        :bt_fw_download_thread started
+blueware        :vendor:hci_ver:0a,hci_rev:000b,lmp_ver:0a,lmp_subver:8761,manu:005d
+blueware        :firmware_config_cb:0
+blueware        :bt_fw_download_thread destroyed
+blueware        :bt_chipset_vnd_init_result,success:1,fd:8
+blueware        :lib_vendor_hci_initialized
+blueware        :h4_init
+blueware        :h4_open
+blueware        :bt_chipset_uart_open success 8
+blueware        :BLUEWARE_HCI_STATE_CHANGED_IND:1
+blueware        :bt_chipset_info:hci_ver:0a,hci_rev:6ca9,lmp_ver:0a,lmp_subver:434d,manu:005d
+blueware        :BLUEWARE_HCI_LOCAL_BD_ADDR_IND DC0D3014FC9F
+blueware        :hci_read_buffer_size:1021,slot:5
+blueware        :hci_read_buffer_size sco:255,slot:11
+blueware        :>>[vendor-req] opcode:fc1b
+blueware        :default-local-name: RTK_BT_5.0
+blueware        :hci_le_read_buffer_size:27,slot:7
+blueware        :BLUEWARE_HCI_STATE_CHANGED_IND:2
+blueware        :[AT]   +VER=BW121,V5.6.6
+blueware        :[AT]   +PROFILE=246952
+blueware        :ENABLED PROFILE:|HF|A2DP|AVRCP|PBAP|AAP|IAP|HICAR1|HICAR2|
+blueware        :SERIAL_iAP2 register:nr[10],handle[00010001]
+blueware        :bt_create_socket_server,/dev/bw_iap,fd:15
+blueware        :iap_set_state,0:1
+blueware        :[AT]   +IAPSTAT=1
+blueware        :SERIAL_AAP register:nr[11],handle[00010002]
+blueware        :bt_create_socket_server,/dev/bw_aap,fd:16
+blueware        :aap_set_state,0:1
+blueware        :[AT]   +AAPSTAT=1
+blueware        :SERIAL_HICAR1 register:nr[3],handle[00010003]
+blueware        :hicar1_set_state,0:1
+blueware        :[AT]   +HC1STAT=1
+blueware        :SERIAL_HICAR2 register:nr[4],handle[00010004]
+blueware        :hicar2_set_state,0:1
+blueware        :[AT]   +HC2STAT=1
+blueware        :a2dp_sink_set_state[0]:[1]
+blueware        :[AT]   +A2DPSTAT=1
+blueware        :[AT]   +AVRCPSTAT=1
+blueware        :[AT]   +HFPMUTED=0
+blueware        :[AT]   +HFPSTAT=1
+blueware        :pbapc_set_state[0]:[1]
+blueware        :[AT]   +PBSTAT=1
+blueware        :watchdog started
+blueware        :>>[vendor-send] size:4,ret:0
+blueware        :[AT]   +DEVSTAT=1
+blueware        :[AT]   +DEVSTAT=3
+blueware        :[BLUEWARE:ON][NAME:Limcet Box_fc9f][MAC:DC0D3014FC9F][PROFILES:246952][RECONNECT:0]
+blueware        :BT_TRAN_STAT:0028
+blueware        :<<[vendor-resp] opcode:fc1b,size:6
+blueware        :BLUEWARE_HCI_LOCAL_BD_ADDR_IND DC0D3014FC9F
+blueware        :broadcast name Limcet Box_fc9f
+blueware        :BLUEWARE_HCI_LOCAL_BD_ADDR_IND DC0D3014FC9F
+blueware        :BLUEWARE_HCI_LOCAL_BD_ADDR_IND DC0D3014FC9F
+blueware        :BLUEWARE_HCI_LOCAL_BD_ADDR_IND DC0D3014FC9F
+blueware        :BLUEWARE_HCI_LOCAL_BD_ADDR_IND DC0D3014FC9F

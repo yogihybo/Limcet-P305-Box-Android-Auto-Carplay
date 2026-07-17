@@ -287,9 +287,18 @@ addressing sequence already used in `ark_nand_read_page_syndrome()`'s
 own `oob_required` branch (`READ0` to select the page, `RNDOUT` directly
 to `mtd->writesize`, read the full contiguous OOB region in one shot) --
 factored out for standalone OOB reads and wired in as `ecc->read_oob`.
-Builds clean. **Not yet hardware-tested** -- verify by cold-booting and
-confirming the bad-block count drops to something small and stable,
-matching what `bootstock`'s real stock U-Boot reports for the same chip.
+Builds clean.
+
+**CONFIRMED FIXED on real hardware (2026-07-17), clean USB reflash,
+cold boot**: bad-block count dropped from ~417 false positives to
+**exactly 1 real bad block** (block 768). That's not just "small and
+stable" -- it's an exact match to the known-good reference count from a
+completely separate, earlier investigation
+(`docs/historical/HANDOFF_touch_and_bootargs_fix.md`'s own evidence
+table: "SD / patched-stock U-Boot: **1** (factory BBT read correctly)").
+Root cause conclusively confirmed: the missing `ecc.read_oob` override
+was the actual bug behind the historical "417 false bad blocks" symptom
+this project has periodically hit across multiple independent sessions.
 
 ---
 

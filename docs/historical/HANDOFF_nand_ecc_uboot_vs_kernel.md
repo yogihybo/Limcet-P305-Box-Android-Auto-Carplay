@@ -210,9 +210,49 @@ the generic descriptors except `NAND_BBT_WRITE` is dropped -- and assign
 them to `nand->bbt_td`/`nand->bbt_md` before `nand_scan()` completes,
 exactly mirroring the U-Boot-side Fix 2 pattern. The scan can still read
 an existing table or fall back to real factory bad-block markers in RAM;
-it just never writes anything back to flash. Builds clean. **Not yet
-hardware-tested** -- verify the same way as above: cold-boot, confirm
-"Bad block table written" never appears again.
+it just never writes anything back to flash. Builds clean.
+
+**Follow-up, same day: write-prevention alone isn't enough.** User asked
+directly whether this now reads the *correct* BBT (the one stock uses) --
+answer worked out to be no, and for a good reason: stock and this driver
+never shared a single cached table in the first place (`ark1668_debug_cmds.c`'s
+`nandoobcheck` comment in the U-Boot tree already noted this: "stock uses
+its own separate driver/cache and never looks at this one's cached
+table"). More importantly, the write-prevention fix above only stops
+*future* writes -- it does nothing about a table that may *already* be
+wrong on flash from an earlier boot (the v14 log's 417-entry table was
+written before this fix existed). `NAND_BBT_USE_FLASH` means "if a cached
+table already exists, trust it and skip rescanning" -- so a pre-existing
+bad table would just get read back and reused silently, never triggering
+the rescan-and-refuse-to-write path at all.
+
+User confirmed stock doesn't have this problem in the first place because
+it doesn't use a flash-cached table at all -- it always rescans the real
+factory OOB markers at boot. Traced that behavior to a single device tree
+property: `nand-on-flash-bbt` (set generically for every board in
+`ark1668.dtsi`) is what causes `of_get_nand_on_flash_bbt()`
+(`drivers/mtd/nand/raw/nand_base.c`) to set `NAND_BBT_USE_FLASH` at all --
+without it, flash-based caching is never enabled, full stop.
+
+**Real fix**: dropped `nand-on-flash-bbt` for this board via a `&nfc`
+override in `ark1668_limcet_p305.dts` (`/delete-property/`). Confirmed
+via `dtc -I dtb -O dts` on the rebuilt DTB that the property is genuinely
+gone. Now this driver matches stock's actual behavior by construction --
+every boot does a full raw factory-marker scan, kept in RAM only, and
+never touches flash for BBT purposes at all. No stale/wrong cache is
+possible anymore, rather than merely being prevented from getting worse.
+The `ark_bbt_*_no_oob_descr` write-prevention override from the fix above
+is kept as a second line of defense (harmless no-op now that
+`NAND_BBT_USE_FLASH` is never set, but protects against some future DT
+variant re-enabling it without this follow-up being remembered).
+
+**Not yet hardware-tested** -- verify by cold-booting and confirming (a)
+"Bad block table not found"/"Bad block table written" never appear again,
+(b) the driver instead does its raw factory-marker scan every single
+boot (a small, real, per-boot cost -- roughly 1.5-2s per the v14 log's
+timestamps -- traded for guaranteed correctness), and (c) the resulting
+bad-block count/positions are small and stable across repeated boots,
+matching what `bootstock`'s real stock U-Boot reports for the same chip.
 
 ---
 

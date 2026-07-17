@@ -292,7 +292,7 @@ row-major), showing as colored-pixel artifacts. Now fails safe to black.
 
 ## 5. Still open -- not fixed tonight, worth knowing about before you start
 
-### `bootnand` kernel-entry hang
+### `bootnand` kernel-entry hang -- FIXED 2026-07-17, see update below
 With ECC and `machid` both fixed, and a CRC32-verified clean kernel image
 in RAM, `bootz` still hangs silently right after printing
 `machine ID r1 = 0x00001068` -- no crash, no further output. Ruled out:
@@ -391,6 +391,81 @@ the full stock UI successfully. Given that, this hang is now a
 lower-priority curiosity, not a blocker -- there's a completely reliable
 path to a working NAND boot already. Worth solving only if direct
 `bootz`-from-this-fork is specifically wanted for some other reason.
+
+**Update (2026-07-17): cache-order fix tried and ruled out, real root
+cause found and fixed via a live register dump.**
+
+Reordering `cleanup_before_linux_select()` to match the stock binary's
+traced I-cache-then-D-cache sequence (see the previous update above) did
+**not** fix the hang -- confirmed on real hardware, cold boot, same hang
+at the same spot. That ruled out cache/MMU-disable ordering as the cause.
+
+Next step: added a one-shot debug print directly at the kernel-jump
+instant in `boot_jump_linux()` (`arch/arm/lib/bootm.c`), dumping live
+`SCTLR`/`ACTLR`/`TTBR0`/`DACR` plus `r0`/`r1`/`r2` and the first 4 words
+at the ATAGS pointer, right before the `kernel_entry(0, machid, r2)`
+call. Real hardware output:
+
+```
+[bootjump] SCTLR=0x00c50878 ACTLR=0x00006000 TTBR0=0x03ff0059 DACR=0xffffffff
+[bootjump] r0=0 r1(machid)=0x1068 r2(atags)=0x00000000 kernel_entry=0x01000000
+[bootjump] atags[0..3]=0x00000005 0x54410001 0x00000000 0x00000000
+```
+
+`SCTLR` confirmed M/C/I all correctly cleared (MMU, D-cache, I-cache all
+off) -- the cache/MMU state itself was never the problem, consistent with
+the reorder test finding nothing. But **`r2` (the ATAGS pointer handed to
+the kernel) is `0x00000000`** -- and `atags[0..3]` shows a real, valid
+`ATAG_CORE` header (`size=5`, `magic=0x54410001`) sitting *at that
+address*. Root cause: `setup_start_tag()` (`arch/arm/lib/bootm.c`) writes
+the ATAGS list starting at `gd->bd->bi_boot_params`, and this board's
+config never defined `CONFIG_SYS_BOOTPARAMS_LEN` -- the only thing that
+causes `initr_malloc_bootparams()` (`common/board_r.c`) to actually
+allocate a real heap address for `bi_boot_params`. Without it,
+`bi_boot_params` stays at its zero-initialized value from `gd`'s early
+`memset()`, so the entire ATAGS list gets written to (and the kernel
+handed a pointer to) **physical address `0x0`** -- which, since `SCTLR.V`
+reads `0` here (low vectors), is exactly where this CPU's exception
+vector table lives. The ATAGS write clobbers the vector table; the
+kernel's own early boot code (before it installs its own vectors) takes
+any exception -- even a benign one during its own startup -- and reads
+corrupted vector data instead of a valid instruction. Silent hang, no
+fault reported, exactly matching the symptom. The kernel's own
+`__vet_atags` (`arch/arm/kernel/head-common.S`) doesn't catch this either,
+since it only checks alignment + the `ATAG_CORE` magic/size at `r2` --
+both of which happen to validate correctly here purely because the
+colliding write happened to look like real ATAGS.
+
+**Fix applied**: added `#define CONFIG_SYS_BOOTPARAMS_LEN SZ_4K` to
+`include/configs/ark1668_limcet_p305.h`, giving `bi_boot_params` a real
+4KB heap allocation instead of address `0x0`. The debug print was removed
+after confirming the diagnosis.
+
+**CONFIRMED FIXED on real hardware (2026-07-17), cold boot, `bootnand`**:
+the kernel-entry hang is gone. Full boot sequence now observed for the
+first time via this fork's own `bootz` (not chainloaded through
+`bootstock`): `Uncompressing Linux... done, booting the kernel.` ->
+`machine ID r1 = 0x00001068` -> kernel dmesg continues -> rootfs mounts
+-> `rcS` runs -> `MSNCoreApp start`/`running`. This is the actual root
+cause of the long-standing `bootnand` hang -- not a cache/MMU-ordering
+issue, a NULL ATAGS pointer overwriting the exception vector table at
+address `0x0`.
+
+**New, separate issue surfaced now that boot gets this far**: `MSNCoreApp`
+fails to initialize its display (`open /dev/ark_display fail`, then
+DirectFB: `QDirectFBScreen: error creating DirectFB interface` / `A
+general initialization error occured` / `directfb: driver cannot
+connect`). This is booting the **stock** kernel + stock NAND rootfs
+(`ubi0:rootfs`, original vendor DirectFB-based userspace) via **this
+fork's own** U-Boot hardware init -- unlike `bootstock`, which chainloads
+the real stock U-Boot binary and gets 100% authentic peripheral
+init before the kernel runs. Most likely cause: this fork's own
+clock-gating/pinmux setup for the LCD/display controller doesn't exactly
+match what stock's own board init leaves, and the kernel's display driver
+doesn't fully reset/reinitialize that hardware from scratch on probe --
+same general class of clock/pinmux issue this project has hit before
+elsewhere (LCD pinmux, clock gating). Not investigated yet -- a new,
+distinct problem from the hang this section was originally about.
 
 ### GPIO button -- piggyback display switch
 User confirmed this works correctly already, on real hardware, by the time

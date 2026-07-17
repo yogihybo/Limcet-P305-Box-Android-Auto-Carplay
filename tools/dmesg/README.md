@@ -80,13 +80,18 @@ arm-linux-gnueabihf-strip -o dmesg dmesg
 ## Usage
 
 ```
-/ # dmesg -T -x --color=always | less
-/ # dmesg -T -x --color=always -w   # follow new kernel log lines live
+/ # dmesg --color=always | less
+/ # dmesg --color=always -w   # follow new kernel log lines live
 ```
 
-`/etc/profile` aliases bare `dmesg` to `/usr/bin/dmesg -T -x
---color=always` (see `install_diag_tools()` in
-`build_bootable_sdcard.sh`) so a plain `dmesg` at the shell gets
-human-readable timestamps, decoded facility/level, and color by
-default. Use the absolute path (`/usr/bin/dmesg` or BusyBox's `busybox
-dmesg`) to bypass the alias.
+`/etc/profile` aliases bare `dmesg` to `/usr/bin/dmesg --color=always`
+(see `firmware_overlay/prado/etc/profile`) so a plain `dmesg` at the
+shell gets color by default. Deliberately no `-T` (ctime/absolute-date
+timestamps) — this device has no RTC/NTP sync, so `-T` shows a
+meaningless boot-epoch date instead of anything useful; the default
+`[seconds.microseconds]` since-boot format is what's actually
+informative here. Also no `-x` (facility:level text column) — color
+alone already distinguishes severity, the extra column was just noise.
+Use the absolute path (`/usr/bin/dmesg` or BusyBox's `busybox dmesg`) to
+bypass the alias, or pass `-T`/`-x` explicitly if you want them back for
+a one-off.

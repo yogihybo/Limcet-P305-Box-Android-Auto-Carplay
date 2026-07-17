@@ -124,13 +124,15 @@ eval `dbus-launch --auto-syntax`
 export SDL_NOMOUSE=1
 
 # BusyBox's dmesg applet (/bin/dmesg, earlier in $PATH than /usr/bin) lacks
-# -T/-x/--color, so alias the bare command to the full util-linux build
-# installed by install_diag_tools() -- see tools/dmesg/README.md. Only
-# useful if that tool is actually installed (install_diag_tools's
-# "install_diag_tools" toggle, ON by default); build_bootable_sdcard.sh
-# removes this alias at build time if dmesg wasn't installed, so it never
-# points at a missing binary and shadows BusyBox's own dmesg for nothing.
-alias dmesg='/usr/bin/dmesg -T -x --color=always'
+# --color, so alias the bare command to the full util-linux build at
+# usr/bin/dmesg (firmware_overlay/prado/usr/bin/) -- see tools/dmesg/README.md.
+# Deliberately no -T (ctime/absolute-date timestamps): this device has no
+# RTC/NTP sync, so ctime would show a meaningless boot-epoch date instead
+# of anything useful -- the default bracketed [seconds.microseconds]
+# format (time since boot) is what's actually informative here. Also no
+# -x (facility:level decode column) -- color alone already distinguishes
+# severity, the text column was just noise.
+alias dmesg='/usr/bin/dmesg --color=always'
 
 
 

@@ -18,28 +18,35 @@ This document explains the physical pin mapping, modules, and commands required 
 
 ---
 
-## 1a. WiFi never enumerates when booting via `bootusb` -- not a bug, one physical port
+## 1a. WiFi never enumerated during `bootusb` -- root cause found and fixed 2026-07-17
 
 `musb-hdrc.0`'s hub reports exactly **one** downstream port
-(`hub 1-0:1.0: 1 port detected`, confirmed in every captured boot log).
-The onboard WiFi module and any external USB stick used to boot via
-`bootusb` share that same single port. Confirmed by comparing every
-`docs/logs/new kernel bootlog*.txt` capture against its own kernel
-command line: every log where WiFi came up successfully
-(`rtw_ndev_init(wlan0)`, `hostapd ... AP-ENABLED`) booted with
-`root=/dev/mmcblk0p2` (`bootmmc`, SD card); every log where WiFi never
-enumerated at all booted with `root=/dev/sda2` (`bootusb`, USB stick) --
-a 100% consistent correlation, not a code regression from any specific
-commit (initially suspected to be the 2026-07-14 USB VBUS-delay/recovery-
-watchdog fixes, `db1da3937`/`07db9a9c3` -- ruled out once the boot-medium
-pattern became clear).
+(`hub 1-0:1.0: 1 port detected`), and every `docs/logs/new kernel
+bootlog*.txt` capture showed a 100% consistent correlation: WiFi only
+ever came up (`rtw_ndev_init(wlan0)`, `hostapd ... AP-ENABLED`) on boots
+using `root=/dev/mmcblk0p2` (`bootmmc`, SD card); it never enumerated at
+all on boots using `root=/dev/sda2` (`bootusb`, USB stick). Initial
+theory was that the boot stick and the onboard WiFi module were
+contending for the same single physical port -- true as far as it went,
+but didn't explain how **stock** manages both a USB stick and wireless
+CarPlay at once.
 
-**Practical implication**: test WiFi/CarPlay specifically via SD-card
-boot (`bootmmc`), not `bootusb` -- the boot stick physically occupies the
-only available port for the whole session, leaving nothing for the WiFi
-module to enumerate on. A powered USB hub between the board and the
-stick (giving the WiFi chip a second downstream port) would resolve this
-if both need to be tested at once, but hasn't been tried.
+Real root cause: this board has **two** separate USB controllers,
+`usb0` (0xE0100000, external-facing port) and `usb1` (0xE0400000, almost
+certainly the onboard WiFi module's dedicated controller) -- confirmed
+because `musb-ark e0400000.usb: Failed to get irq.` /
+`probe of e0400000.usb failed with error -22` appeared in **every**
+boot log, working or not, meaning `usb1` never successfully probed at
+all, regardless of boot medium. Traced to a bad device-tree override in
+`ark1668_limcet_p305.dts` (`interrupts = <40>, <39>`, added 2026-07-16,
+bundled into an unrelated I2S commit) -- `usb1`'s interrupt-parent
+(`vich`) is a single `arm,pl192-vic` with only 32 lines (valid range
+0-31); 40 and 39 are out of range for that domain, and exactly equal
+`ark1668.dtsi`'s original, correct values (8, 7) plus 32 -- a global-vs-
+VIC-local interrupt numbering mix-up. Fixed by dropping the override.
+**Not yet hardware-tested** -- once confirmed, `usb1`/WiFi and `usb0`/a
+boot or accessory stick should be able to work simultaneously, matching
+stock, without needing SD-card boot as a workaround.
 
 ---
 

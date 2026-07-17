@@ -308,14 +308,79 @@ in RAM, `bootz` still hangs silently right after printing
   `bootmmc`/`bootusb` call -- `bootm_start()` explicitly zeroes the whole
   struct on every invocation
 
-Not yet tried: comparing `SCTLR`/`ACTLR` (ARM CP15 coprocessor registers,
-not memory-mapped -- read via `mrc`, would need a small custom command) the
-same way `BCH_CR` and PL310 were compared. Also: the actual kernel-jump code
-in the stock binary was never found in the existing Ghidra decompile
-(`docs/re_stock_uboot/full_decompile.c`) -- only one unrelated string hit
-for "kernel". Finding it would need a fresh, targeted Ghidra pass (or more
-`objdump`, same method as Stepldr/section 3), not a lookup in existing
-artifacts.
+**Update (2026-07-17): the stock kernel-jump code was located and traced.**
+Found via a targeted Ghidra + `objdump` pass on the real dumped
+`uboot.bin` (`firmware_dumps/Prado firmware dump/mtd1-mtd2_uboot/extracted/uboot.bin`,
+Ghidra project at `/home/osboxes/tools/ghidra_project/stock_uboot.gpr`,
+program `mtd1_uboot.bin`) -- the prior attempt found nothing because the
+"Starting kernel ..." string's only auto-detected xref was a `DATA`-typed
+reference from a literal-pool word (`0x319bc`) that Ghidra's existing
+analysis had never linked back to the code that loads it (0 incoming refs
+on the pool word itself). Walking that out by hand with a raw
+`objdump -D -b binary -marm --adjust-vma=0x30000` disassembly (not
+Ghidra's own analysis, which mis-split the function around the literal
+pool) found the real code at `0x3194c`-`0x319b0`:
+
+- `0x31958`-`0x31980`: checks `env_get("machid")` -- skipped in the real
+  dump (no `machid` var set, matching this fork's own env, which also
+  doesn't set one -- both fall through to the compiled-in `0x1068`
+  written earlier into `bd->bi_arch_number`, confirmed at `0x3187c` /
+  `0x318bc` via the `movw r1, #4200` -- `4200 == 0x1068`).
+- `0x3198c`-`0x31990`: `printf("\nStarting kernel ...\n\n")` -- the exact
+  print this hang happens right after.
+- `0x31994`: `bl 0x30888` -- called **immediately after** that print,
+  right before the jump. This is the real `cleanup_before_linux()`.
+- `0x319a8`: `blx r4` -- the actual kernel-entry jump. `r4` holds the
+  kernel entry point (passed in at function entry, pushed at `0x3194c`).
+  At the jump: `r0=0`, `r1=machid` (`0x1068`, from the stack slot filled
+  earlier), `r2=bd->bi_boot_params` (loaded from `bd_t+8`) -- the
+  standard ARM Linux boot ABI, nothing unusual here.
+
+**`FUN_00030888` (`0x30888`-`0x308af`) = stock's `cleanup_before_linux()`
+implementation**, decompiled via Ghidra (7 sub-calls in sequence):
+1. `disable_interrupts()`-equivalent -- trivial `return 1`, no real
+   PSR/GIC masking (this minimal board U-Boot apparently never unmasks
+   IRQs in the first place, so there's nothing to disable).
+2. **I-cache disabled first**: clear `SCTLR.I` (bit 12) via
+   `coproc_moveto_Control(SCTLR & ~0x1000)`, then invalidate I-cache +
+   DSB + ISB.
+3. **D-cache disabled second**: if `SCTLR.C` (bit 2) is set, flush it
+   (via a full CCSIDR/CLIDR set-way walk, same helper as step 5), then
+   clear `SCTLR.C` **and** `SCTLR.M` (MMU, bit 0) together in one write.
+4. Outer/L2 cache disable -- no-op stub (consistent with the PL310
+   register comparison already done in this doc -- L2 is disabled on
+   both stock and this fork, nothing to reconcile here).
+5. One more full `v7_flush_dcache_all()`-style clean+invalidate-by-set/way
+   pass -- done **after both caches are already disabled**, as a final
+   safety net.
+6. no-op.
+
+**This fork's mainline-derived `cleanup_before_linux_select()`
+(`arch/arm/cpu/armv7/cpu.c`) did this in a different order**: D-cache
+disabled *first* (`dcache_disable()` + `v7_outer_cache_disable()`), then
+an *extra* `invalidate_dcache_all()` squeezed in between the two cache
+disables, then I-cache disabled *last*. Stock does I-cache first, D-cache
+(+MMU) second, with its one extra invalidate pass happening only at the
+very end, after both caches are off -- never interleaved between the two
+disables the way mainline's default does.
+
+**Fix applied, not yet confirmed on hardware**: reordered
+`cleanup_before_linux_select()` in this fork to match stock's shape --
+I-cache disable+invalidate first, D-cache disable+outer-disable+invalidate
+second (see the comment block at the top of the `CBL_DISABLE_CACHES`
+branch for the full reasoning). This is a real, concrete divergence
+found by comparing ground truth against the actual working stock binary,
+and sequencing D-cache-disable-while-I-cache-still-active (mainline's
+order) ahead of a full MMU teardown is exactly the class of bug that
+would produce a silent hang with no fault raised, on a core old/minimal
+enough not to paper over it. Needs a real hardware `bootnand` test to
+confirm or rule out.
+
+Not yet tried if this doesn't fix it: comparing `SCTLR`/`ACTLR` live
+values themselves (not just the disable sequence) the same way `BCH_CR`
+and PL310 were compared -- would need a small `mrc`-based debug command,
+now that the exact code path and register operations involved are known
+precisely (see above) rather than needing to be guessed at.
 
 This 3.4 kernel has only ever shipped paired with the stock 2012.10 U-Boot;
 booting it via this 2018.07 fork's `bootz` is fundamentally unproven,

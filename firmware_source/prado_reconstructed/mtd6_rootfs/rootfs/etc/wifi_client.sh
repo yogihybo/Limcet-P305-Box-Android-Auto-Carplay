@@ -49,7 +49,16 @@ if ! lsmod | grep -q rtl8811cu; then
 	fi
 fi
 
-sleep 1
+# The onboard WiFi module can take a long time to finish USB enumeration
+# on this hardware -- the musb controller's own OTG recovery/retry cycle
+# has been observed taking 15-20+ seconds in real boot logs, well past a
+# fixed `sleep 1`. Poll for wlan0 to actually exist instead of assuming
+# it's ready (see etc/wifi_ap.sh for the same fix).
+i=0
+while [ ! -e /sys/class/net/wlan0 ] && [ $i -lt 30 ]; do
+	sleep 1
+	i=$((i + 1))
+done
 
 if ! ifconfig wlan0 up 2>>"$LOG"; then
 	echo "ERROR: could not bring wlan0 up -- check dmesg for the wifi module" | tee -a "$LOG"

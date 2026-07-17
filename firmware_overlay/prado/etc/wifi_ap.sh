@@ -37,7 +37,16 @@ else
     }
 fi
 
-sleep 1
+# The onboard WiFi module can take a long time to finish USB enumeration
+# on this hardware -- the musb controller's own OTG recovery/retry cycle
+# (see [musb] messages elsewhere in rcS/dmesg) has been observed taking
+# 15-20+ seconds in real boot logs, well past a fixed `sleep 1`. Poll for
+# wlan0 to actually exist instead of assuming it's ready.
+i=0
+while [ ! -e /sys/class/net/wlan0 ] && [ $i -lt 30 ]; do
+    sleep 1
+    i=$((i + 1))
+done
 
 ifconfig wlan0 up || exit 1
 ifconfig wlan0 192.168.43.1 netmask 255.255.255.0

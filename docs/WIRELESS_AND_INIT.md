@@ -18,6 +18,31 @@ This document explains the physical pin mapping, modules, and commands required 
 
 ---
 
+## 1a. WiFi never enumerates when booting via `bootusb` -- not a bug, one physical port
+
+`musb-hdrc.0`'s hub reports exactly **one** downstream port
+(`hub 1-0:1.0: 1 port detected`, confirmed in every captured boot log).
+The onboard WiFi module and any external USB stick used to boot via
+`bootusb` share that same single port. Confirmed by comparing every
+`docs/logs/new kernel bootlog*.txt` capture against its own kernel
+command line: every log where WiFi came up successfully
+(`rtw_ndev_init(wlan0)`, `hostapd ... AP-ENABLED`) booted with
+`root=/dev/mmcblk0p2` (`bootmmc`, SD card); every log where WiFi never
+enumerated at all booted with `root=/dev/sda2` (`bootusb`, USB stick) --
+a 100% consistent correlation, not a code regression from any specific
+commit (initially suspected to be the 2026-07-14 USB VBUS-delay/recovery-
+watchdog fixes, `db1da3937`/`07db9a9c3` -- ruled out once the boot-medium
+pattern became clear).
+
+**Practical implication**: test WiFi/CarPlay specifically via SD-card
+boot (`bootmmc`), not `bootusb` -- the boot stick physically occupies the
+only available port for the whole session, leaving nothing for the WiFi
+module to enumerate on. A powered USB hub between the board and the
+stick (giving the WiFi chip a second downstream port) would resolve this
+if both need to be tested at once, but hasn't been tried.
+
+---
+
 ## 2. Boot Script Setup (`/etc/rc.d/rcS`)
 
 During boot, the following steps are performed:

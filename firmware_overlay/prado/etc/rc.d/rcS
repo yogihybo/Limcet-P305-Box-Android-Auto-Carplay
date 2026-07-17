@@ -117,16 +117,16 @@ modprobe rtl8811cu
 mkdir -p /data
 touch /data/udhcpd.leases
 
-# Switched to WiFi client (STA) mode 2026-07-14, for easier SSH/testing
-# access during development -- joins a real local network instead of
-# hosting the carplay_wifi AP. A single WiFi radio generally can't be an
-# AP and a client at once, so this replaces (doesn't run alongside) the
-# AP. etc/wifi_ap.sh is untouched and still works if run manually -- see
-# docs/DRIVER_TEST_PLAN.md and the comment at the top of each script.
-# EDIT etc/wifi_client.conf with your real SSID/password before relying
-# on this.
-#/etc/wifi_ap.sh &
-/etc/wifi_client.sh &
+# Reverted to stock default 2026-07-17: host the carplay_wifi AP again,
+# matching real device behavior for wireless CarPlay. Was switched to
+# WiFi client (STA) mode 2026-07-14 for easier SSH/testing access during
+# development -- a single WiFi radio can't be an AP and a client at the
+# same time, so that replaced (didn't run alongside) the AP. STA mode is
+# still available by hand if needed for testing: comment the line below
+# back out and uncomment/run etc/wifi_client.sh instead (see
+# docs/DRIVER_TEST_PLAN.md and the comment at the top of each script).
+/etc/wifi_ap.sh &
+#/etc/wifi_client.sh &
 
 # --- diagnostic tools banner (firmware_overlay/prado) ---
 echo ""

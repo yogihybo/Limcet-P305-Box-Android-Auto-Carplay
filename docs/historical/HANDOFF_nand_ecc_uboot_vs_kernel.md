@@ -176,6 +176,44 @@ apparently caused by exactly this class of bug, a clean/small/stable bad
 block count after this fix (matching what `bootstock`'s real stock U-Boot
 reports) would be strong confirmation.
 
+### Companion kernel-side fix (2026-07-17): the same write-prevention gap existed in the kernel's own NAND driver too -- confirmed reproducing the exact historical symptom, fixed, not yet hardware-tested
+
+The Fix 1/Fix 2 pair above only ever applied to the **U-Boot** `ark_nand.c`.
+The **kernel's** `ark_nand.c` (`linux-arkmicro/linux/drivers/mtd/nand/raw/
+ark_nand.c` -- a different, independent driver implementation, modern
+`attach_chip`-based NAND framework rather than U-Boot's older
+`nand_scan_tail()` one) had no equivalent override at all -- it set
+`NAND_BBT_NO_OOB` but left `bbt_td`/`bbt_md` untouched, so
+`nand_create_bbt()` always fell back to the generic, write-enabled
+`bbt_main_no_oob_descr`/`bbt_mirror_no_oob_descr`.
+
+**Confirmed happening for real**, caught via `docs/logs/new kernel bootlog
+new uboot v14.txt`: a `bootusb` boot that doesn't use NAND for anything at
+all (kernel+DTB+rootfs all from a USB stick) still probes the onboard NAND
+chip as a matter of course, printed `Bad block table not found for chip 0`,
+rescanned, reproduced **exactly 417 `Bad eraseblock` entries** -- the exact
+same number as the historical "~417 false bad blocks" symptom from
+`docs/historical/HANDOFF_touch_and_bootargs_fix.md` ("Fix C") -- and then
+`Bad block table written to 0x000007fe0000`/`0x000007fc0000`, actually
+persisting the bad table to physical flash. An earlier same-day capture
+(`new kernel bootlog new uboot v12.txt`) shows zero `Bad eraseblock` lines
+at all -- it read an existing, valid on-flash table cleanly -- so
+something between those two boots caused the kernel to start treating the
+on-flash table as unreadable, and this write-then-can't-read-cleanly cycle
+is exactly the kind of bug that gets *worse* on every subsequent boot once
+it starts, since the table it wrote is itself now suspect to whatever ECC
+config reads it next.
+
+**Fix applied** (`ark_nand.c`, `ark_nand_attach_chip()`): added
+`ark_bbt_main_no_oob_descr`/`ark_bbt_mirror_no_oob_descr` -- identical to
+the generic descriptors except `NAND_BBT_WRITE` is dropped -- and assign
+them to `nand->bbt_td`/`nand->bbt_md` before `nand_scan()` completes,
+exactly mirroring the U-Boot-side Fix 2 pattern. The scan can still read
+an existing table or fall back to real factory bad-block markers in RAM;
+it just never writes anything back to flash. Builds clean. **Not yet
+hardware-tested** -- verify the same way as above: cold-boot, confirm
+"Bad block table written" never appears again.
+
 ---
 
 ## 2. NAND ECC -- kernel side: now patched to match U-Boot's ground truth, NOT yet hardware-tested

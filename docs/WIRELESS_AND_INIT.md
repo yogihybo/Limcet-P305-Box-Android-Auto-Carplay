@@ -292,3 +292,99 @@ adapter classes) that parse the `+PREFIX=` lines field-by-field, and
 `libBTSender.so`/`libbt_stack.so` (the latter is almost certainly a
 stock Bluedroid/BlueZ HCI stack judging by its size and generic name,
 not vendor code — lower priority for hand disassembly).
+
+---
+
+## 6. Root cause found and fixed (2026-07-18): missing RTL8761B firmware, not a module-type mismatch
+
+Section 4/5 above left Bluetooth in a broken state: `blueware` would
+crash-loop on `bt_fw_download_thread` → `firmware_config_cb:1` →
+`Restart_MainThread` → repeat, seconds after boot, every single time.
+The investigation went through several wrong turns before landing on
+the real cause — recorded here so the mistakes aren't repeated.
+
+### Dead end #1: switching `MsnProductInfo.ini`'s `BlueToothType` from 6 to 5
+
+`blueware-bw121.properties` (`MODULE_TYPE=BW121`) was crash-looping, so
+the working theory became "wrong module type" — the real device's About
+screen shows `BlueTooth: BT825B,V5.6.6`, and `blueware-bw123.properties`
+(`MODULE_TYPE=BT825`) matched that string, so `BlueToothType` was
+changed `6→5` to select it. This did change `blueware`'s code path
+(`bt_chipset_rtl_init`/H5 transport instead of the old vendor-command
+path) but the *new* failure was worse: a live H5 `>>SYNC` handshake to
+the chip timed out completely (`h5_link_synchronize_timeout` →
+`BLUEWARE_HCI_TRANSPORT_PEER_RESET`), and a separate crash (`blueware`
+segfaulting on a wild pointer inside its own response parser, same
+fault address `0xfcee0112` recurring across both module types) kept
+happening regardless of which one was active — proving that crash was
+unrelated to module-type selection.
+
+### Dead end #2 (partial): the segfault, and ruling out `ARK1668_LCDC_OSD1_CTL`/baud-rate theories
+
+Disassembled the crash site (`0x5d47c: ldrh r3,[r0,#14]`, `r0` a
+garbage pointer from a lookup at `0x30810`) — a parser indexing into
+something with unvalidated data, consistent with a chip responding in a
+format the active module profile's parser doesn't expect. Separately
+noticed the UART never reached its configured `1500000` baud (stuck at
+`115200`, matching `ark_hsuart_set_termios` log lines) — checked the
+kernel driver and DT clock (`uart5clk` = 24MHz, `uartclk/16` = exactly
+1,500,000, no kernel-side cap) and concluded the kernel/DTS side was
+fully capable of 1.5M baud; `blueware` itself simply never requests the
+speed bump because its own initial handshake never completes. Neither
+of these avenues was the actual root cause — both were downstream
+symptoms of the real problem below.
+
+### Root cause: `BlueToothType=6` (BW121) was correct all along — three real files were just missing from the rootfs
+
+A **live capture on genuine stock firmware** (`docs/logs/bluetooth log
+stock.txt`) with `MODULE_TYPE=BW121` — the *original*, never-changed
+setting — succeeded completely: full HCI bring-up, `firmware_config_cb:0`
+(success, not the `:1` failure seen throughout this investigation),
+ending in a broadcasting radio: `[BLUEWARE:ON][NAME:Limcet
+Box_fc9f][MAC:DC0D3014FC9F][PROFILES:246952]`. The `/etc/` listing from
+that same live session showed one file our reconstructed rootfs never
+had: **`rtl8761bt_fw`**. `blueware`'s own log explained why it matters —
+`openning librtkvnd.so` → `set:fwdir=/etc/` → firmware loads →
+`firmware_config_cb:0`.
+
+**The RTL8761B is a ROM+RAM chip, not a chip with persistent onboard
+firmware storage.** Its silicon boot ROM only knows how to listen on
+UART for a firmware patch and load it into volatile SRAM — every power
+cycle (which includes every `GPIO91`/`BTEN` toggle, i.e. every boot and
+every `blueware` restart) wipes that RAM, and the chip needs the patch
+re-pushed from the host before it can do anything Bluetooth-related.
+Without the firmware file present, *every* boot was guaranteed to fail
+the exact same way, regardless of `MODULE_TYPE`/`BlueToothType`
+selection — which is exactly what both dead ends above were actually
+observing without realizing it.
+
+**Files that were missing, found in `Holden firmware update/rootfs.img`
+(a UBI image never previously extracted — `ubireader_extract_files`
+pulled it apart), MD5-verified, and copied into
+`firmware_source/prado_reconstructed/mtd6_rootfs/rootfs/`:**
+
+| File | Size | Why it's needed |
+|---|---|---|
+| `etc/rtl8761bt_fw` | 43,980 bytes | The actual firmware/patch blob pushed into the chip's SRAM on every boot |
+| `usr/lib/librtkvnd.so` | 153,496 bytes | The Realtek vendor library `blueware` `dlopen()`s to actually perform the download (`openning librtkvnd.so` in the log) — without this, the firmware file alone wouldn't have been enough |
+| `etc/rtkbt.conf` | 799 bytes | Config file at the exact path `blueware`'s own log referenced (`cfgfile=/data/feasycom/rtkbt.conf`, seeded from this) — distinct from the *other*, already-present `etc/bluetooth/rtkbt.conf`, which belongs to the unrelated `libbt-vendor.so`/generic-Android-rtkbt stack, not `blueware` |
+| `etc/RingTone.wav`, `etc/bluetooth/RingTone.wav` | 418,380 bytes each | HFP ringtone asset — `blueware-bw121.properties`'s `HFP_RING_PATH=/etc/RingTone.wav` already pointed at this (that property value was already correct in our tree, matching live stock, not the raw Holden archive's own empty default), just the file itself was missing |
+
+All five committed in `ec03977`, "Add missing RTL8761B Bluetooth
+firmware/vendor library from Holden rootfs".
+
+**Status: fixed in the repo, not yet re-confirmed on our own
+reconstructed rootfs on real hardware** (the successful capture above
+was on genuine stock firmware, used to *diagnose* the gap — the fix
+itself is a same-rootfs file addition, no kernel/DTS change, so it
+should carry over directly, but hasn't had its own dedicated boot-log
+confirmation yet). Next real-hardware session should confirm `blueware`
+reaches `firmware_config_cb:0` and a broadcasting radio on our own
+image, not just stock's.
+
+### `mute`/`gpio` startup line — unrelated to this fix, tracked separately
+
+`MsnCoreApp`'s own boot log line `Sound_BD37033::muteSpeakerAtts false
+true` (seen the same session) is BD37033 sound-amp related, not
+Bluetooth — see `docs/BD37033.md` and `docs/AUDIO_SUBSYSTEM_INVESTIGATION.md`,
+not this document.

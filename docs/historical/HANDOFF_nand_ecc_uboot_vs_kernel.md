@@ -246,12 +246,49 @@ is kept as a second line of defense (harmless no-op now that
 `NAND_BBT_USE_FLASH` is never set, but protects against some future DT
 variant re-enabling it without this follow-up being remembered).
 
-**Not yet hardware-tested** -- verify by cold-booting and confirming (a)
-"Bad block table not found"/"Bad block table written" never appear again,
-(b) the driver instead does its raw factory-marker scan every single
-boot (a small, real, per-boot cost -- roughly 1.5-2s per the v14 log's
-timestamps -- traded for guaranteed correctness), and (c) the resulting
-bad-block count/positions are small and stable across repeated boots,
+**Confirmed on real hardware (2026-07-17), full clean rebuild+reflash to
+USB, kernel `#55 Fri Jul 17 13:32:44`**: `Bad block table written` is
+gone -- the driver never persists anything to flash anymore, the actual
+bug this fix targets. `Bad block table not found` / `Scanning device for
+bad blocks` / `Bad eraseblock N...` still appear on every boot, as
+expected/by design -- that's the always-rescan-in-RAM behavior working
+exactly as intended, not a regression, and shouldn't be mistaken for "the
+same bug still happening."
+
+**Resolved same day: root cause found on the read side, not badblockpos.**
+The rescan kept reporting exactly ~417 bad blocks -- the same count as
+the historical "417 false bad blocks" symptom this whole investigation
+started from -- even with the write-side bug fully closed and the scan
+confirmed raw/uncached. `badblockpos` itself turned out fine (`0`, the
+correct mainline default for `writesize > 512`, matching the standard
+large-page convention). The actual bug: **the kernel driver never
+overrode `ecc.read_oob`**, so `NAND_ECC_HW_SYNDROME`'s generic default
+(`nand_read_oob_syndrome()`, `nand_base.c`) was handling every OOB-only
+read -- including `nand_block_bad()`'s factory-marker check during the
+scan. That generic function assumes ECC bytes are physically
+*interleaved* with data at regular `ecc.size` (1024-byte) intervals --
+its column-offset formula for ECC step `i>0` computes physical offset
+`1024`, which on this chip is still squarely inside the *data* area, not
+any OOB/ECC region at all.
+
+This chip's real physical layout is the standard *non-interleaved* one
+instead, confirmed directly from this same driver's own
+`ark_nand_read_page_syndrome()`, which sets `oob_pos = mtd->writesize`
+(2048) before adding the ECC region's offset -- i.e. all 2048 data bytes
+contiguous, then all 64 OOB bytes contiguous, exactly matching this
+section's own "ECC bytes starting at OOB offset 3" finding. The generic
+function's wrong-layout reads were pulling garbage into
+`chip->oob_poi[badblockpos]` for a large fraction of blocks -- a
+plausible, clean explanation for a ~40% (417/1024-ish) false-bad rate
+that's neither "everything fails" nor "everything works."
+
+**Fix applied**: added `ark_nand_read_oob()` -- the same correct
+addressing sequence already used in `ark_nand_read_page_syndrome()`'s
+own `oob_required` branch (`READ0` to select the page, `RNDOUT` directly
+to `mtd->writesize`, read the full contiguous OOB region in one shot) --
+factored out for standalone OOB reads and wired in as `ecc->read_oob`.
+Builds clean. **Not yet hardware-tested** -- verify by cold-booting and
+confirming the bad-block count drops to something small and stable,
 matching what `bootstock`'s real stock U-Boot reports for the same chip.
 
 ---

@@ -27,19 +27,20 @@ During boot, the following steps are performed:
 
 ---
 
-## 3a. Default boot mode changed 2026-07-14 -- client (STA), not AP
+## 3a. Boot mode: back to stock default (AP) as of 2026-07-17
 
-`rc.d/rcS` now calls `etc/wifi_client.sh` instead of `etc/wifi_ap.sh` at
-boot, so the device joins a real local WiFi network automatically
-(easier SSH/testing access) instead of hosting the `carplay_wifi` AP
-described below. This was a deliberate choice — a single WiFi radio
-generally can't be an AP and a client at once, so it replaces rather
-than runs alongside the AP. **Edit `etc/wifi_client.conf` with your real
-SSID/password before relying on this** — it ships with placeholder
-values that will never connect. The AP script below is untouched and
-still works if run manually (`/etc/wifi_ap.sh &`).
+`rc.d/rcS` calls `etc/wifi_ap.sh` at boot again, hosting the
+`carplay_wifi` AP for wireless CarPlay — matching real device behavior.
+Between 2026-07-14 and 2026-07-17 this called `etc/wifi_client.sh`
+instead (client/STA mode, joining a real local network for easier
+SSH/testing access during development) — reverted once that testing
+period was done. A single WiFi radio generally can't be an AP and a
+client at once, so only one of the two runs at boot; the other stays
+available to run by hand (`/etc/wifi_client.sh &`, after editing
+`etc/wifi_client.conf` with real SSID/password first — it ships with
+placeholder values that will never connect).
 
-## 3. WiFi Access Point Setup Commands (no longer runs automatically -- see 3a)
+## 3. WiFi Access Point Setup Commands (runs automatically at boot -- see 3a)
 
 To manually bring up the wireless access point or verify the configuration:
 

@@ -165,9 +165,14 @@ fires for each.
 
 **Device facts.** ARK1680 Linux/BusyBox, root over SSH (this project enables
 `sshd`). Present: BusyBox `cat`, `dd`, `hexdump`, `microcom`. **Absent:** `strace`,
-`stty`, `od`, `xxd`, `socat`. MCU link = `/dev/ttyHS0`; baud is the adapter default
-(not in `MsnProductInfo.ini`) — try **115200**, then **38400**. `MsnCoreApp` holds
-the port open, so a second reader races for bytes — plan around that.
+`stty`, `od`, `xxd`, `socat`. MCU link = `/dev/ttyHS0`; baud **confirmed 38400**
+(2026-07-18, not a guess — `MCUAdapter_BoxP300::getPortSettings()` in
+`libMcuCenter.so`, Prado's real active adapter class for `McuType=6`, copies a
+static `PortSettings` struct straight out of `.rodata` with no computation:
+bytes `00 96 00 00` = `0x00009600` = 38400, 8N1. Previously this section said
+"try 115200, then 38400" as an unconfirmed guess list — 38400 is the real
+value. See `tools/mcu-handshake/README.md` for the full trace). `MsnCoreApp`
+holds the port open, so a second reader races for bytes — plan around that.
 
 ### Method A — built-in MCU debug log (preferred; reuses the app's own parser)
 The frame logging in `libMcuCenter.so` (`recvProtocolData`, `recv track:`,
@@ -207,7 +212,7 @@ Stop the app first (otherwise it steals the bytes), then read the port. With no
 `stty`, set the baud via `microcom`:
 ```sh
 killall MsnCoreApp
-busybox microcom -s 115200 /dev/ttyHS0            # interactive view; Ctrl-X to exit
+busybox microcom -s 38400 /dev/ttyHS0             # interactive view; Ctrl-X to exit
 # or log to hex + file:
 busybox cat /dev/ttyHS0 | busybox hexdump -C | tee /data/ttyHS0.log
 ```

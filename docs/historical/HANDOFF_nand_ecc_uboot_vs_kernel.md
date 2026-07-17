@@ -101,6 +101,81 @@ crc32 0x1000000 0x400000
 Should read `4194304 bytes read: OK` with zero `!!Read Data err` lines. Run
 it 2-3 times back to back -- CRC32 should be identical every time.
 
+### Follow-up (2026-07-17): probe-time ECC default was still wrong, and the auto-BBT-write path made that dangerous -- found and fixed, NOT yet hardware-tested
+
+`switchecc 2` (above) only takes effect when something explicitly runs it --
+e.g. the `nandboot` env command, or a user at the prompt. It does **not**
+run automatically at boot. But `board_nand_init()` (called unconditionally,
+early in board bring-up, long before any env command or shell prompt) calls
+`ark_hwecc_nand_init_param()`, which sets up the chip's ECC config for the
+*initial* probe -- and, for `mtd->oobsize == 64` (this chip), that function
+was still using the old, wrong scheme this whole time: 512-byte ECC step,
+the `nand_hw_eccoob_bootstrap` OOB layout, and `BCH_CR = bit8|bit0` -- not
+the hardware-confirmed 1024-byte-step / `nand_hw_eccoob_64_2seg13b` /
+`BCH_CR = bit8|bit7|bit1` scheme this section already proved correct and
+wired into `switchecc 2`.
+
+This matters a lot more than a merely-wrong diagnostic default, because this
+board also sets `CONFIG_SYS_NAND_USE_FLASH_BBT`. That makes
+`nand_scan_tail()` -- called right after `ark_hwecc_nand_init_param()`, on
+every single boot -- perform an **automatic on-flash bad-block-table scan**,
+using whatever ECC config is active at that moment (the wrong one). Because
+the generic flash-BBT descriptors U-Boot installs by default
+(`bbt_main_no_oob_descr`/`bbt_mirror_no_oob_descr`, selected via
+`NAND_BBT_USE_FLASH | NAND_BBT_NO_OOB`) have `NAND_BBT_CREATE | NAND_BBT_WRITE`
+set, a scan that can't decode the real factory bad-block markers (because
+the ECC scheme is wrong) doesn't just fail loudly -- it silently rebuilds
+and **writes a fresh, polluted BBT back to flash**, marking good blocks
+bad. This is believed to be the actual mechanism behind the historical
+"~417 false bad blocks" symptom documented in
+`docs/historical/HANDOFF_touch_and_bootargs_fix.md` ("Fix C") -- and,
+critically, it was never touched by the `switchecc 2` fix above, since that
+only ever runs *after* the automatic scan has already happened.
+
+**Fix 1 -- correct the probe-time default.** `ark_hwecc_nand_init_param()`'s
+`mtd->oobsize == 64` branch now uses the same parameters as `switchecc 2`
+(`chip->ecc.size = 1024`, `nand_hw_eccoob_64_2seg13b` layout,
+`BCH_CR = bit8|bit7|bit1`), so the correct scheme is active from the very
+first probe, not just after a manual command.
+
+**Fix 2 -- stop the automatic BBT scan from ever writing to flash**, as a
+second, independent line of defense (belt-and-braces: even with Fix 1, a
+still-being-verified ECC/OOB change is not something that should be able to
+silently persist a bad table to flash). Added board-specific
+`ark_bbt_main_descr`/`ark_bbt_mirror_descr` -- identical to U-Boot's
+generic `bbt_main_no_oob_descr`/`bbt_mirror_no_oob_descr` (same pattern
+bytes, offsets, versioning options) except `NAND_BBT_WRITE` is dropped --
+and assign them to `chip->bbt_td`/`chip->bbt_md` in `ark_nand_init()`
+before `nand_scan_tail()` runs. `nand_default_bbt()` (`nand_bbt.c`) only
+installs the generic write-enabled descriptors when `chip->bbt_td` is still
+`NULL`, so this override is picked up board-wide; every flash-write path in
+`nand_bbt.c` is strictly gated on `td->options & NAND_BBT_WRITE`, confirmed
+by reading each call site. Net effect: the scan still reads an existing
+on-flash table, and still falls back to scanning real factory bad-block
+markers and building a table in RAM if none is found or it's invalid -- it
+just never writes anything back to flash.
+
+### Files changed (this follow-up)
+- `drivers/mtd/nand/ark_nand.c`:
+  - `ark_hwecc_nand_init_param()`, `oobsize == 64` branch -- corrected ECC
+    scheme (Fix 1).
+  - New `ark_bbt_main_descr` / `ark_bbt_mirror_descr` (near the top of the
+    file, right after the dead-code layout block) and their assignment to
+    `chip->bbt_td`/`chip->bbt_md` in `ark_nand_init()`, next to where
+    `NAND_BBT_USE_FLASH` is enabled (Fix 2).
+
+### Status
+Builds clean (`make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf-
+drivers/mtd/nand/ark_nand.o`, only pre-existing unrelated
+`-Wmisleading-indentation` warnings). **Not yet hardware-tested.** Verify by
+cold-booting and watching for "Bad block table written"-style console
+output (should now never appear), then cross-check the resulting bad-block
+count/positions against `nandoobcheck`/`nand dump.oob` the same way section
+1's original fix was verified. Given the earlier "417 false bad blocks" was
+apparently caused by exactly this class of bug, a clean/small/stable bad
+block count after this fix (matching what `bootstock`'s real stock U-Boot
+reports) would be strong confirmation.
+
 ---
 
 ## 2. NAND ECC -- kernel side: now patched to match U-Boot's ground truth, NOT yet hardware-tested

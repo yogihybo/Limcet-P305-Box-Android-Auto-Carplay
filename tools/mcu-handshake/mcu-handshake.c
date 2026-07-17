@@ -5,6 +5,8 @@
 #include <fcntl.h>
 #include <termios.h>
 #include <errno.h>
+#include <sys/select.h>
+#include <time.h>
 
 // BoxP300 (McuType=6) Handshake Mapping
 // Maps incoming byte[3] (subcommand) to outbound byte[6] (ip)
@@ -34,6 +36,30 @@ unsigned char calc_xor_checksum(const unsigned char *data, int len) {
     return chk;
 }
 
+/* MCUAdapter_BoxP300::getPortSettings() (libMcuCenter.so @ 0x35a8c) was
+ * disassembled to find this project's own confirmed real baud rate: it
+ * copies a static 16-byte PortSettings struct straight out of .rodata
+ * (@ 0xb2c70: bytes 00 96 00 00 08 00 00 00 00 00 00 00 00 00 00 00) --
+ * 0x00009600 = 38400 baud, 8 data bits, no parity, 1 stop bit. 38400 is
+ * the confirmed value, not a guess -- kept as the default here. The
+ * wider candidate list below is for --scan, in case a different MCU
+ * firmware revision or product variant differs from this trace. */
+#define DEFAULT_BAUD 38400
+
+static const int SCAN_BAUD_CANDIDATES[] = {
+    38400, 115200, 9600, 19200, 57600,
+#ifdef B230400
+    230400,
+#endif
+#ifdef B460800
+    460800,
+#endif
+#ifdef B921600
+    921600,
+#endif
+};
+#define NUM_SCAN_CANDIDATES (int)(sizeof(SCAN_BAUD_CANDIDATES) / sizeof(SCAN_BAUD_CANDIDATES[0]))
+
 speed_t get_baud_rate(int speed) {
     switch (speed) {
         case 9600: return B9600;
@@ -41,7 +67,16 @@ speed_t get_baud_rate(int speed) {
         case 38400: return B38400;
         case 57600: return B57600;
         case 115200: return B115200;
-        default: return B115200;
+#ifdef B230400
+        case 230400: return B230400;
+#endif
+#ifdef B460800
+        case 460800: return B460800;
+#endif
+#ifdef B921600
+        case 921600: return B921600;
+#endif
+        default: return B38400;
     }
 }
 
@@ -231,11 +266,173 @@ void parse_and_respond(int fd, int verbose) {
     }
 }
 
+/* Bounded-duration listen at one baud rate, for --scan. Reports raw byte
+ * traffic (proof something is reaching the port at all, even if framing
+ * is wrong for this baud) and any fully valid, checksum-passing frames
+ * (proof this is the right baud) -- responding to any it finds, same as
+ * normal mode, so a handshake can complete opportunistically mid-scan. */
+struct scan_result {
+    int baud;
+    long bytes_seen;
+    int sync_bytes_seen;   /* raw 0x2E byte count, before framing is checked */
+    int valid_frames;
+};
+
+struct scan_result scan_one_baud(const char *port, int baud, int duration_sec, int verbose) {
+    struct scan_result res = { baud, 0, 0, 0 };
+
+    int fd = open(port, O_RDWR | O_NOCTTY | O_NDELAY);
+    if (fd < 0) {
+        fprintf(stderr, "[-] %d baud: failed to open %s: %s\n", baud, port, strerror(errno));
+        return res;
+    }
+    fcntl(fd, F_SETFL, 0);
+    if (set_interface_attribs(fd, baud) < 0) {
+        close(fd);
+        return res;
+    }
+
+    printf("[*] Scanning %d baud for %ds...\n", baud, duration_sec);
+    fflush(stdout);
+
+    struct timespec deadline;
+    clock_gettime(CLOCK_MONOTONIC, &deadline);
+    deadline.tv_sec += duration_sec;
+
+    unsigned char buf[256];
+    int buf_len = 0;
+
+    for (;;) {
+        struct timespec now;
+        clock_gettime(CLOCK_MONOTONIC, &now);
+        double remaining = (deadline.tv_sec - now.tv_sec) + (deadline.tv_nsec - now.tv_nsec) / 1e9;
+        if (remaining <= 0)
+            break;
+
+        fd_set rfds;
+        FD_ZERO(&rfds);
+        FD_SET(fd, &rfds);
+        struct timeval tv;
+        tv.tv_sec = (long)remaining;
+        tv.tv_usec = (long)((remaining - tv.tv_sec) * 1e6);
+
+        int sel = select(fd + 1, &rfds, NULL, NULL, &tv);
+        if (sel <= 0)
+            continue; /* timeout or interrupted -- loop re-checks deadline */
+
+        unsigned char chunk[64];
+        int n = read(fd, chunk, sizeof(chunk));
+        if (n <= 0)
+            continue;
+
+        res.bytes_seen += n;
+        if (verbose) {
+            printf("[RX %d] ", baud);
+            for (int i = 0; i < n; i++)
+                printf("%02X ", chunk[i]);
+            printf("\n");
+            fflush(stdout);
+        }
+
+        for (int i = 0; i < n; i++) {
+            unsigned char b = chunk[i];
+            if (buf_len == 0) {
+                if (b != 0x2E)
+                    continue;
+                res.sync_bytes_seen++;
+            }
+            if (buf_len < (int)sizeof(buf))
+                buf[buf_len++] = b;
+
+            /* Need at least [sig][cmd][len] before we know the full length */
+            if (buf_len < 3)
+                continue;
+            unsigned char cmd = buf[1];
+            unsigned char length = buf[2];
+            int frame_len = 3 + length + 1; /* sig+cmd+len + payload + checksum */
+            if (frame_len > (int)sizeof(buf) || buf_len < frame_len)
+                continue;
+
+            unsigned char calc = calc_xor_checksum(buf, frame_len - 1);
+            unsigned char recv = buf[frame_len - 1];
+            if (calc == recv) {
+                res.valid_frames++;
+                printf("[+] %d baud: VALID FRAME cmd=%02X len=%d -- this looks like the right baud rate\n",
+                       baud, cmd, length);
+                fflush(stdout);
+                if (cmd == 0x02 && length >= 2) {
+                    unsigned char b3 = buf[3], b4 = buf[4];
+                    unsigned char r6 = (b4 != 0) ? b4 : 3;
+                    unsigned char ip = map_byte3_to_ip(b3);
+                    if (ip != 0xFF) {
+                        unsigned char resp[2] = { r6, ip };
+                        build_and_send_response(fd, 0x00, 0x13, 0x21, resp, 2, verbose);
+                        printf("[+] Handshake response sent at %d baud\n", baud);
+                        fflush(stdout);
+                    }
+                } else if (cmd == 0x20 && length >= 5) {
+                    unsigned char resp[5] = { buf[7], buf[4], buf[3], buf[6], buf[5] };
+                    build_and_send_response(fd, 0x00, 0x13, 0x23, resp, 5, verbose);
+                }
+            }
+            buf_len = 0; /* frame consumed (valid or not), resync on next 0x2E */
+        }
+    }
+
+    close(fd);
+    printf("[*] %d baud: %ld byte(s), %d sync byte(s), %d valid frame(s)\n",
+           baud, res.bytes_seen, res.sync_bytes_seen, res.valid_frames);
+    fflush(stdout);
+    return res;
+}
+
+void run_scan(const char *port, int duration_sec, int verbose) {
+    struct scan_result results[NUM_SCAN_CANDIDATES];
+
+    printf("[*] Scanning %d candidate baud rate(s), %ds each -- toggle an input "
+           "(reverse/ACC/a button) on the vehicle to prompt MCU traffic.\n",
+           NUM_SCAN_CANDIDATES, duration_sec);
+    fflush(stdout);
+
+    for (int i = 0; i < NUM_SCAN_CANDIDATES; i++)
+        results[i] = scan_one_baud(port, SCAN_BAUD_CANDIDATES[i], duration_sec, verbose);
+
+    printf("\n[*] Scan summary:\n");
+    printf("%10s %12s %12s %12s\n", "baud", "bytes", "sync_bytes", "valid_frames");
+    int best = -1;
+    for (int i = 0; i < NUM_SCAN_CANDIDATES; i++) {
+        printf("%10d %12ld %12d %12d\n", results[i].baud, results[i].bytes_seen,
+               results[i].sync_bytes_seen, results[i].valid_frames);
+        if (results[i].valid_frames > 0 && (best == -1 || results[i].valid_frames > results[best].valid_frames))
+            best = i;
+    }
+    if (best >= 0) {
+        printf("\n[+] %d baud produced valid frames -- this is the real MCU baud rate. "
+               "Run with -b %d for normal handshake mode.\n",
+               results[best].baud, results[best].baud);
+    } else {
+        int any_bytes = 0;
+        for (int i = 0; i < NUM_SCAN_CANDIDATES; i++)
+            if (results[i].bytes_seen > 0)
+                any_bytes = 1;
+        if (any_bytes)
+            printf("\n[-] No valid frames at any candidate baud, but raw bytes were seen at "
+                   "some rate(s) above -- framing/checksum logic may need review, or try "
+                   "-b with an exact non-standard rate.\n");
+        else
+            printf("\n[-] Zero bytes received at any candidate baud rate. Check wiring, "
+                   "that the port isn't held open by MsnCoreApp (killall MsnCoreApp first), "
+                   "and that the MCU/vehicle is actually powered.\n");
+    }
+}
+
 int main(int argc, char **argv) {
     char *port = "/dev/ttyHS0";
-    int baud = 115200;
+    int baud = DEFAULT_BAUD;
     int verbose = 0;
-    
+    int scan = 0;
+    int scan_duration = 5;
+
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-p") == 0 || strcmp(argv[i], "--port") == 0) {
             if (i + 1 < argc) {
@@ -247,32 +444,42 @@ int main(int argc, char **argv) {
             }
         } else if (strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--verbose") == 0) {
             verbose = 1;
+        } else if (strcmp(argv[i], "--scan") == 0) {
+            scan = 1;
+            if (i + 1 < argc && argv[i + 1][0] != '-') {
+                scan_duration = atoi(argv[++i]);
+            }
         } else {
-            fprintf(stderr, "Usage: %s [-p port] [-b baud] [-v]\n", argv[0]);
+            fprintf(stderr, "Usage: %s [-p port] [-b baud] [-v] [--scan [seconds_per_baud]]\n", argv[0]);
             return 1;
         }
     }
-    
+
+    if (scan) {
+        run_scan(port, scan_duration, verbose);
+        return 0;
+    }
+
     printf("[*] Opening %s at %d baud...\n", port, baud);
     int fd = open(port, O_RDWR | O_NOCTTY | O_NDELAY);
     if (fd < 0) {
         fprintf(stderr, "[-] Failed to open serial port %s: %s\n", port, strerror(errno));
         return 1;
     }
-    
+
     // Clear flags and enable blocking reads
     fcntl(fd, F_SETFL, 0);
-    
+
     if (set_interface_attribs(fd, baud) < 0) {
         close(fd);
         return 1;
     }
-    
+
     printf("[*] Listening for MCU frames. Press Ctrl+C to stop.\n");
     fflush(stdout);
-    
+
     parse_and_respond(fd, verbose);
-    
+
     close(fd);
     return 0;
 }

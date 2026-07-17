@@ -467,6 +467,88 @@ same general class of clock/pinmux issue this project has hit before
 elsewhere (LCD pinmux, clock gating). Not investigated yet -- a new,
 distinct problem from the hang this section was originally about.
 
+**Update (2026-07-17): seven register/config hypotheses tried and
+disproven via live A/B hardware comparison; one real fix found, but for
+a different boot path than the one under investigation.**
+
+Systematically compared this fork's own U-Boot against the real stock
+U-Boot at the prompt (`md.l`/`regr`, same live-hardware method that found
+the ATAGS bug above), checking every display-adjacent register block one
+at a time. All of the following came back **byte-identical** between the
+two, ruling each one out in turn:
+- `rSYS_LCD_CLK_CFG` (`SYS_BASE+0x54`)
+- The full clock-enable/reset block (`SYS_BASE+0x40`-`0x7c`: `AHB_CLK_EN`,
+  `APB_CLK_EN`, `AXI_CLK_EN`, `PER_CLK_EN`, `DEVICE_CLK_CFG0-3`,
+  `SOFT_RSTNA/B`) -- both leave these at `0xFFFFFFFF`/near-all-1s, clearly
+  set once by Stepldr/common init before either U-Boot runs, not by
+  either board's own LCD-specific code
+- `rLCD_TV_CONTROL` (`LCD_BASE+0x2b0`)
+- PWM backlight (`PWM_BASE+0x10/0x14/0x18` -- `rPWM_ENA1/DUTY1/CNTR1`)
+- Declared `DRAM:` size in the U-Boot banner (both `64 MiB`)
+- `arkdata.ini` presence -- this fork's `ark1668_arkdata_ini.c` only ever
+  tried `fatload` from the SD card (never NAND, unlike stock), and every
+  boot log showed that failing (file not on the SD card), silently
+  falling back to compiled LCD-timing defaults. Bundled the real dumped
+  file (`firmware_dumps/Prado firmware dump/mtd4_arkdata/extracted/
+  arkdata.ini`) onto p1 by default (main repo commit `2609277`) -- loads
+  correctly now (`12/12 fields overridden`), and the boot splash actually
+  displays for the first time, but every single field came back
+  `(unchanged)` from the compiled defaults, meaning this was never the
+  differentiator either.
+
+**One real, well-evidenced difference found**: comparing a full
+`LCD_BASE` core-register dump (`md.l 0xe0500000 2c`) between the two
+side by side, OSD2 (the second display layer) was fully configured and
+enabled on stock (`OSD2_CTL=0x002320ff`, `OSD2_SIZE=0x001e0320`
+[800x480], `OSD2_ADDR=0x0be00000`) but completely zeroed/disabled on this
+fork (`ark_display_init()` explicitly called
+`ark_osd_en_layer(OSD2_LAYER, 0)`, since only OSD1 was ever used for the
+bootlogo). Root-caused precisely: `ark_osd_en_layer()` toggles bit 8 of
+`rLCD_CONTROL` for OSD2, exactly the bit that differed
+(`0x03600081` vs `0x03600181`) in the very first register comparison.
+Notably, stock places both OSD1 (`0x0b400000` = exactly 180MB) and OSD2
+(`0x0be00000` = 190MB) *above* the kernel's own `mem=180M` ceiling --
+fixed physical framebuffer addresses the kernel's allocator never
+manages, rather than something dynamically allocated.
+
+**Fix applied** (`ark1668_display_cfg.c`, `ark_display_init()`):
+configure and enable OSD2 with the exact values read live from stock
+(`linux-arkmicro` commit -- see `git log` in that repo for the current
+hash). **Confirmed on real hardware: did NOT fix the original
+`bootnand`/stock-kernel `open /dev/ark_display fail` /
+DirectFB-crash issue this section is about** -- retested cold-boot,
+byte-for-byte identical failure at the same spot, same messages, same
+order (only a few ms of natural timing jitter differed). That failure
+remains open, and is now understood to be something inside the *stock*
+kernel's `ark_disp` driver itself (see the `__get_free_pages()`/mode-
+validation tracing earlier in this section) -- not reachable without
+either the stock kernel's source (which we don't have, so no way to add
+debug prints) or a live `dmesg`/interactive shell (stock provides
+neither). Given `bootstock` already provides a fully working stock UI
+reliably, this is being left as a known, understood gap rather than
+pursued further via register guessing, which has now had a 0/7 hit rate
+on this specific symptom.
+
+**However, the OSD2 fix is a real, independently-confirmed win for a
+different, arguably more important path**: on `bootusb` (this fork's own
+4.19 kernel + reconstructed rootfs), `MsnCoreApp -qws` previously failed
+immediately; with this fix in place, it starts cleanly, the custom
+`ark_display` kernel shim's `ARKDISP_GET_SCREEN_INFO`/`ARKDISP_GET_VDE_CFG`
+ioctls succeed repeatedly, and the full plugin stack (sound, MCU/CAN bus,
+Bluetooth, touch input) loads and the UI becomes visible
+(`MsnWindowManager::setVisible true true`). Confirmed on real hardware.
+The fix is being kept in the fork on this basis, independent of the
+`bootnand` outcome above.
+
+One separate, unrelated issue surfaced in that same successful boot: a
+kernel NULL-pointer-style crash (`pgd = ...`, fault address `0xc`)
+immediately after `insmod: can't read '/tmp/wlan.ko': No such file or
+directory` -- the WiFi module isn't present at that path, so
+`ifconfig`/`hostapd.sh` fail configuring a nonexistent `wlan0`, and
+something in that failure chain dereferences a near-NULL pointer. Not
+investigated -- appears to be a pre-existing, separate module-path gap,
+unconnected to today's display work.
+
 ### GPIO button -- piggyback display switch
 User confirmed this works correctly already, on real hardware, by the time
 U-Boot is running (i.e., it's boot-firmware-level, not kernel/app-level).

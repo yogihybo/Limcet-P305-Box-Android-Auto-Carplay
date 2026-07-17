@@ -44,9 +44,14 @@ bundled into an unrelated I2S commit) -- `usb1`'s interrupt-parent
 0-31); 40 and 39 are out of range for that domain, and exactly equal
 `ark1668.dtsi`'s original, correct values (8, 7) plus 32 -- a global-vs-
 VIC-local interrupt numbering mix-up. Fixed by dropping the override.
-**Not yet hardware-tested** -- once confirmed, `usb1`/WiFi and `usb0`/a
-boot or accessory stick should be able to work simultaneously, matching
-stock, without needing SD-card boot as a workaround.
+
+**CONFIRMED on real hardware (2026-07-17)**: `bootusb` with a physical
+USB stick plugged in, `wlan0: AP-ENABLED` (`carplay_wifi`, same MAC as
+every prior known-good capture), and `usb-test.sh` shows **2 USB hubs
+enumerated** (`musb-hdrc host0 + host1` -- both controllers now
+probing successfully) with the WiFi driver bound and `wlan0` present.
+`usb1`/WiFi and `usb0`/boot-stick now work at the same time, matching
+stock -- the SD-card-boot workaround is no longer needed.
 
 ---
 

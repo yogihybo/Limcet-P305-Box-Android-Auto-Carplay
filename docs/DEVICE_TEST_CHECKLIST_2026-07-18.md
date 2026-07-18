@@ -354,10 +354,40 @@ interleave with the kernel oops on the same console) to get the full
 register dump for root-causing this one the same way the clock bug was
 found.
 
-- [ ] Capture a clean oops for the `bt_fw_download_thread` crash
-      (`blueware > /tmp/blueware.log 2>&1 &`, then `dmesg` separately
-      once it crashes, so the kernel oops isn't interleaved with
-      blueware's own output).
+**Update (2026-07-18) — crash does not reproduce via the real usage
+path.** All 4 crashes in the v4 log came from manually running
+`killall blueware; /usr/bin/blueware /etc/blueware-bw121.properties`
+*before* `start_msn`. Once `start_msn` ran, `MsnCoreApp`'s own
+`start bt service:/usr/bin/blueware` (line 895, `t=161.559s`) got a
+real `AT+DEVSTAT`/`AT+ADDR` response chain starting just ~200ms later
+— far too fast to have gone through even one crash-restart cycle (each
+cycle takes ~2.6s in the standalone loop). That instance never
+crashed at all; BT Local Address, name-set, HFP config etc. all
+succeeded cleanly. **Downgraded from blocking to
+manual-testing-artifact** — not worth the risk of a binary patch to
+`blueware` unless it's actually observed failing during normal use.
+Root-caused via Ghidra regardless (see below) in case it resurfaces.
+
+**Ghidra root-cause of the manual-test crash (for reference):** the
+crash is inside `blueware` itself (`FUN_00073594`/`bt_fw_download_thread`
+@ `0x73594`, faulting call at `0x738c4`) — an indirect call through a
+completion-callback global (`DAT_000f856c`) that's supposed to be
+armed via `FUN_000741d4` before each vendor command is sent, but
+wasn't armed for whatever response this dispatch is handling,
+producing a null-pointer call matching the kernel's `[00000001]`
+faulting address. Also added the genuinely-missing
+`etc/rtl8761bt_config` (sourced from the official
+`Realtek-OpenSource/android_hardware_realtek` repo, `rtk1395`/`rtk1619`
+branches — identical 33-byte file on both, main repo's `rtl8761bt_fw`
+is an older/smaller build than what we already have from Holden, not
+swapped in) — traced to gracefully fall through rather than cause this
+specific crash, so unlikely to fix it alone, but correct to have.
+
+- [ ] If this crash is ever observed to actually block Bluetooth
+      during normal `MsnCoreApp` use (not just manual testing), capture
+      a clean oops (`blueware > /tmp/blueware.log 2>&1 &`, then `dmesg`
+      separately once it crashes, so the kernel oops isn't interleaved
+      with blueware's own output) before considering a binary patch.
 - [ ] **Retest `mcu-handshake` (item 2) with this kernel** — same
       driver serves `ttyHS0`, so the clock fix may unblock MCU
       handshake too now.

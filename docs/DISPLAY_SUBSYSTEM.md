@@ -507,6 +507,8 @@ partition (p1):**
 | | `clock-frequency` | computed: `CLKFreq / CLKDIV1` (both must be present) |
 | `.../lcd@e0500000/display@0` | `lvds-con` | `LVDSCfg` |
 | | `dithering-con` | `dithering` |
+| | `lcd-wiring-mode` | `RgbMode` (enum→string: `0`→`"BGR"`, `5`→`"RGB"`) |
+| | `interface-type` | `ScreenType` (bitmask→string: bit `0x4` LVDS→`"LVDS"`, bit `0x1`/`0x2` RGB565/RGB888→`"TTL"`) |
 
 Full DTB node paths (confirmed against the compiled
 `ark1668_limcet_p305.dtb` via `dtc -I dtb -O dts`):
@@ -527,15 +529,14 @@ Full DTB node paths (confirmed against the compiled
   `drivers/video/fbdev/arkmicro/ark1668_lcdfb.c` for gamma tables or
   composite-out timing. Patching the DTB with these would silently do
   nothing without writing new kernel driver code first — not attempted.
-- `DISPLAY_INTERFACE` section (`ScreenType`, `Format`, `RgbMode`,
-  `TvoutType`, `interlace`) — `RgbMode`/`ScreenType` map conceptually to
-  the DTS's `lcd-wiring-mode` (string `"BGR"`/`"RGB"`) and
-  `interface-type` (string `"TTL"`/`"LVDS"`), but these need
-  enum-to-string translation rather than a direct numeric copy — not
-  implemented yet; both are already correct for the current panel
-  (`RgbMode=0`↔`"BGR"`, `ScreenType=2`↔`"TTL"`/RGB888) so there was no
-  immediate need. Worth adding the string-mapping logic if a future
-  panel swap needs a different value here.
+- `DISPLAY_INTERFACE` section's `Format`, `TvoutType`, `interlace` — no
+  DT-consumed property exists for these on this driver either (`Format`
+  is about pixel packing for U-Boot's *own* legacy splash renderer, not
+  a kernel fbdev property; `TvoutType`/`interlace` are for the
+  composite/analog output path this LCD-only driver doesn't touch).
+  `RgbMode` and `ScreenType` **are** wired (2026-07-19,
+  `fdt_apply_wiring_mode()`/`fdt_apply_interface_type()`,
+  `linux-arkmicro` `c3a420f1f`) — see the table above.
 
 **Fails safe throughout**, matching the existing reader's philosophy:
 missing `arkdata.ini`, a missing individual key, or a DTB node that

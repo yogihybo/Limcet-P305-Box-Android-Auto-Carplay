@@ -471,6 +471,79 @@ as the console). `dmesg` timing not yet checked.
 
 ---
 
+## 7. Reversing camera / ITU656 `dvr` capture pipeline (2026-07-19, new)
+
+**Change:** `open dvr device /tmp/dev/dvr failure.` has appeared in
+*every single boot log this entire project*, always dismissed as
+noise. Traced it to a real, previously-disabled subsystem: stock's
+kernel has a full reversing-camera driver (`dvr_rn6752_probe`,
+`dvr_detect_carback_signal`, `dvr_enter_carback`/`_exit_carback`, a
+complete `/dev/dvr` character device). Our reconstructed kernel
+already had the *exact same code already ported* sitting in
+`drivers/soc/arkmicro/itu656/` (`rn6752.c` — the I2C camera decoder,
+1210 lines; `ark1668_itu656.c` — the capture pipeline + `dvr` char
+device, 2269 lines) — just switched off in the kernel config
+(`CONFIG_ARK1668_ITU656`/`CONFIG_RN6752` both unset). Confirmed real
+and active on stock hardware via three independent signals: a real
+`itu656_load.sh` script in the stock rootfs (creates `/tmp/dev/dvr`),
+U-Boot's own boot-time `itu656bypinfo check ok` validation of
+`arkdata.ini` on Prado's own real dumped log, and a dedicated U-Boot
+`itu656` command + `ITU656` register block.
+
+Enabling this surfaced a much bigger, unrelated problem: the
+`ark1668_defconfig` re-apply needed to pick up the new config also
+dropped `CONFIG_INET`, `CONFIG_IPV6`, `CONFIG_WIRELESS`, `CONFIG_WLAN`,
+and all 4 RTL8xxx WiFi driver configs — none of those had ever
+actually been captured in the checked-in defconfig, only ever set by
+hand in a stale `.config` that kept getting reused without
+re-applying defconfig (`build_kernel.sh` skips defconfig application
+whenever `.config` already exists). **Recovered and verified** — see
+`linux-arkmicro` `5f9fde926` for the full trace (cross-referenced
+against stale-but-proven-working `.ko` build artifacts still in the
+tree, validated by diffing a from-scratch `.config` regeneration
+against the known-working resolved config: identical except
+build-timestamp metadata).
+
+Also fixed a real conflict: `CONFIG_ARK7116` (a different, unused
+camera decoder chip) was also enabled in the defconfig and defines the
+same global symbols as `rn6752.c` — caused a link error when both were
+on. Disabled `ARK7116` since RN6752 is the chip actually on this board
+(confirmed via the DTS's `dvr_rn6752@2c` I2C node and the already-
+succeeding `dvr_rn6752_probe:init done` boot-log line).
+
+DTS wiring already correct, no changes needed: `dvr_rn6752@2c` (I2C,
+already probes successfully) and `itu656in@e0800000`'s `compatible =
+"arkmicro,ark1668-itu656"` (verified matches `ark1668_itu656.c`'s own
+`of_match_table` exactly).
+
+- [ ] Flash this kernel/DTB. Confirm `cat /proc/devices | grep dvr`
+      shows a real major number (previously would have been empty).
+- [ ] `ls -la /tmp/dev/dvr` after `/etc/itu656_load.sh` runs (or
+      confirm `rcS` already runs it) — should exist as a character
+      device now, not be missing.
+- [ ] Confirm `MsnCoreApp`'s `open dvr device /tmp/dev/dvr failure.`
+      line is gone from the boot log.
+- [ ] **Reverse gear test**: put the vehicle in reverse (or however
+      `dvr_enter_carback`/`dvr_detect_carback_signal` is triggered —
+      recall from earlier this session that reverse-gear detection
+      happens on the companion MCU, not a SoC GPIO, so this may need
+      the MCU link working too) and confirm the camera feed actually
+      displays.
+- [ ] `dmesg | grep -i "rn6752\|itu656\|dvr"` for any probe/init errors
+      not visible in the userspace-focused logs collected so far.
+- [ ] **Also verify nothing regressed**: WiFi AP (`hostapd`) and DHCP
+      still work exactly as before — this is the subsystem that was
+      at risk during the defconfig recovery. Confirm the AP is visible
+      and a client can actually get a DHCP lease.
+
+**Not yet hardware-tested.** This is a bigger, higher-risk change than
+most of tonight's fixes (touches core networking config, not just one
+driver) — the WiFi regression risk was caught and fixed before
+committing, but real hardware confirmation is the only way to be
+fully sure nothing else was missed.
+
+---
+
 ## If anything regresses
 
 All of tonight's changes are two clean commits:

@@ -1,5 +1,22 @@
 # Device Test Checklist — 2026-07-18 session
 
+**Major update, same day:** rather than keep chasing individual
+mismatched files, the entire base rootfs
+(`firmware_source/prado_reconstructed/mtd6_rootfs/rootfs`) has been
+replaced with Holden's confirmed-working 2024-02-21 build (`1925b6a`).
+Prado's own device identity (`config.ini`, `MsnProductInfo.ini` —
+`Limcet-P306`/`McuType=6`, `FactoryConfig.ini`, boot branding) was kept
+as-is, and everything Holden's build doesn't ship at all but Prado's
+stock dump did (`sshd`+SSH host keys, `usbmuxd`/`adb`/`carlife`,
+`libMsnAirPlay.so`, `wifi_ap.sh`, the `Launcher-Box-P301-*.rcc`
+resource pack our own `ResourceName=Box-P301` actually loads) was
+restored rather than silently dropped. See the commit message and
+`firmware_source/.../holden_identity_reference/README.md` for the full
+rationale. **This supersedes the individual blueware-file fix below —
+that fix is now just one part of the wholesale rebase.** Flash and
+retest everything in this checklist fresh against the new image, not
+just Bluetooth.
+
 Everything below is already built and committed (main repo `96eef2e`,
 `linux-arkmicro` `3bc02e43e`). This is just the on-device verification
 pass — nothing here needs a rebuild unless noted.

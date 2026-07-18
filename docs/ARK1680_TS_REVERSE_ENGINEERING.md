@@ -577,7 +577,7 @@ boot log) confirms the fix's target values are right:** stock shows
 confirmation the geometry constants chosen are correct, even before the
 ioctl-match bug was found.
 
-## A second, separate subsystem: `arktool_reg_init` (not yet ported)
+## A second, separate subsystem: `arktool_reg_init` — PORTED 2026-07-18
 
 `docs/boot log.txt` also has a line never seen in any of our boot logs:
 `[    1.340000] arktool display reg init`, printed **before rootfs
@@ -589,26 +589,42 @@ mount** — genuinely early kernel boot. Traced it in `vmlinux.elf`:
   work), then builds a table of ~60 raw register pointers into a global
   struct at `0x805fd29c`.
 - Called from `ark1680_uart_startup()` — a shared UART driver's
-  `.startup()` callback — gated to fire only when **one specific**
-  serial port (one of `ttyS2`/`ttyS3`/`ttyHS0`/`ttyHS1`, matched
-  against a per-port table at `0x805fd208`; exact port not pinned down
-  yet) is first opened. Not tied to the LCD driver's own probe at all.
+  `.startup()` callback. **Trigger port pinned down via Ghidra
+  decompilation of `ark1680_uart_probe()` (2026-07-18): sub-port index
+  0 of the 4-port `ark1680-uart` platform device, which is `uart0` at
+  `0xe4200000` — the debug console, `ttyS0` on this tree.** Not
+  `ttyS2`/`ttyS3`/`ttyHS0`/`ttyHS1` as originally guessed. This also
+  explains the "before rootfs mount" timing: the console UART gets its
+  first open essentially immediately at boot. The 4 `ark1680-uart`
+  ports (`0xe4200000`/irq20, `0xe4e00000`/irq21, `0xe8000000`/irq44,
+  `0xe8100000`/irq45) turn out to already match this tree's own
+  `ark1668.dtsi` `uart0-3` nodes byte-for-byte — no DTS changes were
+  needed, only the missing driver-side hook.
 - Paired with `ark_tool_handle()` right next to it — checksummed
-  framing, `store_com_data`, tasklet scheduling — matching
-  `docs/KERNEL_REFERENCE.md`'s already-documented **"arktool" binary protocol**:
-  boot-animation sync, backcar signal enable/disable, MCU health
-  monitoring.
+  framing (signature byte `0xAC`, running XOR checksum, command IDs
+  `0xB1`-`0xD8` via a 40-entry jump table), matching
+  `docs/KERNEL_REFERENCE.md`'s already-documented **"arktool" binary
+  protocol**: mostly Ypbpr/DDS/PLL analog-video-output configuration
+  and register telemetry readback, plus boot-animation sync and MCU
+  health monitoring per that doc. **Independently confirmed unrelated
+  to touch**: `ark1680_ts.ko`'s own object file has zero references to
+  this struct or any arktool symbol — it does its own independent
+  pinmux pokes. Not the CBT16211A touch-switch trigger; see
+  `tools/mcu-handshake/README.md` for that separate investigation.
 
-**This is a genuinely separate subsystem from the `ark_display`
-ioctl fix above** — `arkapi_get_screen_info()` reads `screeninfo_param`
-(`0x805eecd0`); `arktool_reg_init()` populates a different struct
-(`0x805fd29c`). The `MsnCoreApp` segfault fix doesn't depend on this.
-**Not yet ported, not yet needed for anything confirmed** — flagging it
-because it's a real gap (no equivalent hook exists anywhere in our
-serial drivers) that will likely matter once boot animation, backcar
-detection, or MCU health-monitoring features are tested, even after
-touch and the segfault are resolved. Substantially bigger scope than
-the `ark_display` misc-device fix (new ioremaps, a ~60-entry register
-table, a UART `.startup()` hook, and the `ark_tool_handle` protocol
-layer) — worth scoping as its own task rather than folding into the
-current fix.
+**Ported** in `linux-arkmicro` (`drivers/misc/ark_tool.c`, new; one-line
+hook in `drivers/tty/serial/ark_uart.c`'s `pl011_startup()`;
+`CONFIG_ARK_TOOL=y` in `ark1668_defconfig`): the register table (all
+~60 pointers, offsets fully confirmed) and a `/proc/arktool` interface
+that validates incoming frames (signature + checksum + command-ID
+range) and logs them. **Deliberately does not yet act on any received
+command**, including `0xB7` (the one command confirmed to perform real
+pinmux writes to `0x54`/`0x68`/`0x70`) — disassembly confirmed *which*
+registers it touches but not the exact payload-byte-to-value mapping,
+and guessing at that risked writing wrong data into a live pinmux
+register. Extending this needs either a live capture of a real `0xB7`
+frame from the MCU, or further disassembly of that command's exact
+payload unpacking. Built clean against the 4.19 tree, not yet boot-
+tested on real hardware — `cat /proc/arktool` after boot is the
+quickest way to confirm it initialized (should show `ready`, both
+`ioremap`'d base addresses, and frame/checksum counters).

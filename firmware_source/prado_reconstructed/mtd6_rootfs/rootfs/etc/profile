@@ -92,14 +92,8 @@ export COMMANDSERIAL_BAUDRATE=115200
 export PROTOCOL_ID=ark169
 
 #carplay curstomer diy
-# Disabled 2026-07-14 for driver bring-up/testing (docs/DRIVER_TEST_PLAN.md):
-# this ran unconditionally on every login shell (every SSH/serial/telnet
-# session sources /etc/profile), silently undoing any `killall MsnCoreApp`
-# done in a previous session and fighting live framebuffer/driver tests
-# (tools/lcd-test, tools/ark1680-ts-test, etc.) that expect the compositor
-# to stay down. Run manually (`MsnFirstInit`) when you actually want it.
-#MsnFirstInit
-
+MsnFirstInit
+source /msnprofile/msnexport
 carplay_dimens_export="/tmp/msnfirstexport"
 if [ -e $carplay_dimens_export ]; then
         source $carplay_dimens_export
@@ -110,17 +104,11 @@ if [ -e $touch_export ]; then
         source $touch_export
 fi
 
-source /msnprofile/msnexport
 
 export PATH=/bin:/sbin:/usr/bin/:/usr/sbin:/usr/local/bin:$QTDIR/bin:$TS_ROOT/bin:/usr/local/Mplayer/mplayer/bin/
 eval `dbus-launch --auto-syntax`
 insmod  /lib/modules/3.4.0/galcore.ko registerMemBase=0xE0F00000 irqLine=32 contiguousSize=0x800000 physSize=0x80000000 powerManagement=0
-# Disabled 2026-07-14, same reason as MsnFirstInit above -- this is the
-# actual mechanism behind "rcS respawns MsnCoreApp" mentioned elsewhere in
-# this project's docs; it isn't rcS or inittab (neither autostarts it --
-# checked both this session), it's this unconditional line firing on every
-# login shell. Run manually (`MsnCoreApp -qws&`) when you actually want it.
-#MsnCoreApp -qws&
+MsnCoreApp -qws&
 export SDL_NOMOUSE=1
 
 

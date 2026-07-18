@@ -2,24 +2,22 @@
 mount -t proc none /proc
 mount -t sysfs none /sys
 mount -t ramfs -n none /tmp
-mkdir -p /media
 mount -t ramfs -n none /media
-mkdir -p /var
 mount -t ramfs -n none /var
 mkdir -p /var/run/
 mkdir -p /var/lib/lockdown
 sync
 /sbin/mdev -s
 
-touchdriver="/msnprofile/ark1680_ts"
+#touchdriver="/msnprofile/ark1680_ts"
 
-if [ -e $touchdriver ]; then
-        insmod /lib/modules/3.4.0/kernel/drivers/input/touchscreen/ark1680_ts.ko
-        ln -s   /msnprofile/touch_ark1680_ts_export /tmp/touch_export
-else
-        insmod /lib/modules/3.4.0/kernel/drivers/input/touchscreen/gt9xx/gt9xx.ko
-        ln -s /msnprofile/touch_gt9xx_export /tmp/touch_export
-fi
+#if [ -e $touchdriver ]; then
+#        insmod /lib/modules/3.4.0/kernel/drivers/input/touchscreen/ark1680_ts.ko
+#        ln -s   /msnprofile/touch_ark1680_ts_export /tmp/touch_export
+#else
+#        insmod /lib/modules/3.4.0/kernel/drivers/input/touchscreen/gt9xx/gt9xx.ko
+#        ln -s /msnprofile/touch_gt9xx_export /tmp/touch_export
+#fi
 
 #insmod  /lib/modules/3.4.0/kernel/drivers/input/misc/pwm-beeper.ko
 #insmod  /lib/modules/3.4.0/galcore.ko registerMemBase=0xE0F00000 irqLine=32 contiguousSize=0x400000 physSize=0x80000000 powerManagement=0
@@ -33,7 +31,7 @@ if [ "${USERDATAFS}" != "" ]; then
 	        echo "==============Factory reset, erase data partition!==========="
 		flash_eraseall /dev/mtd$mtd_partition        	                                         
                 ubiattach /dev/ubi_ctrl -m $mtd_partition
-                ubimkvol  /dev/ubi1 -N userdata -m 14
+                ubimkvol  /dev/ubi1 -N userdata -m 6
 		ubidetach /dev/ubi_ctrl -m $mtd_partition -d 1
 		fw_setenv factory_reset 0
 	fi       	
@@ -53,7 +51,7 @@ if [ "${USERDATAFS}" != "" ]; then
 			ubidetach /dev/ubi_ctrl -m $mtd_partition -d 1
 			flash_eraseall /dev/mtd$mtd_partition
 			ubiattach /dev/ubi_ctrl -m $mtd_partition
-			ubimkvol  /dev/ubi1 -N userdata -m 14
+			ubimkvol  /dev/ubi1 -N userdata -m 6
 			mount -o sync -t ubifs ubi1_0 /data
 			sync
 		fi
@@ -87,29 +85,5 @@ fi
 #DV695 -qws -display directfb &
 #mirrordemo &
 #Launcher -qws &
-chmod 600 /etc/ssh/ssh_host_*_key
-mkdir -p /var/run/sshd
-mkdir -p /var/empty
-chmod 755 /var/empty
-/usr/bin/sshd -f /etc/ssh/sshd_config &
+#/usr/local/sbin/sshd &
 
-# Load GPU driver
-modprobe galcore contiguousSize=0x800000 physSize=0x80000000 powerManagement=0
-
-# Load USB WiFi driver
-modprobe rtl8811cu
-
-# Set up DHCP lease directory and file
-mkdir -p /data
-touch /data/udhcpd.leases
-
-# Switched to WiFi client (STA) mode 2026-07-14, for easier SSH/testing
-# access during development -- joins a real local network instead of
-# hosting the carplay_wifi AP. A single WiFi radio generally can't be an
-# AP and a client at once, so this replaces (doesn't run alongside) the
-# AP. etc/wifi_ap.sh is untouched and still works if run manually -- see
-# docs/DRIVER_TEST_PLAN.md and the comment at the top of each script.
-# EDIT etc/wifi_client.conf with your real SSID/password before relying
-# on this.
-#/etc/wifi_ap.sh &
-/etc/wifi_client.sh &

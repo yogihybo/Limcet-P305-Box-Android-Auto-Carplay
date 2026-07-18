@@ -1,3 +1,4 @@
 ::sysinit:/etc/rc.d/rcS
-ttyS0::respawn:/sbin/getty -L ttyS0 115200 vt100
+#::respawn:/sbin/getty ttyS0 115200
+::respawn:-/bin/sh
 ::shutdown:/bin/umount -a

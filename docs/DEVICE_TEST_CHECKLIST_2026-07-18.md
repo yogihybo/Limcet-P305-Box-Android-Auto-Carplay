@@ -259,11 +259,58 @@ Committed `5bf0bcd`.
       mechanism, still worth confirming the `uartclk` fix independently
       now that Bluetooth has a real fix in place.
 
-**Root cause: was open, now has a strong, version-evidenced fix
-pending hardware confirmation.** If this doesn't resolve it, note that
-our *entire* rootfs is running ~3 years behind Holden's confirmed-good
-build — a broader "which other files are actually version-critical vs
-cosmetic" pass may be needed, not just Bluetooth-specific files.
+**Result: FAIL, same crash — even with the correct Holden blueware
+binary + matching config/firmware.** This finally ruled out rootfs
+content entirely: the crash is not a userspace/vendor-library version
+mismatch, it has to be something feeding both HS UART ports from
+underneath.
+
+**New root cause found (2026-07-18), kernel-level, not yet
+hardware-tested:** direct side-by-side comparison of `ark_hsuart.c`
+(serves both `ttyHS0`/MCU and `ttyHS1`/Bluetooth, broken) against its
+working sibling `ark_uart.c` (`ttyS0-3`, PL011-derived, functions
+correctly) found two real, concrete gaps this time, not log-inference:
+
+1. **The HS UART peripheral clock is never actually turned on.**
+   `uap->clk` (`uart4clk`/`uart5clk`) is fetched via `devm_clk_get()`
+   in `probe()`, but `clk_prepare_enable()` is never called anywhere
+   in the file. `ark_uart.c`'s equivalent does call it. This isn't
+   cosmetic — `drivers/clk/arkmicro/clk-sys.c`'s `clk_sys_ops` has
+   real `.enable`/`.disable` callbacks that write an actual
+   gate-enable bit to a hardware register, not a no-op rate-only
+   clock. There was even a dangling `/* Shut down the clock producer
+   */` comment in `shutdown()` with no code under it — this driver
+   clearly intended to manage the clock and the calls were never
+   written. Since `ttyHS0`/`ttyHS1` are only opened by userspace
+   (`blueware`, `MsnCoreApp`), well after the kernel's boot-time
+   "disable unused clocks" pass runs, the clock could be sitting
+   gated off the entire time anything tries to talk to the MCU or
+   Bluetooth chip — which would produce exactly this symptom
+   (peripheral registers all accessible, IRQs fire, but no real
+   bit-accurate serial data ever gets in or out).
+2. `ark_hsuart_set_mctrl()` only ever asserted RTS, with no path to
+   deassert it — the working driver's `pl011_set_mctrl()` handles
+   every modem-control bit symmetrically. Lower-confidence/secondary;
+   fixed for parity regardless.
+
+Both fixes committed to `linux-arkmicro` (`33fd16e31`), build clean
+(zImage + all 150 modules via `build_kernel.sh`).
+
+- [ ] **Retest Bluetooth with this kernel** — watch for the crash
+      disappearing, `openning librtkvnd.so` / vendor init actually
+      completing, full HCI bring-up.
+- [ ] **Retest `mcu-handshake` (item 2) with this kernel too** — same
+      driver serves `ttyHS0`, so this could be the shared root cause
+      for both failures after all.
+
+**Root cause: was open, now has a second, more mechanistic
+kernel-level fix pending hardware confirmation** (the rootfs-version
+theory above is now ruled out — keep that context, but this is the
+active lead). If this doesn't resolve it, note that our *entire*
+rootfs is running ~3 years behind Holden's confirmed-good build — a
+broader "which other files are actually version-critical vs cosmetic"
+pass may still be needed separately, not just Bluetooth-specific
+files.
 
 ---
 

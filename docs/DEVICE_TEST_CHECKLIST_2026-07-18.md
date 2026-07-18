@@ -77,6 +77,37 @@ mcu-handshake --verbose
 **If touch worked, which frame do you think triggered it (if you can
 tell from timing)?** _____________________
 
+**Update (2026-07-18, `new uboot new kernel baseline v4.txt`,
+normal `MsnCoreApp` boot — not a dedicated `mcu-handshake` test):**
+**the physical scroll knob on the head unit works, confirmed by the
+user directly on hardware.** The log shows exactly what that looks
+like at the `MsnMainWindow` level:
+```
+[184.267]  MsnMainWindow::setRealVisible LauncherWindow(...) false
+[184.327]  MsnMainWindow::setRealVisible SettingWindow(...) true
+[184.339]  Waite Event Ticks 10
+[208.156]  MsnMainWindow::setRealVisible SettingWindow(...) false
+[208.156]  MsnMainWindow::setRealVisible LauncherWindow(...) true
+```
+Launcher → Settings → (held ~24s) → back to Launcher, in real time —
+real UI navigation, not a static log line. This is the strong,
+physical-behavior kind of evidence (see project memory on weak
+boot-log evidence) — stronger than anything `mcu-handshake` alone
+could show. `libMcuCenter.so` (line 852, `Load App Plugin 401`) logs
+nothing at the individual knob-event level (closed-source, silent),
+so this window-visibility transition is the only observable trace,
+but it's conclusive: **MCU input is reaching `MsnCoreApp` over
+`ttyHS0`.** Same root cause and same fix as Bluetooth (§3's
+`clk_prepare_enable()` fix in `ark_hsuart.c`, `linux-arkmicro`
+`33fd16e31`) — both ports share this one driver file. The
+`"Open MCU Serial Port ... Ret: true \"No such file or directory\""`
+line still prints (already known to be an unreliable/buggy log string
+from `MsnCoreApp` itself, not real evidence either way) — the physical
+knob test is what actually settles this.
+
+**Still open:** touchscreen itself not yet confirmed working this same
+way — worth testing directly now that MCU input is confirmed alive.
+
 ---
 
 ## 3. Bluetooth — first real test on our own image

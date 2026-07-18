@@ -194,7 +194,7 @@ ROOT_DEV="/dev/mmcblk0p2"                     # root= in the generated uEnv.txt 
 KERNEL_BIN=""
 BOOTLOGO_RAW=""                               # raw framebuffer (--bootlogo) for p1/bootlogo.raw
 STOCK_UBOOT_BIN="$SCRIPT_DIR/firmware_dumps/Prado firmware dump/mtd1-mtd2_uboot/extracted/uboot.bin"  # for p1/stock_uboot.bin, used by the `bootstock` chainload command
-ARKDATA_INI="$SCRIPT_DIR/firmware_dumps/Prado firmware dump/mtd4_arkdata/extracted/arkdata.ini"  # for p1/arkdata.ini -- real calibrated LCD timing/panel config, dumped from the NAND "arkdata" partition. Without this, ark1668_arkdata_ini.c's fatload always fails and every screen_info field falls back to compiled defaults instead of this unit's real calibration -- see docs/DISPLAY_SUBSYSTEM.md
+ARKDATA_INI="$SCRIPT_DIR/firmware_dumps/Prado firmware dump/mtd4_arkdata/extracted/arkdata.ini"  # for p1/arkdata.ini -- real calibrated LCD timing/panel config, dumped from the NAND "arkdata" partition. Without this, ark1668_arkdata_ini.c's fatload always fails: U-Boot's own splash-screen screen_info falls back to compiled defaults, AND (2026-07-19) ft_board_setup() no longer has anything to patch the kernel's DTB display-timings node with either -- see docs/DISPLAY_SUBSYSTEM.md
 DTB_BIN=""
 ROOTFS_DIR=""
 USERDATA_DIR=""

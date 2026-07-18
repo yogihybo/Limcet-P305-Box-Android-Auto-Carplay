@@ -7,14 +7,33 @@ The touch panel signals on the Limcet P305/P306 head unit are physically gated b
 
 If you are debugging or testing drivers without running the full `MsnCoreApp` stack (e.g. to isolate kernel driver coordinate delivery or during development), running this tool simulates the handshake in the background, signaling the MCU to close the switch and activate the touch panel physical line.
 
-### How it works
+### How it works (corrected 2026-07-18 against real `MCUAdapter_BoxP300` disassembly)
 1. Opens `/dev/ttyHS0` at `38400` baud by default.
-2. Listens for incoming MCU packets starting with the RX signature byte `0x2E`.
-3. Handles CMD `0x02` (Handshake):
-   - Translates incoming mode and sequence bytes to mapped parameters.
-   - Builds and replies with a TX response frame starting with `0xFA` and ending with `0xAF` with a valid XOR checksum.
-4. Handles CMD `0x20` (Status query):
-   - Echoes back the requested status frame bytes formatted correctly.
+2. **Sends a startup sequence of three proactive frames**, all confirmed
+   by disassembly (not guessed), since it's not yet known which one (if
+   any beyond the first) actually triggers the MCU to close the touch
+   switch — sending all three is cheap and harmless, they're legitimate
+   frames real firmware sends anyway:
+   - `cmd=0x81, payload=[0x01]` (`2E 81 01 01 7C`) — `MCUAdapter_BoxP300::onInited()`,
+     sent unconditionally at startup before ever waiting to receive anything.
+   - `cmd=0x82, payload=[0x01,0x08,0,0,0,0,0,0,0]` (9 bytes) —
+     `onModeAppChanged(mode=4)`, the only mode reachable from inside
+     `libMcuCenter.so`, fired via `msnAppStateChange`'s bit24/25 path.
+   - `cmd=0x84, payload=[0x00,0x03]` — `msnAppStateChange`'s bit26/27
+     "state changed" path.
+3. Listens for incoming MCU frames (`[0x2E][cmd][len][payload...][checksum]`)
+   and logs them (`CMD 0x02` = handshake request, `CMD 0x20` = status
+   query, anything else logged generically) — **does not send a wire
+   reply to CMD 0x02/0x20**. An earlier version of this tool answered
+   those with a `0xFA...0xAF`-framed response; that framing is real
+   (`makeProtocolPackage()` in `libMsnCommons.so`) but is `MsnCoreApp`'s
+   *internal* IPC format between its own subsystems, never written to
+   `/dev/ttyHS0` in the real firmware — replying with it was reaching
+   nowhere. The real wire checksum is also different from what that
+   version used: a one's-complement of a plain byte sum over
+   `cmd+len+payload` (confirmed from `MCUAdapter_BoxP300::getPackageCheckSum()`),
+   not XOR.
+4. `--no-hello` skips step 2 entirely if you want purely passive listening.
 
 ### Baud rate: confirmed 38400, not a guess
 Earlier versions of this tool (and `docs/MCU_ADAPTERS.md`) defaulted to
@@ -48,20 +67,44 @@ mcu-handshake -p /dev/ttyHS0 -b 38400 -v
 If 38400 doesn't produce anything — e.g. a different MCU firmware
 revision or product variant — `--scan` cycles through a list of common
 candidate rates (38400, 115200, 9600, 19200, 57600, plus 230400/460800/
-921600 where the toolchain supports them), listening on each for a
-configurable duration (default 5s) and reporting raw byte counts, `0x2E`
-sync-byte counts, and fully checksum-valid frame counts per rate. It
-responds to any valid frame it finds along the way, same as normal mode,
-so a handshake can complete opportunistically mid-scan instead of
-needing a manual follow-up run:
+921600 where the toolchain supports them), sending the full startup
+sequence and listening on each for a configurable duration (default
+5s), reporting the count of valid (checksum-passing) frames received
+per rate:
 
 ```sh
 killall MsnCoreApp
 mcu-handshake --scan          # 5s per candidate baud
-mcu-handshake --scan 10 -v    # 10s per candidate, verbose hex dump of everything received
+mcu-handshake --scan 10 -v    # 10s per candidate, verbose hex dump of everything sent/received
 ```
 Toggle an input on the vehicle (reverse, ACC, a button) while scanning
 to prompt MCU traffic — some frames may only be sent on state changes,
 not continuously. A summary table prints at the end naming whichever
-baud rate(s) produced valid frames; zero bytes at every rate points at
-wiring/power/port-contention rather than a baud mismatch.
+baud rate(s) produced valid frames. Since the startup sequence is sent
+at every candidate rate regardless of whether anything comes back, it's
+also worth just checking the touch panel directly during/after a scan —
+if the switch closes even with zero frames received back, these three
+frames alone may be sufficient and reply frames were never the point.
+
+### Still open
+- `showApp(mode=0xCC)` sends a fourth real frame (`cmd=0x82`, a
+  *different* 4-byte payload `02 0B 00 00` than the `onModeAppChanged`
+  one above) — not sent by this tool, since `showApp` is never called
+  from inside `libMcuCenter.so` itself (it's driven externally via
+  vtable dispatch from `MsnCoreApp`'s own UI/navigation code), so its
+  real trigger condition is unconfirmed. Structurally, `showApp`'s
+  `mode=0x203` case dispatches through a live UI object's vtable to
+  what looks exactly like a `show()`/`raise()` vs `hide()`/`lower()`
+  pair — strong circumstantial evidence `showApp` really is "make the
+  Limcet UI visible," which would tie it to both the AUX/long-press
+  switch and auto-switching when a phone connects. If the three-frame
+  startup sequence above doesn't trigger the touch switch, tracing
+  `MsnCoreApp`'s own binary (`/usr/bin/MsnCoreApp`) by vtable offset to
+  find `showApp`'s real caller is the next step.
+- The real-world semantic meaning of `msnAppStateChange`'s bit-flag
+  values (which bit = phone connected vs. ACC vs. reverse, etc.) is
+  still unresolved — `libMcuCenter.so` alone doesn't reveal who calls
+  it or why; would need either `MsnCoreApp`'s central event dispatcher
+  traced by vtable offset, or a live `/dev/ttyHS0` capture per
+  `docs/MCU_ADAPTERS.md`'s existing Method A/B procedures while
+  triggering each real-world event separately.

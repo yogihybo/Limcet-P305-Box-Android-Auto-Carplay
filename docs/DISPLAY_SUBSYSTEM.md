@@ -413,11 +413,16 @@ U-Boot (arkdata `ScreenId`) and the kernel (`screens[]` index).
 DIP switch is an OEM GPIO strap that (almost certainly) sets that id in the OEM
 U-Boot. Confirming the exact GPIO mapping is the one remaining open item.
 
-## Our reconstructed (4.19.192) kernel does NOT replicate any of this dynamic behavior (2026-07-18)
+## Our reconstructed (4.19.192) kernel's approach (updated 2026-07-19)
 
 Everything above describes **stock's** mechanism — a two-stage, per-unit
-dynamic system. Our new kernel does something fundamentally simpler and
-does not read either ini source at runtime at all.
+dynamic system. Our new kernel itself still does something fundamentally
+simpler (a static, compiled-in DTS) — but as of 2026-07-19, **U-Boot now
+dynamically patches that DTS's values from `arkdata.ini` at boot**,
+closing most of the practical gap without touching the kernel driver
+itself. See "Dynamic override via arkdata.ini + `ft_board_setup()`"
+below — read the rest of this section first for what the static-DTS
+baseline actually is, then that section for how it's now overridden.
 
 **Stock's two stages, for reference:**
 
@@ -468,26 +473,94 @@ simply frozen into the kernel at build time.
   polarities `hsync-active=1`/`vsync-active=1`/`de-active=0` matching
   `IHS=1`/`IVS=1`/`IOE=0`. So for *this exact panel*, behavior now
   matches stock's Stage-1 authoritative values.
-- **It IS a real gap if this project ever needs to support a different
-  panel or model.** On stock, swapping the physical panel (or flashing a
-  different `mtd4` image, or changing the DIP switch) reconfigures the
-  display automatically, with no kernel/DTS change needed. On our
-  reconstructed kernel, that would require **manually editing the DTS's
-  `display-timings` node** to the new panel's real `LCD_TIMMING`/
-  `LCD_CLOCK` values (translated the same way as above:
-  `hback-porch`↔`HBP`, `hfront-porch`↔`HFP`, `vback-porch`↔`VBP`,
-  `vfront-porch`↔`VFP`, `hsync-len`↔`HSW`, `vsync-len`↔`VSW`,
-  `clock-frequency`↔`CLKFreq/CLKDIV1`, sync-polarity fields↔`IHS`/`IVS`/
-  `IOE`) and rebuilding — there's no dynamic fallback.
-- **To actually replicate stock's dynamic behavior** (read `mtd4` at
-  boot and program registers/DTS-equivalent state from it, or at least
-  parse it at kernel/bootloader init instead of trusting a frozen DTS)
-  would be a real, non-trivial port — not attempted in this project.
-  If it's ever needed, the ArkPro reference driver
-  (`../ArkPro Reference/kernel/drivers/ark/display/ark_display_lcd.c`
-  and `../ArkPro Reference/uboot/ark_lcd.c`) is the concrete reference
-  for exactly how stock parses this ini and drives the registers from
-  it.
+- **Was a real gap for supporting a different panel/model without a
+  rebuild — now closed for the values that matter, via `arkdata.ini`.**
+  See the next section.
+
+## Dynamic override via arkdata.ini + `ft_board_setup()` (2026-07-19)
+
+Extends the existing `arkdata.ini` reader (`linux-arkmicro/u-boot/board/
+arkmicro/ark1668_limcet_p305/ark1668_arkdata_ini.c`) — which previously
+only fed U-Boot's own splash-screen `screen_info`
+(`arkdata_apply_lcd_timing()`, called from `ark1668_display_cfg.c`) —
+to also patch the **kernel's** DTB, using U-Boot's standard board hook:
+`CONFIG_OF_BOARD_SETUP` → `ft_board_setup(blob, bd)`, called
+automatically on every `bootm`/`bootz` right before jumping to the
+kernel. No `bootcmd`/`uEnv.txt` change needed — it just runs.
+
+**What gets patched, if `arkdata.ini` is present on the FAT boot
+partition (p1):**
+
+| DTB node | Property | arkdata.ini key |
+|---|---|---|
+| `.../display-timings/timing0` | `hactive` | `Width` |
+| | `vactive` | `Height` |
+| | `vback-porch` | `VBP` |
+| | `vfront-porch` | `VFP` |
+| | `vsync-len` | `VSW` |
+| | `hback-porch` | `HBP` |
+| | `hfront-porch` | `HFP` |
+| | `hsync-len` | `HSW` |
+| | `hsync-active` | `IHS` |
+| | `vsync-active` | `IVS` |
+| | `de-active` | `IOE` |
+| | `clock-frequency` | computed: `CLKFreq / CLKDIV1` (both must be present) |
+| `.../lcd@e0500000/display@0` | `lvds-con` | `LVDSCfg` |
+| | `dithering-con` | `dithering` |
+
+Full DTB node paths (confirmed against the compiled
+`ark1668_limcet_p305.dtb` via `dtc -I dtb -O dts`):
+`/ahb/lcd@e0500000/display@0/display-timings/timing0` and
+`/ahb/lcd@e0500000/display@0`.
+
+**Deliberately NOT wired**, and why:
+
+- `arkdata.ini`'s `[VP]` section (`contrast`/`brightness`/`saturation`/
+  `hue`, per-layer) — confirmed via `drivers/misc/ark_display.c` that
+  these are hardcoded compile-time defaults (`.hue = 0, .saturation =
+  128, ...`), entirely runtime-controlled instead by `MsnCoreApp`'s own
+  `ARKDISP_GET_VDE_CFG`/`ARKDISP_SET_VDE_CFG` ioctls (see the boot log
+  lines of the same name) — no DT property exists for them at all, so
+  there's nothing to patch.
+- `[GAMMA_VAL]` and `[ITU656_BYP_COM/NTSC/PAL]` (composite/NTSC/PAL
+  timing) — same reason: no DT-consumed property exists anywhere in
+  `drivers/video/fbdev/arkmicro/ark1668_lcdfb.c` for gamma tables or
+  composite-out timing. Patching the DTB with these would silently do
+  nothing without writing new kernel driver code first — not attempted.
+- `DISPLAY_INTERFACE` section (`ScreenType`, `Format`, `RgbMode`,
+  `TvoutType`, `interlace`) — `RgbMode`/`ScreenType` map conceptually to
+  the DTS's `lcd-wiring-mode` (string `"BGR"`/`"RGB"`) and
+  `interface-type` (string `"TTL"`/`"LVDS"`), but these need
+  enum-to-string translation rather than a direct numeric copy — not
+  implemented yet; both are already correct for the current panel
+  (`RgbMode=0`↔`"BGR"`, `ScreenType=2`↔`"TTL"`/RGB888) so there was no
+  immediate need. Worth adding the string-mapping logic if a future
+  panel swap needs a different value here.
+
+**Fails safe throughout**, matching the existing reader's philosophy:
+missing `arkdata.ini`, a missing individual key, or a DTB node that
+doesn't exist all leave the compiled-in DTS value untouched — nothing
+here is required for boot.
+
+**Practical effect:** for *this* panel, the checked-in DTS values
+(`linux-arkmicro` `47ba523ca`) already match `arkdata.ini` exactly, so
+this override is currently a no-op that just re-confirms the same
+numbers on every boot (watch for `[arkdata.ini] ft_board_setup: ...`
+lines in the U-Boot console log). Its actual value is for **the next
+time a different panel/model needs supporting**: drop a new
+`arkdata.ini` (with the new panel's real `LCD_TIMMING`/`LCD_CLOCK`
+values) onto the FAT boot partition and the kernel's display comes up
+correctly with **no DTS edit or kernel rebuild** — only U-Boot's own
+`arkdata_ini_get_int()`-based key lookup, already proven working for
+the splash-screen path.
+
+If a genuinely full dynamic port (register-level, matching stock's
+Stage-1 U-Boot register programming rather than DTB patching, or
+extending this to cover `RgbMode`/`ScreenType`/gamma/composite as well)
+is ever needed, the ArkPro reference driver
+(`../ArkPro Reference/kernel/drivers/ark/display/ark_display_lcd.c` and
+`../ArkPro Reference/uboot/ark_lcd.c`) is the concrete reference for
+exactly how stock parses this ini and drives the registers from it.
 
 ## ARKDATA_VARIANTS.md
 

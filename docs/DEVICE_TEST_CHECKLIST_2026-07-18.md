@@ -296,21 +296,46 @@ correctly) found two real, concrete gaps this time, not log-inference:
 Both fixes committed to `linux-arkmicro` (`33fd16e31`), build clean
 (zImage + all 150 modules via `build_kernel.sh`).
 
-- [ ] **Retest Bluetooth with this kernel** — watch for the crash
-      disappearing, `openning librtkvnd.so` / vendor init actually
-      completing, full HCI bring-up.
-- [ ] **Retest `mcu-handshake` (item 2) with this kernel too** — same
-      driver serves `ttyHS0`, so this could be the shared root cause
-      for both failures after all.
+- [x] **Retest Bluetooth with this kernel** — **CONFIRMED FIXED at the
+      driver level.** `new uboot new kernel baseline v4.txt`: for the
+      first time in the entire investigation, `realtek selected` /
+      `openning librtkvnd.so` fire, the vendor init callback runs, and
+      the chip returns its **real HCI identity**:
+      `vendor:hci_ver:0a,hci_rev:000b,lmp_ver:0a,lmp_subver:8761,manu:005d`
+      (RTL8761B). The old deterministic crash (`r0=0xfcee0104`, dead
+      uninitialized-list read) is gone completely. The missing
+      `clk_prepare_enable()` was the real root cause of "zero response
+      ever" on both HS UART ports.
 
-**Root cause: was open, now has a second, more mechanistic
-kernel-level fix pending hardware confirmation** (the rootfs-version
-theory above is now ruled out — keep that context, but this is the
-active lead). If this doesn't resolve it, note that our *entire*
-rootfs is running ~3 years behind Holden's confirmed-good build — a
-broader "which other files are actually version-critical vs cosmetic"
-pass may still be needed separately, not just Bluetooth-specific
-files.
+**New, different, downstream crash found in the same log — Bluetooth
+is not fully working yet.** Right after printing that HCI identity,
+`bt_fw_download_thread` (pushing the actual RTL8761B firmware patch to
+the chip) crashes — same fault (`pgd = 88aa2e5c`) 4 times in a row in
+this log, each time `blueware`'s own watchdog restarts it
+(`Restart_MainThread:11` / `SYSTEM_RESET_KILLED:11`) and it loops back
+to the same crash ~2.6s later. This is a **new** failure surfaced only
+now that the clock fix lets real traffic through — it was never
+reachable before. The oops dump in this capture is truncated (missing
+the usual PC/register lines, `[00000001] *pgd=...` cut short) — likely
+interleaved with `blueware`'s own concurrent stdout. Next step: a
+cleaner capture (redirect `blueware`'s stdout to a file so it doesn't
+interleave with the kernel oops on the same console) to get the full
+register dump for root-causing this one the same way the clock bug was
+found.
+
+- [ ] Capture a clean oops for the `bt_fw_download_thread` crash
+      (`blueware > /tmp/blueware.log 2>&1 &`, then `dmesg` separately
+      once it crashes, so the kernel oops isn't interleaved with
+      blueware's own output).
+- [ ] **Retest `mcu-handshake` (item 2) with this kernel** — same
+      driver serves `ttyHS0`, so the clock fix may unblock MCU
+      handshake too now.
+
+**Root cause of "zero response on both HS UART ports": CONFIRMED
+FIXED** (missing `clk_prepare_enable()` in `ark_hsuart.c`). Bluetooth
+has a new, later-stage, downstream crash in firmware download that
+needs its own root-cause pass — real progress, not resolved yet. The
+rootfs-version theory is fully ruled out; ignore it going forward.
 
 ---
 

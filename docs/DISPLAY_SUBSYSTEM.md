@@ -413,6 +413,81 @@ U-Boot (arkdata `ScreenId`) and the kernel (`screens[]` index).
 DIP switch is an OEM GPIO strap that (almost certainly) sets that id in the OEM
 U-Boot. Confirming the exact GPIO mapping is the one remaining open item.
 
+## Our reconstructed (4.19.192) kernel does NOT replicate any of this dynamic behavior (2026-07-18)
+
+Everything above describes **stock's** mechanism — a two-stage, per-unit
+dynamic system. Our new kernel does something fundamentally simpler and
+does not read either ini source at runtime at all.
+
+**Stock's two stages, for reference:**
+
+1. **Stage 1 — `mtd4` `arkdata.ini` (per-physical-unit, authoritative).**
+   A dedicated flash partition holding one or more `[ScreenId=N]` blocks
+   of full `LCD_TIMMING`/`LCD_CLOCK` data. **U-Boot reads this directly
+   and programs the LCD-controller hardware registers from it, before the
+   kernel even boots.** This is the real, authoritative source of truth
+   for *this specific physical unit's* actual panel — it's what a
+   factory/service tool would write when a unit ships with a particular
+   panel installed. Prado's own dump of this partition is at
+   `firmware_source/prado_reconstructed/mtd4_arkdata/arkdata.ini`
+   (single `ScreenId=0`, 800×480 RGB888 — see the "Register-level meaning"
+   section above for the full field dump).
+2. **Stage 2 — `msnprofile/arkdata/arkdataNN_X.ini` (rootfs, 30+ presets).**
+   A completely separate mechanism: `MsnCoreApp` (userspace) reads
+   `ScreenType`/`ResolutionType` from `MsnProductInfo.ini` and picks the
+   matching preset from this set — a menu of known panel configs across
+   different vehicle models, not something dynamically re-read against
+   live hardware every boot the way `mtd4` is.
+3. A single `screen=N` value flows U-Boot→kernel: U-Boot uses it to pick
+   the `mtd4` `ScreenId` block; the same value becomes a kernel boot
+   argument indexing the stock 3.4 kernel's own **compiled-in** `screens[]`
+   C table (`SCREEN_QUN700`, `SCREEN_C101EAN`, etc.) as a fallback the
+   driver/app can re-apply later — not the primary source. The physical
+   DIP switch is an OEM addition (not in the vendor reference BSP) that
+   almost certainly sets `screen`/reads GPIO in the custom OEM U-Boot to
+   pick the right config per model variant at the factory.
+
+**What our kernel actually does instead:** the 4.19.192 kernel uses the
+standard Linux `display-timings` devicetree binding — a **static,
+compiled-in** set of numbers in
+`linux-arkmicro/linux/arch/arm/boot/dts/ark1668_limcet_p305.dts`
+(`display-timings { timing0 { ... } }`). It never reads `mtd4` or any
+arkdata ini at runtime, at all. U-Boot's own patched build for this
+project (`u-boot/` in the main repo) likewise does not reprogram the LCD
+registers from `mtd4` the way the OEM U-Boot does — the DTS values are
+simply frozen into the kernel at build time.
+
+**Why this matters going forward:**
+
+- **This is not a bug for the current unit** — the DTS values were
+  hand-corrected (2026-07-18, `linux-arkmicro` `47ba523ca`) to exactly
+  match Prado's own real `mtd4` dump (`ScreenId=0`): `clock-frequency
+  =330000000/CLKDIV1(11)=30000000`, `hback-porch=32` (`HBP`),
+  `hfront-porch=25` (`HFP`), `vback-porch=29` (`VBP`), `vfront-porch=25`
+  (`VFP`), `hsync-len=54` (`HSW`), `vsync-len=16` (`VSW`), sync
+  polarities `hsync-active=1`/`vsync-active=1`/`de-active=0` matching
+  `IHS=1`/`IVS=1`/`IOE=0`. So for *this exact panel*, behavior now
+  matches stock's Stage-1 authoritative values.
+- **It IS a real gap if this project ever needs to support a different
+  panel or model.** On stock, swapping the physical panel (or flashing a
+  different `mtd4` image, or changing the DIP switch) reconfigures the
+  display automatically, with no kernel/DTS change needed. On our
+  reconstructed kernel, that would require **manually editing the DTS's
+  `display-timings` node** to the new panel's real `LCD_TIMMING`/
+  `LCD_CLOCK` values (translated the same way as above:
+  `hback-porch`↔`HBP`, `hfront-porch`↔`HFP`, `vback-porch`↔`VBP`,
+  `vfront-porch`↔`VFP`, `hsync-len`↔`HSW`, `vsync-len`↔`VSW`,
+  `clock-frequency`↔`CLKFreq/CLKDIV1`, sync-polarity fields↔`IHS`/`IVS`/
+  `IOE`) and rebuilding — there's no dynamic fallback.
+- **To actually replicate stock's dynamic behavior** (read `mtd4` at
+  boot and program registers/DTS-equivalent state from it, or at least
+  parse it at kernel/bootloader init instead of trusting a frozen DTS)
+  would be a real, non-trivial port — not attempted in this project.
+  If it's ever needed, the ArkPro reference driver
+  (`../ArkPro Reference/kernel/drivers/ark/display/ark_display_lcd.c`
+  and `../ArkPro Reference/uboot/ark_lcd.c`) is the concrete reference
+  for exactly how stock parses this ini and drives the registers from
+  it.
 
 ## ARKDATA_VARIANTS.md
 

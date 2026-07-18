@@ -18,7 +18,7 @@ sleep 0.3
 mkdir -p /var/lib/misc/
 touch /data/udhcpd.leases
 ifconfig wlan0 up
-ifconfig wlan0 192.168.2.1 netmask 255.255.255.0 
+ifconfig wlan0 192.168.43.1 netmask 255.255.255.0 
 #echo 0 > /proc/sys/net/ipv4/ip_forward 
 echo 1 > /proc/sys/net/ipv6/conf/wlan0/disable_ipv6
 echo 1 > /proc/sys/net/ipv6/conf/wlan1/disable_ipv6

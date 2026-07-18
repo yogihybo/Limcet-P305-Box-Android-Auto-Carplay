@@ -1,6 +1,8 @@
 # Aliases extracted from modules themselves.
 alias stdrng ansi_cprng
 alias platform:musb-hdrc musb_hdrc
+alias hid:b0003v0000046Dp0000C532 hid_logitech_dj
+alias hid:b0003v0000046Dp0000C52B hid_logitech_dj
 alias tty-ldisc-15 hci_uart
 alias net-pf-31 bluetooth
 alias usb:v0BDAp8731d*dc*dsc*dp*icFFiscFFipFF* wlan_rtl8821cu

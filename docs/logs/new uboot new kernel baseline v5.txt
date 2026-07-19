@@ -1,0 +1,234 @@
+bootusb
+[bootusb] starting USB...
+starting USB...
+USB0:   =============== usb_lowlevel_init time is 172431 us===============
+=============== usb_lowlevel_init device is high speed===============
+scanning bus 0 for devices... 1 USB Device(s) found
+       scanning usb for storage devices... 1 Storage Device(s) found
+[bootusb] booting kernel+DTB+rootfs from USB stick (usb 0:1), root=/dev/sda2
+3987552 bytes read in 1370 ms (2.8 MiB▒▒▒)
+18410 bytes read in 39 ms (460.9 KiB▒▒▒)
+stopping USB..
+Kernel image @ 0x1000000 [ 0x000000 - 0x3cd860 ]
+## Flattened Device Tree blob at 02000000
+   Booting using the fdt blob at 0x2000000
+   Loading Device Tree to 03de1000, end 03de87e9 ... OK
+[arkdata.ini] load() called again, using cached result (loaded)
+[arkdata.ini] ft_board_setup: patching kernel DTB display-timings from arkdata.ini
+[arkdata.ini] load() called again, using cached result (loaded)
+[arkdata.ini] Width='800' -> 800 (0x320)
+[arkdata.ini]   Width='800' -> DTB /ahb/lcd@e0500000/display@0/display-timings/timing0/hactive
+[arkdata.ini] load() called again, using cached result (loaded)
+[arkdata.ini] Height='480' -> 480 (0x1e0)
+[arkdata.ini]   Height='480' -> DTB /ahb/lcd@e0500000/display@0/display-timings/timing0/vactive
+[arkdata.ini] load() called again, using cached result (loaded)
+[arkdata.ini] VBP='29' -> 29 (0x1d)
+[arkdata.ini]   VBP='29' -> DTB /ahb/lcd@e0500000/display@0/display-timings/timing0/vback-porch
+[arkdata.ini] load() called again, using cached result (loaded)
+[arkdata.ini] VFP='25' -> 25 (0x19)
+[arkdata.ini]   VFP='25' -> DTB /ahb/lcd@e0500000/display@0/display-timings/timing0/vfront-porch
+[arkdata.ini] load() called again, using cached result (loaded)
+[arkdata.ini] VSW='16' -> 16 (0x10)
+[arkdata.ini]   VSW='16' -> DTB /ahb/lcd@e0500000/display@0/display-timings/timing0/vsync-len
+[arkdata.ini] load() called again, using cached result (loaded)
+[arkdata.ini] HBP='32' -> 32 (0x20)
+[arkdata.ini]   HBP='32' -> DTB /ahb/lcd@e0500000/display@0/display-timings/timing0/hback-porch
+[arkdata.ini] load() called again, using cached result (loaded)
+[arkdata.ini] HFP='25' -> 25 (0x19)
+[arkdata.ini]   HFP='25' -> DTB /ahb/lcd@e0500000/display@0/display-timings/timing0/hfront-porch
+[arkdata.ini] load() called again, using cached result (loaded)
+[arkdata.ini] HSW='54' -> 54 (0x36)
+[arkdata.ini]   HSW='54' -> DTB /ahb/lcd@e0500000/display@0/display-timings/timing0/hsync-len
+[arkdata.ini] load() called again, using cached result (loaded)
+[arkdata.ini] IHS='1' -> 1 (0x1)
+[arkdata.ini]   IHS='1' -> DTB /ahb/lcd@e0500000/display@0/display-timings/timing0/hsync-active
+[arkdata.ini] load() called again, using cached result (loaded)
+[arkdata.ini] IVS='1' -> 1 (0x1)
+[arkdata.ini]   IVS='1' -> DTB /ahb/lcd@e0500000/display@0/display-timings/timing0/vsync-active
+[arkdata.ini] load() called again, using cached result (loaded)
+[arkdata.ini] IOE='0' -> 0 (0x0)
+[arkdata.ini]   IOE='0' -> DTB /ahb/lcd@e0500000/display@0/display-timings/timing0/de-active
+[arkdata.ini] load() called again, using cached result (loaded)
+[arkdata.ini] CLKFreq='330000000' -> 330000000 (0x13ab6680)
+[arkdata.ini] load() called again, using cached result (loaded)
+[arkdata.ini] CLKDIV1='11' -> 11 (0xb)
+[arkdata.ini]   CLKFreq/CLKDIV1=330000000/11 -> DTB clock-frequency=30000000
+[arkdata.ini] load() called again, using cached result (loaded)
+[arkdata.ini] LVDSCfg='0' -> 0 (0x0)
+[arkdata.ini]   LVDSCfg='0' -> DTB /ahb/lcd@e0500000/display@0/lvds-con
+[arkdata.ini] load() called again, using cached result (loaded)
+[arkdata.ini] key 'dithering' not found
+[arkdata.ini] load() called again, using cached result (loaded)
+[arkdata.ini] RgbMode='0' -> 0 (0x0)
+[arkdata.ini]   -> DTB /ahb/lcd@e0500000/display@0/lcd-wiring-mode="BGR"
+[arkdata.ini] load() called again, using cached result (loaded)
+[arkdata.ini] ScreenType='2' -> 2 (0x2)
+[arkdata.ini]   -> DTB /ahb/lcd@e0500000/display@0/interface-type="TTL"
+[arkdata.ini] ft_board_setup: done, 15 DTB properties overridden from arkdata.ini
+Using machid 0x1068 from environment
+
+Starting kernel ...
+
+[    0.000000] Booting Linux on physical CPU 0x0
+[    0.000000] Linux version 4.19.192 (osboxes@osboxes) (gcc version 7.3.1 20180425 [linaro-7.3-2018.05 revision d29120a424ecfbc167ef90065c0eeb7f91977701] (Linaro GCC 7.3-2018.05)) #75 Sun Jul 19 07:43:10 AEST 2026
+[    0.000000] CPU: ARMv7 Processor [410fc051] revision 1 (ARMv7), cr=10c53c7d
+[    0.000000] CPU: PIPT / VIPT nonaliasing data cache, VIPT aliasing instruction cache
+[    0.000000] OF: fdt: Machine model: Limcet P305/P306 Dashboard Head Unit
+[    0.000000] bootconsole [earlycon0] enabled
+[    0.000000] Memory policy: Data cache writeback
+[    0.000000] cma: Reserved 64 MiB at 0x04000000
+[    0.000000] CPU: All CPU(s) started in SVC mode.
+[    0.000000] random: get_random_bytes called from start_kernel+0x9c/0x340 with crng_init=0
+[    0.000000] Built 1 zonelists, mobility grouping off.  Total pages: 45675
+[    0.000000] Kernel command line: root=/dev/sda2 console=ttyS0,115200n8 mem=180M earlyprintk=serial rootfstype=ext4 rootwait rw screen=0 user_debug=8
+[    0.000000] Dentry cache hash table entries: 32768 (order: 5, 131072 bytes)
+[    0.000000] Inode-cache hash table entries: 16384 (order: 4, 65536 bytes)
+[    0.000000] Memory: 107024K/184320K available (6144K kernel code, 194K rwdata, 1304K rodata, 1024K init, 155K bss, 11760K reserved, 65536K cma-reserved)
+[    0.000000] Virtual kernel memory layout:
+[    0.000000]     vector  : 0xffff0000 - 0xffff1000   (   4 kB)
+[    0.000000]     fixmap  : 0xffc00000 - 0xfff00000   (3072 kB)
+[    0.000000]     vmalloc : 0xcb800000 - 0xff800000   ( 832 MB)
+[    0.000000]     lowmem  : 0xc0000000 - 0xcb400000   ( 180 MB)
+[    0.000000]     modules : 0xbf000000 - 0xc0000000   (  16 MB)
+[    0.000000]       .text : 0x(ptrval) - 0x(ptrval)   (7136 kB)
+[    0.000000]       .init : 0x(ptrval) - 0x(ptrval)   (1024 kB)
+[    0.000000]       .data : 0x(ptrval) - 0x(ptrval)   ( 195 kB)
+[    0.000000]        .bss : 0x(ptrval) - 0x(ptrval)   ( 156 kB)
+[    0.000000] NR_IRQS: 16, nr_irqs: 16, preallocated irqs: 16
+[    0.000000] VIC @(ptrval): id 0x00041192, vendor 0x41
+[    0.000000] VIC @(ptrval): id 0x00041192, vendor 0x41
+[    0.000000] L2C-310 dynamic clock gating enabled, standby mode enabled
+[    0.000000] L2C-310 cache controller enabled, 8 ways, 128 kB
+[    0.000000] L2C-310: CACHE_ID 0x410060c9, AUX_CTRL 0x06020000
+[    0.000000] clk cpupll rate 690000000.
+[    0.000000] clk syspll rate 324000000.
+[    0.000000] clk audpll rate 426000000.
+[    0.000000] clk ddrclk rate 426000000.
+[    0.000000] clk cpuclk rate 690000000.
+[    0.000000] clk axiclk rate 324000000.
+[    0.000000] clk ahbclk rate 162000000.
+[    0.000000] clk pclk rate 81000000.
+[    0.000000] clk uart4clk rate 24000000.
+[    0.000000] clk uart5clk rate 24000000.
+[    0.000000] clk gpuclk rate 324000000.
+[    0.000000] clk gpiodebounceclk rate 24000000.
+[    0.000000] clk lcdclk rate 324000000.
+[    0.000000] clk mfcclk rate 162000000.
+[    0.000000] clk rtc-clk rate 32768.
+[    0.000000] clk spi-clk rate 162000000.
+[    0.000000] clk i2s-dac-clk rate 240000000.
+[    0.000000] clk i2s-adc-clk rate 240000000.
+[    0.000000] clocksource: arkmicro,ark-timer: mask: 0xffffff max_cycles: 0xffffff, max_idle_ns: 92171119 ns
+[    0.000012] sched_clock: 24 bits at 81MHz, resolution 12ns, wraps every 103563053ns
+[    0.008159] Console: colour dummy device 80x30
+[    0.012715] Calibrating delay loop... 457.11 BogoMIPS (lpj=2285568)
+[    0.076589] pid_max: default: 32768 minimum: 301
+[    0.081593] Mount-cache hash table entries: 1024 (order: 0, 4096 bytes)
+[    0.088256] Mountpoint-cache hash table entries: 1024 (order: 0, 4096 bytes)
+[    0.096419] CPU: Testing write buffer coherency: ok
+[    0.102443] Setting up static identity map for 0x100000 - 0x10003c
+[    0.109805] devtmpfs: initialized
+[    0.119908] VFP support v0.3: implementor 41 architecture 2 part 30 variant 5 rev 1
+[    0.127920] clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 19112604462750000 ns
+[    0.137864] futex hash table entries: 256 (order: -1, 3072 bytes)
+[    0.150776] pinctrl core: initialized pinctrl subsystem
+[    0.156721] NET: Registered protocol family 16
+[    0.179127] DMA: preallocated 256 KiB pool for atomic coherent allocations
+[    0.189749] Serial: Arkmicro UART driver
+[    0.195643] pinctrl-ark e4900000.pinctrl: initialized ark pinctrl driver
+[    0.212997] e4200000.uart: ttyS0 at MMIO 0xe4200000 (irq = 36, base_baud = 1500000) is a ARK
+[    0.221608] console [ttyS0] enabled
+[    0.221608] console [ttyS0] enabled
+[    0.228597] bootconsole [earlycon0] disabled
+[    0.228597] bootconsole [earlycon0] disabled
+[    0.237594] ark_tool: initialized on uart0 open (port for /proc/arktool, see drivers/misc/ark_tool.c)
+[    0.247457] e8000000.uart: ttyS2 at MMIO 0xe8000000 (irq = 60, base_baud = 1500000) is a ARK
+[    0.256788] e8100000.uart: ttyS3 at MMIO 0xe8100000 (irq = 61, base_baud = 1500000) is a ARK
+[    0.266200] e4f00000.serial: ttyHS0 at MMIO 0xe4f00000 (irq = 38, base_baud = 0) is a ARK HS UART
+[    0.275992] e4800000.serial: ttyHS1 at MMIO 0xe4800000 (irq = 44, base_baud = 0) is a ARK HS UART
+[    0.289181] ark-mcu-serial mcu-serial@0: probe done, rx handler registered
+[    0.307389] clk lcdclk rate 29454545.
+[    0.312728] ark1668_lcdfb e0500000.lcd: 16384KiB frame buffer at 0f000000 (mapped at (ptrval))
+[    0.321805] ark1668_lcdfb e0500000.lcd: fb0: Atmel LCDC at 0xe0500000 (mapped at (ptrval)), irq 25
+[    0.332653] SCSI subsystem initialized
+[    0.336751] usbcore: registered new interface driver usbfs
+[    0.342415] usbcore: registered new interface driver hub
+[    0.347822] usbcore: registered new device driver usb
+[    0.354582] gpio-3 (i2c-gpio-0): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+[    0.364132] gpio-2 (i2c-gpio-0): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+[    0.373867] i2c i2c-1: Not I2C compliant: can't read SCL
+[    0.379186] i2c i2c-1: Bus may be unreliable
+[    0.383513] i2c-gpio i2c-gpio-0: using lines 3 (SDA) and 2 (SCL, no clock stretching)
+[    0.391556] gpio-9 (i2c-gpio-1): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+[    0.401061] gpio-121 (i2c-gpio-1): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+[    0.410898] i2c i2c-2: Not I2C compliant: can't read SCL
+[    0.416214] i2c i2c-2: Bus may be unreliable
+[    0.420537] i2c-gpio i2c-gpio-1: using lines 9 (SDA) and 121 (SCL, no clock stretching)
+[    0.428635] media: Linux media interface: v0.10
+[    0.433305] videodev: Linux video capture interface: v2.00
+[    0.439124] Advanced Linux Sound Architecture Driver Initialized.
+[    0.446517] clocksource: Switched to clocksource arkmicro,ark-timer
+[    0.453989] ark-vdec e0900000.vdec: VDEC controller at 0x(ptrval), irq = 40, misc_minor = 63
+[    0.462509] ark-vdec e0900000.vdec: Product ID: 0x6731 (revision 2.57.8)
+[    0.481876] NET: Registered protocol family 2
+[    0.487325] tcp_listen_portaddr_hash hash table entries: 512 (order: 0, 4096 bytes)
+[    0.495028] TCP established hash table entries: 2048 (order: 1, 8192 bytes)
+[    0.502108] TCP bind hash table entries: 2048 (order: 1, 8192 bytes)
+[    0.508530] TCP: Hash tables configured (established 2048 bind 2048)
+[    0.515065] UDP hash table entries: 256 (order: 0, 4096 bytes)
+[    0.520988] UDP-Lite hash table entries: 256 (order: 0, 4096 bytes)
+[    0.527648] NET: Registered protocol family 1
+[    0.533270] Initialise system trusted keyrings
+[    0.538202] workingset: timestamp_bits=14 max_order=16 bucket_order=2
+[    0.545516] ntfs: driver 2.1.32 [Flags: R/W DEBUG].
+[    0.553463] Key type asymmetric registered
+[    0.557640] Asymmetric key parser 'x509' registered
+[    0.562549] io scheduler noop registered (default)
+[    0.569927] rn6752: dvr_rn6752_probe:init done
+[    0.582072] nand: device found, Manufacturer ID: 0x98, Chip ID: 0xf1
+[    0.588557] nand: Toshiba NAND 128MiB 3,3V 8-bit
+[    0.593183] nand: 128 MiB, SLC, erase size: 128 KiB, page size: 2048, OOB size: 64
+[    0.600815] nand: WARNING: ark-nand: the ECC used on your system is too weak compared to the one required by the NAND chip
+[    0.611926] Scanning device for bad blocks
+[    0.687710] Bad eraseblock 768 at 0x000006000000
+[    0.717780] usbcore: registered new interface driver cdc_ether
+[    0.723735] usbcore: registered new interface driver cdc_subset
+[    0.729810] usbcore: registered new interface driver zaurus
+[    0.735460] usbcore: registered new interface driver ipheth
+[    0.741186] usbcore: registered new interface driver cdc_ncm
+[    0.747276] usbcore: registered new interface driver uas
+[    0.752688] usbcore: registered new interface driver usb-storage
+[    0.778811] udc-core: couldn't find an available UDC - added [g_ncm] to list of pending drivers
+[    0.788246] rtc-ark e4c00000.rtc: rtc core: registered e4c00000.rtc as rtc0
+[    0.795442] i2c /dev entries driver
+[    0.800352] ark_wdt e4b00000.watchdog: initialized (timeout = 15 sec, nowayout = 0)
+[    0.808987] dw_mmc ec400000.mmc: Using PIO mode.
+[    0.813621] dw_mmc ec400000.mmc: Version ID is 220a
+[    0.818591] dw_mmc ec400000.mmc: DW MMC controller at irq 42,32 bit host data width,32 deep fifo
+[    0.840346] mmc_host mmc0: Bus speed (slot 0) = 24000000Hz (slot req 400000Hz, actual 400000HZ div = 30)
+[    0.862884] dw_mmc ec800000.mmc: Using external DMA controller.
+[    0.868922] dw_mmc ec800000.mmc: Failed to get external DMA channel.
+[    0.875283] dw_mmc ec800000.mmc: dw_mci_init_dma: Unable to initialize DMA Controller.
+[    0.883252] dw_mmc ec800000.mmc: Using PIO mode.
+[    0.887908] dw_mmc ec800000.mmc: Version ID is 220a
+[    0.892827] dw_mmc ec800000.mmc: DW MMC controller at irq 54,32 bit host data width,32 deep fifo
+[    0.901765] mmc_host mmc1: card is non-removable.
+[    0.917144] mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 400000Hz, actual 400000HZ div = 30)
+[    0.943364] NET: Registered protocol family 10
+[    0.949765] Segment Routing with IPv6
+[    0.953608] sit: IPv6, IPv4 and MPLS over IPv4 tunneling driver
+[    0.960575] NET: Registered protocol family 17
+[    0.966439] Loading compiled-in X.509 certificates
+[    0.974827] rtc-ark e4c00000.rtc: setting system clock to 1970-01-01 00:00:00 UTC (0)
+[    0.983089] ALSA device list:
+[    0.986068]   #0: Dummy 1
+[    0.989169] Waiting for root device /dev/sda2...
+[    1.000659] mmc_host mmc0: Bus speed (slot 0) = 24000000Hz (slot req 25000000Hz, actual 24000000HZ div = 0)
+[    1.010495] mmc0: new SD card at address e126
+[    1.015901] mmcblk0: mmc0:e126 SU01G 969 MiB
+[    1.022598] random: fast init done
+[    1.026641] mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 300000Hz, actual 300000HZ div = 40)
+[    1.036379]  mmcblk0: p1 p2 p3
+[    1.076618] mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 200000Hz, actual 200000HZ div = 60)
+[    1.136241] mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 100000Hz, actual 100000HZ div = 120)
+

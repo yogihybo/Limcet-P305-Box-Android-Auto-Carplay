@@ -228,22 +228,67 @@ for alpha-blended widgets, relying on hardware blending to finish the
 job — hardware that this investigation has now shown doesn't reliably
 work correctly on this silicon regardless of register configuration.
 
-**Next steps (redirected — no more LCDC register work planned):**
+**Update (2026-07-19, same session): DirectFB attempted directly —
+confirmed genuinely non-viable, root cause identified.** Tried
+re-enabling `directfb` in `start_msn` (uncommenting `DIRECTFB_ROOT`/
+`DFBARGS`/`QWS_DISPLAY=directfb:...`/`GAL_CONFIG_FILE`, commenting out
+`QWS_DISPLAY=linuxfb`). First attempt crashed immediately — `galcore`
+was never loaded (`lsmod` showed nothing; the rootfs only has stock's
+3.4.0-era `galcore.ko`, which `modprobe galcore` can't find under
+`/lib/modules/4.19.192/`). Found a previously-built, ABI-compatible
+(matching `vermagic`) `galcore.ko` for kernel 4.19.192 already sitting
+parked in this project (`linux-arkmicro/backup_working_no_fbcon/
+compiled_modules/lib/modules/4.19.192/galcore.ko`, from an earlier,
+shelved side-effort). Staged it into the active
+`compiled_modules/lib/modules/4.19.192/` so the SD card build's
+existing module-install + `depmod` step would pick it up. `lsmod`
+confirmed it loads (`galcore ... (O)`).
+
+With `galcore` loaded, `start_msn` got further before crashing —
+`strace` showed `/dev/galcore` opens successfully, but the specific
+ioctl DirectFB's GAL library calls (`_IOC(NONE, 0x75, 0x30, 0)` =
+decimal `30000` = `IOCTL_GCHAL_INTERFACE`) fails with `ENOTTY` five
+times in a row, then the process dereferences a struct field at
+offset `0xe0` that was supposed to be filled in by that (failed)
+ioctl, and segfaults. Traced this to source: `gpu-vivante-6.2.4`'s
+`drv_ioctl()` (`hal/os/linux/kernel/gc_hal_kernel_driver.c`) maps
+*every* validation failure to `-ENOTTY` via a shared `OnError:` label
+— most likely tripped by the `InputBufferSize`/`OutputBufferSize !=
+sizeof(gcsHAL_INTERFACE)` check, a classic ABI-mismatch signature:
+stock's userspace `libGAL.so`/`libdirectfb_gal.so` were compiled
+against a **different Vivante GAL SDK version** than
+`gpu-vivante-6.2.4` (an i.MX-targeted source tree, `gcvVERSION
+6.2.4.150331`) — their `gcsHAL_INTERFACE` struct sizes don't match, so
+every single ioctl fails this check identically.
+
+Checked whether this project has the *correct*, ABI-matching galcore
+source anywhere — **it doesn't.** Only the unusable stock 3.4.0
+binary `.ko` (no source, wrong kernel ABI) and the mismatched generic
+`gpu-vivante-6.2.4` tree exist. Getting DirectFB genuinely working
+would require either finding stock's exact original Vivante SDK
+source (not present in this project) or reverse-engineering
+`gcsHAL_INTERFACE`'s precise struct layout from the 3.4 binary and
+patching the mismatched source to match — a substantial side-project
+in its own right, unrelated to the original LCD bug.
+
+**Conclusion: DirectFB is confirmed not viable without significant
+additional vendor-SDK work. Do not re-attempt without new source
+material.** `start_msn` should stay on `QWS_DISPLAY=linuxfb`. The
+`galcore.ko` module staging is harmless to keep (loads fine, may be
+useful for other GPU-accelerated work later) but doesn't unlock
+DirectFB on its own.
+
+**Next steps (this is now purely a userspace/Qt investigation, not a
+kernel-driver or DirectFB one):**
 - [ ] Investigate whether Qt4's `LinuxFB` `QScreen` driver is expected
       to pre-composite alpha in software by default (this is Qt4 QWS's
       normal architecture — a single software-rendered framebuffer,
       not real hardware compositing) — if so, the bug may be a genuine
       Qt/MsnCoreApp rendering config issue (e.g. writing non-flattened
       alpha where it shouldn't), not a display-driver issue at all.
-- [ ] Consider whether re-enabling `directfb` (reverting the
-      `QWS_DISPLAY` switch) is viable now that other `galcore`/GPU
-      issues from earlier sessions may have separately been resolved —
-      would need to re-verify the original crash class is still
-      relevant before attempting.
-- [ ] If pursuing further, this is now a userspace/Qt investigation,
-      not a kernel-driver one — `docs/MSNCOREAPP_REVIEW.md` (from the
-      `msn_autocopy` disassembly work) may already have relevant
-      context on `MsnCoreApp`'s rendering path.
+- [ ] `docs/MSNCOREAPP_REVIEW.md` (from the `msn_autocopy` disassembly
+      work) may already have relevant context on `MsnCoreApp`'s
+      rendering path.
 
 See `tools/fb-alpha-test/README.md` for the full register-sweep
 writeup (kept for the record, even though it turned out to be the

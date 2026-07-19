@@ -61,13 +61,56 @@ applies to partial-alpha pixels, exactly matching the symptom (opaque
 background fine, blended elements wrong). Fixed in `linux-arkmicro`
 `ad7b2647c` — proper read-modify-write now preserves that field.
 
+**Update: `ad7b2647c` alone wasn't enough — hardware-tested 2026-07-19,
+colors still skewed.** Turned out to be a near-total no-op: nothing in
+our boot path or in Qt/MsnCoreApp (`QWS_DISPLAY=linuxfb:...`, confirmed
+via `start_msn` to use the plain LinuxFB QScreen driver with no `:fb=`
+suboption, i.e. `/dev/fb0` = OSD1) ever calls the vendor ioctl that
+`rgb_order` gets set through — so the RMW-preserve fix was preserving a
+value that was never anything but its hardware reset default (0)
+anyway, both before and after the fix.
+
+Re-ran `fb-alpha-test` (already deployed) and got a much sharper,
+decisive result: only **4 visible bars instead of 6**, with the widths
+matching exactly what two specific band-merges would produce. Bands 1
+(opaque red, `0xffff0000`) and 2 (half-alpha red, `0x80ff0000`) — RGB
+bytes identical, alpha byte the only difference — rendered as one
+uniform "wide strong red" bar. Bands 4/5 (raw-byte tests) merged
+similarly. **This means the alpha byte had zero effect on the
+composited output** — confirmed as data, not photo-guesswork.
+
+Checked whether the two relevant enable bits (`MODE_LCD_REG1`'s
+`alpha_blend_en`/`per_pix_alpha_blend_en` for OSD1, bits 13/12) were
+actually live via a direct `devmem 0xe0500064 32` read on hardware:
+**`0x00003001`** — both bits genuinely set. So the enable bits were
+never the problem either.
+
+**Real root cause, found via further Ghidra comparison:** a completely
+separate register field, `MODE_LCD_REG0` bits `[15:12]` — OSD1's 4-bit
+"blend mode" (confirmed via stock's `ark_disp_set_osd_blend_mode_lcd()`,
+`vmlinux.elf @ 0x802deb08`, which RMWs exactly this nibble). Our
+`ark1668_lcdc_dev_init()` never touched it in either code path (the
+DTS `lcd-priority` formula only ORs into bits `[3:0]`/`[11:8]`/
+`[19:16]`/`[27:24]`; the fallback literal `0x03000204` also leaves it
+`0`) — so OSD1 was stuck at blend mode 0 regardless of the enable bits
+being on. Confirmed via stock's own `ark_disp_dev_init()`
+(`vmlinux.elf @ 0x802ddde4-802ddde8`) that every layer's *default*
+`blend_mode` struct field is hardcoded to `1`, not `0`, before any
+DTS/ioctl override — mode 0 evidently means "ignore per-pixel alpha
+entirely," matching the symptom exactly. Fixed in `linux-arkmicro`
+`063c5be8c` — OSD1's blend mode nibble now explicitly set to `1` in
+both `ark1668_lcdc_dev_init()` code paths.
+
 - [ ] Flash this kernel. Confirm colors on alpha-blended UI elements
       (icons, buttons, anti-aliased widgets) now look correct, not
       just the flat background.
-- [ ] Re-run `fb-alpha-test` if useful for a definitive band-by-band
-      check.
+- [ ] Re-run `fb-alpha-test` — expect all 6 bands visually distinct
+      now (no more 1+2 or 4+5 merging).
+- [ ] If still wrong, re-check `devmem 0xe0500060 32` (`MODE_LCD_REG0`)
+      to confirm bits `[15:12]` actually read back as `1` on real
+      hardware, not just in the source.
 
-**Not yet hardware-tested.**
+**Not yet hardware-tested (this latest fix).**
 
 ---
 

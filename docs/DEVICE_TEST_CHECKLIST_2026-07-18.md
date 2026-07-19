@@ -632,12 +632,27 @@ compiled out entirely — the ark1668 I2S driver, the internal DAC
 `ark_sddac_mute()` fix from `1c3e87e50`, and the external BD37033 amp
 `MsnCoreApp`'s `Sound_BD37033::muteSpeakerAtts` talks to.
 
-**Fixed** in `linux-arkmicro` `95783755f`, validated the same way as
-the other config fixes (fresh defconfig regeneration diffed against
-the known-working resolved config — identical except metadata).
+**Update: `95783755f` alone wasn't enough — real evidence found on the
+next fresh-boot test.** With that fix in, the I2S driver now genuinely
+probes (soft-reset, clock-gate setup all succeed) but then fails:
+```
+ark1668-i2s e4000000.i2s-dac: Could not register PCM
+ark1668-i2s e8200000.i2s-adc: Could not register PCM
+```
+Traced to `devm_snd_dmaengine_pcm_register()` needing a working DMA
+channel from `dwdma0` (the I2S DTS nodes' `dmas=` target, compatible
+`"arkmicro,ark-dma"`) — `CONFIG_ARK_DMA` (the actual driver for that
+compatible string, `drivers/dma/ark-dma.c`) was **also** never
+captured in the defconfig — a sixth instance of the same pattern.
+Fixed in `linux-arkmicro` `b0bff0082` (also disabled `CONFIG_DW_DMAC`,
+the unrelated generic Synopsys DMA driver — nothing in this board's
+DTS uses it, and it was link-conflicting with `ark-dma.c` over
+several identically-named symbols). Validated the same way as the
+other six fixes today.
 
 - [ ] Flash this kernel. Confirm `ALSA device list: #0: ARK-SDDAC` (or
-      similar real card name) appears in dmesg, not `Dummy`.
+      similar real card name) appears in dmesg, not `Dummy`, and that
+      `"Could not register PCM"` is gone.
 - [ ] Confirm actual audio playback works (AUX source, or whatever's
       easiest to test).
 

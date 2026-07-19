@@ -42,6 +42,35 @@ session's evidence log.
 
 ---
 
+## 1b. LCD alpha-blend channel-order fix (2026-07-19)
+
+**Confirmed by user testing:** position offset fixed (arkdata.ini/DTB
+patching) and red tint is gone, but colors on alpha-blended UI
+elements (icons, anti-aliased widgets) are visibly skewed while the
+flat opaque background looks correct — a different, more specific
+symptom than the original red-tint bug.
+
+**Root cause found via direct Ghidra comparison** against stock's real
+LCDC driver (not another config/register guess): `ark1668_lcdfb.c`'s
+panel-init path did a flat literal write to `ARK1668_LCDC_OSD1_CTL`
+that unconditionally zeroed the RGB channel-order field (bits 18-22)
+on every `fb_set_par()` call, clobbering whatever the ioctl path's own
+correct read-modify-write helper had set. That field controls channel
+routing in the blend unit's actual compositor math — which only
+applies to partial-alpha pixels, exactly matching the symptom (opaque
+background fine, blended elements wrong). Fixed in `linux-arkmicro`
+`ad7b2647c` — proper read-modify-write now preserves that field.
+
+- [ ] Flash this kernel. Confirm colors on alpha-blended UI elements
+      (icons, buttons, anti-aliased widgets) now look correct, not
+      just the flat background.
+- [ ] Re-run `fb-alpha-test` if useful for a definitive band-by-band
+      check.
+
+**Not yet hardware-tested.**
+
+---
+
 ## 2. `mcu-handshake` — touch-switch trigger (highest priority)
 
 **Change:** wire protocol corrected (real checksum, real frame format,
@@ -650,9 +679,34 @@ DTS uses it, and it was link-conflicting with `ark-dma.c` over
 several identically-named symbols). Validated the same way as the
 other six fixes today.
 
+**Update: `b0bff0082` also wasn't the end of it.** "Could not register
+PCM" was gone on the next test, but a new failure appeared right
+after:
+```
+drv_bd37033 2-0040: bd37033_write_bytes: i2c_transfer failed
+drv_bd37033 2-0040: bd37033_write_byte: i2c_transfer timeout
+```
+**Confirmed by the user this I2C failure is pre-existing on stock
+firmware too** — not something this reconstruction introduced, and
+never fixable. So the real question was why stock still registers
+`#0: ARK-SDDAC` despite it. Answer: `ark1668_limcet_p305.dts` wired
+BD37033 as a hard `simple-audio-card,aux-devs` dependency (added
+2026-07-14 to expose `PA Volume`/`PA Mute` mixer controls — see
+`docs/AUDIO_SUBSYSTEM_INVESTIGATION.md`), and `soc_probe_aux_devices()`
+(confirmed in `sound/soc/soc-core.c`) aborts the **entire** card's
+registration if any aux-dev's `probe()` fails — which BD37033's does,
+via a real `i2c_transfer()` call. Removed the aux-dev wiring and
+disabled `CONFIG_SND_SOC_BD37033` entirely, in `linux-arkmicro`
+`fe7198962`. Loses `PA Volume`/`PA Mute` mixer exposure (which never
+worked reliably anyway per the 2026-07-14 note), but basic playback/
+capture through `ARK-SDDAC` never depended on BD37033 at all — that's
+a separate external amp `MsnCoreApp`'s own userspace path already
+talks to independently.
+
 - [ ] Flash this kernel. Confirm `ALSA device list: #0: ARK-SDDAC` (or
-      similar real card name) appears in dmesg, not `Dummy`, and that
-      `"Could not register PCM"` is gone.
+      similar real card name) appears in dmesg, not `Dummy`, with
+      neither `"Could not register PCM"` nor a BD37033-caused failure
+      blocking it.
 - [ ] Confirm actual audio playback works (AUX source, or whatever's
       easiest to test).
 

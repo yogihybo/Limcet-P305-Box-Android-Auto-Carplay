@@ -121,35 +121,60 @@ no reboot needed per attempt. Findings, most useful first:
   ones) — mode `1` (stock's struct-init default, what the kernel fix
   above sets) does *not* by itself turn on real blending on our
   reconstruction. Unclear why; no vendor register documentation found.
-- With `blend_mode=9` locked in, swept `rgb_order`
-  (`OSD1_CTL[20:18]`) through all 8 values: band 2 (half-alpha red)
-  came out dark-green (0,1), light-green (2,3), brown (4,5),
-  dark-green (6,7) — **never a correct dim red**. `rgb_order` alone
-  does not fix the hue corruption.
-- Checked whether stock's real `MsnCoreApp`/`libarkadapt.so`/
-  `libarkcmn.so` binaries hardcode a correct value when calling the
-  vendor `VIN_SET_WINDOW_FORMAT` ioctl (`0x4f3b`) — the two vendor
-  libraries are stripped with no ioctl symbols found by name;
-  `MsnCoreApp` itself (unstripped) had no vendor-ioctl symbols either,
-  so the actual call (if any) is buried in a stripped library. Not
-  pursued further (binary-level RE, more effort than the register
-  sweep for uncertain payoff) — noted as a future option.
+- With `blend_mode=9` locked in, swept what was believed to be
+  `rgb_order` (`OSD1_CTL[20:18]`) through all 8 values: band 2
+  (half-alpha red) came out dark-green (0,1), light-green (2,3), brown
+  (4,5), dark-green (6,7) — never a correct dim red.
+
+**Correction found via further Ghidra tracing (still 2026-07-19):**
+this project had `rgb_order`/`yuv_order` **swapped**. Traced the real
+parameter-passing convention in stock's `ark_disp_set_osd_format(id,
+format, yuv_order, rgb_order)` (`vmlinux.elf @ 0x802ddf98`):
+```
+orr r2, r1, r7, lsl #18   -- r7 = yuv_order (3rd arg) -> bits[20:18]
+orr r3, r2, r6, lsl #21   -- r6 = rgb_order (4th arg) -> bits[22:21]
+```
+`yuv_order` is the 3-bit field at bits `[20:18]`; `rgb_order` is only
+a **2-bit** field at bits `[22:21]` — never tested. What the sweep
+above actually tested was `yuv_order`, not `rgb_order`. Confirmed our
+own `ark1668_lcdc_set_osd_format()` (`ark1668_lcdc_funcs.c`) had this
+exact swap baked in (`(yuv_order&3)<<21 | (rgb_order&7)<<18`, backwards
+from stock) — fixed in `linux-arkmicro` `730c5cf1c`. That function
+isn't on the live boot path so the fix alone doesn't resolve the
+hue-corruption bug, but confirms the Ghidra trace is correct.
+
+Also checked whether stock's real `MsnCoreApp`/`libarkadapt.so`/
+`libarkcmn.so` binaries hardcode a correct value when calling the
+vendor `VIN_SET_WINDOW_FORMAT` ioctl (`0x4f3b`) — the two vendor
+libraries are stripped with no ioctl symbols found by name;
+`MsnCoreApp` itself (unstripped) had no vendor-ioctl symbols either,
+so the actual call (if any) is buried in a stripped library. Not
+pursued further (binary-level RE, more effort than the register sweep
+for uncertain payoff) — noted as a future option.
+
+Also **ruled out** two other candidates via Ghidra (no more hardware
+testing needed for these):
+- `Y2R_COEF321`/`654`/`7` — our driver's literals (computed from
+  `(425<<20)|(91<<10)|(298<<0)` etc.) match stock's hardcoded values
+  in `ark_disp_set_lcd_panel_type()` (`@ 0x802e0a78`) byte-for-byte
+  (`0x1a916d2a`, `0x1d12e060`, ORs in `0x1029`). Not the cause.
+- `ALPHA1_0_VIDEO_OSD1` (offset `0x24`) — traced every access to the
+  LCDC MMIO base across the entire display-driver code range;
+  `ark_disp_set_layer_cfg()` (the "apply full layer config" function)
+  calls a comprehensive list of per-layer setters and none target this
+  offset. Very likely unused for this board.
 
 **Consolidated next-session test plan:** `tools/fb-alpha-test/
 lcd-blend-sweep.sh` (deployed to the overlay, on-device as
-`lcd-blend-sweep.sh`). Covers three untested candidates in one script,
-pausing after each for a visual check:
-1. `format` (`OSD1_CTL[15:12]`) swept 0–15, `rgb_order` held at 0.
-2. `Y2R_COEF321`/`654`/`7` zeroed out — our driver writes these
-   unconditionally even though OSD1 is pure RGB; hypothesis is the
-   blend/compositor path routes partial-alpha pixels through this
-   YCbCr matrix even when the bypass bits say not to (would explain
-   hue shifts that vary with `rgb_order`, while sparing opaque pixels
-   which may use a simpler passthrough path).
-3. `ALPHA1_0_VIDEO_OSD1` (offset `0x24`) — a completely separate,
-   never-touched alpha/blend-weight register found in the register
-   header; couldn't identify what stock does with it via Ghidra in
-   the time available.
+`lcd-blend-sweep.sh`), rewritten to prioritize the corrected fields:
+1. **Phase 1 (most promising, untested):** the real `rgb_order` field
+   (`OSD1_CTL[22:21]`, only 4 values), `yuv_order`/`format` held
+   fixed.
+2. **Phase 1b:** if phase 1 alone doesn't work, the combined
+   `rgb_order` × `yuv_order` sweep (16 combos).
+3. **Phase 2 (low priority):** `format` (`OSD1_CTL[15:12]`) swept
+   0–15 — confirmed via Ghidra to be a direct passthrough (no
+   remapping), so `6` (RGBA888) is very likely already correct.
 
 See `tools/fb-alpha-test/README.md` for the full writeup.
 

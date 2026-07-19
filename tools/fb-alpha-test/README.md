@@ -85,16 +85,32 @@ needing a kernel rebuild per attempt. Findings so far:
   correct dim red. `rgb_order` alone does not fix it.
 - **`format`** (`OSD1_CTL` bits `[15:12]`) — not yet tested empirically
   at time of writing; `lcd-blend-sweep.sh` phase 1 covers this.
-- **`Y2R_COEF321`/`654`/`7`** (offsets `0x11c`/`0x120`/`0x124`) — YCbCr→
-  RGB conversion matrix coefficients our driver writes unconditionally
-  even though OSD1 is pure RGB. Hypothesis: the blend/compositor path
-  routes partial-alpha pixels through this matrix even though the
-  "bypass" bits say not to. Untested; `lcd-blend-sweep.sh` phase 2
-  zeroes them to check for any effect at all.
-- **`ALPHA1_0_VIDEO_OSD1`** (offset `0x24`) — a separate, never-touched
-  alpha/blend-weight register found in the register header. Could not
-  identify what stock's kernel does with it via Ghidra in the time
-  available. Untested; `lcd-blend-sweep.sh` phase 3 probes it.
+- **`Y2R_COEF321`/`654`/`7`** (offsets `0x11c`/`0x120`/`0x124`) —
+  **ruled out (2026-07-19, later Ghidra pass).** Found stock's real
+  `ark_disp_set_lcd_panel_type()` (`vmlinux.elf @ 0x802e0a78`)
+  hardcoding these exact same literals: `COEF321=0x1a916d2a`,
+  `COEF654=0x1d12e060`, `COEF7` ORs in `0x1029` (`(1<<12)|41`) after
+  clearing bits `0x33c0`/`0x3f` first. Our driver's values
+  (`(425<<20)|(91<<10)|(298<<0)` etc.) compute to the **exact same
+  literals** — confirmed via direct calculation, byte-for-byte match.
+  The one difference is stock explicitly clears those bits before
+  OR'ing in `COEF7`, ours only ORs — theoretically could matter if
+  those bits are non-zero when `set_par()` runs, but given the other
+  two registers match exactly, this is now a low-priority loose end,
+  not the main suspect. `lcd-blend-sweep.sh` phase 2 still zeroes them
+  as a quick sanity check, but don't expect it to be the fix.
+- **`ALPHA1_0_VIDEO_OSD1`** (offset `0x24`) — **very likely unused for
+  this board** (2026-07-19, later Ghidra pass). Systematically traced
+  every access to the LCDC MMIO base (`0xf6800000`-pattern) across the
+  entire ~100KB display-driver code range (`ark_disp_*`/
+  `ark1668_lcdc_*`/`ark_fb_*`/`ark168vin_*`, `vmlinux.elf @
+  0x802d83d8`-`0x802ec380`) and found zero writes to this offset.
+  `ark_disp_set_layer_cfg()` (the "apply full layer config to
+  hardware" function, `@ 0x802db8d4`) calls a comprehensive list of
+  per-layer setters (alpha, alpha_blend_en, per_pix_alpha_blend_en,
+  blend_mode, colorkey, priority, layer_cut) and none of them target
+  this offset. `lcd-blend-sweep.sh` phase 3 still probes it for
+  completeness, but don't expect it to be the fix either.
 - Checked whether stock's actual `MsnCoreApp`/`libarkadapt.so`/
   `libarkcmn.so` binaries (all in `firmware_dumps/Prado firmware dump/
   mtd6_rootfs/`) hardcode a correct `format`/`rgb_order` value when

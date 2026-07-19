@@ -583,20 +583,50 @@ of which `QWS_DISPLAY` backend is active and is a hard, unconditional
 dependency either way — the symbol-compatibility risk from this swap
 looks low across the whole app, not just the DirectFB-specific path.
 
-**Next steps (this pivot first, then either continue struct RE, or
-fall back to the userspace/Qt investigation below):**
-- [ ] Test on hardware once the SD card is built and flashed — does
-      `start_msn` (with `directfb` active) come up cleanly now?
-- [ ] If it crashes differently, capture fresh `strace`/`dmesg` and
-      compare against the earlier `ENOTTY`/`si_addr=0xe0` signature.
-- [ ] If it works: make the `libGAL.so` swap permanent/documented in
-      the overlay or build process (currently only staged in the
-      working tree, not committed).
-- [ ] Continue tracing `gcoHAL_Call` sites in `libGAL.so` (start with
-      `gcoHAL_QueryChipIdentity`, `gcoHAL_Commit`, and whatever the
-      remaining ~3 of the 5 DirectFB-init-sequence ioctls turn out to
-      be) to keep building out the 264-byte field map — only needed
-      if the matched-pair swap above doesn't pan out.
+**RESULT (2026-07-20): the crash is fixed — matched-version-pair swap
+confirmed working at the ABI level.** Tested `start_msn_directfb` on
+real hardware (`docs/logs/start_msn_directfb.txt`). **Zero crashes,
+zero `ENOTTY`, zero `si_addr=0xe0` segfault.** `MsnCoreApp` runs
+completely through init and stays up: all plugins load
+(`libCarReversing.so`, `libLauncher-Box.so`, `libSetting.so`,
+`libMsnSound.so`, `libMcuCenter.so`, `libCanBus.so`,
+`libBlueTooth.so`, `libMsnCarAuto.so`), Bluetooth pairs
+(`Bluetooth connected: "Pixel 9 Pro"`), and **Android Auto's full
+RFCOMM handshake completes end-to-end** (`CarAuto Status: 3 true`,
+hostapd AP starts, `wlan0 IP Address 192.168.43.1`, SSID/password
+negotiation). `ark_display` ioctls (`ARKDISP_GET_SCREEN_INFO`,
+`ARKDISP_GET_VDE_CFG`/`ARKDISP_SET_VDE_CFG`) all succeed cleanly.
+This conclusively validates the matched-version-pair approach — the
+raw `gcsHAL_INTERFACE` ABI mismatch that caused every previous crash
+is genuinely resolved by pairing `6.2.4.p1.8`'s `galcore.ko` with a
+`libGAL.so` from that same SDK release.
+
+**New, different problem found: app runs but the LCD shows no image
+(sometimes solid red).** Qt/`MsnCoreApp` believes it's drawing
+correctly (`MsnMainWindow::setRealVisible LauncherWindow ... true`,
+`MSNCoreApp show`), but the composited GPU output either isn't
+reaching the LCDC's scanout buffer at all, or is reaching it with
+wrong data — this is a hand-off/compositing problem between DirectFB's
+GPU-accelerated rendering path and the physical display, not a crash
+or an ABI issue. Diagnostic in progress: reading `OSD1_CTL`
+(`0xe0500074`), `OSD1_ADDR` (`0xe0500080`), and `MODE_LCD_REG0`
+(`0xe0500060`) live while the blank/red screen is showing, to see
+what the LCDC is actually being told to scan out.
+
+**Next steps:**
+- [x] Test on hardware — crash confirmed fixed (above).
+- [ ] Diagnose the blank/solid-red display issue — check live LCDC
+      register state (`OSD1_CTL`/`OSD1_ADDR`/`MODE_LCD_REG0`) while
+      the problem is showing; compare against known-good values from
+      the earlier `linuxfb`-path investigation.
+- [ ] Make the `libGAL.so` swap permanent/documented in the overlay
+      (already done — `firmware_overlay/prado/usr/lib/libGAL.so` and
+      the base reconstructed rootfs copy both updated, see
+      `65b2b62`/earlier commits) — the crash-fix side of this is
+      complete; only the new display problem remains open.
+- [ ] Continue tracing `gcoHAL_Call` sites in `libGAL.so` — now lower
+      priority, since the ABI-mismatch crash this was meant to solve
+      is already fixed by the matched-pair swap.
 - [ ] Once enough of the struct is mapped for the commands DirectFB's
       init path actually needs, patch a close Freescale source tree
       (`p1.8`, already parked and building for 4.19) to match the

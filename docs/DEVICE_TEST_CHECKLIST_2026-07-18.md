@@ -287,14 +287,52 @@ not exist for DirectFB 1.7) or replacing DirectFB with a different
 display stack entirely — a bigger architectural change than
 reverse-engineering the struct layout, not a smaller one. Not pursued.
 
-**Conclusion: DirectFB is confirmed not viable without significant
-additional vendor-SDK work (either exact source or a large
-architectural change to etnaviv/DRM). Do not re-attempt without new
-source material or a deliberate decision to take on the etnaviv
-migration as its own project.** `start_msn` should stay on
-`QWS_DISPLAY=linuxfb`. The `galcore.ko` module staging is harmless to
-keep (loads fine, may be useful for other GPU-accelerated work later)
-but doesn't unlock DirectFB on its own.
+**Update (2026-07-19, still same session): a real, self-contained path
+forward found.** User found an NXP community thread referencing
+`galcore` version `6.2.4.150331` — the *exact* build number our
+parked `gpu-vivante-6.2.4` source reports. Verified via GitHub against
+Freescale's own `kernel-module-imx-gpu-viv` repo tags: our source is
+byte-for-byte Freescale's `upstream/6.2.4.p1.8` tag (confirmed by
+checking `gcvVERSION_BUILD` across several `6.2.4.p*` tags — only
+`p1.8` matches `150331`; `p2.3`=`163672`, `p4.0`-`p4.8`=`190076`). So
+this isn't a random mismatched source — it's a real, specific,
+identifiable NXP/Freescale release.
+
+Checked whether NXP's matching **userspace** binary
+(`imx-gpu-viv-<version>.bin`, per `Freescale/meta-fsl-arm`'s
+`recipes-graphics/imx-gpu-viv/imx-gpu-viv.inc`) could be substituted
+for stock's `libGAL.so` instead of trying to match the kernel driver
+to it. Two problems with that: (1) `SRC_URI` requires
+`fsl-eula=true` — a manually EULA-gated download through NXP's portal,
+not something scriptable/automatable; (2) more importantly,
+`COMPATIBLE_MACHINE = "(mx6q|mx6dl|mx6sx|mx6sl)"` — that prebuilt
+binary targets NXP's own i.MX6 SoC platform integration specifically,
+not ArkMicro's ARK1668, so even with EULA access it might not be the
+right binary for this hardware.
+
+**The better, self-contained plan:** Vivante's `gcsHAL_INTERFACE`
+struct layout is version-locked at the SDK level (shared across all
+Vivante GC-core licensees, not itself i.MX6-specific) — so instead of
+swapping userspace to match our kernel module, find which exact SDK
+version **stock's own working `libGAL.so`/`galcore.ko`** (in
+`firmware_dumps/Prado firmware dump/mtd6_rootfs/lib/modules/3.4.0/
+galcore.ko`) was built against, by reading the exact
+`sizeof(gcsHAL_INTERFACE)` constant it validates against (Ghidra, same
+technique used for the LCDC register work). Then check that size
+against Freescale's various tagged `kernel-module-imx-gpu-viv`
+releases (`6.2.4.p1.8`, `p2.3`, `p4.0`, `p4.2`, `p4.4`, `p4.6`, `p4.8`,
+and potentially other `6.2.4.p*`/older major versions if none of
+those match) to find the one with a matching struct size, then port
+*that* specific kernel-side version to 4.19 instead of the `p1.8` we
+happened to have parked — keeping stock's proven, correctly-ARK1668-
+integrated userspace blob completely untouched. Avoids the EULA and
+platform-mismatch issues entirely, and doesn't require obtaining any
+new external binaries — just the right *version selection* among
+Freescale's own publicly-tagged kernel-module source releases (all on
+GitHub, no EULA gate on the kernel-side source itself).
+
+**Status: started, in progress** — see next commits for the actual
+Ghidra work on stock's `galcore.ko`.
 
 **Next steps (this is now purely a userspace/Qt investigation, not a
 kernel-driver or DirectFB one):**

@@ -167,37 +167,87 @@ testing needed for these):
   calls a comprehensive list of per-layer setters and none target this
   offset. Very likely unused for this board.
 
-**Every register-level candidate found so far is now either ruled out
-or exhausted without success.** `lcd-blend-sweep.sh` (deployed to the
-overlay) still covers what's left — an explicit re-write test for
-`blend_mode=1` (stock's real default, in case the compositor needs a
-write-triggered commit rather than just the register holding the right
-value), `yuv_order` swept alone (untested independently, low priority
-for a pure-RGB layer), and `format` (low priority, confirmed to be a
-direct passthrough via Ghidra) — but none of these are expected to be
-the fix.
+**Every register-level candidate found so far was either ruled out or
+exhausted without success** — which turned out to be expected, once
+ground truth arrived.
 
-**Ground-truth plan for next session (most promising path now):**
-probe stock's own firmware directly instead of more guessing. Build a
-fully stock SD card using existing tooling —
-```sh
-./build_bootable_sdcard.sh --no-new-kernel --no-new-uboot \
-  --rootfs-dir "firmware_dumps/Prado firmware dump/mtd6_rootfs"
-```
-— boot it, connect the usual serial console (stock's `inittab` spawns
-a shell directly, no login needed), navigate to a screen with
-correctly-blended UI, and read the live registers with stock's
-`busybox devmem`:
-```sh
-devmem 0xe0500060 32   # MODE_LCD_REG0 (blend_mode)
-devmem 0xe0500064 32   # MODE_LCD_REG1 (alpha_blend_en/per_pix_alpha_blend_en)
-devmem 0xe0500074 32   # OSD1_CTL (format/alpha/rgb_order/yuv_order)
-```
-Whatever these read as while stock is correctly rendering is
-definitively correct — replicate those exact values in
-`ark1668_lcdc_dev_init()`.
+## Ground truth from real stock hardware (2026-07-19, live telnet + devmem)
 
-See `tools/fb-alpha-test/README.md` for the full writeup.
+Got a root shell on **real stock firmware, real hardware** via the
+`msn_autocopy` telnetd payload (`payloads/msn_autocopy/README.md`,
+previously proven working 2026-07-13 for the I2C bus investigation).
+With stock's UI showing correctly-rendered blended elements on screen,
+read the three relevant registers directly with stock's own `busybox
+devmem`:
+```
+devmem 0xe0500060 32   ->  0x03000204   (MODE_LCD_REG0)
+devmem 0xe0500064 32   ->  0x00033001   (MODE_LCD_REG1)
+devmem 0xe0500074 32   ->  0x000260ff   (OSD1_CTL)
+```
+
+**This settles the whole investigation, decisively, and in an
+unexpected direction:**
+
+- `OSD1_CTL` is **byte-for-byte identical** to what our own board
+  already reads (`0x260ff` both) — same format, alpha, `rgb_order`,
+  `yuv_order`.
+- `MODE_LCD_REG1`'s OSD1 bits (`alpha_blend_en`/`per_pix_alpha_blend_en`,
+  bits `[13:12]`) match too.
+- `MODE_LCD_REG0`'s `blend_mode` (bits `[15:12]`) is **`0`** on stock —
+  not `1`, not `9`/`10`/`14`. This is the *exact* value our driver's
+  flat literal (`0x03000204`) already produced before any of this
+  session's LCD fixes.
+
+**Conclusion: the LCDC hardware register configuration was never the
+bug.** Our original, completely unmodified driver already had
+identical register state to stock's real, correctly-rendering
+configuration. The entire register-sweep investigation this session
+(`blend_mode` 0–15, `rgb_order` 0–7, `format`, `Y2R_COEF`,
+`ALPHA1_0_VIDEO_OSD1`) could never have found a fix, because there was
+never a wrong register value to find. The `blend_mode=1` kernel change
+(`063c5be8c`) has been **reverted** (`linux-arkmicro` `41eaa6463`) —
+back to the flat `0x03000204` literal, now matching stock exactly and
+documented as such in `ark1668_lcdc_dev_init()`'s comment.
+
+**Where the real bug almost certainly lives:** stock uses
+`QWS_DISPLAY=directfb:boundingrectflip:...` — DirectFB does its own
+*software* compositing of overlapping widgets/windows before ever
+writing to the framebuffer, producing fully opaque, pre-blended pixel
+data. It likely never exercises the LCDC's per-pixel hardware alpha
+blending at all — which would explain why stock works fine with
+`blend_mode=0` (hardware blending effectively inert) while our
+extensive sweep of "actually enable blending" values (9/10/14) always
+produced wrong hues: those modes may be triggering a genuinely broken
+hardware blend path that stock's software never engages.
+
+Our build uses `QWS_DISPLAY=linuxfb:...` instead (switched away from
+`directfb` specifically to avoid a GPU/`galcore` crash class — see
+`firmware_overlay/prado/README.md`'s tools table). Qt's LinuxFB QScreen
+driver may be writing genuinely semi-transparent pixel data to `/dev/fb0`
+for alpha-blended widgets, relying on hardware blending to finish the
+job — hardware that this investigation has now shown doesn't reliably
+work correctly on this silicon regardless of register configuration.
+
+**Next steps (redirected — no more LCDC register work planned):**
+- [ ] Investigate whether Qt4's `LinuxFB` `QScreen` driver is expected
+      to pre-composite alpha in software by default (this is Qt4 QWS's
+      normal architecture — a single software-rendered framebuffer,
+      not real hardware compositing) — if so, the bug may be a genuine
+      Qt/MsnCoreApp rendering config issue (e.g. writing non-flattened
+      alpha where it shouldn't), not a display-driver issue at all.
+- [ ] Consider whether re-enabling `directfb` (reverting the
+      `QWS_DISPLAY` switch) is viable now that other `galcore`/GPU
+      issues from earlier sessions may have separately been resolved —
+      would need to re-verify the original crash class is still
+      relevant before attempting.
+- [ ] If pursuing further, this is now a userspace/Qt investigation,
+      not a kernel-driver one — `docs/MSNCOREAPP_REVIEW.md` (from the
+      `msn_autocopy` disassembly work) may already have relevant
+      context on `MsnCoreApp`'s rendering path.
+
+See `tools/fb-alpha-test/README.md` for the full register-sweep
+writeup (kept for the record, even though it turned out to be the
+wrong axis).
 
 ---
 

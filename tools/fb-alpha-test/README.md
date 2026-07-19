@@ -142,33 +142,42 @@ reverted in `linux-arkmicro` `926336ce7`. This means the `rgb_order`
 sweep documented above (0–7, including all 6 real values) really was
 testing the correct field, and is genuinely exhausted, not still open.
 
-## Ground-truth plan: probe the stock device directly
+## Ground truth from real stock hardware (2026-07-19) — investigation resolved
 
-Given every register-level candidate is now either ruled out or
-exhausted without success, the most promising next step is reading the
-*actual* live register values while stock's own firmware is correctly
-rendering blended UI, rather than more guessing from Ghidra or sweeping
-blind. This is straightforward with existing tooling:
+Got a root shell on real stock firmware via the `msn_autocopy` telnetd
+payload (`payloads/msn_autocopy/README.md`, no separate SD card build
+needed — the user telnetted directly into the already-installed
+payload). With stock's UI showing correctly-blended elements on
+screen, read the three relevant registers with stock's own `busybox
+devmem`:
 
-```sh
-./build_bootable_sdcard.sh --no-new-kernel --no-new-uboot \
-  --rootfs-dir "firmware_dumps/Prado firmware dump/mtd6_rootfs"
+```
+devmem 0xe0500060 32   ->  0x03000204   (MODE_LCD_REG0)
+devmem 0xe0500064 32   ->  0x00033001   (MODE_LCD_REG1)
+devmem 0xe0500074 32   ->  0x000260ff   (OSD1_CTL)
 ```
 
-This builds a fully stock SD card (original U-Boot, kernel, and rootfs
-— not our patched/reconstructed tree) using our own SD card/partition
-scheme, not the real NAND. Stock's `inittab` has `::respawn:-/bin/sh`
-(a shell spawns directly on console, no login needed) and stock's
-`busybox` includes a `devmem` applet, so once booted and connected via
-the usual serial console:
+**This settles the investigation, and in an unexpected direction:**
+`OSD1_CTL` is byte-for-byte identical to what our own board already
+reads, `MODE_LCD_REG1`'s OSD1 bits match too, and `MODE_LCD_REG0`'s
+`blend_mode` is **`0`** on stock — not `1`, not `9`/`10`/`14`. This is
+the exact value our driver's original flat literal already produced
+*before* any of this session's LCD register fixes. **The LCDC
+hardware register configuration was never the bug** — every candidate
+swept in this document (`blend_mode`, `rgb_order`, `format`,
+`Y2R_COEF`, `ALPHA1_0_VIDEO_OSD1`) could never have fixed this, since
+there was never a wrong register value to find. The `blend_mode=1`
+kernel change has been reverted (`linux-arkmicro` `41eaa6463`).
 
-1. Navigate to a screen with visibly-correct alpha-blended UI elements.
-2. While it's on screen, run:
-   ```sh
-   devmem 0xe0500060 32   # MODE_LCD_REG0 (blend_mode)
-   devmem 0xe0500064 32   # MODE_LCD_REG1 (alpha_blend_en/per_pix_alpha_blend_en)
-   devmem 0xe0500074 32   # OSD1_CTL (format/alpha/rgb_order/yuv_order)
-   ```
-
-Whatever these read as is definitively correct — no more guessing
-needed, just replicate those exact values in `ark1668_lcdc_dev_init()`.
+The real bug is almost certainly at the pixel-data level: stock uses
+`QWS_DISPLAY=directfb` (software-composites to fully opaque pixels
+before ever touching the framebuffer, likely never exercising real
+hardware alpha blending at all), while this build uses
+`QWS_DISPLAY=linuxfb` (switched away from `directfb` to avoid a
+GPU/`galcore` crash class). Qt's LinuxFB path may write genuinely
+semi-transparent pixel data expecting hardware blending to finish the
+job — hardware that this investigation showed doesn't reliably work
+correctly on this silicon regardless of register configuration. See
+`docs/DEVICE_TEST_CHECKLIST_2026-07-18.md` §1b for the full writeup
+and redirected next steps (now a Qt/userspace investigation, not a
+kernel-driver one).

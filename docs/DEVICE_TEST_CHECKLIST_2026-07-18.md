@@ -331,11 +331,94 @@ new external binaries — just the right *version selection* among
 Freescale's own publicly-tagged kernel-module source releases (all on
 GitHub, no EULA gate on the kernel-side source itself).
 
-**Status: started, in progress** — see next commits for the actual
-Ghidra work on stock's `galcore.ko`.
+**Update: Freescale version-matching approach exhausted — no match
+found across the whole public tag history.** Checked
+`sizeof(gcsHAL_INTERFACE)` for every `Freescale/kernel-module-imx-gpu-viv`
+tag from oldest to newest, via a compile-time size probe (`char
+probe[sizeof(gcsHAL_INTERFACE)];` then reading the resulting symbol's
+byte size with `nm -S` — avoids needing to run ARM binaries, no `qemu`
+available in this environment):
+```
+5.0.11.p7.1 / p7.4 / p8.3 / p8.4 / p8.6  -> 320 bytes (0x140)
+6.2.4.p1.0 / p1.2 / p1.6 / p1.8 / p2.3 / p4.0-p4.8  -> 400 bytes (0x190)
+```
+Stock's actual target (from disassembling `drv_ioctl` in stock's real
+`galcore.ko`, `lib/modules/3.4.0/galcore.ko` — `cmp r3,#0; cmpeq
+r2,#264` validates `InputBufferSize`/`OutputBufferSize == 0x108` =
+**264 bytes**) is *smaller* than even the oldest available tag. This
+means ArkMicro (this device's actual GPU IP licensee) integrated a
+separate Vivante SDK snapshot that was never mirrored into NXP/
+Freescale's public BSP history — there's no tag in this repo to find.
 
-**Next steps (this is now purely a userspace/Qt investigation, not a
-kernel-driver or DirectFB one):**
+**Switched to direct reverse-engineering of the 264-byte struct from
+stock's own binaries.** Both `lib/modules/3.4.0/galcore.ko` (kernel
+side, not stripped, real symbol names) and the reconstructed rootfs's
+`usr/lib/libGAL.so` (userspace, **not** corrupted — unlike the raw
+`firmware_dumps/` copy of the same file, which has a deliberately/
+accidentally corrupted ELF section-header string table that defeats
+`nm`/`objdump`/`readelf` entirely, though it still loads fine at
+runtime via program headers) are usable for this. Method: disassemble
+`gcoHAL_Call` (the single userspace choke point every HAL command
+funnels through — confirmed via `mov r3,#264` immediately preceding
+its `gcoOS_DeviceControl(..., 0x7530/*IOCTL_GCHAL_INTERFACE*/, ...)`
+call) and its callers, cross-referenced against `drv_ioctl`'s dispatch
+in the kernel module.
+
+**Confirmed struct facts so far (direct disassembly evidence, high
+confidence):**
+- Total size: **264 bytes**, confirmed independently three ways
+  (kernel's `InputBufferSize`/`OutputBufferSize` validation, `gcoHAL_
+  Call`'s literal `mov r3,#264`, `gcoHAL_ConstructEx`'s local buffer
+  setup).
+- Offset `0` (4 bytes): `command` field (`gceHAL_COMMAND_CODES`).
+  Confirmed via stock kernel's `drv_ioctl`/`gckKERNEL_Dispatch`
+  (`ldr r3,[r6]; cmp r3,#63; ldrls pc,[pc,r3,lsl #2]` — a 64-entry
+  jump table indexed directly by this field) and via userspace's
+  `gcoHAL_ConstructEx` writing the command value with
+  `str r3,[r9,#-264]!` (pre-decrement to struct base, i.e. offset 0).
+- Offset `8` (4 bytes): `status` field, written by the kernel *after*
+  dispatch completes (`str r4,[r6,#8]` in `gckKERNEL_Dispatch`, `r4`
+  holding the error/status code).
+- Offset `0x24`/`36`: a flag related to power-management state,
+  touched only for specific commands in `gckKERNEL_Dispatch`
+  (`strne r1,[r6,#36]`) — not yet tied to a specific named field.
+- `gcoHAL_ConstructEx` (the very first HAL call after opening
+  `/dev/galcore`) issues **two sequential commands**: `command=38`
+  first, then (if its result checks pass) `command=39`. Cross-checking
+  against `6.2.4.p1.8`'s enum ordering gives `gcvHAL_TIMESTAMP`/
+  `gcvHAL_DATABASE` for 38/39 respectively — **but this is not
+  trustworthy evidence**, since the enum ordering itself may have
+  shifted between SDK versions just like the struct size did (only
+  the *offsets found via direct disassembly* are solid; anything
+  inferred by matching against `p1.8`'s header is a guess).
+- Offset `32` appears to be a shared field position across both
+  command 38's and command 39's result data (a count/type
+  discriminator — checked against literal `5` after command 38,
+  used as a loop count feeding an array read starting around offset
+  64-68 after command 39, with per-entry values checked against
+  `1`/`2`/`3`).
+
+**This is real, substantial, ongoing reverse-engineering work — not
+close to a complete 264-byte map yet.** Continuing to trace more
+`gcoHAL_Call`/`gcoOS_DeviceControl` call sites (there are ~5 distinct
+ones observed in the DirectFB init `strace` from earlier) will keep
+building out the picture. Ghidra project for this work:
+`/tmp/claude-1000/.../scratchpad/ghidra_proj2` (session-scoped scratch
+dir, not persistent — if picking this up in a fresh session, re-import
+`libGAL.so` from the *reconstructed* rootfs path, not the corrupted
+`firmware_dumps/` copy, plus `galcore.ko` and `libdirectfb_gal.so`).
+
+**Next steps (either continue the struct reverse-engineering above, or
+fall back to the purely userspace/Qt investigation below if this gets
+parked):**
+- [ ] Continue tracing `gcoHAL_Call` sites in `libGAL.so` (start with
+      `gcoHAL_QueryChipIdentity`, `gcoHAL_Commit`, and whatever the
+      remaining ~3 of the 5 DirectFB-init-sequence ioctls turn out to
+      be) to keep building out the 264-byte field map.
+- [ ] Once enough of the struct is mapped for the commands DirectFB's
+      init path actually needs, patch a close Freescale source tree
+      (`p1.8`, already parked and building for 4.19) to match the
+      real offsets, rebuild `galcore.ko`, and retest.
 - [ ] Investigate whether Qt4's `LinuxFB` `QScreen` driver is expected
       to pre-composite alpha in software by default (this is Qt4 QWS's
       normal architecture — a single software-rendered framebuffer,

@@ -590,6 +590,42 @@ the other config fixes.
 
 ---
 
+## 9. `/dev/ark_display` missing — fixed (2026-07-19)
+
+**Symptom:** `new uboot new kernel baseline v7.txt` showed
+`open /dev/ark_display fail` repeating throughout `MsnCoreApp`'s log —
+absent in v4, which instead shows `ark_display: registered
+/dev/ark_display` and successful `ARKDISP_GET_SCREEN_INFO`/
+`ARKDISP_GET_SET_VDE_CFG` calls.
+
+**Root cause:** `CONFIG_ARK_DISPLAY` was never captured in the checked-in
+`ark1668_defconfig` at all — a **fourth** instance of the same
+`--defconfig`-regeneration pattern from today (INET/WLAN, MUSB,
+RN6752/ITU656/ARK_CARBACK). Missing from every kernel build since,
+including the one with `fd6e03414`'s `ARKDISP_SET_VDE_CFG`
+real-register-write changes — **those have never actually run on
+hardware yet**, since the device never existed for `MsnCoreApp` to
+open. Fixed in `linux-arkmicro` `71d16e73e`.
+
+**Also possibly explains v7's touch failure** (`Open touch input event
+failed!`, fd=-1, vs v4's clean success) — v4's working touch open
+directly coincided with `ark_display` working; v7's failure directly
+coincided with it missing. Not confirmed as the same root cause yet,
+but touch is worth retesting fresh alongside this fix rather than
+treating it as a separate, new regression.
+
+- [ ] Flash this kernel. Confirm `ark_display: registered
+      /dev/ark_display` appears in dmesg, and `open /dev/ark_display
+      fail` is gone from `MsnCoreApp`'s log.
+- [ ] Retest touch (item 2/6 above) now that `ark_display` is back —
+      see if it starts working again on its own.
+- [ ] Try adjusting contrast/brightness/saturation in the UI (if
+      exposed anywhere) and confirm it now has a real visible effect —
+      this is the first real hardware test of `fd6e03414`'s register
+      writes.
+
+---
+
 ## If anything regresses
 
 All of tonight's changes are two clean commits:

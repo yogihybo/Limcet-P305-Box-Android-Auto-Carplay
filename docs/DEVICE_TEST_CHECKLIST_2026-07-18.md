@@ -407,6 +407,33 @@ confidence):**
   its own ioctl in the common path — it reads from a cache at
   `HAL_object+104` (`0x68`), which is presumably populated by these
   same construction-time calls (38/39), not disassembled further.
+- Checked several more calls in the DirectFB init sequence
+  (`gcoHAL_IsFeatureAvailable`, `gcoHAL_MapUserMemory`) — both also
+  turned out to be indirection layers (`IsFeatureAvailable` reads a
+  cached bitfield at `HAL+108`, presumably populated by 38/39 too;
+  `MapUserMemory` calls a separate `gcoOS_LockVideoMemory` helper, not
+  yet traced further) rather than issuing their own `gcoHAL_Call`
+  directly — most "query"-style HAL functions read from a cache
+  populated during construction, not fresh per-call ioctls.
+
+**Header layout, inferred by structural comparison (not yet directly
+disassembly-proven byte-for-byte — flag as hypothesis, not fact):**
+given `command`@`0`, `status`@`8`, and the union's own data
+consistently starting at offset `32` for both commands 38 and 39,
+there are exactly 24 bytes (6 words) between `status` and the union
+boundary. The modern 400-byte struct's header, after `status`, has
+`handle` (`gctUINT64`, 8 bytes) + `pid` (4) + `engine` (4) +
+`ignoreTLS` (4) = 20 bytes — 4 bytes short of the 24 observed here,
+suggesting either one more 4-byte field exists that the modern struct
+doesn't have (unlikely — newer versions almost always have `≥` old
+ones' fields) or `hardwareType` (assumed at offset `4`) plus one
+other field accounts for it. Best current hypothesis: `command`(0,4)
+`hardwareType`(4,4) `status`(8,4) `handle`(12,8) `pid`(20,4)
+`engine`(24,4) `ignoreTLS`(28,4) → union starts at `32`. **Not
+independently verified** (e.g. no confirmed `ldrd`/`strd` 64-bit
+access proving `handle` is actually 8 bytes at that exact offset) —
+treat as a strong lead to verify, not a settled fact, before relying
+on it to patch the source tree.
 
 **This is real, substantial, ongoing reverse-engineering work — not
 close to a complete 264-byte map yet.** Continuing to trace more

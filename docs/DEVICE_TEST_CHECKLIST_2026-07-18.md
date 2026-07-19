@@ -101,16 +101,57 @@ entirely," matching the symptom exactly. Fixed in `linux-arkmicro`
 `063c5be8c` — OSD1's blend mode nibble now explicitly set to `1` in
 both `ark1668_lcdc_dev_init()` code paths.
 
-- [ ] Flash this kernel. Confirm colors on alpha-blended UI elements
-      (icons, buttons, anti-aliased widgets) now look correct, not
-      just the flat background.
-- [ ] Re-run `fb-alpha-test` — expect all 6 bands visually distinct
-      now (no more 1+2 or 4+5 merging).
-- [ ] If still wrong, re-check `devmem 0xe0500060 32` (`MODE_LCD_REG0`)
-      to confirm bits `[15:12]` actually read back as `1` on real
-      hardware, not just in the source.
+- [x] Flash this kernel. `devmem 0xe0500060 32` confirmed `0x03001204`
+      on real hardware — bits `[15:12]=1`, the fix genuinely landed.
+- [x] Re-run `fb-alpha-test`. **Still visibly wrong** — see below.
 
-**Not yet hardware-tested (this latest fix).**
+**Update: fix landed but didn't resolve it — live register sweep
+findings (2026-07-19).** With `blend_mode=1` live, `fb-alpha-test`
+still showed the old merged-band symptom. Rather than more blind
+kernel rebuilds, switched to sweeping registers live via `devmem` on
+`LCDC` (`0xe0500000`), since `MODE_LCD_REG0`/`OSD1_CTL` are just MMIO —
+no reboot needed per attempt. Findings, most useful first:
+
+- **Opaque pixels (alpha=255) always render correctly** on every
+  combination tried, before and after every change below. Only
+  *partial*-alpha pixels are ever wrong.
+- Swept `blend_mode` (`MODE_LCD_REG0[15:12]`) through all 16 values on
+  hardware: **modes 9, 10, and 14 genuinely enable per-pixel alpha
+  blending** (`fb-alpha-test` shows 6 distinct bands, not 4 merged
+  ones) — mode `1` (stock's struct-init default, what the kernel fix
+  above sets) does *not* by itself turn on real blending on our
+  reconstruction. Unclear why; no vendor register documentation found.
+- With `blend_mode=9` locked in, swept `rgb_order`
+  (`OSD1_CTL[20:18]`) through all 8 values: band 2 (half-alpha red)
+  came out dark-green (0,1), light-green (2,3), brown (4,5),
+  dark-green (6,7) — **never a correct dim red**. `rgb_order` alone
+  does not fix the hue corruption.
+- Checked whether stock's real `MsnCoreApp`/`libarkadapt.so`/
+  `libarkcmn.so` binaries hardcode a correct value when calling the
+  vendor `VIN_SET_WINDOW_FORMAT` ioctl (`0x4f3b`) — the two vendor
+  libraries are stripped with no ioctl symbols found by name;
+  `MsnCoreApp` itself (unstripped) had no vendor-ioctl symbols either,
+  so the actual call (if any) is buried in a stripped library. Not
+  pursued further (binary-level RE, more effort than the register
+  sweep for uncertain payoff) — noted as a future option.
+
+**Consolidated next-session test plan:** `tools/fb-alpha-test/
+lcd-blend-sweep.sh` (deployed to the overlay, on-device as
+`lcd-blend-sweep.sh`). Covers three untested candidates in one script,
+pausing after each for a visual check:
+1. `format` (`OSD1_CTL[15:12]`) swept 0–15, `rgb_order` held at 0.
+2. `Y2R_COEF321`/`654`/`7` zeroed out — our driver writes these
+   unconditionally even though OSD1 is pure RGB; hypothesis is the
+   blend/compositor path routes partial-alpha pixels through this
+   YCbCr matrix even when the bypass bits say not to (would explain
+   hue shifts that vary with `rgb_order`, while sparing opaque pixels
+   which may use a simpler passthrough path).
+3. `ALPHA1_0_VIDEO_OSD1` (offset `0x24`) — a completely separate,
+   never-touched alpha/blend-weight register found in the register
+   header; couldn't identify what stock does with it via Ghidra in
+   the time available.
+
+See `tools/fb-alpha-test/README.md` for the full writeup.
 
 ---
 

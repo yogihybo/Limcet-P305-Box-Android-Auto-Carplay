@@ -1,0 +1,42 @@
+#!/bin/sh
+# Shell script to load the main MsnCoreApp on the standard Linux framebuffer
+# (QWS_DISPLAY=linuxfb) -- the safe, known-working display backend.
+# Safe to run from a serial console or ssh session.
+#
+# See also: start_msn_directfb (GPU-accelerated DirectFB backend, still under
+# investigation -- see docs/DEVICE_TEST_CHECKLIST_2026-07-18.md section 1b).
+# Both scripts exist so switching backends doesn't require hand-editing
+# start_msn's QWS_DISPLAY block each time.
+
+echo "Setting up environment for MsnCoreApp..."
+export QTDIR=/usr/local/Qt4.7.4
+export QT_PLUGIN_PATH=$QTDIR/plugins
+export QT_QWS_FONTDIR=$QTDIR/lib/fonts
+export LD_LIBRARY_PATH=$QTDIR/lib:/usr/lib:/lib:$LD_LIBRARY_PATH
+export PATH=/bin:/sbin:/usr/bin:/usr/sbin:$QTDIR/bin:$PATH
+
+export TS_ROOT=/usr/
+export TSLIB_TSDEVICE=/dev/input/event0
+export TSLIB_CONFFILE=/etc/ts.conf
+export TSLIB_PLUGINDIR=/usr/lib/ts
+export TSLIB_CALIBFILE=/data/pointercal
+export TSLIB_CONSOLEDEVICE=none
+export TSLIB_FBDEVICE=/dev/fb0
+
+# Standard Linux Framebuffer display (bypasses DirectFB/galcore entirely)
+export QWS_DISPLAY=linuxfb:mmWidth220:mmHeight120:0
+
+export QWS_KEYBOARD=TTY:/dev/tty1
+
+# Load custom firmware setting overrides
+if [ -f /msnprofile/msnexport ]; then
+    source /msnprofile/msnexport
+fi
+
+# Start DBus session bus if not running
+if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
+    eval `dbus-launch --auto-syntax`
+fi
+
+echo "Starting MsnCoreApp (Software Framebuffer)..."
+exec MsnCoreApp -qws

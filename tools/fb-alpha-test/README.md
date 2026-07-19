@@ -58,3 +58,56 @@ Compare each band's *actual* on-screen color against its printed label:
 
 This tool only writes to the framebuffer — nothing persists across a
 reboot or restarting `MsnCoreApp`, so it's safe to run repeatedly.
+
+## `lcd-blend-sweep.sh` — live register sweep (2026-07-19 findings so far)
+
+Once `fb-alpha-test` proved the bug is real (not photo-guesswork), the
+investigation moved to live `devmem` register pokes on `LCDC`
+(`0xe0500000`) to find the actual broken/missing register value, without
+needing a kernel rebuild per attempt. Findings so far:
+
+- **Opaque pixels (alpha=255) always render correctly**, on every
+  combination tried. Only *partial*-alpha pixels are wrong — this is
+  true both before and after every fix below.
+- **`blend_mode`** (`MODE_LCD_REG0` bits `[15:12]`, offset `0x60`) was
+  hardcoded to `0` by our driver (fixed in `linux-arkmicro` `063c5be8c`
+  to `1`, matching stock's struct-init default). Empirically swept
+  0–15 on hardware: **modes 9, 10, and 14 all turn on real per-pixel
+  alpha blending** (`fb-alpha-test` shows 6 distinct bands instead of 4
+  merged ones) — but the *color* is still wrong for every partial-alpha
+  band once blending is active. `1` (the "safe" stock default) does
+  *not* by itself enable real blending on our reconstruction — it's
+  unclear why 9/10/14 specifically work; no register documentation
+  found to explain the encoding.
+- **`rgb_order`** (`OSD1_CTL` bits `[20:18]`, offset `0x74`) swept 0–7
+  with `blend_mode=9`: band 2 (half-alpha red) came out dark-green
+  (0,1), light-green (2,3), brown (4,5), dark-green (6,7) — **never** a
+  correct dim red. `rgb_order` alone does not fix it.
+- **`format`** (`OSD1_CTL` bits `[15:12]`) — not yet tested empirically
+  at time of writing; `lcd-blend-sweep.sh` phase 1 covers this.
+- **`Y2R_COEF321`/`654`/`7`** (offsets `0x11c`/`0x120`/`0x124`) — YCbCr→
+  RGB conversion matrix coefficients our driver writes unconditionally
+  even though OSD1 is pure RGB. Hypothesis: the blend/compositor path
+  routes partial-alpha pixels through this matrix even though the
+  "bypass" bits say not to. Untested; `lcd-blend-sweep.sh` phase 2
+  zeroes them to check for any effect at all.
+- **`ALPHA1_0_VIDEO_OSD1`** (offset `0x24`) — a separate, never-touched
+  alpha/blend-weight register found in the register header. Could not
+  identify what stock's kernel does with it via Ghidra in the time
+  available. Untested; `lcd-blend-sweep.sh` phase 3 probes it.
+- Checked whether stock's actual `MsnCoreApp`/`libarkadapt.so`/
+  `libarkcmn.so` binaries (all in `firmware_dumps/Prado firmware dump/
+  mtd6_rootfs/`) hardcode a correct `format`/`rgb_order` value when
+  calling the vendor `VIN_SET_WINDOW_FORMAT` ioctl (`_IO('O', 59)` =
+  `0x4f3b`) — `libarkadapt.so`/`libarkcmn.so` are stripped with no
+  ioctl-related symbols found by name; `MsnCoreApp` itself is
+  unstripped but had no vendor-ioctl symbols either, meaning the vendor
+  ioctl call (if any) is buried in one of the stripped libraries.
+  Not pursued further — would need real binary-level reverse
+  engineering (searching for the `0x4f3b` immediate near `ioctl()`
+  calls), left as a future option if the register sweep doesn't pan
+  out.
+
+Run `sh lcd-blend-sweep.sh` on-device (kills `MsnCoreApp` first) to
+continue this sweep — it pauses after each register value change so you
+can run `fb-alpha-test` and report what bands 1 and 2 look like.

@@ -151,6 +151,7 @@ echo "  usb-test.sh                          - USB regression check vs known-goo
 echo "  mmc-test.sh                          - read-only MMC/SD check"
 echo "  mcu-handshake                        - manual MCU handshake daemon to enable touch panel"
 echo "  fb-alpha-test                        - paint alpha/channel-order test bands directly to /dev/fb0"
+echo "  lcd-blend-sweep.sh                   - live devmem sweep of OSD1 blend-mode/format/Y2R registers (no rebuild needed)"
 echo "  dmesg                                - now aliased to /usr/bin/dmesg --color=always (busybox lacks --color)"
 echo "========================="
 echo ""

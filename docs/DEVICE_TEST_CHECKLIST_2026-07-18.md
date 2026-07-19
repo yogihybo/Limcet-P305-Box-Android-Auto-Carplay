@@ -126,22 +126,25 @@ no reboot needed per attempt. Findings, most useful first:
   (half-alpha red) came out dark-green (0,1), light-green (2,3), brown
   (4,5), dark-green (6,7) — never a correct dim red.
 
-**Correction found via further Ghidra tracing (still 2026-07-19):**
-this project had `rgb_order`/`yuv_order` **swapped**. Traced the real
-parameter-passing convention in stock's `ark_disp_set_osd_format(id,
-format, yuv_order, rgb_order)` (`vmlinux.elf @ 0x802ddf98`):
+**Correction, then a correction of the correction (still 2026-07-19).**
+A first pass of further Ghidra tracing seemed to show `rgb_order`/
+`yuv_order` were swapped (based on `ark_disp_set_osd_format()`'s
+argument-register mapping, assuming stock's parameter order exactly
+matched our own driver's `(id, format, yuv_order, rgb_order)` naming) —
+this led to a kernel commit (`linux-arkmicro` `730c5cf1c`) claiming
+`rgb_order` was only a 2-bit field at bits `[22:21]` and had never been
+tested. **That was wrong.** A kernel debug-proc help string found in
+`vmlinux.elf`'s strings settles it definitively:
 ```
-orr r2, r1, r7, lsl #18   -- r7 = yuv_order (3rd arg) -> bits[20:18]
-orr r3, r2, r6, lsl #21   -- r6 = rgb_order (4th arg) -> bits[22:21]
+rgb_order: 0=rgb, 1=rbg, 2=grb, 3=gbr, 4=brg, 5=bgr
 ```
-`yuv_order` is the 3-bit field at bits `[20:18]`; `rgb_order` is only
-a **2-bit** field at bits `[22:21]` — never tested. What the sweep
-above actually tested was `yuv_order`, not `rgb_order`. Confirmed our
-own `ark1668_lcdc_set_osd_format()` (`ark1668_lcdc_funcs.c`) had this
-exact swap baked in (`(yuv_order&3)<<21 | (rgb_order&7)<<18`, backwards
-from stock) — fixed in `linux-arkmicro` `730c5cf1c`. That function
-isn't on the live boot path so the fix alone doesn't resolve the
-hue-corruption bug, but confirms the Ghidra trace is correct.
+Six named values — `rgb_order` needs **3 bits**, not 2. The original
+code (`rgb_order` = 3-bit field at bits `[20:18]`, matching this
+string) was correct all along. The erroneous commit was reverted
+(`linux-arkmicro` `926336ce7`). This means the sweep documented above
+(0–7 at bits `[20:18]`, covering all 6 real values) really was testing
+the correct field, and is genuinely **exhausted** — none of the 6
+meaningful values produce a correct dim red.
 
 Also checked whether stock's real `MsnCoreApp`/`libarkadapt.so`/
 `libarkcmn.so` binaries hardcode a correct value when calling the
@@ -164,17 +167,35 @@ testing needed for these):
   calls a comprehensive list of per-layer setters and none target this
   offset. Very likely unused for this board.
 
-**Consolidated next-session test plan:** `tools/fb-alpha-test/
-lcd-blend-sweep.sh` (deployed to the overlay, on-device as
-`lcd-blend-sweep.sh`), rewritten to prioritize the corrected fields:
-1. **Phase 1 (most promising, untested):** the real `rgb_order` field
-   (`OSD1_CTL[22:21]`, only 4 values), `yuv_order`/`format` held
-   fixed.
-2. **Phase 1b:** if phase 1 alone doesn't work, the combined
-   `rgb_order` × `yuv_order` sweep (16 combos).
-3. **Phase 2 (low priority):** `format` (`OSD1_CTL[15:12]`) swept
-   0–15 — confirmed via Ghidra to be a direct passthrough (no
-   remapping), so `6` (RGBA888) is very likely already correct.
+**Every register-level candidate found so far is now either ruled out
+or exhausted without success.** `lcd-blend-sweep.sh` (deployed to the
+overlay) still covers what's left — an explicit re-write test for
+`blend_mode=1` (stock's real default, in case the compositor needs a
+write-triggered commit rather than just the register holding the right
+value), `yuv_order` swept alone (untested independently, low priority
+for a pure-RGB layer), and `format` (low priority, confirmed to be a
+direct passthrough via Ghidra) — but none of these are expected to be
+the fix.
+
+**Ground-truth plan for next session (most promising path now):**
+probe stock's own firmware directly instead of more guessing. Build a
+fully stock SD card using existing tooling —
+```sh
+./build_bootable_sdcard.sh --no-new-kernel --no-new-uboot \
+  --rootfs-dir "firmware_dumps/Prado firmware dump/mtd6_rootfs"
+```
+— boot it, connect the usual serial console (stock's `inittab` spawns
+a shell directly, no login needed), navigate to a screen with
+correctly-blended UI, and read the live registers with stock's
+`busybox devmem`:
+```sh
+devmem 0xe0500060 32   # MODE_LCD_REG0 (blend_mode)
+devmem 0xe0500064 32   # MODE_LCD_REG1 (alpha_blend_en/per_pix_alpha_blend_en)
+devmem 0xe0500074 32   # OSD1_CTL (format/alpha/rgb_order/yuv_order)
+```
+Whatever these read as while stock is correctly rendering is
+definitively correct — replicate those exact values in
+`ark1668_lcdc_dev_init()`.
 
 See `tools/fb-alpha-test/README.md` for the full writeup.
 

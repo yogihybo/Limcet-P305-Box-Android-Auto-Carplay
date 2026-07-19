@@ -127,3 +127,48 @@ needing a kernel rebuild per attempt. Findings so far:
 Run `sh lcd-blend-sweep.sh` on-device (kills `MsnCoreApp` first) to
 continue this sweep — it pauses after each register value change so you
 can run `fb-alpha-test` and report what bands 1 and 2 look like.
+
+**Note (2026-07-19, later same session):** an earlier revision of this
+README and `lcd-blend-sweep.sh` claimed `rgb_order` was only a 2-bit
+field at `OSD1_CTL[22:21]` and had never been tested — that was wrong,
+based on an unverified Ghidra parameter-order guess (assumed stock's
+`ark_disp_set_osd_format()` argument order exactly matched our own
+driver's parameter names without checking it). A kernel debug-proc help
+string found in `vmlinux.elf`'s strings (`"rgb_order: 0=rgb, 1=rbg,
+2=grb, 3=gbr, 4=brg, 5=bgr"`) proves `rgb_order` needs 6 values (3
+bits), contradicting that claim. The original code (`rgb_order` = 3-bit
+field at bits `[20:18]`) was correct all along; the erroneous "fix" was
+reverted in `linux-arkmicro` `926336ce7`. This means the `rgb_order`
+sweep documented above (0–7, including all 6 real values) really was
+testing the correct field, and is genuinely exhausted, not still open.
+
+## Ground-truth plan: probe the stock device directly
+
+Given every register-level candidate is now either ruled out or
+exhausted without success, the most promising next step is reading the
+*actual* live register values while stock's own firmware is correctly
+rendering blended UI, rather than more guessing from Ghidra or sweeping
+blind. This is straightforward with existing tooling:
+
+```sh
+./build_bootable_sdcard.sh --no-new-kernel --no-new-uboot \
+  --rootfs-dir "firmware_dumps/Prado firmware dump/mtd6_rootfs"
+```
+
+This builds a fully stock SD card (original U-Boot, kernel, and rootfs
+— not our patched/reconstructed tree) using our own SD card/partition
+scheme, not the real NAND. Stock's `inittab` has `::respawn:-/bin/sh`
+(a shell spawns directly on console, no login needed) and stock's
+`busybox` includes a `devmem` applet, so once booted and connected via
+the usual serial console:
+
+1. Navigate to a screen with visibly-correct alpha-blended UI elements.
+2. While it's on screen, run:
+   ```sh
+   devmem 0xe0500060 32   # MODE_LCD_REG0 (blend_mode)
+   devmem 0xe0500064 32   # MODE_LCD_REG1 (alpha_blend_en/per_pix_alpha_blend_en)
+   devmem 0xe0500074 32   # OSD1_CTL (format/alpha/rgb_order/yuv_order)
+   ```
+
+Whatever these read as is definitively correct — no more guessing
+needed, just replicate those exact values in `ark1668_lcdc_dev_init()`.

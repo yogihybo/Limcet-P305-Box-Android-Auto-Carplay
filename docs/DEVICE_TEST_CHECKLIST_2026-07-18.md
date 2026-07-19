@@ -516,31 +516,77 @@ already probes successfully) and `itu656in@e0800000`'s `compatible =
 "arkmicro,ark1668-itu656"` (verified matches `ark1668_itu656.c`'s own
 `of_match_table` exactly).
 
-- [ ] Flash this kernel/DTB. Confirm `cat /proc/devices | grep dvr`
-      shows a real major number (previously would have been empty).
-- [ ] `ls -la /tmp/dev/dvr` after `/etc/itu656_load.sh` runs (or
-      confirm `rcS` already runs it) — should exist as a character
-      device now, not be missing.
-- [ ] Confirm `MsnCoreApp`'s `open dvr device /tmp/dev/dvr failure.`
-      line is gone from the boot log.
-- [ ] **Reverse gear test**: put the vehicle in reverse (or however
-      `dvr_enter_carback`/`dvr_detect_carback_signal` is triggered —
-      recall from earlier this session that reverse-gear detection
-      happens on the companion MCU, not a SoC GPIO, so this may need
-      the MCU link working too) and confirm the camera feed actually
-      displays.
-- [ ] `dmesg | grep -i "rn6752\|itu656\|dvr"` for any probe/init errors
-      not visible in the userspace-focused logs collected so far.
-- [ ] **Also verify nothing regressed**: WiFi AP (`hostapd`) and DHCP
-      still work exactly as before — this is the subsystem that was
-      at risk during the defconfig recovery. Confirm the AP is visible
-      and a client can actually get a DHCP lease.
+**Update (2026-07-19) — reverted, kernel panics on every boot.**
+`new uboot new kernel baseline v6.txt`: with the USB-boot hang fixed
+(item 8 below), boot got far enough for `MsnCoreApp` to actually reach
+`dvr_ioctl()` for the first time ever — and it panics the entire
+system, every single boot, not a graceful failure like before:
+```
+Unable to handle kernel NULL pointer dereference at virtual address 00000000
+PC is at devm_kmalloc+0x74/0x8c
+LR is at dvr_ioctl+0x6a0/0x86c
+...
+Kernel panic - not syncing: stack-protector: Kernel stack is corrupted
+```
+Traced via `objdump` on our own compiled `vmlinux`: `dvr_ioctl()`
+reads a function pointer from `dvr_dev->start`/`->stop` (byte offset
+`0x200`) and calls through it guarded only by a non-NULL check.
+`dvr_dev` is `devm_kzalloc()`'d (should be all-zero unless explicitly
+written), but at panic time that field held a value that happened to
+decode to `devm_kmalloc`'s real kernel address — called with garbage
+arguments, NULL deref, corrupted stack, panic. A real memory-
+corruption bug somewhere in ~2269 lines of decades-old vendor code,
+not something the config flag alone fixes.
 
-**Not yet hardware-tested.** This is a bigger, higher-risk change than
-most of tonight's fixes (touches core networking config, not just one
-driver) — the WiFi regression risk was caught and fixed before
-committing, but real hardware confirmation is the only way to be
-fully sure nothing else was missed.
+Tried disabling just `ARK1668_ITU656` — doesn't link. `RN6752` and
+`ARK_CARBACK` both reference symbols defined only inside
+`ark1668_itu656.c`; the three are one linked unit, not independently
+toggleable as currently structured. **All three disabled together**
+(`linux-arkmicro` `3a8e2568a`), back to the exact stable state that
+predated enabling this — validated the same way as the other config
+fixes (fresh defconfig regeneration diffed against known-good state,
+identical except metadata).
+
+- [x] ~~Flash this kernel/DTB...~~ — superseded, reverted before
+      further hardware testing of this specific feature.
+- [ ] **Properly re-enabling this needs a dedicated investigation**
+      into what's actually writing garbage into `dvr_dev->start`/
+      `->stop` before touching this config again — not a config
+      change, a real source-level bug hunt (likely another Ghidra
+      pass, this time on our *own* driver rather than stock's).
+- [ ] **Still worth confirming**: WiFi AP (`hostapd`) and DHCP work
+      exactly as before now that ITU656/RN6752/ARK_CARBACK are back
+      off — this is the subsystem that was at risk during the earlier
+      defconfig recovery (item 7 above, still applies).
+
+---
+
+## 8. `bootusb` hang — USB stick as root, fixed (2026-07-19)
+
+**Symptom:** `new uboot new kernel baseline v5.txt` hung forever at
+`Waiting for root device /dev/sda2...`. This boot mode (root on a USB
+stick, no initramfs) needs the USB host controller driver built into
+the kernel image itself — it structurally cannot work as a loadable
+module, since nothing can load a module from a filesystem that needs
+that same module to become reachable in the first place.
+
+**Root cause:** `CONFIG_USB_MUSB_HDRC`/`CONFIG_USB_MUSB_ARKMICRO` were
+`=m` in the checked-in defconfig (since its very first commit), but
+every prior successful boot log through v4 — all using this same
+`bootusb` path — shows `musb-hdrc`'s own init lines printing
+synchronously during early kernel boot, well before "Waiting for root
+device", which only a built-in driver can do. Confirms these had been
+live-patched to `=y` in some past session's `.config` that was never
+captured back into the defconfig, and got silently lost the moment
+`--defconfig` was force-reapplied for the ITU656 work above (see the
+`linux-arkmicro` README's new "`.config` vs `ark1668_defconfig`"
+section for the full pattern and why this keeps happening).
+
+**Fixed** in `linux-arkmicro` `db0d63877`, validated the same way as
+the other config fixes.
+
+- [x] **Confirmed fixed by the user directly** — `bootusb` boots again
+      (2026-07-19).
 
 ---
 

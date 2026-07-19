@@ -388,3 +388,128 @@ image, not just stock's.
 true` (seen the same session) is BD37033 sound-amp related, not
 Bluetooth — see `docs/BD37033.md` and `docs/AUDIO_SUBSYSTEM_INVESTIGATION.md`,
 not this document.
+## 7. `usb0` `dr_mode="host"` attempt, reverted (2026-07-19)
+
+**The problem this was trying to fix:** every single boot log this
+whole project has shown `usb0` (`musb-hdrc.0`, gpio-id `76`/gpio-pwr
+`126`) spending several seconds retrying at boot before the USB stick
+enumerates:
+```
+[    5.097638] usb usb1-port1: Cannot enable. Maybe the USB cable is bad?
+[    8.157583] musb-hdrc musb-hdrc.0: musb_reset_timer_handler: reset timer fired
+[    8.164842] musb-hdrc musb-hdrc.0: musb_recovery_usb_proc: reset otg
+[    8.171246] musb-hdrc musb-hdrc.0: +Switch peripheral 76  126===
+[    9.197605] musb-hdrc musb-hdrc.0: +++Switch OTG 76  126===+++
+[    9.524225] usb usb1-port1: attempt power cycle
+```
+(repeats 2-3x, eventually enumerating around 14s). Confirmed via
+`drivers/usb/musb/musb_ark.c` that `"+Switch peripheral"`/`"+++Switch
+OTG+++"` are the exact `dev_info()` strings printed by this driver's
+own `ark_musb_set_mode()` — the cycling is literally the kernel's
+automatic ID-pin OTG role negotiation calling this function
+repeatedly, toggling the ID-pin GPIO back and forth until it settles.
+`usb1` (`musb-hdrc.1`, gpio-id `1`/gpio-pwr `117`) showed a single
+clean `+++Switch OTG+++` line with none of this in every log checked —
+seemed to confirm the cycling was specific to whatever's plugged into
+`usb0`, not a generic OTG startup cost.
+
+### The fix tried, and why it looked right
+
+`usb0` is this board's single external-facing USB port — the user
+confirmed it's genuinely dual-use: USB-boot/storage-stick testing
+(`root=/dev/sda*`) and wired CarPlay's gadget mode both use the same
+physical port. `ark_musb_set_mode()`'s `MUSB_HOST` case is a total
+no-op (just `break;`, no GPIO/register toggling at all), so setting
+`dr_mode="host"` in the DTS should skip the ID-pin negotiation
+entirely for the boot-critical path, while OTG capability gets
+restored afterward via the driver's own runtime-switchable sysfs
+`mode` attribute (`musb_core.c`'s `DEVICE_ATTR_RW(mode)`, which calls
+this same `ark_musb_set_mode()`).
+
+Implemented as two paired changes:
+- `linux-arkmicro` `83ab185e6` — `usb0`'s DTS `dr_mode` changed
+  `otg` → `host`.
+- `firmware_overlay/prado/etc/switchotg.sh` (main repo `9aa0fec`) —
+  new overlay override, fixing two real bugs in the stock script
+  (wrong sysfs paths — `/sys/devices/platform/musb-ark1680.N/...`
+  never existed on this kernel, real path is
+  `e0100000.usb`/`e0400000.usb`; and no safety check before switching
+  `usb0`, added one that skips the switch whenever `root=/dev/sda*` is
+  the live root filesystem, since switching that port away from host
+  mode while it's serving as the running system's own root would yank
+  root out from under it).
+
+### What actually happened on hardware — reverted
+
+`usb0` itself registered **perfectly cleanly** with `dr_mode="host"`
+— no negotiation messages at all, immediate:
+```
+[    0.787373] musb-hdrc musb-hdrc.0: MUSB HDRC host driver
+[    0.792755] musb-hdrc musb-hdrc.0: new USB bus registered, assigned bus number 1
+[    0.801402] hub 1-0:1.0: USB hub found
+[    0.805309] hub 1-0:1.0: 1 port detected
+```
+No sign of a problem there at all. But the physical USB boot stick —
+confirmed by the user to be on the exact same physical port every
+single time this project has tested it — **stopped enumerating on
+`usb0`/bus 1** (where every prior log without exception had shown it)
+and instead appeared on **`usb1`/bus 2** several seconds later, going
+through the identical `"Cannot enable... attempt power cycle"` cycling
+`usb0` used to have:
+```
+[    5.717264] usb usb2-port1: Cannot enable. Maybe the USB cable is bad?
+[    8.797225] musb-hdrc musb-hdrc.1: musb_reset_timer_handler: reset timer fired
+...
+[   14.157224] musb-hdrc musb-hdrc.1: +++Switch OTG 1  117===+++
+[   14.747258] usb usb2-port1: Cannot enable. Maybe the USB cable is bad?
+[   15.117232] usb 2-1: new high-speed USB device number 5 using musb-hdrc
+...
+[   17.757210] musb-hdrc musb-hdrc.1: musb_reset_timer_handler: reset timer fired
+[   17.764488] musb-hdrc musb-hdrc.1: musb_recovery_usb_proc: port already enabled, skipping disruptive VBUS reset
+```
+This last line is where it ended — no further enumeration attempt, no
+success line, boot hung. Worse than the original problem: instead of
+a bounded ~14s delay before things worked, this run never recovered.
+
+**Also notable, though not the reason for reverting:** `usb1`'s own
+boot-time negotiation (separate from the later cycling above) settles
+into a state that the `g_ncm` gadget driver binds to successfully
+right afterward:
+```
+[    0.864685] musb-hdrc musb-hdrc.1: +++Switch OTG 1  117===+++
+...
+[    1.200790] g_ncm gadget: NCM Gadget
+[    1.204372] g_ncm gadget: g_ncm ready
+```
+This suggests `usb1`, not `usb0`, may be the controller actually
+providing UDC/gadget capability for CarPlay's wired networking
+interface (itself confusingly *also* named `usb0` at the network-
+interface level — a naming coincidence with the DTS node label, not
+the same thing; see `mode_show()`/`ifconfig usb0 up` in
+`switchotg.sh`). Not confirmed, and not what caused the revert, but
+worth keeping in mind for any future attempt at this — the physical
+port ↔ DTS node ↔ real-world-role mapping this whole investigation
+has assumed (`usb0` = shared storage+CarPlay port) may not be as
+clean as it looked.
+
+### Reverted, not re-investigated
+
+Reverted in `linux-arkmicro` `d44cce385` — both `usb0` and `usb1` back
+to `dr_mode="otg"`, the exact state proven working (with the ~14s
+delay) across every prior boot log. **Root cause of the regression is
+not understood.** `usb0`'s own registration gave zero indication
+anything was wrong when `dr_mode="host"` was set, so whatever's
+actually happening — bus/device renumbering tied to `usb0`'s probe
+timing changing? some shared hardware dependency between the two
+controllers (a shared power rail, clock enable, or PHY reference this
+DTS doesn't capture) sequenced as a side effect of `usb0`'s own OTG
+negotiation, which no longer runs? — needs real investigation before
+trying this again, not just flipping the DTS value back and forth.
+
+`firmware_overlay/prado/etc/switchotg.sh`'s fix (correct sysfs paths,
+root-mounted-on-`usb0` safety guard) was **not** reverted — both parts
+are still independently valid regardless of `usb0`'s boot-time
+`dr_mode`, since `ark_musb_set_mode()` does an unconditional GPIO/
+register reset even when the requested mode matches the port's
+current state, so the guard remains real protection against calling
+it while root is actively mounted from that port.

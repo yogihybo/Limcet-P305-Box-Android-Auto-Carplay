@@ -11,25 +11,31 @@
 #     Empirically swept 0-15 on hardware: modes 9, 10, and 14 all turn on
 #     real per-pixel alpha blending (6 distinct fb-alpha-test bands instead
 #     of 4 merged ones) -- but the color is WRONG for every partial-alpha
-#     band once blending is active.
-#   - CORRECTED FIELD LAYOUT (found via Ghidra, later same session): what
-#     we thought was "rgb_order" (OSD1_CTL bits[20:18], swept 0-7 with
-#     blend_mode=9, band 2 came out dark-green/light-green/brown/
-#     dark-green -- never correct) was actually WRONG. Traced the real
-#     parameter-passing convention in stock's ark_disp_set_osd_format(id,
-#     format, yuv_order, rgb_order) (vmlinux.elf @ 0x802ddf98):
-#       orr r2, r1, r7, lsl #18   -- r7 = yuv_order (3rd arg) -> bits[20:18]
-#       orr r3, r2, r6, lsl #21   -- r6 = rgb_order (4th arg) -> bits[22:21]
-#     rgb_order and yuv_order are SWAPPED from what this project assumed
-#     earlier. The REAL rgb_order is only a 2-bit field (values 0-3) at
-#     bits[22:21] -- it has NEVER been touched/swept. THIS IS THE MOST
-#     PROMISING UNTESTED CANDIDATE. What we swept before (0-7 at
-#     bits[20:18]) was actually yuv_order, a real but different field.
+#     band once blending is active. Mode 1 (stock's default) does NOT by
+#     itself turn on visible blending on our reconstruction, which is
+#     itself unexplained.
+#   - rgb_order (OSD1_CTL bits[20:18], a 3-bit field -- confirmed correct
+#     via a kernel debug-proc help string found in stock's vmlinux.elf
+#     strings: "rgb_order: 0=rgb, 1=rbg, 2=grb, 3=gbr, 4=brg, 5=bgr").
+#     ALREADY SWEPT 0-7 (covering all 6 meaningful values) with
+#     blend_mode=9: band 2 (half-alpha red) came out dark-green (0,1),
+#     light-green (2,3), brown (4,5), dark-green (6,7) -- NEVER a correct
+#     dim red. rgb_order is EXHAUSTED as a standalone fix.
+#     (An earlier revision of this file incorrectly claimed rgb_order was
+#     only a 2-bit field at bits[22:21] and had never been tested -- that
+#     was wrong, based on an unverified Ghidra parameter-order guess that
+#     was reverted in linux-arkmicro 926336ce7 once the debug string
+#     above was found. Sorry for the churn if you're reading this after
+#     already running the old version.)
+#   - yuv_order (OSD1_CTL bits[22:21], 2-bit field) -- NOT YET
+#     independently swept (only ever changed alongside rgb_order in a
+#     combined test). Low priority: this is a pure-RGB layer, yuv_order
+#     shouldn't matter for RGBA888, but worth ruling out empirically
+#     since nothing else has worked.
 #   - format (OSD1_CTL bits[15:12]) -- confirmed via Ghidra to be a direct
 #     passthrough (the raw format value gets shifted into place unchanged,
 #     no remapping), so our current value (6 = RGBA888) is very likely
-#     already correct assuming our format enum matches stock's -- it does,
-#     since both come from the same vendor header lineage. LOW PRIORITY.
+#     already correct. LOW PRIORITY.
 #   - Y2R_COEF321/654/7 (LCDC base+0x11c/0x120/0x124) -- RULED OUT. Found
 #     stock's ark_disp_set_lcd_panel_type() (@ 0x802e0a78) hardcoding the
 #     EXACT SAME literals our driver already writes (COEF321=0x1a916d2a,
@@ -38,16 +44,22 @@
 #   - ALPHA1_0_VIDEO_OSD1 (LCDC base+0x24) -- RULED OUT. Systematically
 #     traced every access to the LCDC MMIO base across the entire
 #     display-driver code range and found zero writes to this offset.
-#     ark_disp_set_layer_cfg() (the "apply full layer config" function)
-#     calls a comprehensive list of per-layer setters and none target it.
 #     Very likely unused for this board.
 #
-# This script now prioritizes the corrected rgb_order field (bits[22:21],
-# only 4 possible values) as PHASE 1 -- this is the real untested
-# candidate and the most likely fix. Format sweep is PHASE 2 (low
-# priority, probably already correct). Y2R_COEF/ALPHA1_0_VIDEO_OSD1 are
-# NOT included anymore since both were ruled out via Ghidra -- see
-# tools/fb-alpha-test/README.md if you want to re-verify them anyway.
+# CURRENT STATE: every register-level candidate found so far is either
+# ruled out or exhausted without producing a correct result. This script
+# now focuses on: (1) the one still-untested field (yuv_order alone),
+# (2) re-verifying blend_mode=1 (stock's real default) actually latches
+# by doing an explicit re-write rather than trusting the reset value,
+# in case the compositor needs a write-triggered commit, not just a
+# register holding the "right" value, (3) format, low priority.
+#
+# If none of this works, the likely next step is real reverse engineering
+# of stock's actual userspace binaries (MsnCoreApp/libarkadapt.so/
+# libarkcmn.so, all in firmware_dumps/Prado firmware dump/mtd6_rootfs/)
+# to find whether a vendor ioctl call with a specific hardcoded payload
+# is required at runtime that isn't replicated by any kernel-side
+# default -- see tools/fb-alpha-test/README.md.
 #
 # Usage: sh lcd-blend-sweep.sh
 
@@ -70,45 +82,35 @@ printf "MODE_LCD_REG0 (blend_mode):        "; devmem $MODE_REG0 32
 printf "OSD1_CTL (format/alpha/rgb_order/yuv_order): "; devmem $OSD1_CTL 32
 
 echo
-echo "--- Locking in blend_mode=9 (confirmed to enable real per-pixel alpha) ---"
+echo "=== PHASE 0: re-verify blend_mode=1 (stock's real default) with an EXPLICIT write-then-check ==="
+echo "    Testing the hypothesis that the compositor needs a write-triggered commit, not just"
+echo "    the register holding the right value at reset."
+base=$(devmem $MODE_REG0 32)
+devmem $MODE_REG0 32 $(( (base & 0xFFFF0FFF) | (1 << 12) ))
+base=$(devmem $OSD1_CTL 32)
+devmem $OSD1_CTL 32 "$base"   # explicit re-write of the SAME value, to force a commit if one is needed
+fb-alpha-test >/dev/null
+pause "Bands 1/2 -- did an explicit re-write with blend_mode=1 change ANYTHING vs before?"
+
+echo
+echo "=== PHASE 1: sweep yuv_order alone (OSD1_CTL bits[22:21], 4 values) ==="
+echo "    blend_mode locked to 9 (confirmed to enable real blending), rgb_order held at 0."
 base=$(devmem $MODE_REG0 32)
 devmem $MODE_REG0 32 $(( (base & 0xFFFF0FFF) | (9 << 12) ))
-
-echo
-echo "=== PHASE 1 (MOST PROMISING): sweep the REAL rgb_order field ==="
-echo "    (OSD1_CTL bits[22:21], only 4 values -- this was never tested before,"
-echo "     what we tested last time as 'rgb_order' was actually yuv_order)"
-echo "    yuv_order held fixed at 0, format held fixed at 6 (RGBA888)."
 base=$(devmem $OSD1_CTL 32)
-newval=$(( (base & ~(0xF << 12) & ~(0x7 << 18) & ~(0x3 << 21)) | (6 << 12) ))
-devmem $OSD1_CTL 32 "$newval"
+devmem $OSD1_CTL 32 $(( (base & ~(0x7 << 18) & ~(0x3 << 21) & ~(0xF << 12)) | (6 << 12) ))
 
-for order in 0 1 2 3; do
+for yuv in 0 1 2 3; do
     base=$(devmem $OSD1_CTL 32)
-    newval=$(( (base & ~(0x3 << 21)) | (order << 21) ))
-    printf "\n=== REAL rgb_order=%d  (OSD1_CTL=0x%08x) ===\n" "$order" "$newval"
+    newval=$(( (base & ~(0x3 << 21)) | (yuv << 21) ))
+    printf "\n=== yuv_order=%d  (OSD1_CTL=0x%08x) ===\n" "$yuv" "$newval"
     devmem $OSD1_CTL 32 "$newval"
     fb-alpha-test >/dev/null
-    pause "Band 1 (opaque red) and Band 2 (half-alpha red) -- report both colors. Looking for band 2 = DIM/MUTED red, not a different hue."
-done
-
-echo
-echo "=== PHASE 1b: if none of the 4 rgb_order values alone worked, try combined with yuv_order too ==="
-echo "    (16 combos: rgb_order 0-3 x yuv_order 0-3 -- only run this if phase 1 found nothing)"
-for order in 0 1 2 3; do
-    for yuv in 0 1 2 3; do
-        base=$(devmem $OSD1_CTL 32)
-        newval=$(( (base & ~(0x3 << 21) & ~(0x7 << 18)) | (order << 21) | (yuv << 18) ))
-        printf "\n=== rgb_order=%d yuv_order=%d  (OSD1_CTL=0x%08x) ===\n" "$order" "$yuv" "$newval"
-        devmem $OSD1_CTL 32 "$newval"
-        fb-alpha-test >/dev/null
-        pause "Band 2 -- report color."
-    done
+    pause "Band 2 -- report color."
 done
 
 echo
 echo "=== PHASE 2 (low priority -- format is likely already correct): sweep 'format' field ==="
-echo "    rgb_order/yuv_order reset to 0 for this phase."
 base=$(devmem $OSD1_CTL 32)
 devmem $OSD1_CTL 32 $(( base & ~(0x7 << 18) & ~(0x3 << 21) ))
 
@@ -125,4 +127,4 @@ echo
 echo "=== Sweep complete. Restoring known-safe defaults (format=6, rgb_order=0, yuv_order=0, blend_mode=9) before exiting. ==="
 base=$(devmem $OSD1_CTL 32)
 devmem $OSD1_CTL 32 $(( (base & ~(0xF << 12) & ~(0x7 << 18) & ~(0x3 << 21)) | (6 << 12) ))
-echo "Done -- report results, especially phase 1."
+echo "Done -- report results."

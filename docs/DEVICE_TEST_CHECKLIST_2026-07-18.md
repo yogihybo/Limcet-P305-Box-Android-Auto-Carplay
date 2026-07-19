@@ -657,15 +657,98 @@ something to take on as a quick side test. Not pursued further for
 now — `6.2.4.p1.8` remains the only viable matched-pair version
 available without significant additional porting work.
 
+**FOUND AND FIXED: missing `ARKFB_HIDE_WINDOW` ioctl (real vendor number
+`0x4f2c`, decimal 44) — likely root cause of the stuck red-overlay bug.**
+
+The user reported (repeatable on *both* `linuxfb` and `directfb`, i.e.
+independent of the whole `libGAL.so`/matched-pair investigation above)
+that after pressing/rotating the physical MCU input knob, the UI would
+appear momentarily with a full-screen red shade overlaid — as if
+something is supposed to be hidden and isn't. A fresh boot log (`docs/logs/new
+uboot new kernel baseline v12.txt`) captured two "unknown ioctl" errors
+from our driver:
+
+```
+ark1668_lcdfb_ioctl 1330: unknown ioctl 80044f39
+ark1668_lcdfb_ioctl 1330: unknown ioctl 00004f2c
+```
+
+Decoded `00004f2c` as a bare `_IO('O', 44)` call (type='O' matches our
+vendor `ARK_IO` magic; nr=44). Our reconstructed
+`ark_lcdc_common.h` had `ARKFB_HIDE_WINDOW` assigned to `ARK_IO(40)`
+instead, with `ARK_IO(44)` used (as an `_IOW`, different actual value)
+for `ARKFB_SET_WINDOW_ADDR` — so ioctl 44 fell into "unrecognized" and
+was silently dropped.
+
+Checked stock's real, unstripped 3.4-kernel binary
+(`firmware_dumps/Prado firmware dump/mtd5_kernel/extracted/vmlinux.elf`)
+by disassembling `ark_disp_fb_ioctl` (`objdump`/manual ARM decode).
+Found the exact comparison against `0x4f2c`:
+
+```
+802e1ef8: movw r3, #0x4f2c
+802e1efc: cmp  r1, r3
+802e1f00: beq  802e286c
+```
+
+...branching to a handler that reads (via a `printk` format-string
+address resolved back into the binary's `.text`/rodata):
+**`"cmd ARKFB_HIDE_WINDOW when carback."`** — i.e. stock's *real*
+vendor ioctl number for `ARKFB_HIDE_WINDOW` is `44` (`0x4f2c`), not the
+`40` our reconstruction guessed. Stock gates this on
+`ark_carback_get_status()`, refusing to hide the window while the
+reversing camera ("carback") is active (prints the message and
+returns 0 without hiding); otherwise it calls `ark_fb_hide_window()`
+normally.
+
+`MsnCoreApp`/`libarkcmn.so` were built against stock's real headers,
+so they call ioctl `0x4f2c` for hide-window — which our driver never
+recognized, meaning "hide window" requests from the app were silently
+no-ops. This is a very plausible root cause for a window/overlay that
+gets shown but never hidden again (the red shade).
+
+**Fix applied** (`linux-arkmicro` repo, commit `bf91e9e21`): added
+`ARKFB_HIDE_WINDOW_REAL = ARK_IO(44)` to `ark_lcdc_common.h`, and added
+it as a second case alongside the existing `ARKFB_HIDE_WINDOW` in
+`ark1668_lcdc_funcs.c`'s ioctl switch (`ark1668_lcdc_funcs.c`, the
+active driver for this SoC — confirmed by matching the log's line
+number, 1330, to its `default:` case; the `ark1668e_*` variant is not
+compiled in). Our `.config` has `CONFIG_ARK_CARBACK is not set` (no
+reversing-camera subsystem built at all — consistent with the known
+[[kernel defconfig drift]] pattern), so we hide unconditionally rather
+than porting the carback gate — this matches stock's own behavior for
+every case this build can actually hit. Kernel rebuilt clean
+(`build_kernel.sh`).
+
+The second unknown ioctl, `80044f39` (`_IOR('O', 57, 4)` — a 4-byte
+*read* variant, vs. our header's bare `ARK_IO(57)` for
+`VIN_SET_WINDOW_POS`), was also traced in the same disassembly to a
+shared "copy 4 bytes back to userspace" tail block, but its exact
+semantics (what value gets returned) were not fully pinned down before
+time ran out on this session — lower priority since it doesn't share
+the "state never gets cleared" failure mode of the hide-window bug.
+Flagged for follow-up if problems persist after this fix.
+
 **Next steps:**
-- [x] Test on hardware — crash confirmed fixed (above).
-- [ ] Diagnose the blank/solid-red display issue — check live LCDC
-      register state (`OSD1_CTL`/`OSD1_ADDR`/`MODE_LCD_REG0`) while
-      the problem is showing; compare against known-good values from
-      the earlier `linuxfb`-path investigation.
+- [x] Test on hardware — DirectFB crash confirmed fixed (matched-pair
+      swap, above).
+- [x] Root-caused and fixed the cross-backend red-overlay bug — real
+      vendor `ARKFB_HIDE_WINDOW` ioctl (`0x4f2c`) was unrecognized by
+      our driver; fixed in `linux-arkmicro` commit `bf91e9e21`. Needs a
+      fresh `build_bootable_sdcard.sh --new-kernel` build + flash and
+      hardware retest (knob-press repro) to confirm.
+- [ ] Diagnose the blank/solid-red display issue on DirectFB — check
+      live LCDC register state (`OSD1_CTL`/`OSD1_ADDR`/`MODE_LCD_REG0`)
+      while the problem is showing; compare against known-good values
+      from the earlier `linuxfb`-path investigation. Retest after the
+      hide-window fix above, since it may turn out to be the same root
+      cause (a window that should have been hidden and wasn't).
 - [ ] Diagnose the `linuxfb` submenu regression — awaiting a
       `start_msn_linuxfb` console log + `dmesg` capture from the user
-      while the artifact/missing-submenu issue is showing.
+      while the artifact/missing-submenu issue is showing. Retest after
+      the hide-window fix too, for the same reason.
+- [ ] Pin down `80044f39` (`VIN_SET_WINDOW_POS`-area, `_IOR` 4-byte
+      variant) semantics if problems persist after the hide-window fix.
 - [ ] Make the `libGAL.so` swap permanent/documented in the overlay
       (already done — `firmware_overlay/prado/usr/lib/libGAL.so` and
       the base reconstructed rootfs copy both updated, see

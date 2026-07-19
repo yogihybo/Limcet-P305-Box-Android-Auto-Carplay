@@ -615,6 +615,63 @@ the other config fixes.
 
 ---
 
+## 8b. No real sound card — fixed, not yet hardware-confirmed (2026-07-19)
+
+**Symptom:** `new uboot new kernel baseline v9.txt`: `ALSA device
+list: #0: Dummy 1` — only the dummy placeholder ever registered, no
+real sound card. Broken since as early as v7 (same symptom present
+there too), just not noticed until now. v4's log, by contrast, shows
+a real `#0: ARK-SDDAC` card.
+
+**Root cause:** `CONFIG_SND_SOC_ARK` and everything under it
+(`SND_SOC_ARK1668_I2S`, `SND_SOC_ARK1668_ADC`/`DAC`,
+`SND_SOC_BD37033`) were never captured in the checked-in defconfig at
+all — a **fifth** instance of the same `--defconfig`-regeneration
+pattern from 2026-07-19. Without this, the whole audio path was
+compiled out entirely — the ark1668 I2S driver, the internal DAC
+`ark_sddac_mute()` fix from `1c3e87e50`, and the external BD37033 amp
+`MsnCoreApp`'s `Sound_BD37033::muteSpeakerAtts` talks to.
+
+**Fixed** in `linux-arkmicro` `95783755f`, validated the same way as
+the other config fixes (fresh defconfig regeneration diffed against
+the known-working resolved config — identical except metadata).
+
+- [ ] Flash this kernel. Confirm `ALSA device list: #0: ARK-SDDAC` (or
+      similar real card name) appears in dmesg, not `Dummy`.
+- [ ] Confirm actual audio playback works (AUX source, or whatever's
+      easiest to test).
+
+---
+
+## 8c. `usb0` `dr_mode="host"` attempt — reverted (2026-07-19)
+
+Tried fixing the multi-second USB boot-time retry cycling (item 8's
+neighbor symptom — `"Cannot enable... attempt power cycle"` on
+`usb0`) by setting its DTS `dr_mode` to `"host"` instead of `"otg"`,
+skipping the ID-pin negotiation entirely for boot. **Made things
+worse and was reverted** — see `docs/WIRELESS_AND_INIT.md` §7 for the
+full writeup. Short version: `usb0` itself registered perfectly
+cleanly, but the USB boot stick (confirmed same physical port every
+time) stopped enumerating there and moved to `usb1` instead, going
+through the same cycling and this time hanging permanently instead of
+eventually recovering.
+
+Reverted in `linux-arkmicro` `d44cce385` — both `usb0`/`usb1` back to
+`dr_mode="otg"`, the proven-working state. `switchotg.sh`'s fix
+(correct sysfs paths, root-mounted-on-usb0 safety guard, main repo
+`9aa0fec`) was **not** reverted — still valid regardless.
+
+- [x] **Confirmed by the user directly that the revert restores the
+      known-working boot behavior** (same physical port, same
+      cycling-then-eventually-works pattern as every log before this
+      attempt).
+- [ ] **Not re-attempted.** Root cause of the regression is genuinely
+      not understood — needs real investigation (why does `usb0`'s
+      own dr_mode affect where `usb1` enumerates a device?) before
+      trying `dr_mode="host"` again, not just flipping the value.
+
+---
+
 ## 9. `/dev/ark_display` missing — fixed (2026-07-19)
 
 **Symptom:** `new uboot new kernel baseline v7.txt` showed

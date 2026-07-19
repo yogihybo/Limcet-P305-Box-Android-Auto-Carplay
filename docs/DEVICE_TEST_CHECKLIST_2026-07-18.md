@@ -350,6 +350,25 @@ means ArkMicro (this device's actual GPU IP licensee) integrated a
 separate Vivante SDK snapshot that was never mirrored into NXP/
 Freescale's public BSP history — there's no tag in this repo to find.
 
+**Found the exact version string, then exhausted the search across 9
+public source mirrors — still no match.** A previously-captured stock
+boot log (`docs/logs/archived/dmesg live device kernel 3.4 dmeg.txt`)
+has the galcore version print at boot: `Galcore version 5.0.11.28018`
+— giving the *exact* major.minor.patch.build, not an inference.
+Checked every publicly reachable Vivante SDK source snapshot for a
+`5.0.11` build near `28018` (all via the same compile-time size probe):
+Freescale's own `5.0.11.p7.1`/`p7.4`/`p8.3`/`p8.4`/`p8.6` (builds
+`33433`/`33433`/`41671`/`41671`/`41671`), `etnaviv/vivante_kernel_
+drivers`' `pxa1928` (build `31013`, the closest/oldest found anywhere),
+`imx8_v6.2.3.129602` (build `41671`), plus older `4.6.x` variants
+(`eureka`/`imx6`/`v2`/`v4`, build `1210`-`1381`) and the structurally
+incompatible pre-`gcsHAL_INTERFACE`-naming `gc600_driver_dove`. Every
+`5.0.11.x` variant checked gives **320 bytes**, uniformly, regardless
+of build number — none match `264`. `28018` (lower than every build
+checked) isn't mirrored anywhere found. **This conclusively confirms
+there is no shortcut via an external source** — the 264-byte struct
+must be reconstructed directly from stock's own binaries.
+
 **Switched to direct reverse-engineering of the 264-byte struct from
 stock's own binaries.** Both `lib/modules/3.4.0/galcore.ko` (kernel
 side, not stripped, real symbol names) and the reconstructed rootfs's
@@ -410,11 +429,26 @@ confidence):**
 - Checked several more calls in the DirectFB init sequence
   (`gcoHAL_IsFeatureAvailable`, `gcoHAL_MapUserMemory`) — both also
   turned out to be indirection layers (`IsFeatureAvailable` reads a
-  cached bitfield at `HAL+108`, presumably populated by 38/39 too;
-  `MapUserMemory` calls a separate `gcoOS_LockVideoMemory` helper, not
-  yet traced further) rather than issuing their own `gcoHAL_Call`
-  directly — most "query"-style HAL functions read from a cache
-  populated during construction, not fresh per-call ioctls.
+  cached bitfield at `HAL+108`, presumably populated by 38/39 too)
+  rather than issuing their own `gcoHAL_Call` directly — most
+  "query"-style HAL functions read from a cache populated during
+  construction, not fresh per-call ioctls.
+- **`gcoOS_LockVideoMemory`** (called by `gcoHAL_MapUserMemory`) issues
+  **command `11`** directly, no further indirection. Writes `command`
+  at offset `0` (confirms pattern), then after the call reads two
+  4-byte output values at offsets **`56`** and **`60`** (each copied
+  out to caller-supplied pointers — e.g. locked address + a second
+  handle/info value).
+- **`gcoOS_UnmapUserMemory`** issues **command `12`** directly. Writes
+  an *input* value (the memory handle being unmapped) at offset
+  **`52`** before the call; reads nothing back afterward (consistent
+  with unmap having no meaningful output).
+- These two low command numbers (11, 12) being adjacent to each other
+  but far from 38/39 confirms command numbering is stable/consistent
+  with typical Vivante enum ordering conventions (memory-management
+  ops cluster in the low teens across versions) — some corroborating
+  weight for the header-layout hypothesis below, though still not
+  proof.
 
 **Header layout, inferred by structural comparison (not yet directly
 disassembly-proven byte-for-byte — flag as hypothesis, not fact):**

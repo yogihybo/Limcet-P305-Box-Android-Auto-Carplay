@@ -559,6 +559,30 @@ all, that's a different, more specific problem than the raw ioctl
 struct one) — capture `strace`/`dmesg` again and compare against the
 original crash to see whether this changed anything.
 
+**Pre-flight symbol check (2026-07-20): does anything else in the
+rootfs depend on `libGAL.so`'s specific version?** `MsnCoreApp`
+itself lists `libGAL.so` in its own `NEEDED` list but imports zero
+`gco`/`gcv`/`gck`-prefixed symbols directly — it's a transitive
+dependency, not something `MsnCoreApp`'s own code calls. Found the
+real direct callers by scanning every `.so` in the rootfs for a
+`libGAL.so` `NEEDED` entry: `libarkcmn.so` (ArkMicro's own 2D-
+blitting layer — `gco2D_FilterBlitEx2`, `gco2D_Flush`,
+`gco2D_SetClipping`, `gco2D_SetKernelSize`, `gcoHAL_Commit`,
+`gcoHAL_Construct`, `gcoHAL_Destroy`, `gcoHAL_Get2DEngine`,
+`gcoOS_Construct`, `gcoOS_Destroy`), `libarkadapt.so`, and several
+CarPlay/AirPlay/dongle/screen-streaming vendor libraries
+(`libAirPlay.so`, `libAirPlaySupport.so`, `libAudioConverter.so`,
+`libAudioStream.so`, `libcarplay.so`, `libdongle.so`,
+`libScreenStream.so`), plus `libdirectfb_gal.so` itself. Collected
+the full union of all `gco`/`gcv`/`gck` symbols these 10 libraries
+need (54 unique symbols) and checked every one against the new
+`6.2.4.p1.8` `libGAL.so` — **zero missing**. This means `MsnCoreApp`
+should still start and function normally under `linuxfb` too (not
+just `directfb`), since `libarkcmn.so`'s 2D-blit usage is independent
+of which `QWS_DISPLAY` backend is active and is a hard, unconditional
+dependency either way — the symbol-compatibility risk from this swap
+looks low across the whole app, not just the DirectFB-specific path.
+
 **Next steps (this pivot first, then either continue struct RE, or
 fall back to the userspace/Qt investigation below):**
 - [ ] Test on hardware once the SD card is built and flashed — does

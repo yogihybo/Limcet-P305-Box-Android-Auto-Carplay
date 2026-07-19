@@ -398,6 +398,31 @@ has a new, later-stage, downstream crash in firmware download that
 needs its own root-cause pass — real progress, not resolved yet. The
 rootfs-version theory is fully ruled out; ignore it going forward.
 
+**CONFIRMED WORKING END-TO-END on real hardware (2026-07-19, `new
+uboot new kernel baseline v8.txt`).** Not just chip ID this time — a
+real phone paired and connected:
+```
+[360.699]  Bluetooth connected: "Pixel 9 Pro" "04006EAF29C4" "04:00:6E:AF:29:C4"
+[363.196]  recv bluetooth connect phone type: "unkown"
+```
+The system correctly detected the connected phone and switched into
+`MsnCarLife` mode (wireless CarLife/Android-Auto-style projection),
+then began trying to join the phone's WiFi hotspot (`link_29c4`) for
+the actual projection session — the full real-world chain (BT pair →
+phone detect → CarLife handoff) working for the first time in this
+project. This is the practical resolution of everything tracked in
+this section — the manual-test-only crash (still present, see above)
+doesn't matter for real use, exactly as the earlier timing analysis
+predicted.
+
+**New, separate, later-stage issue found in the same log:** the
+WiFi join to the phone's hotspot never completes — `wpa_supplicant`
+initializes fine (`Successfully initialized wpa_supplicant`) but
+`WIFIManager network ssid: "link_29c4" is found: false` repeats every
+~9s all the way to `391s` (log ends there, still retrying). Worth its
+own investigation if CarLife's actual video projection is the next
+target — separate from anything in this Bluetooth section.
+
 ---
 
 ## 4. BD37033 — is the amp stuck muted?

@@ -613,12 +613,59 @@ or an ABI issue. Diagnostic in progress: reading `OSD1_CTL`
 (`0xe0500060`) live while the blank/red screen is showing, to see
 what the LCDC is actually being told to scan out.
 
+**Second regression found: `linuxfb` path (previously the stable
+fallback) is now intermittent too** — launch screen loads but
+submenus don't, or show visual artifacts. Likely cause: `libarkcmn.so`
+(ArkMicro's 2D-blit compositing layer, calling `gco2D_*`/
+`gcoHAL_Commit`) is a **hard, unconditional dependency of
+`MsnCoreApp`** used regardless of `QWS_DISPLAY` backend — since the
+`libGAL.so` swap was applied system-wide (not per-backend), `linuxfb`
+mode is now also running its 2D blits through the newer `6.2.4.p1.8`
+driver instead of the original. All needed symbols are confirmed
+present (see the 54-symbol check above), but symbol-name compatibility
+doesn't guarantee identical *behavior* — a newer GPU driver release
+can have different timing/synchronization characteristics for
+hardware-accelerated blits even with matching function signatures.
+Important complication: this can't be fixed by simply reverting
+`libGAL.so` back to the original for `linuxfb`, because `galcore.ko`
+(kernel side) can only have one version loaded system-wide — reverting
+userspace alone while keeping the new kernel module would reintroduce
+the exact ABI-mismatch crash on *both* paths. Diagnostic log/`dmesg`
+capture requested from the user, not yet received.
+
+**Considered, tried, and ruled out: a matched pair from `5.0.11.p7.4`
+(build `33433`) instead of `6.2.4.p1.8`** — closer to stock's actual
+`5.0.11.28018`, on the theory that a smaller version jump would carry
+over more of the original driver's hardware-specific timing/quirk
+workarounds and avoid the `linuxfb` regression above. Downloaded the
+matching userspace binary from the same NXP mirror
+(`imx-gpu-viv-5.0.11.p7.4-hfp.bin`, also just a plain HTTP download,
+same `--auto-accept` extraction) — that part worked fine. But the
+**kernel-side source doesn't compile against our 4.19 kernel at all**:
+multiple kernel APIs it uses have since been renamed/removed
+(`page_cache_release`, `dmac_map_area`, `hrtimer_get_res`,
+`send_sig_info`, `signal_pending` used without a declaration, several
+others) — real porting work, not a quick rebuild. This is consistent
+with an NXP community GitHub issue found earlier in this investigation
+noting *"this module is only meant for NXP-based kernel up to 4.1.x"*
+for older `imx-gpu-viv` releases — `6.2.4.p1.8` is apparently the
+first release in this lineage close enough to 4.19's kernel API to
+compile without modification. Getting a version genuinely closer to
+stock would require a real kernel-driver porting effort (comparable in
+scope to other driver ports already done in this project), not
+something to take on as a quick side test. Not pursued further for
+now — `6.2.4.p1.8` remains the only viable matched-pair version
+available without significant additional porting work.
+
 **Next steps:**
 - [x] Test on hardware — crash confirmed fixed (above).
 - [ ] Diagnose the blank/solid-red display issue — check live LCDC
       register state (`OSD1_CTL`/`OSD1_ADDR`/`MODE_LCD_REG0`) while
       the problem is showing; compare against known-good values from
       the earlier `linuxfb`-path investigation.
+- [ ] Diagnose the `linuxfb` submenu regression — awaiting a
+      `start_msn_linuxfb` console log + `dmesg` capture from the user
+      while the artifact/missing-submenu issue is showing.
 - [ ] Make the `libGAL.so` swap permanent/documented in the overlay
       (already done — `firmware_overlay/prado/usr/lib/libGAL.so` and
       the base reconstructed rootfs copy both updated, see

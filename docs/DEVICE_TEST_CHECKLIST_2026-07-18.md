@@ -271,12 +271,30 @@ source (not present in this project) or reverse-engineering
 patching the mismatched source to match — a substantial side-project
 in its own right, unrelated to the original LCD bug.
 
+Also checked: can the *userspace* side (`libGAL.so`) be rebuilt instead
+to match the kernel driver, rather than the other way around?
+**No** — `gpu-vivante-6.2.4/` (a `.git` repo) contains only
+`kernel-module-imx-gpu-viv-src/`, no userspace HAL/GAL library source
+at all. `libGAL.so` is Vivante's proprietary closed-source blob;
+nothing to recompile there, in this project or generally for this kind
+of BSP. The one real open-source alternative is **etnaviv** (Mesa's
+reverse-engineered driver for this exact Vivante GC-series GPU family,
+actively maintained upstream) — but it targets the modern DRM/Mesa/GBM
+graphics stack, a fundamentally different architecture from this
+system's legacy `galcore` + proprietary `libGAL.so` + DirectFB 1.7
+combo. Adopting it would mean a DRM-based DirectFB system module (may
+not exist for DirectFB 1.7) or replacing DirectFB with a different
+display stack entirely — a bigger architectural change than
+reverse-engineering the struct layout, not a smaller one. Not pursued.
+
 **Conclusion: DirectFB is confirmed not viable without significant
-additional vendor-SDK work. Do not re-attempt without new source
-material.** `start_msn` should stay on `QWS_DISPLAY=linuxfb`. The
-`galcore.ko` module staging is harmless to keep (loads fine, may be
-useful for other GPU-accelerated work later) but doesn't unlock
-DirectFB on its own.
+additional vendor-SDK work (either exact source or a large
+architectural change to etnaviv/DRM). Do not re-attempt without new
+source material or a deliberate decision to take on the etnaviv
+migration as its own project.** `start_msn` should stay on
+`QWS_DISPLAY=linuxfb`. The `galcore.ko` module staging is harmless to
+keep (loads fine, may be useful for other GPU-accelerated work later)
+but doesn't unlock DirectFB on its own.
 
 **Next steps (this is now purely a userspace/Qt investigation, not a
 kernel-driver or DirectFB one):**

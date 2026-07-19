@@ -449,6 +449,20 @@ confidence):**
   ops cluster in the low teens across versions) — some corroborating
   weight for the header-layout hypothesis below, though still not
   proof.
+- **`gcoBUFFER_Commit`** (reached via `gcoHAL_Commit` →
+  `gcfMEM_AFSMemPoolGetANode@@Base+0x591c`'s wrapper) issues **command
+  `19`** — this is `gcvHAL_COMMIT`, the actual "submit rendering
+  commands to the GPU" operation, arguably the single most important
+  command number to have for real rendering to work. Struct base at
+  `sp+16` in this call site; fields written before the call: offset
+  `32`-`39` zeroed (`vstr d8` — an 8-byte VFP zero-store, likely two
+  reserved/padding fields), offset `40` = a buffer/context pointer,
+  offset `44` = `0`, offset `48` = a count/size value, offset `52` =
+  `0`, offset `56` = a computed size or pointer, offset `60` = a
+  count/flag value. Not yet cross-referenced against what these
+  specific values semantically represent (would need to trace back
+  into `gcoBUFFER_Commit`'s own local state further) — recorded as
+  concrete offsets/write-order for whoever continues this.
 
 **Header layout, inferred by structural comparison (not yet directly
 disassembly-proven byte-for-byte — flag as hypothesis, not fact):**

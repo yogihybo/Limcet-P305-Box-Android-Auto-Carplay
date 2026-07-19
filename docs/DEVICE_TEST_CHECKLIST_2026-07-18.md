@@ -137,6 +137,24 @@ knob test is what actually settles this.
 **Still open:** touchscreen itself not yet confirmed working this same
 way — worth testing directly now that MCU input is confirmed alive.
 
+**Root cause of touch never responding, found (2026-07-19):** every
+touch test since v7 has actually been explained by
+`CONFIG_TOUCHSCREEN_ARK1680` being missing from the kernel entirely —
+a seventh instance of the `--defconfig`-regeneration pattern. `new
+uboot new kernel baseline v10.txt` has no
+`ark1680_ts e4500000.tsc: probe:`/`ARK1680 resistive touchscreen
+registered` line anywhere at all (present in every prior successful
+boot, very early, since it's a built-in driver independent of any
+insmod/modprobe timing) — the driver was simply never in the kernel.
+This was never a downstream consequence of `ark_display` or anything
+else investigated in the meantime; that theory is ruled out. Fixed in
+`linux-arkmicro` `8a0da9c96`.
+
+- [ ] Flash this kernel. Confirm `ark1680_ts e4500000.tsc: ... resistive
+      touchscreen registered` appears early in dmesg.
+- [ ] Retest touch directly — a real finger test, now that the driver
+      is actually present for the first time since v4.
+
 ---
 
 ## 3. Bluetooth — first real test on our own image

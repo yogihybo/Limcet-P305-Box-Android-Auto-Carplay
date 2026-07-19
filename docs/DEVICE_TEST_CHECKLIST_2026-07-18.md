@@ -394,9 +394,19 @@ confidence):**
 - Offset `32` appears to be a shared field position across both
   command 38's and command 39's result data (a count/type
   discriminator — checked against literal `5` after command 38,
-  used as a loop count feeding an array read starting around offset
-  64-68 after command 39, with per-entry values checked against
-  `1`/`2`/`3`).
+  used as a loop count `N` after command 39).
+- **Command 39's result, fully mapped:** offset `32` = count `N`,
+  offset `36` onward = an array of `N` 4-byte "type" values (loop
+  reads `[r9,#4]!` starting from `struct_base+32`, i.e. first element
+  at offset `36`, advancing 4 bytes/iteration). Each type value is
+  checked against `1`/`2`/`3` to set memory-pool-related flags in the
+  persistent HAL object (`HAL+224`/`HAL+228`) — strongly suggestive of
+  a "query memory pool types/count" style command (`gcvPOOL_SYSTEM`/
+  `gcvPOOL_CONTIGUOUS`/`gcvPOOL_VIRTUAL`-style enum, exact names
+  unconfirmed). `gcoHAL_QueryChipIdentity` itself does **not** issue
+  its own ioctl in the common path — it reads from a cache at
+  `HAL_object+104` (`0x68`), which is presumably populated by these
+  same construction-time calls (38/39), not disassembled further.
 
 **This is real, substantial, ongoing reverse-engineering work — not
 close to a complete 264-byte map yet.** Continuing to trace more

@@ -721,6 +721,22 @@ capture through `ARK-SDDAC` never depended on BD37033 at all — that's
 a separate external amp `MsnCoreApp`'s own userspace path already
 talks to independently.
 
+**Update: `fe7198962` still wasn't the end of it — 8th instance found
+2026-07-19 during a proactive audit.** After the user reported "many of
+our commits from yesterday didn't stick," cross-checked every
+`CONFIG_` symbol mentioned across `docs/*.md` against the checked-in
+kernel `.config`/defconfig. `CONFIG_SND_SIMPLE_CARD` (the
+`sound/soc/generic/simple-card.c` machine-driver framework that
+`ark1668_limcet_p305.dts`'s `compatible = "simple-audio-card"` sound
+node actually binds to) was disabled — without it, none of the three
+fixes above matter, since the DTS sound node has no driver to bind to
+at all and `ARK-SDDAC` never registers, full stop. Fixed in
+`linux-arkmicro` `a88acc9e0`, validated the same way as the other
+seven fixes today. Also re-verified (this session) that all seven
+prior fixes (INET/IPV6/WIRELESS/WLAN, MUSB, ARK_DISPLAY, SND_SOC_ARK,
+ARK_DMA, TOUCHSCREEN_ARK1680) are still present in the current
+checked-in defconfig — none had silently dropped.
+
 - [ ] Flash this kernel. Confirm `ALSA device list: #0: ARK-SDDAC` (or
       similar real card name) appears in dmesg, not `Dummy`, with
       neither `"Could not register PCM"` nor a BD37033-caused failure

@@ -493,13 +493,86 @@ dir, not persistent — if picking this up in a fresh session, re-import
 `libGAL.so` from the *reconstructed* rootfs path, not the corrupted
 `firmware_dumps/` copy, plus `galcore.ko` and `libdirectfb_gal.so`).
 
-**Next steps (either continue the struct reverse-engineering above, or
-fall back to the purely userspace/Qt investigation below if this gets
-parked):**
+**Major pivot (2026-07-20): matched-version-pair approach, avoids
+struct reverse-engineering entirely — status: staged, awaiting
+hardware test.** Key insight: `libdirectfb_gal.so` never touches the
+raw `gcsHAL_INTERFACE` struct directly — it only calls stable, named
+C functions exported by `libGAL.so` (`gcoHAL_Construct`,
+`gcoHAL_Commit`, `gcoHAL_QueryChipIdentity`, etc.). The raw-struct ABI
+boundary is entirely *internal* to `libGAL.so`, between it and
+`galcore.ko`. So instead of hunting for stock's exact
+`5.0.11.28018` source (exhausted, doesn't exist publicly), swap in a
+**matched newer pair** — a `libGAL.so` built from the *same* SDK
+version as the `galcore.ko` we can already build (`6.2.4.p1.8`,
+build `150331`) — keeping `libdirectfb_gal.so` (and everything else)
+untouched. Both sides of the struct boundary become internally
+consistent; `libdirectfb_gal.so` doesn't care that the internal
+struct format changed, since it only ever calls the same-named
+functions with (presumably ABI-stable) signatures.
+
+Obtained the matching userspace binary directly from NXP's own
+official mirror — turns out **not actually EULA-gated in practice**:
+`SRC_URI = "${FSL_MIRROR}/${PN}-${PV}.bin;fsl-eula=true"` in the Yocto
+recipe just flags a *local build-config* requirement
+(`ACCEPT_FSL_EULA=1`), not a real server-side auth wall — the file
+(`https://www.nxp.com/lgfiles/NMG/MAD/YOCTO/imx-gpu-viv-6.2.4.p1.8-aarch32.bin`,
+~58MB) is plainly fetchable via a normal HTTP GET, no login/token
+needed, and the self-extracting installer script itself has a
+built-in `--auto-accept` flag for non-interactive extraction (`sh
+imx-gpu-viv-6.2.4.p1.8-aarch32.bin --auto-accept --force`).
+
+Extracted `gpu-core/usr/lib/libGAL-fb.so` (the framebuffer-backend
+variant — matches stock's `/etc/directfbrc`'s `system=fbdev`) — its
+`SONAME` is `libGAL.so` (exactly what `libdirectfb_gal.so` expects to
+find), and its only `NEEDED` dependencies are standard glibc pieces
+already present (`libc`/`libm`/`libdl`/`librt`/`libpthread`) — no
+custom/missing dependency chain. Confirmed all the function names we
+already traced (`gcoHAL_Commit`, `gcoHAL_Construct`,
+`gcoHAL_MapUserMemory`, `gcoHAL_QueryChipIdentity`,
+`gcoOS_DeviceControl`) are present and exported.
+
+**Staged for testing:**
+- Rebuilt `galcore.ko` fresh from `gpu-vivante-6.2.4/kernel-module-
+  imx-gpu-viv-src` against the current kernel tree (needed a
+  `drivers/mxc/gpu-viv` symlink in the kernel source tree — the
+  vendor `Kbuild` hardcodes an in-tree-relative path,
+  `$(srctree)/drivers/mxc/gpu-viv/config` — external `M=` builds
+  don't satisfy this on their own). Byte-identical to the previously
+  parked `backup_working_no_fbcon` artifact — confirms that older
+  build's provenance was genuinely this same source, not a different
+  snapshot.
+- Replaced `firmware_source/prado_reconstructed/mtd6_rootfs/rootfs/
+  usr/lib/libGAL.so` with the new `6.2.4.p1.8` build. Original
+  (`5.0.11.28018`) backed up to the session scratchpad
+  (`libGAL.so.orig-5.0.11.28018.bak`) in case this needs reverting.
+- SD card image build itself needs root (`losetup`) not available in
+  the assistant's sandbox — handed off to the user to run
+  `sudo ./build_bootable_sdcard.sh --new-kernel --non-interactive`
+  and flash/test.
+
+**If this works:** it's a complete, low-risk fix requiring zero
+struct reverse-engineering — just keep this exact file swap
+documented and permanent. **If it still crashes/misbehaves:** the
+crash signature will tell us something new (e.g. if `libdirectfb_gal.
+so`'s calls into the newer `libGAL.so` aren't ABI-compatible after
+all, that's a different, more specific problem than the raw ioctl
+struct one) — capture `strace`/`dmesg` again and compare against the
+original crash to see whether this changed anything.
+
+**Next steps (this pivot first, then either continue struct RE, or
+fall back to the userspace/Qt investigation below):**
+- [ ] Test on hardware once the SD card is built and flashed — does
+      `start_msn` (with `directfb` active) come up cleanly now?
+- [ ] If it crashes differently, capture fresh `strace`/`dmesg` and
+      compare against the earlier `ENOTTY`/`si_addr=0xe0` signature.
+- [ ] If it works: make the `libGAL.so` swap permanent/documented in
+      the overlay or build process (currently only staged in the
+      working tree, not committed).
 - [ ] Continue tracing `gcoHAL_Call` sites in `libGAL.so` (start with
       `gcoHAL_QueryChipIdentity`, `gcoHAL_Commit`, and whatever the
       remaining ~3 of the 5 DirectFB-init-sequence ioctls turn out to
-      be) to keep building out the 264-byte field map.
+      be) to keep building out the 264-byte field map — only needed
+      if the matched-pair swap above doesn't pan out.
 - [ ] Once enough of the struct is mapped for the commands DirectFB's
       init path actually needs, patch a close Freescale source tree
       (`p1.8`, already parked and building for 4.19) to match the

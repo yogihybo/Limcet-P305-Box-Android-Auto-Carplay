@@ -662,7 +662,7 @@ the other config fixes.
 
 ---
 
-## 8b. No real sound card — fixed, not yet hardware-confirmed (2026-07-19)
+## 8b. No real sound card — fixed and confirmed working (2026-07-19)
 
 **Symptom:** `new uboot new kernel baseline v9.txt`: `ALSA device
 list: #0: Dummy 1` — only the dummy placeholder ever registered, no
@@ -737,12 +737,21 @@ prior fixes (INET/IPV6/WIRELESS/WLAN, MUSB, ARK_DISPLAY, SND_SOC_ARK,
 ARK_DMA, TOUCHSCREEN_ARK1680) are still present in the current
 checked-in defconfig — none had silently dropped.
 
-- [ ] Flash this kernel. Confirm `ALSA device list: #0: ARK-SDDAC` (or
-      similar real card name) appears in dmesg, not `Dummy`, with
-      neither `"Could not register PCM"` nor a BD37033-caused failure
-      blocking it.
-- [ ] Confirm actual audio playback works (AUX source, or whatever's
-      easiest to test).
+- [x] Flash this kernel. Confirm `ALSA device list: #0: ARK-SDDAC` (or
+      similar real card name) appears in dmesg, not `Dummy`. Confirmed
+      via `new uboot new kernel baseline v11.txt`:
+      `[ 2.020195] ALSA device list: [ 2.025889]   #1: ARK-SDDAC`, no
+      `"Could not register PCM"` and no BD37033-caused failure.
+- [x] Confirm actual audio playback works. Confirmed via
+      `audio-test.sh`'s static-noise playback on `hw:1,0` — user
+      reported audible static and correct device enumeration.
+      (`audio-test.sh`'s BD37033 mixer-control check still fails, as
+      expected — that's the pre-existing/unfixable I2C issue from
+      earlier in this section, not a regression.)
+
+**Update: `CONFIG_SND_DUMMY` disabled (2026-07-19, `f54d66515`).** Now
+that `ARK-SDDAC` is real and confirmed working, the `Dummy` placeholder
+card was removed so `aplay -l` only shows the real device.
 
 ---
 

@@ -839,6 +839,136 @@ libraries were just looking in the wrong (stock-only, tmpfs) place.
 pattern immediately below it in the same file. No kernel rebuild
 needed, overlay-only change. **Not yet hardware-tested.**
 
+**UPDATE (2026-07-20, continued): `/tmp/dev/memalloc` fix confirmed
+hardware-tested — did NOT fix the black-screen bug.** User rebuilt,
+reflashed, and confirmed both `/dev/memalloc` and `/tmp/dev/memalloc`
+exist and are openable, but a Launcher→`SettingWindow` switch (a
+submenu with no external-device dependency, ruling out "waiting for a
+phone/USB" as an explanation) still goes solid black. Requested a
+fresh-eyes review from a subagent given the investigation felt like it
+was going in circles — see next section.
+
+**Subagent review (general-purpose agent, independent pass over the
+whole investigation) — findings:** flagged that the `memalloc` fix
+only addressed the missing device *node*, never confirmed the actual
+*ioctl* succeeds once opened (same failure shape as the already-proven
+`ARKFB_HIDE_WINDOW` ioctl-number bug). Ranked hypotheses: (1) memalloc
+ioctl number/struct mismatch, (2) `MemallocParams` struct-layout
+mismatch, (3) something in `libarkcmn.so` unrelated to memalloc.
+Recommended an `strace -e trace=open,openat,ioctl` capture of the
+actual memalloc device access during a black-screen transition as the
+decisive next step. Correctly identified the earlier DirectFB/`galcore`
+saga as a closed, unrelated thread — no need to revisit it for this bug.
+
+**Followed up on hypothesis (1), partially refuted:** checked every
+vendor `memalloc.h` variant in the tree, including the genuine
+Hantro-copyrighted `hx170dec`/`hx280enc` reference source — all
+consistently use the same ioctl names/numbers our kernel driver has
+(`MEMALLOC_IOCXGETBUFFER` = `_IOWR('k',1,...)`, `MEMALLOC_IOCSFREEBUFFER`
+= `_IOW('k',2,...)`). The `libarkcmn.so` error string
+(`MEMALLOC_IOCXGETRAMBUFFER`, with "RAM") is very likely just that
+library's own debug wording, not proof of a different macro/number.
+
+**Ran the recommended `strace` capture — decisive, but for a different
+reason than expected: `memalloc` was never even touched.** Full trace
+of a real Launcher→`SettingWindow` switch that went black, filtered to
+`open`/`openat`/`ioctl`: zero references to `/tmp/dev/memalloc` or
+`/dev/memalloc` anywhere in ~7000 lines. `memalloc` is conclusively
+ruled out as the cause of *this* black screen — it's simply not
+exercised by this transition at all. (It may still matter for other
+paths — CarPlay/DVR/reversing-camera buffers — but not this one.)
+
+**Real finding, from the same trace: a separate process, `EffectWatch`
+(PID 126 in the capture), handles every window-switch transition
+animation, and always uses real DirectFB — independent of whether
+MsnCoreApp itself is set to `linuxfb` or `directfb`.** This is the
+missing piece that explains why the bug is identical on both QWS
+backends: it was never about MsnCoreApp's own rendering backend at
+all. `EffectWatch` (`usr/bin/EffectWatch`, stripped C++ binary using
+the native `IDirectFB`/`IDirectFBSurface`/`IDirectFBWindow` API, not
+Qt's QWS abstraction) is launched by MsnCoreApp at startup, syncs with
+it via a named `QSharedMemory` segment (`"EffectShareMemory"`) and a
+custom mutex (`MsnShareLock`, semaphore name `EffectShareLock` — this
+is what appears as `/tmp/qipc_systemsem_EffectShareLock...` in
+`openat` traces), and cross-fades between a screenshot of the outgoing
+window and one of the incoming window on every app switch. Confirmed
+it *does* successfully call into `/dev/galcore` many times during a
+switch (`IOCTL_GCHAL_INTERFACE` = `0x7530`, all returning `0`) — the
+matched-version-pair GPU fix from earlier in this investigation is
+holding up fine here, that's not currently broken.
+
+**Root cause, established via full Ghidra decompile of `EffectWatch`
+(headless, `analyzeHeadless` + custom scripts in `/tmp/ghidra_scripts`,
+JDK at `/home/osboxes/tools/jdk/jdk-21.0.11+10`):**
+
+- Screenshots are cached at `/tmp/app-<id>.bmp`, one file per
+  app/window ID, built from the format string `"/tmp/app-%1.bmp"`
+  (`main()` — decompiled at `FUN_00013a54`).
+- On every transition, `main()` reads two IDs (outgoing/incoming) from
+  the shared-memory handshake, builds both paths, and calls
+  `FUN_000172e4(surface, path)` for each — which calls a hand-rolled
+  BMP loader, `FUN_00017198`.
+- `FUN_00017198` does a plain `open(path, O_RDONLY)`. **If that fails
+  (`ENOENT`), it returns `0` immediately — there is no fallback to a
+  live screen capture anywhere in this function.** The caller
+  (`FUN_000172e4`) only issues the actual DirectFB draw
+  (`FUN_00016c80`) when the loader *fails* — closer reading shows the
+  real pixel upload into the surface happens *inside* the loader on
+  success (`FUN_000163f4`), so a failed load means that surface's
+  content is simply never updated for this transition — it stays at
+  whatever it was before (very plausibly a cleared/black DirectFB
+  surface for a freshly-created one).
+- The **write** side (`FUN_00016e24`, called via `FUN_00017048` at the
+  end of a successful transition, gated by `FUN_00016c50` requiring
+  `width > 399`) is the real "screenshot" mechanism, and it needs no
+  special kernel support at all: `IDirectFBSurface::Lock()` to get a
+  raw pointer to the surface's live pixel data, then hand-writes a BMP
+  file (header + raw pixels) directly from that memory. This already
+  goes through the same DirectFB/galcore path confirmed working above.
+  **So the cache is populated lazily, one entry per window, only
+  *after* you've successfully transitioned *to* that window once.**
+- Confirmed directly in the `strace` capture: `open("/tmp/app-8.bmp",
+  O_RDONLY)` → `ENOENT`, immediately followed by
+  `open("/tmp/app-10.bmp", O_RDWR|O_CREAT, ...)` — exactly matching
+  this read-miss-then-lazy-write pattern.
+
+**Answering "are we missing a kernel/display function that does the
+screenshot": no.** The capture is 100% userspace (direct DirectFB
+surface memory read + hand-rolled BMP writer), needs no special ioctl
+beyond what's already confirmed working, and isn't something our
+kernel/driver reconstruction could be missing a piece of. The
+mechanism is inherently lazy-cached by design — on a freshly booted
+system (`/tmp` is `ramfs`, wiped every boot; `MsnCoreApp`'s own startup
+additionally does `rm -f /tmp/app-*.bmp`), **the very first visit to
+any given submenu is guaranteed to have an empty cache for it**,
+hitting this exact no-fallback code path every time.
+
+**Still open — the one real remaining question:** this lazy-cache-miss
+behavior is very likely present on real stock firmware too (same
+binary logic), but stock presumably only shows a brief, barely-visible
+black flash during the cross-fade rather than a permanently stuck
+black screen with no way back to the menu. `EffectWatch` itself didn't
+crash in the captured trace (no `SIGABRT`/`SIGSEGV`, only the user's
+own `SIGINT` from stopping `strace`) — so this isn't (at least not
+always) the uncaught-`DFBException`-on-failure path in `FUN_00016c80`
+(that only triggers if a previously-cached provider object exists for
+that surface slot, which a first-ever load wouldn't have). The most
+likely remaining culprit is in the **handshake/finalization** between
+`EffectWatch` and `MsnCoreApp` — e.g. `EffectWatch`'s own
+`IDirectFBWindow` transition-overlay never gets properly lowered/hidden
+once the effect "completes" with a failed load, or `MsnCoreApp` is
+waiting on a completion signal that isn't sent correctly in the
+failure case, leaving the real (correctly-rendered) window stuck
+hidden underneath. Not yet traced — would need to look at
+`FUN_00016e1c`/the shared-memory protocol fields more closely, or a
+live test of whether the *real* window content is present but simply
+obscured (e.g. check `OSD1_ADDR`/pixel content again during a stuck
+black screen, this time knowing to look for EffectWatch's overlay
+specifically rather than assuming it's MsnCoreApp's own surface).
+
+Full Ghidra project retained at `/tmp/gh_effectwatch` (not committed —
+scratch/analysis only) if this needs picking back up.
+
 **Next steps:**
 - [x] Test on hardware — DirectFB crash confirmed fixed (matched-pair
       swap, above).
@@ -846,14 +976,18 @@ needed, overlay-only change. **Not yet hardware-tested.**
       themselves are gone (real vendor `ARKFB_HIDE_WINDOW` ioctl
       `0x4f2c` now handled; `linux-arkmicro` commit `bf91e9e21`) — but
       this alone did **not** fix the black/red/static submenu bugs.
-- [ ] **Test the `/tmp/dev/memalloc` symlink fix above on hardware** —
-      needs a fresh `build_bootable_sdcard.sh` build + flash (no
-      `--new-kernel` needed, overlay-only change) and a full retest:
-      does a full submenu switch now render correctly instead of going
-      black? Does the knob-triggered red/static flash also stop? If
-      this fixes it, it likely explains and closes out the DirectFB
-      solid-red bug and the `linuxfb` submenu regression from earlier
-      in this investigation too, not just the black-screen symptom.
+- [x] `/tmp/dev/memalloc` symlink fix — hardware-confirmed both device
+      paths now exist and are openable, but **conclusively ruled out**
+      as the cause of the black-screen bug (the `strace` capture shows
+      it's never even touched during a submenu switch). Real cause
+      found: see `EffectWatch` BMP-cache finding above. The memalloc
+      fix itself is still valid/worth keeping (it fixes a genuine gap
+      for whatever *does* use it — CarPlay/DVR/reversing-camera paths),
+      just not the display bug.
+- [ ] Trace `EffectWatch`'s completion/handshake logic (shared-memory
+      protocol fields, `FUN_00016e1c` and neighbors) to find why a
+      failed-load transition gets permanently stuck rather than
+      recovering after a brief flash like stock presumably does.
 - [ ] Diagnose the blank/solid-red display issue on DirectFB — check
       live LCDC register state (`OSD1_CTL`/`OSD1_ADDR`/`MODE_LCD_REG0`)
       while the problem is showing; compare against known-good values

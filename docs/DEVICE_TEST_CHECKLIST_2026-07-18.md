@@ -729,14 +729,72 @@ time ran out on this session — lower priority since it doesn't share
 the "state never gets cleared" failure mode of the hide-window bug.
 Flagged for follow-up if problems persist after this fix.
 
+**UPDATE (still same day): hide-window ioctl fix confirmed on hardware,
+but it did NOT fix the red-overlay bug.** User flashed the new kernel
+and retested. `dmesg` no longer shows any "unknown ioctl" lines — the
+fix genuinely landed and the app's hide/show calls are now reaching
+the driver — but repeatedly using the knob still momentarily flashes
+the UI with a full-screen red shade. Ioctl dispatch is ruled out as
+the (sole) cause; the bug is downstream of that, in the LCDC
+compositing/layer state itself.
+
+**This SoC's LCDC has 5 real compositing layers**, laid out from
+`ark1668_lcdc.h`/`ark1668_lcdc_funcs.c`:
+- **OSD1** (`ark1668_lcdc_osdlayer` value `0`) — the only layer
+  MsnCoreApp/Qt/DirectFB ever paints, `/dev/fb0`.
+- **OSD2** — otherwise only driven by `ark_bootanimation_display_init/
+  uninit/set_display_addr` (`ark1668_lcdc_funcs.c:708-734`), called
+  from the hardware JPEG (`drivers/soc/arkmicro/jpeg/jpeg_drv.c`) and
+  H.264 (`hx170dec.c`) decoder drivers to play the
+  `msnprofile/bootlogo/logo0.jpg`..`logo26.jpg` splash sequence. Both
+  `CONFIG_ARK_JPEG_DEC` and `CONFIG_ARK_HX170DEC` **are** built into
+  the current `.config` — but no userspace binary/script in the
+  reconstructed rootfs was found opening `/dev/ark_jpeg` or
+  `/dev/hx170dec` at runtime (only a stock, currently-unused
+  `etc/driver_load.sh` references the old 3.4.0 module path), so this
+  layer should be idle after early boot. Worth confirming live, not
+  just from static analysis.
+- **OSD3** — no caller found anywhere in the current driver/rootfs.
+  Should never be enabled.
+- **VIDEO1/VIDEO2** — the ITU656/carback camera capture layers.
+  `CONFIG_ARK1668_ITU656` and `CONFIG_ARK_CARBACK` are **both unset**
+  in the current `.config` (see [[project_kernel_defconfig_drift]]),
+  so these should never turn on at all right now.
+- A 6th fallback: **`ARK1668_LCDC_BACK_COLOR`** (LCDC base `+0x50`) is
+  the fill shown wherever no layer covers a pixel. Our driver sets it
+  once at `ark1668_lcdc_dev_init()` to `0x108080` (black in YCbCr,
+  matching the Y2R conversion path) and never touches it again.
+
+The layer *enable* bits (what `ARKFB_SHOW_WINDOW`/`HIDE_WINDOW`
+actually toggle) live in **`ARK1668_LCDC_CONTROL`** (LCDC base
+`+0x04`, not `MODE_LCD_REG1` as earlier assumed) — bit 5=VIDEO1,
+6=VIDEO2, 7=OSD1, 8=OSD2, 9=OSD3.
+
+**New diagnostic tool added**, since register-level static analysis
+alone hasn't found this bug (per the [[project_lcd_alpha_blend_investigation|earlier
+alpha-blend investigation]]'s hard-won lesson: prefer a live,
+decisive hardware signal over more static tracing):
+`tools/fb-alpha-test/lcd-overlay-watch.sh` (deployed to the overlay as
+`lcd-overlay-watch.sh`), polls `CONTROL`, `BACK_COLOR`, all 3 OSD +
+both VIDEO layers' address registers, and `MODE_LCD_REG0`
+(priority/blend_mode) as fast as `devmem` allows, printing a
+timestamped line only when something changes. Run it in one session
+while mashing the knob in another (`lcd-overlay-watch.sh 60` for a
+60-second window), then send back the log — it will show directly
+whether some other layer's enable bit toggles on, whether OSD1 itself
+blinks off exposing `BACK_COLOR`, or whether an address register
+changes to something unexpected, at the exact moment the red flash
+happens.
+
 **Next steps:**
 - [x] Test on hardware — DirectFB crash confirmed fixed (matched-pair
       swap, above).
-- [x] Root-caused and fixed the cross-backend red-overlay bug — real
-      vendor `ARKFB_HIDE_WINDOW` ioctl (`0x4f2c`) was unrecognized by
-      our driver; fixed in `linux-arkmicro` commit `bf91e9e21`. Needs a
-      fresh `build_bootable_sdcard.sh --new-kernel` build + flash and
-      hardware retest (knob-press repro) to confirm.
+- [x] Fixed and hardware-confirmed: the "unknown ioctl" errors
+      themselves are gone (real vendor `ARKFB_HIDE_WINDOW` ioctl
+      `0x4f2c` now handled; `linux-arkmicro` commit `bf91e9e21`) — but
+      this did **not** fix the red-overlay bug, so the bug is
+      downstream of ioctl dispatch, in LCDC layer/compositing state.
+      Continue with `lcd-overlay-watch.sh` above.
 - [ ] Diagnose the blank/solid-red display issue on DirectFB — check
       live LCDC register state (`OSD1_CTL`/`OSD1_ADDR`/`MODE_LCD_REG0`)
       while the problem is showing; compare against known-good values

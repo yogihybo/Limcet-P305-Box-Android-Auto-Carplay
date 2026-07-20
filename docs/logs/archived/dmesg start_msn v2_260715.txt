@@ -1,0 +1,61 @@
+[<c010d9b8>] (do_DataAbort) from [<c0101cdc>] (__dabt_usr+0x3c/0x40)
+Exception stack(0xc350ffb0 to 0xc350fff8)
+ffa0:                                     b6f90080 b6f90238 00000000 00000000
+ffc0: b6f90080 b6f92578 b6f92000 00000001 00000015 00000019 b6f90080 bef562b4
+ffe0: b6f91968 bef561f0 b6f659dc b6f6d12c 600d0010 ffffffff
+galcore: unknown parameter 'irqline' ignored
+galcore: unknown parameter 'continguousSize' ignored
+Warning: No contiguous memory is reserverd for gpu.!
+Warning: Will use default value(134217728) for the reserved memory!
+Galcore version 6.2.4.150331
+MsnCoreApp: unhandled page fault (11) at 0x00000004, code 0x017
+pgd = 67533dec
+[00000004] *pgd=03994831, *pte=00000000, *ppte=00000000
+CPU: 0 PID: 137 Comm: MsnCoreApp Tainted: G           O      4.19.192 #23
+Hardware name: Arkmicro arm soc Family
+PC is at 0xb6fbb12c
+LR is at 0xb6fb39dc
+pc : [<b6fbb12c>]    lr : [<b6fb39dc>]    psr: 600d0010
+sp : bed971f0  ip : b6fdf968  fp : bed972b4
+r10: b6fde080  r9 : 00000019  r8 : 00000015
+r7 : 00000001  r6 : b6fe0000  r5 : b6fe0578  r4 : b6fde080
+r3 : 00000000  r2 : 00000000  r1 : b6fde238  r0 : b6fde080
+Flags: nZCv  IRQs on  FIQs on  Mode USER_32  ISA ARM  Segment user
+Control: 10c53c7d  Table: 027d4059  DAC: 00000055
+CPU: 0 PID: 137 Comm: MsnCoreApp Tainted: G           O      4.19.192 #23
+Hardware name: Arkmicro arm soc Family
+[<c010cc7c>] (unwind_backtrace) from [<c010a620>] (show_stack+0x10/0x14)
+[<c010a620>] (show_stack) from [<c010d428>] (__do_user_fault+0x11c/0x124)
+[<c010d428>] (__do_user_fault) from [<c010d6d8>] (do_page_fault+0x234/0x338)
+[<c010d6d8>] (do_page_fault) from [<c010d9b8>] (do_DataAbort+0x4c/0xf8)
+[<c010d9b8>] (do_DataAbort) from [<c0101cdc>] (__dabt_usr+0x3c/0x40)
+Exception stack(0xc3991fb0 to 0xc3991ff8)
+1fa0:                                     b6fde080 b6fde238 00000000 00000000
+1fc0: b6fde080 b6fe0578 b6fe0000 00000001 00000015 00000019 b6fde080 bed972b4
+1fe0: b6fdf968 bed971f0 b6fb39dc b6fbb12c 600d0010 ffffffff
+MsnCoreApp: unhandled page fault (11) at 0x00000004, code 0x017
+pgd = da074f26
+[00000004] *pgd=02a2a831, *pte=00000000, *ppte=00000000
+CPU: 0 PID: 141 Comm: MsnCoreApp Tainted: G           O      4.19.192 #23
+Hardware name: Arkmicro arm soc Family
+PC is at 0xb6f9e12c
+LR is at 0xb6f969dc
+pc : [<b6f9e12c>]    lr : [<b6f969dc>]    psr: 600d0010
+sp : becfd240  ip : b6fc2968  fp : becfd304
+r10: b6fc1080  r9 : 00000019  r8 : 00000015
+r7 : 00000001  r6 : b6fc3000  r5 : b6fc3578  r4 : b6fc1080
+r3 : 00000000  r2 : 00000000  r1 : b6fc1238  r0 : b6fc1080
+Flags: nZCv  IRQs on  FIQs on  Mode USER_32  ISA ARM  Segment user
+Control: 10c53c7d  Table: 027c0059  DAC: 00000055
+CPU: 0 PID: 141 Comm: MsnCoreApp Tainted: G           O      4.19.192 #23
+Hardware name: Arkmicro arm soc Family
+[<c010cc7c>] (unwind_backtrace) from [<c010a620>] (show_stack+0x10/0x14)
+[<c010a620>] (show_stack) from [<c010d428>] (__do_user_fault+0x11c/0x124)
+[<c010d428>] (__do_user_fault) from [<c010d6d8>] (do_page_fault+0x234/0x338)
+[<c010d6d8>] (do_page_fault) from [<c010d9b8>] (do_DataAbort+0x4c/0xf8)
+[<c010d9b8>] (do_DataAbort) from [<c0101cdc>] (__dabt_usr+0x3c/0x40)
+Exception stack(0xc00bffb0 to 0xc00bfff8)
+ffa0:                                     b6fc1080 b6fc1238 00000000 00000000
+ffc0: b6fc1080 b6fc3578 b6fc3000 00000001 00000015 00000019 b6fc1080 becfd304
+ffe0: b6fc2968 becfd240 b6f969dc b6f9e12c 600d0010 ffffffff
+/ #

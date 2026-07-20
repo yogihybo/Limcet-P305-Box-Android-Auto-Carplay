@@ -1,0 +1,776 @@
+453.671]  MsnMainWindow::setRealVisible SettingWindow(0x19aa88, name = "SettingWindow") true
+[453.684]  Waite Event Ticks 11
+[469.029]  MsnMainWindow::setRealVisible SettingWindow(0x19aa88, name = "SettingWindow") false
+[469.030]  MsnMainWindow::setRealVisible LauncherWindow(0x13d4d0, name = "LauncherWindow") true
+[469.812]  Waite Event Ticks 704
+^C
+/data # nano ew*
+  GNU nano 7.2                      ew_trace.log
+<0xbea0fd88) = 0
+135   ioctl(5</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xbea0>
+135   ioctl(5</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xbea0>
+138   ioctl(5</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xb3a5>
+135   <... ioctl resumed>)              = 0
+135   ioctl(5</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xbea0>
+135   ioctl(5</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xbea0>
+135   ioctl(5</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xbea0>
+135   ioctl(4</dev/fb0<char 29:0>>, FBIOPUT_VSCREENINFO, 0xbea0fe70) = 0
+135   ioctl(4</dev/fb0<char 29:0>>, FBIOPUT_VSCREENINFO, 0xbea0ffb0) = 0
+135   ioctl(4</dev/fb0<char 29:0>>, FBIOPUT_VSCREENINFO, 0xbea0ff88) = 0
+135   ioctl(4</dev/fb0<char 29:0>>, FBIOPUT_VSCREENINFO, 0xbea0fef8) = 0
+135   ioctl(4</dev/fb0<char 29:0>>, FBIOPUT_VSCREENINFO, 0xbea0fd40) = 0
+135   ioctl(4</dev/fb0<char 29:0>>, FBIOGET_VSCREENINFO, 0xbea0fde0) = 0
+135   ioctl(4</dev/fb0<char 29:0>>, FBIOGET_FSCREENINFO, 0x38dc8) = 0
+135   ioctl(4</dev/fb0<char 29:0>>, FBIOPUTCMAP, 0x38fc4) = -1 EINVAL (Invalid >
+135   ioctl(4</dev/fb0<char 29:0>>, FBIOPUT_VSCREENINFO, 0xbea0fff8) = 0
+135   ioctl(4</dev/fb0<char 29:0>>, FBIOPUT_VSCREENINFO, 0xbea0ffd8) = 0
+135   ioctl(4</dev/fb0<char 29:0>>, FBIOPUT_VSCREENINFO, 0xbea0ff48) = 0
+135   ioctl(4</dev/fb0<char 29:0>>, FBIOPUT_VSCREENINFO, 0xbea0ff60) = 0
+
+
+/data # msn_start_directfb
+-/bin/sh: msn_start_directfb: not found
+/data # cd /usr/bin
+/usr/bin # ls
+ECLink                gdbserver             ntfsinfo
+EffectWatch           gocsdk                ntfslabel
+LCDTest               gocsdk_8822           ntfsls
+MsnCoreApp            gocsdk_968            ntfsresize
+MsnFirstInit          haveged               ntfsundelete
+[                     hostapd               openssl
+[[                    hostapd_cli           pgrep
+adb                   htop                  pkill
+airplay               i2c-dump              readlink
+amixer                i2c-scan              realpath
+aplay                 i2c-write             renice
+arecord               iwconfig              sink
+ark-ts-test           iwlist                sort
+arm-linux-cjpeg       killall               sshd
+arm-linux-djpeg       kmem                  start_msn
+arm-linux-jpegtran    lcd-blend-sweep.sh    start_msn_directfb
+arm-linux-protoc      lcd-overlay-watch.sh  start_msn_linuxfb
+arm-linux-rdjpgcom    lcd-test              strace
+arm-linux-wrjpgcom    less                  tail
+audio-test.sh         libpng-config         tftp
+blueware              libpng15-config       time
+bt-test.sh            lowntfs-3g            tmux
+c_rehash              lsof                  top
+carlife               lsusb                 touch-selftest.sh
+carplay               mcu-handshake         ts_calibrate
+carplaytest           mdnsd                 ts_harvest
+change-arkdata        mesg                  ts_print
+changelogo            mirrlink              ts_print_raw
+cut                   mkfifo                ts_test
+dbus-cleanup-sockets  mkntfs                tty
+dbus-daemon           mmc-test.sh           uart-test.sh
+dbus-launch           mplayer               udhcpc6
+dbus-monitor          msncarlife            unexpand
+dbus-send             mtdev-test            unlink
+dbus-uuidgen          nano                  unzip
+dirname               nmeter                usb-test.sh
+dmesg                 nslookup              usbmuxd
+du                    ntfs-3g               wc
+dumpleases            ntfs-3g.probe         whois
+env                   ntfs-3g.secaudit      wpa_cli
+fb-alpha-test         ntfs-3g.usermap       wpa_passphrase
+find                  ntfscat               wpa_supplicant
+free                  ntfsclone             xargs
+freetype-config       ntfscluster           xml2-config
+fuser                 ntfscmp               xmlcatalog
+fw_printenv           ntfscp                xmllint
+fw_setenv             ntfsfix
+/usr/bin # start_msn_directfb
+Setting up environment for MsnCoreApp...
+Starting MsnCoreApp (DirectFB/GPU)...
+[623.612]  MSNCoreApp start
+[623.615]  MSNCoreApp exception init
+[623.639]  MSNCoreApp running
+[624.398]  Set Effect Process Priority -19  0
+QWS_ARK_TOUCH_DEVICE undefined, touch input disabled
+[624.915]  MsnCoreApp version: V3.21.09.0219
+[628.919]  MSNCor[  628.719408] ark_display: ARKDISP_GET_SCREEN_INFO -> screen_id=0 800x480 120x72mm
+eApp onFirstInit
+[628.950]  ark screen type: 0
+[628.950]  display size: QSize(800, 480)  src size: QSize(120, 72)
+[629.018]  Load App Plugin 12 "/usr/lib/libCarReversing.so"
+[629.117]  Load App Plugin 10 "/usr/lib/libLauncher-Box.so"
+[629.132]  MsnMainWindow::setRealVisible LauncherWindow(0x20f558) true
+
+
+Open reversing dev handle failed!
+
+
+QMetaObject::connectSlotsByName: No matching signal for on_pushButton_clicked()
+[630.183]  DVRSetDialog visibale change: false
+[630.188]  Waite Event Ticks 930
+[630.332]  load wallpaper: "/msnprofile/wallpaper/800x480/"  size: QSize(0, 0)
+[630.386]  MSNCoreApp show
+[630.507]  MsnWindowManager::setVisible true true
+open dvr device /tmp/dev/dvr failure.
+[630.724]  MSNCoreApp hide boot logo
+sh: can't create /proc/display: nonexistent directory
+[630.759]  MSNCoreApp onSecondInit
+[630.760]  DiskDeviceWatcher::startWatcher
+Created device discovery thread
+[630.763]  usb_device_added /dev/bus/usb/002/002
+[630.764]  usb_device_added /dev/bus/usb/002/001
+[630.764]  usb_device_added /dev/bus/usb/001/005
+usb_device_open /dev/bus/usb/001/005
+usb_device_open open returned 26 writeable 1 errno 2
+usb_device_new /dev/bus/usb/001/005 fd: 26
+usb_device_new read returned 50 errno 2
+insert usb dev:/dev/bus/usb/001/005 vid:0x0781 pid:0x5567
+[630.766]  usb_device_added /dev/bus/usb/001/001
+usb_device_open /dev/bus/usb/001/001
+usb_device_open open returned 26 writeable 1 errno 2
+usb_device_new /dev/bus/usb/001/001 fd: 26
+usb_device_new read returned 43 errno 2
+insert usb dev:/dev/bus/usb/001/001 vid:0x1d6b pid:0x0002
+[630.767]  boot remount disk!
+switchotg: root is on /dev/sda2 (USB) -- leaving usb0 in host mode, not switching to otg
+switchotg: /sys/devices/platform/e0400000.usb/musb-hdrc.1/mode not found/writable, skipping usb1
+rmmod: remove 'ark_dw_mmc': No such file or directory
+insmod: can't read '/lib/modules/3.4.0/kernel/drivers/ark/sdmmc/ark_dw_mmc.ko': No such file or directory
+rmmod: remove 'memalloc': No such file or directory
+
+insmod: can't read '/lib/modules/3.4.0/kernel/drivers/ark/memalloc/memalloc.ko': No such file or directory
+[631.278]  onLoadDriverFinished
+ln: /tmp/wlan.ko: File exists
+net.ipv4.udp_mem = 8192 10240 16384
+net.ipv4.udp_rmem_min = 1048576
+insmod: can't read '/tmp/wlan.ko': No such file or directory
+[631.726]  Load App Plugin 8 "/usr/lib/libSetting.so"
+[631.745]  Open b[  631.535090] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=64 brightness=128 contrast=128
+acklight pwm : false
+[  631.558917] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=64 brightness=128 contrast=128
+[  631.578865] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=64 brightness=128 contrast=128
+[  631.599951] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=64 brightness=128 contrast=128
+[  631.617824] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=0 hue=0 saturation=64 brightness=128 contrast=128
+[  631.638870] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=1 hue=0 saturation=64 brightness=128 contrast=128
+[  631.648562] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=1 hue=0 saturation=64 brightness=128 contrast=128
+[  631.698978] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=2 hue=0 saturation=64 brightness=128 contrast=128
+[  631.747526] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=2 hue=0 saturation=64 brightness=128 contrast=128
+
+[  631.769017] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=3 hue=0 saturation=64 brightness=128 contrast=128
+[  631.798791] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=3 hue=0 saturation=64 brightness=128 contrast=128
+[  631.808563] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=4 hue=0 saturation=64 brightness=128 contrast=128
+[  631.828794] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=4 hue=0 saturation=64 brightness=128 contrast=128
+[  631.848817] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=64 brightness=128 contrast=128
+[  631.867404] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=0 hue=0 saturation=64 brightness=128 contrast=128
+[  631.887006] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=1 hue=0 saturation=64 brightness=128 contrast=128
+[  631.906998] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=1 hue=0 saturation=64 brightness=128 contrast=128
+[  631.928855] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=2 hue=0 saturation=64 brightness=128 contrast=128
+[  631.938517] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=2 hue=0 saturation=64 brightness=128 contrast=128
+[  631.968867] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=3 hue=0 saturation=64 brightness=128 contrast=128
+[  631.988800] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=3 hue=0 saturation=64 brightness=128 contrast=128
+[  632.008850] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=4 hue=0 saturation=64 brightness=128 contrast=128
+[  632.026074] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=4 hue=0 saturation=64 brightness=128 contrast=128
+[  632.049074] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=64 brightness=128 contrast=128
+[  632.068807] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=0 hue=0 saturation=64 brightness=128 contrast=128
+[  632.088863] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=1 hue=0 saturation=64 brightness=128 contrast=128
+[  632.108796] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=1 hue=0 saturation=64 brightness=128 contrast=128
+[  632.128195] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=2 hue=0 saturation=64 brightness=128 contrast=128
+[  632.145146] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=2 hue=0 saturation=64 brightness=128 contrast=128
+[  632.162210] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=3 hue=0 saturation=64 brightness=128 contrast=128
+[  632.188811] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=3 hue=0 saturation=64 brightness=128 contrast=128
+[  632.208844] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=4 hue=0 saturation=64 brightness=128 contrast=128
+[  632.228793] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=4 hue=0 saturation=64 brightness=128 contrast=128
+[632.505]  Open I2C Device: 2 "80"  FD: 25
+[632.578]  Sound_BD37033::muteSpeakerAtts false true
+[632.641]  SoundAdapter Create Success, ICType: 3
+[632.642]  Load App Plugin 403 "/usr/lib/libMsnSound.so"
+[632.784]  Blance: 32 32 32 32
+[633.020]  set subwoofer value 8 134
+syncDatas armsetting radar visible:0 datas:0 0 0 0
+[633.438]  McuAdapter: MCUAdapter_BoxP300 6
+[633.450]  Open MCU Serial Port  "/dev/ttyHS0"  Ret: true "No such file or directory"
+
+start serialPortProcessProc
+
+[633.461]  Open MCU Serial Port  "/dev/ttyS2"  Ret: true "No such file or directory"
+[633.461]  Load App Plugin 401 "/usr/lib/libMcuCenter.so"
+[633.662]  CanBusPlugin 0 0
+[633.663]  Load App Plugin 400 "/usr/lib/libCanBus.so"
+[633.817]  Load App Plugin 3 "/usr/lib/libBlueTooth.so"
+[633.831]  open touch monitor dev: /dev/input/event0 32
+open dvr device /tmp/dev/dvr failure.
+[634.113]  MSN protocal type: 0  sendReadyData!
+[634.141]  MSNCoreApp onLoadStartupApp
+[634.141]  MSNCoreApp onEndInit
+[634.142]
+MsnCoreApp End init
+
+[634.292]  MsnLink StartService: "com.arkmicro.carplay"
+[634.296]  MsnLink StartService ret: "com.arkmicro.carplay" true ""
+[634.298]  MSNCoreApp exec
+open dvr device /tmp/dev/dvr failure.
+[634.413]  MSN protocal type: 0  sendReadyData!
+open dvr device /tmp/dev/dvr failure.
+[634.876]  start bt service:/usr/bin/blueware
+[634.994]  MSN protocal type: 0  sendReadyData!
+open dvr device /tmp/dev/dvr failure.
+[635.077]  Retry Open BlueTooth Serial Port,  Ret: true
+[635.078]  Write At atCommand: "AT+DEVSTAT"
+[635.154]  Write At atCommand: "AT+BTEN=1"
+open dvr device /tmp/dev/dvr failure.
+open dvr device /tmp/dev/dvr failure.
+open dvr device /tmp/dev/dvr failure.
+open dvr device /tmp/dev/dvr failure.
+[635.923]  MsnCoreApp::onDiskDeviceStatusChange 0 0
+open dvr device /tmp/dev/dvr failure.
+[636.194]  arkapi_open_dvr() failed after 10 times retry, errno: 2 No such file or directory
+[642.872]  Write At atCommand: "AT+BTEN=1"
+[650.595]  Write At atCommand: "AT+BTEN=1"
+[658.321]  Write At atCommand: "AT+BTEN=1"
+[666.043]  Write At atCommand: "AT+BTEN=1"
+[673.766]  Write At atCommand: "AT+BTEN=1"
+[681.486]  Write At atCommand: "AT+BTEN=1"
+[689.202]  Write At atCommand: "AT+BTEN=1"
+[696.929]  Write At atCommand: "AT+BTEN=1"
+[704.653]  Write At atCommand: "AT+BTEN=1"
+[712.383]  Write At atCommand: "AT+BTEN=1"
+[720.108]  Write At atCommand: "AT+BTEN=1"
+[727.829]  Write At atCommand: "AT+BTEN=1"
+[735.551]  Write At atCommand: "AT+BTEN=1"
+^C
+/usr/bin # start_msn_directfb
+Setting up environment for MsnCoreApp...
+Starting MsnCoreApp (DirectFB/GPU)...
+[742.128]  MSNCoreApp start
+[742.131]  MSNCoreApp exception init
+[742.170]  MSNCoreApp running
+[742.760]  Set Effect Process Priority -19  0
+QWS_ARK_TOUCH_DEVICE undefined, touch input disabled
+[743.277]  MsnCoreApp version: V3.21.09.0219
+[743.631]  MSNCor[  743.420738] ark_display: ARKDISP_GET_SCREEN_INFO -> screen_id=0 800x480 120x72mm
+eApp onFirstInit
+[743.652]  ark screen type: 0
+[743.652]  display size: QSize(800, 480)  src size: QSize(120, 72)
+[743.729]  Load App Plugin 12 "/usr/lib/libCarReversing.so"
+[743.892]  Load App Plugin 10 "/usr/lib/libLauncher-Box.so"
+[743.919]  MsnMainWindow::setRealVisible LauncherWindow(0x212bb8) true
+[744.034]  Waite Event Ticks 11
+[744.205]  load wallpaper: "/msnprofile/wallpaper/800x480/"  size: QSize(0, 0)
+rm: can't remove '/tmp/app-*.bmp': No such file or directory
+[744.301]  MSNCoreApp show
+[744.504]  MsnWindowManager::setVisible true true
+
+
+Open reversing dev handle failed!
+
+
+QMetaObject::connectSlotsByName: No matching signal for on_pushButton_clicked()
+[746.068]  DVRSetDialog visibale change: false
+[746.170]  MSNCoreApp hide boot logo
+sh: can't create /proc/display: nonexistent directory
+[746.221]  MSNCoreApp onSecondInit
+[746.222]  DiskDeviceWatcher::startWatcher
+Created device discovery thread
+[746.226]  usb_device_added /dev/bus/usb/002/002
+[746.226]  usb_device_added /dev/bus/usb/002/001
+[746.230]  usb_device_added /dev/bus/usb/001/005
+usb_device_open /dev/bus/usb/001/005
+usb_device_open open returned 26 writeable 1 errno 2
+usb_device_new /dev/bus/usb/001/005 fd: 26
+usb_device_new read returned 50 errno 2
+insert usb dev:/dev/bus/usb/001/005 vid:0x0781 pid:0x5567
+[746.240]  usb_device_added /dev/bus/usb/001/001
+usb_device_open /dev/bus/usb/001/001
+usb_device_open open returned 26 writeable 1 errno 2
+usb_device_new /dev/bus/usb/001/001 fd: 26
+usb_device_new read returned 43 errno 2
+insert usb dev:/dev/bus/usb/001/001 vid:0x1d6b pid:0x0002
+[746.241]  boot remount disk!
+switchotg: root is on /dev/sda2 (USB) -- leaving usb0 in host mode, not switching to otg
+switchotg: /sys/devices/platform/e0400000.usb/musb-hdrc.1/mode not found/writable, skipping usb1
+rmmod: remove 'ark_dw_mmc': No such file or directory
+insmod: can't read '/lib/modules/3.4.0/kernel/drivers/ark/sdmmc/ark_dw_mmc.ko': No such file or directory
+rmmod: remove 'memalloc': No such file or directory
+
+insmod: can't read '/lib/modules/3.4.0/kernel/drivers/ark/memalloc/memalloc.ko': No such file or directory
+[746.924]  onLoadDriverFinished
+ln: /tmp/wlan.ko: File exists
+net.ipv4.udp_mem = 8192 10240 16384
+net.ipv4.udp_rmem_min = 1048576
+insmod: can't read '/tmp/wlan.ko': No such file or directory
+[747.620]  Load App Plugin 8 "/usr/lib/libSetting.so"
+[747.626]  Open b[  747.415433] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=64 brightness=128 contrast=128
+acklight pwm : false
+[  747.462654] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=64 brightness=128 contrast=128
+[  747.513888] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=64 brightness=128 contrast=128
+[  747.548680] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=64 brightness=128 contrast=128
+[  747.589648] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=0 hue=0 saturation=64 brightness=128 contrast=128
+[  747.635304] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=1 hue=0 saturation=64 brightness=128 contrast=128
+
+[  747.672174] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=1 hue=0 saturation=64 brightness=128 contrast=128
+[  747.700664] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=2 hue=0 saturation=64 brightness=128 contrast=128
+[  747.730947] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=2 hue=0 saturation=64 brightness=128 contrast=128
+[  747.761267] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=3 hue=0 saturation=64 brightness=128 contrast=128
+[  747.788810] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=3 hue=0 saturation=64 brightness=128 contrast=128
+[  747.819720] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=4 hue=0 saturation=64 brightness=128 contrast=128
+[  747.848804] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=4 hue=0 saturation=64 brightness=128 contrast=128
+[  747.879416] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=64 brightness=128 contrast=128
+[  747.908802] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=0 hue=0 saturation=64 brightness=128 contrast=128
+[  747.944305] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=1 hue=0 saturation=64 brightness=128 contrast=128
+[  747.969519] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=1 hue=0 saturation=64 brightness=128 contrast=128
+[  747.998873] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=2 hue=0 saturation=64 brightness=128 contrast=128
+[  748.028804] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=2 hue=0 saturation=64 brightness=128 contrast=128
+[  748.059150] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=3 hue=0 saturation=64 brightness=128 contrast=128
+[  748.088801] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=3 hue=0 saturation=64 brightness=128 contrast=128
+[  748.118871] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=4 hue=0 saturation=64 brightness=128 contrast=128
+[  748.149139] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=4 hue=0 saturation=64 brightness=128 contrast=128
+[  748.177169] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=64 brightness=128 contrast=128
+[  748.207473] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=0 hue=0 saturation=64 brightness=128 contrast=128
+[  748.237814] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=1 hue=0 saturation=64 brightness=128 contrast=128
+[  748.273205] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=1 hue=0 saturation=64 brightness=128 contrast=128
+[  748.298424] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=2 hue=0 saturation=64 brightness=128 contrast=128
+[  748.328680] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=2 hue=0 saturation=64 brightness=128 contrast=128
+[  748.359061] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=3 hue=0 saturation=64 brightness=128 contrast=128
+[  748.388808] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=3 hue=0 saturation=64 brightness=128 contrast=128
+[  748.418874] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=4 hue=0 saturation=64 brightness=128 contrast=128
+[  748.444092] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=4 hue=0 saturation=64 brightness=128 contrast=128
+[748.726]  Open I2C Device: 2 "80"  FD: 25
+[748.779]  Sound_BD37033::muteSpeakerAtts false true
+[748.831]  SoundAdapter Create Success, ICType: 3
+[748.832]  Load App Plugin 403 "/usr/lib/libMsnSound.so"
+[748.938]  Blance: 32 32 32 32
+[749.133]  set subwoofer value 8 134
+syncDatas armsetting radar visible:0 datas:0 0 0 0
+[749.546]  McuAdapter: MCUAdapter_BoxP300 6
+[749.547]  Open MCU Serial Port  "/dev/ttyHS0"  Ret: true "No such file or directory"
+
+start serialPortProcessProc
+
+[749.560]  Open MCU Serial Port  "/dev/ttyS2"  Ret: true "No such file or directory"
+[749.561]  Load App Plugin 401 "/usr/lib/libMcuCenter.so"
+[749.787]  CanBusPlugin 0 0
+[749.787]  Load App Plugin 400 "/usr/lib/libCanBus.so"
+[749.882]  Load App Plugin 3 "/usr/lib/libBlueTooth.so"
+[749.884]  open touch monitor dev: /dev/input/event0 32
+open dvr device /tmp/dev/dvr failure.
+[750.028]  MSN protocal type: 0  sendReadyData!
+[750.063]  MSNCoreApp onLoadStartupApp
+[750.063]  MSNCoreApp onEndInit
+[750.063]
+MsnCoreApp End init
+
+[750.150]  MsnLink StartService: "com.arkmicro.carplay"
+[750.154]  MsnLink StartService ret: "com.arkmicro.carplay" true ""
+[750.156]  MSNCoreApp exec
+open dvr device /tmp/dev/dvr failure.
+[750.328]  MSN protocal type: 0  sendReadyData!
+open dvr device /tmp/dev/dvr failure.
+open dvr device /tmp/dev/dvr failure.
+[750.628]  MSN protocal type: 0  sendReadyData!
+[751.009]  start bt service:/usr/bin/blueware
+open dvr device /tmp/dev/dvr failure.
+[751.210]  Retry Open BlueTooth Serial Port,  Ret: true
+[751.211]  Write At atCommand: "AT+DEVSTAT"
+[751.312]  Write At atCommand: "AT+BTEN=1"
+open dvr device /tmp/dev/dvr failure.
+[751.378]  MsnCoreApp::onDiskDeviceStatusChange 0 0
+open dvr device /tmp/dev/dvr failure.
+open dvr device /tmp/dev/dvr failure.
+open dvr device /tmp/dev/dvr failure.
+open dvr device /tmp/dev/dvr failure.
+[752.336]  arkapi_open_dvr() failed after 10 times retry, errno: 2 No such file or directory
+[759.029]  Write At atCommand: "AT+BTEN=1"
+^C
+/usr/bin # [  767.112798] pgd = 15ed4914
+[  767.115584] [00000810] *pgd=01a23831, *pte=00000000, *ppte=00000000
+
+/usr/bin # ps
+PID   USER     TIME   COMMAND
+    1 root       0:01 init
+    2 root       0:00 [kthreadd]
+    4 root       0:00 [kworker/0:0H-mm]
+    5 root       0:00 [kworker/u2:0-ev]
+    6 root       0:00 [mm_percpu_wq]
+    7 root       0:00 [ksoftirqd/0]
+    8 root       0:00 [kdevtmpfs]
+   10 root       0:00 [oom_reaper]
+   11 root       0:00 [writeback]
+   12 root       0:00 [crypto]
+   13 root       0:00 [kblockd]
+   14 root       0:00 [watchdogd]
+   15 root       0:00 [kswapd0]
+   28 root       0:00 [jpeg_queue]
+   29 root       0:00 [jpeg_decode]
+   30 root       0:00 [uas]
+   32 root       0:00 [irq/20-ark1680_]
+   34 root       0:00 [kworker/0:4-eve]
+   35 root       0:00 [ipv6_addrconf]
+   39 root       0:00 [mmc_complete]
+   40 root       0:00 [kworker/0:1H-kb]
+   41 root       0:00 [scsi_eh_0]
+   42 root       0:00 [scsi_tmf_0]
+   43 root       0:00 [usb-storage]
+   44 root       0:00 [kworker/u2:2-ev]
+   45 root       0:00 [jbd2/sda2-8]
+   46 root       0:00 [ext4-rsv-conver]
+   75 root       0:00 [jbd2/sda3-8]
+   76 root       0:00 [ext4-rsv-conver]
+   85 root       0:00 [galcore workque]
+   86 root       0:00 [galcore deamon ]
+   96 root       0:00 [cfg80211]
+   97 root       0:00 /usr/bin/sshd -f /etc/ssh/sshd_config
+  101 root       0:00 -/bin/sh
+  110 root       0:00 /usr/bin/dbus-daemon --fork --print-pid 4 --print-address
+  111 root       0:01 [RTW_CMD_THREAD]
+  117 root       0:00 udhcpd /etc/udhcpd.conf
+  118 root       0:00 hostapd -B /etc/hostapd/hostapd.conf
+  131 root       0:01 [kworker/0:1-eve]
+  133 root       0:00 strace -f -e trace=ioctl -yy -o /data/ew_trace.log Effect
+  135 root       0:00 EffectWatch
+  142 root       0:00 EffectWatch
+  148 root       0:00 EffectWatch
+  199 root       0:00 udhcpd -f /etc/udhcpd.conf wlan0
+  202 root       0:00 /usr/bin/carplay
+  218 nobody     0:00 mdnsd
+  223 root       0:00 blueware /etc/blueware-bw123.properties
+  268 root       0:00 EffectWatch
+  284 root       0:00 [kworker/0:0-eve]
+  316 root       0:00 udhcpd -f /etc/udhcpd.conf wlan0
+  320 root       0:00 blueware /etc/blueware-bw123.properties
+ 3745 root       0:00 EffectWatch
+ 3904 root       0:00 udhcpd -f /etc/udhcpd.conf wlan0
+ 3922 root       0:00 blueware /etc/blueware-bw123.properties
+ 7157 root       0:01 blueware /etc/blueware-bw123.properties
+ 7265 root       0:00 blueware /etc/blueware-bw123.properties
+ 7416 root       0:00 blueware /etc/blueware-bw123.properties
+ 7493 root       0:00 ps
+/usr/bin # killall blueware
+/usr/bin # killall EffectWatch
+/usr/bin # start_msn_directfb &
+[1]-  Terminated                 strace -f -e trace=ioctl -yy -o /data/ew_trace.log EffectWatch
+/usr/bin # Setting up environment for MsnCoreApp...
+Starting MsnCoreApp (DirectFB/GPU)...
+[846.097]  MSNCoreApp start
+[846.100]  MSNCoreApp exception init
+[846.114]  MSNCoreApp running
+[846.630]  Set Effect Process Priority -19  0
+QWS_ARK_TOUCH_DEVICE undefined, touch input disabled
+[846.829]  MsnCoreApp version: V3.21.09.0219
+[846.993]  MSNCor[  846.782462] ark_display: ARKDISP_GET_SCREEN_INFO -> screen_id=0 800x480 120x72mm
+eApp onFirstInit
+[847.002]  ark screen type: 0
+[847.002]  display size: QSize(800, 480)  src size: QSize(120, 72)
+[847.038]  Load App Plugin 12 "/usr/lib/libCarReversing.so"
+[847.086]  Load App Plugin 10 "/usr/lib/libLauncher-Box.so"
+[847.091]  MsnMainWindow::setRealVisible LauncherWindow(0x20ef20) true
+[847.128]  Waite Event Ticks 11
+[847.177]  load wallpaper: "/msnprofile/wallpaper/800x480/"  size: QSize(0, 0)
+rm: can't remove '/tmp/app-*.bmp': No such file or directory
+[847.205]  MSNCoreApp show
+[847.266]  MsnWindowManager::setVisible true true
+
+
+Open reversing dev handle failed!
+
+
+[847.631]  MSNCoreApp hide boot logo
+sh: can't create /proc/display: nonexistent directory
+[847.647]  MSNCoreApp onSecondInit
+[847.648]  DiskDeviceWatcher::startWatcher
+Created device discovery thread
+[847.651]  usb_device_added /dev/bus/usb/002/002
+[847.652]  usb_device_added /dev/bus/usb/002/001
+[847.652]  usb_device_added /dev/bus/usb/001/005
+usb_device_open /dev/bus/usb/001/005
+usb_device_open open returned 26 writeable 1 errno 2
+usb_device_new /dev/bus/usb/001/005 fd: 26
+usb_device_new read returned 50 errno 2
+insert usb dev:/dev/bus/usb/001/005 vid:0x0781 pid:0x5567
+[847.654]  usb_device_added /dev/bus/usb/001/001
+usb_device_open /dev/bus/usb/001/001
+usb_device_open open returned 26 writeable 1 errno 2
+usb_device_new /dev/bus/usb/001/001 fd: 26
+usb_device_new read returned 43 errno 2
+insert usb dev:/dev/bus/usb/001/001 vid:0x1d6b pid:0x0002
+[847.655]  boot remount disk!
+switchotg: root is on /dev/sda2 (USB) -- leaving usb0 in host mode, not switching to otg
+switchotg: /sys/devices/platform/e0400000.usb/musb-hdrc.1/mode not found/writable, skipping usb1
+rmmod: remove 'ark_dw_mmc': No such file or directory
+insmod: can't read '/lib/modules/3.4.0/kernel/drivers/ark/sdmmc/ark_dw_mmc.ko': No such file or directory
+rmmod: remove 'memalloc': No such file or directory
+
+insmod: can't read '/lib/modules/3.4.0/kernel/drivers/ark/memalloc/memalloc.ko': No such file or directory
+[847.902]  onLoadDriverFinished
+ln: /tmp/wlan.ko: File exists
+net.ipv4.udp_mem = 8192 10240 16384
+net.ipv4.udp_rmem_min = 1048576
+insmod: can't read '/tmp/wlan.ko': No such file or directory
+[848.166]  Load App Plugin 8 "/usr/lib/libSetting.so"
+[848.170[  847.960133] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=64 brightness=128 contrast=128
+]  Open backligh[  847.971193] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=64 brightness=128 contrast=128
+t pwm : false
+[  847.982216] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=64 brightness=128 contrast=128
+[  847.994295] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=64 brightness=128 contrast=128
+[  848.004137] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=0 hue=0 saturation=64 brightness=128 contrast=128
+[  848.013917] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=1 hue=0 saturation=64 brightness=128 contrast=128
+[  848.023742] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=1 hue=0 saturation=64 brightness=128 contrast=128
+[  848.033541] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=2 hue=0 saturation=64 brightness=128 contrast=128
+[  848.043237] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=2 hue=0 saturation=64 brightness=128 contrast=128
+[  848.053022] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=3 hue=0 saturation=64 brightness=128 contrast=128
+[  848.062721] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=3 hue=0 saturation=64 brightness=128 contrast=128
+[  848.072498] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=4 hue=0 saturation=64 brightness=128 contrast=128
+[  848.082246] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=4 hue=0 saturation=64 brightness=128 contrast=128
+[  848.092193] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=64 brightness=128 contrast=128
+[  848.101985] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=0 hue=0 saturation=64 brightness=128 contrast=128
+[  848.111743] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=1 hue=0 saturation=64 brightness=128 contrast=128
+[  848.121590] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=1 hue=0 saturation=64 brightness=128 contrast=128
+[  848.131415] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=2 hue=0 saturation=64 brightness=128 contrast=128
+[  848.141178] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=2 hue=0 saturation=64 brightness=128 contrast=128
+[  848.150954] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=3 hue=0 saturation=64 brightness=128 contrast=128
+[  848.160652] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=3 hue=0 saturation=64 brightness=128 contrast=128
+[  848.170433] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=4 hue=0 saturation=64 brightness=128 contrast=128
+[  848.180131] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=4 hue=0 saturation=64 brightness=128 contrast=128
+[  848.191681] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=64 brightness=128 contrast=128
+[  848.210840] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=0 hue=0 saturation=64 brightness=128 contrast=128
+[  848.230081] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=1 hue=0 saturation=64 brightness=128 contrast=128
+[  848.249106] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=1 hue=0 saturation=64 brightness=128 contrast=128
+[  848.270414] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=2 hue=0 saturation=64 brightness=128 contrast=128
+[  848.290813] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=2 hue=0 saturation=64 brightness=128 contrast=128
+
+[  848.302088] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=3 hue=0 saturation=64 brightness=128 contrast=128
+[  848.311882] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=3 hue=0 saturation=64 brightness=128 contrast=128
+[  848.321683] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=4 hue=0 saturation=64 brightness=128 contrast=128
+[  848.331385] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=4 hue=0 saturation=64 brightness=128 contrast=128
+[848.578]  Open I2C Device: 2 "80"  FD: 26
+[848.607]  Sound_BD37033::muteSpeakerAtts false true
+[848.635]  SoundAdapter Create Success, ICType: 3
+[848.636]  Load App Plugin 403 "/usr/lib/libMsnSound.so"
+[848.708]  Blance: 32 32 32 32
+[848.820]  set subwoofer value 8 134
+syncDatas armsetting radar visible:0 datas:0 0 0 0
+[849.021]  McuAdapter: MCUAdapter_BoxP300 6
+[849.023]  Open MCU Serial Port  "/dev/ttyHS0"  Ret: true "No such file or directory"
+
+start serialPortProcessProc
+
+[849.026]  Open MCU Serial Port  "/dev/ttyS2"  Ret: true "No such file or directory"
+[849.027]  Load App Plugin 401 "/usr/lib/libMcuCenter.so"
+[849.130]  CanBusPlugin 0 0
+[849.130]  Load App Plugin 400 "/usr/lib/libCanBus.so"
+[849.209]  Load App Plugin 3 "/usr/lib/libBlueTooth.so"
+[849.211]  open touch monitor dev: /dev/input/event0 34
+QMetaObject::connectSlotsByName: No matching signal for on_pushButton_clicked()
+[849.346]  DVRSetDialog visibale change: false
+[849.435]  MSN protocal type: 0  sendReadyData!
+[849.483]  MSNCoreApp onLoadStartupApp
+[849.483]  MSNCoreApp onEndInit
+[849.483]
+MsnCoreApp End init
+
+[849.569]  MsnLink StartService: "com.arkmicro.carplay"
+[849.573]  MsnLink StartService ret: "com.arkmicro.carplay" true ""
+[849.575]  MSNCoreApp exec
+open dvr device /tmp/dev/dvr failure.
+[849.735]  MSN protocal type: 0  sendReadyData!
+open dvr device /tmp/dev/dvr failure.
+open dvr device /tmp/dev/dvr failure.
+[850.095]  start bt service:/usr/bin/blueware
+[850.158]  MSN protocal type: 0  sendReadyData!
+open dvr device /tmp/dev/dvr failure.
+[850.296]  Retry Open BlueTooth Serial Port,  Ret: true
+[850.297]  Write At atCommand: "AT+DEVSTAT"
+open dvr device /tmp/dev/dvr failure.
+[850.349]  Write At atCommand: "AT+BTEN=1"
+open dvr device /tmp/dev/dvr failure.
+open dvr device /tmp/dev/dvr failure.
+open dvr device /tmp/dev/dvr failure.
+open dvr device /tmp/dev/dvr failure.
+open dvr device /tmp/dev/dvr failure.
+[851.546]  arkapi_open_dvr() failed after 10 times retry, errno: 2 No such file or directory
+[852.459]  Write At atCommand: "AT+ADDR"
+[852.461]  BlueToothAdapter_Blueware::onStartupConfig()
+[852.461]  Write At atCommand: "AT+HFPCFG"
+[852.462]  Write At atCommand: "AT+HFPDISC"
+[852.463]  Write At atCommand: "AT+ADDR"
+[852.464]  Write At atCommand: "AT+NAME"
+[852.464]  Write At atCommand: "AT+VER"
+mkdir: can't create directory '/dev/socket/': File exists
+[852.493]  Write At atCommand: "AT+PLIST"
+[852.493]  BT Local Address: "DC0D3014FC9F"
+[852.493]  Write At atCommand: "AT+NAME"
+[852.494]I msncoreapp.cpp@2964 enableHostApd start  enable: 1 timeout: 3000
+[852.494]  start  enableWLAN 0 852494
+stop wifi manager
+[852.606]  end  enableWLAN 0 852607
+[852.659]I msncoreapp.cpp@3059 enableHostApd hostapd started  true
+[852.660]  hostapd state: 2  pid: 8351 ap type: 1
+[852.661]I msncoreapp.cpp@3098 enableHostApd end  1
+[852.661]  Write At atCommand: "AT+HFPCFG=0"
+[852.662]  BT Local Address: "DC0D3014FC9F"
+[852.663]  Write At atCommand: "AT+NAME"
+[852.711]  MsnCoreApp::onDiskDeviceStatusChange 0 0
+[854.661]I msncoreapp.cpp@2964 enableHostApd start  enable: 0 timeout: 100
+[854.662]  hostapd state: 0  pid: 0
+[854.718]  hostapd state: 0  pid: 0
+[854.718]I msncoreapp.cpp@3098 enableHostApd end  0
+[855.720]I msncoreapp.cpp@2964 enableHostApd start  enable: 1 timeout: 100
+[855.721]  start  enableWLAN 0 855721
+stop wifi manager
+[855.831]  end  enableWLAN 0 855831
+[855.885]I msncoreapp.cpp@3059 enableHostApd hostapd started  true
+[855.886]  hostapd state: 2  pid: 8365 ap type: 1
+[855.886]I msncoreapp.cpp@3098 enableHostApd end  1
+ps
+PID   USER     TIME   COMMAND
+    1 root       0:01 init
+    2 root       0:00 [kthreadd]
+    4 root       0:00 [kworker/0:0H-mm]
+    5 root       0:00 [kworker/u2:0-ev]
+    6 root       0:00 [mm_percpu_wq]
+    7 root       0:00 [ksoftirqd/0]
+    8 root       0:00 [kdevtmpfs]
+   10 root       0:00 [oom_reaper]
+   11 root       0:00 [writeback]
+   12 root       0:00 [crypto]
+   13 root       0:00 [kblockd]
+   14 root       0:00 [watchdogd]
+   15 root       0:00 [kswapd0]
+   28 root       0:00 [jpeg_queue]
+   29 root       0:00 [jpeg_decode]
+   30 root       0:00 [uas]
+   32 root       0:00 [irq/20-ark1680_]
+   34 root       0:00 [kworker/0:4-eve]
+   35 root       0:00 [ipv6_addrconf]
+   39 root       0:00 [mmc_complete]
+   40 root       0:00 [kworker/0:1H-kb]
+   41 root       0:00 [scsi_eh_0]
+   42 root       0:00 [scsi_tmf_0]
+   43 root       0:00 [usb-storage]
+   44 root       0:00 [kworker/u2:2-ev]
+   45 root       0:00 [jbd2/sda2-8]
+   46 root       0:00 [ext4-rsv-conver]
+   75 root       0:00 [jbd2/sda3-8]
+   76 root       0:00 [ext4-rsv-conver]
+   85 root       0:00 [galcore workque]
+   86 root       0:00 [galcore deamon ]
+   96 root       0:00 [cfg80211]
+   97 root       0:00 /usr/bin/sshd -f /etc/ssh/sshd_config
+  101 root       0:00 -/bin/sh
+  110 root       0:00 /usr/bin/dbus-daemon --fork --print-pid 4 --print-address
+  111 root       0:01 [RTW_CMD_THREAD]
+  117 root       0:00 udhcpd /etc/udhcpd.conf
+  118 root       0:00 hostapd -B /etc/hostapd/hostapd.conf
+  131 root       0:01 [kworker/0:1-eve]
+  199 root       0:00 udhcpd -f /etc/udhcpd.conf wlan0
+  202 root       0:00 /usr/bin/carplay
+  218 nobody     0:00 mdnsd
+  284 root       0:00 [kworker/0:0-eve]
+  316 root       0:00 udhcpd -f /etc/udhcpd.conf wlan0
+ 3904 root       0:00 udhcpd -f /etc/udhcpd.conf wlan0
+ 8275 root       0:03 MsnCoreApp -qws
+ 8277 root       0:00 EffectWatch
+ 8322 root       0:00 udhcpd -f /etc/udhcpd.conf wlan0
+ 8326 root       0:00 blueware /etc/blueware-bw123.properties
+ 8327 root       0:00 blueware /etc/blueware-bw123.properties
+ 8366 root       0:00 ps
+/usr/bin # strace -f -e trace=ioctl -yy -p
+strace: option requires an argument -- 'p'
+Try 'strace -h' for more information.
+/usr/bin # strace -f -e trace=ioctl -yy -p 8275
+strace: Process 8275 attached with 6 threads
+[pid  8279] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xb3439c50 <unfinished ...>
+[pid  8275] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xbebddc50) = 0
+[pid  8275] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xbebddc30) = 0
+[pid  8278] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xb50e37a0) = 0
+[pid  8278] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xb50e37d0 <unfinished ...>
+[pid  8279] <... ioctl resumed>)        = 0
+[pid  8278] <... ioctl resumed>)        = 0
+[pid  8279] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xb3439c50) = 0
+[pid  8279] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xb3439c18) = 0
+[pid  8279] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xb3439c50 <unfinished ...>
+[pid  8278] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xb50e37f8 <unfinished ...>
+[pid  8279] <... ioctl resumed>)        = 0
+[pid  8278] <... ioctl resumed>)        = 0
+[pid  8279] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xb3439c50 <unfinished ...>
+[pid  8278] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xb50e3828 <unfinished ...>
+[pid  8279] <... ioctl resumed>)        = 0
+[pid  8278] <... ioctl resumed>)        = 0
+[pid  8279] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xb3439c50 <unfinished ...>
+[pid  8278] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xb50e3850 <unfinished ...>
+[pid  8279] <... ioctl resumed>)        = 0
+[pid  8279] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xb3439c18) = 0
+[pid  8278] <... ioctl resumed>)        = 0
+[pid  8279] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xb3439c50) = 0
+[pid  8279] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xb3439c50 <unfinished ...>
+[pid  8278] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xb50e3988) = 0
+[pid  8278] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xb50e39b0) = 0
+[pid  8278] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xb50e3988) = 0
+[pid  8278] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xb50e39b0) = 0
+[pid  8278] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xb50e3988) = 0
+[pid  8278] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xb50e39b0) = 0
+[pid  8278] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xb50e3988) = 0
+[pid  8278] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xb50e39b0) = 0
+[pid  8275] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xbebddb30) = 0
+[pid  8275] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xbebddb10) = 0
+[pid  8278] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xb50e3988) = 0
+[pid  8278] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xb50e39b0) = 0
+[pid  8278] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xb50e3988) = 0
+[pid  8278] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xb50e39b0) = 0
+[pid  8278] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xb50e3988) = 0
+[pid  8278] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xb50e39b0) = 0
+[pid  8275] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xbebddb30) = 0
+[pid  8275] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xbebddb10) = 0
+[pid  8275] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xbebddba0) = 0
+[pid  8275] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xbebddb80) = 0
+[pid  8275] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xbebddba0) = 0
+[pid  8275] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xbebddb80) = 0
+[pid  8275] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xbebddc50) = 0
+[pid  8275] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xbebddc30) = 0
+[pid  8275] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xbebddba0) = 0
+[pid  8275] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xbebddb80) = 0
+[pid  8278] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xb50e3988) = 0
+[pid  8278] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xb50e39b0) = 0
+[pid  8275] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xbebddc50) = 0
+[pid  8275] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xbebddc30) = 0
+[pid  8275] ioctl(9</dev/fb0<char 29:0>>, FBIOPAN_DISPLAY, 0xd7828) = 0
+[pid  8275] ioctl(9</dev/fb0<char 29:0>>, FBIO_WAITFORVSYNC, 0xb50f052c) = 0
+^Cstrace: Process 8323 detached
+strace: Process 8287 detached
+strace: Process 8281 detached
+strace: Process 8279 detached
+strace: Process 8278 detached
+strace: Process 8275 detached
+
+/usr/bin # strace -f -e trace=ioctl -yy -p 8275
+strace: Process 8275 attached with 6 threads
+[pid  8279] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xb3439c50[932.717]  MsnMainWindow::setRealVisible LauncherWindow(0x20ef20, name = "LauncherWindow") false
+[932.736]  MsnMainWindow::setRealVisible SettingWindow(0x3fc060, name = "SettingWindow") true
+[932.751]  Waite Event Ticks 11
+ <unfinished ...>
+[pid  8275] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xbebdc318) = 0
+[pid  8275] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xbebdc310) = 0
+[pid  8275] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xbebdbb60) = 0
+[pid  8275] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xbebdbb40) = 0
+[pid  8275] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xbebdbd20) = 0
+[pid  8275] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xbebdbd00) = 0
+[pid  8275] ioctl(9</dev/fb0<char 29:0>>, FBIOPAN_DISPLAY, 0xd7828) = 0
+[pid  8275] ioctl(9</dev/fb0<char 29:0>>, FBIO_WAITFORVSYNC, 0xb50f052c) = 0
+[pid  8275] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xbebdcb18) = 0
+[pid  8275] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xbebdcaf8) = 0
+[pid  8275] ioctl(9</dev/fb0<char 29:0>>, FBIOPAN_DISPLAY, 0xd7828) = 0
+[pid  8275] ioctl(9</dev/fb0<char 29:0>>, FBIO_WAITFORVSYNC, 0xb50f052c) = 0
+[pid  8275] ioctl(9</dev/fb0<char 29:0>>, FBIOPAN_DISPLAY, 0xd7828) = 0
+[pid  8275] ioctl(9</dev/fb0<char 29:0>>, FBIO_WAITFORVSYNC, 0xb50f052c) = 0
+[pid  8275] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xbebdcc88) = 0
+[pid  8275] ioctl(10</dev/galcore<char 199:0>>, _IOC(_IOC_NONE, 0x75, 0x30, 0), 0xbebdcc68) = 0
+[pid  8275] ioctl(9</dev/fb0<char 29:0>>, FBIOPAN_DISPLAY, 0xd7828) = 0
+[pid  8275] ioctl(9</dev/fb0<char 29:0>>, FBIO_WAITFORVSYNC, 0xb50f052c) = 0
+[pid  8275] ioctl(9</dev/fb0<char 29:0>>, FBIOPAN_DISPLAY, 0xd7828) = 0
+[pid  8275] ioctl(9</dev/fb0<char 29:0>>, FBIO_WAITFORVSYNC, 0xb50f052c) = 0
+[949.954]  MsnMainWindow::setRealVisible SettingWindow(0x3fc060, name = "SettingWindow") false
+[949.954]  MsnMainWindow::setRealVisible LauncherWindow(0x20ef20, name = "LauncherWindow") true
+[950.659]  Waite Event Ticks 703
+[pid  8275] ioctl(9</dev/fb0<char 29:0>>, FBIOPAN_DISPLAY, 0xd7828) = 0
+[pid  8275] ioctl(9</dev/fb0<char 29:0>>, FBIO_WAITFORVSYNC, 0xb50f052c) = 0
+[1036.106]  recv track and radar foce visible: true
+[1050.447]  recv track and radar foce visible: true
+[1061.219]  recv track and radar foce visible: true
+[pid  8275] ioctl(9</dev/fb0<char 29:0>>, FBIOPAN_DISPLAY, 0xd7828) = 0
+[pid  8275] ioctl(9</dev/fb0<char 29:0>>, FBIO_WAITFORVSYNC, 0xb50f052c) = 0
+[pid  8275] ioctl(9</dev/fb0<char 29:0>>, FBIOPAN_DISPLAY, 0xd7828) = 0
+[pid  8275] ioctl(9</dev/fb0<char 29:0>>, FBIO_WAITFORVSYNC, 0xb50f0

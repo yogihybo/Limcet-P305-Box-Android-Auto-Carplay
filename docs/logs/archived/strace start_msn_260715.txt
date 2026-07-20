@@ -1,0 +1,407 @@
+openat(AT_FDCWD, "/lib/vfp/libcrypt.so.1", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No s                                uch file or directory)
+stat64("/lib/vfp", 0xbee5ed80)          = -1 ENOENT (No such file or directory)
+openat(AT_FDCWD, "/lib/libcrypt.so.1", O_RDONLY|O_CLOEXEC) = 3
+read(3, "\177ELF\1\1\1\0\0\0\0\0\0\0\0\0\3\0(\0\1\0\0\0\340\10\0\0004\0\0\0"...,                                 512) = 512
+fstat64(3, {st_mode=S_IFREG|0755, st_size=36980, ...}) = 0
+mmap2(NULL, 8192, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0xb6                                f5f000
+mmap2(NULL, 254316, PROT_READ|PROT_EXEC, MAP_PRIVATE|MAP_DENYWRITE, 3, 0) = 0xb6                                ef2000
+mprotect(0xb6ef9000, 61440, PROT_NONE)  = 0
+mmap2(0xb6f08000, 8192, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED|MAP_DENYWRIT                                E, 3, 0x6000) = 0xb6f08000
+mmap2(0xb6f0a000, 156012, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED|MAP_ANONYM                                OUS, -1, 0) = 0xb6f0a000
+close(3)                                = 0
+openat(AT_FDCWD, "/usr/local/Qt4.7.4/lib/libc.so.6", O_RDONLY|O_CLOEXEC) = -1 EN                                OENT (No such file or directory)
+openat(AT_FDCWD, "/usr//lib/libc.so.6", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such                                 file or directory)
+openat(AT_FDCWD, "/usr/lib/libc.so.6", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such                                 file or directory)
+openat(AT_FDCWD, "tls/v7l/neon/vfp/libc.so.6", O_RDONLY|O_CLOEXEC) = -1 ENOENT (                                No such file or directory)
+openat(AT_FDCWD, "tls/v7l/neon/libc.so.6", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No s                                uch file or directory)
+openat(AT_FDCWD, "tls/v7l/vfp/libc.so.6", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No su                                ch file or directory)
+openat(AT_FDCWD, "tls/v7l/libc.so.6", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such f                                ile or directory)
+openat(AT_FDCWD, "tls/neon/vfp/libc.so.6", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No s                                uch file or directory)
+openat(AT_FDCWD, "tls/neon/libc.so.6", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such                                 file or directory)
+openat(AT_FDCWD, "tls/vfp/libc.so.6", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such f                                ile or directory)
+openat(AT_FDCWD, "tls/libc.so.6", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such file                                 or directory)
+openat(AT_FDCWD, "v7l/neon/vfp/libc.so.6", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No s                                uch file or directory)
+openat(AT_FDCWD, "v7l/neon/libc.so.6", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such                                 file or directory)
+openat(AT_FDCWD, "v7l/vfp/libc.so.6", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such f                                ile or directory)
+openat(AT_FDCWD, "v7l/libc.so.6", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such file                                 or directory)
+openat(AT_FDCWD, "neon/vfp/libc.so.6", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such                                 file or directory)
+openat(AT_FDCWD, "neon/libc.so.6", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such file                                 or directory)
+openat(AT_FDCWD, "vfp/libc.so.6", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such file                                 or directory)
+openat(AT_FDCWD, "libc.so.6", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such file or d                                irectory)
+openat(AT_FDCWD, "/lib/libc.so.6", O_RDONLY|O_CLOEXEC) = 3
+read(3, "\177ELF\1\1\1\0\0\0\0\0\0\0\0\0\3\0(\0\1\0\0\0<s\1\0004\0\0\0"..., 512)                                 = 512
+fstat64(3, {st_mode=S_IFREG|0755, st_size=1576184, ...}) = 0
+mmap2(NULL, 1328492, PROT_READ|PROT_EXEC, MAP_PRIVATE|MAP_DENYWRITE, 3, 0) = 0xb                                6dad000
+mprotect(0xb6edc000, 65536, PROT_NONE)  = 0
+mmap2(0xb6eec000, 12288, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED|MAP_DENYWRI                                TE, 3, 0x12f000) = 0xb6eec000
+mmap2(0xb6eef000, 9580, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED|MAP_ANONYMOU                                S, -1, 0) = 0xb6eef000
+close(3)                                = 0
+set_tls(0xb6f5fee0)                     = 0
+mprotect(0xb6eec000, 8192, PROT_READ)   = 0
+mprotect(0xb6f08000, 4096, PROT_READ)   = 0
+mprotect(0x9c000, 4096, PROT_READ)      = 0
+mprotect(0xb6f61000, 4096, PROT_READ)   = 0
+getuid32()                              = 0
+brk(NULL)                               = 0x9e000
+brk(0xbf000)                            = 0xbf000
+getpid()                                = 137
+rt_sigaction(SIGCHLD, {sa_handler=SIG_DFL, sa_mask=[CHLD], sa_flags=SA_RESTORER|                                SA_RESTART, sa_restorer=0xb6dd9710}, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=0                                }, 8) = 0
+rt_sigaction(SIGHUP, {sa_handler=SIG_DFL, sa_mask=[HUP], sa_flags=SA_RESTORER|SA                                _RESTART, sa_restorer=0xb6dd9710}, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=0},                                 8) = 0
+getppid()                               = 135
+uname({sysname="Linux", nodename="(none)", ...}) = 0
+stat64("/", {st_mode=S_IFDIR|0770, st_size=1024, ...}) = 0
+stat64(".", {st_mode=S_IFDIR|0770, st_size=1024, ...}) = 0
+openat(AT_FDCWD, "/usr/bin/start_msn", O_RDONLY|O_LARGEFILE) = 3
+fcntl64(3, F_DUPFD, 10)                 = 10
+close(3)                                = 0
+fcntl64(10, F_SETFD, FD_CLOEXEC)        = 0
+rt_sigaction(SIGINT, NULL, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=0}, 8) = 0
+rt_sigaction(SIGINT, {sa_handler=0x3d6c0, sa_mask=~[RTMIN RT_1], sa_flags=SA_RES                                TORER, sa_restorer=0xb6dd9710}, NULL, 8) = 0
+rt_sigaction(SIGQUIT, NULL, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=0}, 8) = 0
+rt_sigaction(SIGQUIT, {sa_handler=SIG_IGN, sa_mask=~[RTMIN RT_1], sa_flags=SA_RE                                STORER, sa_restorer=0xb6dd9710}, NULL, 8) = 0
+rt_sigaction(SIGTERM, NULL, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=0}, 8) = 0
+rt_sigaction(SIGTERM, {sa_handler=SIG_DFL, sa_mask=~[RTMIN RT_1], sa_flags=SA_RE                                STORER, sa_restorer=0xb6dd9710}, NULL, 8) = 0
+read(10, "#!/bin/sh\n# Shell script to load"..., 1023) = 1023
+wait4(-1, 0xbee5ec68, WNOHANG, NULL)    = -1 ECHILD (No child processes)
+write(1, "Setting up environment for MsnCo"..., 41Setting up environment for Msn                                CoreApp...
+) = 41
+wait4(-1, 0xbee5ec68, WNOHANG, NULL)    = -1 ECHILD (No child processes)
+wait4(-1, 0xbee5ec68, WNOHANG, NULL)    = -1 ECHILD (No child processes)
+wait4(-1, 0xbee5ec68, WNOHANG, NULL)    = -1 ECHILD (No child processes)
+wait4(-1, 0xbee5ec68, WNOHANG, NULL)    = -1 ECHILD (No child processes)
+wait4(-1, 0xbee5ec68, WNOHANG, NULL)    = -1 ECHILD (No child processes)
+wait4(-1, 0xbee5ec68, WNOHANG, NULL)    = -1 ECHILD (No child processes)
+wait4(-1, 0xbee5ec68, WNOHANG, NULL)    = -1 ECHILD (No child processes)
+wait4(-1, 0xbee5ec68, WNOHANG, NULL)    = -1 ECHILD (No child processes)
+wait4(-1, 0xbee5ec68, WNOHANG, NULL)    = -1 ECHILD (No child processes)
+wait4(-1, 0xbee5ec68, WNOHANG, NULL)    = -1 ECHILD (No child processes)
+wait4(-1, 0xbee5ec68, WNOHANG, NULL)    = -1 ECHILD (No child processes)
+wait4(-1, 0xbee5ec68, WNOHANG, NULL)    = -1 ECHILD (No child processes)
+read(10, "fb:mmWidth220:mmHeight120:0\n\nexp"..., 1023) = 379
+wait4(-1, 0xbee5ec68, WNOHANG, NULL)    = -1 ECHILD (No child processes)
+wait4(-1, 0xbee5ec68, WNOHANG, NULL)    = -1 ECHILD (No child processes)
+wait4(-1, 0xbee5eaa8, WNOHANG, NULL)    = -1 ECHILD (No child processes)
+stat64("/msnprofile/msnexport", {st_mode=S_IFREG|0770, st_size=0, ...}) = 0
+wait4(-1, 0xbee5eaa8, WNOHANG, NULL)    = -1 ECHILD (No child processes)
+openat(AT_FDCWD, "/msnprofile/msnexport", O_RDONLY|O_LARGEFILE) = 3
+fcntl64(3, F_DUPFD, 10)                 = 11
+close(3)                                = 0
+fcntl64(11, F_SETFD, FD_CLOEXEC)        = 0
+read(11, "", 1023)                      = 0
+close(11)                               = 0
+wait4(-1, 0xbee5eaa8, WNOHANG, NULL)    = -1 ECHILD (No child processes)
+wait4(-1, 0xbee5ec68, WNOHANG, NULL)    = -1 ECHILD (No child processes)
+write(1, "Starting MsnCoreApp (Software Fr"..., 46Starting MsnCoreApp (Software                                 Framebuffer)...
+) = 46
+wait4(-1, 0xbee5ec68, WNOHANG, NULL)    = -1 ECHILD (No child processes)
+execve("/bin/MsnCoreApp", ["MsnCoreApp", "-qws"], 0x9e3fc /* 80 vars */) = -1 EN                                OENT (No such file or directory)
+execve("/sbin/MsnCoreApp", ["MsnCoreApp", "-qws"], 0x9e3fc /* 80 vars */) = -1 E                                NOENT (No such file or directory)
+execve("/usr/bin/MsnCoreApp", ["MsnCoreApp", "-qws"], 0x9e3fc /* 80 vars */) = 0
+brk(NULL)                               = 0x75000
+uname({sysname="Linux", nodename="(none)", ...}) = 0
+access("/etc/ld.so.preload", R_OK)      = -1 ENOENT (No such file or directory)
+openat(AT_FDCWD, "/usr/local/Qt4.7.4/lib/tls/v7l/neon/vfp/libpng15.so.15", O_RDO                                NLY|O_CLOEXEC) = -1 ENOENT (No such file or directory)
+stat64("/usr/local/Qt4.7.4/lib/tls/v7l/neon/vfp", 0xbef4dd40) = -1 ENOENT (No su                                ch file or directory)
+openat(AT_FDCWD, "/usr/local/Qt4.7.4/lib/tls/v7l/neon/libpng15.so.15", O_RDONLY|                                O_CLOEXEC) = -1 ENOENT (No such file or directory)
+stat64("/usr/local/Qt4.7.4/lib/tls/v7l/neon", 0xbef4dd40) = -1 ENOENT (No such f                                ile or directory)
+openat(AT_FDCWD, "/usr/local/Qt4.7.4/lib/tls/v7l/vfp/libpng15.so.15", O_RDONLY|O                                _CLOEXEC) = -1 ENOENT (No such file or directory)
+stat64("/usr/local/Qt4.7.4/lib/tls/v7l/vfp", 0xbef4dd40) = -1 ENOENT (No such fi                                le or directory)
+openat(AT_FDCWD, "/usr/local/Qt4.7.4/lib/tls/v7l/libpng15.so.15", O_RDONLY|O_CLO                                EXEC) = -1 ENOENT (No such file or directory)
+stat64("/usr/local/Qt4.7.4/lib/tls/v7l", 0xbef4dd40) = -1 ENOENT (No such file o                                r directory)
+openat(AT_FDCWD, "/usr/local/Qt4.7.4/lib/tls/neon/vfp/libpng15.so.15", O_RDONLY|                                O_CLOEXEC) = -1 ENOENT (No such file or directory)
+stat64("/usr/local/Qt4.7.4/lib/tls/neon/vfp", 0xbef4dd40) = -1 ENOENT (No such f                                ile or directory)
+openat(AT_FDCWD, "/usr/local/Qt4.7.4/lib/tls/neon/libpng15.so.15", O_RDONLY|O_CL                                OEXEC) = -1 ENOENT (No such file or directory)
+stat64("/usr/local/Qt4.7.4/lib/tls/neon", 0xbef4dd40) = -1 ENOENT (No such file                                 or directory)
+openat(AT_FDCWD, "/usr/local/Qt4.7.4/lib/tls/vfp/libpng15.so.15", O_RDONLY|O_CLO                                EXEC) = -1 ENOENT (No such file or directory)
+stat64("/usr/local/Qt4.7.4/lib/tls/vfp", 0xbef4dd40) = -1 ENOENT (No such file o                                r directory)
+openat(AT_FDCWD, "/usr/local/Qt4.7.4/lib/tls/libpng15.so.15", O_RDONLY|O_CLOEXEC                                ) = -1 ENOENT (No such file or directory)
+stat64("/usr/local/Qt4.7.4/lib/tls", 0xbef4dd40) = -1 ENOENT (No such file or di                                rectory)
+openat(AT_FDCWD, "/usr/local/Qt4.7.4/lib/v7l/neon/vfp/libpng15.so.15", O_RDONLY|                                O_CLOEXEC) = -1 ENOENT (No such file or directory)
+stat64("/usr/local/Qt4.7.4/lib/v7l/neon/vfp", 0xbef4dd40) = -1 ENOENT (No such f                                ile or directory)
+openat(AT_FDCWD, "/usr/local/Qt4.7.4/lib/v7l/neon/libpng15.so.15", O_RDONLY|O_CL                                OEXEC) = -1 ENOENT (No such file or directory)
+stat64("/usr/local/Qt4.7.4/lib/v7l/neon", 0xbef4dd40) = -1 ENOENT (No such file                                 or directory)
+openat(AT_FDCWD, "/usr/local/Qt4.7.4/lib/v7l/vfp/libpng15.so.15", O_RDONLY|O_CLO                                EXEC) = -1 ENOENT (No such file or directory)
+stat64("/usr/local/Qt4.7.4/lib/v7l/vfp", 0xbef4dd40) = -1 ENOENT (No such file o                                r directory)
+openat(AT_FDCWD, "/usr/local/Qt4.7.4/lib/v7l/libpng15.so.15", O_RDONLY|O_CLOEXEC                                ) = -1 ENOENT (No such file or directory)
+stat64("/usr/local/Qt4.7.4/lib/v7l", 0xbef4dd40) = -1 ENOENT (No such file or di                                rectory)
+openat(AT_FDCWD, "/usr/local/Qt4.7.4/lib/neon/vfp/libpng15.so.15", O_RDONLY|O_CL                                OEXEC) = -1 ENOENT (No such file or directory)
+stat64("/usr/local/Qt4.7.4/lib/neon/vfp", 0xbef4dd40) = -1 ENOENT (No such file                                 or directory)
+openat(AT_FDCWD, "/usr/local/Qt4.7.4/lib/neon/libpng15.so.15", O_RDONLY|O_CLOEXE                                C) = -1 ENOENT (No such file or directory)
+stat64("/usr/local/Qt4.7.4/lib/neon", 0xbef4dd40) = -1 ENOENT (No such file or d                                irectory)
+openat(AT_FDCWD, "/usr/local/Qt4.7.4/lib/vfp/libpng15.so.15", O_RDONLY|O_CLOEXEC                                ) = -1 ENOENT (No such file or directory)
+stat64("/usr/local/Qt4.7.4/lib/vfp", 0xbef4dd40) = -1 ENOENT (No such file or di                                rectory)
+openat(AT_FDCWD, "/usr/local/Qt4.7.4/lib/libpng15.so.15", O_RDONLY|O_CLOEXEC) =                                 3
+read(3, "\177ELF\1\1\1\0\0\0\0\0\0\0\0\0\3\0(\0\1\0\0\08;\0\0004\0\0\0"..., 512)                                 = 512
+fstat64(3, {st_mode=S_IFREG|0755, st_size=223104, ...}) = 0
+mmap2(NULL, 8192, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0xb6                                f18000
+mmap2(NULL, 287324, PROT_READ|PROT_EXEC, MAP_PRIVATE|MAP_DENYWRITE, 3, 0) = 0xb6                                ea3000
+mprotect(0xb6ed9000, 61440, PROT_NONE)  = 0
+mmap2(0xb6ee8000, 8192, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED|MAP_DENYWRIT                                E, 3, 0x35000) = 0xb6ee8000
+close(3)                                = 0
+openat(AT_FDCWD, "/usr/local/Qt4.7.4/lib/libjpeg.so.9", O_RDONLY|O_CLOEXEC) = 3
+read(3, "\177ELF\1\1\1\0\0\0\0\0\0\0\0\0\3\0(\0\1\0\0\0,/\0\0004\0\0\0"..., 512)                                 = 512
+fstat64(3, {st_mode=S_IFREG|0755, st_size=210908, ...}) = 0
+mmap2(NULL, 275072, PROT_READ|PROT_EXEC, MAP_PRIVATE|MAP_DENYWRITE, 3, 0) = 0xb6                                e5f000
+mprotect(0xb6e92000, 61440, PROT_NONE)  = 0
+mmap2(0xb6ea1000, 8192, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED|MAP_DENYWRIT                                E, 3, 0x32000) = 0xb6ea1000
+close(3)                                = 0
+openat(AT_FDCWD, "/usr/local/Qt4.7.4/lib/libz.so.1", O_RDONLY|O_CLOEXEC) = 3
+read(3, "\177ELF\1\1\1\0\0\0\0\0\0\0\0\0\3\0(\0\1\0\0\0\300\27\0\0004\0\0\0"...,                                 512) = 512
+fstat64(3, {st_mode=S_IFREG|0755, st_size=100008, ...}) = 0
+mmap2(NULL, 164124, PROT_READ|PROT_EXEC, MAP_PRIVATE|MAP_DENYWRITE, 3, 0) = 0xb6                                e36000
+mprotect(0xb6e4e000, 61440, PROT_NONE)  = 0
+mmap2(0xb6e5d000, 8192, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED|MAP_DENYWRIT                                E, 3, 0x17000) = 0xb6e5d000
+close(3)                                = 0
+openat(AT_FDCWD, "/usr/local/Qt4.7.4/lib/libts-0.0.so.0", O_RDONLY|O_CLOEXEC) =                                 3
+read(3, "\177ELF\1\1\1\0\0\0\0\0\0\0\0\0\3\0(\0\1\0\0\0000\n\0\0004\0\0\0"..., 5                                12) = 512
+fstat64(3, {st_mode=S_IFREG|0755, st_size=9608, ...}) = 0
+mmap2(NULL, 74904, PROT_READ|PROT_EXEC, MAP_PRIVATE|MAP_DENYWRITE, 3, 0) = 0xb6e                                23000
+mprotect(0xb6e25000, 61440, PROT_NONE)  = 0
+mmap2(0xb6e34000, 8192, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED|MAP_DENYWRIT                                E, 3, 0x1000) = 0xb6e34000
+close(3)                                = 0
+openat(AT_FDCWD, "/usr/local/Qt4.7.4/lib/libDetach.so", O_RDONLY|O_CLOEXEC) = 3
+read(3, "\177ELF\1\1\1\0\0\0\0\0\0\0\0\0\3\0(\0\1\0\0\0\10\37\0\0004\0\0\0"...,                                 512) = 512
+fstat64(3, {st_mode=S_IFREG|0755, st_size=195212, ...}) = 0
+mmap2(NULL, 230936, PROT_READ|PROT_EXEC, MAP_PRIVATE|MAP_DENYWRITE, 3, 0) = 0xb6                                dea000
+mprotect(0xb6e12000, 61440, PROT_NONE)  = 0
+mmap2(0xb6e21000, 8192, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED|MAP_DENYWRIT                                E, 3, 0x27000) = 0xb6e21000
+close(3)                                = 0
+openat(AT_FDCWD, "/usr/local/Qt4.7.4/lib/libarkcmn.so", O_RDONLY|O_CLOEXEC) = -1                                 ENOENT (No such file or directory)
+openat(AT_FDCWD, "/usr/lib/tls/v7l/neon/vfp/libarkcmn.so", O_RDONLY|O_CLOEXEC) =                                 -1 ENOENT (No such file or directory)
+stat64("/usr/lib/tls/v7l/neon/vfp", 0xbef4dcc8) = -1 ENOENT (No such file or dir                                ectory)
+openat(AT_FDCWD, "/usr/lib/tls/v7l/neon/libarkcmn.so", O_RDONLY|O_CLOEXEC) = -1                                 ENOENT (No such file or directory)
+stat64("/usr/lib/tls/v7l/neon", 0xbef4dcc8) = -1 ENOENT (No such file or directo                                ry)
+openat(AT_FDCWD, "/usr/lib/tls/v7l/vfp/libarkcmn.so", O_RDONLY|O_CLOEXEC) = -1 E                                NOENT (No such file or directory)
+stat64("/usr/lib/tls/v7l/vfp", 0xbef4dcc8) = -1 ENOENT (No such file or director                                y)
+openat(AT_FDCWD, "/usr/lib/tls/v7l/libarkcmn.so", O_RDONLY|O_CLOEXEC) = -1 ENOEN                                T (No such file or directory)
+stat64("/usr/lib/tls/v7l", 0xbef4dcc8)  = -1 ENOENT (No such file or directory)
+openat(AT_FDCWD, "/usr/lib/tls/neon/vfp/libarkcmn.so", O_RDONLY|O_CLOEXEC) = -1                                 ENOENT (No such file or directory)
+stat64("/usr/lib/tls/neon/vfp", 0xbef4dcc8) = -1 ENOENT (No such file or directo                                ry)
+openat(AT_FDCWD, "/usr/lib/tls/neon/libarkcmn.so", O_RDONLY|O_CLOEXEC) = -1 ENOE                                NT (No such file or directory)
+stat64("/usr/lib/tls/neon", 0xbef4dcc8) = -1 ENOENT (No such file or directory)
+openat(AT_FDCWD, "/usr/lib/tls/vfp/libarkcmn.so", O_RDONLY|O_CLOEXEC) = -1 ENOEN                                T (No such file or directory)
+stat64("/usr/lib/tls/vfp", 0xbef4dcc8)  = -1 ENOENT (No such file or directory)
+openat(AT_FDCWD, "/usr/lib/tls/libarkcmn.so", O_RDONLY|O_CLOEXEC) = -1 ENOENT (N                                o such file or directory)
+stat64("/usr/lib/tls", 0xbef4dcc8)      = -1 ENOENT (No such file or directory)
+openat(AT_FDCWD, "/usr/lib/v7l/neon/vfp/libarkcmn.so", O_RDONLY|O_CLOEXEC) = -1                                 ENOENT (No such file or directory)
+stat64("/usr/lib/v7l/neon/vfp", 0xbef4dcc8) = -1 ENOENT (No such file or directo                                ry)
+openat(AT_FDCWD, "/usr/lib/v7l/neon/libarkcmn.so", O_RDONLY|O_CLOEXEC) = -1 ENOE                                NT (No such file or directory)
+stat64("/usr/lib/v7l/neon", 0xbef4dcc8) = -1 ENOENT (No such file or directory)
+openat(AT_FDCWD, "/usr/lib/v7l/vfp/libarkcmn.so", O_RDONLY|O_CLOEXEC) = -1 ENOEN                                T (No such file or directory)
+stat64("/usr/lib/v7l/vfp", 0xbef4dcc8)  = -1 ENOENT (No such file or directory)
+openat(AT_FDCWD, "/usr/lib/v7l/libarkcmn.so", O_RDONLY|O_CLOEXEC) = -1 ENOENT (N                                o such file or directory)
+stat64("/usr/lib/v7l", 0xbef4dcc8)      = -1 ENOENT (No such file or directory)
+openat(AT_FDCWD, "/usr/lib/neon/vfp/libarkcmn.so", O_RDONLY|O_CLOEXEC) = -1 ENOE                                NT (No such file or directory)
+stat64("/usr/lib/neon/vfp", 0xbef4dcc8) = -1 ENOENT (No such file or directory)
+openat(AT_FDCWD, "/usr/lib/neon/libarkcmn.so", O_RDONLY|O_CLOEXEC) = -1 ENOENT (                                No such file or directory)
+stat64("/usr/lib/neon", 0xbef4dcc8)     = -1 ENOENT (No such file or directory)
+openat(AT_FDCWD, "/usr/lib/vfp/libarkcmn.so", O_RDONLY|O_CLOEXEC) = -1 ENOENT (N                                o such file or directory)
+stat64("/usr/lib/vfp", 0xbef4dcc8)      = -1 ENOENT (No such file or directory)
+openat(AT_FDCWD, "/usr/lib/libarkcmn.so", O_RDONLY|O_CLOEXEC) = 3
+read(3, "\177ELF\1\1\1\0\0\0\0\0\0\0\0\0\3\0(\0\1\0\0\0\340#\0\0004\0\0\0"..., 5                                12) = 512
+fstat64(3, {st_mode=S_IFREG|0755, st_size=54968, ...}) = 0
+mmap2(NULL, 119224, PROT_READ|PROT_EXEC, MAP_PRIVATE|MAP_DENYWRITE, 3, 0) = 0xb6                                dcc000
+mprotect(0xb6dd9000, 61440, PROT_NONE)  = 0
+mmap2(0xb6de8000, 8192, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED|MAP_DENYWRIT                                E, 3, 0xc000) = 0xb6de8000
+close(3)                                = 0
+openat(AT_FDCWD, "/usr/local/Qt4.7.4/lib/libGAL.so", O_RDONLY|O_CLOEXEC) = -1 EN                                OENT (No such file or directory)
+openat(AT_FDCWD, "/usr/lib/libGAL.so", O_RDONLY|O_CLOEXEC) = 3
+read(3, "\177ELF\1\1\1\0\0\0\0\0\0\0\0\0\3\0(\0\1\0\0\0\240\235\0\0004\0\0\0"...                                , 512) = 512
+fstat64(3, {st_mode=S_IFREG|0755, st_size=359344, ...}) = 0
+mmap2(NULL, 555880, PROT_READ|PROT_EXEC, MAP_PRIVATE|MAP_DENYWRITE, 3, 0) = 0xb6                                d44000
+mprotect(0xb6d90000, 65536, PROT_NONE)  = 0
+mmap2(0xb6da0000, 49152, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED|MAP_DENYWRI                                TE, 3, 0x4c000) = 0xb6da0000
+mmap2(0xb6dac000, 129896, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED|MAP_ANONYM                                OUS, -1, 0) = 0xb6dac000
+close(3)                                = 0
+openat(AT_FDCWD, "/usr/local/Qt4.7.4/lib/libMsnCommons.so.1", O_RDONLY|O_CLOEXEC                                ) = -1 ENOENT (No such file or directory)
+openat(AT_FDCWD, "/usr/lib/libMsnCommons.so.1", O_RDONLY|O_CLOEXEC) = 3
+read(3, "\177ELF\1\1\1\0\0\0\0\0\0\0\0\0\3\0(\0\1\0\0\0\30\377\2\0004\0\0\0"...,                                 512) = 512
+fstat64(3, {st_mode=S_IFREG|0755, st_size=1312736, ...}) = 0
+mmap2(NULL, 1378640, PROT_READ|PROT_EXEC, MAP_PRIVATE|MAP_DENYWRITE, 3, 0) = 0xb                                6bf3000
+mprotect(0xb6d2e000, 65536, PROT_NONE)  = 0
+mmap2(0xb6d3e000, 24576, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED|MAP_DENYWRI                                TE, 3, 0x13b000) = 0xb6d3e000
+close(3)                                = 0
+openat(AT_FDCWD, "/usr/local/Qt4.7.4/lib/libLinkLibs.so.1", O_RDONLY|O_CLOEXEC)                                 = -1 ENOENT (No such file or directory)
+openat(AT_FDCWD, "/usr/lib/libLinkLibs.so.1", O_RDONLY|O_CLOEXEC) = 3
+read(3, "\177ELF\1\1\1\0\0\0\0\0\0\0\0\0\3\0(\0\1\0\0\0\374V\0\0004\0\0\0"..., 5                                12) = 512
+fstat64(3, {st_mode=S_IFREG|0755, st_size=124960, ...}) = 0
+mmap2(NULL, 189084, PROT_READ|PROT_EXEC, MAP_PRIVATE|MAP_DENYWRITE, 3, 0) = 0xb6                                bc4000
+mprotect(0xb6be2000, 61440, PROT_NONE)  = 0
+mmap2(0xb6bf1000, 8192, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED|MAP_DENYWRIT                                E, 3, 0x1d000) = 0xb6bf1000
+close(3)                                = 0
+openat(AT_FDCWD, "/usr/local/Qt4.7.4/lib/libasound.so.2", O_RDONLY|O_CLOEXEC) =                                 -1 ENOENT (No such file or directory)
+openat(AT_FDCWD, "/usr/lib/libasound.so.2", O_RDONLY|O_CLOEXEC) = 3
+read(3, "\177ELF\1\1\1\0\0\0\0\0\0\0\0\0\3\0(\0\1\0\0\0\0\344\1\0004\0\0\0"...,                                 512) = 512
+fstat64(3, {st_mode=S_IFREG|0755, st_size=848520, ...}) = 0
+mmap2(NULL, 912816, PROT_READ|PROT_EXEC, MAP_PRIVATE|MAP_DENYWRITE, 3, 0) = 0xb6                                ae5000
+mprotect(0xb6baf000, 65536, PROT_NONE)  = 0
+mmap2(0xb6bbf000, 20480, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED|MAP_DENYWRI                                TE, 3, 0xca000) = 0xb6bbf000
+close(3)                                = 0
+openat(AT_FDCWD, "/usr/local/Qt4.7.4/lib/libdl.so.2", O_RDONLY|O_CLOEXEC) = -1 E                                NOENT (No such file or directory)
+openat(AT_FDCWD, "/usr/lib/libdl.so.2", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such                                 file or directory)
+openat(AT_FDCWD, "/lib/tls/v7l/neon/vfp/libdl.so.2", O_RDONLY|O_CLOEXEC) = -1 EN                                OENT (No such file or directory)
+stat64("/lib/tls/v7l/neon/vfp", 0xbef4dc50) = -1 ENOENT (No such file or directo                                ry)
+openat(AT_FDCWD, "/lib/tls/v7l/neon/libdl.so.2", O_RDONLY|O_CLOEXEC) = -1 ENOENT                                 (No such file or directory)
+stat64("/lib/tls/v7l/neon", 0xbef4dc50) = -1 ENOENT (No such file or directory)
+openat(AT_FDCWD, "/lib/tls/v7l/vfp/libdl.so.2", O_RDONLY|O_CLOEXEC) = -1 ENOENT                                 (No such file or directory)
+stat64("/lib/tls/v7l/vfp", 0xbef4dc50)  = -1 ENOENT (No such file or directory)
+openat(AT_FDCWD, "/lib/tls/v7l/libdl.so.2", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No                                 such file or directory)
+stat64("/lib/tls/v7l", 0xbef4dc50)      = -1 ENOENT (No such file or directory)
+openat(AT_FDCWD, "/lib/tls/neon/vfp/libdl.so.2", O_RDONLY|O_CLOEXEC) = -1 ENOENT                                 (No such file or directory)
+stat64("/lib/tls/neon/vfp", 0xbef4dc50) = -1 ENOENT (No such file or directory)
+openat(AT_FDCWD, "/lib/tls/neon/libdl.so.2", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No                                 such file or directory)
+stat64("/lib/tls/neon", 0xbef4dc50)     = -1 ENOENT (No such file or directory)
+openat(AT_FDCWD, "/lib/tls/vfp/libdl.so.2", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No                                 such file or directory)
+stat64("/lib/tls/vfp", 0xbef4dc50)      = -1 ENOENT (No such file or directory)
+openat(AT_FDCWD, "/lib/tls/libdl.so.2", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such                                 file or directory)
+stat64("/lib/tls", 0xbef4dc50)          = -1 ENOENT (No such file or directory)
+openat(AT_FDCWD, "/lib/v7l/neon/vfp/libdl.so.2", O_RDONLY|O_CLOEXEC) = -1 ENOENT                                 (No such file or directory)
+stat64("/lib/v7l/neon/vfp", 0xbef4dc50) = -1 ENOENT (No such file or directory)
+openat(AT_FDCWD, "/lib/v7l/neon/libdl.so.2", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No                                 such file or directory)
+stat64("/lib/v7l/neon", 0xbef4dc50)     = -1 ENOENT (No such file or directory)
+openat(AT_FDCWD, "/lib/v7l/vfp/libdl.so.2", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No                                 such file or directory)
+stat64("/lib/v7l/vfp", 0xbef4dc50)      = -1 ENOENT (No such file or directory)
+openat(AT_FDCWD, "/lib/v7l/libdl.so.2", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such                                 file or directory)
+stat64("/lib/v7l", 0xbef4dc50)          = -1 ENOENT (No such file or directory)
+openat(AT_FDCWD, "/lib/neon/vfp/libdl.so.2", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No                                 such file or directory)
+stat64("/lib/neon/vfp", 0xbef4dc50)     = -1 ENOENT (No such file or directory)
+openat(AT_FDCWD, "/lib/neon/libdl.so.2", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No suc                                h file or directory)
+stat64("/lib/neon", 0xbef4dc50)         = -1 ENOENT (No such file or directory)
+openat(AT_FDCWD, "/lib/vfp/libdl.so.2", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such                                 file or directory)
+stat64("/lib/vfp", 0xbef4dc50)          = -1 ENOENT (No such file or directory)
+openat(AT_FDCWD, "/lib/libdl.so.2", O_RDONLY|O_CLOEXEC) = 3
+read(3, "\177ELF\1\1\1\0\0\0\0\0\0\0\0\0\3\0(\0\1\0\0\0\230\t\0\0004\0\0\0"...,                                 512) = 512
+fstat64(3, {st_mode=S_IFREG|0755, st_size=14880, ...}) = 0
+mmap2(NULL, 73920, PROT_READ|PROT_EXEC, MAP_PRIVATE|MAP_DENYWRITE, 3, 0) = 0xb6a                                d2000
+mprotect(0xb6ad4000, 61440, PROT_NONE)  = 0
+mmap2(0xb6ae3000, 8192, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED|MAP_DENYWRIT                                E, 3, 0x1000) = 0xb6ae3000
+close(3)                                = 0
+openat(AT_FDCWD, "/usr/local/Qt4.7.4/lib/libQtDBus.so.4", O_RDONLY|O_CLOEXEC) =                                 3
+read(3, "\177ELF\1\1\1\3\0\0\0\0\0\0\0\0\3\0(\0\1\0\0\0\370\324\0\0004\0\0\0"...                                , 512) = 512
+fstat64(3, {st_mode=S_IFREG|0755, st_size=457428, ...}) = 0
+mmap2(NULL, 8192, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0xb6                                f16000
+mmap2(NULL, 522244, PROT_READ|PROT_EXEC, MAP_PRIVATE|MAP_DENYWRITE, 3, 0) = 0xb6                                a52000
+mprotect(0xb6ac1000, 61440, PROT_NONE)  = 0
+mmap2(0xb6ad0000, 8192, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED|MAP_DENYWRIT                                E, 3, 0x6e000) = 0xb6ad0000
+close(3)                                = 0
+openat(AT_FDCWD, "/usr/local/Qt4.7.4/lib/libQtXml.so.4", O_RDONLY|O_CLOEXEC) = 3
+read(3, "\177ELF\1\1\1\0\0\0\0\0\0\0\0\0\3\0(\0\1\0\0\0t\270\0\0004\0\0\0"..., 5                                12) = 512
+fstat64(3, {st_mode=S_IFREG|0755, st_size=235412, ...}) = 0
+mmap2(NULL, 299540, PROT_READ|PROT_EXEC, MAP_PRIVATE|MAP_DENYWRITE, 3, 0) = 0xb6                                a08000
+mprotect(0xb6a40000, 65536, PROT_NONE)  = 0
+mmap2(0xb6a50000, 8192, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED|MAP_DENYWRIT                                E, 3, 0x38000) = 0xb6a50000
+close(3)                                = 0
+openat(AT_FDCWD, "/usr/local/Qt4.7.4/lib/libQtGui.so.4", O_RDONLY|O_CLOEXEC) = 3
+read(3, "\177ELF\1\1\1\3\0\0\0\0\0\0\0\0\3\0(\0\1\0\0\0xW\21\0004\0\0\0"..., 512                                ) = 512
+fstat64(3, {st_mode=S_IFREG|0755, st_size=9182576, ...}) = 0
+mmap2(NULL, 9252944, PROT_READ|PROT_EXEC, MAP_PRIVATE|MAP_DENYWRITE, 3, 0) = 0xb                                6134000
+mprotect(0xb69d3000, 61440, PROT_NONE)  = 0
+mmap2(0xb69e2000, 147456, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED|MAP_DENYWR                                ITE, 3, 0x89e000) = 0xb69e2000
+mmap2(0xb6a06000, 4176, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED|MAP_ANONYMOU                                S, -1, 0) = 0xb6a06000
+close(3)                                = 0
+openat(AT_FDCWD, "/usr/local/Qt4.7.4/lib/libQtNetwork.so.4", O_RDONLY|O_CLOEXEC)                                 = 3
+read(3, "\177ELF\1\1\1\3\0\0\0\0\0\0\0\0\3\0(\0\1\0\0\0X\320\1\0004\0\0\0"..., 5                                12) = 512
+fstat64(3, {st_mode=S_IFREG|0755, st_size=982836, ...}) = 0
+mmap2(NULL, 1047204, PROT_READ|PROT_EXEC, MAP_PRIVATE|MAP_DENYWRITE, 3, 0) = 0xb                                6034000
+mprotect(0xb6120000, 65536, PROT_NONE)  = 0
+mmap2(0xb6130000, 16384, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED|MAP_DENYWRI                                TE, 3, 0xec000) = 0xb6130000
+close(3)                                = 0
+openat(AT_FDCWD, "/usr/local/Qt4.7.4/lib/libQtCore.so.4", O_RDONLY|O_CLOEXEC) =                                 3
+read(3, "\177ELF\1\1\1\0\0\0\0\0\0\0\0\0\3\0(\0\1\0\0\0\220D\5\0004\0\0\0"..., 5                                12) = 512
+fstat64(3, {st_mode=S_IFREG|0755, st_size=2809208, ...}) = 0
+mmap2(NULL, 2874616, PROT_READ|PROT_EXEC, MAP_PRIVATE|MAP_DENYWRITE, 3, 0) = 0xb                                5d76000
+mprotect(0xb601c000, 65536, PROT_NONE)  = 0
+mmap2(0xb602c000, 32768, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED|MAP_DENYWRI                                TE, 3, 0x2a6000) = 0xb602c000
+close(3)                                = 0
+openat(AT_FDCWD, "/usr/local/Qt4.7.4/lib/libpthread.so.0", O_RDONLY|O_CLOEXEC) =                                 -1 ENOENT (No such file or directory)
+openat(AT_FDCWD, "/usr/lib/libpthread.so.0", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No                                 such file or directory)
+openat(AT_FDCWD, "/lib/libpthread.so.0", O_RDONLY|O_CLOEXEC) = 3
+read(3, "\177ELF\1\1\1\3\0\0\0\0\0\0\0\0\3\0(\0\1\0\0\0\330I\0\0004\0\0\0"..., 5                                12) = 512
+fstat64(3, {st_mode=S_IFREG|0755, st_size=138864, ...}) = 0
+mmap2(NULL, 168524, PROT_READ|PROT_EXEC, MAP_PRIVATE|MAP_DENYWRITE, 3, 0) = 0xb5                                d4c000
+mprotect(0xb5d63000, 61440, PROT_NONE)  = 0
+mmap2(0xb5d72000, 8192, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED|MAP_DENYWRIT                                E, 3, 0x16000) = 0xb5d72000
+mmap2(0xb5d74000, 4684, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED|MAP_ANONYMOU                                S, -1, 0) = 0xb5d74000
+close(3)                                = 0
+openat(AT_FDCWD, "/usr/local/Qt4.7.4/lib/libstdc++.so.6", O_RDONLY|O_CLOEXEC) =                                 -1 ENOENT (No such file or directory)
+openat(AT_FDCWD, "/usr/lib/libstdc++.so.6", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No                                 such file or directory)
+openat(AT_FDCWD, "/lib/libstdc++.so.6", O_RDONLY|O_CLOEXEC) = 3
+read(3, "\177ELF\1\1\1\3\0\0\0\0\0\0\0\0\3\0(\0\1\0\0\0`y\4\0004\0\0\0"..., 512)                                 = 512
+fstat64(3, {st_mode=S_IFREG|0755, st_size=1044248, ...}) = 0
+mmap2(NULL, 750440, PROT_READ|PROT_EXEC, MAP_PRIVATE|MAP_DENYWRITE, 3, 0) = 0xb5                                c94000
+mprotect(0xb5d30000, 61440, PROT_NONE)  = 0
+mmap2(0xb5d3f000, 24576, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED|MAP_DENYWRI                                TE, 3, 0x9b000) = 0xb5d3f000
+mmap2(0xb5d45000, 25448, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED|MAP_ANONYMO                                US, -1, 0) = 0xb5d45000
+close(3)                                = 0
+openat(AT_FDCWD, "/usr/local/Qt4.7.4/lib/libm.so.6", O_RDONLY|O_CLOEXEC) = -1 EN                                OENT (No such file or directory)
+openat(AT_FDCWD, "/usr/lib/libm.so.6", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such                                 file or directory)
+openat(AT_FDCWD, "/lib/libm.so.6", O_RDONLY|O_CLOEXEC) = 3
+read(3, "\177ELF\1\1\1\0\0\0\0\0\0\0\0\0\3\0(\0\1\0\0\0\370l\0\0004\0\0\0"..., 5                                12) = 512
+fstat64(3, {st_mode=S_IFREG|0755, st_size=549668, ...}) = 0
+mmap2(NULL, 540788, PROT_READ|PROT_EXEC, MAP_PRIVATE|MAP_DENYWRITE, 3, 0) = 0xb5                                c0f000
+mprotect(0xb5c83000, 61440, PROT_NONE)  = 0
+mmap2(0xb5c92000, 8192, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED|MAP_DENYWRIT                                E, 3, 0x73000) = 0xb5c92000
+close(3)                                = 0
+openat(AT_FDCWD, "/usr/local/Qt4.7.4/lib/libgcc_s.so.1", O_RDONLY|O_CLOEXEC) = -                                1 ENOENT (No such file or directory)
+openat(AT_FDCWD, "/usr/lib/libgcc_s.so.1", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No s                                uch file or directory)
+openat(AT_FDCWD, "/lib/libgcc_s.so.1", O_RDONLY|O_CLOEXEC) = 3
+read(3, "\177ELF\1\1\1\0\0\0\0\0\0\0\0\0\3\0(\0\1\0\0\0\240\315\0\0004\0\0\0"...                                , 512) = 512
+fstat64(3, {st_mode=S_IFREG|0755, st_size=1356600, ...}) = 0
+mmap2(NULL, 180536, PROT_READ|PROT_EXEC, MAP_PRIVATE|MAP_DENYWRITE, 3, 0) = 0xb5                                be2000
+mprotect(0xb5bfe000, 61440, PROT_NONE)  = 0
+mmap2(0xb5c0d000, 8192, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED|MAP_DENYWRIT                                E, 3, 0x1b000) = 0xb5c0d000
+close(3)                                = 0
+openat(AT_FDCWD, "/usr/local/Qt4.7.4/lib/libc.so.6", O_RDONLY|O_CLOEXEC) = -1 EN                                OENT (No such file or directory)
+openat(AT_FDCWD, "/usr/lib/libc.so.6", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such                                 file or directory)
+openat(AT_FDCWD, "/lib/libc.so.6", O_RDONLY|O_CLOEXEC) = 3
+read(3, "\177ELF\1\1\1\0\0\0\0\0\0\0\0\0\3\0(\0\1\0\0\0<s\1\0004\0\0\0"..., 512)                                 = 512
+fstat64(3, {st_mode=S_IFREG|0755, st_size=1576184, ...}) = 0
+mmap2(NULL, 1328492, PROT_READ|PROT_EXEC, MAP_PRIVATE|MAP_DENYWRITE, 3, 0) = 0xb                                5a9d000
+mprotect(0xb5bcc000, 65536, PROT_NONE)  = 0
+mmap2(0xb5bdc000, 12288, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED|MAP_DENYWRI                                TE, 3, 0x12f000) = 0xb5bdc000
+mmap2(0xb5bdf000, 9580, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED|MAP_ANONYMOU                                S, -1, 0) = 0xb5bdf000
+close(3)                                = 0
+openat(AT_FDCWD, "/usr/local/Qt4.7.4/lib/librt.so.1", O_RDONLY|O_CLOEXEC) = -1 E                                NOENT (No such file or directory)
+openat(AT_FDCWD, "/usr/lib/librt.so.1", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such                                 file or directory)
+openat(AT_FDCWD, "/lib/librt.so.1", O_RDONLY|O_CLOEXEC) = 3
+read(3, "\177ELF\1\1\1\3\0\0\0\0\0\0\0\0\3\0(\0\1\0\0\0\220\27\0\0004\0\0\0"...,                                 512) = 512
+fstat64(3, {st_mode=S_IFREG|0755, st_size=38948, ...}) = 0
+mmap2(NULL, 90648, PROT_READ|PROT_EXEC, MAP_PRIVATE|MAP_DENYWRITE, 3, 0) = 0xb5a                                86000
+mprotect(0xb5a8c000, 61440, PROT_NONE)  = 0
+mmap2(0xb5a9b000, 8192, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED|MAP_DENYWRIT                                E, 3, 0x5000) = 0xb5a9b000
+close(3)                                = 0
+openat(AT_FDCWD, "/usr/local/Qt4.7.4/lib/libqextserialport.so.1", O_RDONLY|O_CLO                                EXEC) = -1 ENOENT (No such file or directory)
+openat(AT_FDCWD, "/usr/lib/libqextserialport.so.1", O_RDONLY|O_CLOEXEC) = 3
+read(3, "\177ELF\1\1\1\0\0\0\0\0\0\0\0\0\3\0(\0\1\0\0\0\24L\0\0004\0\0\0"..., 51                                2) = 512
+fstat64(3, {st_mode=S_IFREG|0755, st_size=51216, ...}) = 0
+mmap2(NULL, 8192, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0xb6                                f14000
+mmap2(NULL, 115336, PROT_READ|PROT_EXEC, MAP_PRIVATE|MAP_DENYWRITE, 3, 0) = 0xb5                                a69000
+mprotect(0xb5a75000, 61440, PROT_NONE)  = 0
+mmap2(0xb5a84000, 8192, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED|MAP_DENYWRIT                                E, 3, 0xb000) = 0xb5a84000
+close(3)                                = 0
+mmap2(NULL, 8192, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0xb6                                f12000
+set_tls(0xb6f124d0)                     = 0
+mprotect(0xb5bdc000, 8192, PROT_READ)   = 0
+mprotect(0xb6e5d000, 4096, PROT_READ)   = 0
+mprotect(0xb5c92000, 4096, PROT_READ)   = gd = 09c0c9a1
+[32m0
+ *pgd=02d06831, *pte=00000000, *ppte=00000000
+[33mmprotect(0xb6ee8000, 4096, PROT_READ)   = 0
+mprotect(0xb6ea1000, 4096, PROT_READ)   = 0
+mprotect(0xb6ae3000, 4096, PROT_READ)   = 0
+mprotect(0xb6e34000, 4096, PROT_READ)   = 0
+mprotect(0xb5d72000, 4096, PROT_READ)   = 0
+mprotect(0xb5c0d000, 4096, PROT_READ)   = 0
+mprotect(0xb5d3f000, 16384, PROT_READ)  = 0
+mprotect(0xb5a9b000, 4096, PROT_READ)   = 0
+mprotect(0xb602c000, 28672, PROT_READ)  = 0
+mprotect(0xb5a84000, 4096, PROT_READ)   = 0
+mprotect(0xb6130000, 12288, PROT_READ)  = 0
+mprotect(0xb69e2000, 131072, PROT_READ) = 0
+mprotect(0xb6a50000, 4096, PROT_READ)   = 0
+mprotect(0xb6ad0000, 4096, PROT_READ)   = 0
+mprotect(0xb6bbf000, 16384, PROT_READ)  = 0
+mprotect(0xb6bf1000, 4096, PROT_READ)   = 0
+mprotect(0xb6d3e000, 12288, PROT_READ)  = 0
+--- SIGSEGV {si_signo=SIGSEGV, si_code=SEGV_MAPERR, si_addr=0x4} ---
++++ killed by SIGSEGV +++

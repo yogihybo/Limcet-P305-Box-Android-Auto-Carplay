@@ -122,7 +122,14 @@ chmod 755 /var/empty
 /usr/bin/sshd -f /etc/ssh/sshd_config &
 
 # Load GPU driver
-modprobe galcore contiguousSize=0x800000 physSize=0x80000000 powerManagement=0
+# registerMemBase/irqLine are required: the gpu@e0f00000 DT node is
+# status="disabled" and gpu_driver has no of_match_table, so galcore only
+# ever binds through the legacy drv_init() module-param path -- without
+# these, it silently defaults to registerMemBase=0x80000000 (wrong physical
+# address for this SoC's GPU registers, real one is 0xe0f00000) and
+# irqLine=-1. Matches stock's own documented invocation (etc/all.sh,
+# etc/rc.d/rcS, both commented out there but present verbatim).
+modprobe galcore registerMemBase=0xE0F00000 irqLine=32 contiguousSize=0x400000 physSize=0x80000000 powerManagement=0
 
 # Load USB WiFi driver
 modprobe rtl8811cu

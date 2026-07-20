@@ -1181,7 +1181,35 @@ re-staged to `compiled_modules/lib/modules/4.19.192/galcore.ko`.
       header offset 4 remain unresolved — currently reserved/padding
       only. If some *other* command turns out to need one of these
       fields (matching the exact failure pattern `ATTACH` just showed),
-      this is where to look first.
+      this is where to look first. **Partial lead found:** a genuinely
+      5.0.11.28018-versioned `libGAL.so` turned up in
+      `~/Downloads/ark1668ed-bsp` (see below) — its `gcoOS_DeviceControl`
+      writes `param_3[1] = 2` (offset 4) as a fallback, or a
+      TLS-derived value otherwise, right before every ioctl. Likely
+      `hardwareType` with a default value, matching the field this
+      session originally removed from the bloated 6.2.4 struct — but
+      since neither stock's real kernel dispatch nor ours ever reads
+      it, this doesn't change the fix's correctness, just its identity.
+
+**Independent struct-size confirmation (same day, reviewing
+`~/Downloads/ark1668ed-bsp`):** that BSP is ArkMicro's own vendor
+source for the related ARK1668E chip — mostly a dead end for this
+device on its own (its `galcore.ko` validates against a different,
+even-newer 424-byte struct, version `6.4.5.323040`). But it bundles a
+leftover demo package (`buildroot-external/package/demo-display/lib/
+libGAL.so`, identical copies in `h264-rotate-render` and
+`demo-v4l2-1668`) that's genuinely version-stamped `5.0.11:28018` —
+the *exact* version confirmed running on the real device, found
+completely independently of the kernel-side decompile the whole
+struct-RE effort was based on. Its disassembly uses the literal
+constant `264` (`0x108`) repeatedly for `gcsHAL_INTERFACE` (`sub sp,
+sp, #264` allocating a local struct copy, `mov r3, #264` setting the
+ioctl buffer-size argument) — confirming the struct **size** from a
+third independent angle (stock's kernel decompile, compile-time
+probes, now this matching-version userspace binary too). Strong
+confidence the size is exactly right; the `ATTACH` crash and any
+remaining bugs are field-offset/content issues within a correctly-sized
+struct, not the size itself.
 - [x] Test on hardware — DirectFB crash confirmed fixed (matched-pair
       swap, above).
 - [x] Fixed and hardware-confirmed: the "unknown ioctl" errors

@@ -1159,14 +1159,77 @@ member absorbed the change automatically). Rebuilt `galcore.ko`,
 re-staged to `compiled_modules/lib/modules/4.19.192/galcore.ko`.
 **Not yet hardware-tested.**
 
+**FOUND AND FIXED VIA PURE STATIC ANALYSIS (same day, "try and
+identify the crash in the code rather than on the device"): the
+`ATTACH` crash was a command-NUMBER bug, not a struct-content bug.**
+User asked to avoid another slow device cycle and find it in the
+source instead.
+
+Re-verified `gcvHAL_ATTACH`'s actual enum position by counting
+carefully (rather than trusting the earlier "the whole enum matches"
+claim, which turned out to only have been checked for the *lower*
+command numbers): it landed at position 42 (`0x2a`) in our source, but
+stock's real decompiled dispatch calls `gckCOMMAND_Attach` from
+**`case 0x28`** (40) — an unambiguous, high-confidence match (direct
+function-name call, not a guessed struct offset). Cross-checked five
+more high-confidence anchor points the same way (`GetBaseAddress`,
+`QueryKernelSettings`, `Reset`, `Database`, `Detach` — all confirmed
+via direct, unambiguous function calls in the decompile) and found a
+**consistent +2 offset** across all of them, starting somewhere after
+`STALL` (confirmed still matching at 20).
+
+Root cause: `RegisterProfileData_part1`/`part2`'s *union fields* were
+removed earlier this session (fixing the struct size, part of the
+`VIVANTE_PROFILER` bloat cleanup) — but their **enum entries**
+(`gcvHAL_READ_ALL_PROFILE_REGISTERS_PART1`/`PART2`) were left declared.
+C auto-numbers enums sequentially, so every command declared *after*
+these two leftover entries kept getting a value 2 higher than stock's
+real, older enum has for the same command — including `ATTACH`. This
+means the earlier `ATTACH`-field-offset fix, while itself correct,
+couldn't have actually fixed the crash on its own: the real userspace
+`libGAL.so` sends ioctl command `0x28` meaning "Attach a context", and
+our kernel (with the shifted enum) was routing that value to whatever
+sat at position 40 instead — a completely different command handler,
+corrupting everything downstream regardless of how correct `ATTACH`'s
+own field layout was.
+
+**Fix:** removed both enum entries entirely (not flag-gated — stock's
+real userspace can never send these command values, so there's no
+compatibility need to keep them at all), removed the corresponding
+`_DispatchText[]` debug-string-table entries (a second array that must
+stay positionally in sync with the enum, same failure mode if left
+inconsistent), and removed the now-uncompilable `switch` case that
+referenced the deleted enum names. Re-verified via the same
+compile-time-probe technique used throughout this whole struct-RE
+effort: `gcvHAL_ATTACH`=40 (`0x28`), `gcvHAL_DETACH`=41 (`0x29`),
+`gcvHAL_GET_BASE_ADDRESS`=29 (`0x1d`) — all three now match stock's
+confirmed real positions exactly, struct still exactly 264 bytes, no
+other side effects. Rebuilt `galcore.ko` clean, re-staged to
+`compiled_modules/lib/modules/4.19.192/galcore.ko`. **Not yet
+hardware-tested.**
+
+This also means the earlier claim "every command number matches stock
+exactly" (used to justify not needing further command-numbering
+verification) was **incomplete** — it was only checked for the lower,
+more fundamental commands (0 through ~20). Worth keeping in mind for
+any command above that range that hasn't been explicitly
+cross-checked against a real decompiled call site yet.
+
 **Next steps:**
 - [ ] **Rebuild and flash, then full retest** — `--new-kernel` needed
       (kernel module changed again). Test, in order: (1) does
       `start_msn_directfb` start without segfaulting now? (2) does
-      `linuxfb`'s color problem from this round resolve, or is it a
-      separate, still-open issue? (3) does a full submenu switch (the
-      original black-screen bug) render correctly? (4) does the
+      `linuxfb`'s color problem from the previous round resolve, or is
+      it a separate, still-open issue? (3) does a full submenu switch
+      (the original black-screen bug) render correctly? (4) does the
       knob-triggered red/static flash stop?
+- [ ] If it still crashes, the next place to look (before another
+      device cycle) is the same technique that just worked: pick
+      another command with a high-confidence, unambiguous function-call
+      match in the decompile, check its enum position against stock's
+      real case-label value, and look for any *other* leftover
+      enum/array entries between the last-confirmed-matching command
+      and the one that's wrong.
 - [ ] If colors are still wrong on `linuxfb` even after the `ATTACH`
       fix, that's likely a genuinely separate bug from the struct-size
       work (or a different still-undiscovered field mismatch,

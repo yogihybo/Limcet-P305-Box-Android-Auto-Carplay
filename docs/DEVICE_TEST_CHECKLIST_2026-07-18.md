@@ -1026,7 +1026,134 @@ specifically chosen to avoid (see the GPU driver saga earlier in this
 section). **This needs a strategic decision before continuing** — see
 next steps.
 
+**RESOLVED (2026-07-20, same day, "push forward with reverse
+engineering"): did the struct reverse-engineering properly instead of
+reverting.** Rather than choose between the matched-pair swap
+(crash-free but breaks `EffectWatch`) or reverting to the old pair
+(fixes `EffectWatch` but reintroduces MsnCoreApp's own DirectFB
+crash), patched our own from-source-built `galcore.ko`
+(`gpu-vivante-6.2.4/kernel-module-imx-gpu-viv-src`, untracked in the
+`linux-arkmicro` git repo — treated as external/scratch source all
+session, so these changes live on disk only, not in git; see file-level
+comments in `gc_hal_driver.h`/`gc_hal_kernel.c` for the full rationale
+inline) so that `gcsHAL_INTERFACE` — the raw ioctl struct shared
+between `galcore.ko` and `libGAL.so` — is **byte-for-byte identical**
+to stock's real, original 5.0.11.28018 struct. This lets us use
+stock's actual original `libGAL.so` (not a mismatched-but-crash-free
+newer one), resolving the whole conflict at its root instead of
+trading one bug for another.
+
+**Method:** decompiled stock's real, unstripped `lib/modules/3.4.0/
+galcore.ko` (Ghidra headless, `/tmp/gh_galcore` — not committed,
+scratch analysis). `drv_ioctl`/`gckKERNEL_Dispatch` confirmed the
+264-byte struct-size check independently (`0x108`), and — critically —
+every command NUMBER in stock's dispatch switch matches our current
+`6.2.4.p1.8` source's `gceHAL_COMMAND_CODES` enum exactly (`QUERY_VIDEO_MEMORY`=0,
+`MAP_USER_MEMORY`=11, `LOCK_VIDEO_MEMORY`=13, `COMMIT`=19, etc.) — the
+kernel command dispatch logic hasn't changed across driver generations
+at all. The entire size difference (400→264 bytes) came from **struct
+field bloat added for multi-GPU-core support** in later Vivante
+releases, which this single-core SoC never needed:
+
+- **32-byte header bloat**: `hardwareType`/`coreIndex`/`handle`/`pid`/
+  `engine`/`ignoreTLS` fields, all added for multi-core dispatch,
+  don't exist in stock's real struct (confirmed: stock reads `status`
+  at byte offset 8, meaning its header really is just
+  `command`+4-byte-unknown+`status`). Removed all 6 fields. Every
+  call site (`gckDEVICE_Dispatch`, the `COMMIT`/`EVENT_COMMIT` engine
+  checks) was fixed by hardcoding `type=0`/`coreIndex=0`/no-BLT —
+  provably safe because `gckDEVICE_AddCore`'s own single-core startup
+  path aliases *every* `(hardwareType, coreIndex)` combination to the
+  same one kernel anyway.
+- **Union start offset**: cross-validated via two independent internal
+  functions (`gckKERNEL_LockVideoMemory`'s `node` field, the
+  `MAP_USER_MEMORY` dispatch case's `memory` field) that stock's union
+  genuinely starts at absolute offset 32, not immediately after
+  `status` — 20 bytes of still-unidentified header content preserved
+  as reserved padding (never read/written in any decompiled path
+  examined).
+- **`Commit` struct (304→64 bytes)**: had three redundant 10-element
+  multi-core arrays (`deltas[]`/`contexts[]`/`commandBuffers[]`,
+  `gcvCORE_COUNT`=10) duplicating the same data as existing singular
+  `context`/`commandBuffer`/`delta` fields. Decompiled stock's exact
+  `COMMIT` field offsets (`context`@0, `commandBuffer`@8, `delta`@16,
+  `queue`@24 relative to the union) — a clean single-core layout with
+  no arrays at all. Removed the arrays, fixed `gckKERNEL_Dispatch`'s
+  `COMMIT`/`EVENT_COMMIT` handling (which was reading `contexts[0]`/
+  `commandBuffers[0]`/`deltas[0]` — the wrong fields, would have been
+  functionally broken even with a correctly-sized struct) to use the
+  singular fields, and deleted the now-fully-dead multi-core broadcast
+  code paths.
+- **`VIVANTE_PROFILER` bloat (~360 bytes)**: `RegisterProfileData_part1/
+  part2` (GPU performance-counter dump structs) added by a hardcoded
+  `-DVIVANTE_PROFILER=1` build flag — a dev/debug feature, not in
+  stock's real command set at all, not used by any rendering path.
+  Removed the two union members entirely and made their
+  `gckKERNEL_Dispatch` cases unconditionally return
+  `gcvSTATUS_NOT_SUPPORTED`, without touching the `VIVANTE_PROFILER`
+  flag itself (globally disabling it cascaded into unrelated internal
+  `gckKERNEL`/`gckHARDWARE` struct fields that have nothing to do with
+  the wire-protocol struct size — reverted that approach, went
+  surgical instead).
+- **`Database` struct (288→208 bytes)**: `vidMemPool[3]` (an array of
+  `gcuDATABASE_INFO`, per-pool-type memory stats) shrunk to
+  `vidMemPool[1]`, with `gckKERNEL_QueryDatabase`'s loop bound reduced
+  from 3 to 1 to match (avoids a buffer overflow — this loop is
+  genuinely exercised by our own driver, unlike the profiler fields).
+  `QUERY_DATABASE` isn't in stock's real command set either and isn't
+  used by any rendering path, so reduced functionality here (only pool
+  type 0 reported) is an acceptable tradeoff.
+- **Final 24-byte gap**: after all of the above, landed at 240 bytes
+  (24 short of 264) — added a dedicated `gctUINT8
+  _unionSizePad[232]` union member (not header padding, which would
+  have shifted the union's cross-validated start offset) to hit
+  exactly 264.
+
+**Empirically verified via compile-time probes** (`char probe[sizeof(x)]`
++ `nm -S`, the same technique established earlier in this GPU
+investigation) at every step, not just calculated: final
+`sizeof(gcsHAL_INTERFACE)` = exactly `0x108` (264) bytes, `status` at
+offset 8, union at offset 32, both cross-validated fields
+(`LockVideoMemory.node`, `MapUserMemory.memory`) landing at
+union-relative offset 0 as stock's decompiled code requires.
+
+**Deployed** (not yet hardware-tested): rebuilt `galcore.ko` clean
+(`CONFIG_MXC_GPU_VIV=m` needed on the `make` command line — the main
+kernel `.config` doesn't define this, an unrelated build-invocation
+gap from earlier discovered along the way), staged to
+`compiled_modules/lib/modules/4.19.192/galcore.ko`. Restored stock's
+**real, original** `libGAL.so` (`libGAL.so.orig-5.0.11.28018.bak`,
+backed up earlier this session before the matched-pair swap) to both
+`firmware_overlay/prado/usr/lib/libGAL.so` and the base reconstructed
+rootfs copy — confirmed matching md5. The matched-version-pair
+`6.2.4.p1.8` `libGAL.so` swap from earlier this session is now fully
+superseded, not just for `EffectWatch` but for MsnCoreApp's own
+DirectFB path too, since both now talk to a `galcore.ko` that matches
+stock's real protocol exactly rather than a different-but-internally-
+consistent one.
+
 **Next steps:**
+- [ ] **Rebuild and flash, then full retest** — `--new-kernel` needed
+      this time (kernel module changed). Test, in order: (1) does
+      `start_msn_directfb` still work without crashing (the original
+      DirectFB fix, now via a genuinely-matching driver instead of a
+      workaround)? (2) does a full submenu switch (the black-screen
+      bug) now render correctly? (3) does the knob-triggered red/static
+      flash also stop? If all three pass, this closes out the entire
+      GPU-driver thread of this investigation — the matched-pair
+      workaround, the `EffectWatch` regression, and the original
+      DirectFB crash all trace back to the same root cause (struct
+      mismatch) and this fix addresses it at the source instead of
+      working around symptoms.
+- [ ] If `Commit`'s field-offset fix has a mistake, expect rendering to
+      be visibly wrong/garbled rather than absent (unlike the previous
+      bugs) — worth specifically checking rendered content quality, not
+      just "does it show something."
+- [ ] The 20 bytes of unidentified stock header content (between
+      `status` and the union) and the exact identity of whatever's at
+      header offset 4 remain unresolved — currently reserved/padding
+      only. If some *other* command turns out to need one of these
+      fields, this is where to look first.
 - [x] Test on hardware — DirectFB crash confirmed fixed (matched-pair
       swap, above).
 - [x] Fixed and hardware-confirmed: the "unknown ioctl" errors

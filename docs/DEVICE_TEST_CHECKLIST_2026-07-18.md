@@ -1215,26 +1215,85 @@ more fundamental commands (0 through ~20). Worth keeping in mind for
 any command above that range that hasn't been explicitly
 cross-checked against a real decompiled call site yet.
 
+**DONE (2026-07-20, later same day): full 64-position enum reconstruction, not just the two anchors.**
+User asked for a Fable 5 subagent (higher-reasoning model) to do this
+properly given the scope, since the +2 shift found for `ATTACH`/
+`DETACH` turned out to be the tip of a larger problem. Independently
+re-verified by me afterward (not just trusted from the subagent's
+report) via the same compile-time-probe technique.
+
+Directly confirmed from stock's real, unstripped `galcore.ko`
+disassembly: `cmp r3, #63` + a 64-entry ARM jump table — stock has
+**exactly 64 valid commands (0-63)**, not the 71 our source had
+declared. Full jump table extracted and every target decompiled.
+Findings beyond the earlier `ATTACH`/`DETACH` fix:
+
+- **`gcvHAL_COMPOSE`** (calls `gckEVENT_Compose`) was **entirely
+  missing** from our enum, not just misnumbered — confirmed at stock
+  position 42. Added the enum value and a correctly-sized union
+  member. Its real implementation (`gckHARDWARE_Compose`) doesn't
+  exist anywhere in this source tree, so the dispatch case returns
+  `NOT_SUPPORTED` rather than fabricating logic — a known, flagged gap,
+  not silently papered over.
+- `SET_TIMEOUT`/`GET_FRAME_INFO` shifted from 42/43 to their real
+  43/44; `NAME_VIDEO_MEMORY`/`IMPORT_VIDEO_MEMORY`/
+  `EXPORT_VIDEO_MEMORY` and several other mid-to-high commands were
+  also off by one or more positions.
+- Commands with **no stock equivalent at all** (`MAP_PHYSICAL`,
+  `DUMP_GPU_PROFILE`, `COMMIT_DONE`, `READ`/`WRITE_REGISTER_EX`,
+  `CREATE`/`WAIT_NATIVE_FENCE`, `DESTROY_MMU`,
+  `GET_GRAPHIC_BUFFER_FD`) renumbered to 64+ — functionally inert
+  since nothing in this codebase sends them over the wire, only
+  references them symbolically.
+- Index 17 (`gcvHAL_SIGNAL`) was assumed to be a reserved gap earlier
+  (stock's jump table does point at the shared unhandled fallback
+  there) — but stock's own compiled code hardcodes the literal `17` in
+  multiple places when constructing internal event records, confirming
+  it's a real, internally-used value just unreachable from the public
+  ioctl. Correctly left in place instead of removed.
+
+Added a bound check (`Interface->command >= gcvHAL_COMMAND_CODE_COUNT`)
+matching stock's own `cmp r3, #63` — this tree had no equivalent
+before, meaning an out-of-range command could have caused an
+out-of-bounds `_DispatchText[]` read. That debug-string array is now
+built with designated initializers instead of positional literals
+(the enum has intentional gaps now), avoiding the exact
+silent-misalignment failure mode that caused the original crash.
+
+**Independently re-verified after the subagent's work** (not just
+trusted): rebuilt clean, `sizeof(gcsHAL_INTERFACE)` still exactly
+264 bytes, `ATTACH`=40, `DETACH`=41, `COMPOSE`=42 all confirmed via
+fresh compile-time probes. `galcore.ko` rebuilt and staged to
+`compiled_modules/lib/modules/4.19.192/galcore.ko`. Committed
+(`linux-arkmicro` `6a1919a56`) and pushed. **Not yet hardware-tested.**
+
+Three positions remain genuinely uncertain (flagged in code comments,
+not hidden): `PROFILE_REGISTERS_2D` (25), `DUMP_EVENT` (48), and
+`QUERY_RESET_TIME_STAMP` (55) — kept at their best-inferred positions
+without a clean confirming match in the decompile. First suspects if
+further hardware testing surfaces problems.
+
+**Also done the same session, independently, via a second Fable 5
+subagent:** the `linuxfb` color-skew fix documented just above (the
+`fb_var_screeninfo`/`transp` field finding) — unrelated to this
+struct-RE thread, can be tested in the same hardware pass. Committed
+`linux-arkmicro` `0068ec2f4`.
+
 **Next steps:**
 - [ ] **Rebuild and flash, then full retest** — `--new-kernel` needed
-      (kernel module changed again). Test, in order: (1) does
-      `start_msn_directfb` start without segfaulting now? (2) does
-      `linuxfb`'s color problem from the previous round resolve, or is
-      it a separate, still-open issue? (3) does a full submenu switch
-      (the original black-screen bug) render correctly? (4) does the
+      (both the kernel module and the built-in fbdev driver changed).
+      Test, in order: (1) does `start_msn_directfb` start without
+      segfaulting now? (2) does `linuxfb`'s color problem resolve
+      (check `fb-alpha-test`'s `FBIOGET_VSCREENINFO` dump first —
+      expect `transp off=0 len=0`)? (3) does a full submenu switch (the
+      original black-screen bug) render correctly? (4) does the
       knob-triggered red/static flash stop?
-- [ ] If it still crashes, the next place to look (before another
-      device cycle) is the same technique that just worked: pick
-      another command with a high-confidence, unambiguous function-call
-      match in the decompile, check its enum position against stock's
-      real case-label value, and look for any *other* leftover
-      enum/array entries between the last-confirmed-matching command
-      and the one that's wrong.
-- [ ] If colors are still wrong on `linuxfb` even after the `ATTACH`
-      fix, that's likely a genuinely separate bug from the struct-size
-      work (or a different still-undiscovered field mismatch,
-      possibly in a format/palette-related command) — don't assume
-      it's the same root cause without evidence.
+- [ ] If it still crashes, the next places to check first are the
+      three flagged-uncertain positions above (25, 48, 55), plus
+      `gcvHAL_COMPOSE` specifically if the crash looks event/compose-
+      related (it's a stub, `NOT_SUPPORTED` — if real userspace
+      actually needs a working Compose, that's a real missing feature,
+      not a numbering bug).
 - [ ] If `Commit`'s field-offset fix has a mistake, expect rendering to
       be visibly wrong/garbled rather than absent — worth specifically
       checking rendered content quality, not just "does it show
@@ -1341,6 +1400,95 @@ struct, not the size itself.
 See `tools/fb-alpha-test/README.md` for the full register-sweep
 writeup (kept for the record, even though it turned out to be the
 wrong axis).
+
+**FOUND, via new angle (2026-07-20): `fb_var_screeninfo`'s declared
+`transp` field drives Qt into non-premultiplied `Format_ARGB32` —
+concrete decompile evidence, fix staged, not yet hardware-tested.**
+Followed up on the still-open "[ ] Investigate whether Qt4's `LinuxFB`
+`QScreen` driver is expected to pre-composite alpha in software"
+action item above, from the software/driver-contract side rather than
+another LCDC register angle (already conclusively exhausted, see
+"Ground truth from real stock hardware" above).
+
+`ark1668_lcdfb_check_var()` (`ark1668_lcdfb.c`) declares, for 32bpp
+(the depth this board actually runs, `bits-per-pixel = <32>` in
+`ark1668_limcet_p305.dts`): `red.offset=16/len=8`,
+`green.offset=8/len=8`, `blue.offset=0/len=8`, **`transp.offset=24/
+len=8`** — a real alpha channel, reported to userspace via
+`FBIOGET_VSCREENINFO`.
+
+Decompiled `QLinuxFbScreen::setPixelFormat(fb_var_screeninfo)` in the
+rootfs's real `libQtGui.so.4.7.4` (`arm-linux-gnueabihf-objdump -d`,
+function at `0x15fe84`). For `bits_per_pixel==32` it jumps to a
+handler at `0x1601b0` that `memcmp`s the actual reported
+red/green/blue/transp `fb_bitfield` triples (48 bytes) against a small
+table of known-good layouts embedded in `.rodata` at `0x769c70`:
+- Template A (`table+0x30`): `red=16/8`, `green=8/8`, `blue=0/8`,
+  `transp=24/8` — **byte-for-byte identical to what our driver
+  reports.** A full 48-byte match against this template
+  (`0x160210`/`0x160214`) sets the screen's `QImage::Format` to **`5`
+  == `Format_ARGB32`** (confirmed against Qt4's stable, public
+  `QImage::Format` enum ordering: `Format_RGB32=4`, `Format_ARGB32=5`,
+  `Format_ARGB32_Premultiplied=6`).
+- If only the RGB portion (36 bytes, ignoring `transp`) matches
+  Template A, format becomes `4` == `Format_RGB32` (fully opaque).
+  Template B (`table+0x60`, a BGR-order variant with the same
+  `transp=24/8`) gives the same `4` plus a byte-swap flag.
+  **Format `6` (`Format_ARGB32_Premultiplied`) is never reachable for
+  any 32bpp template in this table at all** — Qt's LinuxFB backend
+  simply doesn't offer it here.
+- No match at all falls through to `Format_Invalid` (`0`) at
+  `0x15ffe8`.
+
+Since our driver's reported fields hit the first (48-byte) match
+exactly, Qt selects **straight, non-premultiplied `Format_ARGB32`**
+for the on-screen surface. Qt4's raster paint engine's fast
+`SourceOver` composition paths assume premultiplied-alpha semantics;
+compositing translucent content (anti-aliased icons/widgets) onto a
+straight-alpha destination via those paths is a well-known source of
+incorrect color output — and, critically, is a no-op for fully opaque
+pixels (alpha=255: premultiplied and straight are identical), which
+matches the empirically-established "opaque always renders correctly,
+only partial-alpha pixels are ever wrong" signature exactly. This bug
+lives entirely inside Qt's own software compositor's format
+bookkeeping and never touches an LCDC register — consistent with, and
+explaining, why the exhaustive register-level investigation above
+found the hardware state to already be byte-identical to stock's
+correctly-rendering configuration.
+
+**Fix staged (`linux-arkmicro`, uncommitted working-tree change,
+builds clean via `build_kernel.sh`):** `ark1668_lcdfb_check_var()`'s
+`case 32` no longer sets `var->transp.offset`/`length` (left at `0`,
+same as every other depth, via the existing unconditional reset a few
+lines above the switch). This makes Qt's 48-byte match fail and fall
+through to the 36-byte RGB-only match against Template A, selecting
+`Format_RGB32` (opaque) instead — forcing Qt to flatten all
+alpha-blended content in software before it ever reaches `/dev/fb0`,
+mirroring how stock's `directfb` path produces fully opaque scanout
+data and never actually depends on this SoC's LCDC alpha-blend
+circuit. **Not yet hardware-tested.**
+
+- [ ] Rebuild+flash (`--new-kernel`), then verify with
+      `tools/fb-alpha-test/fb-alpha-test` (already dumps
+      `FBIOGET_VSCREENINFO` at startup, `fb-alpha-test.c:144-149`) —
+      expect `transp off=0 len=0` printed instead of `off=24 len=8`,
+      confirming the driver-side change landed.
+- [ ] Then check whether `MsnCoreApp`'s alpha-blended icons/widgets
+      render with correct colors under `linuxfb`. If yes, this closes
+      out the original alpha-blend-skew bug (section 1b) entirely
+      without needing the LCDC hardware to do any real per-pixel alpha
+      blending at all.
+- [ ] This is independent of, and can be tested regardless of the
+      outcome of, the separate ongoing `gcsHAL_INTERFACE`/`galcore.ko`
+      struct-RE effort (DirectFB path) — this fix only touches the
+      `linuxfb` `fb_var_screeninfo` contract, not the GPU driver.
+- [ ] If colors are still wrong after this change, the next place to
+      look is whether `libarkcmn.so`'s own 2D-blit compositing (used
+      for full-window/submenu transitions, per the `EffectWatch`/
+      `galcore` investigation above) does its own separate alpha
+      handling independent of Qt's raster engine — this fix only
+      addresses Qt's *own* direct-paint path (icons/widgets drawn by
+      Qt itself), not necessarily GPU-composited submenu transitions.
 
 ---
 

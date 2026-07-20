@@ -11,6 +11,20 @@ mkdir -p /var/lib/lockdown
 sync
 /sbin/mdev -s
 
+# libarkcmn.so/libarkadapt.so (vendor 2D-blit compositor + CarPlay adapter)
+# hardcode /tmp/dev/memalloc as their physically-contiguous buffer-allocator
+# device -- stock creates it via etc/memalloc_load.sh's `insmod .../3.4.0/
+# .../memalloc.ko` + mknod. That module path doesn't exist on this kernel,
+# but it doesn't need to: CONFIG_ARK_MEMALLOC=y means memalloc is built
+# directly into this kernel, and mdev -s above already created the real
+# device at /dev/memalloc. Just point the path the vendor libs expect at
+# the real one, so full-window/submenu GPU-composited rendering (which
+# depends on this device) gets a valid buffer instead of silently failing
+# open() -- see docs/DEVICE_TEST_CHECKLIST_2026-07-18.md section 1b (the
+# "submenus go black" investigation).
+mkdir -p /tmp/dev
+ln -sf /dev/memalloc /tmp/dev/memalloc
+
 touchdriver="/msnprofile/ark1680_ts"
 
 if [ -e $touchdriver ]; then

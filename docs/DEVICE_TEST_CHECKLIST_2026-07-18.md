@@ -969,6 +969,63 @@ specifically rather than assuming it's MsnCoreApp's own surface).
 Full Ghidra project retained at `/tmp/gh_effectwatch` (not committed —
 scratch/analysis only) if this needs picking back up.
 
+**CORRECTED CONCLUSION (2026-07-20, still later same day): the
+BMP-cache finding above is real but is NOT the root cause — it's a
+symptom that happened to be visible in one particular capture. The
+actual regression is the `galcore.ko`/`libGAL.so` matched-version-pair
+swap from earlier this session.**
+
+Two things established this:
+
+1. **Binary version check:** extracted the Holden `rootfs.img` dump
+   (`ubireader_extract_files`, UBI image) and confirmed both
+   `EffectWatch` and `MsnCoreApp` in our reconstructed rootfs are
+   **byte-identical** (matching md5) to Holden's copies — ruling out
+   an EffectWatch/MsnCoreApp version mismatch as the cause. (Prompted
+   by noticing `EffectWatch` was never in the explicit list of
+   binaries the earlier `9d56450` commit verified/replaced against the
+   real device — that turned out to be a dead end, but worth having
+   checked and ruled out cleanly.) User confirmed their real "stock"
+   comparison unit is itself Holden-based, so this is the right
+   reference.
+
+2. **Decisive: `docs/logs/archived/boot log.txt`** (committed `a89290c`,
+   from *before* this session — before `start_msn_linuxfb`/
+   `start_msn_directfb` existed, before any of tonight's GPU/ioctl/
+   memalloc work) shows multiple full window switches working
+   correctly on real hardware: `LauncherWindow`→`MusicPlayerWindow`
+   (at 18s, an early/cold-cache transition) →`CarAutoWindow`→ back to
+   `MusicPlayerWindow`, alongside a real Bluetooth pairing to a
+   "Pixel 9 Pro" and a working Android Auto session. **Submenu
+   transitions definitely worked before tonight's changes**, including
+   on what would have been a cold/empty BMP cache — directly
+   contradicting the idea that the lazy-cache-miss behavior alone
+   causes a stuck black screen.
+
+Since `EffectWatch` itself is unchanged, and it opens `/dev/galcore`
+and links the system-wide `libGAL.so` directly (confirmed earlier via
+`strace` — successful `IOCTL_GCHAL_INTERFACE` calls), the one thing
+that changed *and* that `EffectWatch` also depends on is the GPU
+driver pair swapped in the earlier DirectFB-crash investigation (see
+above in this section). Working theory: the *old* driver pair (whatever
+was running before tonight) satisfied `EffectWatch`'s usage of the GPU
+fine, but caused MsnCoreApp's own DirectFB rendering to crash outright
+(`ENOTTY`, the struct-size mismatch that motivated the swap in the
+first place). The *new* pair fixes that crash, but appears to have
+changed some behavior `EffectWatch`'s image-loading/surface-fallback
+path (`FUN_00016c80`'s provider-vtable call, or something adjacent
+not yet isolated) relies on — without necessarily causing a hard
+crash, since none was observed in the `strace` capture.
+
+Both processes share the same system-wide kernel module and library —
+there's no way to give MsnCoreApp the new (crash-free) behavior while
+giving EffectWatch the old (working) behavior without actually
+resolving the underlying `gcsHAL_INTERFACE` ABI difference, which is
+the struct-reverse-engineering effort the matched-pair swap was
+specifically chosen to avoid (see the GPU driver saga earlier in this
+section). **This needs a strategic decision before continuing** — see
+next steps.
+
 **Next steps:**
 - [x] Test on hardware — DirectFB crash confirmed fixed (matched-pair
       swap, above).
@@ -984,22 +1041,35 @@ scratch/analysis only) if this needs picking back up.
       fix itself is still valid/worth keeping (it fixes a genuine gap
       for whatever *does* use it — CarPlay/DVR/reversing-camera paths),
       just not the display bug.
-- [ ] Trace `EffectWatch`'s completion/handshake logic (shared-memory
-      protocol fields, `FUN_00016e1c` and neighbors) to find why a
-      failed-load transition gets permanently stuck rather than
-      recovering after a brief flash like stock presumably does.
-- [ ] Diagnose the blank/solid-red display issue on DirectFB — check
-      live LCDC register state (`OSD1_CTL`/`OSD1_ADDR`/`MODE_LCD_REG0`)
-      while the problem is showing; compare against known-good values
-      from the earlier `linuxfb`-path investigation. Retest after the
-      hide-window fix above, since it may turn out to be the same root
-      cause (a window that should have been hidden and wasn't).
-- [ ] Diagnose the `linuxfb` submenu regression — awaiting a
-      `start_msn_linuxfb` console log + `dmesg` capture from the user
-      while the artifact/missing-submenu issue is showing. Retest after
-      the hide-window fix too, for the same reason.
+- [x] **SUPERSEDED — root cause identified (see CORRECTED CONCLUSION
+      above), the following were investigated and ruled out along the
+      way:** `EffectWatch`'s BMP-cache-miss behavior (real, but not the
+      root cause — confirmed a cold cache doesn't cause this by itself
+      via `docs/logs/archived/boot log.txt`, pre-dating this session,
+      showing working transitions); a `clock_gettime`/hang theory
+      (ruled out — waiting several minutes produced no recovery, and
+      more importantly the regression window points elsewhere); the
+      blank/solid-red DirectFB issue and the `linuxfb` submenu
+      regression are now understood to be the **same bug** as the
+      black-screen one, not separate issues — all downstream of the
+      `galcore.ko`/`libGAL.so` matched-pair swap, confirmed by
+      `docs/logs/archived/boot log.txt` showing working submenu
+      transitions on real hardware *before* that swap.
+- [ ] **Decide how to proceed on the GPU driver regression** — the
+      matched-pair swap (`6.2.4.p1.8`) fixed MsnCoreApp's own DirectFB
+      crash but broke something `EffectWatch` needs, and both share the
+      same system-wide `galcore.ko`+`libGAL.so`. Options: (a) resume
+      the abandoned `gcsHAL_INTERFACE` struct reverse-engineering effort
+      to find a driver pair — or the *exact* struct offsets — that
+      satisfies both consumers; (b) narrow down exactly which call in
+      `EffectWatch`'s failure path (`FUN_00016c80`'s provider-vtable
+      call is the current lead) behaves differently between the old and
+      new driver pair, which might be fixable without a full struct RE
+      effort; (c) accept the regression and decide whether the
+      DirectFB-crash fix or working submenus matters more for now.
 - [ ] Pin down `80044f39` (`VIN_SET_WINDOW_POS`-area, `_IOR` 4-byte
-      variant) semantics if problems persist after the hide-window fix.
+      variant) semantics — unrelated side finding, still open, low
+      priority.
 - [ ] Make the `libGAL.so` swap permanent/documented in the overlay
       (already done — `firmware_overlay/prado/usr/lib/libGAL.so` and
       the base reconstructed rootfs copy both updated, see

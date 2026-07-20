@@ -1,0 +1,51 @@
+
+U-Boot 2012.10 (root2023120611 - 11:46:47)
+
+DRAM:  64 MiB
+NAND:  128 MiB
+MMC:   ARK_MMC0: 0, ARK_MMC1: 1
+In:    serial
+Out:   serial
+Err:   serial
+###not back car ...
+=============== usb_lowlevel_init time is 166271 us===============
+=============== usb_lowlevel_init device is high speed===============
+1 USB Device(s) found
+       scanning bus for storage devices... 1 Storage Device(s) found
+reading update
+update_from_media_to_flash can't read update flag
+
+NAND read: device 0 offset 0x160000, size 0x1a0f
+ 6671 bytes read: OK
+ark ini updata, get arkdata.ini file_size = 6671.
+parse arkdata.ini end
+convert success, screen_type=0, subformat=0, tvenc=8.
+get clk_freq=330(MHZ)
+get Gamma_en != 3
+screeninfo check ok
+itu656bypinfo check ok
+vpinfo check ok.
+gammainfo use default.
+touchinfo check ok.
+ScreenType:0, subType:0,Width:800, Height:480,Format:7 RgbMode:0 ,BPP:32 ,TvoutType:12,screen_id:0,interlace:0,pad_unset:0
+src_width:0, src_height:0,dithering:0, video_hfz:0x0,video_vfz:0x0
+
+NAND read: device 0 offset 0x75a0000, size 0x6c1f
+ 27679 bytes read: OK
+get backlight success, val=30.
+
+NAND read: device 0 offset 0x7620000, size 0x511c
+ 20764 bytes read: OK
+Not found boot animation file addr.
+
+NAND read: device 0 offset 0x7920000, size 0x8
+ 8 bytes read: OK
+
+NAND read: device 0 offset 0x7920000, size 0x13b5b4
+ 1291700 bytes read: OK
+Press space key to stop autoboot:  0
+
+NAND read: device 0 offset 0x1a0000, size 0x31acf0
+ 3255536 bytes read: OK
+
+

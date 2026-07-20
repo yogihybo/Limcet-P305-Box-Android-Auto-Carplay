@@ -3,7 +3,6 @@
 # line-ending setting a given contributor's git client uses.
 *.sh text eol=lf
 *.py text eol=lf
-
 # A stray CR in .gitignore becomes part of each pattern's literal text,
 # which then matches nothing on Linux — silently breaking every rule.
 .gitignore text eol=lf
@@ -20,3 +19,8 @@ firmware_dumps/CarSyncTech[[:space:]]Toyota/CSTech-202511-IP17/extracted/rootfs.
 Prado[[:space:]]firmware[[:space:]]reconstructed/mtd6_rootfs/rootfs/etc/ssh/ssh_host_*_key -text
 *.bin filter=lfs diff=lfs merge=lfs -text
 *.img filter=lfs diff=lfs merge=lfs -text
+firmware_dumps/**/*.zip filter=lfs diff=lfs merge=lfs -text
+firmware_dumps/**/*.rar filter=lfs diff=lfs merge=lfs -text
+firmware_dumps/**/*.tar.gz filter=lfs diff=lfs merge=lfs -text
+firmware_dumps/**/*.img filter=lfs diff=lfs merge=lfs -text
+firmware_dumps/**/*.bin filter=lfs diff=lfs merge=lfs -text

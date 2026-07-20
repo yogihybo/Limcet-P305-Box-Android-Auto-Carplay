@@ -1132,28 +1132,56 @@ DirectFB path too, since both now talk to a `galcore.ko` that matches
 stock's real protocol exactly rather than a different-but-internally-
 consistent one.
 
+**UPDATE (same day, first hardware test): both `MsnCoreApp` and
+`EffectWatch` segfaulted almost immediately** (`unhandled page fault
+... at 0x000000e0`, both processes, right after startup) with
+`start_msn_directfb`. Positive signal in the same test: **`linuxfb`
+submenus rendered fully** (no more black screen!) but with wrong
+colors — the first real evidence the struct-size/`Commit` fixes are
+on the right track, since a rendering/palette bug is a very different
+(much better) failure mode than "nothing renders at all".
+
+Root-caused the crash: `gcvHAL_ATTACH` (used during initial GPU
+context construction — consistent with crashing almost immediately at
+startup, before real rendering). Our current source's
+`gckCOMMAND_Attach` call has an extra `numStates` output argument
+stock's real, simpler 4-arg version doesn't have at all — confirmed by
+re-examining the decompiled dispatch precisely: only a single 4-byte
+value gets written at union-relative offset 8 (not the 8-byte
+`gctUINT64 maxState` our struct had there), and `map` sits at offset
+16, not 20. Fixed: `maxState` is now a plain 4-byte field (with an
+explicit reserved gap restoring the correct offset), `numStates` moved
+to a local variable inside the dispatch case (stock's userspace never
+reads it), `map` now lands at the confirmed offset 16. Re-verified via
+the same compile-time probe technique: both offsets now match exactly,
+and total struct size is still precisely 264 bytes (the union padding
+member absorbed the change automatically). Rebuilt `galcore.ko`,
+re-staged to `compiled_modules/lib/modules/4.19.192/galcore.ko`.
+**Not yet hardware-tested.**
+
 **Next steps:**
 - [ ] **Rebuild and flash, then full retest** — `--new-kernel` needed
-      this time (kernel module changed). Test, in order: (1) does
-      `start_msn_directfb` still work without crashing (the original
-      DirectFB fix, now via a genuinely-matching driver instead of a
-      workaround)? (2) does a full submenu switch (the black-screen
-      bug) now render correctly? (3) does the knob-triggered red/static
-      flash also stop? If all three pass, this closes out the entire
-      GPU-driver thread of this investigation — the matched-pair
-      workaround, the `EffectWatch` regression, and the original
-      DirectFB crash all trace back to the same root cause (struct
-      mismatch) and this fix addresses it at the source instead of
-      working around symptoms.
+      (kernel module changed again). Test, in order: (1) does
+      `start_msn_directfb` start without segfaulting now? (2) does
+      `linuxfb`'s color problem from this round resolve, or is it a
+      separate, still-open issue? (3) does a full submenu switch (the
+      original black-screen bug) render correctly? (4) does the
+      knob-triggered red/static flash stop?
+- [ ] If colors are still wrong on `linuxfb` even after the `ATTACH`
+      fix, that's likely a genuinely separate bug from the struct-size
+      work (or a different still-undiscovered field mismatch,
+      possibly in a format/palette-related command) — don't assume
+      it's the same root cause without evidence.
 - [ ] If `Commit`'s field-offset fix has a mistake, expect rendering to
-      be visibly wrong/garbled rather than absent (unlike the previous
-      bugs) — worth specifically checking rendered content quality, not
-      just "does it show something."
+      be visibly wrong/garbled rather than absent — worth specifically
+      checking rendered content quality, not just "does it show
+      something."
 - [ ] The 20 bytes of unidentified stock header content (between
       `status` and the union) and the exact identity of whatever's at
       header offset 4 remain unresolved — currently reserved/padding
       only. If some *other* command turns out to need one of these
-      fields, this is where to look first.
+      fields (matching the exact failure pattern `ATTACH` just showed),
+      this is where to look first.
 - [x] Test on hardware — DirectFB crash confirmed fixed (matched-pair
       swap, above).
 - [x] Fixed and hardware-confirmed: the "unknown ioctl" errors

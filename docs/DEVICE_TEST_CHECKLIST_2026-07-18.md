@@ -786,15 +786,74 @@ blinks off exposing `BACK_COLOR`, or whether an address register
 changes to something unexpected, at the exact moment the red flash
 happens.
 
+**FOUND AND FIXED (2026-07-20, later same day): missing `/tmp/dev/memalloc`
+device node — very likely the real root cause of the black-screen and
+red/static submenu bugs.** `lcd-overlay-watch.sh` ruled out every
+register/layer-level hypothesis: a full submenu switch (Launcher →
+CarPlay) that went black showed **zero** register changes at all —
+`OSD1` stayed enabled, `OSD1_ADDR`/`BACK_COLOR` never moved. So the bug
+is purely in what gets rendered into the still-displayed buffer, not
+in the display hardware/register config. Also established: a popup
+dialog (Music app's "no USB" message, overlaid on the existing screen
+without a full window switch) renders correctly, while *every* full
+submenu/window switch goes black — pointing specifically at whatever
+full-window transitions do differently from simple Qt-painted popups.
+
+User's `start_msn_directfb.txt` console log showed, at every boot:
+```
+rmmod: remove 'memalloc': No such file or directory
+insmod: can't read '/lib/modules/3.4.0/kernel/drivers/ark/memalloc/memalloc.ko': No such file or directory
+```
+`etc/memalloc_load.sh` tries to `insmod` a stock 3.4-kernel module path
+that doesn't exist on 4.19, then `exit 1`s before ever creating its
+target device node (`/tmp/dev/memalloc`, via `mknod` after reading the
+major number from `/proc/devices`).
+
+Checked `strings` on the vendor libraries: both `libarkcmn.so` (the
+2D-blit window compositor used for full-window rendering) and
+`libarkadapt.so` (CarPlay/HiCar adapter) hardcode `/tmp/dev/memalloc`
+as their physically-contiguous buffer-allocation device, with baked-in
+error strings for exactly this failure (`"open memalloc device fail"`,
+`ioctl MEMALLOC_IOCXGETRAMBUFFER fail`). Since that path is never
+created, every full-window compositor buffer allocation silently
+fails — while simple Qt-painted popups (Music's "no USB" dialog) don't
+need memalloc at all and work fine. This is a clean, complete
+explanation for every symptom seen this session: black screens
+(buffer allocation failed outright), red/static flashes (a bad/partial
+fallback before failing), and all of it being identical across both
+`linuxfb` and `directfb` (both go through the same `libarkcmn.so`
+compositor for full-window content).
+
+The good news: our kernel doesn't need that stock module at all —
+`CONFIG_ARK_MEMALLOC=y` means `memalloc` (`drivers/soc/arkmicro/
+memalloc.c`) is **built directly into the kernel**, and self-registers
+a real `/dev/memalloc` node via the standard device model
+(`register_chrdev` + `device_create`, literally commented `/* create
+/dev/memalloc */`) at kernel init — well before `rcS`'s `mdev -s` runs
+and picks it up. The device has always been there; the vendor
+libraries were just looking in the wrong (stock-only, tmpfs) place.
+
+**Fix applied** (`firmware_overlay/prado/etc/rc.d/rcS`, right after
+`mdev -s`): `mkdir -p /tmp/dev && ln -sf /dev/memalloc
+/tmp/dev/memalloc` — matches the existing `/tmp/touch_export` symlink
+pattern immediately below it in the same file. No kernel rebuild
+needed, overlay-only change. **Not yet hardware-tested.**
+
 **Next steps:**
 - [x] Test on hardware — DirectFB crash confirmed fixed (matched-pair
       swap, above).
 - [x] Fixed and hardware-confirmed: the "unknown ioctl" errors
       themselves are gone (real vendor `ARKFB_HIDE_WINDOW` ioctl
       `0x4f2c` now handled; `linux-arkmicro` commit `bf91e9e21`) — but
-      this did **not** fix the red-overlay bug, so the bug is
-      downstream of ioctl dispatch, in LCDC layer/compositing state.
-      Continue with `lcd-overlay-watch.sh` above.
+      this alone did **not** fix the black/red/static submenu bugs.
+- [ ] **Test the `/tmp/dev/memalloc` symlink fix above on hardware** —
+      needs a fresh `build_bootable_sdcard.sh` build + flash (no
+      `--new-kernel` needed, overlay-only change) and a full retest:
+      does a full submenu switch now render correctly instead of going
+      black? Does the knob-triggered red/static flash also stop? If
+      this fixes it, it likely explains and closes out the DirectFB
+      solid-red bug and the `linuxfb` submenu regression from earlier
+      in this investigation too, not just the black-screen symptom.
 - [ ] Diagnose the blank/solid-red display issue on DirectFB — check
       live LCDC register state (`OSD1_CTL`/`OSD1_ADDR`/`MODE_LCD_REG0`)
       while the problem is showing; compare against known-good values

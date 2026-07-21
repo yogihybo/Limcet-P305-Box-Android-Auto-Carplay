@@ -1,0 +1,9 @@
+该工具需要在Windows系统下工作，将bootlogo文件置于当前目录，动画文件置于animation目录，
+运行目录内bootanimation.bat生成bootanimation文件。
+CreateBootanimationImg参数说明
+argv[1] bootlogo文件名，如果当前目录下没有该文件名文件则没有bootlogo
+argv[2] bootlogo显示的时间(ms)，该时间后才会显示动画
+argv[3] 动画以及logo图片的宽     
+argv[4] 动画以及logo图片的高
+argv[5] 动画显示的帧率
+argv[6] 动画播放完成后延时时间(ms)后隐藏

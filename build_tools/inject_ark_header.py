@@ -210,7 +210,7 @@ def main():
 
     print(f"\nOutput:   {args.output}")
     ok = verify_binary(bytes(data), ep, bss_end)
-    print(f"\n{'Header injection successful' if ok else 'Header injection had issues - check above'}")
+    print(f"\n{'U-boot header injection successful' if ok else 'Header injection had issues - check above'}")
 
     if ok:
         print(f"\nNext steps:")

@@ -45,4 +45,4 @@ while IFS= read -r -d '' f; do
     esac
 done
 
-echo "  exec bits restored on $(basename "$ROOT") ($(find "$ROOT" -type f -perm -u+x | wc -l) executable files)"
+echo "    Permission exec bits restored on $(basename "$ROOT") ($(find "$ROOT" -type f -perm -u+x | wc -l) executable files)"

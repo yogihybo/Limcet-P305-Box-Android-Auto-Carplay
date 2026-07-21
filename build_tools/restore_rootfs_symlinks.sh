@@ -71,7 +71,7 @@ while IFS=$'\t' read -r link target || [ -n "$link" ]; do
     fi
 done < "$MANIFEST"
 
-echo "  symlinks restored on $(basename "$ROOT"): $created created/fixed, $already already correct, $dangling dangling"
+echo "    Symlinks restored on $(basename "$ROOT"): $created created/fixed, $already already correct, $dangling dangling"
 if [ "$dangling" -gt 0 ]; then
     echo "  ($dangling symlink target(s) missing from the tree — the source tree is" >&2
     echo "   incomplete, not just missing symlinks. See the extraction source.)" >&2

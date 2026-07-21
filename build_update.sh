@@ -32,16 +32,16 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # ── Paths ────────────────────────────────────────────────────────────────────
 
-ROOTFS_DIR="$SCRIPT_DIR/firmware_source/prado_reconstructed/mtd6_rootfs/rootfs"
-ROOTFS_UBIFS="$SCRIPT_DIR/firmware_source/prado_reconstructed/mtd6_rootfs/rootfs.ubifs"
-ROOTFS_IMG="$SCRIPT_DIR/firmware_source/prado_reconstructed/mtd6_rootfs/rootfs.img"
+ROOTFS_DIR="$SCRIPT_DIR/firmware_source/mtd6_rootfs/rootfs"
+ROOTFS_UBIFS="$SCRIPT_DIR/firmware_source/mtd6_rootfs/rootfs.ubifs"
+ROOTFS_IMG="$SCRIPT_DIR/firmware_source/mtd6_rootfs/rootfs.img"
 
-USERDATA_SRC="$SCRIPT_DIR/firmware_source/prado_reconstructed/mtd7_userdata/userdata"
-USERDATA_UBIFS="$SCRIPT_DIR/firmware_source/prado_reconstructed/mtd7_userdata/userdata.ubifs"
-USERDATA_IMG="$SCRIPT_DIR/firmware_source/prado_reconstructed/mtd7_userdata/userdata.img"
+USERDATA_SRC="$SCRIPT_DIR/firmware_source/mtd7_userdata/userdata"
+USERDATA_UBIFS="$SCRIPT_DIR/firmware_source/mtd7_userdata/userdata.ubifs"
+USERDATA_IMG="$SCRIPT_DIR/firmware_source/mtd7_userdata/userdata.img"
 
-ENV_SRC="$SCRIPT_DIR/firmware_source/env/uboot-env.txt"
-ENV_BIN="$SCRIPT_DIR/firmware_source/env/uboot-env.bin"
+ENV_SRC="$SCRIPT_DIR/firmware_source/mtd3_env/uboot-env.txt"
+ENV_BIN="$SCRIPT_DIR/firmware_source/mtd3_env/uboot-env.bin"
 ENV_SIZE=0x40000
 
 OUTPUT_DIR="$SCRIPT_DIR/firmware_source/sd_update_template/output"
@@ -206,7 +206,7 @@ PARTITIONS=(
 BUILD_ITEMS=(
     "rootfs|Build rootfs image|Compiles source tree into rootfs.img (~106 MB)|OFF"
     "userdata|Build userdata image|Overlays Prado settings and builds userdata.img (~6 MB)|OFF"
-    "uboot-env|Build U-Boot env image|Compiles firmware_source/env/uboot-env.txt into uboot-env.bin (256 KB, mkenvimage)|OFF"
+    "uboot-env|Build U-Boot env image|Compiles firmware_source/mtd3_env/uboot-env.txt into uboot-env.bin (256 KB, mkenvimage)|OFF"
 )
 
 # ── Selection state ───────────────────────────────────────────────────────────
@@ -235,19 +235,19 @@ done
 find_src() {
     local filename="$1"
     local candidates=(
-        "$SCRIPT_DIR/firmware_source/prado_reconstructed/mtd6_rootfs/$filename"
-        "$SCRIPT_DIR/firmware_source/prado_reconstructed/mtd7_userdata/$filename"
-        "$SCRIPT_DIR/firmware_source/prado_reconstructed/mtd0_sloader/$filename"
-        "$SCRIPT_DIR/firmware_source/prado_reconstructed/mtd1-mtd2_uboot/$filename"
-        "$SCRIPT_DIR/firmware_source/prado_reconstructed/mtd4_arkdata/$filename"
-        "$SCRIPT_DIR/firmware_source/prado_reconstructed/mtd5_firmware_source/kernel/$filename"
-        "$SCRIPT_DIR/firmware_source/prado_reconstructed/mtd8_bootlogo/$filename"
-        "$SCRIPT_DIR/firmware_source/prado_reconstructed/mtd9_bootanimation/$filename"
-        "$SCRIPT_DIR/firmware_source/prado_reconstructed/mtd10_reversingtrack/$filename"
-        "$SCRIPT_DIR/firmware_source/prado_reconstructed/mtd11_unicode/$filename"
-        "$SCRIPT_DIR/firmware_source/kernel/$filename"
-        "$SCRIPT_DIR/firmware_source/env/$filename"
-        "$SCRIPT_DIR/firmware_source/display/$filename"
+        "$SCRIPT_DIR/firmware_source/mtd6_rootfs/$filename"
+        "$SCRIPT_DIR/firmware_source/mtd7_userdata/$filename"
+        "$SCRIPT_DIR/firmware_source/mtd0_sloader/$filename"
+        "$SCRIPT_DIR/firmware_source/mtd1-mtd2_uboot/$filename"
+        "$SCRIPT_DIR/firmware_source/mtd4_arkdata/$filename"
+        "$SCRIPT_DIR/firmware_source/mtd5_kernel/$filename"
+        "$SCRIPT_DIR/firmware_source/mtd8_bootlogo/$filename"
+        "$SCRIPT_DIR/firmware_source/mtd9_bootanimation/$filename"
+        "$SCRIPT_DIR/firmware_source/mtd10_reversingtrack/$filename"
+        "$SCRIPT_DIR/firmware_source/mtd11_unicode/$filename"
+        "$SCRIPT_DIR/firmware_source/mtd5_kernel/$filename"
+        "$SCRIPT_DIR/firmware_source/mtd3_env/$filename"
+        "$SCRIPT_DIR/firmware_source/mtd4_arkdata/$filename"
         "$SCRIPT_DIR/$filename"
     )
     for p in "${candidates[@]}"; do
@@ -379,7 +379,7 @@ print_menu() {
         local found
         if [[ -n "$src" ]]; then
             found="${GREEN}found${NC}"
-        elif [[ "$key" == "rootfs" || "$key" == "userdata" || "$key" == "uboot-firmware_source/env" ]]; then
+        elif [[ "$key" == "rootfs" || "$key" == "userdata" || "$key" == "uboot-env" ]]; then
             found="${RED}missing - build first${NC}"
         else
             found="${RED}missing${NC}"
@@ -546,7 +546,7 @@ generate_sd() {
         fi
 
         [[ "$key" == "uboot" ]] && uboot_selected=1
-        [[ "$key" == "uboot-firmware_source/env" ]] && env_selected=1
+        [[ "$key" == "uboot-env" ]] && env_selected=1
 
         local keyword="${ARKUPDATE_KEYWORD[$key]:-}"
         if [[ -z "$keyword" ]]; then

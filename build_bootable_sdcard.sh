@@ -20,13 +20,13 @@
 # (archived at archive/build_bootable_sdcard.sh.pre-overlay). Rootfs patches
 # (rcS, profile, wifi_ap.sh, inittab, libGAL.so) that used to be applied via
 # python3/regex transforms at build time now ship as already-patched files
-# in firmware_overlay/prado/ — rsynced onto p2 straight after the main
-# rootfs sync. See firmware_overlay/prado/README.md for what's there and
+# in firmware_overlay/ — rsynced onto p2 straight after the main
+# rootfs sync. See firmware_overlay/README.md for what's there and
 # why. CarSyncTech CSTech-202511-IP17 rootfs support and the (confirmed
 # non-functional) initramfs boot path were both dropped in this rewrite —
 # see the archived script if either is needed again. The default
 # diagnostic tools (i2c-scan, ark-ts-test, lcd-test, nano, htop, dmesg,
-# *-test.sh, etc.) also moved into firmware_overlay/prado/usr/bin/ and are
+# *-test.sh, etc.) also moved into firmware_overlay/usr/bin/ and are
 # now unconditionally part of the rootfs — no more install_diag_tools
 # toggle or --diag-tools/--no-diag-tools flags.
 #
@@ -71,11 +71,11 @@
 #                      zImage.w_dtb if present) and install compiled modules from
 #                      linux-arkmicro/compiled_modules/ into the p2 rootfs.
 #                      This replaces the stock NAND kernel on the SD image.
-#                      Also determines whether firmware_overlay/prado/ (which
+#                      Also determines whether firmware_overlay/ (which
 #                      targets 4.19.192 kernel compatibility) gets applied.
 #                      ON by default.
 #   --no-new-kernel    Explicitly disable new-kernel replacement (use stock kernel;
-#                      firmware_overlay/prado/ is NOT applied in this mode)
+#                      firmware_overlay/ is NOT applied in this mode)
 #   --kernel-build-dir DIR  Path to linux-arkmicro build root (auto-detected if
 #                           sibling of script dir or in ~/Downloads/linux-arkmicro)
 #   --modules-dir DIR  Path to compiled_modules/ directory (default: auto-detected
@@ -193,13 +193,13 @@ RELOC_ENV=true
 ROOT_DEV="/dev/mmcblk0p2"                     # root= in the generated uEnv.txt (matches p2 rootfs)
 KERNEL_BIN=""
 BOOTLOGO_RAW=""                               # raw framebuffer (--bootlogo) for p1/bootlogo.raw
-STOCK_UBOOT_BIN="$SCRIPT_DIR/firmware_dumps/Prado firmware dump/mtd1-mtd2_uboot/extracted/uboot.bin"  # for p1/stock_uboot.bin, used by the `bootstock` chainload command
-ARKDATA_INI="$SCRIPT_DIR/firmware_dumps/Prado firmware dump/mtd4_arkdata/extracted/arkdata.ini"  # for p1/arkdata.ini -- real calibrated LCD timing/panel config, dumped from the NAND "arkdata" partition. Without this, ark1668_arkdata_ini.c's fatload always fails: U-Boot's own splash-screen screen_info falls back to compiled defaults, AND (2026-07-19) ft_board_setup() no longer has anything to patch the kernel's DTB display-timings node with either -- see docs/DISPLAY_SUBSYSTEM.md
+STOCK_UBOOT_BIN="$SCRIPT_DIR/firmware_source/mtd1-mtd2_uboot/uboot.bin"  # for p1/stock_uboot.bin, used by the `bootstock` chainload command
+ARKDATA_INI="$SCRIPT_DIR/firmware_source/mtd5_kernel/modules/mtd4_arkdata/arkdata.ini"  # for p1/arkdata.ini -- real calibrated LCD timing/panel config, dumped from the NAND "arkdata" partition. Without this, ark1668_arkdata_ini.c's fatload always fails: U-Boot's own splash-screen screen_info falls back to compiled defaults, AND (2026-07-19) ft_board_setup() no longer has anything to patch the kernel's DTB display-timings node with either -- see docs/DISPLAY_SUBSYSTEM.md
 DTB_BIN=""
 ROOTFS_DIR=""
 USERDATA_DIR=""
 RECONSTRUCTED_DIR=""
-OVERLAY_DIR="$SCRIPT_DIR/firmware_overlay/prado"  # already-patched files rsynced onto p2 after the main rootfs sync — see firmware_overlay/prado/README.md
+OVERLAY_DIR="$SCRIPT_DIR/firmware_overlay/"  # already-patched files rsynced onto p2 after the main rootfs sync — see firmware_overlay/README.md
 SKIP_USERDATA=false
 SKIP_MTD_REDIRECT=false
 INSTALL_TELNETD=false                         # unauthenticated root telnetd on port 23 — OFF by default, opt-in only
@@ -274,7 +274,7 @@ run() {
 # ---------------------------------------------------------------------------
 autodetect() {
     [[ -z "$RECONSTRUCTED_DIR" ]] && {
-        local c="$SCRIPT_DIR/firmware_source/prado_reconstructed"
+        local c="$SCRIPT_DIR/firmware_source"
         [[ -d "$c" ]] && RECONSTRUCTED_DIR="$c"
     }
     # Auto-detect linux-arkmicro kernel build directory
@@ -334,23 +334,21 @@ autodetect() {
     # docs/UBOOT_SDBOOT_INVESTIGATION.md, corrupted/README.md for why).
     [[ -z "$UBOOT_BIN" && -z "$UBOOT_SRC" ]] && {
         for c in \
-            "$SCRIPT_DIR/firmware_source/prado_reconstructed/mtd1-mtd2_uboot/uboot.bin" \
-            "$SCRIPT_DIR/firmware_dumps/Prado firmware dump/mtd1-mtd2_uboot/extracted/uboot.bin"
+            "$SCRIPT_DIR/firmware_source/mtd1-mtd2_uboot/uboot.bin" 
         do [[ -f "$c" ]] && { UBOOT_SRC="$c"; break; }; done
     }
     # Fall back to stock kernel if new-kernel not requested
     [[ -z "$KERNEL_BIN" ]] && {
         for c in \
-            "$SCRIPT_DIR/firmware_source/prado_reconstructed/mtd5_firmware_source/kernel/zImage" \
-            "$SCRIPT_DIR/firmware_source/kernel/zImage"
+            "$SCRIPT_DIR/firmware_source/mtd5_kernel/zImage"
         do [[ -f "$c" ]] && { KERNEL_BIN="$c"; break; }; done
     }
     [[ -z "$ROOTFS_DIR" ]] && {
-        local c="$SCRIPT_DIR/firmware_source/prado_reconstructed/mtd6_rootfs/rootfs"
+        local c="$SCRIPT_DIR/firmware_source/mtd6_rootfs"
         [[ -d "$c" ]] && ROOTFS_DIR="$c"
     }
     [[ -z "$USERDATA_DIR" ]] && {
-        local c="$SCRIPT_DIR/firmware_source/prado_reconstructed/mtd7_userdata/userdata"
+        local c="$SCRIPT_DIR/firmware_source/mtd7_userdata"
         [[ -d "$c" ]] && USERDATA_DIR="$c"
     }
     return 0
@@ -395,11 +393,11 @@ check_requirements() {
 # ---------------------------------------------------------------------------
 CONFIG_ITEMS=(
     "use_new_uboot|Install compiled Limcet P305 U-Boot + uEnv|Replaces the stock NAND-dumped UBOOT.BIN on p1 with the freshly compiled Limcet P305 U-Boot. Bypasses patching, and installs UBOOT.BIN, uEnv.txt, and the DTB file on p1.|ON"
-    "use_new_kernel|Install compiled Limcet P305 kernel + modules|Replaces the stock NAND kernel on p1 with the freshly compiled zImage.w_dtb from linux-arkmicro/. Also installs the compiled .ko modules into /lib/modules/ on the p2 rootfs, and applies firmware_overlay/prado/ (rcS/profile/wifi_ap.sh/inittab/libGAL.so fixes for 4.19.192 kernel compatibility — see firmware_overlay/prado/README.md). Uses linux-arkmicro/compiled_modules/ auto-detected from build dir|ON"
+    "use_new_kernel|Install compiled Limcet P305 kernel + modules|Replaces the stock NAND kernel on p1 with the freshly compiled zImage.w_dtb from linux-arkmicro/. Also installs the compiled .ko modules into /lib/modules/ on the p2 rootfs, and applies firmware_overlay/ (rcS/profile/wifi_ap.sh/inittab/libGAL.so fixes for 4.19.192 kernel compatibility — see firmware_overlay/README.md). Uses linux-arkmicro/compiled_modules/ auto-detected from build dir|ON"
     "patch_uboot|Patch binary U-Boot for SD auto-boot (env relocation)|Patches U-Boot and forces the NAND env CRC to fail. By default (--reloc-env) it RELOCATES the compiled-in default env so a full SD-boot command fits and the device AUTO-boots from SD — static-verified, NOT yet hardware-tested (see docs/UBOOT_SDBOOT_INVESTIGATION.md §10). Pass --no-reloc-env for the hardware-confirmed fallback that only drops to an interactive U-Boot prompt (then continue via the README's \"Manual SD Card Boot\").|OFF"
     "redirect_mtd_data|Redirect NAND mtd partitions to SD card (bootlogo, bootanimation, reversingtrack, unicode)|Symlinks bootlogo, bootanimation, reversingtrack, and Unicode font (mtd8-11) to files under /nanddata/ on p2 — if off, the device reads these from whatever is already in NAND instead|ON"
     "include_userdata|Include userdata (p3)|Copies the userdata dir to p3 — if off, p3 is left empty and the app populates /data on first boot|ON"
-    "disable_msncoreapp_autolaunch|Disable MsnCoreApp auto-launch at login|firmware_overlay/prado/etc/profile already ships with 'MsnCoreApp -qws&' commented out (see docs/ARK1680_TS_REVERSE_ENGINEERING.md) so it doesn't auto-run on every shell login. Turning this OFF re-enables the auto-launch line instead. Run 'start_msn' manually when this is on.|ON"
+    "disable_msncoreapp_autolaunch|Disable MsnCoreApp auto-launch at login|firmware_overlay/etc/profile already ships with 'MsnCoreApp -qws&' commented out (see docs/ARK1680_TS_REVERSE_ENGINEERING.md) so it doesn't auto-run on every shell login. Turning this OFF re-enables the auto-launch line instead. Run 'start_msn' manually when this is on.|ON"
     "install_telnetd|Install passwordless root telnetd (UNAUTHENTICATED — diagnostic only)|Inserts 'mount -t devpts none /dev/pts' + 'busybox telnetd -l /bin/sh &' into rcS right after mdev -s, giving a root shell on port 23 with no login prompt to anything that can reach the device's network (WiFi AP or USB-NCM). Same mechanism validated working on stock firmware via the msn_autocopy payload (see msn_autocopy/README.md for why the devpts mount is required — telnetd fails silently without it). This is a real, if minor, exposure while active on any network the device joins — OFF by default, opt-in only.|OFF"
 )
 
@@ -692,7 +690,7 @@ validate() {
         [[ -d "$USERDATA_DIR" ]] || die "userdata dir not found: $USERDATA_DIR"
     fi
     if [[ ${CONFIG_SEL[1]} -eq 1 && ! -d "$OVERLAY_DIR" ]]; then
-        die "firmware_overlay/prado not found at $OVERLAY_DIR — needed when the new kernel is selected"
+        die "firmware_overlay not found at $OVERLAY_DIR — needed when the new kernel is selected"
     fi
     # Sync menu toggles back to runtime variables
     [[ ${CONFIG_SEL[1]} -eq 1 ]] && NEW_KERNEL_MODE=true  || NEW_KERNEL_MODE=false
@@ -829,18 +827,18 @@ prepare_uboot() {
 }
 
 # ---------------------------------------------------------------------------
-# Apply the firmware overlay — rsyncs firmware_overlay/prado/ on top of the
+# Apply the firmware overlay — rsyncs firmware_overlay/ on top of the
 # already-synced p2 rootfs, unconditionally overwriting whatever's there.
 # Only applied when NEW_KERNEL_MODE is active: the overlay's rcS/profile/
 # wifi_ap.sh fixes specifically target 4.19.192 kernel compatibility and
-# would be wrong for a stock-kernel build. See firmware_overlay/prado/README.md
+# would be wrong for a stock-kernel build. See firmware_overlay/README.md
 # for exactly what's in here and why — this replaces what used to be
 # patch_rootfs_for_new_kernel() + fix_libgal_so() (python3/regex transforms
 # against a copy of the rootfs at build time).
 # ---------------------------------------------------------------------------
 apply_overlay() {
     local rootfs_mount="$1"
-    echo -e "${BOLD}  Applying firmware overlay (firmware_overlay/prado/)...${RESET}"
+    echo -e "${BOLD}  Applying firmware overlay (firmware_overlay/)...${RESET}"
 
     if $DRY_RUN; then
         echo "  [dry-run] rsync -a $OVERLAY_DIR/ → $rootfs_mount/"
@@ -850,14 +848,14 @@ apply_overlay() {
     [[ -d "$OVERLAY_DIR" ]] || { warn "Overlay dir not found at $OVERLAY_DIR — skipping"; return; }
 
     rsync -a --info=progress2 "$OVERLAY_DIR/" "$rootfs_mount/"
-    success "Overlay applied — rcS/profile/wifi_ap.sh/inittab/libGAL.so now reflect firmware_overlay/prado/"
+    success "Overlay applied — rcS/profile/wifi_ap.sh/inittab/libGAL.so now reflect firmware_overlay/"
 }
 
 # ---------------------------------------------------------------------------
 # MTD partition redirect — inserts /dev/mtdN symlinks to /nanddata/ after
 # mdev -s in rcS, only if redirect_mtd_data is on. Genuinely conditional
 # (unlike the rest of what used to live in patch_rcs()/
-# patch_rootfs_for_new_kernel(), now baked into firmware_overlay/prado/ —
+# patch_rootfs_for_new_kernel(), now baked into firmware_overlay/ —
 # see that directory's README), so this stays a small, focused build-time
 # insertion rather than overlay content.
 # ---------------------------------------------------------------------------
@@ -911,7 +909,7 @@ PYEOF
 }
 
 # ---------------------------------------------------------------------------
-# MsnCoreApp autolaunch toggle — firmware_overlay/prado/etc/profile already
+# MsnCoreApp autolaunch toggle — firmware_overlay/etc/profile already
 # ships with 'MsnCoreApp -qws&' commented out (the default-ON state for this
 # toggle), so this only has to act when the toggle is explicitly turned OFF
 # (re-enable the line).
@@ -1267,7 +1265,7 @@ build() {
         install_new_kernel_modules /tmp/sd_p2
         end_step 10
     else
-        info "Skipped — stock NAND firmware_source/kernel/modules in use"
+        info "Skipped — stock NAND firmware_source/mtd5_kernel/modules in use"
         end_step 10 skip
     fi
 
@@ -1298,7 +1296,7 @@ build() {
 
     # 12. Install passwordless root telnetd (UNAUTHENTICATED — opt-in diagnostic tool)
     # Diagnostic tools themselves are no longer a build step — they're baked
-    # into firmware_overlay/prado/usr/bin/ unconditionally, see that
+    # into firmware_overlay/usr/bin/ unconditionally, see that
     # directory's README.
     begin_step 13 "Installing telnetd (diagnostic, unauthenticated)"
     if [[ ${CONFIG_SEL[6]} -eq 1 ]]; then

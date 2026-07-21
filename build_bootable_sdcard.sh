@@ -153,15 +153,15 @@ end_step() {
 print_step_summary() {
     local total=0 n mark
     echo ""
-    echo -e "  ${BOLD}Build summary${RESET}"
+	echo -e "  ${DIM}───────────────────────────────────────────────────────────────────${RESET}"
+    echo -e "  ${BOLD}BUILD SUMMARY${RESET}"
     for n in "${!STEP_TITLES[@]}"; do
         [[ "${STEP_STATUS[$n]}" == "skip" ]] && mark="${DIM}○${RESET}" || mark="${GREEN}✔${RESET}"
         printf "   %b %-2s %-28s ${DIM}%s${RESET}\n" "$mark" "$n" "${STEP_TITLES[$n]}" \
-            "$([[ "${STEP_STATUS[$n]}" == "skip" ]] && echo "skipped" || echo "${STEP_ELAPSED[$n]}s")"
+            "$([[ "${STEP_STATUS[$n]}" == "skip" ]] && echo "skipped" || echo "${STEP_ELAPSED[$n]}")"
         [[ "${STEP_STATUS[$n]}" != "skip" ]] && total=$(( total + STEP_ELAPSED[$n] ))
     done
-    echo -e "  ${DIM}────────────────────────────────────────${RESET}"
-    echo -e "   ${BOLD}Total: ${total}s${RESET}"
+    echo -e "  ${DIM}───────────────────────────────────────────────────────────────────${RESET}"
 }
 
 # ---------------------------------------------------------------------------
@@ -192,14 +192,14 @@ PATCH_UBOOT=false                             # run build_tools/patch_uboot.py o
 RELOC_ENV=true
 ROOT_DEV="/dev/mmcblk0p2"                     # root= in the generated uEnv.txt (matches p2 rootfs)
 KERNEL_BIN=""
-BOOTLOGO_RAW=""                               # raw framebuffer (--bootlogo) for p1/bootlogo.raw
+BOOTLOGO_RAW="$SCRIPT_DIR/sd_bootable/bootlogo.raw"                               # raw framebuffer (--bootlogo) for p1/bootlogo.raw
 STOCK_UBOOT_BIN="$SCRIPT_DIR/firmware_source/mtd1-mtd2_uboot/uboot.bin"  # for p1/stock_uboot.bin, used by the `bootstock` chainload command
 ARKDATA_INI="$SCRIPT_DIR/firmware_source/mtd5_kernel/modules/mtd4_arkdata/arkdata.ini"  # for p1/arkdata.ini -- real calibrated LCD timing/panel config, dumped from the NAND "arkdata" partition. Without this, ark1668_arkdata_ini.c's fatload always fails: U-Boot's own splash-screen screen_info falls back to compiled defaults, AND (2026-07-19) ft_board_setup() no longer has anything to patch the kernel's DTB display-timings node with either -- see docs/DISPLAY_SUBSYSTEM.md
 DTB_BIN=""
 ROOTFS_DIR=""
 USERDATA_DIR=""
 RECONSTRUCTED_DIR=""
-OVERLAY_DIR="$SCRIPT_DIR/firmware_overlay/"  # already-patched files rsynced onto p2 after the main rootfs sync — see firmware_overlay/README.md
+OVERLAY_DIR="$SCRIPT_DIR/firmware_overlay"  # already-patched files rsynced onto p2 after the main rootfs sync — see firmware_overlay/README.md
 SKIP_USERDATA=false
 SKIP_MTD_REDIRECT=false
 INSTALL_TELNETD=false                         # unauthenticated root telnetd on port 23 — OFF by default, opt-in only
@@ -848,7 +848,7 @@ apply_overlay() {
     [[ -d "$OVERLAY_DIR" ]] || { warn "Overlay dir not found at $OVERLAY_DIR — skipping"; return; }
 
     rsync -a --info=progress2 "$OVERLAY_DIR/" "$rootfs_mount/"
-    success "Overlay applied — rcS/profile/wifi_ap.sh/inittab/libGAL.so now reflect firmware_overlay/"
+    success "RootFS overlay applied — rcS/profile/wifi_ap.sh/inittab/libGAL.so, etc."
 }
 
 # ---------------------------------------------------------------------------
@@ -861,7 +861,7 @@ apply_overlay() {
 # ---------------------------------------------------------------------------
 patch_rcs_mtd_redirect() {
     local target="$1"
-    echo -e "${BOLD}  Patching rcS for MTD partition redirect...${RESET}"
+    echo -e "${BOLD}  Patching rcS to redirect NAND partitions to SD/USB...${RESET}"
 
     if $DRY_RUN; then
         echo "  [dry-run] insert /dev/mtdN -> /nanddata/ symlinks after mdev -s in rcS"
@@ -905,7 +905,7 @@ open(path, 'w').write(patched)
 print("  rcS MTD symlink block inserted after mdev -s")
 PYEOF
 
-    success "rcS patched for MTD partition redirect"
+    success "rcS patched for NAND partition redirect to SD/USB "nanddata" folder"
 }
 
 # ---------------------------------------------------------------------------
@@ -932,11 +932,11 @@ toggle_msncoreapp_autolaunch() {
 }
 
 # ---------------------------------------------------------------------------
-# NAND partition data — copy to /nanddata/ on p2
+# Directories to emulate NAND partition data — copy to /nanddata/ on p2
 # ---------------------------------------------------------------------------
 populate_nanddata() {
     local dest="$1/nanddata"
-    echo -e "${BOLD}  Populating /nanddata/ (MTD partition data)...${RESET}"
+    echo -e "${BOLD}  Populating folders to emulate NAND /nanddata/...${RESET}"
 
     if $DRY_RUN; then
         echo "  [dry-run] mkdir /nanddata/ on p2"
@@ -1161,7 +1161,7 @@ build() {
     fi
 
     # 4. Format
-    begin_step 5 "Formatting partitions"
+    begin_step 5 "Creating partitions"
     # The target runs a Linux 3.4.0 kernel (and U-Boot 2012.10), whose ext4
     # drivers predate the 64bit and metadata_csum features that modern
     # e2fsprogs enables by default. Leaving them on makes the kernel reject the
@@ -1172,11 +1172,11 @@ build() {
     run mkfs.fat -F32 -n BOOT    "$P1"
     run mkfs.ext4 -O "$EXT4_COMPAT" -L rootfs   -F "$P2"
     run mkfs.ext4 -O "$EXT4_COMPAT" -L userdata -F "$P3"
-    success "p1 FAT32, p2 ext4 (rootfs), p3 ext4 (userdata) — legacy-compatible feature set"
+    success "Filesystem partitions p1 FAT32, p2 ext4 (rootfs), p3 ext4 (userdata) created"
     end_step 5
 
     # 5. Mount
-    begin_step 6 "Mounting partitions"
+    begin_step 6 "Temporarily Mounting Partitions"
     if ! $DRY_RUN; then
         mkdir -p /tmp/sd_p1 /tmp/sd_p2 /tmp/sd_p3
         mount "$P1" /tmp/sd_p1
@@ -1189,7 +1189,7 @@ build() {
     fi
 
     # 6. Populate p1 — boot files
-    begin_step 7 "Populating p1 (boot partition)"
+    begin_step 7 "Populating Partition p1 (boot FAT)"
     run cp "$UBOOT_BIN"  /tmp/sd_p1/UBOOT.BIN
     run cp "$KERNEL_BIN" /tmp/sd_p1/zImage
     local bootlogo_label=""
@@ -1219,7 +1219,7 @@ build() {
     end_step 7
 
     # 7. Populate p2 — rootfs
-    begin_step 8 "Populating p2 (rootfs)"
+    begin_step 8 "Populating Partition p2 (rootfs EXT4)"
     # rsync -a copies the source tree verbatim, so repair the metadata a
     # Windows checkout drops before copying — otherwise p2 is unbootable:
     #   - build_tools/restore_rootfs_symlinks.sh recreates the lost symlinks (/bin/sh,
@@ -1235,10 +1235,12 @@ build() {
         --exclude='ubi.cfg' \
         "$ROOTFS_DIR/" /tmp/sd_p2/
     ! $DRY_RUN && mkdir -p /tmp/sd_p2/{proc,sys,dev,tmp}
+	echo -e "    ${BOLD}Restore rootfs symlinks...${RESET}"
     run bash "$SCRIPT_DIR/build_tools/restore_rootfs_symlinks.sh" "/tmp/sd_p2"
+	echo -e "    ${BOLD}Restore rootfs permissions...${RESET}"
     run bash "$SCRIPT_DIR/build_tools/apply_rootfs_perms.sh" "/tmp/sd_p2"
     if ! $DRY_RUN; then
-        echo "  Converting CRLF line endings to LF on target configuration files and scripts..."
+        echo "    Converting CRLF line endings to LF on target configuration files and scripts..."
         find /tmp/sd_p2/etc -type f -exec sed -i 's/\r$//' {} + 2>/dev/null || true
         find /tmp/sd_p2 -type f \( -name "*.sh" -o -name "rcS" -o -name "inittab" -o -name "profile" -o -name "fstab" \) -exec sed -i 's/\r$//' {} + 2>/dev/null || true
     fi
@@ -1246,7 +1248,7 @@ build() {
     end_step 8
 
     # 8. Populate p3 — userdata
-    begin_step 9 "Populating p3 (userdata)"
+    begin_step 9 "Populating Partition p3 (userdata EXT4)"
     if [[ $do_userdata -eq 0 ]]; then
         warn "Skipped — p3 is empty. App will populate /data on first boot."
         end_step 9 skip
@@ -1284,8 +1286,8 @@ build() {
     toggle_msncoreapp_autolaunch /tmp/sd_p2 "$([[ ${CONFIG_SEL[5]} -eq 1 ]] && echo 0 || echo 1)"
     end_step 11
 
-    # 11. Populate NAND partition data (bootlogo/bootanimation/reversingtrack/Unicode)
-    begin_step 12 "Populating NAND partition data"
+    # 11. Populate "nanddata" folder (bootlogo/bootanimation/reversingtrack/Unicode)
+    begin_step 12 "Populating "nanddata" folder on SD/USB for"
     if [[ $do_mtd_redirect -eq 1 ]]; then
         populate_nanddata /tmp/sd_p2
         end_step 12
@@ -1317,34 +1319,38 @@ build() {
     print_step_summary
 
     echo ""
-    echo -e "${GREEN}${BOLD}=== Build complete ===${RESET}"
+    echo -e "${GREEN}${BOLD}====== BUILD COMPLETE ======${RESET}"
     echo ""
     if [[ -n "$IMAGE" ]] && ! $DRY_RUN; then
         local sz; sz=$(du -sh "$IMAGE" | cut -f1)
-        success "Image: $IMAGE  ($sz)"
-        echo ""
-        echo -e "${BOLD}  Write to SD card:${RESET}"
-        echo    "    sudo dd if=\"$IMAGE\" of=/dev/sdX bs=4M status=progress && sync"
-        echo    "    or use Etcher / Raspberry Pi Imager"
+        echo "Image Generated:"
+        success "$IMAGE  ($sz)"
+		echo ""
+        echo -e "${BOLD}  Write to SD card or USB drive manually:${RESET}"
+        echo    "    Linux:"
+		echo    "    sudo dd if=\"$IMAGE\" of=/dev/sdX bs=4M status=progress && sync"
+		echo    "    Windows:"
+        echo    "    Write image with Etcher or Raspberry Pi Imager"
     elif [[ -n "$DEVICE" ]]; then
         success "Written directly to $DEVICE"
     fi
     echo ""
     echo -e "${BOLD}  Boot sequence:${RESET}"
-    echo    "    Stepldr  → loads UBOOT.BIN from p1 (FAT32)"
+    echo    "    Stepldr  → loads UBOOT.BIN from BOOT partition"
     if $NEW_UBOOT_MODE; then
-        echo "    U-Boot   → imports environment variables from uEnv.txt on p1"
-        echo "    U-Boot   → runs bootcmd (fatload zImage from p1, bootz)"
+        echo "    U-Boot   → imports environment variables from uEnv.txt on BOOT partition"
+        echo "    U-Boot   → runs bootcmd, default is to boot zImage from USB BOOT partition"
+		echo "    U-Boot   → if no valid USB device, fallback to chainloading stock U-Boot"
     elif $UBOOT_WAS_PATCHED; then
         echo "    U-Boot   → NAND env CRC forced invalid, drops to interactive prompt"
         echo "    (manual) → continue with the README's \"Manual SD Card Boot\" section"
     else
         echo "    U-Boot   → whatever bootcmd this UBOOT.BIN was built/patched with"
     fi
-    echo "    Kernel   → mounts p2 ext4 as /"
-    echo "    rcS      → mounts p3 ext4 as /data"
+    echo "    Kernel   → mounts partition p2 ext4 as the root filesystem"
+    echo "    rcS      → mounts partition p3 ext4 as /data"
     if [[ ${CONFIG_SEL[3]} -eq 1 ]]; then
-        echo "    rcS      → symlinks /dev/mtd8-11 to /nanddata/ on p2 (bootlogo/bootanimation/reversingtrack/Unicode, read from SD)"
+        echo "    rcS      → symlinks NAND partitions to /nanddata/ directory on partition p2 "
     fi
     echo ""
     if $UBOOT_WAS_PATCHED; then

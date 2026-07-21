@@ -1,0 +1,17 @@
+	BSP版本中添加了crc校验操作，客户如果要添加不同的升级模块，要将升级文件的文件名添加到crc.sh中，
+这样才将生成的校验码写到crcdata.bin文件，同时要在代码中结构体中添加相应的成员。
+/u-boot/arch/arm/mach-arkmicro/include/mach/ark-common.h
+typedef struct SYS_INFO {
+	unsigned int  uboot_crc;
+	unsigned int  fdt_crc;
+	unsigned int  zImage_crc;
+	unsigned int  rootfs_crc;
+	unsigned int  bootanimation_crc;
+	unsigned int  ubootspl_crc;
+	unsigned int  bootlogo_crc;
+	unsigned int  reserve[9];
+}SYS_INFO;
+另外/u-boot/arch/arm/mach-arkmicro/armv7/ark_common.c中的
+int ark_check_data_from_devide(char *file_name,unsigned int crc_data);
+int ark_check_data_from_partition(char *part_name,unsigned int crc_data);
+函数也要做相应的修改

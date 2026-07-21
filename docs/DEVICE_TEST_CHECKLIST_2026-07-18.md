@@ -1490,6 +1490,217 @@ circuit. **Not yet hardware-tested.**
       addresses Qt's *own* direct-paint path (icons/widgets drawn by
       Qt itself), not necessarily GPU-composited submenu transitions.
 
+**Hardware-tested (2026-07-20): black-screen crash fixed, colors still
+wrong.** `linuxfb` submenus now open/return without going black —
+confirms the `transp` fix genuinely stops the crash. But icon/widget
+colors are **still visibly wrong** under `linuxfb`, so the `transp`
+fix alone doesn't close out the color-skew bug; per the checkbox
+above, this is now a real, confirmed-still-open item pointing at
+GPU/2D-blit compositing rather than Qt's own raster path. See the
+`EffectWatch`/`galStretchBlit` root-cause below — same general area
+(GPU-side alpha/blend-color parameter handling), though not yet
+proven to be the same specific bug.
+
+**`gcsHAL_INTERFACE` struct/enum reconstruction: hardware-tested
+(2026-07-20), still crashes.** The byte-exact struct-RE'd `galcore.ko`
+(paired with stock's original `libGAL.so`, see
+[[project_gcshal_interface_struct_re]]) segfaults `EffectWatch`
+immediately on load — `SIGSEGV`, `SEGV_MAPERR`, fault address `0xe0`,
+zero `/dev/galcore` ioctls before the crash in every `strace` capture.
+This blocked all further hardware validation of the struct-RE work
+until root-caused below.
+
+**Extensive false-lead chasing before finding the real cause — kept
+here so it isn't re-walked if this resurfaces.** Decompiled and ruled
+out, in order: `libdirectfb_fbdev.so`'s `system_initialize()` (clean —
+`dfb_fbdev_get_pci_info`, `fusion_call_init`, `dfb_surface_pool_
+initialize`, `dfb_screens_register`, `dfb_layers_register` all
+inspected via Ghidra, no `0xe0`-offset access anywhere, and none of
+them touch `libGAL.so`/`galcore.ko`); `libdirectfb_gal.so`'s
+`galStretchBlit` (initially misidentified as the crash site from a
+*different* run's ASLR-shifted PC — a reminder that register values
+from one crash instance cannot be reused against another instance's
+memory map). The decisive fix for the methodology: pull a real core
+dump (`ulimit -c unlimited; echo '/data/core.%e.%p' >
+/proc/sys/kernel/core_pattern`) and parse its `NT_FILE`/`NT_PRSTATUS`
+notes directly (`readelf -n`, plus a small Python `struct.unpack` pass
+for the ARM `prstatus` register block — no cross-compiled `gdb` was
+available on the dev machine) rather than trying to reuse register
+values pasted from a live `dmesg` of a *different* process instance.
+
+**Root cause, confirmed via core dump (`docs/logs/core.EffectWatch.252`):**
+the crash is in **`libGAL.so`** itself, function `gcoHAL_QuerySeparated2D`:
+```c
+if (*(int *)(*(int *)(*(int *)(iVar2 + iVar1) + 4) + 0xe0) == 0) {
+```
+A NULL-pointer dereference three levels deep — the middle pointer
+(a per-hardware-type context object, indexed via TLS into what looks
+like `gcHardwareArray[coreType]`) is NULL, and dereferencing
+`NULL + 0xe0` produces exactly the fault address seen in every crash
+this session. Call chain: `galStretchBlit` (`libdirectfb_gal.so`)
+calls `gcoHAL_SetHardwareType(0, 2)` to select the 2D engine before
+`gco2D_FilterBlit`/`gco2D_StretchBlit`; something in that path (via
+the caller at the crash's `LR`, an unnamed TLS-dispatch helper in
+`libGAL.so`) calls `gcoHAL_QuerySeparated2D`, which expects the 2D
+hardware-type context to already be populated and isn't. **Working
+theory, not yet confirmed:** some earlier chip-identity/hardware-type
+query response from our struct-RE'd `galcore.ko` doesn't populate this
+context the way stock's real kernel does — i.e. this may still be a
+struct-RE content bug, just one specific field/command deeper than
+anything checked so far, rather than evidence the struct-RE effort was
+wrong in general. **Next step, not yet done:** find which `gcvHAL_*`
+command `libGAL.so` issues during its own init that's supposed to
+populate `gcHardwareArray[2D]`, and compare our `galcore.ko`'s
+response against stock's real one for that specific command.
+
+**Separately: preserved a known-good fallback checkpoint.** Committed
+`linux-arkmicro` `5b828cbc8` (`gpu-known-good-pairing/` — the
+`6.2.4.p1.8` `galcore.ko` + matching `libGAL.so` that predates the
+struct-RE effort, plus the pristine NXP upstream source both were
+built from, confirmed via exact `gcvVERSION_STRING` match against
+`Freescale/kernel-module-imx-gpu-viv.git` tag `6.2.4.p1.8`) and main
+repo `54d4c7c` (deployed `libGAL.so` swap to match). See
+[[project_gpu_known_good_pairing]]. This is the one pairing that's
+gotten `EffectWatch` running far enough to issue real `/dev/galcore`
+ioctls — useful as a fallback to restore whenever the struct-RE'd
+pairing is blocked, as it was here.
+
+**Also found and fixed, independent of the pairing question: `galcore`
+was loaded without `registerMemBase`/`irqLine`.** The `gpu@e0f00000`
+DT node is `status = "disabled"` and `gpu_driver` has no
+`of_match_table`, so `galcore` only ever binds via the legacy
+`drv_init()` module-param path — without `registerMemBase` it silently
+defaulted to the compiled-in `0x80000000` (wrong physical address;
+real GPU register base is `0xe0f00000`) and `irqLine` defaulted to
+`-1`. Fixed in the main repo (`38a5168`, `firmware_overlay/prado/etc/
+rc.d/rcS`) to match stock's own documented (if commented-out)
+invocation. See [[project_galcore_missing_modparams]]. **Hardware-
+tested together with the struct-RE pairing: fix alone did not resolve
+the `0xe0` crash** — the crash reproduces identically with this fix in
+place, ruling out missing modparams as the (sole) cause of that
+specific crash. Still worth keeping — it's a real correctness fix
+regardless (registers were being accessed at the wrong physical
+address for this SoC), just not what this particular bug was.
+
+**Hardware-tested under the `6.2.4.p1.8` known-good pairing (with the
+`registerMemBase` fix applied): stable, but rendering is still wrong.**
+No crash — `EffectWatch` standalone gets through the entire `galcore`
+init burst and into real per-frame `FBIOPAN_DISPLAY`/
+`FBIO_WAITFORVSYNC`/`galcore` ioctl cycles, all returning `0`.
+`MsnCoreApp` under `start_msn_directfb` ran stably for 2+ minutes with
+real live submenu transitions (`SettingWindow`↔`LauncherWindow`)
+traced via `strace -p`, all ioctls succeeding. **But the actual
+content was wrong in every case**: `EffectWatch`'s crossfade showed
+"another black-cleared frame" (not the real destination content), a
+separate `start_msn_directfb` run showed a solid red screen despite
+the console log showing a clean, uncrashed startup, and — per direct
+report — the screen was **black the entire time** during the traced
+MsnCoreApp session above, despite every ioctl in that trace succeeding.
+This is the "succeeds but wrong content" signature — not a crash, not
+a hang, just incorrect pixels — consistent with a struct-content (not
+struct-size/enum-numbering) ABI mismatch: the `6.2.4.p1.8` pairing is
+internally self-consistent (both sides agree with each other) but
+neither side matches stock's real 264-byte layout, so nothing
+guarantees the *content* of blend/color parameters lands in the fields
+the GPU expects.
+
+**Also relevant: `EffectWatch`'s crossfade "slowly turns a shade of
+transparent red"** (directly reported, under whichever pairing was
+active at the time — not yet re-confirmed against a specific pairing).
+A *gradual* reddening tracking the fade's alpha ramp is a strong
+signature of the opacity/blend-color value landing in the wrong byte
+position — e.g. an ARGB-packed blend color (`/etc/gal_config` confirms
+`stretchblit=...,coloralpha,...,src_premultiply,src_premulticolor`,
+i.e. stock genuinely expects `StretchBlit` to use hardware-accelerated
+premultiplied/color-alpha blending, not a software fallback) being
+read from the wrong struct offset, so more of the ramping alpha value
+bleeds into the red channel as it increases. **Not yet cross-checked
+against the `Blit`/`StretchBlit` command's exact field layout in our
+reconstructed `gcsHAL_INTERFACE`** — a good next static-analysis
+target, same methodology as the original struct-RE work.
+
+**Unrelated dead-end, worth recording so it isn't re-chased:** checked
+whether the Hantro `hx170dec` H.264 decoder (`CONFIG_ARK_HX170DEC=y`,
+built-in, registers as `/dev/vdec`) or the ITU656/`dvr` reversing-
+camera driver (see section 7 below) are involved in Android Auto/
+CarPlay video not displaying. **They are not** — grepped the entire
+rootfs (`usr/bin`, `usr/lib`, including `libAndroidAuto.so`,
+`libcarplay.so`, `libMsnCarPlay.so`, `usr/bin/carplay`) for `hx170`,
+`vdec`, and `h264` (case-insensitive): zero hits anywhere. `/etc/
+all.sh` (where the vendor's "H264 and it565 driver, needed by media
+and carplay etc." comment lives, uncommented) is itself never invoked
+— not from `inittab` (`sysinit` runs `/etc/rc.d/rcS`, not `all.sh`),
+not from `rcS` (same three lines present there too, but commented
+out), not from anywhere else — looks like leftover vendor bring-up
+boilerplate, not real boot-flow, even on stock. If Android Auto not
+loading needs chasing later, start from what `libAndroidAuto.so`
+actually does when invoked instead (it currently only references
+`/dev/random`-family paths in `strings`, suspiciously little for a
+real video pipeline).
+
+**Root cause of the `0xe0` crash, found via continued core-dump tracing
+(2026-07-20, same session): `gcdENABLE_VG` build-flag mismatch.**
+Disassembled `gcoHAL_QuerySeparated2D` directly (`arm-linux-gnueabihf-
+objdump -d`, real exported symbol at `0x14fbc`) and confirmed the exact
+faulting instruction: `14fe8: ldr r4, [r3, #224] @ 0xe0` — a
+GOT-indirected global pointer dereferenced with `+0xe0`, matching the
+fault address exactly, in every crash this session. Traced backward:
+its caller chain (`galStretchBlit` → `gcoHAL_SetHardwareType(0,2)` →
+an internal TLS-dispatch helper, `FUN_00033a38` in the decompile) goes
+through the HAL's per-hardware-type context construction, which itself
+issues an `ATTACH` (`command=0x28`=40, confirmed matching our
+reconstructed enum) ioctl via `gcoOS_DeviceControl(0, 30000, ...,
+0x108, ...)` — `0x108`=264, confirming this is the same
+`gcsHAL_INTERFACE` ioctl throughout.
+
+Since `ATTACH`'s own layout was already independently verified earlier
+this session, looked at what *other* early HAL-construction command
+could be silently wrong without affecting the overall struct size:
+`gcsHAL_QUERY_CHIP_IDENTITY` (`gc_hal_driver.h:454`) has 8 fields
+(`chipFeatures` through `chipMinorFeatures6`, 32 bytes) gated behind
+`#if gcdENABLE_VG`. `Kbuild` defaults to `-DgcdENABLE_VG=1` unless
+`VIVANTE_ENABLE_VG=0` is explicitly passed on the `make` command
+line — which none of this session's (or presumably earlier sessions')
+build invocations ever did. This SoC is a combined 2D/3D GPU with zero
+OpenVG usage anywhere in the userspace stack (checked); stock's real
+build is very likely `VG=0`. With `VG=1` (our default), every field
+after `chipDate` in this command's reply — `streamCount`, `pixelPipes`,
+..., `gpuCoreCount`, `productID`, `chipFlags`, `ecoID`, `customerID` —
+lands 32 bytes off from what `libGAL.so` expects, corrupting exactly
+the kind of chip-capability data that downstream 2D/3D-hardware-type
+logic depends on. Because `gcsHAL_QUERY_CHIP_IDENTITY` was never the
+union's largest member, this never showed up in the overall
+`sizeof(gcsHAL_INTERFACE)` checks that validated the rest of the
+struct-RE work — a genuinely separate, narrower bug hiding inside an
+already-correctly-sized struct.
+
+**Fix: rebuilt `galcore.ko` with `VIVANTE_ENABLE_VG=0` added to the
+`make` command line** (no source changes). Verified via the same
+compile-time-probe technique used throughout this struct-RE effort:
+`sizeof(gcsHAL_INTERFACE)` still exactly `0x108` (264, unaffected, as
+expected), `sizeof(gcsHAL_QUERY_CHIP_IDENTITY)` dropped from `0x58`
+(88) to `0x38` (56) — exactly the 32 VG-only bytes removed, confirming
+the fix does what it's supposed to. New build is 395004 bytes (down
+from 458332 — `gcdENABLE_VG` gates much more than this one struct
+throughout the driver, as expected for a whole-subsystem feature
+macro). Staged to `compiled_modules/lib/modules/4.19.192/galcore.ko`.
+**Not yet hardware-tested.**
+
+- [ ] Flash this build (`--new-kernel` not required — module-only
+      change) and re-run the standalone `EffectWatch` strace. If the
+      `0xe0` `SIGSEGV` is gone, this closes out the crash blocking all
+      hardware validation of the struct-RE effort.
+- [ ] If clean, re-test everything that was blocked by this crash:
+      `EffectWatch` transitions (does the black-cleared-frame symptom
+      persist or resolve now that the struct-RE'd, byte-correct
+      `galcore.ko` can actually run?), `start_msn_directfb`'s solid-red
+      screen, and the linuxfb color-skew bug (still open regardless,
+      per the note above, but worth re-checking in case it shares a
+      root cause).
+- [ ] Remember `VIVANTE_ENABLE_VG=0` on every future rebuild of this
+      module — it's not persisted anywhere except this doc and
+      [[project_gcshal_interface_struct_re]] right now, easy to lose.
+
 ---
 
 ## 2. `mcu-handshake` — touch-switch trigger (highest priority)
@@ -2051,6 +2262,15 @@ identical except metadata).
       exactly as before now that ITU656/RN6752/ARK_CARBACK are back
       off — this is the subsystem that was at risk during the earlier
       defconfig recovery (item 7 above, still applies).
+
+**Scope clarification (2026-07-20):** confirmed this subsystem is
+purely the physical reversing-camera input (`libCarReversing.so`'s
+`open dvr device /tmp/dev/dvr failure.` messages, seen throughout the
+`start_msn_directfb` logs in section 1b above), **not** related to
+Android Auto/CarPlay video playback in any way — grepped the entire
+rootfs and found zero references to `hx170`/`vdec`/`h264` in any
+CarPlay/AndroidAuto binary. See section 1b's "unrelated dead-end" note
+for the full check. Don't re-chase this angle for AA video issues.
 
 ---
 

@@ -1,3 +1,0 @@
-setenv bootargs console=ttyS0,115200n8 console=tty0 mem=180M root=/dev/mmcblk0p2 rootfstype=ext4 rootwait rw
-fatload mmc 0:1 1000000 zImage
-bootz 1000000

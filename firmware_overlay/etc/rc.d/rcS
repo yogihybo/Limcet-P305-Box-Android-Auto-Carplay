@@ -101,9 +101,9 @@ fi
 #ulimit -c unlimited
 
 #ifconfig lo up
-#ifconfig usb0 up
+#ifconfig carplay-ncm0 up
 #hostname CarPlay
-#tcpdump -i usb0 >> /var/tcpdump &
+#tcpdump -i carplay-ncm0 >> /var/tcpdump &
 #testiap &
 #echo 1 4 0x3000001 > /proc/display
 #alsainit&

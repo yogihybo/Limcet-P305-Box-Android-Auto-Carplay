@@ -1284,6 +1284,24 @@ build() {
         info "MTD redirect symlinks skipped (redirect_mtd_data is off — using existing NAND data)"
     fi
     toggle_msncoreapp_autolaunch /tmp/sd_p2 "$([[ ${CONFIG_SEL[5]} -eq 1 ]] && echo 0 || echo 1)"
+    if ! $DRY_RUN; then
+        # apply_overlay's rsync (above) copies firmware_overlay/ verbatim on
+        # top of the already-CRLF-cleaned rootfs from step 8 -- if the
+        # overlay source tree itself carries CRLF (this repo's working tree
+        # can pick that up independent of git history, e.g. via a Windows-
+        # side checkout feeding this shared folder), that reintroduces the
+        # exact stray \r step 8 already stripped. inittab is the case that
+        # actually breaks boot: busybox parses everything after the last
+        # ':' up to the line terminator as the sysinit/respawn command, so
+        # a trailing \r becomes part of the exec path and every attempt to
+        # run rcS/the respawned shell fails with "can't run '/bin/...'" in
+        # a loop, even though root mounts fine. Re-run the same CRLF strip
+        # after the overlay (and its rcS/autolaunch patches) have all been
+        # applied, so nothing placed after step 8 can undo it.
+        echo "    Re-converting CRLF line endings introduced by the overlay..."
+        find /tmp/sd_p2/etc -type f -exec sed -i 's/\r$//' {} + 2>/dev/null || true
+        find /tmp/sd_p2 -type f \( -name "*.sh" -o -name "rcS" -o -name "inittab" -o -name "profile" -o -name "fstab" \) -exec sed -i 's/\r$//' {} + 2>/dev/null || true
+    fi
     end_step 11
 
     # 11. Populate "nanddata" folder (bootlogo/bootanimation/reversingtrack/Unicode)

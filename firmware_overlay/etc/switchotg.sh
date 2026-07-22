@@ -43,12 +43,15 @@
 #
 # Sysfs paths: the stock script's /sys/devices/platform/musb-ark1680.N/
 # musb-hdrc.N/mode never existed on this kernel at all (a different
-# board's platform-device naming) -- our DTS registers these as
-# e0100000.usb/e0400000.usb (standard <reg-address>.<node-name> DT
-# auto-naming), confirmed against this kernel's own boot-log device
-# names.
+# board's platform-device naming). Confirmed on-device via
+# `find /sys/devices/platform -iname mode | grep musb`:
+# /sys/devices/platform/ahb/e0400000.usb/musb-hdrc.1/mode -- the DTS's
+# "ahb" simple-bus container node (parent of the usb0/usb1 nodes) adds
+# an extra path component that a first pass at this script (guessing
+# from the DT node names alone, without checking the real device) had
+# missed.
 
-USB1_MODE_PATH=/sys/devices/platform/e0400000.usb/musb-hdrc.1/mode
+USB1_MODE_PATH=/sys/devices/platform/ahb/e0400000.usb/musb-hdrc.1/mode
 
 root_dev=$(sed -n 's/.*\broot=\([^ ]*\).*/\1/p' /proc/cmdline)
 

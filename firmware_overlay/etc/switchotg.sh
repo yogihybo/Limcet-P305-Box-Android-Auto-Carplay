@@ -21,11 +21,25 @@
 # CarPlay's connector, trying wired mode first (the "carplay-ncm"
 # gadget, see linux-arkmicro's f_ncm.c) and falling back to the
 # internal WiFi chip (host mode) if nothing answers on the wired side.
-# It stays dr_mode="otg" in the DTS for exactly this reason and doesn't
-# need a boot-time host/otg toggle here -- the kernel's own OTG
-# negotiation (docs/WIRELESS_AND_INIT.md sec 7) already handles it
-# dynamically. The "echo otg" below is just a defensive nudge in case
-# something upstream left it in a non-otg state; normally a no-op.
+# It stays dr_mode="otg" in the DTS for exactly this reason, and
+# normally doesn't need a boot-time host/otg toggle here -- the
+# kernel's own OTG negotiation (docs/WIRELESS_AND_INIT.md sec 7)
+# already handles it dynamically.
+#
+# Exception: when this boot is a USB-stick test/dev boot
+# (root=/dev/sda*, usb0's boot-storage path), we already know for
+# certain no wired CarPlay cable is in the picture for this session --
+# the whole point of that path is testing off a USB stick, not driving
+# a car. Rather than let usb1 waste ~15s trying wired mode first and
+# falling back to WiFi only after that times out (docs/WIRELESS_AND_INIT.md
+# sec 7's retry-cycling), force it straight to host mode so the
+# internal WiFi chip/wlan0 comes up immediately. Any other boot
+# (root elsewhere, i.e. actually running in the vehicle) keeps the
+# full dynamic otg negotiation, since a real wired cable might
+# genuinely be present. See linux-arkmicro's musb_ark.c MUSB_HOST case
+# and musb_core.c's mode_store() for why this write alone is enough to
+# stick (it also updates otg->state, not just hardware registers, so
+# the still-armed OTG poll timer won't try to renegotiate it back).
 #
 # Sysfs paths: the stock script's /sys/devices/platform/musb-ark1680.N/
 # musb-hdrc.N/mode never existed on this kernel at all (a different
@@ -36,14 +50,26 @@
 
 USB1_MODE_PATH=/sys/devices/platform/e0400000.usb/musb-hdrc.1/mode
 
+root_dev=$(sed -n 's/.*\broot=\([^ ]*\).*/\1/p' /proc/cmdline)
+
+usb1_mode=otg
+case "$root_dev" in
+	/dev/sda*)
+		usb1_mode=host
+		echo "switchotg: root is on $root_dev (USB test boot) -- forcing usb1 straight to host mode for fast WiFi, skipping wired-CarPlay negotiation"
+		;;
+esac
+
 if [ -w "$USB1_MODE_PATH" ]; then
-	echo otg > "$USB1_MODE_PATH"
+	echo "$usb1_mode" > "$USB1_MODE_PATH"
 else
 	echo "switchotg: $USB1_MODE_PATH not found/writable, skipping usb1"
 fi
 
 #carplay
 ifconfig lo up
-ifconfig carplay-ncm0 up
-hostname CarPlay
+if [ "$usb1_mode" = otg ]; then
+	ifconfig carplay-ncm0 up
+	hostname CarPlay
+fi
 #mdnsd&

@@ -11,6 +11,15 @@ mkdir -p /var/lib/lockdown
 sync
 /sbin/mdev -s
 
+# Set each MUSB controller's operating mode (usb1's CarPlay wired/WiFi
+# role, and a fast-path for USB-stick test boots) -- see
+# docs/WIRELESS_AND_INIT.md sec 7 and the comments in this script for
+# why. Needs /proc and /sys mounted (above), nothing else -- run this
+# as early as possible so it can override the kernel's own in-progress
+# OTG negotiation (which starts automatically at driver init, well
+# before rcS runs) sooner rather than later.
+/etc/switchotg.sh
+
 # libarkcmn.so/libarkadapt.so (vendor 2D-blit compositor + CarPlay adapter)
 # hardcode /tmp/dev/memalloc as their physically-contiguous buffer-allocator
 # device -- stock creates it via etc/memalloc_load.sh's `insmod .../3.4.0/
@@ -100,9 +109,9 @@ fi
 
 #ulimit -c unlimited
 
-#ifconfig lo up
-#ifconfig carplay-ncm0 up
-#hostname CarPlay
+# carplay-ncm0 up/hostname/mode-switch: now handled by /etc/switchotg.sh
+# (called near the top of this script) -- that script also fixes the
+# sysfs path below, which never existed on this kernel at all.
 #tcpdump -i carplay-ncm0 >> /var/tcpdump &
 #testiap &
 #echo 1 4 0x3000001 > /proc/display
@@ -111,7 +120,6 @@ fi
 #rm -rf /tmp/qtembedded-0
 #. /etc/profile
 #carplay&
-#echo otg > /sys/devices/platform/musb-ark1680.0/musb-hdrc.0/mode
 #DV695 -qws -display directfb &
 #mirrordemo &
 #Launcher -qws &

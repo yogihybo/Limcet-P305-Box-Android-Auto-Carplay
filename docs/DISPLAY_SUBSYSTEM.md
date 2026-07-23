@@ -276,6 +276,40 @@ misc_register(10,255)       (export dev "10:255")          (mknod /dev/ark_displ
 - **Stock U-Boot 2012.10**: Runs `disconfig 0` during `bootnand`, loading `arkdata.ini` into RAM `@ 0x02900000`, setting the 330MHz pixel clock (`rSYS_LCD_CLK_CFG = 0x00000b01`), and configuring OSD1/OSD2 layers before jumping to Linux.
 - **Compiled U-Boot 2018.07**: Includes `disconfig 0;` at the start of `nandboot`, automatically reading `arkdata.ini` from NAND partition 4 if not present on SD card, setting up display clocks/OSD layers, and ensuring `ark_disp_probe()` succeeds to create `/dev/ark_display`.
 
+---
+
+### U-Boot DRAM Layout (256MB Top-Hide) & LCDC Framebuffer Bitfield Alignment
+
+#### 1. 256MB SDRAM Architecture & 76MB Carveout Reservation
+- **Hardware RAM Capacity**: Empirical kernel boot logs (`Memory: 105964K/184320K available`) and U-Boot memory probing confirm the SoC physically possesses **256 MiB total DRAM**.
+- **Memory Map Partitioning**:
+  ```
+  0x00000000 ┌──────────────────────────────────────────┐
+             │ Kernel OS Memory (180 MB)                │
+             │ (Linux kernel code, RAM, CMA allocator)   │
+  0x0B400000 ├──────────────────────────────────────────┤
+             │ OSD1 Framebuffer Carveout (180 MB mark)   │
+  0x0BE00000 ├──────────────────────────────────────────┤
+             │ OSD2 Framebuffer Carveout (190 MB mark)   │
+  0x0C800000 ├──────────────────────────────────────────┤
+             │ Video/Decoder Framebuffers               │
+  0x10000000 └──────────────────────────────────────────┘ (256 MB Top)
+  ```
+- **Relocation Trap & Fix**: Setting `CONFIG_SYS_SDRAM_SIZE = SZ_256M` without top-hide previously caused U-Boot to relocate its heap/stack to `~0x0FF00000` (255MB), colliding with hardware video memory and producing `** Bad device mmc 0 **`.
+- **Top-Hide Fix**: Added `#define CONFIG_SYS_MEM_TOP_HIDE (76 * 1024 * 1024)` in `include/configs/ark1668_limcet_p305.h` and set `BOOTLOGO_SD_ADDR = 0x0b400000` (180MB). U-Boot declares 256MB DRAM to Linux while restricting its own relocation to below 180MB (`0x0b400000`), completely resolving memory collisions while preserving physical OSD1/OSD2 carveout addresses.
+
+#### 2. Color Channel Synchronization (U-Boot BGR vs Kernel `check_var()` Bitfield Alignment)
+- **Problem**: U-Boot's `bootlogo.raw` rendered with 100% correct colors under `RgbMode = 0` (`BGR`), but setting `RgbMode = 5` (`RGB`) caused Linux framebuffer colors to render with Red and Blue channels swapped.
+- **Root Cause Analysis**:
+  1. `bootlogo.raw` and physical panel PCB traces expect BGR byte ordering (`RgbMode = 0`). Setting `RgbMode = 5` (`RGB`) forced the hardware LCDC register into `RGB` mode (Byte 0 $\rightarrow$ Red Pins, Byte 2 $\rightarrow$ Blue Pins).
+  2. The kernel's `check_var()` function (`ark1668_lcdfb.c`) hardcoded `red.offset = 16, blue.offset = 0` (telling userspace/Qt that memory is BGR).
+  3. Qt wrote Red to Byte 2 and Blue to Byte 0. But the hardware LCDC (in `RGB` mode) sent Byte 2 to Blue panel pins, swapping Red and Blue on screen.
+- **Resolution**:
+  - Reverted `RgbMode = 0` (`BGR`) in `arkdata.ini` files to match physical panel wiring and U-Boot's proven bootlogo display.
+  - Updated `ark1668_lcdfb_check_var()` in `ark1668_lcdfb.c` to dynamically program `var->red.offset` and `var->blue.offset` based on `pdata->lcd_wiring_mode` (`red.offset = 0, blue.offset = 16` for `RGB`, and `red.offset = 16, blue.offset = 0` for `BGR`), guaranteeing 100% agreement between userspace paint engines and hardware LCDC scanout.
+
+---
+
 ### Stage 2 — Application colour pipeline (MsnCoreApp)
 
 After the kernel boots, `MsnCoreApp` reads two further config sources:

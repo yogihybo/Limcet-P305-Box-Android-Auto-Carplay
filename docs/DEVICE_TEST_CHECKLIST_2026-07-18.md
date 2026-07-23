@@ -2461,6 +2461,1466 @@ treating it as a separate, new regression.
 
 ---
 
+## 10. `libarkcmn.so` framebuffer-init/video-addr ioctls — real gap found and implemented (2026-07-22)
+
+**Context:** after the `gcdENABLE_VG` GPU crash fix (§1b) and the
+`/dev/ark_display` command audit (§9) both landed, the user pushed back
+("I still feel like we're missing something obvious here with
+ark_display") on treating `ark_display.c` as the likely root cause of
+CarPlay/Android Auto video not displaying. That prompted a broader
+`strings` sweep of every rootfs `.so`/binary (an earlier `grep -rlI`
+sweep for `/dev/ark_display` had returned a **false negative** — `grep`'s
+binary-file heuristic missed it; `strings` found it correctly), which
+surfaced the real, much bigger gap: `libarkcmn.so` (the actual
+CarPlay-adapter/2D-blit-compositor library — not `libarkapi.so`, which
+doesn't ship in our rootfs at all) references `/dev/fb0`-`/dev/fb4` and
+`/dev/carback` directly, issuing raw ioctls our `ark1668_lcdfb_ioctl`
+never handled.
+
+**Root cause:** `libarkcmn.so`'s `arkapi_init_fb_display()` (sets up
+`PRIMARY_LAYER`) and `arkapi_init_fb_video_display()` (sets up
+`VIDEO_LAYER`, the CarPlay/phone-mirroring video path) issue raw ioctls
+`0x403c4f27` and `0x403c4f37`; `arkapi_set_fb_video_addr()` (per-frame
+video buffer address update, called every frame during playback) issues
+`0x40104f38`. None of the three matched any command our
+`ark1668_lcdfb_ioctl` implemented, so **every real call from
+`libarkcmn.so` into the framebuffer driver for layer init and per-frame
+video updates silently hit the `default:` case and failed** —
+`PRIMARY_LAYER` UI likely renders via a different/older path (explaining
+"occasional glimpses of the UI"), but `VIDEO_LAYER` (actual CarPlay
+video) never gets configured or fed frames at all. This is a materially
+bigger, more central gap than anything found in `ark_display.c` — that
+device is a secondary control channel, `/dev/fb0`-`4` is the real video
+path.
+
+**Evidence trail (not guessed — traced at the ARM instruction level):**
+- Command numbers decoded via ArkMicro's real `_IOC` macros
+  (`ARK_IOW(num,dtype)=_IOW('O',num,dtype)` etc, from
+  `ark_lcdc_common.h`): both `0x403c4f27`/`0x403c4f37` are `dir=WRITE,
+  size=60, type='O'`, sharing `nr=39`/`nr=55` with existing
+  `ARKFB_SHOW_WINDOW`/`ARKFB_GET_VP_INFO` at different dir/size — no
+  actual 32-bit collision, confirmed by direct C preprocessor
+  computation, not just eyeballing the hex.
+- Full 60-byte payload struct for both `0x403c4f27`/`0x403c4f37` traced
+  via `arm-linux-gnueabihf-objdump -d` disassembly of
+  `arkapi_init_fb_display`/`arkapi_init_fb_video_display` in
+  `libarkcmn.so` (Ghidra's decompiled local-variable ordering was
+  deliberately NOT trusted — it reorders/renames unreliably; raw
+  assembly offsets from the stack-frame base were used instead).
+  Identical layout for both functions. See `struct ark_fb_init_display`
+  in `linux-arkmicro/linux/drivers/video/fbdev/arkmicro/ark_lcdc_common.h`.
+- 16-byte payload struct for `0x40104f38` traced the same way from
+  `arkapi_set_fb_video_addr`. See `struct ark_fb_set_video_addr` in the
+  same header.
+- Cross-checked against stock's real kernel-side handler: decompiled
+  `ark_disp_fb_ioctl` (`vmlinux.elf @ 0x802e1e84`) confirms stock
+  handles all three commands, gated by `ark_carback_get_status()`
+  (`vmlinux.elf @ 0x802eec40` — trivial: returns a global's cached byte
+  if the carback subsystem is present, else falls back to the caller's
+  own default). Our kernel has no carback subsystem built
+  (`CONFIG_ARK_CARBACK` etc are disabled, see §7/`.config`), so that
+  global is always NULL and the gate always falls through to
+  "not active" — meaning our implementation correctly skips the gate
+  entirely rather than needing a stub for it.
+- `ark_video2_write_back` (`vmlinux.elf @ 0x802e43c8`) confirms stock's
+  low-level video-layer register writes map directly onto functions
+  **already present** in our `ark1668_lcdc_funcs.c`
+  (`ark1668_lcdc_set_video_format`/`_source_size`/`_win_size`/
+  `_win_point`/`_layer_size`/`_layer_position`/`_scal`/`_addr`) — these
+  didn't need to be written from scratch, only wired to the new ioctl
+  entry points. In particular `ark1668_lcdc_set_video_addr()` (line 367)
+  already does exactly what `0x40104f38` needs.
+
+**Implementation (deliberate scope decision):** stock's real kernel-side
+handling of `0x40104f38` queues frames through a private,
+IRQ-driven wait-queue buffer pipeline (`ark_video_update_window`/
+`ark_fb_set_video_window_addr`, both decompiled in full — genuinely
+complex, `prepare_to_wait`/`schedule_timeout`/`finish_wait`
+completion-style synchronization). Only the **userspace-facing ioctl
+ABI** (command numbers, payload struct byte layout) is a hard
+compatibility constraint, since `libarkcmn.so` is a fixed prebuilt
+binary we can't recompile — the **kernel-internal** synchronization
+mechanism is entirely under our own control, unlike the `gcsHAL_INTERFACE`
+work in §1b where both sides were separately-compiled and had to match.
+Chose to write the new frame's address directly under `sinfo->lock`
+(`spin_lock_irqsave`) rather than replicate stock's buffer-queue
+machinery: this is a live video feed, showing the latest frame
+immediately is functionally preferable to queuing, and a hasty
+unverified reimplementation of IRQ-driven wait-queue logic risks new
+kernel bugs (races/deadlocks) for no real benefit here.
+
+**Changes** (`linux-arkmicro`, not yet committed as of this doc update):
+- `ark_lcdc_common.h`: added `struct ark_fb_init_display` (60 bytes),
+  `struct ark_fb_set_video_addr` (16 bytes), and
+  `ARKFB_INIT_DISPLAY`/`ARKFB_INIT_VIDEO_DISPLAY`/
+  `ARKFB_SET_VIDEO_ADDR_RAW` macros built from the existing
+  `ARK_IOW()` pattern — verified via a standalone preprocessor probe
+  that they expand to exactly `0x403c4f27`/`0x403c4f37`/`0x40104f38`.
+- `ark1668_lcdc_funcs.c` (`ark1668_lcdfb_ioctl`): added handlers for all
+  three commands. The two init commands reuse the existing
+  `ark1668_lcdc_set_osd_pos/_size` (OSD/`PRIMARY_LAYER` path) or
+  `set_video_layer_pos/_source_size/_win_size/_win_point/_layer_size/
+  _scal` (video-layer path) primitives — the same primitives
+  `ARKFB_SET_WINDOW_POS`/`_SIZE` already use, just driven from the new
+  struct's `x`/`y`/`win_width`/`win_height` fields instead of the packed
+  16-bit pairs those commands use. The addr-update command calls the
+  pre-existing `ark1668_lcdc_set_video_addr()` under `sinfo->lock`.
+- Compiles clean (no warnings). Full `build_kernel.sh` run succeeded;
+  `zImage.w_dtb` now carries this fix together with the earlier
+  `/dev/ark_display` `0xa01b`/`0x4004a000` implementation from the same
+  session (§9's follow-up work, also not yet hardware-tested).
+
+**Two struct fields not fully interpreted** (`right_margin`/
+`bottom_margin` at offsets 8/12, `param12`/`param4`/`param5` at offsets
+24/36/40) — not needed for the direct position+size approach taken
+here, but worth revisiting if the initial hardware test shows
+mispositioned/mis-scaled video (they're most likely margin/crop and a
+capability-flags field respectively, based on the surrounding call-site
+arithmetic, but this wasn't confirmed to the same rigor as the fields
+that were used).
+
+- [ ] **Flash this kernel** (`zImage.w_dtb`, built 2026-07-22) — this is
+      now the single most important pending hardware test in the whole
+      display investigation. Confirms three separate unverified fixes at
+      once: `gcdENABLE_VG` GPU crash fix (§1b, if that `galcore.ko` is
+      flashed alongside), `/dev/ark_display` command implementation
+      (§9), and this framebuffer-ioctl implementation.
+- [ ] Watch for CarPlay/Android-Auto video actually appearing in
+      `VIDEO_LAYER`, not just `PRIMARY_LAYER` UI.
+- [ ] Confirm the "occasional glimpses of the UI" symptom is gone or
+      changes character now that `PRIMARY_LAYER` init goes through the
+      real path instead of failing silently.
+- [ ] If video appears but is mispositioned, cropped, or wrongly scaled,
+      revisit `right_margin`/`bottom_margin`/`param12`/`param4`/`param5`
+      above.
+- [ ] `dmesg` should show no new `unknown ioctl` lines with `cmd` equal
+      to `0x403c4f27`, `0x403c4f37`, or `0x40104f38` from
+      `ark1668_lcdfb_ioctl`'s `default:` case — if any still appear,
+      the macro/struct-size assumption was wrong somewhere and needs
+      re-checking.
+
+## 16. Red/black-screen: checked stock's real `pan_display`, no kernel-side sync exists (2026-07-22)
+
+Per §15's revised theory (`FBIOPAN_DISPLAY` flipping to a buffer before
+render completion), checked whether stock's real kernel provides any
+render-completion synchronization at the `fb_pan_display` layer that our
+port is missing. Traced three real functions from `vmlinux.elf` via
+direct ARM disassembly (`arm-linux-gnueabihf-objdump -d`, addresses
+found via `nm`):
+
+- `ark_disp_fb_pan_display` (`0x802e2900`): NULL-pointer/bounds/
+  alignment/pixel-format validation, then an **IRQ-disabled critical
+  section** wrapping the address update, then re-enables IRQs.
+- `ark_disp_set_next_buf_start_addr` (`0x802db2f0`), called from inside
+  that critical section: converts the target address into an **offset
+  within a ring-buffer-style memory pool** (compares against a stored
+  base/bound, wraps if exceeded) — bookkeeping our port doesn't
+  replicate at all — then delegates to:
+- `ark_disp_set_osd_data_addr` (`0x802def80`): a **plain, immediate
+  `str`** to the hardware register at `0xf6800000+0x80/0x94/0xa4`
+  (stock's static ioremap'd VA for the same LCDC block — confirmed
+  these offsets exactly match our own `ARK1668_LCDC_OSD1/2/3_ADDR`).
+
+**Decisive negative result: there is no vsync-latched shadow register,
+no wait, no fence anywhere in this path.** Stock's kernel does the exact
+same *kind* of immediate register write our port does — it is not
+deferring the visible address update to a safe point, and provides no
+mechanism to wait for GPU render completion before the flip becomes
+visible. This disproves the theory that a kernel-side synchronization
+fix exists to be found here. The two real, confirmed differences from
+our port are (a) the IRQ-disable around the write (protects against a
+concurrent interrupt — most likely the vsync IRQ handler — observing a
+torn update, not a render-completion issue), and (b) the ring-buffer
+offset bookkeeping (translates an absolute address into an offset within
+a pre-allocated pool; our port uses `fix->smem_start`-relative absolute
+addressing directly, which clearly still works at the hardware level
+since OSD1 content does display correctly in `linuxfb` mode and
+intermittently under `directfb`, so this divergence looks like a
+bookkeeping-style difference rather than a functional gap).
+
+**Conclusion: the actual render/flip synchronization responsibility
+lives entirely in userspace** (DirectFB/`libGAL`/`galcore`'s own
+fencing before calling the `FBIOPAN_DISPLAY` ioctl) — not something
+stock's kernel helps with either, and not something patchable here since
+DirectFB/`libGAL` are closed vendor binaries.
+
+**Fix applied (matches stock, but is NOT expected to resolve the
+red/black race on its own):** added the missing IRQ-disabled critical
+section to our own `ark1668_lcdfb_pan_display`
+(`linux-arkmicro/linux/drivers/video/fbdev/arkmicro/ark1668_lcdfb.c`),
+matching stock's real structure. Compiles clean, full kernel rebuild
+succeeded, staged in the same `zImage.w_dtb` as everything else pending
+a flash/test. This closes the one legitimate divergence found by direct
+comparison against stock — it's a real correctness improvement (protects
+against races with the vsync IRQ handler) but should not be expected to
+fix the observed red/black screen, since stock itself has no
+render-completion synchronization at this layer either.
+
+**Where the real fix more plausibly lives:** since the responsible
+synchronization is a userspace-to-galcore fencing concern, not a kernel
+one, the most promising lead is the *currently-parked* struct-RE'd
+`galcore.ko` work ([[project_gcshal_interface_struct_re]]) — if that
+build's `gcsHAL_INTERFACE`/command-dispatch ABI has any remaining
+content mismatch (as opposed to the "known-good pairing" currently
+deployed, which is deliberately an approximate, non-struct-RE'd ABI),
+DirectFB/`libGAL` could plausibly be told a GPU operation (a `STALL`/
+fence-equivalent command) completed before it actually has, causing
+exactly this premature-flip symptom. This isn't confirmed — it's the
+most evidence-consistent hypothesis available without further work on
+the struct-RE path, which was intentionally parked in §13 due to its own
+unresolved crashes. Revisiting that path (once its own `0xe0`/`NULL+4`
+crashes are resolved) is the next real step toward an actual fix, not a
+further kernel-side change at the `pan_display` layer.
+
+---
+
+## 11. `galcore.ko` fails to load — `Unknown symbol v7_dma_map_area` — fixed (2026-07-22)
+
+**Symptom:** first real attempt to boot the newly-built kernel (§10) and
+load `galcore.ko` on hardware:
+```
+galcore: Unknown symbol v7_dma_map_area (err -2)
+galcore: Unknown symbol v7_dma_unmap_area (err -2)
+galcore: Unknown symbol v7_dma_flush_range (err -2)
+modprobe: 'galcore.ko': unknown symbol in module or invalid parameter
+```
+This blocked hardware-testing **every** staged GPU fix at once (§1b's
+`gcdENABLE_VG` crash fix, [[project_gpu_known_good_pairing]],
+[[project_galcore_missing_modparams]]) — `galcore.ko` never loads at all,
+so none of them could be exercised.
+
+**Root cause:** `dmac_map_area()`/`dmac_unmap_area()`/`dmac_flush_range()`
+are marked "private to the dma-mapping API. Do not use directly." in
+`arch/arm/include/asm/cacheflush.h` — no module is supposed to call them.
+Vivante's galcore driver does anyway (`gc_hal_kernel_os.c`,
+`gckOS_CacheClean`/`gckOS_CacheInvalidate`/`gckOS_CacheFlush`). Our kernel
+only enables `CONFIG_CPU_V7` (no other CPU cache variant), so
+`arch/arm/include/asm/glue-cache.h`'s `MULTI_CACHE` macro is undefined and
+`_CACHE`=`v7` — meaning `dmac_map_area(...)` compiles down to a direct
+call to `v7_dma_map_area`, a real global symbol in `cache-v7.S` but never
+`EXPORT_SYMBOL`'d, so no out-of-tree module can resolve it.
+
+**Not a guess** — Vivante's own `gc_hal_kernel_os.c` (around the
+`gckOS_CacheClean` comment block) embeds the exact fix as a documented
+patch: *"Following patch can be applied to kernel in case cache API is
+not exported"*, showing a `proc-syms.c` diff adding
+`EXPORT_SYMBOL(__glue(_CACHE,_dma_map_area))` etc. This is a known,
+vendor-acknowledged compatibility requirement, not specific to our port.
+
+**Fix:** `linux-arkmicro/linux/arch/arm/mm/proc-syms.c`, inside the
+existing `#ifndef MULTI_CACHE` block (right after
+`EXPORT_SYMBOL(__cpuc_flush_dcache_area)`): added explicit `extern`
+prototypes (needed because these are assembly-only symbols with no C
+declaration anywhere visible to `proc-syms.c`) followed by
+`EXPORT_SYMBOL(__glue(_CACHE,_dma_map_area))`,
+`_dma_unmap_area`, and `_dma_flush_range` — matching Vivante's own
+documented patch exactly, just using the `__glue(_CACHE,...)` form so it
+stays correct if `_CACHE` is ever anything other than `v7`.
+
+**Verified (build-time only so far):** `Module.symvers` now lists all
+three as real `vmlinux` `EXPORT_SYMBOL`s. `galcore.ko`'s own `nm -u`
+still shows them as undefined (expected — that just means "resolved at
+load time against the running kernel", which is exactly what
+`EXPORT_SYMBOL` enables). Full `build_kernel.sh` run succeeded with no
+warnings; depmod no longer complains about these three symbols (the
+`dma_buf_*`/`arm_dma_ops` lines depmod still shows are unrelated,
+already-normally-exported symbols).
+
+- [ ] **Flash this kernel** and confirm `modprobe galcore ...` succeeds
+      with no `Unknown symbol` errors.
+- [ ] Once it loads, this unblocks testing everything else GPU-related
+      staged in this session — §1b's `gcdENABLE_VG` fix,
+      [[project_galcore_missing_modparams]], and whichever galcore/libGAL
+      pairing is currently deployed ([[project_gpu_known_good_pairing]]
+      vs the struct-RE'd build).
+
+---
+
+## 12. `libGAL.so` deployment mismatch — corrected (2026-07-22)
+
+**Symptom:** first hardware test after §11's fix (galcore now loads) hit
+the same `0xe0`-address NULL-deref crash pattern the `gcdENABLE_VG` bug
+(§1b) was root-caused against, segfaulting `EffectWatch` repeatedly:
+```
+[1] HAL user version 5.0.11 build 28018 Aug  8 2018 20:51:13
+[2] HAL kernel version 6.2.4 build 150331
+```
+(repeated 4x, then `Segmentation fault`.) `[000000e0]` in the kernel
+oops header confirms the same fault virtual address as before.
+
+**First theory (WRONG, corrected within this same session): "HAL
+user"(5.0.11) vs "HAL kernel"(6.2.4) version mismatch.** This is a false
+lead — these are two independently-versioned components in this driver
+family (Vivante userspace libraries are conventionally `5.0.x`, kernel
+drivers `6.2.4.x`); they were never supposed to numerically match, and
+this pair of numbers is exactly what stock's own real deployment prints.
+
+**What was actually wrong:** traced via `git log` that commit `502c21e
+"libGAL tests"` (2026-07-21, by another agent/session, not this one) had
+swapped the deployed `firmware_overlay/usr/lib/libGAL.so` +
+`firmware_source/mtd6_rootfs/usr/lib/libGAL.so` to an unidentified
+`5.0.11:28018`-reporting build (md5 `312762e6...`, not stock's own
+`e8d811a0...`). First correction attempt restored
+[[project_gpu_known_good_pairing]]'s `libGAL.so` (`277e02e0...`) instead
+— **also wrong**: that 5.6MB debug build was compiled to pair with
+`gpu-known-good-pairing/galcore.ko` (457756 bytes, the pristine p1.8
+upstream tag), not the `galcore.ko` actually deployed right now
+(`compiled_modules/`, 395004 bytes — the struct-RE'd +
+`gcdENABLE_VG=0`-fixed build). Per
+[[project_gcshal_interface_struct_re]] (lines 20/34), that struct-RE'd
+build's entire purpose is byte-exact ABI compatibility with **stock's
+own original `libGAL.so`** — that's specifically what the original
+`0xe0` crash was root-caused against.
+
+**Fix:** restored both deployed `libGAL.so` copies from stock's real
+dump (`firmware_dumps/Prado firmware dump/mtd6_rootfs/usr/lib/libGAL.so`,
+md5 `e8d811a0fbb44fefc9e9de1779757bab`, stripped, 359344 bytes) — the
+correct counterpart for the currently-deployed struct-RE'd `galcore.ko`.
+
+**Implication for the crash itself:** with this correct pairing now
+confirmed restored, if `EffectWatch` still crashes at `0xe0` on the next
+hardware test, that's real signal that the `gcdENABLE_VG` fix (§1b) was
+insufficient on its own — worth reopening that investigation rather than
+assuming a deployment mismatch. If it clears, the fix was good and this
+was purely a stale-deployed-file problem the whole time.
+
+- [ ] **Flash again and retest** with stock's `libGAL.so` + the
+      struct-RE'd/VG-fixed `galcore.ko` — this is the combination that
+      actually validates or invalidates §1b's fix.
+- [ ] Going forward: don't use printed HAL user/kernel version numbers as
+      a pairing sanity check (see corrected theory above) — instead
+      track deployed-file **md5** against which `galcore.ko` build
+      (`compiled_modules/` vs `gpu-known-good-pairing/`) is actually
+      flashed, since different `galcore.ko` builds require different,
+      specific `libGAL.so` counterparts.
+
+---
+
+## 13. Regroup: back to the known-good pairing (2026-07-22)
+
+**Why:** the struct-RE'd `galcore.ko` path (§1b/§11/§12) opened four new
+problems in a row (`0xe0` crash → `v7_dma_map_area` load failure →
+`libGAL.so` pairing mix-up → a new, unexplored `NULL+4` crash) without
+ever getting past any of them to where the black-screen bug (the
+*original* problem) could even be tested. Meanwhile
+[[project_gpu_known_good_pairing]] has been hardware-confirmed since
+2026-07-20 to load and run cleanly (`EffectWatch` reaches real
+`/dev/galcore` ioctls) — its only known problem is the black screen
+itself. Decided to park the struct-RE path and go back to debugging the
+actually-reachable problem.
+
+**Redeployed:** `compiled_modules/lib/modules/4.19.192/galcore.ko` ←
+`gpu-known-good-pairing/galcore.ko` (457756B, md5
+`5d3870259275af7123f4db45fda2d779`, pristine p1.8 upstream tag — does
+not reference `v7_dma_map_area` at all, so §11's kernel-export fix is a
+moot point for this specific build, though it stays in the kernel
+regardless since it's a general vendor-driver compatibility fix worth
+keeping). `firmware_overlay/usr/lib/libGAL.so` +
+`firmware_source/mtd6_rootfs/usr/lib/libGAL.so` ←
+`gpu-known-good-pairing/libGAL.so` (md5
+`277e02e06c54dca5e31bc27bc8dd2824`, its matching counterpart). Confirmed
+the `registerMemBase=0xE0F00000 irqLine=32`
+([[project_galcore_missing_modparams]]) modprobe line is still in place
+in `firmware_overlay/etc/rc.d/rcS` — this fix was never actually
+hardware-tested under this pairing before, so this test also validates
+it for the first time.
+
+**What's kept from today's other work regardless of GPU pairing** (these
+are independent of which `galcore.ko`/`libGAL.so` is deployed):
+- §10: `libarkcmn.so` framebuffer-ioctl implementation
+  ([[project_libarkcmn_fb_ioctl_gap]]) — PRIMARY_LAYER/VIDEO_LAYER init
+  + per-frame video address update.
+- §9 (prior session): `/dev/ark_display` command implementation.
+- §11: the `v7_dma_map_area`/`_unmap_area`/`_flush_range` kernel-export
+  fix ([[project_galcore_v7_dma_export_fix]]) — general compatibility
+  fix, harmless to keep even though this specific `galcore.ko` build
+  doesn't need it.
+
+**Broadened scope for the black-screen investigation itself:** the
+leading theory so far (`EffectWatch`'s `Clear(black)`+`StretchBlit`,
+[[project_effectwatch_black_screen]]) is not the only plausible cause.
+Other real blockers worth checking before/alongside it:
+- Reverse-camera overlay layer interaction (`AUX_LAYER`/carback) —
+  z-order or enable-state conflicts with whatever's drawing.
+- OSD layer configuration/priority (`ARKFB_SET_WINDOW_PRIORITY`,
+  alpha-blend state) — see [[project_lcd_alpha_blend_investigation]] for
+  the related (but distinct, already-fixed) alpha-blend bug.
+- `arkdata`/`ark_display` implementation gaps — §9/§10's newly-found and
+  newly-implemented ioctl gaps could plausibly interact with whatever
+  EffectWatch or the compositor expects to already be configured before
+  it starts drawing.
+
+- [ ] **Flash this (known-good pairing + today's kernel/fb work) and
+      retest.** Confirm `galcore` loads without error, `EffectWatch`
+      reaches real ioctls again (no crash), and specifically look at
+      *what's actually on screen* rather than assuming black==StretchBlit
+      — check whether OSD/PRIMARY_LAYER content is present, whether the
+      new framebuffer-ioctl work (§10) changes anything, and whether
+      reverse-camera/AUX_LAYER state affects it.
+
+---
+
+## 14. `lcd-overlay-watch.sh` register baseline — stock vs ours (2026-07-22)
+
+Captured while chasing the DirectFB solid-red screen (§13's regroup —
+`EffectWatch` removed as a variable; `linuxfb` mode works with only the
+known/separate alpha-blend color issue, `directfb` mode shows solid red
+with the app otherwise functional per console output). Register-level
+comparison via `tools/fb-alpha-test/lcd-overlay-watch.sh` (see that
+script for register offsets/decoding).
+
+**Stock, snapshot #1 (idle/menu-ish state):**
+```
+CONTROL=0x036000C1 (VIDEO1=0 VIDEO2=1 OSD1=1 OSD2=0 OSD3=0)
+BACK_COLOR=0x00108080
+OSD1_ADDR=0x0B400000
+OSD2_ADDR=0x0BE00000
+OSD3_ADDR=0x08800000
+VIDEO_ADDR1=0x00000000
+VIDEO2_ADDR1=0x0FAB4000
+MODE_LCD_REG0(priority/blend_mode)=0x03000204
+```
+
+**Stock, snapshot #2 (CarPlay/phone-mirroring video actively playing):**
+same register set, but `VIDEO2_ADDR1` alternates continuously between
+exactly two addresses — `0x0FAB4000` ↔ `0x0FB5A000` — at roughly 30-60Hz,
+classic double-buffered video (buffer A / buffer B swap per frame).
+Every other register (`CONTROL`'s non-VIDEO2 bits, `OSD1_ADDR`,
+`OSD2_ADDR`, `OSD3_ADDR`, `BACK_COLOR`, `MODE_LCD_REG0`, `VIDEO_ADDR1`)
+printed **zero** change lines during the entire capture, confirming
+OSD1/UI-layer state is completely static during normal stock operation
+(whether idle or with video playing) — only `VIDEO2` (the CarPlay video
+layer) is ever live.
+
+**Our build, captured during the DirectFB red screen:**
+```
+CONTROL=0x03600081 (VIDEO1=0 VIDEO2=0 OSD1=1 OSD2=0 OSD3=0)
+BACK_COLOR=0x00108080
+OSD1_ADDR=0x0F000000
+OSD2_ADDR=0x0BE00000
+OSD3_ADDR=0x00000000
+VIDEO_ADDR1=0x00000000
+VIDEO2_ADDR1=0x00000000
+MODE_LCD_REG0(priority/blend_mode)=0x03000204
+```
+No changes at all after the initial printout — confirmed static
+throughout the red screen, same as stock's idle behavior.
+
+**Register-by-register verdict:**
+
+| Register | Ours | Stock | Match? |
+|---|---|---|---|
+| `CONTROL` (OSD1-enable bit + all bits except VIDEO2) | `0x03600081` | `0x036000C1`/`0x036000C1` | Match (only VIDEO2 bit differs, explained by stock actively running CarPlay video in its capture) |
+| `BACK_COLOR` | `0x00108080` | `0x00108080` | **Exact match** |
+| `OSD1_ADDR` | `0x0F000000` | `0x0B400000` | Differs, but not a correctness signal — per-boot physical DRAM address, expected to vary |
+| `OSD2_ADDR` | `0x0BE00000` | `0x0BE00000` | **Exact match** |
+| `OSD3_ADDR` | `0x00000000` | `0x08800000` | Differs; OSD3 disabled in both, likely stock's leftover boot-animation buffer, not live either way |
+| `VIDEO_ADDR1` | `0x00000000` | `0x00000000` | **Exact match** |
+| `VIDEO2_ADDR1` | `0x00000000` | `0x0FAB4000`/alternating | Differs, entirely explained by VIDEO2-enable difference (CarPlay video active on stock's capture, not ours) |
+| `MODE_LCD_REG0` | `0x03000204` | `0x03000204` | **Exact match** |
+
+**Conclusion:** every register that governs OSD1 (the layer DirectFB
+paints the UI to) — enable bit, `BACK_COLOR`, `MODE_LCD_REG0` — matches
+stock exactly. This rules out LCDC hardware/register misconfiguration as
+the cause of the DirectFB red screen. The bug is downstream of the
+hardware layer: something is writing solid red into OSD1's framebuffer
+content and the real UI never gets composited on top of it. Also
+validates VIDEO_LAYER2's real update pattern as simple 2-buffer
+alternation (userspace-managed), consistent with §10's "direct write,
+latest frame wins" kernel implementation for the per-frame video-addr
+ioctl — no kernel-side buffering logic needed beyond what's already
+there.
+
+**Next step:** `strace` capture of the DirectFB launch (see §13/this
+section's investigation thread) to see what DirectFB/`libGAL`/`galcore`
+actually do — or fail to do — when it should be compositing real UI
+content onto OSD1 instead of leaving it solid red. Not yet captured as
+of this doc update.
+
+## 15. DirectFB red-screen `strace` capture — theory revised (2026-07-22)
+
+Captured `docs/logs/directfb_strace.txt` (`strace -f -tt`, `MsnCoreApp`
+under `start_msn_directfb`, ~39s of activity, 52k lines). Findings:
+
+- **23 `FBIOPAN_DISPLAY` + 23 `FBIO_WAITFORVSYNC` calls, all succeed**
+  (`= 0`), spread across the whole capture — real, repeated frame
+  flips roughly matching UI interaction, not a single startup call.
+- **~680 `galcore` ioctls across 3 threads (pid 124/127/128), all
+  succeed.** Zero errors, zero stalls.
+- Only two ioctl errors anywhere in the trace: `FBIOPUTCMAP` → `EINVAL`
+  (expected/benign on a 32bpp truecolor display — colormap ioctls
+  normally no-op when there's no palette) and one unrelated terminal
+  ioctl failure from a different process.
+
+**This rules out the previous "one bad `Clear()`, then permanently
+stuck" theory** (the `EffectWatch` `StretchBlit`-hang theory from
+[[project_effectwatch_black_screen]]/[[project_gpu_known_good_pairing]]).
+DirectFB is not hanging or failing after a single call — it completes a
+full, successful render-and-flip cycle *every time* the UI is
+interacted with (23 separate times), and every one of those frames
+still comes out red. **This is a per-frame content bug** — wrong pixel
+data landing in the buffer, or a compositing parameter that degenerates
+every blit to a solid fill — not a stall or a crash.
+
+Plain `strace` (no `-v`) can't show the actual pixel data or which
+`gcsHAL_INTERFACE` sub-command each opaque galcore ioctl carries (all
+680 calls are the same generic dispatch number,
+`_IOC(_IOC_NONE, 0x75, 0x30, 0)` — the real command is a field inside
+the struct pointed to, invisible without a verbose/decoded capture).
+
+- [ ] **Next, most direct step:** dump raw framebuffer bytes at
+      `OSD1_ADDR` while the red screen is showing (`devmem <LCDC+0x80>
+      32` to get the current address, then `dd if=/dev/mem bs=1
+      skip=$((address)) count=64 | xxd`) — confirms whether the buffer
+      genuinely contains red pixel data (content bug, as the `strace`
+      evidence suggests) versus something else. Not yet captured.
+- [ ] If confirmed red pixel data: next suspect is a pixel-format/byte-
+      order mismatch somewhere in the DirectFB→`libGAL`→`galcore`
+      blit path (wrong channel order degenerating to solid red for any
+      input), or a wrong/uninitialized source surface being blitted
+      every frame. A verbose (`strace -v -s 200`) recapture around the
+      galcore ioctls, or decoding the `gcsHAL_INTERFACE.command` field
+      at each call site, would be the way to pin down which HAL command
+      dominates each frame.
+
+**Empirical confirmation, 2026-07-22: rapid knob-spin reveals real,
+jumbled UI content briefly on screen.** Spinning the input knob very
+fast (many repaint events in quick succession) makes a jumbled-looking
+real UI briefly appear on the otherwise-permanently-red screen. This is
+decisive, independent confirmation of the per-frame-content theory
+above: DirectFB *is* successfully compositing real UI content — it's
+just normally getting overwritten/covered by red almost immediately,
+every frame. Reframes this specifically as a **race between two draw
+operations**: real content gets composited, then a separate red
+fill/clear (GPU-accelerated, per the original `StretchBlit`-adjacent
+theory) wins the race on almost every frame and paints over it before
+the flip; rapid input changes the timing enough to occasionally let a
+real frame win instead. Next diagnostic, once the raw memory dump above
+confirms red content: try to correlate the *timing* of the red-fill
+operation against the real-content composite (e.g. does the jumbled UI
+appear specifically on frames where `FBIOPAN_DISPLAY`/
+`FBIO_WAITFORVSYNC` land unusually close together, i.e. where the fill
+missed its normal window before the flip?).
+
+**Same session, further knob-spin testing: overridden by BLACK this
+time, not red.** The jumbled real UI got covered by a black fill on a
+subsequent attempt, not the red one seen previously. This is an
+important correction to the race-condition theory above: **the winning
+fill color is not fixed** — it varies run-to-run (or moment-to-moment).
+This unifies this whole investigation with the *original*,
+pre-this-session `EffectWatch` black-screen bug
+([[project_effectwatch_black_screen]]) — despite `EffectWatch` having
+been removed entirely as a variable (§13), a black fill can still win
+the same race.
+
+**Memory dump results (`tools/mem-dump/`, mmap-based -- `dd`'s plain
+read() into `/dev/mem` fails with `EFAULT`/"Bad address" on this
+framebuffer memory, consistent with it being a reserved DMA carve-out
+region outside the kernel's normal linear-mapped RAM; `mmap()` works the
+same way `devmem` already does for MMIO registers):**
+- Captured during "some UI visible" (mid-navigation into Settings,
+  `OSD1_ADDR=0x0F177000`): first 64 bytes are a uniform `00 00 00 FF`
+  pattern (opaque black under any standard byte order) — consistent
+  with sampling a black-colored UI element/border, not proof of a bug on
+  its own (only the top-left 16 pixels of a much larger frame).
+- Captured during a black screen (`OSD1_ADDR=0x0F000000`, a *different*
+  address than the above capture -- confirms the buffer address itself
+  changes between screens, not fixed): first 64 bytes are **all zero**
+  — genuinely empty, not a deliberate black fill.
+- **The solid-red symptom has since stopped reproducing** — only black,
+  or the knob-spin real-UI flash, observed in later testing. No memory
+  capture was taken during an actual red frame.
+
+**Theory revised, given the all-zero buffer result + red no longer
+reproducing:** this is less likely "two competing fill colors racing,"
+and more likely a **buffer-not-yet-rendered bug** — `FBIOPAN_DISPLAY`
+flips to the new screen's buffer before the real content has actually
+finished compositing into it. A freshly-allocated/zeroed buffer flipped
+to too early explains black (matches `BACK_COLOR`'s fallback exactly,
+and the confirmed all-zero dump). A *reused* buffer address still
+holding stale content from whatever was previously allocated there
+would explain arbitrary other colors (including the earlier red) without
+needing two distinct hardcoded fill operations. Rapid knob-spin
+(more render cycles fired in quick succession) occasionally lets a real,
+completed render win the race and get flipped to before being
+overwritten by the next premature pan — matching the jumbled-UI
+observation. This reframes the fix target from "find what's painting a
+wrong color and stop it" to **"make the flip wait for the render to
+actually complete before panning"** — a synchronization/ordering bug
+between compositing and `FBIOPAN_DISPLAY`, not a content/color bug per
+se. Not yet confirmed against the actual DirectFB/MsnCoreApp flip logic
+— would need tracing whether `Flip()`/`FBIOPAN_DISPLAY` waits on a
+render-complete signal (e.g. a prior galcore `FENCE`/`STALL` command) or
+fires unconditionally.
+
+---
+
+## 17. Red/black screen root cause found and fixed: uninitialized framebuffer pages (2026-07-22)
+
+**The actual root cause, confirmed mathematically, not guessed.** In
+response to "is something else writing to the same buffer" (reverse
+camera and `hx170dec` were checked and ruled out — see below), checked
+`/proc/iomem`: `0f000000-0fffffff : e0500000.lcd` — a **16MB region
+fixed, exclusively reserved for the LCD driver**, declared directly in
+`ark1668_limcet_p305.dts`'s `lcd@e0500000` node's second `reg` entry
+(`0xf000000 0x1000000`). Traced `ark1668_lcdfb_probe()`
+(`ark1668_lcdfb.c`): because this resource has a non-zero `map->start`,
+it takes the "pre-allocated memory buffer" branch — `info->fix.smem_len`
+becomes the **entire 16MB**, `info->screen_base` is `ioremap_wc()`'d
+over the whole thing, but the zero-fill was only
+`memset(info->screen_base, 0, info->var.xres * info->var.yres * 4)` —
+**exactly one screen's worth** (800×480×4 = 1,536,000 bytes), not the
+full region.
+
+Meanwhile `check_var()` sets `yres_virtual = yres * 3` — this driver
+triple-buffers, using `pan_display()`'s `yoffset` to select between 3
+stacked pages within this same allocation. **Only the first of those 3
+pages was ever zeroed.** Pages 2 and 3 (everything past the first
+1.536MB, all the way to the 16MB end — which also covers wherever
+OSD2/OSD3/VIDEO1/VIDEO2 land, since those addresses are supplied
+directly by userspace ioctls with zero kernel-side allocation tracking)
+contain **genuine uninitialized DRAM content** from whatever was
+physically there at boot.
+
+**Confirmed exactly, not approximately:** the §15 "some UI visible"
+memory-dump capture was at `OSD1_ADDR=0x0F177000`.
+`0x0F177000 - 0x0F000000 = 0x177000 = 1,536,000` bytes — **precisely**
+one screen (`800*480*4`), i.e. the exact start of page 2. The §15
+"black screen" capture was at `0x0F000000` — page 1, the one page the
+probe-time `memset` actually zeros, which is exactly why it read as
+all-zero. This fully explains every observed symptom: page 1 always
+starts black (zeroed); pages 2/3 start as arbitrary leftover DRAM bytes
+(explaining red, and why the color was never fixed/reproducible);
+panning to a page before DirectFB has ever rendered real content into it
+exposes that garbage; rapid knob input flashes real content through
+because it's whichever page DirectFB happens to have already drawn
+into, race-free — this was never actually a compositing race, it was
+an initialization gap. [[project_effectwatch_black_screen]]'s "race
+between draw operations" theory from earlier in this same day's
+investigation is superseded by this — it correctly identified the
+*symptom pattern* but not the mechanism.
+
+**Ruled out first (both real checks, not assumptions):**
+- `hx170dec` (`CONFIG_ARK_HX170DEC=y`, confirmed built-in, matches the
+  boot log line asked about): has a *second*, DTS-provided "animation
+  buffer" resource separate from its MMIO base, but our board's DTS
+  never provides that second `reg` entry (only sets `status="okay"` on
+  the base `ark1668.dtsi` node) — that fixed-address path is inactive.
+  Its normal decode buffers go through the standard kernel DMA
+  allocator, within the *declared* 128MB system RAM range (`memory {
+  reg = <0x0 0x8000000>; }`), nowhere near the LCD's 0x0F000000+
+  region.
+- Reverse camera: `CONFIG_ARK_CARBACK`/`CONFIG_ARK1668_ITU656`/
+  `CONFIG_RN6752` all confirmed disabled — no active Linux driver, no
+  software DMA path from that hardware into anything.
+- `galcore`'s own `contiguousSize` pool: not registered as a separate
+  `/proc/iomem` entry at all (only its 4KB MMIO register block is);
+  this specific `galcore.ko` build doesn't even print its
+  `contiguousBase`/`contiguousSize` config to `dmesg` (likely built
+  from a slightly different source snapshot than what's archived in
+  `gpu-known-good-pairing/`) — inconclusive either way, but moot now
+  that the real mechanism is found.
+
+**Fix applied** (`linux-arkmicro/linux/drivers/video/fbdev/arkmicro/ark1668_lcdfb.c`,
+`ark1668_lcdfb_probe()`): added a second `memset` covering
+`info->fix.smem_len - (xres*yres*4)` bytes starting right after the
+first screen — zeroing everything from page 2 through the end of the
+full 16MB reserved region, while leaving the first screen's worth
+untouched (preserving the original "don't clear it, might have a U-Boot
+splash image" intent, which only ever applied to page 1 — U-Boot has no
+reason to draw into pages 2/3 or the OSD2/3/VIDEO1/2 area beyond the
+triple-buffer window). Compiles clean, full kernel rebuild succeeded,
+staged in `zImage.w_dtb` alongside everything else pending a flash/test.
+
+- [ ] **Flash and retest** — this is now the primary candidate fix for
+      the entire red/black-screen thread (§13-§17). If it resolves it,
+      the earlier `pan_display` IRQ-disable fix (§16, confirmed
+      independently NOT sufficient on its own) can be understood as a
+      real but unrelated correctness improvement, and the "resume the
+      struct-RE'd galcore path" fallback (§16's other lead) becomes
+      unnecessary for this specific bug.
+- [ ] If it's NOT fully resolved: check whether OSD2/OSD3/VIDEO1/VIDEO2
+      addresses (set directly by userspace, unzeroed by this fix since
+      they're written via ioctl at runtime, not necessarily at the
+      exact moment of probe) might still show init-time garbage on
+      their own first use — the same class of bug could apply to
+      whatever userspace-controlled buffer memory those layers use
+      that ISN'T covered by pages 1-3 of the OSD1 allocation, if any
+      such memory exists outside this 16MB region entirely.
+
+## 18. Real root cause found: galcore's cache-maintenance was compiled out (2026-07-22)
+
+**The premise that reframed everything:** user pointed out `linuxfb` mode
+(no GPU, Qt writes directly to `/dev/fb0` via plain CPU stores) works —
+UI visible, only the already-separately-root-caused alpha-blend color
+bug remains — while `directfb` mode (GPU-accelerated via `galcore`)
+shows the red/black/"hidden" content bug. Since both paths go through
+the exact same OSD1 hardware/kernel path (§17 already fixed and
+retested — not sufficient alone), and only the **GPU-composited** path
+fails, the divergence must be specific to something only GPU writes
+depend on that plain CPU writes don't.
+
+**Root cause: `gckOS_CacheClean`/`CacheFlush`/`CacheInvalidate` were
+compiled as complete no-ops in the currently-deployed
+[[project_gpu_known_good_pairing]] `galcore.ko`.** Checked the real
+`nxp-source-6.2.4.p1.8` source: for `CONFIG_ARM`, real cache maintenance
+calls `dmac_map_area()`/`dmac_flush_range()` (which — same root cause as
+§11 — compile down to `v7_dma_map_area`/`v7_dma_flush_range` on this
+single-cache-type kernel, requiring the `EXPORT_SYMBOL` fix from §11).
+But this is gated behind a `CACHE_FUNCTION_UNIMPLEMENTED` build flag
+(`Kbuild` line 252-256) — if set to `1` at build time, ALL cache
+maintenance becomes a silent no-op that still returns success. Confirmed
+via `nm -u` on the deployed `galcore.ko`: **zero references** to
+`v7_dma_map_area`/`dmac_map_area` anywhere — the only way that's
+possible if cache maintenance is genuinely compiled out entirely.
+
+**Why this exactly explains every symptom:** if the GPU renders real
+content into a buffer but the cache-flush that's supposed to make that
+write visible to the LCDC's DMA reads (or a CPU-based memory dump) is a
+no-op, the data can sit in a cache never flushed to the shared DRAM the
+display and `mem-dump` actually read from — genuinely "in the buffer
+but hidden," exactly as observed. `linuxfb`'s plain CPU writes don't go
+through this GPU-cache path at all, so it's unaffected. Rapid knob input
+increases general system activity, incidentally triggering unrelated
+cache evictions that sometimes flush the relevant lines by chance —
+explaining the intermittent real-content flashes. The color varying
+(red/black/whatever) is just whatever was in DRAM before, unrelated to
+what the GPU actually rendered.
+
+**Likely origin:** this flag isn't mentioned anywhere in
+`gpu-known-good-pairing/README.md` as a deliberate choice. Almost
+certainly, whoever built this `galcore.ko` on 2026-07-16 hit the exact
+same "Unknown symbol v7_dma_map_area" load failure fixed today in §11,
+and "fixed" it at the time by disabling cache maintenance entirely
+(avoiding the need for a kernel-side export patch) — trading a
+load-time crash for a much subtler, harder-to-diagnose rendering bug.
+This also means the struct-RE'd build (§1b/§12) likely has/had the same
+underlying issue if it was ever built with the same flag — not
+confirmed, out of scope now that this pairing is fixed directly.
+
+**Fix:** rebuilt `galcore.ko` from the same `nxp-source-6.2.4.p1.8` tree
+(re-pointed `linux/drivers/mxc/gpu-viv` symlink temporarily), *without*
+`CACHE_FUNCTION_UNIMPLEMENTED` set (defaults to `0`/implemented). This
+flag only affects internal cache-maintenance code, not the wire ABI
+(struct sizes, command numbers) — confirmed version banner still reads
+`$VERSION$6.2.4:150331$`, matching the already-deployed, unchanged
+`libGAL.so` exactly, so no userspace changes were needed.
+
+Hit four unrelated build issues along the way (this exact source tree
+had apparently never been compiled against our specific 4.19.192
+kernel/GCC before) — all fixed directly in the vendor source, none
+touching functional behavior:
+- `gc_hal_kernel_allocator_dma.c` / `gc_hal_kernel_allocator_cma.c`:
+  missing `#include <linux/dma-direct.h>` for `dma_to_phys()`.
+- `gc_hal_kernel_platform_imx.c` (i.MX-specific platform glue, not
+  actually used on this non-i.MX SoC but still compiled): unused
+  variable (`__maybe_unused`) and missing `#include <linux/reset.h>`
+  for `reset_control_reset()`.
+- `gc_hal_kernel_db.c`: dead `!= gcvNULL` check on a fixed-size array
+  (always true) — removed the check, kept the trace call unconditional
+  (behaviorally identical).
+- `gc_hal_kernel_video_memory.c`: `struct dma_buf_ops.map_atomic`/
+  `.unmap_atomic` no longer exist on this kernel (replaced by
+  `begin_cpu_access`/`end_cpu_access`, incompatible signature) — removed
+  those two initializers; `.map`/`.unmap` (non-atomic) still exist and
+  are unaffected.
+
+Confirmed via `nm -u` the rebuilt module now genuinely references
+`v7_dma_map_area`/`v7_dma_unmap_area`/`v7_dma_flush_range`, and that
+`Module.symvers` confirms our kernel exports all three (§11's fix).
+Deployed to `compiled_modules/lib/modules/4.19.192/galcore.ko` and
+`gpu-known-good-pairing/galcore.ko` (replacing the stale cache-disabled
+build there too, so future restores of this pairing get the fix
+automatically). `libGAL.so` unchanged (still the known-good-pairing
+copy from §13).
+
+- [ ] **Flash and retest.** If this resolves the red/black/hidden
+      screen, the whole thread from §13 onward closes here. If GPU
+      writes are STILL not reliably visible, the next thing to check is
+      whether the cache-maintenance calls are being reached at all at
+      runtime (not just compiled in) — e.g. via a `printk` temporarily
+      added to `gckOS_CacheClean`, or checking whether `libGAL.so`
+      actually calls the ioctl path that triggers it for this specific
+      operation.
+- [ ] Worth checking later whether the struct-RE'd `gpu-vivante-6.2.4`
+      build (§1b/§12, currently parked) has the same
+      `CACHE_FUNCTION_UNIMPLEMENTED` issue — if so, it may turn out to
+      have been correct at the ABI level all along, blocked by this same
+      class of build-configuration mistake rather than a real struct
+      mismatch.
+
+## 19. Cache-flush fix retested: NOT sufficient. New lead: check_var stomps yoffset on every mode-set (2026-07-22)
+
+**Hardware-tested §18's cache-flush fix: same exact symptom persists** —
+black by default, real content only flashes through under rapid knob
+input. This is the third distinct, well-reasoned kernel-side fix
+(§16's IRQ-disable, §17's zero-fill, §18's cache-flush) to be
+hardware-disproven with the identical, unchanged signature. That's
+itself informative: since none of the three touched anything related to
+a *repeated, active* re-hiding mechanism, and the symptom never changed
+character across any of them, the bug is very likely something that
+actively re-clears/re-resets display state on a recurring basis, not a
+one-time data/init/cache problem.
+
+**New lead, from the already-captured `directfb_strace.txt`:**
+`FBIOPUT_VSCREENINFO` (a full mode-set ioctl) was called **12 times**,
+interleaved with the 23 `FBIOPAN_DISPLAY` frame-flip calls — unusually
+frequent for something that should typically happen once at startup.
+Checked our own `ark1668_lcdfb_check_var()`: it unconditionally set
+`var->xoffset = var->yoffset = 0` on **every single call**, and
+`set_par()` unconditionally calls `pan_display()` at its end using
+whatever `check_var` left in `var`. Combined: **every one of those 12
+mode-set calls forcibly reset the display back to page 1**, regardless
+of which page DirectFB's own triple-buffer rotation was actually
+displaying at the time — independent of whether that page held current,
+real content. This is a different class of bug than anything the
+previous three fixes addressed (a *repeated forced reset*, not a
+one-time data problem), which is consistent with why none of them
+changed the symptom.
+
+Could not get a clean, directly-comparable stock disassembly for this
+exact line (stock's `check_var`-equivalent, `ark_disp_fb_check_var`,
+operates on a completely different internal struct layout, not
+`fb_var_screeninfo` directly — see §16's note on the same limitation).
+The fix is independently justified on general fbdev-driver-correctness
+grounds regardless: `check_var` should validate/clamp an incoming
+offset, not unconditionally overwrite it — forcing it to 0 on every
+call defeats the entire purpose of a triple-buffered driver.
+
+**Fix applied** (`ark1668_lcdfb.c`, `check_var()`): replaced the
+unconditional zero with clamping — `xoffset` stays 0 (no horizontal
+panning is used by this driver), but `yoffset` is now preserved unless
+it's genuinely out of bounds (`yoffset + yres > yres_virtual`) or not
+page-aligned (`yoffset % yres != 0`), in which case it falls back to 0.
+Compiles clean, full kernel rebuild succeeded, staged in `zImage.w_dtb`.
+
+- [ ] **Flash and retest.** If DirectFB's repeated `FBIOPUT_VSCREENINFO`
+      calls were the actual mechanism forcing the display back to a
+      stale/black page, this should finally resolve the persistent
+      black-with-rapid-flash symptom. If it does NOT change the
+      symptom, that would suggest `FBIOPUT_VSCREENINFO`'s `yoffset`
+      isn't what DirectFB relies on for buffer selection after all (it
+      may pass whatever it last read back, unchanged, for an unrelated
+      reason) — worth a fresh, `-v` (verbose) `strace` capture
+      specifically on `FBIOPUT_VSCREENINFO` calls to see the actual
+      `yoffset` values being passed, rather than continuing to guess
+      kernel-side.
+
+## 20. Fourth kernel fix also disproven; real cause found in DirectFB config (2026-07-22)
+
+**§19's `check_var`/`yoffset` fix hardware-tested: also did NOT fix it.**
+Identical symptom persists across four distinct, well-reasoned
+kernel-side fixes (§16 IRQ-disable, §17 memory zero-fill, §18
+cache-flush, §19 `check_var` yoffset-stomp) — same signature every time:
+black by default, real content only flashes through under rapid knob
+input. Four different fixes failing with an *unchanged* symptom is
+itself strong evidence the mechanism isn't in the kernel driver at all.
+
+**Reconsidered the whole problem from scratch instead of trying a fifth
+kernel tweak.** Checked `/etc/directfbrc` (the actual deployed DirectFB
+config, `firmware_source/mtd6_rootfs/etc/directfbrc` — no
+`firmware_overlay` override exists for this file). Two options stood
+out: `no-layers-clear` and `no-surface-clear`. Per DirectFB's own
+semantics, these explicitly disable clearing of layers/surfaces on
+allocation — a performance optimization that assumes the application
+*always* fully repaints every pixel of a surface immediately after
+creating it.
+
+**This is the real mechanism, independent of anything kernel-side.** If
+MsnCoreApp/Qt instead does partial/damage-region-only repaints (a
+common, standard Qt optimization — redraw only what changed, assuming
+everything else already holds valid prior content), that assumption
+breaks specifically for a *freshly-allocated* surface: DirectFB never
+clears it (per this config), and the app never fully paints it (by
+design, for performance) — so the untouched region shows whatever was
+physically in that memory. Before §17's zero-fill fix, that was
+genuinely uninitialized DRAM (arbitrary color, e.g. the earlier red).
+After §17, physical memory reliably starts at zero — which is exactly
+why the symptom settled into consistently "black" rather than
+continuing to vary, even though none of the four kernel fixes actually
+resolved the underlying issue. Rapid knob input generates more
+navigation/repaint events, so more cumulative partial-redraws land on
+the same surface over time, progressively covering more of the visible
+area — matching "shows if knob moved rapidly" exactly.
+
+**Fix applied:** commented out `no-layers-clear`/`no-surface-clear` in
+`firmware_source/mtd6_rootfs/etc/directfbrc`, letting DirectFB clear
+layers/surfaces on allocation again (the DirectFB default/non-optimized
+behavior). This is a plain config file change — no kernel rebuild, no
+binary patch, deployable via the normal rootfs build
+(`build_bootable_sdcard.sh`) without needing `--new-kernel`.
+
+- [ ] **Flash and retest** — rootfs-only change, the kernel side
+      (§16-§19's fixes, all real correctness improvements even though
+      none alone fixed this) doesn't need to be re-flashed for this
+      specific test, though there's no harm leaving them in.
+- [ ] If this fixes it: the four kernel-side changes were not wasted —
+      §17（zero-fill) and §18 (cache-flush) are still real, independently
+      justified correctness fixes worth keeping regardless. §16 (IRQ
+      disable) and §19 (`check_var` clamping) are also genuine
+      correctness improvements matching more defensive driver behavior,
+      even if none were the root cause here.
+- [ ] If it does NOT fix it: re-enable `no-layers-clear`/
+      `no-surface-clear` (they exist for a real performance reason,
+      don't leave them off speculatively) and reconsider — the next
+      lead would be to trace MsnCoreApp/Qt's own repaint/damage-region
+      logic more directly (e.g. via a verbose strace focused on
+      DirectFB surface-lock/blit calls correlated with visible damage),
+      since the config-level theory would then be ruled out too.
+
+## 21. §20 not yet tested; new, more direct lead traced through DirectFB itself (2026-07-22)
+
+**No device access this session to test §20's `directfbrc` fix.**
+Instead, worked through the user's structural question directly: what's
+actually *different* between the `linuxfb` path (works) and the
+`directfb` path (doesn't) that could explain "rendered but hidden"?
+`linuxfb` is a single writer (CPU) into a single, unambiguous memory
+region. `directfb` with GPU acceleration has a **second, independent
+writer** — the GPU itself, addressed via `galcore`'s own memory
+management, not necessarily the same code path as CPU/`mmap()` writes.
+
+**Decompiled the actual DirectFB modules involved** (both `not stripped,
+with debug_info` — much easier to trace than the closed binaries earlier
+this session):
+
+- `libdirectfb_gal.so` (the GPU-acceleration/"gfxdriver" module):
+  registers its own DirectFB surface pool (`galInitPool`/
+  `galSurfacePoolFuncs`). `galAllocateBuffer` allocates buffer memory via
+  `gcoSURF_Construct` — a Vivante HAL call that creates a **brand-new
+  surface from `galcore`'s own memory manager**, not one that wraps
+  existing physical memory. This is a genuinely separate physical memory
+  region from `/dev/fb0`'s DTS-reserved 16MB buffer (confirmed via
+  decompile, not assumed).
+- `libdirectfb_fbdev.so`'s `primaryFlipRegion` (the function that
+  actually presents a frame to the display): computes
+  `yoffset = left_lock->offset / left_lock->pitch`, then calls
+  `ioctl(fd, 0x4606 /* FBIOPAN_DISPLAY */, &var)` using that value. This
+  is only meaningful if `left_lock->offset` is relative to `fb0`'s own
+  base address.
+
+**The mechanism, if the flipped surface is GAL-pool-backed instead of
+`fb0`-backed:** `left_lock->offset` would be relative to the GAL pool's
+base, not `fb0`'s. Interpreted as an `fb0`-relative `yoffset` by our
+kernel's `pan_display` (`addr = smem_start + yoffset*line_length`), this
+produces a bogus-but-in-bounds address within `fb0`'s buffer — the ioctl
+succeeds (matches every observation: zero ioctl errors anywhere in any
+capture this whole investigation), but the LCDC scans out unrelated
+content, while the GPU's real, correctly-rendered output sits untouched
+in the GAL pool's own memory. This explains every symptom observed
+across §13-§20 without requiring any of the four disproven kernel-side
+mechanisms, and is consistent with every piece of register/memory
+evidence gathered so far (all of which checked out "correct" — because
+the actual bug isn't visible at that layer at all).
+
+**Not yet confirmed** — this is architecturally sound and directly
+traced through real decompiled code, but whether the *primary/screen*
+surface specifically ends up GAL-pool-backed in practice (rather than
+just secondary/offscreen surfaces, which would be normal) still needs a
+live test, since DirectFB's surface-pool selection policy is determined
+by capability flags evaluated at runtime, not something visible from
+static analysis of the pool implementations alone.
+
+**Diagnostic test staged** (not a permanent fix —
+`firmware_source/mtd6_rootfs/etc/directfbrc`): added `no-hardware`
+(currently commented out, confirmed as a real recognized DirectFB
+option via `strings` on `libdirectfb-1.7.so.4.0.0`) with instructions to
+enable it for a single test. `no-hardware` forces pure-software
+rendering — no GPU acceleration, no GAL pool involved at all, functions
+identically to `linuxfb`'s single-writer model but through the
+`directfb` code path. If enabling it makes the UI render correctly (even
+slower), that **conclusively confirms** the GAL-pool mismatch as root
+cause. If the bug persists even with hardware acceleration fully
+disabled, this whole theory is ruled out and the bug is somewhere else
+in DirectFB's software compositing path instead.
+
+- [ ] **First, test §20** (`no-layers-clear`/`no-surface-clear` already
+      disabled in the deployed `directfbrc`) — not yet tested, still an
+      open, independent hypothesis.
+- [ ] **Then, as a diagnostic** (not a permanent change): uncomment
+      `no-hardware` in `directfbrc`, redeploy, and check whether the UI
+      renders correctly with acceleration off. Re-comment it afterward
+      regardless of the result — this is a diagnostic, not intended to
+      ship (full software rendering would be a real performance
+      regression, especially for CarPlay video).
+- [ ] If `no-hardware` confirms the theory: the real fix is finding why
+      the primary/screen surface ends up GAL-pool-backed instead of
+      `fb0`-backed, and forcing it to use the `fbdev` system pool
+      specifically — likely a missing/wrong capability flag either in
+      DirectFB's own layer-realization code or in how
+      `libqdirectfbscreen.so` (Qt's DirectFB integration,
+      `usr/local/Qt4.7.4/plugins/gfxdrivers/`) creates its primary
+      surface. Worth decompiling that Qt plugin next if this is
+      confirmed.
+
+## 22. Decompiled the Qt DirectFB plugin: found the missing `systemonly` token, staged as a targeted fix (2026-07-22)
+
+Continued §21's lead while device access was unavailable — decompiled
+`libqdirectfbscreen.so` (Qt4.7.4's DirectFB integration plugin,
+`usr/local/Qt4.7.4/plugins/gfxdrivers/`; dynamic symbols intact even
+though local symtab is stripped, much easier than the fully-stripped
+binaries elsewhere in this rootfs).
+
+`QDirectFBScreen::connect()` parses `QWS_DISPLAY`'s colon-separated
+option list into a flags bitmask stored at a fixed offset in the screen
+object. `QDirectFBScreen::createDFBSurface()` — the function that
+actually creates every DirectFB surface, including the primary/screen
+one — branches on exactly that same bitmask's bit 0 to decide whether to
+route surface creation through an accelerated allocation path (calling
+a vtable method at offset `0x24`, consistent with `IDirectFB::
+CreateSurface`, whose resulting pool is chosen by DirectFB/the `gal`
+driver's own policy — §21's `gcoSURF_Construct`-backed GAL pool) versus
+a different, unaccelerated path.
+
+**Found the actual missing piece:** `strings` on the binary confirms
+`systemonly` and `videoonly` are both real, compiled-in
+`QWS_DISPLAY`/`-display directfb:...` option tokens Qt's DirectFB screen
+driver recognizes — well-documented Qt4 tokens that force surface
+allocation to a specific memory type. Checked the actual deployed launch
+script, `firmware_overlay/usr/bin/start_msn_directfb`:
+```
+export QWS_DISPLAY=directfb:boundingrectflip:mmWidth220:mmHeight120:0
+```
+**Neither `systemonly` nor `videoonly` is specified.** Without an
+explicit token, `createDFBSurface`'s pool-selection branch falls through
+to whatever Qt's unspecified default does — exactly the ambiguity §21's
+theory points at as the root cause.
+
+**Fix staged** (`firmware_overlay/usr/bin/start_msn_directfb`): added
+`systemonly` to `QWS_DISPLAY`, forcing every DirectFB surface Qt creates
+— including the primary/screen surface actually flipped via
+`primaryFlipRegion`/`FBIOPAN_DISPLAY` — to be allocated from `/dev/fb0`'s
+own system memory, the same guarantee `linuxfb` already has, while still
+using the `directfb` system module (so window management/compositing
+behavior stays the same, only the surface memory source changes). This
+is a plain shell-script/env-var change — no kernel rebuild, no binary
+patch, low-risk and easily reversible.
+
+**Relationship to §21's `no-hardware` diagnostic:** `systemonly` is a
+much more targeted change than `no-hardware` — it should still allow
+GPU-accelerated *operations* (blits/fills) while just fixing *where the
+resulting surfaces live*, rather than disabling acceleration entirely.
+If `systemonly` alone resolves the bug, no performance regression is
+expected (unlike `no-hardware`, which would). Recommended test order:
+try `systemonly` first (this section) since it's both more targeted and
+more likely to be the actual permanent fix; fall back to `no-hardware`
+(§21) only as a pure diagnostic if `systemonly` doesn't resolve it, to
+distinguish "wrong pool" from "something else in the GPU path entirely."
+
+- [ ] **Test `systemonly` first** (already staged in
+      `start_msn_directfb`) — this is now the leading candidate fix for
+      the entire §13-§22 investigation thread.
+- [ ] If it resolves the bug: confirms the GAL-pool-vs-`fb0` mismatch
+      theory conclusively, and this becomes the permanent fix (no
+      further action needed on this thread).
+- [ ] If it does NOT resolve the bug: fall back to §21's `no-hardware`
+      diagnostic to determine whether to keep chasing the GPU-pool
+      theory (if `no-hardware` fixes it but `systemonly` alone didn't,
+      something else about `systemonly`'s scope needs revisiting — e.g.
+      it may not be honored by every accelerated blit path) or abandon
+      it entirely (if even `no-hardware` doesn't fix it) and look at
+      DirectFB's software compositing/damage-region logic instead.
+
+**CORRECTION, same session: `systemonly` is NOT confirmed by stock —
+it's contradicted by it.** Checked stock's real, dumped `/etc/profile`
+(`firmware_dumps/Prado firmware dump/mtd6_rootfs/etc/profile`):
+```
+export QWS_DISPLAY=directfb:boundingrectflip:mmWidth220:mmHeight120:0
+```
+**Identical to what our deployment had before this section's change** —
+no `systemonly`/`videoonly` token on stock either. Since stock
+presumably works correctly without it, the missing-token theory as
+originally framed is wrong — stock proves the *unspecified default*
+pool-selection behavior isn't inherently broken. `systemonly` is left
+staged as a worthwhile experiment regardless (forcing a known-safe pool
+can only rule things in or out), but it should **not** be treated as a
+confirmed fix, and if it does resolve the bug, that raises a new
+question of its own: why does forcing something stock doesn't need
+change the outcome on our build specifically? (Candidate answer: our
+deployed `galcore.ko`/`libGAL.so`/`libdirectfb_gal.so` aren't
+byte-identical to stock's, so the *default* pool-selection outcome
+could differ even with identical launch arguments.)
+
+**Real discrepancy found in the same file, fixed:**
+`galcore`'s `contiguousSize` module param. Stock's real, uncommented,
+unconditionally-executed `/etc/profile` line uses
+`contiguousSize=0x800000` (8MB) — our deployment had `0x400000` (4MB),
+half the size. Traced the discrepancy's origin:
+[[project_galcore_missing_modparams]] (2026-07-20) had "corrected"
+`0x800000` down to `0x400000` based on a **commented-out** reference
+line in stock's `etc/all.sh`/`etc/rc.d/rcS` (verified: both files really
+do have `#insmod ... contiguousSize=0x400000 ...`, but genuinely
+commented out, never executed). That earlier fix had it backwards.
+Reverted in `firmware_overlay/etc/rc.d/rcS`: `contiguousSize=0x800000`,
+matching stock's real active configuration. This is galcore's own GPU
+memory pool size — directly relevant to §21/§22's GAL-pool theory
+regardless of whether it's the primary cause (a too-small pool is a
+real, independent discrepancy from stock worth having fixed either
+way).
+
+**Side finding, same file, for the `ttyS2` thread
+([[project_ttyS2_mcu_channel]]):** stock's `/etc/profile` sets
+`TOUCHSERIAL=/dev/ttyS2`, `TOUCHSERIAL_BAUDRATE=115200`,
+`COMMANDSERIAL=/dev/ttyS2`, `COMMANDSERIAL_BAUDRATE=115200`,
+`PROTOCOL_ID=ark169` — suggests `ttyS2` is actually a touch-input +
+command protocol channel, not necessarily the steering-wheel-control
+candidate speculated earlier. Baud rate (115200) doesn't match what was
+captured live on `ttyS2` (4800 baud) — not yet reconciled, a separate
+open thread from this display-bug investigation.
+
+## 23. `boundingrectflip` confirms §20's partial-redraw mechanism directly (2026-07-22)
+
+Asked to look for other structural differences between the `linuxfb`
+and `directfb` paths beyond the GAL-pool theory. Direct comparison of
+the two launch scripts' `QWS_DISPLAY` values:
+```
+linuxfb:   QWS_DISPLAY=linuxfb:mmWidth220:mmHeight120:0
+directfb:  QWS_DISPLAY=directfb:boundingrectflip:mmWidth220:mmHeight120:0
+```
+**`boundingrectflip` is present only in the `directfb` path.** This is a
+real, documented Qt Embedded (QWS) screen-driver option — instead of
+updating the whole screen on each flip, it computes the bounding
+rectangle of just the *dirty* regions and only exposes/flips that.
+`linuxfb` always does full-screen updates; `directfb` does not.
+
+**This upgrades §20's theory from speculative to directly confirmed.**
+§20 theorized that `no-layers-clear`/`no-surface-clear` (skip clearing
+on allocation) combined with the app doing partial/damage-region-only
+repaints would leave untouched areas showing stale memory content — but
+that relied on an *assumption* about the app's repaint behavior.
+`boundingrectflip` removes that assumption: it's a confirmed, active,
+`directfb`-only mechanism that only ever exposes the bounding rect of
+what changed. Combined with `no-layers-clear`/`no-surface-clear`, this
+is now a complete, self-contained explanation requiring no further
+assumptions: any screen area never covered by a bounding-rect update
+simply shows pre-existing memory content indefinitely, explaining every
+observed symptom (rendered-but-hidden, cumulative coverage under rapid
+input revealing more real content, arbitrary stale colors before §17's
+zero-fill) without needing the GAL-pool/`systemonly` theory at all.
+
+**This also means §20's already-staged fix likely doesn't need
+`boundingrectflip` removed as a separate change.** Once DirectFB clears
+surfaces to a known black baseline again (§20), `boundingrectflip`'s
+partial updates would correctly layer real content on top of a clean
+background — a fresh screen starting black until painted is normal,
+expected UI behavior, not a bug. **§20 is now the single most
+evidence-backed fix in the whole §13-§23 thread** — recommend testing it
+before `systemonly` (§22) or the `no-hardware` diagnostic (§21), which
+were both explored based on a separate, less-directly-confirmed theory.
+
+- [ ] **Test order recommendation, updated:** §20
+      (`no-layers-clear`/`no-surface-clear` disabled in `directfbrc`)
+      first — now the most directly evidenced fix. If it resolves the
+      bug, §22's `systemonly` change can be reverted (not needed) or
+      kept (harmless, still a reasonable safety margin) at your
+      discretion. If §20 alone does *not* resolve it, that's useful
+      signal that `boundingrectflip`'s partial-update mechanism isn't
+      the (sole) explanation, strengthening the case for the GAL-pool
+      theory (§21/§22) instead.
+
+## 24. Confirmed: `linuxfb` never exercises the yoffset/pan_display path at all (2026-07-22)
+
+Decompiled `QLinuxFbScreen::setDirty` (`libQtGui.so.4.7.4`, Qt's built-in
+LinuxFB screen driver — the code path `linuxfb` mode actually uses):
+```c
+void setDirty(QRect *rect) {
+    if (some_mode_flag != 1) return;             // no-op entirely if flag unset
+    if (rect covers the full screen)
+        ioctl(fd, 0x46a2);                        // no third arg
+    else
+        ioctl(fd, 0x46a2, 0);                     // third arg NULL
+}
+```
+**No `yoffset` computation anywhere. No call to `FBIOPAN_DISPLAY`
+(`0x4606`) at all.** `0x46a2` is some other, simpler ioctl (most likely
+a vsync/refresh notification, not investigated further) — not a
+buffer-flip. `QLinuxFbScreen` writes directly into a single, fixed
+buffer via `mmap()` and never touches the `yoffset`/triple-buffer/
+`pan_display` machinery. Cross-checked against §21's decompile of
+`libdirectfb_fbdev.so`'s `primaryFlipRegion`, which *does* compute
+`yoffset = left_lock->offset / left_lock->pitch` and calls real
+`ioctl(fd, 0x4606, &var)` — confirming this is a genuinely
+DirectFB-exclusive mechanism, not something `linuxfb` also exercises
+under the hood.
+
+**This means "`linuxfb` works" never actually validated any of the
+kernel-side buffer-selection fixes from §16-§19.** Those all targeted
+the `yoffset`/`pan_display` mechanism specifically — but `linuxfb`
+writes to a single fixed buffer and was never in a position to prove or
+disprove that mechanism's correctness either way. This doesn't mean
+§16-§19 were wrong to try (they're independently-justified correctness
+fixes regardless), but it does mean their failure to fix the bug isn't
+as strong evidence against "the `yoffset`/`pan_display` path has a real
+bug" as it first appeared — since `linuxfb`'s success was never proof
+that path works in the first place.
+
+**Reframes the remaining open question:** is the bug in *which pool* the
+flipped surface's memory lives in (§21/§22, GAL-pool-vs-`fb0`), in
+*whether nothing ever gets exposed outside the last flip's bounding rect*
+(§23, `boundingrectflip`+no-clear), or in the `left_lock->offset`/
+`pitch` → `yoffset` **arithmetic itself** being wrong regardless of pool
+(not yet checked — `left_lock->pitch` needs to match what our kernel's
+`fix.line_length` actually is, and if DirectFB computes pitch
+differently for a GAL-pool-backed surface than for an `fb0`-backed one,
+this could interact with the pool question rather than being fully
+independent of it). All three remain open; §20's fix (§23's evidence)
+is still the recommended first test, but a bug in the offset/pitch math
+itself hasn't been ruled out and would survive even if surfaces are
+correctly `fb0`-backed and correctly cleared.
+
+## 25. Continued comparing `linuxfb`/`directfb`: two dead ends, one new open lead (2026-07-22)
+
+Checked two more candidate differences, both ruled out:
+
+- **`MODE_LCD_REG1` (per-pixel alpha blend enable for OSD1, bits 12-13):**
+  traced `set_par`'s OSD1 init write (`0x00003001` — `alpha_blend_en`=1,
+  `per_pix_alpha_blend_en`=0) back to an in-code comment confirming this
+  exact fallback value was already verified against real stock hardware's
+  live register dump in an earlier session, with an explicit note not to
+  re-attempt this axis without new evidence. Not a discrepancy — dead
+  end.
+- **`/etc/fb.modes`:** DirectFB's `fbdev` system module
+  (`dfb_fbdev_read_modes`/`init_modes`) tries to read this file for mode
+  definitions — a mechanism `linuxfb` has no equivalent of at all. But
+  the file doesn't exist in either our deployment or stock's real dump
+  — same missing-file fallback path (falls back to the kernel-reported
+  current mode) on both. Not a discrepancy between us and stock.
+
+**New, unexplored, genuinely structural difference:**
+`libqdirectfbscreen.so` exports `qt_directfb_window_for_widget` —
+confirms Qt's DirectFB integration creates **native per-widget DirectFB
+windows**, composited together by DirectFB's own window manager
+(`wm/libdirectfbwm_default.so`, `interfaces/IDirectFBWindows/
+libidirectfbwindows_default.so`). `linuxfb` has no equivalent at all —
+`QWSServer` composites every widget itself, directly into the one
+buffer, with no separate WM layer. This is a real, DirectFB-exclusive
+compositing path, structurally independent of the GAL-pool (§21/§22)
+and `boundingrectflip`/no-clear (§23) theories — not yet decompiled or
+otherwise examined. Worth pursuing next if §20/§22 don't resolve the
+bug: specifically, whether the WM correctly composites every visible
+window's surface into what actually gets flipped, or whether some
+windows (e.g. ones created before the "primary" one, or with an
+unexpected stacking/visibility flag) get silently excluded.
+
+## 26. Traced the per-widget window-surface path further — real structural facts, open thread (2026-07-22)
+
+Continued into §25's per-widget-window lead. Decompiled the actual
+implementations behind `qt_directfb_surface_for_widget`/
+`qt_directfb_window_for_widget` (`libqdirectfbscreen.so`):
+
+- **`QDirectFBScreen::exposeRegion(QRegion, int)` is a complete no-op**
+  — decompiles to a bare `return;`, no body at all. The generic Qt
+  `QScreen` "please expose this region" hook does nothing for the
+  DirectFB backend.
+- **`QDirectFBScreen::windowForWidget`/`surfaceForWidget`** confirm real
+  per-widget architecture: each widget has a `QWSWindowSurface`
+  (accessed via the standard `QWidget::windowSurface()`), verified via a
+  `className()` string comparison (checking it's the DirectFB-specific
+  subclass) before extracting the underlying `IDirectFBSurface*`/
+  `IDirectFBWindow*` pointers from fixed offsets (`+0x18`/`+0x40`) in
+  that object. This is genuine confirmation (not inference) of
+  per-widget native DirectFB windows, composited by DirectFB's own WM
+  — `linuxfb` has no equivalent of any of this.
+- **The actual update-trigger method (`flush()`, the standard Qt4
+  `QWSWindowSurface` virtual for "push this region to the screen") is
+  NOT findable by name** — the window-surface subclass itself has no
+  exported/local symbol anywhere in either `libqdirectfbscreen.so` (its
+  local symtab is stripped, only 62 dynamic symbols exist, none
+  matching) or `libQtGui.so.4.7.4` (zero symbols containing "DirectFB"
+  at all, `nm`/`nm -D` both checked). Locating it would require
+  reconstructing the window-surface class's vtable directly (we already
+  have one confirmed vtable slot — offset `0x48`, `className()`, seen in
+  `windowForWidget`'s decompile — the vtable itself could be walked from
+  there) rather than name-based search. **Not completed this session** —
+  a real, open thread if §20/§22 don't resolve the bug and the WM/
+  per-widget-surface angle needs to be pursued further.
+
+**Honest assessment of this whole thread (§25/§26):** the per-widget
+window/WM architecture is now confirmed real and structurally
+significant, and is a plausible independent explanation for
+"rendered-but-hidden" (a window's surface could hold correct content
+that simply never gets composited by the WM into the final flipped
+output). But without finding the actual `flush()`/composite trigger, this
+remains a real lead, not a proven mechanism — unlike §21's `galAllocateBuffer`→`gcoSURF_Construct`
+and §21's `primaryFlipRegion`→`FBIOPAN_DISPLAY` findings, which were
+fully traced end-to-end.
+
+## 27. Re-audited `/dev/ark_display`'s unimplemented commands against the full DirectFB/GAL stack (2026-07-22)
+
+Asked whether the earlier `ark_display.c` reverse-engineering (§9,
+2026-07-19) missed something, given it predates all of this session's
+DirectFB/GAL/Qt decompile work. Worth checking directly rather than
+assuming — the original "zero confirmed callers" conclusion for
+`SET_LAYER_CFG`/`GET_LAYER_CFG` was based on a rootfs-wide search done
+*before* `libdirectfb_gal.so`, `libdirectfb_fbdev.so`,
+`libqdirectfbscreen.so`, `libQtGui.so.4.7.4`, and `libdirectfb-1.7.so`
+had been examined at all.
+
+**Re-verified properly this time:**
+- `strings` search for the literal path `/dev/ark_display` across all
+  five of those libraries: **zero matches**. None of them open this
+  device at all.
+- Raw ioctl-number byte search (little-endian) for `GET_LAYER_CFG`
+  (`0xc004a003`) and `SET_LAYER_CFG` (`0x4004a004`) across **every**
+  `.so`/executable in the entire deployed rootfs (not just the
+  DirectFB/Qt libraries) — **zero matches anywhere**, including
+  `libGAL.so` and `galcore.ko`.
+
+**Conclusion: `/dev/ark_display` is confirmed entirely disconnected from
+the rendering pipeline.** It's used exclusively by `MsnCoreApp`/
+`libarkcmn.so`/`libMcuCenter.so` (the original callers found in §9) —
+none of the DirectFB/GAL stack touches it in any way. The original
+scope decision (implement only the 5 commands with real confirmed
+callers, skip the rest) holds up under this more rigorous
+re-verification and is not a lead for the current red/black-screen
+investigation.
+
+**Side benefit — completed the full stock command enumeration**, which
+was previously only in conversation context, never persisted to docs.
+Full decompile of `ark_disp_ioctl` (`vmlinux.elf @ 0x802d9fd8`) surfaces
+these additional real commands beyond what's already implemented/
+documented:
+- `ark_disp_get_layer_cfg` (`0x802db56c`) / `ark_disp_try_layer_cfg`
+  (`0x802db6bc`) + `ark_disp_set_layer_cfg` (`0x802db8d4`) — the
+  large "configure any layer" API already known.
+- `ark_disp_get_tvenc_cfg` (`0x802dc1f8`) / `ark_disp_set_tvenc_cfg`
+  (`0x802dad38`) — TV-encoder (analog TV-out) config, not previously
+  named in any persisted doc.
+- `ark_disp_set_itu656in_en` (`0x802dc714`), called for two distinct
+  command values (almost certainly enable/disable variants) — ITU656
+  camera-input enable, ties to the already-disabled
+  `CONFIG_ARK1668_ITU656` reverse-camera subsystem.
+- Two more cases with no dedicated helper function — direct
+  `copy_to_user` of fields read from fixed offsets in some context
+  struct (`+0x34`/`+0x38` and `+0x6c`/`+0x70`) — not decoded further,
+  no confirmed callers found for either.
+
+None of these are TV-out/camera/generic-layer-config commands with any
+plausible tie to the OSD1/DirectFB rendering bug — all confirmed
+zero-caller across the whole rootfs including the newly-decompiled
+stack. This closes out the `/dev/ark_display` angle for this
+investigation with actual rigor behind it, rather than carrying forward
+a pre-DirectFB-decompile assumption.
+
+## 28. Android Auto video pipeline traced — real architecture found (2026-07-22)
+
+User reported: Android Auto (built-in wireless, no external dongle —
+the head unit itself runs the WiFi AP, confirmed hostapd/`wlan0`) shows
+brief static noise then goes to black on `VIDEO2`. Traced the actual
+pipeline rather than guessing, since this is genuinely different
+territory from the OSD1/UI investigation above.
+
+**Real pipeline architecture, confirmed via decompile (not assumed):**
+- `usr/bin/sink` is the real AA daemon (name matches AASDK/OpenAuto's
+  head-unit-side terminology) — **not stripped, full debug info**,
+  much easier to trace than most binaries in this rootfs.
+- Links `libAndroidAuto.so` (pure AA protocol/protobuf library — zero
+  `arkapi_*` imports, confirmed via `nm -D`, so it does NOT touch the
+  display/framebuffer directly at all) and `libAutoDongle.so` (a
+  socket/IPC layer — `CServSocket`/`CCliSocket`/`ArkDongleChannel`,
+  confirmed via exported symbols — used for inter-process communication,
+  not display).
+- **`hx170dec` (hardware H.264 decoder) is confirmed NOT used anywhere
+  in this pipeline** — `sink` has its own **internal, statically-linked
+  `VideoDecoder` C++ class** with a `draw_slice` callback (the classic
+  legacy libavcodec/FFmpeg callback name) — strongly indicating
+  **software H.264 decode**, not hardware. This settles the "which chip
+  decodes" question raised by the user (none — it's done in software
+  inside `sink`).
+- `VideoDecoder` also has `EnterBackCar()`/`ExitBackCar()` methods —
+  **the same decoder class is shared between Android Auto video and the
+  reverse-camera path**, previously not known to be connected at all.
+- `libarkcommon.so` (note: different from `libarkcmn.so`, confirmed
+  different file, different size, both present in the rootfs
+  simultaneously) is a generic utility library (MFi/Apple-auth-chip
+  communication for real licensed CarPlay support, ini-parsing,
+  dictionary/hashtable, i2c/serial helpers) — not display-related either,
+  despite the similar name to the library this whole session's other
+  display work has focused on.
+
+**Still open, decompile in progress:** exactly how `VideoDecoder::play()`
+hands decoded frames to the display — whether `sink` writes directly to
+`/dev/fb2`-`/dev/fb4` itself (bypassing `libarkcmn.so`'s
+`arkapi_set_fb_video_addr`/`0x40104f38` path this session's §10 already
+implemented), or forwards frames via the `ArkDongleChannel` IPC socket
+to `MsnCoreApp`/`libarkcmn.so` for the actual write. This is the
+decisive remaining question — if `sink` writes directly (its own
+ioctls, not through `libarkcmn.so`), §10's fix may not be sufficient on
+its own and there's a second, `sink`-specific ioctl gap to find and
+fix.
+
+## 29. §28's open question resolved: `sink` calls `libarkcmn.so` directly, found and fixed a real SHOW_WINDOW ioctl gap (2026-07-23)
+
+Resolved §28's open question and found a genuine, previously-missed bug.
+
+**`sink` does call `libarkcmn.so` directly.** `strings usr/bin/sink`
+shows the literal path `/usr/lib/libarkcmn.so` plus a cluster of
+`arkapi_*` names not seen in `readelf -d`'s `NEEDED` list — confirming
+`sink` `dlopen()`s it at runtime rather than linking it at load time
+(that's why the earlier `NEEDED`-list check missed it). The specific
+functions referenced: `arkapi_open_video_fb`, `arkapi_open_video_fb_timeout`,
+`arkapi_close_video_fb`, `arkapi_set_fb_addr`, `arkapi_show_fb`, plus
+already-known `arkapi_init_fb_display`/`arkapi_init_tvenc`/`arkapi_gui_tvout`,
+against `/dev/fb3`/`/dev/fb4` (the VIDEO_LAYER1/2 devices).
+
+Decompiled all four new functions in `libarkcmn.so`:
+- `arkapi_open_video_fb` (`0x7f70`): just `open("/dev/fbN", O_RDWR)`.
+- `arkapi_set_fb_addr` (`0x8e80`): calls `ioctl(fd, 0x40104f2a, &addr)`
+  — this is `ARKFB_SET_WINDOW_ADDR` (`ARK_IOW(44, struct ark_disp_addr)`),
+  which our driver already implements correctly (§10):
+  `ark1668_lcdc_funcs.c`'s ioctl handler `memcpy`s the address into
+  `sinfo->render_addr[layer]`, and `ark1668_lcdfb.c`'s vsync interrupt
+  handler (`ark1668_lcdfb_interrupt`, ~line 674) already consumes it
+  each frame via `ark1668_lcdc_set_video_addr()`. Confirmed by decompiling
+  stock's real `ark_fb_set_window_addr` (`vmlinux.elf@0x802e4b60`) — stock
+  uses a 4-slot ring buffer with an optional blocking wait instead of our
+  single-slot fire-and-forget, but the consumption architecture (picked up
+  by the frame-sync IRQ) matches. **No fix needed here — this path was
+  already correct.**
+- `arkapi_show_fb` (`0x19614`): calls `ioctl(fd, 0x4f2c, 0)` to hide,
+  `ioctl(fd, 0x4f2b, 0)` to show. Decompiled stock's real
+  `ark_disp_fb_ioctl` (`vmlinux.elf@0x802e1e84`) to confirm: `0x4f2c` →
+  `ark_fb_hide_window`, `0x4f2b` → `ark_fb_show_window`
+  (`vmlinux.elf@0x802e4cd8`/`0x802e4d5c` — both just toggle the
+  OSD/VIDEO layer's hardware enable bit via
+  `ark_disp_set_osd_en_lcd`/`ark_disp_set_video_en_lcd`).
+
+**Found a real, previously-missed bug**: `0x4f2c` (hide) was already
+fixed in an earlier session (`ARKFB_HIDE_WINDOW_REAL`, see
+[[project_hide_window_ioctl_fix]]) but **`0x4f2b` (show) was never
+implemented at all** — our driver's `ARKFB_SHOW_WINDOW` is
+`ARK_IO(39)` = `0x4f27`, a completely different, unused command. Any
+caller of `arkapi_show_fb(fd, 1)` — both the CarPlay/DirectFB path and
+`sink`'s AndroidAuto path — issues `ioctl(fd, 0x4f2b, 0)`, which our
+driver's `fb_ioctl` doesn't recognize, so the layer's hardware enable
+bit never actually gets set. This is a strong match for "brief static
+noise then black": the frame address gets written and picked up by the
+vsync IRQ correctly, but the video layer itself is never turned on at
+the hardware compositing level, so it can only ever show transiently
+(e.g. if something else briefly toggles a related enable) before going
+black.
+
+**Fix applied** (same pattern as the earlier HIDE_WINDOW fix):
+- `ark_lcdc_common.h`: added `#define ARKFB_SHOW_WINDOW_REAL ARK_IO(43)`.
+- `ark1668_lcdc_funcs.c`: added `case ARKFB_SHOW_WINDOW_REAL:` alongside
+  the existing `ARKFB_SHOW_WINDOW` case (falls through to the same
+  `ark1668_lcdc_set_osd_en`/`ark1668_lcdc_set_video_en` logic).
+- Rebuilt via `build_kernel.sh`, output staged to
+  `linux-arkmicro/zImage.w_dtb` (auto-picked up by
+  `build_bootable_sdcard.sh`).
+- **Only applied to `ark1668_lcdc_funcs.c`** (the active driver per
+  `.config`'s `CONFIG_FB_ARK1668LCD=y`/`CONFIG_SOC_ARK1668=y`). The `E`
+  variant (`ark1668e_lcdc_funcs.c`) has the same gap but is not compiled
+  into this build — left unfixed as out of scope.
+- **Not yet hardware-tested.**
+
+This directly resolves §28's open question: `sink` writes to the
+display through the same `libarkcmn.so`/`arkapi_*` → kernel ioctl path
+already used by CarPlay, not a separate mechanism — so there is no
+second, `sink`-specific gap. The missing piece was this one shared
+SHOW_WINDOW ioctl.
+
+---
+
 ## If anything regresses
 
 All of tonight's changes are two clean commits:

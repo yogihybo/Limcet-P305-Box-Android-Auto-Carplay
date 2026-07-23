@@ -305,8 +305,8 @@ misc_register(10,255)       (export dev "10:255")          (mknod /dev/ark_displ
   2. The kernel's `check_var()` function (`ark1668_lcdfb.c`) hardcoded `red.offset = 16, blue.offset = 0` (telling userspace/Qt that memory is BGR).
   3. Qt wrote Red to Byte 2 and Blue to Byte 0. But the hardware LCDC (in `RGB` mode) sent Byte 2 to Blue panel pins, swapping Red and Blue on screen.
 - **Resolution**:
-  - Reverted `RgbMode = 0` (`BGR`) in `arkdata.ini` files to match physical panel wiring and U-Boot's proven bootlogo display.
-  - Updated `ark1668_lcdfb_check_var()` in `ark1668_lcdfb.c` to dynamically program `var->red.offset` and `var->blue.offset` based on `pdata->lcd_wiring_mode` (`red.offset = 0, blue.offset = 16` for `RGB`, and `red.offset = 16, blue.offset = 0` for `BGR`), guaranteeing 100% agreement between userspace paint engines and hardware LCDC scanout.
+  - Configured `RgbMode = 5` (`RGB`) in `firmware_overlay/msnprofile/arkdata.ini` and `firmware_overlay/msnprofile/arkdata/arkdata_0.ini` so `MsnCoreApp` receives `RgbMode=5` (`RGB`) via the rootfs build overlay without altering the pristine `firmware_source/` baseline.
+  - Updated `ark1668_lcdfb_check_var()` in `ark1668_lcdfb.c` to set `red.offset = 0` and `blue.offset = 16` for 24bpp/32bpp depths, matching `bootlogo.raw` and physical panel PCB wiring byte-for-byte.
 
 ---
 

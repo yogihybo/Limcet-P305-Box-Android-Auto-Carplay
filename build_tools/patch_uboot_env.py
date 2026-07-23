@@ -363,14 +363,15 @@ def preset_sdboot(root, kernel_file='zImage'):
         'bootdelay':  '2',
         'bootfile':   kernel_file,
         'loadaddr':   '0x1000000',
+        'screen':     '0',
         'sdboot':     ('setenv bootargs console=ttyS0,115200n8 console=tty0 mem=180M '
-                       f'root={root} rootfstype=ext4 rootwait rw;'
+                       f'root={root} rootfstype=ext4 rootwait rw screen=0;'
                        'fatload mmc 0:1 ${loadaddr} ${bootfile};'
                        'bootz ${loadaddr}'),
         # convenience at the prompt: `run usbboot`
         'usbboot':    ('usb start;'
                        'setenv bootargs console=ttyS0,115200n8 console=tty0 mem=180M '
-                       'root=/dev/sda2 rootfstype=ext4 rootwait rw;'
+                       'root=/dev/sda2 rootfstype=ext4 rootwait rw screen=0;'
                        'fatload usb 0:1 ${loadaddr} ${bootfile};'
                        'bootz ${loadaddr}'),
         # keep a way back to the stock behaviour
@@ -384,8 +385,9 @@ def preset_hybrid(kernel_file='zImage_stock'):
         'bootdelay':  '2',
         'bootfile':   kernel_file,
         'loadaddr':   '0x1000000',
+        'screen':     '0',
         'sdboot':     ('setenv bootargs console=ttyS0,115200n8 mem=180M earlyprintk=serial '
-                       'ubi.mtd=6 root=ubi0:rootfs rootfstype=ubifs rootwait ro ${mtdparts} screen=${screen};'
+                       'ubi.mtd=6 root=ubi0:rootfs rootfstype=ubifs rootwait ro screen=0 ${mtdparts};'
                        'fatload mmc 0:1 ${loadaddr} ${bootfile};'
                        'bootz ${loadaddr}'),
         'nandboot':   'run nandbootcmd',

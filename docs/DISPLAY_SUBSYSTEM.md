@@ -238,7 +238,43 @@ src_width:0, src_height:0,dithering:0, video_hfz:0x0,video_vfz:0x0
 **Technical Explanation of Diagnostic Lines:**
 - **`file_size = 262144` vs `6671`**: When stock U-Boot reads the entire 256 KB (`262144` bytes) NAND `arkdata` partition into RAM, it attempts to scan past the valid 6,671 bytes of text into the unwritten trailing zero-padding of the partition.
 - **`parser arkdata error, line size out of 1024 byte!`**: Stock U-Boot's INI line scanner has a 1024-byte per line buffer limit. Because trailing zero-padding in the partition lacks newline characters (`\n`), the scanner reaches 1024 bytes without encountering a newline, emits this diagnostic warning, and gracefully terminates parsing (`parse arkdata.ini end`). All valid parameters parsed up to byte 6,671 remain fully active.
-- **Custom U-Boot (`ark1668_arkdata_ini.c`)**: Custom U-Boot loads `arkdata.ini` from FAT partition 1 (`fatload mmc 0:1 0x2900000 arkdata.ini`) using exact `filesize` bounds checking (6,671 bytes). It parses keys cleanly without scanning trailing padding or triggering line-length warnings. Both bootloaders reach 100% parameter parity (`ScreenType:0`, `800x480`, `Format:7 RGB888`, `32 BPP`, `TvoutType:12`, `CLKFreq:330MHz`).
+- **Custom U-Boot (`ark1668_arkdata_ini.c`)**: Custom U-Boot loads `arkdata.ini` from FAT partition 1 (`fatload mmc 0:1 0x2900000 arkdata.ini`) with automatic fallback to NAND partition 4 (`switchecc 2; nand read 0x2900000 arkdata 0x8000`), using exact `filesize` bounds checking (6,671 bytes). It parses keys cleanly without scanning trailing padding or triggering line-length warnings. Both bootloaders reach 100% parameter parity (`ScreenType:0`, `800x480`, `Format:7 RGB888`, `32 BPP`, `TvoutType:12`, `CLKFreq:330MHz`).
+
+### `/dev/ark_display` Node Creation Architecture
+
+The `/dev/ark_display` character device node is created during boot via a 3-step sequence spanning kernel probe, sysfs export, and userspace dynamic node creation:
+
+```
+[ Kernel Probe ]               [ Sysfs Export ]              [ Userspace Init ]
+__disp_probe()        --->  /sys/class/misc/ark_display  --->  /sbin/mdev -s
+misc_register(10,255)       (export dev "10:255")          (mknod /dev/ark_display c 10 255)
+```
+
+1. **Kernel Driver Probe (`__disp_probe()`)**:
+   - During kernel startup, when the `ark_disp` platform driver probes (`__disp_probe()` @ `0x802da884` in stock `vmlinux.elf`), it registers a miscellaneous character device:
+     ```c
+     struct miscdevice ark_disp_miscdev = {
+         .minor = 255,                 /* MISC_DYNAMIC_MINOR */
+         .name  = "ark_display",        /* Node name */
+         .fops  = &ark_disp_fops,
+     };
+     misc_register(&ark_disp_miscdev);
+     ```
+   - On probe, `__disp_probe()` verifies that the display hardware and RAM buffer `@ 0x02900000` (`arkdata.ini`) were initialized by U-Boot.
+
+2. **Sysfs Device Export**:
+   - Upon successful `misc_register()`, the kernel creates:
+     - `/sys/class/misc/ark_display/dev` (containing string `10:255`)
+     - `/sys/class/misc/ark_display/uevent` (containing `MAJOR=10`, `MINOR=255`, `DEVNAME=ark_display`)
+
+3. **Userspace Node Creation (`mdev -s`)**:
+   - During rootfs startup (`/etc/rc.d/rcS` line 10), `/sbin/mdev -s` executes.
+   - `mdev` scans `/sys/class/misc/ark_display/dev`, reads major/minor `10:255`, and executes `mknod /dev/ark_display c 10 255`.
+   - `MSNCoreApp` can then open `/dev/ark_display` cleanly.
+
+#### U-Boot `disconfig 0` Handoff Requirement
+- **Stock U-Boot 2012.10**: Runs `disconfig 0` during `bootnand`, loading `arkdata.ini` into RAM `@ 0x02900000`, setting the 330MHz pixel clock (`rSYS_LCD_CLK_CFG = 0x00000b01`), and configuring OSD1/OSD2 layers before jumping to Linux.
+- **Compiled U-Boot 2018.07**: Includes `disconfig 0;` at the start of `nandboot`, automatically reading `arkdata.ini` from NAND partition 4 if not present on SD card, setting up display clocks/OSD layers, and ensuring `ark_disp_probe()` succeeds to create `/dev/ark_display`.
 
 ### Stage 2 — Application colour pipeline (MsnCoreApp)
 

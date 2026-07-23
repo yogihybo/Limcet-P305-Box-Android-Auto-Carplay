@@ -97,10 +97,17 @@ actual, captured environment) — not guesses.
 The defconfig's default boot flow assumes FDT. Replace it with something matching the Prado's actual
 `nandboot`/`mmcboot` env logic (`env/uboot-env.txt`), 2-arg `bootz` (no fdt address):
 
-```
-setenv bootargs console=ttyS0,115200n8 mem=180M earlyprintk=serial ubi.mtd=6 root=ubi0:rootfs rootfstype=ubifs rootwait ro
-nand read ${loadaddr} <kernel offset from PARTITION_LAYOUT.md> <kernel size>
-bootz ${loadaddr}
+```bash
+disconfig 0
+run nandargs
+switchecc 2
+setenv machid 1068
+if fatload mmc 0:1 ${kerneladdr} zImage_stock; then
+    echo Loaded zImage_stock from SD card
+else
+    nand read ${kerneladdr} kernel
+fi
+bootz ${kerneladdr}
 ```
 
 For the initial SD-only test phase (§5), the simpler SD path is lower-risk and matches what

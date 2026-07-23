@@ -513,3 +513,328 @@ are still independently valid regardless of `usb0`'s boot-time
 register reset even when the requested mode matches the port's
 current state, so the guard remains real protection against calling
 it while root is actively mounted from that port.
+
+### Re-attempted 2026-07-22 with diagnostic logging — root cause found
+
+Re-enabled `usb0` `dr_mode="host"` (`linux-arkmicro` `9fa92d4b1`) with
+`ark_musb_dump_cross_port_state()` added to `musb_ark.c`: logs both
+ports' soft-reset registers (`0x74`/`0x78`) and both ports' id/pwr
+GPIOs at init and at every `set_mode` entry/exit, to check whether the
+2026-07-19 regression was cross-port register/GPIO coupling. It
+wasn't — usb0's registers and GPIOs (`softrest0=0xffffffff`,
+`usb0_id=0`, `usb0_pwr=1`) never moved once, for the entire boot,
+regardless of what usb1 was doing (see `docs/logs/usb otg host log
+v1.txt`).
+
+The real cause, found from the same log:
+- U-Boot's own boot line confirms the stick is present and working on
+  `usb 0:1`, found in 172ms (`usb_lowlevel_init time is 172430 us`,
+  `1 Storage Device(s) found`) — so the device is definitely
+  physically on `usb0`, powered continuously through the U-Boot→kernel
+  transition.
+- Under Linux with `dr_mode="host"`, bus 1 (`usb0`) registers its hub
+  cleanly (`hub 1-0:1.0: 1 port detected`) but **the device never
+  enumerates on it at all**, for the rest of the log. `Waiting for
+  root device /dev/sda2...` never resolves.
+- `ark_musb_diag` confirms `ark_musb_set_mode(MUSB_HOST)` **is** called
+  at boot for `usb0` — so the bug isn't that host-mode ports skip this
+  callback, it's that the callback's old body (`case MUSB_HOST:
+  break;`) did nothing at all, unlike `MUSB_OTG`'s case which ends
+  with an explicit VBUS power-cycle (`gpio_pwr` low → high).
+- That power-cycle isn't just for OTG role switching: it's what forces
+  the hub controller to see a fresh disconnect/reconnect edge. A
+  device that's been continuously connected since before the kernel
+  booted never generates that edge on its own, so in host mode it was
+  simply invisible to the hub forever.
+- The activity on bus 2 (`usb1`) in that log — the extra
+  "Cannot enable... attempt power cycle" retries, worse than usb1's
+  usual single clean `+++Switch OTG+++` line — is a **separate, still
+  not fully understood** effect on usb1's own (likely WiFi module)
+  device, not the boot stick moving buses. Given usb0's registers/
+  GPIOs never moved, whatever's affecting usb1's retry count isn't
+  captured by this diagnostic (maybe a shared VBUS rail, PHY
+  reference, or interrupt-timing effect) — worth another look if the
+  fix below doesn't fully resolve boot behavior.
+
+**Fix applied** (`linux-arkmicro` `d56d5a750`): `MUSB_HOST`'s case now
+does the same controller soft-reset + VBUS power-cycle sequence as
+`MUSB_OTG`, minus the ID-pin GPIO/OTG-state changes that only matter
+for role negotiation. This should keep the benefit `dr_mode="host"`
+was meant to provide (no ID-pin negotiation delay on `usb0`) while
+still generating the connect event the already-attached device needs.
+
+### Confirmed on hardware 2026-07-22 — fix works, boot time fixed
+
+`docs/logs/usb otg host log v1.txt` (first hardware test of the fix
+above) confirmed the enumeration problem was solved: `usb0`/bus 1
+still never showed a device, but that ruled out one thing and
+surfaced another — see below. The real confirmation came a few
+iterations later, in `docs/logs/usb otg host log v4.txt`:
+
+- `usb0` (`switch host (no negotiation)`) registers cleanly with no
+  retry cycling, and the boot stick enumerates on bus 1 within
+  ~2 seconds every time.
+- Root mounts at **t≈3.4s** and `/sbin/init` starts immediately after
+  — down from the ~14s ID-pin negotiation dance in the old
+  `dr_mode="otg"` baseline (or indefinite hang in the first, reverted
+  `dr_mode="host"` attempt from 2026-07-19).
+- This is the actual fix for the original complaint ("usb boot takes
+  several seconds to find the drive and toggle the mode").
+
+### Dead end along the way: usb1 diagnostic test, and the real culprit
+
+Between the `usb0` fix landing and it being confirmed working, a
+separate, unrelated bug produced a very convincing false lead. After
+flashing the `usb0`-fixed kernel, boot got as far as `Run /sbin/init as
+init process` and then looped forever on garbled `can't run '/bin/...'`
+console messages, never reaching a shell. Because the messages were
+first seen interleaved with usb1's own OTG retry-cycling messages on
+the same serial console, it initially looked like a USB/kernel
+regression. It wasn't. In order, what was actually ruled out and found:
+
+1. **Not a missing-symlink issue.** `build_tools/restore_rootfs_symlinks.sh`
+   (which recreates `/bin/sh` etc. lost by a Windows-side checkout) had
+   already run cleanly against the affected build (`1131 created/fixed,
+   0 dangling`), and the physical stick's files were confirmed present
+   when mounted directly.
+2. **Not a VBUS-disconnect-corrupts-root issue**, despite
+   `musb_recovery_usb_proc()` (`musb_core.c:2550-2598`) having a
+   documented comment about exactly that failure mode from a past
+   incident. Ruled out on timing: the first `can't run` failure
+   happened immediately after `/sbin/init` started (t≈3.49s), 2.7+
+   seconds *before* usb1's first reset-timer event in the log (t≈6.27s)
+   — and there were no `EXT4-fs error`/`remount-ro` messages anywhere.
+3. **A diagnostic build with usb1 also set to `dr_mode="host"`**
+   (`linux-arkmicro` `9f678777e`, eliminating *all* OTG negotiation
+   from the boot) was tried to rule out OTG activity entirely as a
+   cause. This came with a known, accepted regression while in place:
+   `musb_core.c`'s init switch only calls `musb_gadget_setup()` for
+   `MUSB_PERIPHERAL`/`MUSB_OTG`, never for pure `MUSB_HOST`, so usb1's
+   `g_ncm` gadget didn't register during this test. The failure still
+   reproduced identically with zero OTG negotiation anywhere in the
+   boot, which ruled out OTG entirely as the cause.
+4. **Real root cause, found once the console noise from (3) stopped
+   interleaving the message**: with usb1 quiet, the previously-garbled
+   message resolved to `can't run '/bin/rc.d/rcS'` — not
+   `/etc/rc.d/rcS` as `inittab` actually specifies. Checking the
+   physical stick directly (`cat -A /etc/inittab` on the mounted
+   partition) showed the `sysinit` line still had a trailing `\r`
+   (`::sysinit:/etc/rc.d/rcS\r\n`). BusyBox's inittab parser takes
+   everything after the last `:` up to the line terminator as the
+   command, so the actual exec target was `/etc/rc.d/rcS\r` — invalid,
+   `ENOENT`, and the embedded `\r` mid-message is what garbled the
+   printed error into what looked like `/bin/...` when raw serial bytes
+   got reinterpreted.
+5. **Why the stray `\r` was there**: `build_bootable_sdcard.sh` strips
+   CRLF at the end of step 8 (`sed 's/\r$//'` across `/tmp/sd_p2`), but
+   `apply_overlay()` — which rsyncs `firmware_overlay/` on top —
+   doesn't run until step 11, *after* that cleanup. This repo's working
+   tree can carry CRLF in text files independent of git history (e.g.
+   `firmware_overlay/etc/inittab` has clean LF at `HEAD`, confirmed via
+   `git show`, but picks up CRLF on-disk in this environment — this
+   repo lives on a Windows-fed shared folder, and the project already
+   documents Windows-checkout artifacts affecting symlinks the same
+   way). So a CRLF-carrying overlay file placed *after* step 8's
+   cleanup silently reintroduces the exact bug step 8 already fixed.
+   **Fixed** in `build_bootable_sdcard.sh` (`8d609a5`): the same CRLF
+   strip now also runs at the end of step 11, after `apply_overlay` and
+   its rcS/autolaunch patches have all applied. The already-affected
+   stick was also fixed directly (`sed -i 's/\r$//'` on its `inittab`
+   and `profile`).
+
+None of this was actually caused by the `usb0` fix — it was a
+pre-existing build-pipeline gap that this investigation happened to
+trip over while testing on a freshly-reflashed stick.
+
+### usb1 stays `dr_mode="otg"` — it's genuinely dual-role, not a fixed device
+
+`usb1` is CarPlay's port, and it's dynamic by design, not a single
+fixed internal device: at boot it tries peripheral role first
+(`g_ncm` gadget registers almost immediately — this is the wired
+CarPlay networking path, confirmed to be bound to `musb-hdrc.1` in
+`docs/logs/usb otg host log v4.txt`, not `usb0`), and only falls back
+to host role — enumerating the internal WiFi chip (`rtl8821cu`,
+`usb 2-1: new high-speed USB device`) and bringing up `wlan0`/the
+`carplay_wifi` AP — once that peripheral-role attempt times out with
+nothing on the other end. This is real, necessary hardware detection
+(is a wired CarPlay cable actually present right now?), not wasted
+work, so it can't be replaced with a static `dr_mode` the way `usb0`
+could — `usb0` is genuinely single-purpose (boot-stick storage), which
+is why locking its mode was safe, while doing the same to `usb1` would
+permanently disable whichever of {wired CarPlay, wireless
+WiFi-fallback} didn't match the hardcoded mode.
+
+A same-day test that briefly set `usb1` to `dr_mode="host"` too
+(`9f678777e`, step 3 above) confirmed this concretely: `g_ncm` simply
+didn't register for the duration of that test. Reverted back to `otg`
+in `linux-arkmicro` `17a80acff` once the CRLF bug (not USB) was
+confirmed as the actual boot-loop cause.
+
+The ~9-18s retry cycling this produces on `usb1` (`Cannot enable...`,
+`attempt power cycle`, `reset timer fired`) is expected and doesn't
+block anything — the shell is already available (~t=6s, well before
+this cycling even starts) since it's no longer sharing a path with the
+boot-critical `usb0`. What *was* fixable: `musb_recovery_usb_proc()`,
+`musb_reset_timer_handler()`, and `musb_irq_work()` (`musb_core.c`)
+logged this routine, expected cycle at `dev_alert` — the loudest
+kernel log level, normally reserved for real faults. Downgraded to
+`dev_dbg` in `linux-arkmicro` `d6be430dd` (pure log verbosity change,
+no timing/retry logic touched). The three cosmetic `dev_info()`
+messages in `ark_musb_set_mode()` (`musb_ark.c`, the vendor's original
+`"+Switch peripheral ===" `/`"+++Switch OTG===+++"` decoration) were
+also reworded to plain text in `linux-arkmicro` `17a80acff`.
+Left `drivers/usb/core/hub.c`'s own `"Cannot enable"`/`"attempt power
+cycle"` messages untouched — that's generic upstream USB core code
+used by every port on the system, not specific to this quirk.
+
+Also note: the underlying OTG *role-detection* mechanism on `usb1`
+(polling every few seconds via `ark_musb_otg_timer`, in `musb_ark.c`)
+can't be made purely interrupt/plug-driven regardless of the above —
+there's vendor commentary already in the driver (`musb_ark.c:139-141,
+168`, `musb_core.c` DRVVBUS comment) explaining this ArkMicro SoC has
+no ID-pin-change interrupt at all, so polling is the only way this
+hardware can detect an OTG role change. That's a real hardware
+limitation, not a driver design choice, and applies regardless of
+which physical device is on the other end.
+
+### Important correction: `usb0` and CarPlay's wired port are the *same physical connector*
+
+Everything above (this section) was written assuming `usb0`'s
+external-facing connector was purely a test/storage-boot port,
+independent of CarPlay. That assumption was wrong, confirmed directly
+by the user: **the port you plug a USB storage stick into to test
+`bootusb` is the exact same physical connector CarPlay uses when
+wired.** That means the `dr_mode="host"` fix above has a real cost
+beyond "slower test boots": since `musb_gadget_setup()` never runs for
+a `dr_mode="host"` port, **wired CarPlay can never work through this
+connector again while this fix is in place** — not just during
+testing, in the actual running vehicle too.
+
+Decision made 2026-07-22 (confirmed with the user, not a unilateral
+call): **keep `dr_mode="host"` on `usb0` anyway.** Reasoning: a USB
+storage stick and a CarPlay cable can never physically occupy the same
+connector at the same time regardless, so there's no scenario where
+both are needed simultaneously — the real question was just "which
+default do we want for this shared connector," and fast boot-stick
+testing won concretely, while wired CarPlay's importance relative to
+the wireless-fallback path (see below) wasn't treated as blocking.
+**If wired CarPlay through this specific connector is needed later,
+this decision needs revisiting** — it would require either reverting
+`usb0` to `otg` (accepting the ~14s boot delay again) or some other
+mechanism (e.g. a separate DTB selected by U-Boot depending on boot
+mode) to get both.
+
+### `g_ncm`'s net device renamed to avoid a real naming collision
+
+While reconciling the above, a second, unrelated point of confusion
+surfaced: the `g_ncm` gadget's network interface was named `usb0` by
+`gether_setup_default()`'s generic `"usb%d"` convention — byte-identical
+text to the DTS node label `usb0` (a physical MUSB controller
+instance) in kernel log output, despite being two completely unrelated
+things (one's a net device, one's a controller instance; the working
+one turned out to be bound to `usb1`/`musb-hdrc.1`, not `usb0`). This
+collision directly caused a misreading during this same investigation.
+Renamed in `linux-arkmicro` `69c59f33a`: `f_ncm.c` now calls
+`gether_setup_name_default("carplay-ncm")`, producing `carplay-ncm0`.
+Userspace references (`ifconfig usb0 up` in `switchotg.sh` and two
+commented-out `rcS` lines) updated to match
+(`prado-firmware-reconstruction` `d1c2ebc`).
+
+### `usb1` forced to host mode on USB-stick test boots (2026-07-22)
+
+Given the connector confusion above, and that `usb1`'s CarPlay
+wired-then-WiFi-fallback negotiation costs up to ~15s (see the retry
+cycling documented earlier in this section), a further optimization:
+when `root=/dev/sda*` (i.e. this is a USB-stick test/dev boot, not the
+vehicle actually running), we already know for certain no wired
+CarPlay cable is in the picture for that session. `switchotg.sh`
+(`prado-firmware-reconstruction` `9f2ef8d`) now detects this and writes
+`host` directly to `usb1`'s sysfs `mode` attribute, skipping the wired
+negotiation entirely so `wlan0` comes up immediately. Any other boot
+(real vehicle deployment, `root` elsewhere) keeps the full dynamic
+`otg` negotiation, since a wired cable might genuinely be present
+there.
+
+This needed one more kernel-side fix to actually stick:
+`mode_store()`'s sysfs write handler (`musb_core.c`) only calls
+`musb_platform_set_mode()` — it doesn't touch `musb->port_mode` or
+disarm `ark_musb_otg_timer`'s periodic poll. Since `usb1`'s
+`port_mode` stays `MUSB_OTG` (set once from the DTS at init, sysfs
+writes don't change it), that poll timer stays armed regardless, and
+its `OTG_STATE_B_IDLE` branch would try to renegotiate the role right
+back on its next tick — unless the OTG state machine no longer reads
+as `B_IDLE`. `MUSB_HOST`'s case in `ark_musb_set_mode()`
+(`musb_ark.c`) didn't set `otg->state` at all (unlike `MUSB_OTG`'s
+case, which sets `OTG_STATE_A_HOST`) — harmless for `usb0`'s
+boot-time-only use (`is_otg_enabled()` is false there, so the timer
+never arms in the first place), but would have silently undone this
+new runtime switch on `usb1`. Fixed in `linux-arkmicro` `a2a8daac3`:
+`MUSB_HOST` now sets `OTG_STATE_A_HOST` too.
+
+### `switchotg.sh` had no caller at all — none of this ever ran until now
+
+`docs/logs/usb otg host log v5.txt` (first hardware test after all of
+the above) surfaced one more gap: `carplay-ncm0` (the kernel-side
+rename) showed up fine, confirming that fix was in the build — but
+none of `switchotg.sh`'s own log messages ever appeared, and `usb1`
+still ran the full ~15s wired-then-WiFi negotiation regardless of
+`root=/dev/sda*`. Checking `rcS`: `switchotg.sh` was only ever
+referenced by the stock `etc/all.sh`, which loads `g_ncm` as a 3.4.0
+kernel module (`insmod`) — inapplicable to this 4.19.192 build, where
+NCM is built in. `rcS` itself never called it. **Every `switchotg.sh`
+change made this session (2026-07-19 through 2026-07-22, including
+today's usb0/usb1 rewrite and the new host-mode-on-test-boot logic)
+had never actually executed on real hardware until this was found and
+fixed.**
+
+Fixed in `prado-firmware-reconstruction` `c1515fe`: added the call
+right after `mdev -s` in `rcS` (needs `/proc`/`/sys` mounted, nothing
+else) — as early as possible, since the kernel's own OTG negotiation
+starts automatically at driver init, well before `rcS` runs, so every
+second earlier this can override it matters. Also removed the old
+commented-out carplay setup block's now-fully-redundant lines (it had
+sat there dead, `ifconfig`/`hostname`/sysfs-mode-switch, including the
+same already-wrong sysfs path `switchotg.sh` was written to fix, since
+before this investigation started).
+
+### Second gotcha: the sysfs path itself was also wrong
+
+With the caller finally wired in, the next boot log showed
+`switchotg.sh` running and correctly detecting `root=/dev/sda2`, but
+still hit `not found/writable, skipping usb1` — the assumed sysfs path
+(`/sys/devices/platform/e0400000.usb/musb-hdrc.1/mode`, guessed from
+DT node names alone) was wrong. Confirmed on-device via
+`find /sys/devices/platform -iname mode | grep musb`: the real path is
+`/sys/devices/platform/ahb/e0400000.usb/musb-hdrc.1/mode` — the DTS's
+`ahb` simple-bus container node (parent of the `usb0`/`usb1` nodes)
+adds an extra path component that guessing from the DT alone missed.
+Fixed in `prado-firmware-reconstruction` `d42f1b3`. **Confirmed
+working on hardware 2026-07-22** — usb1 now goes straight to host
+mode on a `root=/dev/sda*` boot, no wired-negotiation retry cycling.
+This closes out the whole USB OTG/host-mode investigation: both usb0's
+boot-speed fix and usb1's test-boot fast path are hardware-confirmed
+end to end.
+
+### Summary of commits (`linux-arkmicro`)
+
+| Commit | What |
+|---|---|
+| `83ab185e6` | First `usb0 dr_mode=host` attempt (2026-07-19) |
+| `d44cce385` | Reverted — unexplained bus1→bus2 renumbering regression |
+| `9fa92d4b1` | Re-attempt + cross-port register/GPIO diagnostic logging (2026-07-22) |
+| `d56d5a750` | Real fix: `MUSB_HOST` now does soft-reset + VBUS power-cycle |
+| `9f678777e` | Diagnostic: usb1 also `host`, to rule out OTG activity as the CRLF bug's cause |
+| `17a80acff` | usb1 reverted to `otg`; diagnostic logging removed; log messages tidied |
+| `d6be430dd` | Routine OTG recovery messages: `dev_alert` → `dev_dbg` |
+| `69c59f33a` | `g_ncm` net device renamed `usb%d` → `carplay-ncm%d` |
+| `a2a8daac3` | `MUSB_HOST` case now sets `otg->state`, needed for the runtime host-mode switch below |
+
+And in the main `prado-firmware-reconstruction` repo:
+
+| Commit | What |
+|---|---|
+| `8d609a5` | `build_bootable_sdcard.sh`: re-strip CRLF after `apply_overlay`, not just before it |
+| `d1c2ebc` | `switchotg.sh`/`rcS`: reflects usb0=storage-only, usb1=CarPlay; `carplay-ncm0` rename |
+| `9f2ef8d` | `switchotg.sh`: force `usb1` to host mode on USB-stick test boots for fast WiFi |
+| `c1515fe` | `rcS`: actually call `switchotg.sh` — it had no caller at all before this |
+| `d42f1b3` | `switchotg.sh`: fix usb1 mode sysfs path — missing `ahb` DTS bus node component |

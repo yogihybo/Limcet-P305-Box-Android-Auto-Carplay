@@ -48,6 +48,8 @@
 #include <linux/fs.h>
 #include <linux/miscdevice.h>
 #include <linux/uaccess.h>
+#include <linux/io.h>
+#include <linux/string.h>
 
 /* type=0xa0 (ARKDISP_IOCTL_BASE, see ArkPro Reference/userspace/display.h),
  * nr=29 (one past that reference header's last documented command — this
@@ -68,6 +70,29 @@
  * but ioctl() still failed because of exactly this mismatch. */
 #define ARK_DISPLAY_IOC_MAGIC		0xa0
 #define ARKDISP_GET_SCREEN_INFO		_IOWR(ARK_DISPLAY_IOC_MAGIC, 29, unsigned long)
+#define ARKDISP_GET_VDE_CFG		_IOWR(ARK_DISPLAY_IOC_MAGIC, 1, unsigned long)
+#define ARKDISP_SET_VDE_CFG		_IOW(ARK_DISPLAY_IOC_MAGIC, 2, unsigned long)
+
+/* Two more commands confirmed as real, live callers in this rootfs (raw
+ * ioctl-number search across every rootfs shared library and binary,
+ * 2026-07-20) -- unlike every other still-unimplemented ARKDISP_* command
+ * (SET/GET_LAYER_CFG, TVOUT/ITU656 controls, etc, all confirmed to have
+ * ZERO callers anywhere in this rootfs and deliberately left unimplemented
+ * as not worth building against nothing), these two are genuinely called:
+ *   - 0xa01b: MsnCoreApp (2 call sites). Stock's ark_disp_ioctl (@
+ *     0x802d9fd8) just does `*(u32 *)(priv+0x1c88) = 1; return 0;` --
+ *     no register access, an argument-less command (_IO, not _IOW/_IOWR --
+ *     encodes to exactly 0xa01b with zero size/dir bits, confirmed by
+ *     decoding the raw command number). Purpose not identified (nothing
+ *     in ark_disp_ioctl itself reads this flag back), so implemented as a
+ *     genuinely stored flag rather than a bare no-op, in case something
+ *     else in stock depends on it being remembered.
+ *   - 0x4004a000: libMcuCenter.so (1 call site). Stock's handler is a
+ *     literal unconditional `return 0;` -- doesn't even touch the
+ *     argument despite the command encoding as a 4-byte _IOW. */
+#define ARKDISP_SET_UNKNOWN_FLAG_1C88	_IO(ARK_DISPLAY_IOC_MAGIC, 0x1b)
+#define ARKDISP_NOOP_ACK		_IOW(ARK_DISPLAY_IOC_MAGIC, 0, unsigned long)
+#define ARK_DISPLAY_LAYER_NUM		5
 
 struct ark_screen_info {
 	__u32 screen_id;	/* must be 0-7 -- the only field arkapi_get_screen_info() validates */
@@ -75,6 +100,14 @@ struct ark_screen_info {
 	__u32 height_px;
 	__u32 mm_width;
 	__u32 mm_height;
+};
+
+struct ark_disp_vde_cfg_arg {
+	__u32 layer_id;
+	__u32 hue;
+	__u32 saturation;
+	__u32 brightness;
+	__u32 contrast;
 };
 
 /* ScreenId=0, 800x480 RGB888, ~5.5" -- see docs/SCREEN.md */
@@ -86,8 +119,94 @@ static const struct ark_screen_info ark_display_screen0 = {
 	.mm_height  = 72,
 };
 
+static struct ark_disp_vde_cfg_arg ark_display_layers[ARK_DISPLAY_LAYER_NUM] = {
+	{ .layer_id = 0, .hue = 0, .saturation = 128, .brightness = 128, .contrast = 128 },
+	{ .layer_id = 1, .hue = 0, .saturation = 128, .brightness = 128, .contrast = 128 },
+	{ .layer_id = 2, .hue = 0, .saturation = 128, .brightness = 128, .contrast = 128 },
+	{ .layer_id = 3, .hue = 0, .saturation = 128, .brightness = 128, .contrast = 128 },
+	{ .layer_id = 4, .hue = 0, .saturation = 128, .brightness = 128, .contrast = 128 },
+};
+
+/* VDE (video-display-enhancement) register plumbing -- real hardware
+ * writes, recovered via Ghidra decompile of the stock kernel's
+ * ark_disp_set_vde_cfg (@ 0x802db400) and the per-layer
+ * ark_disp_set_osd_* / ark_disp_set_video_* register setters it dispatches
+ * to (2026-07-19). Previously this whole device only ever touched the
+ * ark_display_layers[] software cache above -- MsnCoreApp's contrast/
+ * brightness/saturation/hue controls had zero effect on the actual
+ * display hardware.
+ *
+ * Register base: same 4KB LCDC block already owned by the
+ * ark1668_lcdfb platform driver (lcdc@e0500000 in the DTS) --
+ * confirmed via the stock kernel's own static iotable_init() mapping
+ * table (entry 7: phys 0xe0500000, length 0x1000). This device has no
+ * DT binding of its own (plain misc_register(), not a platform
+ * driver), so it ioremap()s this range directly rather than going
+ * through devm_ioremap_resource() -- same pattern already used by
+ * drivers/misc/ark_tool.c for /proc/arktool, which independently maps
+ * LCD/pinmux registers also owned by another driver's DT node.
+ *
+ * Layer-id -> register offset, and OSD-vs-video routing: confirmed by
+ * decompiling ark_disp_set_vde_cfg's own dispatch (layer_id < 3 -> OSD
+ * setter with osd sub-index == layer_id; layer_id >= 3 -> video setter
+ * with video sub-index == layer_id - 3), then decompiling each
+ * individual ark_disp_set_osd_hue()/ark_disp_set_video_hue() etc. to
+ * find the actual MMIO address each one is hardcoded to (this kernel
+ * predates ioremap()-based mapping -- stock uses compile-time static
+ * virtual addresses, converted back to physical offsets from the LCDC
+ * base for this table). One 32-bit register per layer, all 5 layers
+ * confirmed sharing the identical bit layout:
+ *   bits [31:24] = hue, [23:16] = saturation, [15:8] = brightness,
+ *   [7:0] = contrast -- direct 0-255 pass-through per field, no
+ *   scaling in stock, matching this driver's existing ioctl-level
+ *   0-255 bounds check exactly. */
+#define ARK_LCDC_PHYS_BASE	0xe0500000
+#define ARK_LCDC_MAP_SIZE	0x200		/* covers every offset below */
+
+static const u32 ark_vde_reg_offset[ARK_DISPLAY_LAYER_NUM] = {
+	[0] = 0x144,	/* OSD layer 0 */
+	[1] = 0x14c,	/* OSD layer 1 */
+	[2] = 0x154,	/* OSD layer 2 */
+	[3] = 0x1d8,	/* video layer 0 */
+	[4] = 0x134,	/* video layer 1 */
+};
+
+static void __iomem *ark_lcdc_base;
+
+static void ark_display_write_vde_reg(const struct ark_disp_vde_cfg_arg *cfg)
+{
+	u32 reg;
+
+	if (!ark_lcdc_base)
+		return;
+
+	reg = (cfg->hue & 0xff) << 24 | (cfg->saturation & 0xff) << 16 |
+	      (cfg->brightness & 0xff) << 8 | (cfg->contrast & 0xff);
+
+	writel(reg, ark_lcdc_base + ark_vde_reg_offset[cfg->layer_id]);
+}
+
+/* Stock's ark_disp_ioctl only rejects a NULL arg for the specific commands
+ * that actually dereference it (confirmed per-command in the decompile) --
+ * it has no blanket check. ARKDISP_SET_UNKNOWN_FLAG_1C88 and
+ * ARKDISP_NOOP_ACK both ignore arg entirely in stock, so they're handled
+ * before the NULL check below rather than after it. */
+static bool ark_display_unknown_flag_1c88;
+
 static long ark_display_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
+	switch (cmd) {
+	case ARKDISP_SET_UNKNOWN_FLAG_1C88:
+		ark_display_unknown_flag_1c88 = true;
+		pr_info("ark_display: ARKDISP_SET_UNKNOWN_FLAG_1C88\n");
+		return 0;
+	case ARKDISP_NOOP_ACK:
+		pr_info("ark_display: ARKDISP_NOOP_ACK\n");
+		return 0;
+	default:
+		break;
+	}
+
 	if (!arg)
 		return -EINVAL;
 
@@ -101,6 +220,65 @@ static long ark_display_ioctl(struct file *file, unsigned int cmd, unsigned long
 			ark_display_screen0.height_px, ark_display_screen0.mm_width,
 			ark_display_screen0.mm_height);
 		return 0;
+	case ARKDISP_GET_VDE_CFG:
+		{
+			struct ark_disp_vde_cfg_arg input_arg;
+
+			if (copy_from_user(&input_arg, (void __user *)arg, sizeof(input_arg)))
+				return -EFAULT;
+
+			if (input_arg.layer_id >= ARK_DISPLAY_LAYER_NUM) {
+				pr_err("ark_display: ARKDISP_GET_VDE_CFG invalid layer_id=%u\n",
+				       input_arg.layer_id);
+				return -EINVAL;
+			}
+
+			input_arg = ark_display_layers[input_arg.layer_id];
+
+			if (copy_to_user((void __user *)arg, &input_arg, sizeof(input_arg)))
+				return -EFAULT;
+
+			pr_info("ark_display: ARKDISP_GET_VDE_CFG -> layer_id=%u hue=%u saturation=%u brightness=%u contrast=%u\n",
+				input_arg.layer_id, input_arg.hue, input_arg.saturation,
+				input_arg.brightness, input_arg.contrast);
+			return 0;
+		}
+	case ARKDISP_SET_VDE_CFG:
+		{
+			struct ark_disp_vde_cfg_arg input_arg;
+
+			if (copy_from_user(&input_arg, (void __user *)arg, sizeof(input_arg)))
+				return -EFAULT;
+
+			if (input_arg.layer_id >= ARK_DISPLAY_LAYER_NUM) {
+				pr_err("ark_display: ARKDISP_SET_VDE_CFG invalid layer_id=%u\n",
+				       input_arg.layer_id);
+				return -EINVAL;
+			}
+
+			if (input_arg.hue > 255 || input_arg.saturation > 255 ||
+			    input_arg.brightness > 255 || input_arg.contrast > 255) {
+				pr_err("ark_display: ARKDISP_SET_VDE_CFG invalid values (hue=%u, sat=%u, bri=%u, con=%u)\n",
+				       input_arg.hue, input_arg.saturation, input_arg.brightness,
+				       input_arg.contrast);
+				return -EINVAL;
+			}
+
+			/* Stock's own ark_disp_set_vde_cfg only touches the real
+			 * register when the value actually changed vs its cache --
+			 * matched here rather than writing unconditionally on
+			 * every call. */
+			if (memcmp(&ark_display_layers[input_arg.layer_id], &input_arg,
+				   sizeof(input_arg)))
+				ark_display_write_vde_reg(&input_arg);
+
+			ark_display_layers[input_arg.layer_id] = input_arg;
+
+			pr_info("ark_display: ARKDISP_SET_VDE_CFG -> layer_id=%u hue=%u saturation=%u brightness=%u contrast=%u\n",
+				input_arg.layer_id, input_arg.hue, input_arg.saturation,
+				input_arg.brightness, input_arg.contrast);
+			return 0;
+		}
 	default:
 		pr_info("ark_display: unhandled ioctl cmd=0x%08x\n", cmd);
 		return -ENOTTY;
@@ -134,15 +312,29 @@ static int __init ark_display_init(void)
 {
 	int ret = misc_register(&ark_display_miscdev);
 
-	if (ret)
+	if (ret) {
 		pr_err("ark_display: misc_register failed (%d)\n", ret);
-	else
-		pr_info("ark_display: registered /dev/ark_display\n");
-	return ret;
+		return ret;
+	}
+
+	/* Not fatal if this fails -- ARKDISP_SET_VDE_CFG's cache-only
+	 * behavior (matching what this whole device already did before
+	 * today) is still a strictly better fallback than refusing to
+	 * register the device at all. */
+	ark_lcdc_base = ioremap(ARK_LCDC_PHYS_BASE, ARK_LCDC_MAP_SIZE);
+	if (!ark_lcdc_base)
+		pr_err("ark_display: ioremap of LCDC @ 0x%x failed -- "
+		       "ARKDISP_SET_VDE_CFG will only update the software cache, "
+		       "not real hardware registers\n", ARK_LCDC_PHYS_BASE);
+
+	pr_info("ark_display: registered /dev/ark_display\n");
+	return 0;
 }
 
 static void __exit ark_display_exit(void)
 {
+	if (ark_lcdc_base)
+		iounmap(ark_lcdc_base);
 	misc_deregister(&ark_display_miscdev);
 }
 
@@ -150,5 +342,5 @@ module_init(ark_display_init);
 module_exit(ark_display_exit);
 
 MODULE_AUTHOR("Reconstructed from stock ark_display_drv.c / ark_disp_ioctl disassembly");
-MODULE_DESCRIPTION("Minimal /dev/ark_display misc device (ARKDISP_GET_SCREEN_INFO only)");
+MODULE_DESCRIPTION("Minimal /dev/ark_display misc device -- implements every ARKDISP_* command confirmed to have a real caller in this rootfs (GET_SCREEN_INFO, GET/SET_VDE_CFG with real hardware register writes, SET_UNKNOWN_FLAG_1C88, NOOP_ACK); deliberately omits commands with zero confirmed callers (SET/GET_LAYER_CFG, TVOUT/ITU656 controls)");
 MODULE_LICENSE("GPL");

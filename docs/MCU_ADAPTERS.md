@@ -709,3 +709,48 @@ touch /data/mcudebug_flag
 
 The file `/data/mcudebug_flag` enables debug mode in `libMcuCenter.so` (referenced in
 the binary as the debug flag path).
+
+---
+
+## `/dev/ttyS2` — a second real serial channel, found via `strace` (2026-07-22)
+
+While tracing an unrelated DirectFB display bug (`docs/DEVICE_TEST_CHECKLIST_2026-07-18.md`
+§15, `docs/logs/directfb_strace.txt`), `MsnCoreApp` (pid 124) was observed
+opening **`/dev/ttyS2`** — a separate port from the documented `/dev/ttyHS0`
+MCU link — configuring it `B4800|CS8|CREAD|HUPCL|CLOCAL` (**4800 baud**, 8N1,
+no parity), and writing real framed data to it:
+```
+write(38, "\372\0\23Y\2\2\0\260\257", 9)                          # FA 00 13 59 02 02 00 B0 AF
+write(38, "\372\0\377\377\10k\277\3759 \241\206W\262\257", 15)    # FA 00 FF FF 08 6B BF F5 39 20 A1 86 57 B2 AF
+```
+
+**This corrects a claim in `tools/mcu-handshake/README.md`.** That doc's
+"How it works" section states the `0xFA...0xAF` frame format
+(`makeProtocolPackage()` in `libMsnCommons.so`) is `MsnCoreApp`'s *internal*
+IPC format between its own subsystems and is "never written to `/dev/ttyHS0`
+in the real firmware." That remains true for `ttyHS0` specifically — no
+traffic on that port was captured in this same trace at all (opened, never
+read/written in the captured window). But this same framing genuinely **is**
+written to a real wire — just a different port, `ttyS2`, not `ttyHS0`.
+
+**Not yet determined:** what physical peripheral is on the other end of
+`ttyS2`. 4800 baud is unusually slow for `MCUAdapter_BoxP300`'s own
+38400-baud link (see above), so this is very likely either (a) a genuinely
+separate physical device from the touch-switch STM32 — a steering-wheel-
+control CAN/serial bridge, an amp/DSP control link, or similar — that reuses
+`libMsnCommons.so`'s generic packaging function for its own purposes, or (b)
+a diagnostic/secondary port on the same MCU. `docs/MCU_ADAPTERS.md`'s
+Catalogue section already lists several adapter subclasses with CAN/SWC
+capability compiled in (`MCUAdapter_BoxP230`, "CAN bus SWC adapter") that
+could plausibly be the real source — worth checking against schematics/board
+silkscreen, or capturing a longer `ttyS2` trace correlated with a specific
+physical action (steering wheel button, etc.) the way Method A/B above do
+for `ttyHS0`.
+
+**Also confirmed from the same trace:** `/tmp/mcu_version` is not a live MCU
+query — it's `sh -c "echo 'Limcet-V1.0-1302' > /tmp/mcu_version"`, a hardcoded
+string, not read from hardware. And `/data/msncfg/mcusetup.ini` (`ENOENT` on
+our build) genuinely doesn't exist in stock's own dumped userdata partition
+either (`firmware_source/mtd7_userdata/msncfg/` has `AndroidMirrorLink.ini`,
+`carsetting.ini`, `CarPlayPairList`, `Setting.config`, `StartupApp.config` —
+no `mcusetup.ini`) — not a gap, the app just probes for an optional file.

@@ -27,7 +27,16 @@ export TSLIB_FBDEVICE=/dev/fb0
 # DirectFB setup (requires Vivante galcore module loaded)
 export DIRECTFB_ROOT=/usr
 export DFBARGS=module-dir=$DIRECTFB_ROOT/lib/directfb-1.7-4
-export QWS_DISPLAY=directfb:boundingrectflip:mmWidth220:mmHeight120:0
+# systemonly forces Qt's DirectFB surfaces (including the primary/screen
+# surface) to be allocated from /dev/fb0's own system memory rather than
+# libdirectfb_gal.so's separate GPU pool (gcoSURF_Construct-backed,
+# confirmed via decompile -- see docs/DEVICE_TEST_CHECKLIST_2026-07-18.md
+# section 21/22). Without this, pool selection falls through to Qt's
+# unspecified default, which the evidence points to being the actual
+# cause of GPU-rendered content never reaching the real, displayed
+# framebuffer -- correctly rendered, but in memory the LCDC never scans
+# out from. Added 2026-07-22; not yet hardware-tested.
+export QWS_DISPLAY=directfb:systemonly:boundingrectflip:mmWidth220:mmHeight120:0
 export GAL_CONFIG_FILE=/etc/gal_config
 
 export QWS_KEYBOARD=TTY:/dev/tty1

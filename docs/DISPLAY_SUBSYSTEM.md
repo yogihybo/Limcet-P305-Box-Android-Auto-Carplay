@@ -6,6 +6,24 @@
 ## Overview
 Consolidated document containing: SCREEN.md, ARKDATA_VARIANTS.md, I2C_GPIO0_LCD_PIN_CONFLICT.md
 
+### Display Subsystem Architecture & Handoff Flow
+
+```mermaid
+flowchart TD
+    subgraph Stage 1: Hardware Timing & Pinmux
+        A[U-Boot arkdata.ini / FAT p1] -->|ft_board_setup| B[DTB Patching & Hardware LCDC Regs]
+        B --> C[Kernel ark1668_lcdfb Driver /dev/fb0]
+    end
+
+    subgraph Stage 2: Application Rendering & Color Pipeline
+        D[msncfg/MsnProductInfo.ini] -->|ScreenType=1| E[MsnCoreApp Direct BGR888 Output]
+        D -->|ScreenType=3| F[MsnCoreApp YUV/CVBS Matrix Pipeline]
+        E --> G[DirectFB software composite / QWS LinuxFB]
+        G --> C
+        H[ark_display ioctl] -->|ARKDISP_SET_VDE_CFG| I[Video Display Engine VDE Hue/Sat/Bri/Con]
+    end
+```
+
 ## Milestone: factory `LCDTest -qws` renders its test pattern on real hardware (2026-07-16)
 
 **First confirmed end-to-end working LCD test-pattern output on this
@@ -194,10 +212,33 @@ The ARK1680 platform applies display settings in two distinct stages:
 
 ### Stage 1 — U-Boot hardware init (mtd4 arkdata)
 
-At power-on, U-Boot reads `arkdata.ini` from the **mtd4 partition** and
-programs the display controller hardware registers directly — timings,
-clock dividers, pixel format, and TvoutType. This sets the physical
-panel signal and cannot be overridden without reflashing mtd4.
+At power-on, U-Boot reads `arkdata.ini` from the **mtd4 partition** (or FAT partition 1 on SD card) and programs the display controller hardware registers directly — timings, clock dividers, pixel format, and TvoutType. This sets the physical panel signal and cannot be overridden without reflashing mtd4 or overriding `arkdata.ini` via SD.
+
+#### Log Diagnostic Comparison: Stock U-Boot vs Custom U-Boot
+
+In stock U-Boot serial boot logs, `arkdata.ini` loading prints:
+```text
+NAND read: device 0 offset 0x160000, size 0x1a0f
+ 6671 bytes read: OK
+ark ini updata, get arkdata.ini file_size = 262144.
+parser arkdata error, line size out of 1024 byte!
+parse arkdata.ini end
+convert success, screen_type=0, subformat=0, tvenc=8.
+get clk_freq=330(MHZ)
+get Gamma_en != 3
+screeninfo check ok
+itu656bypinfo check ok
+vpinfo check ok.
+gammainfo use default.
+touchinfo check ok.
+ScreenType:0, subType:0,Width:800, Height:480,Format:7 RgbMode:0 ,BPP:32 ,TvoutType:12,screen_id:0,interlace:0,pad_unset:0
+src_width:0, src_height:0,dithering:0, video_hfz:0x0,video_vfz:0x0
+```
+
+**Technical Explanation of Diagnostic Lines:**
+- **`file_size = 262144` vs `6671`**: When stock U-Boot reads the entire 256 KB (`262144` bytes) NAND `arkdata` partition into RAM, it attempts to scan past the valid 6,671 bytes of text into the unwritten trailing zero-padding of the partition.
+- **`parser arkdata error, line size out of 1024 byte!`**: Stock U-Boot's INI line scanner has a 1024-byte per line buffer limit. Because trailing zero-padding in the partition lacks newline characters (`\n`), the scanner reaches 1024 bytes without encountering a newline, emits this diagnostic warning, and gracefully terminates parsing (`parse arkdata.ini end`). All valid parameters parsed up to byte 6,671 remain fully active.
+- **Custom U-Boot (`ark1668_arkdata_ini.c`)**: Custom U-Boot loads `arkdata.ini` from FAT partition 1 (`fatload mmc 0:1 0x2900000 arkdata.ini`) using exact `filesize` bounds checking (6,671 bytes). It parses keys cleanly without scanning trailing padding or triggering line-length warnings. Both bootloaders reach 100% parameter parity (`ScreenType:0`, `800x480`, `Format:7 RGB888`, `32 BPP`, `TvoutType:12`, `CLKFreq:330MHz`).
 
 ### Stage 2 — Application colour pipeline (MsnCoreApp)
 

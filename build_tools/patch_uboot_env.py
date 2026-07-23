@@ -67,10 +67,48 @@ Examples
 """
 
 import argparse
+import datetime
+import shutil
 import struct
 import sys
 from collections import Counter
 from pathlib import Path
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = SCRIPT_DIR.parent
+
+
+def patch_uboot_banner(data: bytearray, tag: str = "hybrid") -> str:
+    """
+    Patch the U-Boot startup header version string in-place without changing
+    binary length or structure.
+
+    Original: "U-Boot 2012.10 (root2023120611 - 11:46:47)"
+    Patched : "U-Boot 2012.10 (hybrid YYYY-MM-DD HH:MM:SS)"
+    """
+    marker = b'U-Boot 2012.10 ('
+    idx = data.find(marker)
+    if idx == -1:
+        return None
+    end_idx = data.find(b')', idx)
+    if end_idx == -1:
+        return None
+
+    orig_banner = data[idx:end_idx + 1].decode('latin1')
+    orig_len = len(orig_banner)
+
+    now_str = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    new_inner = f"U-Boot 2012.10 ({tag} {now_str})"
+
+    if len(new_inner) < orig_len:
+        new_banner = new_inner[:-1] + ' ' * (orig_len - len(new_inner)) + ')'
+    elif len(new_inner) > orig_len:
+        new_banner = new_inner[:orig_len - 1] + ')'
+    else:
+        new_banner = new_inner
+
+    data[idx:idx + len(new_banner)] = new_banner.encode('latin1')
+    return new_banner
 
 
 # ===========================================================================
@@ -319,11 +357,11 @@ def serialize_env(env):
 # Presets
 # ===========================================================================
 
-def preset_sdboot(root):
+def preset_sdboot(root, kernel_file='zImage'):
     return {
         'bootcmd':    'run sdboot',
         'bootdelay':  '2',
-        'bootfile':   'zImage',
+        'bootfile':   kernel_file,
         'loadaddr':   '0x1000000',
         'sdboot':     ('setenv bootargs console=ttyS0,115200n8 console=tty0 mem=180M '
                        f'root={root} rootfstype=ext4 rootwait rw;'
@@ -338,6 +376,226 @@ def preset_sdboot(root):
         # keep a way back to the stock behaviour
         'nandboot':   'run nandbootcmd',
     }
+
+
+def preset_hybrid(kernel_file='zImage_stock'):
+    return {
+        'bootcmd':    'run sdboot',
+        'bootdelay':  '2',
+        'bootfile':   kernel_file,
+        'loadaddr':   '0x1000000',
+        'sdboot':     ('setenv bootargs console=ttyS0,115200n8 mem=180M earlyprintk=serial '
+                       'ubi.mtd=6 root=ubi0:rootfs rootfstype=ubifs rootwait ro ${mtdparts} screen=${screen};'
+                       'fatload mmc 0:1 ${loadaddr} ${bootfile};'
+                       'bootz ${loadaddr}'),
+        'nandboot':   'run nandbootcmd',
+    }
+
+
+def preset_console():
+    return {
+        'bootcmd':    'echo U-Boot console prompt active...;',
+        'bootdelay':  '0',
+        'nandboot':   'run nandbootcmd',
+    }
+
+
+# ===========================================================================
+# Interactive Menu Mode
+# ===========================================================================
+
+def find_default_uboot_file():
+    candidates = [
+        PROJECT_ROOT / "firmware_source/mtd1-mtd2_uboot/uboot.bin",
+        PROJECT_ROOT / "firmware_dumps/Prado firmware dump/mtd1-mtd2_uboot/extracted/uboot.bin",
+        PROJECT_ROOT / "sd_bootable/uboot.bin",
+        PROJECT_ROOT / "sd_bootable/UBOOT.BIN",
+        PROJECT_ROOT / "uboot.bin",
+        PROJECT_ROOT / "uboot/uboot.bin",
+    ]
+    for c in candidates:
+        if c.is_file():
+            try:
+                return str(c.relative_to(Path.cwd()))
+            except ValueError:
+                return str(c)
+    return None
+
+
+def interactive_menu():
+    CYAN = '\033[0;36m'
+    GREEN = '\033[0;32m'
+    YELLOW = '\033[1;33m'
+    RED = '\033[0;31m'
+    BOLD = '\033[1m'
+    RESET = '\033[0m'
+
+    print(f"\n{BOLD}{CYAN}" + "=" * 72)
+    print("  ARK1680 U-Boot Environment Relocator & Binary Patcher (Interactive)")
+    print("=" * 72 + f"{RESET}")
+
+    default_input = find_default_uboot_file()
+
+    print(f"\n{BOLD}{CYAN}--- Step 1: Input U-Boot Binary Path ---{RESET}")
+    if default_input:
+        print(f"Default U-Boot file found: {GREEN}{default_input}{RESET}")
+        print(f" -> Press {BOLD}[Enter]{RESET} to accept this default path, or enter a custom path below.")
+    else:
+        print("No default U-Boot file auto-detected. Please enter the file path.")
+
+    input_path = ""
+    while True:
+        prompt_str = f"Input binary path [{default_input}]: " if default_input else "Input binary path: "
+        try:
+            val = input(prompt_str).strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\nExiting.")
+            sys.exit(0)
+
+        if not val and default_input:
+            input_path = default_input
+        else:
+            input_path = val
+
+        if input_path and Path(input_path).is_file():
+            print(f"  {GREEN}✔ Verified file exists: {input_path} ({Path(input_path).stat().st_size:,} bytes){RESET}")
+            break
+        else:
+            print(f"  {RED}❌ ERROR: File '{input_path}' does not exist or is not a valid file. Please try again.{RESET}")
+
+    print(f"\n{BOLD}{CYAN}--- Step 2: Select Boot Configuration Preset ---{RESET}")
+    print(f"  {BOLD}1) Hybrid Boot (SD Kernel + NAND RootFS/partitions){RESET} [{GREEN}RECOMMENDED{RESET}]")
+    print("     Loads custom kernel (zImage_stock) from SD FAT partition 1, keeps NAND rootfs.")
+    print(f"  {BOLD}2) U-Boot Console Prompt (Drop to interactive U-Boot console){RESET}")
+    print("     Disables autoboot to drop directly to U-Boot prompt on bootloader startup.")
+    print(f"  {BOLD}3) Pure SD Boot (SD Kernel + SD RootFS ext4){RESET}")
+    print("     Loads kernel (zImage) and mounts rootfs from SD card ext4 partition 2.")
+    print(f"  {BOLD}4) Custom Environment Variables{RESET}")
+    print("     Manually specify key=value pairs.")
+
+    choice = input("\nSelect choice [1-4] (default: 1): ").strip() or "1"
+
+    preset = None
+    root = "/dev/mmcblk0p2"
+    kernel_file = "zImage_stock"
+    custom_sets = []
+    banner_tag = "hybrid"
+
+    if choice == "1":
+        preset = "hybrid"
+        banner_tag = "hybrid"
+        print(f"\n{BOLD}{CYAN}--- Step 3: Hybrid Boot Configuration ---{RESET}")
+        kf_input = input("Target kernel filename on SD card FAT partition 1 [zImage_stock]: ").strip()
+        kernel_file = kf_input if kf_input else "zImage_stock"
+        print(f"  {GREEN}✔ Kernel filename set to: '{kernel_file}'{RESET}")
+        print(f"  {GREEN}✔ Root filesystem target set to: NAND MTD 6 (rootfs / UBIFS){RESET}")
+    elif choice == "2":
+        preset = "console"
+        banner_tag = "ubootconsole"
+        kernel_file = None
+        print(f"\n{BOLD}{CYAN}--- Step 3: Console Prompt Configuration ---{RESET}")
+        print(f"  {GREEN}✔ Configured to drop directly to interactive U-Boot prompt.{RESET}")
+        print(f"  {GREEN}✔ Header banner tag set to: 'ubootconsole'{RESET}")
+    elif choice == "3":
+        preset = "sdboot"
+        banner_tag = "sdboot"
+        print(f"\n{BOLD}{CYAN}--- Step 3: Pure SD Boot Configuration ---{RESET}")
+        kf_input = input("Target kernel filename on SD card FAT partition 1 [zImage]: ").strip()
+        kernel_file = kf_input if kf_input else "zImage"
+        root_input = input("Root partition device [/dev/mmcblk0p2]: ").strip()
+        root = root_input if root_input else "/dev/mmcblk0p2"
+        print(f"  {GREEN}✔ Kernel filename set to: '{kernel_file}'{RESET}")
+        print(f"  {GREEN}✔ Root partition device set to: '{root}'{RESET}")
+    elif choice == "4":
+        preset = None
+        banner_tag = "custom"
+        kernel_file = None
+        print(f"\n{BOLD}{CYAN}--- Step 3: Custom Environment Setup ---{RESET}")
+        print("Enter KEY=VALUE pairs (one per line, press [Enter] on empty line to finish):")
+        while True:
+            kv = input("  setenv: ").strip()
+            if not kv:
+                break
+            if '=' in kv:
+                custom_sets.append(kv)
+                print(f"    {GREEN}✔ Added env: {kv}{RESET}")
+            else:
+                print(f"    {RED}❌ Invalid format! Must be KEY=VALUE.{RESET}")
+    else:
+        print(f"Invalid choice '{choice}', defaulting to Hybrid Boot.")
+        preset = "hybrid"
+        banner_tag = "hybrid"
+
+    print(f"\n{BOLD}{CYAN}--- Step 4: Output Destination & Options ---{RESET}")
+    sd_bootable_dir = PROJECT_ROOT / "sd_bootable"
+    sd_bootable_dir.mkdir(parents=True, exist_ok=True)
+    if preset == "hybrid":
+        out_name = "uboot_hybrid.bin"
+    elif preset == "console":
+        out_name = "uboot_console.bin"
+    elif preset == "sdboot":
+        out_name = "uboot_sd.bin"
+    else:
+        out_name = "uboot_custom.bin"
+
+    default_out_file = sd_bootable_dir / out_name
+    try:
+        default_out_str = str(default_out_file.relative_to(Path.cwd()))
+    except ValueError:
+        default_out_str = str(default_out_file)
+
+    output_path = input(f"Output binary path [{default_out_str}]: ").strip() or default_out_str
+
+    copy_stock_kernel = False
+    if preset in ["hybrid", "sdboot"]:
+        copy_kernel_prompt = f"Copy stock kernel (firmware_source/mtd5_kernel/zImage) to output folder as '{kernel_file}'? [Y/n]: "
+        copy_stock_kernel_in = input(copy_kernel_prompt).strip().lower()
+        copy_stock_kernel = (copy_stock_kernel_in != 'n')
+
+    patch_nand = input("Corrupt NAND env-offset to force relocated default env? [Y/n]: ").strip().lower()
+    patch_nand_offset = (patch_nand != 'n')
+
+    keep_orig = input("Keep existing original compiled-in env variables? [Y/n]: ").strip().lower()
+    keep_original = (keep_orig != 'n')
+
+    dry_run_in = input("Dry run (preview changes without writing file)? [y/N]: ").strip().lower()
+    dry_run = (dry_run_in == 'y')
+
+    # Pre-flight confirmation box
+    print(f"\n{BOLD}{CYAN}┌────────────────────────────────────────────────────────────────────────┐{RESET}")
+    print(f"{BOLD}{CYAN}│                        PRE-FLIGHT PATCH REVIEW                         │{RESET}")
+    print(f"{BOLD}{CYAN}├────────────────────────────────────────────────────────────────────────┤{RESET}")
+    print(f"{BOLD}{CYAN}│{RESET} Input Binary   : {input_path}")
+    print(f"{BOLD}{CYAN}│{RESET} Preset Mode    : {preset or 'Custom'}")
+    if kernel_file:
+        print(f"{BOLD}{CYAN}│{RESET} Target Kernel  : {kernel_file}")
+    print(f"{BOLD}{CYAN}│{RESET} Banner Tag     : {banner_tag}")
+    print(f"{BOLD}{CYAN}│{RESET} NAND Offset    : {'Corrupt (0x120000 -> 0xFF000000)' if patch_nand_offset else 'Leave intact'}")
+    print(f"{BOLD}{CYAN}│{RESET} Output Path    : {output_path}")
+    print(f"{BOLD}{CYAN}│{RESET} Copy Kernel    : {'Yes' if copy_stock_kernel else 'No'}")
+    print(f"{BOLD}{CYAN}└────────────────────────────────────────────────────────────────────────┘{RESET}")
+
+    proceed = input(f"\nProceed with patch operation? [{BOLD}Y/n{RESET}]: ").strip().lower()
+    if proceed == 'n':
+        print("\nPatch operation cancelled by user.")
+        sys.exit(0)
+
+    return argparse.Namespace(
+        input=input_path,
+        output=output_path,
+        analyze=False,
+        preset=preset,
+        root=root,
+        kernel_file=kernel_file,
+        copy_stock_kernel=copy_stock_kernel,
+        setenv=custom_sets,
+        keep_original=keep_original,
+        region_offset=None,
+        patch_nand_offset=patch_nand_offset,
+        dry_run=dry_run,
+        non_interactive=False,
+        interactive=True
+    )
 
 
 # ===========================================================================
@@ -525,13 +783,14 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
-    ap.add_argument('-i', '--input', required=True, help='Input U-Boot binary')
+    ap.add_argument('-i', '--input', help='Input U-Boot binary')
     ap.add_argument('-o', '--output', help='Output patched binary '
                     '(default: <input>_relocenv.bin)')
     ap.add_argument('--analyze', action='store_true',
                     help='Report base, env, pointer/size sites, free regions; then exit')
-    ap.add_argument('--preset', choices=['sdboot'],
-                    help='Start from a preset env (sdboot: full SD-card boot)')
+    ap.add_argument('--preset', choices=['sdboot', 'hybrid', 'console'],
+                    help='Start from a preset env (sdboot: full SD boot, hybrid: SD kernel + NAND rootfs, console: drop to prompt)')
+    ap.add_argument('--kernel-file', help='Kernel filename on FAT partition 1 (default: zImage_stock for hybrid, zImage for sdboot)')
     ap.add_argument('--root', default='/dev/mmcblk0p2', metavar='DEVICE',
                     help='Root device for the sdboot preset (default: /dev/mmcblk0p2)')
     ap.add_argument('--set', metavar='KEY=VALUE', action='append', dest='setenv',
@@ -546,7 +805,25 @@ def main():
                          'CRC and this relocated default env is the one used')
     ap.add_argument('--dry-run', action='store_true',
                     help='Show all changes without writing output')
+    ap.add_argument('--interactive', action='store_true',
+                    help='Force interactive menu mode')
+    ap.add_argument('--non-interactive', action='store_true',
+                    help='Force non-interactive CLI mode (requires -i/--input)')
     args = ap.parse_args()
+
+    # Default to interactive mode if --non-interactive is not set AND
+    # (args.interactive set OR input is missing OR no action options provided)
+    is_interactive = False
+    if not args.non_interactive and (
+        args.interactive or not args.input or (
+            not args.preset and not args.setenv and not args.analyze and not args.patch_nand_offset
+        )
+    ):
+        is_interactive = True
+        args = interactive_menu()
+
+    if not args.input:
+        ap.error("the following arguments are required: -i/--input (or run in default interactive mode)")
 
     data = Path(args.input).read_bytes()
     try:
@@ -555,7 +832,8 @@ def main():
         print(f"ERROR: {e}")
         sys.exit(1)
 
-    print(f"Input: {args.input} ({len(data):,} bytes)")
+    print(f"\n--- Processing Input Binary ---")
+    print(f"Input file: {args.input} ({len(data):,} bytes)")
     report(img)
 
     if args.analyze:
@@ -566,7 +844,14 @@ def main():
     if args.keep_original:
         new_env.update(img.env)
     if args.preset == 'sdboot':
-        new_env.update(preset_sdboot(args.root))
+        kfile = args.kernel_file or 'zImage'
+        new_env.update(preset_sdboot(args.root, kernel_file=kfile))
+    elif args.preset == 'hybrid':
+        kfile = args.kernel_file or 'zImage_stock'
+        new_env.update(preset_hybrid(kernel_file=kfile))
+    elif args.preset == 'console':
+        new_env.update(preset_console())
+
     if args.setenv:
         for item in args.setenv:
             if '=' not in item:
@@ -582,27 +867,70 @@ def main():
 
     ok = True
     if new_env:
+        print("\n--- Relocating Default Environment ---")
         ok = relocate(img, new_env, args.region_offset, args.dry_run)
         if not ok:
             sys.exit(1)
 
     if args.patch_nand_offset:
+        print("\n--- Patching NAND Env Offset ---")
         if not img.nand_candidates:
-            print("\nWARNING: no NAND env-offset MOVs found; NOT patched.")
+            print("WARNING: no NAND env-offset MOVs found; NOT patched.")
         else:
-            print(f"\nNAND offset patch: 0x{DEFAULT_NAND_ENV_OFFSET:08X} -> "
+            print(f"NAND offset patch: 0x{DEFAULT_NAND_ENV_OFFSET:08X} -> "
                   f"0x{INVALID_NAND_OFFSET:08X} at "
                   + " ".join(f"0x{o:06X}" for o, _w, _rd in img.nand_candidates))
             if not args.dry_run:
                 patch_nand_offset(img.data, img.nand_candidates)
 
-    out = args.output or (Path(args.input).stem + '_relocenv.bin')
-    if args.dry_run:
-        print(f"\n[dry-run] would write {len(img.data):,} bytes to {out}")
+    print("\n--- Patching U-Boot Header Banner ---")
+    banner_tag = "ubootconsole" if args.preset == "console" else (args.preset or "hybrid")
+    new_banner = patch_uboot_banner(img.data, tag=banner_tag)
+    if new_banner:
+        print(f"  ✔ Updated U-Boot version banner: '{new_banner}'")
     else:
-        Path(out).write_bytes(bytes(img.data))
-        print(f"\nWrote {len(img.data):,} bytes to {out}")
-        print("Place as UBOOT.BIN on SD p1 (FAT32) for Stepldr to load.")
+        print("  ⚠️ Warning: Could not locate U-Boot version banner pattern to update.")
+
+    out_path = Path(args.output or (Path(args.input).stem + '_relocenv.bin'))
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    print("\n--- Finalizing Output Binary & Assets ---")
+    if args.dry_run:
+        print(f"[dry-run] would write {len(img.data):,} bytes to {out_path}")
+    else:
+        out_path.write_bytes(bytes(img.data))
+        print(f"  ✔ Wrote patched U-Boot ({len(img.data):,} bytes) to: {out_path}")
+        print("  ✔ Place as UBOOT.BIN on SD p1 (FAT32) for Stepldr to load.")
+
+    # Copy stock kernel if requested or preset is hybrid
+    should_copy_kernel = getattr(args, 'copy_stock_kernel', False)
+    if should_copy_kernel:
+        stock_kernel_src = PROJECT_ROOT / "firmware_source/mtd5_kernel/zImage"
+        target_kernel_name = getattr(args, 'kernel_file', None) or 'zImage_stock'
+        target_kernel_dst = out_path.parent / target_kernel_name
+        if stock_kernel_src.is_file():
+            if args.dry_run:
+                print(f"  [dry-run] would copy stock kernel {stock_kernel_src} -> {target_kernel_dst}")
+            else:
+                shutil.copy2(stock_kernel_src, target_kernel_dst)
+                print(f"  ✔ Copied stock kernel ({stock_kernel_src.stat().st_size:,} bytes) to: {target_kernel_dst}")
+        else:
+            print(f"  ⚠️ Warning: Stock kernel not found at {stock_kernel_src}")
+
+    if getattr(args, 'interactive', False) or is_interactive:
+        print("\n" + "=" * 72)
+        print("  PATCH OPERATION COMPLETED SUCCESSFULLY!")
+        print("=" * 72)
+        print("\nSD Card Deployment Steps:")
+        print(f"  1. Copy '{out_path}' to SD FAT partition 1 as 'UBOOT.BIN'")
+        if should_copy_kernel:
+            kname = getattr(args, 'kernel_file', 'zImage_stock') or 'zImage_stock'
+            print(f"  2. Copy kernel file to SD FAT partition 1 as '{kname}'")
+        print("  3. Insert SD card into ARK1680 head unit and power on.\n")
+        try:
+            input("Press [Enter] to exit...")
+        except (EOFError, KeyboardInterrupt):
+            pass
 
 
 if __name__ == '__main__':

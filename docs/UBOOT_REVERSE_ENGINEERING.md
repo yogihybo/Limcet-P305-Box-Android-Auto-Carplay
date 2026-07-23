@@ -491,7 +491,7 @@ can actually be dropped from a compiled-in `bootcmd`.
 
 ## 10. Env RELOCATION — removes the space wall entirely (`patch_uboot_env.py`)
 
-**Status: statically verified, not yet hardware-tested.** Everything in §1–§9
+**Status: Confirmed working end-to-end on real hardware.** Everything in §1–§9
 fought the same constraint: the compiled-in default env is ~73 bytes packed
 against real data, so a full SD-boot command (bootargs + fatload + bootz,
 ~150 B) can't fit *in place*. §8's `sdscript` trick shrank the *compiled-in*

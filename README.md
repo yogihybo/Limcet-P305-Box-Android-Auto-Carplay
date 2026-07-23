@@ -201,7 +201,7 @@ The built in update function used a similar update mechanism to deploy the SD up
 | Method | Auto or manual | NAND writes | Status |
 |--------|----------------|-------------|--------|
 | [Manual SD Card Boot](#manual-sd-card-boot) (section 8.0) | Manual — retyped every boot | None | **Confirmed working: fatload kernel from MMC works but loading of rootfs from MMC is not supported because the MMC drivers are not compiled into the kernel** |
-| [U-boot patching](#self-contained-sd-auto-boot-env-relocation) (below) | Automatic | None | Experimental — statically verified, untested on hardware |
+| [U-boot patching](#self-contained-sd-auto-boot-env-relocation) (below) | Automatic | None | **Confirmed working end-to-end on real hardware (hybrid boot with zImage_stock)** |
 | [Manual USB boot](#usb-boot) (below) | Manual — retyped every boot | None | **Confirmed working: fatload kernel from USB works but loading of rootfs from MMC is not supported because the MMC drivers are not compiled into the kernel** |
 
 Reflashing NAND for every kernel or rootfs change (see [Flashing via SD Card](#90-flashing-via-sd-card)) is slow. A bad image can also leave the device unbootable, with only a single-keypress recovery window (see [Boot Sequence](#40-boot-sequence-stock-nand)).
@@ -262,32 +262,36 @@ bootz ${loadaddr}
 
 `${mmcdev}`, `${loadaddr}`, and `${bootfile}` are already defined in the device's real NAND env (`mmcdev=1`, `loadaddr=0x1000000`, `bootfile=zImage` — see `firmware_source/env/uboot-env.txt`), so nothing needs to be `setenv`'d for those. This has to be re-typed every boot — it isn't saved to NAND env (no `saveenv` is run), so the stock boot behavior is unaffected.
 
-### Self-contained SD auto-boot (env relocation)
+### Self-contained SD auto-boot (env relocation & hybrid boot)
 
-**Statically verified, not yet tested on real hardware** — see [`payloads/experimental_sdboot/README.md`](payloads/experimental_sdboot/README.md) and [`docs/UBOOT_REVERSE_ENGINEERING.md`](docs/UBOOT_REVERSE_ENGINEERING.md) §10 for the full writeup. Don't rely on this without testing on your own unit first, though the fallback (just remove the SD card) is safe.
+**Confirmed working end-to-end on real hardware.** See [`docs/UBOOT_REVERSE_ENGINEERING.md`](docs/UBOOT_REVERSE_ENGINEERING.md) §10 for the full writeup.
 
-A different approach from both the corrupted patched binaries above and the retype-every-boot [Manual SD Card Boot](#manual-sd-card-boot) (section 8.0) — auto-boots from SD with **zero NAND writes of any kind**, not even to spare/placeholder space.
+Auto-boots from SD with **zero NAND writes of any kind**, preserving stock NAND fallback if the SD card is removed.
 
-**The idea:** the raw/Holden-derived `uboot.bin`'s compiled-in env has only ~52 bytes of genuinely safe space (see the corruption warning above) — nowhere near enough for the full `sdboot` preset. Instead of trying to squeeze a script load into that tiny buffer, we completely sidestep the space wall by *relocating* the default env into free image space and repointing it. 
+**The idea:** The stock `uboot.bin`'s compiled-in env has only ~52 bytes of safe space — nowhere near enough for custom boot commands. We relocate the default env into free image zero-space below `__bss_start` (`0x51161`), repoint internal literals, and update `himport` size immediates.
 
-Combined with `--patch-nand-offset` (forces the real NAND env's CRC to fail so the compiled-in env above is actually used) and placing the patched binary as `UBOOT.BIN` on the SD card (Stepldr already prefers SD over NAND), **every file involved lives on the SD card** — patched U-Boot, kernel, rootfs. Nothing touches NAND. Pull the SD card and the device boots exactly as it always has.
+Combined with `--patch-nand-offset` (forces the real NAND env's CRC to fail so U-Boot falls back to the relocated default env) and placing the patched binary on the SD card (Stepldr already prefers SD over NAND), **all bootloader modifications live safely on the SD card**.
 
-Generated with:
+Generated via guided interactive tool:
 
 ```bash
-python build_tools/patch_uboot_env.py -i "firmware_source/prado_reconstructed/mtd1-mtd2_uboot/uboot.bin" \
-  -o payloads/experimental_sdboot/uboot_relocenv.bin \
-  --mode sdboot --patch-nand-offset
+python3 build_tools/patch_uboot_env.py
 ```
 
-**Confirmed (static analysis):** the env relocation works cleanly, the NAND-offset redirect applies, and the binary now boots SD by default without relying on an external script or overwriting real code.
+The interactive menu features:
+- Single-keypress default path acceptance (`firmware_source/mtd1-mtd2_uboot/uboot.bin`)
+- Preset selection: Hybrid Boot (`hybrid`), Drop to Console Prompt (`ubootconsole`), or Pure SD Boot (`sdboot`)
+- Pre-flight confirmation box reviewing all parameters prior to patching
+- Header banner version string patching (`U-Boot 2012.10 (hybrid YYYY-MM-DD HH:MM:SS)`)
+- Automatic copying of stock kernel (`zImage`) to `sd_bootable/zImage_stock`
 
-**SD card contents for this method:**
+**SD card contents for Hybrid Boot:**
 
-| Source file | Filename required on SD card | Partition |
-|-------------|-------------------------------|-----------|
-| `payloads/experimental_sdboot/uboot_relocenv.bin` | `UBOOT.BIN` — exact case, Stepldr won't find it otherwise | p1 (FAT32) |
-| `firmware_source/prado_reconstructed/mtd5_firmware_source/kernel/zImage` | `zImage` | p1 (FAT32) |
+| Source file | Filename required on SD card | Partition | Notes |
+|-------------|-------------------------------|-----------|-------|
+| `sd_bootable/uboot_hybrid.bin` | `uboot_hybrid.bin` (or `UBOOT.BIN`) | p1 (FAT32) | Patched U-Boot (relocated env + NAND CRC invalidation) |
+| `firmware_source/mtd5_kernel/zImage` | `zImage_stock` | p1 (FAT32) | Stock 3.4 kernel loaded by hybrid U-Boot |
+| NAND partition 6 | — | NAND MTD 6 (`ubi0:rootfs`) | Stock NAND rootfs mounted by hybrid U-Boot |
 | rootfs tree | — (copied as the partition's directory contents, not a single file) | p2 (ext4) |
 
 ### Building the SD image with `build_bootable_sdcard.sh`
@@ -400,19 +404,18 @@ The original bootlogo used a hardware JPEG decoder (`jpeghw`). Since this driver
 
 **Build tree:** `/home/osboxes/Downloads/linux-arkmicro/u-boot` (separate git repo from this one — see that repo's own history for board-port commits).
 
-### Boot commands
-
 | Command | Effect | Status |
 |---------|--------|--------|
 | `bootmmc` | Kernel+DTB from SD (`kernelfile`/`dtbfile` env vars), rootfs on SD (`mmcroot`, default `/dev/mmcblk0p2`) | **Confirmed working** |
 | `bootusb` | Kernel+DTB+rootfs all from USB (`usbroot`, default `/dev/sda2`) — needs a two-partition USB stick, FAT (p1, `zImage`+DTB) + ext4 (p2, rootfs), same layout as the SD card. `rcS`'s userdata mount also follows the actual root device (see [`build_bootable_sdcard.sh`](#build_bootable_sdcardsh--current-capabilities) below), so `/data` lands on `/dev/sda3` too | Kernel-load-from-USB confirmed working; the `root=`/userdata device-following fix is newly built, not yet hardware-tested |
-| `bootstock` | Chainloads the real stock U-Boot 2012.10 binary from an SD file (`stockubootfile`, default `stock_uboot.bin`), which then boots the stock kernel+rootfs+**full UI** from NAND with its own driver | **Confirmed working end-to-end** |
+| `boothybrid` | Chainloads `uboot_hybrid.bin` from SD card (`hybridubootfile` env var, default `uboot_hybrid.bin`), which loads custom kernel `zImage_stock` from SD FAT partition 1 and mounts stock NAND rootfs (`ubi0:rootfs`) | **Confirmed working end-to-end** |
+| `bootstock` | Chainloads the real stock U-Boot 2012.10 binary from an SD file (`stockubootfile`, default `uboot_stock.bin`), which then boots the stock kernel+rootfs+**full UI** from NAND with its own driver | **Confirmed working end-to-end** |
 | `bootstockusb` | Same as `bootstock`, stock U-Boot binary sourced from USB instead of SD — NAND is still where the firmware_source/kernel/rootfs come from either way, USB/SD only supplies the stock U-Boot binary itself for that one handoff | Same code path as `bootstock`, not independently hardware-tested |
 | `bootnand` | Direct kernel boot from NAND using *this* fork's own NAND driver (`run nandboot`) | NAND read fixed and reliable; kernel entry itself hangs — see below |
 | `nandoobcheck <offset-hex>` | Diagnostic: raw OOB dump of a NAND page, bypassing ECC/BBT interpretation | Diagnostic tool, not a boot path |
 | `switchecc <0\|1\|2>` | Switch the NAND driver's ECC scheme (0=normal, 1=bootstrap, 2=this chip's real firmware_source/kernel/rootfs/bootloader format) | `switchecc 2` is what fixed `bootnand`'s NAND reads |
 
-**Default (non-interrupted) autoboot order:** `bootusb` → `bootstockusb` → `bootstock` → `run nandboot` (last resort). Import of `uEnv.txt` from the SD card happens first and can override this (or any env var) without recompiling.
+**Default (non-interrupted) autoboot order:** `bootusb` → `boothybrid` → `bootstock` → `run nandboot` (last resort). Import of `uEnv.txt` from the SD card happens first and can override this (or any env var) without recompiling.
 
 **Practical recommendation:** for a fully working boot to the real stock UI right now, use `bootstock`/`bootstockusb` (or just let default autoboot reach it) — not `bootnand`, which reads NAND correctly but hangs at kernel entry for reasons not yet found (this fork's 2018.07 U-Boot handing off to the stock 3.4 kernel is unproven territory; `bootstock` sidesteps it by handing the kernel boot to the binary it was actually built against).
 

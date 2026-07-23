@@ -569,3 +569,117 @@ exception handler stubs because we're not building with `CONFIG_SPL_BUILD`. This
 harmless: Stepldr jumps to `0x30000` which hits the reset vector, which branches forward
 to the actual startup code at `0x2e8`.
 
+---
+
+## Detailed Stock vs. Compiled U-Boot Subsystem Audit & Display Register Map
+
+### 1. Stock Display Register Map & Ground-Truth Values
+
+All display controller registers are mapped at `LCD_BASE` (`0xE0500000`), system clocks at `SYS_BASE` (`0xE4900000`), and backlight PWM registers at `PWM_BASE` (`0xE4B00000`).
+
+#### Master Control & Timings (`LCD_BASE = 0xE0500000`)
+
+| Register Offset | Name | Stock Ground-Truth Value | Purpose & Function |
+| :--- | :--- | :--- | :--- |
+| `0x00` | `rLCD_CONTROL` | `0x03600181` | Master LCD enable, interface format (RGB888 = 7), sync polarities, and layer enables (**Bit 8 = OSD2 enable**, **Bit 7 = OSD1 enable**). |
+| `0x04` | `rLCD_TIMING1` | `0x001d0019` | Vertical timings: `VBP = 29` (`0x1d`), `VFP = 25` (`0x19`). |
+| `0x08` | `rLCD_TIMING2` | `0x00100020` | Sync widths: `VSW = 16` (`0x10`), `HBP = 32` (`0x20`). |
+| `0x0c` | `rLCD_TIMING3` | `0x00190036` | Horizontal timings: `HFP = 25` (`0x19`), `HSW = 54` (`0x36`). |
+| `0x10` | `rLCD_TIMING4` | `0x00000001` | Active sync polarities (`IHS = 1`, `IVS = 1`, `IOE = 0`). |
+| `0x2b0` | `rLCD_TV_CONTROL` | `0x0000000c` | TV Encoder & ITU656 matrix output mode (`TvoutType = 12`). |
+
+#### OSD Layer Framebuffers (`LCD_BASE = 0xE0500000`)
+
+Stock U-Boot pre-populates two OSD layers at fixed physical RAM locations **above the kernel's `mem=180M` ceiling** (`0x0b400000` = 180MB):
+
+| Layer | Register Offsets | Stock Config Values | Physical Address & Resolution |
+| :--- | :--- | :--- | :--- |
+| **OSD1** (Boot Splash) | `0x18` (CTL)<br>`0x1c` (SIZE)<br>`0x20` (ADDR) | `CTL = 0x002320ff`<br>`SIZE = 0x001e0320`<br>`ADDR = 0x0b400000` | Address: **`0x0b400000`** (180 MB)<br>Resolution: 800 × 480 (`0x0320` × `0x01e0`) |
+| **OSD2** (DirectFB UI) | `0x28` (CTL)<br>`0x2c` (SIZE)<br>`0x30` (ADDR) | `CTL = 0x002320ff`<br>`SIZE = 0x001e0320`<br>`ADDR = 0x0be00000` | Address: **`0x0be00000`** (190 MB)<br>Resolution: 800 × 480 (`0x0320` × `0x01e0`) |
+
+*Note: Unpatched compiled U-Boot left OSD2 disabled (`0x00000000`), causing the stock kernel's `open /dev/ark_display` to crash on direct boot because the vendor kernel driver expects OSD2 to be pre-initialized by U-Boot.*
+
+#### System Clocking & Gating (`SYS_BASE = 0xE4900000`)
+
+| Register Offset | Name | Stock Value | Function |
+| :--- | :--- | :--- | :--- |
+| `0x54` | `rSYS_LCD_CLK_CFG` | `0x00000b01` | LCD Pixel Clock Config: Source = `SYSPLL` (330 MHz), `CLKDIV1 = 11` (`0x0b`), `CLKDIV2 = 1`. |
+| `0x40`–`0x7c` | `CLK_EN` blocks | `0xffffffff` | Unconditional clock gating enables for AHB, APB, AXI, and LCD DMA channels. |
+
+#### PWM Backlight Control (`PWM_BASE = 0xE4B00000`)
+
+| Register Offset | Name | Stock Value | Function |
+| :--- | :--- | :--- | :--- |
+| `0x10` | `rPWM_ENA1` | `0x00000001` | Enables PWM Channel 1 for LCD Backlight. |
+| `0x14` | `rPWM_DUTY1` | `0x0000001e` | Duty cycle value (`30` / `0x1e`, matching `backlight=30` env var). |
+| `0x18` | `rPWM_CNTR1` | `0x000000ff` | PWM counter period (`255`). |
+
+---
+
+### 2. C Implementation in Compiled U-Boot Source
+
+The display pre-initialization is implemented in `board/arkmicro/ark1668_limcet_p305/ark1668_display_cfg.c` under `ark_display_init()`:
+
+```c
+/* Location: linux-arkmicro/u-boot/board/arkmicro/ark1668_limcet_p305/ark1668_display_cfg.c */
+
+void ark_display_init(int screen_id)
+{
+	struct screen_info *screen = &screens[screen_id];
+	int interlace;
+	
+	/* Enable AHB/AXI/PER clocks for display pipeline */
+	rSYS_AHB_CLK_EN |= 1 << 8;
+	rSYS_AXI_CLK_EN |= 1 << 1;
+	rSYS_PER_CLK_EN |= 1 << 4;
+
+	/* Apply arkdata.ini LCD timing overrides from SD FAT partition if present */
+	arkdata_apply_lcd_timing(screen);
+	screen_info_show(screen);
+
+	g_screen_info = screen;
+	memset(&g_display_para, 0, sizeof(g_display_para));
+	memcpy(&g_display_para.screeninfo, screen, sizeof(struct screen_info));
+	
+	ark_backlight_config_f(screen->screen_id);
+	ark_display_initialize_port(screen);
+	interlace = is_interlace_tvenc(screen);        
+
+	/* Pre-configure OSD1 Layer (Boot Splash) */
+	ark_osd_en_layer(OSD1_LAYER, 0);
+
+	/* Pre-configure OSD2 Layer (DirectFB UI Framebuffer @ 0x0be00000 / 190MB) */
+	rLCD_OSD2_SIZE = 0x001e0320;   /* 800x480 */
+	rLCD_OSD2_ADDR = 0x0be00000;   /* Fixed physical address outside kernel RAM */
+	rLCD_OSD2_CTL  = 0x002320ff;   /* Enabled + format/order matching stock */
+	ark_osd_en_layer(OSD2_LAYER, 1);
+
+	if (IS_TVENC_SCREEN(screen) && interlace) {
+		ark_set_osd_frame_mode(OSD2_LAYER, 1);
+	} 
+
+	/* Set TV Encoder / ITU656 matrix output mode (TvoutType = 12) */
+	rLCD_TV_CONTROL = 0x0000000c;
+
+	/* Configure PWM Backlight (Duty = 30) */
+	ark_backlight_config(screen->screen_id);
+}
+```
+
+---
+
+### 3. Comprehensive Subsystem Comparison Table
+
+| Subsystem | Stock U-Boot 2012.10 | Compiled U-Boot 2018.07 | Status / Resolution |
+| :--- | :--- | :--- | :--- |
+| **OSD1 Framebuffer** | `0x0b400000` (180 MB) | `0x0b400000` (180 MB) | **Identical** |
+| **OSD2 Framebuffer** | `0x0be00000` (190 MB) | `0x0be00000` (190 MB) | **Identical** (Pre-initialized in `ark_display_init`) |
+| **LCD Master Control** | `rLCD_CONTROL = 0x03600181` | `rLCD_CONTROL = 0x03600181` | **Identical** |
+| **TV Encoder Output** | `TvoutType = 12` (`rLCD_TV_CONTROL = 0x0c`) | `TvoutType = 12` (`rLCD_TV_CONTROL = 0x0c`) | **Identical** |
+| **Pixel Clock Frequency** | 330 MHz (`CLKDIV1 = 11`) | 330 MHz (`CLKDIV1 = 11`) | **Identical** |
+| **NAND Sector / ECC Mode** | 1024-byte sector, 13-bit BCH (`switchecc 2`) | `switchecc 2` command implemented | **Identical** |
+| **ARM Boot ATAGS Pointer** | Valid pointer at `bi_boot_params` | `#define CONFIG_SYS_BOOTPARAMS_LEN SZ_4K` set | **Identical** (Resolved vector table crash at `0x0`) |
+| **Scratch RAM Window** | Fixed physical addresses (`> 180 MB`) | Constrained to U-Boot SDRAM window (`< 64 MB`) | **Resolved** (Prevents RAM corruption) |
+| **ARK Header Injection** | 96-byte Stepldr header (`0x12345678`) | Injected via `build_tools/inject_ark_header.py` | **Identical** |
+
+

@@ -1,0 +1,32 @@
+diff --git a/systems/fbdev/fbdev.c b/systems/fbdev/fbdev.c
+index aee785b..fdded27 100644
+--- a/systems/fbdev/fbdev.c
++++ b/systems/fbdev/fbdev.c
+@@ -1196,6 +1196,27 @@ primaryInitLayer( CoreLayer                  *layer,
+                          DLCAPS_SATURATION | DLCAPS_BRIGHTNESS;
+      description->type = DLTF_GRAPHICS;
+ 
++     /* ark1668 fix: this field is left unset upstream, so
++      * dfb_layer_context_allocate_surface()'s "shared->description.
++      * surface_caps ?: DSCAPS_VIDEOONLY" falls through to VIDEOONLY,
++      * which only requires CSTF_EXTERNAL (satisfied by both the fbdev
++      * pool and this board's GAL gfxdriver pool). Since the GAL pool
++      * registers CSPP_PREFERED vs fbdev's own CSPP_DEFAULT, it wins
++      * dfb_surface_pools_negotiate()'s priority-sorted allocation for
++      * the primary/screen surface. On this board GAL's pool is backed
++      * by galcore's GPU memory (a physically separate DRAM region from
++      * /dev/fb0's own dedicated carveout), so the primary surface ends
++      * up GPU-pool-backed while primaryFlipRegion()'s pan/flip offset
++      * math assumes it's relative to fb0's own base -- producing a
++      * valid-but-meaningless offset (ioctl succeeds, wrong/black
++      * content on screen). Forcing SYSTEMONLY here pins just the
++      * primary surface to fbdev's own pool (CSP_SYSTEMONLY requires
++      * CSTF_INTERNAL, which GAL's pool doesn't declare), leaving
++      * everything else (window/backing-store surfaces) free to use
++      * GAL acceleration normally -- see
++      * docs/DEVICE_TEST_CHECKLIST_2026-07-18.md for the full trace. */
++     description->surface_caps = DSCAPS_SYSTEMONLY;
++
+      /* set name */
+      snprintf( description->name,
+                DFB_DISPLAY_LAYER_DESC_NAME_LENGTH, "FBDev Primary Layer" );

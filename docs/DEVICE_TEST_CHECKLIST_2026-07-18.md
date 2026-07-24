@@ -4978,3 +4978,87 @@ pool-selection question (`libqdirectfbscreen.so`/`libdirectfb_fbdev.so`,
 partially traced in [[project_effectwatch_black_screen]] §22), not a
 kernel-driver-version question. §45's `--stock-config` hardware test
 remains the most direct way to make further progress from here.
+
+---
+
+## 47. Pool-priority mechanism confirmed at the code level — narrows §46's open question to one specific, testable puzzle
+
+Continued §46's thread while waiting for a hardware test window. Decompiled
+both `fbdev`'s and `gal`'s `InitPool` functions in their respective
+DirectFB modules, then cross-referenced against DirectFB's own real,
+open-source implementation (`github.com/deniskropp/DirectFB`, located
+via `gh api search/code`) to resolve the exact struct layout/enum
+values rather than guessing from field position — this is no longer
+architecture-plausible-only, it's confirmed against real values:
+
+- `fbdevInitPool` registers its pool with `types =
+  CSTF_LAYER|CSTF_WINDOW|CSTF_CURSOR|CSTF_FONT|CSTF_EXTERNAL|CSTF_SHARED`,
+  `priority = CSPP_DEFAULT` (0).
+- `galInitPool` registers with `types = 0x60f` =
+  `CSTF_LAYER|CSTF_WINDOW|CSTF_CURSOR|CSTF_FONT|CSTF_EXTERNAL|CSTF_PREALLOCATED`,
+  `priority = 1` = `CSPP_PREFERED` — confirmed against the real
+  `CoreSurfacePoolDescription`/`CoreSurfacePoolPriority` struct
+  (`src/core/surface_pool.h`), with field offsets computed via
+  `_CSAID_NUM=24` from `src/core/surface.h`.
+
+DirectFB core's real `dfb_surface_pools_negotiate()`
+(`src/core/surface_pool.c`) tries registered pools in priority-sorted
+order (highest first) and picks the first whose `types`/`access` mask
+is a superset of what the surface requires. So for any surface
+requesting `CSTF_LAYER` — including the primary/screen surface — GAL's
+higher-priority pool is tried first and wins, **unless** the buffer's
+`policy` is `CSP_SYSTEMONLY` (value `0`; forces `type |= CSTF_INTERNAL`
+into the match requirement). GAL's `types` mask (`0x60f`) does NOT
+include `CSTF_INTERNAL` (`0x100`) — confirmed by direct bit math — so
+a genuinely `CSP_SYSTEMONLY`-policy buffer should exclude GAL's pool
+from consideration entirely.
+
+Also found the real, matching open-source counterpart for `fbdev`'s
+own primary-layer special case: `systems/fbdev/fbdev_surface_pool.c`'s
+real `fbdevAllocateBuffer()` explicitly checks `surface->type &
+CSTF_LAYER && surface->resource_id == DLID_PRIMARY` and, for that case
+only, skips the normal chunk-allocation path entirely (computes
+`allocation->size`, never sets `allocation->offset`) — confirming the
+primary/screen surface is architecturally meant to be handled
+specially, outside the generic multi-pool priority competition (its
+real address almost certainly comes from `primarySetRegion`/
+`primaryInitScreen`'s own pre-existing `/dev/fb0` mmap, not a fresh
+pool allocation at all).
+
+**The genuine remaining puzzle**: if `CSP_SYSTEMONLY` really does
+exclude GAL's pool as this trace shows, §22's `systemonly`
+`QWS_DISPLAY` flag (already hardware-tested as NOT resolving the
+black screen) should have mechanically worked — yet it didn't. Two
+live possibilities, not yet distinguished by static analysis alone:
+
+1. Qt's `QDirectFBScreen::createDFBSurface()` sets `DSCAPS_SYSTEMONLY`
+   but it doesn't correctly propagate through to `buffer->policy =
+   CSP_SYSTEMONLY` at the DirectFB core level — a plumbing gap
+   somewhere in Qt's own DirectFB integration, not traced this
+   session.
+2. `systemonly` is too blunt an instrument: it forces ALL Qt-created
+   DirectFB surfaces (windows, cursor, fonts — not just the primary)
+   to skip GAL acceleration entirely, a real behavior change from
+   stock (which doesn't set this flag at all, and presumably lets
+   ordinary window surfaces use GAL's pool exactly as its higher
+   priority is designed for). Meanwhile the actual primary-surface
+   special-casing `fbdev_surface_pool.c`'s own source shows may need
+   to happen at a different layer — DirectFB core's own layer/region
+   surface creation, driven by `resource_id`/`DLID_PRIMARY`, not a
+   QWS-wide Qt flag — and may not be engaged at all regardless of
+   `systemonly`.
+
+**What this means for the pending `--stock-config` test**: if it
+renders correctly, the bug was caused by §20/§22's changes disrupting
+something DirectFB/`fbdev` already handled correctly on its own
+(plausible, given both are confirmed departures from stock's real
+config). If `--stock-config` STILL shows black, the bug is upstream of
+all of this configuration entirely — most likely in whatever mechanism
+is actually supposed to keep the primary surface `fbdev`-pool-pinned
+(`fbdev_surface_pool.c`'s `DLID_PRIMARY` special case, or wherever
+`primarySetRegion` wires up the real address) not functioning
+correctly in this specific deployment, independent of
+`QWS_DISPLAY`/`directfbrc` entirely — in which case the next static
+step would be decompiling `primarySetRegion`/`primaryInitScreen`
+directly to see how (or whether) the primary surface's real address
+actually gets wired up in our deployment.

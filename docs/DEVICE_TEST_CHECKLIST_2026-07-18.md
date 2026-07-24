@@ -3919,6 +3919,949 @@ already used by CarPlay, not a separate mechanism — so there is no
 second, `sink`-specific gap. The missing piece was this one shared
 SHOW_WINDOW ioctl.
 
+## 30. Stock-kernel direct-boot investigation: reversingtrack preload, backcar GPIO/ITU656/MCU subsystem (2026-07-23)
+
+User tested `bootnand` (boots the untouched dumped stock 3.4 kernel +
+NAND rootfs, "original dumped settings") on the other agent's newly
+faster boot chain. Result: `open /dev/ark_display fail` and
+`open frame buffer fail` in MsnCoreApp's own startup, despite the
+custom U-Boot's own OSD1/bootlogo/arkdata handling all working
+correctly up to that point. This is a **separate investigation from
+the reconstructed 4.19 kernel work** — everything below concerns only
+the legacy stock-kernel direct-boot path.
+
+**Ruled out via decompile of `vmlinux.elf`'s `__disp_probe()`
+(`@0x802da884`):** all 4 of its failure paths print at `<3>`/KERN_ERR
+(`"%s %d: dev init err"`, `"fb init err"`, `"get lcd irq err"`,
+`"can't get assigned scal_irq"`) — high enough priority to reliably
+hit the console. None of these strings appear in the failing boot log,
+suggesting `__disp_probe()` itself likely succeeds.
+
+**Ruled out via the real dumped `rcS`/`inittab`/`etc/profile`:**
+`MsnCoreApp -qws&` is launched from `/etc/profile`, sourced by
+`inittab`'s `::respawn:-/bin/sh` login shell — which only starts after
+`rcS` (a `sysinit` action, always run to completion first) has already
+finished, including its `/sbin/mdev -s` device-node creation. A simple
+mdev-vs-MsnCoreApp race isn't structurally possible. `ro` root
+(confirmed in both our `nandargs` and stock's own archived command
+reference) isn't the deviation either — `devtmpfs: mounted` (confirmed
+present on every boot in the known-good baseline dmesg,
+`docs/logs/archived/dmesg live device kernel 3.4 dmeg_260715.txt`)
+makes `/dev` writable independent of root's ro/rw state.
+
+### Finding 1: missing `reversingtrack` NAND-partition preload — real, confirmed, fixed
+
+`track_paint_init()` (`vmlinux.elf@0x802f0ebc`) checks for a `"RSTK"`
+magic at fixed **physical** address `0x0fd00000` (253MB — inside the
+LCDC's own 240-256MB carveout) before initializing the carback/reverse-
+camera track overlay. Byte-verified: `firmware_source/mtd10_reversingtrack/
+reversingtrack` (and every firmware dump's copy of the same partition)
+genuinely starts with `RSTK`. Our custom U-Boot's `nandboot` never
+loaded this NAND partition into RAM at all. The known-good baseline
+dmesg shows the magic check passing (`track_paint init width=800,
+height=480,...`); our failing boot shows it failing
+(`<1>reservingtrack check failed!`, confirmed exact string match).
+**Fixed**: added `nand read 0xfd00000 reversingtrack;` to `nandboot`
+in `u-boot/include/configs/ark1668_limcet_p305.h`, right after
+`switchecc 2`. This subsystem's own failure path is self-contained
+(doesn't touch the main LCD's shared allocations) — likely a real,
+separate reverse-camera-overlay regression, not proven to be the cause
+of the `/dev/ark_display`/framebuffer bug specifically.
+
+### Finding 2: kernel-side `ark_carback_probe()` disables `fb0` on backcar GPIO read
+
+Decompiled `ark_carback_probe()` (`vmlinux.elf@0x80416880`): reads a
+GPIO (`__gpio_get_value`, active-low, name `"backcar"` confirmed via
+the `gpio_request()` label string) during kernel boot/probe, and if it
+reads active, immediately calls `ark_disp_set_layer_en(1,0)` and
+`ark_disp_set_fb0_en(0)` — **disabling the main framebuffer** — with no
+debounce or sanity check. This is a strong candidate for
+`"open frame buffer fail"` specifically, if this GPIO reads "reverse
+engaged" when it shouldn't. **User confirmed the unit is installed in
+the vehicle and known-working under stock U-Boot + this same stock
+kernel** — ruling out the vehicle wiring itself as the variable, since
+nothing about the physical signal changed between working and failing
+tests. The variable is U-Boot.
+
+### Finding 3: stock U-Boot's own backcar subsystem — fully traced via decompile of the raw `uboot.bin` (no symbols)
+
+Confirmed present, byte-identical function pattern, in **every**
+vendor U-Boot dump we have (Holden, CarSyncTech Toyota, P306 2025, all
+3 copies of the Prado's own mtd1/mtd2 U-Boot) — a standard vendor BSP
+feature, not a one-off. Our custom U-Boot has **none of it**. Traced
+via raw ARM disassembly (`objdump -b binary -m arm --adjust-vma=0x30000`)
+plus a proper Ghidra import (`-processor ARM:LE:32:v7 -loader
+BinaryLoader -loader-baseAddr 0x30000`, since the ELF-based `-noanalysis`
+technique used all session doesn't apply to a raw/headerless binary).
+
+- **`GPIO 5`** is the real backcar-detect pin U-Boot itself reads
+  (`FUN_000690f4(5)`), separate from (though presumably electrically
+  the same signal as) whatever GPIO number the kernel's `platform_data`
+  supplies to `ark_carback_probe()` — the kernel-side exact GPIO number
+  was not resolved (Ghidra address-resolution ambiguity on the
+  `vmlinux.elf` project, not pursued further given the U-Boot side was
+  more tractable).
+- **`GPIO 81 (0x51)`** — a paired enable/strobe pin, toggled 0→(work)→1
+  around the backcar routine. Verified via exhaustive search (all 56
+  GPIO-set call sites in the whole ~380KB binary) that this pin is used
+  **only** within this backcar code — not a general MCU-enable/reset
+  line, so it does **not** explain unrelated MCU-handshake difficulties
+  elsewhere in the project (those are a separate runtime/userspace path,
+  `tools/mcu-handshake` over `/dev/ttyHS0`, already addressed by commit
+  `96eef2e`'s real protocol fixes).
+- **Direct hardware register writes, gated on the GPIO 5 read**
+  (`FUN_0006e860`), at register base `0xe0800000` — confirmed via our
+  own `ark1668.dtsi`/`ark1668e.dtsi` (`itu656in@e0800000`) to be the
+  **ITU656 camera capture INPUT controller, not the LCDC** (0xe0500000).
+  This is about configuring the reverse camera's own video-capture
+  hardware, not the main LCD/OSD output path — corrects an earlier,
+  wrong characterization of this as "LCDC register writes" mid-session.
+  Exact writes:
+  ```
+  base = 0xe0800000
+  base[0x900] |= 1                    // always
+  if (backcar_on):
+      base[0x000] |= 6                // set bits 1-2
+      base[0x8fc] = 0x1e0a
+  else:
+      base[0x124] = 0
+  ```
+- **MCU UART notification** — real code (`vmlinux.elf`-equivalent
+  function in `uboot.bin`, two fixed byte frames: `0D 24 03 00 01 FF 02`
+  always, plus `0D 24 02 02 04 FB` if backcar-on, sent byte-by-byte over
+  a UART selected by a runtime channel-number variable never resolved),
+  matching the `"uart%d notify mcu backcar onoff=%d."` string. **Could
+  not confirm this function is ever actually called** — exhaustively
+  searched the whole binary (direct branch, literal-pool pointer,
+  movw/movt pair, thumb interworking) and found zero references besides
+  its own definition. May be dead/unreached code in this build. Not
+  implemented as a result — treated as a real but unconfirmed lead, not
+  acted on blind.
+
+**Net assessment**: Finding 1 (reversingtrack) is fixed and low-risk.
+Finding 3's GPIO-5 read + ITU656 register writes are fully understood
+and about to be ported to our U-Boot for completeness/fidelity to
+stock, but are a *different* peripheral than the one Finding 2 shows
+the kernel actually disabling (`fb0`/LCDC) — so porting them is
+worthwhile but not guaranteed to fix the framebuffer symptom on its
+own. The MCU notification remains an open, unconfirmed thread.
+**Still not hardware-tested** (no way to capture a fresh boot log at
+time of writing).
+
+**Implemented**: added a `backcarcheck` U-Boot command
+(`ark1668_display_cfg.c`) reading GPIO 5 and writing the exact ITU656
+registers found above, using this codebase's own existing named
+register macros (`rITU656IN_INPUT_SEL`, `rITU656IN_MODULE_EN`,
+`PIX_LINE_NUM_DELTA`, `rITU656IN_IMR` — all already `#define`'d at the
+correct offsets in `ark1668_sys.h`, confirming the register-offset
+recovery above). Wired into `nandboot` right after `disconfig 0`,
+matching stock's real ordering. Deliberately does **not** touch GPIO
+81 — while tracing stock's use of it, found it's the same physical pin
+our own `ark_backlight_config()`/`ark_backlight_config_f()` already
+manage as the LCD backlight enable (`ark1668_lcd.c`); stock's routine
+briefly blips it off/on during the reverse-camera transition, but
+duplicating that here risks a race against existing backlight logic
+for no confirmed benefit. MCU notification also not implemented (see
+above — unconfirmed reachable). U-Boot rebuilt clean, zero new
+compiler warnings.
+
+## 31. Broader stock-U-Boot binary audit for other undocumented features (2026-07-23)
+
+Asked to check the rest of `uboot.bin` for other things we might be
+missing beyond backcar. Extracted all ~1700 unique printable strings
+(`strings -a -n 6`) and worked through them systematically.
+
+**CORRECTED (see §32) — initially misjudged as inert, actually real and active.**
+Found that `struct _display_updatepara` (`ark1668_lcd.h`) has FIVE
+arkdata-driven sub-structs — `vp_info` (per-layer contrast/brightness/
+hue/saturation), `gamma_info` (48-entry gamma curve), `itu656byp_info`
+(analog TV-out bypass timing), `special_info` (backlight-from-arkdata,
+`track_setting`, `dvr_mirror_type`, `usb_update_delay`), and
+`touchscreen_info` (touchkey calibration, `TouchKeyNum`/`TouchKey%d`)
+— ALL gated behind a single `#define ARK_DISPLAY_ALL_MODE 0`,
+hardcoded off identically across every board variant in the vendor
+tree we have checked out. Initially concluded (based on that default
+plus every real `arkdata.ini`'s `[VP]`/`[SPECIAL_INFO]` values being
+exactly the documented stock defaults) that this whole cluster was
+genuinely inert in production. **That conclusion was wrong** — see
+§32, where decompiling stock's actual shipped `uboot.bin` showed this
+exact parsing path is real, reachable, and called very early in boot.
+`[VP]` being "just defaults" doesn't mean inert: whether U-Boot
+actively *writes* those defaults to hardware still matters if the
+silicon's own power-on-reset state differs, and `[ITU656_BYP_NTSC]`/
+`[ITU656_BYP_PAL]` have real calibrated timing values, not defaults.
+
+**Real, connects to already-documented project history, not pursued
+further**: `uboot.bin` contains live-referenced strings `"ark7116"` /
+`"ark7116 decode"` / `"ark7116 recognize failed"` — U-Boot itself
+appears to probe for an ARK7116 video-decoder chip during boot,
+referenced from what looks like a chip-detection table (not confirmed
+reachable from a traced call site, unlike the backcar work above).
+This directly connects to history already in the `linux-arkmicro` git
+log: vendor commit `a25a576de`/`2ca4da04d`
+(`huangliang@arkmicro.com`, 2022) added `ark7116h.c` specifically
+because **RN6752 alone has a vendor-confirmed random power-on hang
+bug** ("添加7116h驱动，解决6752驱动上电随机卡死问题" — "add 7116h driver,
+solve 6752 driver random power-on hang problem"). Separately, this
+session's `linux-arkmicro` history already shows `ITU656`/`RN6752`/
+`ARK_CARBACK` support in **our own reconstructed kernel** was tried,
+found to cause a full kernel panic on every boot (commit `3a8e2568a`,
+a real memory-corruption bug in `dvr_ioctl()` reading a corrupted
+`dvr_dev->start`/`->stop` function pointer), and disabled as a linked
+unit pending a "dedicated investigation" that was never done. **Not
+pursued further this session** — this is squarely about our
+*reconstructed kernel's* camera/carback support, a separate, larger,
+already-tracked task, not the U-Boot backcar work above (which only
+configures hardware for the *stock* kernel's `bootnand` path and
+doesn't touch our kernel's ITU656 config at all). Worth remembering
+if/when someone picks up that dedicated investigation: **the fix
+likely needs both RN6752 and ARK7116(H) together**, not RN6752 alone
+— the vendor's own history says RN6752-only is what hangs.
+
+**Rest of the binary**: remaining ~1500 strings are standard U-Boot/
+filesystem/USB boilerplate (ext4, FAT, UBI, NAND, USB mass storage) —
+no other vendor-specific, board-specific debug strings found beyond
+what's already covered in §28-31 and earlier sections.
+
+## 32. Correction: `ARK_DISPLAY_ALL_MODE` is real and active in stock, not dead code — enabled (2026-07-23)
+
+User asked directly: "the display mode all setting — is that enabled
+in the stock u-boot?" Good challenge — §31's "genuinely inert" call
+was based only on the checked-out *source tree* defaulting the flag to
+0, never actually verified against what code is *reachable* in the
+real shipped binary. Checked properly this time.
+
+Found the strings gated by this flag (`"screeninfo check ok"`,
+`"vpinfo check ok."`, `"gammainfo check ok."`, `"itu656bypinfo check
+ok"`, `"all vp data 0, error!"`) are all referenced from literal-pool
+entries **~80 bytes apart in the same function** (`FUN_0006fea8`,
+decompiled in full) — a long, sequential, unconditional routine that
+reads every `[VP]`/`[ITU656_BYP_*]`/`[GAMMA_VAL]`/`[SPECIAL_INFO]`/
+touchscreen field from `arkdata.ini` by name (loop counts of 0x14/0x26
+match the NTSC/PAL field counts exactly; a 48-iteration loop matches
+`Gamma0`-`Gamma47`). Confirmed reachable: called from `FUN_00030a8c`
+at `0x30b3c` — ~64KB into the binary, clearly on the main early-boot
+path, not a rare/optional branch.
+
+**Conclusion**: stock's real shipped U-Boot has this active. Our
+checked-out `linux-arkmicro` source tree defaulting
+`ARK_DISPLAY_ALL_MODE` to 0 (identically across every board variant)
+doesn't reflect what was actually compiled into the shipped binary —
+most likely the vendor's real production build used a build-flag
+override or a slightly different internal source snapshot than what
+ended up in our reconstruction tree.
+
+**Fixed**: flipped `ARK_DISPLAY_ALL_MODE` to `1` in
+`ark1668_lcd.h`. Hit a real, separate problem doing so: `ark_gamma_init()`
+references `GAMMA_INFO_FLAG`/`GAMMA_REG_MAX`, which are **not defined
+anywhere in the entire vendor tree, in any board variant** — this
+specific sub-path doesn't compile as checked in, confirming the
+vendor's real source differs from ours in more than just this one
+flag. Added both as new `#define`s: `GAMMA_REG_MAX=48` is unambiguous
+(matches the 48 `rLCD_GAMMA_REG_1..48` registers). `GAMMA_INFO_FLAG`'s
+exact value doesn't matter functionally — its only use is gated by
+`gammainfo.gamma_en==0x03`, and every real `arkdata.ini` we have sets
+`Gamma_en=0`, so `ark_gamma_init()` is a provable no-op for every real
+config regardless of what this sentinel is defined as. Rebuilt clean
+— binary grew ~422K→425K (consistent with real new code included), a
+full link succeeded (confirms no other missing symbols in the newly-
+enabled code). **Not yet hardware-tested.**
+
+**What this actually changes**: `[VP]` values are stock defaults in
+every config we have, so enabling this mainly matters if the silicon's
+power-on-reset state for those VP registers differs from 128/128/64/0
+— possible, not confirmed. The more likely-to-matter part is
+`[ITU656_BYP_NTSC]`/`[ITU656_BYP_PAL]`, which have real calibrated
+timing values (not defaults) that were never being applied with this
+flag off — relevant to the analog TV-out/bypass path specifically.
+
+## 33. Colors still wrong after §22's RgbMode/check_var fix — found the actual missing piece (2026-07-24)
+
+User circled back: the other agent's commit pair from earlier this
+session (`arkdata.ini` `RgbMode` reverted to 0, `check_var()` made to
+dynamically set `var.red.offset`/`var.blue.offset` from
+`pdata->lcd_wiring_mode`) tested on hardware and made no visible
+difference. Consistent with this session's own assessment at the time
+(for `RgbMode=0`, the computed offsets are identical to what was
+already hardcoded before any of this session's changes — so no
+observable change was ever expected from that fix alone for the
+*current* wiring setting). Went looking for what's actually still
+missing.
+
+**Found it**: there are three separate places RGB/BGR ordering has to
+be configured consistently, and only two were ever wired to
+`pdata->lcd_wiring_mode`:
+
+1. `ARK1668_LCDC_CONTROL`'s global wiring-mode bit — correctly driven
+   by `lcd_wiring_mode`, unconditionally, once at probe (`ark1668_lcdfb.c`
+   line ~510).
+2. `fb_var_screeninfo`'s `red.offset`/`blue.offset` — the *software*
+   descriptor telling Qt/DirectFB how to pack bytes into framebuffer
+   memory. Fixed earlier this session (§22-adjacent work).
+3. **`ARK1668_LCDC_OSD1_CTL`'s `rgb_order` field (bits 18-20) — the
+   per-layer hardware blend-unit's own channel-routing config. Never
+   set anywhere in this driver.** `ark1668_lcdfb_set_par()` only did a
+   read-modify-write *preserving* whatever was already in these bits
+   (a prior 2026-07-19 fix, correctly stopping it from being zeroed on
+   every set_par call — but that fix only stopped clobbering, it never
+   made anything actually *set* a correct value in the first place).
+   Checked `ARKFB_INIT_DISPLAY` (`ark1668_lcdc_funcs.c` — what
+   `libarkcmn.so`'s `arkapi_init_fb_display()` actually calls at
+   startup, confirmed by its own code comment): it only sets
+   position/size, never touches format. So the "preserved" value was
+   always just whatever U-Boot or hardware reset happened to leave
+   behind in that register — completely disconnected from
+   `lcd_wiring_mode`, `arkdata.ini`'s `RgbMode`, or anything
+   configurable.
+
+**Confirmed against stock's real behavior**: decompiled
+`ark_disp_fb_set_par()` (`vmlinux.elf @ 0x802e2a40`) — it strictly
+validates the userspace-supplied `var.red/green/blue` offset
+combination on every `set_par()` call and *derives* a matching
+hardware format/order code from it (the derived order value takes
+exactly **0 or 5** in the traced branches — precisely
+`ARK_LCDC_WIRING_BGR`/`ARK_LCDC_WIRING_RGB`), then writes it through
+`ark_disp_set_layer_cfg()`. Stock re-derives and re-writes this on
+*every* set_par call; our driver never derived or wrote it even once.
+
+This is a strong candidate for why colors stayed wrong even after
+§22's fix: userspace was writing pixels in one byte order (per
+`var.red/blue.offset`, now correctly wiring-mode-aware) while the
+LCDC's blend-unit compositor math used a stale, unrelated `rgb_order`
+value that no code path had ever set to match — explaining why the
+symptom specifically hit alpha-blended elements (per the 2026-07-19
+fix's own finding: `rgb_order` only affects the blend unit's math for
+partial-alpha pixels; opaque pixels pass through mostly unaffected).
+
+**Fixed**: `ark1668_lcdfb_set_par()`'s `OSD1_CTL` write now derives
+`rgb_order` directly from `pdata->lcd_wiring_mode` and writes it
+explicitly every call, instead of RMW-preserving a value nothing ever
+set correctly. Kernel rebuilt clean, zero new warnings. **Not yet
+hardware-tested.**
+
+## 34. Swept the rest of the LCD setting pipeline against stock's `ark_disp_set_layer_cfg()` field list (2026-07-24)
+
+Asked to trace the whole LCD pipeline for other gaps like §33's
+`rgb_order` one. Stock's `ark_disp_fb_set_par()` calls
+`ark_disp_set_layer_cfg()` (`vmlinux.elf@0x802db8d4`, fully decompiled)
+on every mode-set, which re-derives and re-applies ~10 per-layer
+fields from a caller-supplied config struct: format/`rgb_order`,
+`alpha_blend_en` (lcd+tvenc), `per_pix_alpha_blend_en`, `blend_mode`,
+`colorkey`, `colorkey_thld`, `priority`, `layer_cut`. Went through each
+against our driver:
+
+- **`rgb_order`** — real gap, fixed in §33.
+- **`alpha_blend_en`/`per_pix_alpha_blend_en`/`blend_mode`
+  (`MODE_LCD_REG0`/`MODE_LCD_REG1`)** — NOT a gap. Already
+  investigated exhaustively in an earlier session
+  ([[project_lcd_alpha_blend_investigation]]): live `devmem` read
+  against real stock hardware while it correctly rendered a blended UI
+  confirmed our register values already match stock byte-for-byte
+  (`MODE_LCD_REG0=0x03000204`, `OSD1_CTL=0x260ff`). The real bug for
+  *that* symptom was software-side (Qt's non-premultiplied-alpha
+  selection, already fixed via the `transp` field fix). Explicitly
+  marked "do not re-open without new evidence" in that file's own
+  comments, and this pass found no new evidence — confirmed still
+  correctly resolved, not re-litigated.
+- **`priority`** — same `MODE_LCD_REG0` write as blend_mode, already
+  covered by the same hardware-verified match above. Not a gap.
+- **`colorkey`/`colorkey_thld`/`layer_cut`** — genuinely unimplemented
+  in the active `ark1668_lcdc_funcs.c` (only exist in the unused
+  `ark1668e_*` E-variant driver). Architecturally different risk
+  profile from `rgb_order`: these are opt-in features that need an
+  explicit enable bit set somewhere to have any effect at all, and
+  nothing in this driver ever sets that enable — so their absence is
+  very likely inert (colorkey/cut default to "no effect" at hardware
+  reset) rather than an active bug, unlike `rgb_order`, which always
+  has semantic meaning regardless of value. Not fixed — flagged as a
+  real reconstruction gap worth closing eventually if colorkey/crop
+  functionality is ever needed for a real feature, but not a suspect
+  for the current color/content symptoms.
+
+**Net result**: one additional real, confirmed gap found and already
+fixed (§33's `rgb_order`). Everything else in stock's per-layer
+config-apply pipeline either already matches stock (hardware-verified)
+or is an inert, low-risk absence rather than a live bug. If §33's fix
+doesn't resolve the reported color issue on the next hardware test,
+the next things worth checking are outside this specific
+`ark_disp_set_layer_cfg` pipeline — e.g. DirectFB's own pixel-format
+handling (which may not consult `fb_var_screeninfo` the way linuxfb
+does), or `yuv_order`/format-code edge cases not covered by this pass.
+
+## 35. DirectFB's fbdev backend traced — confirms it never consults our wiring-mode fix at all (2026-07-24)
+
+Followed up §34's open item directly. DirectFB itself isn't something
+we build from source (no source tree in this project — prebuilt binary
+blobs, same version 1.7.4 as stock, in `firmware_source/mtd6_rootfs/
+usr/lib/directfb-1.7-4/`), so "compare against stock" here means:
+decompile the actual fbdev-backend logic (not stripped, full debug
+info, same as `usr/bin/sink` earlier this session) and check what it
+actually reads from the kernel.
+
+**Decisive finding, high confidence:** `primaryInitLayer()`
+(`libdirectfb_fbdev.so`) selects the pixel format via:
+```c
+DVar17 = dfb_pixelformat_for_depth(piVar14[2]);   /* piVar14[2] = mode->bpp */
+```
+This is standard upstream DirectFB library code, not an ArkMicro
+patch. It picks `DSPF_RGB32` purely from bit depth (32bpp) — **it
+never reads `var.red.offset`/`var.blue.offset` at all.** This means
+this session's `check_var()` wiring-mode fix (§22-adjacent,
+dynamically setting `var.red/blue.offset` from `pdata->lcd_wiring_mode`)
+has **zero effect on DirectFB** — that fix only ever mattered for the
+`linuxfb`/Qt raster-engine path. DirectFB's format decision is fixed
+and hardware-wiring-agnostic by design.
+
+Cross-checked `dfb_fbdev_mode_to_var()` (converts DirectFB's chosen
+format back into an `fb_var_screeninfo` it writes via
+`FBIOPUT_VSCREENINFO`) using `DSPF_ARGB` as a calibration reference
+(a universally standard format, unambiguous: `transp.offset=24,
+red.offset=16, green.offset=8, blue.offset=0`) — confirmed `DSPF_RGB32`
+also sets `red.offset=16` (matches `ARK_LCDC_WIRING_BGR`, our current
+`RgbMode=0` setting). Could not fully pin down green/blue.offset for
+the `RGB32` case specifically from the decompile alone (reused temp
+variables across branches made it ambiguous) — not overclaiming
+precision there, but the load-bearing finding (`red.offset=16`,
+matching BGR) doesn't depend on resolving that ambiguity.
+
+**What this means practically**: since our `check_var()`/software-side
+fix is invisible to DirectFB, and `DSPF_RGB32`'s fixed convention
+already assumes the same BGR-style layout as our current `RgbMode=0`
+setting, DirectFB's correctness for the *currently configured* wiring
+depends entirely on things §33/§34 already covered — the LCDC's
+hardware wiring-mode bit (`ARK1668_LCDC_CONTROL`, already correct) and
+`rgb_order` (`OSD1_CTL`, fixed in §33) — not on anything at the
+DirectFB/software level. If wiring mode were ever changed back to RGB
+(`RgbMode=5`), DirectFB would need either a config-level override
+(forcing a different `DSPF_*` constant) or the hardware wiring bit to
+do the compensation, since DirectFB itself can't auto-adapt the way
+Qt/linuxfb now does.
+
+## 36. §33's `rgb_order` fix didn't cover OSD2/OSD3 — real gap found and fixed, VIDEO layers deliberately left alone (2026-07-24)
+
+Continuing the "narrow down all gaps" sweep, checked how `/dev/fb1`
+through `/dev/fb4` (OSD2, OSD3, VIDEO_LAYER1, VIDEO_LAYER2) actually
+get initialized. Found `ark1668_lcdfb_probe()`'s registration loop for
+these four:
+```c
+for(i = 1; i < 5; i++){
+    info_tmp = framebuffer_alloc(sizeof(struct fb_info), dev);
+    memcpy(info_tmp, info, sizeof(struct fb_info));
+    register_framebuffer(info_tmp);
+}
+```
+`memcpy`s `fb0`'s already-configured `struct fb_info` and registers it
+directly — **never calls `fb_set_par()`** for any of them. §33's
+`rgb_order` fix lives entirely inside `ark1668_lcdfb_set_par()`, which
+only ever runs for `fb0` (called explicitly earlier in probe, once).
+So OSD2, OSD3, and both VIDEO layers never got that fix at all — same
+underlying bug, just not covered by the original patch's scope.
+
+**Fixed for OSD2/OSD3** (`layer <= OSD_LAYER3` branch of
+`ARKFB_INIT_DISPLAY`/`ARKFB_INIT_VIDEO_DISPLAY` in
+`ark1668_lcdc_funcs.c` — the actual `arkapi_init_fb_display()` call
+path, confirmed to be the only init-time hook that runs at all for
+these layers): added an explicit
+`ark1668_lcdc_set_osd_format(layer, ARK1668_LCDC_FORMAT_RGBA888, 0,
+sinfo->pdata.lcd_wiring_mode)` call, matching what `set_par()` already
+does for OSD1. Safe because OSD layers are always UI/overlay content,
+always the same RGBA888 convention — same reasoning as OSD1.
+
+**Deliberately NOT fixed for VIDEO_LAYER1/2** (`/dev/fb3`/`/dev/fb4`,
+the layer Android Auto/CarPlay video actually renders into): their
+format is genuinely content-dependent (RGB or YUV depending on the
+decoder output — recall from earlier this session's Android Auto
+investigation, `format constant 0x11` matching a YUV format was
+observed being passed for that path). `ARKFB_INIT_DISPLAY`'s own
+struct (`ark_fb_init_display`) doesn't even carry a format field —
+that's *why* it only ever sets position/size, not a fixable oversight.
+Hardcoding an RGBA888 assumption here would risk actively breaking
+working video display for the sake of a layer that isn't even
+implicated in the reported color symptom. Left to the existing
+explicit-format ioctl paths (`ARKFB_SET_WINDOW_FORMAT`/`ATOMIC`),
+which already correctly take a caller-supplied `rgb_order`.
+
+Kernel rebuilt clean, zero new warnings on the touched file. **Not yet
+hardware-tested.**
+
+## 37. Probed the kernel's own init sequence against stock's `ark_disp_dev_init()` and U-Boot's `ark_display_initialize_common()` (2026-07-24)
+
+Asked to probe the probe/init sequence itself. Our driver has no
+direct equivalent of stock's `ark_disp_dev_init()` — the closest thing
+(`ark1668_lcdc_funcs_init()`) just stores width/height/base pointers,
+no register writes at all. Went through stock's real `ark_disp_dev_init`
+(`vmlinux.elf@0x802ddde4`-ish, decompiled earlier this session) field
+by field:
+
+- **Backcolor**: matches exactly. Our `BALCK_BACKCOLOR = 0x108080`
+  equals stock's `ark_disp_set_lcd_backcolor(0x10,0x80,0x80)`. Not a
+  gap.
+- **Hue/saturation/brightness/contrast**: stock's `ark_disp_dev_init`
+  only *reads/caches* the current register value via getters — it
+  doesn't set anything new. The real default comes from whatever
+  U-Boot leaves in `LCDC_BASE+0x144/0x14c/0x154` (confirmed exact
+  register match against the other agent's recent VDE ioctl work,
+  which targets the same offsets with the same bit-packing). Checked
+  U-Boot's `ark_display_initialize_common()`
+  (`board/arkmicro/ark1668_limcet_p305/ark1668_lcd.c`): writes these
+  registers **unconditionally** (not gated by anything), and its
+  fallback default (`hue=0, sat=0x40, bright=0x80, contrast=0x80`)
+  exactly matches arkdata's documented defaults. Already correct, not
+  a gap — confirmed this was true even before §32 enabled
+  `ARK_DISPLAY_ALL_MODE` (that flag only changes the *source* of these
+  values, not whether they're applied, and our real arkdata.ini has
+  the same values either way).
+
+**Found a real gap while reading further in the same U-Boot function**:
+```c
+#ifdef BOOT_CONFIG_PIXEL_ALPHA
+    ... blend_mode=0 path ...
+#else
+    rLCD_BLD_MODE_LCD_REG0 |= (2 << 12);
+    ...
+    rLCD_COLOR_KEY_MASK_VALUE_OSD1 = (1 << 24) | (BLACK_Y<<16) | (BLACK_U<<8) | BLACK_V;
+#endif
+```
+`BOOT_CONFIG_PIXEL_ALPHA` is referenced at this one `#ifdef` but **never
+`#define`'d anywhere in the entire vendor U-Boot tree, in any board
+variant** — the `#else` branch always compiles. This means **U-Boot
+unconditionally enables a black colorkey on OSD1** (bit 24 = enable,
+per stock's real `ark_disp_set_osd_colorkey()` bit layout, confirmed
+via decompile — `vmlinux.elf@0x802debb8`, register offset `0xec`
+matches our own `ARK1668_LCDC_COLOR_KEY_MASK_VALUE_OSD1` exactly).
+Combined with §34's finding that our kernel has *zero* colorkey
+handling anywhere, nothing ever clears this — the kernel simply
+inherits whatever U-Boot leaves enabled.
+
+Whether this specific black value ever actually matches real rendered
+pixel data wasn't confirmed (depends on whether the hardware
+comparator runs on raw RGB bytes or a post-conversion YCbCr
+representation, which would need further decompile to settle) — not
+overclaiming certainty about the practical visual impact. But
+disabling it is correct regardless: nothing in this driver's userspace
+ABI ever requests a colorkey on OSD1, so inheriting an unintentional
+one from U-Boot is never the right default.
+
+**Fixed**: `ark1668_lcdfb_set_par()` now explicitly writes 0 to
+`ARK1668_LCDC_COLOR_KEY_MASK_VALUE_OSD1` (register already correctly
+defined in `ark1668_lcdc_regs.h`, offset `0xec` — just never written
+anywhere). Kernel rebuilt clean, zero new warnings. **Not yet
+hardware-tested.**
+
+**Net status of the whole session's LCD-pipeline sweep (§33-37)**:
+four real, confirmed gaps found and fixed (`rgb_order` for OSD1 and
+OSD2/OSD3, this colorkey disable), one large area (DirectFB pixel
+format) confirmed independent of the software-side fix and correctly
+left alone, and the alpha-blend/priority axis re-confirmed already
+correct from an earlier session's hardware-verified work. This is a
+reasonable stopping point for this sweep — everything remaining would
+need live hardware testing to prioritize further rather than more
+static comparison.
+
+## 38. First real hardware test results for §32-37: mixed, one U-Boot regression reverted, one concurrent-agent conflict found and fixed
+
+**Test results reported:**
+- DirectFB: definite improvement in transparency and image artifacts
+  (consistent with §33/36/37's rgb_order and colorkey fixes actually
+  landing and mattering) — but still only shows LCD content transiently
+  during rapid input-knob turning. This is the **old, separate**
+  "premature-flip/race" bug ([[project_mem_dump_tool]] /
+  [[project_effectwatch_black_screen]]), not something today's fixes
+  targeted — unrelated thread, still open.
+- linuxfb colors: reported not corrected. Investigated and found the
+  real cause (see below) — not a failure of today's fixes, a
+  **regression from a different commit**.
+- U-Boot: boot logo stopped showing entirely. **Reverted** —
+  `ARK_DISPLAY_ALL_MODE` (§32) back to `0`. That flag activated a
+  large amount of previously-dead vendor code across every arkdata
+  sub-struct (vp/gamma/itu656byp/special_info/touchscreen parsing),
+  and given the `GAMMA_INFO_FLAG`/`GAMMA_REG_MAX` gap already found in
+  §32 (undefined in the *entire* vendor tree, meaning our source
+  doesn't fully match whatever really produced the shipped binary),
+  it's very plausible other parts of that newly-enabled code are
+  similarly incomplete/broken. With a confirmed regression and no
+  confirmed benefit yet, reverting is the safe call — revisit as its
+  own isolated, individually-tested change if picked up again.
+- `bootnand`: the `reservingtrack` fix (§30) worked — the `"RSTK"`
+  magic check now passes (no more `reservingtrack check failed!`) —
+  but progressed to a new, later validation failure in the same
+  function: `"track paint init out width or height fail!"`
+  (`track_paint_init()`, checks the RSTK blob's encoded
+  width/height against the current display resolution). Not
+  investigated further — this is the reverse-camera track-overlay
+  feature specifically, not the main display bug, and matches this
+  session's existing decision to deprioritize that thread.
+- `bootnand`: "directfb driver still cannot load" — expected, not a
+  surprise. §30's GPIO5/ITU656 fix was explicitly flagged at the time
+  as addressing the camera-*input* peripheral (`0xe0800000`), a
+  different piece of hardware from the LCDC (`0xe0500000`) that
+  `/dev/ark_display`/framebuffer actually depend on — was never
+  expected to fix this on its own.
+
+**Real bug found for the linuxfb symptom**: while re-verifying
+`check_var()` still had the wiring-mode-aware logic I relied on for
+§33's `rgb_order` fix, found it had been **silently replaced** by a
+later commit from the other agent (`linux-arkmicro 964371f70`, same
+day as the original dynamic fix, no explanatory commit message):
+hardcoded `red.offset=0`/`blue.offset=16` (RGB memory layout)
+unconditionally, contradicting `wiring_mode=BGR` — which is what
+`arkdata.ini`'s `RgbMode=0`, the LCDC's own wiring-mode control bit,
+and today's `rgb_order` derivation in `fb_set_par()`/
+`ARKFB_INIT_DISPLAY` all consistently agree on, and what U-Boot's own
+correctly-rendering bootlogo confirms is the real physical wiring.
+This mismatch — Qt writing pixels in RGB byte order while the hardware
+is correctly configured for BGR everywhere else — is a strong,
+concrete explanation for "linuxfb colors not corrected": today's other
+fixes (rgb_order, colorkey) are hardware-side and backend-agnostic
+(which is why DirectFB visibly improved), but this specific software
+regression only affects the code path Qt/linuxfb reads, undoing the
+benefit for that backend specifically. **Fixed**: restored the
+wiring-mode-derived logic. Kernel rebuilt clean, zero new warnings.
+
+Another instance of the same class of issue flagged earlier this
+session ([[feedback_verify_reachability_not_just_config]] and the
+U-Boot backcar/GPIO-81 mixup) — concurrent, uncoordinated edits from
+multiple agents on the same shared repo silently reintroducing bugs
+that were already found and fixed. Worth remaining alert to when
+re-verifying a fix still holds before building on top of it.
+
+**Not yet hardware-tested**: this specific check_var revert-of-a-revert.
+
+## 39. `ARK_DISPLAY_ALL_MODE` re-enabled — root-caused and fixed the bootlogo regression instead of just avoiding it
+
+User's direction: given the "prove U-Boot parity via `bootnand` + stock kernel" methodology (§38), disabling `ARK_DISPLAY_ALL_MODE` to dodge the regression isn't good enough if stock's real behavior has it active — debug it properly instead.
+
+**Root cause found**: `g_display_para.vpinfo` (per-layer contrast/
+brightness/saturation/hue, read extensively by
+`ark_display_initialize_common()`) is **never populated by any parser
+anywhere in this source tree** — confirmed via exhaustive grep, only
+`ark1668_lcd.c` itself reads it, nothing writes it. With the flag
+enabled it was pure BSS-zero: `ark_display_initialize_common()`
+unconditionally writes `brightness=0, contrast=0, saturation=0` to
+every OSD layer's real hardware VP register — that crushes all output
+to black, which is exactly what "boot logo not showing" looks like.
+This is the same underlying class of issue as the already-found
+`GAMMA_INFO_FLAG`/`GAMMA_REG_MAX` gap (§32) — our checked-out source
+tree is missing pieces the real vendor build evidently had.
+
+Checked the other four extended struct members
+(`gamma_info`/`itu656byp_info`/`special_info`/`touchscreen_info`) for
+the same problem: confirmed via grep that **nothing in this board's
+U-Boot source reads any of them except `gammainfo`**, and `gammainfo`'s
+only consumer (`ark_gamma_init()`) is already safely gated behind
+`gamma_en==3`, which BSS-zero correctly fails since every real
+`arkdata.ini` we have sets `Gamma_en=0` — so there was nothing else to
+fix.
+
+**Fixed**: added `arkdata_apply_vpinfo()`
+(`ark1668_arkdata_ini.c`) — same `apply_field()`/fail-safe pattern as
+the already-working `arkdata_apply_lcd_timing()`. Seeds `vpinfo` with
+the correct compiled defaults first (matching what the `#else` branch
+already used and what every real `arkdata.ini` `[VP]` section actually
+contains), then optionally overrides each of the 20 fields
+(`videoContrast`, `osd1Hue`, etc.) from arkdata.ini if present. Wired
+into `ark_display_init()` right where `screeninfo` already gets
+populated. `ARK_DISPLAY_ALL_MODE` re-enabled. U-Boot rebuilt clean —
+all warnings from the build are pre-existing vendor code quality
+issues in newly-compiled (not newly-broken) `ark1668_lcd.c` code,
+nothing from the new function itself. **Not yet hardware-tested** —
+this is the fix to test on the next `bootnand` cycle to confirm the
+bootlogo regression is actually resolved, not just theoretically
+root-caused.
+
+## 40. `track_paint_init()`'s width/height check — traced to an architectural wall, parked
+
+Followed up the still-open item from §38 (`bootnand`'s
+`track_paint_init()` progressing past the `reservingtrack` magic check
+to a new failure: `"track paint init out width or height fail!"`).
+Ran a full (~42 minute) Ghidra re-analysis of `vmlinux.elf` specifically
+to find what sets the two comparison globals
+(`_DAT_805eecdc`/`_DAT_805eece0`, the "current" width/height the
+`reservingtrack` blob's encoded 800×480 gets checked against — already
+confirmed correct/unmodified via direct byte inspection of the
+partition file). Result: **zero writes anywhere in the entire kernel**
+to either address — only 15 total references, all reads, across
+`get_scaler_mode_out_info`, `ark_fb_update_window`,
+`animation_timer_handler`, `dvr_set_sys_clk`, `ark_disp_ioctl`,
+`track_paint_init` itself, `ark_video_update_window`, `dvr_restart`,
+and `dvr_enter_carback`.
+
+The address also falls just past the end of the dumped `.text`
+section, and Ghidra's fresh full-analysis labels it `_DAT_805eecdc`
+rather than a normal resolved global — the same naming pattern seen
+elsewhere in this exact function for `_DAT_805fd144`/`_DAT_805fd188`,
+which are known to actually be offsets into a dynamically-allocated
+`ark_carback_probe()` struct, not real static globals. Strong
+indication this is the same situation: a base-plus-offset dereference
+that Ghidra's decompiler is folding into a flat address because the
+base is constant at this call site, not a true fixed kernel global.
+Resolving it for real needs dataflow tracing of that base pointer, a
+meaningfully larger effort than the searches that worked for
+everything else this session.
+
+**Parked, not pursued further**: this is a narrow reverse-camera
+track-overlay sub-feature, not the main display path the parity goal
+is centered on. Revisit if it turns out to matter after the higher-
+value fixes already made (§37 colorkey, §39 vpinfo, §33/36 rgb_order)
+are actually tested.
+
+## 41. Systematic call-graph sweep of stock U-Boot's reachable functions, plus pin/pad setup audit
+
+Asked directly whether stock U-Boot's functions had been comprehensively
+decompiled and cross-checked against our source. Honest answer at the
+time: no — only the ~10-function backcar/VP cluster had been reviewed,
+plus a string-level (not function-level) sweep in §31. Did the real
+sweep:
+
+**Call-graph traversal**: wrote a Ghidra script doing a full BFS from
+two anchors already confirmed on the real boot path (the arkdata
+VP/gamma parser and the backcar GPIO5 check) — 68 functions reachable
+total. Batch-decompiled all of them. Result: every function outside
+the already-reviewed backcar/VP/gamma cluster is **generic upstream
+U-Boot library code** — `malloc()`/`free()` (dlmalloc-style heap
+allocator), `run_command()` (shell/command-line parser), the
+environment-variable hashtable and `env_get()` internals,
+`serial_putc()`. All identical to what our own U-Boot build already
+has via the same public upstream source — nothing vendor-specific,
+nothing to compare. **Conclusion: the call graph from both anchors is
+now fully swept with no additional gaps found beyond what's already
+fixed this session.**
+
+**Pin/pad setup, specifically requested**: traced `rSYS_PAD_CTRL00-03`
+(the actual pin-mux register writes for the RGB interface,
+`ark_display_initialize_rgbif()` in our source) against stock. Found
+the exact literal `0x11111111` (an unusually specific, greppable
+value) at `SYS_BASE+0x1c0/0x1c4/0x1c8/0x1cc` in stock's disassembly —
+**exact match, both the register offsets and the written values**,
+confirmed byte-for-byte against our own `ark1668_sys.h` macros and
+`ark_display_initialize_rgbif()`'s code. The containing stock function
+is a shared, multi-purpose pad-dispatch routine (branches on a mode
+parameter across several different pin functions — backlight, LVDS,
+RGB, etc.), and the RGB-specific branch matches exactly. **No gap
+found — this area is confirmed correct.**
+
+**Net status**: two real gaps found and fixed this session via
+targeted decompile (backcar GPIO/ITU656/colorkey, arkdata vpinfo
+parser), and this systematic sweep found no further gaps in either the
+reachable call graph or the pin/pad setup path specifically. The
+remaining unexplored surface is the parts of `ark_display_init()` not
+reached by either anchor (primarily the bootlogo-drawing code itself)
+— not pursued further this pass, given diminishing returns after two
+clean sweeps in a row.
+
+---
+
+## 42. Followed up on §41's pad-dispatch function's other branches — resolved to a separate TV-out subsystem, not an RGB-pad gap
+
+§41 confirmed the RGB-interface pad writes (`rSYS_PAD_CTRL00-03` =
+`0x11111111`/`0x1111`) exactly match stock, but noted the containing
+stock function was a shared, multi-purpose dispatch and only its
+fall-through/default branch had actually been reviewed. Went back to
+resolve the other two branches (`cmp r0,#0` / `cmp r0,#1` at
+`0x6c6fc`-`0x6c748`).
+
+First had to find the real function boundary — a naive backward search
+for `push {...}` from `0x6c6fc` turned up three candidates
+(`0x6c0c8`/`0x6c234`/`0x6c3f4`), all false leads. Queried Ghidra's own
+function-boundary analysis directly instead: `0x6c6fc` is its own
+clean function, `FUN_0006c6fc`, running exactly to `0x6c7a0` (the two
+addresses that looked like branch targets past it, `0x6c7a0`/`0x6c7a4`,
+are literal-pool data words inside this same function, not separate
+functions — which is why the earlier `push`-instruction search never
+found a match reaching that far).
+
+Resolved the register bases those two branches write to:
+`DAT_0006c7a4` = `0xe0500000` = `LCD_BASE`, offset `+0x2b0` = our own
+`rLCD_TV_CONTROL` (`ark1668_sys.h:248`). The sibling functions in the
+same cluster (`FUN_0006c4fc`/`0006c548`/`0006c5bc`/`0006c6b4`, all
+already decompiled in §41's 68-function sweep as unidentified "generic
+library code") write `SYS_BASE+0x54`/`+0x60`/`+0x74` — our own
+`rSYS_LCD_CLK_CFG`/`rSYS_DEVICE_CLK_CFG0`/`rSYS_SOFT_RSTNA`. So this
+entire cluster is stock's **on-chip TV-encoder (composite/CVBS "TV
+out") clock+reset+enable gating** — a different subsystem entirely
+from the RGB LCD pad pins, not a second RGB-pad code path.
+
+The only caller is `FUN_000684c0`, U-Boot's boot-animation player
+(confirmed via the `"uboot_set_ui_scaler_type=%d"` string it logs).
+It dispatches on a locally-computed scaler-type value: traced how that
+value is set and found it stays `0` ("no rescale needed") whenever the
+animation's configured resolution already matches the display's actual
+width/height — which is our board's exact situation (800x480
+configured and actual, per the `RSTK` blob bytes already verified in
+§30). Only a genuine resolution mismatch drives the type to `2`/`3`
+and reaches the TV-control branches this function guards. So on this
+hardware the two unreviewed branches are unreached in practice — same
+"real code, inert on this board's config" pattern as the earlier
+`GAMMA_INFO_FLAG` finding, just confirmed here by tracing the actual
+selector value instead of assuming.
+
+**Conclusion**: §41's pad/pin audit stands as complete and correct —
+the RGB-pad match was the whole story for this board. This second
+cluster is a separate TV-out subsystem that doesn't apply to our
+LCD-only hardware. No new gap, no source change needed.
+
+---
+
+## 43. §40's "architectural wall" resolved: `track_paint_init()`'s width/height check fixed via a missing ATAG, not a dead end
+
+§40 parked `track_paint_init()`'s width/height validation
+(`_DAT_805fd188+0xc/+0x10 <= _DAT_805eecdc/_DAT_805eece0`) after a
+42-minute full Ghidra re-analysis found zero writes anywhere in the
+kernel's `.text` to the comparison globals, concluding they were
+probably a dynamic base+offset dereference not worth the effort to
+resolve. That conclusion was wrong, caught by going back and reading
+the actual instruction sequence instead of trusting the earlier
+xref/dataflow summary.
+
+The raw disassembly at the read site (`ldr r1,[pc,#36]@0x805eecd0;
+ldr r1,[r1,#0xc]`) shows a `movw`/`movt` building the literal address
+`0x805eecd0` directly, then a single dereference at `+0xc` — a real
+static global, not a runtime-allocated struct pointer (that pattern
+*was* correctly identified for the sibling `_DAT_805fd188`, which the
+earlier pass conflated with this one). Confirmed it's real via
+`readelf`: the dumped `vmlinux.elf` only contains `.text`
+(`PT_LOAD` covers `0x80008000`-`0x805eeae4`, no `.data`/`.bss`/
+`.rodata` at all) — `0x805eecd0` sits just past the end of `.text`,
+which is exactly why it looked unreachable: it's real memory, just in
+a section this particular firmware dump never captured, not a synthetic
+address.
+
+That reframed the question: something must populate this global at
+boot, and the "zero writes in `.text`" finding, now properly
+understood, means the write can't be an ordinary function call — it
+has to happen through a different mechanism. Found it: `parse_tag`
+(`0x8059b984`) is a real ATAG dispatch table, and one of its handlers,
+`parse_tag_display_param()` (`0x8059bb0c`), does exactly four
+`memcpy()`s (0x78/0x98/0xb8/0x50 bytes) from an incoming ATAG payload
+straight into `0x805eecd0` and three neighboring globals — this *is*
+the writer, invoked via the ATAG parsing loop rather than a normal
+call site, which is why no xref search inside the kernel's own
+`.text` alone was ever going to find it.
+
+Cross-checked against our own U-Boot: `arch/arm/lib/bootm.c` (mainline,
+unmodified in our tree) calls a `__weak void setup_board_tags(struct
+tag **in_params) {}` hook right before `ATAG_NONE`, specifically so
+board files can inject vendor-custom tags. Our
+`ark1668_limcet_p305` board file never defines an override — grepped
+the whole board directory for `ATAG`/`setup_.*tag`/`display_param`,
+zero matches — so the weak no-op always ran. The kernel's struct stays
+at its `__memzero()`'d value, and `track_paint_init()`'s `<=` check
+against 0 always fails. Confirmed `bootnand` genuinely uses the ATAGS
+path (not FDT): `nandboot`'s final `bootz ${kerneladdr}` passes no fdt
+argument, and separately sets `machid=1068`, an ATAGS-only convention.
+
+Recovered the real fix from stock's `uboot.bin` (Ghidra, `-noanalysis`
+raw-binary import): the call site at `0x31b18` (mainline's
+`boot_prep_linux()`, confirmed via the same standard `ATAG_CORE`/
+`ATAG_CMDLINE`/`ATAG_MEM`/`ATAG_INITRD2` literal-pool values as our own
+unmodified `bootm.c`) calls three custom tag builders right where
+`setup_board_tags()` belongs — this **is** stock's
+`setup_board_tags()` override:
+- `0x319e8`: 1-word payload, tag `0x41000403`.
+- `0x31a20`: 64-byte payload from a fixed U-Boot data address, tag
+  `0x41000404`.
+- `0x31a7c`: `ATAG_DISPLAY_PARAM` = `0x41000405`, 536-byte (0x218)
+  payload, four `memcpy()`s of 0x78/0x98/0xb8/0x50 bytes from a single
+  source struct at payload offsets 0/0x80/0x118/0x1d0 — byte-identical
+  in size to this file's own `display_updatepara` layout (the first
+  0x78 bytes exactly match `struct screen_info`'s 30 `unsigned int`
+  fields, with `width`/`height` landing at the same `+0xc`/`+0x10`
+  offsets the kernel reads). This is the tag `track_paint_init()`
+  actually needs.
+
+Both `0x41000403`-`0x405` sit immediately after mainline's own
+`ATAG_MEMCLK=0x41000402` in `asm/setup.h` — the vendor extended the
+same numbering block mainline already reserved, corroborating this
+reading rather than being a coincidence. (Which of `0x403`/`0x404` is
+`ATAG_UBOOT_VERSION` vs `ATAG_BACKCAR` wasn't nailed down yet at this
+point — see §44, which cross-checked payload sizes against the
+kernel's own named handlers and found the two were the other way
+around from the first guess above.)
+
+**Fix implemented** (`ark1668_display_cfg.c`): added `setup_board_tags()`
+building `ATAG_DISPLAY_PARAM` with the first 0x78 bytes populated from
+`g_display_para.screeninfo` (already unconditionally populated by
+`ark_display_init()`, real width=800/height=480 from arkdata.ini) and
+the remaining 3 sections zeroed. Zeroed is a deliberate, safe choice,
+not a shortcut avoided: the other three sections' exact field mapping
+into `vpinfo`/`gammainfo`/`itu656bypinfo`/`spec_info`/`touch_info`
+wasn't re-derived, and every reader of this global found in §41's full
+call-graph sweep (`get_scaler_mode_out_info`, `ark_fb_update_window`,
+`animation_timer_handler`, `dvr_set_sys_clk`, `ark_disp_ioctl`,
+`ark_video_update_window`, `dvr_restart`, `dvr_enter_carback`,
+`track_paint_init`) only ever reads the first section's `+0xc`/`+0x10`
+fields — so this is a strict improvement (previously all-zero, now the
+part that's actually read is correct) with no plausible regression
+from the unmapped remainder staying zero, same as before this fix.
+`ATAG_UBOOT_VERSION`/`ATAG_BACKCAR` deliberately left unimplemented —
+separate, lower-priority gaps.
+
+Rebuilt clean, `UBOOT.BIN` header injection succeeded. Not yet
+hardware-tested — this is the fix to verify resolves "track paint init
+out width or height fail!" on the next `bootnand` test.
+
+---
+
+## 44. Implemented the other two custom ATAGs (`ATAG_BACKCAR`, `ATAG_UBOOT_VERSION`) for consistency with stock
+
+§43 implemented `ATAG_DISPLAY_PARAM` (the one that actually fixes
+`track_paint_init()`) and left the other two vendor tags unimplemented
+as a separate, lower-priority gap. Went back to finish them for
+parity with stock's real `setup_board_tags()`.
+
+**Correcting a mistake from §43 first**: §43's writeup assigned
+`ATAG_UBOOT_VERSION=0x41000403`/`ATAG_BACKCAR=0x41000404` purely by
+the order U-Boot's three tag-builder functions appear
+(`0x319e8`/`0x31a20`/`0x31a7c`) — an assumption, never actually
+checked. Verified properly this time by decompiling the kernel's own
+handlers (real symbol names, since `vmlinux.elf` is unstripped) and
+matching payload sizes instead of guessing from position:
+- `parse_tag_backcar()` (kernel) copies exactly **1 word**. Only
+  U-Boot's `0x319e8` sends a 1-word payload. So `0x319e8` is
+  `ATAG_BACKCAR`, tag `0x41000403`.
+- `parse_tag_uboot_version()` (kernel) copies exactly **0x40 (64)
+  bytes**. Only U-Boot's `0x31a20` sends a 64-byte payload. So
+  `0x31a20` is `ATAG_UBOOT_VERSION`, tag `0x41000404`.
+- (`0x31a7c` / `ATAG_DISPLAY_PARAM` / `0x41000405` was already solid
+  from §43's independent 4-way memcpy-size match, unaffected by this
+  correction.)
+
+The two were exactly swapped from the §43 guess. Confirmed empirically
+too: dumped the raw bytes U-Boot's `0x31a20` function copies from (a
+fixed source address recovered from its own literal pool, cross-checked
+against the Holden-brand stock dump specifically, since a *different*
+vendor dump's build-specific `.rodata` layout doesn't transfer to
+another build even though the surrounding *code* is byte-identical
+across brands) — the source data reads as `"root2023120611..."`, an
+obvious build-tag string, not something a 1-word "backcar" flag would
+ever contain. That's what triggered rechecking the mapping rather than
+trusting the original order-based guess.
+
+**Implemented** (`ark1668_display_cfg.c`, same `setup_board_tags()`
+added in §43):
+- `ATAG_BACKCAR`: stock reads this from a fixed U-Boot global whose
+  own producer wasn't re-traced (and can't be reliably recovered from
+  a different customer's binary — build-specific data layout, as
+  above). Rather than guess a magic constant, this sends a live GPIO 5
+  read using the exact same logic as `do_backcarcheck()` above it in
+  this file — real reverse-gear state at boot, a value that's at least
+  independently justified even if it doesn't reproduce whatever static
+  flag stock's own compiled build happened to carry.
+- `ATAG_UBOOT_VERSION`: sends U-Boot's own `version_string`
+  (`include/version.h`) instead of trying to reproduce stock's
+  customer-specific build tag — informational only, no kernel behavior
+  was found (in the call-graph sweep, §41-style) to depend on its
+  content, only that *a* tag arrives.
+
+Rebuilt clean, `UBOOT.BIN` header injection succeeded. Not yet
+hardware-tested. Low regression risk: `ATAG_UBOOT_VERSION` is
+observationally inert wherever it's consumed, and `ATAG_BACKCAR`'s
+only known kernel-side effect is a single boot-time default flag on
+one specific OSD/video sub-layer (`ark_disp_dev_init()`) — worth
+watching on the next `bootnand` test but not expected to touch the
+main color/display pipeline this session has otherwise been focused
+on.
+
 ---
 
 ## If anything regresses

@@ -100,9 +100,32 @@
 # --no-hardware alone already makes systemonly irrelevant (no GPU
 # surfaces to pool-select between).
 #
+# --stock-config: both "systemonly" (QWS_DISPLAY) and disabling
+# no-layers-clear/no-surface-clear (directfbrc) turned out, on
+# checking, to be OUR OWN theory-driven experimental changes from
+# 2026-07-22 -- neither exists in stock's real, shipped config. Stock's
+# actual etc/profile has QWS_DISPLAY=directfb:boundingrectflip:
+# mmWidth220:mmHeight120:0 (no systemonly at all), and stock's actual
+# etc/directfbrc has no-layers-clear/no-surface-clear ENABLED (we
+# turned them off). This mode restores BOTH to stock's exact values --
+# the closest static replication of stock's known-working config this
+# reconstruction can produce. Hardware (GPU/GAL) stays ON, since stock
+# uses it too. If the black screen survives --stock-config, that's
+# strong evidence the bug lives inside the newer ported galcore
+# 6.2.4.p1.8 / libGAL driver stack itself (a different driver
+# generation than whatever stock's 3.4 kernel originally shipped with,
+# on the same physical GPU) rather than in any env/config difference --
+# matching the broader unresolved GPU/EffectWatch black-screen thread
+# already tracked in this project's history.
+#
+# Backs up and restores /etc/directfbrc the same way --no-hardware
+# does (trap on EXIT/INT/TERM), and exports QWS_DISPLAY the same way
+# --no-systemonly does. Mutually exclusive with --no-hardware/
+# --no-systemonly in practice (it sets both directfbrc lines and
+# QWS_DISPLAY itself) -- don't combine.
+#
 # Usage:
-#   lcd-osd1ctl-directfb-watch.sh [--no-hardware] [--no-systemonly] [max seconds, default 120]
-# Flags can be given in either order, before the optional duration.
+#   lcd-osd1ctl-directfb-watch.sh [--no-hardware | --no-systemonly | --stock-config] [max seconds, default 120]
 # Ctrl-C start_msn_directfb whenever you're done observing (black
 # screen or not) -- the script cleans up and prints the full log
 # either way. Also saved at /tmp/lcd-osd1ctl-directfb-watch.log.
@@ -112,15 +135,13 @@ CONTROL=$((LCDC + 0x04))
 OSD1_CTL=$((LCDC + 0x74))
 OSD1_ADDR=$((LCDC + 0x80))
 
-NO_HARDWARE=0
-NO_SYSTEMONLY=0
-while [ "$1" = "--no-hardware" ] || [ "$1" = "--no-systemonly" ]; do
-    case "$1" in
-        --no-hardware) NO_HARDWARE=1 ;;
-        --no-systemonly) NO_SYSTEMONLY=1 ;;
-    esac
-    shift
-done
+MODE="normal"
+case "$1" in
+    --no-hardware|--no-systemonly|--stock-config)
+        MODE="${1#--}"
+        shift
+        ;;
+esac
 DURATION="${1:-120}"
 LOG=/tmp/lcd-osd1ctl-directfb-watch.log
 DIRECTFBRC=/etc/directfbrc
@@ -144,31 +165,42 @@ restore_directfbrc() {
     if [ -f "$DIRECTFBRC_BACKUP" ]; then
         cp "$DIRECTFBRC_BACKUP" "$DIRECTFBRC"
         rm -f "$DIRECTFBRC_BACKUP"
-        echo "[--no-hardware] restored original $DIRECTFBRC" >> "$LOG"
+        echo "[$MODE] restored original $DIRECTFBRC" >> "$LOG"
     fi
 }
 
 : > "$LOG"
-echo "=== lcd-osd1ctl-directfb-watch.sh ===" | tee -a "$LOG"
+echo "=== lcd-osd1ctl-directfb-watch.sh (mode: $MODE) ===" | tee -a "$LOG"
 
-if [ "$NO_HARDWARE" = "1" ]; then
-    echo "Mode: --no-hardware (forcing pure software DirectFB rendering, no GPU/GAL surfaces)" | tee -a "$LOG"
-    cp "$DIRECTFBRC" "$DIRECTFBRC_BACKUP"
-    trap restore_directfbrc EXIT INT TERM
-    sed -i 's/^#no-hardware$/no-hardware/' "$DIRECTFBRC"
-    if ! grep -q '^no-hardware$' "$DIRECTFBRC"; then
-        echo "[--no-hardware] WARNING: couldn't find the commented '#no-hardware' line in $DIRECTFBRC to enable -- check it hasn't moved/changed." | tee -a "$LOG"
-    fi
-else
-    echo "Mode: hardware rendering (GPU/GAL on)" | tee -a "$LOG"
-fi
-
-if [ "$NO_SYSTEMONLY" = "1" ]; then
-    echo "Mode: --no-systemonly (removing the 'systemonly' QWS_DISPLAY flag, allowing DirectFB's own default surface-pool selection)" | tee -a "$LOG"
-    export QWS_DISPLAY="directfb:boundingrectflip:mmWidth220:mmHeight120:0"
-else
-    echo "Mode: systemonly (start_msn_directfb's default -- forces fb0-backed surfaces)" | tee -a "$LOG"
-fi
+case "$MODE" in
+    no-hardware)
+        echo "Forcing pure software DirectFB rendering (no GPU/GAL surfaces at all)." | tee -a "$LOG"
+        cp "$DIRECTFBRC" "$DIRECTFBRC_BACKUP"
+        trap restore_directfbrc EXIT INT TERM
+        sed -i 's/^#no-hardware$/no-hardware/' "$DIRECTFBRC"
+        if ! grep -q '^no-hardware$' "$DIRECTFBRC"; then
+            echo "WARNING: couldn't find the commented '#no-hardware' line in $DIRECTFBRC to enable -- check it hasn't moved/changed." | tee -a "$LOG"
+        fi
+        ;;
+    no-systemonly)
+        echo "Removing the 'systemonly' QWS_DISPLAY flag (GPU/GAL still on, pool selection unconstrained)." | tee -a "$LOG"
+        export QWS_DISPLAY="directfb:boundingrectflip:mmWidth220:mmHeight120:0"
+        ;;
+    stock-config)
+        echo "Restoring stock's exact real config: QWS_DISPLAY without 'systemonly', and directfbrc's no-layers-clear/no-surface-clear re-enabled (both of those are our own theory-driven divergences from stock, not things stock itself needs)." | tee -a "$LOG"
+        export QWS_DISPLAY="directfb:boundingrectflip:mmWidth220:mmHeight120:0"
+        cp "$DIRECTFBRC" "$DIRECTFBRC_BACKUP"
+        trap restore_directfbrc EXIT INT TERM
+        sed -i 's/^#no-layers-clear$/no-layers-clear/' "$DIRECTFBRC"
+        sed -i 's/^#no-surface-clear$/no-surface-clear/' "$DIRECTFBRC"
+        if ! grep -q '^no-layers-clear$' "$DIRECTFBRC" || ! grep -q '^no-surface-clear$' "$DIRECTFBRC"; then
+            echo "WARNING: couldn't find the commented '#no-layers-clear'/'#no-surface-clear' lines in $DIRECTFBRC to enable -- check they haven't moved/changed." | tee -a "$LOG"
+        fi
+        ;;
+    normal)
+        echo "GPU/GAL on, systemonly on (this reconstruction's current defaults)." | tee -a "$LOG"
+        ;;
+esac
 
 echo "Baseline (before starting DirectFB):" | tee -a "$LOG"
 base_ctl=$(devmem $OSD1_CTL 32)

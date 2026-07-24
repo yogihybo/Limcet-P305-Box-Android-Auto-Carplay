@@ -76,8 +76,33 @@
 # file unconditionally (trap on EXIT/INT/TERM) -- no-hardware is
 # explicitly not meant to ship enabled, so this never leaves it on.
 #
+# --no-systemonly: the complementary test. Rather than bypassing the
+# GPU entirely, this keeps GPU acceleration on but REMOVES the
+# "systemonly" QWS_DISPLAY flag, allowing DirectFB to fall through to
+# its own default surface-pool selection (i.e. deliberately
+# reintroducing the condition the 2026-07-22 systemonly fix was meant
+# to prevent). Useful as a three-way comparison with the normal run:
+#   - normal (systemonly on, hardware on) vs --no-systemonly (systemonly
+#     off, hardware on): if these look IDENTICAL, systemonly isn't
+#     actually changing pool selection in practice (the flag isn't
+#     being respected, or GAL-pool allocation was never the
+#     differentiator) -- look elsewhere. If --no-systemonly is WORSE
+#     or different, systemonly is doing something real, just not
+#     enough on its own.
+#   - --no-systemonly vs --no-hardware: isolates whether it's pool
+#     *selection* (systemonly) or GPU *usage* (hardware) that matters,
+#     since --no-hardware makes pool selection moot (no GPU surfaces
+#     exist at all under it).
+# Implemented by exporting QWS_DISPLAY without "systemonly" before
+# calling start_msn_directfb, which now respects an already-exported
+# QWS_DISPLAY instead of always overwriting it (see start_msn_directfb
+# itself). Combine with --no-hardware if useful, though note
+# --no-hardware alone already makes systemonly irrelevant (no GPU
+# surfaces to pool-select between).
+#
 # Usage:
-#   lcd-osd1ctl-directfb-watch.sh [--no-hardware] [max seconds, default 120]
+#   lcd-osd1ctl-directfb-watch.sh [--no-hardware] [--no-systemonly] [max seconds, default 120]
+# Flags can be given in either order, before the optional duration.
 # Ctrl-C start_msn_directfb whenever you're done observing (black
 # screen or not) -- the script cleans up and prints the full log
 # either way. Also saved at /tmp/lcd-osd1ctl-directfb-watch.log.
@@ -88,10 +113,14 @@ OSD1_CTL=$((LCDC + 0x74))
 OSD1_ADDR=$((LCDC + 0x80))
 
 NO_HARDWARE=0
-if [ "$1" = "--no-hardware" ]; then
-    NO_HARDWARE=1
+NO_SYSTEMONLY=0
+while [ "$1" = "--no-hardware" ] || [ "$1" = "--no-systemonly" ]; do
+    case "$1" in
+        --no-hardware) NO_HARDWARE=1 ;;
+        --no-systemonly) NO_SYSTEMONLY=1 ;;
+    esac
     shift
-fi
+done
 DURATION="${1:-120}"
 LOG=/tmp/lcd-osd1ctl-directfb-watch.log
 DIRECTFBRC=/etc/directfbrc
@@ -131,7 +160,14 @@ if [ "$NO_HARDWARE" = "1" ]; then
         echo "[--no-hardware] WARNING: couldn't find the commented '#no-hardware' line in $DIRECTFBRC to enable -- check it hasn't moved/changed." | tee -a "$LOG"
     fi
 else
-    echo "Mode: normal (GPU/GAL rendering as configured, including start_msn_directfb's existing 'systemonly' flag)" | tee -a "$LOG"
+    echo "Mode: hardware rendering (GPU/GAL on)" | tee -a "$LOG"
+fi
+
+if [ "$NO_SYSTEMONLY" = "1" ]; then
+    echo "Mode: --no-systemonly (removing the 'systemonly' QWS_DISPLAY flag, allowing DirectFB's own default surface-pool selection)" | tee -a "$LOG"
+    export QWS_DISPLAY="directfb:boundingrectflip:mmWidth220:mmHeight120:0"
+else
+    echo "Mode: systemonly (start_msn_directfb's default -- forces fb0-backed surfaces)" | tee -a "$LOG"
 fi
 
 echo "Baseline (before starting DirectFB):" | tee -a "$LOG"

@@ -4876,3 +4876,39 @@ confirmed root cause recorded in the corresponding doc
 (`docs/WIRELESS_AND_INIT.md` §6, `docs/ARK1680_TS_REVERSE_ENGINEERING.md`,
 `tools/mcu-handshake/README.md`, `docs/BD37033.md`) — if something looks
 wrong, start there rather than re-guessing from scratch.
+
+---
+
+## 45. Hardware test 2026-07-24: primary `bootnand` display bug resolved; `reservingtrack` regression noted, not chased
+
+Tested `new uboot stock kernel v1_260724.txt`
+(`docs/logs/new uboot stock kernel v1_260724.txt`). Result: **the
+original blocking bug is gone** — no `open /dev/ark_display fail` or
+`open frame buffer fail` anywhere in the log (previously the first
+failure every `bootnand` attempt hit). `MsnCoreApp` fully started,
+display initialized at the correct 800x480, CarPlay/Bluetooth/WiFi all
+came up normally. Furthest `bootnand` has gotten in the whole
+investigation — sections 33-44's fixes (rgb_order/colorkey/vpinfo/
+ATAG_DISPLAY_PARAM/backcarcheck/reservingtrack-preload) are the
+combined cause, not yet individually isolated.
+
+Two open items, not chased further per explicit decision (reservingtrack
+isn't blocking anything — the primary bug is fixed regardless):
+- `reservingtrack check failed!` reappeared (line 95 of the log) — it
+  had passed in an earlier test after §30's NAND-preload fix, so this
+  is a regression from *something* since then, not a fresh gap. Because
+  this check gates `track_paint_init()`, §43's width/height ATAG fix
+  was never actually exercised this run — still unverified.
+- A garbled console line appears right around the same point (line 86)
+  — fragments of the U-Boot version banner merged with the kernel
+  image byte count into one corrupted line. Timing-wise this can't be
+  directly caused by §44's `setup_board_tags()` additions (those run
+  later, during `bootz`, after this console output already happened),
+  but a later wild write from that same new code corrupting the
+  already-loaded `reservingtrack` data before the kernel checks it
+  remains a plausible indirect mechanism — not confirmed either way.
+
+**Parked for a future session**: re-test cleanly (ideally twice, to
+tell a flake from a real regression) and, if it reproduces, bisect by
+temporarily dropping the `setup_board_tags()` additions from §44 to
+see if `reservingtrack` passes again.

@@ -1,0 +1,276 @@
+
+ARK1680 SoC Booter V 1.00
+SDMMC card successfully
+                       Not found ARKSDLDR.bin.
+check_loaderfile fail.
+FlashId: 0x98f18015
+
+ Device In The Table!!
+
+                      ChipSize: 0x00000080
+
+BlkSize: 0x00020000
+
+PageSize: 0x00000800
+
+SpareSize: 0x00000080
+
+BlkNum: 0x00000400
+
+PagePerBlk: 0x00000040
+
+ColCyc: 0x00000002
+
+RowCyc: 0x00000002
+
+EccCodeSize: 0x0000000d
+
+SegSize: 0x00000200
+NandOS_Loader...
+ARK169 2Gb 20180412-6-5-10_330_430_nboot: 0xc0000783
+DDR3 Data training successful
+samsung DDR3_128MX16
+
+Ark1680 SoC Remapped And DDR Init End . . .
+Launch Stepldr...
+NandStepLoader...
+change_clk enable clock successful
+SD get card RCA:0x%x
+change_clk enable clock successful
+Launch UBOOT from sd...
+
+
+U-Boot 2018.07-linux4ark_1.0 (Jul 24 2026 - 11:42:00 +1000)
+
+DRAM:  180 MiB
+NAND:  128 MiB
+MMC:   ARK_MMC0: 0
+In:    serial
+Out:   serial
+Err:   serial
+[bootlogo] ark_show_bootlogo() starting, screen_id=0
+switch to partitions #0, OK
+mmc0 is current device
+[arkdata.ini] loading -> `fatload mmc 0:1 0x2900000 arkdata.ini`
+6437 bytes read in 8 ms (785.2 KiB/s)
+[arkdata.ini] fatload reported filesize=0x1925 (6437 bytes)
+[arkdata.ini] loaded 6437 bytes into RAM @ 0x2900000
+[arkdata.ini] done — 13/13 fields overridden from SD card, final timing (vbp=29 vfp=25 vsw=16 hbp=32 hfp=25 hsw=54 clk_freq=330000000 clk_div1=11 clk_div2=1 rgb_mode=5)
+[screen_info] screen_id=0
+[screen_info] ScreenType:0, subType:0,Width:800, Height:480,Format:7, TvoutType:12,screen_id:0,interlace:0
+[screen_info] RgbMode:5 ,BPP:32 ,pad_unset:0
+[screen_info] HFP:25,HBP:32,HSW:54,VBP:29,VFP:25,VSW:16,HSYNCPolarity:0x1,VSYNCPolarity:0x1 ,DEPolarity:0
+[screen_info] CLKSource:1,CLKFreq:330000000,CLKDIV1:11,CLKDIV2:1,CLKPolarity:0,LVDSCfg:0x0,FrameRate:0,
+[arkdata.ini] vpinfo: 20/20 fields overridden, osd1=(c128 b128 s64 h0)
+[bootlogo] ark_display_init() done
+[bootlogo] loading -> `fatload mmc 0:1 0xb400000 bootlogo.raw`
+1536000 bytes read in 529 ms (2.8 MiB/s)
+[bootlogo] fatload reported filesize=0x177000 (1536000 bytes), expected 0x177000 (800x480x32bpp)
+[bootlogo] pushing OSD1 image 800x480 @ 0xb400000 (DISP_RGB_888)
+[bootlogo] OSD1 layer enabled, splash should be visible now
+[lcdconsole] disabled at build time (ENABLE_LCDCONSOLE=0), serial-only
+Hit space to stop autoboot:  0
+=> bootnand
+[bootnand] booting from NAND with original dumped settings (ubi.mtd=6 root=ubi0:rootfs)
+Booting stock kernel ...
+[arkdata.ini] done — 13/13 fields overridden from SD card, final timing (vbp=29 vfp=25 vsw=16 hbp=32 hfp=25 hsw=54 clk_freq=330000000 clk_div1=11 clk_div2=1 rgb_mode=5)
+[screen_info] screen_id=0
+[screen_info] ScreenType:0, subType:0,Width:800, Height:480,Format:7, TvoutType:12,screen_id:0,interlace:0
+[screen_info] RgbMode:5 ,BPP:32 ,pad_unset:0
+[screen_info] HFP:25,HBP:32,HSW:54,VBP:29,VFP:25,VSW:16,HSYNCPolarity:0x1,VSYNCPolarity:0x1 ,DEPolarity:0
+[screen_info] CLKSource:1,CLKFreq:330000000,CLKDIV1:11,CLKDIV2:1,CLKPolarity:0,LVDSCfg:0x0,FrameRate:0,
+[arkdata.ini] vpinfo: 20/20 fields overridden, osd1=(c128 b128 s64 h0)
+[disconfig] ark display init g_screen_id=0.
+[backcarcheck] gpio5=1, in_reverse=0.
+
+NAND read: ux4ark_1.0 (Jul 24 2026 4V!▒`3255536 bytes read in 1114 ms (2.8 MiB/s)
+Loaded zImage_stock from SD card
+Kernel image @ 0x1000000 [ 0x000000 - 0x31acf0 ]
+Using machid 0x1068 from environment
+
+Starting kernel ...
+
+Uncompressing Linux... done, booting the kernel.
+machine ID r1 = 0x00001068
+[    0.240000] reservingtrack check failed!
+[    1.350000] arktool display reg init
+## Error: "factory_reset" not defined
+sh: 1: unknown operand
+mount successfully!
+insmod: can't insert '/lib/modules/3.4.0/kernel/drivers/input/touchscreen/ark1680_ts.ko': File exists
+ln: /tmp/touch_export: File exists
+[6.833]  set display inch: QSize(120, 72) 5.50956
+[6.875]  init msn firset export ticks: 311
+[    7.290000] IrqLineVG=-1.
+/ # [8.385]  MSNCoreApp start
+[8.399]  MSNCoreApp exception init
+[8.413]  MSNCoreApp running
+[9.643]  Set Effect Process Priority -19  0
+QWS_ARK_TOUCH_DEVICE undefined, touch input disabled
+[10.250]  MsnCoreApp version: V3.21.09.0219
+[10.799]  MSNCoreApp onFirstInit
+[10.803]  ark screen type: 0
+[10.804]  display size: QSize(800, 480)  src size: QSize(800, 480)
+[10.882]  Load App Plugin 12 "/usr/lib/libCarReversing.so"
+[10.968]  Load App Plugin 10 "/usr/lib/libLauncher-Box.so"
+[10.985]  MsnMainWindow::setRealVisible LauncherWindow(0x1f9a98) true
+[11.037]  Waite Event Ticks 11
+[11.167]  load wallpaper: "/msnprofile/wallpaper/800x480/"  size: QSize(0, 0)
+rm: can't remove '/tmp/app-*.bmp': No such file or directory
+[11.188]  MSNCoreApp show
+[11.406]  MsnWindowManager::setVisible true true
+[11.417]  endCarReversing
+get_shared_display_data May 29 2020-16:57:02.
+[11.421]  setTrackOSDVisible false
+[11.423]  set_osd1_visible true
+QMetaObject::connectSlotsByName: No matching signal for on_pushButton_clicked()
+[12.384]  DVRSetDialog visibale change: false
+[12.410]  MSNCoreApp hide boot logo
+[12.422]  MSNCoreApp onSecondInit
+[12.426]  DiskDeviceWatcher::startWatcher
+Created device discovery thread
+[12.430]  Start Load Driver
+[12.829]  Load App Plugin 8 "/usr/lib/libSetting.so"
+[12.856]  Open backlight pwm : true
+SoundAdapter Create Failed, Not Support ICType: 0
+[12.957]  Load App Plugin 403 "/usr/lib/libMsnSound.so"
+syncDatas armsetting radar visible:0 datas:0 0 0 0
+[13.413]  McuAdapter: MCUAdapter_BoxP300 6
+[13.418]  Open MCU Serial Port  "/dev/ttyHS0"  Ret: true "No such file or directory"
+
+start serialPortProcessProc
+
+[13.429]  Open MCU Serial Port  "/dev/ttyS2"  Ret: true "No such file or directory"
+[13.430]  Load App Plugin 401 "/usr/lib/libMcuCenter.so"
+[13.577]  CanBusPlugin 0 0
+[13.578]  Load App Plugin 400 "/usr/lib/libCanBus.so"
+[13.716]  Load App Plugin 3 "/usr/lib/libBlueTooth.so"
+[13.735]  open touch monitor dev: /dev/input/event0 41
+[13.782]  onLoadDriverFinished
+[13.845]  usb_device_added /dev/bus/usb/002/001
+[13.846]  usb_device_added /dev/bus/usb/001/001
+usb_device_open /dev/bus/usb/001/001
+net.ipv4.udp_mem = 8192 10240 16384
+net.ipv4.udp_rmem_min = 1048576
+usb_device_open open returned 30 writeable 1 errno 2
+usb_device_new /dev/bus/usb/001/001 fd: 30
+usb_device_new read returned 43 errno 2
+insert usb dev:/dev/bus/usb/001/001 vid:0x1d6b pid:0x0002
+[14.015]  arkapi_open_dvr() retry_times: 1
+[   14.060000] track_setting=2
+[   14.080000] track_setting=3
+[14.106]  MSN protocal type: 0  sendReadyData!
+[14.338]  MSNCoreApp onLoadStartupApp
+[14.339]  MSNCoreApp onEndInit
+[14.339]
+MsnCoreApp End init
+
+[14.797]  MsnLink StartService: "com.arkmicro.carplay"
+label2 = TOYOTA
+pcarplay_info->bridge_mode=0
+pcarplay_info->icurrent = 500
+pcarplay_info->ns_level = 1
+### ++ carplay initialize ++
+msg instance
+++ MsgEnQueue ++
+### carplay dbus initialize true
+[15.361]  MsnLink StartService ret: "com.arkmicro.carplay" true ""
+[15.363]  MSNCoreApp exec
+[15.383]  MsnLink::onServiceRegistered "com.arkmicro.carplay"
+new device /dev/bus/usb/001/002
+[15.384]  usb_device_added /dev/bus/usb/001/002
+usb_device_open /dev/bus/usb/001/002
+usb_device_open open returned 30 writeable 1 errno 11
+usb_device_new /dev/bus/usb/001/002 fd: 30
+usb_device_new read returned 50 errno 11
+insert usb dev:/dev/bus/usb/001/002 vid:0x0781 pid:0x5567
+new device /dev/bus/usb/002/002
+[15.385]  usb_device_added /dev/bus/usb/002/002
+[15.385]  MSN protocal type: 0  sendReadyData!
+x=0 y=0
+s_w=800 s_h=480
+v_w=800 v_h=480 screen_width_phy=120 screen_height_phy=72
+#pluginfo->btmac=56:fa:dd:e2:50:bf
+mDNSResponder: mDNSResponder (Engineering Build) (May 29 2020 16:56:53) starting
+carplay_plugin_set_info:1505 err=0
+carplay_plugin_start:1728
+### carplay ++ usb_reader_thread ++
+### carplay -- usb_reader_thread --
+### -- carplay initialize --
+[15.918]  start bt service:/usr/bin/blueware
+[16.069]  MSN protocal type: 0  sendReadyData!
+[16.122]  Retry Open BlueTooth Serial Port,  Ret: true
+[16.127]  Write At atCommand: "AT+DEVSTAT"
+[16.348]  Write At atCommand: "AT+BTEN=1"
+mDNSResponder: mDNS_AddDNSServer: Lock not held! mDNS_busy (0) mDNS_reentrancy (0)
+mDNSResponder: mDNSPlatformSourceAddrForDest: connect 1.1.1.1 failed errno 101 (Network is unreachable)
+udhcpd: started, v1.25.0
+unknow disk type: "DOS/MBR boot sector; partition 1 : ID=0xc, active, start-CHS (0x10,0,1), end-CHS (0x3ff,3,32), startsector 2048, 129024 sectors; partition 2 : ID=0x83, start-CHS (0x3ff,3,32), end-CHS (0x3ff,3,32), startsector 133120, 612352 sectors; partition 3 : ID=0x83, start-CHS (0x3ff,3,32), end-CHS (0x3ff,3,32), startsector 747520, 301056 sectors"
+[17.292]  mount command: "mount /dev/mmcblk0p1 -o utf8 /media/sdisk/p1/"
+[17.522]  mount command: "mount /dev/mmcblk0p2 /media/sdisk/p2/"
+[17.760]  mount command: "mount /dev/mmcblk0p3 /media/sdisk/p3/"
+unknow disk type: "DOS/MBR boot sector; partition 1 : ID=0xc, active, start-CHS (0x10,0,1), end-CHS (0x3ff,3,32), startsector 2048, 129024 sectors; partition 2 : ID=0x83, start-CHS (0x3ff,3,32), end-CHS (0x3ff,3,32), startsector 133120, 612352 sectors; partition 3 : ID=0x83, start-CHS (0x3ff,3,32), end-CHS (0x3ff,3,32), startsector 747520, 301056 sectors"
+[18.259]  mount command: "mount /dev/sda1 -o utf8 /media/udisk/p1/"
+[18.456]  mount command: "mount /dev/sda2 /media/udisk/p2/"
+[18.649]  mount command: "mount /dev/sda3 /media/udisk/p3/"
+[18.818]  Write At atCommand: "AT+ADDR"
+[18.819]  BlueToothAdapter_Blueware::onStartupConfig()
+[18.820]  Write At atCommand: "AT+HFPCFG"
+[18.822]  Write At atCommand: "AT+HFPDISC"
+[18.822]  Write At atCommand: "AT+ADDR"
+[18.823]  Write At atCommand: "AT+NAME"
+[18.823]  Write At atCommand: "AT+VER"
+[18.851]  Write At atCommand: "AT+PLIST"
+[18.852]  BT Local Address: "DC0D3014FC9F"
+[18.852]  Write At atCommand: "AT+NAME"
+[18.854]I msncoreapp.cpp@2964 enableHostApd start  enable: 1 timeout: 3000
+[18.855]  start  enableWLAN 0 18855
+stop wifi manager
+[18.958]  end  enableWLAN 0 18958
+[19.002]I msncoreapp.cpp@3059 enableHostApd hostapd started  true
+[19.002]  hostapd state: 2  pid: 945 ap type: 1
+[19.003]I msncoreapp.cpp@3098 enableHostApd end  1
+[19.003]  Write At atCommand: "AT+HFPCFG=0"
+[19.004]  BT Local Address: "DC0D3014FC9F"
+[19.005]  Write At atCommand: "AT+NAME"
+[20.680]  MsnCoreApp::onDiskDeviceStatusChange 1 1
+[20.690]  run thread: 0x70cdc440
+[20.690]  onScannerFiles thread start: MsnThread(0x1e03e0)
+[21.712]  Load App Plugin 2 "/usr/lib/libMusicPlayer.so"
+[21.738]  MsnMainWindow::setRealVisible LauncherWindow(0x1f9a98, name = "LauncherWindow") false
+[21.745]  MsnMainWindow::setRealVisible MusicPlayerWindow(0x533258) true
+[21.745]  mode app change: "MsnCoreApp" -> "MusicPlayer"
+[21.746]
+======== refreshAppAudioChannel 131075 0
+[21.746]  switchToAppAudioChannel, ModeApp: "MusicPlayer"  AudioApp: "MusicPlayer"  Channel: 0 Request: false
+[21.759]  Waite Event Ticks 11
+[22.083]  MsnCoreApp::onDiskDeviceStatusChange 3 1
+[22.091]  run thread: 0x700ff440
+[22.091]  onScannerFiles thread start: MsnThread(0x1e04a8)
+QMetaObject::connectSlotsByName: No matching signal for on_btnBtMusic_clicked()
+[22.275]  setAppVolumeMute "MusicPlayer" true
+[22.276]
+======== refreshAppAudioChannel 131075 0
+[22.276]  switchToAppAudioChannel, ModeApp: "MusicPlayer"  AudioApp: "MusicPlayer"  Channel: 0 Request: false
+TagLib: RIFF::File::read() -- Chunk 'data' has invalid size (larger than the file size)
+TagLib: FileRef::tag() - Called without a valid file.
+[22.750]I msncoreapp.cpp@2964 enableHostApd start  enable: 0 timeout: 100
+[22.754]  hostapd state: 2  pid: 945
+[22.912]  hostapd state: 0  pid: 0
+[22.913]I msncoreapp.cpp@3098 enableHostApd end  0
+[22.913]  Write At atCommand: "AT+HFPCONN=04006EAF29C4"
+[22.914]  Auto ConnectTime 8000
+[23.929]I msncoreapp.cpp@2964 enableHostApd start  enable: 1 timeout: 100
+[23.930]  start  enableWLAN 0 23930
+stop wifi manager
+[24.053]  end  enableWLAN 0 24053
+[24.096]I msncoreapp.cpp@3059 enableHostApd hostapd started  true
+[24.096]  hostapd state: 2  pid: 964 ap type: 1
+[24.097]I msncoreapp.cpp@3098 enableHostApd end  1
+[25.160]  onScannerFiles thread end: MsnThread(0x1e03e0)
+[25.163]  onScannerFinished 1 MsnThread(0x1e03e0) false
+[25.401]  onScannerFiles thread end: MsnThread(0x1e04a8)
+[25.402]  onScannerFinished 3 MsnThread(0x1e04a8) false
+[30.915]  Write At atCommand: "AT+HFPSTAT"
+[30.915]  Write At atCommand: "AT+HFPCONN=04006EAF29C4"
+[30.916]  Auto ConnectTime 16000

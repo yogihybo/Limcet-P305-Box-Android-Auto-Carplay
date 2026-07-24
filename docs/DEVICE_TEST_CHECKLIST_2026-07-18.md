@@ -4912,3 +4912,69 @@ isn't blocking anything — the primary bug is fixed regardless):
 tell a flake from a real regression) and, if it reproduces, bisect by
 temporarily dropping the `setup_board_tags()` additions from §44 to
 see if `reservingtrack` passes again.
+
+---
+
+## 46. galcore version/binary comparison, plus a static trace of DirectFB's dma_buf handoff — mostly ruling out the driver-generation theory
+
+Following on from §44-45's finding that our `systemonly`/`no-layers-clear`
+"fixes" both diverge from stock's real config: compared stock's actual
+running `galcore.ko` against ours directly.
+
+**Version gap confirmed concretely.** Stock's real dmesg (captured
+2026-07-15, before this reconstruction project's GPU work began —
+`docs/logs/archived/dmesg live device kernel 3.4 dmeg_260715.txt`)
+shows `Galcore version 5.0.11.28018`. Ours reports `6.2.4.150331`. Two
+full major versions apart, license also differs (`GPL` vs
+`Dual MIT/GPL`), and the module param sets differ substantially (ours
+has multi-GPU array params, `externalBase/Size`, `type` — none of
+which exist in stock's simpler 27-param set). Genuinely different
+Vivante driver generations, not a build variant of the same one.
+
+**Symbol-level cache/memory API comparison**: stock's compiled module
+references the older `cpu_cache`/`flush_dcache_page`/
+`dma_alloc_writecombine` APIs; ours references `v7_dma_flush_range`/
+`v7_dma_map_area`/`v7_dma_unmap_area` (the same symbols from the
+earlier `CACHE_FUNCTION_UNIMPLEMENTED` fix, [[project_effectwatch_black_screen]]
+§18) plus the DMABUF framework (`dma_buf_attach/export/fd/get/...`) —
+none of which appear in stock's binary at all.
+
+**Traced further to see if DMABUF is the actual mechanism —
+mostly ruled out.** Decompiled `galAllocateBuffer` in stock's
+`libdirectfb_gal.so` (unstripped, with debug info): it only calls the
+generic `gcoSURF_Construct(hal, w, h, Pool=1, Type=6, format, flags,
+&surface)` — no raw ioctls, no dma_buf-specific code anywhere in
+userspace. Whatever galcore does internally with dma_buf is invisible
+to and unaffected by the (unchanged, stock) userspace binary.
+
+Cloned the user-provided reference repo
+(`github.com/etnaviv/vivante_kernel_drivers`, an archive of real
+Vivante GPL kernel driver source across versions) and found an exact
+match for stock's version: `imx-galcore-x8-5.0.11.p7.4.3`. Its
+`gc_hal_kernel_allocator_array.h` shows the `dmabuf` allocator has
+been a pluggable option (alongside `cmafsl`/CMA and `default`) since
+at least this same 5.0.11-era source, gated behind
+`CONFIG_DMA_SHARED_BUFFER` — not something new to the 6.2.4 driver
+generation. Confirmed our kernel `.config` has that flag set (`=y`);
+stock's compiled binary has zero dma_buf symbols, meaning their build
+simply didn't compile that allocator in, not that the mechanism itself
+is new.
+
+More importantly: userspace's `Pool=1` argument is `gcvPOOL_DEFAULT`
+(confirmed against the reference source's `gcePOOL` enum), which maps
+to the always-compiled `"default"` allocator — a plain virtual-memory
+allocator, distinct from both `cmafsl` (contiguous/CMA) and `dmabuf`.
+Since ordinary surfaces request `gcvPOOL_DEFAULT` in both driver
+generations, they should route to the same conceptual allocator type
+either way — meaning `gcvPOOL_DEFAULT` surfaces were likely never
+`/dev/fb0`-backed in stock either.
+
+**Net effect on the theory**: the driver-generation/dma_buf framing is
+mostly walked back. The real open question is narrower — how does
+stock's DirectFB/Qt stack route the *primary/screen* surface
+specifically to `fb0`-backed memory despite everything else defaulting
+to `gcvPOOL_DEFAULT`? That's a DirectFB-internal primary-surface
+pool-selection question (`libqdirectfbscreen.so`/`libdirectfb_fbdev.so`,
+partially traced in [[project_effectwatch_black_screen]] §22), not a
+kernel-driver-version question. §45's `--stock-config` hardware test
+remains the most direct way to make further progress from here.

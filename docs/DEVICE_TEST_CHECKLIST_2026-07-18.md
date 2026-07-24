@@ -5119,3 +5119,143 @@ rather than only as a diagnostic toggle) while leaving the deeper
 GPU/GAL root-cause investigation open as a separate, non-blocking
 thread for whoever wants to pursue real GPU-accelerated compositing
 later.
+
+---
+
+## 49. Root cause found and fixed at the source level — `libdirectfb_fbdev.so`'s `primaryInitLayer()` never pins the primary surface off GAL's pool
+
+User asked to find exactly where DirectFB's own code is supposed to pin
+the primary surface's pool, given `EffectWatch` transitions reproduce
+the same black-screen bug MsnCoreApp's own rendering does (both go
+through this same path). Found it, then fixed it at the source level
+rather than continuing to chase the kernel-memory-aliasing approach
+(too risky — see below).
+
+**The mechanism, traced against DirectFB's real open source
+(`github.com/deniskropp/DirectFB`):**
+
+`dfb_layer_context_allocate_surface()` (`src/core/layer_context.c`):
+```c
+DFBSurfaceCapabilities caps = shared->description.surface_caps ?: DSCAPS_VIDEOONLY;
+```
+This is where a layer driver is *supposed* to pin its primary surface's
+memory policy. `primaryInitLayer()` in this board's `libdirectfb_fbdev.so`
+never sets `description->surface_caps` at all (confirmed via decompile,
+and independently confirmed by finding this board's binary is genuinely
+vanilla upstream DirectFB — see §50) — so it silently defaults to
+`DSCAPS_VIDEOONLY`.
+
+Traced forward through real source:
+- `dfb_surface_buffer_new()` (`surface_buffer.c`): `DSCAPS_VIDEOONLY` →
+  `buffer->policy = CSP_VIDEOONLY`.
+- `dfb_surface_pools_negotiate()` (`surface_pool.c`): `CSP_VIDEOONLY` →
+  `type |= CSTF_EXTERNAL`. Both `fbdev`'s own pool and the GAL
+  gfxdriver's pool declare `CSTF_EXTERNAL` support, so this doesn't
+  exclude GAL at all — pools are tried in priority-sorted order, and
+  GAL's pool (`CSPP_PREFERED`, confirmed via decompile of `galInitPool`)
+  wins over `fbdev`'s own (`CSPP_DEFAULT`).
+- GAL's pool is backed by galcore's GPU memory (generic CMA @
+  `0x04000000` on this kernel), never `/dev/fb0`'s own dedicated 16MB
+  carveout (`0x0F000000`, per the LCDC's own DTS `reg` claim).
+- `primaryFlipRegion()`'s pan/flip offset math assumes the locked
+  buffer's offset is relative to `fb0`'s own base — wrong when
+  GAL-pool-backed, producing a valid-but-meaningless offset: the
+  `FBIOPAN_DISPLAY` ioctl succeeds, but scans out the wrong memory.
+
+**Checked for a free (config-only) fix first, found none.**
+`/etc/directfbrc`'s `window-surface-policy=systemonly` directive only
+affects `windows.c`'s window-surface allocation
+(`dfb_config->window_policy`) — `layer_context.c` never consults it.
+There's no config-file knob for the *primary/layer* surface's policy at
+all; it's hardcoded in `primaryInitLayer()`.
+
+**Why not the kernel-memory-aliasing approach instead** (reconfiguring
+galcore's `contiguousBase`/`contiguousSize` to draw from inside `fb0`'s
+own 16MB carveout, discussed as an alternative): checked our own
+`ark1668_lcdfb_probe()`'s comments first, which state plainly that
+"OSD2/OSD3/VIDEO1/VIDEO2 [are] set via raw addresses from userspace
+ioctls with **no kernel-side allocation tracking**". There's no safe,
+known-free sub-region to hand to galcore without either empirically
+mapping real userspace address usage first (via `lcd-overlay-watch.sh`)
+or risking two independent DMA-capable subsystems (galcore's GPU engine,
+the LCDC's own video-layer writes) silently colliding on the same
+physical memory — a worse failure mode (corruption/crash) than today's
+scrambled screen. The source-level fix avoids this risk entirely.
+
+**Confirmed this board's `libdirectfb_fbdev.so` is genuinely vanilla
+upstream DirectFB, not an ARK fork** — see §50 for the full
+verification. This made a clean source patch + rebuild both possible
+and preferable to editing compiled bytes directly, avoiding "binary
+patches floating around" per explicit instruction.
+
+**Fix**: `description->surface_caps = DSCAPS_SYSTEMONLY;` added to
+`primaryInitLayer()`. `CSP_SYSTEMONLY` requires `CSTF_INTERNAL`, a flag
+GAL's pool doesn't declare (confirmed via its own `0x60f` types mask,
+§47) — so this specifically excludes GAL's pool for the primary surface
+only, while window/backing-store surfaces (including `EffectWatch`'s
+own transition overlays) remain free to use GAL acceleration normally.
+
+Patch, build instructions, and full reasoning:
+`build_tools/directfb-fbdev-fix/`. Rebuilt `libdirectfb_fbdev.so`
+deployed to `firmware_overlay/usr/lib/directfb-1.7-4/systems/`. Not yet
+hardware-tested.
+
+---
+
+## 50. Verifying and building the source-level fix — version identification, ABI verification, drop-in confirmation
+
+**Confirmed exact upstream version.** The deployed module directory is
+`directfb-1.7-4`. DirectFB's own `configure.in` computes this name as
+`directfb-$MAJOR.$MINOR-$(MICRO - BINARY_AGE)`. Checked the real
+`DIRECTFB_1_7_4` git tag (`github.com/deniskropp/DirectFB`):
+`MICRO=4`, `BINARY_AGE=0` → `directfb-1.7-4`, an exact match. (Buildroot
+only has `DirectFB-1.7.7.tar.gz` cached locally, which would build as
+`directfb-1.7-7` — a different, non-matching module directory.)
+
+**Confirmed genuinely vanilla, not an ARK fork.** Decompiled
+`primaryInitLayer()`/`fbdevAllocateBuffer()`/etc. from the deployed
+binary matched the real `DIRECTFB_1_7_4` source closely enough (exact
+literal values: `DLCAPS_SURFACE|CONTRAST|SATURATION|BRIGHTNESS`,
+`DLBM_FRONTONLY`, `0x8000` color-adjustment defaults, etc.) to conclude
+this board's `libdirectfb_fbdev.so` is stock upstream DirectFB, just
+cross-compiled — not a vendor-patched fork. This is what made a clean
+source-level fix viable at all.
+
+**Built from the 1.7.7 tarball instead of the 1.7.4 git checkout** (no
+`autoconf`/`automake`/`libtool` available in this environment, no root
+to install them, and the 1.7.4 git checkout has no pre-generated
+`configure`). Diffed `systems/fbdev/fbdev.c` between the real 1.7.4 tag
+and the 1.7.7 tarball first to confirm this substitution is safe: found
+exactly one unrelated difference (a `buf[512]`→`buf[512+1]` off-by-one
+safety fix). Full reasoning and reproduction steps in
+`build_tools/directfb-fbdev-fix/README.md`.
+
+**Cross-compiled with the same Linaro GCC 7.3.1-2018.05 toolchain the
+kernel/rootfs already use** (matching every boot log's own compiler
+banner this whole project), with `--with-gfxdrivers=none
+--with-inputdrivers=none --disable-zlib --disable-freetype
+--disable-png --disable-jpeg --disable-gif` — none of those are needed
+to produce just `systems/fbdev/libdirectfb_fbdev.so`, confirmed by zero
+undefined symbols from any of those libraries in the built `.so`
+(`nm -D --defined-only`).
+
+**Post-build SONAME fixup**: building from 1.7.7 links against
+`libdirect-1.7.so.7`/`libfusion-1.7.so.7`/`libdirectfb-1.7.so.7`, but
+the deployed rootfs only has the real `.so.4` versions. Both substrings
+are the same byte length (`1.7.so.7`/`1.7.so.4`), so this was a direct,
+safe same-length byte replacement in the built `.so` — no ELF structure
+changes, no `patchelf` needed (not available in this environment
+either).
+
+**Verified as a faithful drop-in, not just "probably fine"**: after the
+SONAME fixup, `readelf -d`'s `NEEDED` entries match the deployed
+rootfs's real libraries exactly, and the exported symbol set
+(`nm -D --defined-only`) is byte-identical (28/28, zero diff) to the
+stock deployed `libdirectfb_fbdev.so`.
+
+Deployed to
+`firmware_overlay/usr/lib/directfb-1.7-4/systems/libdirectfb_fbdev.so`.
+`.la` libtool file deliberately not deployed alongside it — checked the
+stock `.la`'s own `dlname=` field, confirming DirectFB loads modules via
+plain `dlopen()` at runtime, not libtool's `.la` metadata. Not yet
+hardware-tested.

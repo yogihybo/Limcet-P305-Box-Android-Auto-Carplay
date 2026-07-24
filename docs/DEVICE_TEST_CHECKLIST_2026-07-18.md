@@ -5259,3 +5259,80 @@ Deployed to
 stock `.la`'s own `dlname=` field, confirming DirectFB loads modules via
 plain `dlopen()` at runtime, not libtool's `.la` metadata. Not yet
 hardware-tested.
+
+## 51. Hardware test of §49-50's fix, plus a follow-up regression found and fixed at the core-library level (2026-07-24)
+
+Hardware result for the `fbdev.c`-only fix: base UI now starts and
+displays correctly with plain `start_msn` (no extra flags) — the
+pool-priority root cause fix works for ordinary rendering, confirming
+§49's diagnosis was correct.
+
+New regression found on the same test: clicking any function that
+transitions to another window produces `Flip -> The requested operation
+or an argument is (currently) not supported` /
+`terminate called after throwing an instance of 'DFBException*'`.
+Non-fatal — UI stays on the current window rather than crashing.
+Confirmed to be specifically `EffectWatch` (the separate stock process
+that renders window-transition crossfades): deleting `EffectWatch`
+makes transitions work again.
+
+**Root cause**: `EffectWatch` does its own
+`IDirectFB::SetCooperativeLevel(DFSCL_FULLSCREEN/EXCLUSIVE)` +
+`IDirectFB::CreateSurface(DSCAPS_PRIMARY)`, without requesting
+`DSCAPS_SYSTEMONLY` itself (confirmed via `nm -D` on the stripped
+binary — it doesn't use `IDirectFBWindow` at all, contrary to an earlier
+session's note). `IDirectFB_CreateSurface()` builds a
+`DFBDisplayLayerConfig` from EffectWatch's own caps and calls
+`CoreLayerContext_SetConfiguration()` →
+`dfb_layer_context_reallocate_surface()`, which reconfigures the
+*existing* shared primary region's surface using that config — pulling
+it straight back onto GAL's GPU pool. §49's fix only set
+`surface_caps` at `primaryInitLayer()` time (a one-time initial-
+allocation default), so it had no effect on this later reconfiguration.
+`dfb_surface_flip_buffers()` then rejects the `Flip()` because front/
+back buffers end up with mismatched `policy` values mid-transition.
+
+**Fix**: forced `DSCAPS_SYSTEMONLY` directly in `src/core/layer_context.c`
+— in both `dfb_layer_context_allocate_surface()` (belt-and-braces at
+initial allocation) and, critically, `dfb_layer_context_reallocate_surface()`
+(every later reconfiguration) — whenever `shared->contexts.primary ==
+context`, regardless of what any individual caller requests. This is a
+core-library-level fix (not caller-specific), so it protects the shared
+primary context against any future caller with the same pattern, not
+just `EffectWatch`. Private contexts and window surfaces are unaffected.
+Patch: `build_tools/directfb-fbdev-fix/0002-layer-context-force-systemonly-for-shared-primary.patch`.
+
+Also enabled `--disable-debug-support` on this rebuild (was previously
+left at its default of `yes`, bloating the core library to ~8.9MB vs
+stock's ~1.17MB via always-compiled `D_DEBUG_AT`/`D_ASSERT` machinery).
+Result: `libdirectfb-1.7.so.7.0.0` at 1,156,004 bytes (stock:
+1,177,140) and `libdirectfb_fbdev.so` at 59,236 bytes — both much
+closer to stock than the earlier debug-enabled build.
+
+This is the first time the core library itself (not just `fbdev.so`)
+needed rebuilding, so it got its own SONAME/NEEDED fixup and its own
+symbol-set verification: `nm -D --defined-only` against stock's real
+`libdirectfb-1.7.so.4.0.0` found 1933 stock symbols vs 1916 ours, 30
+missing. Checked every other deployed `.so` on the device via
+`nm -D --undefined-only` — none reference any of the 30 missing symbols.
+They're internal-only C++ `Task`/`Renderer` engine implementation
+details (an optional multi-threaded rendering backend DirectFB 1.7.x
+carries but this deployment never exercises) — confirmed safe to be
+absent, not just assumed.
+
+Deployed:
+- `firmware_overlay/usr/lib/directfb-1.7-4/systems/libdirectfb_fbdev.so` (updated)
+- `firmware_overlay/usr/lib/libdirectfb-1.7.so.4.0.0` (new)
+
+Not yet hardware-tested at time of writing.
+
+**Separate, still-open thread**: user's own assessment is that on-screen
+colors are "skewed... appears to be alpha issue" even with the base UI
+now rendering. New detail reported: "the red shade sometimes going in
+waves or moves across the screen." This is distinct from the already-
+fixed `rgb_order`/BGR-RGB swap (§33-36) and connects to the older,
+previously-parked `docs/*` alpha-blend investigation. Not yet
+investigated — worth checking after confirming §51's Flip fix, since a
+moving/wave-like tint is more consistent with a buffer-rotation or
+partial-initialization artifact than a static blend-mode
+misconfiguration (which would produce a constant, not moving, tint).

@@ -146,7 +146,83 @@ runtime; `.la` metadata is only consulted by other packages linking
 against this library at *their* build time, not by DirectFB's own module
 loader.
 
-## Result
+## Result (first fix, `fbdev.c` only)
 
 Deployed to `firmware_overlay/usr/lib/directfb-1.7-4/systems/libdirectfb_fbdev.so`.
+Hardware-tested: base UI now starts and displays correctly with plain
+`start_msn` (previously black/scrambled) -- the pool-priority root cause
+fix works for ordinary rendering.
+
+## Follow-up: `Flip -> ... not supported` regression on window transitions
+
+After the first fix, clicking any function that transitions to another
+window triggered `Flip -> The requested operation or an argument is
+(currently) not supported` (non-fatal -- UI stays on the current window,
+does not crash). Confirmed to be `EffectWatch` specifically: deleting
+`EffectWatch` makes transitions work again.
+
+Root cause: `EffectWatch` is a separate process that does its own
+`IDirectFB::SetCooperativeLevel(DFSCL_FULLSCREEN/EXCLUSIVE)` +
+`IDirectFB::CreateSurface(DSCAPS_PRIMARY)` without requesting
+`DSCAPS_SYSTEMONLY` itself. `IDirectFB_CreateSurface()` derives the new
+`DFBDisplayLayerConfig` from EffectWatch's own (non-`SYSTEMONLY`) caps,
+and `CoreLayerContext_SetConfiguration()` →
+`dfb_layer_context_reallocate_surface()` reconfigures the *existing*
+shared primary region's surface using that config -- pulling it straight
+back onto GAL's GPU pool, since `primaryInitLayer()`'s `surface_caps`
+default is a one-time *initial-allocation* value, not an ongoing
+constraint. `dfb_surface_flip_buffers()` then rejects the `Flip()`
+because the front/back buffers end up with mismatched `policy` values
+mid-transition.
+
+Fix: `0002-layer-context-force-systemonly-for-shared-primary.patch`,
+applied against `src/core/layer_context.c`. Unconditionally forces
+`DSCAPS_SYSTEMONLY` onto the shared PRIMARY context's surface caps in
+both `dfb_layer_context_allocate_surface()` (initial allocation, belt-
+and-braces alongside the `fbdev.c` fix) and
+`dfb_layer_context_reallocate_surface()` (every later reconfiguration,
+which is what actually matters for `EffectWatch`) -- regardless of what
+any individual caller (Qt, EffectWatch, or anything else) requests. This
+only touches the shared primary context; private contexts and window
+surfaces remain free to use GPU acceleration normally.
+
+### Rebuilding with both patches
+
+Same steps as above, plus:
+
+```sh
+patch -p1 < .../0002-layer-context-force-systemonly-for-shared-primary.patch
+```
+
+and add `--disable-debug-support` to the `./configure` flags -- it
+defaults to `yes` upstream and bloats the core library from a stock-like
+~1.17MB to ~8.9MB (all `D_DEBUG_AT`/`D_ASSERT` machinery always compiled
+in). With it disabled, this rebuild produces `libdirectfb-1.7.so.7.0.0`
+at 1,156,004 bytes (stock: 1,177,140) and `libdirectfb_fbdev.so` at
+59,236 bytes -- both much closer to stock size than the earlier
+debug-enabled build.
+
+This time two files need the SONAME/NEEDED byte-fixup from the "Post-build
+fixup" section above, not just `fbdev.so`: `src/.libs/libdirectfb-1.7.so.7.0.0`
+(the core library itself, now also being rebuilt and deployed for the
+first time) and `systems/fbdev/.libs/libdirectfb_fbdev.so`.
+
+### Core library verification
+
+`nm -D --defined-only` against stock's real
+`usr/lib/libdirectfb-1.7.so.4.0.0`: 1933 stock symbols vs 1916 ours, 30
+missing. Checked every other deployed `.so` on the device (fbdev, GAL,
+Qt, etc.) via `nm -D --undefined-only` -- none of them reference any of
+the 30 missing symbols. They're internal-only C++ `Task`/`Renderer`
+engine implementation details (an optional multi-threaded rendering
+backend, all C++-mangled `DirectFB::Task*`/`DirectFB::Renderer`/
+`std::deque</vector</Rb_tree<...Task...` symbols) that nothing on this
+device calls into directly -- safe to be absent.
+
+## Result (both fixes)
+
+Deployed:
+- `firmware_overlay/usr/lib/directfb-1.7-4/systems/libdirectfb_fbdev.so`
+- `firmware_overlay/usr/lib/libdirectfb-1.7.so.4.0.0` (new)
+
 Not yet hardware-tested at time of writing.

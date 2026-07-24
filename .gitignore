@@ -1,3 +1,7 @@
+# Python bytecode cache
+__pycache__/
+*.pyc
+
 # Binary images — not built from source, stored externally or LFS
 kernel/zImage
 env/mtd3_env_prado_firmware_dump.bin

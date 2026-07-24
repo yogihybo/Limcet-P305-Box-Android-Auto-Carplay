@@ -5062,3 +5062,60 @@ correctly in this specific deployment, independent of
 step would be decompiling `primarySetRegion`/`primaryInitScreen`
 directly to see how (or whether) the primary surface's real address
 actually gets wired up in our deployment.
+
+---
+
+## 48. Hardware test results for all four watch-script modes — GPU/GAL rendering conclusively identified as the cause, `--no-hardware` fully works
+
+Ran all four modes on real hardware (`lcd-osd1ctl-directfb-watch.sh`
+`normal` / `--no-systemonly` / `--stock-config` / `--no-hardware`,
+logs in `docs/logs/lcd/`). Visual result, reported directly:
+
+- **`--no-hardware` (pure software DirectFB, no GPU/GAL surfaces at
+  all): the interface displayed correctly.**
+- `normal`, `--no-systemonly`, and `--stock-config`: all three showed
+  the same old symptom — effectively black, with scrambled UI content
+  only briefly visible during rapid knob input (the exact
+  "premature-flip"/stale-buffer pattern from way earlier in this
+  project's history, [[project_effectwatch_black_screen]] /
+  [[project_mem_dump_tool]]).
+
+**This is conclusive, not just further-narrowed.** `--stock-config`
+replicates stock's exact real `QWS_DISPLAY`/`directfbrc` values and
+still fails — ruling out configuration as the cause entirely, exactly
+as predicted in §47 if that test came back black. Since disabling
+GPU/GAL acceleration outright (`--no-hardware`) is the ONLY mode that
+renders correctly, the bug is conclusively a defect somewhere in the
+GPU-accelerated GAL rendering path itself (galcore/libGAL/
+libdirectfb_gal.so's surface handling, or the primary-surface
+pool-pinning mechanism traced in §47) — not env config, not
+`systemonly`, not `no-layers-clear`/`no-surface-clear`.
+
+**Register data cross-check**: `OSD1_CTL`'s `rgb_order` stayed
+correctly at `5` in every mode that captured it — confirms §33-44's
+color-order fix is holding up and nothing overwrites it later, fully
+settling that half of the original investigation. `OSD1_ADDR` showed
+active, healthy-looking page1↔page2 flipping in BOTH `--no-systemonly`
+and `--stock-config` (visually indistinguishable from a working
+double-buffer cycle at the register level) despite both actually
+showing scrambled/black content — confirming the bug is specifically
+about WHAT ends up in those buffers (GAL-pool vs `fb0`-backed content
+mismatch), not whether the flip mechanism itself is running. `
+--no-hardware` showed `OSD1_ADDR` static at `0x0F000000` the whole
+run (consistent with pure-software rendering using a simpler
+single/front-only buffering mode) while still displaying correctly —
+further confirming the flip *cadence* was never the differentiator,
+the buffer *content* was.
+
+**Practical outcome**: `--no-hardware`'s underlying config (forcing
+DirectFB into software rendering) is a genuine, hardware-confirmed fix
+for the black-screen bug, independent of ever finding and fixing the
+deeper GAL/galcore root cause. Trade-off: DirectFB loses GPU
+acceleration for compositing (blits/fills done in software instead) —
+likely an acceptable cost for this touchscreen UI's actual rendering
+load, but not yet performance-tested. Candidate next step: make this
+permanent (enable `no-hardware` in the real, shipped `directfbrc`
+rather than only as a diagnostic toggle) while leaving the deeper
+GPU/GAL root-cause investigation open as a separate, non-blocking
+thread for whoever wants to pursue real GPU-accelerated compositing
+later.

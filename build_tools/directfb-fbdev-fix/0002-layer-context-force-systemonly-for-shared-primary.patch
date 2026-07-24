@@ -1,0 +1,43 @@
+diff --git a/src/core/layer_context.c b/src/core/layer_context.c
+index 0000000..0000000 100644
+--- a/src/core/layer_context.c
++++ b/src/core/layer_context.c
+@@ -1853,6 +1853,23 @@ dfb_layer_context_allocate_surface( CoreLayerContext        *context,
+                                           DSCAPS_SEPARATED  |
+                                           DSCAPS_PREMULTIPLIED);
+
++          if (shared->contexts.primary == context) {
++               /* ark1668 fix: unconditionally force the PRIMARY layer
++                * context's surface off GAL's GPU pool, regardless of
++                * what caps/buffermode this particular caller (Qt,
++                * EffectWatch, or anything else) requested. Relying on
++                * primaryInitLayer()'s shared->description.surface_caps
++                * default alone isn't robust against every caller that
++                * might reconfigure this same shared region afterward
++                * (e.g. a fullscreen/exclusive CreateSurface() request
++                * that doesn't itself ask for DSCAPS_SYSTEMONLY) -- see
++                * docs/DEVICE_TEST_CHECKLIST_2026-07-18.md for the full
++                * trace. This only affects the shared PRIMARY context;
++                * private contexts and window surfaces are unaffected
++                * and remain free to use GPU acceleration normally. */
++               caps |= DSCAPS_SYSTEMONLY;
++          }
++
+           scon.flags          = CSCONF_SIZE | CSCONF_FORMAT | CSCONF_COLORSPACE | CSCONF_CAPS;
+           scon.size.w         = config->width;
+           scon.size.h         = config->height;
+@@ -1969,6 +1986,14 @@ dfb_layer_context_reallocate_surface( CoreLayerContext        *context,
+      sconfig.format      = config->format;
+      sconfig.colorspace  = config->colorspace;
+
++     /* ark1668 fix: same enforcement as dfb_layer_context_allocate_surface()
++      * above, applied on reconfiguration too -- any caller reconfiguring
++      * the shared PRIMARY context's region (e.g. EffectWatch's fullscreen/
++      * exclusive CreateSurface(), which doesn't request DSCAPS_SYSTEMONLY
++      * itself) must not be able to pull it back onto GAL's GPU pool. */
++     if (layer->shared->contexts.primary == context)
++          sconfig.caps |= DSCAPS_SYSTEMONLY;
++
+      ret = dfb_surface_lock( surface );
+      if (ret)
+           return ret;

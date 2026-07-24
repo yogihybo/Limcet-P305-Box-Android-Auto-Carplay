@@ -36,7 +36,12 @@ export DFBARGS=module-dir=$DIRECTFB_ROOT/lib/directfb-1.7-4
 # cause of GPU-rendered content never reaching the real, displayed
 # framebuffer -- correctly rendered, but in memory the LCDC never scans
 # out from. Added 2026-07-22; not yet hardware-tested.
-export QWS_DISPLAY=directfb:systemonly:boundingrectflip:mmWidth220:mmHeight120:0
+# Respects a pre-exported QWS_DISPLAY (e.g. from
+# lcd-osd1ctl-directfb-watch.sh's --no-systemonly test) instead of
+# unconditionally overwriting it, so diagnostics can override just this
+# one flag without needing their own copy of this whole script.
+: "${QWS_DISPLAY:=directfb:systemonly:boundingrectflip:mmWidth220:mmHeight120:0}"
+export QWS_DISPLAY
 export GAL_CONFIG_FILE=/etc/gal_config
 
 export QWS_KEYBOARD=TTY:/dev/tty1

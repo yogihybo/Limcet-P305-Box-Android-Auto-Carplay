@@ -86,6 +86,43 @@ also worth just checking the touch panel directly during/after a scan —
 if the switch closes even with zero frames received back, these three
 frames alone may be sufficient and reply frames were never the point.
 
+### `/dev/ttyS2` — a second, separate serial channel (2026-07-22)
+
+Found via `strace` while debugging an unrelated display bug (see
+`docs/MCU_ADAPTERS.md`'s "`/dev/ttyS2`" section) — `MsnCoreApp` also opens
+`/dev/ttyS2` at **4800 baud** and writes real frames using the
+`0xFA...0xAF` format this tool used to build before being corrected to
+the `[0x2E]`-framed protocol above. That correction still holds for
+`ttyHS0` (zero traffic captured on it) — but the `0xFA...0xAF` framing
+genuinely is written to the wire, just on `ttyS2` instead. Frame
+structure: `[0xFA][arg1][arg2][arg3][len][payload...][chk][0xAF]`, where
+`chk` is a plain XOR over `[0xFA .. last payload byte]` inclusive —
+confirmed byte-exact against two frames captured live off the real
+device.
+
+**What's on the other end of `ttyS2` is not known.** 4800 baud rules out
+`MCUAdapter_BoxP300` itself (confirmed 38400 baud on `ttyHS0`), so this
+is likely either a separate physical peripheral reusing the same
+packaging function (a steering-wheel-control CAN/serial bridge is one
+candidate, see `docs/MCU_ADAPTERS.md`'s Catalogue), or a secondary port
+on the same MCU.
+
+```sh
+# Replays the two known-good captured frames, then listens for more
+mcu-handshake --ttys2
+
+# Verbose, and skip the replay (pure passive listening)
+mcu-handshake --ttys2 --no-hello -v
+
+# Override port/baud if needed
+mcu-handshake --ttys2 -p /dev/ttyS2 -b 4800 -v
+```
+
+As with `ttyHS0`, toggle a physical input (steering wheel buttons are the
+prime suspect here) while listening to see if it produces traffic, and
+correlate frame content with the action to start decoding `arg1`/`arg2`/
+`arg3`'s real meaning.
+
 ### Still open
 - `showApp(mode=0xCC)` sends a fourth real frame (`cmd=0x82`, a
   *different* 4-byte payload `02 0B 00 00` than the `onModeAppChanged`

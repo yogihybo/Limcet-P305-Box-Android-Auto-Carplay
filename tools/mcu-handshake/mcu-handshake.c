@@ -52,6 +52,25 @@
  * sends one either -- it just logs what it receives. If the MCU
  * genuinely expects an ACK we haven't found yet, that's an open item,
  * not something to guess at again.
+ *
+ * 4. 2026-07-22: found via strace (docs/logs/directfb_strace.txt, see
+ *    docs/MCU_ADAPTERS.md's "/dev/ttyS2" section) that MsnCoreApp also
+ *    opens a SECOND, separate serial port -- /dev/ttyS2 at 4800 baud --
+ *    and writes real frames using the 0xFA...0xAF format this tool used
+ *    to build (see point 2 above) before it was corrected: that framing
+ *    IS real (makeProtocolPackage()/getProtocolCheckSum() in
+ *    libMsnCommons.so), just never sent to ttyHS0 -- it goes out ttyS2
+ *    instead. Verified byte-exact against two frames captured live:
+ *      FA 00 13 59 02 02 00 B0 AF                            (heartbeat, repeated)
+ *      FA 00 FF FF 08 6B BF FD 39 20 A1 86 57 B2 AF           (one-off status)
+ *    Structure: [0xFA][arg1][arg2][arg3][len][payload...][chk][0xAF],
+ *    chk = plain XOR over bytes[0 .. 4+len) (i.e. FA..last payload byte
+ *    inclusive, NOT including chk/0xAF themselves) -- confirmed against
+ *    both captures above, byte-exact. What's physically on the other end
+ *    of ttyS2 is NOT yet known (not MCUAdapter_BoxP300 -- that's
+ *    confirmed 38400 baud on ttyHS0 -- likely a separate peripheral, see
+ *    docs/MCU_ADAPTERS.md). --ttys2 mode below replays the two known
+ *    frames and listens for more, using this confirmed encode/decode.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -67,6 +86,11 @@
  * confirmed real baud: 0x00009600 = 38400, 8 data bits, no parity,
  * 1 stop bit. Not a guess, kept as this tool's default. */
 #define DEFAULT_BAUD 38400
+
+/* /dev/ttyS2's real, live-confirmed baud (2026-07-22, from strace --
+ * see docs/MCU_ADAPTERS.md's "/dev/ttyS2" section and the note above). */
+#define TTYS2_DEFAULT_PORT "/dev/ttyS2"
+#define TTYS2_BAUD 4800
 
 static const int SCAN_BAUD_CANDIDATES[] = {
     38400, 115200, 9600, 19200, 57600,
@@ -91,6 +115,19 @@ unsigned char calc_mcu_checksum(const unsigned char *data, int len) {
     for (int i = 0; i < len; i++)
         sum += data[i];
     return (unsigned char)(~sum & 0xFF);
+}
+
+/* ttyS2's 0xFA...0xAF frame checksum: plain XOR over [0xFA .. last
+ * payload byte] inclusive (NOT including the checksum/terminator
+ * bytes themselves). Confirmed byte-exact against two frames captured
+ * live off the real wire -- see the top-of-file note. Distinct from
+ * calc_mcu_checksum(), which is ttyHS0's different one's-complement-
+ * sum algorithm. */
+unsigned char calc_fa_checksum(const unsigned char *data, int len) {
+    unsigned char chk = 0;
+    for (int i = 0; i < len; i++)
+        chk ^= data[i];
+    return chk;
 }
 
 speed_t get_baud_rate(int speed) {
@@ -303,6 +340,149 @@ void listen_forever(int fd, int verbose) {
     }
 }
 
+/* ---- /dev/ttyS2 (0xFA...0xAF format) probing --------------------------
+ * Separate protocol from ttyHS0's [0x2E] frames above -- see the
+ * top-of-file 2026-07-22 note and docs/MCU_ADAPTERS.md's "/dev/ttyS2"
+ * section. Frame: [0xFA][arg1][arg2][arg3][len][payload...][chk][0xAF].
+ * We don't know the semantic meaning of arg1/arg2/arg3 or what's on the
+ * other end -- this just replays the two frames confirmed live off the
+ * wire and logs whatever comes back, the same "probe and observe"
+ * approach as --scan above.
+ */
+void send_fa_frame(int fd, unsigned char arg1, unsigned char arg2, unsigned char arg3,
+                    const unsigned char *payload, int payload_len, int verbose) {
+    unsigned char frame[256];
+    int idx = 0;
+
+    frame[idx++] = 0xFA;
+    frame[idx++] = arg1;
+    frame[idx++] = arg2;
+    frame[idx++] = arg3;
+    frame[idx++] = (unsigned char)payload_len;
+    if (payload_len > 0) {
+        memcpy(&frame[idx], payload, payload_len);
+        idx += payload_len;
+    }
+
+    unsigned char chk = calc_fa_checksum(frame, idx);
+    frame[idx++] = chk;
+    frame[idx++] = 0xAF;
+
+    if (write(fd, frame, idx) < 0) {
+        fprintf(stderr, "Error writing to serial port: %s\n", strerror(errno));
+        return;
+    }
+
+    if (verbose) {
+        printf("[TX] (%d bytes):", idx);
+        for (int i = 0; i < idx; i++)
+            printf(" %02X", frame[i]);
+        printf("\n");
+        fflush(stdout);
+    }
+}
+
+/* Replays the two frames confirmed live on ttyS2 (see top-of-file note):
+ * a repeated short "heartbeat"-looking frame and a longer one-off status
+ * frame. Their real trigger/meaning is unknown -- replaying known-good
+ * traffic is cheap and won't confuse a real peripheral any more than
+ * the app's own normal traffic would. */
+void send_ttys2_probe(int fd, int verbose) {
+    unsigned char heartbeat_payload[2] = { 0x02, 0x00 };
+    unsigned char status_payload[8] = { 0x6B, 0xBF, 0xFD, 0x39, 0x20, 0xA1, 0x86, 0x57 };
+
+    if (verbose)
+        printf("[*] Replaying two frames captured live on ttyS2\n");
+
+    send_fa_frame(fd, 0x00, 0x13, 0x59, heartbeat_payload, 2, verbose);
+    usleep(50000);
+    send_fa_frame(fd, 0x00, 0xFF, 0xFF, status_payload, 8, verbose);
+}
+
+/* Reads and validates one 0xFA...0xAF frame, blocking. Returns 1 with
+ * arg1/arg2/arg3/payload/length filled in on success, 0 on a checksum
+ * mismatch (already logged if verbose), -1 on I/O error. */
+int read_fa_frame(int fd, unsigned char *out_arg1, unsigned char *out_arg2,
+                   unsigned char *out_arg3, unsigned char *out_payload,
+                   unsigned char *out_len, int verbose) {
+    unsigned char sig;
+    if (read(fd, &sig, 1) <= 0)
+        return -1;
+    if (sig != 0xFA)
+        return 0;
+
+    unsigned char header[4]; /* arg1, arg2, arg3, len */
+    int header_read = 0;
+    while (header_read < 4) {
+        int n = read(fd, &header[header_read], 4 - header_read);
+        if (n > 0) header_read += n;
+        else if (n < 0 && errno != EAGAIN && errno != EINTR) break;
+    }
+    if (header_read < 4)
+        return 0;
+
+    unsigned char arg1 = header[0], arg2 = header[1], arg3 = header[2];
+    unsigned char length = header[3];
+
+    unsigned char remaining[256];
+    int req_len = length + 2; /* payload + checksum + terminator */
+    int rem_read = 0;
+    while (rem_read < req_len) {
+        int n = read(fd, &remaining[rem_read], req_len - rem_read);
+        if (n > 0) rem_read += n;
+        else if (n < 0 && errno != EAGAIN && errno != EINTR) break;
+    }
+    if (rem_read < req_len)
+        return 0;
+
+    unsigned char chk_recv = remaining[length];
+    unsigned char terminator = remaining[length + 1];
+
+    unsigned char check_buf[256];
+    check_buf[0] = 0xFA;
+    check_buf[1] = arg1;
+    check_buf[2] = arg2;
+    check_buf[3] = arg3;
+    check_buf[4] = length;
+    memcpy(&check_buf[5], remaining, length);
+    unsigned char chk_calc = calc_fa_checksum(check_buf, 5 + length);
+
+    if (terminator != 0xAF || chk_calc != chk_recv) {
+        if (verbose)
+            printf("[-] ttyS2 frame invalid: term=%02X (want AF), calc %02X, recv %02X\n",
+                   terminator, chk_calc, chk_recv);
+        return 0;
+    }
+
+    if (verbose) {
+        printf("[RX] arg1=%02X arg2=%02X arg3=%02X len=%d:", arg1, arg2, arg3, length);
+        for (int i = 0; i < length; i++)
+            printf(" %02X", remaining[i]);
+        printf("\n");
+        fflush(stdout);
+    }
+
+    *out_arg1 = arg1;
+    *out_arg2 = arg2;
+    *out_arg3 = arg3;
+    *out_len = length;
+    memcpy(out_payload, remaining, length);
+    return 1;
+}
+
+void listen_forever_ttys2(int fd, int verbose) {
+    unsigned char arg1, arg2, arg3, payload[256], len;
+    while (1) {
+        int r = read_fa_frame(fd, &arg1, &arg2, &arg3, payload, &len, verbose);
+        if (r == 1) {
+            printf("[+] ttyS2 frame: arg1=%02X arg2=%02X arg3=%02X len=%d\n",
+                   arg1, arg2, arg3, len);
+            fflush(stdout);
+        }
+        /* r==0: resync/checksum-fail, r==-1: I/O hiccup -- both just loop */
+    }
+}
+
 struct scan_result {
     int baud;
     int valid_frames;
@@ -400,12 +580,15 @@ int main(int argc, char **argv) {
     int scan = 0;
     int scan_duration = 5;
     int no_hello = 0;
+    int ttys2_mode = 0;
+    int port_given = 0;
+    int baud_given = 0;
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-p") == 0 || strcmp(argv[i], "--port") == 0) {
-            if (i + 1 < argc) port = argv[++i];
+            if (i + 1 < argc) { port = argv[++i]; port_given = 1; }
         } else if (strcmp(argv[i], "-b") == 0 || strcmp(argv[i], "--baud") == 0) {
-            if (i + 1 < argc) baud = atoi(argv[++i]);
+            if (i + 1 < argc) { baud = atoi(argv[++i]); baud_given = 1; }
         } else if (strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--verbose") == 0) {
             verbose = 1;
         } else if (strcmp(argv[i], "--scan") == 0) {
@@ -414,10 +597,42 @@ int main(int argc, char **argv) {
                 scan_duration = atoi(argv[++i]);
         } else if (strcmp(argv[i], "--no-hello") == 0) {
             no_hello = 1;
+        } else if (strcmp(argv[i], "--ttys2") == 0) {
+            ttys2_mode = 1;
         } else {
-            fprintf(stderr, "Usage: %s [-p port] [-b baud] [-v] [--scan [seconds_per_baud]] [--no-hello]\n", argv[0]);
+            fprintf(stderr, "Usage: %s [-p port] [-b baud] [-v] [--scan [seconds_per_baud]] "
+                             "[--no-hello] [--ttys2]\n", argv[0]);
             return 1;
         }
+    }
+
+    if (ttys2_mode) {
+        if (!port_given) port = TTYS2_DEFAULT_PORT;
+        if (!baud_given) baud = TTYS2_BAUD;
+
+        printf("[*] --ttys2: opening %s at %d baud (separate protocol from ttyHS0, "
+               "see docs/MCU_ADAPTERS.md)...\n", port, baud);
+        int fd = open(port, O_RDWR | O_NOCTTY | O_NDELAY);
+        if (fd < 0) {
+            fprintf(stderr, "[-] Failed to open serial port %s: %s\n", port, strerror(errno));
+            return 1;
+        }
+        fcntl(fd, F_SETFL, 0);
+        if (set_interface_attribs(fd, baud) < 0) {
+            close(fd);
+            return 1;
+        }
+
+        if (!no_hello)
+            send_ttys2_probe(fd, verbose);
+        else if (verbose)
+            printf("[*] --no-hello given, skipping the two known-frame replay\n");
+
+        printf("[*] Listening for ttyS2 frames. Press Ctrl+C to stop.\n");
+        fflush(stdout);
+        listen_forever_ttys2(fd, verbose);
+        close(fd);
+        return 0;
     }
 
     if (scan) {

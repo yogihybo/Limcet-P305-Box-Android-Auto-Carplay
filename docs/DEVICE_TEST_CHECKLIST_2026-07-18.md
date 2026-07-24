@@ -5423,3 +5423,22 @@ Hardware-confirmed §55's fix works: the AA connection now proceeds all the way 
 **Root cause**: the exact same device-node-path mismatch class of bug as `[[project_memalloc_device_path_fix]]`. The kernel driver (`drivers/soc/arkmicro/hx170dec/hx170dec.c`, `CONFIG_ARK_HX170DEC=y`, built directly into the kernel) registers a misc device named `ark-vdec` (confirmed genuine against stock's own real boot logs -- `docs/logs/archived/new kernel bootlog_260715.txt`: `ark-vdec e0900000.vdec: VDEC controller at ..., irq = 40, misc_minor = 63`, `Product ID: 0x6731 (revision 2.57.8)` -- not a naming bug on our side). `mdev` creates `/dev/ark-vdec` from that name, but userspace's `libmfc.so` was built expecting `/tmp/dev/hx170` -- a path nothing on our rootfs ever created, so every `H264DecInit()` call fails immediately at `open()`.
 
 **Fix**: added `ln -sf /dev/ark-vdec /tmp/dev/hx170` to `rcS`, right alongside the existing `/tmp/dev/memalloc` symlink (same pattern, same section). Plain rootfs change, no kernel rebuild needed. **Not yet hardware-tested.**
+
+## 57. Correcting §56: the "ark-vdec matches stock" claim was wrong (circular comparison), AND the symlink target itself was wrong (two different `.name` fields) (2026-07-24)
+
+User asked to double-check the "`ark-vdec` matches stock" claim from §56 by pointing at the genuine stock reference log, `docs/logs/archived/dmesg live device kernel 3.4 dmeg_260715.txt`. That log shows real stock's driver is a **closed, proprietary `.ko`** identifying as `hx170dec`:
+```
+[10.090000] hx170dec: module license 'Proprietary' taints kernel.
+[10.090000] hx170dec: Compatible HW found at 0xe0900000
+```
+§56's "confirmed genuine against stock's real boot log" claim was based on comparing against `docs/logs/archived/new kernel bootlog_260715.txt` — which is actually **our own reconstructed kernel's** boot log (`Linux version 4.19.192 (osboxes@osboxes)...`), not stock's. That was a circular comparison, not independent confirmation. The real stock device identity is `hx170dec`, not `ark-vdec`.
+
+**Separately, and independent of the naming question: the symlink target in §56's own fix was wrong.** `drivers/soc/arkmicro/hx170dec/hx170dec.c` has *two* different `.name` fields that both happened to look plausible:
+- `struct miscdevice vdec_misc_device`'s name field — this is what `misc_register()` actually uses to create the `/dev/` node. It was `"vdec"`, i.e. the real device was `/dev/vdec`, never `/dev/ark-vdec` at all.
+- `struct platform_driver.driver.name = "ark-vdec"` — only used for `dev_info()`/`dev_warn()` printk prefixes and platform-bus driver matching (this is what actually produced the `"ark-vdec e0900000.vdec: VDEC controller..."` dmesg line that misled the naming investigation).
+
+§56's `rcS` symlink pointed at `/dev/ark-vdec`, which never existed — it would have silently failed (dangling symlink) on the next test, wasting a hardware test cycle.
+
+**Fix**: renamed both fields in the kernel driver to `"hx170dec"` (matching real stock's genuine identity, confirmed via the proprietary module's own dmesg output), and corrected the `rcS` symlink to `ln -sf /dev/hx170dec /tmp/dev/hx170`. The `on2,ark-vdec` DTS `compatible` string was deliberately left untouched — that's a separate, kernel-internal driver-matching string shared across many other board DTS files in this tree, invisible to userspace, and unrelated to either renamed field. Kernel rebuilt clean. **Not yet hardware-tested.**
+
+The ioctl-ABI cross-check from §56 (magic `'k'`, matching `HX170DEC_IOC_*` command numbers between `libmfc.so` and this driver) remains valid and unaffected by either naming mistake -- that check never depended on device-node names.

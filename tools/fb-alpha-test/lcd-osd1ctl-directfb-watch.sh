@@ -128,7 +128,9 @@
 #   lcd-osd1ctl-directfb-watch.sh [--no-hardware | --no-systemonly | --stock-config] [max seconds, default 120]
 # Ctrl-C start_msn_directfb whenever you're done observing (black
 # screen or not) -- the script cleans up and prints the full log
-# either way. Also saved at /tmp/lcd-osd1ctl-directfb-watch.log.
+# either way. Also saved at /lcd-osd1ctl-directfb-watch.log (rootfs
+# root, not /tmp -- /tmp is ramfs/tmpfs and doesn't survive pulling the
+# device's storage off via USB).
 
 LCDC=0xe0500000
 CONTROL=$((LCDC + 0x04))
@@ -143,7 +145,11 @@ case "$1" in
         ;;
 esac
 DURATION="${1:-120}"
-LOG=/tmp/lcd-osd1ctl-directfb-watch.log
+# Logged to the rootfs root (not /tmp) -- /tmp is ramfs/tmpfs here and
+# doesn't survive being pulled off the device via USB. Filename includes
+# the mode so running all four modes back-to-back doesn't overwrite
+# each run's log with the next.
+LOG="/lcd-osd1ctl-directfb-watch.$MODE.log"
 DIRECTFBRC=/etc/directfbrc
 DIRECTFBRC_BACKUP=/tmp/directfbrc.lcd-osd1ctl-watch.bak
 

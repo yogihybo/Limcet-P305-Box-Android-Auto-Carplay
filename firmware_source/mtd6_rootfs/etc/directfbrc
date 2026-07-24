@@ -7,11 +7,45 @@ pixelformat=ARGB
 no-vt
 vsync-after
 no-cursor
-no-layers-clear
-no-surface-clear
-no-sighandler 
+# no-layers-clear / no-surface-clear disabled 2026-07-22: these tell
+# DirectFB to skip clearing newly-allocated layers/surfaces entirely,
+# on the assumption the app always fully repaints every pixel
+# immediately. If MsnCoreApp instead does partial/damage-region-only
+# repaints (common Qt optimization), a freshly-allocated surface's
+# untouched area shows whatever was physically in that memory --
+# genuinely uninitialized/stale content, not app content -- until
+# enough cumulative partial redraws happen to cover it. This is the
+# leading explanation for the persistent black/hidden-content bug in
+# docs/DEVICE_TEST_CHECKLIST_2026-07-18.md (section 20) after four
+# separate kernel-side fixes (IRQ-disable, memory zero-fill,
+# cache-flush, check_var yoffset) all failed with the identical
+# symptom -- letting DirectFB clear on allocation again is the first
+# fix that targets the actual mechanism instead of the kernel driver.
+#no-layers-clear
+#no-surface-clear
+no-sighandler
 #bg-color=00000000
 quiet
 smooth-upscale
 smooth-downscale
+#
+# --- DIAGNOSTIC ONLY, not a permanent fix -- see
+# docs/DEVICE_TEST_CHECKLIST_2026-07-18.md section 21 ---
+# Decompiled libdirectfb_gal.so: its surface pool allocates NEW GPU
+# memory via gcoSURF_Construct (galcore's own memory manager), a
+# genuinely separate physical region from /dev/fb0's DTS-reserved 16MB
+# buffer. Decompiled libdirectfb_fbdev.so's primaryFlipRegion: it computes
+# yoffset = left_lock->offset / left_lock->pitch and passes that straight
+# to FBIOPAN_DISPLAY -- meaningful ONLY if left_lock->offset is relative
+# to fb0's own base. If the actual flipped surface is GAL-pool-backed
+# instead, that offset is garbage relative to fb0, and the kernel happily
+# pans to a bogus-but-in-bounds address within fb0's buffer -- ioctl
+# succeeds, content shows nothing meaningful. This would explain every
+# symptom in the whole red/black/hidden-content investigation.
+# Uncomment the next line to force pure-software rendering (no GPU
+# acceleration at all) as a one-time test: if this alone makes the UI
+# render correctly (just slower), it CONFIRMS the GAL-pool mismatch as
+# root cause. Re-comment it afterward -- this is not meant to ship,
+# it's strictly to confirm/deny the theory.
+#no-hardware
 # directfbrc end

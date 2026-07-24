@@ -51,8 +51,33 @@
 # the next step should look elsewhere (DirectFB surface pixel format,
 # Y2R coefficients, or GAL/libGAL.so's own color handling).
 #
+# --no-hardware: the black-screen leading theory is a GAL-pool vs fb0-
+# offset mismatch (libdirectfb_gal.so allocates surfaces from galcore's
+# own GPU memory via gcoSURF_Construct, separate from /dev/fb0's DTS-
+# reserved buffer; primaryFlipRegion()'s yoffset math is only valid if
+# the surface is fb0-backed -- if it's GAL-pool-backed instead, the pan
+# ioctl succeeds but pans to a valid-but-wrong, never-written address).
+# start_msn_directfb already sets QWS_DISPLAY's "systemonly" flag to
+# force fb0-backed surface allocation (added 2026-07-22) -- if the
+# black screen still happens with that in place, systemonly alone isn't
+# sufficient (either it doesn't cover every surface DirectFB allocates,
+# or this isn't the real cause). --no-hardware goes one step further:
+# it forces DirectFB into pure software rendering, no GPU/GAL surfaces
+# at all, via /etc/directfbrc's commented-out "no-hardware" line. If
+# the black screen disappears (just slower) with --no-hardware but NOT
+# with systemonly alone, that confirms GPU/GAL involvement as the root
+# cause and narrows it to something systemonly doesn't cover. If it
+# STILL happens even with --no-hardware, the GPU/GAL pool theory is
+# ruled out entirely and the bug is elsewhere (colorkey, alpha
+# compositing, or something outside DirectFB's rendering path).
+#
+# This flag backs up /etc/directfbrc, uncomments "no-hardware", runs
+# the normal watch+start_msn_directfb flow, then restores the original
+# file unconditionally (trap on EXIT/INT/TERM) -- no-hardware is
+# explicitly not meant to ship enabled, so this never leaves it on.
+#
 # Usage:
-#   lcd-osd1ctl-directfb-watch.sh [max seconds to run, default 120]
+#   lcd-osd1ctl-directfb-watch.sh [--no-hardware] [max seconds, default 120]
 # Ctrl-C start_msn_directfb whenever you're done observing (black
 # screen or not) -- the script cleans up and prints the full log
 # either way. Also saved at /tmp/lcd-osd1ctl-directfb-watch.log.
@@ -62,8 +87,15 @@ CONTROL=$((LCDC + 0x04))
 OSD1_CTL=$((LCDC + 0x74))
 OSD1_ADDR=$((LCDC + 0x80))
 
+NO_HARDWARE=0
+if [ "$1" = "--no-hardware" ]; then
+    NO_HARDWARE=1
+    shift
+fi
 DURATION="${1:-120}"
 LOG=/tmp/lcd-osd1ctl-directfb-watch.log
+DIRECTFBRC=/etc/directfbrc
+DIRECTFBRC_BACKUP=/tmp/directfbrc.lcd-osd1ctl-watch.bak
 
 decode_osd1ctl() {
     val="$1"
@@ -79,8 +111,29 @@ decode_control() {
     printf "OSD1_enabled=%d" "$o1"
 }
 
+restore_directfbrc() {
+    if [ -f "$DIRECTFBRC_BACKUP" ]; then
+        cp "$DIRECTFBRC_BACKUP" "$DIRECTFBRC"
+        rm -f "$DIRECTFBRC_BACKUP"
+        echo "[--no-hardware] restored original $DIRECTFBRC" >> "$LOG"
+    fi
+}
+
 : > "$LOG"
 echo "=== lcd-osd1ctl-directfb-watch.sh ===" | tee -a "$LOG"
+
+if [ "$NO_HARDWARE" = "1" ]; then
+    echo "Mode: --no-hardware (forcing pure software DirectFB rendering, no GPU/GAL surfaces)" | tee -a "$LOG"
+    cp "$DIRECTFBRC" "$DIRECTFBRC_BACKUP"
+    trap restore_directfbrc EXIT INT TERM
+    sed -i 's/^#no-hardware$/no-hardware/' "$DIRECTFBRC"
+    if ! grep -q '^no-hardware$' "$DIRECTFBRC"; then
+        echo "[--no-hardware] WARNING: couldn't find the commented '#no-hardware' line in $DIRECTFBRC to enable -- check it hasn't moved/changed." | tee -a "$LOG"
+    fi
+else
+    echo "Mode: normal (GPU/GAL rendering as configured, including start_msn_directfb's existing 'systemonly' flag)" | tee -a "$LOG"
+fi
+
 echo "Baseline (before starting DirectFB):" | tee -a "$LOG"
 base_ctl=$(devmem $OSD1_CTL 32)
 base_control=$(devmem $CONTROL 32)

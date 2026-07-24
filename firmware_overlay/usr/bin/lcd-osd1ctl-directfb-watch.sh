@@ -153,6 +153,14 @@ LOG="/lcd-osd1ctl-directfb-watch.$MODE.log"
 DIRECTFBRC=/etc/directfbrc
 DIRECTFBRC_BACKUP=/tmp/directfbrc.lcd-osd1ctl-watch.bak
 
+# Plain shell replacement for `echo ... | tee -a "$LOG"` -- this
+# device's busybox doesn't have tee available. Prints to stdout and
+# appends to $LOG.
+log() {
+    echo "$1"
+    echo "$1" >> "$LOG"
+}
+
 decode_osd1ctl() {
     val="$1"
     fmt=$(( (val >> 12) & 0xF ))
@@ -176,46 +184,46 @@ restore_directfbrc() {
 }
 
 : > "$LOG"
-echo "=== lcd-osd1ctl-directfb-watch.sh (mode: $MODE) ===" | tee -a "$LOG"
+log "=== lcd-osd1ctl-directfb-watch.sh (mode: $MODE) ==="
 
 case "$MODE" in
     no-hardware)
-        echo "Forcing pure software DirectFB rendering (no GPU/GAL surfaces at all)." | tee -a "$LOG"
+        log "Forcing pure software DirectFB rendering (no GPU/GAL surfaces at all)."
         cp "$DIRECTFBRC" "$DIRECTFBRC_BACKUP"
         trap restore_directfbrc EXIT INT TERM
         sed -i 's/^#no-hardware$/no-hardware/' "$DIRECTFBRC"
         if ! grep -q '^no-hardware$' "$DIRECTFBRC"; then
-            echo "WARNING: couldn't find the commented '#no-hardware' line in $DIRECTFBRC to enable -- check it hasn't moved/changed." | tee -a "$LOG"
+            log "WARNING: couldn't find the commented '#no-hardware' line in $DIRECTFBRC to enable -- check it hasn't moved/changed."
         fi
         ;;
     no-systemonly)
-        echo "Removing the 'systemonly' QWS_DISPLAY flag (GPU/GAL still on, pool selection unconstrained)." | tee -a "$LOG"
+        log "Removing the 'systemonly' QWS_DISPLAY flag (GPU/GAL still on, pool selection unconstrained)."
         export QWS_DISPLAY="directfb:boundingrectflip:mmWidth220:mmHeight120:0"
         ;;
     stock-config)
-        echo "Restoring stock's exact real config: QWS_DISPLAY without 'systemonly', and directfbrc's no-layers-clear/no-surface-clear re-enabled (both of those are our own theory-driven divergences from stock, not things stock itself needs)." | tee -a "$LOG"
+        log "Restoring stock's exact real config: QWS_DISPLAY without 'systemonly', and directfbrc's no-layers-clear/no-surface-clear re-enabled (both of those are our own theory-driven divergences from stock, not things stock itself needs)."
         export QWS_DISPLAY="directfb:boundingrectflip:mmWidth220:mmHeight120:0"
         cp "$DIRECTFBRC" "$DIRECTFBRC_BACKUP"
         trap restore_directfbrc EXIT INT TERM
         sed -i 's/^#no-layers-clear$/no-layers-clear/' "$DIRECTFBRC"
         sed -i 's/^#no-surface-clear$/no-surface-clear/' "$DIRECTFBRC"
         if ! grep -q '^no-layers-clear$' "$DIRECTFBRC" || ! grep -q '^no-surface-clear$' "$DIRECTFBRC"; then
-            echo "WARNING: couldn't find the commented '#no-layers-clear'/'#no-surface-clear' lines in $DIRECTFBRC to enable -- check they haven't moved/changed." | tee -a "$LOG"
+            log "WARNING: couldn't find the commented '#no-layers-clear'/'#no-surface-clear' lines in $DIRECTFBRC to enable -- check they haven't moved/changed."
         fi
         ;;
     normal)
-        echo "GPU/GAL on, systemonly on (this reconstruction's current defaults)." | tee -a "$LOG"
+        log "GPU/GAL on, systemonly on (this reconstruction's current defaults)."
         ;;
 esac
 
-echo "Baseline (before starting DirectFB):" | tee -a "$LOG"
+log "Baseline (before starting DirectFB):"
 base_ctl=$(devmem $OSD1_CTL 32)
 base_control=$(devmem $CONTROL 32)
 base_addr=$(devmem $OSD1_ADDR 32)
-printf "  OSD1_CTL=%s (%s)\n" "$base_ctl" "$(decode_osd1ctl "$base_ctl")" | tee -a "$LOG"
-printf "  CONTROL=%s (%s)\n" "$base_control" "$(decode_control "$base_control")" | tee -a "$LOG"
-printf "  OSD1_ADDR=%s\n" "$base_addr" | tee -a "$LOG"
-echo | tee -a "$LOG"
+log "  OSD1_CTL=$base_ctl ($(decode_osd1ctl "$base_ctl"))"
+log "  CONTROL=$base_control ($(decode_control "$base_control"))"
+log "  OSD1_ADDR=$base_addr"
+log ""
 
 (
     prev_ctl=""
@@ -244,12 +252,12 @@ echo | tee -a "$LOG"
 POLLER_PID=$!
 
 killall MsnCoreApp 2>/dev/null
-echo "Starting start_msn_directfb -- watch the screen, Ctrl-C when done (black screen or not)..." | tee -a "$LOG"
+log "Starting start_msn_directfb -- watch the screen, Ctrl-C when done (black screen or not)..."
 start_msn_directfb
 
 kill "$POLLER_PID" 2>/dev/null
 wait "$POLLER_PID" 2>/dev/null
 
-echo | tee -a "$LOG"
+log ""
 echo "=== Full log ($LOG) ==="
 cat "$LOG"

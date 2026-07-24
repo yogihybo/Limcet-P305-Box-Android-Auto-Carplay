@@ -34,15 +34,23 @@ sync
 mkdir -p /tmp/dev
 ln -sf /dev/memalloc /tmp/dev/memalloc
 
-# Same story for libmfc.so's H.264/MPEG2 software decoder (the Hantro
+# Same story for libmfc.so's H.264/MPEG2 hardware decoder (the Hantro
 # hx170dec DWL backend usr/bin/sink's VideoDecoder actually calls into for
 # Android Auto video, confirmed via decompile 2026-07-24 -- contradicts an
 # earlier session's wrong assumption that AA video decode never touches
-# hx170dec) -- it hardcodes /tmp/dev/hx170. The kernel driver's own name
-# ("ark-vdec", confirmed genuine/matches stock's real boot log, not a
-# naming bug on our side) means mdev creates /dev/ark-vdec, never anything
-# at /tmp/dev/hx170, so every H264DecInit() call fails immediately on
-# open(). See docs/DEVICE_TEST_CHECKLIST_2026-07-18.md section 56.
+# hx170dec) -- it hardcodes /tmp/dev/hx170. The kernel driver's own device
+# node name is "ark-vdec" (confirmed genuine/matches stock's real boot
+# log, not a naming bug on our side -- it's the vendor's own chosen name
+# for this Hantro IP block on this SoC, same "ark-vdec e0900000.vdec:
+# VDEC controller..." dev_info() line stock prints too). Cross-checked at
+# the ioctl-ABI level, not just the name: libmfc.so's ioctl() calls use
+# magic 'k' (0x6b) with the exact HX170DEC_IOC_* command numbers this
+# driver implements (drivers/soc/arkmicro/hx170dec/hx170dec.h) -- this is
+# genuinely the same device/protocol, not a coincidental name match. mdev
+# creates /dev/ark-vdec, never anything at /tmp/dev/hx170, so every
+# H264DecInit() call failed immediately on open(). See
+# docs/DEVICE_TEST_CHECKLIST_2026-07-18.md section 56.
+echo "device-node compat symlinks: /dev/ark-vdec (Hantro hx170dec H.264/MPEG2 hardware decoder, used by Android Auto video) -> /tmp/dev/hx170"
 ln -sf /dev/ark-vdec /tmp/dev/hx170
 
 touchdriver="/msnprofile/ark1680_ts"

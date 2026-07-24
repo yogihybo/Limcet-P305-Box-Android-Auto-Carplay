@@ -219,10 +219,54 @@ backend, all C++-mangled `DirectFB::Task*`/`DirectFB::Renderer`/
 `std::deque</vector</Rb_tree<...Task...` symbols) that nothing on this
 device calls into directly -- safe to be absent.
 
-## Result (both fixes)
+### `GLIBCXX_3.4.21' not found` at runtime -- statically link libstdc++/libgcc into the core library
+
+First hardware test of the core-library rebuild failed to even load:
+`EffectWatch: /lib/libstdc++.so.6: version 'GLIBCXX_3.4.21' not found
+(required by /usr/lib/libdirectfb-1.7.so.4)`. The deployed rootfs's
+`libstdc++.so.6.0.20` tops out at `GLIBCXX_3.4.20` (an older GCC ~4.8/
+4.9-era build); the Linaro 7.3.1 toolchain this project's kernel/rootfs
+build otherwise uses requires `GLIBCXX_3.4.21` (introduced in GCC 5) for
+some C++11 standard library symbols DirectFB's core (the `Task`/
+`Renderer` C++ engine, see above) pulls in. `systems/fbdev/libdirectfb_fbdev.so`
+is plain C and was never affected -- this only hit the new core library.
+
+Fix: link libstdc++ and libgcc statically into the core `.so` instead of
+depending on the runtime's older shared copy. `-static-libstdc++
+-static-libgcc` on the `g++`/libtool command line does **not** work --
+libtool's C++ (`--tag=CXX`) link mode builds with `-nostdlib` and adds
+its own hardcoded `-lstdc++ ... -lgcc_s` at the end, silently dropping
+those flags. Instead, captured libtool's real underlying link command
+(`make V=1 ... libdirectfb.la`) and re-ran it by hand with `-lstdc++
+-lgcc` wrapped in `-Wl,-Bstatic ... -Wl,-Bdynamic` to force just those
+two archives to link statically while everything else (`libdirect`,
+`libfusion`, `libc`, `libm`, `libpthread`, `libdl`, `librt`) stays
+dynamic as before.
+
+**Caveat found and fixed**: statically linking a library into a shared
+object by default re-exports every one of its global symbols into the
+resulting `.so`'s own dynamic symbol table (`nm -D --defined-only` count
+jumped from 1916 to 2707). Beyond ABI-verification noise, this is a real
+risk on a system with other processes also dynamically linking the
+*real* `libstdc++.so.6`/`libgcc_s.so.1` -- symbol interposition between
+two different libstdc++ builds sharing a process/address space (or even
+just the dynamic loader's global symbol scope on some configurations)
+can misbehave in subtle ways. Fixed with `-Wl,--exclude-libs=libstdc++.a
+-Wl,--exclude-libs=libgcc.a` (two separate `-Wl,` flags -- combining them
+as `-Wl,--exclude-libs=a.a,b.a` gets comma-split by gcc's driver into a
+bogus positional linker argument, `ld: cannot find libgcc.a`, since gcc
+splits every `-Wl,` argument on commas before forwarding it). Result:
+back to exactly 1916 exported symbols, byte-identical to the dynamically-
+linked build's own symbol set, confirmed via diff.
+
+Verified: zero `GLIBCXX_*` version requirements at all
+(`objdump -T | grep GLIBCXX`, empty output) and no `libstdc++.so.6`/
+`libgcc_s.so.1` `NEEDED` entries (`readelf -d`) in the final binary.
+
+## Result (both fixes + static libstdc++)
 
 Deployed:
 - `firmware_overlay/usr/lib/directfb-1.7-4/systems/libdirectfb_fbdev.so`
-- `firmware_overlay/usr/lib/libdirectfb-1.7.so.4.0.0` (new)
+- `firmware_overlay/usr/lib/libdirectfb-1.7.so.4.0.0` (new, statically links libstdc++/libgcc)
 
 Not yet hardware-tested at time of writing.

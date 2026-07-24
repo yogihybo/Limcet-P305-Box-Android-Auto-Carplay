@@ -159,15 +159,23 @@ modprobe rtl8811cu
 mkdir -p /data
 touch /data/udhcpd.leases
 
-# Reverted to stock default 2026-07-17: host the carplay_wifi AP again,
-# matching real device behavior for wireless CarPlay. Was switched to
-# WiFi client (STA) mode 2026-07-14 for easier SSH/testing access during
-# development -- a single WiFi radio can't be an AP and a client at the
-# same time, so that replaced (didn't run alongside) the AP. STA mode is
-# still available by hand if needed for testing: comment the line below
-# back out and uncomment/run etc/wifi_client.sh instead (see
+# Disabled 2026-07-24: this static-SSID AP (etc/wifi_ap.sh, added by this
+# reconstruction project -- confirmed absent from the real stock rootfs
+# dump) was previously believed to match stock's real boot behavior, but
+# that was never actually verified against a live wireless Android
+# Auto/CarPlay connection. It does the opposite: `sink` (usr/bin/sink)
+# dynamically generates a per-connection SSID (e.g. "carplay_fc9f") and
+# tells the phone to join THAT network over Bluetooth (confirmed via
+# decompile + a live connection log, docs/DEVICE_TEST_CHECKLIST_2026-07-18.md).
+# With this static "carplay_wifi" AP already bound to wlan0 from boot,
+# sink's own attempt to (re)configure hostapd to match never takes
+# effect, the phone can't find/join the SSID it was told, and it reports
+# connect_status=0 (failure) back over Bluetooth -- exactly the "connects
+# via Bluetooth, video never loads" symptom. Leaving wlan0 free for
+# sink's own dynamic AP setup instead. STA mode is still available by
+# hand if needed for SSH/testing: uncomment/run etc/wifi_client.sh (see
 # docs/DRIVER_TEST_PLAN.md and the comment at the top of each script).
-/etc/wifi_ap.sh &
+#/etc/wifi_ap.sh &
 #/etc/wifi_client.sh &
 
 # --- diagnostic tools banner (firmware_overlay/prado) ---

@@ -5336,3 +5336,46 @@ investigated — worth checking after confirming §51's Flip fix, since a
 moving/wave-like tint is more consistent with a buffer-rotation or
 partial-initialization artifact than a static blend-mode
 misconfiguration (which would produce a constant, not moving, tint).
+
+## 52. Real bug found while digging into the "red shade in waves" report: `lcd_wiring_mode` and the LCDC's `rgb_order` hardware field use two DIFFERENT numbering schemes for the same six orderings (2026-07-24)
+
+User's latest hardware report while testing §51's Flip fix: `linuxfb` shows no red shade, "just the colours appear inverted"; `directfb` shows the previously-reported moving red shade; the factory `LCDTest` color-bar pattern shows its top 4 bars all as solid red. Investigated the "colours appear inverted" / bar-color symptom directly (the moving-red-waves theory investigation continues separately, see below).
+
+**Found via source inspection, not speculation — the codebase itself defines two different enums for the same six RGB orderings, with different numeric values:**
+
+```c
+// ark_lcdc_common.h — DTS/pdata-facing "wiring mode" enum
+#define ARK_LCDC_WIRING_BGR  0
+#define ARK_LCDC_WIRING_GBR  1
+#define ARK_LCDC_WIRING_RBG  2
+#define ARK_LCDC_WIRING_BRG  3
+#define ARK_LCDC_WIRING_GRB  4
+#define ARK_LCDC_WIRING_RGB  5
+
+// ark_lcdc_common.h — hardware register's own rgb_order field encoding
+// (confirmed independently against a debug string found in stock's
+// vmlinux.elf during the earlier §alpha-blend investigation:
+// "rgb_order: 0=rgb, 1=rbg, 2=grb, 3=gbr, 4=brg, 5=bgr")
+enum ark_lcdc_rgb_order {
+	ARK_LCDC_ORDER_RGB,   // 0
+	ARK_LCDC_ORDER_RBG,   // 1
+	ARK_LCDC_ORDER_GRB,   // 2
+	ARK_LCDC_ORDER_GBR,   // 3
+	ARK_LCDC_ORDER_BRG,   // 4
+	ARK_LCDC_ORDER_BGR,   // 5
+};
+```
+
+`ark1668_lcdfb_set_par()` (OSD1's `rgb_order` write, added earlier this session in §33) and the OSD2/OSD3 init path in `ark1668_lcdc_funcs.c` (§36) both wrote `pdata->lcd_wiring_mode` straight into the hardware's `rgb_order` bitfield, unchanged. For this board's real wiring (`ARK_LCDC_WIRING_BGR = 0`, matching `RgbMode=0` in `FactoryConfig.ini`), the hardware received `rgb_order = 0` — which the hardware's own encoding defines as **"rgb" (no reorder at all)**, not "bgr". Every wiring mode except the coincidental identity case (`GRB`, both enums number it differently but happens not to matter here) got the wrong hardware value.
+
+This is a genuine, previously-undiscovered bug in this session's own earlier `rgb_order` work (§33/§36) — the extensive `rgb_order` 0-5 sweep done days earlier (see `project_lcd_alpha_blend_investigation` memory, "exhausted" conclusion) never actually tested this exact combination, because it varied `rgb_order` independently while `var.red/blue.offset` were held at unrelated fixed values — it couldn't have found this, since the bug is in the *mapping* from wiring mode to hardware value, not in the register or offsets themselves.
+
+**Why this explains "colours appear inverted" on `linuxfb`:** `check_var()`'s `var.red.offset`/`var.blue.offset` (fixed earlier this session, §33-38) are correctly wiring-mode-aware — Qt writes pixel bytes in the right software order for BGR wiring. But the *hardware*'s own `rgb_order` field (which reorders channels again at the LCDC's own scan-out/blend stage, independent of what software wrote) was applying "rgb" (identity/no swap) instead of the needed "bgr" swap — undoing the correctness of the software-side fix and leaving red/blue effectively swapped on screen, which reads as "inverted" colors.
+
+**Relevance to the red-waves/DirectFB investigation:** DirectFB's own `primaryInitLayer()` never consults `var.red/blue.offset` at all (confirmed in §35 much earlier) — DirectFB's correctness depends *entirely* on this same hardware `rgb_order` field. So this bug affects `directfb` too, likely as a **contributing factor**, not the sole cause: a wrong static R/B swap layered underneath whatever is producing the additional moving/wave-like red-alpha artifact (see below). Fixing this may improve, but is not expected to fully resolve, the DirectFB symptom by itself.
+
+**Fix:** added `ark_lcdc_wiring_to_rgb_order()` (`ark_lcdc_common.h`), an explicit translation table between the two enums, and applied it at all three raw-`lcd_wiring_mode`-into-hardware-field call sites (`ark1668_lcdfb.c`'s `ARK1668_LCDC_CONTROL` init write and its `ARK1668_LCDC_OSD1_CTL` per-`set_par` write; `ark1668_lcdc_funcs.c`'s OSD2/OSD3 `ARKFB_INIT_VIDEO_DISPLAY` handler). Deliberately did NOT touch the other three `ark1668_lcdc_set_osd_format()` call sites in `ark1668_lcdc_funcs.c` (`VIN_SET_WINDOW_FORMAT`, `ARKFB_SET_WINDOW_FORMAT`, the atomic-layer path) — those all take `rgb_order` directly from a raw userspace-supplied payload, which (since userspace was built against the real vendor headers) is already in the hardware's own encoding; translating it again would be wrong. Also left the `ark1668e`/`arkn141` board-variant drivers alone (different hardware, not what this board uses). Kernel rebuilt clean via `build_kernel.sh`. **Not yet hardware-tested.**
+
+**Still open, not yet explained: the moving/wave-like quality of the red shade, and why it's `directfb`-only.** Traced a plausible mechanism, not yet confirmed: DirectFB's primary surface uses `DSPF_RGB32` (confirmed via real DirectFB 1.7.7 source, `include/directfb.h`), whose top byte is explicitly documented as **"nothing"** (undefined/unused) — unlike `DSPF_ARGB`'s meaningful alpha top byte. This board's LCDC has per-pixel alpha blending enabled for OSD1 (`MODE_LCD_REG1` bits 12/13, confirmed live via `devmem` in the earlier alpha-blend investigation, matches stock) and format=RGBA888 (confirmed matches stock too) — meaning the hardware DOES read that "nothing" byte as real alpha, regardless of whether the software populated it meaningfully. Qt's own raster engine (used by `linuxfb`) is documented to always store `0xff` in that byte for `Format_RGB32`, so `linuxfb` never exposes this gap. DirectFB's own software/GPU-accelerated rasterizer has no such documented guarantee, and this board's GPU stack (`libGAL.so`/`galcore.ko` 6.2.4.p1.8) is a different driver generation than stock's original (5.0.11.28018) — plausible that it doesn't reliably fill that byte to `0xff` the way stock's original blob did. Combined with §49-51's fix (the primary surface is now genuinely `fb0`-backed and persists across frames, rather than fresh GPU memory each time), a garbage/leftover alpha byte would become "sticky" and shift as different screen regions get redrawn — a plausible mechanism for a moving, partial reveal of whatever's underneath OSD1, tinted by BACK_COLOR or another layer. `BACK_COLOR` itself is confirmed set to black (matching stock) so it's not a direct red source on its own — if this theory is right, the red must come from residual alpha-composited content from an earlier frame, not the current backcolor.
+
+**Next diagnostic step (not yet run):** with the red-wave symptom showing, live `devmem` reads of `MODE_LCD_REG1` (confirm bits 12/13 are still on) and a targeted experiment — temporarily clearing OSD1's per-pixel-alpha-blend-enable bit — would directly confirm or rule out this mechanism. If red waves disappear with that bit cleared, this is confirmed; if not, the mechanism is something else (worth checking OSD2/OSD3/VIDEO1/VIDEO2 enable state and content next, since a "no signal" video-decoder red-screen pattern bleeding through a compositing gap is also a plausible, not yet ruled out, alternative explanation for a moving/rolling red artifact).

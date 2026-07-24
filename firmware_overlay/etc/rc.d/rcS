@@ -34,6 +34,17 @@ sync
 mkdir -p /tmp/dev
 ln -sf /dev/memalloc /tmp/dev/memalloc
 
+# Same story for libmfc.so's H.264/MPEG2 software decoder (the Hantro
+# hx170dec DWL backend usr/bin/sink's VideoDecoder actually calls into for
+# Android Auto video, confirmed via decompile 2026-07-24 -- contradicts an
+# earlier session's wrong assumption that AA video decode never touches
+# hx170dec) -- it hardcodes /tmp/dev/hx170. The kernel driver's own name
+# ("ark-vdec", confirmed genuine/matches stock's real boot log, not a
+# naming bug on our side) means mdev creates /dev/ark-vdec, never anything
+# at /tmp/dev/hx170, so every H264DecInit() call fails immediately on
+# open(). See docs/DEVICE_TEST_CHECKLIST_2026-07-18.md section 56.
+ln -sf /dev/ark-vdec /tmp/dev/hx170
+
 touchdriver="/msnprofile/ark1680_ts"
 
 if [ -e $touchdriver ]; then

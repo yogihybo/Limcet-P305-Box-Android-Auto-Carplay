@@ -5602,3 +5602,22 @@ devmem 0xe0500340 32   # VIDEO2_ADDR3
 ```
 
 Not yet hardware-tested.
+
+## 68. Root cause found for deterministic black cells in factory LCDTest color chart: `--disable-debug-support` broke D_MAGIC ABI compatibility with the closed-source GAL module (2026-07-25)
+
+User ran the factory `LCDTest -qws` command explicitly under `directfb` (`QWS_DISPLAY=directfb:boundingrectflip:mmWidth220:mmHeight120:0 LCDTest -qws`) to isolate a deterministic visual bug found in an earlier photo of the color-test chart -- two specific cells (60%/70% in the red intensity ramp) always rendered solid black while every other cell in the same row was correct, and the same column positions in other rows (green/blue) rendered fine. This immediately crashed:
+
+```
+(!) [LCDTest] *** Assertion [(pool)->magic == D_MAGIC("CoreSurfacePool")] failed *** [gc_dfb_pool.c:78 in galInitPool()]
+(-) [LCDTest] Direct/Trap: Raising signal 5 from Assertion...
+```
+
+**Root cause, confirmed via DirectFB source, not guessed**: `D_MAGIC_SET`/`D_MAGIC_ASSERT` (`lib/direct/debug.h`) are gated by `#if DIRECT_BUILD_DEBUGS` -- when disabled, `D_MAGIC_SET` becomes a complete no-op (never writes the `magic` field into a struct at all), while `D_MAGIC_ASSERT` still checks it under the SAME disabled-debug build (also a no-op) but NOT necessarily on the other side of a cross-module boundary. `libdirectfb_gal.so` (GAL, the GPU 2D-acceleration system module) is the **original, unmodified, closed-source vendor binary** -- never rebuilt by this project. It calls `D_MAGIC_ASSERT` on a `CoreSurfacePool` struct that *our* rebuilt core library allocates and initializes (via `dfb_surface_pool_register()`-style code) before handing control to GAL's `InitPool()` callback. The core-library rebuild in checklist §50 used `--disable-debug-support` (`DIRECT_BUILD_DEBUGS=0`) purely to shrink the binary closer to stock's size -- this silently made `D_MAGIC_SET` a no-op on our side, so the `magic` field was never written (stayed zero-initialized). GAL's own precompiled code, built with debug support enabled (whatever the original vendor's build settings were), still performs the real check -- `0 != D_MAGIC("CoreSurfacePool")` -- and asserts.
+
+This directly explains the deterministic black-cell artifact too: GPU-accelerated surface pool registration/allocation involving GAL was fundamentally broken by this ABI mismatch, not crashing outright in every code path but producing inconsistent/wrong results for some GAL-backed allocations -- consistent with isolated, deterministic (not random) wrong cells rather than a uniform color/channel problem.
+
+**Fix**: reconfigured and rebuilt the DirectFB core library and `fbdev.so` with debug support **re-enabled** (removed `--disable-debug-support`, confirmed `DIRECT_BUILD_DEBUGS=1` in `config.log`), matching GAL's expectation. This reverses the size optimization from §50 -- core library is back to ~9.98MB (debug-enabled + statically-linked libstdc++/libgcc from §53, both still needed) instead of the previous ~1.16MB. Correctness matters more than matching stock's binary size here; the size-matching was never load-bearing, just a nice-to-have that turned out to have a real functional cost.
+
+Re-verified after rebuild: zero `GLIBCXX_*` requirements (§53's static-libstdc++ fix still holds, unaffected by debug-support setting), `fbdev.so` exported symbols unchanged (28/28), core library exported symbols unchanged (1916, matching the debug-disabled build's set exactly -- confirms `DIRECT_BUILD_DEBUGS` only affects internal assertions, not the public symbol table). SONAME/NEEDED fixup reapplied to both files.
+
+Deployed: `firmware_overlay/usr/lib/libdirectfb-1.7.so.4.0.0`, `firmware_overlay/usr/lib/directfb-1.7-4/systems/libdirectfb_fbdev.so`. **Not yet hardware-tested** -- this should fix both the `LCDTest` crash under `directfb` and, if the mechanism theory above is right, the deterministic black-cell rendering artifact.

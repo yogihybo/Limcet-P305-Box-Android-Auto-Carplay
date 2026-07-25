@@ -5539,3 +5539,31 @@ Followed up on §61/§63's colorkey lead by checking the real blend-mode semanti
 Stock's confirmed live `MODE_LCD_REG1=0x00033001` has both OSD1 bits set (12=1, 13=1). The exact hardware semantics of "blend with back color" aren't fully resolvable from source comments alone -- could mean OSD1 blends against the fixed `BACK_COLOR` register specifically (independent of whatever's stacked beneath it, i.e. potentially unrelated to VIDEO_LAYER visibility), or could describe how OSD1's own undrawn/edge pixels get filled. Not resolved further via static tracing -- reached diminishing returns without a real datasheet.
 
 **Where this leaves the AA black-screen investigation**: the "DirectFB's undefined `DSPF_RGB32` alpha byte, consumed as real per-pixel alpha" theory remains the best-supported remaining lead (OSD1 genuinely uses pixel alpha, confirmed via bit12), but confidence in exactly *what* it blends against is now lower than previously stated, given the newly-found back-color-blend bit's unclear role. §61's `devmem` reads (`MODE_LCD_REG0`, `MODE_LCD_REG1`, `VIDEO_ADDR1`, `VIDEO_CTL`, OSD1 colorkey) remain the concrete next step -- static tracing of this specific mechanism has reached the point of diminishing returns without live data or a real hardware datasheet.
+
+## 65. Found and implemented a genuinely missing ioctl: `ARKFB_SET_BLEND` (0x40104f29), traced to the exact bit positions via real stock kernel disassembly (2026-07-25)
+
+Follow-up to §61-64's layer-priority/colorkey trace, which reached diminishing returns via static analysis. Pivoted to checking whether the real stock kernel has a *dynamic* mechanism for configuring blend parameters at runtime (as opposed to the static, boot-time-only config traced so far).
+
+**Found it**: `ark_fb_set_blend()` in stock's real kernel (`vmlinux.elf`), dispatched from `ark_disp_fb_ioctl`'s comparison chain at literal ioctl value `0x40104f29` (`_IOW('O', 41, <16-byte struct>)`, confirmed via direct disassembly of the `movw`/`movt`/`cmp`/`beq` sequence, not inferred). Copies a 16-byte struct from userspace (`{alpha_blend_en, per_pix_alpha_blend_en, blend_mode, alpha}`, layer determined by which `/dev/fbN` the fd was opened against, same convention as every other ioctl in this driver) and dispatches to per-layer setter functions -- for OSD layers, the same `ark_disp_set_osd_alpha_blend_en_lcd`/`per_pix_alpha_blend_en_lcd` functions already traced in §64; for VIDEO layers, genuinely new functions (`ark_disp_set_video_alpha_blend_en_lcd`, `ark_disp_set_video_per_pix_alpha_blend_en_lcd`, `ark_disp_set_video_blend_mode_lcd`, `ark_disp_set_video_alpha`) that had no equivalent in our driver at all.
+
+**This was completely unimplemented in our reconstruction** -- confirmed via grep, no trace of ioctl `0x40104f29` or `ARKFB_SET_BLEND` anywhere in `ark1668_lcdc_funcs.c`/`ark_lcdc_common.h` before this fix.
+
+**Exact bit positions extracted via direct disassembly** (all in `MODE_LCD_REG0`/`MODE_LCD_REG1`, LCDC+0x60/0x64):
+- `ark_disp_set_video_alpha_blend_en_lcd`: video=bit11, video2=bit9 (MODE_LCD_REG1)
+- `ark_disp_set_video_per_pix_alpha_blend_en_lcd`: video=bit10, video2=bit8 (MODE_LCD_REG1)
+- `ark_disp_set_video_blend_mode_lcd`: video=`MODE_LCD_REG0` bits[7:4], video2=`MODE_LCD_REG1` bits[7:4] -- **a different register per layer**, not just a different bit offset within the same register like every other field traced this session.
+- `ark_disp_set_video_alpha`: writes `VIDEO_VIDEO2_BLD_COEF` (0x48) -- video in the low byte, video2 in bits[15:8], matching U-Boot's own `ark_set_video_alpha()`/`ark_set_video2_alpha()` exactly.
+
+This also completes the `MODE_LCD_REG1` bit map for all 5 layers (video2=8/9, video=10/11, OSD1=12/13, OSD2=14/15, OSD3=16/17 -- alternating per-pix-select/blend-with-backcolor-en pairs).
+
+**Decoding stock's confirmed live `MODE_LCD_REG0`/`REG1` dump against these exact bit positions**: VIDEO's `alpha_blend_en`=0 (disabled -- does NOT blend with back color), `per_pix_alpha_blend_en`=0 (uses fixed layer alpha, not pixel data -- sensible, since decoded video frames have no meaningful alpha channel), `blend_mode`=0, and (per U-Boot's own real init code) layer alpha=`0xff` (fully opaque). I.e. **VIDEO is drawn as a simple, always-visible, non-blended layer** on real stock hardware -- not subject to any of the per-pixel alpha reliability concerns theorized earlier in this investigation for OSD1.
+
+Since neither U-Boot nor any always-run kernel path ever sets VIDEO's `alpha_blend_en`/`per_pix_alpha_blend_en` bits (only this ioctl and a debug-only interface do, per the same caller-tracing method used in §63), **this configuration was either never being applied on our reconstruction at all** (stuck at raw hardware-reset default, unknown value) **or entirely dependent on `libarkcmn.so` actually calling this ioctl** (never confirmed either way) -- both cases were broken by this ioctl's absence.
+
+**Fix, implemented and hardware-untested**:
+1. Added `struct ark_fb_blend` + `ARKFB_SET_BLEND` macro (`ark_lcdc_common.h`).
+2. Added the four missing VIDEO-layer primitives (`ark1668_lcdc_set_video_alpha_blend_en_lcd`, `_per_pix_alpha_blend_en_lcd`, `_blend_mode`, `_alpha`) plus two missing OSD-layer primitives that existed on the register-write side but never had a callable setter (`ark1668_lcdc_set_osd_blend_mode`, `ark1668_lcdc_set_osd_alpha`) -- `ark1668_lcdc_funcs.c`.
+3. Wired up the `ARKFB_SET_BLEND` ioctl handler, dispatching to OSD or VIDEO primitives by layer, matching the established `layer <= OSD_LAYER3` convention.
+4. **Belt-and-braces**: also applied stock's confirmed-live VIDEO blend defaults (`alpha_blend_en=0, per_pix_alpha_blend_en=0, blend_mode=0, alpha=0xff`) unconditionally inside the real `ARKFB_INIT_VIDEO_DISPLAY` handler -- so VIDEO_LAYER gets correct blend state on every real init call regardless of whether `libarkcmn.so` also calls the new `ARKFB_SET_BLEND` ioctl separately.
+
+Kernel rebuilt clean, zero new warnings. **Not yet hardware-tested** -- this is now the leading, most concrete candidate fix for the AA black-screen symptom: if VIDEO_LAYER's blend state was previously stuck at an unconfigured/wrong hardware-reset default, this directly addresses it with stock's own confirmed-correct values.

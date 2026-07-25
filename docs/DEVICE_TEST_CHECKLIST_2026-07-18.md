@@ -5579,3 +5579,26 @@ User confirmed on hardware: §58's revert (direct `lcd_wiring_mode` passthrough 
 **Net effect**: this abandons the whole "wiring_mode drives both software packing and hardware rgb_order in a coordinated way" model this investigation had built up over many sessions (§20-38, §52, §58, §60), in favor of directly matching the one thing ever empirically proven correct on real hardware -- U-Boot's own fixed, config-independent bootlogo values. `lcd_wiring_mode`/`RgbMode` may still matter for something else in this driver, but no longer drives color channel ordering anywhere in this file.
 
 Kernel rebuilt clean, zero warnings (removed the now-dead `pdata` local in `check_var()`). **Not yet hardware-tested.**
+
+## 67. Identified and implemented the "unknown ioctl 80044f39" from §61's hardware log: `ARKFB_GET_LAYER_ID` (2026-07-25)
+
+The `layer=4: init display...` debug line hardware-confirmed in a recent log (§61 follow-up) also showed `ark1668_lcdfb_ioctl 1651: unknown ioctl 80044f39` firing immediately before it. Decoded: `0x80044f39` = `_IOR('O', 57, 4 bytes)`.
+
+Traced its caller in `libarkcmn.so` -- a small unnamed helper function (between the exported `get_screen_info` and `arkapi_init_fb_display_internal` symbols) that takes an fd, issues this exact ioctl with a 4-byte output buffer, and on failure just `puts()`s an error and returns -1 (non-fatal, caller can continue). The error string itself names the real ioctl: **`"ARKFB_GET_LAYER_ID fail."`** (rodata offset `0xbe4c`).
+
+**Also confirmed from this session's `layer=4` hardware log**: AA video genuinely initializes on **`VIDEO_LAYER2`** (`layer=4` -> `vlayer = 4 - OSD_LAYER_MAX(3) = 1` = `VIDEO_LAYER2`), not `VIDEO_LAYER1` as every `devmem` register check earlier in this investigation assumed. `VIDEO_LAYER2` uses an entirely separate register block (`VIDEO2_CTL`=0x320, `VIDEO2_ADDR1/2/3`=0x338/0x33c/0x340, `VIDEO2_POSITION`=0x334, `VIDEO2_SIZE`=0x330 -- all confirmed via `ark1668_lcdc_set_video_addr()`/`set_video_en()`'s own per-layer register selection) from `VIDEO_LAYER1`'s (`VIDEO_CTL`=0x3c, `VIDEO_ADDR1/2/3`=0x54/0x58/0x5c). Every earlier `devmem 0xe050003c`/`0xe0500054` read in this investigation was checking the wrong layer's registers -- explains why they consistently read zero regardless of what fixes were staged.
+
+**Fix**: added `ARKFB_GET_LAYER_ID` (`ark_lcdc_common.h`) and its handler (`ark1668_lcdc_funcs.c`) -- trivial, since `layer` (the value to report) is already computed from the fd's minor number at the top of `ark1668_lcdfb_ioctl()`. Kernel rebuilt clean.
+
+**Corrected diagnostic commands for VIDEO_LAYER2 (the layer AA actually uses), for the next hardware session:**
+```sh
+devmem 0xe0500004 32   # CONTROL -- VIDEO_LAYER2 enable is bit 6 (VIDEO_LAYER1 is bit 5)
+devmem 0xe0500320 32   # VIDEO2_CTL
+devmem 0xe0500330 32   # VIDEO2_SIZE
+devmem 0xe0500334 32   # VIDEO2_POSITION
+devmem 0xe0500338 32   # VIDEO2_ADDR1 -- read 2-3x a second apart, check if it's changing
+devmem 0xe050033c 32   # VIDEO2_ADDR2
+devmem 0xe0500340 32   # VIDEO2_ADDR3
+```
+
+Not yet hardware-tested.

@@ -269,7 +269,8 @@ int read_mcu_frame(int fd, unsigned char *out_cmd, unsigned char *out_payload,
     while (header_read < 2) {
         int n = read(fd, &header[header_read], 2 - header_read);
         if (n > 0) header_read += n;
-        else if (n < 0 && errno != EAGAIN && errno != EINTR) break;
+        else if (n == 0) return -1; /* EOF -- port closed/unplugged */
+        else if (errno != EAGAIN && errno != EINTR) break;
     }
     if (header_read < 2)
         return 0;
@@ -283,7 +284,8 @@ int read_mcu_frame(int fd, unsigned char *out_cmd, unsigned char *out_payload,
     while (rem_read < req_len) {
         int n = read(fd, &remaining[rem_read], req_len - rem_read);
         if (n > 0) rem_read += n;
-        else if (n < 0 && errno != EAGAIN && errno != EINTR) break;
+        else if (n == 0) return -1; /* EOF -- port closed/unplugged */
+        else if (errno != EAGAIN && errno != EINTR) break;
     }
     if (rem_read < req_len)
         return 0;
@@ -416,7 +418,8 @@ int read_fa_frame(int fd, unsigned char *out_arg1, unsigned char *out_arg2,
     while (header_read < 4) {
         int n = read(fd, &header[header_read], 4 - header_read);
         if (n > 0) header_read += n;
-        else if (n < 0 && errno != EAGAIN && errno != EINTR) break;
+        else if (n == 0) return -1; /* EOF -- port closed/unplugged */
+        else if (errno != EAGAIN && errno != EINTR) break;
     }
     if (header_read < 4)
         return 0;
@@ -430,7 +433,8 @@ int read_fa_frame(int fd, unsigned char *out_arg1, unsigned char *out_arg2,
     while (rem_read < req_len) {
         int n = read(fd, &remaining[rem_read], req_len - rem_read);
         if (n > 0) rem_read += n;
-        else if (n < 0 && errno != EAGAIN && errno != EINTR) break;
+        else if (n == 0) return -1; /* EOF -- port closed/unplugged */
+        else if (errno != EAGAIN && errno != EINTR) break;
     }
     if (rem_read < req_len)
         return 0;

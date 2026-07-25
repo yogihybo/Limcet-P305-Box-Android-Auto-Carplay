@@ -194,13 +194,24 @@ Same steps as above, plus:
 patch -p1 < .../0002-layer-context-force-systemonly-for-shared-primary.patch
 ```
 
-and add `--disable-debug-support` to the `./configure` flags -- it
-defaults to `yes` upstream and bloats the core library from a stock-like
-~1.17MB to ~8.9MB (all `D_DEBUG_AT`/`D_ASSERT` machinery always compiled
-in). With it disabled, this rebuild produces `libdirectfb-1.7.so.7.0.0`
-at 1,156,004 bytes (stock: 1,177,140) and `libdirectfb_fbdev.so` at
-59,236 bytes -- both much closer to stock size than the earlier
-debug-enabled build.
+**Do NOT add `--disable-debug-support`.** An earlier revision of this
+README recommended it (it defaults to `yes` upstream and bloats the
+core library from a stock-like ~1.17MB to ~8.9MB) purely to shrink the
+binary closer to stock's size -- this turned out to have a real
+functional cost, found 2026-07-25 (checklist section 68): `D_MAGIC_SET`/
+`D_MAGIC_ASSERT` (`lib/direct/debug.h`) are gated by
+`#if DIRECT_BUILD_DEBUGS` (set from this flag) -- when disabled,
+`D_MAGIC_SET` becomes a complete no-op, so `CoreSurfacePool` structs our
+core library allocates never get a valid `magic` field written. The
+closed-source, unmodified `libdirectfb_gal.so` (GAL, never rebuilt by
+this project) still performs the real `D_MAGIC_ASSERT` check on those
+same structs in `galInitPool()`, and crashes
+(`Assertion [(pool)->magic == D_MAGIC("CoreSurfacePool")] failed`) --
+confirmed via a real hardware crash running the factory `LCDTest -qws`
+command under `directfb`. Leave debug support at its default (enabled)
+-- the resulting core library is ~9.98MB (with §53's static-libstdc++
+fix also applied), much bigger than stock, but binary size was never
+actually load-bearing here and correctness matters more.
 
 This time two files need the SONAME/NEEDED byte-fixup from the "Post-build
 fixup" section above, not just `fbdev.so`: `src/.libs/libdirectfb-1.7.so.7.0.0`

@@ -706,3 +706,39 @@ question, separate from this Qt-gate finding.
    confirm `QWS_MOUSE_PROTO`/`QWS_ARK_MT_DEVICE` actually made it
    through — not yet verified live on the 4.19 rebuild, only traced
    statically.
+
+## Debug tracing: `ark1680_ts` driver (2026-07-27)
+
+The kernel driver (`linux/drivers/input/touchscreen/ark1680_ts.c`) has
+a `debug` module param, off by default, gating two kinds of tracing:
+
+- **Per-IRQ sample tracing** (`ark_ts_dbg()`): raw ADC samples, the
+  5-sample warm-up count, filtered coordinates, and each IRQ's status
+  register — fires on every touch, so it's noisy by design and stays
+  off unless you're actively diagnosing coordinate/filtering issues.
+- **Setup-sequence register tracing** (`ark1680_ts_trace()`): 11 lines
+  of `setup[<step>]: ADC[...] SYS[...]` register dumps, one after each
+  write in `ark1680_setup_tsc()`'s init sequence. **Was unconditional
+  until 2026-07-27** (fired on every probe/boot regardless of the
+  `debug` flag, added during v7 hardware testing to isolate a SYS
+  clken/padcfg bus-fault pattern — see "Hardware-tested" above). Now
+  gated behind the same `debug` flag as the per-IRQ tracing, since that
+  bus-fault issue is resolved and normal boots don't need it.
+
+To turn either kind of tracing back on, set the param **before** the
+driver probes (it reads `ark1680_ts_debug` once, at each register
+write/IRQ, so it's fine to flip live too, just won't retroactively show
+already-printed setup steps):
+
+```sh
+echo 1 > /sys/module/ark1680_ts/parameters/debug   # if already probed/loaded
+dmesg -w                                            # then watch, or touch the panel
+
+# to re-run probe with tracing on from the very first "setup[initial]" line:
+rmmod ark1680_ts
+echo 1 > /sys/module/ark1680_ts/parameters/debug
+modprobe ark1680_ts
+```
+
+Confirm current state any time with
+`cat /sys/module/ark1680_ts/parameters/debug` (`Y`/`N`).

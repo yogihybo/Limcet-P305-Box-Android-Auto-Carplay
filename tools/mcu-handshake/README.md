@@ -3,9 +3,11 @@
 This utility (`mcu-handshake`) is a compiled C daemon that runs natively on the target device to emulate the SoC-to-MCU connection handshake and periodic status ping-pong.
 
 ### Why is this needed?
-The touch panel signals on the Limcet P305/P306 head unit are physically gated by a `CBT16211A` touch-bus switch controlled by the companion STM32 MCU. The MCU only closes this switch once it performs a successful connection handshake with the userspace application `MsnCoreApp` over the High-Speed UART port (`/dev/ttyHS0`).
+**Status update (2026-07-26): this CBT16211A/MCU theory is unconfirmed and probably not the real touch-activation gate — see `docs/ARK1680_TS_REVERSE_ENGINEERING.md`'s "Touch activation is gated by `MsnFirstInit`/`/etc/profile`, not the MCU" section for the real, disassembly-confirmed mechanism (a Qt/QWS env var, `QWS_MOUSE_PROTO`/`QWS_ARK_MT_DEVICE`, set by `MsnFirstInit` before `MsnCoreApp` launches).** This theory below was always static-disassembly-only, never hardware-confirmed, and is inconsistent with the directly-observed fact that the AUX+long-press-home mode switch works with `MsnCoreApp` not running at all (`project_limcet_activation_gate` memory) — if a live symptom brought you here expecting this tool to fix touch, try the real mechanism in that doc first.
 
-If you are debugging or testing drivers without running the full `MsnCoreApp` stack (e.g. to isolate kernel driver coordinate delivery or during development), running this tool simulates the handshake in the background, signaling the MCU to close the switch and activate the touch panel physical line.
+The touch panel signals on the Limcet P305/P306 head unit are *believed* to be physically gated by a `CBT16211A` touch-bus switch controlled by the companion STM32 MCU. The theory was that the MCU only closes this switch once it performs a successful connection handshake with the userspace application `MsnCoreApp` over the High-Speed UART port (`/dev/ttyHS0`).
+
+If you are debugging or testing drivers without running the full `MsnCoreApp` stack (e.g. to isolate kernel driver coordinate delivery or during development), running this tool simulates the handshake in the background, in case it does still turn out to matter — but don't expect it to be sufficient on its own; it does not replicate `MsnFirstInit`'s Qt env var setup, which is the confirmed prerequisite.
 
 ### How it works (corrected 2026-07-18 against real `MCUAdapter_BoxP300` disassembly)
 1. Opens `/dev/ttyHS0` at `38400` baud by default.

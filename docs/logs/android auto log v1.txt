@@ -1,0 +1,1780 @@
+[   20.638504] RTW: +r871xu_dev_remove, hw_init_completed=0
+[   20.645305] RTW: WARN free_recv_skb_queue not empty, 8
+[   20.650594] RTW: rtw_wdev_free(wdev=15310930)
+[   20.655005] RTW: rtw_drv_free_vir_if(wlan1)
+[   20.659876] RTW: WARN free_recv_skb_queue not empty, 8
+[   20.665080] RTW: rtw_wdev_free(wdev=6cf61db4)
+[   20.669539] RTW: rtw_wiphy_free(phy0)
+[   20.673214] RTW: -r871xu_dev_remove, done
+[20.702]  Open I2C Device: 2 "80"  FD: 29
+[20.750]  Sound_BD37033::muteSpeakerAtts false true
+[20.778]  SoundAdapter Create Success, ICType: 3
+[20.779]  Load App Plugin 403 "/usr/lib/libMsnSound.so"
+[20.851]  Blance: 32 32 32 32
+[20.964]  set subwoofer value 8 134
+syncDatas armsetting radar visible:0 datas:0 0 0 0
+[   21.079610] usb 2-1: new high-speed USB device number 3 using musb-hdrc
+[21.222]  McuAdap[   21.222801] ark-hsuart e4f00000.serial: no TX DMA channel available (no platform data) -- using PIO/interrupt-driven TX instead, this is expected on this board
+ter: MCUAdapter_[   21.238155] ark-hsuart e4f00000.serial: no RX DMA channel available (no platform data) -- using PIO/interrupt-driven RX instead, this is expected on this board
+BoxP300 6
+[   21.253849] ark_hsuart_set_termios 1652 hsuart0 baud:9600 c_cflag:0xcbd
+[   21.261575] usb 2-1: hub_port_init:4710 speed=3
+[   21.267062] ark_hsuart_set_termios 1652 hsuart0 baud:38400 c_cflag:0xcbf
+[21.274]  Open MCU Serial Port  "/dev/ttyHS0"  Ret: true[   21.278136] ark-uart e8000000.uart: no TX DMA channel available (no platform data) -- using PIO/interrupt-driven TX instead, this is expected on this board
+ "No such file o[   21.293411] ark-uart e8000000.uart: no RX DMA channel available (no platform data) -- using PIO/interrupt-driven RX instead, this is expected on this board
+r directory"
+
+start serialPor[   21.310525] RTW:
+[   21.310525] usb_endpoint_descriptor(0):
+tProcessProc
+
+[   21.317208] RTW: bLength=7
+[   21.321345] RTW: bDescriptorType=5
+[   21.324765] RTW: bEndpointAddress=84
+[   21.328337] RTW: wMaxPacketSize=512
+[   21.331855] RTW: bInterval=0
+[   21.334736] RTW: RT_usb_endpoint_is_bulk_in = 4
+[   21.339261] RTW:
+[   21.339261] usb_endpoint_descriptor(1):
+[   21.345040] RTW: bLength=7
+[   21.347745] RTW: bDescriptorType=5
+[   21.351171] RTW: bEndpointAddress=5
+[   21.354673] RTW: wMaxPacketSize=512
+[   21.358165] RTW: bInterval=0
+[   21.361071] RTW: RT_usb_endpoint_is_bulk_out = 5
+[   21.365685] RTW:
+[   21.365685] usb_endpoint_descriptor(2):
+[   21.371457] RTW: bLength=7
+[   21.374162] RTW: bDescriptorType=5
+[   21.377566] RTW: bEndpointAddress=6
+[   21.381080] RTW: wMaxPacketSize=512
+[   21.384565] RTW: bInterval=0
+[   21.387441] RTW: RT_usb_endpoint_is_bulk_out = 6
+[   21.392088] RTW:
+[   21.392088] usb_endpoint_descriptor(3):
+[   21.397835] RTW: bLength=7
+[   21.400566] RTW: bDescriptorType=5
+[   21.403964] RTW: bEndpointAddress=87
+[   21.407533] RTW: wMaxPacketSize=64
+[   21.410963] RTW: bInterval=3
+[   21.413843] RTW: RT_usb_endpoint_is_int_in = 7, Interval = 3
+[   21.419526] RTW:
+[   21.419526] usb_endpoint_descriptor(4):
+[   21.425270] RTW: bLength=7
+[   21.427980] RTW: bDescriptorType=5
+[   21.431407] RTW: bEndpointAddress=8
+[   21.434893] RTW: wMaxPacketSize=512
+[   21.438375] RTW: bInterval=0
+[   21.441279] RTW: RT_usb_endpoint_is_bulk_out = 8
+[   21.445903] RTW: nr_endpoint=5, in_num=2, out_num=3
+[   21.445903]
+[   21.452283] RTW: USB_SPEED_HIGH
+[   21.455427] RTW: CHIP TYPE: RTL8821C
+[21.459]  Open MCU Serial Port  [   21.461191] RTW: loadparam, Select P2P interface: iface_id:1
+"/dev/ttyS2"  Re[   21.468442] RTW: [HALMAC]55772M
+[   21.468442] HALMAC_MAJOR_VER = 1
+[   21.468442] HALMAC_PROTOTYPE_VER = 6
+[   21.468442] HALMAC_MINOR_VER = 6
+[   21.468442] HALMAC_PATCH_VER = 22
+t: true "No such file or directory"
+[2[   21.488489] RTW: Chip Version Info: CHIP_8821C_U3_1T1R_RomVer(2)
+1.460]  Load App[   21.495553] RTW: config_chip_out_EP OutEpQueueSel(0x07), OutEpNumber(3)
+ Plugin 401 "/us[   21.503782] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+r/lib/libMcuCenter.so"
+[21.740]  CanBusPlugin 0 0
+[21.740]  Load App Plugin 400 "/usr/lib/libCanBus.so"
+[   21.765238] RTW: is_valid_id_status: HALMAC_FEATURE_DUMP_LOGICAL_EFUSE
+[   21.772027] RTW: HW EFUSE
+[   21.774702] RTW: 0x000: 29 81 00 BC  09 00 21 00  6E 04 A4 10  10 00 30 0B
+[   21.781908] RTW: 0x010: FF FF FF FF  FF FF FF FF  FF FF FF 02  FF FF FF FF
+[   21.789086] RTW: 0x020: FF FF 25 25  25 25 25 23  23 22 22 23  23 23 24 25
+[   21.796360] RTW: 0x030: 22 FF FF FF  FF FF 10 FF  FF FF 28 28  28 28 28 28
+[   21.803476] RTW: 0x040: 2C 2C 2C 2C  2C 02 FF FF  FF FF FF FF  FF FF FF FF
+[   21.810583] RTW: 0x050: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[   21.817668] RTW: 0x060: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[   21.824772] RTW: 0x070: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[   21.831878] RTW: 0x080: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[   21.838963] RTW: 0x090: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[   21.846067] RTW: 0x0A0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[   21.853179] RTW: 0x0B0: FF FF FF FF  FF FF FF FF  7F 2D 1B 00  FF FF FF FF
+[   21.860284] RTW: 0x0C0: FF 01 00 41  00 00 00 00  00 FF 22 FF  FF FF FF FF
+[   21.867361] RTW: 0x0D0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[   21.874471] RTW: 0x0E0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[   21.881578] RTW: 0x0F0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[   21.888663] RTW: 0x100: DA 0B 11 C8  E3 46 02 68  B9 D3 F1 5A  43 09 03 52
+[   21.895767] RTW: 0x110: 65 61 6C 74  65 6B 0E 03  38 30 32 2E  31 31 61 63
+[   21.902878] RTW: 0x120: 20 4E 49 43  08 03 31 32  33 34 35 36  FF FF FF FF
+[   21.909985] RTW: 0x130: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[   21.917061] RTW: 0x140: FF FF FF FF  00 00 31 0F  FF FF FF FF  FF FF FF FF
+[   21.924168] RTW: 0x150: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[   21.931273] RTW: 0x160: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[   21.938358] RTW: 0x170: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[   21.945461] RTW: 0x180: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[   21.952567] RTW: 0x190: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[   21.959678] RTW: 0x1A0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[   21.966754] RTW: 0x1B0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[   21.973862] RTW: 0x1C0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[   21.980970] RTW: 0x1D0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[   21.988055] RTW: 0x1E0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[   21.995158] RTW: 0x1F0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[   22.002275] RTW: EEPROM ID = 0x8129
+[   22.005772] RTW: EEPROM Version = 0
+[   22.009261] RTW: EEPROM Regulatory=0x01
+[   22.013126] RTW: EEPROM Board Type=0x00
+[   22.093529] RTW: EEPROM Disable BT-coex, ant_num=1
+[   22.098379] RTW: hal_com_config_channel_plan chplan:0x7F
+[   22.103811] RTW: EEPROM crystal_cap=0x2d
+[   22.107781] RTW: EEPROM ThermalMeter=0x1b
+[   22.111854] RTW: EEPROM Customer ID=0x00
+[   22.115804] RTW: EEPROM SupportRemoteWakeup=0
+[   22.120219] RTW: EEPROM rfe_type=0x22
+[   22.123918] RTW: EEPROM PAType_2G is 0x0, ExternalPA_2G = 0
+[   22.129534] RTW: EEPROM PAType_5G is 0x0, external_pa_5g = 0
+[   22.135222] RTW: EEPROM LNAType_2G is 0x0, ExternalLNA_2G = 0
+[   22.141028] RTW: EEPROM LNAType_5G is 0x0, external_lna_5g = 0
+[   22.146888] RTW: EEPROM TypeGPA = 0x0
+[   22.150592] RTW: EEPROM TypeAPA = 0x0
+[   22.154284] RTW: EEPROM TypeGLNA = 0x0
+[   22.158048] RTW: EEPROM TypeALNA = 0x0
+[   22.161842] RTW: EEPROM tx_bbswing_24G =0x00
+[   22.166141] RTW: EEPROM tx_bbswing_5G =0x00
+[   22.170367] RTW: EEPROM USB Switch=0
+[   22.173973] RTW: EEPROM VID = 0x0BDA, PID = 0xC811
+[22.185]  Load App Plugin 3 "/usr/lib/libBlueTooth.so"
+[22.187]  open touch monitor dev: /dev/input[   22.192776] RTW: [HALMAC][ALWAYS]shall R reg twice!!
+/event0 39
+[   22.209051] RTW: SetHwReg: bMacPwrCtrlOn=1
+[22.255]  onLoadDriverFinished
+[   22.343024] RTW: _rtw_hal_set_fw_rsvd_page((null)) Get [ NOR ] RsvdPageNUm  ==>
+[   22.350457] RTW: LocPsPoll: 4
+[   22.353439] RTW: WARN Invalid rate 0x0 in MRateToHwRate
+[   22.358662] RTW: LocNullData: 5
+[   22.361856] RTW: WARN Invalid rate 0x0 in MRateToHwRate
+[   22.367082] RTW: LocQosNull: 6
+[   22.370173] RTW: WARN Invalid rate 0x0 in MRateToHwRate
+[   22.375400] RTW: _rtw_hal_set_fw_rsvd_page((null)) Get [ NOR ] RsvdPageNUm <==
+[   22.382665] RTW: _cfg_drv_rsvd_pg_num: request 7 pages => halmac 8 pages success
+gone device /dev/bus/usb/002/002
+[22.405]  usb_device_removed /dev/bus/usb/002/002
+new device /dev/bus/usb/002/003
+[22.405]  usb_device_added /dev/bus/usb/002/003
+QMetaObject::connectSlotsByName: No matching signal for on_pushButton_clicked()
+net.ipv4.udp_mem = 8192 10240 16384
+net.ipv4.udp_rmem_min = 1048576
+[   22.494264] RTW: WARN [HALMAC][WARN]the H2C ver. does not match halmac
+insmod: can't read '/tmp/wlan.ko': No such file or directory
+[   22.537951] RTW: rtl8821c_fw_dl Download Firmware from array success
+[   22.544414] RTW: NIC FW Version:24 SubVersion:8
+[   22.560508] RTW: SetHwReg: bMacPwrCtrlOn=0
+[   22.573763] RTW: hal_read_mac_hidden_rpt OK! (1, 30ms), fwdl:1, id:0x19
+[   22.580458] RTW: EEPROM Disable BT-coex by hal_spec
+[   22.585374] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[   22.609720] RTW: is_valid_id_status: HALMAC_FEATURE_DUMP_PHYSICAL_EFUSE
+[   22.616393] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[22.628]  DVRSetDialog visibale c[   22.630697] RTW: is_valid_id_status: HALMAC_FEATURE_DUMP_PHYSICAL_EFUSE
+hange: false
+[   22.638240] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[   22.645220] RTW: is_valid_id_status: HALMAC_FEATURE_DUMP_PHYSICAL_EFUSE
+[   22.651974] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[   22.657581] RTW: is_valid_id_status: HALMAC_FEATURE_DUMP_PHYSICAL_EFUSE
+[   22.664317] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[   22.669957] RTW: is_valid_id_status: HALMAC_FEATURE_DUMP_PHYSICAL_EFUSE
+[   22.676629] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[   22.682259] RTW: is_valid_id_status: HALMAC_FEATURE_DUMP_PHYSICAL_EFUSE
+[   22.688952] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[   22.694572] RTW: is_valid_id_status: HALMAC_FEATURE_DUMP_PHYSICAL_EFUSE
+[   22.701303] RTW: rtw_hal_read_chip_info in 1200 ms
+[   22.706215] RTW: [RF_PATH] ver_id.RF_TYPE:RF_1T1R
+[   22.710992] RTW: [RF_PATH] HALSPEC's rf_reg_trx_path_bmp:0x11, rf_reg_path_avail_num:1, max_tx_cnt:1
+[   22.720190] RTW: [RF_PATH] PG's trx_path_bmp:0x00, max_tx_cnt:0
+[   22.726141] RTW: [RF_PATH] Registry's trx_path_bmp:0x00, tx_path_lmt:0, rx_path_lmt:0
+[   22.734017] RTW: [RF_PATH] HALDATA's trx_path_bmp:0x11, max_tx_cnt:1
+[   22.740433] RTW: [RF_PATH] HALDATA's rf_type:RF_1T1R, NumTotalRFPath:1
+[   22.746980] RTW: rtw_hal_rfpath_init trx_path_bmp:0x11(RF_1T1R), NumTotalRFPath:1, max_tx_cnt:1
+[   22.755757] RTW: [TRX_Nss] HALSPEC - tx_nss:1, rx_nss:1
+[   22.761044] RTW: [TRX_Nss] Registry - tx_nss:0, rx_nss:0
+[   22.766383] RTW: [TRX_Nss] HALDATA - tx_nss:1, rx_nss:1
+[   22.771670] RTW: rtw_hal_trxnss_init tx_nss:1, rx_nss:1
+[   22.776943] RTW: txpath=0x1, rxpath=0x1
+[   22.780837] RTW: txpath_1ss:0x1, num:1
+[   22.785383] RTW: init_mlme_default_rate_set: support CCK
+[   22.790802] RTW: init_mlme_default_rate_set: support OFDM
+[   22.797813] RTW: NR_RECVBUFF: 8, recvbuf_nr: 8
+[   22.802386] RTW: MAX_RECVBUF_SZ: 32768
+[   22.806221] RTW: NR_PREALLOC_RECV_SKB: 8
+[   22.810906] RTW: rtw_alloc_macid((null)) if1, mac_addr:ff:ff:ff:ff:ff:ff macid:1
+[   22.818319] RTW: rtw_init_pwrctrl_priv: IPS_mode=0, LPS_mode=0, LPS_level=0
+[   22.825958] RTW: IQK FW offload:enable
+[   22.829864] RTW: init_phydm_cominfo: Fv=1 Cv=2
+[   22.834511] RTW: [A] 2G G00 CCK-1T base:45 from IC_DEF
+[   22.839749] RTW: [A] 2G G01 CCK-1T base:45 from IC_DEF
+[   22.844941] RTW: [A] 2G G02 CCK-1T base:45 from IC_DEF
+[   22.850120] RTW: [A] 2G G03 CCK-1T base:45 from IC_DEF
+[   22.855266] RTW: [A] 2G G04 CCK-1T base:45 from IC_DEF
+[   22.860434] RTW: [A] 2G G05 CCK-1T base:45 from IC_DEF
+[   22.865572] RTW: [A] 2G G00 BW40-1S base:45 from IC_DEF
+[   22.870825] RTW: [A] 2G G01 BW40-1S base:45 from IC_DEF
+[   22.876059] RTW: [A] 2G G02 BW40-1S base:45 from IC_DEF
+[   22.881313] RTW: [A] 2G G03 BW40-1S base:45 from IC_DEF
+[   22.886537] RTW: [A] 2G G04 BW40-1S base:45 from IC_DEF
+[   22.891860] RTW: rtw_regsty_chk_target_tx_power_valid return _FALSE for band:0, path:0, rs:0, t:-1
+[   22.900947] RTW: phy_ConfigBBWithPgParaFile(): No File PHY_REG_PG.txt, Load from HWImg Array!
+[   22.909556] RTW: default power by rate loaded
+[   22.913924] RTW: phy_txpwr_by_rate_chk_for_path_dup duplicate 2.4G [A] to [B]
+[   22.921137] RTW: init_channel_set_from_rtk_priv((null)) ChannelPlan ID:0x7f, ch num:37
+[   22.931910] RTW: rtw_macaddr_cfg mac addr:68:b9:d3:f1:5a:43
+[   22.937489] RTW: bDriverStopped:True, bSurpriseRemoved:False, bup:0, hw_init_completed:0
+ifconfig: ioctl 0x8913 failed: No such device
+ifconfig: SIOCSIFADDR: No such device
+/etc/hostapd.sh: line 23: can't create /proc/sys/net/ipv6/conf/wlan0/disable_ipv6: nonexistent directory
+/etc/hostapd.sh: line 24: can't create /proc/sys/net/ipv6/conf/wlan1/disable_ipv6: nonexistent directory
+udhcpd: started, v1.25.0
+udhcpd: is interface wlan0 up and configured?: No such device
+[23.135]  MSN protocal type: 0  s[   23.137261] RTW: loadparam, Select P2P interface: iface_id:1
+endReadyData!
+[   23.145269] RTW: init_mlme_default_rate_set: support CCK
+[   23.150987] RTW: init_mlme_default_rate_set: support OFDM
+[   23.159240] RTW: NR_RECVBUFF: 8, recvbuf_nr: 8
+[   23.163867] RTW: MAX_RECVBUF_SZ: 32768
+[   23.167630] RTW: NR_PREALLOC_RECV_SKB: 8
+[   23.174269] RTW: rtw_alloc_macid((null)) if2, mac_addr:ff:ff:ff:ff:ff:ff macid:1
+[   23.181857] RTW: rtw_drv_add_vir_if if2 mac_addr : 6a:b9:d3:f1:5a:43
+[   23.188246] RTW: rtw_cfg80211_init_wiphy_band:rf_type=0
+[   23.193590] RTW: rtw_build_vht_cap_ie, line821, Set MAX MPDU len = 11454 bytes
+[   23.200901] RTW: [VHT] Declare supporting SGI 80MHz
+[   23.205831] RTW: rtw_wiphy_alloc(phy1)
+[   23.209686] RTW: rtw_wdev_alloc(padapter=02e269b7)
+[   23.214539] RTW: rtw_wdev_alloc(padapter=ce73f91c)
+[   23.219371] RTW: rtw_wiphy_register(phy1)
+[   23.223424] RTW: Register RTW cfg80211 vendor cmd(0x67) interface
+[   23.229822] RTW: rtw_reg_notifier(phy1)
+[   23.233668] RTW: initiator:CORE, wiphy_idx:-1, type:USER
+[   23.238975] RTW: alpha2:00
+[   23.241735] RTW: dfs_region:UNSET
+[   23.245049] RTW: intersect:0
+[   23.247948] RTW: processed:0
+[   23.250862] RTW: country_ie_env:ANY
+[   23.254647] RTW: rtw_ndev_init(wlan0) if1 mac_addr=68:b9:d3:f1:5a:43
+[   23.261594] RTW: rtw_ndev_notifier_call(wlan0) state:16
+[   23.268085] RTW: cfg80211_rtw_get_txpower(wlan0) total max: -10000 mbm
+[   23.274731] RTW: rtw_ndev_notifier_call(wlan0) state:5
+[   23.280090] RTW: rtw_ndev_init(wlan1) if2 mac_addr=6a:b9:d3:f1:5a:43
+[   23.287040] RTW: rtw_ndev_notifier_call(wlan1) state:16
+[   23.293518] RTW: cfg80211_rtw_get_txpower(wlan1) total max: -10000 mbm
+[   23.300168] RTW: rtw_ndev_notifier_call(wlan1) state:5
+[23.363]  MSNCoreApp onLoadStartupApp
+[23.363]  MSNCoreApp onEndInit
+[23.364]
+MsnCoreApp End init
+
+[23.472]  MsnLink StartService: "com.arkmicro.carplay"
+label2 = Home
+pcarplay_info->bridge_mode=0
+pcarplay_info->icurrent = 500
+pcarplay_info->ns_level = -1
+### ++ carplay initialize ++
+msg instance
+++ MsgEnQueue ++
+[23.714]  MsnLink StartService ret: "com.arkmicro.carplay" true ""
+[23.716]  MSNCoreApp exec
+### carplay dbus initialize true
+[23.728]  MsnLink::onServiceRegistered "com.arkmicro.carplay"
+open dvr device /tmp/dev/dvr failure.
+ifconfig: ioctl 0x8913 failed: No such device
+x=0 y=0
+s_w=800 s_h=480
+v_w=800 v_h=480 screen_width_phy=154 screen_height_phy=87
+#pluginfo->btmac=56:fa:dd:e2:50:bf
+carplay_plugin_set_info:1505 err=0
+mDNSResponder: mDNSResponder (Engineering Build) (May 29 2020 16:56:53) starting
+carplay_plugin_start:1728
+### carplay ++ usb_reader_thread ++
+### carplay -- usb_reader_thread --
+### -- carplay initialize --
+mDNSResponder: mDNS_AddDNSServer: Lock not held! mDNS_busy (0) mDNS_reentrancy (0)
+mDNSResponder: mDNSPlatformSourceAddrForDest: connect 1.1.1.1 failed errno 101 (Network is unreachable)
+[24.117]  start bt service:/usr/bin/blueware
+[24.119]  MSN protocal type: 0  sendReadyData!
+open dvr device /tmp/dev/dvr failure.
+[24.318]  Retry Open BlueTooth Serial Port,  Ret: true
+[24.319]  Write At atCommand: "AT+DEVSTAT"
+open dvr device /tmp/dev/dvr failure.
+[24.418]  Write At atCommand: "AT+BTEN=1"
+[24.421]  MSN protocal type: 0  sendReadyData!
+open dvr device /tmp/dev/dvr failure.
+open dvr device /tmp/dev/dvr failure.
+[   24.873511] ark-hsuart e4800000.serial: no TX DMA channel available (no platform data) -- using PIO/interrupt-driven TX instead, this is expected on this board
+[   24.887936] ark-hsuart e4800000.serial: no RX DMA channel available (no platform data) -- using PIO/interrupt-driven RX instead, this is expected on this board
+[   24.902271] ark_hsuart_set_termios 1652 hsuart1 baud:9600 c_cflag:0xcbd
+[   24.909411] ark_hsuart_set_termios 1652 hsuart1 baud:9600 c_cflag:0xdbd
+[   24.916225] ark_hsuart_set_termios 1652 hsuart1 baud:115200 c_cflag:0x1db2
+open dvr device /tmp/dev/dvr failure.
+[   25.025374] ark_hsuart_set_termios 1652 hsuart1 baud:1500000 c_cflag:0x1dba
+open dvr device /tmp/dev/dvr failure.
+open dvr device /tmp/dev/dvr failure.
+open dvr device /tmp/dev/dvr failure.
+open dvr device /tmp/dev/dvr failure.
+[26.001]  arkapi_open_dvr() failed after 10 times retry, errno: 2 No such file or directory
+[26.601]  Write At atCommand: "AT+ADDR"
+[26.602]  BlueToothAdapter_Blueware::onStartupConfig()
+[26.603]  Write At atCommand: "AT+HFPCFG"
+[26.604]  Write At atCommand: "AT+HFPDISC"
+[26.604]  Write At atCommand: "AT+ADDR"
+[26.605]  Write At atCommand: "AT+NAME"
+[26.606]  Write At atCommand: "AT+VER"
+[26.643]  Write At atCommand: "AT+PLIST"
+[26.644]  BT Local Address: "DC0D3014FC9F"
+[26.644]  Write At atCommand: "AT+NAME"
+[26.644]I msncoreapp.cpp@2964 enableHostApd start  enable: 1 timeout: 3000
+[26.644]  start  enableWLAN 0 26645
+stop wifi manager
+[26.778]  end  enableWLAN 0 26778
+[   26.810686] RTW: rtw_ndev_notifier_call(wlan0) state:13
+[   26.815937] RTW: _netdev_open(wlan0) , bup=0
+[   26.827926] RTW: [HALMAC][ALWAYS]shall R reg twice!!
+[   26.833671] RTW: SetHwReg: bMacPwrCtrlOn=1
+[   26.898112] RTW: _rtw_hal_set_fw_rsvd_page(wlan0) Get [ NOR ] RsvdPageNUm  ==>
+[   26.905435] RTW: LocPsPoll: 4
+[   26.908416] RTW: LocNullData: 5
+[   26.911625] RTW: LocQosNull: 6
+[   26.914691] RTW: _rtw_hal_set_fw_rsvd_page(wlan0) Get [ NOR ] RsvdPageNUm <==
+[   26.921877] RTW: _cfg_drv_rsvd_pg_num: request 7 pages => halmac 8 pages success
+[   26.936256] RTW: rtw_start_drv_threads(wlan0) enter
+[   26.941209] RTW: rtw_start_drv_threads(wlan0) start RTW_CMD_THREAD
+[   26.948029] RTW: WARN [HALMAC][WARN]the H2C ver. does not match halmac
+[   27.726766] RTW: FW Version:24 SubVersion:8
+[   27.731022] RTW: rtl8821c_hal_init_main: successful
+[   27.747190] start_addr=(0x8000), end_addr=(0x10000), buffer_size=(0x8000), smp_number_max=(4096)
+[   27.756798] RTW: rtw_hal_set_default_port_id_cmd (wlan0) port_id :0, mad_id:0
+[   27.765552] RTW: rtl8821cu_hal_init in 940ms
+[   27.769874] RTW: rtw_hal_set_macaddr_port wlan0- hw port(0) mac_addr =68:b9:d3:f1:5a:43
+[   27.778073] RTW: rtw_hal_set_macaddr_port wlan1- hw port(1) mac_addr =6a:b9:d3:f1:5a:43
+[   27.786763] RTW: [HW_VAR_ENABLE_RX_BAR] 0x6A2=0x500
+[   27.803537] RTW: wlan0: hw_port(0) will set mode to 2
+[   27.808626] RTW: rtw_hal_set_macaddr_port wlan0- hw port(0) mac_addr =68:b9:d3:f1:5a:43
+[   27.816869] RTW: wlan0: hw_port(0) set mode=2
+[   27.821929] RTW: rtw_hal_init: padapter->registrypriv.set_rrsr_value=0xffffffff
+[   27.829264] RTW: MAC Address = 68:b9:d3:f1:5a:43
+[   27.833940] RTW: _netdev_vir_if_open(wlan1) , bup=0
+[   27.838842] RTW: rtw_start_drv_threads(wlan1) enter
+[   27.843766] RTW: _netdev_vir_if_open(wlan1) (bup=1) exit
+[   27.849396] RTW: -871x_drv - drv_open, bup=1
+[   27.854231] IPv6: ADDRCONF(NETDEV_UP): wlan0: link is not ready
+[   27.860250] RTW: cfg80211_rtw_set_power_mgmt(wlan0) enabled:0, timeout:-1
+[   27.867041] RTW: rtw_ndev_notifier_call(wlan0) state:1
+[27.907]I msncoreapp.cpp@3059 enableHostApd hostapd started  true
+[27.907]  hostapd state: 2  pid: 215 ap type: 1
+[27.908]I msncoreapp.cpp@3098 enableHostApd end  1
+[27.908]  Write At atCommand: "AT+HFPCFG=0"
+[27.910]  BT Local Address: "DC0D3014FC9F"
+[27.910]  Write At atCommand: "AT+NAME"
+[   27.967291] RTW: cfg80211_rtw_get_txpower(wlan0) total max: -10000 mbm
+[   27.985295] RTW: cfg80211_rtw_get_txpower(wlan0) total max: -10000 mbm
+[   27.992191] RTW: cfg80211_rtw_change_iface(wlan0) type=3, hw_port:0
+[   27.998506] RTW: cfg80211_rtw_change_iface(wlan0) call netdev_open
+[   28.004746] RTW: _netdev_open(wlan0) , bup=1
+[   28.009027] RTW: -871x_drv - drv_open, bup=1
+[   28.013354] RTW: cfg80211_rtw_change_iface(wlan0) old_iftype=2, new_iftype=3
+[   28.020489] RTW: rtw_release_macid(wlan0) if1, mac_addr:ff:ff:ff:ff:ff:ff macid:1
+[   28.028018] RTW: rtw_alloc_macid(wlan0) if1, mac_addr:ff:ff:ff:ff:ff:ff macid:0
+[   28.035458] RTW: wlan0: hw_port(0) will set mode to 3
+[   28.040569] RTW: rtw_hal_set_macaddr_port wlan0- hw port(0) mac_addr =68:b9:d3:f1:5a:43
+[   28.048875] RTW: wlan0: hw_port(0) set mode=3
+[   28.054221] RTW: cfg80211_rtw_change_iface(wlan0) ret:0
+[   28.060367] RTW: cfg80211_rtw_get_txpower(wlan0) total max: -10000 mbm
+[   28.071369] RTW: +cfg80211_rtw_del_station(wlan0) mac=  (null)
+[   28.077282] RTW: flush all sta, and cam_entry
+[   28.081748] RTW: rtw_sta_flush(wlan0)
+[   28.085457] RTW: issue_deauth reason(3) to ff:ff:ff:ff:ff:ff
+[   28.092236] RTW: +cfg80211_rtw_del_station(wlan0) mac=ff:ff:ff:ff:ff:ff
+[   28.098919] RTW: free sta macaddr =ff:ff:ff:ff:ff:ff
+[   28.104416] RTW: cfg80211_rtw_del_key(wlan0) key_index=0, addr=  (null)
+[   28.113010] RTW: cfg80211_rtw_del_key(wlan0) key_index=1, addr=  (null)
+[   28.120760] RTW: cfg80211_rtw_del_key(wlan0) key_index=2, addr=  (null)
+[   28.129080] RTW: cfg80211_rtw_del_key(wlan0) key_index=3, addr=  (null)
+[   28.327732] RTW: cfg80211_rtw_start_ap(wlan0) hidden_ssid:0, auth_type:0
+[   28.334588] RTW: rtw_add_beacon beacon_head_len=63, beacon_tail_len=110
+[   28.341266] RTW: rtw_check_beacon_data, len=149
+[   28.345843] RTW: [HT] HAL Support LDPC = 0x02
+[   28.350251] RTW: [HT] HAL Support STBC = 0x01
+[   28.354749] RTW: update_hw_ht_param
+[   28.359080] RTW: rtw_hal_set_bssid wlan0- hw port -0 BSSID: 68:b9:d3:f1:5a:43
+[   28.366528] RTW: hw_var_set_sec_cfg: [HW_VAR_SEC_CFG] 0x680=0x30c
+[   28.373020] RTW: rtw_ap_chbw_decision ifbmp:0x01 excl_ifbmp:0x00 req:0,-1,-1
+[   28.380115] RTW: rtw_ap_chbw_decision others ld_sta_num:0, lg_sta_num:0, ap_num:0, mesh_num:0
+[   28.388668] RTW: rtw_ap_chbw_decision ifbmp:0x01 tmp union:36,0,0
+[   28.394847] RTW: rtw_ap_chbw_decision(wlan0) 36,0,0 => 36,0,0
+[   28.400654] RTW: rtw_ap_chbw_decision union:36,0,0
+[   28.405464] RTW: HW_VAR_BASIC_RATE: 0x150->0x15f->0x15f
+[   28.411383] RTW: rtw_get_sta_tx_nss: 1 SS
+[   28.415400] RTW: rtw_get_sta_rx_nss: 1 ss
+[   28.419431] RTW: STA - MAC_ID:0, Tx - 1 SS, Rx - 1 SS
+[   28.424528] RTW: STA - MAC_ID:0, SM_PS 3
+[   28.428995] RTW: wlan0 BMC Init Tx rate - OFDM_24M
+[   28.433865] RTW: rtw_dfs_rd_en_decision(wlan0) needed:0, mlme_act:11, excl_ifbmp:0x00
+[   28.441754] RTW: rtw_dfs_rd_en_decision(wlan0) ld_sta_num:0, lg_sta_num:0, ap_num:1, mesh_num:0, 36,0,0
+[   28.484144] RTW: is_valid_id_status: HALMAC_FEATURE_IQK
+[   28.490474] RTW: hw_var_set_correct_tsf(wlan0)
+[   28.494929] RTW: [TSF_SYNC] p0 sync port = N/A
+[   28.499393] RTW: [TSF_SYNC] timer offset = 0
+[   28.504605] RTW: rtw_cfg80211_indicate_connect(wlan0)
+[   28.509719] RTW: assoc success
+[   28.512951] IPv6: ADDRCONF(NETDEV_CHANGE): wlan0: link becomes ready
+[   28.519647] RTW: rtw_ndev_notifier_call(wlan0) state:4
+[   28.526389] RTW: cfg80211_rtw_change_bss(wlan0)
+[   28.531036] RTW: ap_isolate=0
+[   28.534964] RTW: cfg80211_rtw_add_key(wlan0) cipher=0xfac04
+[   28.540647] RTW: cfg80211_rtw_add_key(wlan0) key_len=16, key_index=1
+[   28.547029] RTW: cfg80211_rtw_add_key(wlan0) pairwise=0
+[   28.552303] RTW: rtw_cfg80211_ap_set_encryption
+[   28.556849] RTW: rtw_cfg80211_ap_set_encryption(wlan0) set CCMP TX GTK idx:1, len:16
+[   28.564629] RTW: rtw_ap_set_group_key
+[   28.568533] RTW: set group key camid:0, addr:68:b9:d3:f1:5a:43, kid:1, type:AES
+[   28.578152] RTW: cfg80211_rtw_set_default_key(wlan0) key_index=1, unicast=0, multicast=1
+[   28.586823] RTW: rtw_ac_parm_cmd_hdl(wlan0) AC_VO = 0x002f3219
+[   28.594712] RTW: rtw_ac_parm_cmd_hdl(wlan0) AC_VI = 0x005e4319
+[   28.600980] RTW: rtw_ac_parm_cmd_hdl(wlan0) AC_BE = 0x0000642b
+[   28.606997] RTW: rtw_ac_parm_cmd_hdl(wlan0) AC_BK = 0x0000a44f
+[29.449]  MsnCoreApp::onDiskDeviceStatusChange 0 0
+[29.908]I msncoreapp.cp[   29.908968] RTW: +cfg80211_rtw_del_station(wlan0) mac=ff:ff:ff:ff:ff:ff
+p@2964 enabl[   29.916971] RTW: free sta macaddr =ff:ff:ff:ff:ff:ff
+eHostApd start  enable: 0 timeou[   29.924918] RTW: cfg80211_rtw_stop_ap(wlan0)
+t: 100
+[29.908[   29.930487] RTW: stop_ap_hdl(wlan0)
+]  hostapd state[   29.935329] RTW: stop_ap_mode -wlan0
+: 2  pid: 215
+[   29.940340] RTW: rtw_dfs_rd_en_decision(wlan0) needed:0, mlme_act:12, excl_ifbmp:0x00
+[   29.949554] RTW: rtw_dfs_rd_en_decision(wlan0) ld_sta_num:0, lg_sta_num:0, ap_num:0, mesh_num:0, 36,0,0
+[   29.958976] RTW: rtw_sta_flush(wlan0)
+[   29.962681] RTW: issue_deauth reason(3) to ff:ff:ff:ff:ff:ff
+[   29.968581] RTW: rtw_sta_mstatus_disc_rpt(wlan0) - mac_id=0
+[   29.974561] RTW: wlan0 drop macid=0, done reg_0x1450=0x00000001
+[   29.981147] RTW: wlan0 wakeup macid=0, ori reg_0x4d4=0x00000000
+[   29.987129] RTW: rtw_release_macid(wlan0) if1, mac_addr:ff:ff:ff:ff:ff:ff macid:0
+[   29.994889] RTW: hw_var_set_correct_tsf(wlan0)
+[   29.999338] RTW: [TSF_SYNC] p0 sync port = N/A
+[   30.003836] RTW: [TSF_SYNC] timer offset = 0
+[   30.008570] RTW: rtw_hal_set_bssid wlan0- hw port -0 BSSID: 00:00:00:00:00:00
+[   30.015922] RTW: rtw_dfs_rd_en_decision(wlan0) needed:0, mlme_act:12, excl_ifbmp:0x00
+[   30.023825] RTW: rtw_dfs_rd_en_decision(wlan0) ld_sta_num:0, lg_sta_num:0, ap_num:0, mesh_num:0, 36,0,0
+[   30.033270] RTW: clear wep or group key for addr:68:b9:d3:f1:5a:43, camid:0
+[   30.041883] RTW: rtw_set_rts_bw connect_to_8812=0,enable=1
+[   30.048466] RTW: rtw_free_assoc_resources-wlan0 tgt_network MacAddress=68:b9:d3:f1:5a:43 ssid=carplay_fc9f
+[   30.058231] RTW: ERROR Free disconnecting network of scanned_queue failed due to pwlan == NULL
+[   30.058231]
+[   30.068412] RTW: rtw_alloc_macid(wlan0) if1, mac_addr:ff:ff:ff:ff:ff:ff macid:1
+[   30.075777] RTW: wlan0: hw_port(0) will set mode to 2
+[   30.080917] RTW: rtw_hal_set_macaddr_port wlan0- hw port(0) mac_addr =68:b9:d3:f1:5a:43
+[   30.089456] RTW: wlan0: hw_port(0) set mode=2
+[   30.095075] RTW: cfg80211_rtw_change_iface(wlan0) type=2, hw_port:0
+[   30.101430] RTW: cfg80211_rtw_change_iface(wlan0) call netdev_open
+[   30.107633] RTW: _netdev_open(wlan0) , bup=1
+[   30.111945] RTW: -871x_drv - drv_open, bup=1
+[   30.116229] RTW: cfg80211_rtw_change_iface(wlan0) old_iftype=3, new_iftype=2
+[   30.132220] RTW: wlan0: hw_port(0) will set mode to 2
+[   30.137317] RTW: rtw_hal_set_macaddr_port wlan0- hw port(0) mac_addr =68:b9:d3:f1:5a:43
+[   30.145650] RTW: wlan0: hw_port(0) set mode=2
+[   30.150707] RTW: cfg80211_rtw_change_iface(wlan0) ret:0
+[   30.311182] RTW: rtw_ndev_notifier_call(wlan0) state:9
+[   30.316380] RTW: netdev_close(wlan0) , bup=1
+[   30.320734] RTW: (2)871x_drv - drv_close, bup=1, hw_init_completed=_TRUE
+[   30.327483] RTW: -871x_drv - drv_close, bup=1
+[   30.332246] RTW: rtw_ndev_notifier_call(wlan0) state:2
+[30.341]  hostapd state: 0  pid: 0
+[30.341]I msncoreapp.cpp@3098 enableHostApd end  0
+[30.342]  Write At atCommand: "AT+HFPCONN=04006EAF29C4"
+[30.343]  Auto ConnectTime 8000
+[31.150]  Write At atCommand: "AT+A2DPMUTE=1"
+[31.154]  Bluetooth connected: "Pixel 9 Pro" "04006EAF29C4" "04:00:6E:AF:29:C4"
+[31.342]I msncoreapp.cpp@2964 enableHostApd start  enable: 1 timeout: 100
+[31.342]  start  enableWLAN 0 31342
+stop wifi manager
+[31.450]  end  enableWLAN 0 31450
+[   31.479335] RTW: rtw_ndev_notifier_call(wlan0) state:13
+[   31.484717] RTW: _netdev_open(wlan0) , bup=1
+[   31.489004] RTW: -871x_drv - drv_open, bup=1
+[   31.493829] RTW: cfg80211_rtw_set_power_mgmt(wlan0) enabled:0, timeout:-1
+[   31.500706] RTW: rtw_ndev_notifier_call(wlan0) state:1
+[31.529]I msncoreapp.cpp@3059 enableHostApd hostapd started  true
+[31.529]  hostapd state: 2  pid: 229 ap type: 1
+[31.530]I msncoreapp.cpp@3098 enableHostApd end  1
+[   31.545475] RTW: cfg80211_rtw_get_txpower(wlan0) total max: -10000 mbm
+[   31.554002] RTW: cfg80211_rtw_get_txpower(wlan0) total max: -10000 mbm
+[   31.560873] RTW: cfg80211_rtw_change_iface(wlan0) type=3, hw_port:0
+[   31.567183] RTW: cfg80211_rtw_change_iface(wlan0) call netdev_open
+[   31.573421] RTW: _netdev_open(wlan0) , bup=1
+[   31.577723] RTW: -871x_drv - drv_open, bup=1
+[   31.582053] RTW: cfg80211_rtw_change_iface(wlan0) old_iftype=2, new_iftype=3
+[   31.589151] RTW: rtw_release_macid(wlan0) if1, mac_addr:ff:ff:ff:ff:ff:ff macid:1
+[   31.596712] RTW: rtw_alloc_macid(wlan0) if1, mac_addr:ff:ff:ff:ff:ff:ff macid:0
+[   31.604243] RTW: wlan0: hw_port(0) will set mode to 3
+[   31.609337] RTW: rtw_hal_set_macaddr_port wlan0- hw port(0) mac_addr =68:b9:d3:f1:5a:43
+[   31.617660] RTW: wlan0: hw_port(0) set mode=3
+[   31.622653] RTW: cfg80211_rtw_change_iface(wlan0) ret:0
+[   31.628819] RTW: cfg80211_rtw_get_txpower(wlan0) total max: -10000 mbm
+[   31.638882] RTW: +cfg80211_rtw_del_station(wlan0) mac=  (null)
+[   31.644939] RTW: flush all sta, and cam_entry
+[   31.649314] RTW: rtw_sta_flush(wlan0)
+[   31.653080] RTW: issue_deauth reason(3) to ff:ff:ff:ff:ff:ff
+[   31.659443] RTW: +cfg80211_rtw_del_station(wlan0) mac=ff:ff:ff:ff:ff:ff
+[   31.666152] RTW: free sta macaddr =ff:ff:ff:ff:ff:ff
+[   31.671608] RTW: cfg80211_rtw_del_key(wlan0) key_index=0, addr=  (null)
+[   31.678643] RTW: cfg80211_rtw_del_key(wlan0) key_index=1, addr=  (null)
+[   31.685652] RTW: cfg80211_rtw_del_key(wlan0) key_index=2, addr=  (null)
+[   31.692557] RTW: cfg80211_rtw_del_key(wlan0) key_index=3, addr=  (null)
+[   31.880448] RTW: cfg80211_rtw_start_ap(wlan0) hidden_ssid:0, auth_type:0
+[   31.887188] RTW: rtw_add_beacon beacon_head_len=63, beacon_tail_len=110
+[   31.893929] RTW: rtw_check_beacon_data, len=149
+[   31.898507] RTW: [HT] HAL Support LDPC = 0x02
+[   31.902915] RTW: [HT] HAL Support STBC = 0x01
+[   31.907419] RTW: update_hw_ht_param
+[   31.911628] RTW: rtw_hal_set_bssid wlan0- hw port -0 BSSID: 68:b9:d3:f1:5a:43
+[   31.919016] RTW: hw_var_set_sec_cfg: [HW_VAR_SEC_CFG] 0x680=0x30c
+[   31.925444] RTW: rtw_ap_chbw_decision ifbmp:0x01 excl_ifbmp:0x00 req:0,-1,-1
+[   31.932544] RTW: rtw_ap_chbw_decision others ld_sta_num:0, lg_sta_num:0, ap_num:0, mesh_num:0
+[   31.941127] RTW: rtw_ap_chbw_decision ifbmp:0x01 tmp union:36,0,0
+[   31.947253] RTW: rtw_ap_chbw_decision(wlan0) 36,0,0 => 36,0,0
+[   31.953043] RTW: rtw_ap_chbw_decision union:36,0,0
+[   31.957863] RTW: HW_VAR_BASIC_RATE: 0x150->0x150->0x150
+[   31.963654] RTW: rtw_get_sta_tx_nss: 1 SS
+[   31.967670] RTW: rtw_get_sta_rx_nss: 1 ss
+[   31.971726] RTW: STA - MAC_ID:0, Tx - 1 SS, Rx - 1 SS
+[   31.976817] RTW: STA - MAC_ID:0, SM_PS 3
+[   31.981389] RTW: wlan0 BMC Init Tx rate - OFDM_24M
+[   31.986217] RTW: rtw_dfs_rd_en_decision(wlan0) needed:0, mlme_act:11, excl_ifbmp:0x00
+[   31.994113] RTW: rtw_dfs_rd_en_decision(wlan0) ld_sta_num:0, lg_sta_num:0, ap_num:1, mesh_num:0, 36,0,0
+[   32.024859] RTW: is_valid_id_status: HALMAC_FEATURE_IQK
+[   32.032444] RTW: hw_var_set_correct_tsf(wlan0)
+[   32.036906] RTW: [TSF_SYNC] p0 sync port = N/A
+[   32.041440] RTW: [TSF_SYNC] timer offset = 0
+[   32.046696] RTW: rtw_cfg80211_indicate_connect(wlan0)
+[   32.051821] RTW: assoc success
+[   32.055321] RTW: cfg80211_rtw_change_bss(wlan0)
+[   32.059956] RTW: ap_isolate=0
+[   32.064025] RTW: cfg80211_rtw_add_key(wlan0) cipher=0xfac04
+[   32.069689] RTW: cfg80211_rtw_add_key(wlan0) key_len=16, key_index=1
+[   32.076072] RTW: cfg80211_rtw_add_key(wlan0) pairwise=0
+[   32.081350] RTW: rtw_cfg80211_ap_set_encryption
+[   32.085889] RTW: rtw_cfg80211_ap_set_encryption(wlan0) set CCMP TX GTK idx:1, len:16
+[   32.093719] RTW: rtw_ap_set_group_key
+[   32.097896] RTW: set group key camid:0, addr:68:b9:d3:f1:5a:43, kid:1, type:AES
+[   32.111666] RTW: cfg80211_rtw_set_default_key(wlan0) key_index=1, unicast=0, multicast=1
+[   32.122147] RTW: rtw_ac_parm_cmd_hdl(wlan0) AC_VO = 0x002f3219
+[   32.134643] RTW: rtw_ac_parm_cmd_hdl(wlan0) AC_VI = 0x005e4319
+[   32.141114] RTW: rtw_ac_parm_cmd_hdl(wlan0) AC_BE = 0x0000642b
+[   32.147130] RTW: rtw_ac_parm_cmd_hdl(wlan0) AC_BK = 0x0000a44f
+[33.650]  recv bluetooth connect phone type: "unkown"
+[33.650]  onRecvUUID PhoneType: 0
+[33.673]  Load App Plugin 13 "/usr/lib/libMsnCarAuto.so"
+[33.676]  MsnMainWindow::setRealVisible LauncherWindow(0x11fff0, name = "LauncherWindow") false
+[33.679]  MsnMainWindow::setRealVisible CarAutoWindow(0x1313a8) true
+[33.680]  mode app change: "MsnCoreApp" -> "MsnCarAuto"
+[33.681]
+======== refreshAppAudioChannel 8388611 0
+[33.681]  switchToAppAudioChannel, ModeApp: "MsnCarAuto"  AudioApp: "MsnCarAuto"  Channel: 0 Request: false
+[33.692]  Waite Event Ticks 11
+[   33.809483] ark_display: ARKDISP_GET_SCREEN_INFO -> screen_id=0 800x480 120x72mm
+get_shared_display_data May 29 2020-16:57:02.
+[33.818]  CarAutoWindow::retryConnect()
+[33.819]  isPhoneConnected 2
+[33.819]_ msncoreapp.cpp@2413 msnAppNotify ____ APP_NOTIFY_ENABLE_HOSTAPD 1
+[33.819]I msncoreapp.cpp@2964 enableHostApd start  enable: 1 timeout: 3000
+[33.819]  start  enableWLAN 0 33820
+stop wifi manager
+[33.939]  end  enableWLAN 0 33939
+[33.943]  hostapd state: 2  pid: 229 ap type: 1
+[33.943]I msncoreapp.cpp@3098 enableHostApd end  1
+[33.943]  refreshConnectType 11
+[33.944]_ msncoreapp.cpp@2413 msnAppNotify ____ APP_NOTIFY_ENABLE_HOSTAPD 1
+[33.944]I msncoreapp.cpp@2964 enableHostApd start  enable: 1 timeout: 3000
+[33.944]  start  enableWLAN 0 33944
+stop wifi manager
+[34.053]  end  enableWLAN 0 34053
+[34.057]  hostapd state: 2  pid: 229 ap type: 1
+[34.057]I msncoreapp.cpp@3098 enableHostApd end  1
+[34.110]  requestLinkStatus 11 3
+[34.110]  MsnLink StartService: "com.arkmicro.auto"
+ArkUtils::open_local_socket:266 sock = 3
+ArkUtils::open_local_socket:266 sock = 4
+initWlConnection:249
+
+IArkCallbacks::IArkCallbacks:35
+wirelessConnectionProc:187
+
+wirelessConnectionProc:189
+
+IArkCallbacks::IArkCallbacks:37 handle=00066ee0
+right_hand_driver : 0
+pcarplay_info->bridge_mode=0
+ArkAuto::init right_hand_driver : 0
+ArkAuto::init:68 mIsDongleMode=0
+ArkDbus::ArkDbus:66 handle=00067a18
+ArkDbus::init:115 mIsDongleMode=0
+ScreenWidth:800 ScreenHeight:480
+ArkAuto::run : 222
+[34.466]  MsnLink StartService ret: "com.arkmicro.auto" true ""
+[34.466]  ====================== requestAutoHandler ====================== 3
+ArkDbus::reply_to_requestLinkStatus_call 223 param1=11 param2=3
+IArkCallbacks::requestLinkStatus:77 0
+IArkCallbacks::requestLinkStatus:83
+ArkDbus::onLinkStatusChange:175 mStatus=3
+Signal Sent
+ArkDbus::run 468
+[34.610]  MsnLink::onServiceRegistered "com.arkmicro.auto"
+[34.611]  MsnCoreApp::onLinkStatusChange 11 3
+[34.611]
+==========CarAuto onLinkStatusChange: 11 3 ==========
+
+
+==========CarAuto Status: 3 true ==========
+
+BtRfcommController::start : 404
+/dev/bw_aap is not symlink
+ArkUtils::open_local_socket:266 sock = 9
+BtRfcommController::start : 414
+rfcomm write: 00 09 00 04 08 01 10 00 18 00 20 bc 28
+rfcomm read: 00 16 00 05
+len=22 type=5
+rfcomm read: 08 01 10 00 1a 0e 35 36 31 37 31 46 44 41 50 30 30 31 54 45 20 00
+interface=wlan0
+wlan0 IP Address 192.168.43.1
+wlan0 IP Address fe80::6ab9:d3ff:fef1:5a43
+local wifi ip=192.168.43.1
+majorVer:1 minorVer0 deviceSerial:56171FDAP001TE status:0 channel:-1
+rfcomm write: 00 11 00 01 0a 0c 31 39 32 2e 31 36 38 2e 34 33 2e 31 10 ca 34
+rfcomm read: 00 00 00 02
+len=0 type=2
+Rfcomm Read timeout!!!
+ssid=carplay_fc9f
+passwd=88888888
+interface=wlan0
+local mac:68:b9:d3:f1:5a:43
+mac=68:b9:d3:f1:5a:43
+rfcomm write: 00 2d 00 03 0a 0c 63 61 72 70 6c 61 79 5f 66 63 39 66 12 08 38 38 38 38 38 38 38 38 1a 11 36 38 3a 62 39 3a 64 33 3a 66 31 3a 35 61 3a 34 33 20 08
+rfcomm read: 00 02 00 07
+len=2 type=7
+rfcomm read: 18 00
+ip: port:-1
+[   40.340798] RTW: +OnAuth
+[   40.343378] RTW: auth alg=0, seq=1
+[   40.346791] RTW: going to alloc stainfo for sa=f6:d6:cb:da:c0:aa
+[   40.352854] RTW: rtw_alloc_macid(wlan0) if1, mac_addr:f6:d6:cb:da:c0:aa macid:2
+[   40.360194] RTW: issue_auth
+[   40.365099] RTW: OnAssocReq
+[   40.367956] RTW: OnAssocReq(wlan0) allocate new AID=1
+[   40.373050] RTW: HT: STA f6:d6:cb:da:c0:aa HT Capabilities Info: 0x006f
+[   40.379708] RTW: bss_cap_update_on_sta_join STA f6:d6:cb:da:c0:aa - no greenfield, num of non-gf stations 1
+[   40.389448] RTW: rtw_ht_operation_update current operation mode=0x0
+[   40.395722] RTW: rtw_ht_operation_update new operation mode=0x4 changes=1
+[   40.402505] RTW: update_bcn_htcap_ie
+[   40.406079] RTW: update_bcn_htinfo_ie current operation mode=0x4
+[   40.412113] RTW: num_sta_40mhz_intolerant(0), 20mhz_width_req(0), intolerant_ch_rpt(0), olbc(0)
+[   40.420843] RTW: associated_stainfo_update: f6:d6:cb:da:c0:aa, updated_type=0x3f
+[   40.428245] RTW: bss_cap_update_on_sta_join, updated=1
+[   40.433380] RTW: update_sta_info_apmode
+[   40.437215] RTW: Enable HT Tx LDPC for STA(1)
+[   40.441581] RTW: ### Set STA_(2) info ###
+[   40.445615] RTW: issue_asocrsp
+[   40.448798] RTW: report_add_sta_event: add STA
+[   40.454430] RTW: rtw_get_sta_tx_nss: 1 SS
+[   40.458454] RTW: rtw_get_sta_rx_nss: 1 ss
+[   40.462547] RTW: STA - MAC_ID:2, Tx - 1 SS, Rx - 1 SS
+[   40.467600] RTW: STA - MAC_ID:2, SM_PS 3
+[   40.471571] RTW: ht_mcs_set=ff 00 00 00, nss=1, bitmap=000000ff
+[   40.477496] RTW: rtw_ap_update_sta_ra_info=> mac_id:2 , tx_ra_bitmap:0x00000000000ffff0, networkType:0x14
+[   40.511802] RTW: ============ STA [f6:d6:cb:da:c0:aa]  ===================
+[   40.519105] RTW: mac_id : 2
+[   40.521981] RTW: wireless_mode : 0x14
+[   40.525646] RTW: mimo_type : 0
+[   40.528695] RTW: static smps : N
+[   40.531962] RTW: bw_mode : 20MHz, ra_bw_mode : 20MHz
+[   40.536926] RTW: rate_id : 10
+[   40.539938] RTW: rssi : -1 (%), rssi_level : 0
+[   40.544413] RTW: is_support_sgi : Y, is_vht_enable : N
+[   40.549589] RTW: disable_ra : N, disable_pt : N
+[   40.554140] RTW: is_noisy : N
+[   40.557104] RTW: txrx_state : 0
+[   40.560273] RTW: curr_tx_rate : CCK_1M (L)
+[   40.564376] RTW: curr_tx_bw : 20MHz
+[   40.567861] RTW: curr_retry_ratio : 0
+[   40.571550] RTW: ra_mask : 0x00000000000ffff0
+[   40.571550]
+[   40.577386] RTW: indicate_sta_assoc_event to upper layer - hostapd
+[   40.583611] RTW: rtw_cfg80211_indicate_sta_assoc(wlan0)
+[   40.588920] RTW: rtw_set_rts_bw connect_to_8812=0,enable=1
+[   40.595904] RTW: cfg80211_rtw_change_station(wlan0) mac:f6:d6:cb:da:c0:aa
+[   40.614998] RTW: cfg80211_rtw_del_key(wlan0) key_index=0, addr=f6:d6:cb:da:c0:aa
+[   40.630089] RTW: cfg80211_rtw_del_key(wlan0) key_index=0, addr=f6:d6:cb:da:c0:aa
+[   40.645014] RTW: cfg80211_rtw_change_station(wlan0) mac:f6:d6:cb:da:c0:aa
+[   40.653809] RTW: cfg80211_rtw_add_key(wlan0) cipher=0xfac04
+[   40.659458] RTW: cfg80211_rtw_add_key(wlan0) key_len=16, key_index=1
+[   40.665897] RTW: cfg80211_rtw_add_key(wlan0) pairwise=0
+[   40.671167] RTW: rtw_cfg80211_ap_set_encryption
+[   40.675705] RTW: rtw_cfg80211_ap_set_encryption(wlan0) set CCMP TX GTK idx:1, len:16
+[   40.683491] RTW: rtw_ap_set_group_key
+[   40.687560] RTW: cfg80211_rtw_set_default_key(wlan0) key_index=1, unicast=0, multicast=1
+[   40.696628] RTW: send eapol packet 1/4
+[   40.700993] RTW: set group key camid:0, addr:68:b9:d3:f1:5a:43, kid:1, type:AES
+[   40.708608] RTW: recv eapol packet 2/4
+[   40.713551] RTW: cfg80211_rtw_get_key(wlan0) keyid=1, pairwise=0, addr=  (null) ret 0
+[   40.721520] RTW: cfg80211_rtw_get_key(wlan0) seq:0x0
+[   40.728992] RTW: send eapol packet 3/4
+[   40.735008] RTW: recv eapol packet 4/4
+[   40.739415] RTW: cfg80211_rtw_add_key(wlan0) adding key for f6:d6:cb:da:c0:aa
+[   40.746676] RTW: cfg80211_rtw_add_key(wlan0) cipher=0xfac04
+[   40.752313] RTW: cfg80211_rtw_add_key(wlan0) key_len=16, key_index=0
+[   40.758666] RTW: cfg80211_rtw_add_key(wlan0) pairwise=1
+[   40.763941] RTW: rtw_cfg80211_ap_set_encryption
+[   40.768497] RTW: rtw_cfg80211_ap_set_encryption(wlan0) set CCMP PTK of f6:d6:cb:da:c0:aa idx:0, len:16
+[   40.779755] RTW: set pairwise key camid:2, addr:f6:d6:cb:da:c0:aa, kid:0, type:AES
+[   40.813070] RTW: cfg80211_rtw_change_station(wlan0) mac:f6:d6:cb:da:c0:aa
+[   40.886880] RTW: OnAction_back
+[   40.889958] RTW: OnAction_back, action=0
+[   40.896072] RTW: issue_addba_rsp_wait_ack(wlan0) ra=f6:d6:cb:da:c0:aa status:=0 tid=0 size:64, acked, 1/3 in 0 ms
+[   41.920406] RTW: Turbo EDCA =0x5ea42b
+[   42.424973] RTW: OnDisassoc(wlan0) - Start to Disconnect
+[   42.430318] RTW: OnDisassoc(wlan0) reason=8, ta=f6:d6:cb:da:c0:aa
+[   42.436438] RTW: rtw_cfg80211_indicate_sta_disassoc(wlan0)
+[   42.442012] RTW: rtw_ht_operation_update current operation mode=0x4
+[   42.448285] RTW: rtw_ht_operation_update new operation mode=0x0 changes=1
+[   42.455079] RTW: update_bcn_htcap_ie
+[   42.458653] RTW: update_bcn_htinfo_ie current operation mode=0x0
+[   42.464656] RTW: num_sta_40mhz_intolerant(0), 20mhz_width_req(0), intolerant_ch_rpt(0), olbc(0)
+[   42.473385] RTW: bss_cap_update_on_sta_leave, updated=1
+[   42.478623] RTW: report_del_sta_event(wlan0) f6:d6:cb:da:c0:aa mac_id=2, enqueue:1, res:1
+[   42.487760] RTW: cfg80211_rtw_del_key(wlan0) key_index=0, addr=f6:d6:cb:da:c0:aa
+[   42.496075] RTW: rtw_stadel_event_callback(mac_id=2)=f6:d6:cb:da:c0:aa
+[   42.502716] RTW: rtw_sta_mstatus_disc_rpt(wlan0) - mac_id=2
+[   42.509451] RTW: wlan0 drop macid=2, done reg_0x1450=0x00000004
+[   42.516914] RTW: wlan0 wakeup macid=2, ori reg_0x4d4=0x00000000
+[   42.522981] RTW: ### Clean STA_(2) info ###
+[   42.527185] RTW: rtw_release_macid(wlan0) if1, mac_addr:f6:d6:cb:da:c0:aa macid:2
+[   42.534732] RTW: rtw_set_rts_bw connect_to_8812=0,enable=1
+[   42.540871] RTW: cfg80211_rtw_del_key(wlan0) key_index=0, addr=f6:d6:cb:da:c0:aa
+[   42.554179] RTW: cfg80211_rtw_change_station(wlan0) mac:f6:d6:cb:da:c0:aa
+[   42.570077] RTW: +cfg80211_rtw_del_station(wlan0) mac=f6:d6:cb:da:c0:aa
+[   42.576796] RTW: free sta macaddr =f6:d6:cb:da:c0:aa
+[   42.581825] RTW: -cfg80211_rtw_del_station(wlan0)
+[   42.597552] RTW: clear key for addr:f6:d6:cb:da:c0:aa, camid:2
+[   46.160814] RTW: +OnAuth
+[   46.163376] RTW: auth alg=0, seq=1
+[   46.166788] RTW: going to alloc stainfo for sa=f6:d6:cb:da:c0:aa
+[   46.172898] RTW: rtw_alloc_macid(wlan0) if1, mac_addr:f6:d6:cb:da:c0:aa macid:2
+[   46.180298] RTW: issue_auth
+[   46.185381] RTW: OnAssocReq
+[   46.188246] RTW: OnAssocReq(wlan0) allocate new AID=1
+[   46.193386] RTW: HT: STA f6:d6:cb:da:c0:aa HT Capabilities Info: 0x006f
+[   46.200066] RTW: bss_cap_update_on_sta_join STA f6:d6:cb:da:c0:aa - no greenfield, num of non-gf stations 1
+[   46.209844] RTW: rtw_ht_operation_update current operation mode=0x0
+[   46.216141] RTW: rtw_ht_operation_update new operation mode=0x4 changes=1
+[   46.222958] RTW: update_bcn_htcap_ie
+[   46.226536] RTW: update_bcn_htinfo_ie current operation mode=0x4
+[   46.232577] RTW: num_sta_40mhz_intolerant(0), 20mhz_width_req(0), intolerant_ch_rpt(0), olbc(0)
+[   46.241337] RTW: associated_stainfo_update: f6:d6:cb:da:c0:aa, updated_type=0x3f
+[   46.248742] RTW: bss_cap_update_on_sta_join, updated=1
+[   46.253911] RTW: update_sta_info_apmode
+[   46.257749] RTW: Enable HT Tx LDPC for STA(1)
+[   46.262152] RTW: ### Set STA_(2) info ###
+[   46.266166] RTW: issue_asocrsp
+[   46.269376] RTW: report_add_sta_event: add STA
+[   46.275051] RTW: rtw_get_sta_tx_nss: 1 SS
+[   46.279097] RTW: rtw_get_sta_rx_nss: 1 ss
+[   46.283179] RTW: STA - MAC_ID:2, Tx - 1 SS, Rx - 1 SS
+[   46.288233] RTW: STA - MAC_ID:2, SM_PS 3
+[   46.292204] RTW: ht_mcs_set=ff 00 00 00, nss=1, bitmap=000000ff
+[   46.298139] RTW: rtw_ap_update_sta_ra_info=> mac_id:2 , tx_ra_bitmap:0x00000000000ffff0, networkType:0x14
+[   46.339765] RTW: ============ STA [f6:d6:cb:da:c0:aa]  ===================
+[   46.346658] RTW: mac_id : 2
+[   46.349525] RTW: wireless_mode : 0x14
+[   46.353188] RTW: mimo_type : 0
+[   46.356258] RTW: static smps : N
+[   46.359521] RTW: bw_mode : 20MHz, ra_bw_mode : 20MHz
+[   46.364494] RTW: rate_id : 10
+[   46.367458] RTW: rssi : -1 (%), rssi_level : 0
+[   46.371931] RTW: is_support_sgi : Y, is_vht_enable : N
+[   46.377090] RTW: disable_ra : N, disable_pt : N
+[   46.381656] RTW: is_noisy : N
+[   46.384623] RTW: txrx_state : 0
+[   46.387760] RTW: curr_tx_rate : CCK_1M (L)
+[   46.391883] RTW: curr_tx_bw : 20MHz
+[   46.395370] RTW: curr_retry_ratio : 0
+[   46.399036] RTW: ra_mask : 0x00000000000ffff0
+[   46.399036]
+[   46.404899] RTW: indicate_sta_assoc_event to upper layer - hostapd
+[   46.411115] RTW: rtw_cfg80211_indicate_sta_assoc(wlan0)
+[   46.416439] RTW: rtw_set_rts_bw connect_to_8812=0,enable=1
+[   46.423101] RTW: cfg80211_rtw_change_station(wlan0) mac:f6:d6:cb:da:c0:aa
+[   46.430437] RTW: cfg80211_rtw_del_key(wlan0) key_index=0, addr=f6:d6:cb:da:c0:aa
+[   46.438413] RTW: cfg80211_rtw_del_key(wlan0) key_index=0, addr=f6:d6:cb:da:c0:aa
+[   46.449759] RTW: cfg80211_rtw_change_station(wlan0) mac:f6:d6:cb:da:c0:aa
+[   46.467154] RTW: send eapol packet 1/4
+[   46.473263] RTW: recv eapol packet 2/4
+[   46.477940] RTW: cfg80211_rtw_get_key(wlan0) keyid=1, pairwise=0, addr=  (null) ret 0
+[   46.485911] RTW: cfg80211_rtw_get_key(wlan0) seq:0x0
+[   46.501967] RTW: send eapol packet 3/4
+[   46.507971] RTW: recv eapol packet 4/4
+[   46.512438] RTW: cfg80211_rtw_add_key(wlan0) adding key for f6:d6:cb:da:c0:aa
+[   46.519712] RTW: cfg80211_rtw_add_key(wlan0) cipher=0xfac04
+[   46.525332] RTW: cfg80211_rtw_add_key(wlan0) key_len=16, key_index=0
+[   46.531730] RTW: cfg80211_rtw_add_key(wlan0) pairwise=1
+[   46.536972] RTW: rtw_cfg80211_ap_set_encryption
+[   46.541550] RTW: rtw_cfg80211_ap_set_encryption(wlan0) set CCMP PTK of f6:d6:cb:da:c0:aa idx:0, len:16
+[   46.551138] RTW: set pairwise key camid:2, addr:f6:d6:cb:da:c0:aa, kid:0, type:AES
+[   46.561327] RTW: cfg80211_rtw_change_station(wlan0) mac:f6:d6:cb:da:c0:aa
+[   46.653495] RTW: OnAction_back
+[   46.656575] RTW: OnAction_back, action=0
+[   46.661633] RTW: issue_addba_rsp_wait_ack(wlan0) ra=f6:d6:cb:da:c0:aa status:=0 tid=0 size:64, acked, 1/3 in 0 ms
+[   48.160641] RTW: Turbo EDCA =0xa42b
+BtRfcommController::stop : 422 start
+RfcommTransport::stop : 230
+ArkUtils::send_local_message:288 sock = 9 n =1
+~RfcommConnection:289
+read:291
+Rfcomm transport exit because receiving quit cmd
+Read header failed
+run:161 stop
+BtRfcommController::stop : 430 end
+ArkDbus::onLinkStatusChange:175 mStatus=2
+Signal Sent
+[50.074]  MsnCoreApp::onLinkStatusChange 11 2
+[50.075]
+==========CarAuto onLinkStatusChange: 11 2 ==========
+
+
+==========CarAuto Status: 2 true ==========
+
+[   54.477605] RTW: OnDisassoc(wlan0) - Start to Disconnect
+[   54.482965] RTW: OnDisassoc(wlan0) reason=8, ta=f6:d6:cb:da:c0:aa
+[   54.489088] RTW: rtw_cfg80211_indicate_sta_disassoc(wlan0)
+[   54.494666] RTW: rtw_ht_operation_update current operation mode=0x4
+[   54.500949] RTW: rtw_ht_operation_update new operation mode=0x0 changes=1
+[   54.507733] RTW: update_bcn_htcap_ie
+[   54.511328] RTW: update_bcn_htinfo_ie current operation mode=0x0
+[   54.517341] RTW: num_sta_40mhz_intolerant(0), 20mhz_width_req(0), intolerant_ch_rpt(0), olbc(0)
+[   54.526061] RTW: bss_cap_update_on_sta_leave, updated=1
+[   54.531308] RTW: report_del_sta_event(wlan0) f6:d6:cb:da:c0:aa mac_id=2, enqueue:1, res:1
+[   54.540404] RTW: cfg80211_rtw_del_key(wlan0) key_index=0, addr=f6:d6:cb:da:c0:aa
+[   54.548662] RTW: rtw_stadel_event_callback(mac_id=2)=f6:d6:cb:da:c0:aa
+[   54.555284] RTW: rtw_sta_mstatus_disc_rpt(wlan0) - mac_id=2
+[   54.578951] RTW: wlan0 drop macid=2, done reg_0x1450=0x00000004
+[   54.585531] RTW: wlan0 wakeup macid=2, ori reg_0x4d4=0x00000000
+[   54.591554] RTW: ### Clean STA_(2) info ###
+[   54.595782] RTW: rtw_release_macid(wlan0) if1, mac_addr:f6:d6:cb:da:c0:aa macid:2
+[   54.603351] RTW: rtw_set_rts_bw connect_to_8812=0,enable=1
+[   54.614927] RTW: cfg80211_rtw_del_key(wlan0) key_index=0, addr=f6:d6:cb:da:c0:aa
+[   54.624494] RTW: cfg80211_rtw_change_station(wlan0) mac:f6:d6:cb:da:c0:aa
+[   54.631846] RTW: +cfg80211_rtw_del_station(wlan0) mac=f6:d6:cb:da:c0:aa
+[   54.638478] RTW: free sta macaddr =f6:d6:cb:da:c0:aa
+[   54.643529] RTW: -cfg80211_rtw_del_station(wlan0)
+[   54.648538] RTW: clear key for addr:f6:d6:cb:da:c0:aa, camid:2
+[   58.113931] RTW: +OnAuth
+[   58.116491] RTW: auth alg=0, seq=1
+[   58.119941] RTW: going to alloc stainfo for sa=f6:d6:cb:da:c0:aa
+[   58.125982] RTW: rtw_alloc_macid(wlan0) if1, mac_addr:f6:d6:cb:da:c0:aa macid:2
+[   58.133338] RTW: issue_auth
+[   58.138234] RTW: OnAssocReq
+[   58.141088] RTW: OnAssocReq(wlan0) allocate new AID=1
+[   58.146178] RTW: HT: STA f6:d6:cb:da:c0:aa HT Capabilities Info: 0x006f
+[   58.152824] RTW: bss_cap_update_on_sta_join STA f6:d6:cb:da:c0:aa - no greenfield, num of non-gf stations 1
+[   58.162605] RTW: rtw_ht_operation_update current operation mode=0x0
+[   58.168892] RTW: rtw_ht_operation_update new operation mode=0x4 changes=1
+[   58.175685] RTW: update_bcn_htcap_ie
+[   58.179260] RTW: update_bcn_htinfo_ie current operation mode=0x4
+[   58.185262] RTW: num_sta_40mhz_intolerant(0), 20mhz_width_req(0), intolerant_ch_rpt(0), olbc(0)
+[   58.193995] RTW: associated_stainfo_update: f6:d6:cb:da:c0:aa, updated_type=0x3f
+[   58.201388] RTW: bss_cap_update_on_sta_join, updated=1
+[   58.206531] RTW: update_sta_info_apmode
+[   58.210365] RTW: Enable HT Tx LDPC for STA(1)
+[   58.214733] RTW: ### Set STA_(2) info ###
+[   58.218742] RTW: issue_asocrsp
+[   58.221942] RTW: report_add_sta_event: add STA
+[   58.228076] RTW: rtw_get_sta_tx_nss: 1 SS
+[   58.232161] RTW: rtw_get_sta_rx_nss: 1 ss
+[   58.236172] RTW: STA - MAC_ID:2, Tx - 1 SS, Rx - 1 SS
+[   58.241287] RTW: STA - MAC_ID:2, SM_PS 3
+[   58.245238] RTW: ht_mcs_set=ff 00 00 00, nss=1, bitmap=000000ff
+[   58.251199] RTW: rtw_ap_update_sta_ra_info=> mac_id:2 , tx_ra_bitmap:0x00000000000ffff0, networkType:0x14
+[   58.285170] RTW: ============ STA [f6:d6:cb:da:c0:aa]  ===================
+[   58.292170] RTW: mac_id : 2
+[   58.294989] RTW: wireless_mode : 0x14
+[   58.298673] RTW: mimo_type : 0
+[   58.301766] RTW: static smps : N
+[   58.304998] RTW: bw_mode : 20MHz, ra_bw_mode : 20MHz
+[   58.310000] RTW: rate_id : 10
+[   58.312967] RTW: rssi : -1 (%), rssi_level : 0
+[   58.317406] RTW: is_support_sgi : Y, is_vht_enable : N
+[   58.322571] RTW: disable_ra : N, disable_pt : N
+[   58.327132] RTW: is_noisy : N
+[   58.330130] RTW: txrx_state : 0
+[   58.333271] RTW: curr_tx_rate : CCK_1M (L)
+[   58.337361] RTW: curr_tx_bw : 20MHz
+[   58.340881] RTW: curr_retry_ratio : 0
+[   58.344543] RTW: ra_mask : 0x00000000000ffff0
+[   58.344543]
+[   58.350405] RTW: indicate_sta_assoc_event to upper layer - hostapd
+[   58.356599] RTW: rtw_cfg80211_indicate_sta_assoc(wlan0)
+[   58.361937] RTW: rtw_set_rts_bw connect_to_8812=0,enable=1
+[   58.370583] RTW: cfg80211_rtw_change_station(wlan0) mac:f6:d6:cb:da:c0:aa
+[   58.390094] RTW: cfg80211_rtw_del_key(wlan0) key_index=0, addr=f6:d6:cb:da:c0:aa
+[   58.408454] RTW: cfg80211_rtw_del_key(wlan0) key_index=0, addr=f6:d6:cb:da:c0:aa
+[   58.416474] RTW: cfg80211_rtw_change_station(wlan0) mac:f6:d6:cb:da:c0:aa
+[   58.424558] RTW: send eapol packet 1/4
+[   58.430780] RTW: recv eapol packet 2/4
+[   58.435448] RTW: cfg80211_rtw_get_key(wlan0) keyid=1, pairwise=0, addr=  (null) ret 0
+[   58.443395] RTW: cfg80211_rtw_get_key(wlan0) seq:0x0
+[   58.463323] RTW: send eapol packet 3/4
+[   58.469438] RTW: recv eapol packet 4/4
+[   58.474048] RTW: cfg80211_rtw_add_key(wlan0) adding key for f6:d6:cb:da:c0:aa
+[   58.481336] RTW: cfg80211_rtw_add_key(wlan0) cipher=0xfac04
+[   58.486940] RTW: cfg80211_rtw_add_key(wlan0) key_len=16, key_index=0
+[   58.493338] RTW: cfg80211_rtw_add_key(wlan0) pairwise=1
+[   58.498571] RTW: rtw_cfg80211_ap_set_encryption
+[   58.503150] RTW: rtw_cfg80211_ap_set_encryption(wlan0) set CCMP PTK of f6:d6:cb:da:c0:aa idx:0, len:16
+[   58.512840] RTW: set pairwise key camid:2, addr:f6:d6:cb:da:c0:aa, kid:0, type:AES
+[   58.532753] RTW: cfg80211_rtw_change_station(wlan0) mac:f6:d6:cb:da:c0:aa
+[   58.560511] RTW: Turbo EDCA =0x5ea42b
+[   58.612990] RTW: OnAction_back
+[   58.616073] RTW: OnAction_back, action=0
+[   58.621292] RTW: issue_addba_rsp_wait_ack(wlan0) ra=f6:d6:cb:da:c0:aa status:=0 tid=0 size:64, acked, 1/3 in 0 ms
+[   60.640537] RTW: Turbo EDCA =0xa42b
+[   62.720535] RTW: Turbo EDCA =0x5ea42b
+[   64.800537] RTW: Turbo EDCA =0xa42b
+[   71.040522] RTW: Turbo EDCA =0x5ea42b
+[   71.598881] RTW: OnDisassoc(wlan0) - Start to Disconnect
+[   71.604225] RTW: OnDisassoc(wlan0) reason=8, ta=f6:d6:cb:da:c0:aa
+[   71.610372] RTW: rtw_cfg80211_indicate_sta_disassoc(wlan0)
+[   71.615958] RTW: rtw_ht_operation_update current operation mode=0x4
+[   71.622232] RTW: rtw_ht_operation_update new operation mode=0x0 changes=1
+[   71.629028] RTW: update_bcn_htcap_ie
+[   71.632603] RTW: update_bcn_htinfo_ie current operation mode=0x0
+[   71.638629] RTW: num_sta_40mhz_intolerant(0), 20mhz_width_req(0), intolerant_ch_rpt(0), olbc(0)
+[   71.647371] RTW: bss_cap_update_on_sta_leave, updated=1
+[   71.652610] RTW: report_del_sta_event(wlan0) f6:d6:cb:da:c0:aa mac_id=2, enqueue:1, res:1
+[   71.661799] RTW: cfg80211_rtw_del_key(wlan0) key_index=0, addr=f6:d6:cb:da:c0:aa
+[   71.671148] RTW: rtw_stadel_event_callback(mac_id=2)=f6:d6:cb:da:c0:aa
+[   71.677750] RTW: rtw_sta_mstatus_disc_rpt(wlan0) - mac_id=2
+[   71.690012] RTW: cfg80211_rtw_del_key(wlan0) key_index=0, addr=f6:d6:cb:da:c0:aa
+[   71.709839] RTW: wlan0 drop macid=2, done reg_0x1450=0x00000004
+[   71.716723] RTW: cfg80211_rtw_change_station(wlan0) mac:f6:d6:cb:da:c0:aa
+[   71.724272] RTW: wlan0 wakeup macid=2, ori reg_0x4d4=0x00000000
+[   71.730309] RTW: ### Clean STA_(2) info ###
+[   71.734534] RTW: rtw_release_macid(wlan0) if1, mac_addr:f6:d6:cb:da:c0:aa macid:2
+[   71.742069] RTW: rtw_set_rts_bw connect_to_8812=0,enable=1
+[   71.754826] RTW: +cfg80211_rtw_del_station(wlan0) mac=f6:d6:cb:da:c0:aa
+[   71.761599] RTW: free sta macaddr =f6:d6:cb:da:c0:aa
+[   71.766596] RTW: -cfg80211_rtw_del_station(wlan0)
+[   71.771980] RTW: clear key for addr:f6:d6:cb:da:c0:aa, camid:2
+[  111.921496] RTW: +OnAuth
+[  111.924055] RTW: auth alg=0, seq=1
+[  111.927486] RTW: going to alloc stainfo for sa=7a:05:1c:c2:97:47
+[  111.933553] RTW: rtw_alloc_macid(wlan0) if1, mac_addr:7a:05:1c:c2:97:47 macid:2
+[  111.940888] RTW: issue_auth
+[  111.945811] RTW: OnAssocReq
+[  111.948666] RTW: OnAssocReq(wlan0) allocate new AID=1
+[  111.953727] RTW: HT: STA 7a:05:1c:c2:97:47 HT Capabilities Info: 0x006f
+[  111.960385] RTW: bss_cap_update_on_sta_join STA 7a:05:1c:c2:97:47 - no greenfield, num of non-gf stations 1
+[  111.970123] RTW: rtw_ht_operation_update current operation mode=0x0
+[  111.976412] RTW: rtw_ht_operation_update new operation mode=0x4 changes=1
+[  111.983197] RTW: update_bcn_htcap_ie
+[  111.986771] RTW: update_bcn_htinfo_ie current operation mode=0x4
+[  111.992782] RTW: num_sta_40mhz_intolerant(0), 20mhz_width_req(0), intolerant_ch_rpt(0), olbc(0)
+[  112.001530] RTW: associated_stainfo_update: 7a:05:1c:c2:97:47, updated_type=0x3f
+[  112.008948] RTW: bss_cap_update_on_sta_join, updated=1
+[  112.014092] RTW: update_sta_info_apmode
+[  112.017927] RTW: Enable HT Tx LDPC for STA(1)
+[  112.022293] RTW: ### Set STA_(2) info ###
+[  112.026302] RTW: issue_asocrsp
+[  112.029493] RTW: report_add_sta_event: add STA
+[  112.035076] RTW: rtw_get_sta_tx_nss: 1 SS
+[  112.039101] RTW: rtw_get_sta_rx_nss: 1 ss
+[  112.043173] RTW: STA - MAC_ID:2, Tx - 1 SS, Rx - 1 SS
+[  112.048246] RTW: STA - MAC_ID:2, SM_PS 3
+[  112.052221] RTW: ht_mcs_set=ff 00 00 00, nss=1, bitmap=000000ff
+[  112.058149] RTW: rtw_ap_update_sta_ra_info=> mac_id:2 , tx_ra_bitmap:0x00000000000ffff0, networkType:0x14
+[  112.092571] RTW: ============ STA [7a:05:1c:c2:97:47]  ===================
+[  112.099748] RTW: mac_id : 2
+[  112.102546] RTW: wireless_mode : 0x14
+[  112.106203] RTW: mimo_type : 0
+[  112.109327] RTW: static smps : N
+[  112.112607] RTW: bw_mode : 20MHz, ra_bw_mode : 20MHz
+[  112.117571] RTW: rate_id : 10
+[  112.120575] RTW: rssi : -1 (%), rssi_level : 0
+[  112.125018] RTW: is_support_sgi : Y, is_vht_enable : N
+[  112.130192] RTW: disable_ra : N, disable_pt : N
+[  112.134744] RTW: is_noisy : N
+[  112.137708] RTW: txrx_state : 0
+[  112.140877] RTW: curr_tx_rate : CCK_1M (L)
+[  112.144991] RTW: curr_tx_bw : 20MHz
+[  112.148485] RTW: curr_retry_ratio : 0
+[  112.152175] RTW: ra_mask : 0x00000000000ffff0
+[  112.152175]
+[  112.158012] RTW: indicate_sta_assoc_event to upper layer - hostapd
+[  112.164227] RTW: rtw_cfg80211_indicate_sta_assoc(wlan0)
+[  112.169572] RTW: rtw_set_rts_bw connect_to_8812=0,enable=1
+[  112.180478] RTW: cfg80211_rtw_change_station(wlan0) mac:7a:05:1c:c2:97:47
+[  112.187650] RTW: cfg80211_rtw_del_key(wlan0) key_index=0, addr=7a:05:1c:c2:97:47
+[  112.210100] RTW: cfg80211_rtw_del_key(wlan0) key_index=0, addr=7a:05:1c:c2:97:47
+[  112.224393] RTW: cfg80211_rtw_change_station(wlan0) mac:7a:05:1c:c2:97:47
+[  112.232266] RTW: send eapol packet 1/4
+[  112.238215] RTW: recv eapol packet 2/4
+[  112.242853] RTW: cfg80211_rtw_get_key(wlan0) keyid=1, pairwise=0, addr=  (null) ret 0
+[  112.250815] RTW: cfg80211_rtw_get_key(wlan0) seq:0x0
+[  112.256458] RTW: send eapol packet 3/4
+[  112.262397] RTW: recv eapol packet 4/4
+[  112.266813] RTW: cfg80211_rtw_add_key(wlan0) adding key for 7a:05:1c:c2:97:47
+[  112.274061] RTW: cfg80211_rtw_add_key(wlan0) cipher=0xfac04
+[  112.279693] RTW: cfg80211_rtw_add_key(wlan0) key_len=16, key_index=0
+[  112.286085] RTW: cfg80211_rtw_add_key(wlan0) pairwise=1
+[  112.291357] RTW: rtw_cfg80211_ap_set_encryption
+[  112.295926] RTW: rtw_cfg80211_ap_set_encryption(wlan0) set CCMP PTK of 7a:05:1c:c2:97:47 idx:0, len:16
+[  112.309640] RTW: set pairwise key camid:2, addr:7a:05:1c:c2:97:47, kid:0, type:AES
+[  112.340655] RTW: cfg80211_rtw_change_station(wlan0) mac:7a:05:1c:c2:97:47
+[  112.358384] RTW: OnAction_back
+[  112.361466] RTW: OnAction_back, action=0
+[  112.366956] RTW: issue_addba_rsp_wait_ack(wlan0) ra=7a:05:1c:c2:97:47 status:=0 tid=0 size:64, acked, 1/3 in 0 ms
+[  114.720577] RTW: Turbo EDCA =0xa42b
+[125.539]  setAppVolumeMute "BlueTooth" true
+[125.540]
+======== refreshAppAudioChannel 3 0
+[125.540]  switchToAppAudioChannel, ModeApp: "MsnCarAuto"  AudioApp: "MsnCarAuto"  Channel: 0 Request: false
+[  127.200572] RTW: Turbo EDCA =0x5ea42b
+[  129.280542] RTW: Turbo EDCA =0xa42b
+[  130.496127] RTW: OnDisassoc(wlan0) - Start to Disconnect
+[  130.501514] RTW: OnDisassoc(wlan0) reason=8, ta=7a:05:1c:c2:97:47
+[  130.507615] RTW: rtw_cfg80211_indicate_sta_disassoc(wlan0)
+[  130.513214] RTW: rtw_ht_operation_update current operation mode=0x4
+[  130.519523] RTW: rtw_ht_operation_update new operation mode=0x0 changes=1
+[  130.526309] RTW: update_bcn_htcap_ie
+[  130.529884] RTW: update_bcn_htinfo_ie current operation mode=0x0
+[  130.535895] RTW: num_sta_40mhz_intolerant(0), 20mhz_width_req(0), intolerant_ch_rpt(0), olbc(0)
+[  130.544616] RTW: bss_cap_update_on_sta_leave, updated=1
+[  130.549855] RTW: report_del_sta_event(wlan0) 7a:05:1c:c2:97:47 mac_id=2, enqueue:1, res:1
+[  130.559051] RTW: cfg80211_rtw_del_key(wlan0) key_index=0, addr=7a:05:1c:c2:97:47
+[  130.567405] RTW: rtw_stadel_event_callback(mac_id=2)=7a:05:1c:c2:97:47
+[  130.574017] RTW: rtw_sta_mstatus_disc_rpt(wlan0) - mac_id=2
+[  130.580108] RTW: cfg80211_rtw_del_key(wlan0) key_index=0, addr=7a:05:1c:c2:97:47
+[  130.588038] RTW: cfg80211_rtw_change_station(wlan0) mac:7a:05:1c:c2:97:47
+[  130.595109] RTW: wlan0 drop macid=2, done reg_0x1450=0x00000004
+[  130.618592] RTW: +cfg80211_rtw_del_station(wlan0) mac=7a:05:1c:c2:97:47
+[  130.625359] RTW: free sta macaddr =7a:05:1c:c2:97:47
+[  130.630370] RTW: -cfg80211_rtw_del_station(wlan0)
+[  130.635795] RTW: wlan0 wakeup macid=2, ori reg_0x4d4=0x00000000
+[  130.641834] RTW: ### Clean STA_(2) info ###
+[  130.646035] RTW: rtw_release_macid(wlan0) if1, mac_addr:7a:05:1c:c2:97:47 macid:2
+[  130.653596] RTW: rtw_set_rts_bw connect_to_8812=0,enable=1
+[  130.667238] RTW: clear key for addr:7a:05:1c:c2:97:47, camid:2
+[  133.329302] RTW: +OnAuth
+[  133.331896] RTW: auth alg=0, seq=1
+[  133.335315] RTW: going to alloc stainfo for sa=7a:05:1c:c2:97:47
+[  133.341381] RTW: rtw_alloc_macid(wlan0) if1, mac_addr:7a:05:1c:c2:97:47 macid:2
+[  133.348716] RTW: issue_auth
+[  133.353739] RTW: OnAssocReq
+[  133.356597] RTW: OnAssocReq(wlan0) allocate new AID=1
+[  133.361739] RTW: HT: STA 7a:05:1c:c2:97:47 HT Capabilities Info: 0x006f
+[  133.368383] RTW: bss_cap_update_on_sta_join STA 7a:05:1c:c2:97:47 - no greenfield, num of non-gf stations 1
+[  133.378158] RTW: rtw_ht_operation_update current operation mode=0x0
+[  133.384450] RTW: rtw_ht_operation_update new operation mode=0x4 changes=1
+[  133.391261] RTW: update_bcn_htcap_ie
+[  133.394847] RTW: update_bcn_htinfo_ie current operation mode=0x4
+[  133.400889] RTW: num_sta_40mhz_intolerant(0), 20mhz_width_req(0), intolerant_ch_rpt(0), olbc(0)
+[  133.409653] RTW: associated_stainfo_update: 7a:05:1c:c2:97:47, updated_type=0x3f
+[  133.417049] RTW: bss_cap_update_on_sta_join, updated=1
+[  133.422215] RTW: update_sta_info_apmode
+[  133.426052] RTW: Enable HT Tx LDPC for STA(1)
+[  133.430453] RTW: ### Set STA_(2) info ###
+[  133.434467] RTW: issue_asocrsp
+[  133.437662] RTW: report_add_sta_event: add STA
+[  133.443398] RTW: rtw_get_sta_tx_nss: 1 SS
+[  133.447455] RTW: rtw_get_sta_rx_nss: 1 ss
+[  133.451520] RTW: STA - MAC_ID:2, Tx - 1 SS, Rx - 1 SS
+[  133.456573] RTW: STA - MAC_ID:2, SM_PS 3
+[  133.460560] RTW: ht_mcs_set=ff 00 00 00, nss=1, bitmap=000000ff
+[  133.466485] RTW: rtw_ap_update_sta_ra_info=> mac_id:2 , tx_ra_bitmap:0x00000000000ffff0, networkType:0x14
+[  133.500900] RTW: ============ STA [7a:05:1c:c2:97:47]  ===================
+[  133.508043] RTW: mac_id : 2
+[  133.510916] RTW: wireless_mode : 0x14
+[  133.514608] RTW: mimo_type : 0
+[  133.517661] RTW: static smps : N
+[  133.520924] RTW: bw_mode : 20MHz, ra_bw_mode : 20MHz
+[  133.525888] RTW: rate_id : 10
+[  133.528870] RTW: rssi : -1 (%), rssi_level : 0
+[  133.533343] RTW: is_support_sgi : Y, is_vht_enable : N
+[  133.538480] RTW: disable_ra : N, disable_pt : N
+[  133.543048] RTW: is_noisy : N
+[  133.546026] RTW: txrx_state : 0
+[  133.549164] RTW: curr_tx_rate : CCK_1M (L)
+[  133.553286] RTW: curr_tx_bw : 20MHz
+[  133.556774] RTW: curr_retry_ratio : 0
+[  133.560464] RTW: ra_mask : 0x00000000000ffff0
+[  133.560464]
+[  133.566308] RTW: indicate_sta_assoc_event to upper layer - hostapd
+[  133.572523] RTW: rtw_cfg80211_indicate_sta_assoc(wlan0)
+[  133.577821] RTW: rtw_set_rts_bw connect_to_8812=0,enable=1
+[  133.584493] RTW: cfg80211_rtw_change_station(wlan0) mac:7a:05:1c:c2:97:47
+[  133.591841] RTW: cfg80211_rtw_del_key(wlan0) key_index=0, addr=7a:05:1c:c2:97:47
+[  133.610254] RTW: cfg80211_rtw_del_key(wlan0) key_index=0, addr=7a:05:1c:c2:97:47
+[  133.625337] RTW: cfg80211_rtw_change_station(wlan0) mac:7a:05:1c:c2:97:47
+[  133.640468] RTW: send eapol packet 1/4
+[  133.645893] RTW: Turbo EDCA =0x5ea42b
+[  133.650036] RTW: recv eapol packet 2/4
+[  133.654598] RTW: cfg80211_rtw_get_key(wlan0) keyid=1, pairwise=0, addr=  (null) ret 0
+[  133.662551] RTW: cfg80211_rtw_get_key(wlan0) seq:0x0
+[  133.673712] RTW: send eapol packet 3/4
+[  133.679782] RTW: recv eapol packet 4/4
+[  133.685700] RTW: cfg80211_rtw_add_key(wlan0) adding key for 7a:05:1c:c2:97:47
+[  133.692951] RTW: cfg80211_rtw_add_key(wlan0) cipher=0xfac04
+[  133.698574] RTW: cfg80211_rtw_add_key(wlan0) key_len=16, key_index=0
+[  133.704984] RTW: cfg80211_rtw_add_key(wlan0) pairwise=1
+[  133.710250] RTW: rtw_cfg80211_ap_set_encryption
+[  133.714796] RTW: rtw_cfg80211_ap_set_encryption(wlan0) set CCMP PTK of 7a:05:1c:c2:97:47 idx:0, len:16
+[  133.724523] RTW: set pairwise key camid:2, addr:7a:05:1c:c2:97:47, kid:0, type:AES
+[  133.734563] RTW: cfg80211_rtw_change_station(wlan0) mac:7a:05:1c:c2:97:47
+[  133.778074] RTW: OnAction_back
+[  133.781161] RTW: OnAction_back, action=0
+[  133.786184] RTW: issue_addba_rsp_wait_ack(wlan0) ra=7a:05:1c:c2:97:47 status:=0 tid=0 size:64, acked, 1/3 in 0 ms
+[  135.520330] RTW: Turbo EDCA =0xa42b
+[135.541]  Write At atCommand: "AT+HFPCONN=04006EAF29C4"
+[135.541]  Auto ConnectTime 8000
+[136.416]  Write At atCommand: "AT+A2DPMUTE=1"
+[136.421]  Bluetooth connected: "Pixel 9 Pro" "04006EAF29C4" "04:00:6E:AF:29:C4"
+[138.914]  recv bluetooth connect phone type: "unkown"
+[138.914]  onRecvUUID PhoneType: 0
+[138.915]  CarAutoWindow::retryConnect()
+[138.915]  isPhoneConnected 2
+[138.915]_ msncoreapp.cpp@2413 msnAppNotify ____ APP_NOTIFY_ENABLE_HOSTAPD 1
+[138.915]I msncoreapp.cpp@2964 enableHostApd start  enable: 1 timeout: 3000
+[138.916]  start  enableWLAN 0 138916
+stop wifi manager
+[139.060]  end  enableWLAN 0 139060
+[139.064]  hostapd state: 2  pid: 229 ap type: 1
+[139.064]I msncoreapp.cpp@3098 enableHostApd end  1
+[139.064]  refreshConnectType 11
+[139.065]_ msncoreapp.cpp@2413 msnAppNotify ____ APP_NOTIFY_ENABLE_HOSTAPD 1
+[139.065]I msncoreapp.cpp@2964 enableHostApd start  enable: 1 timeout: 3000
+[139.065]  start  enableWLAN 0 139065
+stop wifi manager
+[139.177]  end  enableWLAN 0 139177
+[139.181]  hostapd state: 2  pid: 229 ap type: 1
+[139.181]I msncoreapp.cpp@3098 enableHostApd end  1
+[139.182]  requestLinkStatus 11 3
+[139.182]  ====================== requestAutoHandler ====================== 3
+[139.184]  current app is phone link app, not auto start carlife app! 13
+ArkDbus::reply_to_requestLinkStatus_call 223 param1=11 param2=3
+IArkCallbacks::requestLinkStatus:77 0
+IArkCallbacks::requestLinkStatus:83
+ArkDbus::onLinkStatusChange:175 mStatus=3
+Signal Sent
+ArkDbus::run 468
+[139.193]  MsnCoreApp::onLinkStatusChange 11 3
+[139.194]
+==========CarAuto onLinkStatusChange: 11 3 ==========
+
+
+==========CarAuto Status: 3 true ==========
+
+BtRfcommController::start : 404
+/dev/bw_aap is not symlink
+ArkUtils::open_local_socket:266 sock = 9
+BtRfcommController::start : 414
+rfcomm write: 00 09 00 04 08 01 10 00 18 00 20 bc 28
+rfcomm read: 00 16 00 05
+len=22 type=5
+rfcomm read: 08 01 10 00 1a 0e 35 36 31 37 31 46 44 41 50 30 30 31 54 45 20 00
+interface=wlan0
+wlan0 IP Address 192.168.43.1
+wlan0 IP Address fe80::6ab9:d3ff:fef1:5a43
+local wifi ip=192.168.43.1
+majorVer:1 minorVer0 deviceSerial:56171FDAP001TE status:0 channel:-1
+rfcomm write: 00 11 00 01 0a 0c 31 39 32 2e 31 36 38 2e 34 33 2e 31 10 ca 34
+rfcomm read: 00 00 00 02
+len=0 type=2
+Rfcomm Read timeout!!!
+ssid=carplay_fc9f
+passwd=88888888
+interface=wlan0
+local mac:68:b9:d3:f1:5a:43
+mac=68:b9:d3:f1:5a:43
+rfcomm write: 00 2d 00 03 0a 0c 63 61 72 70 6c 61 79 5f 66 63 39 66 12 08 38 38 38 38 38 38 38 38 1a 11 36 38 3a 62 39 3a 64 33 3a 66 31 3a 35 61 3a 34 33 20 08
+rfcomm read: 00 02 00 07
+len=2 type=7
+rfcomm read: 18 00
+ip: port:-1
+[  139.715830] RTW: OnDisassoc(wlan0) - Start to Disconnect
+[  139.721187] RTW: OnDisassoc(wlan0) reason=8, ta=7a:05:1c:c2:97:47
+[  139.727320] RTW: rtw_cfg80211_indicate_sta_disassoc(wlan0)
+[  139.732888] RTW: rtw_ht_operation_update current operation mode=0x4
+[  139.739169] RTW: rtw_ht_operation_update new operation mode=0x0 changes=1
+[  139.745953] RTW: update_bcn_htcap_ie
+[  139.749526] RTW: update_bcn_htinfo_ie current operation mode=0x0
+[  139.755537] RTW: num_sta_40mhz_intolerant(0), 20mhz_width_req(0), intolerant_ch_rpt(0), olbc(0)
+[  139.764257] RTW: bss_cap_update_on_sta_leave, updated=1
+[  139.769494] RTW: report_del_sta_event(wlan0) 7a:05:1c:c2:97:47 mac_id=2, enqueue:1, res:1
+[  139.778645] RTW: cfg80211_rtw_del_key(wlan0) key_index=0, addr=7a:05:1c:c2:97:47
+[  139.799831] RTW: rtw_stadel_event_callback(mac_id=2)=7a:05:1c:c2:97:47
+[  139.806430] RTW: rtw_sta_mstatus_disc_rpt(wlan0) - mac_id=2
+[  139.812678] RTW: cfg80211_rtw_del_key(wlan0) key_index=0, addr=7a:05:1c:c2:97:47
+[  139.827655] RTW: wlan0 drop macid=2, done reg_0x1450=0x00000004
+[  139.834227] RTW: cfg80211_rtw_change_station(wlan0) mac:7a:05:1c:c2:97:47
+[  139.846549] RTW: wlan0 wakeup macid=2, ori reg_0x4d4=0x00000000
+[  139.852611] RTW: ### Clean STA_(2) info ###
+[  139.856842] RTW: rtw_release_macid(wlan0) if1, mac_addr:7a:05:1c:c2:97:47 macid:2
+[  139.864389] RTW: rtw_set_rts_bw connect_to_8812=0,enable=1
+[  139.870575] RTW: +cfg80211_rtw_del_station(wlan0) mac=7a:05:1c:c2:97:47
+[  139.877253] RTW: free sta macaddr =7a:05:1c:c2:97:47
+[  139.882291] RTW: -cfg80211_rtw_del_station(wlan0)
+[  139.887635] RTW: clear key for addr:7a:05:1c:c2:97:47, camid:2
+[  140.814338] RTW: +OnAuth
+[  140.816901] RTW: auth alg=0, seq=1
+[  140.820351] RTW: going to alloc stainfo for sa=f6:d6:cb:da:c0:aa
+[  140.826404] RTW: rtw_alloc_macid(wlan0) if1, mac_addr:f6:d6:cb:da:c0:aa macid:2
+[  140.833763] RTW: issue_auth
+[  140.838773] RTW: OnAssocReq
+[  140.841707] RTW: OnAssocReq(wlan0) allocate new AID=1
+[  140.846834] RTW: HT: STA f6:d6:cb:da:c0:aa HT Capabilities Info: 0x006f
+[  140.853528] RTW: bss_cap_update_on_sta_join STA f6:d6:cb:da:c0:aa - no greenfield, num of non-gf stations 1
+[  140.863311] RTW: rtw_ht_operation_update current operation mode=0x0
+[  140.869612] RTW: rtw_ht_operation_update new operation mode=0x4 changes=1
+[  140.876399] RTW: update_bcn_htcap_ie
+[  140.880010] RTW: update_bcn_htinfo_ie current operation mode=0x4
+[  140.886018] RTW: num_sta_40mhz_intolerant(0), 20mhz_width_req(0), intolerant_ch_rpt(0), olbc(0)
+[  140.894793] RTW: associated_stainfo_update: f6:d6:cb:da:c0:aa, updated_type=0x3f
+[  140.902244] RTW: bss_cap_update_on_sta_join, updated=1
+[  140.907383] RTW: update_sta_info_apmode
+[  140.911262] RTW: Enable HT Tx LDPC for STA(1)
+[  140.915635] RTW: ### Set STA_(2) info ###
+[  140.919680] RTW: issue_asocrsp
+[  140.922895] RTW: report_add_sta_event: add STA
+[  140.931535] RTW: rtw_get_sta_tx_nss: 1 SS
+[  140.935566] RTW: rtw_get_sta_rx_nss: 1 ss
+[  140.939649] RTW: STA - MAC_ID:2, Tx - 1 SS, Rx - 1 SS
+[  140.944726] RTW: STA - MAC_ID:2, SM_PS 3
+[  140.948676] RTW: ht_mcs_set=ff 00 00 00, nss=1, bitmap=000000ff
+[  140.954641] RTW: rtw_ap_update_sta_ra_info=> mac_id:2 , tx_ra_bitmap:0x00000000000ffff0, networkType:0x14
+[  140.999913] RTW: ============ STA [f6:d6:cb:da:c0:aa]  ===================
+[  141.006803] RTW: mac_id : 2
+[  141.009659] RTW: wireless_mode : 0x14
+[  141.013359] RTW: mimo_type : 0
+[  141.016411] RTW: static smps : N
+[  141.019674] RTW: bw_mode : 20MHz, ra_bw_mode : 20MHz
+[  141.024639] RTW: rate_id : 10
+[  141.027628] RTW: rssi : -1 (%), rssi_level : 0
+[  141.032110] RTW: is_support_sgi : Y, is_vht_enable : N
+[  141.037248] RTW: disable_ra : N, disable_pt : N
+[  141.041811] RTW: is_noisy : N
+[  141.044778] RTW: txrx_state : 0
+[  141.047927] RTW: curr_tx_rate : CCK_1M (L)
+[  141.052051] RTW: curr_tx_bw : 20MHz
+[  141.055538] RTW: curr_retry_ratio : 0
+[  141.059196] RTW: ra_mask : 0x00000000000ffff0
+[  141.059196]
+[  141.065073] RTW: indicate_sta_assoc_event to upper layer - hostapd
+[  141.071295] RTW: rtw_cfg80211_indicate_sta_assoc(wlan0)
+[  141.076613] RTW: rtw_set_rts_bw connect_to_8812=0,enable=1
+[  141.083316] RTW: cfg80211_rtw_change_station(wlan0) mac:f6:d6:cb:da:c0:aa
+[  141.108590] RTW: cfg80211_rtw_del_key(wlan0) key_index=0, addr=f6:d6:cb:da:c0:aa
+[  141.117977] RTW: cfg80211_rtw_del_key(wlan0) key_index=0, addr=f6:d6:cb:da:c0:aa
+[  141.126191] RTW: cfg80211_rtw_change_station(wlan0) mac:f6:d6:cb:da:c0:aa
+[  141.140571] RTW: send eapol packet 1/4
+[  141.146548] RTW: recv eapol packet 2/4
+[  141.151381] RTW: cfg80211_rtw_get_key(wlan0) keyid=1, pairwise=0, addr=  (null) ret 0
+[  141.159223] RTW: cfg80211_rtw_get_key(wlan0) seq:0x0
+[  141.180133] RTW: send eapol packet 3/4
+[  141.186094] RTW: recv eapol packet 4/4
+[  141.190750] RTW: cfg80211_rtw_add_key(wlan0) adding key for f6:d6:cb:da:c0:aa
+[  141.197906] RTW: cfg80211_rtw_add_key(wlan0) cipher=0xfac04
+[  141.203610] RTW: cfg80211_rtw_add_key(wlan0) key_len=16, key_index=0
+[  141.210006] RTW: cfg80211_rtw_add_key(wlan0) pairwise=1
+[  141.215240] RTW: rtw_cfg80211_ap_set_encryption
+[  141.219823] RTW: rtw_cfg80211_ap_set_encryption(wlan0) set CCMP PTK of f6:d6:cb:da:c0:aa idx:0, len:16
+[  141.229405] RTW: set pairwise key camid:2, addr:f6:d6:cb:da:c0:aa, kid:0, type:AES
+[  141.239751] RTW: cfg80211_rtw_change_station(wlan0) mac:f6:d6:cb:da:c0:aa
+[  141.302416] RTW: OnAction_back
+[  141.305501] RTW: OnAction_back, action=0
+[  141.310842] RTW: issue_addba_rsp_wait_ack(wlan0) ra=f6:d6:cb:da:c0:aa status:=0 tid=0 size:64, acked, 1/3 in 0 ms
+[  141.760644] RTW: Turbo EDCA =0x5ea42b
+[  143.840631] RTW: Turbo EDCA =0xa42b
+[  146.743662] RTW: OnDisassoc(wlan0) - Start to Disconnect
+[  146.749046] RTW: OnDisassoc(wlan0) reason=8, ta=f6:d6:cb:da:c0:aa
+[  146.755147] RTW: rtw_cfg80211_indicate_sta_disassoc(wlan0)
+[  146.760715] RTW: rtw_ht_operation_update current operation mode=0x4
+[  146.766997] RTW: rtw_ht_operation_update new operation mode=0x0 changes=1
+[  146.773805] RTW: update_bcn_htcap_ie
+[  146.777381] RTW: update_bcn_htinfo_ie current operation mode=0x0
+[  146.783393] RTW: num_sta_40mhz_intolerant(0), 20mhz_width_req(0), intolerant_ch_rpt(0), olbc(0)
+[  146.792150] RTW: bss_cap_update_on_sta_leave, updated=1
+[  146.797403] RTW: report_del_sta_event(wlan0) f6:d6:cb:da:c0:aa mac_id=2, enqueue:1, res:1
+[  146.806546] RTW: cfg80211_rtw_del_key(wlan0) key_index=0, addr=f6:d6:cb:da:c0:aa
+[  146.814894] RTW: rtw_stadel_event_callback(mac_id=2)=f6:d6:cb:da:c0:aa
+[  146.821503] RTW: rtw_sta_mstatus_disc_rpt(wlan0) - mac_id=2
+[  146.827556] RTW: cfg80211_rtw_del_key(wlan0) key_index=0, addr=f6:d6:cb:da:c0:aa
+[  146.839831] RTW: wlan0 drop macid=2, done reg_0x1450=0x00000004
+[  146.850833] RTW: cfg80211_rtw_change_station(wlan0) mac:f6:d6:cb:da:c0:aa
+[  146.857989] RTW: +cfg80211_rtw_del_station(wlan0) mac=f6:d6:cb:da:c0:aa
+[  146.864717] RTW: free sta macaddr =f6:d6:cb:da:c0:aa
+[  146.869762] RTW: -cfg80211_rtw_del_station(wlan0)
+[  146.880172] RTW: wlan0 wakeup macid=2, ori reg_0x4d4=0x00000000
+[  146.886172] RTW: ### Clean STA_(2) info ###
+[  146.890443] RTW: rtw_release_macid(wlan0) if1, mac_addr:f6:d6:cb:da:c0:aa macid:2
+[  146.897936] RTW: rtw_set_rts_bw connect_to_8812=0,enable=1
+[  146.914862] RTW: clear key for addr:f6:d6:cb:da:c0:aa, camid:2
+[149.864]  setAppVolumeMute "BlueTooth" true
+[149.864]
+======== refreshAppAudioChannel 3 0
+[149.865]  switchToAppAudioChannel, ModeApp: "MsnCarAuto"  AudioApp: "MsnCarAuto"  Channel: 0 Request: false
+Rfcomm Read timeout!!!
+Read header failed
+run:161 stop
+BtRfcommController::stop : 422 start
+RfcommTransport::stop : 230
+ArkUtils::send_local_message:288 sock = 9 n =1
+~RfcommConnection:289
+BtRfcommController::stop : 430 end
+ArkDbus::onLinkStatusChange:175 mStatus=2
+Signal Sent
+[154.509]  MsnCoreApp::onLinkStatusChange 11 2
+[154.510]
+==========CarAuto onLinkStatusChange: 11 2 ==========
+
+
+==========CarAuto Status: 2 true ==========
+
+[  156.652071] RTW: +OnAuth
+[  156.654630] RTW: auth alg=0, seq=1
+[  156.658041] RTW: going to alloc stainfo for sa=7a:05:1c:c2:97:47
+[  156.664095] RTW: rtw_alloc_macid(wlan0) if1, mac_addr:7a:05:1c:c2:97:47 macid:2
+[  156.671455] RTW: issue_auth
+[  156.676412] RTW: OnAssocReq
+[  156.679269] RTW: OnAssocReq(wlan0) allocate new AID=1
+[  156.684373] RTW: HT: STA 7a:05:1c:c2:97:47 HT Capabilities Info: 0x006f
+[  156.691019] RTW: bss_cap_update_on_sta_join STA 7a:05:1c:c2:97:47 - no greenfield, num of non-gf stations 1
+[  156.700765] RTW: rtw_ht_operation_update current operation mode=0x0
+[  156.707030] RTW: rtw_ht_operation_update new operation mode=0x4 changes=1
+[  156.713842] RTW: update_bcn_htcap_ie
+[  156.717429] RTW: update_bcn_htinfo_ie current operation mode=0x4
+[  156.723434] RTW: num_sta_40mhz_intolerant(0), 20mhz_width_req(0), intolerant_ch_rpt(0), olbc(0)
+[  156.732180] RTW: associated_stainfo_update: 7a:05:1c:c2:97:47, updated_type=0x3f
+[  156.739574] RTW: bss_cap_update_on_sta_join, updated=1
+[  156.744709] RTW: update_sta_info_apmode
+[  156.748551] RTW: Enable HT Tx LDPC for STA(1)
+[  156.752918] RTW: ### Set STA_(2) info ###
+[  156.756928] RTW: issue_asocrsp
+[  156.760117] RTW: report_add_sta_event: add STA
+[  156.765895] RTW: rtw_get_sta_tx_nss: 1 SS
+[  156.769990] RTW: rtw_get_sta_rx_nss: 1 ss
+[  156.774002] RTW: STA - MAC_ID:2, Tx - 1 SS, Rx - 1 SS
+[  156.779051] RTW: STA - MAC_ID:2, SM_PS 3
+[  156.783041] RTW: ht_mcs_set=ff 00 00 00, nss=1, bitmap=000000ff
+[  156.788969] RTW: rtw_ap_update_sta_ra_info=> mac_id:2 , tx_ra_bitmap:0x00000000000ffff0, networkType:0x14
+[  156.823086] RTW: ============ STA [7a:05:1c:c2:97:47]  ===================
+[  156.830082] RTW: mac_id : 2
+[  156.832878] RTW: wireless_mode : 0x14
+[  156.836559] RTW: mimo_type : 0
+[  156.839649] RTW: static smps : N
+[  156.842878] RTW: bw_mode : 20MHz, ra_bw_mode : 20MHz
+[  156.847838] RTW: rate_id : 10
+[  156.850842] RTW: rssi : -1 (%), rssi_level : 0
+[  156.855284] RTW: is_support_sgi : Y, is_vht_enable : N
+[  156.860452] RTW: disable_ra : N, disable_pt : N
+[  156.865002] RTW: is_noisy : N
+[  156.867975] RTW: txrx_state : 0
+[  156.871146] RTW: curr_tx_rate : CCK_1M (L)
+[  156.875241] RTW: curr_tx_bw : 20MHz
+[  156.878725] RTW: curr_retry_ratio : 0
+[  156.882422] RTW: ra_mask : 0x00000000000ffff0
+[  156.882422]
+[  156.888266] RTW: indicate_sta_assoc_event to upper layer - hostapd
+[  156.894493] RTW: rtw_cfg80211_indicate_sta_assoc(wlan0)
+[  156.899854] RTW: rtw_set_rts_bw connect_to_8812=0,enable=1
+[  156.910541] RTW: cfg80211_rtw_change_station(wlan0) mac:7a:05:1c:c2:97:47
+[  156.917811] RTW: cfg80211_rtw_del_key(wlan0) key_index=0, addr=7a:05:1c:c2:97:47
+[  156.940089] RTW: cfg80211_rtw_del_key(wlan0) key_index=0, addr=7a:05:1c:c2:97:47
+[  156.954558] RTW: cfg80211_rtw_change_station(wlan0) mac:7a:05:1c:c2:97:47
+[  156.962408] RTW: send eapol packet 1/4
+[  156.971798] RTW: recv eapol packet 2/4
+[  156.976349] RTW: cfg80211_rtw_get_key(wlan0) keyid=1, pairwise=0, addr=  (null) ret 0
+[  156.984294] RTW: cfg80211_rtw_get_key(wlan0) seq:0x0
+[  156.990190] RTW: send eapol packet 3/4
+[  156.996381] RTW: recv eapol packet 4/4
+[  157.000808] RTW: cfg80211_rtw_add_key(wlan0) adding key for 7a:05:1c:c2:97:47
+[  157.008039] RTW: cfg80211_rtw_add_key(wlan0) cipher=0xfac04
+[  157.013678] RTW: cfg80211_rtw_add_key(wlan0) key_len=16, key_index=0
+[  157.020076] RTW: cfg80211_rtw_add_key(wlan0) pairwise=1
+[  157.025332] RTW: rtw_cfg80211_ap_set_encryption
+[  157.029913] RTW: rtw_cfg80211_ap_set_encryption(wlan0) set CCMP PTK of 7a:05:1c:c2:97:47 idx:0, len:16
+[  157.049648] RTW: set pairwise key camid:2, addr:7a:05:1c:c2:97:47, kid:0, type:AES
+[  157.073835] RTW: cfg80211_rtw_change_station(wlan0) mac:7a:05:1c:c2:97:47
+[  157.113354] RTW: OnAction_back
+[  157.116436] RTW: OnAction_back, action=0
+[  157.121233] RTW: issue_addba_rsp_wait_ack(wlan0) ra=7a:05:1c:c2:97:47 status:=0 tid=0 size:64, acked, 1/3 in 0 ms
+[  157.497026] RTW: OnAction_back
+[  157.500209] RTW: OnAction_back, action=0
+[  157.505194] RTW: issue_addba_rsp_wait_ack(wlan0) ra=7a:05:1c:c2:97:47 status:=0 tid=7 size:64, acked, 1/3 in 0 ms
+[159.865]  Write At atCommand: "AT+HFPCONN=04006EAF29C4"
+[159.867]  Auto ConnectTime 8000
+[  162.560448] RTW: Turbo EDCA =0x5ea42b
+[  164.640406] RTW: Turbo EDCA =0xa42b
+[167.867]  Write At atCommand: "AT+HFPSTAT"
+[167.868]  Write At atCommand: "AT+HFPCONN=04006EAF29C4"
+[167.869]  Auto ConnectTime 16000
+[174.277]  Write At atCommand: "AT+A2DPMUTE=1"
+[174.279]  Bluetooth connected: "Pixel 9 Pro" "04006EAF29C4" "04:00:6E:AF:29:C4"
+[  175.171277] RTW: OnDisassoc(wlan0) - Start to Disconnect
+[  175.176668] RTW: OnDisassoc(wlan0) reason=8, ta=7a:05:1c:c2:97:47
+[  175.182793] RTW: rtw_cfg80211_indicate_sta_disassoc(wlan0)
+[  175.188379] RTW: rtw_ht_operation_update current operation mode=0x4
+[  175.194652] RTW: rtw_ht_operation_update new operation mode=0x0 changes=1
+[  175.201486] RTW: update_bcn_htcap_ie
+[  175.205074] RTW: update_bcn_htinfo_ie current operation mode=0x0
+[  175.211080] RTW: num_sta_40mhz_intolerant(0), 20mhz_width_req(0), intolerant_ch_rpt(0), olbc(0)
+[  175.219821] RTW: bss_cap_update_on_sta_leave, updated=1
+[  175.225075] RTW: report_del_sta_event(wlan0) 7a:05:1c:c2:97:47 mac_id=2, enqueue:1, res:1
+[  175.234230] RTW: cfg80211_rtw_del_key(wlan0) key_index=0, addr=7a:05:1c:c2:97:47
+[  175.244201] RTW: rtw_stadel_event_callback(mac_id=2)=7a:05:1c:c2:97:47
+[  175.250833] RTW: rtw_sta_mstatus_disc_rpt(wlan0) - mac_id=2
+[  175.270030] RTW: cfg80211_rtw_del_key(wlan0) key_index=0, addr=7a:05:1c:c2:97:47
+[  175.277888] RTW: wlan0 drop macid=2, done reg_0x1450=0x00000004
+[  175.290014] RTW: cfg80211_rtw_change_station(wlan0) mac:7a:05:1c:c2:97:47
+[  175.300162] RTW: wlan0 wakeup macid=2, ori reg_0x4d4=0x00000000
+[  175.306133] RTW: ### Clean STA_(2) info ###
+[  175.310416] RTW: rtw_release_macid(wlan0) if1, mac_addr:7a:05:1c:c2:97:47 macid:2
+[  175.317932] RTW: rtw_set_rts_bw connect_to_8812=0,enable=1
+[  175.330070] RTW: +cfg80211_rtw_del_station(wlan0) mac=7a:05:1c:c2:97:47
+[  175.336715] RTW: free sta macaddr =7a:05:1c:c2:97:47
+[  175.341798] RTW: -cfg80211_rtw_del_station(wlan0)
+[  175.348134] RTW: clear key for addr:7a:05:1c:c2:97:47, camid:2
+[176.776]  recv bluetooth connect phone type: "unkown"
+[176.776]  onRecvUUID PhoneType: 0
+[176.777]  CarAutoWindow::retryConnect()
+[176.777]  isPhoneConnected 2
+[176.777]_ msncoreapp.cpp@2413 msnAppNotify ____ APP_NOTIFY_ENABLE_HOSTAPD 1
+[176.778]I msncoreapp.cpp@2964 enableHostApd start  enable: 1 timeout: 3000
+[176.778]  start  enableWLAN 0 176778
+stop wifi manager
+[176.890]  end  enableWLAN 0 176890
+[176.894]  hostapd state: 2  pid: 229 ap type: 1
+[176.895]I msncoreapp.cpp@3098 enableHostApd end  1
+[176.895]  refreshConnectType 11
+[176.895]_ msncoreapp.cpp@2413 msnAppNotify ____ APP_NOTIFY_ENABLE_HOSTAPD 1
+[176.896]I msncoreapp.cpp@2964 enableHostApd start  enable: 1 timeout: 3000
+[176.896]  start  enableWLAN 0 176896
+stop wifi manager
+[177.008]  end  enableWLAN 0 177008
+[177.014]  hostapd state: 2  pid: 229 ap type: 1
+[177.014]I msncoreapp.cpp@3098 enableHostApd end  1
+[177.015]  requestLinkStatus 11 3
+[177.015]  ====================== requestAutoHandler ====================== 3
+[177.017]  current app is phone link app, not auto start carlife app! 13
+ArkDbus::reply_to_requestLinkStatus_call 223 param1=11 param2=3
+IArkCallbacks::requestLinkStatus:77 0
+IArkCallbacks::requestLinkStatus:83
+ArkDbus::onLinkStatusChange:175 mStatus=3
+Signal Sent
+ArkDbus::run 468
+[177.035]  MsnCoreApp::onLinkStatusChange 11 3
+[177.035]
+==========CarAuto onLinkStatusChange: 11 3 ==========
+
+
+==========CarAuto Status: 3 true ==========
+
+BtRfcommController::start : 404
+/dev/bw_aap is not symlink
+ArkUtils::open_local_socket:266 sock = 9
+BtRfcommController::start : 414
+rfcomm write: 00 09 00 04 08 01 10 00 18 00 20 bc 28
+rfcomm read: 00 16 00 05
+len=22 type=5
+rfcomm read: 08 01 10 00 1a 0e 35 36 31 37 31 46 44 41 50 30 30 31 54 45 20 00
+interface=wlan0
+wlan0 IP Address 192.168.43.1
+wlan0 IP Address fe80::6ab9:d3ff:fef1:5a43
+local wifi ip=192.168.43.1
+majorVer:1 minorVer0 deviceSerial:56171FDAP001TE status:0 channel:-1
+rfcomm write: 00 11 00 01 0a 0c 31 39 32 2e 31 36 38 2e 34 33 2e 31 10 ca 34
+rfcomm read: 00 00 00 02
+len=0 type=2
+Rfcomm Read timeout!!!
+ssid=carplay_fc9f
+passwd=88888888
+interface=wlan0
+local mac:68:b9:d3:f1:5a:43
+mac=68:b9:d3:f1:5a:43
+rfcomm write: 00 2d 00 03 0a 0c 63 61 72 70 6c 61 79 5f 66 63 39 66 12 08 38 38 38 38 38 38 38 38 1a 11 36 38 3a 62 39 3a 64 33 3a 66 31 3a 35 61 3a 34 33 20 08
+rfcomm read: 00 02 00 07
+len=2 type=7
+rfcomm read: 18 00
+ip: port:-1
+[  181.003342] RTW: +OnAuth
+[  181.005917] RTW: auth alg=0, seq=1
+[  181.009332] RTW: going to alloc stainfo for sa=f6:d6:cb:da:c0:aa
+[  181.015395] RTW: rtw_alloc_macid(wlan0) if1, mac_addr:f6:d6:cb:da:c0:aa macid:2
+[  181.022725] RTW: issue_auth
+[  181.027588] RTW: OnAssocReq
+[  181.030444] RTW: OnAssocReq(wlan0) allocate new AID=1
+[  181.035504] RTW: HT: STA f6:d6:cb:da:c0:aa HT Capabilities Info: 0x006f
+[  181.042164] RTW: bss_cap_update_on_sta_join STA f6:d6:cb:da:c0:aa - no greenfield, num of non-gf stations 1
+[  181.051926] RTW: rtw_ht_operation_update current operation mode=0x0
+[  181.058202] RTW: rtw_ht_operation_update new operation mode=0x4 changes=1
+[  181.065014] RTW: update_bcn_htcap_ie
+[  181.068590] RTW: update_bcn_htinfo_ie current operation mode=0x4
+[  181.074604] RTW: num_sta_40mhz_intolerant(0), 20mhz_width_req(0), intolerant_ch_rpt(0), olbc(0)
+[  181.083331] RTW: associated_stainfo_update: f6:d6:cb:da:c0:aa, updated_type=0x3f
+[  181.090724] RTW: bss_cap_update_on_sta_join, updated=1
+[  181.095867] RTW: update_sta_info_apmode
+[  181.099703] RTW: Enable HT Tx LDPC for STA(1)
+[  181.104070] RTW: ### Set STA_(2) info ###
+[  181.108087] RTW: issue_asocrsp
+[  181.111262] RTW: report_add_sta_event: add STA
+[  181.116825] RTW: rtw_get_sta_tx_nss: 1 SS
+[  181.120911] RTW: rtw_get_sta_rx_nss: 1 ss
+[  181.124945] RTW: STA - MAC_ID:2, Tx - 1 SS, Rx - 1 SS
+[  181.130041] RTW: STA - MAC_ID:2, SM_PS 3
+[  181.133995] RTW: ht_mcs_set=ff 00 00 00, nss=1, bitmap=000000ff
+[  181.139963] RTW: rtw_ap_update_sta_ra_info=> mac_id:2 , tx_ra_bitmap:0x00000000000ffff0, networkType:0x14
+[  181.174282] RTW: ============ STA [f6:d6:cb:da:c0:aa]  ===================
+[  181.181288] RTW: mac_id : 2
+[  181.184084] RTW: wireless_mode : 0x14
+[  181.187770] RTW: mimo_type : 0
+[  181.190864] RTW: static smps : N
+[  181.194104] RTW: bw_mode : 20MHz, ra_bw_mode : 20MHz
+[  181.199065] RTW: rate_id : 10
+[  181.202062] RTW: rssi : -1 (%), rssi_level : 0
+[  181.206504] RTW: is_support_sgi : Y, is_vht_enable : N
+[  181.211673] RTW: disable_ra : N, disable_pt : N
+[  181.216232] RTW: is_noisy : N
+[  181.219197] RTW: txrx_state : 0
+[  181.222368] RTW: curr_tx_rate : CCK_1M (L)
+[  181.226462] RTW: curr_tx_bw : 20MHz
+[  181.229984] RTW: curr_retry_ratio : 0
+[  181.233645] RTW: ra_mask : 0x00000000000ffff0
+[  181.233645]
+[  181.239508] RTW: indicate_sta_assoc_event to upper layer - hostapd
+[  181.245702] RTW: rtw_cfg80211_indicate_sta_assoc(wlan0)
+[  181.251038] RTW: rtw_set_rts_bw connect_to_8812=0,enable=1
+[  181.260459] RTW: cfg80211_rtw_change_station(wlan0) mac:f6:d6:cb:da:c0:aa
+[  181.278551] RTW: cfg80211_rtw_del_key(wlan0) key_index=0, addr=f6:d6:cb:da:c0:aa
+[  181.290060] RTW: cfg80211_rtw_del_key(wlan0) key_index=0, addr=f6:d6:cb:da:c0:aa
+[  181.306422] RTW: cfg80211_rtw_change_station(wlan0) mac:f6:d6:cb:da:c0:aa
+[  181.314297] RTW: send eapol packet 1/4
+[  181.319873] RTW: Turbo EDCA =0x5ea42b
+[  181.323845] RTW: recv eapol packet 2/4
+[  181.328564] RTW: cfg80211_rtw_get_key(wlan0) keyid=1, pairwise=0, addr=  (null) ret 0
+[  181.336532] RTW: cfg80211_rtw_get_key(wlan0) seq:0x0
+[  181.346983] RTW: send eapol packet 3/4
+[  181.353045] RTW: recv eapol packet 4/4
+[  181.357655] RTW: cfg80211_rtw_add_key(wlan0) adding key for f6:d6:cb:da:c0:aa
+[  181.364948] RTW: cfg80211_rtw_add_key(wlan0) cipher=0xfac04
+[  181.370573] RTW: cfg80211_rtw_add_key(wlan0) key_len=16, key_index=0
+[  181.376948] RTW: cfg80211_rtw_add_key(wlan0) pairwise=1
+[  181.382222] RTW: rtw_cfg80211_ap_set_encryption
+[  181.386769] RTW: rtw_cfg80211_ap_set_encryption(wlan0) set CCMP PTK of f6:d6:cb:da:c0:aa idx:0, len:16
+[  181.411115] RTW: set pairwise key camid:2, addr:f6:d6:cb:da:c0:aa, kid:0, type:AES
+[  181.433087] RTW: cfg80211_rtw_change_station(wlan0) mac:f6:d6:cb:da:c0:aa
+[  181.461862] RTW: OnAction_back
+[  181.465121] RTW: OnAction_back, action=0
+[  181.470198] RTW: issue_addba_rsp_wait_ack(wlan0) ra=f6:d6:cb:da:c0:aa status:=0 tid=0 size:64, acked, 1/3 in 0 ms
+[  183.360637] RTW: Turbo EDCA =0xa42b
+[  184.723485] RTW: OnDisassoc(wlan0) - Start to Disconnect
+[  184.728829] RTW: OnDisassoc(wlan0) reason=8, ta=f6:d6:cb:da:c0:aa
+[  184.734970] RTW: rtw_cfg80211_indicate_sta_disassoc(wlan0)
+[  184.740527] RTW: rtw_ht_operation_update current operation mode=0x4
+[  184.746798] RTW: rtw_ht_operation_update new operation mode=0x0 changes=1
+[  184.753594] RTW: update_bcn_htcap_ie
+[  184.757170] RTW: update_bcn_htinfo_ie current operation mode=0x0
+[  184.763206] RTW: num_sta_40mhz_intolerant(0), 20mhz_width_req(0), intolerant_ch_rpt(0), olbc(0)
+[  184.771952] RTW: bss_cap_update_on_sta_leave, updated=1
+[  184.777215] RTW: report_del_sta_event(wlan0) f6:d6:cb:da:c0:aa mac_id=2, enqueue:1, res:1
+[  184.786362] RTW: cfg80211_rtw_del_key(wlan0) key_index=0, addr=f6:d6:cb:da:c0:aa
+[  184.794773] RTW: rtw_stadel_event_callback(mac_id=2)=f6:d6:cb:da:c0:aa
+[  184.801399] RTW: rtw_sta_mstatus_disc_rpt(wlan0) - mac_id=2
+[  184.807449] RTW: cfg80211_rtw_del_key(wlan0) key_index=0, addr=f6:d6:cb:da:c0:aa
+[  184.819790] RTW: wlan0 drop macid=2, done reg_0x1450=0x00000004
+[  184.830005] RTW: cfg80211_rtw_change_station(wlan0) mac:f6:d6:cb:da:c0:aa
+[  184.840167] RTW: wlan0 wakeup macid=2, ori reg_0x4d4=0x00000000
+[  184.846146] RTW: ### Clean STA_(2) info ###
+[  184.850434] RTW: rtw_release_macid(wlan0) if1, mac_addr:f6:d6:cb:da:c0:aa macid:2
+[  184.857954] RTW: rtw_set_rts_bw connect_to_8812=0,enable=1
+[  184.867840] RTW: +cfg80211_rtw_del_station(wlan0) mac=f6:d6:cb:da:c0:aa
+[  184.874584] RTW: free sta macaddr =f6:d6:cb:da:c0:aa
+[  184.879615] RTW: -cfg80211_rtw_del_station(wlan0)
+[  184.895061] RTW: clear key for addr:f6:d6:cb:da:c0:aa, camid:2
+[  185.683502] RTW: +OnAuth
+[  185.686079] RTW: auth alg=0, seq=1
+[  185.689539] RTW: going to alloc stainfo for sa=f6:d6:cb:da:c0:aa
+[  185.695580] RTW: rtw_alloc_macid(wlan0) if1, mac_addr:f6:d6:cb:da:c0:aa macid:2
+[  185.702921] RTW: issue_auth
+[  185.707886] RTW: OnAssocReq
+[  185.710788] RTW: OnAssocReq(wlan0) allocate new AID=1
+[  185.715880] RTW: HT: STA f6:d6:cb:da:c0:aa HT Capabilities Info: 0x006f
+[  185.722532] RTW: bss_cap_update_on_sta_join STA f6:d6:cb:da:c0:aa - no greenfield, num of non-gf stations 1
+[  185.732271] RTW: rtw_ht_operation_update current operation mode=0x0
+[  185.738543] RTW: rtw_ht_operation_update new operation mode=0x4 changes=1
+[  185.745329] RTW: update_bcn_htcap_ie
+[  185.748902] RTW: update_bcn_htinfo_ie current operation mode=0x4
+[  185.754912] RTW: num_sta_40mhz_intolerant(0), 20mhz_width_req(0), intolerant_ch_rpt(0), olbc(0)
+[  185.763642] RTW: associated_stainfo_update: f6:d6:cb:da:c0:aa, updated_type=0x3f
+[  185.771044] RTW: bss_cap_update_on_sta_join, updated=1
+[  185.776181] RTW: update_sta_info_apmode
+[  185.780015] RTW: Enable HT Tx LDPC for STA(1)
+[  185.784384] RTW: ### Set STA_(2) info ###
+[  185.788401] RTW: issue_asocrsp
+[  185.791603] RTW: report_add_sta_event: add STA
+[  185.797251] RTW: rtw_get_sta_tx_nss: 1 SS
+[  185.801345] RTW: rtw_get_sta_rx_nss: 1 ss
+[  185.805381] RTW: STA - MAC_ID:2, Tx - 1 SS, Rx - 1 SS
+[  185.810483] RTW: STA - MAC_ID:2, SM_PS 3
+[  185.814440] RTW: ht_mcs_set=ff 00 00 00, nss=1, bitmap=000000ff
+[  185.820407] RTW: rtw_ap_update_sta_ra_info=> mac_id:2 , tx_ra_bitmap:0x00000000000ffff0, networkType:0x14
+[  185.854559] RTW: ============ STA [f6:d6:cb:da:c0:aa]  ===================
+[  185.861541] RTW: mac_id : 2
+[  185.864337] RTW: wireless_mode : 0x14
+[  185.868016] RTW: mimo_type : 0
+[  185.871125] RTW: static smps : N
+[  185.874355] RTW: bw_mode : 20MHz, ra_bw_mode : 20MHz
+[  185.879315] RTW: rate_id : 10
+[  185.882314] RTW: rssi : -1 (%), rssi_level : 0
+[  185.886758] RTW: is_support_sgi : Y, is_vht_enable : N
+[  185.891929] RTW: disable_ra : N, disable_pt : N
+[  185.896457] RTW: is_noisy : N
+[  185.899422] RTW: txrx_state : 0
+[  185.902591] RTW: curr_tx_rate : CCK_1M (L)
+[  185.906693] RTW: curr_tx_bw : 20MHz
+[  185.910216] RTW: curr_retry_ratio : 0
+[  185.913878] RTW: ra_mask : 0x00000000000ffff0
+[  185.913878]
+[  185.919748] RTW: indicate_sta_assoc_event to upper layer - hostapd
+[  185.925943] RTW: rtw_cfg80211_indicate_sta_assoc(wlan0)
+[  185.931284] RTW: rtw_set_rts_bw connect_to_8812=0,enable=1
+[  185.939044] RTW: cfg80211_rtw_change_station(wlan0) mac:f6:d6:cb:da:c0:aa
+[  185.956568] RTW: cfg80211_rtw_del_key(wlan0) key_index=0, addr=f6:d6:cb:da:c0:aa
+[  185.970079] RTW: cfg80211_rtw_del_key(wlan0) key_index=0, addr=f6:d6:cb:da:c0:aa
+[  185.986561] RTW: cfg80211_rtw_change_station(wlan0) mac:f6:d6:cb:da:c0:aa
+[  185.994462] RTW: send eapol packet 1/4
+[  186.000470] RTW: recv eapol packet 2/4
+[  186.005022] RTW: cfg80211_rtw_get_key(wlan0) keyid=1, pairwise=0, addr=  (null) ret 0
+[  186.012968] RTW: cfg80211_rtw_get_key(wlan0) seq:0x0
+[  186.033870] RTW: send eapol packet 3/4
+[  186.039948] RTW: recv eapol packet 4/4
+[  186.044503] RTW: cfg80211_rtw_add_key(wlan0) adding key for f6:d6:cb:da:c0:aa
+[  186.051779] RTW: cfg80211_rtw_add_key(wlan0) cipher=0xfac04
+[  186.057356] RTW: cfg80211_rtw_add_key(wlan0) key_len=16, key_index=0
+[  186.063761] RTW: cfg80211_rtw_add_key(wlan0) pairwise=1
+[  186.068996] RTW: rtw_cfg80211_ap_set_encryption
+[  186.073577] RTW: rtw_cfg80211_ap_set_encryption(wlan0) set CCMP PTK of f6:d6:cb:da:c0:aa idx:0, len:16
+[  186.083277] RTW: set pairwise key camid:2, addr:f6:d6:cb:da:c0:aa, kid:0, type:AES
+[  186.101852] RTW: cfg80211_rtw_change_station(wlan0) mac:f6:d6:cb:da:c0:aa
+[  186.142662] RTW: OnAction_back
+[  186.145783] RTW: OnAction_back, action=0
+[  186.151019] RTW: issue_addba_rsp_wait_ack(wlan0) ra=f6:d6:cb:da:c0:aa status:=0 tid=0 size:64, acked, 1/3 in 0 ms
+BtRfcommController::stop : 422 start
+RfcommTransport::stop : 230
+ArkUtils::send_local_message:288 sock = 9 n =1
+~RfcommConnection:289
+read:291
+Rfcomm transport exit because receiving quit cmd
+Read header failed
+run:161 stop
+BtRfcommController::stop : 430 end
+ArkDbus::onLinkStatusChange:175 mStatus=2
+Signal Sent
+[192.344]  MsnCoreApp::onLinkStatusChange 11 2
+[192.344]
+==========CarAuto onLinkStatusChange: 11 2 ==========
+
+
+==========CarAuto Status: 2 true ==========
+
+[  195.840442] RTW: Turbo EDCA =0x5ea42b
+[  196.903215] RTW: OnDisassoc(wlan0) - Start to Disconnect
+[  196.908557] RTW: OnDisassoc(wlan0) reason=8, ta=f6:d6:cb:da:c0:aa
+[  196.914699] RTW: rtw_cfg80211_indicate_sta_disassoc(wlan0)
+[  196.920267] RTW: rtw_ht_operation_update current operation mode=0x4
+[  196.926539] RTW: rtw_ht_operation_update new operation mode=0x0 changes=1
+[  196.933335] RTW: update_bcn_htcap_ie
+[  196.936910] RTW: update_bcn_htinfo_ie current operation mode=0x0
+[  196.942914] RTW: num_sta_40mhz_intolerant(0), 20mhz_width_req(0), intolerant_ch_rpt(0), olbc(0)
+[  196.951674] RTW: bss_cap_update_on_sta_leave, updated=1
+[  196.956919] RTW: report_del_sta_event(wlan0) f6:d6:cb:da:c0:aa mac_id=2, enqueue:1, res:1
+[  196.966093] RTW: cfg80211_rtw_del_key(wlan0) key_index=0, addr=f6:d6:cb:da:c0:aa
+[  196.974450] RTW: rtw_stadel_event_callback(mac_id=2)=f6:d6:cb:da:c0:aa
+[  196.981075] RTW: rtw_sta_mstatus_disc_rpt(wlan0) - mac_id=2
+[  196.996395] RTW: wlan0 drop macid=2, done reg_0x1450=0x00000004
+[  197.003002] RTW: cfg80211_rtw_del_key(wlan0) key_index=0, addr=f6:d6:cb:da:c0:aa
+[  197.013773] RTW: wlan0 wakeup macid=2, ori reg_0x4d4=0x00000000
+[  197.019833] RTW: ### Clean STA_(2) info ###
+[  197.024033] RTW: rtw_release_macid(wlan0) if1, mac_addr:f6:d6:cb:da:c0:aa macid:2
+[  197.031595] RTW: rtw_set_rts_bw connect_to_8812=0,enable=1
+[  197.040014] RTW: cfg80211_rtw_change_station(wlan0) mac:f6:d6:cb:da:c0:aa
+[  197.047217] RTW: +cfg80211_rtw_del_station(wlan0) mac=f6:d6:cb:da:c0:aa
+[  197.053929] RTW: free sta macaddr =f6:d6:cb:da:c0:aa
+[  197.058897] RTW: -cfg80211_rtw_del_station(wlan0)
+[  197.074281] RTW: clear key for addr:f6:d6:cb:da:c0:aa, camid:2
+[  200.543266] RTW: +OnAuth
+[  200.545825] RTW: auth alg=0, seq=1
+[  200.549264] RTW: going to alloc stainfo for sa=f6:d6:cb:da:c0:aa
+[  200.555315] RTW: rtw_alloc_macid(wlan0) if1, mac_addr:f6:d6:cb:da:c0:aa macid:2
+[  200.562647] RTW: issue_auth
+[  200.567712] RTW: OnAssocReq
+[  200.570662] RTW: OnAssocReq(wlan0) allocate new AID=1
+[  200.575728] RTW: HT: STA f6:d6:cb:da:c0:aa HT Capabilities Info: 0x006f
+[  200.582403] RTW: bss_cap_update_on_sta_join STA f6:d6:cb:da:c0:aa - no greenfield, num of non-gf stations 1
+[  200.592182] RTW: rtw_ht_operation_update current operation mode=0x0
+[  200.598452] RTW: rtw_ht_operation_update new operation mode=0x4 changes=1
+[  200.605270] RTW: update_bcn_htcap_ie
+[  200.608849] RTW: update_bcn_htinfo_ie current operation mode=0x4
+[  200.614883] RTW: num_sta_40mhz_intolerant(0), 20mhz_width_req(0), intolerant_ch_rpt(0), olbc(0)
+[  200.623660] RTW: associated_stainfo_update: f6:d6:cb:da:c0:aa, updated_type=0x3f
+[  200.631093] RTW: bss_cap_update_on_sta_join, updated=1
+[  200.636233] RTW: update_sta_info_apmode
+[  200.640103] RTW: Enable HT Tx LDPC for STA(1)
+[  200.644475] RTW: ### Set STA_(2) info ###
+[  200.648486] RTW: issue_asocrsp
+[  200.651731] RTW: report_add_sta_event: add STA
+[  200.657379] RTW: rtw_get_sta_tx_nss: 1 SS
+[  200.661469] RTW: rtw_get_sta_rx_nss: 1 ss
+[  200.665482] RTW: STA - MAC_ID:2, Tx - 1 SS, Rx - 1 SS
+[  200.670594] RTW: STA - MAC_ID:2, SM_PS 3
+[  200.674546] RTW: ht_mcs_set=ff 00 00 00, nss=1, bitmap=000000ff
+[  200.680510] RTW: rtw_ap_update_sta_ra_info=> mac_id:2 , tx_ra_bitmap:0x00000000000ffff0, networkType:0x14
+[  200.730181] RTW: ============ STA [f6:d6:cb:da:c0:aa]  ===================
+[  200.737109] RTW: mac_id : 2
+[  200.739975] RTW: wireless_mode : 0x14
+[  200.743637] RTW: mimo_type : 0
+[  200.746686] RTW: static smps : N
+[  200.749948] RTW: bw_mode : 20MHz, ra_bw_mode : 20MHz
+[  200.754911] RTW: rate_id : 10
+[  200.757912] RTW: rssi : -1 (%), rssi_level : 0
+[  200.762387] RTW: is_support_sgi : Y, is_vht_enable : N
+[  200.767525] RTW: disable_ra : N, disable_pt : N
+[  200.772088] RTW: is_noisy : N
+[  200.775064] RTW: txrx_state : 0
+[  200.778203] RTW: curr_tx_rate : CCK_1M (L)
+[  200.782324] RTW: curr_tx_bw : 20MHz
+[  200.785813] RTW: curr_retry_ratio : 0
+[  200.789502] RTW: ra_mask : 0x00000000000ffff0
+[  200.789502]
+[  200.795344] RTW: indicate_sta_assoc_event to upper layer - hostapd
+[  200.801568] RTW: rtw_cfg80211_indicate_sta_assoc(wlan0)
+[  200.806877] RTW: rtw_set_rts_bw connect_to_8812=0,enable=1
+[  200.813630] RTW: cfg80211_rtw_change_station(wlan0) mac:f6:d6:cb:da:c0:aa
+[  200.828411] RTW: cfg80211_rtw_del_key(wlan0) key_index=0, addr=f6:d6:cb:da:c0:aa
+[  200.840005] RTW: cfg80211_rtw_del_key(wlan0) key_index=0, addr=f6:d6:cb:da:c0:aa
+[  200.848011] RTW: cfg80211_rtw_change_station(wlan0) mac:f6:d6:cb:da:c0:aa
+[  200.855781] RTW: send eapol packet 1/4
+[  200.861788] RTW: recv eapol packet 2/4
+[  200.870388] RTW: cfg80211_rtw_get_key(wlan0) keyid=1, pairwise=0, addr=  (null) ret 0
+[  200.878286] RTW: cfg80211_rtw_get_key(wlan0) seq:0x0
+[  200.899273] RTW: send eapol packet 3/4
+[  200.905405] RTW: recv eapol packet 4/4
+[  200.909971] RTW: cfg80211_rtw_add_key(wlan0) adding key for f6:d6:cb:da:c0:aa
+[  200.917185] RTW: cfg80211_rtw_add_key(wlan0) cipher=0xfac04
+[  200.922838] RTW: cfg80211_rtw_add_key(wlan0) key_len=16, key_index=0
+[  200.929206] RTW: cfg80211_rtw_add_key(wlan0) pairwise=1
+[  200.934482] RTW: rtw_cfg80211_ap_set_encryption
+[  200.939029] RTW: rtw_cfg80211_ap_set_encryption(wlan0) set CCMP PTK of f6:d6:cb:da:c0:aa idx:0, len:16
+[  200.948778] RTW: set pairwise key camid:2, addr:f6:d6:cb:da:c0:aa, kid:0, type:AES
+[  200.962896] RTW: cfg80211_rtw_change_station(wlan0) mac:f6:d6:cb:da:c0:aa
+[  200.995461] RTW: OnAction_back
+[  200.998538] RTW: OnAction_back, action=0
+[  201.003395] RTW: issue_addba_rsp_wait_ack(wlan0) ra=f6:d6:cb:da:c0:aa status:=0 tid=0 size:64, acked, 1/3 in 0 ms
+[  202.080660] RTW: Turbo EDCA =0xa42b

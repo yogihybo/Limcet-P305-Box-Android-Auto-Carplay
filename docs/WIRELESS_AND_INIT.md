@@ -914,5 +914,10 @@ error, not a mystery.
 
 Fixed: added `fdt resize 64` right after `fdt addr`, before
 `fdt set`, in `boot_from_block_dev()`. Commit: `linux-arkmicro
-3ed011608`. **Not yet retested after this fix** — the `bootmmc`
-wired-CarPlay side above also remains untested.
+3ed011608`.
+
+**Hardware-confirmed working, same day.** Retest showed a clean
+`bootusb` boot: no `FDT_ERR_NOSPACE`, no fallback warning, and
+`reserving fdt memory region: addr=2000000 size=5000` present in the
+log (the `fdt resize` padding taking effect). The `bootmmc`
+wired-CarPlay side above still remains untested.

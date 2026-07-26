@@ -628,3 +628,81 @@ payload unpacking. Built clean against the 4.19 tree, not yet boot-
 tested on real hardware — `cat /proc/arktool` after boot is the
 quickest way to confirm it initialized (should show `ready`, both
 `ioremap`'d base addresses, and frame/checksum counters).
+
+## Touch activation is gated by `MsnFirstInit`/`/etc/profile`, not the MCU — confirmed via disassembly (2026-07-26)
+
+User observation that reopened this: on real hardware, touch only
+becomes responsive once `MsnFirstInit`/`MsnCoreApp` has actually
+loaded — not immediately after the AUX+long-press-home switch alone.
+That's inconsistent with both prior theories on record, so this traced
+the real mechanism directly rather than trusting either:
+
+1. **`tools/mcu-handshake/README.md`'s CBT16211A/MCU-handshake theory
+   is unconfirmed and likely not the touch-input gate.** It was based
+   on static disassembly of `libMcuCenter.so`'s `MCUAdapter_BoxP300`
+   class, never verified against hardware. It's inconsistent with the
+   `[[project_limcet_activation_gate]]` memory's directly-observed
+   hardware fact (2026-07-13): the AUX+long-press-home mode switch
+   works even with `MsnCoreApp` not running at all, at a bare shell
+   prompt — ruling out any Linux-userspace handshake as *that*
+   switch's mechanism. Treat the CBT16211A claim as open, not settled.
+2. **The real, confirmed mechanism is a Qt/QWS-level software gate,
+   not a hardware switch.** `/etc/profile` runs `MsnFirstInit` first
+   (`main` @ `0x138e0` in `usr/bin/MsnFirstInit`), which does
+   `system("insmod .../gt9xx.ko &")` or
+   `system("insmod .../ark1680_ts.ko &")` (selected by the presence of
+   the `/msnprofile/ark1680_ts` marker file) and then
+   `system("ln -s /msnprofile/touch_<driver>_export /tmp/touch_export")`.
+   `/etc/profile` then `source`s `/tmp/touch_export` directly (this
+   works because it's `source`d into the *same* shell, not run as a
+   subprocess like `MsnFirstInit` itself was), setting either:
+   - `export QWS_MOUSE_PROTO=tslib:/dev/input/event0` (`ark1680_ts`), or
+   - `export QWS_ARK_MT_DEVICE=/dev/input/event0` (`gt9xx`)
+
+   immediately before `/etc/profile` execs `MsnCoreApp -qws&`, so the
+   var is inherited into its environment. **`libQtGui.so.4.7.4` itself
+   (confirmed via `strings`, not `MsnCoreApp`/`libarkcmn.so`) reads
+   these** — Qt's QWS server only instantiates a mouse/touch input
+   driver plugin, and only opens `/dev/input/eventN` for touch at all,
+   if one of these is set before the `QApplication` object is
+   constructed. This matches the known stock log line
+   `QWS_ARK_TOUCH_DEVICE undefined, touch input disabled`, seen on
+   every boot where this sequence hasn't run yet.
+
+**This only explains why *Qt/`MsnCoreApp`* doesn't see touch before
+this sequence runs — it does NOT by itself explain why a standalone
+evdev monitor (`ark-ts-test events /dev/input/event0`) sees nothing.**
+A raw evdev reader bypasses Qt entirely and multiple readers can watch
+the same device concurrently with no conflict — if the kernel driver
+is genuinely producing events, the monitor should see them regardless
+of `QWS_MOUSE_PROTO`/`QWS_ARK_MT_DEVICE`. Earlier isolated kernel-level
+testing in this doc (see the ADC/IRQ investigation above) found *zero*
+IRQ activity from the touch controller — that remains the real open
+question, separate from this Qt-gate finding.
+
+**For future testing, in this order:**
+1. Confirm the unit is switched into Limcet mode (AUX + long-press-home
+   on the factory head unit) — a prerequisite for the physical touch
+   panel signal to reach this board at all, per
+   `[[project_limcet_activation_gate]]`.
+2. Let `/etc/profile`'s normal boot sequence run (`MsnFirstInit` then
+   `MsnCoreApp -qws&`) rather than starting `MsnCoreApp` by hand from a
+   bare shell — otherwise `QWS_MOUSE_PROTO`/`QWS_ARK_MT_DEVICE` never
+   gets set and Qt won't touch the input device at all, independent of
+   whether the kernel driver itself works.
+3. With `MsnCoreApp` running and actively responding to touch, run
+   `ark-ts-test events /dev/input/event0` (or
+   `echo 1 > /sys/module/ark1680_ts/parameters/debug; dmesg -w`)
+   **concurrently**, not standalone. If it shows real events while
+   `MsnCoreApp` visibly responds to the same touches, the touch panel
+   and kernel driver are both fine and earlier "monitor shows nothing"
+   results were just missing one of steps 1-2. If it shows nothing even
+   then, that's the real bug — worth revisiting the ADC/IRQ dead-end
+   from earlier in this doc with the panel now confirmed switched live
+   and electrically connected.
+4. Sanity-check the values actually landing in the environment:
+   `cat /tmp/touch_export` and, inside `MsnCoreApp`'s own environment
+   (`cat /proc/$(pidof MsnCoreApp)/environ | tr '\0' '\n' | grep QWS`),
+   confirm `QWS_MOUSE_PROTO`/`QWS_ARK_MT_DEVICE` actually made it
+   through — not yet verified live on the 4.19 rebuild, only traced
+   statically.

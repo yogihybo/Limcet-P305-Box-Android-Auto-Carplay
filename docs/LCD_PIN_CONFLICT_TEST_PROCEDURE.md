@@ -1,0 +1,150 @@
+# LCD RGB / I2C Pin-Conflict Test Procedure
+
+**Context:** `LCDTest -qws`'s color-test-pattern grid shows dramatic,
+value-dependent color corruption (red/cyan cells in what should be a
+neutral grayscale row, wrong hues in the yellow/olive row) on our
+build, while stock hardware shows the same test correctly (only a
+subtle panel-characteristic tint). Framebuffer content and the LCDC's
+own 242 named registers were both checked and ruled out (see
+`docs/DEVICE_TEST_CHECKLIST_2026-07-18.md`) -- the current leading
+theory is a **real, physical pin-sharing conflict**: LCD RGB888 data
+pins `r0`/`r1` (pins 2/3) are the same physical pads as `i2c-gpio-0`'s
+SCL/SDA (RN6752 camera decoder bus), and `r7` (pin 9) is the same pad
+as `i2c-gpio-1`'s SDA (BD37033 audio chip bus). This is already
+partially documented in `docs/DISPLAY_SUBSYSTEM.md`'s
+`I2C_GPIO0_LCD_PIN_CONFLICT` section, which found via a single static
+debugfs snapshot that the pins stay muxed to LCD function even after
+`i2c-gpio` claims them -- concluding it only breaks I2C, not the LCD.
+Real hardware testing since then shows a tint that visibly **moves
+across the screen in sync with I2C message activity**, which doesn't
+fit that conclusion. This procedure tests it directly.
+
+`r7` (pin 9, BD37033/audio bus) is the primary suspect over `r0`/`r1`
+(RN6752/camera bus): `r0`/`r1` are the R channel's two
+least-significant bits (max effect ~+/-3 out of 255 -- too small to
+explain a dramatic visible shift), while `r7` is plausibly the
+most-significant bit (128 of 255). The RN6752 signal-detect polling
+path also appears to be dead code in real operation (no binary in
+`/usr/bin` calls `arkapi_dvr_detect_signal`), whereas BD37033 writes
+are real, on-demand, and retry up to 5 times per register write
+(`bd37033_write_byte()` in `linux/sound/soc/arkmicro/BD37033.c`) --
+matching "tint moves while an I2C message is being output."
+
+## Tools used
+
+- `tools/pinmux-watch/` -- passive poller, logs any change to the
+  pad-mux function-select register covering LCD `r0`-`r7` (and
+  `g0`-`g7`/`b0`-`b7`), with a timestamp.
+- `tools/pin-force/` -- active tool, directly forces a given LCD RGB
+  pin into GPIO mode at a specific level (or restores it to LCD
+  function), bypassing the kernel entirely.
+
+Both are statically linked ARM binaries -- copy them to the device the
+same way as other tools (`mem-dump`, `fb-scan`, etc).
+
+## Starting LCDTest on the device
+
+`LCDTest` needs environment variables `/etc/profile` normally sets up
+for `MsnCoreApp` -- running it directly from a shell skips them.
+`MsnCoreApp` must also be stopped first (it otherwise fights for the
+display).
+
+```sh
+killall MsnCoreApp 2>/dev/null
+export LD_LIBRARY_PATH=/usr/local/Qt4.7.4/lib:/usr/lib
+export QT_QWS_FONTDIR=/usr/local/Qt4.7.4/lib/fonts
+./LCDTest -qws
+```
+
+Do **not** just `source /etc/profile` instead -- that also runs
+`MsnFirstInit`, `insmod galcore.ko`, and relaunches `MsnCoreApp` in the
+background, which will fight `LCDTest` for the display.
+
+Confirmed against the stock rootfs dump: `libQtGui.so.4.7.4` lives
+directly in `/usr/local/Qt4.7.4/lib/`, and `fonts/wqy-microhei.ttf` is
+the only font in the `fonts` subdirectory -- both paths above are real,
+not guesses.
+
+## Test sequence
+
+Run with `LCDTest -qws` already up and visible, showing the row(s)
+where corruption was previously seen (grayscale row, and/or the
+yellow/olive row). Use a second terminal/SSH session so `amixer`
+commands can run while watching another tool's output.
+
+### Step 1 -- Baseline, no forced activity
+
+```sh
+./pin-force 9 status
+```
+
+Confirm it reads `pinmux_nibble=0x1 (LCD)` -- the expected idle state.
+
+### Step 2 -- Correlate real BD37033 traffic against the pinmux register
+
+Terminal A:
+
+```sh
+./pinmux-watch 20
+```
+
+Terminal B, within that 20s window, trigger several real audio writes
+back-to-back:
+
+```sh
+amixer cset iface=MIXER,name='PA Input Select' 1
+amixer cset iface=MIXER,name='PA Input Select' 2
+amixer cset iface=MIXER,name='PA Input Select' 3
+amixer cset iface=MIXER,name='PA Input Select' 1
+```
+
+Watch Terminal A for any `RGB_0_7` change logged during that window,
+and watch the LCDTest screen at the same moment for a visible glitch.
+A logged change timed to the `amixer` commands means the mux is
+flipping live, exactly when BD37033 traffic happens.
+
+### Step 3 -- Direct visual correlation (no pinmux-watch needed)
+
+Run the same `amixer` commands again while watching the LCDTest grid
+directly (video recording or a second person watching helps). Look
+specifically at cells in the previously-corrupted row(s) -- does a
+visible flicker/shift happen at the exact moment each `amixer cset`
+runs?
+
+### Step 4 -- Isolate with `pin-force` (rules out amixer/audio-stack side effects entirely)
+
+```sh
+./pin-force 9 status        # confirm still LCD
+./pin-force 9 gpio-low       # force r7 low directly, no I2C/amixer involved
+```
+
+Look at the screen immediately -- a uniform, predictable shift (R
+channel dropping across the board, not just specific cells) confirms
+`r7` is genuinely drivable via this path and is significant enough to
+matter visually.
+
+```sh
+./pin-force 9 gpio-high      # force r7 high -- compare
+./pin-force 9 lcd             # restore immediately
+./pin-force 9 status          # confirm restored to LCD
+```
+
+## Interpreting the results
+
+| Step 2/3 correlation | Step 4 visual effect | Conclusion |
+|---|---|---|
+| Yes | Yes | Mechanism fully confirmed -- `r7`/BD37033 is the cause. Fix path: move BD37033 off this shared pin, or stop the pinmux from actually flipping during I2C transactions. |
+| No | Yes | The pin is drivable but something other than BD37033 is triggering it in practice -- look for other I2C/GPIO activity on `r0`-`r7`. |
+| -- | No | This specific theory is ruled out cleanly. Look elsewhere. |
+
+## Related reference
+
+- `docs/DISPLAY_SUBSYSTEM.md` -- `I2C_GPIO0_LCD_PIN_CONFLICT` section
+  (the original pin-sharing discovery, pins 2/3 only).
+- `docs/DEVICE_TEST_CHECKLIST_2026-07-18.md` -- full history of what's
+  already been ruled out for the LCDTest color-grid bug (framebuffer
+  content, LCDC register config, `rgb_order`/`ycbcr_bypass`/colorkey/
+  blend-mode/gamma/dithering).
+- `tools/lcdc-regdump/`, `tools/fb-scan/`, `tools/mem-dump/` -- the
+  earlier register/framebuffer-comparison tools this investigation
+  built before landing on the pin-conflict theory.

@@ -8,6 +8,7 @@ mkdir -p /var
 mount -t ramfs -n none /var
 mkdir -p /var/run/
 mkdir -p /var/lib/lockdown
+mkdir -p /var/log
 sync
 /sbin/mdev -s
 

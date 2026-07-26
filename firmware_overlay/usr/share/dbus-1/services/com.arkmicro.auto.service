@@ -1,0 +1,3 @@
+[D-BUS Service]
+Name=com.arkmicro.auto
+Exec=/bin/sh -c "exec /usr/bin/sink >>/var/log/sink.log 2>&1"

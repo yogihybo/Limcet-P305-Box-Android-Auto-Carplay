@@ -62,9 +62,43 @@ Examples:
 """
 
 import argparse
+import datetime
 import struct
 import sys
 from pathlib import Path
+
+
+def patch_uboot_banner(data: bytearray, tag: str = "ubootconsole") -> str:
+    """
+    Patch the U-Boot startup header version string in-place without changing
+    binary length or structure.
+
+    Original: "U-Boot 2012.10 (root2023120611 - 11:46:47)"
+    Patched : "U-Boot 2012.10 (ubootconsole 2026-07-23 ...)"
+    """
+    marker = b'U-Boot 2012.10 ('
+    idx = data.find(marker)
+    if idx == -1:
+        return None
+    end_idx = data.find(b')', idx)
+    if end_idx == -1:
+        return None
+
+    orig_banner = data[idx:end_idx + 1].decode('latin1')
+    orig_len = len(orig_banner)
+
+    now_str = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
+    new_inner = f"U-Boot 2012.10 ({tag} {now_str})"
+
+    if len(new_inner) < orig_len:
+        new_banner = new_inner[:-1] + ' ' * (orig_len - len(new_inner)) + ')'
+    elif len(new_inner) > orig_len:
+        new_banner = new_inner[:orig_len - 1] + ')'
+    else:
+        new_banner = new_inner
+
+    data[idx:idx + len(new_banner)] = new_banner.encode('latin1')
+    return new_banner
 
 
 # ---------------------------------------------------------------------------
@@ -276,6 +310,23 @@ PRESETS = {
             ),
         },
     },
+    'hybrid': {
+        'description': 'Hybrid Boot — SD Kernel (zImage_stock) + NAND RootFS/partitions',
+        'env': {
+            'bootcmd':    'run sdboot',
+            'bootfile':   'zImage_stock',
+            'bootdelay':  '2',
+            'sdboot':     (
+                'run sdbootargs; '
+                'fatload mmc 0:1 1000000 ${bootfile}; '
+                'bootz 1000000'
+            ),
+            'sdbootargs': (
+                'setenv bootargs console=ttyS0,115200n8 mem=180M earlyprintk=serial '
+                'ubi.mtd=6 root=ubi0:rootfs rootfstype=ubifs rootwait ro ${mtdparts} screen=${screen}'
+            ),
+        },
+    },
     'sdscript': {
         'description': (
             'Minimal bootcmd that loads and runs a boot script from SD p1 — '
@@ -434,6 +485,12 @@ def main():
             print("  NAND env CRC will fail; U-Boot falls back to compiled-in defaults.")
             if not args.dry_run:
                 patch_nand_offset(data, candidates)
+
+    # Patch U-Boot header banner
+    tag_name = "ubootconsole" if (args.mode == 'sdscript' or not args.mode) else args.mode
+    new_banner = patch_uboot_banner(data, tag=tag_name)
+    if new_banner:
+        print(f"\nHeader banner patch: updated version string to '{new_banner}'")
 
     # Write output
     out_path = args.output or (Path(args.input).stem + '_patched.bin')

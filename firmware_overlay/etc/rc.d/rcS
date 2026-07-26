@@ -55,8 +55,22 @@ ln -sf /dev/memalloc /tmp/dev/memalloc
 # anything at /tmp/dev/hx170, so every H264DecInit() call failed
 # immediately on open(). See docs/DEVICE_TEST_CHECKLIST_2026-07-18.md
 # section 56/57.
+# Same story again for libarkcmn.so's ARK_DVR_* ioctl interface (camera
+# input / reverse-gear carback, drivers/soc/arkmicro/itu656/ark1668_itu656.c)
+# -- it hardcodes /tmp/dev/dvr (confirmed via the "open dvr device %s
+# failure." + "/tmp/dev/dvr" strings in libarkcmn.so), but the kernel
+# driver's own device_create() call creates the real node at /dev/dvr, not
+# /tmp/dev/dvr. Missing here the whole time -- meant arkapi_open_dvr()
+# always failed at open() with ENOENT, so dvr_ioctl() was never actually
+# reachable from a plain boot regardless of the CONFIG_ARK1668_ITU656/
+# RN6752/ARK_CARBACK crash investigation (see docs/DEVICE_TEST_CHECKLIST_
+# 2026-07-18.md item 7) -- needed for the DIAG_ITU656_* printk tags added
+# there to actually fire on the next boot. Harmless dangling symlink when
+# ITU656 is built disabled (the normal, non-diagnostic config).
 echo "device-node compat symlinks: /dev/hx170dec (Hantro hx170dec H.264/MPEG2 hardware decoder, used by Android Auto video) -> /tmp/dev/hx170"
 ln -sf /dev/hx170dec /tmp/dev/hx170
+echo "device-node compat symlinks: /dev/dvr (ITU656 camera/carback ioctl interface) -> /tmp/dev/dvr"
+ln -sf /dev/dvr /tmp/dev/dvr
 
 touchdriver="/msnprofile/ark1680_ts"
 
@@ -230,5 +244,14 @@ echo "  lcd-overlay-watch.sh [secs]          - poll all 5 LCDC layer enable-bits
 echo "  lcd-osd1ctl-directfb-watch.sh [--no-hardware|--no-systemonly|--stock-config] [secs] - watches OSD1_CTL rgb_order + OSD1 enable/addr while running start_msn_directfb; --stock-config replicates stock's exact real QWS_DISPLAY/directfbrc (no systemonly, clearing enabled) to test whether the black screen is a config gap or a real driver-stack bug"
 echo "  start_msn_linuxfb / start_msn_directfb - start MsnCoreApp on a specific QWS backend without editing start_msn"
 echo "  dmesg                                - now aliased to /usr/bin/dmesg --color=always (busybox lacks --color)"
+echo "  mem-dump <phys_addr> [len]           - hex-dump physical memory via mmap'd /dev/mem (works on DMA carve-outs plain dd can't reach)"
+echo "  fb-scan [threshold]                  - locate solid-color regions in /dev/fb0, predict expected color for black cells via row-fit"
+echo "  lcdc-regdump [label]                 - dump every named ARK1668 LCDC register, for diffing a stock vs our-build run"
+echo "  pin-force <pin 2-9> <status|gpio-low|gpio-high|lcd> - force an LCD RGB data pin (r0-r7) to GPIO at a level, or restore it to LCD function"
+echo "  pinmux-watch [secs]                  - poll the LCD r0-r7/g0-g7/b0-b7 pad-mux registers, log any live function-select change"
+echo "  gpio-i2c-probe <sda-pin> <scl-pin>   - bit-bang I2C over two arbitrary sysfs GPIOs, scan for ACKs (hunt real chip wiring)"
+echo "  i2c-gpio-bruteforce <target-addr>    - try every candidate pin pair as SCL/SDA, checking for a real ACK from a known I2C address"
+echo "  i2c-read-raw /dev/i2c-N addr len     - plain multi-byte I2C read, no register-address write phase"
+echo "  pin-dump.sh                          - dump every ARK1668 pinmux pad's live hardware mux value via devmem"
 echo "========================="
 echo ""

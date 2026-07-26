@@ -724,6 +724,8 @@ this decision needs revisiting** — it would require either reverting
 mechanism (e.g. a separate DTB selected by U-Boot depending on boot
 mode) to get both.
 
+**Revisited 2026-07-27 — see "`usb0` dr_mode made boot-command-dependent" below.** Wired CarPlay testing needed this connector back, so this tradeoff is no longer in effect: `dr_mode` is now decided per boot command instead of one hardcoded DTS value.
+
 ### `g_ncm`'s net device renamed to avoid a real naming collision
 
 While reconciling the above, a second, unrelated point of confusion
@@ -838,3 +840,51 @@ And in the main `prado-firmware-reconstruction` repo:
 | `9f2ef8d` | `switchotg.sh`: force `usb1` to host mode on USB-stick test boots for fast WiFi |
 | `c1515fe` | `rcS`: actually call `switchotg.sh` — it had no caller at all before this |
 | `d42f1b3` | `switchotg.sh`: fix usb1 mode sysfs path — missing `ahb` DTS bus node component |
+
+### `usb0` dr_mode made boot-command-dependent, restoring wired CarPlay on `bootmmc` (2026-07-27)
+
+Wired-CarPlay bench testing needed to actually use `usb0` (the shared
+storage/CarPlay connector), which the tradeoff above ruled out
+entirely. Implemented the "boot-mode-dependent DTB" option that
+section flagged but never built:
+
+- **`linux-arkmicro`'s `ark1668.dtsi`**: `usb0`'s `dr_mode` reverted
+  from the hardcoded `"host"` (since `9fa92d4b1`, 2026-07-22) back to
+  `"otg"` — the DTS default now has real OTG/gadget capability again,
+  since `musb_core` only calls `musb_gadget_setup()` at DTS-parse
+  time, not something a runtime sysfs write can restore after the
+  fact (the same constraint documented above for why `switchotg.sh`
+  couldn't touch `usb0` at all before this).
+- **`bootmmc`/`bootsd`** (the real vehicle boot path): get this `otg`
+  default unchanged — a wired CarPlay cable can now negotiate through
+  `usb0` on a normal boot.
+- **`bootusb`** (U-Boot, `ark1668_boot_cmds.c`'s
+  `boot_from_block_dev()`): patches the *in-RAM* DTB it just
+  `fatload`'d, right before `bootz` —
+  `fdt addr <dtbaddr>; fdt set /ahb/usb@E0100000 dr_mode "host"` —
+  restoring the original fast host-mode boot (skips the ID-pin
+  negotiation retries) for that path specifically, since a USB-stick
+  test boot already occupies the one connector a CarPlay cable would
+  need, so there's no tradeoff to make there.
+- `firmware_overlay/etc/switchotg.sh`'s comment (previously stated
+  `usb0` has *no* gadget capability at all, unconditionally) corrected
+  to describe the new per-boot-command behavior — the runtime script
+  still has nothing to do for `usb0` on either path, just for
+  different reasons now (DTS default handles `bootmmc`, the U-Boot fdt
+  patch handles `bootusb`).
+
+Both kernel/DTB and U-Boot rebuilt clean. **Not yet hardware-tested.**
+Two things the next test needs to confirm: (1) a wired phone on
+`bootmmc` actually negotiates OTG/gadget through `usb0` now: check
+`fdt print /ahb/usb@E0100000 dr_mode` at the U-Boot prompt, or
+`cat /proc/device-tree/ahb/usb@e0100000/dr_mode` once booted, before
+assuming any remaining wired-CarPlay problem is elsewhere in the stack
+(`carplay-ncm`/`f_ncm.c`, `libAutoDongle.so`); (2) `bootmmc` with
+*nothing* plugged into `usb0` doesn't reintroduce the original
+multi-second ID-pin negotiation delay on ordinary (non-CarPlay-testing)
+boots — if that turns out to matter, this may need a further
+compromise (e.g. only patch `otg` back in for a `bootmmc`-carplay-test
+variant command, defaulting normal `bootmmc` to `host` too).
+
+Commit: `linux-arkmicro b04c6e59f` (DTS + boot command);
+`prado-firmware-reconstruction 7942537` (`switchotg.sh` comment fix).

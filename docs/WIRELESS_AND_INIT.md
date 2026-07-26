@@ -888,3 +888,31 @@ variant command, defaulting normal `bootmmc` to `host` too).
 
 Commit: `linux-arkmicro b04c6e59f` (DTS + boot command);
 `prado-firmware-reconstruction 7942537` (`switchotg.sh` comment fix).
+
+#### `bootusb` side hardware-tested and fixed (2026-07-27)
+
+First hardware test (`docs/logs/new uboot new kernel baseline
+v19_260727.txt`) showed the fix wasn't taking effect on `bootusb` —
+`usb0` still ran the full slow OTG negotiation cycle (`switch
+peripheral`/`switch otg`/`Cannot enable... attempt power cycle`,
+USB stick not detected until ~14.6s, same as before `dr_mode="host"`
+existed at all). The U-Boot console log itself pinpointed it exactly:
+
+```
+libfdt fdt_setprop(): FDT_ERR_NOSPACE
+[bootusb] warning: failed to force usb0 dr_mode=host in DTB, keeping DTS default (otg) -- boot will be slower but should still work
+```
+
+Root cause: `fatload` gives the in-RAM DTB blob its exact on-disk
+file size — zero slack space. `fdt_setprop()` growing `dr_mode` from
+`"otg"` (4 bytes incl. NUL) to `"host"` (5 bytes) is only a 1-byte
+grow, but even that fails outright without first padding the working
+copy via `fdt resize`. The code's own fallback warning fired
+correctly both times (confirms that graceful-degradation path itself
+works as designed) — this was diagnosed straight from the printed
+error, not a mystery.
+
+Fixed: added `fdt resize 64` right after `fdt addr`, before
+`fdt set`, in `boot_from_block_dev()`. Commit: `linux-arkmicro
+3ed011608`. **Not yet retested after this fix** — the `bootmmc`
+wired-CarPlay side above also remains untested.

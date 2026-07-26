@@ -200,7 +200,7 @@ section the key lives under. Some SKUs comment keys out with `#` (shown as
 
 | Key | Observed values | Meaning |
 |-----|-----------------|---------|
-| `Language` | `4096`, `4098` *[commented]* | UI language code (vendor‑coded; `4096` is the English/default build). *(inferred)* |
+| `Language` | `4097`-`4111` | UI language code. **Confirmed 2026-07-26 via disassembly** of `libMsnCommons.so`'s `GetLanguageValueList()`/`GetLanguageNameList()` (the real ordered value↔name table `MsnCoreApp` builds at runtime) — corrects the earlier inferred guess that `4096` was English/default; `4096` actually decodes to an unrelated/anomalous string (possibly a reserved "system default" slot, not confirmed) and should not be used. Full confirmed table: `4097`=English, `4098`=简体中文 (Chinese Simplified), `4099`=繁體中文 (Chinese Traditional), `4100`=Português brasileiro, `4101`=한국어 (Korean), `4102`=Español, `4103`=Dansk, `4104`=Protuguês, `4105`=Italiano, `4106`=עברית (Hebrew), `4107`=Русский язык, `4108`=Français, `4109`=Türkçe, `4110`=Deutsch, `4111`=Dutch. `firmware_overlay/msnprofile/FactoryConfig.ini` sets `Language=4097` (English) as this reconstruction's default — the base `firmware_source` rootfs ships it commented out, and a live device capture showed it explicitly set to `4098` (Chinese Simplified). |
 | `DisableWindowEffect` | `1` | Disable window/transition animations (Chinese comment: 禁用转场动画). |
 | `ScreenRatio` | `0` | Aspect‑ratio handling mode. *(inferred)* |
 | `EnableBackLight` | `0` | Software backlight control toggle (Box‑C235). |

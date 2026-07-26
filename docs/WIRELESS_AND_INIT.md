@@ -919,5 +919,21 @@ Fixed: added `fdt resize 64` right after `fdt addr`, before
 **Hardware-confirmed working, same day.** Retest showed a clean
 `bootusb` boot: no `FDT_ERR_NOSPACE`, no fallback warning, and
 `reserving fdt memory region: addr=2000000 size=5000` present in the
-log (the `fdt resize` padding taking effect). The `bootmmc`
-wired-CarPlay side above still remains untested.
+log (the `fdt resize` padding taking effect).
+
+#### `bootmmc` wired-CarPlay side hardware-tested (2026-07-27, same day)
+
+User confirmed: `bootmmc` with a phone wired into `usb0` detects the
+phone. **No log was captured for this specific run**, so this only
+confirms USB-level device detection — not yet verified whether a
+wired session completes full CarPlay/AA protocol negotiation and
+shows video end-to-end. The one AA session actually captured with a
+log that same day auto-connected over *wireless* instead (BT+WiFi,
+`MsnCoreApp`'s normal auto-connect, no wired gadget negotiation lines
+in that log at all) — see the "Android Auto video launches but shows
+black screen" thread (`docs/DEVICE_TEST_CHECKLIST_2026-07-18.md`
+§61-67) for what that wireless session did surface (video decode
+completes but the screen never visibly switches — an existing,
+separately-tracked bug, not related to wired vs. wireless). Worth a
+proper log capture on the next wired test to confirm past basic USB
+detection.

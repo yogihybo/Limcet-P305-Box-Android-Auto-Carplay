@@ -6,16 +6,24 @@
 # actually confirmed which physical port does what -- corrects a wrong
 # assumption the first version of this rewrite made.
 #
-# usb0 (e0100000.usb) is this board's single external-facing USB port,
-# used for booting/testing off a USB storage stick (root=/dev/sda*,
-# "bootusb" in U-Boot) and nothing else. linux-arkmicro's ark1668.dtsi
-# sets usb0's dr_mode="host" permanently (was "otg") to skip the ID-pin
-# OTG negotiation that otherwise cost several seconds of "Cannot
-# enable... attempt power cycle" retries at every boot. Because that's
-# the DTS boot-time dr_mode (not just a runtime default), musb_core's
-# init never calls musb_gadget_setup() for this port -- there is no
-# gadget capability to switch back on here even if this script tried,
-# so there's nothing for this script to do for usb0 at all.
+# usb0 (e0100000.usb) is this board's single external-facing USB port
+# -- used for booting/testing off a USB storage stick (root=/dev/sda*,
+# "bootusb" in U-Boot) AND the wired-CarPlay connector on a real
+# vehicle boot (bootmmc/bootsd). Updated 2026-07-27: linux-arkmicro's
+# ark1668.dtsi now ships usb0's dr_mode="otg" by default (real
+# OTG/gadget capability, needed for wired CarPlay) -- the "host"-mode
+# skip of ID-pin negotiation retries is applied per-boot-command
+# instead, only for bootusb (which already knows for certain no wired
+# CarPlay cable is in the picture, since a boot stick occupies the
+# same port): U-Boot's bootusb command `fdt set`s dr_mode="host" on
+# the in-RAM DTB right before bootz (see linux-arkmicro's
+# ark1668_boot_cmds.c). Because that's still a boot-time dr_mode (not
+# a runtime default), musb_core's init still never calls
+# musb_gadget_setup() for usb0 specifically on a bootusb boot -- so
+# there is genuinely nothing for this script to switch on usb0 on that
+# path. On bootmmc/bootsd, usb0 keeps its DTS default (otg) and the
+# kernel's own OTG negotiation handles it dynamically, same as usb1
+# below -- also nothing for this script to do there, by design.
 #
 # usb1 (e0400000.usb) is the port that's actually dual-role: it's
 # CarPlay's connector, trying wired mode first (the "carplay-ncm"

@@ -193,8 +193,10 @@ RELOC_ENV=true
 ROOT_DEV="/dev/mmcblk0p2"                     # root= in the generated uEnv.txt (matches p2 rootfs)
 KERNEL_BIN=""
 BOOTLOGO_RAW="$SCRIPT_DIR/sd_bootable/bootlogo.raw"                               # raw framebuffer (--bootlogo) for p1/bootlogo.raw
-STOCK_UBOOT_BIN="$SCRIPT_DIR/firmware_source/mtd1-mtd2_uboot/uboot.bin"  # for p1/stock_uboot.bin, used by the `bootstock` chainload command
-ARKDATA_INI="$SCRIPT_DIR/firmware_source/mtd5_kernel/modules/mtd4_arkdata/arkdata.ini"  # for p1/arkdata.ini -- real calibrated LCD timing/panel config, dumped from the NAND "arkdata" partition. Without this, ark1668_arkdata_ini.c's fatload always fails: U-Boot's own splash-screen screen_info falls back to compiled defaults, AND (2026-07-19) ft_board_setup() no longer has anything to patch the kernel's DTB display-timings node with either -- see docs/DISPLAY_SUBSYSTEM.md
+STOCK_UBOOT_BIN="$SCRIPT_DIR/firmware_source/mtd1-mtd2_uboot/uboot.bin"  # for p1/uboot_stock.bin, used by the `bootstock` chainload command
+HYBRID_UBOOT_BIN="$SCRIPT_DIR/sd_bootable/uboot_hybrid.bin"             # for p1/uboot_hybrid.bin, used by the `boothybrid` chainload command
+ARKDATA_INI="$SCRIPT_DIR/sd_bootable/arkdata.ini"  # for p1/arkdata.ini -- real calibrated LCD timing/panel config, dumped from the NAND "arkdata" partition. Without this, ark1668_arkdata_ini.c's fatload always fails: U-Boot's own splash-screen screen_info falls back to compiled defaults, AND (2026-07-19) ft_board_setup() no longer has anything to patch the kernel's DTB display-timings node with either -- see docs/DISPLAY_SUBSYSTEM.md
+                                                                         # (previously pointed at firmware_source/mtd5_kernel/modules/mtd4_arkdata/arkdata.ini, a path that never existed -- the -f guard below silently skipped copying arkdata.ini on every build. sd_bootable/'s copy is used here, not firmware_source/mtd4_arkdata/'s, because the latter has CRLF line endings and this project has repeatedly hit CRLF-parsing bugs elsewhere in the boot pipeline; both copies already have RgbMode=5 applied.)
 DTB_BIN=""
 ROOTFS_DIR=""
 USERDATA_DIR=""
@@ -807,6 +809,7 @@ prepare_uboot() {
         info "Relocating compiled-in env for full SD auto-boot (build_tools/patch_uboot_env.py --preset sdboot)"
         info "Static-verified, NOT yet hardware-tested — see docs/UBOOT_SDBOOT_INVESTIGATION.md §10"
         run python3 "$SCRIPT_DIR/build_tools/patch_uboot_env.py" \
+            --non-interactive \
             -i "$UBOOT_SRC" -o "$UBOOT_OUT" \
             --preset sdboot --root "$ROOT_DEV" \
             --patch-nand-offset
@@ -849,6 +852,54 @@ apply_overlay() {
 
     rsync -a --info=progress2 "$OVERLAY_DIR/" "$rootfs_mount/"
     success "RootFS overlay applied — rcS/profile/wifi_ap.sh/inittab/libGAL.so, etc."
+}
+
+# ---------------------------------------------------------------------------
+# Diagnostic tools (tools/) — copies every compiled binary/script/data file
+# from each tools/<name>/ directory into /usr/bin on the built image, so
+# mem-dump, fb-scan, lcdc-regdump, pin-force, pinmux-watch, etc. are always
+# present without hand-copying them onto the device or manually curating
+# firmware_overlay/usr/bin/ (which had drifted stale — several tools built
+# in later sessions were never added there). Runs after apply_overlay() so
+# tools/ — the canonical, up-to-date source — wins over any older duplicate
+# firmware_overlay/usr/bin/ may still carry.
+#
+# Copies every file under each tools/*/ directory except source/doc/build
+# artifacts (*.py host-side analysis scripts, *.c/*.h source, *.md docs,
+# *.cmd/*.o build leftovers) — this picks up compiled ELF binaries, .sh
+# wrapper scripts, and any data files a tool needs (e.g. audio-test's
+# test-tone.wav) in one pass, regardless of a tool's exact internal layout.
+# ---------------------------------------------------------------------------
+install_diag_tools() {
+    local rootfs_mount="$1"
+    local tools_dir="$SCRIPT_DIR/tools"
+    echo -e "${BOLD}  Installing diagnostic tools (tools/) into /usr/bin...${RESET}"
+
+    [[ -d "$tools_dir" ]] || { warn "tools/ dir not found at $tools_dir — skipping"; return; }
+
+    if $DRY_RUN; then
+        echo "  [dry-run] copy tools/*/<binaries/scripts/data> → $rootfs_mount/usr/bin/"
+        return
+    fi
+
+    mkdir -p "$rootfs_mount/usr/bin"
+    local count=0
+    local d f base
+    for d in "$tools_dir"/*/; do
+        [[ -d "$d" ]] || continue
+        for f in "$d"*; do
+            [[ -f "$f" ]] || continue
+            base="$(basename "$f")"
+            case "$base" in
+                *.py|*.c|*.h|*.inc|*.md|*.cmd|*.o|*.orig) continue ;;
+                *-debug) continue ;;  # e.g. tools/htop/htop-debug — unstripped debug build, not for routine deployment
+            esac
+            cp -f "$f" "$rootfs_mount/usr/bin/$base"
+            chmod +x "$rootfs_mount/usr/bin/$base" 2>/dev/null || true
+            count=$((count + 1))
+        done
+    done
+    success "Installed $count diagnostic tool file(s) from tools/ into /usr/bin"
 }
 
 # ---------------------------------------------------------------------------
@@ -1202,8 +1253,22 @@ build() {
         bootlogo_label="$bootlogo_label + arkdata.ini"
     fi
     if [[ -n "$STOCK_UBOOT_BIN" && -f "$STOCK_UBOOT_BIN" ]]; then
-        run cp "$STOCK_UBOOT_BIN" /tmp/sd_p1/stock_uboot.bin
-        bootlogo_label="$bootlogo_label + stock_uboot.bin"
+        run cp "$STOCK_UBOOT_BIN" /tmp/sd_p1/uboot_stock.bin
+        bootlogo_label="$bootlogo_label + uboot_stock.bin"
+    fi
+    if [[ -n "$HYBRID_UBOOT_BIN" && -f "$HYBRID_UBOOT_BIN" ]]; then
+        run cp "$HYBRID_UBOOT_BIN" /tmp/sd_p1/uboot_hybrid.bin
+        bootlogo_label="$bootlogo_label + uboot_hybrid.bin"
+    fi
+    local stock_kernel_src=""
+    if [[ -f "$SCRIPT_DIR/sd_bootable/zImage_stock" ]]; then
+        stock_kernel_src="$SCRIPT_DIR/sd_bootable/zImage_stock"
+    elif [[ -f "$SCRIPT_DIR/firmware_source/mtd5_kernel/zImage" ]]; then
+        stock_kernel_src="$SCRIPT_DIR/firmware_source/mtd5_kernel/zImage"
+    fi
+    if [[ -n "$stock_kernel_src" && -f "$stock_kernel_src" ]]; then
+        run cp "$stock_kernel_src" /tmp/sd_p1/zImage_stock
+        bootlogo_label="$bootlogo_label + zImage_stock"
     fi
     if $NEW_UBOOT_MODE; then
         if [[ -n "$DTB_BIN" && -f "$DTB_BIN" ]]; then
@@ -1279,6 +1344,7 @@ build() {
     else
         info "Skipped overlay — targets 4.19.192 kernel compatibility, not applicable to the stock kernel"
     fi
+    install_diag_tools /tmp/sd_p2
     patch_rcs_mtd_redirect /tmp/sd_p2/etc/rc.d/rcS
     if [[ "$do_mtd_redirect" != "1" ]]; then
         info "MTD redirect symlinks skipped (redirect_mtd_data is off — using existing NAND data)"
@@ -1356,9 +1422,11 @@ build() {
     echo -e "${BOLD}  Boot sequence:${RESET}"
     echo    "    Stepldr  → loads UBOOT.BIN from BOOT partition"
     if $NEW_UBOOT_MODE; then
-        echo "    U-Boot   → imports environment variables from uEnv.txt on BOOT partition"
-        echo "    U-Boot   → runs bootcmd, default is to boot zImage from USB BOOT partition"
-		echo "    U-Boot   → if no valid USB device, fallback to chainloading stock U-Boot"
+        echo "    U-Boot   → imports environment variables from uEnv.txt on BOOT partition (if present)"
+        echo "    U-Boot   → 1. bootusb: attempts booting kernel (zImage) + DTB from attached USB drive"
+        echo "    U-Boot   → 2. boothybrid: falls back to chainloading uboot_hybrid.bin from SD card (loads zImage_stock + NAND rootfs)"
+        echo "    U-Boot   → 3. bootstock: falls back to chainloading uboot_stock.bin from SD card"
+        echo "    U-Boot   → 4. nandboot: last-resort fallback to direct NAND kernel boot"
     elif $UBOOT_WAS_PATCHED; then
         echo "    U-Boot   → NAND env CRC forced invalid, drops to interactive prompt"
         echo "    (manual) → continue with the README's \"Manual SD Card Boot\" section"

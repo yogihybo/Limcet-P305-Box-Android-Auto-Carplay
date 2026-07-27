@@ -1207,6 +1207,30 @@ built-in echo cancellation instead), or it's populated but nobody's
 gone looking for it on the SPI bus yet. Worth an SPI-controller
 probe/pin audit if hands-free call audio quality ever becomes a target.
 
+**Follow-up, same day: found the real stock AEC test mode, and it
+doesn't need a separate chip.** `usr/lib/libSetting.so` has a genuine
+`EchoCancellationWindow` class, launched via `FactoryWindow::
+on_btnAEC_clicked()` -- an "AEC" button living in the same factory
+test menu as `LCDTest`/boot-logo/calibration/reboot (the numeric-
+keypad-gated menu behind this project's Limcet activation gate, see
+`project_limcet_activation_gate` memory). Its methods: `startRecord()`/
+`onPlayFinished()` (record mic audio, play it back), `micVolumeChange(int)`
+(adjustable mic gain), and `AECDelayValues`/`AECDelayType` (a
+configurable AEC delay parameter -- the acoustic delay between
+reference/output and the mic's picked-up echo, a standard AEC tuning
+knob). The actual cancellation algorithm is a **software/BT-stack
+setting**, not hardware: `/etc/blueware.properties` has
+`HFP_NREC=3` ("enable noise reduction and echo cancellation for voice
+call"). Combined with the mic already routing through the SoC's own
+internal ADC (`ahb:sdadc@0 <-> e8200000.i2s-adc`, confirmed in every
+real boot log), this makes it very likely the schematic's separate
+Voice Processor chip simply isn't populated on this unit -- AEC is
+handled by `blueware`'s `HFP_NREC` algorithm over the SoC's own mic
+path, not a dedicated SPI DSP. If this test mode or the underlying AEC
+behavior is ever ported/reimplemented, `EchoCancellationWindow`/
+`FactoryWindow::on_btnAEC_clicked` and `HFP_NREC` are the real entry
+points -- not the SPI bus.
+
 ### Bluetooth
 
 `BT` block -- UART to `ARK1668` (this is the already-documented

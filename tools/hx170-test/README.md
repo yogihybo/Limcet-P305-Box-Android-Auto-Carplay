@@ -52,6 +52,34 @@ specifically (inconclusive) versus a device/ioctl/open failure
 clip's raw NAL stream instead of the built-in test pattern would give
 a fully conclusive answer either way.
 
+## Build
+
+This tool `dlopen()`s `libmfc.so` at runtime, which rules out static
+linking (glibc's static `dlopen()` support for real shared objects is
+unsupported/broken on this toolchain -- see `tools/nss-stub/README.md`,
+whose `--wrap=dlopen` workaround only *stubs out* dlopen, which isn't
+an option here since real dlopen is the whole point). A plain dynamic
+build against the host cross-toolchain's own libc fails on-device with
+`GLIBC_2.34' not found` -- the device runs glibc 2.27
+(`firmware_source/mtd6_rootfs/lib/libc-2.27.so`), the host toolchain
+(Debian 12.2, glibc 2.36) is newer. Fix: link against the device's own
+libc/libdl instead of the host's, so only glibc-2.27-compatible symbol
+versions get referenced:
+
+```sh
+mkdir -p /tmp/old-libc
+cp /path/to/firmware_source/mtd6_rootfs/lib/libc-2.27.so  /tmp/old-libc/libc.so
+cp /path/to/firmware_source/mtd6_rootfs/lib/libdl-2.27.so /tmp/old-libc/libdl.so
+arm-linux-gnueabihf-gcc -O2 -Wall -o hx170-test hx170-test.c \
+  -L/tmp/old-libc -Wl,-rpath-link,/tmp/old-libc \
+  -Wl,--dynamic-linker=/lib/ld-linux-armhf.so.3 \
+  -lc -ldl
+arm-linux-gnueabihf-strip hx170-test
+```
+
+Verify with `readelf -V hx170-test | grep GLIBC` -- should show only
+`GLIBC_2.4`, nothing newer.
+
 ## DMA input buffer
 
 Rather than replicating `libmfc.so`'s own internal `DWLInit()`/

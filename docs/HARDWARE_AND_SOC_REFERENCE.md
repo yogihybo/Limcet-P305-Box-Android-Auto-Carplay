@@ -1244,3 +1244,95 @@ reads as a direct analog stereo audio pair from `ARK1668` down to `DSP`
 (bypassing MCU) -- plausible (the head unit's own line-out feeding the
 amp) but not confirmed from the image alone; flagged here rather than
 stated as fact.
+
+## 12. GPIO pins set/toggled directly by MsnCoreApp and its plugins (2026-07-28)
+
+Prompted by "does MsnCoreApp/MsnFirstInit toggle any pins directly, e.g.
+for touch activation?" Traced every real `GPIOOperater` (a genuine C++
+class in `libMsnCommons.so`, with real `setValue`/`getValue`/`setDir`/
+`setEdge` -- not just Qt/QWS environment-variable plumbing) constructor
+call site across every binary that references it, via Ghidra decompile.
+`objdump -T` first scoped which binaries even import the symbol:
+`MsnCoreApp` itself, plus `libCanBus.so`, `libMcuCenter.so`,
+`libFMRadio.so`, `libBTSender.so`, `libMsnSound.so`, `libSetting.so`.
+**`MsnFirstInit` does not reference `GPIOOperater` at all** -- no direct
+GPIO manipulation there; it only sets environment variables and
+`insmod`s the touch kernel modules (see below).
+
+Pin numbers below are the literal argument passed to
+`GPIOOperater::GPIOOperater(int)` at each call site, decoded as the
+same global `bank*32+offset` numbering as the rest of this doc, and
+cross-checked against `ark1668-pinctrl.dtsi` for an existing
+alternate-function claim (same method as the GPIO 95/Apple-auth pin
+in section 5).
+
+| Global GPIO | Bank/offset | Caller (class::function) | Binary | pinctrl claim |
+|---|---|---|---|---|
+| 30 | PBANK_0 30 | `CarSignalsWatch` (via `MsnCoreApp`) | MsnCoreApp | none -- spare |
+| 31 | PBANK_0 31 | `CarSignalsWatch` (via `MsnCoreApp`) | MsnCoreApp | none -- spare |
+| 30 | PBANK_0 30 | `CanBus_XinHang::CanBus_XinHang` | libCanBus.so | none -- spare |
+| 33 | PBANK_1 1  | `CanBus_XinHang::CanBus_XinHang` | libCanBus.so | none -- spare |
+| 34 | PBANK_1 2  | `CanBus_XinHang::onRecvMcuProtocol` | libCanBus.so | none -- spare |
+| 34 | PBANK_1 2  | `Sound_BD37033`, `Sound_MCU`, `Sound_MCU_OnlyEQ`, `Sound_PT2312`, `MsnSoundPlugin` (all ctors) | libMsnSound.so | none -- spare |
+| 33 | PBANK_1 1  | `SettingWindow::SettingWindow` | libSetting.so | none -- spare |
+| 38 | PBANK_1 6  | `SettingWindow::SettingWindow` | libSetting.so | none -- spare |
+| 36 | PBANK_1 4  | every `FMAdapter_*` ctor (ST7786/ST7703/Msn4730/ST7708/QN8035) | libFMRadio.so | none -- spare |
+| 9  | PBANK_0 9  | `MCUAdapter_BoxP400::MCUAdapter_BoxP400` | libMcuCenter.so | **claimed: LCD r7** (see below) |
+| 35 | PBANK_1 3  | `MCUAdapter_CarA300::msnAppStateChange` | libMcuCenter.so | none -- spare |
+| 37 | PBANK_1 5  | `MCUAdapter_BoxP700`/`BoxP701`/`ZhongHang` ctors | libMcuCenter.so | none -- spare |
+| 96 | PBANK_3 0  | `MCUAdapter_BoxP700`/`BoxP701` ctors | libMcuCenter.so | none -- spare |
+| 98 | PBANK_3 2  | `MCUAdapter_BoxC270::MCUAdapter_BoxC270` | libMcuCenter.so | **claimed: uart rxd** (see below) |
+| 102 | PBANK_3 6 | `MCUAdapter_Bagoo::MCUAdapter_Bagoo` | libMcuCenter.so | none -- spare |
+
+**Critical finding: the MCU adapter this unit actually uses does not
+touch GPIO at all.** `MsnProductInfo.ini` sets `McuType=6`, which is
+`MCUAdapter_BoxP300` (already documented, `MCU_ADAPTERS.md`) -- its
+full symbol table was checked directly (`objdump -T`) and it **never
+calls `GPIOOperater`**, anywhere. It only talks over its UART port
+(`getPortSettings`/`makeMCUProtocol`/`onRecvMcuProtocol`,
+`/dev/ttyHS0`). Every GPIO-touching MCU adapter above
+(`BoxP400`/`CarA300`/`BoxP700`/`BoxP701`/`BoxC270`/`ZhongHang`/`Bagoo`)
+is a *different* board variant's adapter class, compiled into the same
+shared `libMcuCenter.so` but never instantiated on this unit --
+several of them (`BoxP400`'s GPIO 9, `BoxC270`'s GPIO 98) would
+actually **collide with real, claimed pins** (LCD r7 and UART rxd
+respectively) if they were ever mistakenly activated, which is exactly
+the kind of cross-board-variant pin conflict this project has run into
+before (see `I2C_GPIO0_LCD_PIN_CONFLICT.md`).
+
+**No evidence of a touch-specific GPIO anywhere.** All six binaries
+that reference `GPIOOperater` were checked; none has a touch-related
+call site, and no `libSetting.so`/`libLauncher-Box.so`/
+`libCarReversing.so`/`libMsnCommons.so` string suggests one either.
+This reinforces (doesn't just fail to contradict) the existing
+[[project_touch_qws_env_gate]] conclusion: touch activation on this
+unit is genuinely just the Qt/QWS environment-variable gate
+(`QWS_MOUSE_PROTO`/`QWS_ARK_MT_DEVICE`, set by `MsnFirstInit`) plus the
+kernel driver's own always-on registration -- there is no pin
+`MsnCoreApp` or `MsnFirstInit` toggles to "turn on" the touchscreen.
+
+**What `MsnFirstInit` actually does around touch** (from its own
+decompiled logic, no GPIO involved): `insmod`s *both*
+`ark1680_ts.ko` (the real resistive touch driver, confirmed active)
+*and* `gt9xx.ko` (Goodix capacitive -- matches the disabled/wrong-pinned
+`gt911` DTS node, see section 11's Bluetooth/Apple-auth notes and
+`ARK1680_TS_REVERSE_ENGINEERING.md`), then symlinks `/tmp/touch_export`
+to whichever one's `/msnprofile/touch_*_export` config exists --
+board-driver selection via a symlink+file-existence check, not a pin.
+
+**Active-variant pin numbers still need confirming.** `CanType=0` and
+`RadioType=0` in `MsnProductInfo.ini` select one of
+`CanBus_OdieBenz`/`CanBus_XinHang`/`CanBus_XinRi` and one of the five
+`FMAdapter_*` classes respectively -- the 0-indexed mapping wasn't
+resolved this session (the plugin factory function found,
+`libCanBus.so`'s `create()`, is just the Qt plugin entry point, not the
+type switch). `SoundType=3` is already confirmed as `Sound_BD37033` via
+real boot logs (`Sound_BD37033::muteSpeakerAtts`, matches
+`AUDIO_SUBSYSTEM_INVESTIGATION.md`) -- and since every `Sound_*`
+variant shares the same GPIO 34 regardless of which is active, that one
+pin's relevance doesn't depend on resolving the exact class.
+
+**Not yet decoded**: `libBTSender.so`'s `GPIOOperater` calls pass a
+*runtime variable*, not a literal constant -- its actual pin number(s)
+depend on tracing back to wherever that variable is populated (likely
+a config read), not yet done.

@@ -903,6 +903,46 @@ install_diag_tools() {
 }
 
 # ---------------------------------------------------------------------------
+# Busybox applet symlinks — firmware_overlay/busybox-applets.manifest lists
+# every applet path + symlink target for the rebuilt busybox
+# (firmware_overlay/bin/busybox, 2026-07-27, defconfig-based build with
+# ipcs/ipcrm added — see docs/USERDATA_REVIEW.md or the commit message for
+# why). Stored as plain-text data, not real symlinks in the overlay tree,
+# because this repo's working copy sits on a VirtualBox shared folder
+# (vboxsf), which cannot create symlinks at all (`ln -s` fails with
+# "Operation not permitted") — this materializes them for real onto the
+# properly-mounted rootfs image at build time instead, where symlinks work
+# normally. Two applet names are deliberately excluded from the manifest
+# already (dmesg, less) because this project already ships better
+# standalone replacements for both (tools/dmesg, real GNU less) and a
+# busybox-provided /bin/dmesg would shadow /usr/bin/dmesg via $PATH order,
+# reintroducing a bug already fixed once (see firmware_overlay/README.md).
+# ---------------------------------------------------------------------------
+install_busybox_applets() {
+    local rootfs_mount="$1"
+    local manifest="$OVERLAY_DIR/busybox-applets.manifest"
+    echo -e "${BOLD}  Creating busybox applet symlinks...${RESET}"
+
+    [[ -f "$manifest" ]] || { warn "busybox-applets.manifest not found at $manifest — skipping"; return; }
+
+    if $DRY_RUN; then
+        echo "  [dry-run] create $(wc -l < "$manifest") busybox applet symlinks in $rootfs_mount/"
+        return
+    fi
+
+    local count=0
+    local path target dir
+    while read -r path target; do
+        [[ -n "$path" ]] || continue
+        dir="$(dirname "$path")"
+        mkdir -p "$rootfs_mount/$dir"
+        ln -sf "$target" "$rootfs_mount/$path"
+        count=$((count + 1))
+    done < "$manifest"
+    success "Created $count busybox applet symlink(s)"
+}
+
+# ---------------------------------------------------------------------------
 # MTD partition redirect — inserts /dev/mtdN symlinks to /nanddata/ after
 # mdev -s in rcS, only if redirect_mtd_data is on. Genuinely conditional
 # (unlike the rest of what used to live in patch_rcs()/
@@ -1345,6 +1385,7 @@ build() {
         info "Skipped overlay — targets 4.19.192 kernel compatibility, not applicable to the stock kernel"
     fi
     install_diag_tools /tmp/sd_p2
+    install_busybox_applets /tmp/sd_p2
     patch_rcs_mtd_redirect /tmp/sd_p2/etc/rc.d/rcS
     if [[ "$do_mtd_redirect" != "1" ]]; then
         info "MTD redirect symlinks skipped (redirect_mtd_data is off — using existing NAND data)"

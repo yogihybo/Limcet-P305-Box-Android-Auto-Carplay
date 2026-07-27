@@ -1336,3 +1336,41 @@ pin's relevance doesn't depend on resolving the exact class.
 *runtime variable*, not a literal constant -- its actual pin number(s)
 depend on tracing back to wherever that variable is populated (likely
 a config read), not yet done.
+
+### The protocol daemons have essentially zero GPIO interaction
+
+Follow-up check, same session: does the *daemon* layer (the separate
+binaries `MsnCoreApp`'s plugins launch over D-Bus/sockets -- see
+`MSN_APP_ARCHITECTURE.html` band 03) touch any GPIO? `objdump -T` +
+`strings` checked on every one directly:
+
+| Daemon | GPIO interaction |
+|---|---|
+| `sink` (Android Auto) | none |
+| `carplay` | none |
+| `dbus-daemon` | none |
+| `msncarlife` / `carlife` | none |
+| `mirrlink` | none |
+| `airplay` | none |
+| `ECLink` | none |
+| `blueware` | **yes** -- see below |
+
+`blueware` is the sole exception, and it closes a loop rather than
+opening a new one: `/etc/blueware.properties` sets
+`BTEN_INTERFACE=gpio91` (a config key, not hardcoded), and the binary
+writes it via plain sysfs (`/sys/class/gpio/export`,
+`/sys/class/gpio/gpio91/direction`, `/sys/class/gpio/gpio91/value`) --
+confirmed by the binary's own `BTEN_INTERFACE`/`EventBTChipsetPowerOn`/
+`EventBTChipsetPowerOff` strings. This is the actual mechanism behind
+the already-documented GPIO 91/`ttyHS1` Bluetooth power pin
+(`wireless_and_init_documentation.md`) -- previously known to exist,
+not previously traced to *how* it gets toggled. Notably `blueware`
+uses plain sysfs, not the `GPIOOperater` C++ class every other GPIO
+user above goes through -- consistent with it being a standalone C
+daemon, not a Qt/C++ MsnCoreApp plugin.
+
+Net result: none of the actual protocol/video daemons touch hardware
+directly -- they're pure IPC/protocol engines, matching the
+architecture diagram. All real GPIO interaction in this whole stack
+happens either inside `MsnCoreApp`'s plugins (via `GPIOOperater`) or in
+`blueware` (via sysfs), never in the daemons they launch.

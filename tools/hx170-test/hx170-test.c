@@ -25,8 +25,11 @@
  * DWLInit()/DWLMallocLinear() (which needs an opaque DWL context this
  * tool has no independent way to construct correctly), this opens
  * /tmp/dev/memalloc directly and replicates DWLMallocLinear's own
- * ioctl sequence by hand (confirmed via decompile: 0xc0046b01 allocate
- * -> u32 bus address out, then mmap() using that as the file offset).
+ * ioctl sequence by hand: MEMALLOC_IOCXGETBUFFER exchanges an 8-byte
+ * {busAddress; size} struct (in: size, out: busAddress) -- confirmed
+ * against the real kernel driver's MemallocParams struct
+ * (drivers/soc/arkmicro/memalloc.h) and its fixed-size copy_from_user,
+ * then mmap() using the returned bus address as the file offset.
  * /tmp/dev/memalloc itself is a real, already hardware-confirmed-
  * working device node (see docs/DEVICE_TEST_CHECKLIST_2026-07-18.md,
  * 2026-07-20 fix) -- this tool only needs it for staging the input
@@ -81,8 +84,17 @@ typedef struct {
 } H264DecPicture;
 
 /* DWLMallocLinear's own confirmed ioctl protocol against /dev/memalloc,
- * replicated by hand against our own fd (see file header). */
-#define MEMALLOC_IOCX_GETBUFFER 0xc0046b01
+ * replicated by hand against our own fd (see file header). GETBUFFER's
+ * ioctl number encodes sizeof(MemallocParams)=8, not 4 -- the kernel
+ * driver's copy_from_user always reads a fixed 8 bytes regardless of
+ * what a smaller request buffer provides, so passing anything short
+ * silently pulls in adjacent stack garbage as the "size" field. */
+typedef struct {
+    uint32_t busAddress;
+    uint32_t size;
+} MemallocParams;
+
+#define MEMALLOC_IOCX_GETBUFFER 0xc0086b01
 #define MEMALLOC_IOCX_FREEBUFFER 0x40046b02
 
 static void *g_mem_virt;
@@ -100,13 +112,14 @@ static int mem_alloc(uint32_t size) {
         return -1;
     }
 
-    uint32_t bus_addr = 0;
-    if (ioctl(g_mem_fd, MEMALLOC_IOCX_GETBUFFER, &bus_addr) < 0) {
+    MemallocParams params = { .busAddress = 0, .size = aligned };
+    if (ioctl(g_mem_fd, MEMALLOC_IOCX_GETBUFFER, &params) < 0) {
         fprintf(stderr, "ioctl(GETBUFFER) on /tmp/dev/memalloc: %s\n", strerror(errno));
         close(g_mem_fd);
         g_mem_fd = -1;
         return -1;
     }
+    uint32_t bus_addr = params.busAddress;
     if (bus_addr == 0) {
         fprintf(stderr, "ioctl(GETBUFFER) returned bus address 0 -- allocation failed\n");
         close(g_mem_fd);

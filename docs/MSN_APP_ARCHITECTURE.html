@@ -1,0 +1,820 @@
+<title>MsnCoreApp Architecture — ARK1668 Limcet Head Unit</title>
+<style>
+  :root{
+    --bg:#10141a;
+    --bg-alt:#0c0f14;
+    --panel:#1a212b;
+    --panel-2:#1f2733;
+    --hairline:#2c3644;
+    --hairline-soft:#232b37;
+    --text-hi:#eef0ea;
+    --text-lo:#93a0b0;
+    --text-dim:#5d6b7c;
+    --amber:#e0a339;
+    --amber-soft:#e0a33933;
+    --teal:#4fb8b3;
+    --teal-soft:#4fb8b333;
+    --violet:#a58fd6;
+    --violet-soft:#a58fd633;
+    --rose:#d97a7a;
+    --rose-soft:#d97a7a33;
+    --mono: ui-monospace, "JetBrains Mono", "Fira Code", "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: ui-sans-serif, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  :root[data-theme="light"]{
+    --bg:#f4f2ec;
+    --bg-alt:#eae7de;
+    --panel:#ffffff;
+    --panel-2:#f7f5ef;
+    --hairline:#d8d3c4;
+    --hairline-soft:#e3dfd2;
+    --text-hi:#1c1f16;
+    --text-lo:#5c5f52;
+    --text-dim:#8b8d7e;
+    --amber:#a86c12;
+    --amber-soft:#a86c1222;
+    --teal:#1f7d78;
+    --teal-soft:#1f7d7822;
+    --violet:#6b4fae;
+    --violet-soft:#6b4fae22;
+    --rose:#a8433d;
+    --rose-soft:#a8433d22;
+  }
+  @media (prefers-color-scheme: light){
+    :root:not([data-theme="dark"]){
+      --bg:#f4f2ec;
+      --bg-alt:#eae7de;
+      --panel:#ffffff;
+      --panel-2:#f7f5ef;
+      --hairline:#d8d3c4;
+      --hairline-soft:#e3dfd2;
+      --text-hi:#1c1f16;
+      --text-lo:#5c5f52;
+      --text-dim:#8b8d7e;
+      --amber:#a86c12;
+      --amber-soft:#a86c1222;
+      --teal:#1f7d78;
+      --teal-soft:#1f7d7822;
+      --violet:#6b4fae;
+      --violet-soft:#6b4fae22;
+      --rose:#a8433d;
+      --rose-soft:#a8433d22;
+    }
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(1200px 600px at 15% -10%, var(--bg-alt), transparent),
+      var(--bg);
+    color:var(--text-hi);
+    font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;
+    min-width:0;
+  }
+  .wrap{
+    max-width:1580px;
+    margin:0 auto;
+    padding:56px 32px 80px;
+  }
+
+  /* ---------- header ---------- */
+  header{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    padding-bottom:34px;
+    margin-bottom:38px;
+    border-bottom:1px solid var(--hairline);
+  }
+  .eyebrow{
+    font-family:var(--mono);
+    font-size:12px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--amber);
+  }
+  h1{
+    font-family:var(--mono);
+    font-weight:600;
+    font-size:clamp(26px,3.4vw,38px);
+    line-height:1.15;
+    margin:0;
+    text-wrap:balance;
+    letter-spacing:-0.01em;
+  }
+  .dek{
+    font-size:15px;
+    line-height:1.6;
+    color:var(--text-lo);
+    max-width:70ch;
+    margin:2px 0 0;
+  }
+  .dek code{font-family:var(--mono); color:var(--text-hi); background:var(--panel-2); padding:1px 5px; border-radius:3px; font-size:.92em;}
+  .meta-row{
+    display:flex;
+    gap:22px;
+    flex-wrap:wrap;
+    margin-top:6px;
+    font-family:var(--mono);
+    font-size:11.5px;
+    color:var(--text-dim);
+  }
+  .meta-row b{color:var(--text-lo); font-weight:500;}
+
+  /* ---------- bands ---------- */
+  .diagram{
+    position:relative;
+  }
+  .band{
+    display:grid;
+    grid-template-columns:132px 1fr;
+    gap:20px;
+    padding:22px 0;
+    border-bottom:1px solid var(--hairline-soft);
+    position:relative;
+  }
+  .band:last-of-type{border-bottom:none;}
+  .band-label{
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    color:var(--text-dim);
+    padding-top:4px;
+    position:sticky;
+    top:16px;
+    align-self:start;
+  }
+  .band-label .n{
+    display:block;
+    font-size:20px;
+    color:var(--text-lo);
+    letter-spacing:0;
+    margin-bottom:4px;
+  }
+  .row{
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+    align-content:flex-start;
+  }
+  .overflow-note{
+    display:none;
+  }
+
+  /* ---------- node cards ---------- */
+  .node{
+    font-family:var(--mono);
+    background:var(--panel);
+    border:1px solid var(--hairline);
+    border-radius:7px;
+    padding:9px 12px;
+    min-width:118px;
+    position:relative;
+    transition:border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+  }
+  .node .title{
+    font-size:12.5px;
+    font-weight:600;
+    color:var(--text-hi);
+    white-space:nowrap;
+  }
+  .node .sub{
+    font-size:10.5px;
+    color:var(--text-dim);
+    margin-top:2px;
+    white-space:nowrap;
+  }
+  .node .pid{
+    position:absolute;
+    top:-8px;
+    right:-6px;
+    background:var(--bg);
+    border:1px solid var(--hairline);
+    color:var(--text-dim);
+    font-size:9.5px;
+    padding:1px 5px;
+    border-radius:8px;
+    line-height:1.4;
+  }
+  .node.core{border-color:var(--amber); box-shadow:0 0 0 1px var(--amber-soft) inset;}
+  .node.core .title{color:var(--amber);}
+  .node.kern{border-style:dashed;}
+  .node.dim{opacity:.55;}
+  .node.dim .title{color:var(--text-lo);}
+
+  .node[data-nid]:hover,
+  .node[data-nid].hl{
+    border-color:var(--amber);
+    transform:translateY(-1px);
+    box-shadow:0 4px 14px -6px #0008;
+    z-index:3;
+  }
+
+  /* app band: plugin cards get their own inner layout for id badge */
+  .plugin .title{font-size:12px;}
+  .plugin .sub{font-size:10px;}
+
+  svg.links{
+    position:absolute;
+    inset:0;
+    width:100%;
+    height:100%;
+    pointer-events:none;
+    overflow:visible;
+  }
+  svg.links path{
+    fill:none;
+    stroke-width:1.4;
+    opacity:.55;
+    transition:opacity .15s ease, stroke-width .15s ease;
+  }
+  svg.links path.hl{
+    opacity:1;
+    stroke-width:2.2;
+  }
+  svg.links .e-dbus{stroke:var(--amber);}
+  svg.links .e-inproc{stroke:var(--text-dim); stroke-dasharray:1,4; stroke-linecap:round;}
+  svg.links .e-serial{stroke:var(--teal);}
+  svg.links .e-sock{stroke:var(--violet);}
+  svg.links .e-hal{stroke:var(--rose); stroke-dasharray:5,3;}
+
+  /* ---------- legend ---------- */
+  .legend{
+    margin-top:44px;
+    padding-top:26px;
+    border-top:1px solid var(--hairline);
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+    gap:28px;
+  }
+  .legend h3{
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    color:var(--text-dim);
+    margin:0 0 10px;
+  }
+  .legend ul{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:7px;}
+  .legend li{
+    display:flex;
+    align-items:center;
+    gap:9px;
+    font-size:12.5px;
+    color:var(--text-lo);
+  }
+  .swatch-line{width:22px; height:0; border-top-width:2px; border-top-style:solid; flex:none;}
+  .swatch-box{width:13px; height:13px; border-radius:3px; border-width:1.5px; border-style:solid; flex:none;}
+
+  /* ---------- footnotes ---------- */
+  .notes{
+    margin-top:40px;
+    padding-top:24px;
+    border-top:1px solid var(--hairline);
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(320px,1fr));
+    gap:26px 40px;
+  }
+  .notes h3{
+    font-family:var(--mono);
+    font-size:12px;
+    color:var(--text-hi);
+    margin:0 0 8px;
+    font-weight:600;
+  }
+  .notes p{
+    font-size:13px;
+    line-height:1.65;
+    color:var(--text-lo);
+    margin:0;
+  }
+  .notes code{font-family:var(--mono); color:var(--text-hi); background:var(--panel-2); padding:1px 5px; border-radius:3px; font-size:.9em;}
+
+  ::selection{background:var(--amber-soft); color:var(--text-hi);}
+
+  @media (max-width:880px){
+    .band{grid-template-columns:1fr;}
+    .band-label{position:static; display:flex; align-items:baseline; gap:8px;}
+    .band-label .n{margin-bottom:0;}
+    svg.links{display:none;}
+    .overflow-note{
+      display:block;
+      font-family:var(--mono);
+      font-size:11px;
+      color:var(--text-dim);
+      margin-bottom:16px;
+    }
+  }
+</style>
+
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">Prado Firmware Reconstruction · Reference Diagram</div>
+    <h1>MsnCoreApp Process Architecture</h1>
+    <p class="dek">
+      How the head unit's Qt/QWS application, its <code>dlopen</code>'d feature
+      plugins, the external protocol daemons they launch over D‑Bus, and the
+      shared hardware‑abstraction libraries all fit together on the
+      ARK1668/Limcet‑P305 platform. Built from real boot logs, D‑Bus service
+      files, and binaries pulled from this project's firmware dump — not the
+      vendor's own documentation, which doesn't exist for this board.
+    </p>
+    <div class="meta-row">
+      <span><b>Platform</b> ARK1668, Linux 4.19.192 (reconstructed) / stock 3.4</span>
+      <span><b>UI stack</b> Qt 4.7.4 · QWS</span>
+      <span><b>Source</b> firmware_source/mtd6_rootfs, docs/logs/*</span>
+    </div>
+  </header>
+
+  <div class="diagram" id="diagram">
+    <svg class="links" id="links"></svg>
+
+    <!-- ================= BAND 1 : APPLICATION ================= -->
+    <div class="band" id="band-app">
+      <div class="band-label"><span class="n">01</span>MsnCoreApp<br/>process</div>
+      <div class="row">
+        <div class="node core" data-nid="msncoreapp">
+          <div class="title">MsnCoreApp</div>
+          <div class="sub">/usr/bin — main binary</div>
+        </div>
+        <div class="node core" data-nid="msncommons">
+          <div class="title">libMsnCommons.so</div>
+          <div class="sub">MsnIniConfig · ArkUtils · ArkDbus</div>
+        </div>
+
+        <div class="node plugin" data-nid="p10">
+          <div class="pid">plugin 10</div>
+          <div class="title">libLauncher-Box.so</div>
+          <div class="sub">home screen / launcher UI</div>
+        </div>
+        <div class="node plugin" data-nid="p8">
+          <div class="pid">plugin 8</div>
+          <div class="title">libSetting.so</div>
+          <div class="sub">settings + factory test menu</div>
+        </div>
+        <div class="node plugin" data-nid="p13">
+          <div class="pid">plugin 13</div>
+          <div class="title">libMsnCarAuto.so</div>
+          <div class="sub">Android&nbsp;Auto UI + orchestration</div>
+        </div>
+        <div class="node plugin" data-nid="p4">
+          <div class="pid">plugin 4</div>
+          <div class="title">libMsnCarPlay.so</div>
+          <div class="sub">CarPlay UI + orchestration</div>
+        </div>
+        <div class="node plugin" data-nid="p5">
+          <div class="pid">plugin 5</div>
+          <div class="title">libMsnCarLife.so</div>
+          <div class="sub">Baidu CarLife UI</div>
+        </div>
+        <div class="node plugin" data-nid="p11">
+          <div class="pid">plugin 11</div>
+          <div class="title">libMsnMirrLink.so</div>
+          <div class="sub">MirrorLink UI</div>
+        </div>
+        <div class="node plugin" data-nid="p12">
+          <div class="pid">plugin 12</div>
+          <div class="title">libCarReversing.so</div>
+          <div class="sub">backup‑camera overlay</div>
+        </div>
+        <div class="node plugin" data-nid="p3">
+          <div class="pid">plugin 3</div>
+          <div class="title">libBlueTooth.so</div>
+          <div class="sub">BT pairing / HFP UI</div>
+        </div>
+        <div class="node plugin" data-nid="p400">
+          <div class="pid">plugin 400</div>
+          <div class="title">libCanBus.so</div>
+          <div class="sub">vehicle CAN signal bridge</div>
+        </div>
+        <div class="node plugin" data-nid="p401">
+          <div class="pid">plugin 401</div>
+          <div class="title">libMcuCenter.so</div>
+          <div class="sub">MCU adapter (McuType=6, BoxP300)</div>
+        </div>
+        <div class="node plugin" data-nid="p403">
+          <div class="pid">plugin 403</div>
+          <div class="title">libMsnSound.so</div>
+          <div class="sub">ALSA mixer / EQ / channel routing</div>
+        </div>
+        <div class="node plugin dim" data-nid="p2">
+          <div class="pid">plugin 2</div>
+          <div class="title">libMusicPlayer.so</div>
+          <div class="sub">local media player</div>
+        </div>
+        <div class="node plugin dim" data-nid="p7">
+          <div class="pid">plugin 7</div>
+          <div class="title">libVideoPlayer.so</div>
+          <div class="sub">local video player</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= BAND 2 : IPC ================= -->
+    <div class="band" id="band-ipc">
+      <div class="band-label"><span class="n">02</span>IPC &amp;<br/>transport</div>
+      <div class="row">
+        <div class="node" data-nid="dbus">
+          <div class="title">dbus-daemon</div>
+          <div class="sub">session bus, service activation</div>
+        </div>
+        <div class="node" data-nid="localsock">
+          <div class="title">AF_UNIX sockets</div>
+          <div class="sub"><code style="font-family:inherit">ArkUtils::open_local_socket</code></div>
+        </div>
+        <div class="node" data-nid="uart">
+          <div class="title">UART links</div>
+          <div class="sub">ttyHS0 (MCU) · ttyHS1 (BT) · ttyS2</div>
+        </div>
+        <div class="node" data-nid="inproc">
+          <div class="title">in‑process dlopen</div>
+          <div class="sub">direct C++ vtable calls, no IPC</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= BAND 3 : DAEMONS ================= -->
+    <div class="band" id="band-daemon">
+      <div class="band-label"><span class="n">03</span>Protocol<br/>daemons</div>
+      <div class="row">
+        <div class="node" data-nid="sink">
+          <div class="title">sink</div>
+          <div class="sub">com.arkmicro.auto — AA video/audio engine</div>
+        </div>
+        <div class="node" data-nid="carplay">
+          <div class="title">carplay</div>
+          <div class="sub">com.arkmicro.carplay</div>
+        </div>
+        <div class="node" data-nid="msncarlife">
+          <div class="title">msncarlife / carlife</div>
+          <div class="sub">com.masnuo.carlife / com.arkmicro.carlife</div>
+        </div>
+        <div class="node" data-nid="mirrlink">
+          <div class="title">mirrlink</div>
+          <div class="sub">com.masnuo.mirror</div>
+        </div>
+        <div class="node dim" data-nid="airplay">
+          <div class="title">airplay</div>
+          <div class="sub">com.masnuo.airplay</div>
+        </div>
+        <div class="node dim" data-nid="eclink">
+          <div class="title">ECLink</div>
+          <div class="sub">com.arkmicro.eclink</div>
+        </div>
+        <div class="node" data-nid="blueware">
+          <div class="title">blueware</div>
+          <div class="sub">HFP / A2DP stack, AT‑command control</div>
+        </div>
+        <div class="node" data-nid="hostapd">
+          <div class="title">hostapd + udhcpd</div>
+          <div class="sub">per‑session WiFi AP for AA/CarPlay</div>
+        </div>
+        <div class="node dim" data-nid="unused-services">
+          <div class="title">AudioManager · BTManager · Launcher</div>
+          <div class="sub">.service files present, binaries absent on this unit</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= BAND 4 : HAL ================= -->
+    <div class="band" id="band-hal">
+      <div class="band-label"><span class="n">04</span>Shared HAL<br/>libraries</div>
+      <div class="row">
+        <div class="node" data-nid="arkcmn">
+          <div class="title">libarkcmn.so</div>
+          <div class="sub">arkapi_* — fb/DVR/memalloc ioctl wrapper</div>
+        </div>
+        <div class="node" data-nid="gal">
+          <div class="title">libGAL.so</div>
+          <div class="sub">Vivante GC GPU 2D/3D (DirectFB backend)</div>
+        </div>
+        <div class="node" data-nid="mfc">
+          <div class="title">libmfc.so</div>
+          <div class="sub">Hantro DWL — H264DecInit/Decode</div>
+        </div>
+        <div class="node" data-nid="qextser">
+          <div class="title">libqextserialport.so</div>
+          <div class="sub">serial‑port abstraction</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= BAND 5 : KERNEL / HW ================= -->
+    <div class="band" id="band-kernel">
+      <div class="band-label"><span class="n">05</span>Kernel drivers<br/>&amp; hardware</div>
+      <div class="row">
+        <div class="node kern" data-nid="fb">
+          <div class="title">/dev/fb0‑fb4</div>
+          <div class="sub">ark1668_lcdfb — OSD1‑3, VIDEO_LAYER1/2</div>
+        </div>
+        <div class="node kern" data-nid="hx170">
+          <div class="title">/dev/hx170dec</div>
+          <div class="sub">Hantro G1 H.264 decoder</div>
+        </div>
+        <div class="node kern" data-nid="dvr">
+          <div class="title">/dev/dvr</div>
+          <div class="sub">ITU656 capture ← RN6752</div>
+        </div>
+        <div class="node kern" data-nid="ttyhs0">
+          <div class="title">ttyHS0 → MCU</div>
+          <div class="sub">ark-hsuart, PIO/interrupt driven</div>
+        </div>
+        <div class="node kern" data-nid="ttyhs1">
+          <div class="title">ttyHS1 → BT module</div>
+          <div class="sub">GPIO91 power</div>
+        </div>
+        <div class="node kern" data-nid="i2c">
+          <div class="title">i2c‑gpio‑0/1</div>
+          <div class="sub">RN6752 (0x2c) · BD37033 (0x40)</div>
+        </div>
+        <div class="node kern" data-nid="alsa">
+          <div class="title">ALSA / I2S</div>
+          <div class="sub">i2s-dac + i2s-adc ↔ BD37033</div>
+        </div>
+        <div class="node kern" data-nid="can0">
+          <div class="title">can0</div>
+          <div class="sub">CAN transceiver</div>
+        </div>
+        <div class="node kern" data-nid="touch">
+          <div class="title">/dev/input/event0</div>
+          <div class="sub">ARK1680 resistive touch</div>
+        </div>
+        <div class="node kern" data-nid="wlan0">
+          <div class="title">wlan0</div>
+          <div class="sub">RTL8821CU</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ================= LEGEND ================= -->
+  <div class="legend">
+    <div>
+      <h3>Connection type</h3>
+      <ul>
+        <li><span class="swatch-line" style="border-color:var(--amber)"></span>D‑Bus service activation</li>
+        <li><span class="swatch-line" style="border-color:var(--text-dim); border-top-style:dotted"></span>in‑process (dlopen, same PID)</li>
+        <li><span class="swatch-line" style="border-color:var(--teal)"></span>UART / serial link</li>
+        <li><span class="swatch-line" style="border-color:var(--violet)"></span>AF_UNIX local socket</li>
+        <li><span class="swatch-line" style="border-color:var(--rose); border-top-style:dashed"></span>shared library call (HAL)</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Node style</h3>
+      <ul>
+        <li><span class="swatch-box" style="border-color:var(--amber); background:var(--amber-soft)"></span>core process / always loaded</li>
+        <li><span class="swatch-box" style="border-color:var(--hairline); background:var(--panel)"></span>plugin, daemon, or library</li>
+        <li><span class="swatch-box" style="border-color:var(--hairline); border-style:dashed; background:var(--panel)"></span>kernel driver / device node</li>
+        <li><span class="swatch-box" style="border-color:var(--hairline); background:var(--panel); opacity:.55"></span>defined but dormant on this unit</li>
+      </ul>
+    </div>
+    <div>
+      <h3>How to read it</h3>
+      <ul style="font-family:var(--sans)">
+        <li style="color:var(--text-dim)">Hover any node to highlight its drawn connections.</li>
+        <li style="color:var(--text-dim)">Bands run app → transport → daemon → HAL → kernel.</li>
+        <li style="color:var(--text-dim)">Not every plausible edge is drawn — only ones confirmed in logs/binaries.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ================= NOTES ================= -->
+  <div class="notes">
+    <div>
+      <h3>The plugin system is one process, not many</h3>
+      <p>
+        Everything in band 01 — <code>libLauncher-Box.so</code>,
+        <code>libSetting.so</code>, <code>libMsnCarAuto.so</code>, and the
+        rest — is <code>dlopen()</code>'d directly into <code>MsnCoreApp</code>'s
+        own address space at startup (<code>[t]&nbsp;Load App Plugin N "path"</code>
+        in every boot log, in a fixed order). They share one Qt event loop and
+        one DirectFB/QWS surface; switching "apps" on screen is a window swap
+        inside a single PID, not a process switch.
+      </p>
+    </div>
+    <div>
+      <h3>Protocol work happens in separate daemons</h3>
+      <p>
+        The actual CarPlay/Android&nbsp;Auto/CarLife/MirrorLink protocol
+        stacks are <em>not</em> in-process — each has its own binary
+        (<code>sink</code>, <code>carplay</code>, <code>msncarlife</code>,
+        <code>mirrlink</code>…) started on demand via D‑Bus service
+        activation (<code>MsnLink StartService: "com.arkmicro.auto"</code>).
+        The plugin only owns the UI chrome and talks to its daemon over a
+        small AF_UNIX socket protocol (<code>ArkUtils::open_local_socket</code>,
+        seen as <code>sock = 3/4/9</code> in captured logs).
+      </p>
+    </div>
+    <div>
+      <h3>Two rendering paths, one app</h3>
+      <p>
+        <code>start_msn</code> launches Qt/QWS over plain <code>linuxfb</code>
+        (writes straight to <code>/dev/fb0</code>, no GPU); a separate
+        <code>start_msn_directfb</code> path runs the same binary over
+        DirectFB, which goes through <code>libGAL.so</code> → the Vivante
+        <code>galcore.ko</code> driver for GPU‑composited layers. Android
+        Auto/CarPlay video always lands on the LCDC's own
+        <code>VIDEO_LAYER2</code> hardware plane either way — it's composited
+        by the display controller, not drawn by Qt.
+      </p>
+    </div>
+    <div>
+      <h3>Vehicle I/O bypasses D‑Bus entirely</h3>
+      <p>
+        <code>libMcuCenter.so</code> and <code>libCanBus.so</code> don't go
+        through the daemon/D‑Bus path at all — they talk directly over a
+        UART (<code>/dev/ttyHS0</code>, the "MCU" — an on‑board
+        microcontroller handling steering‑wheel controls, ACC/ILL sensing,
+        and backlight) or the CAN transceiver. This is the same UART link
+        this project's own <code>mcu-handshake</code> tool speaks to
+        directly, bypassing <code>MsnCoreApp</code> altogether for testing.
+      </p>
+    </div>
+    <div>
+      <h3>Bluetooth is AT‑commands over serial, not D‑Bus</h3>
+      <p>
+        <code>blueware</code> is launched as a direct child process
+        (<code>start bt service:/usr/bin/blueware</code>), not a D‑Bus
+        service — <code>libBlueTooth.so</code> and <code>libMsnCarAuto.so</code>
+        (for the AA WiFi/BT handoff) control it by writing AT commands over
+        its own serial port and reading structured replies
+        (<code>rfcomm write: 00 09 00 04…</code>), configured by
+        <code>/etc/blueware.properties</code> (inc. <code>HFP_NREC</code>,
+        the software echo‑cancellation toggle).
+      </p>
+    </div>
+    <div>
+      <h3>A lot of this image is dormant</h3>
+      <p>
+        <code>usr/lib/</code> ships ~90 libraries — AirPlay, HiCar, DMSDP,
+        five different <code>Launcher-Box-*</code> skins, CarLife variants —
+        for the whole ArkMicro product family sharing one firmware build.
+        Only what's reachable from a real boot log or an actually-present
+        <code>/usr/bin</code> binary is drawn solid here; everything else
+        (dimmed above) is present on disk but not exercised on this specific
+        Prado unit.
+      </p>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function(){
+  var edges = [
+    // app <-> ipc / daemons (dbus)
+    ['p13','dbus','e-dbus'],
+    ['p4','dbus','e-dbus'],
+    ['p5','dbus','e-dbus'],
+    ['p11','dbus','e-dbus'],
+    ['dbus','sink','e-dbus'],
+    ['dbus','carplay','e-dbus'],
+    ['dbus','msncarlife','e-dbus'],
+    ['dbus','mirrlink','e-dbus'],
+    ['dbus','airplay','e-dbus'],
+    ['dbus','eclink','e-dbus'],
+
+    // app <-> local sockets <-> daemons
+    ['p13','localsock','e-sock'],
+    ['localsock','sink','e-sock'],
+    ['p4','localsock','e-sock'],
+    ['localsock','carplay','e-sock'],
+
+    // app <-> uart <-> mcu/bt hw
+    ['p401','uart','e-serial'],
+    ['uart','ttyhs0','e-serial'],
+    ['ttyhs0','i2c','e-serial'],
+    ['p3','uart','e-serial'],
+    ['uart','ttyhs1','e-serial'],
+    ['p3','blueware','e-inproc'],
+    ['blueware','ttyhs1','e-serial'],
+    ['p13','blueware','e-inproc'],
+    ['p13','hostapd','e-inproc'],
+    ['hostapd','wlan0','e-hal'],
+
+    // can
+    ['p400','can0','e-serial'],
+
+    // in-process plugin relationships
+    ['msncoreapp','msncommons','e-inproc'],
+    ['msncoreapp','p10','e-inproc'],
+    ['msncoreapp','p8','e-inproc'],
+    ['msncoreapp','p13','e-inproc'],
+    ['msncoreapp','p4','e-inproc'],
+    ['msncoreapp','p5','e-inproc'],
+    ['msncoreapp','p11','e-inproc'],
+    ['msncoreapp','p12','e-inproc'],
+    ['msncoreapp','p3','e-inproc'],
+    ['msncoreapp','p400','e-inproc'],
+    ['msncoreapp','p401','e-inproc'],
+    ['msncoreapp','p403','e-inproc'],
+    ['msncoreapp','p2','e-inproc'],
+    ['msncoreapp','p7','e-inproc'],
+
+    // HAL usage
+    ['p12','arkcmn','e-hal'],
+    ['p8','arkcmn','e-hal'],
+    ['msncommons','arkcmn','e-hal'],
+    ['arkcmn','fb','e-hal'],
+    ['arkcmn','dvr','e-hal'],
+    ['dvr','i2c','e-serial'],
+    ['gal','fb','e-hal'],
+    ['sink','mfc','e-hal'],
+    ['mfc','hx170','e-hal'],
+    ['sink','fb','e-hal'],
+    ['carplay','fb','e-hal'],
+    ['p401','qextser','e-hal'],
+    ['p3','qextser','e-hal'],
+    ['p403','alsa','e-hal'],
+    ['sink','alsa','e-hal'],
+    ['blueware','alsa','e-hal'],
+    ['p12','dvr','e-hal'],
+
+    // touch
+    ['p10','touch','e-hal']
+  ];
+
+  var svg = document.getElementById('links');
+  var diagram = document.getElementById('diagram');
+  var nodeMap = {};
+  document.querySelectorAll('[data-nid]').forEach(function(el){
+    nodeMap[el.getAttribute('data-nid')] = el;
+  });
+
+  function pt(el){
+    var r = el.getBoundingClientRect();
+    var d = diagram.getBoundingClientRect();
+    return {
+      top:    {x:r.left + r.width/2 - d.left, y:r.top - d.top},
+      bottom: {x:r.left + r.width/2 - d.left, y:r.bottom - d.top},
+      left:   {x:r.left - d.left,  y:r.top + r.height/2 - d.top},
+      right:  {x:r.right - d.left, y:r.top + r.height/2 - d.top}
+    };
+  }
+
+  function draw(){
+    if (window.innerWidth < 880) { svg.innerHTML=''; return; }
+    svg.setAttribute('width', diagram.clientWidth);
+    svg.setAttribute('height', diagram.clientHeight);
+    var frag = document.createDocumentFragment();
+    var ns = 'http://www.w3.org/2000/svg';
+
+    edges.forEach(function(e, i){
+      var a = nodeMap[e[0]], b = nodeMap[e[1]];
+      if (!a || !b) return;
+      var pa = pt(a), pb = pt(b);
+      var ay = a.closest('.band').offsetTop, by = b.closest('.band').offsetTop;
+      var start, end;
+      if (Math.abs(ay - by) < 2) {
+        // same band: connect left/right
+        var goRight = pa.right.x <= pb.left.x;
+        start = goRight ? pa.right : pa.left;
+        end   = goRight ? pb.left  : pb.right;
+      } else if (ay < by) {
+        start = pa.bottom; end = pb.top;
+      } else {
+        start = pa.top; end = pb.bottom;
+      }
+      var midY = (start.y + end.y) / 2;
+      var d = 'M ' + start.x + ' ' + start.y +
+              ' C ' + start.x + ' ' + midY + ', ' +
+                      end.x   + ' ' + midY + ', ' +
+                      end.x   + ' ' + end.y;
+      var path = document.createElementNS(ns,'path');
+      path.setAttribute('d', d);
+      path.setAttribute('class', e[2]);
+      path.setAttribute('data-a', e[0]);
+      path.setAttribute('data-b', e[1]);
+      frag.appendChild(path);
+    });
+    svg.innerHTML = '';
+    svg.appendChild(frag);
+  }
+
+  function highlight(nid, on){
+    document.querySelectorAll('svg.links path').forEach(function(p){
+      if (p.getAttribute('data-a') === nid || p.getAttribute('data-b') === nid) {
+        p.classList.toggle('hl', on);
+      }
+    });
+    var n = nodeMap[nid];
+    if (n) n.classList.toggle('hl', on);
+  }
+
+  document.querySelectorAll('[data-nid]').forEach(function(el){
+    var nid = el.getAttribute('data-nid');
+    el.addEventListener('mouseenter', function(){ highlight(nid, true); });
+    el.addEventListener('mouseleave', function(){ highlight(nid, false); });
+  });
+
+  window.addEventListener('resize', draw);
+  window.addEventListener('load', draw);
+  requestAnimationFrame(draw);
+  setTimeout(draw, 200);
+})();
+</script>

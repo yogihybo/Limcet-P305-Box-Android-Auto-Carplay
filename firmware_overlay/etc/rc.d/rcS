@@ -247,6 +247,7 @@ echo "  start_msn_linuxfb / start_msn_directfb - start MsnCoreApp on a specific 
 echo "  dmesg                                - now aliased to /usr/bin/dmesg --color=always (busybox lacks --color)"
 echo "  mem-dump <phys_addr> [len]           - hex-dump physical memory via mmap'd /dev/mem (works on DMA carve-outs plain dd can't reach)"
 echo "  mem-fill <phys_addr> <len> <pattern>  - fill physical memory with a repeating 32-bit pattern via mmap'd /dev/mem (stage a test frame, see tools/mem-fill/README.md)"
+echo "  hx170-test                           - direct standalone hx170dec H.264 decode test via libmfc.so, bypasses sink/AA entirely (see tools/hx170-test/README.md)"
 echo "  fb-scan [threshold]                  - locate solid-color regions in /dev/fb0, predict expected color for black cells via row-fit"
 echo "  lcdc-regdump [label]                 - dump every named ARK1668 LCDC register, for diffing a stock vs our-build run"
 echo "  pin-force <pin 2-9> <status|gpio-low|gpio-high|lcd> - force an LCD RGB data pin (r0-r7) to GPIO at a level, or restore it to LCD function"

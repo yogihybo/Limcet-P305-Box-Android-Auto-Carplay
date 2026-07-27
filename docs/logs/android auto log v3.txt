@@ -1,0 +1,1694 @@
+[    0.357789] ark1668_lcdfb e0500000.lcd: 16384KiB frame buffer at 0f000000 (mapped at (ptrval))
+[    0.366864] ark1668_lcdfb e0500000.lcd: fb0: Atmel LCDC at 0xe0500000 (mapped at (ptrval)), irq 25
+[    0.378087] dw_dmac e0000000.dma: DesignWare DMA Controller, 8 channels
+[    0.385580] SCSI subsystem initialized
+[    0.389696] usbcore: registered new interface driver usbfs
+[    0.395357] usbcore: registered new interface driver hub
+[    0.400807] usbcore: registered new device driver usb
+[    0.407499] gpio-3 (i2c-gpio-0): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+[    0.417046] gpio-2 (i2c-gpio-0): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+[    0.426763] i2c i2c-1: Not I2C compliant: can't read SCL
+[    0.432140] i2c i2c-1: Bus may be unreliable
+[    0.436430] i2c-gpio i2c-gpio-0: using lines 3 (SDA) and 2 (SCL, no clock stretching)
+[    0.444467] gpio-9 (i2c-gpio-1): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+[    0.453971] gpio-121 (i2c-gpio-1): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+[    0.463831] i2c i2c-2: Not I2C compliant: can't read SCL
+[    0.469162] i2c i2c-2: Bus may be unreliable
+[    0.473476] i2c-gpio i2c-gpio-1: using lines 9 (SDA) and 121 (SCL, no clock stretching)
+[    0.481603] media: Linux media interface: v0.10
+[    0.486220] videodev: Linux video capture interface: v2.00
+[    0.492084] Advanced Linux Sound Architecture Driver Initialized.
+[    0.499462] clocksource: Switched to clocksource arkmicro,ark-timer
+[    0.506936] hx170dec e0900000.vdec: VDEC controller at 0x(ptrval), irq = 40, misc_minor = 63
+[    0.515458] hx170dec e0900000.vdec: Product ID: 0x6731 (revision 2.57.8)
+[    0.535252] NET: Registered protocol family 2
+[    0.540644] tcp_listen_portaddr_hash hash table entries: 512 (order: 0, 4096 bytes)
+[    0.548349] TCP established hash table entries: 2048 (order: 1, 8192 bytes)
+[    0.555432] TCP bind hash table entries: 2048 (order: 1, 8192 bytes)
+[    0.561853] TCP: Hash tables configured (established 2048 bind 2048)
+[    0.568385] UDP hash table entries: 256 (order: 0, 4096 bytes)
+[    0.574312] UDP-Lite hash table entries: 256 (order: 0, 4096 bytes)
+[    0.580953] NET: Registered protocol family 1
+[    0.586610] Initialise system trusted keyrings
+[    0.591514] workingset: timestamp_bits=14 max_order=16 bucket_order=2
+[    0.598792] ntfs: driver 2.1.32 [Flags: R/W DEBUG].
+[    0.606631] Key type asymmetric registered
+[    0.610814] Asymmetric key parser 'x509' registered
+[    0.615725] io scheduler noop registered (default)
+[    0.623111] rn6752: dvr_rn6752_probe:init done
+[    0.627867] [DIAG_ITU656_PROBE] call #1: dvr_dev=c816d440 sizeof(struct dvr_dev)=588
+[    0.635717] [DIAG_ITU656_PROBE] dvr_dev=c816d440 &start=c816d624 start=c038dd78 (want dvr_start=c038dd78) &stop=c816d628 stop=c038be00 (want dvr_stop=c038be00)
+[    0.651182] [DIAG_ITU656_PROBE_END] dvr_dev=c816d440 start=c038dd78 (want c038dd78) stop=c038be00 (want c038be00)
+[    0.667241] ark_display: registered /dev/ark_display
+[    0.673210] nand: device found, Manufacturer ID: 0x98, Chip ID: 0xf1
+[    0.679667] nand: Toshiba NAND 128MiB 3,3V 8-bit
+[    0.684292] nand: 128 MiB, SLC, erase size: 128 KiB, page size: 2048, OOB size: 64
+[    0.691924] nand: WARNING: ark-nand: the ECC used on your system is too weak compared to the one required by the NAND chip
+[    0.703007] Scanning device for bad blocks
+[    0.778633] Bad eraseblock 768 at 0x000006000000
+[    0.808703] usbcore: registered new interface driver cdc_ether
+[    0.814710] usbcore: registered new interface driver cdc_subset
+[    0.820743] usbcore: registered new interface driver zaurus
+[    0.826425] usbcore: registered new interface driver ipheth
+[    0.832136] usbcore: registered new interface driver cdc_ncm
+[    0.838176] usbcore: registered new interface driver uas
+[    0.843687] usbcore: registered new interface driver usb-storage
+[    0.879642] musb-hdrc musb-hdrc.0: MUSB HDRC host driver
+[    0.885028] musb-hdrc musb-hdrc.0: new USB bus registered, assigned bus number 1
+[    0.893736] hub 1-0:1.0: USB hub found
+[    0.897578] hub 1-0:1.0: 1 port detected
+[    0.902119] musb-hdrc musb-hdrc.0: switch host (no negotiation): gpio_id=76 gpio_pwr=126
+[    1.249621] ark_musb_disable 128: dma still active
+[    1.254473] musb-hdrc musb-hdrc.1: MUSB HDRC host driver
+[    1.259895] musb-hdrc musb-hdrc.1: new USB bus registered, assigned bus number 2
+[    1.268510] hub 2-0:1.0: USB hub found
+[    1.272421] hub 2-0:1.0: 1 port detected
+[    1.277028] musb-hdrc musb-hdrc.1: switch otg: gpio_id=1 gpio_pwr=117
+[    1.595786] using random self ethernet address
+[    1.600332] using random host ethernet address
+[    1.605587] carplay-ncm0: HOST MAC ee:2c:ee:f8:76:2d
+[    1.610727] carplay-ncm0: MAC fe:4b:a8:b4:ef:96
+[    1.615321] g_ncm gadget: NCM Gadget
+[    1.618898] g_ncm gadget: g_ncm ready
+[    1.622630] musb-hdrc musb-hdrc.1: ark_musb_enable: dma not reactivated
+[    1.629616] ark1680_ts e4500000.tsc: probe: ADC/TSC MEM resource [mem 0xe4500000-0xe450003f]
+[    1.638137] ark1680_ts e4500000.tsc: probe: irq=20
+[    1.643013] ark1680_ts e4500000.tsc: probe: mapped syscon/pinmux block at phys 0xe4900000, size 0x200
+[    1.652961] input: ark1680-ts as /devices/platform/e4500000.tsc/input/input0
+[    1.660511] ark1680_ts e4500000.tsc: ARK1680 resistive touchscreen registered, irq=20, debug=0 (echo 1 > /sys/module/ark1680_ts/parameters/debug to trace samples)
+[    1.676028] rtc-ark e4c00000.rtc: rtc core: registered e4c00000.rtc as rtc0
+[    1.683271] i2c /dev entries driver
+[    1.688181] ark_wdt e4b00000.watchdog: initialized (timeout = 15 sec, nowayout = 0)
+[    1.696875] dw_mmc ec400000.mmc: Using PIO mode.
+[    1.701547] random: fast init done
+[    1.704990] dw_mmc ec400000.mmc: Version ID is 220a
+[    1.709955] dw_mmc ec400000.mmc: DW MMC controller at irq 42,32 bit host data width,32 deep fifo
+[    1.731642] mmc_host mmc0: Bus speed (slot 0) = 24000000Hz (slot req 400000Hz, actual 400000HZ div = 30)
+[    1.741230] usb 1-1: new high-speed USB device number 2 using musb-hdrc
+[    1.754282] dw_mmc ec800000.mmc: Using external DMA controller.
+[    1.760343] dw_mmc ec800000.mmc: Version ID is 220a
+[    1.765270] dw_mmc ec800000.mmc: DW MMC controller at irq 54,32 bit host data width,32 deep fifo
+[    1.774234] mmc_host mmc1: card is non-removable.
+[    1.789612] mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 400000Hz, actual 400000HZ div = 30)
+[    1.813602] ark1668-i2s e4000000.i2s-dac: mem resource at 0xe4000000
+[    1.820090] ark1668-i2s e4000000.i2s-dac: releasing soft reset for I2S1 (DAC/internal I2S) at 0xe4000000
+[    1.829650] ark1668-i2s e4000000.i2s-dac: enabled internal I2S1 clock-gate bit at 0xe4a00000+0x1f0
+[    1.839217] ark1668-i2s e8200000.i2s-adc: mem resource at 0xe8200000
+[    1.845671] ark1668-i2s e8200000.i2s-adc: releasing soft reset for I2S2 (ADC/external I2S) at 0xe8200000
+[    1.855212] ark1668-i2s e8200000.i2s-adc: enabled external I2S2/CS4334 clock-gate bits at 0xe4a00000
+[    1.865898] NET: Registered protocol family 10
+[    1.872626] Segment Routing with IPv6
+[    1.876427] sit: IPv6, IPv4 and MPLS over IPv4 tunneling driver
+[    1.883527] NET: Registered protocol family 17
+[    1.889364] Loading compiled-in X.509 certificates
+[    1.900237] asoc-simple-card sound: e4000000.sddac <-> e4000000.i2s-dac mapping ok
+[    1.909725] asoc-simple-card sound: ahb:sdadc@0 <-> e8200000.i2s-adc mapping ok
+[    1.919351] rtc-ark e4c00000.rtc: setting system clock to 1970-01-01 00:00:00 UTC (0)
+[    1.927568] ALSA device list:
+[    1.930646]   #0: ARK-SDDAC
+[    1.933837] Waiting for root device /dev/sda2...
+[    1.939533] usb 1-1: hub_port_init:4710 speed=3
+[    1.947829] mmc_host mmc0: Bus speed (slot 0) = 24000000Hz (slot req 25000000Hz, actual 24000000HZ div = 0)
+[    1.957644] mmc0: new SD card at address e126
+[    1.962500] mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 300000Hz, actual 300000HZ div = 40)
+[    1.973782] usb-storage 1-1:1.0: USB Mass Storage device detected
+[    1.980650] mmcblk0: mmc0:e126 SU01G 969 MiB
+[    1.987259] scsi host0: usb-storage 1-1:1.0
+[    1.992948]  mmcblk0: p1 p2 p3
+[    2.025546] mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 200000Hz, actual 200000HZ div = 60)
+[    2.085251] mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 100000Hz, actual 100000HZ div = 120)
+[    3.040292] scsi 0:0:0:0: Direct-Access     SanDisk  Cruzer Blade     8.02 PQ: 0 ANSI: 0 CCS
+[    3.050578] sd 0:0:0:0: Attached scsi generic sg0 type 0
+[    3.056747] sd 0:0:0:0: [sda] 7856127 512-byte logical blocks: (4.02 GB/3.75 GiB)
+[    3.064721] sd 0:0:0:0: [sda] Write Protect is off
+[    3.069959] sd 0:0:0:0: [sda] No Caching mode page found
+[    3.075286] sd 0:0:0:0: [sda] Assuming drive cache: write through
+[    3.087835]  sda: sda1 sda2 sda3
+[    3.094496] sd 0:0:0:0: [sda] Attached SCSI removable disk
+[    3.220658] EXT4-fs (sda2): recovery complete
+[    3.225909] EXT4-fs (sda2): mounted filesystem with ordered data mode. Opts: (null)
+[    3.233726] VFS: Mounted root (ext4 filesystem) on device 8:2.
+[    3.256982] devtmpfs: mounted
+[    3.262346] Freeing unused kernel memory: 1024K
+[    3.267035] Run /sbin/init as init process
+[    3.439631] ark1668_lcdfb: LCD RGB888 r0-r7 pinmux reclaimed from any i2c-gpio pin theft (now 0x11111111)
+[    3.521504] random: crng init done
+mtd8: /nanddata/bootlogo
+mtd9: /nanddata/bootanimation
+mtd10: /nanddata/reversingtrack
+mtd11: /nanddata/unicode
+switchotg: root is on /de[    3.941511] musb-hdrc musb-hdrc.1: switch host (no negotiation): gpio_id=1 gpio_pwr=117
+v/sda2 (USB test boot) -- forcing usb1 straight to host mode for fast WiFi, skipping wired-CarPlay negotiation
+device-node compat symlinks: /dev/hx170dec (Hantro hx170dec H.264/MPEG2 hardware decoder, used by Android Auto video) -> /tmp/dev/hx170
+device-node compat symlinks: /dev/dvr (ITU656 camera/carback ioctl interface) -> /tmp/dev/dvr
+[    4.799615] usb 2-1: new high-speed USB device number 2 using musb-hdrc
+[    4.949627] usb 2-1: hub_port_init:4710 speed=3
+[    5.461390] EXT4-fs (sda3): mounted filesystem with ordered data mode. Opts: (null)
+userdata: ext4 (/dev/sda3)
+[    5.642624] galcore: loading out-of-tree module taints kernel.
+[    5.670777] Galcore version 6.2.4.150331
+[    6.111914] rtl8811cu: Unknown symbol __cfg80211_alloc_event_skb (err -2)
+[    6.118742] rtl8811cu: Unknown symbol wiphy_register (err -2)
+[    6.124609] rtl8811cu: Unknown symbol cfg80211_remain_on_channel_expired (err -2)
+[    6.132200] rtl8811cu: Unknown symbol cfg80211_vendor_cmd_reply (err -2)
+[    6.138921] rtl8811cu: Unknown symbol cfg80211_del_sta_sinfo (err -2)
+[    6.145422] rtl8811cu: Unknown symbol wiphy_unregister (err -2)
+[    6.151498] rtl8811cu: Unknown symbol cfg80211_ch_switch_notify (err -2)
+[    6.158225] rtl8811cu: Unknown symbol cfg80211_ch_switch_started_notify (err -2)
+[    6.165709] rtl8811cu: Unknown symbol cfg80211_ready_on_channel (err -2)
+[    6.172542] rtl8811cu: Unknown symbol wiphy_free (err -2)
+[    6.177955] rtl8811cu: Unknown symbol wiphy_new_nm (err -2)
+[    6.183593] rtl8811cu: Unknown symbol cfg80211_get_bss (err -2)
+[    6.189594] rtl8811cu: Unknown symbol __cfg80211_send_event_skb (err -2)
+[    6.196352] rtl8811cu: Unknown symbol cfg80211_disconnected (err -2)
+[    6.202768] rtl8811cu: Unknown symbol cfg80211_michael_mic_failure (err -2)
+[    6.209796] rtl8811cu: Unknown symbol cfg80211_ibss_joined (err -2)
+[    6.216235] rtl8811cu: Unknown symbol cfg80211_scan_done (err -2)
+[    6.222417] rtl8811cu: Unknown symbol cfg80211_roamed (err -2)
+[    6.228257] rtl8811cu: Unknown symbol cfg80211_put_bss (err -2)
+[    6.234264] rtl8811cu: Unknown symbol cfg80211_connect_done (err -2)
+[    6.240761] rtl8811cu: Unknown symbol cfg80211_unlink_bss (err -2)
+[    6.247010] rtl8811cu: Unknown symbol ieee80211_get_channel (err -2)
+[    6.253429] rtl8811cu: Unknown symbol cfg80211_inform_bss_frame_data (err -2)
+[    6.260640] rtl8811cu: Unknown symbol cfg80211_new_sta (err -2)
+[    6.266657] rtl8811cu: Unknown symbol __cfg80211_alloc_reply_skb (err -2)
+[    6.273516] rtl8811cu: Unknown symbol cfg80211_rx_mgmt (err -2)
+[    6.279484] rtl8811cu: Unknown symbol ieee80211_frequency_to_channel (err -2)
+[    6.286665] rtl8811cu: Unknown symbol cfg80211_mgmt_tx_status (err -2)
+[    6.293273] rtl8811cu: Unknown symbol cfg80211_external_auth_request (err -2)
+[    6.489385] rtl8811cu: Unknown symbol __cfg80211_alloc_event_skb (err -2)
+[    6.496324] rtl8811cu: Unknown symbol wiphy_register (err -2)
+[    6.502139] rtl8811cu: Unknown symbol cfg80211_remain_on_channel_expired (err -2)
+[    6.509715] rtl8811cu: Unknown symbol cfg80211_vendor_cmd_reply (err -2)
+[    6.516434] rtl8811cu: Unknown symbol cfg80211_del_sta_sinfo (err -2)
+[    6.522940] rtl8811cu: Unknown symbol wiphy_unregister (err -2)
+[    6.528972] rtl8811cu: Unknown symbol cfg80211_ch_switch_notify (err -2)
+[    6.535745] rtl8811cu: Unknown symbol cfg80211_ch_switch_started_notify (err -2)
+[    6.543226] rtl8811cu: Unknown symbol cfg80211_ready_on_channel (err -2)
+[    6.550061] rtl8811cu: Unknown symbol wiphy_free (err -2)
+[    6.555488] rtl8811cu: Unknown symbol wiphy_new_nm (err -2)
+[    6.561115] rtl8811cu: Unknown symbol cfg80211_get_bss (err -2)
+[    6.567075] rtl8811cu: Unknown symbol __cfg80211_send_event_skb (err -2)
+[    6.573879] rtl8811cu: Unknown symbol cfg80211_disconnected (err -2)
+[    6.580289] rtl8811cu: Unknown symbol cfg80211_michael_mic_failure (err -2)
+[    6.587284] rtl8811cu: Unknown symbol cfg80211_ibss_joined (err -2)
+[    6.593755] rtl8811cu: Unknown symbol cfg80211_scan_done (err -2)
+[    6.599933] rtl8811cu: Unknown symbol cfg80211_roamed (err -2)
+[    6.605783] rtl8811cu: Unknown symbol cfg80211_put_bss (err -2)
+[    6.611779] rtl8811cu: Unknown symbol cfg80211_connect_done (err -2)
+[    6.618230] rtl8811cu: Unknown symbol cfg80211_unlink_bss (err -2)
+[    6.624529] rtl8811cu: Unknown symbol ieee80211_get_channel (err -2)
+[    6.630939] rtl8811cu: Unknown symbol cfg80211_inform_bss_frame_data (err -2)
+[    6.638111] rtl8811cu: Unknown symbol cfg80211_new_sta (err -2)
+[    6.644159] rtl8811cu: Unknown symbol __cfg80211_alloc_reply_skb (err -2)
+[    6.651023] rtl8811cu: Unknown symbol cfg80211_rx_mgmt (err -2)
+[    6.656967] rtl8811cu: Unknown symbol ieee80211_frequency_to_channel (err -2)
+[    6.664174] rtl8811cu: Unknown symbol cfg80211_mgmt_tx_status (err -2)
+[    6.670786] rtl8811cu: Unknown symbol cfg80211_external_auth_request (err -2)
+[    6.727849] cfg80211: Loading compiled-in X.509 certificates for regulatory database
+[    8.305304] cfg80211: Loaded X.509 cert 'sforshee: 00b28ddf47aef9cea7'
+[    8.312242] platform regulatory.0: Direct firmware load for regulatory.db failed with error -2
+[    8.320926] cfg80211: failed to load regulatory.db
+[    8.762764] usbcore: registered new interface driver rtl8821cu
+
+=== Diagnostic tools ===
+  i2c-scan /dev/i2c-0 /dev/i2c-1 ...   - scan I2C buses for ACKing devices
+  i2c-dump /dev/i2c-N slave_addr [num] - dump registers of an I2C device
+  i2c-write /dev/i2c-N addr reg val    - raw single-register i2c write (bypasses kernel client)
+  ark-ts-test regs                      - dump ARK1680 touch ADC/syscon registers
+  ark-ts-test events /dev/input/eventN  - watch touch evdev events
+  lcd-test                             - print fb/display info, then cycle through solid fills, bars, and gradient
+  strace -f -o /data/x.log <cmd>       - trace syscalls (e.g. strace -f start_msn)
+  nano <file>                          - edit a file (e.g. nano /msnprofile/MsnProductInfo.ini)
+  less <file>                          - page through a file/log (e.g. dmesg | less)
+  htop                                 - interactive process/CPU/memory viewer
+  tmux new -s <name>                   - start a session that survives a dropped connection
+  gdbserver :2345 --attach <pid>       - live remote debugging from a host gdb, see tools/gdbserver/README.md
+  touch-selftest.sh                    - automated touch pass/fail (needs a real touch)
+  uart-test.sh                         - passive listen on MCU (ttyHS0) + MSNEry (ttyS2) links
+  audio-test.sh [file.wav]             - sound card + BD37033 bus/mixer check
+  bt-test.sh                           - GPIO91/ttyHS1/blueware check
+  usb-test.sh                          - USB regression check vs known-good baseline
+  mmc-test.sh                          - read-only MMC/SD check
+  mcu-handshake                        - manual MCU handshake daemon to enable touch panel
+  fb-alpha-test                        - paint alpha/channel-order test bands directly to /dev/fb0
+  lcd-blend-sweep.sh                   - live devmem sweep of OSD1 blend-mode/format/Y2R registers (no rebuild needed)
+  lcd-overlay-watch.sh [secs]          - poll all 5 LCDC layer enable-bits/addrs, log only on change (for the red-overlay bug)
+  lcd-osd1ctl-directfb-watch.sh [--no-hardware|--no-systemonly|--stock-config] [secs] - watches OSD1_CTL rgb_order + OSD1 enable/addr while running start_msn_directfb; --stock-config replicates stock's exact real QWS_DISPLAY/directfbrc (no systemonly, clearing enabled) to test whether the black screen is a config gap or a real driver-stack bug
+  start_msn_linuxfb / start_msn_directfb - start MsnCoreApp on a specific QWS backend without editing start_msn
+  dmesg                                - now aliased to /usr/bin/dmesg --color=always (busybox lacks --color)
+  mem-dump <phys_addr> [len]           - hex-dump physical memory via mmap'd /dev/mem (works on DMA carve-outs plain dd can't reach)
+  mem-fill <phys_addr> <len> <pattern>  - fill physical memory with a repeating 32-bit pattern via mmap'd /dev/mem (stage a test frame, see tools/mem-fill/README.md)
+  hx170-test                           - direct standalone hx170dec H.264 decode test via libmfc.so, bypasses sink/AA entirely (see tools/hx170-test/README.md)
+  fb-scan [threshold]                  - locate solid-color regions in /dev/fb0, predict expected color for black cells via row-fit
+  lcdc-regdump [label]                 - dump every named ARK1668 LCDC register, for diffing a stock vs our-build run
+  pin-force <pin 2-9> <status|gpio-low|gpio-high|lcd> - force an LCD RGB data pin (r0-r7) to GPIO at a level, or restore it to LCD function
+  pinmux-watch [secs]                  - poll the LCD r0-r7/g0-g7/b0-b7 pad-mux registers, log any live function-select change
+  gpio-i2c-probe <sda-pin> <scl-pin>   - bit-bang I2C over two arbitrary sysfs GPIOs, scan for ACKs (hunt real chip wiring)
+  i2c-gpio-bruteforce <target-addr>    - try every candidate pin pair as SCL/SDA, checking for a real ACK from a known I2C address
+  i2c-read-raw /dev/i2c-N addr len     - plain multi-byte I2C read, no register-address write phase
+  pin-dump.sh                          - dump every ARK1668 pinmux pad's live hardware mux value via devmem
+=========================
+
+/ # start_msn_directfb
+Setting up environment for MsnCoreApp...
+Starting MsnCoreApp (DirectFB/GPU)...
+[16.721]  MSNCoreApp start
+[16.737]  MSNCoreApp exception init
+[16.758]  MSNCoreApp running
+QWS_ARK_TOUCH_DEVICE undefined, touch input disabled
+(*) Direct/Thread: Started 'SigHandler' (117) [CRITICAL - OTHER/0] <8388608>...
+
+   ~~~~~~~~~~~~~~~~~~~~~~~~~| DirectFB 1.7.7 |~~~~~~~~~~~~~~~~~~~~~~~~~~
+        (c) 2012-2015  DirectFB integrated media GmbH
+        (c) 2001-2015  The world wide DirectFB Open Source Community
+        (c) 2000-2004  Convergence (integrated media) GmbH
+      ----------------------------------------------------------------
+
+(*) DirectFB/Core: Single Application Core. (2026-07-25 07:03)
+(*) Direct/Memcpy: Using libc memcpy()
+(*) Direct/Thread: Started 'Fusion Dispatch' (118) [MESSAGING - OTHER/0] <8388608>...
+[17.564]  MsnCoreApp version: V3.21.09.0219
+[17.857]  MSNCore[   17.857499] ark_display: ARKDISP_GET_SCREEN_INFO -> screen_id=0 800x480 120x72mm
+App onFirstInit
+[17.866]  ark screen type: 0
+[17.867]  display size: QSize(800, 480)  src size: QSize(120, 72)
+[17.949]  Load App Plugin 12 "/usr/lib/libCarReversing.so"
+Mon Feb 19 09:09:30 UTC 2024
+[18.091]  SetTime: "2024-02-19 09:09:30" Ret: 0
+[18.121]  Load App Plugin 10 "/usr/lib/libLauncher-Box.so"
+[18.126]  MsnMainWindow::setRealVisible LauncherWindow(0x148a70) true
+[18.169]  Waite Event Ticks 11
+[18.174]  load wallpaper: "/msnprofile/wallpaper/800x480/"  size: QSize(0, 0)
+rm: can't remove '/tmp/app-*.bmp': No such file or directory
+[18.199]  MSNCoreApp show
+[18.270]  MsnWindowManager::setVisible true true
+
+
+Open reversing dev handle failed!
+
+
+QMetaObject::connectSlotsByName: No matching signal for on_pushButton_clicked()
+[18.912]  DVRSetDialog visibale change: false
+[18.940]  MSNCoreApp hide boot logo
+sh: can't create /proc/display: nonexistent directory
+[18.958]  MSNCoreApp onSecondInit
+[18.958]  DiskDeviceWatcher::startWatcher
+Created device discovery thread
+[18.961]  usb_device_added /dev/bus/usb/002/002
+[18.962]  usb_device_added /dev/bus/usb/002/001
+[18.962]  usb_device_added /dev/bus/usb/001/002
+usb_device_open /dev/bus/usb/001/002
+usb_device_open open returned 25 writeable 1 errno 2
+usb_device_new /dev/bus/usb/001/002 fd: 25
+usb_device_new read returned 50 errno 2
+insert usb dev:/dev/bus/usb/001/002 vid:0x0781 pid:0x5567
+[18.964]  usb_device_added /dev/bus/usb/001/001
+usb_device_open /dev/bus/usb/001/001
+usb_device_open open returned 25 writeable 1 errno 2
+usb_device_new /dev/bus/usb/001/001 fd: 25
+usb_device_new read returned 43 errno 2
+insert usb dev:/dev/bus/usb/001/001 vid:0x1d6b pid:0x0002
+[18.966]  Start Load Driver
+[19.306]  Load App Plugin 8 "/usr/lib/libSetting.so"
+[19.313]  Open ba[   19.313890] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+cklight pwm : false
+[   19.339742] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   19.359709] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   19.380944] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   19.409656] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   19.419622] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=1 hue=0 saturation=128 brightness=128 contrast=128
+[   19.429371] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=1 hue=0 saturation=128 brightness=128 contrast=128
+[   19.456592] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=2 hue=0 saturation=128 brightness=128 contrast=128
+[   19.476636] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=2 hue=0 saturation=128 brightness=128 contrast=128
+[   19.497980] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=3 hue=0 saturation=128 brightness=128 contrast=128
+[   19.520550] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=3 hue=0 saturation=128 brightness=128 contrast=128
+[   19.539673] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=4 hue=0 saturation=128 brightness=128 contrast=128
+[   19.549439] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=4 hue=0 saturation=128 brightness=128 contrast=128
+[   19.574882] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   19.586986] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   19.601570] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=1 hue=0 saturation=128 brightness=128 contrast=128
+[   19.627930] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=1 hue=0 saturation=128 brightness=128 contrast=128
+[   19.648632] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=2 hue=0 saturation=128 brightness=128 contrast=128
+[   19.686545] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=2 hue=0 saturation=128 brightness=128 contrast=128
+[   19.718845] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=3 hue=0 saturation=128 brightness=128 contrast=128
+[   19.737601] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=3 hue=0 saturation=128 brightness=128 contrast=128
+[   19.759782] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=4 hue=0 saturation=128 brightness=128 contrast=128
+[   19.779693] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=4 hue=0 saturation=128 brightness=128 contrast=128
+[   19.800054] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   19.819701] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=0 hue=0 saturation=64 brightness=128 contrast=128
+[   19.836265] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=1 hue=0 saturation=128 brightness=128 contrast=128
+[   19.856628] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=1 hue=0 saturation=64 brightness=128 contrast=128
+[   19.879136] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=2 hue=0 saturation=128 brightness=128 contrast=128
+[   19.891402] musb-hdrc musb-hdrc.1: switch host (no negotiation): gpio_id=1 gpio_pwr=117
+[   20.002764] usb 2-1: USB disconnect, device number 2
+[   20.011138] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=2 hue=0 saturation=64 brightness=128 contrast=128
+[   20.023730] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=3 hue=0 saturation=128 brightness=128 contrast=128
+[   20.033614] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=3 hue=0 saturation=64 brightness=128 contrast=128
+[   20.043426] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=4 hue=0 saturation=128 brightness=128 contrast=128
+[   20.053248] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=4 hue=0 saturation=64 brightness=128 contrast=128
+[20.115]  Open I2C Device: 2 "80"  FD: 24
+[20.136]  Sound_BD37033::muteSpeakerAtts false true
+[20.153]  SoundAdapter Create Success, ICType: 3
+[20.154]  Load App Plugin 403 "/usr/lib/libMsnSound.so"
+[   20.369516] usb 2-1: new high-speed USB device number 3 using musb-hdrc
+[   20.519498] usb 2-1: hub_port_init:4710 speed=3
+[21.140]  Blance: 32 32 32 32
+[21.209]  set subwoofer value 8 134
+syncDatas armsetting radar visible:0 datas:0 0 0 0
+[22.327]  McuAdap[   22.327523] ark-hsuart e4f00000.serial: no TX DMA channel available (no platform data) -- using PIO/interrupt-driven TX instead, this is expected on this board
+ter: MCUAdapter_[   22.342894] ark-hsuart e4f00000.serial: no RX DMA channel available (no platform data) -- using PIO/interrupt-driven RX instead, this is expected on this board
+BoxP300 6
+[22.360]  Open MCU Serial Port  "/dev/ttyHS0"  Ret: true[   22.363702] ark-uart e8000000.uart: no TX DMA channel available (no platform data) -- using PIO/interrupt-driven TX instead, this is expected on this board
+ "No such file o[   22.379004] ark-uart e8000000.uart: no RX DMA channel available (no platform data) -- using PIO/interrupt-driven RX instead, this is expected on this board
+r directory"
+
+start serialPortProcessProc
+
+[22.395]  Open MCU Serial Port  "/dev/ttyS2"  Ret: true "No such file or directory"
+[22.395]  Load App Plugin 401 "/usr/lib/libMcuCenter.so"
+[22.534]  CanBusPlugin 0 0
+[22.534]  Load App Plugin 400 "/usr/lib/libCanBus.so"
+[22.641]  Load App Plugin 3 "/usr/lib/libBlueTooth.so"
+[22.643]  open touch monitor dev: /dev/input/event0 39
+gone device /dev/bus/usb/002/002
+[22.679]  usb_device_removed /dev/bus/usb/002/002
+new device /dev/bus/usb/002/003
+[22.680]  usb_device_added /dev/bus/usb/002/003
+[22.681]  onLoadDriverFinished
+[   22.751696] [DIAG_ITU656_OPEN] container_of-dvr_dev=c816d440 g_dvr_dev=c816d440 (MATCH) start=c038dd78 (want c038dd78) stop=c038be00 (want c038be00)
+[22.768]  arkapi_[   22.779815] [DIAG_ITU656_IOCTL] cmd=0xc0046ee0 g_dvr_dev=c816d440 filp->private_data=c816d440 (MATCH) start=c038dd78 (want c038dd78, OK) stop=c038be00 (want c038be00, OK)
+open_dvr() retry_times: 1
+[   22.806699] [DIAG_ITU656_IOCTL] cmd=0xc0046ee2 g_dvr_dev=c816d440 filp->private_data=c816d440 (MATCH) start=c038dd78 (want c038dd78, OK) stop=c038be00 (want c038be00, OK)
+net.ipv4.udp_mem = 8192 10240 16384
+net.ipv4.udp_rmem_min = 1048576
+[   22.837115] [DIAG_ITU656_IOCTL] cmd=0xc0046ee4 g_dvr_dev=c816d440 filp->private_data=c816d440 (MATCH) start=c038dd78 (want c038dd78, OK) stop=c038be00 (want c038be00, OK)
+[   22.870533] [DIAG_ITU656_IOCTL] cmd=0xc0046ee1 g_dvr_dev=c816d440 filp->private_data=c816d440 (MATCH) start=c038dd78 (want c038dd78, OK) stop=c038be00 (want c038be00, OK)
+insmod: can't read '/tmp/wlan.ko': No such file or directory
+[   22.900731] [DIAG_ITU656_IOCTL] cmd=0xc0046ee3 g_dvr_dev=c816d440 filp->private_data=c816d440 (MATCH) start=c038dd78 (want c038dd78, OK) stop=c038be00 (want c038be00, OK)
+[   22.916315] [DIAG_ITU656_IOCTL] cmd=0xc0046ee5 g_dvr_dev=c816d440 filp->private_data=c816d440 (MATCH) start=c038dd78 (want c038dd78, OK) stop=c038be00 (want c038be00, OK)
+[23.047]  MSN protocal type: 0  sendReadyData!
+[23.057]  MSNCoreApp onLoadStartupApp
+[23.057]  MSNCoreApp onEndInit
+[23.057]
+MsnCoreApp End init
+
+[23.166]  MsnLink StartService: "com.arkmicro.carplay"
+label2 = Home
+pcarplay_info->bridge_mode=0
+pcarplay_info->icurrent = 500
+pcarplay_info->ns_level = -1
+### ++ carplay initialize ++
+msg instance
+++ MsgEnQueue ++
+[23.521]  MsnLink StartService ret: "com.arkmicro.carplay" true ""
+[23.522]  MSNCoreApp exec
+### carplay dbus initialize true
+[23.579]  MsnLink::onServiceRegistered "com.arkmicro.carplay"
+[23.582]  MSN protocal type: 0  sendReadyData!
+[23.897]  start bt service:/usr/bin/blueware
+[23.996]  MSN protocal type: 0  sendReadyData!
+[24.098]  Retry Open BlueTooth Serial Port,  Ret: true
+[24.099]  Write At atCommand: "AT+DEVSTAT"
+[24.265]  Write At atCommand: "AT+BTEN=1"
+[   24.604597] IPv6: ADDRCONF(NETDEV_UP): wlan0: link is not ready
+udhcpd: started, v1.30.1
+ifconfig: SIOCGIFFLAGS: No such device
+x=0 y=0
+s_w=800 s_h=480
+v_w=800 v_h=480 screen_width_phy=154 screen_height_phy=87
+#pluginfo->btmac=56:fa:dd:e2:50:bf
+carplay_plugin_set_info:1505 err=0
+carplay_plugin_start:1728
+### carplay ++ usb_reader_thread ++
+### carplay -- usb_reader_thread --
+### -- carplay initialize --
+mDNSResponder: mDNSResponder (Engineering Build) (May 29 2020 16:56:53) starting
+[   25.658730] ark-hsuart e4800000.serial: no TX DMA channel available (no platform data) -- using PIO/interrupt-driven TX instead, this is expected on this board
+[   25.673119] ark-hsuart e4800000.serial: no RX DMA channel available (no platform data) -- using PIO/interrupt-driven RX instead, this is expected on this board
+mDNSResponder: mDNS_AddDNSServer: Lock not held! mDNS_busy (0) mDNS_reentrancy (0)
+mDNSResponder: mDNSPlatformSourceAddrForDest: connect 1.1.1.1 failed errno 101 (Network is unreachable)
+[27.396]  Write At atCommand: "AT+ADDR"
+[27.398]  BlueToothAdapter_Blueware::onStartupConfig()
+[27.398]  Write At atCommand: "AT+HFPCFG"
+[27.399]  Write At atCommand: "AT+HFPDISC"
+[27.400]  Write At atCommand: "AT+ADDR"
+[27.400]  Write At atCommand: "AT+NAME"
+[27.401]  Write At atCommand: "AT+VER"
+[27.472]  Write At atCommand: "AT+PLIST"
+[27.473]  BT Local Address: "DC0D3014FC9F"
+[27.473]  Write At atCommand: "AT+NAME"
+[27.474]I msncoreapp.cpp@2964 enableHostApd start  enable: 1 timeout: 3000
+[27.474]  start  enableWLAN 0 27474
+stop wifi manager
+[27.586]  end  enableWLAN 0 27586
+[27.651]I msncoreapp.cpp@3059 enableHostApd hostapd started  true
+[27.651]  hostapd state: 2  pid: 207 ap type: 1
+[27.652]I msncoreapp.cpp@3098 enableHostApd end  1
+[27.653]  Write At atCommand: "AT+HFPCFG=0"
+[27.654]  BT Local Address: "DC0D3014FC9F"
+[27.654]  Write At atCommand: "AT+NAME"
+[27.661]  Write At atCommand: "AT+NAME=Limcet Box_fc9f"
+[27.662]  Write At atCommand: "AT+LENAME=Limcet Box_fc9f"
+[27.728]  Write At atCommand: "AT+NAME=Limcet Box_fc9f"
+[27.729]  Write At atCommand: "AT+LENAME=Limcet Box_fc9f"
+[27.731]  Write At atCommand: "AT+NAME=Limcet Box_fc9f"
+[27.732]  Write At atCommand: "AT+LENAME=Limcet Box_fc9f"
+[28.967]  MsnCoreApp::onDiskDeviceStatusChange 0 0
+[29.652]I msncoreapp.cpp@2964 enableHostApd start  enable: 0 timeout: 100
+[29.653]  hostapd state: 2  pid: 207
+[29.819]  hostapd state: 0  pid: 0
+[29.819]I msncoreapp.cpp@3098 enableHostApd end  0
+[30.821]I msncoreapp.cpp@2964 enableHostApd start  enable: 1 timeout: 100
+[30.822]  start  enableWLAN 0 30822
+stop wifi manager
+[30.929]  end  enableWLAN 0 30929
+[30.981]I msncoreapp.cpp@3059 enableHostApd hostapd started  true
+[30.982]  hostapd state: 2  pid: 215 ap type: 1
+[30.982]I msncoreapp.cpp@3098 enableHostApd end  1
+[42.014]  Write At atCommand: "AT+HFPCONN=04006EAF29C4"
+[42.014]  Auto ConnectTime 8000
+[42.821]  Write At atCommand: "AT+A2DPMUTE=1"
+[42.834]  Bluetooth connected: "Pixel 9 Pro" "04006EAF29C4" "04:00:6E:AF:29:C4"
+[45.320]  recv bluetooth connect phone type: "unkown"
+[45.320]  onRecvUUID PhoneType: 0
+[45.343]  Load App Plugin 13 "/usr/lib/libMsnCarAuto.so"
+[45.346]  MsnMainWindow::setRealVisible LauncherWindow(0x148a70, name = "LauncherWindow") false
+[45.349]  MsnMainWindow::setRealVisible CarAutoWindow(0xb2400e00) true
+[45.349]  mode app change: "MsnCoreApp" -> "MsnCarAuto"
+[45.350]
+======== refreshAppAudioChannel 8388611 0
+[45.350]  switchToAppAudioChannel, ModeApp: "MsnCarAuto"  AudioApp: "MsnCarAuto"  Channel: 0 Request: false
+[45.362]  Waite Event Ticks 11
+[   45.477102] ark_display: ARKDISP_GET_SCREEN_INFO -> screen_id=0 800x480 120x72mm
+get_shared_display_data May 29 2020-16:57:02.
+[45.486]  CarAutoWindow::retryConnect()
+[45.486]  isPhoneConnected 2
+[45.487]_ msncoreapp.cpp@2413 msnAppNotify ____ APP_NOTIFY_ENABLE_HOSTAPD 1
+[45.487]I msncoreapp.cpp@2964 enableHostApd start  enable: 1 timeout: 3000
+[45.487]  start  enableWLAN 0 45487
+stop wifi manager
+[45.607]  end  enableWLAN 0 45607
+[45.611]  hostapd state: 2  pid: 215 ap type: 1
+[45.611]I msncoreapp.cpp@3098 enableHostApd end  1
+[45.612]  refreshConnectType 11
+[45.612]_ msncoreapp.cpp@2413 msnAppNotify ____ APP_NOTIFY_ENABLE_HOSTAPD 1
+[45.612]I msncoreapp.cpp@2964 enableHostApd start  enable: 1 timeout: 3000
+[45.612]  start  enableWLAN 0 45613
+stop wifi manager
+[45.721]  end  enableWLAN 0 45721
+[45.724]  hostapd state: 2  pid: 215 ap type: 1
+[45.725]I msncoreapp.cpp@3098 enableHostApd end  1
+[45.746]  requestLinkStatus 11 3
+[45.747]  MsnLink StartService: "com.arkmicro.auto"
+ArkUtils::open_local_socket:266 sock = 3
+ArkUtils::open_local_socket:266 sock = 4
+initWlConnection:249
+
+IArkCallbacks::IArkCallbacks:35
+IArkCallbacks::IArkCallbacks:37 handle=00066ee0
+wirelessConnectionProc:187
+
+wirelessConnectionProc:189
+
+right_hand_driver : 0
+pcarplay_info->bridge_mode=0
+ArkAuto::init right_hand_driver : 0
+ArkAuto::init:68 mIsDongleMode=0
+ArkDbus::ArkDbus:66 handle=00067a18
+ArkDbus::init:115 mIsDongleMode=0
+ScreenWidth:800 ScreenHeight:480
+ArkAuto::run : 222
+[56.687]  MsnLink StartService ret: "com.arkmicro.auto" true ""
+[56.688]  ====================== requestAutoHandler ====================== 3
+ArkDbus::reply_to_requestLinkStatus_call 223 param1=11 param2=3
+IArkCallbacks::requestLinkStatus:77 0
+IArkCallbacks::requestLinkStatus:83
+ArkDbus::onLinkStatusChange:175 mStatus=3
+Signal Sent
+ArkDbus::run 468
+[56.801]  MsnLink::onServiceRegistered "com.arkmicro.auto"
+[56.802]  MsnCoreApp::onLinkStatusChange 11 3
+[56.802]
+==========CarAuto onLinkStatusChange: 11 3 ==========
+
+
+==========CarAuto Status: 3 true ==========
+
+BtRfcommController::start : 404
+/dev/bw_aap is not symlink
+ArkUtils::open_local_socket:266 sock = 9
+BtRfcommController::start : 414
+rfcomm write: 00 09 00 04 08 01 10 00 18 00 20 bc 28
+rfcomm read: 00 16 00 05
+len=22 type=5
+rfcomm read: 08 01 10 00 1a 0e 35 36 31 37 31 46 44 41 50 30 30 31 54 45 20 00
+interface=wlan0
+wlan0 IP Address 192.168.43.1
+local wifi ip=192.168.43.1
+majorVer:1 minorVer0 deviceSerial:56171FDAP001TE status:0 channel:-1
+rfcomm write: 00 11 00 01 0a 0c 31 39 32 2e 31 36 38 2e 34 33 2e 31 10 ca 34
+rfcomm read: 00 00 00 02
+len=0 type=2
+Rfcomm Read timeout!!!
+ssid=carplay_fc9f
+passwd=88888888
+interface=wlan0
+local mac:68:b9:d3:f1:5a:43
+mac=68:b9:d3:f1:5a:43
+rfcomm write: 00 2d 00 03 0a 0c 63 61 72 70 6c 61 79 5f 66 63 39 66 12 08 38 38 38 38 38 38 38 38 1a 11 36 38 3a 62 39 3a 64 33 3a 66 31 3a 35 61 3a 34 33 20 08
+rfcomm read: 00 02 00 07
+len=2 type=7
+rfcomm read: 18 00
+ip: port:-1
+udhcpd: sending OFFER of 192.168.43.20
+udhcpd: sending OFFER of 192.168.43.20
+udhcpd: sending ACK to 192.168.43.20
+rfcomm read: 00 02 00 06
+len=2 type=6
+rfcomm read: 08 00
+wirelessConnectionProc:206 Accept client connection
+wirelessConnectionProc:189
+
+ArkDbus::onLinkStatusChange:175 mStatus=9
+Signal Sent
++++ArkAuto::run : 262
+[62.292]  MsnCoreApp::onLinkStatusChange 11 9
+[62.293]
+==========CarAuto onLinkStatusChange: 11 9 ==========
+
+
+==========CarAuto Status: 3 true ==========
+
+Sink::init Sink : 0
+Creating new Video Sink...
+w=800 h=480 widthMargin=0  heightMargin=0
+w=1280 h=720 widthMargin=0  heightMargin=0
+w=800 h=480 widthMargin=0  heightMargin=0
+Creating new input source...
+Creating new Audio source...
+###Microphone::init:85 bridge_mode=0 audio=0
+Microphone::init:102
+Microphone initialized!
+Creating new Audio sink...
+open:174 m_handle_name=plug:softvol2 mode=0
+rate=48000 channels=2 bits_per_sample=16
+set_alsa_paramters:103 period_size=1024 buffer_size=16384
+open:190 ret=0 m_handle=0xb4a23840
+Creating new Audio sink...
+open:174 m_handle_name=plug:softvol1 mode=0
+rate=16000 channels=1 bits_per_sample=16
+set_alsa_paramters:103 period_size=341 buffer_size=5461
+open:190 ret=0 m_handle=0xb4a033e0
+Creating new Audio sink...
+open:174 m_handle_name=plug:softvol4 mode=0
+rate=16000 channels=1 bits_per_sample=16
+set_alsa_paramters:103 period_size=341 buffer_size=5461
+open:190 ret=0 m_handle=0xb4a52060
+bt addr=dc:0d:30:14:fc:9f
+Creating Bluetooth endpoint...
+BluetoothCallbacks:BluetoothCallbacks:21
+Creating Bluetooth endpoint...
+Transport type is wlan!
+Starting link, car major=1 minor=3
+Phone reported version major=1 minor=7
+ssl state=SSLv3 read server hello A -1
+ssl state=SSLv3 read finished A -1
+ssl state=SSL negotiation finished successfully 1
+SSL version=TLSv1.2 Cipher name=ECDHE-RSA-AES128-GCM-SHA256
+Verify returned: ok
+label:Android deviceName: Google Pixel 9 Pro
+#audio stream release
+VideoSinkCallbacks::setupCallback:222
+Source video config index is 0 w=800 h=480.
+
+VideoSinkCallbacks::playbackStartCallback:228 0xb19f9440
+m_screen_width=800 m_screen_height=480 mTVOutEnable=1
+VideoDecoder::SetVideoResolution:198 800 480 0 0
+VideoDecoder::open:116
+VideoDecoder::open:125 m_backcar=0
+VideoDecoder::video_init:337 fb_lock=-1 enable_vga:0
+video_init:350, 800, 480, 800, 480
+#video_init:351, 0, 0, 0, 0
+[   71.453386] ark_display: ARKDISP_GET_SCREEN_INFO -> screen_id=0 800x480 120x72mm
+VideoDecoder::open:140
+ArkDbus::onLinkStatusChange:175 mStatus=4
+Signal Sent
+VideoSinkCallbacks::playbackStartCallback:235
+[71.521]  MsnLink status success: 11 4
+[71.522]  MsnCoreApp::onLinkStatusChange 11 4
+[71.522]
+==========CarAuto onLinkStatusChange: 11 4 ==========
+
+
+==========CarAuto Status: 4 false ==========
+
+[71.522]  requestLinkStatus 11 32
+[71.522]  ====================== requestAutoHandler ====================== 32
+[71.524]  APP_NOTIFY_ANDROIDAUTO_LINKCHANGE true
+ArkDbus::reply_to_requestLinkStatus_call 223 param1=11 param2=32
+ArkDbus::run 468
+VideoSinkCallbacks::codecConfigCallback:215
+Configuring codec
+**********VideoDecoder::play:166 Linking=0
+VideoSinkCallbacks::codecConfigCallback:217
+***PhoneStatusCallbacks:phoneStatusCallback:23 calls=0 ***
+^C
+/ # Rfcomm Read timeout!!!
+Read header failed
+run:161 stop
+dmesg
+[    3.220658] EXT4-fs (sda2): recovery complete
+[    3.225909] EXT4-fs (sda2): mounted filesystem with ordered data mode. Opts: (null)
+[    3.233726] VFS: Mounted root (ext4 filesystem) on device 8:2.
+[    3.256982] devtmpfs: mounted
+[    3.262346] Freeing unused kernel memory: 1024K
+[    3.267035] Run /sbin/init as init process
+[    3.439631] ark1668_lcdfb: LCD RGB888 r0-r7 pinmux reclaimed from any i2c-gpio pin theft (now 0x11111111)
+[    3.521504] random: crng init done
+[    3.941511] musb-hdrc musb-hdrc.1: switch host (no negotiation): gpio_id=1 gpio_pwr=117
+[    4.799615] usb 2-1: new high-speed USB device number 2 using musb-hdrc
+[    4.949627] usb 2-1: hub_port_init:4710 speed=3
+[    5.461390] EXT4-fs (sda3): mounted filesystem with ordered data mode. Opts: (null)
+[    5.642624] galcore: loading out-of-tree module taints kernel.
+[    5.670777] Galcore version 6.2.4.150331
+[    6.111914] rtl8811cu: Unknown symbol __cfg80211_alloc_event_skb (err -2)
+[    6.118742] rtl8811cu: Unknown symbol wiphy_register (err -2)
+[    6.124609] rtl8811cu: Unknown symbol cfg80211_remain_on_channel_expired (err -2)
+[    6.132200] rtl8811cu: Unknown symbol cfg80211_vendor_cmd_reply (err -2)
+[    6.138921] rtl8811cu: Unknown symbol cfg80211_del_sta_sinfo (err -2)
+[    6.145422] rtl8811cu: Unknown symbol wiphy_unregister (err -2)
+[    6.151498] rtl8811cu: Unknown symbol cfg80211_ch_switch_notify (err -2)
+[    6.158225] rtl8811cu: Unknown symbol cfg80211_ch_switch_started_notify (err -2)
+[    6.165709] rtl8811cu: Unknown symbol cfg80211_ready_on_channel (err -2)
+[    6.172542] rtl8811cu: Unknown symbol wiphy_free (err -2)
+[    6.177955] rtl8811cu: Unknown symbol wiphy_new_nm (err -2)
+[    6.183593] rtl8811cu: Unknown symbol cfg80211_get_bss (err -2)
+[    6.189594] rtl8811cu: Unknown symbol __cfg80211_send_event_skb (err -2)
+[    6.196352] rtl8811cu: Unknown symbol cfg80211_disconnected (err -2)
+[    6.202768] rtl8811cu: Unknown symbol cfg80211_michael_mic_failure (err -2)
+[    6.209796] rtl8811cu: Unknown symbol cfg80211_ibss_joined (err -2)
+[    6.216235] rtl8811cu: Unknown symbol cfg80211_scan_done (err -2)
+[    6.222417] rtl8811cu: Unknown symbol cfg80211_roamed (err -2)
+[    6.228257] rtl8811cu: Unknown symbol cfg80211_put_bss (err -2)
+[    6.234264] rtl8811cu: Unknown symbol cfg80211_connect_done (err -2)
+[    6.240761] rtl8811cu: Unknown symbol cfg80211_unlink_bss (err -2)
+[    6.247010] rtl8811cu: Unknown symbol ieee80211_get_channel (err -2)
+[    6.253429] rtl8811cu: Unknown symbol cfg80211_inform_bss_frame_data (err -2)
+[    6.260640] rtl8811cu: Unknown symbol cfg80211_new_sta (err -2)
+[    6.266657] rtl8811cu: Unknown symbol __cfg80211_alloc_reply_skb (err -2)
+[    6.273516] rtl8811cu: Unknown symbol cfg80211_rx_mgmt (err -2)
+[    6.279484] rtl8811cu: Unknown symbol ieee80211_frequency_to_channel (err -2)
+[    6.286665] rtl8811cu: Unknown symbol cfg80211_mgmt_tx_status (err -2)
+[    6.293273] rtl8811cu: Unknown symbol cfg80211_external_auth_request (err -2)
+[    6.489385] rtl8811cu: Unknown symbol __cfg80211_alloc_event_skb (err -2)
+[    6.496324] rtl8811cu: Unknown symbol wiphy_register (err -2)
+[    6.502139] rtl8811cu: Unknown symbol cfg80211_remain_on_channel_expired (err -2)
+[    6.509715] rtl8811cu: Unknown symbol cfg80211_vendor_cmd_reply (err -2)
+[    6.516434] rtl8811cu: Unknown symbol cfg80211_del_sta_sinfo (err -2)
+[    6.522940] rtl8811cu: Unknown symbol wiphy_unregister (err -2)
+[    6.528972] rtl8811cu: Unknown symbol cfg80211_ch_switch_notify (err -2)
+[    6.535745] rtl8811cu: Unknown symbol cfg80211_ch_switch_started_notify (err -2)
+[    6.543226] rtl8811cu: Unknown symbol cfg80211_ready_on_channel (err -2)
+[    6.550061] rtl8811cu: Unknown symbol wiphy_free (err -2)
+[    6.555488] rtl8811cu: Unknown symbol wiphy_new_nm (err -2)
+[    6.561115] rtl8811cu: Unknown symbol cfg80211_get_bss (err -2)
+[    6.567075] rtl8811cu: Unknown symbol __cfg80211_send_event_skb (err -2)
+[    6.573879] rtl8811cu: Unknown symbol cfg80211_disconnected (err -2)
+[    6.580289] rtl8811cu: Unknown symbol cfg80211_michael_mic_failure (err -2)
+[    6.587284] rtl8811cu: Unknown symbol cfg80211_ibss_joined (err -2)
+[    6.593755] rtl8811cu: Unknown symbol cfg80211_scan_done (err -2)
+[    6.599933] rtl8811cu: Unknown symbol cfg80211_roamed (err -2)
+[    6.605783] rtl8811cu: Unknown symbol cfg80211_put_bss (err -2)
+[    6.611779] rtl8811cu: Unknown symbol cfg80211_connect_done (err -2)
+[    6.618230] rtl8811cu: Unknown symbol cfg80211_unlink_bss (err -2)
+[    6.624529] rtl8811cu: Unknown symbol ieee80211_get_channel (err -2)
+[    6.630939] rtl8811cu: Unknown symbol cfg80211_inform_bss_frame_data (err -2)
+[    6.638111] rtl8811cu: Unknown symbol cfg80211_new_sta (err -2)
+[    6.644159] rtl8811cu: Unknown symbol __cfg80211_alloc_reply_skb (err -2)
+[    6.651023] rtl8811cu: Unknown symbol cfg80211_rx_mgmt (err -2)
+[    6.656967] rtl8811cu: Unknown symbol ieee80211_frequency_to_channel (err -2)
+[    6.664174] rtl8811cu: Unknown symbol cfg80211_mgmt_tx_status (err -2)
+[    6.670786] rtl8811cu: Unknown symbol cfg80211_external_auth_request (err -2)
+[    6.727849] cfg80211: Loading compiled-in X.509 certificates for regulatory database
+[    8.305304] cfg80211: Loaded X.509 cert 'sforshee: 00b28ddf47aef9cea7'
+[    8.312242] platform regulatory.0: Direct firmware load for regulatory.db failed with error -2
+[    8.320926] cfg80211: failed to load regulatory.db
+[    8.531537] RTW: module init start
+[    8.531552] RTW: rtl8821cu v5.12.0-16-g5229e7f95.20210118_COEX20200730-5151
+[    8.531558] RTW: build time: Jul 26 2026 20:34:08
+[    8.531563] RTW: rtl8821cu BT-Coex version = COEX20200730-5151
+[    8.531659] RTW: rtw_inetaddr_notifier_register
+[    8.531844] RTW:
+               usb_endpoint_descriptor(0):
+[    8.531853] RTW: bLength=7
+[    8.531858] RTW: bDescriptorType=5
+[    8.531865] RTW: bEndpointAddress=84
+[    8.531872] RTW: wMaxPacketSize=512
+[    8.531877] RTW: bInterval=0
+[    8.531883] RTW: RT_usb_endpoint_is_bulk_in = 4
+[    8.531889] RTW:
+               usb_endpoint_descriptor(1):
+[    8.531893] RTW: bLength=7
+[    8.531898] RTW: bDescriptorType=5
+[    8.531903] RTW: bEndpointAddress=5
+[    8.531908] RTW: wMaxPacketSize=512
+[    8.531912] RTW: bInterval=0
+[    8.531918] RTW: RT_usb_endpoint_is_bulk_out = 5
+[    8.531923] RTW:
+               usb_endpoint_descriptor(2):
+[    8.531928] RTW: bLength=7
+[    8.531933] RTW: bDescriptorType=5
+[    8.531937] RTW: bEndpointAddress=6
+[    8.531942] RTW: wMaxPacketSize=512
+[    8.531946] RTW: bInterval=0
+[    8.531952] RTW: RT_usb_endpoint_is_bulk_out = 6
+[    8.531956] RTW:
+               usb_endpoint_descriptor(3):
+[    8.531961] RTW: bLength=7
+[    8.531966] RTW: bDescriptorType=5
+[    8.531971] RTW: bEndpointAddress=87
+[    8.531975] RTW: wMaxPacketSize=64
+[    8.531980] RTW: bInterval=3
+[    8.531986] RTW: RT_usb_endpoint_is_int_in = 7, Interval = 3
+[    8.531991] RTW:
+               usb_endpoint_descriptor(4):
+[    8.531996] RTW: bLength=7
+[    8.532001] RTW: bDescriptorType=5
+[    8.532005] RTW: bEndpointAddress=8
+[    8.532010] RTW: wMaxPacketSize=512
+[    8.532015] RTW: bInterval=0
+[    8.532019] RTW: RT_usb_endpoint_is_bulk_out = 8
+[    8.532027] RTW: nr_endpoint=5, in_num=2, out_num=3
+
+[    8.532031] RTW: USB_SPEED_HIGH
+[    8.532040] RTW: CHIP TYPE: RTL8821C
+[    8.532189] RTW: loadparam, Select P2P interface: iface_id:1
+[    8.532317] RTW: [HALMAC]55772M
+               HALMAC_MAJOR_VER = 1
+               HALMAC_PROTOTYPE_VER = 6
+               HALMAC_MINOR_VER = 6
+               HALMAC_PATCH_VER = 22
+[    8.533306] RTW: Chip Version Info: CHIP_8821C_U3_1T1R_RomVer(2)
+[    8.533329] RTW: config_chip_out_EP OutEpQueueSel(0x07), OutEpNumber(3)
+[    8.533517] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[    8.666065] RTW: is_valid_id_status: HALMAC_FEATURE_DUMP_LOGICAL_EFUSE
+[    8.666140] RTW: HW EFUSE
+[    8.666154] RTW: 0x000: 29 81 00 BC  09 00 21 00  6E 04 A4 10  10 00 30 0B
+[    8.666198] RTW: 0x010: FF FF FF FF  FF FF FF FF  FF FF FF 02  FF FF FF FF
+[    8.666235] RTW: 0x020: FF FF 25 25  25 25 25 23  23 22 22 23  23 23 24 25
+[    8.666272] RTW: 0x030: 22 FF FF FF  FF FF 10 FF  FF FF 28 28  28 28 28 28
+[    8.666309] RTW: 0x040: 2C 2C 2C 2C  2C 02 FF FF  FF FF FF FF  FF FF FF FF
+[    8.666344] RTW: 0x050: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    8.666380] RTW: 0x060: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    8.666415] RTW: 0x070: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    8.666451] RTW: 0x080: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    8.666487] RTW: 0x090: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    8.666522] RTW: 0x0A0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    8.666558] RTW: 0x0B0: FF FF FF FF  FF FF FF FF  7F 2D 1B 00  FF FF FF FF
+[    8.666593] RTW: 0x0C0: FF 01 00 41  00 00 00 00  00 FF 22 FF  FF FF FF FF
+[    8.666629] RTW: 0x0D0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    8.666665] RTW: 0x0E0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    8.666701] RTW: 0x0F0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    8.666737] RTW: 0x100: DA 0B 11 C8  E3 46 02 68  B9 D3 F1 5A  43 09 03 52
+[    8.666773] RTW: 0x110: 65 61 6C 74  65 6B 0E 03  38 30 32 2E  31 31 61 63
+[    8.666809] RTW: 0x120: 20 4E 49 43  08 03 31 32  33 34 35 36  FF FF FF FF
+[    8.666845] RTW: 0x130: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    8.666881] RTW: 0x140: FF FF FF FF  00 00 31 0F  FF FF FF FF  FF FF FF FF
+[    8.666917] RTW: 0x150: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    8.666953] RTW: 0x160: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    8.666988] RTW: 0x170: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    8.667024] RTW: 0x180: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    8.667060] RTW: 0x190: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    8.667095] RTW: 0x1A0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    8.667132] RTW: 0x1B0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    8.667168] RTW: 0x1C0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    8.667204] RTW: 0x1D0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    8.667240] RTW: 0x1E0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    8.667276] RTW: 0x1F0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    8.667322] RTW: EEPROM ID = 0x8129
+[    8.667330] RTW: EEPROM Version = 0
+[    8.667342] RTW: EEPROM Regulatory=0x01
+[    8.667348] RTW: EEPROM Board Type=0x00
+[    8.667527] RTW: EEPROM Disable BT-coex, ant_num=1
+[    8.667542] RTW: hal_com_config_channel_plan chplan:0x7F
+[    8.667549] RTW: EEPROM crystal_cap=0x2d
+[    8.667556] RTW: EEPROM ThermalMeter=0x1b
+[    8.667562] RTW: EEPROM Customer ID=0x00
+[    8.667568] RTW: EEPROM SupportRemoteWakeup=0
+[    8.667574] RTW: EEPROM rfe_type=0x22
+[    8.667585] RTW: EEPROM PAType_2G is 0x0, ExternalPA_2G = 0
+[    8.667592] RTW: EEPROM PAType_5G is 0x0, external_pa_5g = 0
+[    8.667598] RTW: EEPROM LNAType_2G is 0x0, ExternalLNA_2G = 0
+[    8.667604] RTW: EEPROM LNAType_5G is 0x0, external_lna_5g = 0
+[    8.667610] RTW: EEPROM TypeGPA = 0x0
+[    8.667615] RTW: EEPROM TypeAPA = 0x0
+[    8.667620] RTW: EEPROM TypeGLNA = 0x0
+[    8.667625] RTW: EEPROM TypeALNA = 0x0
+[    8.667632] RTW: EEPROM tx_bbswing_24G =0x00
+[    8.667637] RTW: EEPROM tx_bbswing_5G =0x00
+[    8.667643] RTW: EEPROM USB Switch=0
+[    8.667651] RTW: EEPROM VID = 0x0BDA, PID = 0xC811
+[    8.675405] RTW: [HALMAC][ALWAYS]shall R reg twice!!
+[    8.676035] RTW: SetHwReg: bMacPwrCtrlOn=1
+[    8.736204] RTW: _rtw_hal_set_fw_rsvd_page((null)) Get [ NOR ] RsvdPageNUm  ==>
+[    8.736228] RTW: LocPsPoll: 4
+[    8.736246] RTW: WARN Invalid rate 0x0 in MRateToHwRate
+[    8.736255] RTW: LocNullData: 5
+[    8.736268] RTW: WARN Invalid rate 0x0 in MRateToHwRate
+[    8.736276] RTW: LocQosNull: 6
+[    8.736286] RTW: WARN Invalid rate 0x0 in MRateToHwRate
+[    8.736295] RTW: _rtw_hal_set_fw_rsvd_page((null)) Get [ NOR ] RsvdPageNUm <==
+[    8.736312] RTW: _cfg_drv_rsvd_pg_num: request 7 pages => halmac 8 pages success
+[    8.742992] RTW: WARN [HALMAC][WARN]the H2C ver. does not match halmac
+[    8.743915] RTW: rtl8821c_fw_dl Download Firmware from array success
+[    8.743930] RTW: NIC FW Version:24 SubVersion:8
+[    8.744934] RTW: SetHwReg: bMacPwrCtrlOn=0
+[    8.749425] RTW: hal_read_mac_hidden_rpt OK! (1, 0ms), fwdl:1, id:0x19
+[    8.749435] RTW: EEPROM Disable BT-coex by hal_spec
+[    8.749504] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[    8.749671] RTW: is_valid_id_status: HALMAC_FEATURE_DUMP_PHYSICAL_EFUSE
+[    8.749701] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[    8.749869] RTW: is_valid_id_status: HALMAC_FEATURE_DUMP_PHYSICAL_EFUSE
+[    8.749891] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[    8.750043] RTW: is_valid_id_status: HALMAC_FEATURE_DUMP_PHYSICAL_EFUSE
+[    8.750063] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[    8.750262] RTW: is_valid_id_status: HALMAC_FEATURE_DUMP_PHYSICAL_EFUSE
+[    8.750285] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[    8.750426] RTW: is_valid_id_status: HALMAC_FEATURE_DUMP_PHYSICAL_EFUSE
+[    8.750446] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[    8.750608] RTW: is_valid_id_status: HALMAC_FEATURE_DUMP_PHYSICAL_EFUSE
+[    8.750629] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[    8.750801] RTW: is_valid_id_status: HALMAC_FEATURE_DUMP_PHYSICAL_EFUSE
+[    8.750823] RTW: rtw_hal_read_chip_info in 220 ms
+[    8.750866] RTW: [RF_PATH] ver_id.RF_TYPE:RF_1T1R
+[    8.750877] RTW: [RF_PATH] HALSPEC's rf_reg_trx_path_bmp:0x11, rf_reg_path_avail_num:1, max_tx_cnt:1
+[    8.750885] RTW: [RF_PATH] PG's trx_path_bmp:0x00, max_tx_cnt:0
+[    8.750893] RTW: [RF_PATH] Registry's trx_path_bmp:0x00, tx_path_lmt:0, rx_path_lmt:0
+[    8.750899] RTW: [RF_PATH] HALDATA's trx_path_bmp:0x11, max_tx_cnt:1
+[    8.750906] RTW: [RF_PATH] HALDATA's rf_type:RF_1T1R, NumTotalRFPath:1
+[    8.750916] RTW: rtw_hal_rfpath_init trx_path_bmp:0x11(RF_1T1R), NumTotalRFPath:1, max_tx_cnt:1
+[    8.750926] RTW: [TRX_Nss] HALSPEC - tx_nss:1, rx_nss:1
+[    8.750932] RTW: [TRX_Nss] Registry - tx_nss:0, rx_nss:0
+[    8.750938] RTW: [TRX_Nss] HALDATA - tx_nss:1, rx_nss:1
+[    8.750944] RTW: rtw_hal_trxnss_init tx_nss:1, rx_nss:1
+[    8.750955] RTW: txpath=0x1, rxpath=0x1
+[    8.750962] RTW: txpath_1ss:0x1, num:1
+[    8.751256] RTW: init_mlme_default_rate_set: support CCK
+[    8.751264] RTW: init_mlme_default_rate_set: support OFDM
+[    8.752011] RTW: NR_RECVBUFF: 8, recvbuf_nr: 8
+[    8.752023] RTW: MAX_RECVBUF_SZ: 32768
+[    8.752048] RTW: NR_PREALLOC_RECV_SKB: 8
+[    8.752447] RTW: rtw_alloc_macid((null)) if1, mac_addr:ff:ff:ff:ff:ff:ff macid:1
+[    8.752469] RTW: rtw_init_pwrctrl_priv: IPS_mode=0, LPS_mode=0, LPS_level=0
+[    8.752660] RTW: IQK FW offload:enable
+[    8.752688] RTW: init_phydm_cominfo: Fv=1 Cv=2
+[    8.752829] RTW: [A] 2G G00 CCK-1T base:45 from IC_DEF
+[    8.752840] RTW: [A] 2G G01 CCK-1T base:45 from IC_DEF
+[    8.752848] RTW: [A] 2G G02 CCK-1T base:45 from IC_DEF
+[    8.752855] RTW: [A] 2G G03 CCK-1T base:45 from IC_DEF
+[    8.752862] RTW: [A] 2G G04 CCK-1T base:45 from IC_DEF
+[    8.752869] RTW: [A] 2G G05 CCK-1T base:45 from IC_DEF
+[    8.752878] RTW: [A] 2G G00 BW40-1S base:45 from IC_DEF
+[    8.752885] RTW: [A] 2G G01 BW40-1S base:45 from IC_DEF
+[    8.752892] RTW: [A] 2G G02 BW40-1S base:45 from IC_DEF
+[    8.752899] RTW: [A] 2G G03 BW40-1S base:45 from IC_DEF
+[    8.752907] RTW: [A] 2G G04 BW40-1S base:45 from IC_DEF
+[    8.752975] RTW: rtw_regsty_chk_target_tx_power_valid return _FALSE for band:0, path:0, rs:0, t:-1
+[    8.753073] RTW: phy_ConfigBBWithPgParaFile(): No File PHY_REG_PG.txt, Load from HWImg Array!
+[    8.753109] RTW: default power by rate loaded
+[    8.753125] RTW: phy_txpwr_by_rate_chk_for_path_dup duplicate 2.4G [A] to [B]
+[    8.753172] RTW: init_channel_set_from_rtk_priv((null)) ChannelPlan ID:0x7f, ch num:37
+[    8.756008] RTW: rtw_macaddr_cfg mac addr:68:b9:d3:f1:5a:43
+[    8.756021] RTW: bDriverStopped:True, bSurpriseRemoved:False, bup:0, hw_init_completed:0
+[    8.756090] RTW: loadparam, Select P2P interface: iface_id:1
+[    8.756563] RTW: init_mlme_default_rate_set: support CCK
+[    8.756572] RTW: init_mlme_default_rate_set: support OFDM
+[    8.757330] RTW: NR_RECVBUFF: 8, recvbuf_nr: 8
+[    8.757342] RTW: MAX_RECVBUF_SZ: 32768
+[    8.757357] RTW: NR_PREALLOC_RECV_SKB: 8
+[    8.757765] RTW: rtw_alloc_macid((null)) if2, mac_addr:ff:ff:ff:ff:ff:ff macid:1
+[    8.757804] RTW: rtw_drv_add_vir_if if2 mac_addr : 6a:b9:d3:f1:5a:43
+[    8.757842] RTW: rtw_cfg80211_init_wiphy_band:rf_type=0
+[    8.757920] RTW: rtw_build_vht_cap_ie, line821, Set MAX MPDU len = 11454 bytes
+[    8.757926] RTW: [VHT] Declare supporting SGI 80MHz
+[    8.757983] RTW: rtw_wiphy_alloc(phy0)
+[    8.758056] RTW: rtw_wdev_alloc(padapter=c650427e)
+[    8.758101] RTW: rtw_wdev_alloc(padapter=57b019c5)
+[    8.758112] RTW: rtw_wiphy_register(phy0)
+[    8.758120] RTW: Register RTW cfg80211 vendor cmd(0x67) interface
+[    8.758402] RTW: rtw_reg_notifier(phy0)
+[    8.758415] RTW: initiator:CORE, wiphy_idx:-1, type:USER
+[    8.758421] RTW: alpha2:00
+[    8.758426] RTW: dfs_region:UNSET
+[    8.758431] RTW: intersect:0
+[    8.758436] RTW: processed:0
+[    8.758441] RTW: country_ie_env:ANY
+[    8.758740] RTW: rtw_ndev_init(wlan0) if1 mac_addr=68:b9:d3:f1:5a:43
+[    8.759275] RTW: rtw_ndev_notifier_call(wlan0) state:16
+[    8.760595] RTW: cfg80211_rtw_get_txpower(wlan0) total max: -10000 mbm
+[    8.760641] RTW: rtw_ndev_notifier_call(wlan0) state:5
+[    8.760781] RTW: rtw_ndev_init(wlan1) if2 mac_addr=6a:b9:d3:f1:5a:43
+[    8.761330] RTW: rtw_ndev_notifier_call(wlan1) state:16
+[    8.762475] RTW: cfg80211_rtw_get_txpower(wlan1) total max: -10000 mbm
+[    8.762501] RTW: rtw_ndev_notifier_call(wlan1) state:5
+[    8.762764] usbcore: registered new interface driver rtl8821cu
+[    8.768640] RTW: module init ret=0
+[   17.254641] ==============[ark_sddac_startup]:[ 93]
+[   17.302384] ==============[ark_sddac_startup]:[ 93]
+[   17.330685] ==============[ark_sddac_startup]:[ 93]
+[   17.342421] ==============[ark_sddac_startup]:[ 93]
+[   17.380537] ==============[ark_sddac_startup]:[ 93]
+[   17.388409] ==============[ark_sddac_startup]:[ 93]
+[   17.440210] ==============[ark_sddac_startup]:[ 93]
+[   17.456156] ==============[ark_sddac_startup]:[ 93]
+[   17.477915] ==============[ark_sddac_startup]:[ 93]
+[   17.490968] ==============[ark_sddac_startup]:[ 93]
+[   17.500787] ==============[ark_sddac_startup]:[ 93]
+[   17.508624] ==============[ark_sddac_startup]:[ 93]
+[   17.857499] ark_display: ARKDISP_GET_SCREEN_INFO -> screen_id=0 800x480 120x72mm
+[   19.313890] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   19.339742] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   19.359709] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   19.380944] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   19.409656] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   19.419622] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=1 hue=0 saturation=128 brightness=128 contrast=128
+[   19.429371] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=1 hue=0 saturation=128 brightness=128 contrast=128
+[   19.456592] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=2 hue=0 saturation=128 brightness=128 contrast=128
+[   19.476636] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=2 hue=0 saturation=128 brightness=128 contrast=128
+[   19.497980] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=3 hue=0 saturation=128 brightness=128 contrast=128
+[   19.520550] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=3 hue=0 saturation=128 brightness=128 contrast=128
+[   19.539673] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=4 hue=0 saturation=128 brightness=128 contrast=128
+[   19.549439] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=4 hue=0 saturation=128 brightness=128 contrast=128
+[   19.574882] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   19.586986] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   19.601570] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=1 hue=0 saturation=128 brightness=128 contrast=128
+[   19.627930] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=1 hue=0 saturation=128 brightness=128 contrast=128
+[   19.648632] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=2 hue=0 saturation=128 brightness=128 contrast=128
+[   19.686545] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=2 hue=0 saturation=128 brightness=128 contrast=128
+[   19.718845] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=3 hue=0 saturation=128 brightness=128 contrast=128
+[   19.737601] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=3 hue=0 saturation=128 brightness=128 contrast=128
+[   19.759782] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=4 hue=0 saturation=128 brightness=128 contrast=128
+[   19.779693] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=4 hue=0 saturation=128 brightness=128 contrast=128
+[   19.800054] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   19.819701] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=0 hue=0 saturation=64 brightness=128 contrast=128
+[   19.836265] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=1 hue=0 saturation=128 brightness=128 contrast=128
+[   19.856628] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=1 hue=0 saturation=64 brightness=128 contrast=128
+[   19.879136] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=2 hue=0 saturation=128 brightness=128 contrast=128
+[   19.891402] musb-hdrc musb-hdrc.1: switch host (no negotiation): gpio_id=1 gpio_pwr=117
+[   20.002764] usb 2-1: USB disconnect, device number 2
+[   20.008055] RTW: +rtw_dev_remove
+[   20.008079] RTW: rtw_wdev_unregister(wdev=0230e7df)
+[   20.008423] RTW: cfg80211_rtw_get_txpower(wlan0) total max: -10000 mbm
+[   20.008476] RTW: rtw_ndev_notifier_call(wlan0) state:6
+[   20.008538] RTW: rtw_ndev_uninit(wlan0) if1
+[   20.009673] RTW: rtw_wdev_unregister(wdev=a4e284d9)
+[   20.009979] RTW: cfg80211_rtw_get_txpower(wlan1) total max: -10000 mbm
+[   20.010028] RTW: rtw_ndev_notifier_call(wlan1) state:6
+[   20.010084] RTW: rtw_ndev_uninit(wlan1) if2
+[   20.011138] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=2 hue=0 saturation=64 brightness=128 contrast=128
+[   20.020917] RTW: rtw_wiphy_unregister(phy0)
+[   20.020924] RTW: Vendor: Unregister RTW cfg80211 vendor interface
+[   20.021133] RTW: rtw_drv_stop_vir_if(wlan1) enter
+[   20.021148] RTW: rtw_usb_primary_adapter_deinit(wlan0)
+[   20.021154] RTW: rtw_dev_unload: bup==_FALSE
+[   20.021171] RTW: +r871xu_dev_remove, hw_init_completed=0
+[   20.021780] RTW: WARN free_recv_skb_queue not empty, 8
+[   20.021852] RTW: rtw_wdev_free(wdev=0230e7df)
+[   20.021910] RTW: rtw_drv_free_vir_if(wlan1)
+[   20.022513] RTW: WARN free_recv_skb_queue not empty, 8
+[   20.022557] RTW: rtw_wdev_free(wdev=a4e284d9)
+[   20.022605] RTW: rtw_wiphy_free(phy0)
+[   20.022619] RTW: -r871xu_dev_remove, done
+[   20.023730] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=3 hue=0 saturation=128 brightness=128 contrast=128
+[   20.033614] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=3 hue=0 saturation=64 brightness=128 contrast=128
+[   20.043426] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=4 hue=0 saturation=128 brightness=128 contrast=128
+[   20.053248] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=4 hue=0 saturation=64 brightness=128 contrast=128
+[   20.369516] usb 2-1: new high-speed USB device number 3 using musb-hdrc
+[   20.519498] usb 2-1: hub_port_init:4710 speed=3
+[   20.551027] RTW:
+               usb_endpoint_descriptor(0):
+[   20.551039] RTW: bLength=7
+[   20.551046] RTW: bDescriptorType=5
+[   20.551052] RTW: bEndpointAddress=84
+[   20.551057] RTW: wMaxPacketSize=512
+[   20.551062] RTW: bInterval=0
+[   20.551068] RTW: RT_usb_endpoint_is_bulk_in = 4
+[   20.551073] RTW:
+               usb_endpoint_descriptor(1):
+[   20.551078] RTW: bLength=7
+[   20.551083] RTW: bDescriptorType=5
+[   20.551088] RTW: bEndpointAddress=5
+[   20.551092] RTW: wMaxPacketSize=512
+[   20.551097] RTW: bInterval=0
+[   20.551102] RTW: RT_usb_endpoint_is_bulk_out = 5
+[   20.551107] RTW:
+               usb_endpoint_descriptor(2):
+[   20.551112] RTW: bLength=7
+[   20.551117] RTW: bDescriptorType=5
+[   20.551121] RTW: bEndpointAddress=6
+[   20.551126] RTW: wMaxPacketSize=512
+[   20.551130] RTW: bInterval=0
+[   20.551135] RTW: RT_usb_endpoint_is_bulk_out = 6
+[   20.551140] RTW:
+               usb_endpoint_descriptor(3):
+[   20.551145] RTW: bLength=7
+[   20.551149] RTW: bDescriptorType=5
+[   20.551154] RTW: bEndpointAddress=87
+[   20.551159] RTW: wMaxPacketSize=64
+[   20.551164] RTW: bInterval=3
+[   20.551170] RTW: RT_usb_endpoint_is_int_in = 7, Interval = 3
+[   20.551175] RTW:
+               usb_endpoint_descriptor(4):
+[   20.551180] RTW: bLength=7
+[   20.551184] RTW: bDescriptorType=5
+[   20.551189] RTW: bEndpointAddress=8
+[   20.551193] RTW: wMaxPacketSize=512
+[   20.551198] RTW: bInterval=0
+[   20.551203] RTW: RT_usb_endpoint_is_bulk_out = 8
+[   20.551210] RTW: nr_endpoint=5, in_num=2, out_num=3
+
+[   20.551216] RTW: USB_SPEED_HIGH
+[   20.551223] RTW: CHIP TYPE: RTL8821C
+[   20.551321] RTW: loadparam, Select P2P interface: iface_id:1
+[   20.551447] RTW: [HALMAC]55772M
+               HALMAC_MAJOR_VER = 1
+               HALMAC_PROTOTYPE_VER = 6
+               HALMAC_MINOR_VER = 6
+               HALMAC_PATCH_VER = 22
+[   20.552193] RTW: Chip Version Info: CHIP_8821C_U3_1T1R_RomVer(2)
+[   20.552215] RTW: config_chip_out_EP OutEpQueueSel(0x07), OutEpNumber(3)
+[   20.552346] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[   20.680200] RTW: is_valid_id_status: HALMAC_FEATURE_DUMP_LOGICAL_EFUSE
+[   20.680272] RTW: HW EFUSE
+[   20.680284] RTW: 0x000: 29 81 00 BC  09 00 21 00  6E 04 A4 10  10 00 30 0B
+[   20.680328] RTW: 0x010: FF FF FF FF  FF FF FF FF  FF FF FF 02  FF FF FF FF
+[   20.680366] RTW: 0x020: FF FF 25 25  25 25 25 23  23 22 22 23  23 23 24 25
+[   20.680401] RTW: 0x030: 22 FF FF FF  FF FF 10 FF  FF FF 28 28  28 28 28 28
+[   20.680438] RTW: 0x040: 2C 2C 2C 2C  2C 02 FF FF  FF FF FF FF  FF FF FF FF
+[   20.680473] RTW: 0x050: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[   20.680510] RTW: 0x060: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[   20.680545] RTW: 0x070: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[   20.680581] RTW: 0x080: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[   20.680617] RTW: 0x090: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[   20.680653] RTW: 0x0A0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[   20.680689] RTW: 0x0B0: FF FF FF FF  FF FF FF FF  7F 2D 1B 00  FF FF FF FF
+[   20.680724] RTW: 0x0C0: FF 01 00 41  00 00 00 00  00 FF 22 FF  FF FF FF FF
+[   20.680760] RTW: 0x0D0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[   20.680796] RTW: 0x0E0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[   20.680832] RTW: 0x0F0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[   20.680868] RTW: 0x100: DA 0B 11 C8  E3 46 02 68  B9 D3 F1 5A  43 09 03 52
+[   20.680904] RTW: 0x110: 65 61 6C 74  65 6B 0E 03  38 30 32 2E  31 31 61 63
+[   20.680940] RTW: 0x120: 20 4E 49 43  08 03 31 32  33 34 35 36  FF FF FF FF
+[   20.680976] RTW: 0x130: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[   20.681013] RTW: 0x140: FF FF FF FF  00 00 31 0F  FF FF FF FF  FF FF FF FF
+[   20.681049] RTW: 0x150: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[   20.681085] RTW: 0x160: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[   20.681121] RTW: 0x170: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[   20.681158] RTW: 0x180: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[   20.681193] RTW: 0x190: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[   20.681229] RTW: 0x1A0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[   20.681266] RTW: 0x1B0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[   20.681302] RTW: 0x1C0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[   20.681337] RTW: 0x1D0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[   20.681374] RTW: 0x1E0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[   20.681410] RTW: 0x1F0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[   20.681454] RTW: EEPROM ID = 0x8129
+[   20.681461] RTW: EEPROM Version = 0
+[   20.681474] RTW: EEPROM Regulatory=0x01
+[   20.681480] RTW: EEPROM Board Type=0x00
+[   20.681640] RTW: EEPROM Disable BT-coex, ant_num=1
+[   20.681655] RTW: hal_com_config_channel_plan chplan:0x7F
+[   20.681663] RTW: EEPROM crystal_cap=0x2d
+[   20.681671] RTW: EEPROM ThermalMeter=0x1b
+[   20.681677] RTW: EEPROM Customer ID=0x00
+[   20.681683] RTW: EEPROM SupportRemoteWakeup=0
+[   20.681690] RTW: EEPROM rfe_type=0x22
+[   20.681699] RTW: EEPROM PAType_2G is 0x0, ExternalPA_2G = 0
+[   20.681705] RTW: EEPROM PAType_5G is 0x0, external_pa_5g = 0
+[   20.681712] RTW: EEPROM LNAType_2G is 0x0, ExternalLNA_2G = 0
+[   20.681718] RTW: EEPROM LNAType_5G is 0x0, external_lna_5g = 0
+[   20.681723] RTW: EEPROM TypeGPA = 0x0
+[   20.681729] RTW: EEPROM TypeAPA = 0x0
+[   20.681735] RTW: EEPROM TypeGLNA = 0x0
+[   20.681740] RTW: EEPROM TypeALNA = 0x0
+[   20.681747] RTW: EEPROM tx_bbswing_24G =0x00
+[   20.681752] RTW: EEPROM tx_bbswing_5G =0x00
+[   20.681758] RTW: EEPROM USB Switch=0
+[   20.681765] RTW: EEPROM VID = 0x0BDA, PID = 0xC811
+[   20.688895] RTW: [HALMAC][ALWAYS]shall R reg twice!!
+[   20.689530] RTW: SetHwReg: bMacPwrCtrlOn=1
+[   20.746552] RTW: _rtw_hal_set_fw_rsvd_page((null)) Get [ NOR ] RsvdPageNUm  ==>
+[   20.746576] RTW: LocPsPoll: 4
+[   20.746594] RTW: WARN Invalid rate 0x0 in MRateToHwRate
+[   20.746605] RTW: LocNullData: 5
+[   20.746618] RTW: WARN Invalid rate 0x0 in MRateToHwRate
+[   20.746625] RTW: LocQosNull: 6
+[   20.746635] RTW: WARN Invalid rate 0x0 in MRateToHwRate
+[   20.746644] RTW: _rtw_hal_set_fw_rsvd_page((null)) Get [ NOR ] RsvdPageNUm <==
+LinuxController::pingTimerExpired, do not receive ping in 5s, exit now!.
+Writer thread exiting.
+[   20.746659] RTW: _cfg_drv_rsvd_pg_num: request 7 pages => halmac 8 pages success
+[   20.752901] RTW: WARN [HALMAC][WARN]the H2C ver. does not match halmac
+[   20.753761] RTW: rtl8821c_fw_dl Download Firmware from array success
+[   20.753776] RTW: NIC FW Version:24 SubVersion:8
+[   20.754566] RTW: SetHwReg: bMacPwrCtrlOn=0
+[   20.758832] RTW: hal_read_mac_hidden_rpt OK! (1, 0ms), fwdl:1, id:0x19
+[   20.758841] RTW: EEPROM Disable BT-coex by hal_spec
+[   20.758865] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[   20.759020] RTW: is_valid_id_status: HALMAC_FEATURE_DUMP_PHYSICAL_EFUSE
+[   20.759049] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[   20.759198] RTW: is_valid_id_status: HALMAC_FEATURE_DUMP_PHYSICAL_EFUSE
+[   20.759218] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[   20.759330] RTW: is_valid_id_status: HALMAC_FEATURE_DUMP_PHYSICAL_EFUSE
+[   20.759348] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[   20.759510] RTW: is_valid_id_status: HALMAC_FEATURE_DUMP_PHYSICAL_EFUSE
+[   20.759530] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[   20.759684] RTW: is_valid_id_status: HALMAC_FEATURE_DUMP_PHYSICAL_EFUSE
+[   20.759703] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[   20.759814] RTW: is_valid_id_status: HALMAC_FEATURE_DUMP_PHYSICAL_EFUSE
+[   20.759833] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[   20.759942] RTW: is_valid_id_status: HALMAC_FEATURE_DUMP_PHYSICAL_EFUSE
+[   20.759965] RTW: rtw_hal_read_chip_info in 210 ms
+[   20.760007] RTW: [RF_PATH] ver_id.RF_TYPE:RF_1T1R
+[   20.760019] RTW: [RF_PATH] HALSPEC's rf_reg_trx_path_bmp:0x11, rf_reg_path_avail_num:1, max_tx_cnt:1
+[   20.760027] RTW: [RF_PATH] PG's trx_path_bmp:0x00, max_tx_cnt:0
+[   20.760035] RTW: [RF_PATH] Registry's trx_path_bmp:0x00, tx_path_lmt:0, rx_path_lmt:0
+[   20.760042] RTW: [RF_PATH] HALDATA's trx_path_bmp:0x11, max_tx_cnt:1
+[   20.760049] RTW: [RF_PATH] HALDATA's rf_type:RF_1T1R, NumTotalRFPath:1
+[   20.760059] RTW: rtw_hal_rfpath_init trx_path_bmp:0x11(RF_1T1R), NumTotalRFPath:1, max_tx_cnt:1
+[   20.760068] RTW: [TRX_Nss] HALSPEC - tx_nss:1, rx_nss:1
+[   20.760074] RTW: [TRX_Nss] Registry - tx_nss:0, rx_nss:0
+[   20.760080] RTW: [TRX_Nss] HALDATA - tx_nss:1, rx_nss:1
+[   20.760087] RTW: rtw_hal_trxnss_init tx_nss:1, rx_nss:1
+[   20.760098] RTW: txpath=0x1, rxpath=0x1
+[   20.760105] RTW: txpath_1ss:0x1, num:1
+[   20.760405] RTW: init_mlme_default_rate_set: support CCK
+[   20.760414] RTW: init_mlme_default_rate_set: support OFDM
+[   20.761081] RTW: NR_RECVBUFF: 8, recvbuf_nr: 8
+[   20.761093] RTW: MAX_RECVBUF_SZ: 32768
+[   20.761116] RTW: NR_PREALLOC_RECV_SKB: 8
+[   20.761483] RTW: rtw_alloc_macid((null)) if1, mac_addr:ff:ff:ff:ff:ff:ff macid:1
+[   20.761504] RTW: rtw_init_pwrctrl_priv: IPS_mode=0, LPS_mode=0, LPS_level=0
+[   20.761691] RTW: IQK FW offload:enable
+[   20.761716] RTW: init_phydm_cominfo: Fv=1 Cv=2
+[   20.761800] RTW: [A] 2G G00 CCK-1T base:45 from IC_DEF
+[   20.761812] RTW: [A] 2G G01 CCK-1T base:45 from IC_DEF
+[   20.761820] RTW: [A] 2G G02 CCK-1T base:45 from IC_DEF
+[   20.761828] RTW: [A] 2G G03 CCK-1T base:45 from IC_DEF
+[   20.761835] RTW: [A] 2G G04 CCK-1T base:45 from IC_DEF
+[   20.761841] RTW: [A] 2G G05 CCK-1T base:45 from IC_DEF
+[   20.761849] RTW: [A] 2G G00 BW40-1S base:45 from IC_DEF
+[   20.761856] RTW: [A] 2G G01 BW40-1S base:45 from IC_DEF
+[   20.761864] RTW: [A] 2G G02 BW40-1S base:45 from IC_DEF
+[   20.761871] RTW: [A] 2G G03 BW40-1S base:45 from IC_DEF
+[   20.761878] RTW: [A] 2G G04 BW40-1S base:45 from IC_DEF
+[   20.761946] RTW: rtw_regsty_chk_target_tx_power_valid return _FALSE for band:0, path:0, rs:0, t:-1
+[   20.762046] RTW: phy_ConfigBBWithPgParaFile(): No File PHY_REG_PG.txt, Load from HWImg Array!
+[   20.762083] RTW: default power by rate loaded
+[   20.762101] RTW: phy_txpwr_by_rate_chk_for_path_dup duplicate 2.4G [A] to [B]
+[   20.762149] RTW: init_channel_set_from_rtk_priv((null)) ChannelPlan ID:0x7f, ch num:37
+[   20.764983] RTW: rtw_macaddr_cfg mac addr:68:b9:d3:f1:5a:43
+[   20.764997] RTW: bDriverStopped:True, bSurpriseRemoved:False, bup:0, hw_init_completed:0
+[   20.765063] RTW: loadparam, Select P2P interface: iface_id:1
+[   20.765531] RTW: init_mlme_default_rate_set: support CCK
+[   20.765540] RTW: init_mlme_default_rate_set: support OFDM
+[   20.766248] RTW: NR_RECVBUFF: 8, recvbuf_nr: 8
+[   20.766258] RTW: MAX_RECVBUF_SZ: 32768
+[   20.766274] RTW: NR_PREALLOC_RECV_SKB: 8
+[   20.766664] RTW: rtw_alloc_macid((null)) if2, mac_addr:ff:ff:ff:ff:ff:ff macid:1
+[   20.766704] RTW: rtw_drv_add_vir_if if2 mac_addr : 6a:b9:d3:f1:5a:43
+[   20.766740] RTW: rtw_cfg80211_init_wiphy_band:rf_type=0
+[   20.766813] RTW: rtw_build_vht_cap_ie, line821, Set MAX MPDU len = 11454 bytes
+[   20.766820] RTW: [VHT] Declare supporting SGI 80MHz
+[   20.766879] RTW: rtw_wiphy_alloc(phy1)
+[   20.766952] RTW: rtw_wdev_alloc(padapter=988a14e5)
+[   20.766998] RTW: rtw_wdev_alloc(padapter=fc93c96f)
+[   20.767011] RTW: rtw_wiphy_register(phy1)
+[   20.767019] RTW: Register RTW cfg80211 vendor cmd(0x67) interface
+[   20.767324] RTW: rtw_reg_notifier(phy1)
+[   20.767338] RTW: initiator:CORE, wiphy_idx:-1, type:USER
+[   20.767344] RTW: alpha2:00
+[   20.767348] RTW: dfs_region:UNSET
+[   20.767354] RTW: intersect:0
+[   20.767359] RTW: processed:0
+[   20.767364] RTW: country_ie_env:ANY
+[   20.767667] RTW: rtw_ndev_init(wlan0) if1 mac_addr=68:b9:d3:f1:5a:43
+[   20.768180] RTW: rtw_ndev_notifier_call(wlan0) state:16
+[   20.769408] RTW: cfg80211_rtw_get_txpower(wlan0) total max: -10000 mbm
+[   20.769437] RTW: rtw_ndev_notifier_call(wlan0) state:5
+[   20.769696] RTW: rtw_ndev_init(wlan1) if2 mac_addr=6a:b9:d3:f1:5a:43
+[   20.770256] RTW: rtw_ndev_notifier_call(wlan1) state:16
+[   20.771440] RTW: cfg80211_rtw_get_txpower(wlan1) total max: -10000 mbm
+[   20.771470] RTW: rtw_ndev_notifier_call(wlan1) state:5
+[   22.327523] ark-hsuart e4f00000.serial: no TX DMA channel available (no platform data) -- using PIO/interrupt-driven TX instead, this is expected on this board
+readBytes:548
+ArkUtils::send_local_message:288 sock = 4 n =1
+
+[   22.342894] ark-hsuart e4f00000.serial: no RX DMA channel available (no platform data) -- using PIO/interrupt-driven RX instead, this is expected on this board
+[   22.358557] ark_hsuart_set_termios 1652 hsuart0 baud:9600 c_cflag:0xcbd
+[   22.359445] ark_hsuart_set_termios 1652 hsuart0 baud:38400 c_cflag:0xcbf
+[   22.363702] ark-uart e8000000.uart: no TX DMA channel available (no platform data) -- using PIO/interrupt-driven TX instead, this is expected on this board
+[   22.379004] ark-uart e8000000.uart: no RX DMA channel available (no platform data) -- using PIO/interrupt-driven RX instead, this is expected on this board
+[   22.751696] [DIAG_ITU656_OPEN] container_of-dvr_dev=c816d440 g_dvr_dev=c816d440 (MATCH) start=c038dd78 (want c038dd78) stop=c038be00 (want c038be00)
+[   22.779815] [DIAG_ITU656_IOCTL] cmd=0xc0046ee0 g_dvr_dev=c816d440 filp->private_data=c816d440 (MATCH) start=c038dd78 (want c038dd78, OK) stop=c038be00 (want c038be00, OK)
+[   22.806699] [DIAG_ITU656_IOCTL] cmd=0xc0046ee2 g_dvr_dev=c816d440 filp->private_data=c816d440 (MATCH) start=c038dd78 (want c038dd78, OK) stop=c038be00 (want c038be00, OK)
+[   22.837115] [DIAG_ITU656_IOCTL] cmd=0xc0046ee4 g_dvr_dev=c816d440 filp->private_data=c816d440 (MATCH) start=c038dd78 (want c038dd78, OK) stop=c038be00 (want c038be00, OK)
+[   22.870533] [DIAG_ITU656_IOCTL] cmd=0xc0046ee1 g_dvr_dev=c816d440 filp->private_data=c816d440 (MATCH) start=c038dd78 (want c038dd78, OK) stop=c038be00 (want c038be00, OK)
+[   22.900731] [DIAG_ITU656_IOCTL] cmd=0xc0046ee3 g_dvr_dev=c816d440 filp->private_data=c816d440 (MATCH) start=c038dd78 (want c038dd78, OK) stop=c038be00 (want c038be00, OK)
+[   22.916315] [DIAG_ITU656_IOCTL] cmd=0xc0046ee5 g_dvr_dev=c816d440 filp->private_data=c816d440 (MATCH) start=c038dd78 (want c038dd78, OK) stop=c038be00 (want c038be00, OK)
+[   23.314966] RTW: rtw_ndev_notifier_call(wlan0) state:13
+[   23.315020] RTW: _netdev_open(wlan0) , bup=0
+[   23.340297] RTW: [HALMAC][ALWAYS]shall R reg twice!!
+[   23.340978] RTW: SetHwReg: bMacPwrCtrlOn=1
+[   23.460246] RTW: _rtw_hal_set_fw_rsvd_page(wlan0) Get [ NOR ] RsvdPageNUm  ==>
+[   23.460270] RTW: LocPsPoll: 4
+[   23.460289] RTW: LocNullData: 5
+[   23.460303] RTW: LocQosNull: 6
+[   23.460316] RTW: _rtw_hal_set_fw_rsvd_page(wlan0) Get [ NOR ] RsvdPageNUm <==
+[   23.460333] RTW: _cfg_drv_rsvd_pg_num: request 7 pages => halmac 8 pages success
+[   23.475074] RTW: rtw_start_drv_threads(wlan0) enter
+[   23.475089] RTW: rtw_start_drv_threads(wlan0) start RTW_CMD_THREAD
+[   23.476590] RTW: WARN [HALMAC][WARN]the H2C ver. does not match halmac
+[   24.576841] RTW: FW Version:24 SubVersion:8
+[   24.576853] RTW: rtl8821c_hal_init_main: successful
+[   24.588089] start_addr=(0x8000), end_addr=(0x10000), buffer_size=(0x8000), smp_number_max=(4096)
+[   24.588849] RTW: rtw_hal_set_default_port_id_cmd (wlan0) port_id :0, mad_id:0
+[   24.590534] RTW: rtl8821cu_hal_init in 1280ms
+[   24.590556] RTW: rtw_hal_set_macaddr_port wlan0- hw port(0) mac_addr =68:b9:d3:f1:5a:43
+[   24.590733] RTW: rtw_hal_set_macaddr_port wlan1- hw port(1) mac_addr =6a:b9:d3:f1:5a:43
+[   24.591416] RTW: [HW_VAR_ENABLE_RX_BAR] 0x6A2=0x500
+[   24.603297] RTW: wlan0: hw_port(0) will set mode to 2
+[   24.603321] RTW: rtw_hal_set_macaddr_port wlan0- hw port(0) mac_addr =68:b9:d3:f1:5a:43
+[   24.603544] RTW: wlan0: hw_port(0) set mode=2
+[   24.604209] RTW: rtw_hal_init: padapter->registrypriv.set_rrsr_value=0xffffffff
+[   24.604225] RTW: MAC Address = 68:b9:d3:f1:5a:43
+[   24.604251] RTW: _netdev_vir_if_open(wlan1) , bup=0
+[   24.604259] RTW: rtw_start_drv_threads(wlan1) enter
+[   24.604269] RTW: _netdev_vir_if_open(wlan1) (bup=1) exit
+[   24.604275] RTW: -871x_drv - drv_open, bup=1
+[   24.604597] IPv6: ADDRCONF(NETDEV_UP): wlan0: link is not ready
+[   24.610611] RTW: cfg80211_rtw_set_power_mgmt(wlan0) enabled:0, timeout:-1
+[   24.610624] RTW: rtw_ndev_notifier_call(wlan0) state:1
+[   25.658730] ark-hsuart e4800000.serial: no TX DMA channel available (no platform data) -- using PIO/interrupt-driven TX instead, this is expected on this board
+[   25.673119] ark-hsuart e4800000.serial: no RX DMA channel available (no platform data) -- using PIO/interrupt-driven RX instead, this is expected on this board
+[   25.687451] ark_hsuart_set_termios 1652 hsuart1 baud:9600 c_cflag:0xcbd
+[   25.689911] ark_hsuart_set_termios 1652 hsuart1 baud:9600 c_cflag:0xdbd
+[   25.690226] ark_hsuart_set_termios 1652 hsuart1 baud:115200 c_cflag:0x1db2
+[   25.801632] ark_hsuart_set_termios 1652 hsuart1 baud:1500000 c_cflag:0x1dba
+[   27.714650] RTW: cfg80211_rtw_get_txpower(wlan0) total max: -10000 mbm
+[   27.716356] RTW: cfg80211_rtw_get_txpower(wlan0) total max: -10000 mbm
+[   27.716587] RTW: cfg80211_rtw_change_iface(wlan0) type=3, hw_port:0
+[   27.716597] RTW: cfg80211_rtw_change_iface(wlan0) call netdev_open
+[   27.716607] RTW: _netdev_open(wlan0) , bup=1
+[   27.716627] RTW: -871x_drv - drv_open, bup=1
+[   27.716646] RTW: cfg80211_rtw_change_iface(wlan0) old_iftype=2, new_iftype=3
+[   27.716706] RTW: rtw_release_macid(wlan0) if1, mac_addr:ff:ff:ff:ff:ff:ff macid:1
+[   27.716753] RTW: rtw_alloc_macid(wlan0) if1, mac_addr:ff:ff:ff:ff:ff:ff macid:0
+[   27.716848] RTW: wlan0: hw_port(0) will set mode to 3
+[   27.716870] RTW: rtw_hal_set_macaddr_port wlan0- hw port(0) mac_addr =68:b9:d3:f1:5a:43
+[   27.717146] RTW: wlan0: hw_port(0) set mode=3
+[   27.732198] RTW: cfg80211_rtw_change_iface(wlan0) ret:0
+[   27.733144] RTW: cfg80211_rtw_get_txpower(wlan0) total max: -10000 mbm
+[   27.737095] RTW: +cfg80211_rtw_del_station(wlan0) mac=  (null)
+[   27.737107] RTW: flush all sta, and cam_entry
+[   27.737127] RTW: rtw_sta_flush(wlan0)
+[   27.737149] RTW: issue_deauth reason(3) to ff:ff:ff:ff:ff:ff
+wifi transport exit because receiving quit cmd
+
+Encounted fatal error on read.
+Reader thread shutting down on request.
+Reader thread exiting.
+[   27.738822] RTW: +cfg80211_rtw_del_station(wlan0) mac=ff:ff:ff:ff:ff:ff
+[   27.738844] RTW: free sta macaddr =ff:ff:ff:ff:ff:ff
+Reader thread joined
+Writer thread joined
+Teardown display called.
+[   27.739203] RTW: cfg80211_rtw_del_key(wlan0) key_index=0, addr=  (null)
+[   27.739581] RTW: cfg80211_rtw_del_key(wlan0) key_index=1, addr=  (null)
+[   27.739828] RTW: cfg80211_rtw_del_key(wlan0) key_index=2, addr=  (null)
+[   27.740072] RTW: cfg80211_rtw_del_key(wlan0) key_index=3, addr=  (null)
+[   27.937584] RTW: cfg80211_rtw_start_ap(wlan0) hidden_ssid:0, auth_type:0
+[   27.937623] RTW: rtw_add_beacon beacon_head_len=63, beacon_tail_len=110
+[   27.937650] RTW: rtw_check_beacon_data, len=149
+[   27.937703] RTW: [HT] HAL Support LDPC = 0x02
+[   27.937712] RTW: [HT] HAL Support STBC = 0x01
+[   27.937842] RTW: update_hw_ht_param
+[   27.938555] RTW: rtw_hal_set_bssid wlan0- hw port -0 BSSID: 68:b9:d3:f1:5a:43
+[   27.938785] RTW: hw_var_set_sec_cfg: [HW_VAR_SEC_CFG] 0x680=0x30c
+[   27.939093] RTW: rtw_ap_chbw_decision ifbmp:0x01 excl_ifbmp:0x00 req:0,-1,-1
+[   27.939110] RTW: rtw_ap_chbw_decision others ld_sta_num:0, lg_sta_num:0, ap_num:0, mesh_num:0
+[   27.939129] RTW: rtw_ap_chbw_decision ifbmp:0x01 tmp union:36,0,0
+[   27.939168] RTW: rtw_ap_chbw_decision(wlan0) 36,0,0 => 36,0,0
+[   27.939184] RTW: rtw_ap_chbw_decision union:36,0,0
+[   27.939210] RTW: HW_VAR_BASIC_RATE: 0x150->0x15f->0x15f
+[   27.939935] RTW: rtw_get_sta_tx_nss: 1 SS
+[   27.939947] RTW: rtw_get_sta_rx_nss: 1 ss
+[   27.939956] RTW: STA - MAC_ID:0, Tx - 1 SS, Rx - 1 SS
+[   27.939962] RTW: STA - MAC_ID:0, SM_PS 3
+[   27.940407] RTW: wlan0 BMC Init Tx rate - OFDM_24M
+[   27.940441] RTW: rtw_dfs_rd_en_decision(wlan0) needed:0, mlme_act:11, excl_ifbmp:0x00
+[   27.940454] RTW: rtw_dfs_rd_en_decision(wlan0) ld_sta_num:0, lg_sta_num:0, ap_num:1, mesh_num:0, 36,0,0
+[   27.972915] RTW: is_valid_id_status: HALMAC_FEATURE_IQK
+[   27.974007] RTW: hw_var_set_correct_tsf(wlan0)
+[   27.974018] RTW: [TSF_SYNC] p0 sync port = N/A
+[   27.974027] RTW: [TSF_SYNC] timer offset = 0
+[   27.974870] RTW: rtw_cfg80211_indicate_connect(wlan0)
+[   27.974880] RTW: assoc success
+[   27.975332] RTW: cfg80211_rtw_change_bss(wlan0)
+[   27.975347] RTW: ap_isolate=0
+[   27.976235] RTW: cfg80211_rtw_add_key(wlan0) cipher=0xfac04
+[   27.976250] RTW: cfg80211_rtw_add_key(wlan0) key_len=16, key_index=1
+[   27.976258] RTW: cfg80211_rtw_add_key(wlan0) pairwise=0
+[   27.976273] RTW: rtw_cfg80211_ap_set_encryption
+[   27.976286] RTW: rtw_cfg80211_ap_set_encryption(wlan0) set CCMP TX GTK idx:1, len:16
+[   27.976300] RTW: rtw_ap_set_group_key
+[   27.976519] RTW: cfg80211_rtw_set_default_key(wlan0) key_index=1, unicast=0, multicast=1
+[   27.978102] RTW: rtw_ndev_notifier_call(wlan0) state:4
+[   27.979345] RTW: set group key camid:0, addr:68:b9:d3:f1:5a:43, kid:1, type:AES
+[   27.981945] RTW: rtw_ac_parm_cmd_hdl(wlan0) AC_VO = 0x002f3219
+[   27.982050] RTW: rtw_ac_parm_cmd_hdl(wlan0) AC_VI = 0x005e4319
+[   27.982158] RTW: rtw_ac_parm_cmd_hdl(wlan0) AC_BE = 0x0000642b
+[   27.982292] RTW: rtw_ac_parm_cmd_hdl(wlan0) AC_BK = 0x0000a44f
+[   29.653515] RTW: +cfg80211_rtw_del_station(wlan0) mac=ff:ff:ff:ff:ff:ff
+[   29.653538] RTW: free sta macaddr =ff:ff:ff:ff:ff:ff
+[   29.654392] RTW: cfg80211_rtw_stop_ap(wlan0)
+[   29.654461] RTW: stop_ap_hdl(wlan0)
+[   29.654472] RTW: stop_ap_mode -wlan0
+[   29.654504] RTW: rtw_dfs_rd_en_decision(wlan0) needed:0, mlme_act:12, excl_ifbmp:0x00
+VideoDecoder::free_input_buffer:323
+[   29.654517] RTW: rtw_dfs_rd_en_decision(wlan0) ld_sta_num:0, lg_sta_num:0, ap_num:0, mesh_num:0, 36,0,0
+[   29.654536] RTW: rtw_sta_flush(wlan0)
+[   29.654551] RTW: issue_deauth reason(3) to ff:ff:ff:ff:ff:ff
+[   29.654828] RTW: rtw_sta_mstatus_disc_rpt(wlan0) - mac_id=0
+[   29.655073] RTW: wlan0 drop macid=0, done reg_0x1450=0x00000001
+[   29.655577] RTW: wlan0 wakeup macid=0, ori reg_0x4d4=0x00000000
+[   29.655621] RTW: rtw_release_macid(wlan0) if1, mac_addr:ff:ff:ff:ff:ff:ff macid:0
+[   29.655816] RTW: hw_var_set_correct_tsf(wlan0)
+[   29.655824] RTW: [TSF_SYNC] p0 sync port = N/A
+[   29.655831] RTW: [TSF_SYNC] timer offset = 0
+[   29.656405] RTW: rtw_hal_set_bssid wlan0- hw port -0 BSSID: 00:00:00:00:00:00
+[   29.656586] RTW: rtw_dfs_rd_en_decision(wlan0) needed:0, mlme_act:12, excl_ifbmp:0x00
+[   29.656600] RTW: rtw_dfs_rd_en_decision(wlan0) ld_sta_num:0, lg_sta_num:0, ap_num:0, mesh_num:0, 36,0,0
+[   29.656626] RTW: clear wep or group key for addr:68:b9:d3:f1:5a:43, camid:0
+[   29.658279] RTW: rtw_set_rts_bw connect_to_8812=0,enable=1
+[   29.658458] RTW: rtw_free_assoc_resources-wlan0 tgt_network MacAddress=68:b9:d3:f1:5a:43 ssid=carplay_fc9f
+[   29.658468] RTW: ERROR Free disconnecting network of scanned_queue failed due to pwlan == NULL
+
+[   29.658512] RTW: rtw_alloc_macid(wlan0) if1, mac_addr:ff:ff:ff:ff:ff:ff macid:1
+[   29.658532] RTW: wlan0: hw_port(0) will set mode to 2
+[   29.658549] RTW: rtw_hal_set_macaddr_port wlan0- hw port(0) mac_addr =68:b9:d3:f1:5a:43
+[   29.658776] RTW: wlan0: hw_port(0) set mode=2
+[   29.660461] RTW: cfg80211_rtw_change_iface(wlan0) type=2, hw_port:0
+[   29.660473] RTW: cfg80211_rtw_change_iface(wlan0) call netdev_open
+[   29.660485] RTW: _netdev_open(wlan0) , bup=1
+[   29.660502] RTW: -871x_drv - drv_open, bup=1
+[   29.660520] RTW: cfg80211_rtw_change_iface(wlan0) old_iftype=3, new_iftype=2
+[   29.660640] RTW: wlan0: hw_port(0) will set mode to 2
+[   29.660660] RTW: rtw_hal_set_macaddr_port wlan0- hw port(0) mac_addr =68:b9:d3:f1:5a:43
+[   29.660919] RTW: wlan0: hw_port(0) set mode=2
+[   29.661703] RTW: cfg80211_rtw_change_iface(wlan0) ret:0
+[   29.816219] RTW: rtw_ndev_notifier_call(wlan0) state:9
+[   29.816275] RTW: netdev_close(wlan0) , bup=1
+[   29.816286] RTW: (2)871x_drv - drv_close, bup=1, hw_init_completed=_TRUE
+[   29.816300] RTW: -871x_drv - drv_close, bup=1
+[   29.816538] RTW: rtw_ndev_notifier_call(wlan0) state:2
+[   30.958743] RTW: rtw_ndev_notifier_call(wlan0) state:13
+[   30.958767] RTW: _netdev_open(wlan0) , bup=1
+[   30.958800] RTW: -871x_drv - drv_open, bup=1
+[   30.959127] RTW: cfg80211_rtw_set_power_mgmt(wlan0) enabled:0, timeout:-1
+[   30.959140] RTW: rtw_ndev_notifier_call(wlan0) state:1
+[   30.997920] RTW: cfg80211_rtw_get_txpower(wlan0) total max: -10000 mbm
+[   30.999682] RTW: cfg80211_rtw_get_txpower(wlan0) total max: -10000 mbm
+[   30.999922] RTW: cfg80211_rtw_change_iface(wlan0) type=3, hw_port:0
+[   30.999933] RTW: cfg80211_rtw_change_iface(wlan0) call netdev_open
+[   30.999944] RTW: _netdev_open(wlan0) , bup=1
+[   30.999965] RTW: -871x_drv - drv_open, bup=1
+[   30.999984] RTW: cfg80211_rtw_change_iface(wlan0) old_iftype=2, new_iftype=3
+[   31.000044] RTW: rtw_release_macid(wlan0) if1, mac_addr:ff:ff:ff:ff:ff:ff macid:1
+[   31.000090] RTW: rtw_alloc_macid(wlan0) if1, mac_addr:ff:ff:ff:ff:ff:ff macid:0
+[   31.000178] RTW: wlan0: hw_port(0) will set mode to 3
+[   31.000200] RTW: rtw_hal_set_macaddr_port wlan0- hw port(0) mac_addr =68:b9:d3:f1:5a:43
+[   31.000527] RTW: wlan0: hw_port(0) set mode=3
+[   31.001301] RTW: cfg80211_rtw_change_iface(wlan0) ret:0
+[   31.002204] RTW: cfg80211_rtw_get_txpower(wlan0) total max: -10000 mbm
+[   31.005628] RTW: +cfg80211_rtw_del_station(wlan0) mac=  (null)
+[   31.005642] RTW: flush all sta, and cam_entry
+VideoDecoder::video_uninit:393
+Called ArkMediaPlayer teardown successfully
+[   31.005660] RTW: rtw_sta_flush(wlan0)
+[   31.005681] RTW: issue_deauth reason(3) to ff:ff:ff:ff:ff:ff
+[   31.006338] RTW: +cfg80211_rtw_del_station(wlan0) mac=ff:ff:ff:ff:ff:ff
+[   31.006360] RTW: free sta macaddr =ff:ff:ff:ff:ff:ff
+[   31.006696] RTW: cfg80211_rtw_del_key(wlan0) key_index=0, addr=  (null)
+[   31.006938] RTW: cfg80211_rtw_del_key(wlan0) key_index=1, addr=  (null)
+[   31.007153] RTW: cfg80211_rtw_del_key(wlan0) key_index=2, addr=  (null)
+Video sink shut down.
+~LinuxVideoSink 72
+~VideoSinkCallbacks 47
+Input source shut down.
+Called Microphone teardown successfully
+Audio source shut down.
+[   31.007356] RTW: cfg80211_rtw_del_key(wlan0) key_index=3, addr=  (null)
+[   31.189269] RTW: cfg80211_rtw_start_ap(wlan0) hidden_ssid:0, auth_type:0
+[   31.189308] RTW: rtw_add_beacon beacon_head_len=63, beacon_tail_len=110
+[   31.189337] RTW: rtw_check_beacon_data, len=149
+[   31.189389] RTW: [HT] HAL Support LDPC = 0x02
+[   31.189397] RTW: [HT] HAL Support STBC = 0x01
+[   31.189616] RTW: update_hw_ht_param
+[   31.190178] RTW: rtw_hal_set_bssid wlan0- hw port -0 BSSID: 68:b9:d3:f1:5a:43
+[   31.190328] RTW: hw_var_set_sec_cfg: [HW_VAR_SEC_CFG] 0x680=0x30c
+[   31.190655] RTW: rtw_ap_chbw_decision ifbmp:0x01 excl_ifbmp:0x00 req:0,-1,-1
+[   31.190671] RTW: rtw_ap_chbw_decision others ld_sta_num:0, lg_sta_num:0, ap_num:0, mesh_num:0
+[   31.190691] RTW: rtw_ap_chbw_decision ifbmp:0x01 tmp union:36,0,0
+[   31.190731] RTW: rtw_ap_chbw_decision(wlan0) 36,0,0 => 36,0,0
+[   31.190781] RTW: rtw_ap_chbw_decision union:36,0,0
+[   31.190807] RTW: HW_VAR_BASIC_RATE: 0x150->0x150->0x150
+[   31.191426] RTW: rtw_get_sta_tx_nss: 1 SS
+[   31.191436] RTW: rtw_get_sta_rx_nss: 1 ss
+[   31.191445] RTW: STA - MAC_ID:0, Tx - 1 SS, Rx - 1 SS
+[   31.191452] RTW: STA - MAC_ID:0, SM_PS 3
+[   31.191837] RTW: wlan0 BMC Init Tx rate - OFDM_24M
+[   31.191871] RTW: rtw_dfs_rd_en_decision(wlan0) needed:0, mlme_act:11, excl_ifbmp:0x00
+[   31.191884] RTW: rtw_dfs_rd_en_decision(wlan0) ld_sta_num:0, lg_sta_num:0, ap_num:1, mesh_num:0, 36,0,0
+[   31.212923] RTW: is_valid_id_status: HALMAC_FEATURE_IQK
+[   31.214096] RTW: hw_var_set_correct_tsf(wlan0)
+[   31.214105] RTW: [TSF_SYNC] p0 sync port = N/A
+[   31.214116] RTW: [TSF_SYNC] timer offset = 0
+[   31.215082] RTW: rtw_cfg80211_indicate_connect(wlan0)
+[   31.215092] RTW: assoc success
+[   31.215528] RTW: cfg80211_rtw_change_bss(wlan0)
+[   31.215542] RTW: ap_isolate=0
+[   31.216429] RTW: cfg80211_rtw_add_key(wlan0) cipher=0xfac04
+[   31.216445] RTW: cfg80211_rtw_add_key(wlan0) key_len=16, key_index=1
+[   31.216452] RTW: cfg80211_rtw_add_key(wlan0) pairwise=0
+[   31.216467] RTW: rtw_cfg80211_ap_set_encryption
+[   31.216481] RTW: rtw_cfg80211_ap_set_encryption(wlan0) set CCMP TX GTK idx:1, len:16
+[   31.216494] RTW: rtw_ap_set_group_key
+[   31.216716] RTW: cfg80211_rtw_set_default_key(wlan0) key_index=1, unicast=0, multicast=1
+[   31.216909] RTW: set group key camid:0, addr:68:b9:d3:f1:5a:43, kid:1, type:AES
+[   31.220493] RTW: rtw_ac_parm_cmd_hdl(wlan0) AC_VO = 0x002f3219
+[   31.220602] RTW: rtw_ac_parm_cmd_hdl(wlan0) AC_VI = 0x005e4319
+[   31.220708] RTW: rtw_ac_parm_cmd_hdl(wlan0) AC_BE = 0x0000642b
+[   31.220815] RTW: rtw_ac_parm_cmd_hdl(wlan0) AC_BK = 0x0000a44f
+[   45.477102] ark_display: ARKDISP_GET_SCREEN_INFO -> screen_id=0 800x480 120x72mm
+[   58.865161] RTW: +OnAuth
+[   58.865183] RTW: auth alg=0, seq=1
+[   58.865205] RTW: going to alloc stainfo for sa=f6:d6:cb:da:c0:aa
+[   58.865249] RTW: rtw_alloc_macid(wlan0) if1, mac_addr:f6:d6:cb:da:c0:aa macid:2
+[   58.865282] RTW: issue_auth
+[   58.868772] RTW: OnAssocReq
+[   58.868837] RTW: OnAssocReq(wlan0) allocate new AID=1
+[   58.868857] RTW: HT: STA f6:d6:cb:da:c0:aa HT Capabilities Info: 0x006f
+[   58.868871] RTW: bss_cap_update_on_sta_join STA f6:d6:cb:da:c0:aa - no greenfield, num of non-gf stations 1
+[   58.868880] RTW: rtw_ht_operation_update current operation mode=0x0
+[   58.868891] RTW: rtw_ht_operation_update new operation mode=0x4 changes=1
+[   58.868899] RTW: update_bcn_htcap_ie
+[   58.868907] RTW: update_bcn_htinfo_ie current operation mode=0x4
+[   58.868916] RTW: num_sta_40mhz_intolerant(0), 20mhz_width_req(0), intolerant_ch_rpt(0), olbc(0)
+[   58.868958] RTW: associated_stainfo_update: f6:d6:cb:da:c0:aa, updated_type=0x3f
+[   58.868966] RTW: bss_cap_update_on_sta_join, updated=1
+[   58.868973] RTW: update_sta_info_apmode
+[   58.868982] RTW: Enable HT Tx LDPC for STA(1)
+[   58.869003] RTW: ### Set STA_(2) info ###
+[   58.869013] RTW: issue_asocrsp
+[   58.869157] RTW: report_add_sta_event: add STA
+[   58.870235] RTW: rtw_get_sta_tx_nss: 1 SS
+[   58.870248] RTW: rtw_get_sta_rx_nss: 1 ss
+[   58.870258] RTW: STA - MAC_ID:2, Tx - 1 SS, Rx - 1 SS
+[   58.870264] RTW: STA - MAC_ID:2, SM_PS 3
+[   58.870281] RTW: ht_mcs_set=ff 00 00 00, nss=1, bitmap=000000ff
+[   58.870294] RTW: rtw_ap_update_sta_ra_info=> mac_id:2 , tx_ra_bitmap:0x00000000000ffff0, networkType:0x14
+[   58.870645] RTW: ============ STA [f6:d6:cb:da:c0:aa]  ===================
+[   58.870656] RTW: mac_id : 2
+[   58.870663] RTW: wireless_mode : 0x14
+[   58.870668] RTW: mimo_type : 0
+[   58.870673] RTW: static smps : N
+[   58.870680] RTW: bw_mode : 20MHz, ra_bw_mode : 20MHz
+[   58.870685] RTW: rate_id : 10
+[   58.870693] RTW: rssi : -1 (%), rssi_level : 0
+[   58.870698] RTW: is_support_sgi : Y, is_vht_enable : N
+[   58.870704] RTW: disable_ra : N, disable_pt : N
+[   58.870708] RTW: is_noisy : N
+[   58.870713] RTW: txrx_state : 0
+[   58.870720] RTW: curr_tx_rate : CCK_1M (L)
+[   58.870725] RTW: curr_tx_bw : 20MHz
+[   58.870730] RTW: curr_retry_ratio : 0
+[   58.870736] RTW: ra_mask : 0x00000000000ffff0
+
+[   58.870743] RTW: indicate_sta_assoc_event to upper layer - hostapd
+[   58.870760] RTW: rtw_cfg80211_indicate_sta_assoc(wlan0)
+[   58.871189] RTW: rtw_set_rts_bw connect_to_8812=0,enable=1
+[   58.872319] RTW: cfg80211_rtw_change_station(wlan0) mac:f6:d6:cb:da:c0:aa
+[   58.872732] RTW: cfg80211_rtw_del_key(wlan0) key_index=0, addr=f6:d6:cb:da:c0:aa
+[   58.873047] RTW: cfg80211_rtw_del_key(wlan0) key_index=0, addr=f6:d6:cb:da:c0:aa
+[   58.873294] RTW: cfg80211_rtw_change_station(wlan0) mac:f6:d6:cb:da:c0:aa
+[   58.874964] RTW: cfg80211_rtw_add_key(wlan0) cipher=0xfac04
+[   58.874979] RTW: cfg80211_rtw_add_key(wlan0) key_len=16, key_index=1
+[   58.874987] RTW: cfg80211_rtw_add_key(wlan0) pairwise=0
+[   58.875002] RTW: rtw_cfg80211_ap_set_encryption
+[   58.875016] RTW: rtw_cfg80211_ap_set_encryption(wlan0) set CCMP TX GTK idx:1, len:16
+[   58.875031] RTW: rtw_ap_set_group_key
+[   58.875229] RTW: cfg80211_rtw_set_default_key(wlan0) key_index=1, unicast=0, multicast=1
+[   58.875974] RTW: send eapol packet 1/4
+[   58.876690] RTW: set group key camid:0, addr:68:b9:d3:f1:5a:43, kid:1, type:AES
+[   58.883890] RTW: recv eapol packet 2/4
+[   58.884800] RTW: cfg80211_rtw_get_key(wlan0) keyid=1, pairwise=0, addr=  (null) ret 0
+[   58.884813] RTW: cfg80211_rtw_get_key(wlan0) seq:0x0
+[   58.889963] RTW: send eapol packet 3/4
+[   58.892196] RTW: recv eapol packet 4/4
+[   58.892899] RTW: cfg80211_rtw_add_key(wlan0) adding key for f6:d6:cb:da:c0:aa
+[   58.892919] RTW: cfg80211_rtw_add_key(wlan0) cipher=0xfac04
+[   58.892930] RTW: cfg80211_rtw_add_key(wlan0) key_len=16, key_index=0
+[   58.892938] RTW: cfg80211_rtw_add_key(wlan0) pairwise=1
+[   58.892954] RTW: rtw_cfg80211_ap_set_encryption
+[   58.892979] RTW: rtw_cfg80211_ap_set_encryption(wlan0) set CCMP PTK of f6:d6:cb:da:c0:aa idx:0, len:16
+[   58.893110] RTW: set pairwise key camid:2, addr:f6:d6:cb:da:c0:aa, kid:0, type:AES
+[   58.895448] RTW: cfg80211_rtw_change_station(wlan0) mac:f6:d6:cb:da:c0:aa
+[   58.952807] RTW: OnAction_back
+[   58.952831] RTW: OnAction_back, action=0
+[   58.953701] RTW: issue_addba_rsp_wait_ack(wlan0) ra=f6:d6:cb:da:c0:aa status:=0 tid=7 size:64, acked, 1/3 in 0 ms
+[   59.145025] RTW: OnAction_back
+[   59.145185] RTW: OnAction_back, action=0
+[   59.146029] RTW: issue_addba_rsp_wait_ack(wlan0) ra=f6:d6:cb:da:c0:aa status:=0 tid=0 size:64, acked, 1/3 in 0 ms
+[   60.080346] RTW: Turbo EDCA =0x5ea42b
+[   62.573398] ==============[ark_sddac_startup]:[ 93]
+[   64.240538] RTW: Turbo EDCA =0xa42b
+[   70.480929] RTW: Turbo EDCA =0x5ea42b
+[   71.415251] memalloc-cls memalloc: file open (b69bb2e5)
+[   71.432217] memalloc-cls memalloc: large alloc ok: VA=3655ff0e PA=0x4c00000 SZ=1048576 (requested 1048576)
+[   71.453386] ark_display: ARKDISP_GET_SCREEN_INFO -> screen_id=0 800x480 120x72mm
+[   71.474646] layer=4: hide window.
+
+[   71.481177] layer=4: init display x=0, y=0, w=800, h=480.
+
+[   72.560292] RTW: Turbo EDCA =0xa42b
+[   72.967682] memalloc-cls memalloc: file open (bcd5be21)
+[   73.010416] memalloc-cls memalloc: large alloc ok: VA=1fe08a63 PA=0x4d00000 SZ=675840 (requested 675840)
+[   73.020380] memalloc-cls memalloc: large alloc ok: VA=57be11b7 PA=0x4e00000 SZ=675840 (requested 675840)
+[   73.032146] memalloc-cls memalloc: large alloc ok: VA=87cb59da PA=0x4f00000 SZ=675840 (requested 675840)
+[   73.044852] memalloc-cls memalloc: large alloc ok: VA=c737e27d PA=0x4044000 SZ=4096 (requested 4096)
+[   73.948273] layer=4: show window.
+
+[  112.080862] RTW: Turbo EDCA =0x5ea42b
+[  130.800290] RTW: Turbo EDCA =0xa42b
+[  132.598698] RTW: +cfg80211_rtw_del_station(wlan0) mac=ff:ff:ff:ff:ff:ff
+[  132.598726] RTW: free sta macaddr =ff:ff:ff:ff:ff:ff
+[  132.602946] RTW: cfg80211_rtw_stop_ap(wlan0)
+[  132.603020] RTW: stop_ap_hdl(wlan0)
+[  132.603030] RTW: stop_ap_mode -wlan0
+[  132.603061] RTW: rtw_dfs_rd_en_decision(wlan0) needed:0, mlme_act:12, excl_ifbmp:0x00
+[  132.603076] RTW: rtw_dfs_rd_en_decision(wlan0) ld_sta_num:0, lg_sta_num:0, ap_num:0, mesh_num:0, 36,0,0
+[  132.603094] RTW: rtw_sta_flush(wlan0)
+[  132.603337] RTW: issue_del_ba(wlan0) ra=f6:d6:cb:da:c0:aa reason=37, tid=0, initiator=0
+[  132.603457] RTW: issue_del_ba(wlan0) ra=f6:d6:cb:da:c0:aa reason=37, tid=7, initiator=0
+[  132.603480] RTW: issue_deauth reason(3) to f6:d6:cb:da:c0:aa
+[  132.603573] RTW: rtw_cfg80211_indicate_sta_disassoc(wlan0)
+[  132.603651] RTW: rtw_ht_operation_update current operation mode=0x4
+[  132.603664] RTW: rtw_ht_operation_update new operation mode=0x0 changes=1
+[  132.603671] RTW: update_bcn_htcap_ie
+[  132.603679] RTW: update_bcn_htinfo_ie current operation mode=0x0
+[  132.603689] RTW: num_sta_40mhz_intolerant(0), 20mhz_width_req(0), intolerant_ch_rpt(0), olbc(0)
+Called ArkMediaPlayer teardown successfully
+[  132.603712] RTW: bss_cap_update_on_sta_leave, updated=1
+[  132.603733] RTW: report_del_sta_event(wlan0) f6:d6:cb:da:c0:aa mac_id=2, enqueue:1, res:1
+[  132.603750] RTW: issue_deauth reason(3) to ff:ff:ff:ff:ff:ff
+[  132.603915] RTW: ### Clean STA_(2) info ###
+[  132.603940] RTW: rtw_release_macid(wlan0) if1, mac_addr:f6:d6:cb:da:c0:aa macid:2
+[  132.603954] RTW: rtw_sta_mstatus_disc_rpt(wlan0) - mac_id=0
+[  132.604202] RTW: wlan0 drop macid=0, done reg_0x1450=0x00000001
+[  132.609244] RTW: wlan0 wakeup macid=0, ori reg_0x4d4=0x00000000
+[  132.609302] RTW: rtw_release_macid(wlan0) if1, mac_addr:ff:ff:ff:ff:ff:ff macid:0
+[  132.609619] RTW: hw_var_set_correct_tsf(wlan0)
+[  132.609629] RTW: [TSF_SYNC] p0 sync port = N/A
+[  132.609638] RTW: [TSF_SYNC] timer offset = 0
+[  132.610102] RTW: rtw_hal_set_bssid wlan0- hw port -0 BSSID: 00:00:00:00:00:00
+[  132.610292] RTW: rtw_dfs_rd_en_decision(wlan0) needed:0, mlme_act:12, excl_ifbmp:0x00
+[  132.610307] RTW: rtw_dfs_rd_en_decision(wlan0) ld_sta_num:0, lg_sta_num:0, ap_num:0, mesh_num:0, 36,0,0
+[  132.610335] RTW: clear wep or group key for addr:68:b9:d3:f1:5a:43, camid:0
+[  132.612623] RTW: rtw_set_rts_bw connect_to_8812=0,enable=1
+[  132.612821] RTW: rtw_free_assoc_resources-wlan0 tgt_network MacAddress=68:b9:d3:f1:5a:43 ssid=carplay_fc9f
+[  132.612830] RTW: ERROR Free disconnecting network of scanned_queue failed due to pwlan == NULL
+
+[  132.612880] RTW: rtw_alloc_macid(wlan0) if1, mac_addr:ff:ff:ff:ff:ff:ff macid:1
+[  132.612900] RTW: wlan0: hw_port(0) will set mode to 2
+[  132.612918] RTW: rtw_hal_set_macaddr_port wlan0- hw port(0) mac_addr =68:b9:d3:f1:5a:43
+[  132.613151] RTW: wlan0: hw_port(0) set mode=2
+[  132.614395] RTW: cfg80211_rtw_change_iface(wlan0) type=2, hw_port:0
+[  132.614407] RTW: cfg80211_rtw_change_iface(wlan0) call netdev_open
+[  132.614418] RTW: _netdev_open(wlan0) , bup=1
+[  132.614438] RTW: -871x_drv - drv_open, bup=1
+[  132.614457] RTW: cfg80211_rtw_change_iface(wlan0) old_iftype=3, new_iftype=2
+[  132.615050] RTW: rtw_stadel_event_callback(mac_id=2)=f6:d6:cb:da:c0:aa
+[  132.615062] RTW: rtw_sta_mstatus_disc_rpt(wlan0) - mac_id=2
+[  132.615216] RTW: wlan0 drop macid=2, done reg_0x1450=0x00000005
+[  132.615694] RTW: wlan0 wakeup macid=2, ori reg_0x4d4=0x00000000
+[  132.615714] RTW: rtw_stadel_event_callback(mac_id=2)=f6:d6:cb:da:c0:aa psta == NULL
+[  132.615729] RTW: hw_var_set_correct_tsf(wlan0)
+[  132.615736] RTW: [TSF_SYNC] p0 sync port = N/A
+[  132.615742] RTW: [TSF_SYNC] timer offset = 0
+[  132.616162] RTW: rtw_hal_set_bssid wlan0- hw port -0 BSSID: 00:00:00:00:00:00
+[  132.616459] RTW: rtw_dfs_rd_en_decision(wlan0) needed:0, mlme_act:8, excl_ifbmp:0x00
+[  132.616474] RTW: rtw_dfs_rd_en_decision(wlan0) ld_sta_num:0, lg_sta_num:0, ap_num:0, mesh_num:0, 36,0,0
+[  132.616496] RTW: rtw_set_rts_bw connect_to_8812=0,enable=1
+[  132.620105] RTW: rtw_free_assoc_resources-wlan0 tgt_network MacAddress=68:b9:d3:f1:5a:43 ssid=carplay_fc9f
+[  132.620125] RTW: ERROR Free disconnecting network of scanned_queue failed due to pwlan == NULL
+
+[  132.620167] RTW: rtw_cfg80211_indicate_disconnect(wlan0) ,reason = 3
+[  132.620180] RTW: rtw_cfg80211_indicate_disconnect(wlan0) call cfg80211_disconnected, reason:3
+[  132.620233] RTW: rtw_set_rts_bw connect_to_8812=0,enable=1
+[  132.620745] RTW: clear key for addr:f6:d6:cb:da:c0:aa, camid:2
+[  132.622685] RTW: wlan0: hw_port(0) will set mode to 2
+[  132.622707] RTW: rtw_hal_set_macaddr_port wlan0- hw port(0) mac_addr =68:b9:d3:f1:5a:43
+[  132.622915] RTW: wlan0: hw_port(0) set mode=2
+[  132.623562] RTW: rtw_reset_securitypriv(wlan0) - End to Disconnect
+[  132.623597] RTW: cfg80211_rtw_change_iface(wlan0) ret:0
+[  132.625559] RTW: cfg80211_rtw_del_key(wlan0) key_index=0, addr=  (null)
+[  132.625575] RTW: cfg80211_rtw_del_key(wlan0) key_index=1, addr=  (null)
+[  132.625585] RTW: cfg80211_rtw_del_key(wlan0) key_index=2, addr=  (null)
+[  132.625593] RTW: cfg80211_rtw_del_key(wlan0) key_index=3, addr=  (null)
+[  132.625601] RTW: cfg80211_rtw_del_key(wlan0) key_index=4, addr=  (null)
+Audio sink shut down.
+[  132.625609] RTW: cfg80211_rtw_del_key(wlan0) key_index=5, addr=  (null)
+[  132.625745] RTW: rtw_ndev_notifier_call(wlan0) state:4
+[  138.394952] memalloc-cls memalloc: large free: VA=1fe08a63
+[  138.402140] memalloc-cls memalloc: large free: VA=57be11b7
+[  138.409246] memalloc-cls memalloc: large free: VA=87cb59da
+[  138.416685] memalloc-cls memalloc: large free: VA=c737e27d
+[  138.420626] memalloc-cls memalloc: file release (bcd5be21)
+[  138.424784] memalloc-cls memalloc: large free: VA=3655ff0e
+[  138.428477] memalloc-cls memalloc: file release (b69bb2e5)
+/ # Called ArkMediaPlayer teardown successfully
+Audio sink shut down.
+Called ArkMediaPlayer teardown successfully
+Audio sink shut down.
+Shutting down LinuxPhoneStatus.
+Sink shutdown complete!
+ArkDbus::onLinkStatusChange:175 mStatus=8
+Signal Sent
+BtRfcommController::stop : 422 start
+RfcommTransport::stop : 230
+ArkUtils::send_local_message:288 sock = 9 n =1
+~RfcommConnection:289
+BtRfcommController::stop : 430 end
+run : 294

@@ -1,0 +1,554 @@
+<title>Hardware Block Architecture — ARK1668 Limcet Head Unit</title>
+<style>
+  :root{
+    --bg:#10141a;
+    --bg-alt:#0c0f14;
+    --panel:#1a212b;
+    --panel-2:#1f2733;
+    --hairline:#2c3644;
+    --hairline-soft:#232b37;
+    --text-hi:#eef0ea;
+    --text-lo:#93a0b0;
+    --text-dim:#5d6b7c;
+    --amber:#e0a339;
+    --amber-soft:#e0a33933;
+    --teal:#4fb8b3;
+    --teal-soft:#4fb8b333;
+    --violet:#a58fd6;
+    --violet-soft:#a58fd633;
+    --rose:#d97a7a;
+    --rose-soft:#d97a7a33;
+    --mono: ui-monospace, "JetBrains Mono", "Fira Code", "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: ui-sans-serif, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  :root[data-theme="light"]{
+    --bg:#f4f2ec; --bg-alt:#eae7de; --panel:#ffffff; --panel-2:#f7f5ef;
+    --hairline:#d8d3c4; --hairline-soft:#e3dfd2;
+    --text-hi:#1c1f16; --text-lo:#5c5f52; --text-dim:#8b8d7e;
+    --amber:#a86c12; --amber-soft:#a86c1222;
+    --teal:#1f7d78; --teal-soft:#1f7d7822;
+    --violet:#6b4fae; --violet-soft:#6b4fae22;
+    --rose:#a8433d; --rose-soft:#a8433d22;
+  }
+  @media (prefers-color-scheme: light){
+    :root:not([data-theme="dark"]){
+      --bg:#f4f2ec; --bg-alt:#eae7de; --panel:#ffffff; --panel-2:#f7f5ef;
+      --hairline:#d8d3c4; --hairline-soft:#e3dfd2;
+      --text-hi:#1c1f16; --text-lo:#5c5f52; --text-dim:#8b8d7e;
+      --amber:#a86c12; --amber-soft:#a86c1222;
+      --teal:#1f7d78; --teal-soft:#1f7d7822;
+      --violet:#6b4fae; --violet-soft:#6b4fae22;
+      --rose:#a8433d; --rose-soft:#a8433d22;
+    }
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(1200px 600px at 15% -10%, var(--bg-alt), transparent),
+      var(--bg);
+    color:var(--text-hi);
+    font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;
+    min-width:0;
+  }
+  .wrap{max-width:1580px; margin:0 auto; padding:56px 32px 80px;}
+
+  header{
+    display:flex; flex-direction:column; gap:10px;
+    padding-bottom:34px; margin-bottom:38px;
+    border-bottom:1px solid var(--hairline);
+  }
+  .eyebrow{
+    font-family:var(--mono); font-size:12px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--teal);
+  }
+  h1{
+    font-family:var(--mono); font-weight:600; font-size:clamp(26px,3.4vw,38px);
+    line-height:1.15; margin:0; text-wrap:balance; letter-spacing:-0.01em;
+  }
+  .dek{
+    font-size:15px; line-height:1.6; color:var(--text-lo);
+    max-width:72ch; margin:2px 0 0;
+  }
+  .dek code{font-family:var(--mono); color:var(--text-hi); background:var(--panel-2); padding:1px 5px; border-radius:3px; font-size:.92em;}
+  .meta-row{
+    display:flex; gap:22px; flex-wrap:wrap; margin-top:6px;
+    font-family:var(--mono); font-size:11.5px; color:var(--text-dim);
+  }
+  .meta-row b{color:var(--text-lo); font-weight:500;}
+
+  .diagram{position:relative;}
+  .band{
+    display:grid; grid-template-columns:132px 1fr; gap:20px;
+    padding:22px 0; border-bottom:1px solid var(--hairline-soft);
+    position:relative;
+  }
+  .band:last-of-type{border-bottom:none;}
+  .band-label{
+    font-family:var(--mono); font-size:11px; letter-spacing:.1em;
+    text-transform:uppercase; color:var(--text-dim); padding-top:4px;
+    position:sticky; top:16px; align-self:start;
+  }
+  .band-label .n{display:block; font-size:20px; color:var(--text-lo); letter-spacing:0; margin-bottom:4px;}
+  .row{display:flex; flex-wrap:wrap; gap:10px; align-content:flex-start;}
+
+  .node{
+    font-family:var(--mono); background:var(--panel); border:1px solid var(--hairline);
+    border-radius:7px; padding:9px 12px; min-width:118px; position:relative;
+    transition:border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+  }
+  .node .title{font-size:12.5px; font-weight:600; color:var(--text-hi); white-space:nowrap;}
+  .node .sub{font-size:10.5px; color:var(--text-dim); margin-top:2px; white-space:nowrap;}
+  .node .pid{
+    position:absolute; top:-8px; right:-6px; background:var(--bg);
+    border:1px solid var(--hairline); color:var(--text-dim); font-size:9.5px;
+    padding:1px 5px; border-radius:8px; line-height:1.4;
+  }
+  .node.core{border-color:var(--teal); box-shadow:0 0 0 1px var(--teal-soft) inset;}
+  .node.core .title{color:var(--teal);}
+  .node.kern{border-style:dashed;}
+  .node.dim{opacity:.55;}
+  .node.dim .title{color:var(--text-lo);}
+  .node[data-nid]:hover, .node[data-nid].hl{
+    border-color:var(--teal); transform:translateY(-1px);
+    box-shadow:0 4px 14px -6px #0008; z-index:3;
+  }
+
+  svg.links{position:absolute; inset:0; width:100%; height:100%; pointer-events:none; overflow:visible;}
+  svg.links path{fill:none; stroke-width:1.4; opacity:.55; transition:opacity .15s ease, stroke-width .15s ease;}
+  svg.links path.hl{opacity:1; stroke-width:2.2;}
+  svg.links .e-i2c{stroke:var(--amber);}
+  svg.links .e-power{stroke:var(--text-dim); stroke-dasharray:1,4; stroke-linecap:round;}
+  svg.links .e-serial{stroke:var(--teal);}
+  svg.links .e-analog{stroke:var(--violet);}
+  svg.links .e-bus{stroke:var(--rose); stroke-dasharray:5,3;}
+
+  .legend{
+    margin-top:44px; padding-top:26px; border-top:1px solid var(--hairline);
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:28px;
+  }
+  .legend h3{
+    font-family:var(--mono); font-size:11px; letter-spacing:.1em;
+    text-transform:uppercase; color:var(--text-dim); margin:0 0 10px;
+  }
+  .legend ul{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:7px;}
+  .legend li{display:flex; align-items:center; gap:9px; font-size:12.5px; color:var(--text-lo);}
+  .swatch-line{width:22px; height:0; border-top-width:2px; border-top-style:solid; flex:none;}
+  .swatch-box{width:13px; height:13px; border-radius:3px; border-width:1.5px; border-style:solid; flex:none;}
+
+  .notes{
+    margin-top:40px; padding-top:24px; border-top:1px solid var(--hairline);
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:26px 40px;
+  }
+  .notes h3{font-family:var(--mono); font-size:12px; color:var(--text-hi); margin:0 0 8px; font-weight:600;}
+  .notes p{font-size:13px; line-height:1.65; color:var(--text-lo); margin:0;}
+  .notes code{font-family:var(--mono); color:var(--text-hi); background:var(--panel-2); padding:1px 5px; border-radius:3px; font-size:.9em;}
+
+  ::selection{background:var(--teal-soft); color:var(--text-hi);}
+
+  @media (max-width:880px){
+    .band{grid-template-columns:1fr;}
+    .band-label{position:static; display:flex; align-items:baseline; gap:8px;}
+    .band-label .n{margin-bottom:0;}
+    svg.links{display:none;}
+  }
+</style>
+
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">Prado Firmware Reconstruction · Reference Diagram</div>
+    <h1>Hardware Block Architecture</h1>
+    <p class="dek">
+      The physical modules and buses on the ARK1668/Limcet‑P305 board —
+      cross‑checked against the vendor's own reference schematic
+      (<code>docs/ARK1668 diagram.jpg</code>), a real board photo, and
+      what's actually reachable on this unit's I2C/USB buses. Where reality
+      diverges from the reference design, both are shown — that gap is
+      itself the interesting part of this reverse‑engineering project.
+    </p>
+    <div class="meta-row">
+      <span><b>SoC</b> ARK1668, marked G210209927N</span>
+      <span><b>MCU</b> ARM STM32F105 (McuType=6, "BoxP300")</span>
+      <span><b>Board</b> DC_LIMCET_MB_REV_003</span>
+      <span><b>Source</b> vendor schematic + hardware/board_photo_*.jpg + docs/HARDWARE_AND_SOC_REFERENCE.md §11</span>
+    </div>
+  </header>
+
+  <div class="diagram" id="diagram">
+    <svg class="links" id="links"></svg>
+
+    <!-- ================= BAND 1 : VEHICLE / EXTERNAL WORLD ================= -->
+    <div class="band" id="band-world">
+      <div class="band-label"><span class="n">01</span>Vehicle &amp;<br/>external I/O</div>
+      <div class="row">
+        <div class="node" data-nid="dcdc">
+          <div class="title">B+ / GND → DC‑DC</div>
+          <div class="sub">+5V / +3V3 / +9V rails</div>
+        </div>
+        <div class="node" data-nid="canwire">
+          <div class="title">CAN H / CAN L</div>
+          <div class="sub">vehicle CAN bus wiring</div>
+        </div>
+        <div class="node" data-nid="accillswc">
+          <div class="title">ACC / ILL / SWC</div>
+          <div class="sub">ignition, dimming, steering‑wheel controls</div>
+        </div>
+        <div class="node" data-nid="isosocket">
+          <div class="title">ISO antenna socket</div>
+          <div class="sub">AM/FM radio input</div>
+        </div>
+        <div class="node" data-nid="spkwires">
+          <div class="title">Speaker wires</div>
+          <div class="sub">FR±/FL±/RR±/RL±</div>
+        </div>
+        <div class="node" data-nid="campwr">
+          <div class="title">CAM PWR</div>
+          <div class="sub">reversing‑camera power feed</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= BAND 2 : SUPPORT ICs ================= -->
+    <div class="band" id="band-support">
+      <div class="band-label"><span class="n">02</span>Support ICs<br/>on‑board</div>
+      <div class="row">
+        <div class="node core" data-nid="mcu">
+          <div class="title">MCU — STM32F105</div>
+          <div class="sub">vehicle I/O hub, /dev/ttyHS0</div>
+        </div>
+        <div class="node" data-nid="cantrx">
+          <div class="title">CAN transceiver</div>
+          <div class="sub">Rx/Tx into MCU</div>
+        </div>
+        <div class="node" data-nid="tuner">
+          <div class="title">Tuner</div>
+          <div class="sub">AM/FM, I2C control</div>
+        </div>
+        <div class="node" data-nid="dsp">
+          <div class="title">DSP</div>
+          <div class="sub">audio EQ / channel mix</div>
+        </div>
+        <div class="node dim" data-nid="voiceproc">
+          <div class="title">Voice Processor</div>
+          <div class="sub">reference schematic only — see notes</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= BAND 3 : SoC ================= -->
+    <div class="band" id="band-soc">
+      <div class="band-label"><span class="n">03</span>ARK1668<br/>SoC</div>
+      <div class="row">
+        <div class="node core" data-nid="ark1668" style="min-width:220px; padding:14px 18px;">
+          <div class="title" style="font-size:15px;">ARK1668</div>
+          <div class="sub">ARM · LCDC · GPU · hx170dec · NAND/SDRAM ctrl</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= BAND 4 : ATTACHED PERIPHERAL ICs ================= -->
+    <div class="band" id="band-periph">
+      <div class="band-label"><span class="n">04</span>Attached<br/>peripheral ICs</div>
+      <div class="row">
+        <div class="node kern" data-nid="nand">
+          <div class="title">NAND flash</div>
+          <div class="sub">128 MiB real (256M on reference)</div>
+        </div>
+        <div class="node kern" data-nid="sdram">
+          <div class="title">SDRAM</div>
+          <div class="sub">Nanya NT5CC128M16IP</div>
+        </div>
+        <div class="node" data-nid="rn6752">
+          <div class="title">RN6752</div>
+          <div class="sub">AHD camera decoder, I2C 0x2c — real chip</div>
+        </div>
+        <div class="node dim" data-nid="ark7116">
+          <div class="title">ARK7116</div>
+          <div class="sub">reference decoder — not populated here</div>
+        </div>
+        <div class="node dim" data-nid="appleauth">
+          <div class="title">Apple Authentication</div>
+          <div class="sub">MFi IC — presence unconfirmed, GPIO95 reset line</div>
+        </div>
+        <div class="node" data-nid="usb">
+          <div class="title">USB host / OTG</div>
+          <div class="sub">USB1/USB2 sockets + charge</div>
+        </div>
+        <div class="node dim" data-nid="gt911">
+          <div class="title">GT911 (disabled)</div>
+          <div class="sub">wrong pins for this board — see notes</div>
+        </div>
+        <div class="node" data-nid="wifi">
+          <div class="title">RTL8821CU</div>
+          <div class="sub">WiFi, via USB — not on reference schematic</div>
+        </div>
+        <div class="node" data-nid="bt">
+          <div class="title">BT module</div>
+          <div class="sub">ttyHS1, GPIO91 power, own antenna</div>
+        </div>
+        <div class="node dim" data-nid="cbt">
+          <div class="title">CBT16211A</div>
+          <div class="sub">touch‑bus switch — theorized role, unconfirmed</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= BAND 5 : OUTPUT / ANALOG ENDPOINTS ================= -->
+    <div class="band" id="band-endpoint">
+      <div class="band-label"><span class="n">05</span>Output &amp;<br/>analog endpoints</div>
+      <div class="row">
+        <div class="node" data-nid="tft">
+          <div class="title">TFT panel</div>
+          <div class="sub">LVDS video + I2C touch (ARK1680 resistive)</div>
+        </div>
+        <div class="node" data-nid="poweramp">
+          <div class="title">Power amp</div>
+          <div class="sub">BD37033FV → speaker wires</div>
+        </div>
+        <div class="node" data-nid="mic">
+          <div class="title">MIC</div>
+          <div class="sub">real path: SoC's own ADC, i2s-adc</div>
+        </div>
+        <div class="node" data-nid="camera">
+          <div class="title">Reversing camera</div>
+          <div class="sub">external, CVBS analog video in</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ================= LEGEND ================= -->
+  <div class="legend">
+    <div>
+      <h3>Bus / connection type</h3>
+      <ul>
+        <li><span class="swatch-line" style="border-color:var(--amber)"></span>I2C control bus</li>
+        <li><span class="swatch-line" style="border-color:var(--teal)"></span>UART / CAN serial link</li>
+        <li><span class="swatch-line" style="border-color:var(--violet)"></span>analog audio / RF</li>
+        <li><span class="swatch-line" style="border-color:var(--rose); border-top-style:dashed"></span>parallel/digital bus (NAND, SDRAM, USB, LVDS, BT656)</li>
+        <li><span class="swatch-line" style="border-color:var(--text-dim); border-top-style:dotted"></span>power rail</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Node style</h3>
+      <ul>
+        <li><span class="swatch-box" style="border-color:var(--teal); background:var(--teal-soft)"></span>core IC (SoC, MCU)</li>
+        <li><span class="swatch-box" style="border-color:var(--hairline); background:var(--panel)"></span>real, confirmed component</li>
+        <li><span class="swatch-box" style="border-color:var(--hairline); border-style:dashed; background:var(--panel)"></span>memory / storage IC</li>
+        <li><span class="swatch-box" style="border-color:var(--hairline); background:var(--panel); opacity:.55"></span>reference‑schematic only, or disabled on this unit</li>
+      </ul>
+    </div>
+    <div>
+      <h3>How to read it</h3>
+      <ul style="font-family:var(--sans)">
+        <li style="color:var(--text-dim)">Hover any node to highlight its drawn connections.</li>
+        <li style="color:var(--text-dim)">Bands run outside world → support ICs → SoC → attached ICs → output.</li>
+        <li style="color:var(--text-dim)">Dimmed nodes are the reference design's plan, not this board's reality.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ================= NOTES ================= -->
+  <div class="notes">
+    <div>
+      <h3>This board doesn't match the vendor schematic exactly</h3>
+      <p>
+        The reference design's camera decoder slot is <code>ARK7116</code>;
+        this board actually populates <strong>RN6752</strong> instead
+        (confirmed by a live I2C probe finding <code>dvr_rn6752@2c</code>).
+        ArkMicro's own kernel commit history notes RN6752 alone has a known
+        random power‑on hang bug, and ARK7116(H) support was added
+        specifically to pair alongside it as a fix — the two chips are
+        closely related alternates, not unrelated options.
+      </p>
+    </div>
+    <div>
+      <h3>The Voice Processor doesn't seem to exist here</h3>
+      <p>
+        The schematic wires a dedicated SPI+I2C+I2S "Voice Processor" chip
+        for hands‑free echo cancellation. This board's device tree has
+        <strong>no SPI bus node at all</strong>, and no real boot log ever
+        shows an SPI device probe. The real AEC path is software: the
+        Bluetooth stack's <code>HFP_NREC=3</code> setting, run over the
+        mic's existing path through the SoC's own internal ADC
+        (<code>ahb:sdadc@0 ↔ i2s-adc</code>) — not a separate chip.
+      </p>
+    </div>
+    <div>
+      <h3>Touch bypasses the MCU, contrary to an earlier theory</h3>
+      <p>
+        The schematic routes the touch panel's I2C straight to
+        <code>ARK1668</code>, not through the MCU — independent,
+        schematic‑level confirmation that touch activation on this unit is
+        a Qt/QWS environment‑variable gate reading the controller directly,
+        not an MCU‑handshake‑gated feature as an earlier project theory
+        assumed. <code>CBT16211A</code> (a real, visible chip on the board)
+        was once theorized as a touch‑bus switch tied to that handshake —
+        that theory is still open, not settled.
+      </p>
+    </div>
+    <div>
+      <h3>WiFi isn't on the reference schematic at all</h3>
+      <p>
+        The vendor block diagram only shows a <code>BT</code> block with its
+        own antenna and UART link (<code>ttyHS1</code>, confirmed). WiFi
+        (<code>RTL8821CU</code>, appearing as a USB device in every boot
+        log) isn't drawn anywhere on the original schematic — it's a
+        real, working part of this board that simply wasn't part of the
+        vendor's reference design, presumably added to support the
+        wireless Android Auto/CarPlay handoff.
+      </p>
+    </div>
+    <div>
+      <h3>The MCU is a real, identified part</h3>
+      <p>
+        Visible directly on the board photo: an ARM‑marked
+        <code>STM32F105</code> QFP package sits where the schematic's
+        generic "MCU" block is. This is the same chip
+        <code>libMcuCenter.so</code> talks to over <code>/dev/ttyHS0</code>
+        using the McuType=6 ("BoxP300") protocol documented in
+        <code>MCU_ADAPTERS.md</code> — steering‑wheel controls,
+        ACC/ILL sensing, and backlight control all pass through it.
+      </p>
+    </div>
+    <div>
+      <h3>Companion to the software diagram</h3>
+      <p>
+        Pairs with <code>MSN_APP_ARCHITECTURE.html</code> — that diagram
+        picks up exactly where this one ends: <code>ARK1668</code>'s kernel
+        drivers (framebuffer, hx170dec, ALSA, UART) are the bottom band
+        there, and this board's physical ICs are what those drivers talk
+        to. Same visual language, deliberately: I2C/serial/analog/bus/power
+        here map onto D‑Bus/serial/socket/HAL/in‑process there.
+      </p>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function(){
+  var edges = [
+    // power
+    ['dcdc','ark1668','e-power'],
+    ['dcdc','mcu','e-power'],
+    ['campwr','dcdc','e-power'],
+
+    // world -> support ICs
+    ['canwire','cantrx','e-serial'],
+    ['cantrx','mcu','e-serial'],
+    ['accillswc','mcu','e-power'],
+    ['isosocket','tuner','e-analog'],
+    ['tuner','mcu','e-i2c'],
+    ['spkwires','poweramp','e-analog'],
+    ['camera','rn6752','e-analog'],
+
+    // support -> soc
+    ['mcu','ark1668','e-serial'],
+    ['mcu','dsp','e-i2c'],
+    ['dsp','poweramp','e-analog'],
+    ['ark1668','voiceproc','e-i2c'],
+    ['voiceproc','mic','e-analog'],
+    ['ark1668','mic','e-analog'],
+
+    // soc -> peripheral ICs
+    ['ark1668','nand','e-bus'],
+    ['ark1668','sdram','e-bus'],
+    ['ark1668','rn6752','e-i2c'],
+    ['rn6752','ark1668','e-bus'],
+    ['ark1668','ark7116','e-bus'],
+    ['ark1668','appleauth','e-i2c'],
+    ['ark1668','usb','e-bus'],
+    ['ark1668','gt911','e-i2c'],
+    ['ark1668','wifi','e-bus'],
+    ['ark1668','bt','e-serial'],
+    ['ark1668','cbt','e-i2c'],
+
+    // peripheral -> endpoints
+    ['ark1668','tft','e-bus'],
+    ['ark1668','tft','e-i2c'],
+    ['bt','mic','e-analog']
+  ];
+
+  var svg = document.getElementById('links');
+  var diagram = document.getElementById('diagram');
+  var nodeMap = {};
+  document.querySelectorAll('[data-nid]').forEach(function(el){
+    nodeMap[el.getAttribute('data-nid')] = el;
+  });
+
+  function pt(el){
+    var r = el.getBoundingClientRect();
+    var d = diagram.getBoundingClientRect();
+    return {
+      top:    {x:r.left + r.width/2 - d.left, y:r.top - d.top},
+      bottom: {x:r.left + r.width/2 - d.left, y:r.bottom - d.top},
+      left:   {x:r.left - d.left,  y:r.top + r.height/2 - d.top},
+      right:  {x:r.right - d.left, y:r.top + r.height/2 - d.top}
+    };
+  }
+
+  function draw(){
+    if (window.innerWidth < 880) { svg.innerHTML=''; return; }
+    svg.setAttribute('width', diagram.clientWidth);
+    svg.setAttribute('height', diagram.clientHeight);
+    var frag = document.createDocumentFragment();
+    var ns = 'http://www.w3.org/2000/svg';
+
+    edges.forEach(function(e){
+      var a = nodeMap[e[0]], b = nodeMap[e[1]];
+      if (!a || !b) return;
+      var pa = pt(a), pb = pt(b);
+      var ay = a.closest('.band').offsetTop, by = b.closest('.band').offsetTop;
+      var start, end;
+      if (Math.abs(ay - by) < 2) {
+        var goRight = pa.right.x <= pb.left.x;
+        start = goRight ? pa.right : pa.left;
+        end   = goRight ? pb.left  : pb.right;
+      } else if (ay < by) {
+        start = pa.bottom; end = pb.top;
+      } else {
+        start = pa.top; end = pb.bottom;
+      }
+      var midY = (start.y + end.y) / 2;
+      var d = 'M ' + start.x + ' ' + start.y +
+              ' C ' + start.x + ' ' + midY + ', ' +
+                      end.x   + ' ' + midY + ', ' +
+                      end.x   + ' ' + end.y;
+      var path = document.createElementNS(ns,'path');
+      path.setAttribute('d', d);
+      path.setAttribute('class', e[2]);
+      path.setAttribute('data-a', e[0]);
+      path.setAttribute('data-b', e[1]);
+      frag.appendChild(path);
+    });
+    svg.innerHTML = '';
+    svg.appendChild(frag);
+  }
+
+  function highlight(nid, on){
+    document.querySelectorAll('svg.links path').forEach(function(p){
+      if (p.getAttribute('data-a') === nid || p.getAttribute('data-b') === nid) {
+        p.classList.toggle('hl', on);
+      }
+    });
+    var n = nodeMap[nid];
+    if (n) n.classList.toggle('hl', on);
+  }
+
+  document.querySelectorAll('[data-nid]').forEach(function(el){
+    var nid = el.getAttribute('data-nid');
+    el.addEventListener('mouseenter', function(){ highlight(nid, true); });
+    el.addEventListener('mouseleave', function(){ highlight(nid, false); });
+  });
+
+  window.addEventListener('resize', draw);
+  window.addEventListener('load', draw);
+  requestAnimationFrame(draw);
+  setTimeout(draw, 200);
+})();
+</script>

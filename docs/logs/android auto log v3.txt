@@ -466,10 +466,10 @@ stop wifi manager
 [30.981]I msncoreapp.cpp@3059 enableHostApd hostapd started  true
 [30.982]  hostapd state: 2  pid: 215 ap type: 1
 [30.982]I msncoreapp.cpp@3098 enableHostApd end  1
-[42.014]  Write At atCommand: "AT+HFPCONN=04006EAF29C4"
+[42.014]  Write At atCommand: "AT+HFPCONN=XXXXXXXXXXXX"
 [42.014]  Auto ConnectTime 8000
 [42.821]  Write At atCommand: "AT+A2DPMUTE=1"
-[42.834]  Bluetooth connected: "Pixel 9 Pro" "04006EAF29C4" "04:00:6E:AF:29:C4"
+[42.834]  Bluetooth connected: "Pixel 9 Pro" "XXXXXXXXXXXX" "XX:XX:XX:XX:XX:XX"
 [45.320]  recv bluetooth connect phone type: "unkown"
 [45.320]  onRecvUUID PhoneType: 0
 [45.343]  Load App Plugin 13 "/usr/lib/libMsnCarAuto.so"

@@ -59,6 +59,43 @@ surface immediately.
 | `bin/busybox` + `busybox-applets.manifest` | Rebuilt from real busybox 1.30.1 source (`defconfig`, same cross-toolchain as the rest of this project) instead of the stock 1.25.0 binary, whose original build config is unknown/unrecoverable | 2026-07-27 — needed `ipcs`/`ipcrm` for live debugging (clearing a stuck SysV shared-memory flag, see `docs/DEVICE_TEST_CHECKLIST_2026-07-18.md`'s Android Auto black-screen investigation) and neither exists in the stock build. `defconfig` enables ~390 applets essentially for free, so took the opportunity to ship the full set rather than cherry-picking just these two. **The applet symlinks themselves are NOT stored as real symlinks in this directory** — this repo's working tree sits on a VirtualBox shared folder (`vboxsf`), which cannot create symlinks at all. `busybox-applets.manifest` (plain text, `path target` per line) is materialized into real symlinks on the properly-mounted rootfs image by `build_bootable_sdcard.sh`'s `install_busybox_applets()` step instead. Two applet names are deliberately excluded from the manifest (`dmesg`, `less`) because this project already ships better standalone replacements for both (`tools/dmesg`, real GNU `less`) at the same effective `$PATH` position — a busybox-provided symlink for either would silently shadow the real tool, reintroducing a bug already fixed once (see the `dmesg` alias row below). **Hardware-confirmed working, 2026-07-27** (tested via SD card) — this also replaces `/sbin/init` (busybox's own `init` applet, matching this rootfs's existing `/etc/inittab` format), the highest-stakes single entry in the manifest; boots and runs correctly. |
 | `msnprofile/FactoryConfig.ini` | `Language=4097` (English) instead of the live-captured device's `Language=4098` (简体中文/Chinese Simplified); base `firmware_source` rootfs ships this key commented out entirely | 2026-07-26 — `4097`, not `4096`, is the real English value, confirmed by disassembling `libMsnCommons.so`'s `GetLanguageValueList()`/`GetLanguageNameList()` (the earlier `docs/SETTINGS_REFERENCE.md` guess of `4096` was wrong); set explicitly rather than left commented since an unset key's real fallback behavior isn't confirmed |
 
+## New busybox applets, by category
+
+The rebuilt busybox (`bin/busybox` row above) ships ~390 applets via
+`defconfig`, not just the `ipcs`/`ipcrm` that triggered the rebuild.
+Full raw list: `busybox-applets.manifest`. Highlights, grouped by
+what's actually useful for this project's debugging work:
+
+- **Process / IPC debugging** (the category that started this) —
+  `ipcs`, `ipcrm` · `pstree`, `pmap`, `pgrep`, `pkill`, `fuser`, `lsof`
+  · `nsenter`, `taskset`, `chrt`, `renice`, `ionice` · `top`, `iostat`,
+  `mpstat`, `smemcap`
+- **I2C** — busybox's own `i2cdetect`/`i2cdump`/`i2cget`/`i2cset`, as a
+  cross-check against this project's own custom
+  `i2c-scan`/`i2c-dump`/`i2c-write` tools (`tools/`)
+- **Networking** — real `iproute2`-style commands (`ip`, `ipaddr`,
+  `iplink`, `iproute`, `iprule`, `ipneigh`, `iptunnel`), plus
+  `netstat`, `arp`, `arping`, `brctl`, `ether-wake`, `nc`, `telnet`,
+  `traceroute`/`traceroute6`, `nslookup`, `whois`, `tftp`,
+  `ftpget`/`ftpput`
+- **MTD/flash/filesystem** — `nanddump`, `nandwrite`, the full UBI set
+  (`ubiattach`, `ubidetach`, `ubimkvol`, `ubirmvol`, `ubirsvol`,
+  `ubirename`, `ubiupdatevol`), `mkfs.ext2`/`mkfs.vfat`/`mkfs.minix`,
+  `fsck`, `blkid`, `losetup`, `fstrim`
+- **Hex/binary inspection** — `hexdump`, `hexedit`, `xxd`, `od`,
+  `strings`, `cmp`, `patch`, `diff`
+- **Compression/archive** — `bzip2`/`bunzip2`, `gzip`/`gunzip`,
+  `xz`/`unxz`, `lzma`, `lzop`, `zcat`, `unzip`, `cpio`, more `tar`
+  format support
+- **General quality-of-life** — `watch`, `timeout`, `flock`,
+  `mktemp`, `seq`, `xargs`, `md5sum`/`sha1sum`/`sha256sum`/`sha512sum`,
+  `base64`, `vi`, `more`, `readlink`, `realpath`
+
+Intentionally **not** added: `dmesg` and `less` (see the `bin/busybox`
+row above — this project already ships better standalone replacements
+for both, and a busybox version would have shadowed them via `$PATH`
+order).
+
 ## What's still applied by the build script, not this overlay
 
 A few things stay as small, focused, genuinely-conditional build-time

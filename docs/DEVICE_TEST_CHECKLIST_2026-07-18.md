@@ -5720,3 +5720,13 @@ User flashed the §73 kernel and reconnected. `layer=4: show window.` fired at `
 **Fix**: renamed the struct field `param12` -> `format` (confirmed unused elsewhere in the codebase before renaming), and added `ark1668_lcdc_set_video_format(vlayer, init.format, 0, 0, 0);` to the video-layer branch of the `ARKFB_INIT_DISPLAY`/`ARKFB_INIT_VIDEO_DISPLAY` handler -- `yuv_order`/`rgb_order` don't matter for `Y_UV420` (the function derives its own `y_uv_order` bit internally from the format value). Kernel compiles clean (targeted `.o` build, zero warnings). `zImage.w_dtb` rebuild in progress.
 
 `zImage.w_dtb` rebuilt and staged (`/home/osboxes/Downloads/linux-arkmicro/zImage.w_dtb`). **Not yet hardware-tested.** Touch/interaction slowness is a separate, not-yet-investigated observation -- don't assume it's related to the color fix.
+
+## 75. User confirmed the crosshatch pattern is a real on-screen artifact, not a camera effect -- found and fixed a second video-layer config gap: the scaler was never bypassed
+
+Corrected assumption from §74: the fine repeating weave/crosshatch texture visible over live AA video is real, not a photography moire artifact.
+
+**Root cause**: `ARKFB_INIT_VIDEO_DISPLAY`'s handler programs the video-layer scaler's source size and window size from the exact same `init.win_width`/`init.win_height` value (see the `ark1668_lcdc_set_video_source_size`/`ark1668_lcdc_set_video_win_size`/`ark1668_lcdc_set_video_scal` calls immediately following) -- source and destination are structurally always identical (1:1, no scaling) on this code path, since Android Auto always sends frames at the exact negotiated panel resolution. But the §74 fix's new `ark1668_lcdc_set_video_format()` call left `scal_bypass=0` (scaler active), meaning the video layer's scaler engine -- including its chroma FIR low-pass filter, only relevant/active when the scaler isn't bypassed (`VIDEO2_CTL` bit 8/9, see `ark1668_lcdc_set_video_format()`'s own comments) -- was needlessly engaged for a 1:1 pass-through. A misbehaving or simply unnecessary chroma FIR filtering pass is a very plausible source of exactly this kind of fine repeating spatial artifact.
+
+**Fix**: changed the `scal_bypass` argument from `0` to `1` in that call (`ark1668_lcdc_funcs.c`). Kernel compiles clean. `zImage.w_dtb` rebuilt and staged.
+
+**Not yet hardware-tested.**

@@ -1108,3 +1108,115 @@ SOURCES
 - ARK1680_TS_REVERSE_ENGINEERING.md
 - MCU_ADAPTERS.md             -- McuType=6 (BoxP300), /dev/ttyHS0 protocol
 - wireless_and_init_documentation.md -- Bluetooth (ttyHS1/GPIO91) + WiFi setup
+
+## 11. Vendor reference block diagram (`docs/ARK1668 diagram.jpg`)
+
+A genuine ArkMicro reference-design block diagram (not this specific
+board's actual schematic -- several blocks below are confirmed, via
+this project's own hardware work, to be populated differently on the
+real Prado unit). Read 2026-07-27. Kept here as a cross-reference index
+against everything else in this doc, not a replacement for it.
+
+### Power / vehicle interface (left edge connector)
+
+- `B+`/`GND` -> `DC-DC` converter -> `+5V`/`+3V3`/`+9V` rails
+- `CAM PWR` -- power feed out to an external reversing camera
+- `CAN H`/`CAN L` -> `CAN TRANSCEIVER` -> `Rx/Tx` into `MCU`
+- `ACC`/`ILL`/`SWC` feed straight into `MCU` (ignition-accessory sense,
+  illumination/dimming, steering-wheel-control resistor ladder)
+- `ISO SOCKET` (radio antenna) -> `Tuner` (RF, own antenna) -> `I2C` to
+  `MCU`
+- Speaker wires `FR+/FR-`, `FL+/FL-`, `RR+/RR-`, `RL+/RL-`, and `CVBS`
+  (analog composite video, presumably the reversing-camera feed) run
+  to the `POWER AMP`/`DSP` area
+
+### MCU
+
+Hub for vehicle-side I/O: `CAN transceiver`, `ACC/ILL/SWC` (direct),
+`Tuner` (I2C), `DSP` (I2C), `TFT`+`TOUCH PANEL`'s `BL_CTR` (backlight
+control only -- **not** touch I2C), and a single **UART** to
+`ARK1668`.
+
+That UART matches `/dev/ttyHS0`, the real, already-confirmed MCU
+serial link `MsnCoreApp` opens (see `MCU_ADAPTERS.md`). Notably, the
+diagram shows touch's I2C going **straight to `ARK1668`**, not through
+the MCU -- independent schematic-level confirmation of
+[[project_touch_qws_env_gate]]'s finding (memory) that touch activation
+is a Qt/QWS env-var gate reading the touch controller directly, not an
+MCU-handshake-gated thing as an earlier theory in this project assumed.
+
+### Display
+
+`ARK1668` -> `LVDS` -> `TFT` panel (video); `ARK1668` -> `BL_PWR` ->
+backlight power enable; `ARK1668` -> `I2C` -> `TOUCH PANEL` controller.
+
+### Storage/memory
+
+`NAND FLASH 256M` and `SDRAM 256M/512M`, direct bus interfaces to
+`ARK1668`. This unit's real NAND is smaller than the reference design's
+256M option (`nand: 128 MiB` in every real boot log).
+
+### USB
+
+`USB HOST` -> `USB2 SOCKET`; `USB OTG` -> shared between `USB CHARGE`
+and `USB1 SOCKET`. Matches `usb0`/`usb1` in
+[[project_usb_otg_host_mode_investigation]]/[[project_usb0_carplay_boot_mode_dtb]]
+(memory).
+
+### Apple Authentication
+
+I2C to `ARK1668` -- the MFi/CarPlay licensing chip. Already tracked in
+this doc as `GPIO 95` (`apple_encpy_ic_rst`, section 5/10 above),
+presence on the actual unit still unconfirmed. The schematic confirms
+it's I2C-attached, not just reset-line-attached -- worth an I2C bus
+scan if wired CarPlay's MFi handshake is ever investigated.
+
+### ARK7116 (reversing-camera decoder)
+
+`BT656/601` digital video into `ARK1668`. On this actual board it's
+populated as **RN6752** instead (confirmed via I2C probe,
+`dvr_rn6752@2c`) -- see the chat/memory discussion the same day this
+section was added. ArkMicro's own kernel commit history notes RN6752
+alone has a known random power-on hang bug, and ARK7116(H) support was
+added specifically to pair alongside it as a fix, so the two chips are
+closely related alternates/companions, not unrelated options.
+
+### Audio chain
+
+`DSP` <-> `MCU` (I2C, control) and `DSP` -> `POWER AMP` -> speaker
+wires (`RL/LL`, `RR/LR`, the amplified analog output). Separately,
+`ARK1668` -> `Voice Processor` over **SPI + I2C + I2S**, and
+`Voice Processor` <-> `MIC`/`BT` for hands-free audio (`MIC AUDIO`).
+This "Voice Processor" is likely a distinct chip from the `DSP` block
+-- probably an echo-cancellation/hands-free codec for Bluetooth calls,
+separate from the main head-unit audio path (`Sound_BD37033`, the
+I2S1/I2S2 codec pair `e4000000.i2s-dac`/`e8200000.i2s-adc` -- see
+`AUDIO_SUBSYSTEM_INVESTIGATION.md`).
+
+**Checked 2026-07-27: this Voice Processor chip is NOT in our device
+tree.** `ark1668_limcet_p305.dts` has no SPI bus node at all (not even
+a controller, let alone a device on one), and no real boot log shows
+any SPI device probe -- the only `spi` string anywhere is the generic
+PLL clock name (`spi-clk rate 162000000`), never an actual peripheral.
+Our I2C buses are already fully accounted for by other things
+(`i2c-gpio-0`: RN6752 `0x2c` + disabled/wrong-pinned GT911 touch
+`0x5d`; `i2c-gpio-1`: BD37033 `0x40`) -- none is a plausible match for
+a separate hands-free codec. Either this unit doesn't populate the
+reference design's Voice Processor (relying on the BT chip's own
+built-in echo cancellation instead), or it's populated but nobody's
+gone looking for it on the SPI bus yet. Worth an SPI-controller
+probe/pin audit if hands-free call audio quality ever becomes a target.
+
+### Bluetooth
+
+`BT` block -- UART to `ARK1668` (this is the already-documented
+`ttyHS1`/GPIO91 link, see `wireless_and_init_documentation.md`), own
+antenna, feeds `MIC AUDIO` to the Voice Processor.
+
+### One inferred (not certain) connection
+
+An `R/L` label sits on a line near the `ARK1668`/`MCU`/`DSP` area that
+reads as a direct analog stereo audio pair from `ARK1668` down to `DSP`
+(bypassing MCU) -- plausible (the head unit's own line-out feeding the
+amp) but not confirmed from the image alone; flagged here rather than
+stated as fact.

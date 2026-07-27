@@ -768,10 +768,10 @@ stop wifi manager
 [30.955]  hostapd state: 2  pid: 216
 [31.122]  hostapd state: 0  pid: 0
 [31.122]I msncoreapp.cpp@3098 enableHostApd end  0
-[31.124]  Write At atCommand: "AT+HFPCONN=04006EAF29C4"
+[31.124]  Write At atCommand: "AT+HFPCONN=XXXXXXXXXXXX"
 [31.125]  Auto ConnectTime 8000
 [31.822]  Write At atCommand: "AT+A2DPMUTE=1"
-[31.826]  Bluetooth connected: "Pixel 9 Pro" "04006EAF29C4" "04:00:6E:AF:29:C4"
+[31.826]  Bluetooth connected: "Pixel 9 Pro" "XXXXXXXXXXXX" "XX:XX:XX:XX:XX:XX"
 [32.123]I msncoreapp.cpp@2964 enableHostApd start  enable: 1 timeout: 100
 [32.123]  start  enableWLAN 0 32124
 stop wifi manager
@@ -1566,10 +1566,10 @@ stop wifi manager
 [20.287]  hostapd state: 2  pid: 216
 [20.471]  hostapd state: 0  pid: 0
 [20.471]I msncoreapp.cpp@3098 enableHostApd end  0
-[20.473]  Write At atCommand: "AT+HFPCONN=04006EAF29C4"
+[20.473]  Write At atCommand: "AT+HFPCONN=XXXXXXXXXXXX"
 [20.474]  Auto ConnectTime 8000
 [21.162]  Write At atCommand: "AT+A2DPMUTE=1"
-[21.165]  Bluetooth connected: "Pixel 9 Pro" "04006EAF29C4" "04:00:6E:AF:29:C4"
+[21.165]  Bluetooth connected: "Pixel 9 Pro" "XXXXXXXXXXXX" "XX:XX:XX:XX:XX:XX"
 [21.561]I msncoreapp.cpp@2964 enableHostApd start  enable: 1 timeout: 100
 [21.561]  start  enableWLAN 0 21561
 stop wifi manager

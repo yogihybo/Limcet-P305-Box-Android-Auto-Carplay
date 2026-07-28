@@ -2772,6 +2772,42 @@ two different client MAC addresses (`f6:d6:cb:da:c0:aa` and
 checking whether those were shorter sessions, different test
 conditions, or genuinely cleaner runs -- not yet compared).
 
+**CORRECTION, same day: checked, and this weakens the theory
+significantly -- it's NOT a general/consistent problem.** Compared
+session lengths, not just event counts, across every AA-session log
+available: `v1.txt` spans kernel-time `20.6s`->`202.1s` (~180s active)
+with 9 disassociations; `v2.txt` and `v3.txt` (~138s) both show
+**zero**; a newly-captured comprehensive boot+session log,
+`new uboot new kernel baseline v20_260728.txt` (~170s, includes a
+CarPlay session), also shows **zero**. These are comparable-length
+sessions, not "v1 just ran longer and had more chances to fail" --
+**3 of 4 similar-length sessions had a completely clean WiFi
+connection.** That means the repeated disassociation seen in `v1` was
+most likely something specific to that one test run (interference,
+phone-side behavior that session, etc.), not a standing bug in this
+project's AP/driver setup that would explain a *general* stuttering
+symptom. Kept on file as a real, confirmed event worth understanding
+on its own terms -- but **downgraded from "the answer" to "one
+possible contributing factor in some sessions, not the general
+explanation."** Also checked the `HW EFUSE` calibration dump in the
+v20 log for a blank/uncalibrated-TX-power theory -- the region that
+looks like per-rate TX power table data (`0x020`-`0x048`) is
+genuinely populated with plausible calibration-looking values, not
+blank, weakening that theory too. Also checked whether either build
+ships `regulatory.db` (a missing regulatory database could affect
+channel/power selection) -- **neither stock nor our build ships it**,
+so that's not a stock-vs-ours divergence either.
+
+**Open question needed to make further progress on this thread**:
+does the choppy/segmented audio happen in *every* AA session, or only
+some of them? If it's present even in sessions with a clean WiFi
+connection (like whatever session produced `v2`/`v3`/`v20`), WiFi
+disassociation can be ruled out as the (or a) cause entirely for those
+instances, and the investigation should look elsewhere. If it only
+happens in sessions that also show disassociation events, that would
+support it as a real, if intermittent, contributing factor. Not yet
+answered.
+
 **Why this fits "choppy, segmented" better than either prior theory,
 without needing a new test at all -- the evidence already exists**: a
 WiFi link dropping and reconstructing this often would put literal

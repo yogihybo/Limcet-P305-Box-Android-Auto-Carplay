@@ -3084,3 +3084,60 @@ time in `libAndroidAuto.so`'s AES routines (or generally in `sink`'s
 receive/demux code) exactly when the audio thread should be running
 but isn't, that would confirm this mechanism directly rather than by
 inference.
+
+### Confirmed content detail + third candidate mechanism + live test plan for next hardware session (2026-07-28, same day)
+
+User confirmed a useful detail: the chopped-up audio is the *correct*
+content in tiny pieces, not corrupted/garbled data. This matches a
+genuine ALSA XRUN exactly (the data that does get through is real,
+just interrupted at buffer-refill boundaries) -- confirms the
+mechanism already identified rather than suggesting a new one.
+
+**Third concrete candidate found, alongside AES-decrypt and RTW's
+periodic watchdogs**: this system's MCU UART runs in **PIO mode, not
+DMA** -- confirmed directly in the boot logs ("no TX/RX DMA channel
+available (no platform data) -- using PIO/interrupt-driven TX/RX
+instead"). That means every single byte of MCU communication requires
+a real hardware interrupt and immediate CPU service, not a bulk DMA
+transfer. If the MCU is chatty (status/CAN/GPIO reporting), this is a
+genuine, driver-level, traffic-proportional interrupt-load source --
+structurally different from AES (CPU-bound, data-driven by video
+bitrate) and RTW's watchdogs (CPU-bound, purely time-driven), and a
+direct answer to "is there a driver interrupting the stream."
+
+**Test plan for the next hardware session, cheapest check first (not
+yet run)**:
+
+1. **`/proc/interrupts`, diffed across a reproduced choppy episode --
+   no ftrace setup needed, fastest possible check:**
+   ```sh
+   cat /proc/interrupts > /tmp/irq_before.txt
+   # reproduce the choppy audio
+   cat /proc/interrupts > /tmp/irq_after.txt
+   diff /tmp/irq_before.txt /tmp/irq_after.txt
+   ```
+   Whichever IRQ line jumped disproportionately during the episode
+   directly points at the offending driver (MCU UART vs. WiFi vs.
+   something else) without needing to interpret a full trace.
+
+2. **If #1 isn't conclusive, the already-staged ftrace tracers:**
+   ```sh
+   mount -t debugfs none /sys/kernel/debug 2>/dev/null
+   echo sched_switch > /sys/kernel/debug/tracing/current_tracer
+   # or: echo irqsoff > /sys/kernel/debug/tracing/current_tracer
+   echo 1 > /sys/kernel/debug/tracing/tracing_on
+   # reproduce choppy audio
+   echo 0 > /sys/kernel/debug/tracing/tracing_on
+   cat /sys/kernel/debug/tracing/trace > /data/sched_trace.txt
+   ```
+   `sched_switch` shows exactly what task runs instead of the audio
+   thread each time it's off-CPU; `irqsoff` catches the longest
+   interrupts-disabled window if the cause turns out to be kernel-side
+   lock/IRQ contention rather than plain scheduling loss.
+
+User is testing at the device tomorrow (2026-07-29). This is the plan
+to run then -- three concrete candidate mechanisms now identified
+(software AES decrypt of the video-heavy AA stream, RTW's periodic
+watchdog/calibration timers, PIO-mode MCU UART interrupt load), none
+confirmed yet, `/proc/interrupts` diffing is the fastest way to start
+distinguishing between them.

@@ -2736,3 +2736,61 @@ This is now the leading theory for the "choppy, segmented" symptom --
 more directly testable than the WiFi-packet-loss theory above, and
 doesn't require any log capture, just a quick behavioral test (BT
 on vs. off during an AA session).
+
+### CORRECTION: proposed BT-disable test walked back; existing logs already show a much stronger, direct lead -- repeated real WiFi disassociation (2026-07-28, same day)
+
+User asked whether Bluetooth needs to stay connected for Android Auto
+to function -- checked the already-captured connection logs
+(`docs/logs/android auto log v1/v2/v3.txt`) rather than guess, and
+found two things that change the picture.
+
+**Answer to the question, from real log evidence**: in this
+implementation, yes -- BT appears to be part of the WiFi-session
+recovery chain. Tracing the sequence around a reconnect in `v1.txt`:
+`130.496s` `OnDisassoc(wlan0)` (WiFi drops) -> `133.7s` WiFi
+reassociates -> `135.541s` `Write At atCommand: "AT+HFPCONN=..."` ->
+`136.416s` `AT+A2DPMUTE=1` + `Bluetooth connected` ->
+`138.915s` `enableHostApd start` (the WiFi AP AA runs over gets
+re-enabled). The Bluetooth reconnect is what triggers re-enabling the
+hotspt in our own code (`msncoreapp.cpp`'s `enableHostApd`/
+`APP_NOTIFY_ENABLE_HOSTAPD` path) -- **deliberately disconnecting BT
+mid-session would very likely disrupt this recovery mechanism and
+break the AA session outright, rather than cleanly isolating whether
+A2DP is mixing in.** The BT-disable test proposed above is walked
+back -- do not run it as originally suggested.
+
+**Much stronger, already-evidenced lead found in the same log**: the
+WiFi link itself is disassociating and reconnecting repeatedly
+throughout the session -- **9 separate `OnDisassoc(wlan0)` events in
+`v1.txt` inside a ~3-minute session** (`42.4s`, `54.5s`, `71.6s`,
+`130.5s`, `139.7s`, `146.7s`, `175.2s`, `184.7s`, `196.9s` -- roughly
+one every 10-30 seconds), every one with `reason=8` (802.11
+"disassociated because sending STA is leaving BSS" -- phone-side
+initiated, not the AP rejecting/kicking the phone), cycling between
+two different client MAC addresses (`f6:d6:cb:da:c0:aa` and
+`7a:05:1c:c2:97:47`). `v2.txt`/`v3.txt` show none of this (worth
+checking whether those were shorter sessions, different test
+conditions, or genuinely cleaner runs -- not yet compared).
+
+**Why this fits "choppy, segmented" better than either prior theory,
+without needing a new test at all -- the evidence already exists**: a
+WiFi link dropping and reconstructing this often would put literal
+gaps in the AA audio/video data stream every single time, independent
+of any kernel-side DMA/IRQ timing or A2DP-mixing mechanism. This
+doesn't rule out the A2DP-mixing theory (both could be contributing,
+and the A2DP mute cycle is itself entangled with these same
+reconnects per the trace above), but it's better-evidenced right now
+since it's already visible in logs that exist, rather than requiring
+a new capture.
+
+**Real next steps, not yet done**: figure out WHY the WiFi link keeps
+disassociating this often -- reason=8 being phone-initiated points at
+either the phone's own WiFi power-management/Doze behavior, RF
+interference, or possibly our AP's beacon/keep-alive timing tripping a
+phone-side timeout. Two different cycling MAC addresses is also worth
+understanding on its own (could be normal Android per-connection MAC
+randomization, or could indicate the phone is maintaining two
+separate WiFi links that are each independently unstable). Checking
+`v2.txt`/`v3.txt` for whether they show the same pattern (or genuinely
+don't) would help establish whether this is a consistent problem or
+session-dependent.

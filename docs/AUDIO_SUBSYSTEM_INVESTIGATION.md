@@ -3251,3 +3251,82 @@ analysis this session (the pipeline trace, the read-chunk-size
 finding) was done against the *wrong* binary -- worth confirming next
 time whether the genuine stock binary's behavior differs in any way
 now that it's what's actually deployed.
+
+**CORRECTION, same day: the sink/libAndroidAuto.so/libAutoDongle.so
+swap above was reverted per explicit instruction.** User identified
+the deployed copies are genuinely sourced from the Holden firmware
+(confirmed: extracted `firmware_dumps/Holden firmware update/
+rootfs.img` via `ubireader_extract_files`, `sink`/`libAndroidAuto.so`
+came back md5-identical to what was deployed) -- not corruption or an
+unknown build, the wrong sibling dump's copy got pulled in during the
+2026-07-21 directory restructure, most likely unnoticed because
+Holden and Prado share close enough lineage that the Holden binary
+runs without any obvious error on a Prado image. **Explicitly told not
+to change the deployed file** -- reverted commit `74ec4c9` (revert
+commit `289c750`), `firmware_source`'s copies are back to the
+Holden-sourced binaries. Leave as-is; this is not currently being
+treated as part of the active investigation.
+
+### `pingThread`: a real, confirmed fixed-interval (1s) mechanism touching the same shared connection as audio/video (2026-07-28, same day)
+
+User reported observing "a repeatable fixed interval interrupt to the
+stream" -- a specific, valuable clue: fixed-interval (not data-driven)
+rules out the AES-decrypt theory (which scales with video content, not
+time) and points at a genuine timer-driven mechanism instead. Traced
+a `pingThread` symbol spotted earlier in `sink` rather than guessing
+further.
+
+**`pingThread::run()` (`0x1f510`), disassembled directly**:
+```
+loop:
+    if (stop-requested) break
+    GalReceiver::sendPingRequest(timestamp, false)
+    sleep(1)                          <- exactly 1 second, hard sleep(1) libc call
+    if (missed_ping_count > 5) { log error, Transport::requestStop(); break }
+```
+**`sink` sends a ping request over the same `GalReceiver`/`Transport`
+connection every single second, unconditionally, for the entire
+session.** This is a confirmed, disassembly-verified fixed-interval
+mechanism, not inferred from timing alone.
+
+**Traced further into the write path**: `GalReceiver::sendPingRequest`
+delegates to `Controller::sendPingRequest` (`libAndroidAuto.so`,
+`0x12e6c4`), which builds a `PingRequest` protobuf message, marshals
+it via `MessageRouter::marshallProto`, then calls
+**`ProtocolEndpointBase::queueOutgoing(void*, unsigned int)`** -- it
+does not write to the socket directly. This confirms a producer/
+consumer design: a **separate writer thread** (matches the
+`Transport::getWriterThread()` symbol found earlier, distinct from
+the reader thread that pulls in audio/video data) dequeues and
+actually sends the ping.
+
+**The resulting candidate mechanism**: every second, the writer thread
+sends the ping over the *exact same* TLS/socket connection the reader
+thread is using to decrypt incoming audio and video data. If that
+shared `SSL` object (or the underlying socket) needs synchronization
+between concurrent read and write access -- a common real constraint
+with OpenSSL, whose `SSL` object is not inherently safe for
+simultaneous multi-directional I/O from two threads without explicit
+locking -- a ping write on the writer thread could briefly stall
+whatever the reader thread is doing at that exact moment. That is a
+genuinely periodic, fixed-interval (~1s, matching "repeatable fixed
+interval" directly) interruption to the stream, driven by a real,
+confirmed mechanism, not a guess.
+
+**This is now the strongest lead in the investigation** -- more
+directly matching the reported symptom character than the AES-decrypt,
+RTW-watchdog, or PIO-UART theories, all of which were either
+data-driven or had confirmed intervals (2s for RTW) that didn't
+obviously fit "repeatable fixed interval" as tightly as a confirmed
+1-second `sleep(1)` loop touching the shared connection does.
+
+**Not yet confirmed with live evidence.** Real next steps: (1) confirm
+the actual observed interval matches ~1s (or a clean divisor/multiple
+of it) during a live reproduction; (2) trace whether the writer
+thread's dequeue-and-send actually contends with the reader thread on
+a shared lock (would need `libAndroidAuto.so`'s `Transport`/writer-
+thread-loop and `ProtocolEndpointBase` internals, not yet done); (3)
+the already-planned `/proc/interrupts` diff and `sched_switch`/
+`irqsoff` ftrace captures for tomorrow's hardware session would also
+directly show this if reproduced -- watch specifically for periodicity
+close to 1 second, not just "what's running."

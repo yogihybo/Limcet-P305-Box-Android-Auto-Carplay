@@ -3141,3 +3141,103 @@ to run then -- three concrete candidate mechanisms now identified
 watchdog/calibration timers, PIO-mode MCU UART interrupt load), none
 confirmed yet, `/proc/interrupts` diffing is the fastest way to start
 distinguishing between them.
+
+### The WiFi-to-buffer data pipeline, traced through the binary (2026-07-28, same day)
+
+User asked what the actual pipeline is from a WiFi frame arriving to
+landing in the ALSA buffer. Traced this via disassembly rather than
+inferring from architecture docs.
+
+**Pipeline, as it actually exists in `sink`**:
+1. Kernel: `rtl8811cu` receives 802.11 frames -> TCP/IP stack -> the
+   AA session's TCP socket receive buffer (over the `carplay_fc9f` AP
+   link).
+2. **`PipeTransport::read(void*, unsigned int)`** -- the generic
+   transport reader, used for both wired and wireless. Confirmed via
+   `typeinfo for` symbols that only three concrete `Transport`
+   subclasses exist in the whole binary: `Transport` (abstract),
+   `PipeTransport`, `RfcommTransport` -- no separate WiFi/TCP-specific
+   class. Caps each read at **4096 bytes**.
+3. Delegates to **`Accessory::readBytes(unsigned char*, int, int*,
+   int)`**, which branches by connection type: `libusb_bulk_transfer()`
+   for USB, or **`select()` then a plain `read()`** on the socket fd
+   for WLAN -- confirmed directly in the disassembly.
+4. Decrypted (OpenSSL AES, statically linked in `libAndroidAuto.so`)
+   and demultiplexed by **`GalReceiver::messageRouter()`** into
+   logical channels (audio/video/control).
+5. Audio payloads -> `LinuxAudioSink` -> `AlsaHandle::play()` ->
+   `snd_pcm_writei()`. Video payloads -> `VideoDecoder` -> `hx170dec`.
+
+**Structural implication, initially framed as a strong lead**: audio
+and video are multiplexed over the **same single TCP connection**,
+read through the same 4096-byte-at-a-time call -- only one `Transport`
+instance per session (matches "Transport type is wlan!" logging once,
+not per-channel). A large video frame (easily tens of KB) requires
+many successive reads; whatever thread loops on `PipeTransport::read()`
+has to work through the whole video message before reaching audio
+data queued right behind it in the same byte stream -- a potential
+head-of-line blocking mechanism, structurally distinct from CPU-load
+theories.
+
+### Checked against real stock -- and found something bigger: the deployed AA binaries don't match stock at all
+
+Asked to check this finding against stock before trusting it --
+this surfaced a much larger, independent problem.
+
+**The architecture itself is confirmed identical in stock.**
+Disassembled the genuine Prado dump's `sink`
+(`firmware_dumps/Prado firmware dump/mtd6_rootfs/usr/bin/sink`):
+same `Transport` class layout, `PipeTransport::read()` caps at 4096
+bytes identically, `Accessory::readBytes()` has the identical
+`select()`+`read()` (WLAN) / `libusb_bulk_transfer()` (USB) branch.
+**Since stock has this exact same single-reader multiplexed-transport
+design and does not stutter, this weakens the head-of-line-blocking
+theory as a standalone, sufficient explanation** -- the architecture
+alone evidently doesn't cause the problem on genuine stock hardware,
+so if it contributes here, something else about our system must be
+what turns a normally-harmless design into a real bottleneck (most
+plausibly the single-core + zero-crypto-hardware + unprioritized-
+audio-thread combination already documented above, making this
+pipeline more failure-prone than it would otherwise be).
+
+**But comparing byte-for-byte turned up a real, independent bug**: the
+deployed `firmware_source/mtd6_rootfs/usr/bin/sink`,
+`usr/lib/libAndroidAuto.so`, and `usr/lib/libAutoDongle.so` **did not
+match the genuine Prado dump's copies at all** (different md5sums),
+and didn't match any other firmware dump in this repo either (Holden,
+CarSyncTech, P306) -- unknown origin. `git log` shows `sink` was
+introduced as a fresh 0->532304-byte addition in commit `d2b2dbc`
+("fix: correct corrupted paths in build scripts from directory
+restructure", 2026-07-21) rather than ever being copied from a
+verified source -- stock's real `sink` is 527448 bytes, and the
+deployed one has at least one extra exported symbol
+(`RfcommConnection::reSendVersionRequestMessage`) not present in
+stock, confirming this is a genuinely different SDK build, not a
+corrupted copy of the same binary. `firmware_overlay` has no copies of
+these three files to override this, so `firmware_source`'s mismatched
+copies are exactly what has been getting deployed and tested this
+whole time.
+
+**Fixed**: restored all three files from the real Prado dump,
+verified byte-identical via md5 afterward. `firmware_source/
+mtd6_rootfs` is the base directly used by `build_bootable_sdcard.sh`
+(confirmed in the script), and nothing in `firmware_overlay` shadows
+these paths, so this takes effect automatically on the next build --
+no script changes needed. Committed (`74ec4c9`), pushed. **Not yet
+hardware-tested.**
+
+**Why this matters for the investigation**: this was a real,
+previously-unnoticed divergence from stock sitting directly in the
+exact code path (`Transport`/`PipeTransport`/`GalReceiver`) this
+session has been tracing for the audio-stutter investigation. Not
+confirmed as the cause of the choppy-audio symptom -- but it's a
+genuine bug independent of that question (the deployed AA SDK build
+should match stock unless there's a documented reason it shouldn't,
+and there wasn't one here), and different AA SDK build versions can
+have real behavioral differences in exactly the kind of
+buffering/threading/timing details this investigation cares about.
+**This should be retested from a clean slate**: a lot of static
+analysis this session (the pipeline trace, the read-chunk-size
+finding) was done against the *wrong* binary -- worth confirming next
+time whether the genuine stock binary's behavior differs in any way
+now that it's what's actually deployed.

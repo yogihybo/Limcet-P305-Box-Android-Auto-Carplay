@@ -1841,3 +1841,116 @@ manifests through the actual dynamic linker/loader path — same category
 of mistake as the "next instruction after crash" heuristic above, just
 one level up (verifying a *fix's applicability* by inspection instead of
 verifying a *patch target* by inspection).
+
+## Android Auto media audio stutters (video/touch confirmed good) — mechanism traced, root cause still OPEN (2026-07-28)
+
+With this session's video fixes deployed, AA finally renders perfectly
+and touch is responsive -- but media audio (tested with a podcast)
+stutters, each glitch under a second, no button presses involved, and
+no mic input is ever actually received during it. **Confirmed
+identical on stock**: the real hardware and BT/WiFi interface are the
+same, and stock's original firmware does not exhibit this. This
+section documents everything traced so far -- a real, well-evidenced
+mechanism, but not yet a proven explanation for the stock-vs-ours
+difference. Don't cite this section as "solved."
+
+### Dead ends, ruled out with real evidence (don't re-chase these)
+
+- **BT UART DMA.** Our reconstructed kernel's `ark-hsuart` driver
+  (`uart4`/`uart5`, MCU/BT) runs without DMA
+  (`no TX/RX DMA channel available (no platform data)`). Checked the
+  *real* stock 3.4 kernel dmesg
+  (`docs/logs/archived/dmesg live device kernel 3.4 dmeg_260715.txt`)
+  before building anything -- stock prints the near-identical
+  `ark1680-hsuart ark1680-hsuart: no TX DMA channel!`. Stock never had
+  DMA on these UARTs either. Dead end.
+- **Bluetooth transport.** AA's actual media/video/control data goes
+  entirely over WiFi (`Transport type is wlan!`, TLS over TCP) -- BT
+  is only used for the initial RFCOMM handshake exchanging WiFi
+  credentials. This independently confirms the BT-UART angle was never
+  relevant to begin with.
+- **ALSA buffer/period sizes.** `period_size`/`buffer_size` on all
+  three slave devices in `/etc/asound.conf` (`dmix`, `dmix2`, `dsnoop`)
+  are byte-for-byte identical between `firmware_source/mtd6_rootfs`
+  and the real, untouched `firmware_dumps/Prado firmware dump`. Not
+  changed by this project.
+- **Mixer/channel routing.** Same 5 `softvol0-5` controls, same
+  `dmix`/`dmix2`/`dsnoop` topology in both copies of `asound.conf`.
+  Only difference found: `softvol3`'s `max_dB` (5.0 vs 10.0, a volume
+  *ceiling*, unrelated to timing/stutter).
+- **Audio codec.** Not applicable -- AA sends linear PCM directly for
+  all three channels (48kHz/stereo media, 16kHz/mono x2 speech+system),
+  confirmed by the exact channel/rate/bit-depth match to AA's known
+  protocol spec and the total absence of any audio codec library
+  linked into `sink`/`libAndroidAuto.so`/`libAutoDongle.so`. There is
+  no decode step to be slow.
+
+### What's actually happening (confirmed via Ghidra decompile)
+
+The stutter's timing matches a real, continuously-repeating cycle in
+`sink`'s own logs, **not** a button press: `LinuxController::
+voiceSessionNotificationCallback` (a genuine Google AA SDK symbol, not
+ArkMicro code) fires status=1 ("Granted transient audio focus") then
+status=2 back-to-back, no idle gap, every ~10-12 seconds for the
+entire session, opening/closing a microphone *capture* stream
+(`dsnoop`-based, separate from playback) each time with **no real mic
+input ever received**. See `docs/MSN_APP_ARCHITECTURE.html` band 03
+for where `sink` sits in the process architecture.
+
+Each cycle, `MsnCoreApp::onLinkStatusChange` (status codes 33/34/35/36)
+calls `switchToAppAudioChannel()`, which (traced via Ghidra decompile
+of `MsnCoreApp` and `libMsnCommons.so`) ultimately calls
+`SoftVolCtrl::setMute()`/`setVolume()` -> `SoftVolCtrl::amixer_cset()`.
+That function does a **complete ALSA control-device cycle from
+scratch on every single call**, not a lightweight cached update:
+
+```
+snd_ctl_open()              -- fresh open of /dev/snd/controlC0
+snd_ctl_elem_info()          -- ioctl round-trip
+snd_ctl_elem_read()           -- ioctl round-trip (read current value)
+snd_ctl_ascii_value_parse()
+snd_ctl_elem_write()          -- ioctl round-trip (write new value)
+snd_ctl_close()
+```
+
+This is literally `amixer cset`'s own logic, reimplemented inline (the
+function is even named after it). `softvol` is a pure *software*
+mixing control (`type softvol` in `asound.conf`) -- it does not touch
+the slow bit-banged I2C bus to the BD37033 hardware codec, ruling that
+out as an added-latency source too.
+
+`AudioApp: "MsnCarPlay"` in the logs is a red herring/mislabeling, not
+an actual CarPlay/AndroidAuto conflict -- it's just the internal label
+for whichever app currently holds the transient-focus slot, left over
+from when CarPlay support was written before AA was retrofitted in.
+
+### Why this isn't actually solved yet
+
+All of the above is real and confirmed, but **`MsnCoreApp` and
+`libMsnCommons.so` are both unmodified vendor binaries, and the
+hardware is confirmed identical to stock** -- so this exact
+`amixer_cset()` call sequence also runs on stock every ~10-12 seconds,
+and stock does not stutter. Attributing the difference to "our kernel
+has more concurrent load now (video decode, SIGIO delivery, per-frame
+LCDC updates)" was the working theory but is not proven, and the user
+directly and correctly pushed back on it as too hand-wavy given
+identical hardware/interface and identical vendor code. Don't present
+"CPU contention" as the answer without harder evidence.
+
+**Real next steps, not yet done:**
+- Live-profile an actual stutter (`htop` or better, a scheduling
+  trace) at the exact moment `voiceSessionNotificationCallback`
+  fires, to see whether there's measurable CPU/scheduling pressure at
+  that instant or not -- this is the one test that would actually
+  confirm or kill the contention theory rather than just asserting it.
+- Compare our ALSA/sound kernel driver stack against stock's directly
+  for anything that could make `snd_ctl_open`/`snd_ctl_elem_write`
+  itself slower on identical hardware -- e.g. a different lock
+  granularity, a probe-time difference, or something in the
+  `ark1668-i2s`/machine-driver glue that isn't part of the userspace
+  code traced above at all.
+- Confirm whether `voiceSessionNotificationCallback`'s ~10-12s cycling
+  itself happens on stock too (with no audible effect), or whether
+  stock's `sink`/AA library genuinely doesn't cycle this way at all --
+  this hasn't been checked, and would materially change where to look
+  next.

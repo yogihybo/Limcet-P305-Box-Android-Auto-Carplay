@@ -2198,3 +2198,52 @@ Once flashed, just play AA audio until a stutter is heard and check
 `CONFIG_PRINTK_TIME=y` is already on so every line is timestamped) --
 this is now the second piece of evidence to gather at the device
 alongside the `irqsoff` ftrace capture above.
+
+### Regression: FUNCTION_TRACER caused a new, unrelated galcore crash (2026-07-28, same day)
+
+User flashed and booted the ftrace-enabled kernel. Boot succeeded, but
+`galcore` (the GPU driver) crashed during probe with a kernel Oops:
+`Unable to handle kernel NULL pointer dereference at virtual address
+00000000`, in `gckOS_WriteRegisterEx`, called from
+`gctaHARDWARE_Construct` -> `gcTA_Construct` -> `gckGALDEVICE_Construct`
+-> `drv_init` -> `gpu_probe`. This crash had never been seen before on
+this same `galcore.ko`/`rcS` combination.
+
+Checked first whether this was a regression of the 2026-07-20
+`registerMemBase`/`irqLine` modprobe-params fix
+([[project_galcore_missing_modparams]]) -- it wasn't. `firmware_overlay/
+etc/rc.d/rcS` still correctly has:
+`modprobe galcore registerMemBase=0xE0F00000 irqLine=32
+contiguousSize=0x800000 physSize=0x80000000 powerManagement=0`.
+
+None of this session's audio-focused changes (ALSA XRUN debug config,
+the `Atmel LCDC` -> `ARK1668 LCDC` log-string fix) touch anything
+GPU-adjacent. The one plausible candidate: `CONFIG_FUNCTION_TRACER`
+(added earlier the same day for the ftrace/irqsoff diagnostic).
+`FUNCTION_TRACER`'s own Kconfig help text: it works "by using a
+compiler feature to insert a small, 5-byte No-Operation" at every
+kernel function's entry point, patched live at boot via
+`CONFIG_DYNAMIC_FTRACE` -- confirmed active from the boot log itself:
+`ftrace: allocating 21831 entries in 65 pages`, i.e. roughly 21,831
+call sites patched system-wide at boot. That's a far larger, riskier
+change than anything else in today's diff, on an
+ARM32/Linaro-gcc-7.3 toolchain combination that's nowhere near as
+heavily exercised upstream as x86 -- plausible as a source of new
+instability surfacing in an unrelated out-of-tree driver.
+
+Checked `kernel/trace/Kconfig` directly: neither `IRQSOFF_TRACER` nor
+`SCHED_TRACER` (the two tracers this investigation actually needs)
+list `FUNCTION_TRACER` as a dependency. So `CONFIG_FUNCTION_TRACER`
+and `CONFIG_FUNCTION_GRAPH_TRACER` were dropped from
+`arch/arm/configs/ark1668_defconfig`, keeping `CONFIG_FTRACE=y`,
+`CONFIG_IRQSOFF_TRACER=y`, `CONFIG_SCHED_TRACER=y`. Rebuilt (zImage
+shrank back from 4.5M to 4.2M, consistent with removing the
+instrumentation), committed (`3ce38eaee`), pushed to `linux-arkmicro`,
+`zImage.w_dtb` re-staged.
+
+**Not yet re-tested on hardware.** If the galcore crash persists after
+this change, `FUNCTION_TRACER` was not the actual cause and the real
+trigger is still unidentified among today's other kernel changes
+(least likely candidates, in order: the ALSA `SND_DEBUG`/`SND_PCM_XRUN_DEBUG`
+config, the LCD driver log-string rename, or something not yet
+considered).

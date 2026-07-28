@@ -2294,6 +2294,50 @@ tracing/trace` has the full per-period timeline via the `trace_printk`
 calls -- useful to correlate against the exact moment a stutter was
 heard.
 
+### Added mute/volume/mixer-control logging (2026-07-28, same day)
+
+Follow-up request: cover mute, mixer, and channel-control activity too,
+not just DMA/period timing. Two more additions, both to real, active
+code paths (not per-audio-frame, so safe to log unconditionally):
+
+**`sound/soc/arkmicro/ark1668-sddac-codec.c`, `ark_sddac_mute()`** --
+this is a **real, hardware-active mute**: it writes the DAC's gain
+register directly (`I2S_DACR0`), fixed 2026-07-18 after being a no-op
+stub. ASoC's core calls `.digital_mute` automatically around stream
+trigger/prepare transitions. If something is toggling this more often
+than expected during otherwise-continuous playback, that alone would
+produce an audible click/dropout **completely independent of ALSA's
+digital buffer health** -- directly explaining why
+`SND_PCM_XRUN_DEBUG` found nothing. This is arguably the single
+strongest new lead added today. Also logged the L/R playback-volume
+get/set kcontrols in the same file, even though their bodies are
+currently no-op stubs -- worth knowing if they're ever actually
+called.
+
+**`sound/core/control.c`, `snd_ctl_elem_write()`** -- logs every
+mixer/control write on the system, any card, any control, any name.
+This is the generic ALSA core ioctl handler behind `amixer cset` and
+`SoftVolCtrl::amixer_cset()` alike. Whether or not whatever
+MsnCoreApp's channel-switching/volume code touches actually shows up
+here settles a real open question: some ALSA-lib virtual/software
+controls (e.g. an `asound.conf` `ctl { type softvol }` block) are
+handled **entirely in userspace** and never reach the kernel control
+API at all. If nothing logs here during a stutter despite the app
+definitely adjusting *something*, that's a real, useful negative
+result -- it would mean the investigation needs to move to userspace/
+alsa-lib instrumentation instead of the kernel.
+
+Compiles clean, kernel rebuilt, `zImage.w_dtb` re-staged, galcore.ko
+(fixed earlier today) confirmed unaffected/still present. Committed
+(`c6276c71a`), pushed to `linux-arkmicro`. **Not yet hardware-tested.**
+
+Once flashed, alongside the earlier `pcm_dmaengine`/`ark1668-i2s` log
+lines, watch `dmesg` for:
+- `ark1668-sddac: digital_mute` -- any unexpected mute toggling during
+  continuous playback is the strongest candidate to chase next.
+- `snd_ctl: elem_write` -- confirms or rules out whether userspace
+  volume/channel control calls reach the kernel at all.
+
 ### galcore GPU driver: unrelated crash found and fixed along the way
 
 While testing the above, the first hardware boot after enabling ftrace

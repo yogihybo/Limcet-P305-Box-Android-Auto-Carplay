@@ -3493,3 +3493,81 @@ landing inside `ark_musb_interrupt` or its callees. The `/proc/
 interrupts` diff remains the fastest first check (a spike in the USB0/
 USB1 IRQ counts during a choppy episode, disproportionate to DMA's own
 count, would support (3) specifically).
+
+### First live hardware evidence for this whole thread (2026-07-29)
+
+User began live testing with the fully-instrumented kernel. Several
+real, concrete data points collected so far, none individually
+conclusive but all pointing the same direction.
+
+**`/proc/asound/card0/pcm0p/sub0/status` polling**: `state: RUNNING`
+never once caught `XRUN`, expected and not contradictory -- the
+recovery in `AlsaHandle::play()` calls `snd_pcm_prepare()` immediately
+after detecting `-EPIPE`, so the state flips back to `RUNNING` within
+microseconds, far faster than a manual poll can catch. Also noted:
+`appl_ptr` read as a constant `0` across every poll while `hw_ptr`
+climbed steadily -- most likely a reporting quirk in this proc-status
+path rather than a real timing problem, not pursued further.
+
+**Interleaved with those polls, `play:225` (the XRUN/EPIPE recovery
+path) was firing roughly once per second, continuously, for the whole
+~7+ second window shown** -- not rare, an ongoing condition throughout
+normal playback. A burst of ~13 consecutive `play:225` lines appeared
+right at stream teardown (`playbackStopCallback`) -- most likely
+normal end-of-stream buffer draining, not part of the ongoing
+mechanism. The ~1/sec cadence remains a close match for `pingThread`'s
+confirmed 1-second cycle.
+
+**Two real `pcm_dmaengine: period jitter` lines** (our own
+instrumentation, first time it's fired on real hardware):
+```
+actual=27105864ns expected=21333333ns (+27%)   <- period 5.77ms late
+actual=15551074ns expected=21333333ns (-27%)   <- next period 5.78ms early
+```
+A genuine delay-then-catch-up pattern (the two nearly cancel out over
+two periods). Real, measurable DMA-side jitter, but ~5.8ms is smaller
+than would be needed to drain a 341ms-deep buffer to XRUN by itself --
+either a separate, smaller artifact, or one instance of something that
+occasionally compounds into a larger stall not yet captured.
+
+**`irqsoff` trace (twice)**: first run showed the single longest
+interrupts-disabled window (~305-353us) occurring in the context of
+**`PipeWrit`-238** -- the transport writer thread (matches
+`Transport::getWriterThread()`, the same thread that sends
+`pingThread`'s ping and other outgoing messages). Second run (tracer
+apparently not reset between tests) caught a boring, expected
+idle-wake cycle (`<idle>-0` -> `arch_cpu_idle` -> `__irq_svc`) instead
+-- not meaningful, normal ARM idle behavior. ~300-350us is real but
+too short to explain a full audible dropout alone.
+
+**`wakeup` latency tracer**: caught a 479us scheduling-latency event
+for a task named `msgfunc1`-168, running with genuine real-time
+priority (`policy:2`=`SCHED_RR`, `rt_prio:50`). Identified via `strings`
+match: this is `carplay`'s `MsgQueue::SendMsgFunc` thread (symbol
+`_ZN8MsgQueue11SendMsgFuncEPv`) -- **`carplay` runs its own
+RT-priority message-queue thread continuously, even with no CarPlay
+device connected** (this session is entirely `sink`/Android Auto).
+The trace shows `PipeWrit`-238 running immediately before `msgfunc1`
+was woken but had to wait ~479us to actually be scheduled. Real,
+independent corroboration that the writer thread's activity causes
+measurable scheduling perturbation on this system -- if it can delay
+a genuine RT-priority thread by ~479us, `sink`'s own audio-writing
+thread (confirmed zero priority protection) is at least as vulnerable.
+Still too small in magnitude to be the sole explanation on its own.
+
+**Pattern across all of the above**: three independent small
+perturbations (300us, 305-353us, 479us) all coincide with `PipeWrit`
+(the AA transport writer thread) being active, consistent with -- but
+not yet proof of -- the `TCP_NODELAY`/Nagle and/or non-threaded-USB-IRQ
+theories. None individually explains the full-scale audible dropout;
+either they compound, or a larger event (matching the ~5.8ms jitter
+or bigger) is still uncaptured.
+
+**Not yet obtained**: a proper `sched_switch` event-based trace over a
+full, multi-second window (attempted twice; first attempt likely
+never actually left `irqsoff` set, second produced the `wakeup`
+summary above instead of the full context-switch log requested) --
+this remains the key missing piece to see the complete picture rather
+than isolated worst-case snapshots. Also still wanted: a `dmesg` dump
+from the *same* window as a sched trace, to line up jitter/XRUN
+timestamps against exactly what the CPU was doing at each one.

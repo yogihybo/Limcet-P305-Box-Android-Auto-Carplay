@@ -2338,6 +2338,48 @@ lines, watch `dmesg` for:
 - `snd_ctl: elem_write` -- confirms or rules out whether userspace
   volume/channel control calls reach the kernel at all.
 
+### L/R playback volume was ALSO a no-op stub -- fixed (2026-07-28, same day)
+
+User asked whether the volume stub found while adding logging actually
+needs implementing, and whether stock has it. Checked stock's real
+`vmlinux` (`firmware_dumps/Prado firmware dump/mtd5_kernel/extracted/
+vmlinux.elf`) via `strings` and `objdump -d`: stock has real, active
+`sddac_get_l_playback_volume`/`sddac_set_l_playback_volume`/`_r_`
+functions and `"Left Playback Volume"`/`"Right Playback Volume"`
+kcontrol name strings.
+
+Disassembly confirmed **this is the exact same bug class as
+`ark_sddac_mute`** before its 2026-07-18 fix: the correct
+reconstruction already existed as commented-out code in this file, it
+was just never enabled.
+- `sddac_get_l_playback_volume` (stock `0x802f63c4`): reads back a
+  cached software value (`dac->vol_l`), not a live register read --
+  matches the commented-out body exactly.
+- `sddac_set_l_playback_volume` (stock `0x802f63ec`) /
+  `sddac_set_r_playback_volume` (stock `0x802f645c`): read-modify-write
+  `I2S_DACR0` with the L field (bits `[6:0]`) or R field (bits
+  `[14:8]`) replaced while preserving the other channel -- byte-exact
+  match for the `DACR0_LVOL_MASK`/`DACR0_LVOL()`/`DACR0_RVOL_MASK`/
+  `DACR0_RVOL()` macros already defined in `ark_i2s.h` and already used
+  by `ark_sddac_mute`'s real implementation. **Same register** --
+  meaning a volume-set landing here concurrently with a mute/unmute
+  (both hitting `I2S_DACR0`) is now directly correlatable via the mute
+  logging added earlier today.
+
+Also found and fixed a **control-name mismatch**: our kcontrols were
+named `"Left/Right Playback Volume 2"` (note the "2" suffix) while
+stock's real name (confirmed via the vmlinux strings, and independently
+via a commented reference line in `firmware_source/mtd6_rootfs/etc/
+all.sh`: `amixer cset ... name='Left Playback Volume' 118`) has no "2"
+suffix at all. If anything -- `SoftVolCtrl`, or any other amixer-name
+lookup -- was ever trying to reach these controls by stock's real
+name, the mismatch would have made that lookup silently fail.
+
+Implemented both get/set functions for real (uncommented + fixed the
+existing logic), renamed the controls to match stock exactly. Compiles
+clean, kernel rebuilt, `zImage.w_dtb` re-staged. Committed
+(`f419add39`), pushed to `linux-arkmicro`. **Not yet hardware-tested.**
+
 ### galcore GPU driver: unrelated crash found and fixed along the way
 
 While testing the above, the first hardware boot after enabling ftrace

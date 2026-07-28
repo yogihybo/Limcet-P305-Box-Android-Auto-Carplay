@@ -1,3 +1,13 @@
 [D-BUS Service]
 Name=com.arkmicro.auto
-Exec=/usr/bin/sink
+# 2026-07-28: redirect sink's own stdout/stderr into the kernel log
+# (docs/AUDIO_SUBSYSTEM_INVESTIGATION.md) so its prints -- including
+# AlsaHandle::play()'s "play:225" XRUN-recovery line, the actual
+# mechanism behind the choppy-audio investigation -- land in the same
+# `dmesg` timeline as our kernel-side period-jitter/mute/mixer
+# logging, instead of being invisible or requiring a separate
+# terminal capture. Plain `>` redirection to /dev/kmsg; glibc still
+# fully-buffers stdout when it isn't a TTY, so lines may arrive in
+# bursts rather than immediately -- acceptable for post-hoc log
+# correlation, not real-time monitoring.
+Exec=/bin/sh -c "exec /usr/bin/sink > /dev/kmsg 2>&1"

@@ -2885,3 +2885,61 @@ kernel build, and check `dmesg` for `pcm_dmaengine: period jitter`,
 during that exact window, plus whether `sink`'s own write cadence
 (via a short, targeted strace if needed) matches the bursty pattern
 suggested above.
+
+### `play:225` identified precisely: it's the ALSA XRUN recovery path, not a routine write log (2026-07-28, same day)
+
+User corrected the "bursty" read above -- the gaps between `play:225`
+occurrences are even, not clustered. That correction led to actually
+tracing what the log line represents, via disassembly, instead of
+continuing to guess from its timing alone.
+
+**Found and disassembled `AlsaHandle::play(unsigned char*, unsigned
+int)` in `sink`** (`0x31a4c`, symbol intact, not stripped). It calls
+`snd_pcm_writei()` in a loop and branches on the return value:
+- `-11` (`EAGAIN`): print, `snd_pcm_wait(handle, 500)`, retry.
+- `-32` (`EPIPE`): **this is the `play:225` line** -- prints, then
+  calls `snd_pcm_prepare()` (the standard ALSA underrun/XRUN recovery
+  sequence), then retries the write.
+- Any other negative value: print the real error via
+  `snd_strerror()`/`fprintf`, then abandon the write and return.
+
+**`play:225` is not "wrote a chunk of audio" -- it's ALSA reporting a
+genuine userspace-visible buffer underrun (XRUN) on every single
+occurrence.** 28 occurrences across the ~10.5-second window pinned
+down above means **28 real ALSA XRUNs happened during that exact
+stretch of real media playback**, each one triggering an audible
+underrun-recovery cycle -- a direct, mechanism-level explanation for
+"choppy, segmented" audio, not a inference from indirect timing. User
+confirmed the gaps between occurrences are even (~375ms apart, given
+28 events across ~10.5s) -- not random bursts, something is starving
+the ALSA write at a fairly regular interval specifically during this
+window.
+
+**This also reframes the "media never resumes" observation from the
+same log**: playback being paused immediately after this window lines
+up with 28 underruns in 10 seconds being a rough enough listening
+experience to pause, rather than a separate audio-focus/resume bug as
+first suspected.
+
+**Reconciling with the earlier clean `SND_PCM_XRUN_DEBUG` result**:
+that test predates this finding and may not have specifically
+recaptured this exact post-connect window (the first ~10-20s of
+playback right after an AA session establishes) -- the kernel-side
+XRUN debug logging (already staged, confirmed working infrastructure)
+should catch this directly if reproduced now. This is now the most
+concrete, mechanism-confirmed lead in the whole investigation --
+promoted above the WiFi-disassociation and A2DP-mixing theories, both
+of which were built on indirect evidence.
+
+**Real next step, well-defined**: reproduce media playback starting
+immediately after an AA session connects (matching the `69.3s`-ish
+timing relative to connection in this log), and check `dmesg` for
+`XRUN` lines from `SND_PCM_XRUN_DEBUG` during that specific window --
+if they appear with the same ~375ms-ish regular spacing, that
+confirms the mechanism at the kernel level too and the investigation
+can move to *why* the buffer underruns that regularly during exactly
+this startup-adjacent window (candidates: concurrent video-decoder
+initialization/first-frame work, DBus signaling load, or general CPU/
+bus contention specific to the just-connected state, since this
+window is right when the video sink/decoder is also standing up for
+the first time in the session).

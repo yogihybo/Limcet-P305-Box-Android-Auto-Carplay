@@ -2247,3 +2247,69 @@ trigger is still unidentified among today's other kernel changes
 (least likely candidates, in order: the ALSA `SND_DEBUG`/`SND_PCM_XRUN_DEBUG`
 config, the LCD driver log-string rename, or something not yet
 considered).
+
+### Update: FUNCTION_TRACER theory disproven, real cause found and fixed (2026-07-28, same day)
+
+User flashed the `FUNCTION_TRACER`-free kernel. **Identical crash** --
+byte-for-byte the same PC, LR, and register dump as before. This
+conclusively rules out `FUNCTION_TRACER` (or anything else in the
+day's kernel-config changes) as the cause: a config-sensitive bug
+would not reproduce with an identical register dump across two
+different kernel builds. This is a fully deterministic bug, unrelated
+to the audio investigation entirely.
+
+The second boot log also showed a new line just before the Oops:
+`modprobe: vmalloc: allocation failure: 351358976 bytes`. Traced the
+actual crash site properly this time using the driver's own upstream
+source (`gpu-known-good-pairing/nxp-source-6.2.4.p1.8/`, the pristine
+tag this project's deployed `galcore.ko` was built from): the fault is
+in `hal/security_v1/gc_hal_ta_hardware.c`'s `gctaHARDWARE_Construct()`,
+specifically its very first hardware-probe write --
+`gctaOS_WriteRegister(hardware->ta->os, hardware->ta->core, 0x00000,
+0x00000900)` -- which matches the crash's register dump exactly (`r6 :
+00000900`, offset 0). `gc_hal_ta_hardware.c` is Vivante's **ARM
+TrustZone "Trusted Application" layer** -- built for boards with real
+TrustZone/TEE silicon (its own `os/emulator/` subdirectory is a
+software stand-in for boards without it, meant to make this codepath
+harmless everywhere -- but it isn't, here).
+
+Checked why this path is even being exercised: `Kbuild` sets
+`-DgcdENABLE_TRUST_APPLICATION=1` **unconditionally** -- unlike the
+neighboring `gcdSECURITY` flag, it isn't gated behind the `SECURITY=1`
+build variable. So `gckGALDEVICE_Construct()` always calls
+`gcTA_Construct()` (confirmed via `gc_hal_kernel_device.c` --
+unconditional inside the `if (device->irqLines[gcvCORE_MAJOR] != -1)`
+block, i.e. it always runs once `registerMemBase`/`irqLine` are
+correctly configured -- which explains why this exact crash was never
+seen before the 2026-07-20 modparam fix: with the wrong, previously
+undetected `registerMemBase` default, this codepath likely wrote
+through a wrong-but-still-mapped address rather than a genuinely NULL
+one). `gctaOS_WriteRegister()` (in the emulator glue) forwards to
+`gckOS_WriteRegisterEx(Os->os, Core, ...)`, and whatever the TA-layer's
+own `os` wrapper construction does here ends up with a NULL register
+base for this SoC -- root cause not traced further into the emulator's
+internals, but the outcome (and fix) don't require it.
+
+**Fix**: this TA construction is provably non-essential -- it exists
+purely to power on the GPU and read a chip ID for the TrustZone/
+security codepath (irrelevant on ARK1668, which has no TrustZone/TEE
+at all), and `globalTA[]` (the pointer it would populate) is
+NULL-checked everywhere else it's read in the driver, including its
+own teardown path. The real, load-bearing GPU/MMU setup
+(`gckDEVICE_AddCore()`) is a separate, unaffected call a few lines
+below it. Patched `gc_hal_kernel_device.c` to skip the
+`gcTA_Construct()` call for `gcvCORE_MAJOR`, rebuilt `galcore.ko`
+out-of-tree against this exact kernel (`vermagic=4.19.192` confirmed
+matching, no SMP/PREEMPT flags, consistent with this build), and
+deployed the new binary over both the `gpu-known-good-pairing/`
+checkpoint and the actual staged `compiled_modules/lib/modules/
+4.19.192/galcore.ko`. Full detail and exact rebuild commands in
+`linux-arkmicro`'s `gpu-known-good-pairing/README.md`. Committed
+(`f6ae2660b`), pushed. **Not yet hardware-tested.**
+
+Also restored `FUNCTION_TRACER`/`FUNCTION_GRAPH_TRACER` is **not**
+being re-added -- keeping them off since they were never actually
+needed for the audio investigation (only `IRQSOFF_TRACER`/
+`SCHED_TRACER` are), and there's no reason to reintroduce the more
+invasive whole-kernel instrumentation now that it's confirmed
+unrelated to this crash.

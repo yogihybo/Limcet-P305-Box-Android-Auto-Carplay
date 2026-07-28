@@ -2943,3 +2943,33 @@ initialization/first-frame work, DBus signaling load, or general CPU/
 bus contention specific to the just-connected state, since this
 window is right when the video sink/decoder is also standing up for
 the first time in the session).
+
+### `sink`'s own output redirected into dmesg (2026-07-28, same day)
+
+To make the next test easier -- correlating `play:225`/XRUN events
+against the kernel-side period-jitter/mute/mixer logging without
+needing a separate terminal capture -- `firmware_overlay/usr/share/
+dbus-1/services/com.arkmicro.auto.service`'s `Exec=` line now redirects
+`sink`'s stdout/stderr straight into the kernel log:
+
+```
+Exec=/bin/sh -c "exec /usr/bin/sink > /dev/kmsg 2>&1"
+```
+
+**Known caveat, not yet verified on hardware**: glibc fully-buffers
+`stdout` when it isn't attached to a TTY (true for both a plain file
+redirect and `/dev/kmsg`), so `sink`'s `printf`-based lines (including
+`play:225`) may arrive in bursts rather than immediately, only
+flushing once the C library's internal buffer fills or the process
+exits. This project's busybox build has no `stdbuf`/pty-allocating
+`script` applet available to force line-buffering the usual way. Fine
+for post-hoc correlation (comparing which lines appear before/after
+which kernel events across a whole capture) even if buffered; not
+reliable for real-time monitoring. If the buffering turns out to be
+severe enough to matter (e.g. `play:225` lines arriving many seconds
+late, out of useful order relative to kernel events), the next step
+would be a small `LD_PRELOAD` shim forcing unbuffered stdio, rather
+than assuming this simple redirect is sufficient.
+
+Plain rootfs config change, no kernel rebuild needed. Committed
+(`690454e`), pushed. **Not yet hardware-tested.**

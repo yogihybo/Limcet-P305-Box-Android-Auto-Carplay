@@ -5730,3 +5730,7 @@ Corrected assumption from §74: the fine repeating weave/crosshatch texture visi
 **Fix**: changed the `scal_bypass` argument from `0` to `1` in that call (`ark1668_lcdc_funcs.c`). Kernel compiles clean. `zImage.w_dtb` rebuilt and staged.
 
 **Not yet hardware-tested.**
+
+## 76. Status recap (2026-07-28): LCD, AA video, and EffectWatch/DirectFB all confirmed working; AA exit-to-menu confirmed working; audio stutter remains the open item
+
+User confirmed, during a general project status check-in: LCD renders correctly, Android Auto video works, closing Android Auto correctly returns to the main menu screen, and `EffectWatch` is running cleanly with no black screens (visible in the process list) -- **closing out the entire black-screen/Flip-regression thread from §49-73 and [[project_effectwatch_black_screen]]** (memory), which had been open since before this session began. AA/media audio stuttering is the one item confirmed still open, actively being instrumented (see `docs/AUDIO_SUBSYSTEM_INVESTIGATION.md`, 2026-07-28 entries and [[project_aa_audio_stutter_investigation]]).

@@ -2083,3 +2083,59 @@ around the stutter instead.
 Once a trace is captured, pull `/data/irqsoff_trace.txt` off the
 device and this investigation can move from static analysis to
 measured evidence for the first time.
+
+### Further static sweep while waiting on hardware (2026-07-28, same day)
+
+While waiting for the ftrace-enabled kernel to be flashed and tested,
+did a broader static pass across our custom kernel code for anything
+else that could cause a periodic full-system stall.
+
+**Ruled out (clean, no further action):**
+- No `printk`/`dev_dbg` on the success path of the video ioctl
+  handlers, the I2S trigger/DMA path, or the `hx170dec` IRQ handler --
+  every print in those files is either error-path-only or already
+  commented out.
+- `CONFIG_DYNAMIC_DEBUG` is not set, so all `dev_dbg()` calls in the
+  tree compile to no-ops regardless of console loglevel.
+- No `msleep`/`udelay`/`mdelay`/`usleep_range` anywhere in the video
+  ioctl, I2S, or hx170dec hot paths that could block under a lock.
+- No `CONFIG_CPU_FREQ` at all -- the CPU runs at a fixed clock, so
+  cpufreq governor transitions are not a possible cause.
+- No `request_threaded_irq` use anywhere relevant to this SoC (the
+  only hits in the tree are for unrelated, unused DMA platforms
+  compiled in but not instantiated).
+- No userspace code anywhere (`firmware_overlay`, `firmware_source`)
+  calls `sched_setscheduler`/uses `SCHED_FIFO`/`SCHED_RR` -- nothing
+  runs at realtime priority, so the kernel's default RT-bandwidth
+  throttle (`sysctl_sched_rt_runtime`=950000/1000000, i.e. RT tasks
+  capped at 95% per 1s period) should not be able to fire.
+
+**One real, unresolved risk -- not confirmed as the cause, but not
+ruled out either**: the DTS bootargs (`arch/arm/boot/dts/ark1668.dtsi`
+and siblings) set `loglevel=8`, and
+`CONFIG_MESSAGE_LOGLEVEL_DEFAULT=7`. Console loglevel 8 means *every*
+plain `printk()` anywhere in the kernel -- not just code this project
+wrote -- gets written out to the `ttyS0` serial console at 115200
+baud. printk-to-slow-serial holding `console_sem` is a well-documented
+cause of exactly this "continuous, regular, sub-second glitch"
+pattern, if anything in the tree prints even occasionally during
+playback. Nothing was found printing in the specific hot paths audited
+above, but this sweep could not cover the WiFi driver (`rtl8821au`,
+fetched from GitHub at build time via buildroot, not vendored in this
+repo, so it couldn't be grepped directly) or the USB stack. Two ways
+to make progress on this without more source access: (1) as a quick
+test, drop `loglevel=8` to something like `loglevel=4` in the DTS and
+see if the stutter changes at all; (2) check whether the ftrace
+capture shows any `console_unlock`/printk-related activity
+coinciding with a stutter.
+
+Also noted but not chased further: `CONFIG_RT_GROUP_SCHED=y` and
+`CONFIG_CGROUP_SCHED=y` are enabled, with the kernel's default RT
+scheduling-bandwidth split active. Since nothing actually runs at RT
+priority (confirmed above), this shouldn't be able to fire -- flagged
+only in case the ftrace/sched trace turns up something scheduling
+related that would make it relevant after all.
+
+No new fix came out of this pass -- it's a narrowing/elimination step
+to keep the live ftrace trace as the next real source of evidence,
+rather than another untested static-analysis guess.

@@ -2973,3 +2973,63 @@ than assuming this simple redirect is sufficient.
 
 Plain rootfs config change, no kernel rebuild needed. Committed
 (`690454e`), pushed. **Not yet hardware-tested.**
+
+### Investigating the XRUN root cause: single-core + unprioritized audio thread, but NOT confined to video-startup (2026-07-28, same day)
+
+Asked to investigate what actually causes the XRUN underruns
+identified above. Two structural facts confirmed via static analysis:
+
+1. **This SoC is single-core.** `arch/arm/boot/dts/ark1668.dtsi` has
+   exactly one `cpu@0` node, and `CONFIG_SMP` isn't set in the kernel
+   config at all -- one CPU for the whole system.
+2. **`sink` never elevates the audio-writing thread's priority
+   anywhere.** Traced `LinuxAudioSink::init()` -- it registers with
+   `GalReceiver` and starts a generic `WorkQueue`, standard
+   normal-priority threading. Swept the whole binary for
+   `pthread_setschedparam`/`sched_setscheduler`/`setpriority` -- zero
+   matches. The thread that ends up calling `AlsaHandle::play()` has
+   no protection against being starved by anything else that's
+   demanding CPU at the same moment.
+
+**Initial hypothesis, since corrected**: the first pass at this only
+had one example to work from (the `v20` log's single ~10.5s playback
+burst, right when the video pipeline was standing up for the first
+time), so the working theory was "one-time video-init CPU burst
+starves the unprioritized audio thread." **User has since confirmed
+choppy audio also occurs at other points, well after video has been
+running steady-state for a while** -- this rules out "only during
+one-time video pipeline startup" as the full picture.
+
+**What still holds**: the single-core + zero-priority-elevation facts
+above are structural and confirmed, independent of when exactly the
+starvation happens. They mean `sink`'s audio thread is *generally*
+vulnerable to being starved by anything else CPU-heavy sharing the
+one core, not just video-pipeline startup specifically. Ongoing video
+decode itself remains a plausible recurring trigger (frame-to-frame
+decode cost isn't constant -- keyframes/scene changes/larger encoded
+frames could spike CPU periodically throughout a session, not just at
+connect time), but nothing yet narrows the *recurring* trigger to one
+specific source over any other candidate (WiFi servicing, DBus
+traffic, etc.) -- this needs live evidence, not more static
+inference.
+
+**Real next step**: since this is now confirmed reproducible at
+multiple points in a session (not a narrow one-time startup window),
+it should be much more capturable with the `SCHED_TRACER` already
+staged in the kernel (enabled earlier this session specifically for
+this class of question, not yet actually used). A scheduling-latency
+trace spanning a reproduced choppy moment -- at any point in a
+session, not just right after connecting -- should show directly
+what's running on the single core instead of the audio thread when it
+needs to run.
+
+**Available, no-rebuild experiment, not yet tried**: busybox has
+`chrt` compiled in. Wrapping `sink`'s launch with `chrt -f <priority>`
+to give it real-time scheduling priority is the standard fix for
+exactly this class of problem -- lets the audio thread preempt
+normal-priority work whenever it needs to run, without any source
+changes or rebuild. Worth trying as a low-risk test independent of
+getting the sched-trace confirmation first, since if it resolves the
+choppiness that's itself strong evidence for the mechanism (and a
+usable fix), and if it doesn't, that's a real negative result ruling
+out "scheduling priority alone" as the complete explanation.

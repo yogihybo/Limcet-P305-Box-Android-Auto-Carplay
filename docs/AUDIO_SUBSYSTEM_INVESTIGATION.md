@@ -3571,3 +3571,79 @@ this remains the key missing piece to see the complete picture rather
 than isolated worst-case snapshots. Also still wanted: a `dmesg` dump
 from the *same* window as a sched trace, to line up jitter/XRUN
 timestamps against exactly what the CPU was doing at each one.
+
+### The full `sched_switch` trace obtained, and a major reframing (2026-07-29, same day)
+
+Got the real, full `sched_switch` event trace (22628 entries,
+kernel-uptime `1069.7s`-`1088s`, ~18 seconds) plus the terminal
+transcript of the app-level output from the exact same test run.
+User confirmed stuttering genuinely happened during this window.
+
+**Analyzed the trace programmatically**: extracted all 901
+`dmaengine_pcm_dma_complete` (period-jitter) events -- worst deviation
+found was only +-19.3% (~4ms), far too small to explain a real XRUN.
+Checked the biggest gap between *any* two consecutive trace entries
+across the whole 18-second window -- **~15 milliseconds, the largest
+gap anywhere in the entire trace.** No scheduling stalls, no
+IRQ-disabled windows, nothing anomalous at the CPU/DMA level for the
+whole session.
+
+**This is a genuinely decisive negative result for the CPU-scheduling
+theories.** If real stuttering happened during this window (confirmed)
+and the CPU/DMA-side trace shows completely healthy, normal activity
+throughout, that's strong evidence against every CPU-scheduling-based
+mechanism examined so far -- the `PipeWrit` writer-thread IRQ-disable
+window, the non-threaded USB hard-IRQ theory, general CPU starvation.
+If the CPU were the bottleneck, this trace would show it. It doesn't.
+
+**But cross-referencing the terminal transcript from the same test run
+revealed the real pattern**: the ~50 `play:225` (XRUN-recovery) events
+are **concentrated in a dense burst immediately after
+`playbackStartCallback:63 status=39` fires** (media playback starting)
+at `1071.892s` -- not spread evenly across the whole ~18-second window.
+After that initial burst, the rest of the session (until
+`playbackStopCallback` at `1089.858s`) produced no further `play:225`
+lines at all. **This is a startup ramp-up problem, not an ongoing
+steady-state scheduling contention problem** -- which is exactly why
+the CPU/DMA trace over the same window came back clean: after the
+initial burst, playback genuinely stabilized and ran normally at the
+CPU/DMA level for the rest of the session. This also retroactively
+explains the very first `v20` log finding (choppy audio confined to
+the first ~10s of playback, then paused) and the manual `/proc/asound/
+.../status`-polling test, which likely also happened to sample during
+a similar startup window rather than true steady-state playback.
+
+**New leading theory: TCP slow start.** The "rough for the first few
+seconds, then smooth" pattern is the textbook signature of a freshly-
+active TCP connection's congestion window ramping up from a small
+initial value rather than delivering full throughput immediately. If
+AA's audio+video data starts flowing while this connection is still
+in its slow-start ramp, throughput would genuinely be constrained and
+bursty for the first several seconds -- producing exactly this
+pattern, with nothing visible in CPU/DMA-side tracing since the
+bottleneck is the TCP stack's congestion-control state, not anything
+the CPU is doing. Still purely kernel-level (`tcp_slow_start_after_idle`,
+initial congestion window, TCP stack internals all live in the
+kernel), and it cleanly explains "why not stock" too: if stock's
+kernel has a different initial-cwnd default, or its WiFi driver
+reaches full link rate faster, the same slow-start ramp would simply
+finish before becoming audible.
+
+**Not yet checked, real next steps**: compare our kernel's TCP
+slow-start/initial-congestion-window defaults and
+`tcp_slow_start_after_idle` sysctl against stock's (if determinable);
+check `iw`/WiFi driver link-rate ramp-up timing during the first few
+seconds after a fresh AA connection (does the radio negotiate/settle
+into full link speed quickly, or does it also ramp up slowly, which
+would compound with TCP's own slow start); a live packet-level
+capture (if `tcpdump`-equivalent tooling can be gotten onto the
+device) during a stream-start event would be the most direct way to
+confirm or rule this out definitively.
+
+**Status of the earlier three CPU-scheduling candidates (Nagle/
+`TCP_NODELAY`, WiFi USB half-duplex, non-threaded USB hard-IRQ)**:
+not disproven outright (they could still matter for a different
+class of stutter, e.g. if choppiness genuinely recurs deep into a
+long-running session as the user separately reported), but
+de-prioritized below TCP slow start for explaining *this* specific,
+now well-characterized startup-burst pattern.

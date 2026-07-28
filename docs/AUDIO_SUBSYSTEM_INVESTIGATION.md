@@ -2002,3 +2002,84 @@ the device yet. If the stutter persists after this, the ALSA
 `user_ctl_lock` finding above is still worth keeping as a secondary
 lead, and the "does stock even cycle voice-session status" question is
 still open too.
+
+### Update (2026-07-28, same day): hardware-tested, the IRQ-disable fix did NOT resolve it
+
+User tested the `spin_lock_irqsave` -> `spin_lock` downgrade on the
+device: **no change to audio stuttering**. The fix is kept -- it's a
+real, verified-safe improvement (removes a genuinely pointless
+interrupt-disable window) -- but it is not the root cause of this
+symptom.
+
+Ruled out two more candidates before escalating to live measurement:
+
+- **WiFi power-save.** `rtl8811cu`'s own driver Makefile compiles
+  `CONFIG_POWER_SAVING` out entirely, so the radio always runs in
+  `PS_MODE_ACTIVE`. Not a source of periodic latency.
+- **I2S/ALSA DMA engine driver.** Checked `ark1668`'s machine driver
+  and DMA glue for anything custom; it uses the generic ALSA
+  `dmaengine` framework with nothing unusual in the period/IRQ
+  handling. No bug found here either.
+
+At this point every static-analysis candidate examined so far has
+either been ruled out or fixed-but-ineffective, so rather than keep
+guessing new candidate mechanisms, the next step is to measure
+interrupt/scheduling latency directly on the device with the kernel's
+own `ftrace` infrastructure.
+
+**Enabled `CONFIG_FTRACE` and the `irqsoff` tracer.** `CONFIG_FTRACE`
+was previously disabled outright (`# CONFIG_FTRACE is not set`) despite
+the hardware supporting it (`CONFIG_HAVE_DYNAMIC_FTRACE=y` was already
+set). Added to `arch/arm/configs/ark1668_defconfig`:
+
+```
+CONFIG_FTRACE=y
+CONFIG_FUNCTION_TRACER=y
+CONFIG_FUNCTION_GRAPH_TRACER=y
+CONFIG_IRQSOFF_TRACER=y
+CONFIG_SCHED_TRACER=y
+```
+
+(`CONFIG_PREEMPT_TRACER` was attempted too but doesn't apply -- it
+requires `CONFIG_PREEMPT`, and this kernel is built `PREEMPT_NONE`.)
+
+Rebuilt via `./build_kernel.sh --defconfig` (the `--defconfig` flag is
+required here specifically because the build script skips defconfig
+application when a `.config` already exists, which it did). Build
+succeeded; zImage grew from 3.9M to 4.5M as expected for the added
+tracer instrumentation. Spot-checked the regenerated `.config` against
+every setting this project has previously lost to defconfig
+regeneration drift (see `docs/` kernel-defconfig-drift history) --
+`CONFIG_INET`, `CONFIG_IPV6`, `CONFIG_WIRELESS`, `CONFIG_CFG80211`,
+`CONFIG_MAC80211`, `CONFIG_WLAN`, `CONFIG_ARK_MEMALLOC`,
+`CONFIG_ARK_HX170DEC`, and the RN6752-vs-ARK7116 choice were all
+confirmed intact.
+
+Committed (`38eece991`) and pushed to `linux-arkmicro`. `zImage.w_dtb`
+rebuilt and staged. **Not yet hardware-tested.**
+
+**How to capture a trace at the device** (once this kernel is
+flashed/booted):
+
+```sh
+# if not already mounted:
+mount -t debugfs none /sys/kernel/debug
+
+echo irqsoff > /sys/kernel/debug/tracing/current_tracer
+echo 1 > /sys/kernel/debug/tracing/tracing_on
+# let Android Auto audio play and stutter for ~10-20 seconds
+echo 0 > /sys/kernel/debug/tracing/tracing_on
+cat /sys/kernel/debug/tracing/trace > /data/irqsoff_trace.txt
+```
+
+`irqsoff` records the single longest interrupts-disabled section seen
+during the capture window (and resets each time `tracing_on` is
+toggled back on), so if the stutter is periodic and short, prefer
+several short capture windows over one long one. If `irqsoff` doesn't
+turn up anything above its latency threshold, `current_tracer` can be
+switched to `function_graph` for a broader look at what's running
+around the stutter instead.
+
+Once a trace is captured, pull `/data/irqsoff_trace.txt` off the
+device and this investigation can move from static analysis to
+measured evidence for the first time.

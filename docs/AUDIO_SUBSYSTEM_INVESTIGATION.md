@@ -2139,3 +2139,62 @@ related that would make it relevant after all.
 No new fix came out of this pass -- it's a narrowing/elimination step
 to keep the live ftrace trace as the next real source of evidence,
 rather than another untested static-analysis guess.
+
+### ALSA XRUN debug logging enabled (2026-07-28, same day)
+
+User checked at the device: **no console log output at all coincides
+with a stutter**, which effectively rules out the `loglevel=8`/printk
+theory above -- if any driver were printing during playback it would
+have shown up. Asked for better audio-side logging instead of more
+static guessing.
+
+Rather than hand-roll new `printk`s into the I2S driver (which uses
+the generic `dmaengine` PCM framework -- there's no custom
+period-elapsed/DMA-callback code of ours to instrument; the real DMA
+IRQ handling lives in `drivers/dma/ark-dma.c`, the Synopsys DesignWare
+DMA controller driver, shared with every other DMA consumer on the
+SoC), enabled ALSA core's own built-in ring-buffer overrun/underrun
+detector logging instead. This is a standard, well-tested facility,
+not new code:
+
+```
+CONFIG_SND_VERBOSE_PROCFS=y
+CONFIG_SND_DEBUG=y
+CONFIG_SND_PCM_XRUN_DEBUG=y
+CONFIG_SND_VERBOSE_PRINTK=y
+```
+
+`SND_PCM_XRUN_DEBUG`'s own Kconfig help text: *"if you have trouble
+with sound clicking when system is loaded, it may help to determine
+the process or driver which causes the scheduling gaps."* -- a direct
+match for our symptom. Normally, when ALSA's `snd_pcm_update_hw_ptr`
+finds the ring buffer has run empty (or the DMA pointer has looped past
+where it should be), it just silently transitions
+`runtime->status->state` to `SNDRV_PCM_STATE_XRUN` -- no log line at
+all unless this option is on. With it on, ALSA prints a timestamped
+XRUN report to dmesg (via `SND_VERBOSE_PRINTK`, with source file/line)
+the instant it detects one.
+
+This directly tests two competing possibilities:
+- **If XRUN messages appear in dmesg exactly when a stutter is heard**:
+  proves it's a genuine buffer-underrun problem -- something is
+  failing to keep the ALSA ring buffer fed in time (points back at
+  scheduling latency / the DMA controller / CPU contention, and the
+  ftrace `irqsoff` capture becomes the natural next step to find out
+  *why* the refill is late).
+- **If no XRUN messages appear despite audible stutters**: proves the
+  ALSA buffer itself is *not* underrunning -- the glitch is being
+  introduced somewhere else entirely (e.g. in the audio content
+  actually arriving over the network from the phone, in `sink`'s own
+  buffering/decoding, or downstream of ALSA in the analog output
+  path) -- which would redirect the whole investigation away from the
+  kernel DMA/scheduling angle it's been focused on.
+
+Rebuilt (`./build_kernel.sh --defconfig`), verified all four configs
+landed in `.config`, committed (`8125387c8`) and pushed to
+`linux-arkmicro`. `zImage.w_dtb` re-staged. **Not yet hardware-tested.**
+Once flashed, just play AA audio until a stutter is heard and check
+`dmesg | grep -i xrun` (or the tail of `dmesg` generally, given
+`CONFIG_PRINTK_TIME=y` is already on so every line is timestamped) --
+this is now the second piece of evidence to gather at the device
+alongside the `irqsoff` ftrace capture above.

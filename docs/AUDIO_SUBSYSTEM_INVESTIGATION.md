@@ -1954,3 +1954,51 @@ identical hardware/interface and identical vendor code. Don't present
   stock's `sink`/AA library genuinely doesn't cycle this way at all --
   this hasn't been checked, and would materially change where to look
   next.
+
+### Correction (2026-07-28, same day): the real symptom doesn't match the theory above -- redirected to a much better-fitting cause, fixed
+
+User clarified the actual symptom: **a continuous, regular, split-second
+break in audio, happening no matter how long playback runs** -- not
+something that lines up with a once-per-10-12-seconds event. That
+timing rules out `voiceSessionNotificationCallback`/`amixer_cset` as
+the primary explanation (that section above is kept for the record --
+the ALSA `user_ctl_lock` finding is real, upstream-verified, and worth
+keeping in mind for something *else* eventually, but it doesn't fire
+often enough to be *this*).
+
+A "continuous, regular, high-frequency" stutter matches something else
+already found earlier this same session: `sink`'s video layer calls
+`ARKFB_SET_FB_ADDR`/`ARKFB_GET_FB_ADDR` roughly **30 times a second**
+(once per AA video frame, confirmed via strace when those ioctls were
+first implemented). The kernel handlers for those ioctls (and the
+earlier `ARKFB_SET_VIDEO_ADDR_RAW`) used
+`spin_lock_irqsave(&sinfo->lock, ...)` around a couple of `writel`/
+`readl` calls -- disabling **all interrupts on the CPU**, including
+whatever services the audio DMA/period-elapsed IRQ, for the critical
+section, ~30-90 times a second (up to 3 ioctls per frame).
+
+**Checked whether that lock was even doing anything real**: it wasn't.
+`ark1668_lcdfb_interrupt()` (the LCDC vsync IRQ handler) calls the
+exact same `ark1668_lcdc_set_video_addr()` function from IRQ context
+and does **not** take `sinfo->lock` at all -- and grep across the whole
+driver (`ark1668_lcdfb.c` + `ark1668_lcdc_funcs.c`) confirms `sinfo->lock`
+is used *nowhere* except these three ioctl handlers, never from IRQ
+context. So the IRQ-disabling was providing zero protection against the
+real concurrent writer (the vsync IRQ handler ignores this lock
+entirely) -- it only ever serialized against another ioctl call in
+process context, which never needed interrupts disabled to do safely.
+
+**Fix**: downgraded all three sites from `spin_lock_irqsave`/
+`spin_unlock_irqrestore` to a plain `spin_lock`/`spin_unlock` (no IRQ
+disable), in `ark1668_lcdc_funcs.c`. Confirmed safe (no deadlock risk)
+by exhaustively checking every use of `sinfo->lock` in the driver
+before making the change, not just assuming it. Kernel compiles clean,
+rebuilt, and `zImage.w_dtb` re-staged.
+
+**Not yet hardware-tested.** This is a strong, well-reasoned fix for a
+real, confirmed-pointless IRQ-disable window at exactly the frequency
+that matches "continuous and regular" -- but it hasn't been verified on
+the device yet. If the stutter persists after this, the ALSA
+`user_ctl_lock` finding above is still worth keeping as a secondary
+lead, and the "does stock even cycle voice-session status" question is
+still open too.

@@ -2380,6 +2380,77 @@ existing logic), renamed the controls to match stock exactly. Compiles
 clean, kernel rebuilt, `zImage.w_dtb` re-staged. Committed
 (`f419add39`), pushed to `linux-arkmicro`. **Not yet hardware-tested.**
 
+### Systematic stub/gap sweep against stock's real vmlinux (2026-07-28, same day)
+
+User asked whether there are other stubs/gaps like the mute and volume
+ones. Compared every function in the currently-active audio path
+against stock's real `vmlinux` (`firmware_dumps/Prado firmware dump/
+mtd5_kernel/extracted/vmlinux.elf`) via `nm`/`objdump -d`.
+
+**Confirmed genuinely inert in stock too -- our matching stubs are
+correct, not bugs, leave alone:**
+- `ark_i2s_trigger`/`txctrl`/`rxctrl` -- stock's `ark_i2s_trigger`
+  (`0x802f5f54`) jumps to the same `mov r0,#0; pop {r4,pc}` epilogue
+  for all six `SNDRV_PCM_TRIGGER_*` commands. Confirms the earlier
+  "TODO comments" finding (this document, above) was right: real
+  DMA start/stop is handled entirely by the generic ASoC/dmaengine
+  PCM framework, independent of this DAI-level callback, on stock too.
+- `ark_i2s_hw_params`, `ark_i2s_set_fmt`, `ark_i2s_probe`,
+  `sddac_startup`, `sddac_hw_params`, `sddac_set_bias_level` -- every
+  one of these is `mov r0,#0; bx lr` in stock, i.e. a real, intentional
+  no-op. (We don't even define a `set_bias_level` at all -- ASoC
+  treats that identically to stock's own no-op version, so the
+  omission is fine.)
+
+**Already-fixed real gaps this session**: `ark_sddac_mute` (fixed
+2026-07-18) and L/R playback volume get/set + control-name mismatch
+(fixed earlier today, see above).
+
+**New finding, NOT a stub -- an architecture difference, not yet
+acted on**: stock has a real, separate `ark_i2s_mclk_set_rate`/
+`ark_i2s_mclk_get_rate` pair (`0x80019278`/`0x80019da0`) -- these are a
+proper Linux CLK-framework provider (`struct clk_ops`), not part of
+`ark_i2s_hw_params` at all (consistent with `ark_i2s_hw_params` itself
+being a no-op in stock, confirmed above). Disassembling
+`ark_i2s_mclk_set_rate` shows a **hardcoded lookup table**: a chain of
+rate comparisons (specific `mov`/`movt` immediate constants matching
+exact sample rates like 22050/44100/8000/etc.) each selecting a
+specific, apparently hand-tuned divider constant (`r8` values seen:
+21, 25, 30, 33, 51, 85) -- not a simple linear formula.
+
+Our `ark_i2s_hw_params` (`ark1668_i2s.c`) does something stock never
+does in this function at all: it computes `modulo = freq / rate`
+inline via plain integer division and writes the result straight to
+the NCO register (guarded by `if (!i2s->nco_reg) return 0;`). This
+isn't "does nothing when it should do something" like the other stubs
+-- it's the reverse: we're doing real work here that stock does
+elsewhere, via a different mechanism (a proper clk provider with
+per-rate-tuned constants, not a formula).
+
+**Not yet fixed, deliberately -- documented only per explicit
+instruction.** This wouldn't explain click/stutter-type symptoms (it's
+a clock-divider precision question, not a buffering one), so it's a
+lower-priority thread than the mute/mixer logging above. If revisited:
+would need `ark_i2s_mclk_set_rate`'s full comparison table
+reconstructed (the snippet disassembled so far only covers a few of
+the branches) to confirm whether plain division ever produces a
+different divisor than stock's table for any of this project's actual
+supported sample rates, before deciding whether it's worth changing.
+
+**Not audited** (out of scope for this sweep, not part of the active
+`ARK-SDDAC` card): `BD37033.c`, `ark_dac_codec.c`, `arkn141_audio.c`,
+`ark1668e_audio_codec.c`, `cs4334.c`, `cs5343.c` -- confirmed via
+`sound/soc/arkmicro/Makefile`'s `obj-$(CONFIG_...)` guards and the
+current `.config` that **none of these are compiled in at all**
+(`CONFIG_SND_SOC_BD37033`/`ARK_INTERNAL_DAC`/`ARK_ARKN141`/
+`ARK1668E_INTERNAL_ADAC`/`CS4334`/`CS5343` are all unset). They're
+Arkmicro's shared multi-board BSP source (ark1668/ark1668e/arkn141/
+arkn141s all coexist in this tree) -- present in the filesystem, zero
+runtime relevance. Only `ark1668_i2s.c` + `ark1668-sddac-codec.c` (+
+`ark1668-sdadc-codec.c` for capture) are actually compiled
+(`CONFIG_SND_SOC_ARK1668_I2S/ADC/DAC=y` confirmed in `.config`) --
+already fully covered by this sweep.
+
 ### galcore GPU driver: unrelated crash found and fixed along the way
 
 While testing the above, the first hardware boot after enabling ftrace

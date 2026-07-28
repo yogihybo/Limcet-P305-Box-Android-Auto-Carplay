@@ -2830,3 +2830,58 @@ separate WiFi links that are each independently unstable). Checking
 `v2.txt`/`v3.txt` for whether they show the same pattern (or genuinely
 don't) would help establish whether this is a consistent problem or
 session-dependent.
+
+### Detailed analysis of `new uboot new kernel baseline v20_260728.txt` -- the choppy window pinned down precisely (2026-07-28, same day)
+
+User confirmed exactly where the reported choppy audio happened in
+this log: the first ~10-second real media playback window, which was
+then paused, followed by a separate microphone test. This lines up
+precisely with a specific, identifiable stretch of the log.
+
+**Session overview**: a full, clean AA wireless session -- BT pairing
+-> RFCOMM handshake -> WiFi AP (`carplay_fc9f`) -> phone DHCP -> TLS
+1.2 negotiation with a Pixel 9 Pro -> video sink opens at 800x480 ->
+plays -> disconnects cleanly at the end (`reason=3`, a normal
+disconnect, not the `reason=8` instability pattern seen in `v1.txt`).
+No crashes, no kernel Oops, zero `OnDisassoc` events this session.
+
+**The choppy window, pinned to exact lines**: `playbackStartCallback
+status=39 streamtype=3` at `69.315s` -> 28x `play:225` (no per-line
+timestamp, unlike the surrounding `[XX.XXX]`-prefixed MsnCoreApp
+lines) -> `playbackStopCallback status=40 streamtype=3` at `79.855s`.
+That's the entire real-media (podcast/music) playback for this
+session -- user confirmed this is where they heard the choppiness,
+and confirmed it was then paused (matches the stop callback exactly),
+followed by a separate microphone test (matches the `streamtype=1`
+voice-prompt blips and `MicrophoneReaderThread` activity later in the
+log, `137s` onward, cycling via the already-documented
+`voiceSessionNotificationCallback` mechanism).
+
+**A real, concrete mismatch found in this exact window**: 28 `play:225`
+calls span the full ~10.5-second window (`69.315s` -> `79.855s`).
+`hw_params` earlier in the same log shows `period_size=1024` at
+`rate=48000` -- one period is ~21ms of audio. If each `play:225`
+corresponds to writing roughly one period, 28 calls is only ~600ms of
+actual audio content stretched across 10,500ms of wall-clock time --
+audio being written in bursts with real gaps between them, not
+steadily, which is a good, direct match for "choppy, segmented"
+during precisely the window it was heard. Averaged out, that's one
+`play:225` call roughly every ~375ms -- far slower than the ~21ms
+per-period cadence a healthy, continuously-fed stream would show. No
+per-line timestamps exist on the `play:225` lines themselves, so the
+exact gap pattern between individual calls (evenly spread vs. bursty
+clusters) isn't visible from this log alone -- only the aggregate rate
+across the window.
+
+**Why this specific log can't go further**: it predates today's kernel
+logging additions (`digital_mute`/`period jitter`/`elem_write`/
+`ark1668-i2s: trigger` -- confirmed zero matches for any of those
+strings in this file) and the `play:225` lines have no fine-grained
+timestamps of their own. **This is exactly the window a fresh capture
+on the current kernel should target** -- reproduce a short (~10-20s)
+real media playback right after AA connects, on the currently-staged
+kernel build, and check `dmesg` for `pcm_dmaengine: period jitter`,
+`ark1668-sddac: digital_mute`, and `snd_ctl: elem_write` activity
+during that exact window, plus whether `sink`'s own write cadence
+(via a short, targeted strace if needed) matches the bursty pattern
+suggested above.

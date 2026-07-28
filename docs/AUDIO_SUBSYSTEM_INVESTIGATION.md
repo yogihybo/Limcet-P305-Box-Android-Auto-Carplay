@@ -3330,3 +3330,90 @@ the already-planned `/proc/interrupts` diff and `sched_switch`/
 `irqsoff` ftrace captures for tomorrow's hardware session would also
 directly show this if reproduced -- watch specifically for periodicity
 close to 1 second, not just "what's running."
+
+### Comprehensive re-sweep per explicit instruction: "must be the kernel" (2026-07-28, same day)
+
+User correction/constraint: `firmware_source`'s userspace binaries are
+confirmed to be what's actually on the device's NAND right now (the
+Holden-sourced `sink`/`libAndroidAuto.so`/`libAutoDongle.so` --
+matches the revert above), so whatever is different from stock has to
+be in the kernel. Also flagged a units slip in the earlier write-up:
+the `play:225` interval is **375 milliseconds (0.375s)**, not
+0.375ms -- 28 calls over ~10.5s. Asked for a genuinely thorough sweep
+of every angle, not just the strongest one found so far.
+
+**Reconciling `pingThread` with "must be the kernel"**: the finding
+isn't invalidated by this constraint, it's sharpened. `pingThread`'s
+`write()` (via `queueOutgoing()` and the writer thread) is the
+*trigger*, issued from userspace once a second -- but any actual stall
+has to physically happen in the kernel's TCP/IP stack or WiFi driver
+servicing that write, not in `sink` itself. Two concrete kernel-level
+mechanisms checked for how that trigger could turn into a real stall:
+
+**1. No `TCP_NODELAY` anywhere -- Nagle's algorithm is active by
+default. Confirmed, not inferred.** Swept both `sink` and
+`libAndroidAuto.so` for any `setsockopt` call at all -- zero matches
+in either binary. `TCP_NODELAY` is never explicitly set, meaning
+Nagle's algorithm runs at the kernel's default behavior on this
+connection. Nagle's algorithm interacting with the receiver's
+delayed-ACK timer is a classic, extremely well-documented source of
+periodic ~40-200ms stalls on connections carrying small, frequent
+writes -- and a once-a-second tiny ping message is exactly the kind of
+write that triggers it. This is purely kernel/TCP-stack behavior,
+directly satisfying "must be the kernel," and unlike the half-duplex
+theory below, could also explain stalls happening *more often* than
+once a second if other small protocol/control messages hit the same
+connection (not just the ping).
+
+**2. WiFi chip is confirmed USB-attached** (`usbcore: registered new
+interface driver rtl8821cu` in the boot log) -- consumer 802.11 USB
+chips are essentially always single-radio/half-duplex at the PHY
+level, meaning a TX operation (sending the ping frame) may require
+briefly pausing RX on the same radio chain, a real, physically-driven
+stall mechanism entirely in kernel/firmware territory. **Less
+concretely confirmed than the Nagle finding**: swept the `rtl8811cu`
+driver for a literal "pause RX to TX" primitive and found only
+`rtw_xmit_ac_blocked`/`rtw_is_xmit_blocked`/`rtw_set_xmit_block` --
+these look like WMM/QoS access-category TX flow control, not a direct
+RX-pause-during-TX mechanism. The actual half-duplex behavior (if it
+exists) most likely lives inside the RTL88xx chip's own closed
+firmware, not visible in kernel driver symbol names -- can't confirm
+or rule this out further via static analysis alone.
+
+**Full inventory of every kernel-level angle considered this
+investigation, for completeness**:
+
+| Angle | Status |
+|---|---|
+| IRQ-disable window in `ARKFB_SET/GET_FB_ADDR` (~30x/sec, unrelated to audio content but shares the CPU) | Fixed, hw-tested, **no change** to stuttering -- ruled out |
+| `SND_PCM_XRUN_DEBUG` (does ALSA's own buffer ever starve?) | Hw-tested clean in one prior session -- inconclusive re: this specific choppy window, not yet retested with current logging |
+| Generic `dmaengine_pcm` framework vs. stock's custom `ark_pcm_*` platform driver | Real architecture difference, but traced to functionally-equivalent DMA calls -- weak candidate |
+| `CONFIG_CPU_FREQ` / cpufreq governor stalls | Not present at all (fixed clock) -- ruled out |
+| RT scheduling priority anywhere in `sink` or the kernel | None set anywhere -- confirmed absent, but this alone doesn't explain a *fixed interval* |
+| `HZ`/`PREEMPT` model vs. stock | Confirmed identical (`HZ=100`, `PREEMPT_NONE` both) -- ruled out as a differentiator |
+| Hardware AES/crypto engine | Confirmed absent in both stock and ours -- not a stock-vs-ours divergence, though software AES cost itself remains a live (if now lower-priority, since data-driven not fixed-interval) candidate |
+| RTW driver's periodic watchdog/DM timers | Main one confirmed exactly 2s via disassembly -- doesn't match a sub-1s "repeatable fixed interval" report as tightly as the 1s ping does; sub-watchdogs' intervals not individually resolved |
+| MCU UART in PIO mode (no DMA) | Confirmed -- traffic-driven, not obviously fixed-interval unless the MCU itself polls/reports on a fixed schedule (not checked) |
+| DMA burst size / `dma_slave_config` exact values vs. stock | Still not resolved -- flagged as open several times, never completed |
+| GIC interrupt-priority configuration (audio DMA IRQ vs. WiFi/USB/video IRQs) | Never compared against stock at all -- genuinely open |
+| **`TCP_NODELAY` / Nagle's algorithm** | **Confirmed absent -- new strongest concrete candidate, see above** |
+| WiFi USB chip TX/RX half-duplex serialization | Plausible, physically well-motivated, not confirmable via kernel driver symbols alone -- needs live/hardware evidence or vendor documentation |
+| Head-of-line blocking in the shared audio/video `PipeTransport`/reader thread | Confirmed same architecture in stock (doesn't stutter) -- weakens this as a standalone explanation |
+
+**Recommended priority for tomorrow's hardware session, given this
+sweep**: (1) confirm the observed choppy interval's exact value against
+1s (the ping period) -- if it's actually much less than 1s and
+genuinely fixed, that would argue against the ping/Nagle theory and
+toward something else entirely (RTW sub-watchdog timers, or a GIC/DMA
+angle not yet checked); (2) the `/proc/interrupts` diff and `sched_switch`
+capture already planned remain the fastest way to get real data rather
+than continuing to add candidates from static analysis; (3) if a
+kernel-side fix is wanted to test the Nagle theory specifically without
+waiting for a full trace, forcing `TCP_NODELAY` on this connection
+would need either a kernel-side `sysctl net.ipv4.tcp_*` workaround
+(imprecise, affects all sockets) or an `LD_PRELOAD` shim intercepting
+`connect()`/`socket()` to call `setsockopt(..., TCP_NODELAY, ...)` on
+the AA session's socket specifically (same complexity tradeoff as the
+stdbuf shim discussed and deferred earlier -- not proposing to build
+this now, just noting it's the concrete next step if this theory is
+confirmed).

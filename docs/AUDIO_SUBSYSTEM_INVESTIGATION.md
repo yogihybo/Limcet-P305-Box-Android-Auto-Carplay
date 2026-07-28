@@ -3417,3 +3417,79 @@ the AA session's socket specifically (same complexity tradeoff as the
 stdbuf shim discussed and deferred earlier -- not proposing to build
 this now, just noting it's the concrete next step if this theory is
 confirmed).
+
+### DMA burst-size and interrupt-controller deep dive, requested to fill the wait before hardware testing (2026-07-29)
+
+**DMA burst size**: ours is `maxburst=16` in `ark1668_i2s.c`
+(`snd_dmaengine_dai_dma_data.maxburst`), which `ark-dma.c`'s
+`convert_burst()` turns into DW_DMAC's `MSIZE=3` encoding (`fls(16)-2`)
+-- a standard, unremarkable burst length. Traced stock's `ark_pcm_open`
+(`vmlinux.elf`) far enough to confirm it goes through the **same
+generic `__dma_request_channel()` DMA-engine core API** our driver
+uses -- not some entirely bespoke mechanism -- but couldn't pin down
+stock's exact burst constant from static disassembly (most likely
+passed via a filter/private-data struct to the channel request, not
+visible as a separate `dma_slave_config`-style call at the site
+traced). **Inconclusive, no evidence of a difference, not fully
+resolved.**
+
+**Interrupt controller -- correction and a real finding**: this SoC
+uses **ARM PL192 VIC** (`compatible = "arm,pl192-vic"` in the DTS),
+not GIC. Checked the mainline Linux driver (`drivers/irqchip/
+irq-vic.c`) for any priority-configuration code -- **none exists at
+all**. This VIC driver has no software-configurable per-IRQ priority
+scheme; dispatch order is fixed by hardware vector wiring. So "GIC/VIC
+priority misconfiguration" isn't a real axis of difference from
+stock here -- there's nothing to compare or misconfigure.
+
+**Checked IRQ line sharing between audio DMA and USB/WiFi -- ruled
+out.** DTS confirms distinct IRQ numbers: audio DMA controller = IRQ
+16, `usb0` (musb) = IRQs 14/13, `usb1` = IRQs 8/7. No physical line
+sharing, despite both drivers requesting `IRQF_SHARED` (permissive,
+not actually shared with anything in practice per the DTS).
+
+**But this surfaced a third real, concrete kernel-level mechanism**:
+both `ark-dma.c`'s DMA-controller IRQ handler and `musb_ark.c`'s USB
+IRQ handler (`ark_musb_interrupt` -- the controller carrying *all*
+WiFi traffic, since the WiFi chip is USB-attached per the earlier
+finding) are registered via plain **`request_irq()`, not
+`request_threaded_irq()`** -- confirmed via grep, neither is threaded.
+Disassembled/read `ark_musb_interrupt`: it does real, synchronous
+register reads (`MUSB_INTRRX`/`MUSB_INTRTX`/`MUSB_INTRUSB`) and (via
+the generic MUSB core it calls into) FIFO processing entirely inline,
+in hard-IRQ context -- a well-known characteristic of the mainline
+MUSB driver in PIO mode, not something specific to our port.
+
+**On a confirmed single-core system, this matters independent of IRQ
+line sharing**: any hard-IRQ handler running -- on any line -- masks
+the CPU from servicing other pending interrupts for as long as it
+runs, simply because there is exactly one core to run interrupt
+handlers on at all. WiFi USB traffic (which is also what carries the
+once-a-second `pingThread` write and the ongoing AA audio/video data)
+being serviced in `ark_musb_interrupt`'s hard-IRQ context can
+genuinely, measurably delay the audio DMA controller's own
+period-complete interrupt (IRQ 16) from being serviced -- a third,
+independent candidate mechanism alongside the `TCP_NODELAY`/Nagle
+theory and the WiFi-chip half-duplex theory, and one that doesn't
+require either of those to also be true.
+
+**Where this leaves the investigation, going into hardware testing**:
+three real, non-mutually-exclusive kernel-level candidate mechanisms
+now on the table, all consistent with "must be the kernel" and none
+requiring the userspace binaries to be anything other than what's
+already deployed:
+1. No `TCP_NODELAY` -- Nagle's algorithm stalls on `pingThread`'s
+   small once-a-second write (or other small writes).
+2. WiFi USB chip TX/RX half-duplex serialization (plausible, not
+   confirmable via kernel driver symbols alone).
+3. Non-threaded hard-IRQ USB handling delaying audio DMA's own IRQ on
+   a single-core system, independent of (1) and (2).
+
+All three would be directly visible in the already-planned
+`sched_switch`/`irqsoff` ftrace capture -- (1) and (2) would show up
+as the audio thread blocked/waiting around WiFi TX activity; (3) would
+show up directly as `irqsoff`'s longest-interrupts-disabled window
+landing inside `ark_musb_interrupt` or its callees. The `/proc/
+interrupts` diff remains the fastest first check (a spike in the USB0/
+USB1 IRQ counts during a choppy episode, disproportionate to DMA's own
+count, would support (3) specifically).

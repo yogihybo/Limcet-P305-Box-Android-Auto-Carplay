@@ -2579,3 +2579,90 @@ needed for the audio investigation (only `IRQSOFF_TRACER`/
 `SCHED_TRACER` are), and there's no reason to reintroduce the more
 invasive whole-kernel instrumentation now that it's confirmed
 unrelated to this crash.
+
+### Deep DMA/PCM-architecture comparison against stock (2026-07-28, same day)
+
+User asked for a deep comparison of stock's audio pathway against
+ours, to help localize the stutter. Compared the actual DMA-level
+mechanics via disassembly of stock's real `vmlinux`.
+
+**Confirmed real architectural difference**: stock has its own
+hand-written ASoC platform/PCM driver -- `ark_pcm_open`/`_hw_params`/
+`_prepare_dma`/`_trigger`/`_dma_period_done`/`_pointer`/`_new`,
+registered via its own `platform_driver_register()` call (confirmed
+genuinely active: registered alongside `ark_i2s_driver_init`/
+`sddac_codec_driver_init` at the same module-init point, not dead
+code). Our reconstruction has none of this source anywhere --
+`ark1668_i2s.c` even still has a dead, commented-out
+`//#include "ark1668_pcm.h"` -- it never made it into whatever source
+this project's kernel was rebuilt from. We use the generic ASoC
+`dmaengine_pcm` framework instead, bridged onto our driver's legacy
+cyclic-DMA API via `dwc_prep_dma_cyclic()` (`ark-dma.c`, added
+2026-07-13 specifically to make that bridging work at all).
+
+**But tracing the actual DMA mechanics, this turns out functionally
+equivalent -- not the smoking gun it first looked like:**
+- `ark_pcm_prepare_dma` (stock) calls `dw_dma_cyclic_prep()` -- the
+  exact same low-level DesignWare cyclic-DMA API our own bridge
+  ultimately calls.
+- It sets the period-callback function pointer into the returned
+  descriptor the same way our bridge code does
+  (`cdesc->period_callback = ...`).
+- `ark_pcm_dma_period_done` (stock's period-complete handler,
+  `0x802f5628`) disassembles to a trivial 4-instruction wrapper: null
+  check, then call `snd_pcm_period_elapsed()`. Our
+  `dmaengine_pcm_dma_complete()` does the same thing (update position,
+  call `snd_pcm_period_elapsed()`).
+
+So both paths ultimately drive the same DesignWare DMA engine the same
+way, with only a thin extra layer of generic-framework indirection on
+our side -- a handful of extra instructions per period, not something
+that would produce an audible periodic artifact on its own. Real
+difference, but doesn't look like the cause.
+
+**Not yet checked, still open**: the actual DMA burst size /
+`dma_slave_config` values (our `maxburst=16` in
+`ark1668_i2s_drv_probe()` -- couldn't trace where/how stock sets the
+equivalent without deeper decompilation of `ark_pcm_open`/whatever
+configures the DMA channel's slave config), and GIC interrupt-priority
+configuration for the DMA/audio IRQ relative to WiFi/USB/video IRQs
+(a classic source of this symptom class, not compared against stock
+at all yet).
+
+### Symptom re-characterized: "choppy, segmented" audio, not clicks/pops (2026-07-28, same day)
+
+**Important correction from the user**: the actual audio output isn't
+a clicking/popping noise (brief interruptions in an otherwise-normal
+stream) -- it's **a choppy, segmented version of the audio stream
+itself**. This is a materially different symptom class from what most
+of this investigation (the IRQ-disable-window fix, the DMA/PCM
+architecture comparison just above, XRUN debug logging) has been
+built around, and changes where to look.
+
+**Why this redirects the investigation**: a DMA/IRQ-timing glitch or a
+late/dropped period would typically produce a brief click or pop at
+the moment of disruption -- a healthy stream with an occasional
+defect. "Choppy, segmented" describes something different: audio that
+sounds broken into pieces throughout, much more consistent with the
+underlying **audio content itself** having gaps, being duplicated, or
+arriving out of order -- before it ever reaches ALSA -- than with a
+kernel-side scheduling/DMA problem downstream of a healthy PCM stream.
+This matches the "before ALSA" branch of the two-way fork already
+identified after the clean `SND_PCM_XRUN_DEBUG` result (see above):
+`sink` could be receiving genuinely incomplete/gapped audio over the
+Android Auto WiFi link (packet loss/jitter/retransmission) and still
+writing *something* continuously to the ALSA buffer, which is exactly
+why no XRUN was ever seen despite the audible defect.
+
+**Real next steps, not yet done**: check WiFi link quality during a
+reproduced stutter (`iw dev wlan0 station dump` -- retransmission
+count, signal/noise, any deauth/reassoc events -- for a timing
+correlation with when segments sound choppy); if feasible, a short,
+deliberate `strace` capture of `sink`'s own `snd_pcm_writei`/`writen`
+call timing and buffer sizes during a stutter (not the wholesale trace
+reverted earlier this project for CPU-load reasons -- a brief, targeted
+one) to see whether the data *arriving* at ALSA is already
+discontinuous. The kernel-side DMA/PCM architecture comparison above
+remains recorded for completeness but is now a lower-priority thread
+given this symptom clarification -- it was aimed at explaining clicks
+from a healthy stream, not gaps in the stream's actual content.

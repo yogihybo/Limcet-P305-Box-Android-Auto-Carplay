@@ -2199,6 +2199,114 @@ Once flashed, just play AA audio until a stutter is heard and check
 this is now the second piece of evidence to gather at the device
 alongside the `irqsoff` ftrace capture above.
 
+### Result: no XRUN, ALSA's buffer is not underrunning (2026-07-28, same day)
+
+User tested on the now-galcore-fixed kernel (see below): played AA
+audio through multiple stutters, `dmesg | grep -i xrun` came back
+empty. This is a real, clean negative result, not an inconclusive one
+-- `SND_PCM_XRUN_DEBUG` logs unconditionally the moment ALSA's
+`snd_pcm_update_hw_ptr` detects the ring buffer has run empty or the
+DMA pointer has looped past where it should be. No log line means it
+never happened.
+
+**This rules out the entire kernel-side scheduling/DMA-refill theory
+this investigation has been chasing since the IRQ-disable fix.** If
+the DMA engine is being fed on schedule every period, the audible
+click is being introduced either:
+
+1. **Before ALSA** -- the PCM samples `sink` writes into the ring
+   buffer already contain the gap/glitch by the time they're written
+   (e.g. a network stall on the AA WiFi link causes `sink` to insert
+   silence, drop, or duplicate a chunk of audio while still writing
+   *something* continuously, so ALSA never sees an empty buffer even
+   though the content itself has a defect), or
+2. **After ALSA**, in the analog output path -- the digital I2S/DMA
+   stream is perfect, but something intermittently disturbs the
+   analog signal downstream (the external amp's I2C control channel,
+   or a mute/volume-ramp pulse) independent of the PCM data itself.
+
+**Real, concrete next steps, not yet done:**
+- For (1): check `sink`'s own audio-write timing/content for gaps --
+  either a targeted, short strace capture of its `snd_pcm_writei`/
+  `writen` calls (not the wholesale trace reverted earlier this
+  project for CPU-load reasons -- a brief, deliberate capture just
+  around a stutter), or check WiFi link quality (`iw dev wlan0 station
+  dump`, retransmission/signal stats) during a stutter for a timing
+  correlation with the phone's AP.
+- For (2): this investigation already found a real, frequently-firing
+  mechanism earlier in this same document -- `switchToAppAudioChannel`
+  -> `SoftVolCtrl::amixer_cset()`, previously ruled out as the
+  *primary* explanation only because its known trigger
+  (`voiceSessionNotificationCallback`'s ~10-12s cycle) was too
+  infrequent to match "continuous, regular, sub-second". Worth
+  re-checking whether `SoftVolCtrl`/`amixer_cset` (or the external amp
+  it may also drive via I2C, not just the software `softvol` ALSA
+  control) gets invoked from some OTHER, higher-frequency call site
+  than the voice-session cycle -- this wasn't exhaustively ruled out,
+  only the one specific trigger was.
+
+### Added period-timing and trigger-event logging (2026-07-28, same day)
+
+User asked for more logging across the audio pathways since `dmesg`
+wasn't giving much signal (the XRUN check came back clean). Added two
+kinds, deliberately placed to avoid flooding `dmesg` at audio-frame
+rate:
+
+**`sound/core/pcm_dmaengine.c`, `dmaengine_pcm_dma_complete()`** -- this
+is the generic ALSA period-complete callback used by *any*
+dmaengine-based ASoC driver, including ours (not something specific to
+the I2S driver -- editing it here catches every period completion
+regardless of which DMA channel/direction it's on). Now tracks the
+actual wall-clock gap between successive period completions against
+the period's expected duration (from `rate`/`period_size`):
+- `trace_printk()` fires on **every** period -- goes to the ftrace ring
+  buffer (`cat /sys/kernel/debug/tracing/trace`), not `dmesg`, so this
+  is safe to leave running continuously with no console/printk
+  overhead of its own.
+- A rate-limited `printk()` (capped ~20/sec) fires only when a period
+  arrives more than 25% off its expected duration -- this is the one
+  line that reaches `dmesg`, and only for a genuine timing anomaly.
+
+This directly closes the gap the XRUN check left open: XRUN only fires
+once the buffer is completely empty, but a period that's late-yet-not-
+buffer-starving would never trigger it and could still be audible.
+Now that's directly observable.
+
+**`sound/soc/arkmicro/ark1668_i2s.c`** -- added plain `printk`s (safe at
+dmesg rate, these are rare events) at:
+- `ark_i2s_trigger()` -- logs every START/STOP/PAUSE with a timestamp.
+  This is also currently the *only* visibility into trigger activity
+  at all, since `ark_i2s_txctrl`/`rxctrl` are no-op stubs (see the
+  earlier "TODO comments" discussion in this document) -- if the
+  stream is being stopped/restarted more often than expected during
+  playback, this will now show it directly.
+- `ark_i2s_hw_params()` -- logs stream open/format changes (rate,
+  period size, periods, format).
+
+Compiles clean, kernel rebuilt, `zImage.w_dtb` re-staged. Committed
+(`d71ec3ef0`), pushed to `linux-arkmicro`. **Not yet hardware-tested.**
+
+Once flashed: reproduce a few stutters, then check `dmesg` for any
+`pcm_dmaengine: period jitter` lines (timing anomalies large enough to
+matter) and `ark1668-i2s: trigger` lines (unexpected stream restarts).
+For finer-grained detail than dmesg gives, `cat /sys/kernel/debug/
+tracing/trace` has the full per-period timeline via the `trace_printk`
+calls -- useful to correlate against the exact moment a stutter was
+heard.
+
+### galcore GPU driver: unrelated crash found and fixed along the way
+
+While testing the above, the first hardware boot after enabling ftrace
+hit an unrelated kernel Oops in `galcore` (GPU driver) during
+`gpu_probe` -- root-caused to Vivante's ARM TrustZone "Trusted
+Application" layer being unconditionally compiled in and probed even
+though ARK1668 has no TrustZone/TEE hardware. Fixed by skipping that
+non-essential construction step and rebuilding `galcore.ko`.
+**HW-CONFIRMED 2026-07-28: boots cleanly, galcore loads.** Full detail
+in `linux-arkmicro`'s `gpu-known-good-pairing/README.md` and
+[[project_galcore_missing_modparams]] (memory) -- kept here only as a
+pointer since it's unrelated to audio.
+
 ### Regression: FUNCTION_TRACER caused a new, unrelated galcore crash (2026-07-28, same day)
 
 User flashed and booted the ftrace-enabled kernel. Boot succeeded, but

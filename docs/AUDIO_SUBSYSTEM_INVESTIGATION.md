@@ -3033,3 +3033,54 @@ getting the sched-trace confirmation first, since if it resolves the
 choppiness that's itself strong evidence for the mechanism (and a
 usable fix), and if it doesn't, that's a real negative result ruling
 out "scheduling priority alone" as the complete explanation.
+
+### Refined further: not video decode itself -- software AES decryption of the video stream (2026-07-28, same day)
+
+User correctly pushed back on the "video decode competes for CPU"
+framing: actual H.264 decode is hardware-offloaded to `hx170dec`
+(confirmed extensively elsewhere in this project -- the fasync/SIGIO
+fix, the direct decoder test tool), not something the CPU does math
+for. Re-examined what's actually CPU-bound in the video pipeline
+instead of assuming decode itself was the cost.
+
+**Confirmed: this SoC has zero hardware crypto acceleration.**
+`arch/arm/boot/dts/ark1668.dtsi` has no crypto/AES node; the kernel
+config has no `CONFIG_CRYPTO_DEV_*` driver at all.
+
+**Confirmed: the Android Auto session is TLS-encrypted, and the
+decryption is genuinely done in software.** The connection log shows
+a real TLS 1.2 handshake (`SSL version=TLSv1.2 Cipher
+name=ECDHE-RSA-AES128-GCM-SHA256`). `libAndroidAuto.so` (the library
+`sink` actually delegates `GalReceiver`'s implementation to --
+`GalReceiver::init/start/shutdown` are undefined/imported symbols in
+`sink` itself) has **OpenSSL statically linked in**: real
+`AES_encrypt`/`AES_decrypt`/`AES_cbc_encrypt`/`EVP_aes_128_cbc`
+symbols, not stubs, and critically **no separate `libssl.so`/
+`libcrypto.so` dependency** -- confirming OpenSSL is compiled directly
+into this library, not delegated to some external accelerated path.
+
+**Refined mechanism**: decode itself is hardware-offloaded and cheap
+for the CPU, but the AES decryption that has to happen *before*
+`hx170dec` can even start on a frame is 100% software, on the single
+core, with no hardware assist anywhere in this SoC. Audio and video
+are multiplexed over the same encrypted AA session -- video's data
+volume is far higher than audio's, so decryption cost scales heavily
+with video bitrate/frame size, not audio. If both are demultiplexed
+from the same decrypted stream in a serial receive pipeline, a large
+video frame's decrypt work directly delays whatever audio data is
+queued immediately behind it. This fits "recurs throughout the
+session" (the user's correction to the earlier one-time-startup
+theory) far better than video decode ever could, since decrypt cost
+tracks ongoing video content complexity continuously, not a one-time
+pipeline-setup burst.
+
+**Still not confirmed with live evidence** -- this is now a precise,
+well-evidenced *candidate* mechanism (single-core + no crypto hardware
++ real statically-linked software AES + audio thread with zero
+priority protection), not a proven root cause. The `SCHED_TRACER`
+capture and/or the `chrt -f` no-rebuild experiment proposed above are
+still the needed next steps -- if a sched trace shows the CPU spending
+time in `libAndroidAuto.so`'s AES routines (or generally in `sink`'s
+receive/demux code) exactly when the audio thread should be running
+but isn't, that would confirm this mechanism directly rather than by
+inference.

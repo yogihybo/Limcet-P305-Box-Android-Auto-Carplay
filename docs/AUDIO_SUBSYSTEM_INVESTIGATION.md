@@ -2666,3 +2666,73 @@ discontinuous. The kernel-side DMA/PCM architecture comparison above
 remains recorded for completeness but is now a lower-priority thread
 given this symptom clarification -- it was aimed at explaining clicks
 from a healthy stream, not gaps in the stream's actual content.
+
+### New leading theory: simultaneous Bluetooth A2DP + Android Auto audio mixing (2026-07-28, same day)
+
+User asked directly whether audio could be playing back simultaneously
+through both MsnCoreApp's Bluetooth path and the Android Auto path.
+Checked the actual ALSA routing and code, and this is a genuinely
+strong, previously-unexplored lead.
+
+**Confirmed: the default ALSA output path is `dmix`-based, which
+allows multiple simultaneous PCM clients with zero exclusivity.**
+`firmware_source/mtd6_rootfs/etc/asound.conf`: `pcm.!default` ->
+`asymed` -> `softvol` -> `dmix` -> `hw:0,0`. `dmix` is ALSA's software
+mixing plugin, explicitly designed so multiple independent processes
+can each open a playback stream and have ALSA mix them together in
+real time -- there is no exclusive-open enforcement anywhere in this
+chain. If two processes both hold an open `softvol`/`dmix` stream at
+once, both play, mixed, simultaneously, with no error from ALSA at
+all.
+
+**Confirmed: Bluetooth A2DP is genuinely enabled and capable of
+streaming audio.** `blueware.properties`: `A2DP_ENABLE=1`. `strings`
+on the `blueware` binary shows a real, active A2DP audio-playback
+path: `audio_control_play a2dp:[%d]`, plus AT-command-style controls
+`+A2DPSTAT`/`+A2DPCONN`/`+A2DPDISC`/`+A2DPMUTE`/`+A2DPSR`/`+A2DPDEV`/
+`+A2DPMUTED` -- a full, real A2DP sink implementation, not a stub.
+
+**Confirmed gap: nothing in the Android Auto code path has ANY A2DP
+awareness at all.** `strings`-swept `sink` (the AA daemon), `carplay`,
+`libAndroidAuto.so`, and `libAutoDongle.so` for any A2DP-related
+string -- zero matches in all four. None of them call `+A2DPMUTE`,
+check A2DP connection state, or coordinate with `blueware` in any way.
+If a phone maintains both its classic Bluetooth A2DP profile AND an
+Android Auto WiFi session concurrently (a real, common phone-side
+possibility -- AA-over-WiFi typically keeps the underlying BT
+connection alive for pairing/control purposes even after the WiFi
+link is up) and independently decides to stream audio over A2DP at
+the same time `sink` is streaming AA media audio, **this system has
+no mechanism anywhere to prevent both streams reaching `dmix`
+simultaneously.**
+
+**Why this fits "choppy, segmented" specifically, better than the
+kernel-side theories chased so far**: two independently-clocked PCM
+streams being software-mixed by `dmix`, especially if one of them
+(A2DP, over a lossier/lower-bandwidth BT link, or intermittently
+receiving silence/comfort-noise/control-tone bursts from the phone)
+isn't feeding data as smoothly as the other, would produce exactly a
+broken-up, segmented-sounding hybrid of the intended audio -- not a
+clean stream with occasional clicks. This also cleanly explains the
+clean `SND_PCM_XRUN_DEBUG` result from earlier: `dmix`'s slave device
+never starves, because *something* (possibly two somethings) keeps
+feeding it continuously.
+
+**Not yet confirmed -- needs a live test, two easy options:**
+1. During a reproduced stutter, check whether more than one process
+   holds an open PCM handle to `dmix`/`hw:0,0` simultaneously (e.g.
+   `fuser`/`lsof` on `/dev/snd/pcmC0D0p`, or checking for both `sink`
+   and `blueware` appearing as active clients).
+2. Simpler, more direct test: **disconnect/disable Bluetooth entirely
+   on the phone (or turn off BT on the head unit) while keeping the
+   Android Auto WiFi session active, and see if the stutter changes.**
+   If it goes away or changes character, this theory is confirmed and
+   the fix is straightforward (have `sink`/`MsnCoreApp` proactively
+   call `blueware`'s own `+A2DPMUTE`/disconnect A2DP when an AA
+   session becomes the active media source, mirroring what a
+   well-behaved implementation should already be doing here).
+
+This is now the leading theory for the "choppy, segmented" symptom --
+more directly testable than the WiFi-packet-loss theory above, and
+doesn't require any log capture, just a quick behavioral test (BT
+on vs. off during an AA session).

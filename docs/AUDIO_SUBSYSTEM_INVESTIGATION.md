@@ -3203,20 +3203,30 @@ pipeline more failure-prone than it would otherwise be).
 **But comparing byte-for-byte turned up a real, independent bug**: the
 deployed `firmware_source/mtd6_rootfs/usr/bin/sink`,
 `usr/lib/libAndroidAuto.so`, and `usr/lib/libAutoDongle.so` **did not
-match the genuine Prado dump's copies at all** (different md5sums),
-and didn't match any other firmware dump in this repo either (Holden,
-CarSyncTech, P306) -- unknown origin. `git log` shows `sink` was
-introduced as a fresh 0->532304-byte addition in commit `d2b2dbc`
-("fix: correct corrupted paths in build scripts from directory
-restructure", 2026-07-21) rather than ever being copied from a
-verified source -- stock's real `sink` is 527448 bytes, and the
-deployed one has at least one extra exported symbol
-(`RfcommConnection::reSendVersionRequestMessage`) not present in
-stock, confirming this is a genuinely different SDK build, not a
-corrupted copy of the same binary. `firmware_overlay` has no copies of
-these three files to override this, so `firmware_source`'s mismatched
-copies are exactly what has been getting deployed and tested this
-whole time.
+match the genuine Prado dump's copies at all** (different md5sums).
+`git log` shows `sink` was introduced as a fresh 0->532304-byte
+addition in commit `d2b2dbc` ("fix: correct corrupted paths in build
+scripts from directory restructure", 2026-07-21) rather than ever
+being copied from a verified-against-Prado source -- stock's real
+`sink` is 527448 bytes, and the deployed one has at least one extra
+exported symbol (`RfcommConnection::reSendVersionRequestMessage`) not
+present in the Prado dump's copy.
+
+**Provenance confirmed, not a mystery**: user identified the source --
+these are genuinely from the **Holden** firmware. Verified directly:
+extracted `firmware_dumps/Holden firmware update/rootfs.img` (a UBI
+image, via `ubireader_extract_files`, same technique already used
+once before in this project for the same dump) and both `sink` and
+`libAndroidAuto.so` came back **byte-identical** (md5-verified) to
+what `firmware_source` had. So this wasn't corruption or an unknown
+build -- at some point (most likely during the July 21 directory
+restructure) the wrong sibling dump's copy got pulled in for this
+Prado-specific rootfs, probably because Holden and Prado share close
+enough lineage that a Holden binary runs fine here without any
+obvious error, masking the mismatch. `firmware_overlay` has no copies
+of these three files to override this, so `firmware_source`'s
+Holden-sourced copies are exactly what has been getting deployed and
+tested this whole time on a Prado unit.
 
 **Fixed**: restored all three files from the real Prado dump,
 verified byte-identical via md5 afterward. `firmware_source/

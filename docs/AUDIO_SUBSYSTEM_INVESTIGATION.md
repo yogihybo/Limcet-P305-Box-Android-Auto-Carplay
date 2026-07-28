@@ -2305,7 +2305,8 @@ deployed the new binary over both the `gpu-known-good-pairing/`
 checkpoint and the actual staged `compiled_modules/lib/modules/
 4.19.192/galcore.ko`. Full detail and exact rebuild commands in
 `linux-arkmicro`'s `gpu-known-good-pairing/README.md`. Committed
-(`f6ae2660b`), pushed. **Not yet hardware-tested.**
+(`f6ae2660b`), pushed. **HW-CONFIRMED 2026-07-28: boots cleanly, galcore
+loads without the Oops.** Root cause and fix both verified correct.
 
 Also restored `FUNCTION_TRACER`/`FUNCTION_GRAPH_TRACER` is **not**
 being re-added -- keeping them off since they were never actually

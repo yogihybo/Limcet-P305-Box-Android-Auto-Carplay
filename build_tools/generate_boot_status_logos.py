@@ -2,23 +2,28 @@
 """
 build_tools/generate_boot_status_logos.py — Generate boot-status bootlogo variants
 
-sd_bootable/bootlogo.raw is the real, hand-placed Toyota logo (never
-written by this script) built from make_touch2_bootlogo.py + convert_bootlogo.py
--- confirmed byte-for-byte identical by regenerating it from that same
-pipeline. This script reuses make_touch2_bootlogo.py's exact composition
-(gradient, cropped/alpha-blended Toyota emblem, wordmark, status-line font/
-size/color/position) with only the status string changed, so the other two
-boot-progress variants match it pixel-for-pixel in style:
+sd_bootable/bootlogo.raw is the real Toyota logo, originally built from
+make_touch2_bootlogo.py + convert_bootlogo.py -- confirmed byte-for-byte
+identical by regenerating it from that same pipeline. This script reuses
+that exact composition (gradient, cropped/alpha-blended Toyota emblem,
+wordmark, status-line font/size/color/position) with only the status
+string changed, producing all four boot-progress variants pixel-for-pixel
+consistent in style:
 
-    bootlogo_usb.raw    "Loading USB"     (shown just before attempting bootusb)
-    bootlogo_nand.raw   "Loading NAND"    (shown just before falling back to nandboot)
+    bootlogo.raw         "Loaded U-Boot"   (shown by ark_show_bootlogo() at earliest boot)
+    bootlogo_sd.raw      "Loading SD"      (shown by bootmmc)
+    bootlogo_usb.raw     "Loading USB"     (shown before attempting bootusb)
+    bootlogo_nand.raw    "Loading NAND"    (shown before falling back to nandboot)
+
+Wording is deliberately past tense for the first ("Loaded" -- U-Boot has
+already finished loading by the time this shows) and present tense for
+the rest (each names the boot medium about to be attempted).
 
 Usage:
   python3 build_tools/generate_boot_status_logos.py
 """
 
 import struct
-import sys
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
@@ -34,9 +39,10 @@ BG_BOTTOM = (30, 33, 40)
 TEXT_WHITE = (235, 236, 238)
 
 VARIANTS = [
+    ("bootlogo.raw", "Loaded U-Boot"),
+    ("bootlogo_sd.raw", "Loading SD"),
     ("bootlogo_usb.raw", "Loading USB"),
     ("bootlogo_nand.raw", "Loading NAND"),
-    ("bootlogo_sd.raw", "Booting SD Card"),
 ]
 
 
@@ -99,18 +105,12 @@ def pack_raw(img: Image.Image) -> bytes:
 
 
 def main():
-    base = OUT_DIR / "bootlogo.raw"
-    if not base.exists():
-        sys.exit(f"ERROR: {base} not found (this script never writes it, only reads for reference)")
-
     for filename, status in VARIANTS:
         img = render(status)
         raw = pack_raw(img)
         out_path = OUT_DIR / filename
         out_path.write_bytes(raw)
         print(f"Wrote {out_path}: {len(raw)} bytes ({W}x{H}x32bpp) -- \"{status}\"")
-
-    print(f"{base} left untouched.")
 
 
 if __name__ == "__main__":

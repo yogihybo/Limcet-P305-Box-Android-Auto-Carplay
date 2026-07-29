@@ -1476,7 +1476,7 @@ build() {
     echo    "    Stepldr  → loads UBOOT.BIN from BOOT partition"
     if $NEW_UBOOT_MODE; then
         echo "    U-Boot   → imports environment variables from uEnv.txt on BOOT partition (if present)"
-        echo "    U-Boot   → shows \"Loading U-Boot\" splash (bootlogo.raw) from earliest boot"
+        echo "    U-Boot   → shows \"Loaded U-Boot\" splash (bootlogo.raw) from earliest boot"
         echo "    U-Boot   → 1. bootusb: attempts booting kernel (zImage) + DTB from attached USB drive"
         echo "    U-Boot   →    (splash switches to \"Loading USB\" before this attempt)"
         echo "    U-Boot   → 2. nandboot: falls back to direct NAND kernel boot (splash switches to \"Loading NAND\")"

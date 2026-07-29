@@ -4913,6 +4913,62 @@ tell a flake from a real regression) and, if it reproduces, bisect by
 temporarily dropping the `setup_board_tags()` additions from §44 to
 see if `reservingtrack` passes again.
 
+### Picked back up 2026-07-29: strong candidate mechanism found, not yet fully pinned down
+
+User asked to dig into remaining U-Boot-vs-stock gaps in the reverse
+camera path. Re-examined this parked regression with fresh eyes.
+
+**Found a directly-relevant, already hardware-confirmed corruption
+class in this same codebase.** `gd->ram_size` is capped at **180MiB**
+(confirmed live in every recent boot log: `DRAM:  180 MiB`) via
+`CONFIG_SYS_MEM_TOP_HIDE` (76MB), deliberately reserving the top
+76MB (180-256MB of the real 256MB SDRAM) for the OSD1/OSD2 hardware
+framebuffer carveouts, outside U-Boot's own managed memory. Two
+*other* buffers -- the `arkdata.ini` load address
+(`ARKDATA_BUF_ADDR`) and the bootlogo JPEG scratch buffer
+(`BOOTLOGO_SCRATCH_ADDR`), both in
+`board/arkmicro/ark1668_limcet_p305/`) -- were **originally placed
+inside this same hidden 180-256MB region** (`0xfe00000`/254MB and
+`0xe000000`/224MB respectively), and real hardware testing traced
+this to genuine corruption of **U-Boot's own command table**. Both
+were already fixed by relocating them down into the managed <180MiB
+region (`0x2900000`/`0x2a00000`) -- see the "Was 0xfe00000/0xe000000
+-- moved..." comments in `ark1668_arkdata_ini.c` and
+`ark1668_display_cfg.c`.
+
+**The gap**: `reservingtrack`'s load address (`nand read 0xfd00000
+reversingtrack` in `nandboot`, `include/configs/
+ark1668_limcet_p305.h`) is still at `0xfd00000` (253MB) -- squarely
+inside that same hidden/dangerous 180-256MB zone that already caused
+real, confirmed corruption for the other two buffers -- and was
+**never relocated**, because unlike those two, this address isn't
+ours to pick: it's the fixed physical address stock's own
+`track_paint_init()` (kernel-side) hardcodes and checks for the
+`"RSTK"` magic. This is a strong, concrete candidate for the same
+corruption mechanism behind this section's parked regression.
+
+**Checked two obvious specific causes, both ruled out**: U-Boot's own
+malloc arena (`CONFIG_SYS_MALLOC_LEN=0x80000`, `CONFIG_SYS_INIT_SP_ADDR
+=0x80000`) is tiny and lives near the very start of RAM, nowhere near
+`0xfd00000` -- not the mechanism. The stock kernel's own load address
+(`kerneladdr=0x1000000`/16MB) plus its real ~3.2MB `zImage` size also
+doesn't reach anywhere near `0xfd00000` -- also ruled out as a direct
+overwrite.
+
+**Not yet pinned down**: the *exact* write that corrupts the
+reservingtrack data once loaded remains unconfirmed -- this needs a
+live test, not more static analysis, since nothing else in the
+`nandboot` command sequence between the `nand read 0xfd00000
+reversingtrack` line and `bootz` obviously touches that address
+range. Recommended next test, combining with the bisect already
+proposed above: capture a fresh `bootnand` boot log and, if
+`reservingtrack` still fails, try reading back `0xfd00000` (e.g. `md
+0xfd00000 0x10`) at increasing points through the boot sequence
+(right after the `nand read`, then again right before `bootz`) to
+pinpoint exactly when the `"RSTK"` bytes actually get clobbered --
+narrows the search to whichever specific command in between is
+responsible, rather than guessing.
+
 ---
 
 ## 46. galcore version/binary comparison, plus a static trace of DirectFB's dma_buf handoff — mostly ruling out the driver-generation theory

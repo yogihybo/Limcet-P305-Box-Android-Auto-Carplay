@@ -1242,3 +1242,27 @@ deterministic logic bug. **Fixed** (`linux-arkmicro` commit
 `ad1e7c816`): retries the `fatload`+magic-check up to 3 times before
 giving up, rather than failing hard on a single bad read. Not yet
 hardware-tested.
+
+**Same day, decisive move: default boot chain no longer chainloads
+stock U-Boot at all.** User's call: the intermittent hang is inside
+the unmodifiable stock U-Boot binary itself once execution jumps into
+it -- not something either of the two fixes above can retry from our
+side, since control has already left our own code. Worse, because
+`boothybrid`/`bootstock` sat inside `CONFIG_BOOTCOMMAND`'s
+`if...elif...else` chain, a genuine hang there never returns, meaning
+the `nandboot` fallback at the end of that chain never ran either --
+the unit would just sit stuck until power-cycled, defeating the whole
+point of having a fallback.
+
+Given `nandboot` (this build's own U-Boot booting the real stock
+kernel+rootfs directly from NAND -- no chainload, no black-box binary,
+entirely our own debuggable code) was already hardware-confirmed
+2026-07-24 (§45 above) to bring up the full stock kernel/MsnCoreApp/
+CarPlay/BT/WiFi stack end to end, there's no known remaining
+functional gap that chainloading stock U-Boot was still needed for.
+**Fixed** (`linux-arkmicro` commit `299f89b32`): default
+`CONFIG_BOOTCOMMAND` is now `bootusb -> nandboot` directly, removing
+the chainload step (and its unfixable hang risk) from the automatic
+boot path entirely. `boothybrid`/`bootstock` remain available as
+manual commands at the prompt for anyone who wants to explicitly
+test/compare against real stock U-Boot. Not yet hardware-tested.

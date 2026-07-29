@@ -3778,3 +3778,71 @@ removes the network+demux pipeline entirely -- clean playback there
 would confirm the ALSA/DMA/codec path itself is fine and the problem
 really is upstream in the shared reader/demux stage, not ruled out
 by this reframing.
+
+### This-session reader-thread theory ALSO doesn't fit: user confirms recurrence at any point, even with static video (2026-07-29, same day)
+
+User corrected the reader-thread/video-data-volume theory above almost
+immediately: the audio stutter is **not confined to startup** -- it
+recurs at any point during normal operation, including while video
+content is largely static. A "large video I-frame contends with audio
+on the shared reader thread" mechanism can't explain this: static
+video content means little/no large frame data is arriving to cause
+contention, yet the audio glitch still happens. **This deprioritizes
+the reader-thread-contention theory** (still plausible as a
+contributor to the specific startup burst already captured in logs,
+but not the general/recurring mechanism).
+
+User's own framing: "we must be doing something different to stock in
+our kernel decoding path." This redirects the search specifically to
+kernel-side video/display code that (a) fires continuously regardless
+of point in the session, and (b) fires regardless of whether video
+content is actually changing -- i.e. driven by fixed hardware timing,
+not by data volume or network delivery.
+
+**Found a strong structural match**: `ark1668_lcdfb_interrupt()`
+(`drivers/video/fbdev/arkmicro/ark1668_lcdfb.c`) is the LCDC's own
+vsync/frame IRQ -- fires at the **physical panel refresh rate**, a
+fixed hardware timing signal, completely independent of whether AA
+video content is static or changing, for as long as the display is
+powered on (i.e. always, for the whole time the unit is running).
+This handler is a plain, non-threaded `request_irq()` handler (same
+class of mechanism already flagged this session for the non-threaded
+USB IRQ theory), and on every single frame it unconditionally calls
+`schedule_work(&sinfo->task)`. That work item calls
+`ark_itu656_display_int_handler()` in
+`drivers/soc/arkmicro/itu656/ark1668_vin.c` -- the **backup-camera**
+video-input handler, part of `CONFIG_ARK1668_ITU656`, which this
+project re-enabled in the defconfig on 2026-07-26 specifically to fix
+the reverse-camera feature (see
+[[project_stock_kernel_boot_backcar_investigation]]). When the camera
+isn't active it returns quickly after checking `dvr_dev->work_status`,
+but the ISR still pays for a full `schedule_work()` -> kworker wake ->
+schedule round-trip every single frame, unconditionally, on this
+single-core system, for the entire time the display is on.
+
+This fits both of the user's corrections directly: **recurs at any
+point in operation** (driven by continuous panel-refresh timing, not
+a one-time startup event) and **independent of video content**
+(hardware vsync timing, not data volume). It's also a strong fit for
+"different from stock": ITU656 backup-camera support is something
+this project reconstructed/re-enabled from scratch (no real stock
+driver source available for it), so a difference in how often/how
+this work gets scheduled compared to whatever stock's actual
+(closed) driver does is very plausible.
+
+**Not yet proven sufficient to explain the audible magnitude of the
+mute-flap pattern by itself** -- the per-call overhead when the
+camera is inactive is small (a few flag/pointer checks), and this
+needs live correlation, not just architectural plausibility. **Added
+logging (commit f83033fac, `linux-arkmicro`, not yet hw-tested)**: a
+per-frame `trace_printk` in the vsync ISR itself (ftrace buffer,
+correlatable directly against the `pcm_dmaengine` period-jitter
+trace_printk already in place), plus a `ktime`-measured runtime of
+`ark_itu656_display_int_handler()` with a rate-limited `printk` if any
+single call exceeds 1ms. Test: reproduce the stutter mid-session with
+static video, then check `cat /sys/kernel/debug/tracing/trace` for
+`lcdfb vsync irq`/`itu656 display task` lines lined up in time against
+the `pcm period`/`digital_mute`/`play:225` lines already logged
+elsewhere -- if vsync IRQ timing or task runtime spikes coincide with
+audio events even when video is static, that's the confirmation this
+theory needs.

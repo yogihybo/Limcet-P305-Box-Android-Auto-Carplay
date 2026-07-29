@@ -1187,4 +1187,34 @@ resetting` crashes (worked once, failed consistently after — skipping
 required low-level init would produce exactly that kind of "usually
 fine, occasionally traps" pattern). Fix: change `bootstock`'s `go`
 target from the header `EP` to `STOCK_UBOOT_LOAD_ADDR` (`0x30000`)
-directly. Not yet applied/tested as of this writing — see session notes.
+directly. **Applied and hardware-confirmed 2026-07-13** (see
+`project_nand_ecc_investigation` memory) — this specific bug is fixed.
+
+**2026-07-29: a different intermittent failure in the same chainload
+path, found later.** User reported `bootstock` still occasionally
+chainloading into stock U-Boot successfully but then having *stock
+U-Boot itself* fail to boot the stock kernel — a different symptom
+from the `EP`-vs-`0x30000` crash above (that one crashed inside stock
+U-Boot immediately; this one gets further, into stock's own kernel
+boot). The chainload's warm handoff (`bootstock_file_from_block_dev()`)
+only zeroes 7 NAND/BCH control registers right before the jump
+(`rBCH_CR`, `rBCH_INT` clear+mask, `rNAND_DMA_CTRL`, `rNAND_GLOBAL_CTL`,
+`rNAND_JUMP_CTL`, `rNAND_CR`) — unconditionally, with no check that the
+controller's FSM has actually finished whatever transaction our own
+boot sequence last ran (kernel/arkdata/reservingtrack load, `switchecc`,
+etc, at a point in the boot sequence that varies session to session
+depending on what the user did before typing `bootstock`). Zeroing
+control registers out from under a still-in-flight transaction would
+leave the controller in a genuinely undefined state for stock U-Boot's
+own NAND driver to inherit when it then tries to read the kernel
+partition — a plausible mechanism specifically for *intermittent*
+failures (a fixed, always-present gap would be expected to fail every
+time, not "moments where it fails"). **Fixed** (`linux-arkmicro`
+commit `25f3bb7ec`): added a bounded poll on `rBCH_NAND_STATUS` bits
+`[5:0]` (the FSM-idle condition; reuses the exact same wait this
+build's own `ark_nand.c` driver already does after every real NAND
+transaction) before the existing register reset, so the zeroing only
+happens once the controller is actually quiescent. Bounded with a
+timeout rather than looping forever, so a genuinely wedged controller
+prints a warning and proceeds rather than hanging the chainload
+silently. Not yet hardware-tested.

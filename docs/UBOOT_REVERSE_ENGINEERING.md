@@ -1325,18 +1325,42 @@ and a status line in DejaVu Sans **regular** (not mono, not bold) at
 
 **Implementation**: `build_tools/generate_boot_status_logos.py`
 reuses that exact same composition function with only the status
-string changed, producing `bootlogo_usb.raw`/`bootlogo_nand.raw` --
-pixel-identical style to the real `bootlogo.raw`, which itself is
-only ever read, never regenerated or written by this script. On the
-U-Boot side (`linux-arkmicro` commit `d843fd60e`):
+string changed, producing `bootlogo_usb.raw`/`bootlogo_nand.raw`/
+`bootlogo_sd.raw` -- pixel-identical style to the real `bootlogo.raw`,
+which itself is only ever read, never regenerated or written by this
+script. On the U-Boot side (`linux-arkmicro` commit `d843fd60e`):
 `display_bootlogo_from_sd()` was parameterized into
 `display_bootlogo_file(const char *filename)`, and a new
 `bootlogofile <name>` command re-does just the fatload+OSD1-push
 (display is already initialized by `ark_show_bootlogo()` by the time
-this runs, so no need to redo that) to swap the splash mid-boot.
-Wired into the default `CONFIG_BOOTCOMMAND`: shows
-`bootlogo_usb.raw` right before attempting `bootusb`, and
-`bootlogo_nand.raw` right before falling back to `nandboot`. The
+this runs, so no need to redo that) to swap the splash mid-boot. The
 initial `bootlogo.raw` ("Loading U-Boot", shown by
 `ark_show_bootlogo()` itself, unrelated to this new command) is
-unaffected. Not yet hardware-tested.
+unaffected.
+
+**Wired into every boot path, not just the default chain (commits
+`ade576c24`/`f433ccb67`)**: initially only added to
+`CONFIG_BOOTCOMMAND`'s automatic chain, but the manual commands
+(`bootmmc`/`bootusb`/`bootnand` -- what's actually used day to day,
+interrupting autoboot at the prompt) didn't call it at all. Added
+calls to each: `bootmmc` -> `bootlogo_sd.raw` ("Booting SD Card"),
+`bootusb` -> `bootlogo_usb.raw`, `bootnand` -> `bootlogo_nand.raw`.
+
+**Real bug found testing `bootnand`, not a timing issue**: user
+reported not seeing the status change and guessed it might need a
+pause before handing off to the next boot stage. Actual cause: the
+`nandboot` env script's own first command, `disconfig 0`, calls
+`ark_display_init()` -- a full LCDC re-init that resets OSD1 layer
+state. Any `bootlogofile` call made *before* that point (as the
+initial implementation did, both in `CONFIG_BOOTCOMMAND` and inside
+`do_bootnand()`) gets silently wiped out before it's ever visible, no
+amount of waiting fixes that. **Fixed**: moved the
+`bootlogofile bootlogo_nand.raw` call into the `nandboot` env script
+itself, positioned right after `disconfig 0`, plus a `sleep 1` so the
+status text is actually on screen for a moment before the NAND
+reads/`bootz` that follow (a real, if secondary, use for the pause the
+user suggested). `bootmmc`/`bootusb` were unaffected by this specific
+bug -- `boot_from_block_dev()` never touches display state -- and
+needed no equivalent fix.
+
+Not yet hardware-tested.

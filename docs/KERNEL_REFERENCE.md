@@ -76,7 +76,17 @@ Linux version 3.4.0 (root@build-server) (gcc version 4.9.4 (Buildroot 2018.08-rc
 
 ## Compiled-in Drivers — Complete ARK1680 BSP Inventory
 
-Everything is **monolithic** (no loadable modules). `kallsyms` is present; no module signing enforced.
+Most of the driver set is **monolithic**; `kallsyms` is present, no module
+signing enforced. **Correction (2026-07-29): not everything is built-in.**
+The shipped `mtd6_rootfs`'s `lib/modules/3.4.0/` contains real `.ko` files
+for both MMC (`kernel/drivers/ark/sdmmc/ark_dw_mmc.ko`, 29KB) and USB
+(`kernel/drivers/usb/musb/{musb_hdrc,ark1680_musb}.ko` plus the gadget
+drivers `g_ncm.ko`/`g_eap.ko`/`g_webcam.ko`/`g_zero.ko`) — both were
+loadable modules in stock, not compiled in. This resolves the
+contradiction flagged in `docs/UBOOT_REVERSE_ENGINEERING.md` §6 (that
+doc's zImage-symbol-string search couldn't confirm it either way; the
+direct rootfs module listing settles it). The "Key Findings" #4 below
+("no loadable modules") is stale/wrong and kept only for history.
 
 ### Serial / UART
 
@@ -266,7 +276,7 @@ These drivers are compiled in to support TV-tuner accessory variants:
 
 3. **No kernel module signing** — no `module.sig`, `verify_module`, or PKCS#7 signature verification references found. Kernel accepts unsigned modules (though none are loaded — everything is built-in).
 
-4. **No loadable modules** — the entire driver set is compiled monolithically. `kallsyms` is present for symbol resolution.
+4. ~~**No loadable modules** — the entire driver set is compiled monolithically.~~ **STALE, CORRECTED 2026-07-29** — real `.ko` files for both MMC (`ark_dw_mmc.ko`) and USB (`musb_hdrc.ko`, `ark1680_musb.ko`, gadget drivers) exist in the shipped rootfs; see the note above the driver inventory table. `kallsyms` is present for symbol resolution.
 
 5. **RN6752 AHD decoder** is the reverse camera interface IC — probed via I²C, streams ITU-656 video to the hardware prescaler → de-interlacer → display compositor chain.
 

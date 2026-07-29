@@ -1294,7 +1294,7 @@ build() {
     # like --bootlogo since they're a fixed pair tied to this specific
     # feature, not an arbitrary user-supplied splash -- always sourced from
     # sd_bootable/ alongside the default bootlogo.raw.
-    for variant in bootlogo_usb.raw bootlogo_nand.raw; do
+    for variant in bootlogo_usb.raw bootlogo_nand.raw bootlogo_sd.raw; do
         if [[ -f "$SCRIPT_DIR/sd_bootable/$variant" ]]; then
             run cp "$SCRIPT_DIR/sd_bootable/$variant" "/tmp/sd_p1/$variant"
             bootlogo_label="$bootlogo_label + $variant"

@@ -36,6 +36,7 @@ TEXT_WHITE = (235, 236, 238)
 VARIANTS = [
     ("bootlogo_usb.raw", "Loading USB"),
     ("bootlogo_nand.raw", "Loading NAND"),
+    ("bootlogo_sd.raw", "Booting SD Card"),
 ]
 
 

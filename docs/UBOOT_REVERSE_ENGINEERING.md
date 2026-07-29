@@ -254,15 +254,17 @@ driver needed to read the SD card is itself sitting on the SD card. The fix
 there is a small initramfs that `insmod`s the module first, then pivots to
 the real root.
 
-**Whether that problem even applies here is unresolved.** `docs/KERNEL_REFERENCE.md`
-states "no loadable modules — the entire driver set is compiled
-monolithically," explicitly listing `drivers/mmc/` as built-in. But a real,
-29 KB `ark_dw_mmc.ko` module file does exist in the shipped rootfs
-(`.../rootfs/lib/modules/3.4.0/kernel/drivers/ark/sdmmc/ark_dw_mmc.ko`) —
-exactly what `SD_BOOT_PLAN.md` was concerned about. Tried to settle it by
-searching the kernel image for MMC-related symbol strings, but `zImage` is a
-compressed image — a raw string search can't see inside it, so this remains
-unconfirmed either way without real decompression/extraction tooling.
+**RESOLVED 2026-07-29: yes, `ark_dw_mmc` genuinely was a loadable module in
+stock, not built-in.** `docs/KERNEL_REFERENCE.md` used to state "no
+loadable modules — the entire driver set is compiled monolithically,"
+explicitly listing `drivers/mmc/` as built-in -- that claim was wrong (now
+corrected there). The real 29 KB `ark_dw_mmc.ko` module file in the shipped
+rootfs (`.../rootfs/lib/modules/3.4.0/kernel/drivers/ark/sdmmc/ark_dw_mmc.ko`)
+is genuine, confirmed by direct rootfs inspection rather than the earlier
+inconclusive zImage-symbol-string search (which couldn't see inside the LZO
+payload). USB is the same story: `musb_hdrc.ko`/`ark1680_musb.ko` and the
+gadget drivers (`g_ncm.ko`/`g_eap.ko`/`g_webcam.ko`/`g_zero.ko`) are also
+real loadable modules in stock, not built-in.
 
 **Doesn't matter for our actual blocker either way.** Using an initramfs as
 documented requires U-Boot to load *two* files instead of one:

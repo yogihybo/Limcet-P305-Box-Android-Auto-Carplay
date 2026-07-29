@@ -3917,3 +3917,117 @@ single-core-CPU-contending mechanism. If confirmed, the ftrace
 capture (correlating `itu656 hw irq` lines against
 `pcm period`/`digital_mute`/`play:225`) is the next step to prove
 actual audio impact, not just IRQ presence.
+
+### SoundAdapter `ICType` experiment: negative result, and a strong new lead from a real captured stutter (2026-07-29, same day)
+
+User found a genuine stock log showing `SoundAdapter Create Failed,
+Not Support ICType: 0` and, since this project's own `.ini` was
+already set to `ICType`/`SoundType=3` (the confirmed-correct BD37033
+value, see the "Background: how this started" section above), set it
+to `0` to test whether matching stock's apparent value changed
+anything. **Result: no crash** (the documented `SettingWindow::
+onFirstInit()` NULL-deref crash path wasn't hit this run), **and the
+audio still stuttered.** Expected and consistent: `SoundType`/`ICType`
+only selects MsnCoreApp's userspace `SoundAdapter` class for talking
+to the external BD37033 amp over I2C -- a completely separate layer
+from the kernel ALSA/PCM data path the stutter mechanism lives in.
+Ruled out as a stutter-relevant setting.
+
+**The same test run (`docs/logs/new uboot new kernel baseline
+v22_260729.txt`) also contained the richest live capture of a real
+XRUN burst yet, correlated against the newly-added `hw_params`/
+`digital_mute`/`trigger` logging plus `switchToAppAudioChannel`/
+`setAppVolumeMute` app-level log lines.**
+
+**First, a genuinely new pattern found and then ruled out as the
+general mechanism**: at boot, t=20.4s-21.2s (well before `MsnCoreApp
+version` even prints, i.e. before the app's main init), there's a
+storm of ~18 `hw_params` calls, each paired with `digital_mute`/
+`trigger cmd=1`/`cmd=0`, cycling through all **6** `asound.conf`
+`softvol`/`softmaster` dmix slots in turn (`softmaster`,
+`softmaster1`-`softmaster5`, distinct `numid`s 3-8) -- one open/mute/
+trigger/close cycle per slot. This looks like MsnCoreApp priming/
+self-testing all 6 of its named audio-focus slots once at launch (the
+DirectFB startup banner appears immediately before it in the log,
+confirming the process has already started). **Checked whether this
+recurs later and it doesn't** -- `hw_params` appears exactly twice in
+the whole ~929-line log: this one boot-time storm, and a single
+ordinary call at t=58.8s when AA's own audio sink is created
+(`Creating new Audio sink...`, `plug:softvol2`) -- a normal one-time
+setup, not a repeat of the multi-slot storm. **Ruled out** as the
+general "recurs at any point" mechanism -- it's boot-only.
+
+**But the actual XRUN burst at t=69.68s-76.29s (the same `play:225`
+mechanism already root-caused as genuine ALSA XRUN recovery) has a
+striking, tight correlation right at its onset:**
+
+```
+[69.679]  switchToAppAudioChannel, ModeApp: "MsnCarAuto"  AudioApp: "MsnCarAuto"  Channel: 0 Request: false
+[69.680]  setAppVolumeMute "MsnCarAuto" false
+[69.681]  ======== refreshAppAudioChannel 8388611 0
+[69.682]  switchToAppAudioChannel, ModeApp: "MsnCarAuto"  AudioApp: "MsnCarAuto"  Channel: 3 Request: false
+...
+play:225  (x18)
+```
+
+`switchToAppAudioChannel`/`setAppVolumeMute` fire twice in immediate
+succession right before the 18x `play:225` burst begins -- not a loose
+same-window correlation like earlier candidates, but the literal
+preceding action. This is the exact mechanism traced by disassembly
+much earlier in this whole investigation (see the very first "Real
+mechanism, confirmed via Ghidra decompile" entry in the project
+memory / early sections of this doc): `switchToAppAudioChannel()` ->
+`SoftVolCtrl::setMute()`/`setVolume()` -> `SoftVolCtrl::amixer_cset()`,
+which does a **full `snd_ctl_open()`->`elem_info()`->`elem_read()`->
+`elem_write()`->`snd_ctl_close()` cycle from scratch on every single
+call**. That lead was explored early on and deprioritized because it
+seemed tied only to a ~10-12s voice-session cycle that didn't match
+the reported symptom frequency -- this new evidence is a direct timing
+hit against an actual captured XRUN onset, not a loose frequency
+argument, and revives it as a strong candidate.
+
+**A second, earlier `switchToAppAudioChannel` call in the same log
+(t=50.825s, when the UI switches into CarAuto mode, before AA's WiFi
+link is even up) produces NO `play:225`** -- consistent with, not
+contradicting, the theory: at t=50.8s there's no active PCM stream
+being written yet, so nothing is available to glitch. The mechanism
+plausibly fires at any audio-focus/channel-switch event (BT connect,
+source change, voice prompt, phone call) regardless of video content
+or session stage, but only produces an audible/XRUN-visible symptom
+when it happens to land during active playback -- exactly the "recurs
+at any point, even with static video" pattern already established,
+and a much better fit than the USB/camera-IRQ leads chased over the
+last several turns.
+
+**Also explains the `ICType` test result cleanly**: `amixer_cset()`
+operates directly on ALSA mixer controls via `snd_ctl_*`, entirely
+independent of which `SoundAdapter` backend class is selected --
+consistent with changing `ICType` having no effect on the stutter.
+
+**A plausible cross-process mechanism, tying to earlier evidence**:
+`MsnCoreApp` (running `switchToAppAudioChannel`) and `sink` (writing
+AA's PCM audio) are separate processes, both routed through the same
+shared `dmix`/`softvol` chain in `asound.conf`. ALSA's dmix
+implementation coordinates concurrent clients via shared memory +
+System V semaphores. This connects directly to the `Semop lock
+failure Invalid argument` / `Semop unlock failure Invalid argument`
+lines seen in the earlier MsnCoreApp-restart dmesg capture (this same
+session, a few turns back) -- independent evidence of real contention
+in exactly this shared IPC mechanism. Two separate captures now point
+at the same architectural weak point: `MsnCoreApp`'s control-plane
+`amixer_cset()` calls contending with `sink`'s active PCM writes
+through the shared dmix/softvol layer.
+
+**Not yet confirmed, concrete next steps**: (1) check whether
+`switchToAppAudioChannel`/`setAppVolumeMute` (or the underlying
+`amixer_cset()`) fires at other points during a longer session --
+voice prompts, phone calls, source switches -- and whether those
+correlate with reported stutter away from the AA-connect window; (2)
+if reachable, time `SoftVolCtrl::amixer_cset()`'s actual duration on
+this hardware (a slow `snd_ctl_open()`/`close()` round-trip against a
+contended dmix semaphore could plausibly block for tens of
+milliseconds, comparable to the ALSA buffer's ~340ms XRUN margin
+established earlier); (3) a live semaphore-contention check (`ipcs -s`
+during a reproduced stutter, or strace on both processes around a
+`switchToAppAudioChannel` call) would directly confirm or rule out
+the cross-process blocking theory.

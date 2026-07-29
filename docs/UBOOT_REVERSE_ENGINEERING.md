@@ -1265,4 +1265,12 @@ functional gap that chainloading stock U-Boot was still needed for.
 the chainload step (and its unfixable hang risk) from the automatic
 boot path entirely. `boothybrid`/`bootstock` remain available as
 manual commands at the prompt for anyone who wants to explicitly
-test/compare against real stock U-Boot. Not yet hardware-tested.
+test/compare against real stock U-Boot.
+
+**HARDWARE-TESTED 2026-07-29, same day: working, no hang reproduced.**
+User ran the new default over multiple boots and could not trigger a
+hang. Treated as a good initial result, not a final closure -- per
+explicit user decision, keeping this open for a few more days of
+regular use before calling it fully confirmed, since the original bug
+was intermittent by nature (a handful of clean boots doesn't rule out
+a rarer recurrence). Amend this section if anything pops up.

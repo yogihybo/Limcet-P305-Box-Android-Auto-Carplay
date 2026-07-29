@@ -3647,3 +3647,77 @@ class of stutter, e.g. if choppiness genuinely recurs deep into a
 long-running session as the user separately reported), but
 de-prioritized below TCP slow start for explaining *this* specific,
 now well-characterized startup-burst pattern.
+
+### Mixer/mute RE-mistake check: I2C path cleared, but the audible mute mechanism confirmed (2026-07-29, same day)
+
+User asked directly: could our own RE of the drivers/audio stack have
+broken the mixer or mute controls, and separately, is audio being
+continuously muted and unmuted?
+
+**BD37033 external-amp userspace I2C path -- checked, cleared as an RE
+mistake.** `Sound_BD37033::resetSpeakerAtts`/`muteSpeakerAtts` in
+`libMsnSound.so` call `I2COperator::writeData()`, fully implemented in
+`libMsnCommons.so`. Disassembled `I2COperator::I2COperator(uchar,uchar)`
+and the underlying `arki2c_open`/`arki2c_write` helpers directly:
+they do a completely standard kernel `i2c-dev` sequence --
+`snprintf("/dev/i2c-N")` -> `open()` -> `ioctl(fd, I2C_SLAVE=0x0703,
+addr>>1)` -> `write(fd, buf, len)`. This is not custom register-level
+GPIO bit-banging in userspace (which would have been the worst case
+for this single-core system -- a busy-loop with zero opportunity to
+yield). It's a normal blocking syscall through whatever kernel i2c
+driver backs `/dev/i2c-N` (i2c-gpio in our case). The chip's confirmed
+always-fails-with-timeout behavior (documented earlier in this file)
+is real, but it fails through the kernel driver's own retry/timeout
+logic, not through anything `I2COperator` itself does wrong. **Ruled
+out as an RE mistake and de-prioritized as a stutter mechanism.**
+
+**Mute/unmute: confirmed happening repeatedly, and now tied directly
+to the `play:225` XRUN burst.** Grepped the kernel-side `digital_mute`
+and `elem_write` logging (added earlier this session) against
+`new uboot new kernel baseline v21_260729.txt`. In a ~1.1-second
+window at stream start (kernel-uptime `14.815s`-`15.9s`),
+`ark1668-sddac: digital_mute` toggles **24 times**, alternating
+mute=1/mute=0 at 20-45ms intervals, interleaved with `softmaster*`
+`elem_write` volume-ramp writes. After `15.9s` it goes completely
+silent -- no further mute activity until `41.36s`.
+
+Cross-checked against `ark1668-i2s: trigger cmd=1/cmd=0 stream=0
+(playback)` logging in the same file: the START(cmd=1)/STOP(cmd=0)
+trigger pairs fire at the **identical timestamps and cadence** as the
+`digital_mute` toggles in that same window. They are the same event,
+not two separate mechanisms -- `ark1668-sddac`'s codec driver mutes
+the DAC on `trigger(STOP)` and unmutes on `trigger(START)` (standard
+pop/click suppression), so every trigger flap produces one audible
+mute blip.
+
+**This connects directly to the already-identified `play:225` XRUN
+burst and explains the actual audible mechanism**: ALSA's
+`snd_pcm_prepare()` (called by `AlsaHandle::play()`'s XRUN-recovery
+path on every `play:225`) issues an implicit `trigger(STOP)` on a
+still-running stream; once the refilled buffer crosses the
+auto-start threshold, the next successful write auto-triggers
+`trigger(START)`. If the following write underruns again within
+milliseconds -- which it does, repeatedly, during the startup burst
+-- the cycle repeats. So: **`play:225` (XRUN) -> implicit
+`trigger(STOP)` -> `digital_mute(1)` -> buffer refills ->
+`trigger(START)` -> `digital_mute(0)` -> repeat.** ~24 of these
+cycles happen in just over a second at stream start, which is
+plainly audible as choppy/segmented audio -- this is not a separate
+bug, it's the literal mechanism connecting the already-confirmed
+XRUN storm to what the user actually hears.
+
+**Answers the user's two questions directly**: (1) no RE mistake
+found in the mixer/mute/I2C code paths examined -- the codec driver's
+mute-on-stop behavior is correct, standard behavior, just exercised
+far more than it should be; (2) yes, audio is genuinely being muted
+and unmuted repeatedly, dozens of times, but only during the
+already-known ~1s startup window, not continuously through playback.
+
+**Still open**: this confirms the downstream *symptom* mechanism, not
+the upstream *cause* of the XRUN storm itself -- the TCP-slow-start
+theory (or another network/buffer-starvation cause) is still the
+leading candidate for why the XRUNs happen in the first place. A
+useful next diagnostic: if TCP slow start is the real cause, a local
+`aplay` test of a WAV file (no network involved at all) should play
+back cleanly with none of this mute-flapping pattern -- which is
+exactly the test the user is already running.

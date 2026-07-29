@@ -3846,3 +3846,74 @@ the `pcm period`/`digital_mute`/`play:225` lines already logged
 elsewhere -- if vsync IRQ timing or task runtime spikes coincide with
 audio events even when video is static, that's the confirmation this
 theory needs.
+
+### Broader RE audit: "look at any RE that would create issues like this" (2026-07-29, same day)
+
+User asked for a systematic sweep, not just the one lcdfb finding.
+Grepped every `request_irq`/`request_threaded_irq` call site across
+`drivers/video/fbdev/arkmicro/`, `drivers/soc/arkmicro/`, and
+`sound/soc/arkmicro/`: **not a single one uses
+`request_threaded_irq`** -- every video/camera/DMA/I2S interrupt
+handler in this whole tree is a plain non-threaded hard-IRQ handler.
+This is a systemic characteristic of the tree, not an isolated
+mistake (and top-half-does-register-work-then-defers-to-workqueue is
+a normal Linux idiom in itself; the concern is specifically about how
+much work happens in the hard-IRQ top half, and how often it fires).
+
+**Also found: two alternate ITU656 driver implementations exist in
+the source tree** (`ark1668_vin.c` and `ark1668_itu656.c`, both
+exporting the same `ark_itu656_display_int_handler` symbol), gated by
+different Kconfig options (`CONFIG_VIDEO_ARK1668_VIN` vs
+`CONFIG_ARK1668_ITU656`). Only `CONFIG_ARK1668_ITU656=y` is set in
+this project's defconfig, so `ark1668_itu656.c` is the file actually
+linked -- the earlier analysis of `ark1668_vin.c`'s version of this
+function (in the section above) was describing **dead code that
+isn't even compiled in**. Corrected: the real active
+`ark_itu656_display_int_handler()` (in `ark1668_itu656.c`) also
+exits early on `!dvr_dev->work_status`, so it's cheap when the camera
+isn't active -- weaker than initially thought as a standalone cause.
+
+**Found something stronger while correcting that: the ITU656
+hardware capture IRQ itself.** `ark_itu656_int_handler()` in
+`ark1668_itu656.c` (registered as `"dvr_itu656"`, `IRQF_SHARED`,
+non-threaded) does a register read (`ARK1668_ITU656_ISR`), a register
+write (clear `ARK1668_ITU656_ICR`), and takes
+`dvr_dev->spin_lock_irqsave` -- **all before** the `work_status`
+check. This overhead happens on *every single interrupt from this
+hardware line*, regardless of whether the backup camera is actually
+being displayed. No `clk_prepare_enable`/power-gating for the ITU656
+peripheral was found anywhere in this driver -- the clock/interrupt
+source isn't obviously toggled based on `work_status` at all. If the
+camera sensor free-runs (common for reverse cameras, wired always-on
+so the picture appears instantly on gear change rather than after a
+sensor warm-up), this non-threaded hard-IRQ could be firing
+continuously at the camera's field rate (~50-60Hz) the entire time
+the unit is powered, **completely independent of AA video content or
+session state** -- a much better structural match for "recurs at any
+point in operation, even with static video" than the vsync/lcdfb
+theory above.
+
+**Also found, documented but lower-priority (gated behind
+`work_status`, so only matters when the camera is actively
+displaying, e.g. actual reverse gear)**: a real busy-wait spin loop
+in this same hard-IRQ handler --
+`while(dvr_dev->deinter_status && timeout--);` (10000 iterations,
+`ark1668_itu656.c` line 1333) -- executing with interrupts disabled
+via the held `spin_lock_irqsave`. Genuinely bad practice in hard-IRQ
+context regardless of relevance to the general stutter; worth fixing
+on its own merits, separately from this investigation.
+
+**Added logging (commit 05ecc4c56, `linux-arkmicro`, not yet
+hw-tested)**: `trace_printk` at the very top of
+`ark_itu656_int_handler()`, before the `work_status` gate, logging
+`intr_stat` and `work_status` on every single firing. **Cheapest
+possible test, no ftrace even required**: `cat /proc/interrupts |
+grep -i itu656` at two points during normal driving with no reverse
+gear engaged -- if the `dvr_itu656`/`dvr_deinterlace` counts are
+climbing, this confirms the hardware IRQ fires continuously
+regardless of camera state, which would make this the strongest
+candidate found so far for a content-independent, whole-session,
+single-core-CPU-contending mechanism. If confirmed, the ftrace
+capture (correlating `itu656 hw irq` lines against
+`pcm period`/`digital_mute`/`play:225`) is the next step to prove
+actual audio impact, not just IRQ presence.

@@ -3721,3 +3721,60 @@ useful next diagnostic: if TCP slow start is the real cause, a local
 `aplay` test of a WAV file (no network involved at all) should play
 back cleanly with none of this mute-flapping pattern -- which is
 exactly the test the user is already running.
+
+### TCP slow start deprioritized -- video is unaffected, so it isn't a shared-pipe bandwidth problem (2026-07-29, same day)
+
+User pointed out the flaw directly: video isn't delayed or glitchy at
+all during this same window, only audio chops. Audio and video are
+multiplexed over the **same single TCP `Transport`** (confirmed
+earlier this session -- only one `Transport` instance exists per AA
+session; `GalReceiver::messageRouter` demuxes both channels from it).
+A TCP-level cause -- slow start, Nagle, retransmission from packet
+loss -- throttles the connection as a whole; it can't selectively
+delay only the audio channel while leaving video completely clean.
+**This rules out every TCP/network-bandwidth-level theory examined so
+far** (slow start, Nagle/`TCP_NODELAY`, WiFi USB half-duplex,
+retransmission) as the cause of the startup XRUN burst specifically.
+
+**New theory, better supported by the actual binary architecture:
+single-threaded reader/demux contention between audio and video, not
+a network problem.** Symbol-table evidence from `sink`/
+`libAndroidAuto.so`: there is exactly **one `GalReaderThread`** per
+session, pulling all bytes off the shared `Transport` serially. Data
+passes through a single decrypt stage (`SslWrapper::
+decryptionPipelineEnqueue/Dequeue`), then `MessageRouter::
+routeMessage()` demuxes by channel ID to per-channel handlers
+(`AudioSource`, `MediaSinkBase`/`VideoDecoder`), with a `WorkQueue::
+queueWork()` dispatch mechanism in between. This is architecturally
+**one serial pipe feeding two very differently-buffered consumers**:
+video has large frame buffers and a hardware decode pipeline that
+easily absorbs a few extra milliseconds of reader-thread delay;
+audio's ALSA buffer is tiny (~21ms periods, already established
+earlier in this file) and has essentially zero tolerance for the
+same delay. If the single reader thread spends time receiving/
+decrypting/dispatching a large video frame (an I-frame is much
+bigger than a P-frame or an audio chunk) right when an audio chunk
+is due, the *audio* consumer starves while the *video* consumer
+doesn't even notice -- exactly the asymmetric symptom observed.
+This also fits the startup-only timing better than TCP slow start
+did: the first ~1s of an AA session is precisely when an initial
+video I-frame and audio stream setup both need to go out close
+together, maximizing contention on the single reader thread; once
+the session settles into steady-state P-frames the contention
+disappears, matching the observed silence after ~15.9s.
+
+**Not yet confirmed, concrete next steps**: (1) check whether
+`AudioSource`'s frame delivery to `AlsaHandle::play()` is synchronous
+on the `GalReaderThread` itself or dispatched onto a separate
+consumer thread via `WorkQueue` -- if synchronous, the reader thread
+literally cannot start the next audio read until the video frame
+ahead of it in the demux/decrypt pipeline is fully processed, which
+would be a smoking gun; (2) in a fresh capture, check whether video
+I-frame arrival (visible via frame-size/type if logged, or via
+`hx170dec` decode-start timing) lines up with the `play:225`/
+`digital_mute` burst timestamps; (3) the already-pending `aplay`
+local-WAV test remains useful even under this theory, since it
+removes the network+demux pipeline entirely -- clean playback there
+would confirm the ALSA/DMA/codec path itself is fine and the problem
+really is upstream in the shared reader/demux stage, not ruled out
+by this reframing.

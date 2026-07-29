@@ -4031,3 +4031,111 @@ established earlier); (3) a live semaphore-contention check (`ipcs -s`
 during a reproduced stutter, or strace on both processes around a
 `switchToAppAudioChannel` call) would directly confirm or rule out
 the cross-process blocking theory.
+
+### Critical correction: the stutter is NOT a startup-only burst that self-resolves -- it is continuous for the whole session, and doesn't recover on its own (2026-07-29, same day)
+
+User clarified two things that materially change this investigation's
+framing. First: every session captured so far shows the media stream
+stopping (`playbackStopCallback`) a few seconds after starting -- this
+was being read as the app/AA SDK giving up automatically due to poor
+quality. **It isn't. The user manually presses pause to end these
+test sessions.** Session-length numbers (v20's ~10.5s, v22's ~6.6s)
+only reflect how long each test happened to run, not anything about
+the underlying condition resolving. Second, and decisive: **the
+stutter never stops or improves on its own -- "keeps stuttering,
+never catches up," for as long as playback continues.**
+
+This retroactively undermines the earlier "it's a startup ramp-up
+burst, not steady-state contention" reframing (the section above,
+built on a clean `sched_switch` trace over an 18s window) -- that
+trace's window may simply have been a session the user paused
+similarly early, not evidence the condition self-resolves. It also
+weakens (without fully ruling out) the `switchToAppAudioChannel`/
+`amixer_cset` theory as the *sole* explanation: that call fires
+exactly once per session, at stream start, so on its own it can
+plausibly explain the *first* XRUN but not why the storm continues,
+unrecovering, for the entire rest of playback with no further trigger
+event visible in the log. Whatever the real mechanism is, it must be
+a *persistent* condition present for the whole duration of playback,
+not a one-time disruption with lingering effects.
+
+**DMA/buffering driver code audited directly against mainline, found
+solid, not the cause.** In response to "are our buffering routines
+correct," did a line-by-line comparison of `ark-dma.c`'s cyclic DMA
+implementation (period-elapsed callback, residue/pointer tracking)
+against the in-tree mainline reference (`drivers/dma/dw/core.c`).
+Initially suspected `dwc_get_sent()` had an inverted read of the
+hardware `BLOCK_TS` counter (counts-remaining vs counts-sent) -- would
+have been a very plausible chronic, structural bug -- but it's a
+byte-for-byte match with mainline's own identical function, same
+comment, same logic. Not a bug. The two real DMA bugs this project
+already found and fixed earlier (inverted residue formula in the
+cyclic `tx_status` path; missing `BLOCK` IRQ unmask needed for cyclic
+period-boundary detection) remain the only confirmed issues in this
+layer, and both are already fixed. No new DMA/buffering-layer bug
+found despite a careful, direct audit.
+
+**DMA "is our USB slower than stock" check: inconclusive, one
+real-but-cosmetic finding.** Compared boot logs: stock's driver
+explicitly logs `"musb-hdrc musb-hdrc.0: ... using DMA, IRQ 14"`;
+ours has no equivalent line (different driver entirely for the 4.19
+port, not proof of a functional gap by itself). `is_dma_capable()`
+compiles to `1` in our build (`CONFIG_USB_INVENTRA_DMA=y`,
+`CONFIG_MUSB_PIO_ONLY` not set), same DMA-capable status as stock.
+Found a real code smell in `musb_ark.c` -- `dma_off` is a single
+`static int` shared across *both* USB controller instances rather
+than per-instance -- but traced both branches of the code that reads
+it and confirmed neither touches any hardware register, only a log
+message; functionally inert, not a performance bug. Whether DMA is
+actually *engaged* for real bulk WiFi transfers at runtime (vs. just
+compile-time capable) remains genuinely unresolved -- would need a
+live check (MUSB debugfs, or IRQ-count-vs-data-volume comparison), not
+answerable from static code alone.
+
+**Renamed `ark-dma.c`'s driver/log strings to match stock**
+(`linux-arkmicro` commit `e8b9bb9fe`) purely for easier side-by-side
+log comparison going forward: `"dw_dmac"`/`"DesignWare DMA
+Controller"` -> `"ark_dw_dmac"`/`"Arkmicro DMA Controller"`, matching
+stock's real 3.4 kernel dmesg exactly. Cosmetic only, DT probing is
+unaffected (matches on the `"arkmicro,ark-dma"` compatible string).
+
+### Major mixer-control-surface gap found via `audio log stock_260715.txt`, checked and ruled out as the stutter's cause (2026-07-29, same day)
+
+Compared stock's real `amixer controls` output (`docs/logs/archived/
+audio log stock_260715.txt`) against this project's own established
+control list. **Stock has 39 mixer controls; our build has 8** (`Left/
+Right Playback Volume` + the 6 `softmasterN` dmix controls). Stock has
+all of that plus **22 real BD37033 "PA" hardware controls** (`PA
+Mute`, `PA Volume`, `PA Fader-FL/FR/RL/RR/Sub1/Sub2`, `PA Input
+Select`, `PA Loudness`, `PA Mixing-CH1/CH2`, `PA Sub-Input/LPF-FC/
+LPF-Parse/Output Select`, `PA Reset`, etc.) **and 9 EQ controls** (`EQ
+Bass/Middle/Treble`, each with gain/F0/Q) -- all entirely absent from
+our card. `CONFIG_SND_SOC_BD37033 is not set` in the current
+defconfig (briefly enabled 2026-07-19, disabled again) -- consistent
+with this project's long, never-resolved BD37033 I2C timeout history
+(see `docs/BD37033.md`).
+
+**Promising theory raised, then checked and walked back with direct
+evidence**: hypothesized that stock's `switchToAppAudioChannel`
+mechanism might normally hit the real, fast `PA Mute`/`PA Volume`
+hardware controls directly, while our build -- missing those entirely
+-- falls through to the slower, IPC-heavy `softmasterN` path instead,
+which would nicely explain the whole investigation. **Checked via
+`nm -CD` on `MsnCoreApp`'s own binary strings: it only ever references
+`"softmaster"`-prefixed control names, never `"PA Mute"` or similar.**
+So `switchToAppAudioChannel` uses the same software `dmix`-routed
+controls on stock too, regardless of whether BD37033 is present --
+this theory doesn't hold up. **Also checked**: `Sound_BD37033::
+resetSpeakerAtts`/`muteSpeakerAtts` (flagged in an earlier session's
+log as firing right before a burst) does not appear anywhere in the
+v22 log's runtime output at all, yet the identical XRUN burst still
+happens at the same point in the sequence -- ruling this specific
+mechanism out for at least this capture.
+
+**Net result**: the missing 31 mixer controls are a real, separate,
+worth-fixing functional gap (no EQ, no fader balance, no working
+external amp control at all currently) but not demonstrably connected
+to the audio stutter based on everything traceable in the available
+logs. Static log analysis of this specific angle is exhausted; further
+progress needs the pending `aplay` local-file test or a live `ipcs`/
+`strace` capture during a reproduced stutter.

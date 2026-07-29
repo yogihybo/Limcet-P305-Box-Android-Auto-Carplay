@@ -1288,6 +1288,18 @@ build() {
         run cp "$BOOTLOGO_RAW" /tmp/sd_p1/bootlogo.raw
         bootlogo_label=" + bootlogo.raw"
     fi
+    # Boot-stage status variants (bootlogofile command in CONFIG_BOOTCOMMAND
+    # swaps to these mid-boot -- see docs/UBOOT_REVERSE_ENGINEERING.md §46 /
+    # build_tools/generate_boot_status_logos.py). Not exposed via a CLI flag
+    # like --bootlogo since they're a fixed pair tied to this specific
+    # feature, not an arbitrary user-supplied splash -- always sourced from
+    # sd_bootable/ alongside the default bootlogo.raw.
+    for variant in bootlogo_usb.raw bootlogo_nand.raw; do
+        if [[ -f "$SCRIPT_DIR/sd_bootable/$variant" ]]; then
+            run cp "$SCRIPT_DIR/sd_bootable/$variant" "/tmp/sd_p1/$variant"
+            bootlogo_label="$bootlogo_label + $variant"
+        fi
+    done
     if [[ -n "$ARKDATA_INI" && -f "$ARKDATA_INI" ]]; then
         run cp "$ARKDATA_INI" /tmp/sd_p1/arkdata.ini
         bootlogo_label="$bootlogo_label + arkdata.ini"

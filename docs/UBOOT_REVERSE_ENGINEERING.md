@@ -1274,3 +1274,69 @@ explicit user decision, keeping this open for a few more days of
 regular use before calling it fully confirmed, since the original bug
 was intermittent by nature (a handful of clean boots doesn't rule out
 a rarer recurrence). Amend this section if anything pops up.
+
+## 46. Boot-stage status text on the splash screen (2026-07-29)
+
+User asked for the bootlogo to show which boot stage U-Boot is
+currently at ("Loading U-Boot" -> "Loading NAND"/"Loading USB"). An
+existing full scrolling-console-on-OSD2 mechanism
+(`ark1668_lcd_console.c`, mirrors the serial console onto the LCD) was
+considered and rejected -- "the console was problematic" and it
+replaces the logo entirely with scrolling text rather than showing a
+clean status line. Went with swapping the whole OSD1 splash image
+between pre-rendered variants instead, reusing the existing bootlogo
+infrastructure rather than adding new text-rendering machinery.
+
+**Real Toyota logo, not the repo's placeholder.** `sd_bootable/`
+(the SD-card staging directory `build_bootable_sdcard.sh` assembles
+from) was entirely `.gitignore`'d, and its `bootlogo.raw` turned out
+to be the ONLY copy on the machine of a real, hand-placed Toyota logo
+-- not reproducible from anything else in the repo. `firmware_source/
+mtd8_bootlogo/bootlogo`, which looked like the obvious source to build
+variants from, turned out to be a **Holden logo** (same class of
+Holden-vs-Prado contamination found earlier this session with `sink`/
+`libAndroidAuto.so`) -- the real Prado dump never captured its
+`mtd8_bootlogo` partition at all. Generating variants from that Holden
+source and pushing the result over `sd_bootable/bootlogo.raw`
+overwrote the real Toyota file with no way to recover it through git,
+since the whole directory was ignored. **User re-supplied the real
+file from a USB backup.**
+
+**Fixed the underlying gap that let this happen**: `sd_bootable/` is
+now tracked in git (only `sd_bootable/sd_boot.img`, the 536MB
+generated disk image, stays ignored -- too large for git, pure build
+output, trivially regenerable). Hand-placed assets living in a fully
+gitignored directory with no other copy anywhere is exactly the
+condition that made this unrecoverable; don't repeat that pattern
+elsewhere in this repo.
+
+**Found the real generator, not a guess.** `build_tools/
+make_touch2_bootlogo.py` (already existed in the repo, unrelated to
+this task originally) turned out to be the actual script used to
+produce the real `bootlogo.raw` -- confirmed by regenerating it fresh
+via `make_touch2_bootlogo.py` + `convert_bootlogo.py` and diffing
+byte-for-byte identical against the real file. It composites: a
+linear vertical gradient (`BG_TOP=(14,16,20)` to `BG_BOTTOM=(30,33,40)`),
+a cropped+alpha-blended Toyota emblem (sourced from one of the real
+Prado boot-animation frames, `firmware_dumps/Prado firmware dump/
+mtd6_rootfs/msnprofile/bootlogo/logo17.jpg`), a bold "TOYOTA" wordmark,
+and a status line in DejaVu Sans **regular** (not mono, not bold) at
+28px, color `(235,236,238)` (off-white, not pure white).
+
+**Implementation**: `build_tools/generate_boot_status_logos.py`
+reuses that exact same composition function with only the status
+string changed, producing `bootlogo_usb.raw`/`bootlogo_nand.raw` --
+pixel-identical style to the real `bootlogo.raw`, which itself is
+only ever read, never regenerated or written by this script. On the
+U-Boot side (`linux-arkmicro` commit `d843fd60e`):
+`display_bootlogo_from_sd()` was parameterized into
+`display_bootlogo_file(const char *filename)`, and a new
+`bootlogofile <name>` command re-does just the fatload+OSD1-push
+(display is already initialized by `ark_show_bootlogo()` by the time
+this runs, so no need to redo that) to swap the splash mid-boot.
+Wired into the default `CONFIG_BOOTCOMMAND`: shows
+`bootlogo_usb.raw` right before attempting `bootusb`, and
+`bootlogo_nand.raw` right before falling back to `nandboot`. The
+initial `bootlogo.raw` ("Loading U-Boot", shown by
+`ark_show_bootlogo()` itself, unrelated to this new command) is
+unaffected. Not yet hardware-tested.

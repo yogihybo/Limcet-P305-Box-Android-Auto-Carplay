@@ -1476,10 +1476,14 @@ build() {
     echo    "    Stepldr  → loads UBOOT.BIN from BOOT partition"
     if $NEW_UBOOT_MODE; then
         echo "    U-Boot   → imports environment variables from uEnv.txt on BOOT partition (if present)"
+        echo "    U-Boot   → shows \"Loading U-Boot\" splash (bootlogo.raw) from earliest boot"
         echo "    U-Boot   → 1. bootusb: attempts booting kernel (zImage) + DTB from attached USB drive"
-        echo "    U-Boot   → 2. boothybrid: falls back to chainloading uboot_hybrid.bin from SD card (loads zImage_stock + NAND rootfs)"
-        echo "    U-Boot   → 3. bootstock: falls back to chainloading uboot_stock.bin from SD card"
-        echo "    U-Boot   → 4. nandboot: last-resort fallback to direct NAND kernel boot"
+        echo "    U-Boot   →    (splash switches to \"Loading USB\" before this attempt)"
+        echo "    U-Boot   → 2. nandboot: falls back to direct NAND kernel boot (splash switches to \"Loading NAND\")"
+        echo "    (2026-07-29: chainloading stock/hybrid U-Boot was removed from this default"
+        echo "     chain — a bug inside that unmodifiable binary could hang without ever"
+        echo "     falling through to nandboot. boothybrid/bootstock/bootmmc remain available"
+        echo "     as manual commands at the U-Boot prompt, each showing their own status splash.)"
     elif $UBOOT_WAS_PATCHED; then
         echo "    U-Boot   → NAND env CRC forced invalid, drops to interactive prompt"
         echo "    (manual) → continue with the README's \"Manual SD Card Boot\" section"

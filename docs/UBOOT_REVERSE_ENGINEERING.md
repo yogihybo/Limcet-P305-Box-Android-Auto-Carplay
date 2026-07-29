@@ -1218,3 +1218,27 @@ happens once the controller is actually quiescent. Bounded with a
 timeout rather than looping forever, so a genuinely wedged controller
 prints a warning and proceeds rather than hanging the chainload
 silently. Not yet hardware-tested.
+
+**Same day, follow-up: a second, upstream cause found.** User clarified
+two things: (1) `boothybrid` (same `bootstock_file_from_block_dev()`
+function, different source file `uboot_hybrid.bin`) can hang the same
+way, before the kernel loads; (2) "the kernel magic error seems to
+come and go." Also corrected an assumption in the previous fix's
+comment -- `bootstock`/`boothybrid` are reached automatically via the
+default `CONFIG_BOOTCOMMAND` fallback chain (`bootusb` →
+`boothybrid` → `bootstock` → `nandboot`) on every cold boot, not typed
+by hand at the prompt as previously assumed, so any run-to-run
+variance is real hardware/timing marginality, not user-command
+variability.
+
+The only "magic" check anywhere in this path is the ARK header check
+right after `fatload`'ing `uboot_stock.bin`/`uboot_hybrid.bin` from
+the SD/USB FAT partition -- upstream of the NAND-FSM fix above (which
+only covers the register reset immediately before the `go` jump,
+*after* this check already passed). An intermittent magic mismatch
+("comes and goes") fits a transient/marginal SD or USB read
+corrupting part of the loaded 428KB binary far better than a
+deterministic logic bug. **Fixed** (`linux-arkmicro` commit
+`ad1e7c816`): retries the `fatload`+magic-check up to 3 times before
+giving up, rather than failing hard on a single bad read. Not yet
+hardware-tested.

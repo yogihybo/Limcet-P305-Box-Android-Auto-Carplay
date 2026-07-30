@@ -21,6 +21,21 @@ sync
 # before rcS runs) sooner rather than later.
 /etc/switchotg.sh
 
+# Feed the hardware watchdog (ark_wdt, /dev/watchdog) so a full kernel
+# hang/lockup triggers a real reset instead of the unit sitting dead
+# until someone power-cycles the vehicle. Previously present but
+# dormant (no feed daemon existed in either stock's real rootfs or
+# ours) -- also needed a kernel-side fix (linux-arkmicro's ark_wdt.c
+# soft_noboot default 1 -> 0) since the driver's interrupt/soft mode
+# silently never resets anything regardless of feeding, see that
+# file's comment. busybox's own watchdog applet is already compiled in
+# (firmware_overlay/busybox-applets.manifest); -t is the feed interval,
+# -T must match the kernel driver's configured timeout
+# (ARK_WATCHDOG_DEFAULT_TIME, drivers/watchdog/ark_wdt.c) -- 5s feed /
+# 15s hardware timeout gives a 3x margin. /dev/watchdog is created
+# automatically by devtmpfs (CONFIG_DEVTMPFS=y), no mdev rule needed.
+watchdog -t 5 -T 15 /dev/watchdog
+
 # libarkcmn.so/libarkadapt.so (vendor 2D-blit compositor + CarPlay adapter)
 # hardcode /tmp/dev/memalloc as their physically-contiguous buffer-allocator
 # device -- stock creates it via etc/memalloc_load.sh's `insmod .../3.4.0/

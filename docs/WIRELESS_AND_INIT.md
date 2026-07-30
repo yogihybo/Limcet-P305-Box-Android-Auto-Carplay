@@ -492,6 +492,17 @@ port ↔ DTS node ↔ real-world-role mapping this whole investigation
 has assumed (`usb0` = shared storage+CarPlay port) may not be as
 clean as it looked.
 
+**Resolved 2026-07-30**: `usb0` IS confirmed the single external
+connector (boot-stick storage and wired AA's AOA host detection both
+live on `musb-hdrc.0`), settling that half. But `usb1` providing
+gadget capability for CarPlay was checked directly against every
+available boot log and never once observed — no external device ever
+enumerates on `usb1`/bus 2, only the onboard WiFi chip. See the
+corrected "usb1 stays otg" subsection further below: `usb1`'s
+`g_ncm`/`carplay-ncm0` registration is now believed to be dead/
+unreachable on this board, not a real second half of a shared-port
+story.
+
 ### Reverted, not re-investigated
 
 Reverted in `linux-arkmicro` `d44cce385` — both `usb0` and `usb1` back
@@ -646,23 +657,39 @@ None of this was actually caused by the `usb0` fix — it was a
 pre-existing build-pipeline gap that this investigation happened to
 trip over while testing on a freshly-reflashed stick.
 
-### usb1 stays `dr_mode="otg"` — it's genuinely dual-role, not a fixed device
+### usb1 stays `dr_mode="otg"` — corrected 2026-07-30: it has no external connector at all, "CarPlay's port" was never actually observed
 
-`usb1` is CarPlay's port, and it's dynamic by design, not a single
-fixed internal device: at boot it tries peripheral role first
-(`g_ncm` gadget registers almost immediately — this is the wired
-CarPlay networking path, confirmed to be bound to `musb-hdrc.1` in
-`docs/logs/usb otg host log v4.txt`, not `usb0`), and only falls back
-to host role — enumerating the internal WiFi chip (`rtl8821cu`,
-`usb 2-1: new high-speed USB device`) and bringing up `wlan0`/the
-`carplay_wifi` AP — once that peripheral-role attempt times out with
-nothing on the other end. This is real, necessary hardware detection
-(is a wired CarPlay cable actually present right now?), not wasted
-work, so it can't be replaced with a static `dr_mode` the way `usb0`
-could — `usb0` is genuinely single-purpose (boot-stick storage), which
-is why locking its mode was safe, while doing the same to `usb1` would
-permanently disable whichever of {wired CarPlay, wireless
-WiFi-fallback} didn't match the hardcoded mode.
+Previously described here as "CarPlay's port," dynamically negotiating
+wired CarPlay first and falling back to WiFi. **This was never
+confirmed and is now believed wrong.** A dedicated reconciliation pass
+(2026-07-30) checked every available boot log containing both
+controllers (`android auto log v2.txt`/`v3.txt`, `usb otg host log
+v1`-`v6.txt`, every `new uboot ... baseline v*.txt`) for what actually
+enumerates on `usb1`/bus 2 after its peripheral-role attempt times
+out. **Every single one, without exception, shows only the onboard
+RTL8811CU WiFi chip** (`rtl8811cu` driver messages immediately
+following `usb 2-1: new high-speed USB device`) — never a phone, never
+any external device. Cross-referenced against "Important correction"
+below: `usb0` is confirmed the board's *only* external-facing
+connector (boot-stick storage AND wired Android Auto's AOA host
+detection both confirmed live on `usb0`/`musb-hdrc.0` specifically).
+`usb1` has no evidence of any external connector on this board at
+all — it's paired permanently with the onboard WiFi module. The
+`g_ncm`/`carplay-ncm0` peripheral registration at boot is real (the
+gadget driver does bind), but nothing has ever been observed
+attaching to it — its host-mode fallback is not "detecting whether a
+wired CarPlay cable is present," it's simply how this controller
+always ends up talking to the internal WiFi chip once the pointless
+peripheral-role attempt (with nothing that could ever plug into it)
+times out. Whether wired CarPlay's actual data path runs through
+`usb0` instead (alongside wired AA's AOA path) is not yet confirmed
+either — this needs a real wired-CarPlay test with full serial capture
+to settle. Because of this, `usb1`'s `dr_mode="otg"` and the
+peripheral-role negotiation delay it costs at every boot are currently
+unexplained overhead rather than confirmed necessary hardware
+detection — worth revisiting once wired CarPlay's real path is
+confirmed. `usb0`'s locked-mode-per-boot-command approach (see below)
+remains correct regardless of this correction.
 
 A same-day test that briefly set `usb1` to `dr_mode="host"` too
 (`9f678777e`, step 3 above) confirmed this concretely: `g_ncm` simply

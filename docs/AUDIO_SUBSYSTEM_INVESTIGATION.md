@@ -4139,3 +4139,98 @@ to the audio stutter based on everything traceable in the available
 logs. Static log analysis of this specific angle is exhausted; further
 progress needs the pending `aplay` local-file test or a live `ipcs`/
 `strace` capture during a reproduced stutter.
+
+### Major provenance discovery: 67/205 core userspace binaries are Holden-sourced, not Prado (2026-07-30)
+
+A systematic `md5sum` sweep of every file in `firmware_source/
+mtd6_rootfs/usr/bin` + `usr/lib` (205 files) against both the real
+Prado dump and a freshly re-extracted Holden UBI image found that
+**67 files (33%) genuinely match Holden's build, not Prado's** --
+including `MsnCoreApp` itself, `libMsnCommons.so` (where
+`SoftVolCtrl` lives), `libMsnSound.so`, `libMsnCarAuto.so`,
+`libSetting.so`, `libBlueTooth.so`, `blueware`, `mplayer`,
+`EffectWatch`, `LCDTest`, `MsnFirstInit`, `openssl`, `haveged`, and
+nearly every `libLauncher-*.so`/`libMsn*.so`. **User confirmed this
+entire set is genuinely what's flashed and running on the physical
+device** -- this isn't a build artifact or mistake in `firmware_source`,
+it's the actual deployed reality.
+
+This is now foundational context for the whole project: any static
+comparison against "stock" for one of these 67 files must use
+**Holden's** binary as the reference, not Prado's -- comparing against
+Prado for these specific files is comparing against the wrong vendor
+build entirely (see the `AndroidLinkType` case below, and in
+`docs/WIRELESS_AND_INIT.md`, for a concrete instance where this
+mattered). Kernel-level code, DTS, and U-Boot remain Prado-sourced
+throughout -- this provenance split only applies to this specific set
+of `usr/bin`/`usr/lib` userspace binaries.
+
+**`AndroidLinkType` config fix**: `firmware_source/mtd6_rootfs/
+msnprofile/FactoryConfig.ini` had `AndroidLinkType=6` (Prado's value).
+Since `MsnCoreApp` is genuinely Holden's binary, the correct reference
+is Holden's own `FactoryConfig.ini`, which uses `AndroidLinkType=3`.
+Changed to match (main repo commit `99e1074`). This was previously
+checked and wrongly ruled out as a wired-AA divergence because the
+comparison used Prado's ini as the reference (see
+`docs/WIRELESS_AND_INIT.md` for the full wired-AA context). Not yet
+hardware-tested.
+
+### Fix implemented: mute/settle-delay/unmute sequencing on PCM start/stop (2026-07-30)
+
+A subagent was dispatched to do a detailed side-by-side comparison of
+`firmware_source`'s kernel audio drivers against stock, using stock's
+real unstripped `vmlinux.elf` (`firmware_dumps/Prado firmware dump/
+mtd5_kernel/extracted/vmlinux.elf`). Headline finding: **stock has an
+entirely different PCM architecture from ours.**
+
+Stock does NOT use the generic ASoC `dmaengine_pcm` framework's
+automatic `.digital_mute` dispatch for muting. Instead it has a
+**custom PCM trigger** (`ark_pcm_trigger`) that, on every playback
+START, does explicitly: `ark_audio_mute(1)` -> `dw_dma_cyclic_start()`
+-> `__const_udelay(0x00A3D6F8)` (~2.5ms fixed settle delay) ->
+`ark_audio_mute(0)`. On STOP: notify -> mute ->
+`dw_dma_cyclic_stop()`. `ark_audio_mute()` is a separate,
+`EXPORT_SYMBOL`'d function containing the real register writes,
+called explicitly from the PCM trigger path -- and stock's ASoC
+`.digital_mute` DAI callback (`sddac_mute`) is a **confirmed no-op**.
+
+Our port had instead wired the real mute register-write logic
+directly into the generic `.digital_mute` callback, meaning ASoC's
+own internal dispatch timing (unsynchronized to actual DMA readiness)
+drove the audible mute -- directly explaining why the previously
+confirmed digital_mute-flapping mechanism (~24x/sec during an XRUN
+burst) is audible as stutter: our mute/unmute events fire on ASoC's
+schedule, not on DMA's.
+
+A second, smaller finding from the same subagent pass: a stray
+`writel(0, i2s->base + ARK_I2SSDDAC_DACR0)` in
+`ark_i2s_startup()`'s playback branch unconditionally zeroed both
+L/R volume on every single stream start/restart, with no counterpart
+in stock's equivalent function at all.
+
+**Fix implemented** (`linux-arkmicro` commit `a2350d8a7`), across
+three files in `linux/sound/soc/arkmicro/`:
+- `ark1668-sddac-codec.c`: extracted the real mute register-write
+  logic into a new `EXPORT_SYMBOL`'d `ark_audio_mute(int mute)`,
+  matching stock's architecture; made the `.digital_mute` callback
+  (`ark_sddac_mute`) a genuine no-op (log only), matching stock's
+  confirmed no-op behavior.
+- `ark1668_i2s.c`: `ark_i2s_trigger()`'s playback START case now
+  calls `ark_audio_mute(1)` -> `ark_i2s_txctrl(i2s, 1)` ->
+  `mdelay(3)` -> `ark_audio_mute(0)`; STOP case calls
+  `ark_audio_mute(1)` -> `ark_i2s_txctrl(i2s, 0)`. (`mdelay(3)` not
+  `udelay(2500)`: ARM's `udelay()` has a compile-time-constant safe
+  range of roughly ~2ms and deliberately fails to link
+  (`undefined reference to '__bad_udelay'`) past that -- `mdelay`
+  busy-waits internally in safe chunks, same semantics for this
+  magnitude, rounded 2.5ms up to 3ms since the exact value is a
+  settle window, not safety-critical.) Also removed the stray
+  DACR0-zeroing `writel` from `ark_i2s_startup()`.
+- `ark_i2s.h`: declared `ark_audio_mute(int mute)`.
+
+Kernel builds cleanly (`zImage.w_dtb` produced, no errors). **Not yet
+hardware-tested.** This is the leading fix candidate for the AA audio
+stutter as of 2026-07-30 -- awaiting a live test to confirm whether it
+actually resolves the audible stutter, since the mechanism (flapping
+mute) was confirmed but the ultimate upstream trigger for the
+XRUN/re-trigger storm itself is still not fully identified.

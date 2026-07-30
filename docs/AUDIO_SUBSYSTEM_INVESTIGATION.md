@@ -4234,3 +4234,71 @@ stutter as of 2026-07-30 -- awaiting a live test to confirm whether it
 actually resolves the audible stutter, since the mechanism (flapping
 mute) was confirmed but the ultimate upstream trigger for the
 XRUN/re-trigger storm itself is still not fully identified.
+
+### USB/DMA driver review: 4 of 5 open theories closed out, no bugs found (2026-07-30)
+
+A follow-up subagent pass reviewed the USB (`musb_ark.c`) and DMA
+(`ark-dma.c`) pipeline against stock's real disassembled
+`vmlinux.elf`/`ark1680_musb.ko` and `musb_hdrc.ko`, targeting five
+previously-open, never-fully-resolved theories from earlier sessions
+about single-core CPU/interrupt contention between WiFi USB traffic
+and audio DMA. No code was changed; this was research/comparison
+only.
+
+**Closed, confirmed not real divergences:**
+- **`IRQF_SHARED` on `ark-dma.c`'s DMA controller IRQ registration**
+  (vs. a reported `flags=0` in stock): confirmed cosmetic via the DTS
+  (`ark1668.dtsi`) -- `dwdma0` is the sole device on its VIC hwirq
+  line (`vicl` hwirq 0); nothing actually shares it. No functional
+  effect either way.
+- **Non-threaded MUSB hard-IRQ handler doing inline FIFO work**
+  (theorized to monopolize the single CPU core during WiFi USB
+  traffic, delaying audio DMA's IRQ 16): disassembled stock's real
+  `musb_hdrc.ko` `musb_init_controller` -- stock calls
+  `request_threaded_irq(nIrq, musb->isr, /*thread_fn=*/NULL, ...)`,
+  which with a NULL thread_fn still runs the handler in hard-IRQ
+  context, identical in practice to our `request_irq()`. **Stock has
+  the exact same architectural exposure** -- this isn't a regression
+  in our port, it's an inherent single-core/VIC platform
+  characteristic present in both builds. Not worth chasing further as
+  a stutter cause.
+- **`int_rx` included in our MUSB interrupt-status gate where an
+  earlier subagent pass flagged stock as excluding it**: disassembled
+  stock's real `ark1680_musb_interrupt` -- its branch structure calls
+  `musb_interrupt()` whenever any of TX/RX/USB status is nonzero,
+  structurally equivalent to our `int_tx || int_rx || int_usb` gate.
+  The earlier flagged divergence appears to have been a false lead
+  (medium confidence -- exact struct field layout for this specific
+  3.4 build wasn't independently confirmed via a symbol table, but the
+  branch logic itself is unambiguous).
+- **Whether DMA is genuinely engaged at runtime for USB WiFi bulk
+  transfers, and whether it could contend with audio's DMA engine**:
+  clarified rather than confirmed/denied -- our USB controllers use
+  MUSB's own embedded Inventra DMA (`musbhsdma.c`,
+  `CONFIG_USB_INVENTRA_DMA=y`), which is **physically separate
+  hardware from `ark-dma.c`'s shared AHB `dw_dmac` controller** that
+  serves I2S/SPI, with its own separate IRQ line. There is no
+  DMA-engine-level sharing or contention between WiFi USB DMA and
+  audio DMA -- only IRQ-priority/CPU-scheduling contention (previous
+  bullet) remains a live, unconfirmed theory, and it's common to stock
+  too.
+
+**Still genuinely open, not resolved this pass**: the DMA burst-size
+question (our `maxburst=16`/`MSIZE=3` for the I2S DMA slave config vs.
+stock's real value). Stock's `ark_i2s_hw_params` turned out to be a
+no-op stub (matches the earlier "confirmed inert in stock too"
+finding for several I2S functions) -- the real burst-size handshake
+lives elsewhere in stock's driver and wasn't located in this pass.
+Checked `ark_i2s_init_cfg` (does direct I2S peripheral FIFO-threshold
+register bit-banging) without finding a DMA CTL_LO/MSIZE touch in the
+portion inspected. Would need further tracing into stock's
+`ark_i2s_probe`/`ark_i2s_trigger` and cross-referencing against
+`dw_dmac`'s `dma_slave_config` call sites to resolve.
+
+**Net effect**: this closes out 4 of the 5 previously-open USB/DMA
+theories as either cosmetic or architecturally inherent to stock too
+(not real divergences worth fixing) -- meaningfully narrows the
+remaining search space for the stutter's root cause back toward the
+already-implemented mute-sequencing fix (see above) and away from the
+USB/DMA IRQ-contention angle, since stock carries the same exposure
+without stuttering.

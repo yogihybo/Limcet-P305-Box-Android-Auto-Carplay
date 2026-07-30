@@ -851,6 +851,19 @@ apply_overlay() {
     [[ -d "$OVERLAY_DIR" ]] || { warn "Overlay dir not found at $OVERLAY_DIR — skipping"; return; }
 
     rsync -a --info=progress2 "$OVERLAY_DIR/" "$rootfs_mount/"
+
+    # This whole repo lives on a VirtualBox shared folder (vboxsf), which is
+    # well known to not reliably preserve/apply chmod on the host side --
+    # git can track a file as executable, but the bits `rsync -a` actually
+    # reads off the vboxsf-mounted source may not honor it. rootfs_mount
+    # here is a real (loopback-mounted) ext4 filesystem though, which does
+    # support permissions properly -- so explicitly force +x on every
+    # script here that needs to run directly (not sh-wrapped) after the
+    # copy, regardless of what the source showed. Covers rcS itself (the
+    # init sysinit target) plus every top-level etc/*.sh script.
+    chmod +x "$rootfs_mount/etc/rc.d/rcS" 2>/dev/null || true
+    find "$rootfs_mount/etc" -maxdepth 1 -name "*.sh" -exec chmod +x {} + 2>/dev/null || true
+
     success "RootFS overlay applied — rcS/profile/wifi_ap.sh/inittab/libGAL.so, etc."
 }
 

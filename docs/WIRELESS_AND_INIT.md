@@ -981,31 +981,44 @@ single time, with no AOA "turn on accessory mode" control request, no
 re-enumeration to the true accessory PID (`0x2d00`, per stock's log),
 and no USB bulk-endpoint read/write ever attempted.
 
-**Two obvious candidate causes checked and ruled out, both matching
-stock exactly:**
+**One candidate cause checked against the wrong reference, corrected 2026-07-30:**
 - `FactoryConfig.ini`'s `AndroidLinkType=6` (found via disassembling
   `MsnCoreApp::onUSBPhoneStatusChange(int,int,int)`, which has this
-  exact value as a function-local static, read from this ini key) --
-  **identical** between `firmware_source` and the real Prado dump.
-  (`IphoneLinkType`/`MirroringLinkType` do differ, 2 vs 3 and 2 vs 1
-  respectively -- not touched, not relevant to Android specifically.)
-- Kernel-side MUSB OTG driver logic: disassembled and compared three
-  functions in the real stock `ark1680_musb.ko` (confirmed genuine
-  Prado-sourced via md5sum match) against our `musb_ark.c` --
-  interrupt-enable register setup (`ark1680_musb_enable`, byte-
-  identical `0x1E`/`0xF7` mask values), the DMA-warning logic, and the
-  full OTG state-machine timer (`otg_timer`/`ark_musb_otg_timer` --
-  same `MUSB_DEVCTL_SESSION`/`BDEVICE`/`VBUS` bit tests, same state
-  transitions, same VBUSERROR interrupt-set write). All three are
-  faithful, essentially identical ports. No kernel-level divergence
-  found.
+  exact value as a function-local static, read from this ini key) was
+  originally compared against the real **Prado** dump and found
+  identical (both 6), so it was ruled out. **This was the wrong
+  reference.** A full binary-provenance sweep (2026-07-30) found that
+  67 of 205 core userspace binaries in `firmware_source`'s `usr/bin`+
+  `usr/lib` -- including `MsnCoreApp` itself -- are genuinely
+  **Holden**-sourced, not Prado, and confirmed by the user to be
+  exactly what's flashed on the physical device. Holden's own
+  `FactoryConfig.ini` uses `AndroidLinkType=3`, not 6.
+  `IphoneLinkType`/`MirroringLinkType` already matched Holden's values
+  correctly; only `AndroidLinkType` had been left at Prado's value.
+  **Fixed**: `firmware_source/mtd6_rootfs/msnprofile/FactoryConfig.ini`
+  changed `AndroidLinkType=6` -> `3` (main repo commit `99e1074`).
+  **Not yet hardware-tested.**
 
-**Net conclusion**: both the config value and the kernel driver logic
-match stock. The gap is almost certainly in `MsnCoreApp`'s own
-userspace decision logic -- something that should trigger an AOA
-activation attempt after detection succeeds, but doesn't, falling
-through to the wireless path instead. **Not yet confirmed** which
-specific code path is responsible. Proposed next step, not yet done:
+**Kernel-side MUSB OTG driver logic checked and ruled out, matches
+stock exactly:** disassembled and compared three functions in the
+real stock `ark1680_musb.ko` (confirmed genuine Prado-sourced via
+md5sum match) against our `musb_ark.c` -- interrupt-enable register
+setup (`ark1680_musb_enable`, byte-identical `0x1E`/`0xF7` mask
+values), the DMA-warning logic, and the full OTG state-machine timer
+(`otg_timer`/`ark_musb_otg_timer` -- same
+`MUSB_DEVCTL_SESSION`/`BDEVICE`/`VBUS` bit tests, same state
+transitions, same VBUSERROR interrupt-set write). All three are
+faithful, essentially identical ports. No kernel-level divergence
+found. (Note: Prado's `.ko` is the right reference here since this is
+kernel code, not a Holden-sourced userspace binary.)
+
+**Net conclusion**: the `AndroidLinkType` config fix is now in place
+and awaiting a hardware test. If wired AA still doesn't complete after
+that, the remaining suspect is `MsnCoreApp`'s own userspace decision
+logic -- something that should trigger an AOA activation attempt
+after detection succeeds, but doesn't, falling through to the
+wireless path instead. Proposed next step if the config fix alone
+doesn't resolve it:
 `strace -f -o /data/x.log <MsnCoreApp pid>` (tool already available at
 the device shell prompt) during a fresh wired-connection attempt,
 watching specifically for whether a `USBDEVFS_CONTROL` ioctl is ever

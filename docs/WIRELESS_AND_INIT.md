@@ -937,3 +937,79 @@ completes but the screen never visibly switches — an existing,
 separately-tracked bug, not related to wired vs. wireless). Worth a
 proper log capture on the next wired test to confirm past basic USB
 detection.
+
+#### Wired Android Auto never completes, always falls back to wireless -- root cause narrowed to userspace, kernel/config ruled out (2026-07-29/30)
+
+User reported wired AA never actually establishes -- it always falls
+back to wireless -- and wanted to test wired specifically to rule
+audio-network-transport in/out of the ongoing stutter investigation.
+Real, decisive live testing this time (multiple full console captures
+with the phone plugged into `usb0`):
+
+**Wrong initial diagnosis, corrected**: first suspected `usb0`'s OTG
+role (`a_host` vs `b_peripheral`) was resolving backwards and told
+the user to force `peripheral` mode via sysfs -- **this was wrong and
+made things worse** (nothing can complete in peripheral mode; the
+phone expects to talk to a host). Confirmed via a real stock log
+comparison (`docs/logs/archived/audio log stock_260715.txt`'s
+sibling wired-USB capture) that wired Android Auto uses the
+**AOA (Android Open Accessory) protocol**, not the `carplay-ncm0`
+NCM-gadget approach this project built for `usb1` -- the head unit
+must be USB **host**, detect the phone, and send it a "switch to
+accessory mode" control request. `a_host` was correct all along.
+
+**Confirmed live, repeatedly, that AOA detection already works
+correctly on our build**: with `usb0` left in its DTS-default `otg`
+(resolving naturally to `a_host`), every reconnect cycle (device
+numbers 2 through 6 across one test session) showed:
+```
+insert usb dev:/dev/bus/usb/001/00X vid:0x18d1 pid:0x4ee1
+Device is support acessory mode, AOA version:2
+```
+(`vid:18d1` = Google, `pid:4ee1` = a Pixel's normal non-accessory MTP
+mode -- matches stock's own first-enumeration PID before it sends the
+AOA activation request). Confirmed this exact detection string
+(`"Found Google device not in accessory mode. Trying to turn on."`)
+already exists in our deployed `sink` binary via `strings` -- the
+capability isn't missing at the binary level.
+
+**But the connection never proceeds past detection.** Immediately
+after `"Device is support acessory mode"` fires, the log shows
+`MsnLink StartService: "com.arkmicro.auto"` -> `wirelessConnectionProc`
+-- the same WiFi-socket connection path used for wireless AA, every
+single time, with no AOA "turn on accessory mode" control request, no
+re-enumeration to the true accessory PID (`0x2d00`, per stock's log),
+and no USB bulk-endpoint read/write ever attempted.
+
+**Two obvious candidate causes checked and ruled out, both matching
+stock exactly:**
+- `FactoryConfig.ini`'s `AndroidLinkType=6` (found via disassembling
+  `MsnCoreApp::onUSBPhoneStatusChange(int,int,int)`, which has this
+  exact value as a function-local static, read from this ini key) --
+  **identical** between `firmware_source` and the real Prado dump.
+  (`IphoneLinkType`/`MirroringLinkType` do differ, 2 vs 3 and 2 vs 1
+  respectively -- not touched, not relevant to Android specifically.)
+- Kernel-side MUSB OTG driver logic: disassembled and compared three
+  functions in the real stock `ark1680_musb.ko` (confirmed genuine
+  Prado-sourced via md5sum match) against our `musb_ark.c` --
+  interrupt-enable register setup (`ark1680_musb_enable`, byte-
+  identical `0x1E`/`0xF7` mask values), the DMA-warning logic, and the
+  full OTG state-machine timer (`otg_timer`/`ark_musb_otg_timer` --
+  same `MUSB_DEVCTL_SESSION`/`BDEVICE`/`VBUS` bit tests, same state
+  transitions, same VBUSERROR interrupt-set write). All three are
+  faithful, essentially identical ports. No kernel-level divergence
+  found.
+
+**Net conclusion**: both the config value and the kernel driver logic
+match stock. The gap is almost certainly in `MsnCoreApp`'s own
+userspace decision logic -- something that should trigger an AOA
+activation attempt after detection succeeds, but doesn't, falling
+through to the wireless path instead. **Not yet confirmed** which
+specific code path is responsible. Proposed next step, not yet done:
+`strace -f -o /data/x.log <MsnCoreApp pid>` (tool already available at
+the device shell prompt) during a fresh wired-connection attempt,
+watching specifically for whether a `USBDEVFS_CONTROL` ioctl is ever
+issued on the phone's device node right after "Device is support
+acessory mode" -- if it never appears, that's a pure userspace gap
+(matches the log evidence so far); if it appears but fails, that
+would justify going back to the kernel driver after all.

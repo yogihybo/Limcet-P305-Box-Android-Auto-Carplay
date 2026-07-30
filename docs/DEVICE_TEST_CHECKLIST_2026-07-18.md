@@ -5820,3 +5820,17 @@ A subagent did a breadth-first review of the current kernel against stock's real
 - Bluetooth HS-UART (`/dev/ttyHS1`, `ark1668-pinctrl.dtsi`'s `pinctrl_uart5`) has no RTS/CTS pins wired, even though `ark_hsuart.c` implements `CRTSCTS` handling. BT is already extensively confirmed working end-to-end (audio, HFP, data) per `docs/WIRELESS_AND_INIT.md`, so this reads as an intentional 2-wire link design, not a bug -- flagged only as a latent risk if BT throughput/reliability issues ever surface.
 
 Full detail in the subagent's own report; not separately filed elsewhere since this section captures everything actionable.
+
+## 78. Hardware watchdog implemented (2026-07-31) -- was present but dormant, and would have silently never worked even if fed
+
+Following up on §77's "watchdog present but dormant, not a regression" note -- the user asked to actually implement it. Turned out to be a small change plus one real, load-bearing kernel bug.
+
+**Found**: `ark_wdt.c`'s `soft_noboot` module param defaults to `1`. With `soft_noboot=1`, `ark_wdt_irq()` (the expiry interrupt handler) unconditionally re-arms the counter and clears the interrupt on every single fire, with **no escalation logic at all** -- meaning the watchdog could never actually reset the board regardless of whether userspace ever fed it. This would have silently defeated the entire point of implementing a feed daemon.
+
+**Fixed**: `soft_noboot` default changed `1` -> `0` (`linux-arkmicro` commit `d0ca32c50`) -- enables `ARK_WTCON_RSTEN` instead of `ARK_WTCON_INTEN`, so an unfed countdown resets the SoC directly in hardware, no OS involvement needed.
+
+**Userspace feeder**: turned out busybox's own `watchdog` applet was already compiled in and symlinked (`firmware_overlay/busybox-applets.manifest:163`, `sbin/watchdog`) -- just never invoked. Added `watchdog -t 5 -T 15 /dev/watchdog` to `firmware_overlay/etc/rc.d/rcS` (main repo commit `2b3c1d1`), right after the existing `switchotg.sh` device-setup block. 5s feed interval against the driver's 15s default timeout gives a 3x margin. `/dev/watchdog` is auto-created by devtmpfs (`CONFIG_DEVTMPFS=y`), no mdev rule needed.
+
+Both kernel and rootfs changes build/apply clean. **Not yet hardware-tested.** Needs staged validation before trusting it: (1) confirm `/dev/watchdog` exists and `watchdog` is running after boot, (2) let the unit idle through normal use including known slow phases (NAND, WiFi/BT bring-up) with no spurious reset, (3) deliberately induce a hang (e.g. kill the `watchdog` process) and confirm a real reset happens within ~15s. A wrong timeout here means unwanted mid-drive reboots, so don't skip step 2.
+
+**Explicitly out of scope for this change** (see the approved plan, `/home/osboxes/.claude/plans/mossy-crafting-oasis.md`): this only proves the kernel is still scheduling tasks, not that `MsnCoreApp` specifically is healthy. App-level supervision (a `respawn` inittab entry, or a feeder that checks app liveness before petting) would be a separate, smaller follow-up if a wedged-but-still-scheduling `MsnCoreApp` ever turns out to be a real failure mode in practice.

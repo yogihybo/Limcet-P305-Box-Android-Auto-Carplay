@@ -1171,6 +1171,61 @@ presence on the actual unit still unconfirmed. The schematic confirms
 it's I2C-attached, not just reset-line-attached -- worth an I2C bus
 scan if wired CarPlay's MFi handshake is ever investigated.
 
+**Presence and I2C address confirmed, 2026-07-31.** Three previously
+separate pieces of evidence in this project connect into one clear
+answer:
+
+1. GPIO 95 (`apple_encpy_ic_rst`) is driven high (reset deasserted)
+   unconditionally at boot by stock's `customer_gpio_init` (section 5
+   above) -- the chip is expected to be present and ready, not
+   optional/DNP hardware.
+2. A live `i2c-scan` on hw `&i2c0` (the DesignWare controller, pins
+   70-71) found **two unidentified devices, addr 0x10 and 0x11**
+   (line ~552/973 above) -- never matched to anything in stock's
+   static `i2c_board_info` table (which only covers `bd37033`,
+   `Goodix-TS`, and `rn6752` on the bit-banged buses).
+3. **Direct proof, from stock's own binary**: `firmware_source/
+   mtd6_rootfs/usr/lib/MFITest` (a real, unstripped stock diagnostic
+   tool, symbols intact) is a full MFi coprocessor test harness --
+   `mfi_open`/`mfi_close`/`mfi_read`/`mfi_write`/`mfi_scan`/
+   `mfi_get_device_id`/`mfi_get_certificate`/
+   `mfi_get_cer_serial_number`/`mfi_process_challenge`/
+   `mfi_process_challenge2`, referencing `MFI_REG_AUTH_CTRL_AND_STATUS`
+   and opening `/dev/i2c-%d` directly (no kernel driver -- MFi
+   coprocessors are driven from userspace via `i2c-dev`, standard for
+   this class of chip). Disassembled `MFISerialportApp::
+   initSerialPort()`'s call into `mfi_open()`
+   (`objdump -d usr/lib/MFITest`, function at `0x120c4`): calls
+   `mfi_open(bus=0, addr_param=0x22)`; inside `mfi_open` (`0x11a74`),
+   the device path is built as `/dev/i2c-<bus>` and the `I2C_SLAVE`
+   ioctl (`0x703`) is issued with `addr_param >> 1` as the 7-bit slave
+   address -- `0x22 >> 1 = 0x11`. **This exactly matches one of the
+   two live-scanned addresses (0x11) on exactly the bus the scan found
+   them on (hw i2c0/`/dev/i2c-0`)**, independently confirming both the
+   chip's presence on this real unit and its precise address.
+
+Address `0x11` also matches the publicly documented I2C address for
+one real Apple MFi Authentication Coprocessor generation (the 2.0C-era
+`MFI337S3959`; the 3.0-era `MFI343S00177` instead defaults to `0x10`,
+which is very plausibly what the scan's *other* unidentified address,
+`0x10`, actually is -- either an alternate register bank on the same
+chip or the coprocessor responding on both addresses depending on
+boot/init state; not independently confirmed which).
+
+**Net conclusion**: the Apple MFi/CarPlay auth chip IS populated on
+this real unit, on hw `&i2c0` (`/dev/i2c-0` under Linux, DesignWare
+controller, pins 70-71), 7-bit address `0x11` (with `0x10` a strong
+secondary candidate for the same chip). `usr/lib/MFITest` is a ready,
+stock, standalone diagnostic tool that can be run directly (no
+`MsnCoreApp`/carplay daemon needed) to test the chip in isolation --
+the natural next step if wired CarPlay's MFi handshake is ever
+actually investigated on real hardware. Production code that also
+references the `mfi_*` symbols: `usr/lib/libiap2link.so` (undefined
+references to `mfi_close`/`mfi_get_cer_serial_number`/
+`mfi_certificate`/`mfi_cert_len`, plus its own `mfi_get_certificate`
+definition) -- this is the real, in-use CarPlay iAP2-link library, not
+just the test tool.
+
 ### ARK7116 (reversing-camera decoder)
 
 `BT656/601` digital video into `ARK1668`. On this actual board it's

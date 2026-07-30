@@ -20,15 +20,17 @@ if [ -f /tmp/wlan.ko ]; then
     insmod /tmp/wlan.ko
 else
     # Try modprobe first -- uses modules.dep for 4.19.192
-    # rtw_drv_log_level=3 quiets routine INFO-level driver spam (e.g.
-    # "Turbo EDCA =0x...") on the three variants that support the param;
-    # rtl8822cs/rtl8821cu have no source in this tree (always fail to
-    # "module not found" regardless) so there's nothing to quiet there.
-    modprobe rtl8821cs rtw_drv_log_level=3 2>/dev/null || \
+    # rtw_drv_log_level=2 (_DRV_ERR_, lowered from 3/_DRV_WARNING_
+    # 2026-07-31 -- WARNING level in this vendor driver is still
+    # routinely noisy) quiets routine driver-internal chatter on the
+    # three variants that support the param; rtl8822cs/rtl8821cu have
+    # no source in this tree (always fail to "module not found"
+    # regardless) so there's nothing to quiet there.
+    modprobe rtl8821cs rtw_drv_log_level=2 2>/dev/null || \
     modprobe rtl8822cs 2>/dev/null || \
-    modprobe rtl8189fs rtw_drv_log_level=3 2>/dev/null || \
+    modprobe rtl8189fs rtw_drv_log_level=2 2>/dev/null || \
     modprobe rtl8821cu 2>/dev/null || \
-    modprobe rtl8811cu rtw_drv_log_level=3 2>/dev/null || {
+    modprobe rtl8811cu rtw_drv_log_level=2 2>/dev/null || {
         # Fallback: direct .ko path using running kernel version
         KVER=$(uname -r)
         for ko in \

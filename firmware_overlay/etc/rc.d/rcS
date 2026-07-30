@@ -207,11 +207,12 @@ chmod 755 /var/empty
 modprobe galcore registerMemBase=0xE0F00000 irqLine=32 contiguousSize=0x800000 physSize=0x80000000 powerManagement=0
 
 # Load USB WiFi driver
-# rtw_drv_log_level=3 (_DRV_WARNING_) quiets the driver's routine INFO-level
-# spam (e.g. "Turbo EDCA =0x...", printed every few seconds during normal
-# adaptive QoS tuning) while keeping real warnings/errors visible. Default
-# is _DRV_INFO_=4. See include/rtw_debug.h in the driver source.
-modprobe rtl8811cu rtw_drv_log_level=3
+# rtw_drv_log_level=2 (_DRV_ERR_, lowered from 3/_DRV_WARNING_ 2026-07-31 --
+# WARNING level in this vendor driver is still routinely noisy, not
+# reserved for genuinely exceptional conditions) keeps real errors visible
+# while dropping routine driver-internal chatter. Default is _DRV_INFO_=4.
+# See include/rtw_debug.h in the driver source.
+modprobe rtl8811cu rtw_drv_log_level=2
 
 # Set up DHCP lease directory and file
 mkdir -p /data

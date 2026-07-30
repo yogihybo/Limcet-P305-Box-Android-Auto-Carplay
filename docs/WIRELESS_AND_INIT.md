@@ -657,7 +657,51 @@ None of this was actually caused by the `usb0` fix — it was a
 pre-existing build-pipeline gap that this investigation happened to
 trip over while testing on a freshly-reflashed stick.
 
-### usb1 stays `dr_mode="otg"` — corrected 2026-07-30: it has no external connector at all, "CarPlay's port" was never actually observed
+### usb1 fixed to `dr_mode="host"` (2026-07-30) — it was winning the gadget-UDC race against usb0, breaking wired CarPlay
+
+**Root cause found and fixed, same day as the correction below.**
+Checking real bootmmc boot logs (`docs/logs/new uboot new kernel
+baseline v21_260729.txt`, `v22_260729.txt` — both post-2026-07-27,
+both controllers `otg`) for exactly which controller the `g_ncm`
+gadget driver actually binds to: `usb0` finishes its own OTG setup at
+t≈0.969s; `usb1` doesn't even start probing until t≈1.316s. Yet
+`carplay-ncm0`/`g_ncm gadget: NCM Gadget` consistently appears right
+after **usb1's** setup line in every capture checked, never usb0's.
+
+The kernel's gadget-UDC binding logic explains why:
+`usb_gadget_probe_driver()` (`drivers/usb/gadget/udc/core.c`) just
+binds to "the first" UDC with no driver already attached when no
+explicit `udc_name` is set — and `g_ncm` (`drivers/usb/gadget/legacy/
+ncm.c`) never sets one. With both controllers registering as
+candidate UDCs, the race consistently resolved in `usb1`'s favor
+(exact ordering mechanism not fully pinned down — plausibly probe
+deferral or initcall-level timing — but the *outcome* is decisively
+confirmed by two independent log captures). Since `usb1` has no
+external connector at all (see the correction just below), this meant
+wired CarPlay's gadget was silently bound to a controller nothing
+could ever plug into, from boot, on every prior build — **this was
+the real, previously undiagnosed reason wired CarPlay (NCM) could
+never work**, not a userspace bug.
+
+**Fixed**: `usb1`'s `dr_mode` locked to `"host"` permanently in
+`ark1668.dtsi` (`linux-arkmicro` commit `c5f6d0b6e`) — it never
+legitimately needs peripheral/gadget capability anyway, only ever
+talking to the onboard WiFi chip in host mode. This removes it from
+UDC contention entirely, so `g_ncm` has no candidate left except
+`usb0`. Also removes `usb1`'s pointless OTG negotiation delay at every
+boot. Companion fix: `switchotg.sh` (main repo commit `9090bbb`) no
+longer writes a runtime `mode` value to `usb1` at all — its old
+default (`otg` on any non-test boot) would have silently overridden
+this DTS fix and reopened the same race every boot; the script now
+only decides whether to bring up `carplay-ncm0` (which now only ever
+registers when `usb0` itself is gadget-capable, i.e. not a `bootusb`
+test boot). Kernel builds clean. **Not yet hardware-tested** — the
+next wired CarPlay test should confirm `carplay-ncm0` exists and is
+bound to `usb0`/`musb-hdrc.0` (check `readlink
+/sys/class/udc/*/device` or similar), and ideally complete a real
+CarPlay handshake end to end.
+
+### usb1's role, corrected 2026-07-30: it has no external connector at all, "CarPlay's port" was never actually observed
 
 Previously described here as "CarPlay's port," dynamically negotiating
 wired CarPlay first and falling back to WiFi. **This was never
@@ -684,12 +728,12 @@ peripheral-role attempt (with nothing that could ever plug into it)
 times out. Whether wired CarPlay's actual data path runs through
 `usb0` instead (alongside wired AA's AOA path) is not yet confirmed
 either — this needs a real wired-CarPlay test with full serial capture
-to settle. Because of this, `usb1`'s `dr_mode="otg"` and the
-peripheral-role negotiation delay it costs at every boot are currently
-unexplained overhead rather than confirmed necessary hardware
-detection — worth revisiting once wired CarPlay's real path is
-confirmed. `usb0`'s locked-mode-per-boot-command approach (see below)
-remains correct regardless of this correction.
+to settle. **Fixed same day** (see the subsection above): `usb1`'s
+`dr_mode="otg"` and its peripheral-role negotiation delay turned out
+to be worse than just unexplained overhead — it was actively winning
+the gadget-UDC race against `usb0`, so `usb1` is now locked to
+`"host"` permanently. `usb0`'s locked-mode-per-boot-command approach
+(see below) remains correct regardless of this correction.
 
 A same-day test that briefly set `usb1` to `dr_mode="host"` too
 (`9f678777e`, step 3 above) confirmed this concretely: `g_ncm` simply

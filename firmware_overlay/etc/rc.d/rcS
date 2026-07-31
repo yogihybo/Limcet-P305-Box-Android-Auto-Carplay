@@ -46,8 +46,18 @@ watchdog -t 5 -T 15 /dev/watchdog
 # shortly after this point in rcS still gets caught by bootcheck on the
 # next boot instead of being masked. fw_setenv is a symlink to
 # fw_printenv (firmware_overlay/busybox-applets.manifest); both read
-# /etc/fw_env.config for the NAND-backed environment location.
-(sleep 15 && fw_setenv bootcount 0) &
+# /etc/fw_env.config for the environment location.
+#
+# 2026-07-31: QUIETED -- U-Boot's CONFIG_ENV_IS_IN_MMC attempt was
+# reverted (hung the board, see docs/DEVICE_TEST_CHECKLIST_2026-07-18.md
+# §83) and it's back on CONFIG_ENV_IS_NOWHERE, meaning there is
+# currently no valid environment location for fw_env.config to point
+# at at all -- this line would print "Cannot parse config file:
+# Invalid argument" / "Error: environment not initialized" on every
+# single boot, harmlessly but noisily. Re-enable once env persistence
+# gets a proper re-attempt (see that same doc section) and
+# fw_env.config has a real, working entry again.
+# (sleep 15 && fw_setenv bootcount 0) &
 
 # libarkcmn.so/libarkadapt.so (vendor 2D-blit compositor + CarPlay adapter)
 # hardcode /tmp/dev/memalloc as their physically-contiguous buffer-allocator

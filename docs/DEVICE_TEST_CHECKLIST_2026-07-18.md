@@ -5910,3 +5910,24 @@ First hardware test of §82's fix: the board locked up completely, with **nothin
 **Reverted** (`linux-arkmicro` commit `84aaf9567`, main repo `1ae6537`): back to `CONFIG_ENV_IS_NOWHERE`, restoring basic bootability. `CONFIG_ENV_OFFSET`/`CONFIG_SYS_MMC_ENV_DEV` left commented out (not deleted) in the config header, and `/etc/fw_env.config`'s MMC entry likewise commented out with an explanatory note, for whenever this gets a proper re-attempt. **§82's bootcount-persistence fix is open again** -- `bootcount` is back to living only in RAM for the current boot session, same limitation as before §82.
 
 **Real lesson reinforced**: this project's own established caution about hardware-testing cadence ("confident-but-unverified fixes reliably cost a full test cycle each when they're wrong") applied directly here -- rather than a second guess-and-flash cycle against a device that was already fully locked up, reverting to the last known-working state was the right call. Any future re-attempt at persistent U-Boot environment storage on this board should budget for live serial/JTAG debug access to actually see where in `board_init_r`'s sequence it stalls, rather than inferring from config diffs alone.
+
+## 84. Double-checked the full automatic post-countdown sequence; pulled `carbackcamcheck` back out of `CONFIG_BOOTCOMMAND`
+
+Requested review of the full `CONFIG_BOOTCOMMAND` chain after §83's scare. Traced it step by step:
+
+```
+if fatload mmc 0:1 ${loadaddr} uEnv.txt; then env import -t ${loadaddr} ${filesize}; fi;
+if bootcheck; then
+    bootlogofile bootlogo_usb.raw;
+    if bootusb; then true; else run nandboot; fi;
+else
+    echo [bootcheck] bootlimit exceeded -- going straight to nandboot;
+    run nandboot;
+fi
+```
+
+**Confirmed safe, one open question resolved**: with the environment reverted to `CONFIG_ENV_IS_NOWHERE` (§83), checked whether `do_bootcheck()`/`do_bootnand()`'s unconditional `env_save()` calls could themselves cause any new problem. Traced `env/env.c`'s `env_save()`: it loops over registered backends and explicitly skips any without a `.save` callback (true of every backend under `nowhere`) -- no I/O, no print, no hang, just a clean no-op. Confirms `bootcheck`'s fallback branch is currently dead code (bootcount always resets to 0 every boot, so it can never exceed `bootlimit`) but is not itself a new risk -- matches what's already documented as broken-pending-re-fix, nothing worse.
+
+**Real risk found and acted on**: `carbackcamcheck` (§80's ITU656 camera bypass + MCU UART notify) was still wired in as the very first automatic step -- and its register sequence has never actually been hardware-verified, not even manually, despite the original approved plan requiring exactly that (Phase 0) before any automatic wiring (Phase 1). Given the board had just fully locked once this session from a different unverified change, decided not to leave a second one sitting in the default automatic path. **Removed** (`linux-arkmicro` commit `5c64e6779`): `carbackcamcheck;` no longer runs automatically. Still fully available as a manual command at the prompt (`carbackcamcheck`, or `itu656` directly) -- the right next step, still per the original plan, is confirming it works correctly by hand before ever re-adding the automatic call.
+
+Builds clean.

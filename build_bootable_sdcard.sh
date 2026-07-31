@@ -1240,6 +1240,17 @@ build() {
 
     # 2. Partition table
     begin_step 3 "Partitioning"
+    # Zero the ~1MiB gap before partition 1 -- this is where U-Boot's
+    # environment now lives (CONFIG_ENV_IS_IN_MMC, CONFIG_ENV_OFFSET
+    # 0x40000, see linux-arkmicro's include/configs/ark1668_limcet_p305.h,
+    # 2026-07-31). The --image path already builds from a freshly
+    # zeroed file, but writing directly to a real, reused physical
+    # $TARGET wouldn't otherwise touch bytes outside the partitions
+    # parted creates below -- without this, a stale environment from an
+    # earlier build could silently carry forward across a "fresh"
+    # rebuild on the same card, undermining the guarantee that a freshly
+    # built SD image always starts from this repo's compiled defaults.
+    run dd if=/dev/zero of="$TARGET" bs=1M count=1 conv=notrunc
     run parted -s "$TARGET" mklabel msdos
     run parted -s "$TARGET" mkpart primary fat32 1MiB "${P1_SIZE_MB}MiB"
     run parted -s "$TARGET" mkpart primary ext4  "$((P1_SIZE_MB+1))MiB" "$((P1_SIZE_MB+P2_SIZE_MB))MiB"

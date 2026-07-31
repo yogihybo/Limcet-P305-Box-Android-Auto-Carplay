@@ -389,3 +389,4 @@ usr/sbin/ubirmvol ../../bin/busybox
 usr/sbin/ubirsvol ../../bin/busybox
 usr/sbin/ubiupdatevol ../../bin/busybox
 usr/sbin/udhcpd ../../bin/busybox
+usr/bin/fw_setenv fw_printenv

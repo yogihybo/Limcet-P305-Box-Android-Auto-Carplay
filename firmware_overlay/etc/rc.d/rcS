@@ -36,6 +36,19 @@ sync
 # automatically by devtmpfs (CONFIG_DEVTMPFS=y), no mdev rule needed.
 watchdog -t 5 -T 15 /dev/watchdog
 
+# Clear U-Boot's boot-attempt counter (see linux-arkmicro's
+# ark1668_boot_cmds.c do_bootcheck(), invoked from CONFIG_BOOTCOMMAND's
+# `bootcheck` gate) once this boot has stayed up for a short stable
+# period -- confirms this boot succeeded so the counter doesn't creep
+# toward bootlimit (default 3) during ordinary use, which would
+# otherwise eventually skip bootusb and fall back straight to nandboot.
+# Backgrounded + delayed (not cleared immediately) so a crash-loop
+# shortly after this point in rcS still gets caught by bootcheck on the
+# next boot instead of being masked. fw_setenv is a symlink to
+# fw_printenv (firmware_overlay/busybox-applets.manifest); both read
+# /etc/fw_env.config for the NAND-backed environment location.
+(sleep 15 && fw_setenv bootcount 0) &
+
 # libarkcmn.so/libarkadapt.so (vendor 2D-blit compositor + CarPlay adapter)
 # hardcode /tmp/dev/memalloc as their physically-contiguous buffer-allocator
 # device -- stock creates it via etc/memalloc_load.sh's `insmod .../3.4.0/

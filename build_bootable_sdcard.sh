@@ -1336,6 +1336,21 @@ build() {
         run cp "$HYBRID_UBOOT_BIN" /tmp/sd_p1/uboot_hybrid.bin
         bootlogo_label="$bootlogo_label + uboot_hybrid.bin"
     fi
+    # reversingtrack.raw: the reverse-camera parking-guide overlay data
+    # (RSTK-magic'd, kernel's track_paint_init() checks for it at fixed
+    # physical 0xfd00000 -- see include/configs/ark1668_limcet_p305.h's
+    # nandboot comment). Previously only ever loaded via nandboot's own
+    # `nand read`; bootmmc/bootusb (boot_from_block_dev()) never loaded
+    # it at all, so the guideline overlay silently never worked on those
+    # paths. 2026-07-31: added the equivalent fatload to
+    # boot_from_block_dev() too -- needs the same source file placed on
+    # p1 here, same pattern as bootlogo.raw. Source is the same asset
+    # already used for the redirect_mtd_data /nanddata/ symlink on p2
+    # (Linux-side), just also copied to p1 now for U-Boot's own use.
+    if [[ -f "$SCRIPT_DIR/firmware_source/mtd10_reversingtrack/reversingtrack" ]]; then
+        run cp "$SCRIPT_DIR/firmware_source/mtd10_reversingtrack/reversingtrack" /tmp/sd_p1/reversingtrack.raw
+        bootlogo_label="$bootlogo_label + reversingtrack.raw"
+    fi
     local stock_kernel_src=""
     if [[ -f "$SCRIPT_DIR/sd_bootable/zImage_stock" ]]; then
         stock_kernel_src="$SCRIPT_DIR/sd_bootable/zImage_stock"

@@ -12,6 +12,28 @@ mkdir -p /var/log
 sync
 /sbin/mdev -s
 
+# 2026-08-02: low-latency socket polling, system-wide -- practical
+# mitigation attempt for the long-running AA media audio stutter
+# investigation (docs/AUDIO_SUBSYSTEM_INVESTIGATION.md), tried after
+# live tracing (strace) proved too invasive on this hardware to safely
+# gather more diagnostic data. Makes the kernel busy-poll for incoming
+# socket data instead of relying purely on interrupt-driven wakeup,
+# for every socket system-wide -- sink itself never opts in via
+# setsockopt(SO_BUSY_POLL) (confirmed absent from its binary), so this
+# is the only way to get this behavior without patching sink, which is
+# a genuine, unmodified vendor binary. NOT a restoration of stock
+# behavior -- CONFIG_NET_RX_BUSY_POLL (and these sysctls) didn't exist
+# until Linux 3.11; stock runs Linux 3.4 and cannot have this
+# mechanism, full stop. A deliberate deviation, not a stock match.
+# Values are microseconds to busy-poll before falling back to normal
+# interrupt-driven waiting; 50us is a commonly-used starting point for
+# this class of low-latency tuning, not derived from anything specific
+# to this hardware -- revisit if it doesn't help or if CPU usage rises
+# noticeably (busy-polling trades CPU time for latency, real cost on a
+# single-core system already suspected of contention).
+sysctl -w net.core.busy_poll=50 >/dev/null 2>&1
+sysctl -w net.core.busy_read=50 >/dev/null 2>&1
+
 # Set each MUSB controller's operating mode (usb1's CarPlay wired/WiFi
 # role, and a fast-path for USB-stick test boots) -- see
 # docs/WIRELESS_AND_INIT.md sec 7 and the comments in this script for

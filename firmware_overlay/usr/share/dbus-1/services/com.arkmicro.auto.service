@@ -1,13 +1,44 @@
 [D-BUS Service]
 Name=com.arkmicro.auto
-# 2026-07-28: redirect sink's own stdout/stderr into the kernel log
-# (docs/AUDIO_SUBSYSTEM_INVESTIGATION.md) so its prints -- including
-# AlsaHandle::play()'s "play:225" XRUN-recovery line, the actual
-# mechanism behind the choppy-audio investigation -- land in the same
-# `dmesg` timeline as our kernel-side period-jitter/mute/mixer
-# logging, instead of being invisible or requiring a separate
-# terminal capture. Plain `>` redirection to /dev/kmsg; glibc still
-# fully-buffers stdout when it isn't a TTY, so lines may arrive in
-# bursts rather than immediately -- acceptable for post-hoc log
-# correlation, not real-time monitoring.
-Exec=/bin/sh -c "exec /usr/bin/sink > /dev/kmsg 2>&1"
+# 2026-07-28: redirect sink's own stdout/stderr so its prints --
+# including AlsaHandle::play()'s "play:225" XRUN-recovery line, the
+# actual mechanism behind the choppy-audio investigation -- are
+# visible for correlation instead of being lost.
+#
+# 2026-08-02: switched from /dev/kmsg to a real file
+# (/data/sink_output.log). /dev/kmsg is both rate-limited and
+# buffer-bounded by the kernel -- under a burst of output (exactly
+# what happens during an XRUN storm, dozens of play:225 lines in under
+# a second) it can silently drop lines, which is effectively lossy in
+# precisely the situation this logging exists to capture. A plain file
+# has neither limit. glibc still fully-buffers stdout when it isn't a
+# TTY (no stdbuf/script applet in this busybox build to force
+# line-buffering), so lines may still arrive in bursts rather than
+# immediately -- acceptable for post-hoc correlation against dmesg
+# timestamps, not real-time monitoring. `>` (not `>>`) so each session
+# starts a fresh log rather than accumulating indefinitely across
+# reboots.
+#
+# 2026-08-02: prefixed with `chrt -f 50` -- real-time (SCHED_FIFO)
+# scheduling priority for sink and every thread it spawns. This is a
+# deliberate deviation from stock, not a restoration of stock behavior
+# -- checked the real stock rootfs dump's own com.arkmicro.auto.service
+# directly, it's a bare `Exec=/usr/bin/sink` with no priority wrapping
+# at all, and sink's own binary (same Holden-sourced binary on both
+# stock and here) never calls sched_setscheduler/pthread_setschedparam
+# internally either. This is a practical mitigation attempt for the
+# long-running AA media audio stutter investigation
+# (docs/AUDIO_SUBSYSTEM_INVESTIGATION.md) after live tracing (strace)
+# proved too invasive on this hardware to safely gather more diagnostic
+# data -- not a fix for a specific confirmed mechanism, a scheduling-
+# priority experiment covering several of the remaining open theories
+# (single-core CPU contention, IRQ-disable windows, generic scheduling
+# starvation) at once regardless of which one is real. Threads created
+# via pthread_create() after this inherit the parent's SCHED_FIFO
+# policy/priority by default, so this covers every thread sink spawns,
+# not just its main one, without needing to enumerate/attach to
+# individual thread IDs after the fact. Revert this line alone (back to
+# the previous Exec=) if it doesn't help or causes new problems --
+# genuine SCHED_FIFO on a single-core system that never yields can
+# starve *other* processes if sink ever spins instead of blocking.
+Exec=/bin/sh -c "exec chrt -f 50 /usr/bin/sink > /data/sink_output.log 2>&1"

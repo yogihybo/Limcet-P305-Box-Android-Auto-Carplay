@@ -1,0 +1,1682 @@
+udhcpd: started, v1.25.0
+mDNSResponder: mDNS_AddDNSServer: Lock not held! mDNS_busy (0) mDNS_reentrancy (0)
+mDNSResponder: mDNSPlatformSourceAddrForDest: connect 1.1.1.1 failed errno 101 (Network is unreachable)
+unknow disk type: "DOS/MBR boot sector; partition 1 : ID=0xc, active, start-CHS (0x10,0,1), end-CHS (0x3ff,3,32), startsector 2048, 129024 sectors; partition 2 : ID=0x83, start-CHS (0x3ff,3,32), end-CHS (0x3ff,3,32), startsector 133120, 612352 sectors; partition 3 : ID=0x83, start-CHS (0x3ff,3,32), end-CHS (0x3ff,3,32), startsector 747520, 301056 sectors"
+[17.392]  mount command: "mount /dev/mmcblk0p1 -o utf8 /media/sdisk/p1/"
+[17.622]  mount command: "mount /dev/mmcblk0p2 /media/sdisk/p2/"
+[17.857]  mount command: "mount /dev/mmcblk0p3 /media/sdisk/p3/"
+[17.897]  Write At atCommand: "AT+BTEN=1"
+[18.779]  Write At atCommand: "AT+ADDR"
+[18.780]  BlueToothAdapter_Blueware::onStartupConfig()
+[18.780]  Write At atCommand: "AT+HFPCFG"
+[18.782]  Write At atCommand: "AT+HFPDISC"
+[18.783]  Write At atCommand: "AT+ADDR"
+[18.783]  Write At atCommand: "AT+NAME"
+[18.784]  Write At atCommand: "AT+VER"
+[18.811]  Write At atCommand: "AT+PLIST"
+[18.812]  BT Local Address: "<REDACTED-MAC>"
+[18.812]  Write At atCommand: "AT+NAME"
+[18.813]I msncoreapp.cpp@2964 enableHostApd start  enable: 1 timeout: 3000
+[18.814]  start  enableWLAN 0 18815
+stop wifi manager
+[18.910]  end  enableWLAN 0 18914
+[18.958]I msncoreapp.cpp@3059 enableHostApd hostapd started  true
+[18.958]  hostapd state: 2  pid: 911 ap type: 1
+[18.959]I msncoreapp.cpp@3098 enableHostApd end  1
+[18.959]  Write At atCommand: "AT+HFPCFG=0"
+[18.972]  BT Local Address: "<REDACTED-MAC>"
+[18.972]  Write At atCommand: "AT+NAME"
+[19.895]  MsnCoreApp::onDiskDeviceStatusChange 1 1
+[19.910]  run thread: 0x70c3f440
+[19.911]  onScannerFiles thread start: MsnThread(0x1e04e8)
+[20.912]  Load App Plugin 2 "/usr/lib/libMusicPlayer.so"
+[20.938]  MsnMainWindow::setRealVisible LauncherWindow(0x1f99f0, name = "LauncherWindow") false
+[20.945]  MsnMainWindow::setRealVisible MusicPlayerWindow(0x5346a8) true
+[20.945]  mode app change: "MsnCoreApp" -> "MusicPlayer"
+[20.946]
+======== refreshAppAudioChannel 131075 0
+[20.946]  switchToAppAudioChannel, ModeApp: "MusicPlayer"  AudioApp: "MusicPlayer"  Channel: 0 Request: false
+[20.958]  Waite Event Ticks 10
+QMetaObject::connectSlotsByName: No matching signal for on_btnBtMusic_clicked()
+[21.409]  setAppVolumeMute "MusicPlayer" true
+[21.409]
+======== refreshAppAudioChannel 131075 0
+[21.409]  switchToAppAudioChannel, ModeApp: "MusicPlayer"  AudioApp: "MusicPlayer"  Channel: 0 Request: false
+TagLib: Could not open file /media/udisk/p2/etc/bluetooth/RingTone.wav
+TagLib: FileRef::tag() - Called without a valid file.
+[21.712]I msncoreapp.cpp@2964 enableHostApd start  enable: 0 timeout: 100
+[21.712]  hostapd state: 2  pid: 911
+[21.870]  hostapd state: 0  pid: 0
+[21.871]I msncoreapp.cpp@3098 enableHostApd end  0
+[21.871]  Write At atCommand: "AT+HFPCONN=REDACTEDMAC0"
+[21.872]  Auto ConnectTime 8000
+[22.910]I msncoreapp.cpp@2964 enableHostApd start  enable: 1 timeout: 100
+[22.910]  start  enableWLAN 0 22910
+stop wifi manager
+[22.998]  end  enableWLAN 0 22998
+[23.050]I msncoreapp.cpp@3059 enableHostApd hostapd started  true
+[23.050]  hostapd state: 2  pid: 928 ap type: 1
+[23.050]I msncoreapp.cpp@3098 enableHostApd end  1
+[23.825]  onScannerFiles thread end: MsnThread(0x1e04e8)
+[23.834]  onScannerFinished 1 MsnThread(0x1e04e8) false
+
+ARK1680 SoC Booter V 1.00
+SDMMC card successfully
+                       Not found ARKSDLDR.bin.
+check_loaderfile fail.
+FlashId: 0x98f18015
+
+ Device In The Table!!
+
+                      ChipSize: 0x00000080
+
+BlkSize: 0x00020000
+
+PageSize: 0x00000800
+
+SpareSize: 0x00000080
+
+BlkNum: 0x00000400
+
+PagePerBlk: 0x00000040
+
+ColCyc: 0x00000002
+
+RowCyc: 0x00000002
+
+EccCodeSize: 0x0000000d
+
+SegSize: 0x00000200
+NandOS_Loader...
+ARK169 2Gb 20180412-6-5-10_330_430_nboot: 0xc0000783
+DDR3 Data training successful
+samsung DDR3_128MX16
+
+Ark1680 SoC Remapped And DDR Init End . . .
+Launch Stepldr...
+NandStepLoader...
+change_clk enable clock successful
+SD get card RCA:0x%x
+change_clk enable clock successful
+Launch UBOOT from sd...
+
+
+U-Boot 2018.07-linux4ark_1.0 (Jul 31 2026 - 21:34:18 +1000)
+
+DRAM:  180 MiB
+NAND:  128 MiB
+MMC:   ARK_MMC0: 0
+In:    serial
+Out:   serial
+Err:   serial
+[bootlogo] ark_show_bootlogo() starting, screen_id=0
+switch to partitions #0, OK
+mmc0 is current device
+[arkdata.ini] loading -> `fatload mmc 0:1 0x2900000 arkdata.ini`
+6437 bytes read in 9 ms (698.2 KiB/s)
+[arkdata.ini] fatload reported filesize=0x1925 (6437 bytes)
+[arkdata.ini] loaded 6437 bytes into RAM @ 0x2900000
+[arkdata.ini] done — 13/13 fields overridden from SD card, final timing (vbp=29 vfp=25 vsw=16 hbp=32 hfp=25 hsw=54 clk_freq=330000000 clk_div1=11 clk_div2=1 rgb_mode=5)
+[screen_info] screen_id=0
+[screen_info] ScreenType:0, subType:0,Width:800, Height:480,Format:7, TvoutType:12,screen_id:0,interlace:0
+[screen_info] RgbMode:5 ,BPP:32 ,pad_unset:0
+[screen_info] HFP:25,HBP:32,HSW:54,VBP:29,VFP:25,VSW:16,HSYNCPolarity:0x1,VSYNCPolarity:0x1 ,DEPolarity:0
+[screen_info] CLKSource:1,CLKFreq:330000000,CLKDIV1:11,CLKDIV2:1,CLKPolarity:0,LVDSCfg:0x0,FrameRate:0,
+[arkdata.ini] vpinfo: 20/20 fields overridden, osd1=(c128 b128 s64 h0)
+[bootlogo] ark_display_init() done
+[bootlogo] loading -> `fatload mmc 0:1 0xb400000 bootlogo.raw`
+1536000 bytes read in 529 ms (2.8 MiB/s)
+[bootlogo] fatload reported filesize=0x177000 (1536000 bytes), expected 0x177000 (800x480x32bpp)
+[bootlogo] pushing OSD1 image 800x480 @ 0xb400000 (DISP_RGB_888)
+[bootlogo] OSD1 layer enabled, splash should be visible now
+[lcdconsole] disabled at build time (ENABLE_LCDCONSOLE=0), serial-only
+Hit space to stop autoboot:  0
+=> bootmmc
+[bootmmc] booting kernel+DTB from SD card (mmc 0:1), rootfs on /dev/mmcblk0p2
+[bootlogo] loading -> `fatload mmc 0:1 0xb400000 bootlogo_sd.raw`
+1536000 bytes read in 529 ms (2.8 MiB/s)
+[bootlogo] fatload reported filesize=0x177000 (1536000 bytes), expected 0x177000 (800x480x32bpp)
+[bootlogo] pushing OSD1 image 800x480 @ 0xb400000 (DISP_RGB_888)
+[bootlogo] OSD1 layer enabled, splash should be visible now
+4341616 bytes read in 1484 ms (2.8 MiB/s)
+18355 bytes read in 14 ms (1.3 MiB/s)
+Kernel image @ 0x1000000 [ 0x000000 - 0x423f70 ]
+## Flattened Device Tree blob at 02000000
+   Booting using the fdt blob at 0x2000000
+   Loading Device Tree to 0b1bc000, end 0b1c37b2 ... OK
+[arkdata.ini]   -> DTB /ahb/lcd@e0500000/display@0/lcd-wiring-mode="RGB"
+[arkdata.ini]   -> DTB /ahb/lcd@e0500000/display@0/interface-type="TTL"
+[arkdata.ini] ft_board_setup: done, 15 DTB properties overridden from arkdata.ini
+Using machid 0x1068 from environment
+
+Starting kernel ...
+
+[    0.000000] Booting Linux on physical CPU 0x0
+[    0.000000] Linux version 4.19.192 (osboxes@osboxes) (gcc version 7.3.1 20180425 [linaro-7.3-2018.05 revision d29120a424ecfbc167ef90065c0eeb7f91977701] (Linaro GCC 7.3-2018.05)) #156 Fri Jul 31 21:25:11 AEST 2026
+[    0.000000] CPU: ARMv7 Processor [410fc051] revision 1 (ARMv7), cr=10c53c7d
+[    0.000000] CPU: PIPT / VIPT nonaliasing data cache, VIPT aliasing instruction cache
+[    0.000000] OF: fdt: Machine model: Limcet P305/P306 Dashboard Head Unit
+[    0.000000] bootconsole [earlycon0] enabled
+[    0.000000] Memory policy: Data cache writeback
+[    0.000000] cma: Reserved 64 MiB at 0x04000000
+[    0.000000] CPU: All CPU(s) started in SVC mode.
+[    0.000000] random: get_random_bytes called from start_kernel+0xa0/0x394 with crng_init=0
+[    0.000000] Built 1 zonelists, mobility grouping off.  Total pages: 45675
+[    0.000000] Kernel command line: root=/dev/mmcblk0p2 console=ttyS0,115200n8 mem=180M earlyprintk=serial rootfstype=ext4 rootwait rw screen=0 user_debug=8
+[    0.000000] Dentry cache hash table entries: 32768 (order: 5, 131072 bytes)
+[    0.000000] Inode-cache hash table entries: 16384 (order: 4, 65536 bytes)
+[    0.000000] Memory: 106836K/184320K available (6144K kernel code, 375K rwdata, 1444K rodata, 1024K init, 163K bss, 11948K reserved, 65536K cma-reserved)
+[    0.000000] Virtual kernel memory layout:
+[    0.000000]     vector  : 0xffff0000 - 0xffff1000   (   4 kB)
+[    0.000000]     fixmap  : 0xffc00000 - 0xfff00000   (3072 kB)
+[    0.000000]     vmalloc : 0xcb800000 - 0xff800000   ( 832 MB)
+[    0.000000]     lowmem  : 0xc0000000 - 0xcb400000   ( 180 MB)
+[    0.000000]     modules : 0xbf000000 - 0xc0000000   (  16 MB)
+[    0.000000]       .text : 0x(ptrval) - 0x(ptrval)   (7136 kB)
+[    0.000000]       .init : 0x(ptrval) - 0x(ptrval)   (1024 kB)
+[    0.000000]       .data : 0x(ptrval) - 0x(ptrval)   ( 376 kB)
+[    0.000000]        .bss : 0x(ptrval) - 0x(ptrval)   ( 164 kB)
+[    0.000000]
+[    0.000000] **********************************************************
+[    0.000000] **   NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE   **
+[    0.000000] **                                                      **
+[    0.000000] ** trace_printk() being used. Allocating extra memory.  **
+[    0.000000] **                                                      **
+[    0.000000] ** This means that this is a DEBUG kernel and it is     **
+[    0.000000] ** unsafe for production use.                           **
+[    0.000000] **                                                      **
+[    0.000000] ** If you see this message and you are not debugging    **
+[    0.000000] ** the kernel, report this immediately to your vendor!  **
+[    0.000000] **                                                      **
+[    0.000000] **   NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE   **
+[    0.000000] **********************************************************
+[    0.000000] NR_IRQS: 16, nr_irqs: 16, preallocated irqs: 16
+[    0.000000] VIC @(ptrval): id 0x00041192, vendor 0x41
+[    0.000000] VIC @(ptrval): id 0x00041192, vendor 0x41
+[    0.000000] L2C-310 dynamic clock gating enabled, standby mode enabled
+[    0.000000] L2C-310 cache controller enabled, 8 ways, 128 kB
+[    0.000000] L2C-310: CACHE_ID 0x410060c9, AUX_CTRL 0x06020000
+[    0.000000] clk cpupll rate 690000000.
+[    0.000000] clk syspll rate 324000000.
+[    0.000000] clk audpll rate 426000000.
+[    0.000000] clk ddrclk rate 426000000.
+[    0.000000] clk cpuclk rate 690000000.
+[    0.000000] clk axiclk rate 324000000.
+[    0.000000] clk ahbclk rate 162000000.
+[    0.000000] clk pclk rate 81000000.
+[    0.000000] clk uart4clk rate 24000000.
+[    0.000000] clk uart5clk rate 24000000.
+[    0.000000] clk gpuclk rate 324000000.
+[    0.000000] clk gpiodebounceclk rate 24000000.
+[    0.000000] clk lcdclk rate 324000000.
+[    0.000000] clk mfcclk rate 162000000.
+[    0.000000] clk rtc-clk rate 32768.
+[    0.000000] clk spi-clk rate 162000000.
+[    0.000000] clk i2s-dac-clk rate 240000000.
+[    0.000000] clk i2s-adc-clk rate 240000000.
+[    0.000000] clocksource: arkmicro,ark-timer: mask: 0xffffff max_cycles: 0xffffff, max_idle_ns: 92171119 ns
+[    0.000018] sched_clock: 24 bits at 81MHz, resolution 12ns, wraps every 103563053ns
+[    0.008552] Console: colour dummy device 80x30
+[    0.013209] Calibrating delay loop... 457.11 BogoMIPS (lpj=2285568)
+[    0.076602] pid_max: default: 32768 minimum: 301
+[    0.081740] Mount-cache hash table entries: 1024 (order: 0, 4096 bytes)
+[    0.088426] Mountpoint-cache hash table entries: 1024 (order: 0, 4096 bytes)
+[    0.097292] CPU: Testing write buffer coherency: ok
+[    0.104312] Setting up static identity map for 0x100000 - 0x10003c
+[    0.112644] devtmpfs: initialized
+[    0.125286] VFP support v0.3: implementor 41 architecture 2 part 30 variant 5 rev 1
+[    0.133465] clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 19112604462750000 ns
+[    0.143466] futex hash table entries: 256 (order: -1, 3072 bytes)
+[    0.160860] pinctrl core: initialized pinctrl subsystem
+[    0.167447] NET: Registered protocol family 16
+[    0.202351] DMA: preallocated 256 KiB pool for atomic coherent allocations
+[    0.214826] Serial: Arkmicro UART driver
+[    0.221926] pinctrl-ark e4900000.pinctrl: initialized ark pinctrl driver
+[    0.244747] e4200000.uart: ttyS0 at MMIO 0xe4200000 (irq = 36, base_baud = 1500000) is a ARK
+[    0.253512] console [ttyS0] enabled
+[    0.253512] console [ttyS0] enabled
+[    0.260570] bootconsole [earlycon0] disabled
+[    0.260570] bootconsole [earlycon0] disabled
+[    0.269956] ark_tool: initialized on uart0 open (port for /proc/arktool, see drivers/misc/ark_tool.c)
+[    0.280429] e8000000.uart: ttyS2 at MMIO 0xe8000000 (irq = 60, base_baud = 1500000) is a ARK
+[    0.290340] e8100000.uart: ttyS3 at MMIO 0xe8100000 (irq = 61, base_baud = 1500000) is a ARK
+[    0.300518] e4f00000.serial: ttyHS0 at MMIO 0xe4f00000 (irq = 38, base_baud = 0) is a ARK HS UART
+[    0.310956] e4800000.serial: ttyHS1 at MMIO 0xe4800000 (irq = 44, base_baud = 0) is a ARK HS UART
+[    0.326015] ark-mcu-serial mcu-serial@0: probe done, rx handler registered
+[    0.349435] clk lcdclk rate 29454545.
+[    0.368815] ark1668_lcdfb e0500000.lcd: 16384KiB frame buffer at 0f000000 (mapped at (ptrval))
+[    0.377963] ark1668_lcdfb e0500000.lcd: fb0: ARK1668 LCDC at 0xe0500000 (mapped at (ptrval)), irq 25
+[    0.389684] ark_dw_dmac e0000000.dma: Arkmicro DMA Controller, 8 channels
+[    0.397449] SCSI subsystem initialized
+[    0.401728] usbcore: registered new interface driver usbfs
+[    0.407319] usbcore: registered new interface driver hub
+[    0.412808] usbcore: registered new device driver usb
+[    0.419843] gpio-3 (i2c-gpio-0): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+[    0.429415] gpio-2 (i2c-gpio-0): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+[    0.439194] i2c i2c-1: Not I2C compliant: can't read SCL
+[    0.444566] i2c i2c-1: Bus may be unreliable
+[    0.448850] i2c-gpio i2c-gpio-0: using lines 3 (SDA) and 2 (SCL, no clock stretching)
+[    0.456957] gpio-9 (i2c-gpio-1): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+[    0.466486] gpio-121 (i2c-gpio-1): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+[    0.476412] i2c i2c-2: Not I2C compliant: can't read SCL
+[    0.481782] i2c i2c-2: Bus may be unreliable
+[    0.486084] i2c-gpio i2c-gpio-1: using lines 9 (SDA) and 121 (SCL, no clock stretching)
+[    0.494235] media: Linux media interface: v0.10
+[    0.498849] videodev: Linux video capture interface: v2.00
+[    0.504782] Advanced Linux Sound Architecture Driver Initialized.
+[    0.512348] clocksource: Switched to clocksource arkmicro,ark-timer
+[    0.569107] hx170dec e0900000.vdec: VDEC controller at 0x(ptrval), irq = 40, misc_minor = 63
+[    0.577717] hx170dec e0900000.vdec: Product ID: 0x6731 (revision 2.57.8)
+[    0.599002] NET: Registered protocol family 2
+[    0.604528] tcp_listen_portaddr_hash hash table entries: 512 (order: 0, 4096 bytes)
+[    0.612243] TCP established hash table entries: 2048 (order: 1, 8192 bytes)
+[    0.619330] TCP bind hash table entries: 2048 (order: 1, 8192 bytes)
+[    0.625787] TCP: Hash tables configured (established 2048 bind 2048)
+[    0.632395] UDP hash table entries: 256 (order: 0, 4096 bytes)
+[    0.638307] UDP-Lite hash table entries: 256 (order: 0, 4096 bytes)
+[    0.644985] NET: Registered protocol family 1
+[    0.650712] Initialise system trusted keyrings
+[    0.655714] workingset: timestamp_bits=14 max_order=16 bucket_order=2
+[    0.663206] ntfs: driver 2.1.32 [Flags: R/W DEBUG].
+[    0.671919] Key type asymmetric registered
+[    0.676120] Asymmetric key parser 'x509' registered
+[    0.681041] io scheduler noop registered (default)
+[    0.689005] rn6752: dvr_rn6752_probe:init done
+[    0.693930] [DIAG_ITU656_PROBE] call #1: dvr_dev=c848b040 sizeof(struct dvr_dev)=588
+[    0.701692] [DIAG_ITU656_PROBE] dvr_dev=c848b040 &start=c848b224 start=c03ce098 (want dvr_start=c03ce098) &stop=c848b228 stop=c03cbf34 (want dvr_stop=c03cbf34)
+[    0.716073] [DIAG_ITU656_PROBE] priv_data after memcpy: &priv_data=c848b22c select_channel=c03cb8ac (want c03cb8ac) detect_signal=c03cb060 (want c03cb060) get_progressive=c03ca264 (want c03ca264) display_effect=c03cab48 (want c03cab48)
+[    0.737002] [DIAG_ITU656_PROBE] priv_data after memcpy (cont): dvr_start_cb=00000000 (want 00000000) dvr_stop_cb=00000000 (want 00000000) enter_carback_cb=c03cb09c (want c03cb09c) exit_carback_cb=c03ca4ec (want c03ca4ec) dvr_config=00000000 (want 00000000)
+[    0.761017] [DIAG_ITU656_PROBE_END] dvr_dev=c848b040 start=c03ce098 (want c03ce098) stop=c03cbf34 (want c03cbf34)
+[    0.777893] ark_display: registered /dev/ark_display
+[    0.783969] nand: device found, Manufacturer ID: 0x98, Chip ID: 0xf1
+[    0.790343] nand: Toshiba NAND 128MiB 3,3V 8-bit
+[    0.795111] nand: 128 MiB, SLC, erase size: 128 KiB, page size: 2048, OOB size: 64
+[    0.802754] nand: WARNING: ark-nand: the ECC used on your system is too weak compared to the one required by the NAND chip
+[    0.813863] Scanning device for bad blocks
+[    0.890679] Bad eraseblock 768 at 0x000006000000
+[    0.921263] usbcore: registered new interface driver cdc_ether
+[    0.927339] usbcore: registered new interface driver cdc_subset
+[    0.933402] usbcore: registered new interface driver zaurus
+[    0.939060] usbcore: registered new interface driver ipheth
+[    0.944817] usbcore: registered new interface driver cdc_ncm
+[    0.950936] usbcore: registered new interface driver uas
+[    0.956451] usbcore: registered new interface driver usb-storage
+[    0.992588] musb-hdrc musb-hdrc.0: MUSB HDRC host driver
+[    0.998033] musb-hdrc musb-hdrc.0: new USB bus registered, assigned bus number 1
+[    1.006940] hub 1-0:1.0: USB hub found
+[    1.010820] hub 1-0:1.0: 1 port detected
+[    1.015663] musb-hdrc musb-hdrc.0: switch otg: gpio_id=76 gpio_pwr=126
+[    1.362557] musb-hdrc musb-hdrc.1: MUSB HDRC host driver
+[    1.367950] musb-hdrc musb-hdrc.1: new USB bus registered, assigned bus number 2
+[    1.376858] hub 2-0:1.0: USB hub found
+[    1.380722] hub 2-0:1.0: 1 port detected
+[    1.385291] musb-hdrc musb-hdrc.1: switch host (no negotiation): gpio_id=1 gpio_pwr=117
+[    1.705982] using random self ethernet address
+[    1.710509] using random host ethernet address
+[    1.715864] carplay-ncm0: HOST MAC <MAC-REDACTED>
+[    1.720918] carplay-ncm0: MAC <MAC-REDACTED>
+[    1.725521] random: fast init done
+[    1.729028] g_ncm gadget: NCM Gadget
+[    1.732660] g_ncm gadget: g_ncm ready
+[    1.736344] musb-hdrc musb-hdrc.0: ark_musb_enable: dma not reactivated
+[    1.743378] ark1680_ts e4500000.tsc: probe: ADC/TSC MEM resource [mem 0xe4500000-0xe450003f]
+[    1.751913] ark1680_ts e4500000.tsc: probe: irq=20
+[    1.756825] ark1680_ts e4500000.tsc: probe: mapped syscon/pinmux block at phys 0xe4900000, size 0x200
+[    1.766798] input: ark1680-ts as /devices/platform/e4500000.tsc/input/input0
+[    1.774373] ark1680_ts e4500000.tsc: ARK1680 resistive touchscreen registered, irq=20, debug=0 (echo 1 > /sys/module/ark1680_ts/parameters/debug to trace samples)
+[    1.789908] rtc-ark e4c00000.rtc: rtc core: registered e4c00000.rtc as rtc0
+[    1.797219] i2c /dev entries driver
+[    1.802316] ark_wdt e4b00000.watchdog: initialized (timeout = 15 sec, nowayout = 0)
+[    1.811166] dw_mmc ec400000.mmc: Using PIO mode.
+[    1.815922] dw_mmc ec400000.mmc: Version ID is 220a
+[    1.820870] dw_mmc ec400000.mmc: DW MMC controller at irq 42,32 bit host data width,32 deep fifo
+[    1.842696] mmc_host mmc0: Bus speed (slot 0) = 24000000Hz (slot req 400000Hz, actual 400000HZ div = 30)
+[    1.862963] dw_mmc ec800000.mmc: Using external DMA controller.
+[    1.868992] dw_mmc ec800000.mmc: Version ID is 220a
+[    1.873992] dw_mmc ec800000.mmc: DW MMC controller at irq 54,32 bit host data width,32 deep fifo
+[    1.882996] mmc_host mmc1: card is non-removable.
+[    1.898418] mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 400000Hz, actual 400000HZ div = 30)
+[    1.922940] ark1668-i2s e4000000.i2s-dac: mem resource at 0xe4000000
+[    1.929330] ark1668-i2s e4000000.i2s-dac: releasing soft reset for I2S1 (DAC/internal I2S) at 0xe4000000
+[    1.938946] ark1668-i2s e4000000.i2s-dac: enabled internal I2S1 clock-gate bit at 0xe4a00000+0x1f0
+[    1.948638] ark1668-i2s e8200000.i2s-adc: mem resource at 0xe8200000
+[    1.955101] ark1668-i2s e8200000.i2s-adc: releasing soft reset for I2S2 (ADC/external I2S) at 0xe8200000
+[    1.964685] ark1668-i2s e8200000.i2s-adc: enabled external I2S2/CS4334 clock-gate bits at 0xe4a00000
+[    1.975560] NET: Registered protocol family 10
+[    1.981010] usb 2-1: new high-speed USB device number 2 using musb-hdrc
+[    1.989212] Segment Routing with IPv6
+[    1.993140] sit: IPv6, IPv4 and MPLS over IPv4 tunneling driver
+[    2.000183] NET: Registered protocol family 17
+[    2.006584] Loading compiled-in X.509 certificates
+[    2.018613] asoc-simple-card sound: e4000000.sddac <-> e4000000.i2s-dac mapping ok
+[    2.028311] asoc-simple-card sound: ahb:sdadc@0 <-> e8200000.i2s-adc mapping ok
+[    2.036018] mmc_host mmc0: Bus speed (slot 0) = 24000000Hz (slot req 25000000Hz, actual 24000000HZ div = 0)
+[    2.045897] mmc0: new SD card at address e126
+[    2.053032] mmcblk0: mmc0:e126 SU01G 969 MiB
+[    2.059433] rtc-ark e4c00000.rtc: setting system clock to 1970-01-01 00:00:00 UTC (0)
+[    2.068020] ALSA device list:
+[    2.071007]   #0: ARK-SDDAC
+[    2.074844]  mmcblk0: p1 p2 p3
+[    2.092546] mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 300000Hz, actual 300000HZ div = 40)
+[    2.123911] EXT4-fs (mmcblk0p2): recovery complete
+[    2.128752] EXT4-fs (mmcblk0p2): mounted filesystem with ordered data mode. Opts: (null)
+[    2.137046] VFS: Mounted root (ext4 filesystem) on device 179:2.
+[    2.143216] usb 2-1: hub_port_init:4710 speed=3
+[    2.169751] mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 200000Hz, actual 200000HZ div = 60)
+[    2.186322] devtmpfs: mounted
+[    2.191746] Freeing unused kernel memory: 1024K
+[    2.196578] Run /sbin/init as init process
+[    2.237131] mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 100000Hz, actual 100000HZ div = 120)
+[    2.584667] random: crng init done
+[    3.432469] ark1668_lcdfb: LCD RGB888 r0-r7 pinmux reclaimed from any i2c-gpio pin theft (now 0x11111111)
+mtd8: /nanddata/bootlogo
+mtd9: /nanddata/bootanimation
+mtd10: /nanddata/reversingtrack
+mtd11: /nanddata/unicode
+[    4.217527] IPv6: ADDRCONF(NETDEV_UP): carplay-ncm0: link is not ready
+[    4.224263] IPv6: ADDRCONF(NETDEV_CHANGE): carplay-ncm0: link becomes ready
+device-node compat symlinks: /dev/hx170dec (Hantro hx170dec H.264/MPEG2 hardware decoder, used by Android Auto video) -> /tmp/dev/hx170
+device-node compat symlinks: /dev/dvr (ITU656 camera/carback ioctl interface) -> /tmp/dev/dvr
+[    9.099998] galcore: loading out-of-tree module taints kernel.
+[    9.129766] Galcore version 6.2.4.150331
+[    9.270883] cfg80211: Loading compiled-in X.509 certificates for regulatory database
+[    9.393477] cfg80211: Loaded X.509 cert 'sforshee: 00b28ddf47aef9cea7'
+[    9.400619] platform regulatory.0: Direct firmware load for regulatory.db failed with error -2
+[    9.409340] cfg80211: failed to load regulatory.db
+[   10.023402] usbcore: registered new interface driver rtl8821cu
+
+=== Diagnostic tools ===
+  i2c-scan /dev/i2c-0 /dev/i2c-1 ...   - scan I2C buses for ACKing devices
+  i2c-dump /dev/i2c-N slave_addr [num] - dump registers of an I2C device
+  i2c-write /dev/i2c-N addr reg val    - raw single-register i2c write (bypasses kernel client)
+  ark-ts-test regs                      - dump ARK1680 touch ADC/syscon registers
+  ark-ts-test events /dev/input/eventN  - watch touch evdev events
+  lcd-test                             - print fb/display info, then cycle through solid fills, bars, and gradient
+  strace -f -o /data/x.log <cmd>       - trace syscalls (e.g. strace -f start_msn)
+  nano <file>                          - edit a file (e.g. nano /msnprofile/MsnProductInfo.ini)
+  less <file>                          - page through a file/log (e.g. dmesg | less)
+  htop                                 - interactive process/CPU/memory viewer
+  tmux new -s <name>                   - start a session that survives a dropped connection
+  gdbserver :2345 --attach <pid>       - live remote debugging from a host gdb, see tools/gdbserver/README.md
+  touch-selftest.sh                    - automated touch pass/fail (needs a real touch)
+  uart-test.sh                         - passive listen on MCU (ttyHS0) + MSNEry (ttyS2) links
+  audio-test.sh [file.wav]             - sound card + BD37033 bus/mixer check
+  bt-test.sh                           - GPIO91/ttyHS1/blueware check
+  usb-test.sh                          - USB regression check vs known-good baseline
+  mmc-test.sh                          - read-only MMC/SD check
+  mcu-handshake                        - manual MCU handshake daemon to enable touch panel
+  fb-alpha-test                        - paint alpha/channel-order test bands directly to /dev/fb0
+  lcd-blend-sweep.sh                   - live devmem sweep of OSD1 blend-mode/format/Y2R registers (no rebuild needed)
+  lcd-overlay-watch.sh [secs]          - poll all 5 LCDC layer enable-bits/addrs, log only on change (for the red-overlay bug)
+  lcd-osd1ctl-directfb-watch.sh [--no-hardware|--no-systemonly|--stock-config] [secs] - watches OSD1_CTL rgb_order + OSD1 enable/addr while running start_msn_directfb; --stock-config replicates stock's exact real QWS_DISPLAY/directfbrc (no systemonly, clearing enabled) to test whether the black screen is a config gap or a real driver-stack bug
+  start_msn_linuxfb / start_msn_directfb - start MsnCoreApp on a specific QWS backend without editing start_msn
+  dmesg                                - now aliased to /usr/bin/dmesg --color=always (busybox lacks --color)
+  mem-dump <phys_addr> [len]           - hex-dump physical memory via mmap'd /dev/mem (works on DMA carve-outs plain dd can't reach)
+  mem-fill <phys_addr> <len> <pattern>  - fill physical memory with a repeating 32-bit pattern via mmap'd /dev/mem (stage a test frame, see tools/mem-fill/README.md)
+  hx170-test                           - direct standalone hx170dec H.264 decode test via libmfc.so, bypasses sink/AA entirely (see tools/hx170-test/README.md)
+  fb-scan [threshold]                  - locate solid-color regions in /dev/fb0, predict expected color for black cells via row-fit
+  lcdc-regdump [label]                 - dump every named ARK1668 LCDC register, for diffing a stock vs our-build run
+  pin-force <pin 2-9> <status|gpio-low|gpio-high|lcd> - force an LCD RGB data pin (r0-r7) to GPIO at a level, or restore it to LCD function
+  pinmux-watch [secs]                  - poll the LCD r0-r7/g0-g7/b0-b7 pad-mux registers, log any live function-select change
+  gpio-i2c-probe <sda-pin> <scl-pin>   - bit-bang I2C over two arbitrary sysfs GPIOs, scan for ACKs (hunt real chip wiring)
+  i2c-gpio-bruteforce <target-addr>    - try every candidate pin pair as SCL/SDA, checking for a real ACK from a known I2C address
+  i2c-read-raw /dev/i2c-N addr len     - plain multi-byte I2C read, no register-address write phase
+  pin-dump.sh                          - dump every ARK1668 pinmux pad's live hardware mux value via devmem
+=========================
+
+/ # dmesg
+[    0.000000] Booting Linux on physical CPU 0x0
+[    0.000000] Linux version 4.19.192 (osboxes@osboxes) (gcc version 7.3.1 20180425 [linaro-7.3-2018.05 revision d29120a424ecfbc167ef90065c0eeb7f91977701] (Linaro GCC 7.3-2018.05)) #156 Fri Jul 31 21:25:11 AEST 2026
+[    0.000000] CPU: ARMv7 Processor [410fc051] revision 1 (ARMv7), cr=10c53c7d
+[    0.000000] CPU: PIPT / VIPT nonaliasing data cache, VIPT aliasing instruction cache
+[    0.000000] OF: fdt: Machine model: Limcet P305/P306 Dashboard Head Unit
+[    0.000000] bootconsole [earlycon0] enabled
+[    0.000000] Memory policy: Data cache writeback
+[    0.000000] cma: Reserved 64 MiB at 0x04000000
+[    0.000000] On node 0 totalpages: 46080
+[    0.000000]   Normal zone: 405 pages used for memmap
+[    0.000000]   Normal zone: 0 pages reserved
+[    0.000000]   Normal zone: 46080 pages, LIFO batch:15
+[    0.000000] CPU: All CPU(s) started in SVC mode.
+[    0.000000] random: get_random_bytes called from start_kernel+0xa0/0x394 with crng_init=0
+[    0.000000] pcpu-alloc: s0 r0 d32768 u32768 alloc=1*32768
+[    0.000000] pcpu-alloc: [0] 0
+[    0.000000] Built 1 zonelists, mobility grouping off.  Total pages: 45675
+[    0.000000] Kernel command line: root=/dev/mmcblk0p2 console=ttyS0,115200n8 mem=180M earlyprintk=serial rootfstype=ext4 rootwait rw screen=0 user_debug=8
+[    0.000000] Dentry cache hash table entries: 32768 (order: 5, 131072 bytes)
+[    0.000000] Inode-cache hash table entries: 16384 (order: 4, 65536 bytes)
+[    0.000000] Memory: 106836K/184320K available (6144K kernel code, 375K rwdata, 1444K rodata, 1024K init, 163K bss, 11948K reserved, 65536K cma-reserved)
+[    0.000000] Virtual kernel memory layout:
+                   vector  : 0xffff0000 - 0xffff1000   (   4 kB)
+                   fixmap  : 0xffc00000 - 0xfff00000   (3072 kB)
+                   vmalloc : 0xcb800000 - 0xff800000   ( 832 MB)
+                   lowmem  : 0xc0000000 - 0xcb400000   ( 180 MB)
+                   modules : 0xbf000000 - 0xc0000000   (  16 MB)
+                     .text : 0x(ptrval) - 0x(ptrval)   (7136 kB)
+                     .init : 0x(ptrval) - 0x(ptrval)   (1024 kB)
+                     .data : 0x(ptrval) - 0x(ptrval)   ( 376 kB)
+                      .bss : 0x(ptrval) - 0x(ptrval)   ( 164 kB)
+
+[    0.000000] **********************************************************
+[    0.000000] **   NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE   **
+[    0.000000] **                                                      **
+[    0.000000] ** trace_printk() being used. Allocating extra memory.  **
+[    0.000000] **                                                      **
+[    0.000000] ** This means that this is a DEBUG kernel and it is     **
+[    0.000000] ** unsafe for production use.                           **
+[    0.000000] **                                                      **
+[    0.000000] ** If you see this message and you are not debugging    **
+[    0.000000] ** the kernel, report this immediately to your vendor!  **
+[    0.000000] **                                                      **
+[    0.000000] **   NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE   **
+[    0.000000] **********************************************************
+[    0.000000] NR_IRQS: 16, nr_irqs: 16, preallocated irqs: 16
+[    0.000000] VIC @(ptrval): id 0x00041192, vendor 0x41
+[    0.000000] VIC @(ptrval): id 0x00041192, vendor 0x41
+[    0.000000] L2C-310 dynamic clock gating enabled, standby mode enabled
+[    0.000000] L2C-310 cache controller enabled, 8 ways, 128 kB
+[    0.000000] L2C-310: CACHE_ID 0x410060c9, AUX_CTRL 0x06020000
+[    0.000000] clk cpupll rate 690000000.
+[    0.000000] clk syspll rate 324000000.
+[    0.000000] clk audpll rate 426000000.
+[    0.000000] clk ddrclk rate 426000000.
+[    0.000000] clk cpuclk rate 690000000.
+[    0.000000] clk axiclk rate 324000000.
+[    0.000000] clk ahbclk rate 162000000.
+[    0.000000] clk pclk rate 81000000.
+[    0.000000] clk uart4clk rate 24000000.
+[    0.000000] clk uart5clk rate 24000000.
+[    0.000000] clk gpuclk rate 324000000.
+[    0.000000] clk gpiodebounceclk rate 24000000.
+[    0.000000] clk lcdclk rate 324000000.
+[    0.000000] clk mfcclk rate 162000000.
+[    0.000000] clk rtc-clk rate 32768.
+[    0.000000] clk spi-clk rate 162000000.
+[    0.000000] clk i2s-dac-clk rate 240000000.
+[    0.000000] clk i2s-adc-clk rate 240000000.
+[    0.000000] clocksource: arkmicro,ark-timer: mask: 0xffffff max_cycles: 0xffffff, max_idle_ns: 92171119 ns
+[    0.000018] sched_clock: 24 bits at 81MHz, resolution 12ns, wraps every 103563053ns
+[    0.008552] Console: colour dummy device 80x30
+[    0.013209] Calibrating delay loop... 457.11 BogoMIPS (lpj=2285568)
+[    0.076602] pid_max: default: 32768 minimum: 301
+[    0.081740] Mount-cache hash table entries: 1024 (order: 0, 4096 bytes)
+[    0.088426] Mountpoint-cache hash table entries: 1024 (order: 0, 4096 bytes)
+[    0.097292] CPU: Testing write buffer coherency: ok
+[    0.104312] Setting up static identity map for 0x100000 - 0x10003c
+[    0.112644] devtmpfs: initialized
+[    0.125286] VFP support v0.3: implementor 41 architecture 2 part 30 variant 5 rev 1
+[    0.133465] clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 19112604462750000 ns
+[    0.143466] futex hash table entries: 256 (order: -1, 3072 bytes)
+[    0.160860] pinctrl core: initialized pinctrl subsystem
+[    0.167447] NET: Registered protocol family 16
+[    0.202351] DMA: preallocated 256 KiB pool for atomic coherent allocations
+[    0.214826] Serial: Arkmicro UART driver
+[    0.221926] pinctrl-ark e4900000.pinctrl: initialized ark pinctrl driver
+[    0.244747] e4200000.uart: ttyS0 at MMIO 0xe4200000 (irq = 36, base_baud = 1500000) is a ARK
+[    0.253512] console [ttyS0] enabled
+[    0.260570] bootconsole [earlycon0] disabled
+[    0.269956] ark_tool: initialized on uart0 open (port for /proc/arktool, see drivers/misc/ark_tool.c)
+[    0.280429] e8000000.uart: ttyS2 at MMIO 0xe8000000 (irq = 60, base_baud = 1500000) is a ARK
+[    0.290340] e8100000.uart: ttyS3 at MMIO 0xe8100000 (irq = 61, base_baud = 1500000) is a ARK
+[    0.300518] e4f00000.serial: ttyHS0 at MMIO 0xe4f00000 (irq = 38, base_baud = 0) is a ARK HS UART
+[    0.310956] e4800000.serial: ttyHS1 at MMIO 0xe4800000 (irq = 44, base_baud = 0) is a ARK HS UART
+[    0.326015] ark-mcu-serial mcu-serial@0: probe done, rx handler registered
+[    0.349435] clk lcdclk rate 29454545.
+[    0.368815] ark1668_lcdfb e0500000.lcd: 16384KiB frame buffer at 0f000000 (mapped at (ptrval))
+[    0.377963] ark1668_lcdfb e0500000.lcd: fb0: ARK1668 LCDC at 0xe0500000 (mapped at (ptrval)), irq 25
+[    0.389684] ark_dw_dmac e0000000.dma: Arkmicro DMA Controller, 8 channels
+[    0.397449] SCSI subsystem initialized
+[    0.401449] libata version 3.00 loaded.
+[    0.401728] usbcore: registered new interface driver usbfs
+[    0.407319] usbcore: registered new interface driver hub
+[    0.412808] usbcore: registered new device driver usb
+[    0.419843] gpio-3 (i2c-gpio-0): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+[    0.429415] gpio-2 (i2c-gpio-0): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+[    0.439194] i2c i2c-1: Not I2C compliant: can't read SCL
+[    0.444566] i2c i2c-1: Bus may be unreliable
+[    0.448850] i2c-gpio i2c-gpio-0: using lines 3 (SDA) and 2 (SCL, no clock stretching)
+[    0.456957] gpio-9 (i2c-gpio-1): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+[    0.466486] gpio-121 (i2c-gpio-1): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+[    0.476412] i2c i2c-2: Not I2C compliant: can't read SCL
+[    0.481782] i2c i2c-2: Bus may be unreliable
+[    0.486084] i2c-gpio i2c-gpio-1: using lines 9 (SDA) and 121 (SCL, no clock stretching)
+[    0.494235] media: Linux media interface: v0.10
+[    0.498849] videodev: Linux video capture interface: v2.00
+[    0.504782] Advanced Linux Sound Architecture Driver Initialized.
+[    0.512348] clocksource: Switched to clocksource arkmicro,ark-timer
+[    0.569107] hx170dec e0900000.vdec: VDEC controller at 0x(ptrval), irq = 40, misc_minor = 63
+[    0.577717] hx170dec e0900000.vdec: Product ID: 0x6731 (revision 2.57.8)
+[    0.599002] NET: Registered protocol family 2
+[    0.604528] tcp_listen_portaddr_hash hash table entries: 512 (order: 0, 4096 bytes)
+[    0.612243] TCP established hash table entries: 2048 (order: 1, 8192 bytes)
+[    0.619330] TCP bind hash table entries: 2048 (order: 1, 8192 bytes)
+[    0.625787] TCP: Hash tables configured (established 2048 bind 2048)
+[    0.632395] UDP hash table entries: 256 (order: 0, 4096 bytes)
+[    0.638307] UDP-Lite hash table entries: 256 (order: 0, 4096 bytes)
+[    0.644985] NET: Registered protocol family 1
+[    0.650712] Initialise system trusted keyrings
+[    0.655714] workingset: timestamp_bits=14 max_order=16 bucket_order=2
+[    0.663206] ntfs: driver 2.1.32 [Flags: R/W DEBUG].
+[    0.671919] Key type asymmetric registered
+[    0.676120] Asymmetric key parser 'x509' registered
+[    0.681041] io scheduler noop registered (default)
+[    0.687128] memalloc-cls memalloc: allocator with major = 250
+[    0.689005] rn6752: dvr_rn6752_probe:init done
+[    0.693930] [DIAG_ITU656_PROBE] call #1: dvr_dev=c848b040 sizeof(struct dvr_dev)=588
+[    0.701692] [DIAG_ITU656_PROBE] dvr_dev=c848b040 &start=c848b224 start=c03ce098 (want dvr_start=c03ce098) &stop=c848b228 stop=c03cbf34 (want dvr_stop=c03cbf34)
+[    0.716073] [DIAG_ITU656_PROBE] priv_data after memcpy: &priv_data=c848b22c select_channel=c03cb8ac (want c03cb8ac) detect_signal=c03cb060 (want c03cb060) get_progressive=c03ca264 (want c03ca264) display_effect=c03cab48 (want c03cab48)
+[    0.737002] [DIAG_ITU656_PROBE] priv_data after memcpy (cont): dvr_start_cb=00000000 (want 00000000) dvr_stop_cb=00000000 (want 00000000) enter_carback_cb=c03cb09c (want c03cb09c) exit_carback_cb=c03ca4ec (want c03ca4ec) dvr_config=00000000 (want 00000000)
+[    0.760986] get mirror type=0
+[    0.760999] carback_first_enter g_carback null error
+[    0.761017] [DIAG_ITU656_PROBE_END] dvr_dev=c848b040 start=c03ce098 (want c03ce098) stop=c03cbf34 (want c03cbf34)
+[    0.777893] ark_display: registered /dev/ark_display
+[    0.783969] nand: device found, Manufacturer ID: 0x98, Chip ID: 0xf1
+[    0.790343] nand: Toshiba NAND 128MiB 3,3V 8-bit
+[    0.795111] nand: 128 MiB, SLC, erase size: 128 KiB, page size: 2048, OOB size: 64
+[    0.802754] nand: WARNING: ark-nand: the ECC used on your system is too weak compared to the one required by the NAND chip
+[    0.813863] Scanning device for bad blocks
+[    0.890679] Bad eraseblock 768 at 0x000006000000
+[    0.921263] usbcore: registered new interface driver cdc_ether
+[    0.927339] usbcore: registered new interface driver cdc_subset
+[    0.933402] usbcore: registered new interface driver zaurus
+[    0.939060] usbcore: registered new interface driver ipheth
+[    0.944817] usbcore: registered new interface driver cdc_ncm
+[    0.950936] usbcore: registered new interface driver uas
+[    0.956451] usbcore: registered new interface driver usb-storage
+[    0.992588] musb-hdrc musb-hdrc.0: MUSB HDRC host driver
+[    0.998033] musb-hdrc musb-hdrc.0: new USB bus registered, assigned bus number 1
+[    1.006940] hub 1-0:1.0: USB hub found
+[    1.010820] hub 1-0:1.0: 1 port detected
+[    1.015663] musb-hdrc musb-hdrc.0: switch otg: gpio_id=76 gpio_pwr=126
+[    1.333545] musb_ark_probe succss
+[    1.362557] musb-hdrc musb-hdrc.1: MUSB HDRC host driver
+[    1.367950] musb-hdrc musb-hdrc.1: new USB bus registered, assigned bus number 2
+[    1.376858] hub 2-0:1.0: USB hub found
+[    1.380722] hub 2-0:1.0: 1 port detected
+[    1.385291] musb-hdrc musb-hdrc.1: switch host (no negotiation): gpio_id=1 gpio_pwr=117
+[    1.704698] musb_ark_probe succss
+[    1.705982] using random self ethernet address
+[    1.710509] using random host ethernet address
+[    1.715864] carplay-ncm0: HOST MAC <MAC-REDACTED>
+[    1.720918] carplay-ncm0: MAC <MAC-REDACTED>
+[    1.725521] random: fast init done
+[    1.729028] g_ncm gadget: NCM Gadget
+[    1.732660] g_ncm gadget: g_ncm ready
+[    1.736344] musb-hdrc musb-hdrc.0: ark_musb_enable: dma not reactivated
+[    1.743378] ark1680_ts e4500000.tsc: probe: ADC/TSC MEM resource [mem 0xe4500000-0xe450003f]
+[    1.751913] ark1680_ts e4500000.tsc: probe: irq=20
+[    1.756825] ark1680_ts e4500000.tsc: probe: mapped syscon/pinmux block at phys 0xe4900000, size 0x200
+[    1.766798] input: ark1680-ts as /devices/platform/e4500000.tsc/input/input0
+[    1.774373] ark1680_ts e4500000.tsc: ARK1680 resistive touchscreen registered, irq=20, debug=0 (echo 1 > /sys/module/ark1680_ts/parameters/debug to trace samples)
+[    1.789908] rtc-ark e4c00000.rtc: rtc core: registered e4c00000.rtc as rtc0
+[    1.797219] i2c /dev entries driver
+[    1.802316] ark_wdt e4b00000.watchdog: initialized (timeout = 15 sec, nowayout = 0)
+[    1.811166] dw_mmc ec400000.mmc: Using PIO mode.
+[    1.815922] dw_mmc ec400000.mmc: Version ID is 220a
+[    1.820870] dw_mmc ec400000.mmc: DW MMC controller at irq 42,32 bit host data width,32 deep fifo
+[    1.842696] mmc_host mmc0: Bus speed (slot 0) = 24000000Hz (slot req 400000Hz, actual 400000HZ div = 30)
+[    1.862963] dw_mmc ec800000.mmc: Using external DMA controller.
+[    1.868992] dw_mmc ec800000.mmc: Version ID is 220a
+[    1.873992] dw_mmc ec800000.mmc: DW MMC controller at irq 54,32 bit host data width,32 deep fifo
+[    1.882996] mmc_host mmc1: card is non-removable.
+[    1.898418] mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 400000Hz, actual 400000HZ div = 30)
+[    1.922940] ark1668-i2s e4000000.i2s-dac: mem resource at 0xe4000000
+[    1.929330] ark1668-i2s e4000000.i2s-dac: releasing soft reset for I2S1 (DAC/internal I2S) at 0xe4000000
+[    1.938946] ark1668-i2s e4000000.i2s-dac: enabled internal I2S1 clock-gate bit at 0xe4a00000+0x1f0
+[    1.948638] ark1668-i2s e8200000.i2s-adc: mem resource at 0xe8200000
+[    1.955101] ark1668-i2s e8200000.i2s-adc: releasing soft reset for I2S2 (ADC/external I2S) at 0xe8200000
+[    1.964685] ark1668-i2s e8200000.i2s-adc: enabled external I2S2/CS4334 clock-gate bits at 0xe4a00000
+[    1.974397] start:================[ark_sdadc_probe]:[ 95]
+[    1.974434] end:===============[ark_sdadc_probe]:[ 103]
+[    1.974747] start:================[ark_sddac_probe]:[ 257]
+[    1.974803] end:===============[ark_sddac_probe]:[ 282]
+[    1.975560] NET: Registered protocol family 10
+[    1.981010] usb 2-1: new high-speed USB device number 2 using musb-hdrc
+[    1.989212] Segment Routing with IPv6
+[    1.993140] sit: IPv6, IPv4 and MPLS over IPv4 tunneling driver
+[    2.000183] NET: Registered protocol family 17
+[    2.006584] Loading compiled-in X.509 certificates
+[    2.018613] asoc-simple-card sound: e4000000.sddac <-> e4000000.i2s-dac mapping ok
+[    2.028311] asoc-simple-card sound: ahb:sdadc@0 <-> e8200000.i2s-adc mapping ok
+[    2.036018] mmc_host mmc0: Bus speed (slot 0) = 24000000Hz (slot req 25000000Hz, actual 24000000HZ div = 0)
+[    2.045897] mmc0: new SD card at address e126
+[    2.053032] mmcblk0: mmc0:e126 SU01G 969 MiB
+[    2.059433] rtc-ark e4c00000.rtc: setting system clock to 1970-01-01 00:00:00 UTC (0)
+[    2.068020] ALSA device list:
+[    2.071007]   #0: ARK-SDDAC
+[    2.074844]  mmcblk0: p1 p2 p3
+[    2.092546] mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 300000Hz, actual 300000HZ div = 40)
+[    2.123911] EXT4-fs (mmcblk0p2): recovery complete
+[    2.128752] EXT4-fs (mmcblk0p2): mounted filesystem with ordered data mode. Opts: (null)
+[    2.137046] VFS: Mounted root (ext4 filesystem) on device 179:2.
+[    2.143216] usb 2-1: hub_port_init:4710 speed=3
+[    2.169751] mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 200000Hz, actual 200000HZ div = 60)
+[    2.186322] devtmpfs: mounted
+[    2.191746] Freeing unused kernel memory: 1024K
+[    2.196578] Run /sbin/init as init process
+[    2.237131] mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 100000Hz, actual 100000HZ div = 120)
+[    2.584667] random: crng init done
+[    3.432469] ark1668_lcdfb: LCD RGB888 r0-r7 pinmux reclaimed from any i2c-gpio pin theft (now 0x11111111)
+[    4.217527] IPv6: ADDRCONF(NETDEV_UP): carplay-ncm0: link is not ready
+[    4.224263] IPv6: ADDRCONF(NETDEV_CHANGE): carplay-ncm0: link becomes ready
+[    9.099998] galcore: loading out-of-tree module taints kernel.
+[    9.129766] Galcore version 6.2.4.150331
+[    9.270883] cfg80211: Loading compiled-in X.509 certificates for regulatory database
+[    9.393477] cfg80211: Loaded X.509 cert 'sforshee: 00b28ddf47aef9cea7'
+[    9.400619] platform regulatory.0: Direct firmware load for regulatory.db failed with error -2
+[    9.409340] cfg80211: failed to load regulatory.db
+[    9.660572] RTW: module init start
+[    9.660590] RTW: rtl8821cu v5.12.0-16-g5229e7f95.20210118_COEX20200730-5151
+[    9.660598] RTW: build time: Jul 28 2026 15:06:21
+[    9.660604] RTW: rtl8821cu BT-Coex version = COEX20200730-5151
+[    9.661973] RTW: [HALMAC]55772M
+               HALMAC_MAJOR_VER = 1
+               HALMAC_PROTOTYPE_VER = 6
+               HALMAC_MINOR_VER = 6
+               HALMAC_PATCH_VER = 22
+[    9.663571] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[    9.866052] RTW: HW EFUSE
+[    9.866102] RTW: 0x000: 29 81 00 BC  09 00 21 00  6E 04 A4 10  10 00 30 0B
+[    9.866198] RTW: 0x010: FF FF FF FF  FF FF FF FF  FF FF FF 02  FF FF FF FF
+[    9.866280] RTW: 0x020: FF FF 25 25  25 25 25 23  23 22 22 23  23 23 24 25
+[    9.866360] RTW: 0x030: 22 FF FF FF  FF FF 10 FF  FF FF 28 28  28 28 28 28
+[    9.866440] RTW: 0x040: 2C 2C 2C 2C  2C 02 FF FF  FF FF FF FF  FF FF FF FF
+[    9.866523] RTW: 0x050: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    9.866593] RTW: 0x060: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    9.866673] RTW: 0x070: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    9.866755] RTW: 0x080: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    9.866843] RTW: 0x090: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    9.866923] RTW: 0x0A0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    9.867004] RTW: 0x0B0: FF FF FF FF  FF FF FF FF  7F 2D 1B 00  FF FF FF FF
+[    9.867073] RTW: 0x0C0: FF 01 00 41  00 00 00 00  00 FF 22 FF  FF FF FF FF
+[    9.867153] RTW: 0x0D0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    9.867231] RTW: 0x0E0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    9.867312] RTW: 0x0F0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    9.867392] RTW: 0x100: DA 0B 11 C8  E3 46 02 68  B9 D3 F1 5A  43 09 03 52
+[    9.867462] RTW: 0x110: 65 61 6C 74  65 6B 0E 03  38 30 32 2E  31 31 61 63
+[    9.867542] RTW: 0x120: 20 4E 49 43  08 03 31 32  33 34 35 36  FF FF FF FF
+[    9.867621] RTW: 0x130: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    9.867701] RTW: 0x140: FF FF FF FF  00 00 31 0F  FF FF FF FF  FF FF FF FF
+[    9.867771] RTW: 0x150: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    9.867850] RTW: 0x160: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    9.867931] RTW: 0x170: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    9.868013] RTW: 0x180: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    9.868082] RTW: 0x190: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    9.868163] RTW: 0x1A0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    9.868243] RTW: 0x1B0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    9.868324] RTW: 0x1C0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    9.868393] RTW: 0x1D0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    9.868474] RTW: 0x1E0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    9.868553] RTW: 0x1F0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    9.870145] RTW: hal_com_config_channel_plan chplan:0x7F
+[    9.887441] RTW: [HALMAC][ALWAYS]shall R reg twice!!
+[   10.007114] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[   10.007360] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[   10.007583] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[   10.007800] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[   10.010646] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[   10.010855] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[   10.011080] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[   10.011344] RTW: [RF_PATH] ver_id.RF_TYPE:RF_1T1R
+[   10.011365] RTW: [RF_PATH] HALSPEC's rf_reg_trx_path_bmp:0x11, rf_reg_path_avail_num:1, max_tx_cnt:1
+[   10.011375] RTW: [RF_PATH] PG's trx_path_bmp:0x00, max_tx_cnt:0
+[   10.011383] RTW: [RF_PATH] Registry's trx_path_bmp:0x00, tx_path_lmt:0, rx_path_lmt:0
+[   10.011391] RTW: [RF_PATH] HALDATA's trx_path_bmp:0x11, max_tx_cnt:1
+[   10.011400] RTW: [RF_PATH] HALDATA's rf_type:RF_1T1R, NumTotalRFPath:1
+[   10.011412] RTW: [TRX_Nss] HALSPEC - tx_nss:1, rx_nss:1
+[   10.011419] RTW: [TRX_Nss] Registry - tx_nss:0, rx_nss:0
+[   10.011426] RTW: [TRX_Nss] HALDATA - tx_nss:1, rx_nss:1
+[   10.011438] RTW: txpath=0x1, rxpath=0x1
+[   10.011446] RTW: txpath_1ss:0x1, num:1
+[   10.013502] RTW: rtw_regsty_chk_target_tx_power_valid return _FALSE for band:0, path:0, rs:0, t:-1
+[   10.019277] RTW: rtw_ndev_init(wlan0) if1 mac_addr=<MAC-REDACTED>
+[   10.021215] RTW: rtw_ndev_init(wlan1) if2 mac_addr=<MAC-REDACTED>
+[   10.023402] usbcore: registered new interface driver rtl8821cu
+[   10.029299] RTW: module init ret=0
+/ # reboot
+/ # umount: can't unmount /dev: Device or resource busy
+[   22.651715] EXT4-fs (mmcblk0p2): re-mounted. Opts: (null)
+The system is going down NOW!
+Sent SIGTERM to all processes
+Sent SIGKILL to all processes
+Requesting system reboot
+[   24.672423] reboot: Restarting system
+
+ARK1680 SoC Booter V 1.00
+SDMMC card successfully
+                       Not found ARKSDLDR.bin.
+check_loaderfile fail.
+FlashId: 0x98f18015
+
+ Device In The Table!!
+
+                      ChipSize: 0x00000080
+
+BlkSize: 0x00020000
+
+PageSize: 0x00000800
+
+SpareSize: 0x00000080
+
+BlkNum: 0x00000400
+
+PagePerBlk: 0x00000040
+
+ColCyc: 0x00000002
+
+RowCyc: 0x00000002
+
+EccCodeSize: 0x0000000d
+
+SegSize: 0x00000200
+NandOS_Loader...
+ARK169 2Gb 20180412-6-5-10_330_430_nboot: 0xc0000783
+DDR3 Data training successful
+samsung DDR3_128MX16
+
+Ark1680 SoC Remapped And DDR Init End . . .
+Launch Stepldr...
+NandStepLoader...
+change_clk enable clock successful
+SD get card RCA:0x%x
+change_clk enable clock successful
+Launch UBOOT from sd...
+
+
+U-Boot 2018.07-linux4ark_1.0 (Jul 31 2026 - 21:34:18 +1000)
+
+DRAM:  180 MiB
+NAND:  128 MiB
+MMC:   ARK_MMC0: 0
+In:    serial
+Out:   serial
+Err:   serial
+[bootlogo] ark_show_bootlogo() starting, screen_id=0
+switch to partitions #0, OK
+mmc0 is current device
+[arkdata.ini] loading -> `fatload mmc 0:1 0x2900000 arkdata.ini`
+6437 bytes read in 9 ms (698.2 KiB/s)
+[arkdata.ini] fatload reported filesize=0x1925 (6437 bytes)
+[arkdata.ini] loaded 6437 bytes into RAM @ 0x2900000
+[arkdata.ini] done — 13/13 fields overridden from SD card, final timing (vbp=29 vfp=25 vsw=16 hbp=32 hfp=25 hsw=54 clk_freq=330000000 clk_div1=11 clk_div2=1 rgb_mode=5)
+[screen_info] screen_id=0
+[screen_info] ScreenType:0, subType:0,Width:800, Height:480,Format:7, TvoutType:12,screen_id:0,interlace:0
+[screen_info] RgbMode:5 ,BPP:32 ,pad_unset:0
+[screen_info] HFP:25,HBP:32,HSW:54,VBP:29,VFP:25,VSW:16,HSYNCPolarity:0x1,VSYNCPolarity:0x1 ,DEPolarity:0
+[screen_info] CLKSource:1,CLKFreq:330000000,CLKDIV1:11,CLKDIV2:1,CLKPolarity:0,LVDSCfg:0x0,FrameRate:0,
+[arkdata.ini] vpinfo: 20/20 fields overridden, osd1=(c128 b128 s64 h0)
+[bootlogo] ark_display_init() done
+[bootlogo] loading -> `fatload mmc 0:1 0xb400000 bootlogo.raw`
+1536000 bytes read in 529 ms (2.8 MiB/s)
+[bootlogo] fatload reported filesize=0x177000 (1536000 bytes), expected 0x177000 (800x480x32bpp)
+[bootlogo] pushing OSD1 image 800x480 @ 0xb400000 (DISP_RGB_888)
+[bootlogo] OSD1 layer enabled, splash should be visible now
+[lcdconsole] disabled at build time (ENABLE_LCDCONSOLE=0), serial-only
+Hit space to stop autoboot:  0
+251 bytes read in 6 ms (40 KiB/s)
+[bootcheck] bootcount=1 bootlimit=3
+[bootlogo] loading -> `fatload mmc 0:1 0xb400000 bootlogo_usb.raw`
+1536000 bytes read in 527 ms (2.8 MiB/s)
+[bootlogo] fatload reported filesize=0x177000 (1536000 bytes), expected 0x177000 (800x480x32bpp)
+[bootlogo] pushing OSD1 image 800x480 @ 0xb400000 (DISP_RGB_888)
+[bootlogo] OSD1 layer enabled, splash should be visible now
+[bootusb] starting USB...
+starting USB...
+USB0:   =============== usb_lowlevel_init 400000 us timeout===============
+usb_lowlevel_init: port 0 empty, retrying on port 1
+=============== port 1 usb_lowlevel_init time is 172431 us===============
+=============== usb_lowlevel_init device is high speed===============
+scanning bus 0 for devices... 1 USB Device(s) found
+       scanning usb for storage devices... 0 Storage Device(s) found
+[bootusb] booting kernel+DTB+rootfs from USB stick (usb 0:1), root=/dev/sda2
+[bootlogo] loading -> `fatload mmc 0:1 0xb400000 bootlogo_usb.raw`
+1536000 bytes read in 527 ms (2.8 MiB/s)
+[bootlogo] fatload reported filesize=0x177000 (1536000 bytes), expected 0x177000 (800x480x32bpp)
+[bootlogo] pushing OSD1 image 800x480 @ 0xb400000 (DISP_RGB_888)
+[bootlogo] OSD1 layer enabled, splash should be visible now
+** Bad device usb 0 **
+[bootusb] failed to load zImage from usb 0:1
+Booting stock kernel ...
+[arkdata.ini] done — 13/13 fields overridden from SD card, final timing (vbp=29 vfp=25 vsw=16 hbp=32 hfp=25 hsw=54 clk_freq=330000000 clk_div1=11 clk_div2=1 rgb_mode=5)
+[screen_info] screen_id=0
+[screen_info] ScreenType:0, subType:0,Width:800, Height:480,Format:7, TvoutType:12,screen_id:0,interlace:0
+[screen_info] RgbMode:5 ,BPP:32 ,pad_unset:0
+[screen_info] HFP:25,HBP:32,HSW:54,VBP:29,VFP:25,VSW:16,HSYNCPolarity:0x1,VSYNCPolarity:0x1 ,DEPolarity:0
+[screen_info] CLKSource:1,CLKFreq:330000000,CLKDIV1:11,CLKDIV2:1,CLKPolarity:0,LVDSCfg:0x0,FrameRate:0,
+[arkdata.ini] vpinfo: 20/20 fields overridden, osd1=(c128 b128 s64 h0)
+[disconfig] ark display init g_screen_id=0.
+[bootlogo] loading -> `fatload mmc 0:1 0xb400000 bootlogo_nand.raw`
+1536000 bytes read in 529 ms (2.8 MiB/s)
+[bootlogo] fatload reported filesize=0x177000 (1536000 bytes), expected 0x177000 (800x480x32bpp)
+[bootlogo] pushing OSD1 image 800x480 @ 0xb400000 (DISP_RGB_888)
+[bootlogo] OSD1 layer enabled, splash should be visible now
+[backcarcheck] gpio5=1, in_reverse=0.
+
+NAND read: device 0 offset 0x7920000, size 0x300000
+ 3145728 bytes read: OK
+3255536 bytes read in 1118 ms (2.8 MiB/s)
+Loaded zImage_stock from SD card
+Kernel image @ 0x1000000 [ 0x000000 - 0x31acf0 ]
+Using machid 0x1068 from environment
+
+Starting kernel ...
+
+Uncompressing Linux... done, booting the kernel.
+machine ID r1 = 0x00001068
+[    1.340000] arktool display reg init
+## Error: "factory_reset" not defined
+sh: 1: unknown operand
+mount successfully!
+insmod: can't insert '/lib/modules/3.4.0/kernel/drivers/input/touchscreen/ark1680_ts.ko': File exists
+ln: /tmp/touch_export: File exists
+[6.829]  set display inch: QSize(120, 72) 5.50956
+[6.871]  init msn firset export ticks: 311
+[    7.280000] IrqLineVG=-1.
+/ # [8.395]  MSNCoreApp start
+[8.410]  MSNCoreApp exception init
+[8.423]  MSNCoreApp running
+[9.651]  Set Effect Process Priority -19  0
+QWS_ARK_TOUCH_DEVICE undefined, touch input disabled
+[10.283]  MsnCoreApp version: V3.21.09.0219
+[10.835]  MSNCoreApp onFirstInit
+[10.839]  ark screen type: 0
+[10.840]  display size: QSize(800, 480)  src size: QSize(800, 480)
+[10.918]  Load App Plugin 12 "/usr/lib/libCarReversing.so"
+Mon Feb 19 09:09:30 UTC 2024
+[11.001]  SetTime: "2024-02-19 09:09:30" Ret: 0
+[11.038]  Load App Plugin 10 "/usr/lib/libLauncher-Box.so"
+[11.056]  MsnMainWindow::setRealVisible LauncherWindow(0x1cc7c8) true
+[11.110]  Waite Event Ticks 12
+[11.241]  load wallpaper: "/msnprofile/wallpaper/800x480/"  size: QSize(0, 0)
+rm: can't remove '/tmp/app-*.bmp': No such file or directory
+[11.262]  MSNCoreApp show
+[11.481]  MsnWindowManager::setVisible true true
+[11.492]  endCarReversing
+get_shared_display_data May 29 2020-16:57:02.
+[11.496]  setTrackOSDVisible false
+[11.499]  set_osd1_visible true
+QMetaObject::connectSlotsByName: No matching signal for on_pushButton_clicked()
+[12.460]  DVRSetDialog visibale change: false
+[12.485]  MSNCoreApp hide boot logo
+[12.497]  MSNCoreApp onSecondInit
+[12.501]  DiskDeviceWatcher::startWatcher
+Created device discovery thread
+[12.506]  Start Load Driver
+[12.905]  Load App Plugin 8 "/usr/lib/libSetting.so"
+[12.948]  Open backlight pwm : true
+SoundAdapter Create Failed, Not Support ICType: 0
+[13.038]  Load App Plugin 403 "/usr/lib/libMsnSound.so"
+syncDatas armsetting radar visible:0 datas:0 0 0 0
+[13.485]  McuAdapter: MCUAdapter_BoxP300 6
+[13.491]  Open MCU Serial Port  "/dev/ttyHS0"  Ret: true "No such file or directory"
+
+start serialPortProcessProc
+
+[13.502]  Open MCU Serial Port  "/dev/ttyS2"  Ret: true "No such file or directory"
+[13.503]  Load App Plugin 401 "/usr/lib/libMcuCenter.so"
+[13.650]  CanBusPlugin 0 0
+[13.650]  Load App Plugin 400 "/usr/lib/libCanBus.so"
+[13.799]  Load App Plugin 3 "/usr/lib/libBlueTooth.so"
+[13.817]  open touch monitor dev: /dev/input/event0 41
+[13.862]  onLoadDriverFinished
+[13.932]  usb_device_added /dev/bus/usb/002/001
+[13.933]  usb_device_added /dev/bus/usb/001/001
+usb_device_open /dev/bus/usb/001/001
+usb_device_open open returned 30 writeable 1 errno 2
+usb_device_new /dev/bus/usb/001/001 fd: 30
+usb_device_new read returned 43 errno 2
+insert usb dev:/dev/bus/usb/001/001 vid:0x1d6b pid:0x0002
+[13.936]  arkapi_open_dvr() retry_times: 1
+net.ipv4.udp_mem = 8192 10240 16384
+net.ipv4.udp_rmem_min = 1048576
+[   13.990000] track_setting=2
+[   14.020000] track_setting=3
+[14.058]  MSN protocal type: 0  sendReadyData!
+[14.328]  MSNCoreApp onLoadStartupApp
+[14.328]  MSNCoreApp onEndInit
+[14.329]
+MsnCoreApp End init
+
+[14.765]  MsnLink StartService: "com.arkmicro.carplay"
+label2 = TOYOTA
+pcarplay_info->bridge_mode=0
+pcarplay_info->icurrent = 500
+pcarplay_info->ns_level = 1
+### ++ carplay initialize ++
+msg instance
+++ MsgEnQueue ++
+### carplay dbus initialize true
+[15.399]  MsnLink StartService ret: "com.arkmicro.carplay" true ""
+[15.412]  MSNCoreApp exec
+[15.442]  MsnLink::onServiceRegistered "com.arkmicro.carplay"
+new device /dev/bus/usb/002/002
+[15.443]  usb_device_added /dev/bus/usb/002/002
+[15.448]  MSN protocal type: 0  sendReadyData!
+x=0 y=0
+s_w=800 s_h=480
+v_w=800 v_h=480 screen_width_phy=120 screen_height_phy=72
+#pluginfo->btmac=<MAC-REDACTED>
+carplay_plugin_set_info:1505 err=0
+mDNSResponder: mDNSResponder (Engineering Build) (May 29 2020 16:56:53) starting
+carplay_plugin_start:1728
+### carplay ++ usb_reader_thread ++
+### carplay -- usb_reader_thread --
+### -- carplay initialize --
+[16.041]  start bt service:/usr/bin/blueware
+[16.106]  MSN protocal type: 0  sendReadyData!
+[16.242]  Retry Open BlueTooth Serial Port,  Ret: true
+[16.243]  Write At atCommand: "AT+DEVSTAT"
+[16.417]  Write At atCommand: "AT+BTEN=1"
+udhcpd: started, v1.25.0
+mDNSResponder: mDNS_AddDNSServer: Lock not held! mDNS_busy (0) mDNS_reentrancy (0)
+mDNSResponder: mDNSPlatformSourceAddrForDest: connect 1.1.1.1 failed errno 101 (Network is unreachable)
+unknow disk type: "DOS/MBR boot sector; partition 1 : ID=0xc, active, start-CHS (0x10,0,1), end-CHS (0x3ff,3,32), startsector 2048, 129024 sectors; partition 2 : ID=0x83, start-CHS (0x3ff,3,32), end-CHS (0x3ff,3,32), startsector 133120, 612352 sectors; partition 3 : ID=0x83, start-CHS (0x3ff,3,32), end-CHS (0x3ff,3,32), startsector 747520, 301056 sectors"
+[17.372]  mount command: "mount /dev/mmcblk0p1 -o utf8 /media/sdisk/p1/"
+[17.602]  mount command: "mount /dev/mmcblk0p2 /media/sdisk/p2/"
+[17.835]  mount command: "mount /dev/mmcblk0p3 /media/sdisk/p3/"
+[18.708]  Write At atCommand: "AT+ADDR"
+[18.709]  BlueToothAdapter_Blueware::onStartupConfig()
+[18.710]  Write At atCommand: "AT+HFPCFG"
+[18.712]  Write At atCommand: "AT+HFPDISC"
+[18.712]  Write At atCommand: "AT+ADDR"
+[18.713]  Write At atCommand: "AT+NAME"
+[18.713]  Write At atCommand: "AT+VER"
+[18.741]  Write At atCommand: "AT+PLIST"
+[18.742]  BT Local Address: "<REDACTED-MAC>"
+[18.742]  Write At atCommand: "AT+NAME"
+[18.743]I msncoreapp.cpp@2964 enableHostApd start  enable: 1 timeout: 3000
+[18.744]  start  enableWLAN 0 18744
+stop wifi manager
+[18.845]  end  enableWLAN 0 18845
+[18.888]I msncoreapp.cpp@3059 enableHostApd hostapd started  true
+[18.889]  hostapd state: 2  pid: 911 ap type: 1
+[18.889]I msncoreapp.cpp@3098 enableHostApd end  1
+[18.901]  Write At atCommand: "AT+HFPCFG=0"
+[18.902]  BT Local Address: "<REDACTED-MAC>"
+[18.902]  Write At atCommand: "AT+NAME"
+[20.022]  MsnCoreApp::onDiskDeviceStatusChange 1 1
+[20.030]  run thread: 0x70cdc440
+[20.030]  onScannerFiles thread start: MsnThread(0x1f44b0)
+[21.047]  Load App Plugin 2 "/usr/lib/libMusicPlayer.so"
+[21.073]  MsnMainWindow::setRealVisible LauncherWindow(0x1cc7c8, name = "LauncherWindow") false
+[21.080]  MsnMainWindow::setRealVisible MusicPlayerWindow(0x544b20) true
+[21.080]  mode app change: "MsnCoreApp" -> "MusicPlayer"
+[21.081]
+======== refreshAppAudioChannel 131075 0
+[21.081]  switchToAppAudioChannel, ModeApp: "MusicPlayer"  AudioApp: "MusicPlayer"  Channel: 0 Request: false
+[21.093]  Waite Event Ticks 11
+QMetaObject::connectSlotsByName: No matching signal for on_btnBtMusic_clicked()
+[21.567]  setAppVolumeMute "MusicPlayer" true
+[21.567]
+======== refreshAppAudioChannel 131075 0
+[21.568]  switchToAppAudioChannel, ModeApp: "MusicPlayer"  AudioApp: "MusicPlayer"  Channel: 0 Request: false
+TagLib: Could not open file /media/udisk/p2/etc/bluetooth/RingTone.wav
+TagLib: FileRef::tag() - Called without a valid file.
+[21.901]I msncoreapp.cpp@2964 enableHostApd start  enable: 0 timeout: 100
+[21.902]  hostapd state: 2  pid: 911
+[22.060]  hostapd state: 0  pid: 0
+[22.060]I msncoreapp.cpp@3098 enableHostApd end  0
+[22.061]  Write At atCommand: "AT+HFPCONN=REDACTEDMAC0"
+[22.061]  Auto ConnectTime 8000
+[23.061]I msncoreapp.cpp@2964 enableHostApd start  enable: 1 timeout: 100
+[23.061]  start  enableWLAN 0 23061
+stop wifi manager
+[23.153]  end  enableWLAN 0 23153
+[23.195]I msncoreapp.cpp@3059 enableHostApd hostapd started  true
+[23.195]  hostapd state: 2  pid: 928 ap type: 1
+[23.195]I msncoreapp.cpp@3098 enableHostApd end  1
+[23.863]  onScannerFiles thread end: MsnThread(0x1f44b0)
+[23.870]  onScannerFinished 1 MsnThread(0x1f44b0) false
+
+ARK1680 SoC Booter V 1.00
+SDMMC card successfully
+                       Not found ARKSDLDR.bin.
+check_loaderfile fail.
+FlashId: 0x98f18015
+
+ Device In The Table!!
+
+                      ChipSize: 0x00000080
+
+BlkSize: 0x00020000
+
+PageSize: 0x00000800
+
+SpareSize: 0x00000080
+
+BlkNum: 0x00000400
+
+PagePerBlk: 0x00000040
+
+ColCyc: 0x00000002
+
+RowCyc: 0x00000002
+
+EccCodeSize: 0x0000000d
+
+SegSize: 0x00000200
+NandOS_Loader...
+ARK169 2Gb 20180412-6-5-10_330_430_nboot: 0xc0000783
+DDR3 Data training successful
+samsung DDR3_128MX16
+
+Ark1680 SoC Remapped And DDR Init End . . .
+Launch Stepldr...
+NandStepLoader...
+change_clk enable clock successful
+SD get card RCA:0x%x
+change_clk enable clock successful
+Launch UBOOT from sd...
+
+
+U-Boot 2018.07-linux4ark_1.0 (Jul 31 2026 - 23:10:45 +1000)
+
+DRAM:  180 MiB
+NAND:  128 MiB
+MMC:   ARK_MMC0: 0
+In:    serial
+Out:   serial
+Err:   serial
+[bootlogo] ark_show_bootlogo() starting, screen_id=0
+switch to partitions #0, OK
+mmc0 is current device
+[arkdata.ini] loading -> `fatload mmc 0:1 0x2900000 arkdata.ini`
+6437 bytes read in 9 ms (698.2 KiB/s)
+[arkdata.ini] fatload reported filesize=0x1925 (6437 bytes)
+[arkdata.ini] loaded 6437 bytes into RAM @ 0x2900000
+[arkdata.ini] done — 13/13 fields overridden from SD card, final timing (vbp=29 vfp=25 vsw=16 hbp=32 hfp=25 hsw=54 clk_freq=330000000 clk_div1=11 clk_div2=1 rgb_mode=5)
+[screen_info] screen_id=0
+[screen_info] ScreenType:0, subType:0,Width:800, Height:480,Format:7, TvoutType:12,screen_id:0,interlace:0
+[screen_info] RgbMode:5 ,BPP:32 ,pad_unset:0
+[screen_info] HFP:25,HBP:32,HSW:54,VBP:29,VFP:25,VSW:16,HSYNCPolarity:0x1,VSYNCPolarity:0x1 ,DEPolarity:0
+[screen_info] CLKSource:1,CLKFreq:330000000,CLKDIV1:11,CLKDIV2:1,CLKPolarity:0,LVDSCfg:0x0,FrameRate:0,
+[arkdata.ini] vpinfo: 20/20 fields overridden, osd1=(c128 b128 s64 h0)
+[bootlogo] ark_display_init() done
+[bootlogo] loading -> `fatload mmc 0:1 0xb400000 bootlogo.raw`
+1536000 bytes read in 529 ms (2.8 MiB/s)
+[bootlogo] fatload reported filesize=0x177000 (1536000 bytes), expected 0x177000 (800x480x32bpp)
+[bootlogo] pushing OSD1 image 800x480 @ 0xb400000 (DISP_RGB_888)
+[bootlogo] OSD1 layer enabled, splash should be visible now
+[lcdconsole] disabled at build time (ENABLE_LCDCONSOLE=0), serial-only
+Hit space to stop autoboot:  0
+251 bytes read in 9 ms (26.4 KiB/s)
+[bootcheck] bootcount=1 bootlimit=3
+[bootlogo] loading -> `fatload mmc 0:1 0xb400000 bootlogo_usb.raw`
+1536000 bytes read in 527 ms (2.8 MiB/s)
+[bootlogo] fatload reported filesize=0x177000 (1536000 bytes), expected 0x177000 (800x480x32bpp)
+[bootlogo] pushing OSD1 image 800x480 @ 0xb400000 (DISP_RGB_888)
+[bootlogo] OSD1 layer enabled, splash should be visible now
+[bootusb] starting USB...
+starting USB...
+USB0:   =============== usb_lowlevel_init 400000 us timeout===============
+usb_lowlevel_init: port 0 empty, retrying on port 1
+=============== port 1 usb_lowlevel_init time is 172431 us===============
+=============== usb_lowlevel_init device is high speed===============
+scanning bus 0 for devices... 1 USB Device(s) found
+       scanning usb for storage devices... 0 Storage Device(s) found
+[bootusb] booting kernel+DTB+rootfs from USB stick (usb 0:1), root=/dev/sda2
+[bootlogo] loading -> `fatload mmc 0:1 0xb400000 bootlogo_usb.raw`
+1536000 bytes read in 527 ms (2.8 MiB/s)
+[bootlogo] fatload reported filesize=0x177000 (1536000 bytes), expected 0x177000 (800x480x32bpp)
+[bootlogo] pushing OSD1 image 800x480 @ 0xb400000 (DISP_RGB_888)
+[bootlogo] OSD1 layer enabled, splash should be visible now
+** Bad device usb 0 **
+[bootusb] failed to load zImage from usb 0:1
+Booting stock kernel ...
+[arkdata.ini] done — 13/13 fields overridden from SD card, final timing (vbp=29 vfp=25 vsw=16 hbp=32 hfp=25 hsw=54 clk_freq=330000000 clk_div1=11 clk_div2=1 rgb_mode=5)
+[screen_info] screen_id=0
+[screen_info] ScreenType:0, subType:0,Width:800, Height:480,Format:7, TvoutType:12,screen_id:0,interlace:0
+[screen_info] RgbMode:5 ,BPP:32 ,pad_unset:0
+[screen_info] HFP:25,HBP:32,HSW:54,VBP:29,VFP:25,VSW:16,HSYNCPolarity:0x1,VSYNCPolarity:0x1 ,DEPolarity:0
+[screen_info] CLKSource:1,CLKFreq:330000000,CLKDIV1:11,CLKDIV2:1,CLKPolarity:0,LVDSCfg:0x0,FrameRate:0,
+[arkdata.ini] vpinfo: 20/20 fields overridden, osd1=(c128 b128 s64 h0)
+[disconfig] ark display init g_screen_id=0.
+[bootlogo] loading -> `fatload mmc 0:1 0xb400000 bootlogo_nand.raw`
+1536000 bytes read in 529 ms (2.8 MiB/s)
+[bootlogo] fatload reported filesize=0x177000 (1536000 bytes), expected 0x177000 (800x480x32bpp)
+[bootlogo] pushing OSD1 image 800x480 @ 0xb400000 (DISP_RGB_888)
+[bootlogo] OSD1 layer enabled, splash should be visible now
+[backcarcheck] gpio5=1, in_reverse=0.
+
+NAND read: device 0 offset 0x7920000, size 0x300000
+ 3145728 bytes read: OK
+3255536 bytes read in 1117 ms (2.8 MiB/s)
+Loaded zImage_stock from SD card
+Kernel image @ 0x1000000 [ 0x000000 - 0x31acf0 ]
+Using machid 0x1068 from environment
+
+Starting kernel ...
+
+Uncompressing Linux... done, booting the kernel.
+machine ID r1 = 0x00001068
+[    1.340000] arktool display reg init
+## Error: "factory_reset" not defined
+sh: 1: unknown operand
+mount successfully!
+insmod: can't insert '/lib/modules/3.4.0/kernel/drivers/input/touchscreen/ark1680_ts.ko': File exists
+ln: /tmp/touch_export: File exists
+[6.827]  set display inch: QSize(120, 72) 5.50956
+[6.868]  init msn firset export ticks: 310
+[    7.280000] IrqLineVG=-1.
+/ # [8.394]  MSNCoreApp start
+[8.408]  MSNCoreApp exception init
+[8.422]  MSNCoreApp running
+[9.651]  Set Effect Process Priority -19  0
+QWS_ARK_TOUCH_DEVICE undefined, touch input disabled
+[10.281]  MsnCoreApp version: V3.21.09.0219
+[10.835]  MSNCoreApp onFirstInit
+[10.839]  ark screen type: 0
+[10.839]  display size: QSize(800, 480)  src size: QSize(800, 480)
+[10.918]  Load App Plugin 12 "/usr/lib/libCarReversing.so"
+Mon Feb 19 09:09:30 UTC 2024
+[11.001]  SetTime: "2024-02-19 09:09:30" Ret: 0
+[11.038]  Load App Plugin 10 "/usr/lib/libLauncher-Box.so"
+[11.056]  MsnMainWindow::setRealVisible LauncherWindow(0x1f99e0) true
+[11.110]  Waite Event Ticks 12
+[11.241]  load wallpaper: "/msnprofile/wallpaper/800x480/"  size: QSize(0, 0)
+rm: can't remove '/tmp/app-*.bmp': No such file or directory
+[11.263]  MSNCoreApp show
+[11.482]  MsnWindowManager::setVisible true true
+[11.493]  endCarReversing
+get_shared_display_data May 29 2020-16:57:02.
+[11.497]  setTrackOSDVisible false
+[11.500]  set_osd1_visible true
+QMetaObject::connectSlotsByName: No matching signal for on_pushButton_clicked()
+[12.443]  DVRSetDialog visibale change: false
+[12.468]  MSNCoreApp hide boot logo
+[12.480]  MSNCoreApp onSecondInit
+[12.484]  DiskDeviceWatcher::startWatcher
+Created device discovery thread
+[12.489]  Start Load Driver
+[12.903]  Load App Plugin 8 "/usr/lib/libSetting.so"
+[12.941]  Open backlight pwm : true
+SoundAdapter Create Failed, Not Support ICType: 0
+[13.019]  Load App Plugin 403 "/usr/lib/libMsnSound.so"
+syncDatas armsetting radar visible:0 datas:0 0 0 0
+[13.473]  McuAdapter: MCUAdapter_BoxP300 6
+[13.479]  Open MCU Serial Port  "/dev/ttyHS0"  Ret: true "No such file or directory"
+
+start serialPortProcessProc
+
+[13.490]  Open MCU Serial Port  "/dev/ttyS2"  Ret: true "No such file or directory"
+[13.490]  Load App Plugin 401 "/usr/lib/libMcuCenter.so"
+[13.638]  CanBusPlugin 0 0
+[13.638]  Load App Plugin 400 "/usr/lib/libCanBus.so"
+[13.775]  Load App Plugin 3 "/usr/lib/libBlueTooth.so"
+[13.792]  open touch monitor dev: /dev/input/event0 41
+[13.843]  onLoadDriverFinished
+[13.906]  usb_device_added /dev/bus/usb/002/001
+[13.908]  usb_device_added /dev/bus/usb/001/001
+usb_device_open /dev/bus/usb/001/001
+usb_device_open open returned 30 writeable 1 errno 2
+usb_device_new /dev/bus/usb/001/001 fd: 30
+usb_device_new read returned 43 errno 2
+insert usb dev:/dev/bus/usb/001/001 vid:0x1d6b pid:0x0002
+[13.922]  arkapi_open_dvr() retry_times: 1
+net.ipv4.udp_mem = 8192 10240 16384
+net.ipv4.udp_rmem_min = 1048576
+[   13.970000] track_setting=2
+[   13.970000] track_setting=3
+[14.016]  MSN protocal type: 0  sendReadyData!
+[14.283]  MSNCoreApp onLoadStartupApp
+[14.283]  MSNCoreApp onEndInit
+[14.283]
+MsnCoreApp End init
+
+[14.712]  MsnLink StartService: "com.arkmicro.carplay"
+label2 = TOYOTA
+pcarplay_info->bridge_mode=0
+pcarplay_info->icurrent = 500
+pcarplay_info->ns_level = 1
+### ++ carplay initialize ++
+msg instance
+++ MsgEnQueue ++
+### carplay dbus initialize true
+[15.410]  MsnLink StartService ret: "com.arkmicro.carplay" true ""
+[15.413]  MSNCoreApp exec
+[15.432]  MsnLink::onServiceRegistered "com.arkmicro.carplay"
+new device /dev/bus/usb/002/002
+[15.433]  usb_device_added /dev/bus/usb/002/002
+[15.438]  MSN protocal type: 0  sendReadyData!
+x=0 y=0
+s_w=800 s_h=480
+v_w=800 v_h=480 screen_width_phy=120 screen_height_phy=72
+#pluginfo->btmac=<MAC-REDACTED>
+mDNSResponder: mDNSResponder (Engineering Build) (May 29 2020 16:56:53) starting
+carplay_plugin_set_info:1505 err=0
+mDNSResponder: mDNS_AddDNSServer: Lock not held! mDNS_busy (0) mDNS_reentrancy (0)
+mDNSResponder: mDNSPlatformSourceAddrForDest: connect 1.1.1.1 failed errno 101 (Network is unreachable)
+carplay_plugin_start:1728
+### carplay ++ usb_reader_thread ++
+### carplay -- usb_reader_thread --
+### -- carplay initialize --
+[15.990]  start bt service:/usr/bin/blueware
+[16.128]  MSN protocal type: 0  sendReadyData!
+[16.192]  Retry Open BlueTooth Serial Port,  Ret: true
+[16.192]  Write At atCommand: "AT+DEVSTAT"
+[16.412]  Write At atCommand: "AT+BTEN=1"
+udhcpd: started, v1.25.0
+unknow disk type: "DOS/MBR boot sector; partition 1 : ID=0xc, active, start-CHS (0x10,0,1), end-CHS (0x3ff,3,32), startsector 2048, 129024 sectors; partition 2 : ID=0x83, start-CHS (0x3ff,3,32), end-CHS (0x3ff,3,32), startsector 133120, 612352 sectors; partition 3 : ID=0x83, start-CHS (0x3ff,3,32), end-CHS (0x3ff,3,32), startsector 747520, 301056 sectors"
+[17.312]  mount command: "mount /dev/mmcblk0p1 -o utf8 /media/sdisk/p1/"
+[17.542]  mount command: "mount /dev/mmcblk0p2 /media/sdisk/p2/"
+[17.779]  mount command: "mount /dev/mmcblk0p3 /media/sdisk/p3/"
+[18.661]  Write At atCommand: "AT+ADDR"
+[18.661]  BlueToothAdapter_Blueware::onStartupConfig()
+[18.661]  Write At atCommand: "AT+HFPCFG"
+[18.662]  Write At atCommand: "AT+HFPDISC"
+[18.662]  Write At atCommand: "AT+ADDR"
+[18.662]  Write At atCommand: "AT+NAME"
+[18.662]  Write At atCommand: "AT+VER"
+[18.693]  Write At atCommand: "AT+PLIST"
+[18.693]  BT Local Address: "<REDACTED-MAC>"
+[18.693]  Write At atCommand: "AT+NAME"
+[18.695]I msncoreapp.cpp@2964 enableHostApd start  enable: 1 timeout: 3000
+[18.696]  start  enableWLAN 0 18696
+stop wifi manager
+[18.791]  end  enableWLAN 0 18792
+[18.835]I msncoreapp.cpp@3059 enableHostApd hostapd started  true
+[18.835]  hostapd state: 2  pid: 911 ap type: 1
+[18.836]I msncoreapp.cpp@3098 enableHostApd end  1
+[18.836]  Write At atCommand: "AT+HFPCFG=0"
+[18.837]  BT Local Address: "<REDACTED-MAC>"
+[18.838]  Write At atCommand: "AT+NAME"
+[19.960]  MsnCoreApp::onDiskDeviceStatusChange 1 1
+[19.970]  run thread: 0x70cbb440
+[19.970]  onScannerFiles thread start: MsnThread(0x1e0310)
+[20.987]  Load App Plugin 2 "/usr/lib/libMusicPlayer.so"
+[21.015]  MsnMainWindow::setRealVisible LauncherWindow(0x1f99e0, name = "LauncherWindow") false
+[21.022]  MsnMainWindow::setRealVisible MusicPlayerWindow(0x533f60) true
+[21.022]  mode app change: "MsnCoreApp" -> "MusicPlayer"
+[21.023]
+======== refreshAppAudioChannel 131075 0
+[21.023]  switchToAppAudioChannel, ModeApp: "MusicPlayer"  AudioApp: "MusicPlayer"  Channel: 0 Request: false
+[21.103]  Waite Event Ticks 78
+QMetaObject::connectSlotsByName: No matching signal for on_btnBtMusic_clicked()
+[21.508]  setAppVolumeMute "MusicPlayer" true
+[21.508]
+======== refreshAppAudioChannel 131075 0
+[21.509]  switchToAppAudioChannel, ModeApp: "MusicPlayer"  AudioApp: "MusicPlayer"  Channel: 0 Request: false
+TagLib: Could not open file /media/udisk/p2/etc/bluetooth/RingTone.wav
+TagLib: FileRef::tag() - Called without a valid file.
+[21.858]I msncoreapp.cpp@2964 enableHostApd start  enable: 0 timeout: 100
+[21.858]  hostapd state: 2  pid: 911
+[22.011]  hostapd state: 0  pid: 0
+[22.011]I msncoreapp.cpp@3098 enableHostApd end  0
+[22.011]  Write At atCommand: "AT+HFPCONN=REDACTEDMAC0"
+[22.012]  Auto ConnectTime 8000
+[23.011]I msncoreapp.cpp@2964 enableHostApd start  enable: 1 timeout: 100
+[23.012]  start  enableWLAN 0 23012
+stop wifi manager
+[23.104]  end  enableWLAN 0 23104
+[23.146]I msncoreapp.cpp@3059 enableHostApd hostapd started  true
+[23.146]  hostapd state: 2  pid: 928 ap type: 1
+[23.147]I msncoreapp.cpp@3098 enableHostApd end  1
+[23.816]  onScannerFiles thread end: MsnThread(0x1e0310)
+[23.819]  onScannerFinished 1 MsnThread(0x1e0310) false
+
+ARK1680 SoC Booter V 1.00
+SDMMC card successfully
+                       Not found ARKSDLDR.bin.
+check_loaderfile fail.
+FlashId: 0x98f18015
+
+ Device In The Table!!
+
+                      ChipSize: 0x00000080
+
+BlkSize: 0x00020000
+
+PageSize: 0x00000800
+
+SpareSize: 0x00000080
+
+BlkNum: 0x00000400
+
+PagePerBlk: 0x00000040
+
+ColCyc: 0x00000002
+
+RowCyc: 0x00000002
+
+EccCodeSize: 0x0000000d
+
+SegSize: 0x00000200
+NandOS_Loader...
+ARK169 2Gb 20180412-6-5-10_330_430_nboot: 0xc0000783
+DDR3 Data training successful
+samsung DDR3_128MX16
+
+Ark1680 SoC Remapped And DDR Init End . . .
+Launch Stepldr...
+NandStepLoader...
+change_clk enable clock successful
+SD get card RCA:0x%x
+change_clk enable clock successful
+Launch UBOOT from sd...
+
+
+U-Boot 2018.07-linux4ark_1.0 (Jul 31 2026 - 23:10:45 +1000)
+
+DRAM:  180 MiB
+NAND:  128 MiB
+MMC:   ARK_MMC0: 0
+In:    serial
+Out:   serial
+Err:   serial
+[bootlogo] ark_show_bootlogo() starting, screen_id=0
+switch to partitions #0, OK
+mmc0 is current device
+[arkdata.ini] loading -> `fatload mmc 0:1 0x2900000 arkdata.ini`
+6437 bytes read in 9 ms (698.2 KiB/s)
+[arkdata.ini] fatload reported filesize=0x1925 (6437 bytes)
+[arkdata.ini] loaded 6437 bytes into RAM @ 0x2900000
+[arkdata.ini] done — 13/13 fields overridden from SD card, final timing (vbp=29 vfp=25 vsw=16 hbp=32 hfp=25 hsw=54 clk_freq=330000000 clk_div1=11 clk_div2=1 rgb_mode=5)
+[screen_info] screen_id=0
+[screen_info] ScreenType:0, subType:0,Width:800, Height:480,Format:7, TvoutType:12,screen_id:0,interlace:0
+[screen_info] RgbMode:5 ,BPP:32 ,pad_unset:0
+[screen_info] HFP:25,HBP:32,HSW:54,VBP:29,VFP:25,VSW:16,HSYNCPolarity:0x1,VSYNCPolarity:0x1 ,DEPolarity:0
+[screen_info] CLKSource:1,CLKFreq:330000000,CLKDIV1:11,CLKDIV2:1,CLKPolarity:0,LVDSCfg:0x0,FrameRate:0,
+[arkdata.ini] vpinfo: 20/20 fields overridden, osd1=(c128 b128 s64 h0)
+[bootlogo] ark_display_init() done
+[bootlogo] loading -> `fatload mmc 0:1 0xb400000 bootlogo.raw`
+1536000 bytes read in 529 ms (2.8 MiB/s)
+[bootlogo] fatload reported filesize=0x177000 (1536000 bytes), expected 0x177000 (800x480x32bpp)
+[bootlogo] pushing OSD1 image 800x480 @ 0xb400000 (DISP_RGB_888)
+[bootlogo] OSD1 layer enabled, splash should be visible now
+[lcdconsole] disabled at build time (ENABLE_LCDCONSOLE=0), serial-only
+Hit space to stop autoboot:  0
+=> bootmmc
+[bootmmc] booting kernel+DTB from SD card (mmc 0:1), rootfs on /dev/mmcblk0p2
+[bootlogo] loading -> `fatload mmc 0:1 0xb400000 bootlogo_sd.raw`
+1536000 bytes read in 529 ms (2.8 MiB/s)
+[bootlogo] fatload reported filesize=0x177000 (1536000 bytes), expected 0x177000 (800x480x32bpp)
+[bootlogo] pushing OSD1 image 800x480 @ 0xb400000 (DISP_RGB_888)
+[bootlogo] OSD1 layer enabled, splash should be visible now
+4341616 bytes read in 1484 ms (2.8 MiB/s)
+18355 bytes read in 14 ms (1.3 MiB/s)
+1291700 bytes read in 450 ms (2.7 MiB/s)
+Kernel image @ 0x1000000 [ 0x000000 - 0x423f70 ]
+## Flattened Device Tree blob at 02000000
+   Booting using the fdt blob at 0x2000000
+   Loading Device Tree to 0b1bc000, end 0b1c37b2 ... OK
+[arkdata.ini]   -> DTB /ahb/lcd@e0500000/display@0/lcd-wiring-mode="RGB"
+[arkdata.ini]   -> DTB /ahb/lcd@e0500000/display@0/interface-type="TTL"
+[arkdata.ini] ft_board_setup: done, 15 DTB properties overridden from arkdata.ini
+Using machid 0x1068 from environment
+
+Starting kernel ...
+
+[    0.000000] Booting Linux on physical CPU 0x0
+[    0.000000] Linux version 4.19.192 (osboxes@osboxes) (gcc version 7.3.1 20180425 [linaro-7.3-2018.05 revision d29120a424ecfbc167ef90065c0eeb7f91977701] (Linaro GCC 7.3-2018.05)) #156 Fri Jul 31 21:25:11 AEST 2026
+[    0.000000] CPU: ARMv7 Processor [410fc051] revision 1 (ARMv7), cr=10c53c7d
+[    0.000000] CPU: PIPT / VIPT nonaliasing data cache, VIPT aliasing instruction cache
+[    0.000000] OF: fdt: Machine model: Limcet P305/P306 Dashboard Head Unit
+[    0.000000] bootconsole [earlycon0] enabled
+[    0.000000] Memory policy: Data cache writeback
+[    0.000000] cma: Reserved 64 MiB at 0x04000000
+[    0.000000] CPU: All CPU(s) started in SVC mode.
+[    0.000000] random: get_random_bytes called from start_kernel+0xa0/0x394 with crng_init=0
+[    0.000000] Built 1 zonelists, mobility grouping off.  Total pages: 45675
+[    0.000000] Kernel command line: root=/dev/mmcblk0p2 console=ttyS0,115200n8 mem=180M earlyprintk=serial rootfstype=ext4 rootwait rw screen=0 user_debug=8
+[    0.000000] Dentry cache hash table entries: 32768 (order: 5, 131072 bytes)
+[    0.000000] Inode-cache hash table entries: 16384 (order: 4, 65536 bytes)
+[    0.000000] Memory: 106836K/184320K available (6144K kernel code, 375K rwdata, 1444K rodata, 1024K init, 163K bss, 11948K reserved, 65536K cma-reserved)
+[    0.000000] Virtual kernel memory layout:
+[    0.000000]     vector  : 0xffff0000 - 0xffff1000   (   4 kB)
+[    0.000000]     fixmap  : 0xffc00000 - 0xfff00000   (3072 kB)
+[    0.000000]     vmalloc : 0xcb800000 - 0xff800000   ( 832 MB)
+[    0.000000]     lowmem  : 0xc0000000 - 0xcb400000   ( 180 MB)
+[    0.000000]     modules : 0xbf000000 - 0xc0000000   (  16 MB)
+[    0.000000]       .text : 0x(ptrval) - 0x(ptrval)   (7136 kB)
+[    0.000000]       .init : 0x(ptrval) - 0x(ptrval)   (1024 kB)
+[    0.000000]       .data : 0x(ptrval) - 0x(ptrval)   ( 376 kB)
+[    0.000000]        .bss : 0x(ptrval) - 0x(ptrval)   ( 164 kB)
+[    0.000000]
+[    0.000000] **********************************************************
+[    0.000000] **   NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE   **
+[    0.000000] **                                                      **
+[    0.000000] ** trace_printk() being used. Allocating extra memory.  **
+[    0.000000] **                                                      **
+[    0.000000] ** This means that this is a DEBUG kernel and it is     **
+[    0.000000] ** unsafe for production use.                           **
+[    0.000000] **                                                      **
+[    0.000000] ** If you see this message and you are not debugging    **
+[    0.000000] ** the kernel, report this immediately to your vendor!  **
+[    0.000000] **                                                      **
+[    0.000000] **   NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE   **
+[    0.000000] **********************************************************
+[    0.000000] NR_IRQS: 16, nr_irqs: 16, preallocated irqs: 16
+[    0.000000] VIC @(ptrval): id 0x00041192, vendor 0x41
+[    0.000000] VIC @(ptrval): id 0x00041192, vendor 0x41
+[    0.000000] L2C-310 dynamic clock gating enabled, standby mode enabled
+[    0.000000] L2C-310 cache controller enabled, 8 ways, 128 kB
+[    0.000000] L2C-310: CACHE_ID 0x410060c9, AUX_CTRL 0x06020000
+[    0.000000] clk cpupll rate 690000000.
+[    0.000000] clk syspll rate 324000000.
+[    0.000000] clk audpll rate 426000000.
+[    0.000000] clk ddrclk rate 426000000.
+[    0.000000] clk cpuclk rate 690000000.
+[    0.000000] clk axiclk rate 324000000.
+[    0.000000] clk ahbclk rate 162000000.
+[    0.000000] clk pclk rate 81000000.
+[    0.000000] clk uart4clk rate 24000000.
+[    0.000000] clk uart5clk rate 24000000.
+[    0.000000] clk gpuclk rate 324000000.
+[    0.000000] clk gpiodebounceclk rate 24000000.
+[    0.000000] clk lcdclk rate 324000000.
+[    0.000000] clk mfcclk rate 162000000.
+[    0.000000] clk rtc-clk rate 32768.
+[    0.000000] clk spi-clk rate 162000000.
+[    0.000000] clk i2s-dac-clk rate 240000000.
+[    0.000000] clk i2s-adc-clk rate 240000000.
+[    0.000000] clocksource: arkmicro,ark-timer: mask: 0xffffff max_cycles: 0xffffff, max_idle_ns: 92171119 ns
+[    0.000018] sched_clock: 24 bits at 81MHz, resolution 12ns, wraps every 103563053ns
+[    0.008553] Console: colour dummy device 80x30
+[    0.013210] Calibrating delay loop... 457.11 BogoMIPS (lpj=2285568)
+[    0.076601] pid_max: default: 32768 minimum: 301
+[    0.081739] Mount-cache hash table entries: 1024 (order: 0, 4096 bytes)
+[    0.088430] Mountpoint-cache hash table entries: 1024 (order: 0, 4096 bytes)
+[    0.097287] CPU: Testing write buffer coherency: ok
+[    0.104285] Setting up static identity map for 0x100000 - 0x10003c
+[    0.112594] devtmpfs: initialized
+[    0.125226] VFP support v0.3: implementor 41 architecture 2 part 30 variant 5 rev 1
+[    0.133425] clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 19112604462750000 ns
+[    0.143420] futex hash table entries: 256 (order: -1, 3072 bytes)
+[    0.160773] pinctrl core: initialized pinctrl subsystem
+[    0.167372] NET: Registered protocol family 16
+[    0.202376] DMA: preallocated 256 KiB pool for atomic coherent allocations
+[    0.214819] Serial: Arkmicro UART driver
+[    0.221934] pinctrl-ark e4900000.pinctrl: initialized ark pinctrl driver
+[    0.244686] e4200000.uart: ttyS0 at MMIO 0xe4200000 (irq = 36, base_baud = 1500000) is a ARK
+[    0.253445] console [ttyS0] enabled
+[    0.253445] console [ttyS0] enabled
+[    0.260507] bootconsole [earlycon0] disabled
+[    0.260507] bootconsole [earlycon0] disabled
+[    0.269895] ark_tool: initialized on uart0 open (port for /proc/arktool, see drivers/misc/ark_tool.c)
+[    0.280250] e8000000.uart: ttyS2 at MMIO 0xe8000000 (irq = 60, base_baud = 1500000) is a ARK
+[    0.290200] e8100000.uart: ttyS3 at MMIO 0xe8100000 (irq = 61, base_baud = 1500000) is a ARK
+[    0.300517] e4f00000.serial: ttyHS0 at MMIO 0xe4f00000 (irq = 38, base_baud = 0) is a ARK HS UART
+[    0.310935] e4800000.serial: ttyHS1 at MMIO 0xe4800000 (irq = 44, base_baud = 0) is a ARK HS UART
+[    0.326014] ark-mcu-serial mcu-serial@0: probe done, rx handler registered
+[    0.349427] clk lcdclk rate 29454545.
+[    0.368802] ark1668_lcdfb e0500000.lcd: 16384KiB frame buffer at 0f000000 (mapped at (ptrval))
+[    0.377954] ark1668_lcdfb e0500000.lcd: fb0: ARK1668 LCDC at 0xe0500000 (mapped at (ptrval)), irq 25
+[    0.389675] ark_dw_dmac e0000000.dma: Arkmicro DMA Controller, 8 channels
+[    0.397446] SCSI subsystem initialized
+[    0.401722] usbcore: registered new interface driver usbfs
+[    0.407314] usbcore: registered new interface driver hub
+[    0.412804] usbcore: registered new device driver usb
+[    0.419838] gpio-3 (i2c-gpio-0): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+[    0.429407] gpio-2 (i2c-gpio-0): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+[    0.439185] i2c i2c-1: Not I2C compliant: can't read SCL
+[    0.444555] i2c i2c-1: Bus may be unreliable
+[    0.448840] i2c-gpio i2c-gpio-0: using lines 3 (SDA) and 2 (SCL, no clock stretching)
+[    0.456947] gpio-9 (i2c-gpio-1): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+[    0.466473] gpio-121 (i2c-gpio-1): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+[    0.476395] i2c i2c-2: Not I2C compliant: can't read SCL
+[    0.481765] i2c i2c-2: Bus may be unreliable
+[    0.486070] i2c-gpio i2c-gpio-1: using lines 9 (SDA) and 121 (SCL, no clock stretching)
+[    0.494221] media: Linux media interface: v0.10
+[    0.498839] videodev: Linux video capture interface: v2.00
+[    0.504770] Advanced Linux Sound Architecture Driver Initialized.
+[    0.512334] clocksource: Switched to clocksource arkmicro,ark-timer
+[    0.569117] hx170dec e0900000.vdec: VDEC controller at 0x(ptrval), irq = 40, misc_minor = 63
+[    0.577724] hx170dec e0900000.vdec: Product ID: 0x6731 (revision 2.57.8)
+[    0.599033] NET: Registered protocol family 2
+[    0.604580] tcp_listen_portaddr_hash hash table entries: 512 (order: 0, 4096 bytes)
+[    0.612295] TCP established hash table entries: 2048 (order: 1, 8192 bytes)
+[    0.619387] TCP bind hash table entries: 2048 (order: 1, 8192 bytes)
+[    0.625849] TCP: Hash tables configured (established 2048 bind 2048)
+[    0.632454] UDP hash table entries: 256 (order: 0, 4096 bytes)
+[    0.638367] UDP-Lite hash table entries: 256 (order: 0, 4096 bytes)
+[    0.645048] NET: Registered protocol family 1
+[    0.650773] Initialise system trusted keyrings
+[    0.655784] workingset: timestamp_bits=14 max_order=16 bucket_order=2
+[    0.663263] ntfs: driver 2.1.32 [Flags: R/W DEBUG].
+[    0.671920] Key type asymmetric registered
+[    0.676117] Asymmetric key parser 'x509' registered
+[    0.681041] io scheduler noop registered (default)
+[    0.688987] rn6752: dvr_rn6752_probe:init done
+[    0.693911] [DIAG_ITU656_PROBE] call #1: dvr_dev=c848b040 sizeof(struct dvr_dev)=588
+[    0.701676] [DIAG_ITU656_PROBE] dvr_dev=c848b040 &start=c848b224 start=c03ce098 (want dvr_start=c03ce098) &stop=c848b228 stop=c03cbf34 (want dvr_stop=c03cbf34)
+[    0.716058] [DIAG_ITU656_PROBE] priv_data after memcpy: &priv_data=c848b22c select_channel=c03cb8ac (want c03cb8ac) detect_signal=c03cb060 (want c03cb060) get_progressive=c03ca264 (want c03ca264) display_effect=c03cab48 (want c03cab48)
+[    0.736986] [DIAG_ITU656_PROBE] priv_data after memcpy (cont): dvr_start_cb=00000000 (want 00000000) dvr_stop_cb=00000000 (want 00000000) enter_carback_cb=c03cb09c (want c03cb09c) exit_carback_cb=c03ca4ec (want c03ca4ec) dvr_config=00000000 (want 00000000)
+[    0.760993] [DIAG_ITU656_PROBE_END] dvr_dev=c848b040 start=c03ce098 (want c03ce098) stop=c03cbf34 (want c03cbf34)
+[    0.777858] ark_display: registered /dev/ark_display
+[    0.783927] nand: device found, Manufacturer ID: 0x98, Chip ID: 0xf1
+[    0.790300] nand: Toshiba NAND 128MiB 3,3V 8-bit
+[    0.795066] nand: 128 MiB, SLC, erase size: 128 KiB, page size: 2048, OOB size: 64
+[    0.802708] nand: WARNING: ark-nand: the ECC used on your system is too weak compared to the one required by the NAND chip
+[    0.813819] Scanning device for bad blocks
+[    0.890598] Bad eraseblock 768 at 0x000006000000
+[    0.921154] usbcore: registered new interface driver cdc_ether
+[    0.927233] usbcore: registered new interface driver cdc_subset
+[    0.933297] usbcore: registered new interface driver zaurus
+[    0.938958] usbcore: registered new interface driver ipheth
+[    0.944714] usbcore: registered new interface driver cdc_ncm
+[    0.950833] usbcore: registered new interface driver uas
+[    0.956351] usbcore: registered new interface driver usb-storage
+[    0.992573] musb-hdrc musb-hdrc.0: MUSB HDRC host driver
+[    0.998022] musb-hdrc musb-hdrc.0: new USB bus registered, assigned bus number 1
+[    1.006928] hub 1-0:1.0: USB hub found
+[    1.010807] hub 1-0:1.0: 1 port detected
+[    1.015650] musb-hdrc musb-hdrc.0: switch otg: gpio_id=76 gpio_pwr=126
+[    1.362542] musb-hdrc musb-hdrc.1: MUSB HDRC host driver
+[    1.367937] musb-hdrc musb-hdrc.1: new USB bus registered, assigned bus number 2
+[    1.376854] hub 2-0:1.0: USB hub found
+[    1.380717] hub 2-0:1.0: 1 port detected
+[    1.385286] musb-hdrc musb-hdrc.1: switch host (no negotiation): gpio_id=1 gpio_pwr=117
+[    1.705989] using random self ethernet address
+[    1.710515] using random host ethernet address
+[    1.715879] carplay-ncm0: HOST MAC <MAC-REDACTED>
+[    1.720926] carplay-ncm0: MAC <MAC-REDACTED>
+[    1.725527] random: fast init done
+[    1.729030] g_ncm gadget: NCM Gadget
+[    1.732660] g_ncm gadget: g_ncm ready
+[    1.736343] musb-hdrc musb-hdrc.0: ark_musb_enable: dma not reactivated
+[    1.743378] ark1680_ts e4500000.tsc: probe: ADC/TSC MEM resource [mem 0xe4500000-0xe450003f]
+[    1.751913] ark1680_ts e4500000.tsc: probe: irq=20
+[    1.756823] ark1680_ts e4500000.tsc: probe: mapped syscon/pinmux block at phys 0xe4900000, size 0x200
+[    1.766798] input: ark1680-ts as /devices/platform/e4500000.tsc/input/input0
+[    1.774380] ark1680_ts e4500000.tsc: ARK1680 resistive touchscreen registered, irq=20, debug=0 (echo 1 > /sys/module/ark1680_ts/parameters/debug to trace samples)
+[    1.789922] rtc-ark e4c00000.rtc: rtc core: registered e4c00000.rtc as rtc0
+[    1.797234] i2c /dev entries driver
+[    1.802416] ark_wdt e4b00000.watchdog: initialized (timeout = 15 sec, nowayout = 0)
+[    1.811187] dw_mmc ec400000.mmc: Using PIO mode.
+[    1.815941] dw_mmc ec400000.mmc: Version ID is 220a
+[    1.820890] dw_mmc ec400000.mmc: DW MMC controller at irq 42,32 bit host data width,32 deep fifo
+[    1.842716] mmc_host mmc0: Bus speed (slot 0) = 24000000Hz (slot req 400000Hz, actual 400000HZ div = 30)
+[    1.865377] dw_mmc ec800000.mmc: Using external DMA controller.
+[    1.871407] dw_mmc ec800000.mmc: Version ID is 220a
+[    1.876412] dw_mmc ec800000.mmc: DW MMC controller at irq 54,32 bit host data width,32 deep fifo
+[    1.885415] mmc_host mmc1: card is non-removable.
+[    1.902552] mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 400000Hz, actual 400000HZ div = 30)
+[    1.927100] ark1668-i2s e4000000.i2s-dac: mem resource at 0xe4000000
+[    1.933618] ark1668-i2s e4000000.i2s-dac: releasing soft reset for I2S1 (DAC/internal I2S) at 0xe4000000
+[    1.943177] ark1668-i2s e4000000.i2s-dac: enabled internal I2S1 clock-gate bit at 0xe4a00000+0x1f0
+[    1.952903] ark1668-i2s e8200000.i2s-adc: mem resource at 0xe8200000
+[    1.959286] ark1668-i2s e8200000.i2s-adc: releasing soft reset for I2S2 (ADC/external I2S) at 0xe8200000
+[    1.968889] ark1668-i2s e8200000.i2s-adc: enabled external I2S2/CS4334 clock-gate bits at 0xe4a00000
+[    1.979790] NET: Registered protocol family 10
+[    1.985335] usb 2-1: new high-speed USB device number 2 using musb-hdrc
+[    1.993642] Segment Routing with IPv6
+[    1.997514] sit: IPv6, IPv4 and MPLS over IPv4 tunneling driver
+[    2.004656] NET: Registered protocol family 17
+[    2.010992] Loading compiled-in X.509 certificates
+[    2.021345] mmc_host mmc0: Bus speed (slot 0) = 24000000Hz (slot req 25000000Hz, actual 24000000HZ div = 0)
+[    2.031278] mmc0: new SD card at address e126
+[    2.037089] mmcblk0: mmc0:e126 SU01G 969 MiB
+[    2.044604] asoc-simple-card sound: e4000000.sddac <-> e4000000.i2s-dac mapping ok
+[    2.053212]  mmcblk0: p1 p2 p3
+[    2.060007] asoc-simple-card sound: ahb:sdadc@0 <-> e8200000.i2s-adc mapping ok
+[    2.069666] rtc-ark e4c00000.rtc: setting system clock to 1970-01-01 00:00:00 UTC (0)
+[    2.077917] ALSA device list:
+[    2.080903]   #0: ARK-SDDAC
+[    2.096661] mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 300000Hz, actual 300000HZ div = 40)
+[    2.126677] EXT4-fs (mmcblk0p2): recovery complete
+[    2.131517] EXT4-fs (mmcblk0p2): mounted filesystem with ordered data mode. Opts: (null)
+[    2.139814] VFS: Mounted root (ext4 filesystem) on device 179:2.
+[    2.152493] usb 2-1: hub_port_init:4710 speed=3
+[    2.176786] mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 200000Hz, actual 200000HZ div = 60)
+[    2.190326] devtmpfs: mounted
+[    2.195785] Freeing unused kernel memory: 1024K
+[    2.200559] Run /sbin/init as init process
+[    2.241310] mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 100000Hz, actual 100000HZ div = 120)
+[    2.587117] random: crng init done
+[    3.432475] ark1668_lcdfb: LCD RGB888 r0-r7 pinmux reclaimed from any i2c-gpio pin theft (now 0x11111111)
+mtd8: /nanddata/bootlogo
+mtd9: /nanddata/bootanimation
+mtd10: /nanddata/reversingtrack
+mtd11: /nanddata/unicode
+[    4.502306] IPv6: ADDRCONF(NETDEV_UP): carplay-ncm0: link is not ready
+[    4.509028] IPv6: ADDRCONF(NETDEV_CHANGE): carplay-ncm0: link becomes ready
+device-node compat symlinks: /dev/hx170dec (Hantro hx170dec H.264/MPEG2 hardware decoder, used by Android Auto video) -> /tmp/dev/hx170
+device-node compat symlinks: /dev/dvr (ITU656 camera/carback ioctl interface) -> /tmp/dev/dvr
+[    9.337053] galcore: loading out-of-tree module taints kernel.
+[    9.370287] Galcore version 6.2.4.150331
+[    9.510893] cfg80211: Loading compiled-in X.509 certificates for regulatory database
+[    9.630532] cfg80211: Loaded X.509 cert 'sforshee: 00b28ddf47aef9cea7'
+[    9.637765] platform regulatory.0: Direct firmware load for regulatory.db failed with error -2
+[    9.646490] cfg80211: failed to load regulatory.db
+[   10.252457] usbcore: registered new interface driver rtl8821cu
+
+=== Diagnostic tools ===
+  i2c-scan /dev/i2c-0 /dev/i2c-1 ...   - scan I2C buses for ACKing devices
+  i2c-dump /dev/i2c-N slave_addr [num] - dump registers of an I2C device
+  i2c-write /dev/i2c-N addr reg val    - raw single-register i2c write (bypasses kernel client)
+  ark-ts-test regs                      - dump ARK1680 touch ADC/syscon registers
+  ark-ts-test events /dev/input/eventN  - watch touch evdev events
+  lcd-test                             - print fb/display info, then cycle through solid fills, bars, and gradient
+  strace -f -o /data/x.log <cmd>       - trace syscalls (e.g. strace -f start_msn)
+  nano <file>                          - edit a file (e.g. nano /msnprofile/MsnProductInfo.ini)
+  less <file>                          - page through a file/log (e.g. dmesg | less)
+  htop                                 - interactive process/CPU/memory viewer
+  tmux new -s <name>                   - start a session that survives a dropped connection
+  gdbserver :2345 --attach <pid>       - live remote debugging from a host gdb, see tools/gdbserver/README.md
+  touch-selftest.sh                    - automated touch pass/fail (needs a real touch)
+  uart-test.sh                         - passive listen on MCU (ttyHS0) + MSNEry (ttyS2) links
+  audio-test.sh [file.wav]             - sound card + BD37033 bus/mixer check
+  bt-test.sh                           - GPIO91/ttyHS1/blueware check
+  usb-test.sh                          - USB regression check vs known-good baseline
+  mmc-test.sh                          - read-only MMC/SD check
+  mcu-handshake                        - manual MCU handshake daemon to enable touch panel
+  fb-alpha-test                        - paint alpha/channel-order test bands directly to /dev/fb0
+  lcd-blend-sweep.sh                   - live devmem sweep of OSD1 blend-mode/format/Y2R registers (no rebuild needed)
+  lcd-overlay-watch.sh [secs]          - poll all 5 LCDC layer enable-bits/addrs, log only on change (for the red-overlay bug)
+  lcd-osd1ctl-directfb-watch.sh [--no-hardware|--no-systemonly|--stock-config] [secs] - watches OSD1_CTL rgb_order + OSD1 enable/addr while running start_msn_directfb; --stock-config replicates stock's exact real QWS_DISPLAY/directfbrc (no systemonly, clearing enabled) to test whether the black screen is a config gap or a real driver-stack bug
+  start_msn_linuxfb / start_msn_directfb - start MsnCoreApp on a specific QWS backend without editing start_msn
+  dmesg                                - now aliased to /usr/bin/dmesg --color=always (busybox lacks --color)
+  mem-dump <phys_addr> [len]           - hex-dump physical memory via mmap'd /dev/mem (works on DMA carve-outs plain dd can't reach)
+  mem-fill <phys_addr> <len> <pattern>  - fill physical memory with a repeating 32-bit pattern via mmap'd /dev/mem (stage a test frame, see tools/mem-fill/README.md)
+  hx170-test                           - direct standalone hx170dec H.264 decode test via libmfc.so, bypasses sink/AA entirely (see tools/hx170-test/README.md)
+  fb-scan [threshold]                  - locate solid-color regions in /dev/fb0, predict expected color for black cells via row-fit
+  lcdc-regdump [label]                 - dump every named ARK1668 LCDC register, for diffing a stock vs our-build run
+  pin-force <pin 2-9> <status|gpio-low|gpio-high|lcd> - force an LCD RGB data pin (r0-r7) to GPIO at a level, or restore it to LCD function
+  pinmux-watch [secs]                  - poll the LCD r0-r7/g0-g7/b0-b7 pad-mux registers, log any live function-select change
+  gpio-i2c-probe <sda-pin> <scl-pin>   - bit-bang I2C over two arbitrary sysfs GPIOs, scan for ACKs (hunt real chip wiring)
+  i2c-gpio-bruteforce <target-addr>    - try every candidate pin pair as SCL/SDA, checking for a real ACK from a known I2C address
+  i2c-read-raw /dev/i2c-N addr len     - plain multi-byte I2C read, no register-address write phase
+  pin-dump.sh                          - dump every ARK1668 pinmux pad's live hardware mux value via devmem
+=========================
+
+/ #

@@ -317,11 +317,15 @@ touch /data/udhcpd.leases
 # never by start_msn_directfb itself) are all silently missing when
 # launched straight from rcS. Sourcing /etc/profile first in the same
 # subshell closes that gap; start_msn_directfb's own exports on top
-# still take effect exactly as they do interactively. Kept the 5s
-# delay too -- confirmed insufficient alone, but not confirmed
-# unnecessary either now that the real cause may be fixed; cheap to
-# leave in.
-(sleep 5 && . /etc/profile && /usr/bin/start_msn_directfb) &
+# still take effect exactly as they do interactively.
+#
+# HARDWARE-CONFIRMED WORKING 2026-08-03: sourcing /etc/profile was the
+# real fix -- the missing environment, not settle time. Delay dropped
+# from 5s to 1s and retested clean, confirming the 5s value was never
+# doing the real work; 1s is kept only as a trivial safety margin for
+# /etc/profile's own dependencies (e.g. /tmp/touch_export) rather than
+# anything galcore/GPU-related.
+(sleep 1 && . /etc/profile && /usr/bin/start_msn_directfb) &
 
 # --- diagnostic tools banner (firmware_overlay/prado) ---
 echo ""

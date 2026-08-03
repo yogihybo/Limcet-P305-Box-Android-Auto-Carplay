@@ -305,18 +305,23 @@ touch /data/udhcpd.leases
 # 2026-08-03: real hardware testing found launching it immediately
 # here raced with something not fully ready yet -- a kernel-level
 # page fault landed mid-init, right in the galcore/Vivante GPU driver
-# path (modprobe'd only ~50 lines above -- at this point in rcS its
-# own init may not have settled, firmware/reset sequencing isn't
-# necessarily complete just because modprobe returned) and/or
-# scheduling contention from rtl8811cu's own firmware-loading work
-# (modprobed immediately before this). Confirmed as a timing race, not
-# a real code bug: running start_msn_directfb by hand over SSH a
-# minute or so after boot (once everything above has settled) works
-# perfectly every time. 5s is a starting-point guess, not measured
-# against the actual minimum needed -- revisit (larger delay, or a
-# real readiness check on /dev/galcore instead of a fixed sleep) if
-# this still races intermittently.
-(sleep 5 && /usr/bin/start_msn_directfb) &
+# path. A 5s delay alone (below) did NOT fix it, same crash -- ruling
+# out pure settle-time and pointing at a real environment difference
+# instead: rcS never sources /etc/profile, but every SSH/serial login
+# shell does (it's a login shell), so a manual run always has
+# /etc/profile's exports in place first, then start_msn_directfb's own
+# on top -- CARPLAY_*/PROTOCOL_ID/TOUCHSERIAL and, notably,
+# /tmp/touch_export (QWS_MOUSE_PROTO/QWS_ARK_MT_DEVICE -- see
+# project_touch_qws_env_gate -- created by the touchdriver block
+# earlier in this same script, but only ever sourced by /etc/profile,
+# never by start_msn_directfb itself) are all silently missing when
+# launched straight from rcS. Sourcing /etc/profile first in the same
+# subshell closes that gap; start_msn_directfb's own exports on top
+# still take effect exactly as they do interactively. Kept the 5s
+# delay too -- confirmed insufficient alone, but not confirmed
+# unnecessary either now that the real cause may be fixed; cheap to
+# leave in.
+(sleep 5 && . /etc/profile && /usr/bin/start_msn_directfb) &
 
 # --- diagnostic tools banner (firmware_overlay/prado) ---
 echo ""

@@ -1,0 +1,495 @@
+# Vendor BSP Research (ark1668ed-bsp / cstech-ip17-rootfs)
+
+**Status:** Reference
+**Last Updated:** 2026-08-04
+
+## Overview
+
+This document covers a research pass through two vendor/sibling source trees that are
+**not** part of this project's build (see `docs/SOURCES.md`), looking for anything
+relevant to our USB, audio, and WiFi work:
+
+- `/home/osboxes/Downloads/ark1668ed-bsp` — ArkMicro's own internal BSP for a newer SoC
+  variant (ARK1668ED), Linux 6.12.56, from ArkMicro's internal Gogs server
+  (`RD_Software/ark1668ed-bsp`), commit dated 2026-05-27. Different kernel generation and
+  different USB PHY (Synopsys dwc2 vs our MUSB), but the **same WiFi/BT chip family** and
+  the **same `com.arkmicro.*` platform conventions**, so several of its packages are
+  directly useful as reference or literal upgrade material.
+- `/home/osboxes/Downloads/cstech-ip17-rootfs` — a rootfs-only dump from a different,
+  older ArkMicro product (ARK1680, Linux 3.4.0, board type `msn5g`). Confirmed wrong SoC
+  generation for direct reuse; useful only for corroborating platform-wide naming
+  conventions (see §1).
+
+Everything below is organized by what was found and what to do with it. All vendor-tree
+paths cited are **outside** this repo and outside `linux-arkmicro` — they are personal
+Downloads on this machine, not tracked anywhere. Driver changes that came out of this
+research were made in the separate `linux-arkmicro` kernel source repo
+(`/home/osboxes/Downloads/linux-arkmicro`, see `docs/SOURCES.md`), not in this repo — see
+§2 for details and branch names.
+
+---
+
+## 1. `cstech-ip17-rootfs` — confirmed wrong generation, one useful corroboration
+
+ARK1680 (not any ARK1668 variant), Linux 3.4.0, compiled binaries only, no source tree —
+too old/different a chip generation for any binary or register-level reuse.
+
+The one useful finding: its `usr/share/dbus-1/services/` confirms `com.arkmicro.*` naming
+(`com.arkmicro.audio`, `com.arkmicro.bluetooth`, `com.arkmicro.carplay`, etc.) is a
+genuine platform-wide ArkMicro convention reused across at least two chip generations
+(ARK1680 here, ARK1668-family on our board), not something `MsnCoreApp` invented — see
+§4 below for a third, independent confirmation from `ark1668ed-bsp`'s own D-Bus service
+names.
+
+Its `etc/asound.conf` also has a multi-zone `pcm.softvolN` pattern (several softvol
+stanzas sharing one `dmix`) that turned out to be the same underlying design documented
+in more detail in §5 below via `ark1668ed-bsp`'s carlink source.
+
+---
+
+## 2. Driver-level findings in `ark1668ed-bsp/linux/`
+
+### USB (MUSB glue) — no action taken, real difference in silicon
+
+Our board's USB glue is `linux/drivers/usb/musb/musb_ark.c` (a fork of TI's `musb_dsps.c`
+glue for the Mentor/Synopsys MUSB core). `ark1668ed-bsp` uses **Synopsys DesignWare
+dwc2** instead — genuinely different USB PHY silicon on ARK1668ED, not a newer version of
+the same driver. Nothing here is portable to our MUSB code.
+
+Separately (found via a general web search, not this vendor tree): mainline Linux's own
+`musb_dsps.c` gained real suspend/resume support after our fork diverged (commit
+`869c5978`, "usb: musb: dsps: add support for suspend and resume") that `musb_ark.c`
+still lacks (it has only a bare `printk("suspend save\n")` with no real state
+save/restore). **Not yet backported** — flagged as a candidate, low risk, not started.
+
+### Audio — no action taken, different hardware architecture
+
+`ark1668ed-bsp`'s audio path (`ark1668ed_i2s.c` + `ark1668ed_audio_codec.c`) drives an
+**external I2C codec** (`regmap`-based `CODEC_REG_*` writes), whereas our ARK1668 (non-E)
+board uses the SoC's **internal** delta-sigma ADC/DAC through `ark1668_i2s.c` +
+`ark1668-sdadc-codec.c`/`ark1668-sddac-codec.c`. No register-level correspondence; not
+portable. (See `linux-arkmicro`'s `audio-driver-tidyup` branch, §3, for unrelated
+cosmetic cleanup of our own actually-built audio driver files done in this same
+session.)
+
+### WiFi — backported, build-verified, done on a separate branch
+
+**This is the one real driver upgrade that came out of this vendor tree.** ArkMicro's own
+RTL8821CS (SDIO WiFi+BT combo chip) vendor driver in `ark1668ed-bsp` is dated
+**2025-03-27** (`v5.15.9.6-1-g3fe4f4b91.20250327_COEX20230331-5d5d`), vs. our tree's
+**2019-10-16/2021-01-18** drops. Same chip family, same `CONFIG_ARCH_ARKMICRO` Makefile
+hook preserved essentially unchanged across BSP generations — a same-vendor version
+bump, not a fork divergence.
+
+Two commits, on branch **`wifi-rtl8821cs-driver-port`** in the `linux-arkmicro` repo
+(branched off `master`, not merged, not hardware-tested):
+
+1. **`rtl8821cs` (SDIO, WiFi+BT combo)** — direct swap of the whole vendor driver
+   directory for the newer 2025-03-27 drop. Adds whole subsystems the old drop lacked:
+   `core/crypto` (AES-CCM/GCM/SIV, SHA-256), 802.11r fast transition (`rtw_ft.c`), DFS
+   (`rtw_dfs.c`), MBO (`rtw_mbo.c`), radiotap monitor mode, newer BT-coex table.
+   Built cleanly as a module against this tree's real `CONFIG_ARCH_ARKMICRO=y` /
+   `CONFIG_RTL8821CS=m` `.config` with `arm-linux-gnueabihf-gcc` — zero warnings, vermagic
+   matches (`4.19.192 mod_unload ARMv7 p2v8`). Firmware is compiled into the module
+   (`hal8821c_fw.c` array), not loaded from `/lib/firmware`, so no rootfs changes needed.
+
+2. **`rtl8811cu` (USB, WiFi-only) — the module actually loaded at boot** (per
+   `docs/WIRELESS_AND_INIT.md`, `wifi_ap.sh`/`rcS` load `rtl8811cu`, not `rtl8821cs`).
+   **Key discovery**: RTL8811CU and RTL8821C(U/S) are the *same silicon die* — confirmed
+   directly by the vendor tree itself, which names the 8811CU driver's chip HAL directory
+   `hal/rtl8821c/` and its internal module string `RTL871X_MODULE_NAME "8821CU"` — "8811"
+   vs "8821" is a Makefile/`autoconf.h` naming choice on top of identical source, not a
+   different chip driver. This meant the newer 2025-03-27 code could be backported here
+   too, not just to the SDIO variant.
+
+   Built by taking the already-updated `rtl8821cs` (2025) tree as a base and restoring
+   only the USB-specific pieces that have no SDIO equivalent from the old (2021)
+   `rtl8811cu` tree: `hal/rtl8821c/usb/*`, `hal/hal_hci/hal_usb.c`, `hal/led/hal_usb_led.c`,
+   `hal/halmac/halmac_88xx/halmac_usb_88xx.*` + `halmac_8821c/halmac_usb_8821c.*`,
+   `os_dep/linux/{usb_intf,usb_ops_linux}.c`, and five matching `include/usb_*.h` headers.
+   Everything else (PHY/RF/MAC `phydm`/`halrf`/`halmac`/`efuse`, and the chip-agnostic
+   `core/`) is literally the same files as the SDIO variant.
+
+   Four real build issues were found and fixed one at a time (not guessed in advance):
+   - `Makefile`: bus-select flags (`CONFIG_USB_HCI=y`/`CONFIG_SDIO_HCI=n`) and the
+     `CONFIG_ARCH_ARKMICRO` block's `MODULE_NAME` (back to `rtl8811cu`).
+   - `include/autoconf.h`: still had the SDIO tree's hardcoded `#define CONFIG_SDIO_HCI`
+     (needed `CONFIG_USB_HCI`) — the driver's own `#error "CONFIG_USB_HCI shall be on!"`
+     caught this immediately.
+   - `include/autoconf.h`: missing `CONFIG_USB_VENDOR_REQ_BUFFER_PREALLOC` /
+     `_MUTEX`/`CONFIG_VENDOR_REQ_RETRY` — the newer SDIO-only `autoconf.h` had dropped
+     this whole USB-vendor-request-buffer section entirely, which the old `usb_ops_linux.c`
+     needs (a genuinely undeclared-variable bug in the merged tree, not present in either
+     source drop alone).
+   - `include/autoconf.h`: **did not** carry over `CONFIG_SDIO_INDIRECT_ACCESS`/
+     `DBG_SDIO_INDIRECT_ACCESS` from the SDIO tree — two call sites in `ioctl_linux.c`
+     guard on that macro alone without also checking `CONFIG_SDIO_HCI`, so defining it for
+     USB pulls in calls to `rtw_sd_iread8/16/32` that don't exist outside the SDIO HAL.
+
+   Final result: clean build, zero warnings, correct vermagic, correct USB device alias
+   (`usb:v0BDAp8811d*` — Realtek VID, PID 0x8811).
+
+**Both drivers on this branch are build-verified only — not hardware-tested.** Same
+caveats apply as any vendor driver bump: association behavior, BT-coex timing, and power
+management are real code paths that changed. Test `carplay_wifi` AP mode (WiFi) and BT
+pairing/audio before trusting either.
+
+---
+
+## 3. Audio driver cosmetic cleanup (separate, unrelated branch)
+
+Branch **`audio-driver-tidyup`** in `linux-arkmicro` (off `master`, not related to the
+WiFi work above) did a cosmetic-only pass on the *actually-built* audio driver set
+(`ark1668_i2s.c`, `ark1668-sdadc-codec.c`, `ark1668-sddac-codec.c`, `ark1668_i2s.h` —
+confirmed live via `.config`: `CONFIG_SOC_ARK1668=y` + `CONFIG_SND_SOC_ARK1668_{I2S,ADC,DAC}=y`;
+the `ark1668e_*` variants and `BD37033` are not compiled for this board). No functional
+changes: removed dead/commented-out code, generic printk trace litter (careful to leave
+every dated, investigation-context printk untouched), `__FUNCTION__`→`__func__`, and
+replaced magic address literals with already-defined-but-unused macros. Verified with a
+real ARM cross-compile, no new warnings.
+
+One finding worth a functional follow-up, not fixed here (out of scope for a cosmetic
+pass): `ark_i2s_suspend`/`ark_i2s_resume` and `ark_i2s_remove` are fully implemented in
+`ark1668_i2s.c` but never wired into `ark_i2s_dai`'s `.suspend`/`.resume`/`.remove`
+fields, even though this kernel's `struct snd_soc_dai_driver` supports them — they're
+dead code today.
+
+---
+
+## 4. `ark1668ed-bsp/buildroot-external/package/` — full survey
+
+Read through all ~24 packages. Full one-line verdicts:
+
+| Package | Verdict |
+|---|---|
+| `libarkapi` | **Real source**, most valuable package — see §4a |
+| `carlink` | **Real source**, second most valuable — see §5, §6 |
+| `hx170dec` (kernel driver) | Useful negative confirmation — see §4b |
+| `hxtest`, `mfc` | Reference Hantro decode API usage, redundant with hx170dec |
+| `libgal`, `libvglite` | Newer Vivante GC (6.4.5 vs our 6.2.4.p1.8), wrong kernel ABI (6.12) to load directly — diff/reference only |
+| `libmali` | Inactive legacy GPU path even in this newer BSP, skip |
+| `ark-mplayer` | Stock upstream MPlayer, skip |
+| `libdns_sd` | Genuine Apple mDNSResponder/Bonjour build (Aug 2025), useful reference `dns_sd.h` |
+| `ark1668edApp`, `DashBoard` | Qt reference apps — see §4c |
+| `demo-display` | Has a real display-layer design doc (README) — see §4c |
+| `libbt_feasycom`, `libbt_gukai`, `libsd818` | Three BT vendor stack options behind a shared `gocsdk` daemon name — see §4d |
+| `libcheck` | Generic "Check" C unit-test framework, skip |
+
+### 4a. `libarkapi` — real source for the platform API family this project has reverse-engineered
+
+Full C source: `ark_video.c`, `ark_display.c`, `ark_scalar.c`, `ark_2d.c`, `ark_vin.c`,
+`ark_memalloc.c`. `ark_memalloc.c`'s ioctl names (`MEMALLOC_IOCXGETBUFFER`,
+`MEMALLOC_IOCSFREEBUFFER`) match this project's independently reverse-engineered
+protocol exactly — external confirmation the understanding is correct. Also surfaces a
+disabled/`#if 0`'d `MEMALLOC_IOCSFLUSHRAMBUFFER` cache-flush ioctl path
+(`ark1668_memalloc_flush`/`ark1668_cache_flush`), unused in this reference too, but worth
+knowing exists if a buffer-coherency bug is ever suspected.
+
+### 4b. `hx170dec` kernel driver — negative confirmation for the fasync fix
+
+ArkMicro's own newer reference driver (`linux/drivers/soc/arkmicro/hx170dec/hx170dec.c`
+in `ark1668ed-bsp`) has **removed fasync/SIGIO support entirely** — no
+`fasync_helper`/`kill_fasync`/`.fasync` fop — whereas our tree's driver still has
+`vdec_misc_fasync()` etc. This confirms the fasync fix this project made
+(`project_hx170_fasync_root_cause` memory) is a genuine local necessity for our kernel
+line, not something ArkMicro carried forward or fixed differently upstream.
+
+### 4c. Qt apps (`ark1668edApp`, `DashBoard`) — mostly irrelevant UI, two real finds
+
+`AutoConnect` is **not** a connection state machine — it's a 13-line Qt
+signal/slot-by-naming-convention helper used ~50 times as UI plumbing sugar, unrelated to
+BT/WiFi/USB connection logic despite the name. `DashBoard`'s `cornerlampwidget.cpp`/
+`speedpainter.cpp` are pure self-driven animation mockups with zero real vehicle-signal
+input (no CAN, no GPIO) — not usable as a turn-signal/speedometer wiring reference.
+
+Two genuine finds:
+
+- **`DashBoard/BusinessLogic/carback.cpp`** — the complete userspace reverse-camera
+  handshake protocol:
+  ```c
+  #define CARBACK_IOCTL_BASE           0x9A
+  #define CARBACK_IOCTL_SET_APP_READY  _IO(CARBACK_IOCTL_BASE, 0)
+  #define CARBACK_IOCTL_APP_ENTER_DONE _IO(CARBACK_IOCTL_BASE, 1)
+  #define CARBACK_IOCTL_APP_EXIT_DONE  _IO(CARBACK_IOCTL_BASE, 2)
+  #define CARBACK_IOCTL_GET_STATUS     _IOR(CARBACK_IOCTL_BASE, 3, int)
+  #define CARBACK_IOCTL_DETECT_SIGNAL  _IOR(CARBACK_IOCTL_BASE, 4, int)
+  #define VIN_UPDATE_WINDOW  _IOWR('n', 50, struct vin_screen)  // on /dev/video0
+  ```
+  Sequence: `open("/dev/carback")` → `ioctl(SET_APP_READY)` → worker thread blocks on a
+  1-byte `read()` of the fd (not polled) → on `CBS_On`: `arkapi_enter_carback()` →
+  `ioctl(APP_ENTER_DONE)` ack → `ioctl(video0Fd, VIN_UPDATE_WINDOW, &vin_para)` to set the
+  capture window. This corroborates and extends what this project had only from kernel
+  disassembly (`docs/HARDWARE_AND_SOC_REFERENCE.md`, GPIO 5, `request_threaded_irq`) and
+  strace (`arkapi_enter_carback()`/`arkapi_exit_carback()` sharing a `shmget(0x4449,...)`
+  struct). Worth diffing against the actual driver/glue code for exact ioctl-number
+  confirmation.
+
+- **`ArkIVI/BusinessLogic/Bluetooth.cpp`** — the full Feasycom AT-command vocabulary over
+  `/dev/bw_serial` (a second vendor branch talks to `/dev/goc_serial`, see §4d):
+  `HFPCONN=<mac>`, `DSCA`, `HFPDIAL=<num>`, `HFPDTMF=<num>`, `HFPANSW`, `HFPCHUP`/`CF`,
+  `HFPSTAT`, `BTEN=1/0`, `HFPCFG=<bitmask>` (bit0=auto-connect, bit1=auto-answer),
+  `SCAN=1/0`, `PLIST`, `PBDOWN=1..5`, `AVRCPCFG=<n>`, `MICMUTE=<0/1>`, `HFPADTS=1/2`
+  (voice route: phone vs. car BT), `PIN=<code>`, `NAME=<devname>`, `ADDR`,
+  `A2DPCONN`/`A2DPDISC`, `PLAY`/`PAUSE`/`STOP`/`FORWARD`/`BACKWARD`. Corroborates and
+  extends `docs/WIRELESS_AND_INIT.md` §5's `libBlueTooth.so` findings — likely fills gaps
+  in commands not yet observed live (`HFPCFG` bits, `AVRCPCFG`, `HFPADTS`).
+
+`demo-display`'s README (`ark1668显示接口相关说明.txt`) is a genuine ArkMicro design
+document (not just headers) for the display-layer model: 5 layers (`PRIMARY_LAYER`,
+`VIDEO_LAYER`, `OVER_LAYER`, `TVOUT_LAYER`, `AUX_LAYER`) with defined z-order and the full
+`arkapi_display_*` API (open/close/show/hide/force_show/force_hide/set_pos/set_size/
+set_format). Worth reading in full as a cross-check against this project's own
+independently-reconstructed display API documentation.
+
+### 4d. Bluetooth — three vendor stack options behind one shared daemon name
+
+- `libbt_feasycom` — Feasycom stack (already known — this is what our board uses, per
+  `docs/WIRELESS_AND_INIT.md` §5). Its `gocsdk` binary in `ark1668ed-bsp` is a *different*
+  build than ours, but its own git history literally says "first debug version" — too
+  weak to act on as an upgrade candidate.
+- `libbt_gukai` — a **previously-unknown second BT stack option**: CSR/Qualcomm BlueCore
+  (`CsrBt*`/`CsrSched*` symbols — CSR was acquired by Qualcomm in 2015; this signature is
+  the hallmark of their proprietary BT SDK), wrapped by ArkMicro's own `gbts_*`-prefixed
+  glue for A2DP/ringtone routing.
+- `libsd818` — a third option, generic vendor-agnostic HCI-level stack (`HCI_EV_Vendor_Command`,
+  a full Bluetooth SIG company-ID table).
+
+All three link a binary of the **same name**, `gocsdk` — i.e. `gocsdk` is ArkMicro's
+umbrella daemon name across BT vendor choices, not a Feasycom-specific artifact. If a
+board's actual BT chip identity is ever in question, grepping its `gocsdk` binary for
+`CsrBt*` (Gukai/CSR) vs Feasycom-specific strings vs generic HCI vendor-command strings
+(sd818) is a fast way to tell which of the three it links.
+
+---
+
+## 5. Android Auto — real, unstripped reference implementation, directly relevant
+
+`carlink/lib/auto/libAndroidAuto.so` is a genuine AASDK/OpenAuto-style Android Auto
+receiver — OpenSSL for the auth handshake, protobuf for the control channel, the full
+real Google AA message set as linked symbols (`AudioConfiguration`, `AuthResponse`,
+`BluetoothPairingRequest`, `ByeByeRequest`, `ChannelCloseNotification`, `AbsoluteEvent`,
+etc.) — **unstripped, with debug symbols**, unlike our board's own stripped copy of the
+same library (`firmware_source/mtd6_rootfs/usr/lib/libAndroidAuto.so`).
+
+### API shape (`include/auto/AndroidAuto.h`, `IUserAutoCbs.h`)
+
+```cpp
+class AndroidAuto {
+    void registerCallbacks(IUserAutoCbs *cbs);
+    void startSession(bool isWifi = true);   // false = wired (AOA), true = wireless
+    void getVideoFocus(); void releaseVideoFocus();
+    void getAudioFocus(); void releaseAudioFocus();
+    void sendTouchEvent(...); void sendKeyEvent(...); void sendKnobEvent(...);
+};
+class IUserAutoCbs {
+    virtual void videoStart(int width, int height, int offsetX, int offsetY) = 0;
+    virtual void videoPlay(char *buf, int len) = 0;      // raw H.264, still encoded
+    virtual void audioStart(int type, int rate, int channels, int bits) = 0;
+    virtual void audioPlay(int type, char *buf, int len) = 0;
+    virtual void recordStart(int rate, int channels, int bits) = 0;
+    virtual void recordProc(char *buf, int len) = 0;
+    virtual void notifyStatus(int state) = 0;   // LINK_STARTING/LINK_SUCCESS/LINK_EXITING/...
+};
+```
+
+Confirms the architecture already inferred: the AA library only delivers still-encoded
+transport data via callbacks; the platform integrator owns decode and display entirely.
+
+### Video pipeline (`UserInterface/IUserLinkPlayer.cpp` + `include/user/VideoDecoder.h`)
+
+One `VideoDecoder` class, shared by every link type (Auto, CarPlay, CarLife, HiCar,
+Mirror — one pipeline for all of them):
+
+```cpp
+class VideoDecoder {
+    bool Init(VideoFrame*);                              // set up decode+display state
+    bool Open(VideoFrame*);                               // open video layer
+    bool Show(bool bVisible);                              // show/hide the video layer
+    int  InputDecoder(const void *data, int length);      // feed H.264 to hx170dec/mfcapi
+    display_info *disp_layer_init(enum ark_disp_layer layer, int format, int w, int h, int buf_cnt);
+    // wraps ark_api.h (libarkapi display layers), mfcapi.h/dwl.h (Hantro/hx170dec)
+};
+```
+
+`app_status(APP_FOREGROUND/APP_BACKGROUND)` — not the AA session's video-start event
+itself — is what calls `VideoDecoder::instance()->Show(true/false)`. This project's own
+AA video black-screen bug is already resolved (per session context), but this confirms
+the intended design: video visibility is gated by app lifecycle state, decode/feed by
+session state — two separate triggers, not one.
+
+### Audio pipeline — directly relevant to the ongoing AA audio-stutter investigation
+
+`IUserLinkPlayer`'s constructor opens **four persistent ALSA PCM handles, one per stream
+type, once, not per-connection**:
+
+```cpp
+mpMusicDecoder(new AudioDecoder("plug:softvol2")),   // music
+mpTTSDecoder(new AudioDecoder("plug:softvol1")),     // nav/TTS
+mpVRDecoder(new AudioDecoder("plug:softvol4")),      // voice recognition prompts
+mpCallDecoder(new AudioDecoder("plug:softvol3")),    // phone call
+```
+
+**This is an exact, independent corroboration of a finding already in
+`docs/AUDIO_SUBSYSTEM_INVESTIGATION.md`.** That investigation traced `sink`'s own
+`ArkMediaPlayer::setup()` via disassembly and found `mode==3 → "plug:softvol2"`,
+`mode==1 → "plug:softvol1"`, `mode==2 → "plug:softvol4"` — the *exact same*
+softvol-channel-to-stream-type mapping (1=TTS, 2=music, 4=VR), reverse-engineered
+independently from a different binary. Two unrelated sources agreeing on this numbering
+is strong confirmation it's a real, stable ArkMicro-platform-wide convention, not
+coincidence.
+
+Mixing happens entirely at the ALSA `softvol`/`dmix` layer (all three/four softvol
+instances share one underlying `dmix`), not in application code — matches
+`AUDIO_SUBSYSTEM_INVESTIGATION.md`'s own finding that `softvol1`/`2`/`4` differ **only**
+in `max_dB` gain ceiling and control name, with identical `period_size 1024`/
+`buffer_size 16384`/`slave.pcm "hw:0,0"`.
+
+**`AudioDecoder`/`AudioRecord` both declare `xrunRecover(snd_pcm_t*, int)`.** No
+implementation source available for these two specific classes (headers only in this
+package), but the same method exists, implemented and compiled, in a *sibling* class pair
+used by the CarLife link (`MediaDecode::xrunRecover`, `MicCapture::xrunRecover`, in
+`lib/carlife/libcarlifeplayer.so`, unstripped). Disassembled it directly:
+
+```
+err == -EPIPE (32)    → snd_pcm_prepare(handle)
+err == -ESTRPIPE (86) → loop: snd_pcm_resume(handle), sleep(1000ms) while -EAGAIN,
+                          fall back to snd_pcm_prepare() if resume fails
+```
+
+This is the **textbook alsa-lib reference `xrun_recovery()`** — no custom tuning, no
+vendor-specific tricks. Useful negative result for the audio-stutter investigation: if
+recovery mechanics were the gap, you'd expect this vendor reference to differ; it
+doesn't. Consistent with `AUDIO_SUBSYSTEM_INVESTIGATION.md`'s own conclusion that the real
+mechanism is scheduling-starvation-driven XRUNs inside `AlsaHandle::play()`, not a
+recovery-logic or buffer-sizing bug.
+
+**Mic capture is opened once and gated by a pause flag, never re-opened per session:**
+
+```cpp
+// on LINK_SUCCESS (AA session connects):
+record_start(info); record_pause(true);      // capture PCM opens immediately, but muted
+// only on an actual Siri/VR request:
+recordStart() → record_pause(false)          // un-gate data flow
+recordStop()  → record_pause(true)           // re-gate; PCM stays open the whole time
+```
+
+A concrete design signal for the "silent capture-XRUN path" concern in
+`project_mic_capture_investigation`: the reference implementation deliberately avoids
+repeated open/close of the capture device (a classic XRUN trigger), keeping one
+continuously-running capture thread and gating only at the data-callback level. Worth
+checking whether this project's own mic path re-opens the capture PCM per recognition
+session instead of doing this.
+
+### USB hotplug / sink-side connection detection
+
+`UsbHostServicePrivate` (in `lib/user/libUserInterface.so`, unstripped) uses real
+`libusb_hotplug_register_callback`-based detection (not polling):
+`usbHotplugCallback()` dispatches to `usbInsertProc()`/`usbRemoveProc()` on
+`LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED`/`_LEFT`. Insert goes through a gate function,
+`isValid(libusb_device*, int*)`, which pulls the active USB config descriptor and rejects
+anything whose interface class isn't `0xFF` (vendor-specific) or `6` (still-image/PTP).
+**Vendor/product ID matching (Apple `0x05ac`, Google AOA `0x18d1`) is not done at this
+layer** — confirmed by checking the disassembly directly for those immediates and finding
+none. This is a generic first-pass class filter; per-protocol identification happens one
+layer up.
+
+### **The big one: `libAndroidAuto.so` has its own complete, self-contained AOA implementation** — directly relevant to the open wired-AA investigation
+
+`libAndroidAuto.so` (the `ark1668ed-bsp` copy) exports a full `Accessory`/
+`AccessoryPrivate`/`AccessoryWifi`/`AccessoryWifiPrivate` class hierarchy with its own
+independent USB hotplug handling, **separate from** `UsbHostService` above:
+
+```
+Accessory::startSession() / stopSession() / Read() / Write()
+AccessoryPrivate::usbHotplugCallback / usbInsertProc / usbRemoveProc
+AccessoryPrivate::startAccessoryMode()   ← the actual "switch phone to AOA" call
+AccessoryPrivate::switchAoa()
+AccessoryPrivate::waitConnectReady()
+```
+Strings in the same library: `"AOA %d.%d"`, `"found aoa dev"`,
+`"Found Google device not in accessory mode. Trying to turn on."`,
+`"Phone is already in aoa state"`, `"%s:%d start usb aoa!"`.
+
+**Checked our own deployed device's copy directly**
+(`firmware_source/mtd6_rootfs/usr/lib/libAndroidAuto.so`, fully stripped): it contains the
+exact string `"Found Google device not in accessory mode. Trying to turn on."` and the
+mangled symbol text `_ZN9Accessory18startAccessoryModeEv` — i.e. **our board's own
+`libAndroidAuto.so` has the same `Accessory::startAccessoryMode()` method**, just with the
+rest of the symbol table stripped.
+
+**This directly reframes the open question in `docs/WIRELESS_AND_INIT.md`'s "Wired
+Android Auto never completes" thread.** That investigation's live testing found AOA
+*detection* works (`"Device is support acessory mode, AOA version:2"` fires correctly),
+but the connection then falls straight through to `wirelessConnectionProc` with "no AOA
+'turn on accessory mode' control request" ever attempted, and speculated the gap might be
+that `MsnCoreApp` needs to issue a raw `USBDEVFS_CONTROL` ioctl itself. **This vendor
+tree shows the AOA switch-to-accessory-mode logic is supposed to live *inside*
+`libAndroidAuto.so`'s own `Accessory`/`AccessoryPrivate` classes, self-contained** —
+triggered by `AndroidAuto::startSession(false)` (the `isWifi=false` wired path), not by
+anything the app is expected to do at the raw USB ioctl level itself.
+
+That reframes the likely real gap: either (a) `MsnCoreApp` never actually calls
+`AndroidAuto::startSession(false)` for a wired connection at all (going straight to the
+wireless path instead, which would make this a pure app-logic bug, matching the
+`AndroidLinkType=6→3` config-value investigation already in progress), or (b)
+`startSession(false)` is called but `AccessoryPrivate`'s own internal hotplug/switch logic
+isn't firing for some other reason. Either way, **the next concrete step recommended by
+this research** is: get the unstripped `ark1668ed-bsp` copy of `libAndroidAuto.so` beside
+the stripped deployed one, and either (1) trace `AndroidAuto::startSession()` call sites
+in `sink`/`MsnCoreApp` via `strace`/disassembly to see if `Accessory::startAccessoryMode()`
+is ever reached at all during a wired attempt, or (2) if a debug/symboled build of the
+exact same `libAndroidAuto.so` version deployed on the Prado can be obtained, load it
+with symbols to trace this directly instead of working from stripped addresses.
+
+---
+
+## Handoff — what a future session should pick up here
+
+In rough priority order:
+
+1. **Wired Android Auto (`docs/WIRELESS_AND_INIT.md`'s open thread)** — see the
+   `Accessory::startAccessoryMode()` finding in §5 above. This is the strongest new lead
+   from this research pass. Next step: confirm (via strace or disassembly) whether
+   `AndroidAuto::startSession(false)` / `Accessory::startAccessoryMode()` is ever reached
+   during a real wired connection attempt on hardware. If it's never reached, the bug is
+   purely in `MsnCoreApp`'s decision to start a wired vs. wireless session — not a
+   USB/AOA/kernel issue at all.
+
+2. **Hardware-test the two WiFi driver updates** on branch `wifi-rtl8821cs-driver-port`
+   in `linux-arkmicro` (§2) — both build clean but are unverified on real hardware. Test
+   `rtl8811cu` first (it's the one actually loaded at boot); `rtl8821cs` is lower priority
+   since it's not currently in the boot path.
+
+3. **AA audio-stutter investigation** — the softvol1/2/4 corroboration and the
+   textbook-`xrun_recovery()` finding in §5 don't point to a new fix, but they do further
+   rule out "buffer/recovery misconfiguration" as the mechanism, reinforcing
+   `AUDIO_SUBSYSTEM_INVESTIGATION.md`'s existing conclusion that the real bottleneck is
+   scheduling-starvation inside `AlsaHandle::play()`'s `WorkQueue` thread. The two staged
+   mitigations there (`chrt -f 50`, `busy_poll` sysctls) are still the next thing to
+   hardware-test, unrelated to anything new found here.
+
+4. **`carback.cpp`'s exact ioctl protocol** (§4c) — worth a direct diff against this
+   project's own reverse-camera driver/glue code to confirm ioctl numbers and the
+   `VIN_UPDATE_WINDOW` companion call are handled identically.
+
+5. **Feasycom AT-command vocabulary** (§4c) — worth exercising the previously-unobserved
+   commands (`HFPCFG` bits, `AVRCPCFG`, `HFPADTS`) live to fill gaps in
+   `docs/WIRELESS_AND_INIT.md` §5's BT protocol documentation.
+
+6. Lower priority / no action needed: `libgal`/`libvglite` (reference only, wrong kernel
+   ABI), `libbt_gukai`/`libsd818` (confirmed alternate vendor options, not applicable
+   unless BT chip identity is ever in doubt), `demo-display`'s README (good cross-check
+   reading, not urgent), MUSB suspend/resume backport (low-risk, low-urgency, still
+   un-started).
+
+### Where things live
+
+- This document: `docs/VENDOR_BSP_RESEARCH.md` (this repo).
+- WiFi driver updates: `linux-arkmicro` repo, branch `wifi-rtl8821cs-driver-port`
+  (2 commits, off `master`).
+- Audio driver cosmetic cleanup: `linux-arkmicro` repo, branch `audio-driver-tidyup`
+  (1 commit, off `master`, unrelated to the WiFi branch).
+- Vendor source trees referenced: `/home/osboxes/Downloads/ark1668ed-bsp`,
+  `/home/osboxes/Downloads/cstech-ip17-rootfs` — neither is tracked in any repo, both are
+  personal Downloads on this machine (see `docs/SOURCES.md` for how this project usually
+  registers reference-only external sources).

@@ -1,7 +1,7 @@
 # Wireless And Init
 
 **Status:** Reference
-**Last Updated:** 2026-07-16
+**Last Updated:** 2026-08-04
 
 ## Overview
 
@@ -1097,3 +1097,60 @@ issued on the phone's device node right after "Device is support
 acessory mode" -- if it never appears, that's a pure userspace gap
 (matches the log evidence so far); if it appears but fails, that
 would justify going back to the kernel driver after all.
+
+#### Where the AOA "turn on accessory mode" logic actually lives -- found via vendor source (2026-08-04)
+
+See `docs/VENDOR_BSP_RESEARCH.md` §5 for the full writeup; summary here
+since it directly reframes the open question above.
+
+ArkMicro's own newer reference BSP (`ark1668ed-bsp`) ships an
+**unstripped** copy of `libAndroidAuto.so`
+(`buildroot-external/package/carlink/lib/auto/libAndroidAuto.so`) with
+a complete, self-contained `Accessory`/`AccessoryPrivate` class doing
+its *own* USB hotplug detection and AOA switch-to-accessory-mode logic,
+entirely separate from the generic multi-protocol `UsbHostService`
+carlink also has:
+
+```
+Accessory::startSession(bool isWifi)   // false = wired/AOA path
+AccessoryPrivate::usbHotplugCallback / usbInsertProc / usbRemoveProc
+AccessoryPrivate::startAccessoryMode() // <- the actual "switch to AOA" call
+AccessoryPrivate::switchAoa()
+AccessoryPrivate::waitConnectReady()
+```
+with strings `"AOA %d.%d"`, `"found aoa dev"`,
+`"Found Google device not in accessory mode. Trying to turn on."`
+(exactly the string already confirmed present in our own deployed
+`sink`, see above), `"Phone is already in aoa state"`.
+
+**Checked our own board's actual `libAndroidAuto.so`
+(`firmware_source/mtd6_rootfs/usr/lib/libAndroidAuto.so`, fully
+stripped) directly**: it still contains the same
+`"Found Google device not in accessory mode..."` string and the
+mangled symbol text `_ZN9Accessory18startAccessoryModeEv` -- i.e. our
+board's copy has the *same* `Accessory::startAccessoryMode()` method,
+just symbol-table-stripped.
+
+**This means the AOA switch-to-accessory-mode call is designed to
+happen automatically inside `libAndroidAuto.so` itself once
+`AndroidAuto::startSession(false)` is invoked for a wired connection --
+not something `MsnCoreApp` is expected to trigger via a raw
+`USBDEVFS_CONTROL` ioctl of its own.** That reframes the two live
+possibilities for the still-open bug:
+
+1. `MsnCoreApp` never actually calls `AndroidAuto::startSession(false)`
+   for a wired attempt at all -- goes straight to the wireless path
+   instead. This would make it a pure app-decision-logic bug, and lines
+   up with the `AndroidLinkType=6→3` config fix already staged above
+   (not yet hardware-tested) -- if that fix alone doesn't change the
+   behavior, this is the next thing to check via `strace`/disassembly
+   of `MsnCoreApp`/`sink` around session-start decision points.
+2. `startSession(false)` *is* called but `AccessoryPrivate`'s own
+   internal hotplug callback isn't firing for some other reason -- less
+   likely given AOA detection already works at the kernel/`sink` level
+   per the logs above, but not ruled out.
+
+Either way, the working hypothesis "the missing piece is a manual
+`USBDEVFS_CONTROL` ioctl `MsnCoreApp` needs to issue itself" is now
+superseded -- the vendor design expects this to be internal to
+`libAndroidAuto.so`.

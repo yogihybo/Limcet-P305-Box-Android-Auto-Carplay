@@ -1,7 +1,7 @@
 # Audio Subsystem Investigation
 
 **Status:** Reference
-**Last Updated:** 2026-07-15
+**Last Updated:** 2026-08-04
 
 ## Overview
 
@@ -4380,3 +4380,30 @@ Following on from tracing `ArkMediaPlayer::play()`'s `flag@+40` dongle-vs-local-
 **The `getRegValue()`/`flag@+41` tail** (0x30b84-0x30c58, reads hardcoded MMIO `0xe0100060`/`0xe0400060`, bit-4 checks) only ever gates the already-confirmed-unreached dongle/`usleep()` block inside `play()` -- moot for this system, not investigated further.
 
 **Net conclusion: `ArkMediaPlayer::setup()` is now fully traced end-to-end with no new stutter lead.** This closes out the static-disassembly branch of this investigation. The real mechanism remains the XRUN itself inside `AlsaHandle::play()` (`play:225`), occurring despite a fairly generous ~371ms `dmix` buffer (16384/1024 = 16 periods @ 44.1kHz) -- consistent with genuine scheduling-starvation gaps (long enough CPU stalls to blow through that whole buffer), not a marginal timing/buffering misconfiguration. This is consistent with, not a new justification beyond, the two mitigations already staged. **No further static-analysis lead identified -- the next real signal has to come from hardware-testing the `chrt -f 50` / `busy_poll` mitigations.**
+
+## Independent corroboration from ArkMicro's own reference source (2026-08-04)
+
+See `docs/VENDOR_BSP_RESEARCH.md` §5 for the full writeup. Two points worth recording
+here directly:
+
+1. **The `softvol1`/`2`/`4` → TTS/music/VR mapping found above by disassembling
+   `ArkMediaPlayer::setup()` is independently confirmed** by ArkMicro's own unstripped
+   reference carlink source (`ark1668ed-bsp/buildroot-external/package/carlink`,
+   `IUserLinkPlayer`'s constructor opens `AudioDecoder("plug:softvol2")` for music,
+   `"plug:softvol1"` for TTS, `"plug:softvol4"` for VR, `"plug:softvol3"` for calls). Two
+   completely independent methods (disassembly of our binary vs. reading a different,
+   unstripped vendor binary) landing on the same numbering is strong confirmation this is
+   a real, stable platform-wide convention.
+2. **A working sibling `xrunRecover()` implementation was found and disassembled**
+   (`MediaDecode::xrunRecover`/`MicCapture::xrunRecover`, CarLife's audio classes,
+   `libcarlifeplayer.so`) — it's the textbook alsa-lib reference `xrun_recovery()`
+   (`snd_pcm_prepare()` on `-EPIPE`, `snd_pcm_resume()`-retry-then-`prepare()` on
+   `-ESTRPIPE`), nothing custom. Useful negative result: if XRUN recovery *mechanics* were
+   the gap here, you'd expect a vendor reference to differ; it doesn't, reinforcing the
+   conclusion above that the real mechanism is scheduling starvation, not a
+   recovery-logic or buffer-sizing bug.
+3. Also found: the reference implementation keeps its mic-capture ALSA PCM open
+   continuously across a whole AA session, gating actual data flow with a pause flag
+   rather than opening/closing the capture device per Siri/VR request. Worth checking
+   against this project's own mic capture path if the "silent capture-XRUN" concern in
+   `project_mic_capture_investigation` memory is revisited.

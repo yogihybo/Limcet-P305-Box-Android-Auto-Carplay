@@ -12,6 +12,22 @@ mkdir -p /var/log
 sync
 /sbin/mdev -s
 
+# 2026-08-04: mdev -s above is a one-shot coldplug scan only -- it creates
+# device nodes for what's already present at boot, then exits. It does NOT
+# react to anything plugged in afterward. Normally that's handled by the
+# kernel's legacy uevent-helper mechanism invoking mdev automatically on
+# every hotplug event, but this kernel has CONFIG_UEVENT_HELPER unset
+# (confirmed in .config) -- that whole mechanism is compiled out. On a
+# kernel built this way, mdev needs to run as a persistent netlink-uevent
+# listener instead (`mdev -df`) to react to anything after boot at all,
+# USB storage insertion (see etc/mdev.conf/usb_domount.sh) included.
+# NOT CONFIRMED this busybox build has daemon-mode (`-df`) compiled in --
+# if it doesn't, this exits immediately and is a harmless no-op, but
+# hotplug (including USB automount) silently won't work; check for a
+# running `mdev -df` process and a live insertion test before trusting
+# this.
+/sbin/mdev -df &
+
 # 2026-08-02: low-latency socket polling, system-wide -- practical
 # mitigation attempt for the long-running AA media audio stutter
 # investigation (docs/AUDIO_SUBSYSTEM_INVESTIGATION.md), tried after

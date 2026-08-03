@@ -1,8 +1,15 @@
 # nss-stub
 
 `nss_stub.c` isn't a standalone tool -- it's a small object file linked
-into `tools/nano`, `tools/htop`, `tools/tmux`, and `tools/gdbserver` to
-work around a real, confirmed-on-hardware startup crash in statically
+into `tools/nano`, `tools/htop`, `tools/tmux`, and `tools/gdbserver` (and,
+via the sibling `nss_stub_busybox.c` variant, `firmware_overlay/bin/busybox`
+itself -- see that file's own header comment and
+`firmware_overlay/etc/rc.d/rcS`'s 2026-08-04 comment for why its symbol
+set is different: busybox's own `CONFIG_USE_BB_PWD_GRP` already replaces
+getpwnam/getpwuid/getgrnam/getgrgid/etc, so only the real glibc NSS calls
+busybox *does* still make -- getaddrinfo/gethostbyname/gethostbyaddr/
+getservbyname/getservbyport, plus dlopen defensively -- need wrapping)
+to work around a real, confirmed-on-hardware startup crash in statically
 linked glibc binaries on this toolchain:
 
 ```

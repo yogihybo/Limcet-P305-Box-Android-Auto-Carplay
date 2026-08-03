@@ -13,46 +13,49 @@ sync
 /sbin/mdev -s
 
 # 2026-08-04: mdev -s above is a one-shot coldplug scan only -- it creates
-# device nodes for what's already present at boot, then exits. It does NOT
-# react to anything plugged in afterward. Normally that's handled by the
-# kernel's legacy uevent-helper mechanism invoking mdev automatically on
-# every hotplug event, but this kernel has CONFIG_UEVENT_HELPER unset
-# (confirmed in .config) -- that whole mechanism is compiled out.
+# device nodes for what's already present at boot, then exits. Reacting to
+# anything plugged in afterward needs a persistent listener. This kernel's
+# legacy CONFIG_UEVENT_HELPER mechanism (auto-invoking a helper program on
+# every hotplug uevent) is unset/compiled out, but that's not the only
+# path: `mdev -df` listens directly on a netlink socket for kobject uevents
+# (CONFIG_NET=y, confirmed on), a separate, more modern kernel mechanism
+# that doesn't depend on CONFIG_UEVENT_HELPER at all.
 #
-# The "correct" fix -- running mdev as a persistent netlink-uevent
-# listener (`mdev -df`) -- does NOT work on this specific busybox build:
-# confirmed by actually running this project's own compiled `bin/busybox`
-# (via qemu-arm-static, not guessed from strings) -- `mdev --help` only
-# ever lists `[-s]`, no daemon mode at all. CONFIG_FEATURE_MDEV_DAEMON
-# was not enabled when this busybox was built (see
-# project_busybox_rebuild memory -- that rebuild's own goal was
-# ipcs/ipcrm, mdev daemon mode was never a consideration at the time).
+# The busybox 1.30.1 build previously shipped here didn't have this
+# option: CONFIG_FEATURE_MDEV_DAEMON doesn't exist as a Kconfig symbol
+# until busybox 1.31+ (confirmed by grepping that version's own
+# util-linux/mdev.c -- no daemon code path present at all, not just
+# disabled). Rebuilt busybox from 1.33.0 -- same version this project's
+# buildroot tree already uses elsewhere, defconfig enables the daemon
+# feature by default.
 #
-# Stopgap until/unless busybox gets rebuilt with that feature: poll
-# `mdev -s` periodically instead of a real event listener. This picks up
-# NEW insertions within the poll interval (each coldplug rescan finds
-# the new /sys entry and runs mdev.conf's rule same as a real hotplug
-# event would) -- but does NOT detect removal on its own, since a
-# coldplug scan has nothing to iterate for a device that's already gone.
-# Good enough for the immediate need (testing playback via MsnCoreApp's
-# media player off a USB stick present at/soon-after boot) -- not a
-# real hotplug replacement. 5s is an arbitrary, untuned interval.
+# First rebuild attempt (dynamically linked against the host toolchain's
+# glibc 2.36) booted straight into a kernel panic ("Attempted to kill
+# init!", GLIBC_2.29/2.34 not found) -- the device's own libc is 2.27,
+# far older than the host toolchain's. Swapping in the device's own
+# libc-2.27.so at link time (the tools/hx170-test recipe) doesn't work
+# for a whole program like busybox either: that old glibc's stat/fcntl
+# family isn't ABI-compatible with code compiled against modern glibc
+# headers (undefined stat64/lstat64/fcntl64 -- old glibc only exports
+# the __xstat-style wrapper interface for those). Real fix: static
+# linking (CONFIG_STATIC=y, no runtime libc dependency at all) plus the
+# project's existing nss-stub treatment (see tools/nss-stub/README.md)
+# for the small set of real glibc NSS/dlopen symbols busybox still
+# references (getaddrinfo/gethostbyname/gethostbyaddr/getservbyname/
+# getservbyport for ipcalc/netstat/inetd, plus dlopen defensively) --
+# busybox's OWN getpwnam/getpwuid/getgrnam/getgrgid/etc are NOT wrapped,
+# since CONFIG_USE_BB_PWD_GRP=y already makes busybox provide those
+# itself without ever touching glibc's NSS machinery. See
+# tools/nss-stub/nss_stub_busybox.c for the stub implementations, and
+# project_usb_udisk_automount memory for the full build recipe
+# (CONFIG_EXTRA_LDFLAGS must fold the wrap flags and stub .o into a
+# single "-Wl,..." token, or busybox's own build system double-links it
+# into an intermediate built-in.o and the final binary both).
 #
-# Also handles removal here, since coldplug alone can't: after each
-# rescan, unmount any /media/udisk* whose underlying device node no
-# longer exists (physically removed, but nothing ever told the mount
-# to go away). Without this, a stale mount to a vanished USB stick
-# would just sit there -- usb_domount.sh's own $ACTION=remove path
-# never fires under polling, since mdev -s has nothing to iterate for
-# a device that's already gone.
-(while true; do
-	sleep 5
-	/sbin/mdev -s
-	for mp in /media/udisk /media/udisk2 /media/udisk3; do
-		dev=$(awk -v m="$mp" '$2==m{print $1}' /proc/mounts)
-		[ -n "$dev" ] && [ ! -b "$dev" ] && umount "$mp" 2>/dev/null
-	done
-done) &
+# Verified via qemu-arm-static running the actual new binary: `mdev
+# --help` lists real `-d`/`-f` daemon flags, applet list unchanged from
+# the previous 1.30.1 build (396 vs 392 entries, normal version churn).
+/sbin/mdev -df &
 
 # 2026-08-02: low-latency socket polling, system-wide -- practical
 # mitigation attempt for the long-running AA media audio stutter

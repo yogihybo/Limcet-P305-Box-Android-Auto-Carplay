@@ -101,13 +101,15 @@ getting it wrong (e.g. `ScreenType`) produces a blank or garbled display before
 
 | Key | Observed values | Meaning |
 |-----|-----------------|---------|
-| `McuType` | `6` (P306), `16` (C235/Holden) | Which MCU/steering‑wheel adapter protocol the box speaks over `MCUPortName`. Also selects the matching `KeyMaps-NN`/`Knob-NN` block. See [`MCU_ADAPTERS.md`](MCU_ADAPTERS.md). |
-| `BlueToothType` | `5`, `6` | Bluetooth module/stack. `5` = older module; `6` = newer RTL BLE‑capable module (matches the 2025 BC6/BLE additions in `usr/config.ini`). *(inferred)* |
+| `McuType` | `6` (P306), `16` (C235/Holden) | Which MCU/steering‑wheel adapter protocol the box speaks over `MCUPortName`. Also selects the matching `KeyMaps-NN`/`Knob-NN` block. **Full 1–30 value table disassembly-confirmed** (`MCUAdapter::getAdapterInstance(McuType)`, `libMcuCenter.so` `0x25e40`, same jump-table idiom as `CanType` below) — see [`MCU_ADAPTERS.md`](MCU_ADAPTERS.md) for the complete list. `6`=`BoxP300` (this device's real adapter). |
+| `BlueToothType` | `5`, `6` | Bluetooth module/stack. `5` = older module; `6` = newer RTL BLE‑capable module (matches the 2025 BC6/BLE additions in `usr/config.ini`). *(inferred — see note below, the disassembly trail doesn't close cleanly)* |
 | `RadioType` | `0` | FM/AM tuner type. `0` = none. |
-| `CanType` | `0` | Built‑in CAN decoder type. `0` = none / CAN handled by the external MCU instead. |
-| `SoundType` | `0`, `3`, `4`, `128` | Audio routing / codec profile selector (vendor‑coded). Varies per SKU and per DSP board. *(inferred)* |
+| `CanType` | `0` | Built‑in CAN decoder type selecting a `libCanBus.so` adapter class. **Full 0–16 value table disassembly-confirmed** 2026-08-03 — see [`CANBUS.md`](CANBUS.md) for the complete class table and the live-tested finding that `CanType=1` breaks touch/knob input (constructs a wrong-vendor HVAC-capable adapter that fights the MCU for its own UART port). `0`=none/MCU handles it (current, correct value here); `9`=`CanBus_Raise_Toyota` (unused on this device). **Do not set to anything other than `0`.** |
+| `SoundType` | `0`, `2`, `3`, `4`, `5`, `128` | Audio routing/codec profile selector. **Full value table disassembly-confirmed** (`SoundAdapter::getInstance(SoundICType)`, `libMsnSound.so`): `2`/`4`=`Sound_PT2312` (Princeton PT2312), `3`=`Sound_BD37033` (Rohm BD37033), `5`=`Sound_MCU`, `128`(`0x80`)=`Sound_MCU_OnlyEQ`, anything else incl. `0`=no adapter constructed. `SoundType=0` is what this device currently ships with — no adapter, and as a side effect the only value confirmed to also let the mic work; `3`/`5` both construct a real adapter and both break the mic (mechanism not fully understood — see `AUDIO_SUBSYSTEM_INVESTIGATION.md`/project memory). |
 | `TouchScreen` | `0` | Touch controller class. `0` = none / handled by panel driver. |
 | `WLANType` | `3` | Wi‑Fi module type. *(inferred)* |
+
+**Note on `BlueToothType` (2026-08-03 disassembly attempt):** traced `BTSenderAdapter::getInstance(BTSenderType)` (`libBTSender.so`, `0x7144`) — it turns out to construct exactly **one** class, `BTSenderAdapter_Blueware`, only when its argument is `1`; anything else falls through to an error/log path with no adapter. So this function is not a multi-vendor selector the way `CanType`/`McuType`/`SoundType` are. Critically, its one call site (`libSetting.so`, `AudioSenderPanel::init()`) does **not** pass the raw `BlueToothType` ini value in — it reads a separate runtime app-tag (`MsnApplication::getTag(AppTagId=0x1000f, ...)`) instead. Where/how the ini's `BlueToothType` (`5`/`6`) gets translated into that app-tag was not found in this pass — a real gap, not a confirmed "just use 1" answer. Don't assume `BlueToothType` maps directly onto `BTSenderType`.
 
 ## 1.4 Serial ports
 

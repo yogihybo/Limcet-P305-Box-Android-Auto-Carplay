@@ -267,13 +267,48 @@ evidence point the other way, i.e. that it's unused on this device:
    SoC CAN peripheral directly (the ARK1668 has none) or to the onboard TJA1042 (that
    transceiver is wired to the STM32's own bxCAN pins, not to the Linux side at all —
    see Hardware above).
-2. **`CanType=0`, not a `CanBus_Raise_*` enum value.** Given the naming pattern, a
-   nonzero `CanType` almost certainly selects one of these `CanBus_Raise_*` classes
-   via `getAdapterInstance()`. `CanType=0` on this device is consistent with "no
-   `libCanBus.so` adapter active" — decoding is left entirely to the Limcet MCU
-   firmware via `McuType=6` instead. The exact `CanType` → class enum mapping was not
-   recoverable from strings alone (would need disassembly of the factory switch/table
-   in `getAdapterInstance`).
+2. **`CanType=0`, not a `CanBus_Raise_*` enum value.** `CanType=0` on this device is
+   consistent with "no `libCanBus.so` adapter active" — decoding is left entirely to
+   the Limcet MCU firmware via `McuType=6` instead.
+
+**`CanType` → adapter class, full table (disassembly-confirmed 2026-08-03).**
+`CanBusAdapter::getAdapterInstance(CanBusType)` (`libCanBus.so`, `0x23d40`) is a
+classic ARM jump table: `sub r3, r5, #1; cmp r3, #15; addls pc, pc, r3, lsl #2` —
+table index is `CanType − 1`, valid for `CanType` `1`–`16`; `0` or anything outside
+that range falls through to a no-op path (no adapter constructed, matches this
+device's `CanType=0`). Spot-checked directly against the disassembly (not just the
+class names) for `1`, `9`, and `11`:
+
+| `CanType` | Adapter class constructed |
+|:--:|---|
+| 0 | *(none — no adapter, current value on this device)* |
+| 1 | `CanBus_LiHang_JMCE200N` |
+| 2 | `CanBus_Huida_ZD` |
+| 3 | `CanBus_Raise_Volkswagen` |
+| 4 | `CanBus_XinHang` |
+| 5 | `CanBus_XBS_Mazda` |
+| 6 | `CanBus_XinRi` |
+| 7 | `CanBus_Raise_Honda` |
+| 8 | `CanBus_Raise_Nissan` |
+| **9** | **`CanBus_Raise_Toyota`** |
+| 10 | `CanBus_Raise_GM` |
+| 11 | `CanBus_Raise_Haval` |
+| 12 | `CanBus_Raise_GAC` |
+| 13 | `CanBus_Raise_Venucia` |
+| 14 | `CanBus_Raise_Renault` |
+| 15 | `CanBus_Raise_Jeep` |
+| 16 | `CanBus_OdieBenz` |
+
+**Explains the user's live finding (2026-08-03): `CanType=1` breaks all touch/knob
+input.** It doesn't fail benignly — it actively constructs `CanBus_LiHang_JMCE200N`,
+a real adapter for an entirely different vendor's CAN decoder box (a climate/HVAC
+-control-capable adapter, per its own method names like `setAirVolume`/
+`setTemperature`/`setWindDirect` — clearly not a Toyota part), which opens
+`/dev/ttyHS0` in a mode that fights the Limcet MCU's own use of that same port. The
+device's real Toyota-specific class, `CanBus_Raise_Toyota`, is `CanType=9` — not
+currently used on this device (CAN decoding is left to the external STM32 MCU via
+`McuType=6` instead, i.e. `CanType=0` is correct for this hardware as shipped).
+**Do not set `CanType` to anything other than `0` here.**
 
 This reframes (rather than contradicts) the "Root cause" findings below: the
 `CanBusKeyManager` / `CanBusKey.config` machinery that Holden's firmware stripped

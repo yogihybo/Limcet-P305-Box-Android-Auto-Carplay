@@ -4407,3 +4407,41 @@ here directly:
    rather than opening/closing the capture device per Siri/VR request. Worth checking
    against this project's own mic capture path if the "silent capture-XRUN" concern in
    `project_mic_capture_investigation` memory is revisited.
+
+## `chrt -f 50` mitigation confirmed structurally correct, not a shot in the dark (2026-08-04)
+
+`libAndroidAuto.so` has its own thread base class (`Thread`/`ArkThread`/`GalThread`
+depending on build -- same class, different link-time name) with a real
+`setPriority(int)` method. Disassembled it directly: it calls
+`pthread_setschedparam(thread, SCHED_FIFO, &param)` -- a genuine, working real-time
+priority mechanism, already present in the app's own threading infrastructure, not
+something that would need to be added from scratch.
+
+**Checked whether anything actually calls it, on our own board's real deployed
+`libAndroidAuto.so`.** Answer: nothing does -- zero callers anywhere in the whole
+library. Specifically checked `WorkQueue::start()` (0x1222ec, the exact function already
+traced in this investigation as spawning the `WorkQueueThread` pool that runs
+`AudioPlaybackWorkItem::run() -> ArkMediaPlayer::play()`, the already-suspected
+scheduling-starvation site): it constructs `WorkQueueThread` objects, calls
+`WorkQueueThread::setQueue()`, then plain `Thread::start()` -- no priority bump anywhere
+in that sequence. `sink` itself doesn't import `pthread_setschedparam` or anything
+priority-related either. Also checked ArkMicro's own newer reference build
+(`ark1668ed-bsp`'s `libAndroidAuto.so`, same `GalThread::setPriority` method) for
+callers -- also zero, in the whole `.so`. Full detail:
+`docs/VENDOR_BSP_RESEARCH.md` §5.
+
+**Conclusion**: every thread in the AA audio pipeline -- the network reader, the
+`WorkQueue` pool, everything -- runs at plain default `SCHED_OTHER` priority on both our
+board and ArkMicro's own newer reference platform. Nothing ever elevates the specific
+thread that performs the ALSA write. This is not something this project's rebuild broke
+relative to stock; ArkMicro ships it this way everywhere.
+
+This **upgrades the `chrt -f 50` mitigation from "an experiment covering several vague
+theories at once" to "structurally the exact right fix."** The app already ships the
+mechanism to solve exactly this class of problem (`Thread::setPriority` /
+`pthread_setschedparam`) and simply never invokes it on any thread. Wrapping the whole
+`sink` process in `chrt -f 50` at launch achieves the same effect from outside (child
+threads inherit `SCHED_FIFO` via `pthread_create()`, as already established earlier in
+this investigation), just applied process-wide instead of surgically to only the
+`WorkQueue` threads. Still not yet hardware-tested, but this is a real, positive signal
+for it working, not a guess.

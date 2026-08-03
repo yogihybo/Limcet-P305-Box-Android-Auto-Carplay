@@ -1,7 +1,7 @@
 # Settings Reference
 
 **Status:** Reference
-**Last Updated:** 2026-07-15
+**Last Updated:** 2026-08-03
 
 ## Overview
 
@@ -17,7 +17,7 @@ Each file exists in **two physical copies** that serve different roles:
 | Layer | Path | Role |
 |-------|------|------|
 | **Provisioning copy** | `msn_factory_configs/*.ini` inside the update ZIP/SD payload | Applied by the factory/update tool **at flash time**; copied into `/msnprofile` to override the baked‑in defaults for a specific product SKU. |
-| **Rootfs baked‑in copy** | `/msnprofile/MsnProductInfo.ini`, `/msnprofile/FactoryConfig.ini` | The defaults compiled into the shipped `rootfs.img`. Read **at every boot** by `MsnCoreApp` / `Launcher`. |
+| **Rootfs baked‑in copy** | `/msnprofile/MsnProductInfo.ini`, `/msnprofile/FactoryConfig.ini` | The defaults compiled into the shipped `rootfs.img`. Read **at every boot** by `MsnCoreApp` / `Launcher` — but see [Userdata caching](#userdata-caching-settingconfig) below, this is not the whole story. |
 
 Both files are flat `key=value` text. `MsnProductInfo.ini` uses a single
 `[General]` section. `FactoryConfig.ini` uses four sections — `[General]`,
@@ -55,6 +55,64 @@ then again on every power‑up:
 > Because step 3 gates steps 4–6, a wrong `MsnProductInfo.ini` (e.g. bad
 > `ScreenType`) produces a blank/garbled display before `FactoryConfig.ini` is
 > ever reached.
+
+## File interaction map (2026-08-03)
+
+The two‑tier provisioning story above is accurate but incomplete — there are
+more files in play than just the two INIs, and some of them interact in ways
+that aren't obvious from reading either file alone. Full picture, gathered
+across this project's disassembly work on `SoundType`/`Language`/`ScreenType`/
+`CanType`/etc.:
+
+| File | Location | Written by | Read by |
+|---|---|---|---|
+| `MsnProductInfo.ini` | `/msnprofile/` (rootfs) | Factory/update tool, at flash time only | `MsnCoreApp`, every boot |
+| `FactoryConfig.ini` | `/msnprofile/` (rootfs) | Factory/update tool, at flash time only | `MsnCoreApp`/`MsnFirstInit`, every boot — for most keys; see the caching caveat below |
+| `/data/msncfg/Setting.config` | userdata partition | `MsnCoreApp`, once, at first provisioning | `MsnCoreApp`, **every subsequent boot, in preference to the ini files** |
+| `/msnprofile/arkdata.ini` | `/msnprofile/` (rootfs) | Factory tool at flash time, **and** rewritten live by `libMcuCenter.so`'s MCU-protocol handlers | `MsnCoreApp` (LCD panel init); separately, **U-Boot** reads its own unrelated copy — see below |
+| `sd_bootable/arkdata.ini` | SD card FAT partition (this project's own) | This project, manually | U-Boot only, pre-Linux |
+
+**Userdata caching (`Setting.config`).** Editing an ini value is not
+guaranteed to change live behavior. `Setting.config` in userdata is a cache
+that, once populated, **wins over the ini files on every subsequent boot** —
+the ini only seeds it the very first time a device provisions. Confirmed for
+`Language` (documented in §2.4 below) and functionally for `SoundType`
+(`project_mic_capture_investigation` — editing the ini alone didn't stick
+across a real device that had already provisioned). To force a value to take
+effect on an already-provisioned device, either edit `Setting.config`
+directly or trigger a factory reset (`fw_setenv factory_reset 1`), which
+wipes all of `/data` and forces a fresh reseed from the ini — not something
+to do casually, it also wipes every other saved userdata setting.
+
+**`arkdata.ini` is genuinely bidirectional.** It isn't a static factory
+timing table read once — `libMcuCenter.so`'s MCU-adapter protocol parsers
+(`MCUAdapter_Bagoo`/`BoxC270`/`ZhongHang`, one per physical MCU board
+variant) **write** `ScreenType` and a full LCD timing block into its
+`[DISPLAY_INTERFACE]` group at runtime, based on which MCU board actually
+handshakes with the unit at boot. The value you observe in this file at any
+given moment may reflect what the connected MCU reported, not just what was
+flashed — see §1.2 (`ScreenType`) below.
+
+**Two files named `arkdata.ini` with zero relationship to each other.** The
+Linux-side `/msnprofile/arkdata.ini` above is entirely separate from this
+project's own `sd_bootable/arkdata.ini` (same format, same key names, even
+overlapping display-timing keys) — U-Boot reads its copy before Linux ever
+boots, to build the splash screen and patch the kernel DTB (see the
+`BootInterrupt` toggle work in this project's U-Boot history); Linux never
+touches U-Boot's copy and vice versa. Easy to confuse when debugging a
+display issue — always check which layer (pre-boot U-Boot vs. running Linux)
+is actually relevant before editing either one.
+
+**Build-time layering adds a third copy of the two main INIs.**
+`firmware_overlay/msnprofile/*.ini` wins unconditionally over
+`firmware_source/mtd6_rootfs/msnprofile/*.ini` on every `build_bootable_sdcard.sh`
+run (rsynced on top, last write wins). This caused a real regression once
+already: a `SoundType` fix landed in the `mtd6_rootfs` copy but not the
+overlay copy, so every rebuild silently reverted the live device back to the
+old value. **When changing a setting in this repo, both copies need updating**
+(or just the overlay copy, if the intent is a permanent project-wide
+deviation from the base rootfs dump — check both before assuming a change
+shipped).
 
 ## Sources for the value tables
 

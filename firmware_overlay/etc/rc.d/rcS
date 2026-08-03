@@ -301,7 +301,22 @@ touch /data/udhcpd.leases
 # and the galcore modprobe above are both already in place by this
 # point in the script. Backgrounded (&) so rcS itself still returns and
 # the console/diagnostic banner below remain usable.
-/usr/bin/start_msn_directfb &
+#
+# 2026-08-03: real hardware testing found launching it immediately
+# here raced with something not fully ready yet -- a kernel-level
+# page fault landed mid-init, right in the galcore/Vivante GPU driver
+# path (modprobe'd only ~50 lines above -- at this point in rcS its
+# own init may not have settled, firmware/reset sequencing isn't
+# necessarily complete just because modprobe returned) and/or
+# scheduling contention from rtl8811cu's own firmware-loading work
+# (modprobed immediately before this). Confirmed as a timing race, not
+# a real code bug: running start_msn_directfb by hand over SSH a
+# minute or so after boot (once everything above has settled) works
+# perfectly every time. 5s is a starting-point guess, not measured
+# against the actual minimum needed -- revisit (larger delay, or a
+# real readiness check on /dev/galcore instead of a fixed sleep) if
+# this still races intermittently.
+(sleep 5 && /usr/bin/start_msn_directfb) &
 
 # --- diagnostic tools banner (firmware_overlay/prado) ---
 echo ""

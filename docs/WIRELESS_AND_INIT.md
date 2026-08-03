@@ -1154,3 +1154,75 @@ Either way, the working hypothesis "the missing piece is a manual
 `USBDEVFS_CONTROL` ioctl `MsnCoreApp` needs to issue itself" is now
 superseded -- the vendor design expects this to be internal to
 `libAndroidAuto.so`.
+
+#### Full disassembly trace of `Accessory` in our own `sink` -- narrows the bug to a device-filtering gate, not a call-site/state-machine issue (2026-08-04)
+
+Continued the vendor-BSP-research lead directly against our own deployed
+`sink` binary (not just comparing strings). Correcting the prior framing:
+`sink` does **not** use the `AndroidAuto`/`Accessory` wrapper class family
+the way the `ark1668ed-bsp` reference's `carlink` package does at the
+`AndroidAuto::startSession(bool)` entry point -- checked, zero references
+to that symbol (or to `Accessory::startAccessoryMode()`) in either
+`sink`'s or `MsnCoreApp`'s *dynamic* symbol tables. But `sink`'s *local*
+(non-exported) symbol table -- not actually stripped, just invisible to a
+`nm -D`-only search -- shows the entire `Accessory` class compiled
+directly into `sink` itself, with real addresses:
+
+```
+Accessory::isValid(libusb_device*, libusb_device_descriptor*)  0x34a30
+Accessory::init(libusb_device*, libusb_device_descriptor*)     0x34b18
+Accessory::startAccessoryMode()                                0x347d4
+Accessory::init()                                               0x34360  (enumeration loop)
+Accessory::wirelessConnectionProc(void*)                        0x33cf0  (the fallback path already observed live)
+Accessory::Accessory() [ctor]                                   0x3b7ec
+```
+
+Traced the real call chain end to end via direct disassembly (PIC-relative
+string/literal-pool cross-references resolved by script, not guessed):
+
+1. **`Accessory::init(libusb_device*, libusb_device_descriptor*)`**
+   (0x34b18): opens the device, reads the USB product ID (`idProduct`,
+   offset+10 of the descriptor) and compares against `0x2D00`/`0x2D01`
+   (the real Google AOA/AOA+ADB product IDs). If already in AOA mode,
+   skips straight to normal init. If not, prints the already-known
+   `"Found Google device not in accessory mode. Trying to turn on."`
+   line, checks a per-object flag at `this+16`, and calls
+   `startAccessoryMode()` **only if that flag is false**.
+2. **The `this+16` flag is not a hidden blocker.** Traced every write to
+   it: the constructor (0x3b7ec) sets it to `0`; `Accessory::init()`'s
+   enumeration loop (0x34360) resets it to `0` at the top of every fresh
+   scan; the *only* place it's ever set to `1` is immediately after a
+   **successful** `startAccessoryMode()` return (0x34cb4-34cbc) -- a
+   plain "already succeeded, don't retry" flag, not something that could
+   be stuck closed under normal conditions.
+3. **`Accessory::isValid(libusb_device*, libusb_device_descriptor*)`**
+   (0x34a30) -- the actual gate deciding whether a USB device reaches
+   step 1 at all -- gets the device's active USB config descriptor and
+   loops its interfaces, returning `true` only if **any** interface's
+   `bInterfaceClass` is `0xFF` (vendor-specific) or `6` (still-image/PTP).
+   **No vendor/product ID check anywhere in this function** -- confirmed
+   by reading the full disassembly, not inferred. This is the exact same
+   generic class-only filter `docs/VENDOR_BSP_RESEARCH.md` §5 already
+   found in the *unrelated* `UsbHostServicePrivate::isValid` -- two
+   independent classes in this codebase share the identical
+   class-code-only filtering convention.
+
+**This narrows the bug meaningfully**: the `Accessory` class's own
+internal logic (gate flag, AOA product-ID check, `startAccessoryMode()`
+call) all look correct and reachable under normal conditions -- nothing
+here is "stuck closed" by construction. The remaining open possibility is
+narrower and more concrete than before: **a phone connected in its normal
+default USB mode may simply not present any interface with class `0xFF`
+or `6`**, meaning it fails `isValid()` and never reaches `init()`/
+`startAccessoryMode()` at all -- a device-filtering problem upstream of
+`Accessory`'s own state machine, not a bug within it.
+
+**Next step, needs live hardware, not resolvable from static analysis
+alone**: capture the actual connected phone's real USB interface
+descriptors during a wired-connection attempt (e.g. `lsusb -v` while
+connected, or a small standalone `libusb_get_active_config_descriptor`
+dump tool) and check whether any interface genuinely reports class
+`0xFF`/`6` in the phone's default (pre-AOA) mode. If none do, that
+directly confirms the root cause and the fix is adding the missing
+vendor/product-ID check (Apple `0x05ac`, Google `0x18d1`) rather than
+anything AOA-protocol- or state-machine-related.

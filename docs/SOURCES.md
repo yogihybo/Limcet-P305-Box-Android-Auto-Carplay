@@ -1,7 +1,7 @@
 # Sources
 
 **Status:** Reference
-**Last Updated:** 2026-07-15
+**Last Updated:** 2026-08-04
 
 ## Overview
 
@@ -24,7 +24,16 @@ Source of: MsnProductInfo.ini (ProductId=Limcet-P306), msncfg settings, pointerc
 `docs/HARDWARE_AND_SOC_REFERENCE.md` §9 and `docs/DISPLAY_SUBSYSTEM.md`; see `ArkPro Reference/README.md`  
 **`linux-arkmicro Reference/`** — ArkMicro's own public U-Boot BSP (`RD_Software/linux-arkmicro`,
 a later generation than the Prado's actual stock U-Boot — see that folder's README), the starting
-point for `docs/UBOOT_BUILD_GUIDE.md`'s from-source build plan
+point for `docs/UBOOT_BUILD_GUIDE.md`'s from-source build plan  
+**`ark1668ed-bsp`** (personal Downloads, not tracked in any repo) — ArkMicro's own internal BSP
+for a newer SoC variant (ARK1668ED, Linux 6.12.56, ArkMicro's internal Gogs server), different
+kernel generation and USB PHY but same WiFi/BT chip family; source of the RTL8821CS/RTL8811CU
+WiFi driver updates (`linux-arkmicro` repo, branch `wifi-rtl8821cs-driver-port`) and the Android
+Auto/audio-pipeline/USB-hotplug findings in `docs/VENDOR_BSP_RESEARCH.md`  
+**`cstech-ip17-rootfs`** (personal Downloads, not tracked in any repo) — a rootfs-only dump from a
+different, older ArkMicro product (ARK1680, Linux 3.4.0); wrong SoC generation for direct reuse,
+used only to corroborate the `com.arkmicro.*` D-Bus naming convention — see
+`docs/VENDOR_BSP_RESEARCH.md` §1
 
 ## Key differences applied vs base Holden firmware
 

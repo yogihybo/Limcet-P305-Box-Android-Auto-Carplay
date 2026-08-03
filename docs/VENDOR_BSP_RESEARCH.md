@@ -129,10 +129,24 @@ Two commits, on branch **`wifi-rtl8821cs-driver-port`** in the `linux-arkmicro` 
    Final result: clean build, zero warnings, correct vermagic, correct USB device alias
    (`usb:v0BDAp8811d*` — Realtek VID, PID 0x8811).
 
-**Both drivers on this branch are build-verified only — not hardware-tested.** Same
-caveats apply as any vendor driver bump: association behavior, BT-coex timing, and power
-management are real code paths that changed. Test `carplay_wifi` AP mode (WiFi) and BT
-pairing/audio before trusting either.
+**Update, first real hardware boot of `rtl8811cu`**: hit a real bug --
+`RTW: ### rtw_hal_ops_check - Error : Please hook hal_func.recv_hdl ###`. Root cause: the
+merged `autoconf.h` (based on the newer SDIO-only drop) defined `CONFIG_RECV_THREAD_MODE`,
+which makes `hal_intf.c` require `hal_func.recv_hdl` to be hooked -- only
+`hal/rtl8821c/sdio/rtl8821cs_ops.c` populates that hook; the USB ops file (kept from the
+2021 tree, predates this feature) never does, since USB receive is URB-driven, not
+thread-polled. Confirmed the original 2021 USB `autoconf.h` never defined
+`CONFIG_RECV_THREAD_MODE`, `CONFIG_XMIT_THREAD_MODE` ("necessary for SDIO" per its own
+comment), or `CONFIG_SDIO_RX_COPY` (SDIO-named directly) -- all three were carried over
+unintentionally during the merge; undefined them to match the original working config
+(`CONFIG_TX_AGGREGATION`, genuinely generic, kept). Fixed, rebuilt clean, commit
+`d4ebc10ec`. **Still needs a retest** to confirm the module now probes past this point and
+actually associates.
+
+**Both drivers on this branch are otherwise build-verified only — not fully
+hardware-tested.** Same caveats apply as any vendor driver bump: association behavior,
+BT-coex timing, and power management are real code paths that changed. Test
+`carplay_wifi` AP mode (WiFi) and BT pairing/audio before trusting either.
 
 ---
 

@@ -282,6 +282,27 @@ touch /data/udhcpd.leases
 #/etc/wifi_ap.sh &
 #/etc/wifi_client.sh &
 
+# 2026-08-03: auto-start MsnCoreApp (the main UI) at boot -- now that
+# U-Boot's own reliability work (cold-boot hangs, noise-triggered
+# autoboot aborts) has settled down, moving from fully-manual startup
+# toward normal unattended operation. Deliberately NOT resurrecting
+# stock's own mechanism for this: stock's /etc/profile unconditionally
+# ran MsnFirstInit + `MsnCoreApp -qws&` on every login shell, which
+# this project intentionally disabled 2026-07-14 (see that file's own
+# comment) because /etc/profile is sourced on *every* SSH/serial/telnet
+# session, not just once at boot -- it was silently respawning a second
+# compositor instance and fighting live framebuffer/driver tests
+# (tools/lcd-test, tools/ark1680-ts-test, etc.) that expect the real
+# one to stay down while testing. rcS runs exactly once, at real boot,
+# so it doesn't have that problem -- this is the right place for an
+# actual "start on boot" behavior, distinct from stock's login-shell
+# hack. start_msn_directfb (not start_msn_linuxfb) is the
+# GPU-accelerated DirectFB backend -- matched-pair galcore.ko/libGAL.so
+# and the galcore modprobe above are both already in place by this
+# point in the script. Backgrounded (&) so rcS itself still returns and
+# the console/diagnostic banner below remain usable.
+/usr/bin/start_msn_directfb &
+
 # --- diagnostic tools banner (firmware_overlay/prado) ---
 echo ""
 echo "=== Diagnostic tools ==="

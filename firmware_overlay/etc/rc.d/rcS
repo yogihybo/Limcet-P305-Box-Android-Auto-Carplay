@@ -302,7 +302,23 @@ modprobe galcore registerMemBase=0xE0F00000 irqLine=32 contiguousSize=0x800000 p
 # reserved for genuinely exceptional conditions) keeps real errors visible
 # while dropping routine driver-internal chatter. Default is _DRV_INFO_=4.
 # See include/rtw_debug.h in the driver source.
-modprobe rtl8811cu rtw_drv_log_level=2
+# rtw_country_code=US added 2026-08-04: without a valid HW (EFUSE) or SW
+# channel plan, this driver's rtw_rfctl_decide_init_chplan() (new in the
+# 2025-03-27 SDK update -- the old driver had no channel-plan/regulatory
+# validation at all) falls back to RTW_CHPLAN_WORLDWIDE (chplan 0x7F),
+# which excludes 5GHz UNII-1 channels (36/40/44/48). This is the module's
+# very first load at boot -- well before wifi_ap.sh or MsnCoreApp ever
+# run -- so without this, every later reload inherits/re-derives the same
+# restrictive default unless something else supplies a country code.
+# Hardware-confirmed: this fix (paired with the matching insmod in
+# etc/hostapd.sh, MsnCoreApp's own reload path) resolves the "wireless
+# CarPlay/Android Auto never connects" symptom -- hostapd was rejecting
+# the dynamic hw_mode=a channel=36 AP config with "Configured channel
+# (36) not found from the channel list of current mode... Could not
+# select hw_mode and channel. (-3)" until a real channel plan (0x1B, US)
+# was available. See docs/VENDOR_BSP_RESEARCH.md and
+# project_wireless_carplay_aa_channel_plan memory for the full trace.
+modprobe rtl8811cu rtw_drv_log_level=2 rtw_country_code=US
 
 # Set up DHCP lease directory and file
 mkdir -p /data

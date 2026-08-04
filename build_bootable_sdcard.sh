@@ -1132,6 +1132,22 @@ install_new_kernel_modules() {
                 ln -sf "$kopath" "wlan_$kobasename"
             fi
         done
+
+        # MsnCoreApp's own chip-detection names this board's WiFi chip
+        # "rtl8821cu" (confirmed live: /tmp/wlan.ko -> wlan_rtl8821cu.ko,
+        # a dangling symlink, insmod silently ENOENTs, hostapd never gets
+        # a working wlan0 -- this is what breaks automatic WiFi startup
+        # when CarPlay/Android Auto is selected). No module named
+        # rtl8821cu.ko has ever existed in this tree -- only rtl8811cu.ko
+        # (USB) does, and this session's WiFi driver work already
+        # established RTL8811CU/RTL8821C(U/S) are the same silicon
+        # (linux-arkmicro's own vendor tree names the 8811CU driver's
+        # chip HAL directory hal/rtl8821c/, RTL871X_MODULE_NAME "8821CU").
+        # Add the alias MsnCoreApp actually asks for, pointing at the
+        # real driver, the same way as every other symlink above.
+        if [[ -e "kernel/drivers/net/wireless/realtek/rtl8811cu/rtl8811cu.ko" ]]; then
+            ln -sf "kernel/drivers/net/wireless/realtek/rtl8811cu/rtl8811cu.ko" "wlan_rtl8821cu.ko"
+        fi
     )
 
     success "Modules installed: /lib/modules/$kver  ($(find "$rootfs_mount/lib/modules/$kver" -name '*.ko' | wc -l) .ko files)"

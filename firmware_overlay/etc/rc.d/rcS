@@ -133,6 +133,42 @@ for p in /proc/[0-9]*; do
 	fi
 done
 
+# 2026-08-04: match stock's real TCP congestion control algorithm --
+# AA audio-stutter investigation, static comparison against stock's own
+# vmlinux. `strings` on stock's real dumped kernel
+# (firmware_dumps/"Prado firmware dump"/mtd5_kernel/extracted/vmlinux.elf)
+# surfaced its actual compiled source path
+# (/workspace/ark0618system/kernels/linux-3.4/net/ipv4/tcp_cong.c) and
+# only two congestion-control algorithm name strings: "reno" and
+# "highspeed" -- no "cubic" anywhere. Confirmed live, not just inferred:
+# stock's own real boot dmesg (docs/logs/archived/"dmesg live device
+# kernel 3.4 dmeg_260715.txt") prints `TCP: reno registered` /
+# `TCP: highspeed registered` at boot -- cubic is never registered at
+# all. Since nothing else selects a different default, stock's real,
+# live, active default congestion control is Reno -- the old
+# conservative linear-growth algorithm. This kernel's defconfig instead
+# builds CUBIC as the default (CONFIG_DEFAULT_TCP_CONG="cubic",
+# CONFIG_TCP_CONG_CUBIC=y) -- the modern default virtually every current
+# Linux distribution ships, but NOT what stock actually runs. This is a
+# genuine, version-driven divergence (congestion-control defaults
+# changed across kernel releases between 3.4 and 4.19) independent of
+# anything `sink` itself does -- `sink` never calls setsockopt for this,
+# so the algorithm is purely a kernel-side default either way.
+#
+# Unlike every other mitigation in this file, this one is an actual
+# STOCK RESTORATION, not a new deviation: `tcp_reno` is unconditionally
+# compiled into net/ipv4/tcp_cong.c itself (the mandatory fallback
+# implementation, not a separate CONFIG_TCP_CONG_RENO-gated module), so
+# switching to it is a plain runtime sysctl, no kernel rebuild needed,
+# trivially reversible.
+#
+# Cubic and Reno have real behavioral differences under real-world
+# packet loss/reordering (a WiFi link's realistic operating condition)
+# -- different congestion-window growth curves and loss-recovery
+# timing -- worth testing directly rather than reasoning further from
+# static analysis alone. NOT YET HARDWARE-TESTED.
+sysctl -w net.ipv4.tcp_congestion_control=reno >/dev/null 2>&1
+
 # Set each MUSB controller's operating mode (usb1's CarPlay wired/WiFi
 # role, and a fast-path for USB-stick test boots) -- see
 # docs/WIRELESS_AND_INIT.md sec 7 and the comments in this script for

@@ -143,6 +143,25 @@ unintentionally during the merge; undefined them to match the original working c
 `d4ebc10ec`. **Still needs a retest** to confirm the module now probes past this point and
 actually associates.
 
+**Update, the DFS crash persisted even with `regulatory.db` fixed — real root cause
+found and fixed.** A live boot with the regdb fix in place confirmed both certs load
+(`sforshee` and `wens`) and the module now inits fully (`module init ret=0`, `wlan0`/
+`wlan1` both created) -- but the *same* `rtw_dfs_rd_en_decision` NULL-deref crash still
+hit later, when `hostapd` starts the AP on `wlan0`. The register dump confirmed the exact
+mechanism: `r3 == 0` faulting at `r3+0xfc8`, matching `ALINK_GET_BAND`/`_CH`/`_BW`/
+`_OFFSET` (`drv_types.h`), which all dereference `alink->adapter` before reading into the
+`_adapter` struct. Root cause: `os_intfs.c`'s `rtw_drv_add_vir_if()` (creates virtual/
+secondary interfaces, e.g. `wlan1`) sets `padapter->adapter_link.adapter = padapter`, but
+`rtw_init_netdev()` -- the **primary** adapter's own init path, i.e. `wlan0`, the
+interface `hostapd` actually uses -- never does. Confirmed `os_intfs.c` is byte-identical
+between `rtl8811cu` and `rtl8821cs` (same missing line, same file, both from the same
+2025-03-27 SDK drop) -- a genuine upstream vendor bug, not something the USB backport
+introduced. Fixed in both drivers (added the same assignment the vendor's own virtual-
+interface code already uses), rebuilt clean, commit `c79611076`. **Still needs a
+retest** -- this is now three real, sequential hardware-found-and-fixed bugs on this one
+driver update (`recv_hdl` hook, missing `regulatory.db`, missing `adapter_link.adapter`),
+each only surfacing after the previous one was fixed and the driver got further.
+
 **Both drivers on this branch are otherwise build-verified only — not fully
 hardware-tested.** Same caveats apply as any vendor driver bump: association behavior,
 BT-coex timing, and power management are real code paths that changed. Test

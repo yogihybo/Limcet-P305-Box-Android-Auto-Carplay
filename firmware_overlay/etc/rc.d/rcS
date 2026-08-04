@@ -79,6 +79,50 @@ sync
 sysctl -w net.core.busy_poll=50 >/dev/null 2>&1
 sysctl -w net.core.busy_read=50 >/dev/null 2>&1
 
+# 2026-08-04: disable RT throttling -- AA audio-stutter investigation,
+# found live via `dmesg | grep "RT throttling"`: `sched: RT throttling
+# activated`. Linux's RT scheduler has a built-in safety net
+# (kernel.sched_rt_runtime_us, default 950000 out of a 1000000us
+# sched_rt_period_us) that caps how much CPU time ALL real-time-
+# priority threads combined may consume system-wide -- once that
+# budget is exhausted within a period, the kernel stops EVERY RT
+# thread from running at all for the rest of that period, forcing a
+# fallback to normal (SCHED_OTHER) threads. sink's 8 threads at chrt's
+# RT priority 50 (2026-08-02 mitigation), plus this same file's own
+# ksoftirqd/0 elevation to RT priority 60 (added earlier the same day
+# as this fix), together were apparently enough combined RT CPU demand
+# on this single-core SoC to cross that 95% ceiling and trip it.
+# Critically, tripping it doesn't throttle just the greedy thread --
+# it silences EVERY RT thread simultaneously, including the very
+# audio-delivery thread the chrt -f 50 mitigation exists to protect --
+# a real, newly-confirmed candidate for periodic stalls that look
+# exactly like the stutter this whole investigation is chasing, and
+# one this reconstruction's own RT-priority mitigations may have
+# introduced or worsened rather than fixed.
+#
+# NOT a version-driven divergence like the TCP reno/cubic fix below --
+# this global RT-throttling mechanism has existed since long before
+# Linux 3.4, stock almost certainly has it compiled in too. The real
+# difference is that stock's own service file launches sink completely
+# bare (`Exec=/usr/bin/sink`, confirmed via the real stock rootfs dump)
+# -- stock never runs ANY userspace thread at real-time priority at
+# all, so this throttling mechanism is simply never relevant there.
+# This is 100% a side effect of this reconstruction's own chrt -f 50
+# mitigation (compounded by the ksoftirqd fix layered on top of it),
+# not a kernel-version issue.
+#
+# Fix: disable the ceiling entirely (-1 = unlimited) rather than tune
+# it, since the RT thread set here is small, fully audited, and under
+# this project's own control (sink's threads + ksoftirqd/0) -- the
+# throttling safety net exists to protect against runaway/buggy RT
+# code in an untrusted or unknown workload, not something a properly-
+# tuned, fully-understood RT configuration should need active. Real
+# tradeoff, stated plainly: this removes Linux's own protection against
+# a genuinely hung/runaway RT thread starving the whole system forever
+# -- acceptable here because the RT thread set is small and known, not
+# because the risk doesn't exist. NOT YET HARDWARE-TESTED.
+sysctl -w kernel.sched_rt_runtime_us=-1 >/dev/null 2>&1
+
 # 2026-08-04: elevate ksoftirqd/0 above sink's own real-time priority --
 # AA audio-stutter investigation, new lead from a live pcm_dmaengine
 # period-jitter capture (docs/logs/"new uboot new kernel baseline

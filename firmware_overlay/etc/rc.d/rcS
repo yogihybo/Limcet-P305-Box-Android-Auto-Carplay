@@ -79,6 +79,60 @@ sync
 sysctl -w net.core.busy_poll=50 >/dev/null 2>&1
 sysctl -w net.core.busy_read=50 >/dev/null 2>&1
 
+# 2026-08-04: elevate ksoftirqd/0 above sink's own real-time priority --
+# AA audio-stutter investigation, new lead from a live pcm_dmaengine
+# period-jitter capture (docs/logs/"new uboot new kernel baseline
+# v31_260804.txt"): both playback and capture periods swing +-25-47%
+# around their expected 21.333ms interval, persistently, from the very
+# first period -- not an occasional glitch.
+#
+# Mechanism: the DMA controller backing ark1668-i2s (drivers/dma/
+# ark-dma.c, a DesignWare dw_dma core) completes transfers via the
+# classic hardirq-schedules-a-tasklet pattern (dw_dma_interrupt ->
+# tasklet_schedule -> dw_dma_tasklet -> dmaengine_pcm_dma_complete,
+# where the period-jitter instrumentation lives). Tasklets normally run
+# in softirq context immediately after the hard IRQ returns -- fast,
+# low jitter. But under softirq load, Linux defers further softirq
+# processing to ksoftirqd/0, a plain SCHED_OTHER kernel thread with no
+# elevated priority. Meanwhile com.arkmicro.auto.service already
+# launches sink under `chrt -f 50` (2026-08-02 mitigation) -- since
+# rt priority is inherited by every thread a process spawns and
+# libAndroidAuto.so's own per-thread priority mechanism is confirmed
+# never called (see project_aa_audio_stutter_investigation memory),
+# ALL of sink's threads (8 confirmed running concurrently in the same
+# capture) sit at that same RT priority, uniformly, with zero
+# differentiation between them. On this single-core SoC (confirmed:
+# every kworker is kworker/0:*, no kworker/1:*), an RT thread always
+# preempts SCHED_OTHER -- so whenever the DMA completion work gets
+# pushed onto ksoftirqd/0, it has to wait behind however many of
+# sink's 8 equal-priority threads happen to be runnable, round-robining
+# unpredictably. That lines up with the observed jitter: most periods
+# complete fast (softirq ran inline after the hardirq), the rest lag by
+# tens of percent (deferred to a starved ksoftirqd).
+#
+# Fix: give ksoftirqd/0 a higher real-time priority (60) than sink's
+# threads (50), so the actual audio-critical kernel-side completion
+# work can always preempt sink's own (individually not time-critical)
+# threads instead of competing with them as an equal. Iterates /proc
+# directly rather than relying on busybox pgrep's pattern-matching
+# behavior against a comm containing "/" (untested/unreliable in this
+# busybox build) -- matches this project's existing convention of
+# preferring plain /proc/awk parsing over assuming tool-specific
+# pattern syntax works as expected (see usb_domount.sh).
+#
+# NOT a restoration of stock behavior: stock runs Linux 3.4 on a
+# different DMA/audio driver stack entirely, and no archived stock
+# capture (docs/logs/archived/) shows any process-priority information
+# at all -- there's nothing to compare against. This is a deliberate
+# reconstruction-side mitigation, same class as the busy_poll sysctls
+# above and the chrt -f 50 sink mitigation this fix responds to.
+# NOT YET HARDWARE-TESTED.
+for p in /proc/[0-9]*; do
+	if [ "$(cat "$p/comm" 2>/dev/null)" = "ksoftirqd/0" ]; then
+		chrt -f -p 60 "${p#/proc/}" 2>/dev/null
+	fi
+done
+
 # Set each MUSB controller's operating mode (usb1's CarPlay wired/WiFi
 # role, and a fast-path for USB-stick test boots) -- see
 # docs/WIRELESS_AND_INIT.md sec 7 and the comments in this script for

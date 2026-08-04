@@ -213,6 +213,36 @@ done
 # static analysis alone. NOT YET HARDWARE-TESTED.
 sysctl -w net.ipv4.tcp_congestion_control=reno >/dev/null 2>&1
 
+# 2026-08-04: actually activate ALSA's XRUN debug logging -- AA audio-
+# stutter investigation. CONFIG_SND_PCM_XRUN_DEBUG=y (already enabled
+# in this kernel's defconfig) only compiles IN the capability; it does
+# NOT turn logging on by itself. The real switch is a per-substream
+# runtime bitmask (sound/core/pcm_lib.c's `pstr->xrun_debug`) that has
+# no default-value assignment anywhere in the kernel source -- it's
+# zero-initialized memory, and the only way it ever becomes non-zero is
+# by writing to a proc control file
+# (sound/core/pcm.c:snd_pcm_xrun_debug_write(), registered as
+# "xrun_debug" under each substream's own /proc/asound/cardN/pcmN[cp]/
+# dir). An earlier test that relied on CONFIG_SND_PCM_XRUN_DEBUG alone
+# found zero XRUN lines in dmesg despite audible stutter and sink's own
+# `play:225` line (a disassembly-confirmed genuine ALSA EPIPE/XRUN
+# recovery event) firing repeatedly -- that "clean negative" was almost
+# certainly just this switch never having been flipped on, not real
+# evidence against XRUN happening. `__snd_pcm_xrun()` (sound/core/
+# pcm_lib.c) is confirmed the SOLE function anywhere in sound/core that
+# transitions PCM state to SNDRV_PCM_STATE_XRUN, and its logging is
+# unconditionally tied to that same transition once this bit is set --
+# no other path can produce an XRUN without also logging it here.
+#
+# 1 = XRUN_DEBUG_BASIC (one line per XRUN, timestamped, matches
+# CONFIG_SND_VERBOSE_PRINTK's format). card0/pcm0 is this board's only
+# sound card/PCM device (ark1668-sdadc/sddac, confirmed single ALSA
+# device throughout this project) -- p=playback, c=capture, both
+# covered since either could underrun independently.
+for f in /proc/asound/card0/pcm0p/xrun_debug /proc/asound/card0/pcm0c/xrun_debug; do
+	[ -e "$f" ] && echo 1 > "$f" 2>/dev/null
+done
+
 # Set each MUSB controller's operating mode (usb1's CarPlay wired/WiFi
 # role, and a fast-path for USB-stick test boots) -- see
 # docs/WIRELESS_AND_INIT.md sec 7 and the comments in this script for

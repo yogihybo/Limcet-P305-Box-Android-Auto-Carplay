@@ -243,6 +243,34 @@ for f in /proc/asound/card0/pcm0p/xrun_debug /proc/asound/card0/pcm0c/xrun_debug
 	[ -e "$f" ] && echo 1 > "$f" 2>/dev/null
 done
 
+# 2026-08-04: poll /proc/sched_debug for RT-throttling recurrence -- AA
+# audio-stutter investigation. The `sched: RT throttling activated`
+# dmesg line (kernel/sched/rt.c) uses printk_deferred_once -- it fires
+# exactly ONCE, ever, then stays permanently silent even if throttling
+# keeps recurring hundreds more times after. We confirmed it fired at
+# least once (2026-08-04 hw test) but have no visibility into how
+# often or how continuously it's actually still happening -- a real
+# blind spot given `kernel.sched_rt_runtime_us=-1` (this same file,
+# above) is meant to have already disabled the mechanism entirely; if
+# the counters below are STILL climbing after that, either the sysctl
+# isn't taking effect the way expected or something else is resetting
+# it, either of which would be a real, actionable finding.
+# CONFIG_SCHED_DEBUG=y (already enabled) exposes each CPU's RT
+# run-queue state directly via /proc/sched_debug -- `.rt_throttled`
+# (0 or 1, current state) and `.rt_time` (accumulated ns of RT runtime
+# this period, resets each sched_rt_period_us) are logged every 2s to
+# a plain file (not dmesg, avoids adding to that buffer's pressure) so
+# a full test session's throttling history survives for post-hoc
+# correlation against dmesg timestamps (/proc/uptime is the same
+# monotonic clock dmesg's `[ N.NNNNNN]` prefix uses).
+(while true; do
+	sleep 2
+	{
+		echo "=== $(cat /proc/uptime) ==="
+		grep -A3 "^rt_rq\[" /proc/sched_debug 2>/dev/null
+	} >> /data/sched_debug_rt.log
+done) &
+
 # Set each MUSB controller's operating mode (usb1's CarPlay wired/WiFi
 # role, and a fast-path for USB-stick test boots) -- see
 # docs/WIRELESS_AND_INIT.md sec 7 and the comments in this script for

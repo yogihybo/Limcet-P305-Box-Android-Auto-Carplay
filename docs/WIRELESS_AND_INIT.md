@@ -1226,3 +1226,114 @@ dump tool) and check whether any interface genuinely reports class
 directly confirms the root cause and the fix is adding the missing
 vendor/product-ID check (Apple `0x05ac`, Google `0x18d1`) rather than
 anything AOA-protocol- or state-machine-related.
+
+---
+
+## 8. Wireless CarPlay/Android Auto never auto-starts WiFi -- root cause found and fixed 2026-08-04
+
+Following the `rtl8811cu`/`rtl8821cs` WiFi driver update (2019/2021-era
+vendor SDK -> 2025-03-27, see `docs/VENDOR_BSP_RESEARCH.md` §2), user
+reported that selecting CarPlay or Android Auto on the head unit no
+longer automatically brought up WiFi at all -- this exact flow had
+previously been hardware-confirmed working (§3a above /
+`project_static_wifi_ap_vs_dynamic` memory, 2026-07-24), so this was a
+genuine regression, not a pre-existing gap.
+
+### Investigation false starts (recorded so a future session doesn't re-walk the same path)
+
+Several plausible-looking theories were chased and ruled out with live
+evidence, in order, before the real cause was found:
+
+1. **A dangling module-alias symlink.** `MsnCoreApp`'s own chip-detection
+   names this board's WiFi chip `"rtl8821cu"` and symlinks
+   `/tmp/wlan.ko -> /lib/modules/3.4.0/wlan_rtl8821cu.ko` -- but no
+   module by that exact name has ever been built in this tree (only
+   `rtl8811cu.ko`, USB, exists). Confirmed real and fixed
+   (`build_bootable_sdcard.sh`'s `install_new_kernel_modules()` now adds
+   this alias explicitly, main repo commit `2c62756`) -- but checking the
+   pre-driver-swap backup confirmed this exact gap existed with the *old*
+   driver too, so it couldn't be the actual regression. Manually creating
+   the symlink live did not fix `hostapd` starting either, confirming it
+   was insufficient alone.
+2. **`/etc/hostapd.sh`'s own `hostapd -B ...` line being commented out**
+   (stock, unmodified, present since before this reconstruction project).
+   Wrong track -- ARM disassembly of `MsnCoreApp::enableHostApd(int,int)`
+   confirmed `MsnCoreApp` launches `hostapd` itself via `QProcess`, not by
+   relying on that line; the comment is a red herring/leftover from a
+   different, unused invocation style.
+3. **`PATH` environment blocking `QProcess::start("hostapd",...)`**
+   (started via a bare command name, no absolute path). Checked
+   `MsnCoreApp`'s real `/proc/<pid>/environ` on hardware -- `PATH`
+   correctly includes `/usr/bin`. Ruled out.
+4. **`WIFIManager::isStarted()`**, a check `MsnCoreApp::enableWLAN()`
+   makes before calling `enableHostApd()`. Traced via disassembly into
+   `libwifimanager.so` and initially looked like a real gate -- but turned
+   out to be a trivial non-NULL check on a `QProcess*` object member
+   constructed unconditionally in `WIFIManager`'s own constructor at app
+   startup, i.e. effectively always true. A red herring from going one
+   layer too deep in static analysis without live confirmation.
+5. At this point the user pushed back that it had to be the driver, since
+   the previous driver version worked and nothing about the app itself had
+   changed -- correct call, and what reframed the investigation onto the
+   real cause.
+
+### Real root cause, confirmed live on hardware
+
+`MsnCoreApp` does everything right: it generates the correct dynamic
+per-connection `hostapd` config (`/tmp/hostapd.conf`, SSID
+`carplay_fc9f`, `hw_mode=a channel=36` -- 5GHz) and successfully launches
+`hostapd` against it. `hostapd` itself immediately fails:
+
+```
+wlan0: IEEE 802.11 Configured channel (36) not found from the channel
+list of current mode (2) IEEE 802.11a
+wlan0: IEEE 802.11 Hardware does not support configured channel
+Could not select hw_mode and channel. (-3)
+wlan0: interface state UNINITIALIZED->DISABLED
+wlan0: AP-DISABLED
+wlan0: Unable to setup interface.
+```
+
+Traced to `linux-arkmicro`'s `drivers/net/wireless/realtek/rtl8811cu/
+core/rtw_chplan.c`: `rtw_rfctl_decide_init_chplan()` is genuinely new
+code in the 2025-03-27 SDK -- the old (pre-driver-update) driver had no
+channel-plan/regulatory validation logic at all. Without a valid HW
+(EFUSE-stored) or SW channel plan, it falls back to
+`RTW_CHPLAN_WORLDWIDE` (`chplan:0x7F`, confirmed via
+`dmesg | grep chplan` at boot), which deliberately excludes 5GHz UNII-1
+channels (36/40/44/48) since not every regulatory domain permits them
+without further certification.
+
+This is exactly why `wifi_ap.sh`'s static SSH-convenience AP
+(`carplay_wifi`, `hw_mode=g channel=11`, 2.4GHz -- see §3/§3a) was never
+affected and kept testing as completely healthy: 2.4GHz channels are
+permitted even under the `WORLDWIDE` fallback. That's what made this look
+like an app-layer `MsnCoreApp` bug for a while, until the actual dynamic
+5GHz config was tested directly.
+
+**Fix, confirmed live**: `insmod`ing/`modprobe`ing the driver with
+`rtw_country_code=US` makes `rtw_rfctl_decide_init_chplan()` resolve a
+real regional plan (`chplan:0x1B`) instead of the `0x7F` fallback,
+confirmed directly via `dmesg`. The module actually loads in **two**
+separate places, both needed the fix:
+
+- `etc/rc.d/rcS`'s `modprobe rtl8811cu rtw_drv_log_level=2` -- the
+  module's very first load at boot, well before `wifi_ap.sh` or
+  `MsnCoreApp` ever run (main repo commit `f18744f`).
+- `etc/hostapd.sh`'s `insmod /tmp/wlan.ko $1` -- `MsnCoreApp`'s own
+  reload immediately before launching `hostapd` (main repo commit
+  `d350962`).
+
+**HARDWARE-CONFIRMED WORKING, 2026-08-04**: user applied the `rcS` fix
+live and confirmed CarPlay/Android Auto connects successfully
+end-to-end. Full technical trace (disassembly addresses, exact
+before/after `dmesg` output): `project_wireless_carplay_aa_channel_plan`
+memory.
+
+**How to apply if this recurs after a future driver update**: check
+`dmesg | grep chplan` first, before re-investigating the app layer --
+this exact "no country code -> `WORLDWIDE` fallback -> 5GHz channels
+excluded -> dynamic AP's `hostapd` fails" failure mode is a real,
+structural risk any time this driver's channel-plan resolution can't
+find a valid HW/SW source (e.g. if EFUSE data ever changes, or
+`rtw_country_code` stops being passed for any reason).

@@ -781,3 +781,33 @@ implementation; (2) run the existing unstripped x86-64 `Launcher` binary inside 
 Debian/Ubuntu release (or container) that still carries Qt4 packages, to see the
 reference UI live; (3) attempt a real Qt5 port using the existing `QT_VERSION` guards as
 a starting point — genuine, non-trivial work across ~1650 files, not attempted here.
+
+### 6k. Option 2 done — the reference UI actually runs, live, on this dev machine
+
+No container/VM turned out to be necessary. Debian's Qt4 packages (`libqtcore4`,
+`libqtdbus4`, `libqtgui4`, `libqt4-svg`, `libqt4-xml`, `libqt4-network`, `libqt4-sql`,
+all `4:4.8.6+dfsg-2~bpo70+1`) are still hosted on `snapshot.debian.org` and install
+cleanly into a **local, non-root prefix** via `apt-get download` (works without root,
+same pattern as this project's earlier `qemu-user-static` extraction workflow) +
+`dpkg-deb -x`. Two remaining gaps, both worked around:
+- `libpng12.so.0` — same snapshot-archive approach, one extra package.
+- `libQtSerialPort.so.1` — genuinely doesn't exist anywhere as a Qt4 Debian package (Qt5
+  only). Built as an empty stub (`gcc -shared -Wl,-soname,libQtSerialPort.so.1`) — the
+  dynamic loader only needs the SONAME to resolve at load time; Linux's default lazy PLT
+  binding means real serial-port symbols are only needed if a code path that actually
+  calls them gets exercised. Never happened during a basic UI walkthrough.
+
+With `LD_LIBRARY_PATH` pointing at that prefix and a real `DISPLAY=:0` (this dev machine
+runs a normal desktop session), `Package/Launcher/x86/Launcher` **launches as a real,
+live 800x480 window** — spawns its service subprocesses (`-multimedia`, `-setting`,
+`-audiomanager`) exactly as the multi-process/D-Bus architecture in §6a-6d implied, shows
+a real-time clock (confirms it's genuinely executing, not a cached asset), and responds
+to real mouse input (`xdotool`, itself fetched the same no-root way). Two confirmed
+screens: **Home** (CarPlay / 双屏互联 dual-screen-mirroring / 系统设置 tiles) and
+**Settings > General** (sidebar: General/Calibration+Time, Language, Volume, Version —
+same settings taxonomy as this project's own `docs/SETTINGS_REFERENCE.md`).
+
+This is now a repeatable recipe, not a one-off — worth reaching for again if a future
+UI/UX question about the ArkMicro reference design comes up (e.g. what a screen is
+*supposed* to look like, or how a settings flow is organized), rather than re-deriving it
+from static source reading alone.

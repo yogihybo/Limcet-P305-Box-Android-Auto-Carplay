@@ -1,0 +1,1549 @@
+[  409.440370] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=94,82 at 409444970146ns
+[  409.450957] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=94,94 at 409455565862ns
+[  409.479313] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=111,94 at 409483917207ns
+[  409.489253] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=111,111 at 409493872331ns
+[  409.499476] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=118,111 at 409504094862ns
+[  409.512053] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=118,118 at 409516650170ns
+[  409.523086] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=124,118 at 409527696627ns
+[  409.535820] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=124,124 at 409540422306ns
+[  409.547039] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=127,124 at 409551648924ns
+[  409.560280] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=127,127 at 409564888195ns
+[  432.871716] memalloc-cls memalloc: large free: VA=bbb4d024
+[  432.872127] memalloc-cls memalloc: large free: VA=833be5e7
+[  432.872510] memalloc-cls memalloc: large free: VA=13a3ddc9
+[  432.872842] memalloc-cls memalloc: large free: VA=3cb28f98
+[  432.873021] memalloc-cls memalloc: file release (6ea7c4e5)
+[  432.873216] memalloc-cls memalloc: large free: VA=b69851da
+[  432.873581] memalloc-cls memalloc: file release (d94dff98)
+[  432.873748] layer=4: hide window.
+
+[  624.153550] RTW: send eapol packet - WPA Group Key 1/2
+[  624.156167] RTW: recv eapol packet - WPA Group Key 2/2
+[  624.157496] RTW: set group key camid:0, addr:68:b9:d3:f1:5a:43, kid:2, type:AES
+[  627.385778] ark1668_lcdfb: itu656 display task took 1120518ns
+[  677.738329] ark1668_lcdfb: itu656 display task took 1550803ns
+[  706.143207] LCDTest: unhandled page fault (11) at 0x00000008, code 0x017
+[  706.143233] pgd = 37ff953d
+[  706.146179] [00000008] *pgd=026f5831, *pte=00000000, *ppte=00000000
+[  706.152479] CPU: 0 PID: 1424 Comm: LCDTest Not tainted 4.19.192 #168
+[  706.152486] Hardware name: Arkmicro arm soc Family
+[  706.152501] PC is at 0xb676a228
+[  706.152511] LR is at 0xb6717970
+[  706.152519] pc : [<b676a228>]    lr : [<b6717970>]    psr: 600d0010
+[  706.152527] sp : bec30390  ip : b6e7cf58  fp : 00035280
+[  706.152535] r10: b6e7fa74  r9 : 0002cfe8  r8 : b64ad660
+[  706.152543] r7 : ffff0fc0  r6 : 00028ba0  r5 : b6e7f9b8  r4 : 00028ba0
+[  706.152551] r3 : 00000000  r2 : 000005e0  r1 : 00000000  r0 : 00028ba0
+[  706.152562] Flags: nZCv  IRQs on  FIQs on  Mode USER_32  ISA ARM  Segment user
+[  706.152571] Control: 10c53c7d  Table: 02638059  DAC: 00000055
+[  706.152583] CPU: 0 PID: 1424 Comm: LCDTest Not tainted 4.19.192 #168
+[  706.152589] Hardware name: Arkmicro arm soc Family
+[  706.152633] [<c010e7e8>] (unwind_backtrace) from [<c010be74>] (show_stack+0x10/0x14)
+[  706.152658] [<c010be74>] (show_stack) from [<c010f148>] (__do_user_fault+0x114/0x118)
+[  706.152679] [<c010f148>] (__do_user_fault) from [<c010f308>] (do_page_fault+0x1bc/0x2c0)
+[  706.152698] [<c010f308>] (do_page_fault) from [<c010f58c>] (do_DataAbort+0x4c/0xec)
+[  706.152720] [<c010f58c>] (do_DataAbort) from [<c0101ca0>] (__dabt_usr+0x40/0x60)
+[  706.152730] Exception stack(0xc0c87fb0 to 0xc0c87ff8)
+[  706.152744] 7fa0:                                     00028ba0 00000000 000005e0 00000000
+[  706.152760] 7fc0: 00028ba0 b6e7f9b8 00028ba0 ffff0fc0 b64ad660 0002cfe8 b6e7fa74 00035280
+[  706.152773] 7fe0: b6e7cf58 bec30390 b6717970 b676a228 600d0010 ffffffff
+[  709.382171] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=0,127 at 709386781081ns
+[  709.393949] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=0,0 at 709398572007ns
+/ # cd /usr/bin
+/usr/bin # ls
+ECLink                         mmc-test.sh
+EffectWatch                    mplayer
+LCDTest                        msncarlife
+MsnCoreApp                     mtdev-test
+MsnFirstInit                   nano
+[                              nc
+[[                             nl
+adb                            nmeter
+airplay                        nohup
+amixer                         nproc
+aplay                          nsenter
+arecord                        nslookup
+ark-ts-test                    ntfs-3g
+arm-linux-cjpeg                ntfs-3g.probe
+arm-linux-djpeg                ntfs-3g.secaudit
+arm-linux-jpegtran             ntfs-3g.usermap
+arm-linux-protoc               ntfscat
+arm-linux-rdjpgcom             ntfsclone
+arm-linux-wrjpgcom             ntfscluster
+audio-test.sh                  ntfscmp
+awk                            ntfscp
+basename                       ntfsfix
+bc                             ntfsinfo
+beep                           ntfslabel
+blkdiscard                     ntfsls
+blueware                       ntfsresize
+bt-test.sh                     ntfsundelete
+bunzip2                        od
+bzcat                          openssl
+bzip2                          openvt
+c_rehash                       passwd
+cal                            paste
+carlife                        patch
+carplay                        pgrep
+carplaytest                    pin-dump.sh
+change-arkdata                 pin-force
+changelogo                     pinmux-watch
+chpst                          pkill
+chrt                           pmap
+chvt                           printf
+cksum                          pscan
+clear                          pstree
+cmp                            pwdx
+comm                           readlink
+crontab                        realpath
+cryptpw                        renice
+cut                            reset
+dbus-cleanup-sockets           resize
+dbus-daemon                    rpm2cpio
+dbus-launch                    runsv
+dbus-monitor                   runsvdir
+dbus-send                      rx
+dbus-uuidgen                   script
+dc                             seq
+deallocvt                      setfattr
+diff                           setkeycodes
+dirname                        setsid
+dmesg                          setuidgid
+dos2unix                       sha1sum
+dpkg                           sha256sum
+dpkg-deb                       sha3sum
+du                             sha512sum
+dumpleases                     showkey
+eject                          shred
+env                            shuf
+envdir                         sink
+envuidgid                      smemcap
+expand                         softlimit
+expr                           sort
+factor                         split
+fallocate                      sshd
+fb-alpha-test                  ssl_client
+fb-scan                        start_msn
+fgconsole                      start_msn_directfb
+find                           start_msn_linuxfb
+flock                          strace
+fold                           strings
+free                           sum
+freetype-config                sv
+ftpget                         svc
+ftpput                         svok
+fuser                          tac
+fw_printenv                    tail
+fw_setenv                      taskset
+gdbserver                      tcpsvd
+gocsdk                         tee
+gocsdk_8822                    telnet
+gocsdk_968                     test
+gpio-i2c-probe                 test-tone.wav
+groups                         tftp
+haveged                        time
+hd                             timeout
+head                           tmux
+hexdump                        top
+hexedit                        touch-selftest.sh
+hostapd                        tr
+hostapd_cli                    traceroute
+hostid                         traceroute6
+htop                           truncate
+hx170-test                     ts
+i2c-dump                       ts_calibrate
+i2c-gpio-bruteforce            ts_harvest
+i2c-read-raw                   ts_print
+i2c-scan                       ts_print_raw
+i2c-write                      ts_test
+id                             tty
+install                        ttysize
+ipcrm                          uart-test.sh
+ipcs                           udhcpc6
+iwconfig                       udpsvd
+iwlist                         unexpand
+killall                        uniq
+kmem                           unix2dos
+last                           unlink
+lcd-blend-sweep.sh             unlzma
+lcd-osd1ctl-directfb-watch.sh  unshare
+lcd-overlay-watch.sh           unxz
+lcd-test                       unzip
+lcdc-regdump                   uptime
+less                           usb-test.sh
+libpng-config                  usbmuxd
+libpng15-config                users
+logger                         uudecode
+logname                        uuencode
+lowntfs-3g                     vlock
+lpq                            volname
+lpr                            w
+lsof                           wall
+lspci                          wc
+lsscsi                         wget
+lsusb                          which
+lzcat                          who
+lzma                           whoami
+man                            whois
+mcu-handshake                  wpa_cli
+md5sum                         wpa_passphrase
+mdnsd                          wpa_supplicant
+mem-dump                       xargs
+mem-fill                       xml2-config
+mesg                           xmlcatalog
+microcom                       xmllint
+mirrlink                       xxd
+mkfifo                         xz
+mkntfs                         xzcat
+mkpasswd                       yes
+/usr/bin # mcu-handshake
+[*] Opening /dev/ttyHS0 at 38400 baud...
+[859.892]  "MCU" Recv datas: 2E7F104C696D6365742D56312E302D31
+[859.895]  "MCU" Recv datas: 3330320D
+[859.895]  "MCU" Process protocol: 2E7F104C696D6365742D56312E302D313330320D
+[859.918]  "MCU" Recv datas: 2E0106110000000000E7
+[859.919]  "MCU" Process protocol: 2E0106110000000000E7
+[*] Listening for MCU frames. Press Ctrl+C to stop.
+[+] CMD 0x40 from MCU, len=1
+[+] CMD 0x30 from MCU, len=2
+[+] CMD 0x12 from MCU, len=3
+[+] CMD 0x01 from MCU, len=6
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+[+] CMD 0x12 from MCU, len=3
+[+] CMD 0x01 from MCU, len=6
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+[+] CMD 0x12 from MCU, len=3
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+[+] CMD 0x02 (handshake request) from MCU: b3=65 b4=1 -- no wire reply sent (real MsnCoreApp doesn't send one either)
+[+] CMD 0x02 (handshake request) from MCU: b3=64 b4=1 -- no wire reply sent (real MsnCoreApp doesn't send one either)
+[+] CMD 0x02 (handshake request) from MCU: b3=64 b4=1 -- no wire reply sent (real MsnCoreApp doesn't send one either)
+[+] CMD 0x02 (handshake request) from MCU: b3=64 b4=1 -- no wire reply sent (real MsnCoreApp doesn't send one either)
+[+] CMD 0x02 (handshake request) from MCU: b3=65 b4=1 -- no wire reply sent (real MsnCoreApp doesn't send one either)
+[+] CMD 0x02 (handshake request) from MCU: b3=65 b4=1 -- no wire reply sent (real MsnCoreApp doesn't send one either)
+[+] CMD 0x02 (handshake request) from MCU: b3=65 b4=1 -- no wire reply sent (real MsnCoreApp doesn't send one either)
+[+] CMD 0x02 (handshake request) from MCU: b3=65 b4=1 -- no wire reply sent (real MsnCoreApp doesn't send one either)
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+[+] CMD 0x02 (handshake request) from MCU: b3=65 b4=1 -- no wire reply sent (real MsnCoreApp doesn't send one either)
+[+] CMD 0x02 (handshake request) from MCU: b3=65 b4=1 -- no wire reply sent (real MsnCoreApp doesn't send one either)
+[+] CMD 0x02 (handshake request) from MCU: b3=65 b4=1 -- no wire reply sent (real MsnCoreApp doesn't send one either)
+[+] CMD 0x02 (handshake request) from MCU: b3=65 b4=1 -- no wire reply sent (real MsnCoreApp doesn't send one either)
+[+] CMD 0x02 (handshake request) from MCU: b3=65 b4=1 -- no wire reply sent (real MsnCoreApp doesn't send one either)
+[+] CMD 0x02 (handshake request) from MCU: b3=65 b4=1 -- no wire reply sent (real MsnCoreApp doesn't send one either)
+[+] CMD 0x02 (handshake request) from MCU: b3=65 b4=1 -- no wire reply sent (real MsnCoreApp doesn't send one either)
+[+] CMD 0x02 (handshake request) from MCU: b3=65 b4=1 -- no wire reply sent (real MsnCoreApp doesn't send one either)
+[+] CMD 0x02 (handshake request) from MCU: b3=64 b4=1 -- no wire reply sent (real MsnCoreApp doesn't send one either)
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+[+] CMD 0x02 (handshake request) from MCU: b3=64 b4=1 -- no wire reply sent (real MsnCoreApp doesn't send one either)
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+[+] CMD 0x02 (handshake request) from MCU: b3=64 b4=1 -- no wire reply sent (real MsnCoreApp doesn't send one either)
+[+] CMD 0x02 (handshake request) from MCU: b3=64 b4=1 -- no wire reply sent (real MsnCoreApp doesn't send one either)
+[+] CMD 0x02 (handshake request) from MCU: b3=64 b4=1 -- no wire reply sent (real MsnCoreApp doesn't send one either)
+[+] CMD 0x02 (handshake request) from MCU: b3=64 b4=1 -- no wire reply sent (real MsnCoreApp doesn't send one either)
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+[+] CMD 0x02 (handshake request) from MCU: b3=64 b4=1 -- no wire reply sent (real MsnCoreApp doesn't send one either)
+[+] CMD 0x02 (handshake request) from MCU: b3=64 b4=1 -- no wire reply sent (real MsnCoreApp doesn't send one either)
+[+] CMD 0x02 (handshake request) from MCU: b3=64 b4=1 -- no wire reply sent (real MsnCoreApp doesn't send one either)
+[+] CMD 0x02 (handshake request) from MCU: b3=64 b4=1 -- no wire reply sent (real MsnCoreApp doesn't send one either)
+[+] CMD 0x02 (handshake request) from MCU: b3=13 b4=1 -- no wire reply sent (real MsnCoreApp doesn't send one either)
+[+] CMD 0x02 (handshake request) from MCU: b3=13 b4=0 -- no wire reply sent (real MsnCoreApp doesn't send one either)
+[+] CMD 0x02 (handshake request) from MCU: b3=65 b4=1 -- no wire reply sent (real MsnCoreApp doesn't send one either)
+[+] CMD 0x02 (handshake request) from MCU: b3=64 b4=1 -- no wire reply sent (real MsnCoreApp doesn't send one either)
+[+] CMD 0x02 (handshake request) from MCU: b3=64 b4=1 -- no wire reply sent (real MsnCoreApp doesn't send one either)
+[+] CMD 0x20 (status query) from MCU: b3=17 b4=0 b5=18 b6=0 b7=1 -- no wire reply sent
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+[+] CMD 0x20 (status query) from MCU: b3=17 b4=0 b5=21 b6=0 b7=2 -- no wire reply sent
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+[+] CMD 0x20 (status query) from MCU: b3=17 b4=0 b5=18 b6=0 b7=2 -- no wire reply sent
+[+] CMD 0x20 (status query) from MCU: b3=0 b4=0 b5=0 b6=0 b7=0 -- no wire reply sent
+[+] CMD 0x20 (status query) from MCU: b3=30 b4=0 b5=20 b6=0 b7=1 -- no wire reply sent
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+[+] CMD 0x20 (status query) from MCU: b3=28 b4=0 b5=20 b6=0 b7=2 -- no wire reply sent
+[+] CMD 0x20 (status query) from MCU: b3=28 b4=0 b5=21 b6=0 b7=2 -- no wire reply sent
+[+] CMD 0x20 (status query) from MCU: b3=0 b4=0 b5=0 b6=0 b7=0 -- no wire reply sent
+[+] CMD 0x20 (status query) from MCU: b3=36 b4=0 b5=21 b6=0 b7=1 -- no wire reply sent
+[+] CMD 0x20 (status query) from MCU: b3=0 b4=0 b5=0 b6=0 b7=0 -- no wire reply sent
+[+] CMD 0x02 (handshake request) from MCU: b3=12 b4=1 -- no wire reply sent (real MsnCoreApp doesn't send one either)
+[+] CMD 0x02 (handshake request) from MCU: b3=12 b4=0 -- no wire reply sent (real MsnCoreApp doesn't send one either)
+[+] CMD 0x02 (handshake request) from MCU: b3=12 b4=1 -- no wire reply sent (real MsnCoreApp doesn't send one either)
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+processIOEvents read fd:31 error, errno:11 str:Resource temporarily unavailable!
+
+[+] CMD 0x02 (handshake request) from MCU: b3=12 b4=0 -- no wire reply sent (real MsnCoreApp doesn't send one either)
+[+] CMD 0x02 (handshake request) from MCU: b3=12 b4=1 -- no wire reply sent (real MsnCoreApp doesn't send one either)
+[+] CMD 0x02 (handshake request) from MCU: b3=12 b4=0 -- no wire reply sent (real MsnCoreApp doesn't send one either)
+[+] CMD 0x02 (handshake request) from MCU: b3=12 b4=1 -- no wire reply sent (real MsnCoreApp doesn't send one either)
+[+] CMD 0x02 (handshake request) from MCU: b3=12 b4=0 -- no wire reply sent (real MsnCoreApp doesn't send one either)
+^C
+/usr/bin # [895.080]  "MCU" Recv datas: 2E02020D01ED
+[895.080]  "MCU" Process protocol: 2E02020D01ED
+[895.320]  "MCU" Recv datas: 2E02020D00EE
+[895.321]  "MCU" Process protocol: 2E02020D00EE
+[895.330]  MsnMainWindow::setRealVisible MCUSettingWindow(0xa68d40, name = "MCUSettingWindow") false
+[895.330]  MsnMainWindow::setRealVisible LauncherWindow(0x148278, name = "LauncherWindow") true
+[895.342]  Waite Event Ticks 11
+killall MsnCoreApp
+/usr/bin # [903.844]  Record Error Log: /data/minidump/err-8.log
+AppVer:V3.21.09.0219
+SystemVer:Limcet_
+HardwareInfos:02-0006-06-00-00-00-00-00
+ErrorCode:15
+CallStack:
+/usr/lib/libMsnCommons.so(+0x5d7d0)[0xb63ae7d0]
+/lib/libc.so.6(__default_sa_restorer+0x0)[0xb5206710]
+/lib/libc.so.6(__select+0x74)[0xb52a57e0]
+/usr/local/Qt4.7.4/lib/libQtCore.so.4(_Z14qt_safe_selectiP6fd_setS0_S0_PK7timeval+0x60)[0xb5624a40]
+/usr/local/Qt4.7.4/lib/libQtCore.so.4(_ZN27QEventDispatcherUNIXPrivate8doSelectE6QFlagsIN10QEventLoop17ProcessEventsFlagEEP7timeval+0x248)[0xb56297c8]
+/usr/local/Qt4.7.4/lib/libQtCore.so.4(_ZN20QEventDispatcherUNIX13processEventsE6QFlagsIN10QEventLoop17ProcessEventsFlagEE+0xb0)[0xb5629c4c]
+/usr/local/Qt4.7.4/lib/libQtGui.so.4(+0x1cd680)[0xb5a3e680]
+/usr/local/Qt4.7.4/lib/libQtCore.so.4(_ZN10QEventLoop13processEventsE6QFlagsINS_17ProcessEventsFlagEE+0x40)[0xb55fa270]
+/usr/local/Qt4.7.4/lib/libQtCore.so.4(_ZN10QEventLoop4execE6QFlagsINS_17ProcessEventsFlagEE+0x100)[0xb55fa4b0]
+/usr/local/Qt4.7.4/lib/libQtCore.so.4(_ZN16QCoreApplication4execEv+0x8c)[0xb55fee34]
+MsnCoreApp[0x2021c]
+/lib/libc.so.6(__libc_start_main+0x110)[0xb51f1174]
+[    0.000000] Booting Linux on physical CPU 0x0
+[    0.000000] Linux version 4.19.192 (osboxes@osboxes) (gcc version 7.3.1 20180425 [linaro-7.3-2018.05 revision d29120a424ecfbc167ef90065c0eeb7f91977701] (Linaro GCC 7.3-2018.05)) #168 Wed Aug 5 08:42:57 AEST 2026
+[    0.000000] CPU: ARMv7 Processor [410fc051] revision 1 (ARMv7), cr=10c53c7d
+[    0.000000] CPU: PIPT / VIPT nonaliasing data cache, VIPT aliasing instruction cache
+[    0.000000] OF: fdt: Machine model: Limcet P305/P306 Dashboard Head Unit
+[    0.000000] bootconsole [earlycon0] enabled
+[    0.000000] Memory policy: Data cache writeback
+[    0.000000] cma: Reserved 64 MiB at 0x04000000
+[    0.000000] On node 0 totalpages: 46080
+[    0.000000]   Normal zone: 405 pages used for memmap
+[    0.000000]   Normal zone: 0 pages reserved
+[    0.000000]   Normal zone: 46080 pages, LIFO batch:15
+[    0.000000] CPU: All CPU(s) started in SVC mode.
+[    0.000000] random: get_random_bytes called from start_kernel+0xa0/0x394 with crng_init=0
+[    0.000000] pcpu-alloc: s0 r0 d32768 u32768 alloc=1*32768
+[    0.000000] pcpu-alloc: [0] 0
+[    0.000000] Built 1 zonelists, mobility grouping off.  Total pages: 45675
+[    0.000000] Kernel command line: root=/dev/sda2 console=ttyS0,115200n8 mem=180M earlyprintk=serial rootfstype=ext4 rootwait rw screen=0 user_debug=8
+[    0.000000] Dentry cache hash table entries: 32768 (order: 5, 131072 bytes)
+[    0.000000] Inode-cache hash table entries: 16384 (order: 4, 65536 bytes)
+[    0.000000] Memory: 106540K/184320K available (6144K kernel code, 459K rwdata, 1552K rodata, 1024K init, 355K bss, 12244K reserved, 65536K cma-reserved)
+[    0.000000] Virtual kernel memory layout:
+[    0.000000]     vector  : 0xffff0000 - 0xffff1000   (   4 kB)
+[    0.000000]     fixmap  : 0xffc00000 - 0xfff00000   (3072 kB)
+[    0.000000]     vmalloc : 0xcb800000 - 0xff800000   ( 832 MB)
+[    0.000000]     lowmem  : 0xc0000000 - 0xcb400000   ( 180 MB)
+[    0.000000]     modules : 0xbf000000 - 0xc0000000   (  16 MB)
+[    0.000000]       .text : 0x(ptrval) - 0x(ptrval)   (7136 kB)
+[    0.000000]       .init : 0x(ptrval) - 0x(ptrval)   (1024 kB)
+[    0.000000]       .data : 0x(ptrval) - 0x(ptrval)   ( 460 kB)
+[    0.000000]        .bss : 0x(ptrval) - 0x(ptrval)   ( 356 kB)
+[    0.000000]
+[    0.000000] **********************************************************
+[    0.000000] **   NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE   **
+[    0.000000] **                                                      **
+[    0.000000] ** trace_printk() being used. Allocating extra memory.  **
+[    0.000000] **                                                      **
+[    0.000000] ** This means that this is a DEBUG kernel and it is     **
+[    0.000000] ** unsafe for production use.                           **
+[    0.000000] **                                                      **
+[    0.000000] ** If you see this message and you are not debugging    **
+[    0.000000] ** the kernel, report this immediately to your vendor!  **
+[    0.000000] **                                                      **
+[    0.000000] **   NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE   **
+[    0.000000] **********************************************************
+[    0.000000] NR_IRQS: 16, nr_irqs: 16, preallocated irqs: 16
+[    0.000000] VIC @(ptrval): id 0x00041192, vendor 0x41
+[    0.000000] VIC @(ptrval): id 0x00041192, vendor 0x41
+[    0.000000] L2C-310 dynamic clock gating enabled, standby mode enabled
+[    0.000000] L2C-310 cache controller enabled, 8 ways, 128 kB
+[    0.000000] L2C-310: CACHE_ID 0x410060c9, AUX_CTRL 0x06020000
+[    0.000000] clk cpupll rate 690000000.
+[    0.000000] clk syspll rate 324000000.
+[    0.000000] clk audpll rate 426000000.
+[    0.000000] clk ddrclk rate 426000000.
+[    0.000000] clk cpuclk rate 690000000.
+[    0.000000] clk axiclk rate 324000000.
+[    0.000000] clk ahbclk rate 162000000.
+[    0.000000] clk pclk rate 81000000.
+[    0.000000] clk uart4clk rate 24000000.
+[    0.000000] clk uart5clk rate 24000000.
+[    0.000000] clk gpuclk rate 324000000.
+[    0.000000] clk gpiodebounceclk rate 24000000.
+[    0.000000] clk lcdclk rate 324000000.
+[    0.000000] clk mfcclk rate 162000000.
+[    0.000000] clk rtc-clk rate 32768.
+[    0.000000] clk spi-clk rate 162000000.
+[    0.000000] clk i2s-dac-clk rate 240000000.
+[    0.000000] clk i2s-adc-clk rate 240000000.
+[    0.000000] clocksource: arkmicro,ark-timer: mask: 0xffffff max_cycles: 0xffffff, max_idle_ns: 92171119 ns
+[    0.000020] sched_clock: 24 bits at 81MHz, resolution 12ns, wraps every 103563053ns
+[    0.008480] Console: colour dummy device 80x30
+[    0.013068] Calibrating delay loop... 457.11 BogoMIPS (lpj=2285568)
+[    0.076585] pid_max: default: 32768 minimum: 301
+[    0.081701] Mount-cache hash table entries: 1024 (order: 0, 4096 bytes)
+[    0.088383] Mountpoint-cache hash table entries: 1024 (order: 0, 4096 bytes)
+[    0.097214] CPU: Testing write buffer coherency: ok
+[    0.104210] Setting up static identity map for 0x100000 - 0x10003c
+[    0.116106] devtmpfs: initialized
+[    0.128775] VFP support v0.3: implementor 41 architecture 2 part 30 variant 5 rev 1
+[    0.137050] clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 19112604462750000 ns
+[    0.147041] futex hash table entries: 256 (order: -1, 3072 bytes)
+[    0.164377] pinctrl core: initialized pinctrl subsystem
+[    0.171152] NET: Registered protocol family 16
+[    0.205876] DMA: preallocated 256 KiB pool for atomic coherent allocations
+[    0.218375] Serial: Arkmicro UART driver
+[    0.225477] pinctrl-ark e4900000.pinctrl: initialized ark pinctrl driver
+[    0.248313] e4200000.uart: ttyS0 at MMIO 0xe4200000 (irq = 36, base_baud = 1500000) is a ARK
+[    0.257072] console [ttyS0] enabled
+[    0.264122] bootconsole [earlycon0] disabled
+[    0.273495] ark_tool: initialized on uart0 open (port for /proc/arktool, see drivers/misc/ark_tool.c)
+[    0.283820] e8000000.uart: ttyS2 at MMIO 0xe8000000 (irq = 60, base_baud = 1500000) is a ARK
+[    0.293729] e8100000.uart: ttyS3 at MMIO 0xe8100000 (irq = 61, base_baud = 1500000) is a ARK
+[    0.303804] e4f00000.serial: ttyHS0 at MMIO 0xe4f00000 (irq = 38, base_baud = 0) is a ARK HS UART
+[    0.314202] e4800000.serial: ttyHS1 at MMIO 0xe4800000 (irq = 44, base_baud = 0) is a ARK HS UART
+[    0.329367] ark-mcu-serial mcu-serial@0: probe done, rx handler registered
+[    0.352749] clk lcdclk rate 29454545.
+[    0.372097] ark1668_lcdfb e0500000.lcd: 16384KiB frame buffer at 0f000000 (mapped at (ptrval))
+[    0.381233] ark1668_lcdfb e0500000.lcd: fb0: ARK1668 LCDC at 0xe0500000 (mapped at (ptrval)), irq 25
+[    0.392848] ark_dw_dmac e0000000.dma: Arkmicro DMA Controller, 8 channels
+[    0.400696] SCSI subsystem initialized
+[    0.404567] libata version 3.00 loaded.
+[    0.404840] usbcore: registered new interface driver usbfs
+[    0.410520] usbcore: registered new interface driver hub
+[    0.415971] usbcore: registered new device driver usb
+[    0.422973] gpio-3 (i2c-gpio-0): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+[    0.432588] gpio-2 (i2c-gpio-0): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+[    0.442359] i2c i2c-1: Not I2C compliant: can't read SCL
+[    0.447707] i2c i2c-1: Bus may be unreliable
+[    0.452034] i2c-gpio i2c-gpio-0: using lines 3 (SDA) and 2 (SCL, no clock stretching)
+[    0.460086] gpio-9 (i2c-gpio-1): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+[    0.469630] gpio-121 (i2c-gpio-1): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+[    0.479529] i2c i2c-2: Not I2C compliant: can't read SCL
+[    0.484892] i2c i2c-2: Bus may be unreliable
+[    0.489174] i2c-gpio i2c-gpio-1: using lines 9 (SDA) and 121 (SCL, no clock stretching)
+[    0.497329] media: Linux media interface: v0.10
+[    0.501985] videodev: Linux video capture interface: v2.00
+[    0.507866] Advanced Linux Sound Architecture Driver Initialized.
+[    0.515389] clocksource: Switched to clocksource arkmicro,ark-timer
+[    0.571465] hx170dec e0900000.vdec: VDEC controller at 0x(ptrval), irq = 40, misc_minor = 63
+[    0.580027] hx170dec e0900000.vdec: Product ID: 0x6731 (revision 2.57.8)
+[    0.601572] NET: Registered protocol family 2
+[    0.607133] tcp_listen_portaddr_hash hash table entries: 512 (order: 0, 4096 bytes)
+[    0.614848] TCP established hash table entries: 2048 (order: 1, 8192 bytes)
+[    0.621966] TCP bind hash table entries: 2048 (order: 1, 8192 bytes)
+[    0.628404] TCP: Hash tables configured (established 2048 bind 2048)
+[    0.634975] UDP hash table entries: 256 (order: 0, 4096 bytes)
+[    0.640906] UDP-Lite hash table entries: 256 (order: 0, 4096 bytes)
+[    0.647579] NET: Registered protocol family 1
+[    0.653376] Initialise system trusted keyrings
+[    0.658367] workingset: timestamp_bits=14 max_order=16 bucket_order=2
+[    0.665844] ntfs: driver 2.1.32 [Flags: R/W DEBUG].
+[    0.674245] Key type asymmetric registered
+[    0.678444] Asymmetric key parser 'x509' registered
+[    0.683357] io scheduler noop registered (default)
+[    0.689492] memalloc-cls memalloc: allocator with major = 250
+[    0.691250] rn6752: dvr_rn6752_probe:init done
+[    0.696173] [DIAG_ITU656_PROBE] call #1: dvr_dev=c848a040 sizeof(struct dvr_dev)=588
+[    0.703994] [DIAG_ITU656_PROBE] dvr_dev=c848a040 &start=c848a224 start=c03da610 (want dvr_start=c03da610) &stop=c848a228 stop=c03d84ac (want dvr_stop=c03d84ac)
+[    0.718339] [DIAG_ITU656_PROBE] priv_data after memcpy: &priv_data=c848a22c select_channel=c03d7778 (want c03d7778) detect_signal=c03d6e80 (want c03d6e80) get_progressive=c03d63d4 (want c03d63d4) display_effect=c03d6968 (want c03d6968)
+[    0.739259] [DIAG_ITU656_PROBE] priv_data after memcpy (cont): dvr_start_cb=00000000 (want 00000000) dvr_stop_cb=00000000 (want 00000000) enter_carback_cb=c03d770c (want c03d770c) exit_carback_cb=c03d76b0 (want c03d76b0) dvr_config=00000000 (want 00000000)
+[    0.763267] get mirror type=0
+[    0.763282] carback_first_enter g_carback null error
+[    0.763299] [DIAG_ITU656_PROBE_END] dvr_dev=c848a040 start=c03da610 (want c03da610) stop=c03d84ac (want c03d84ac)
+[    0.780250] ark_display: registered /dev/ark_display
+[    0.786361] nand: device found, Manufacturer ID: 0x98, Chip ID: 0xf1
+[    0.792730] nand: Toshiba NAND 128MiB 3,3V 8-bit
+[    0.797440] nand: 128 MiB, SLC, erase size: 128 KiB, page size: 2048, OOB size: 64
+[    0.805062] nand: WARNING: ark-nand: the ECC used on your system is too weak compared to the one required by the NAND chip
+[    0.816161] Scanning device for bad blocks
+[    0.892829] Bad eraseblock 768 at 0x000006000000
+[    0.923315] usbcore: registered new interface driver cdc_ether
+[    0.929334] usbcore: registered new interface driver cdc_subset
+[    0.935330] usbcore: registered new interface driver zaurus
+[    0.941102] usbcore: registered new interface driver ipheth
+[    0.946839] usbcore: registered new interface driver cdc_ncm
+[    0.952982] usbcore: registered new interface driver uas
+[    0.958559] usbcore: registered new interface driver usb-storage
+[    0.985633] musb-hdrc musb-hdrc.0: MUSB HDRC host driver
+[    0.991085] musb-hdrc musb-hdrc.0: new USB bus registered, assigned bus number 1
+[    1.000006] hub 1-0:1.0: USB hub found
+[    1.003881] hub 1-0:1.0: 1 port detected
+[    1.008555] musb-hdrc musb-hdrc.0: switch host (no negotiation): gpio_id=76 gpio_pwr=126
+[    1.328007] musb_ark_probe succss
+[    1.355549] ark_musb_disable 128: dma still active
+[    1.360414] musb-hdrc musb-hdrc.1: MUSB HDRC host driver
+[    1.365891] musb-hdrc musb-hdrc.1: new USB bus registered, assigned bus number 2
+[    1.374753] hub 2-0:1.0: USB hub found
+[    1.378711] hub 2-0:1.0: 1 port detected
+[    1.382951] musb-hdrc musb-hdrc.1: ark_musb_enable: dma not reactivated
+[    1.390010] musb-hdrc musb-hdrc.1: switch host (no negotiation): gpio_id=1 gpio_pwr=117
+[    1.709350] musb_ark_probe succss
+[    1.710740] udc-core: couldn't find an available UDC - added [g_ncm] to list of pending drivers
+[    1.719834] ark1680_ts e4500000.tsc: probe: ADC/TSC MEM resource [mem 0xe4500000-0xe450003f]
+[    1.728330] random: fast init done
+[    1.731891] ark1680_ts e4500000.tsc: probe: irq=20
+[    1.736766] ark1680_ts e4500000.tsc: probe: mapped syscon/pinmux block at phys 0xe4900000, size 0x200
+[    1.746693] input: ark1680-ts as /devices/platform/e4500000.tsc/input/input0
+[    1.754177] ark1680_ts e4500000.tsc: ARK1680 resistive touchscreen registered, irq=20, debug=0 (echo 1 > /sys/module/ark1680_ts/parameters/debug to trace samples)
+[    1.769805] rtc-ark e4c00000.rtc: rtc core: registered e4c00000.rtc as rtc0
+[    1.777114] i2c /dev entries driver
+[    1.782251] ark_wdt e4b00000.watchdog: initialized (timeout = 15 sec, nowayout = 0)
+[    1.791313] dw_mmc ec400000.mmc: Using PIO mode.
+[    1.796019] dw_mmc ec400000.mmc: Version ID is 220a
+[    1.800949] dw_mmc ec400000.mmc: DW MMC controller at irq 42,32 bit host data width,32 deep fifo
+[    1.822794] mmc_host mmc0: Bus speed (slot 0) = 24000000Hz (slot req 400000Hz, actual 400000HZ div = 30)
+[    1.845514] dw_mmc ec800000.mmc: Using external DMA controller.
+[    1.851541] ark_dw_dmac e0000000.dma: of_xlate: src_id/dst_id=9 -> chan0 (nollp=0)
+[    1.859222] dw_mmc ec800000.mmc: Version ID is 220a
+[    1.864156] dw_mmc ec800000.mmc: DW MMC controller at irq 54,32 bit host data width,32 deep fifo
+[    1.873127] mmc_host mmc1: card is non-removable.
+[    1.878189] usb 1-1: new high-speed USB device number 2 using musb-hdrc
+[    1.889145] mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 400000Hz, actual 400000HZ div = 30)
+[    1.913561] ark1668-i2s e4000000.i2s-dac: mem resource at 0xe4000000
+[    1.920057] ark1668-i2s e4000000.i2s-dac: releasing soft reset for I2S1 (DAC/internal I2S) at 0xe4000000
+[    1.929658] ark1668-i2s e4000000.i2s-dac: enabled internal I2S1 clock-gate bit at 0xe4a00000+0x1f0
+[    1.939286] ark1668-i2s e8200000.i2s-adc: mem resource at 0xe8200000
+[    1.945767] ark1668-i2s e8200000.i2s-adc: releasing soft reset for I2S2 (ADC/external I2S) at 0xe8200000
+[    1.955272] ark1668-i2s e8200000.i2s-adc: enabled external I2S2/CS4334 clock-gate bits at 0xe4a00000
+[    1.966161] NET: Registered protocol family 10
+[    1.971588] usb 2-1: new high-speed USB device number 2 using musb-hdrc
+[    1.979713] Segment Routing with IPv6
+[    1.983569] sit: IPv6, IPv4 and MPLS over IPv4 tunneling driver
+[    1.990677] NET: Registered protocol family 17
+[    1.997099] Loading compiled-in X.509 certificates
+[    2.008345] asoc-simple-card sound: e4000000.sddac <-> e4000000.i2s-dac mapping ok
+[    2.017446] asoc-simple-card sound: ahb:sdadc@0 <-> e8200000.i2s-adc mapping ok
+[    2.025081] mmc_host mmc0: Bus speed (slot 0) = 24000000Hz (slot req 25000000Hz, actual 24000000HZ div = 0)
+[    2.034983] mmc0: new SD card at address e126
+[    2.042112] mmcblk0: mmc0:e126 SU01G 969 MiB
+[    2.048621] rtc-ark e4c00000.rtc: setting system clock to 1970-01-01 00:00:00 UTC (0)
+[    2.057174] ALSA device list:
+[    2.060160]   #0: ARK-SDDAC
+[    2.063991]  mmcblk0: p1 p2 p3
+[    2.069299] Waiting for root device /dev/sda2...
+[    2.086630] mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 300000Hz, actual 300000HZ div = 40)
+[    2.125489] usb 1-1: hub_port_init:4710 speed=3
+[    2.135448] usb 2-1: hub_port_init:4710 speed=3
+[    2.144067] mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 200000Hz, actual 200000HZ div = 60)
+[    2.157179] usb-storage 1-1:1.0: USB Mass Storage device detected
+[    2.164392] scsi host0: usb-storage 1-1:1.0
+[    2.207516] mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 100000Hz, actual 100000HZ div = 120)
+[    3.196340] scsi 0:0:0:0: Direct-Access     SanDisk  Cruzer Blade     8.02 PQ: 0 ANSI: 0 CCS
+[    3.206878] sd 0:0:0:0: Attached scsi generic sg0 type 0
+[    3.213085] sd 0:0:0:0: [sda] 7856127 512-byte logical blocks: (4.02 GB/3.75 GiB)
+[    3.221163] sd 0:0:0:0: [sda] Write Protect is off
+[    3.226035] sd 0:0:0:0: [sda] Mode Sense: 45 00 00 08
+[    3.226398] sd 0:0:0:0: [sda] No Caching mode page found
+[    3.231729] sd 0:0:0:0: [sda] Assuming drive cache: write through
+[    3.244899]  sda: sda1 sda2 sda3
+[    3.251836] sd 0:0:0:0: [sda] Attached SCSI removable disk
+[    3.290575] EXT4-fs (sda2): mounted filesystem with ordered data mode. Opts: (null)
+[    3.298430] VFS: Mounted root (ext4 filesystem) on device 8:2.
+[    3.324380] devtmpfs: mounted
+[    3.329921] Freeing unused kernel memory: 1024K
+[    3.334637] Run /sbin/init as init process
+[    3.435616] ark1668_lcdfb: LCD RGB888 r0-r7 pinmux reclaimed from any i2c-gpio pin theft (now 0x11111111)
+[    4.878046] random: crng init done
+[    6.816548] cfg80211: Loading compiled-in X.509 certificates for regulatory database
+[    6.979771] cfg80211: Loaded X.509 cert 'sforshee: 00b28ddf47aef9cea7'
+[    6.998045] cfg80211: Loaded X.509 cert 'wens: 61c038651aabdcf94bd0ac7ff06c7248db18c600'
+[    7.383157] RTW: module init start
+[    7.383176] RTW: rtl8811cu v5.15.9.6-1-g3fe4f4b91.20250327_COEX20230331-5d5d
+[    7.383184] RTW: build time: Aug  4 2026 14:42:37
+[    7.383190] RTW: rtl8811cu BT-Coex version = COEX20230331-5d5d
+[    7.389207] RTW: [HALMAC]55772M
+[    7.389207] HALMAC_MAJOR_VER = 1
+[    7.389207] HALMAC_PROTOTYPE_VER = 6
+[    7.389207] HALMAC_MINOR_VER = 7
+[    7.389207] HALMAC_PATCH_VER = 15
+[    7.390527] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[    7.593049] RTW: HW EFUSE
+[    7.593071] RTW: 0x000: 29 81 00 BC  09 00 21 00  6E 04 A4 10  10 00 30 0B
+[    7.593126] RTW: 0x010: FF FF FF FF  FF FF FF FF  FF FF FF 02  FF FF FF FF
+[    7.593174] RTW: 0x020: FF FF 25 25  25 25 25 23  23 22 22 23  23 23 24 25
+[    7.593221] RTW: 0x030: 22 FF FF FF  FF FF 10 FF  FF FF 28 28  28 28 28 28
+[    7.593268] RTW: 0x040: 2C 2C 2C 2C  2C 02 FF FF  FF FF FF FF  FF FF FF FF
+[    7.593316] RTW: 0x050: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    7.593363] RTW: 0x060: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    7.593410] RTW: 0x070: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    7.593458] RTW: 0x080: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    7.593505] RTW: 0x090: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    7.593552] RTW: 0x0A0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    7.593599] RTW: 0x0B0: FF FF FF FF  FF FF FF FF  7F 2D 1B 00  FF FF FF FF
+[    7.593646] RTW: 0x0C0: FF 01 00 41  00 00 00 00  00 FF 22 FF  FF FF FF FF
+[    7.593694] RTW: 0x0D0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    7.593742] RTW: 0x0E0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    7.593789] RTW: 0x0F0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    7.593836] RTW: 0x100: DA 0B 11 C8  E3 46 02 68  B9 D3 F1 5A  43 09 03 52
+[    7.593884] RTW: 0x110: 65 61 6C 74  65 6B 0E 03  38 30 32 2E  31 31 61 63
+[    7.593932] RTW: 0x120: 20 4E 49 43  08 03 31 32  33 34 35 36  FF FF FF FF
+[    7.593979] RTW: 0x130: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    7.594027] RTW: 0x140: FF FF FF FF  00 00 31 0F  FF FF FF FF  FF FF FF FF
+[    7.594074] RTW: 0x150: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    7.594121] RTW: 0x160: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    7.594169] RTW: 0x170: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    7.594216] RTW: 0x180: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    7.594264] RTW: 0x190: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    7.594311] RTW: 0x1A0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    7.594359] RTW: 0x1B0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    7.594406] RTW: 0x1C0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    7.594453] RTW: 0x1D0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    7.594501] RTW: 0x1E0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    7.594548] RTW: 0x1F0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    7.604951] RTW: [HALMAC][ALWAYS]shall R reg twice!!
+[    7.696957] RTW: c2h_mac_hidden_rpt_hdl: 0x41
+[    7.696972] RTW: c2h_mac_hidden_rpt_hdl: 0x39
+[    7.696980] RTW: c2h_mac_hidden_rpt_hdl: 0xD1
+[    7.696986] RTW: c2h_mac_hidden_rpt_hdl: 0xFD
+[    7.696991] RTW: c2h_mac_hidden_rpt_hdl: 0xF2
+[    7.696998] RTW: c2h_mac_hidden_rpt_hdl: 0xFF
+[    7.697003] RTW: c2h_mac_hidden_rpt_hdl: 0x27
+[    7.697009] RTW: c2h_mac_hidden_rpt_hdl: 0xFF
+[    7.697018] RTW: uuid x:0x41 y:0x39 z:0x11 crc:0x7ee
+[    7.697025] RTW: hci_type:0x2
+[    7.697030] RTW: package_type:0x7
+[    7.697036] RTW: tr_switch:0x1
+[    7.697041] RTW: wl_func:0xf
+[    7.697046] RTW: hw_stype:0xf
+[    7.697051] RTW: bw:0x7
+[    7.697057] RTW: ant_num:0x1
+[    7.697063] RTW: protocol:0x3
+[    7.697068] RTW: nic:0x3
+[    7.697085] RTW: c2h_mac_hidden_rpt_2_hdl: 0xFF
+[    7.697093] RTW: c2h_mac_hidden_rpt_2_hdl: 0xFF
+[    7.697099] RTW: c2h_mac_hidden_rpt_2_hdl: 0xF8
+[    7.697105] RTW: c2h_mac_hidden_rpt_2_hdl: 0xFC
+[    7.697110] RTW: c2h_mac_hidden_rpt_2_hdl: 0xFF
+[    7.703990] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[    7.704238] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[    7.704472] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[    7.704735] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[    7.704966] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[    7.705219] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[    7.705497] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[    7.705762] RTW: [RF_PATH] ver_id.RF_TYPE:RF_1T1R
+[    7.705778] RTW: [RF_PATH] HALSPEC's rf_reg_trx_path_bmp:0x11, rf_reg_path_avail_num:1, max_tx_cnt:1
+[    7.705786] RTW: [RF_PATH] PG's trx_path_bmp:0x00, max_tx_cnt:0
+[    7.705794] RTW: [RF_PATH] Registry's trx_path_bmp:0x00, tx_path_lmt:0, rx_path_lmt:0
+[    7.705802] RTW: [RF_PATH] HALDATA's trx_path_bmp:0x11, max_tx_cnt:1
+[    7.705810] RTW: [RF_PATH] HALDATA's rf_type:RF_1T1R, NumTotalRFPath:1
+[    7.705820] RTW: [TRX_Nss] HALSPEC - tx_nss:1, rx_nss:1
+[    7.705827] RTW: [TRX_Nss] Registry - tx_nss:0, rx_nss:0
+[    7.705833] RTW: [TRX_Nss] HALDATA - tx_nss:1, rx_nss:1
+[    7.705844] RTW: txpath=0x1, rxpath=0x1
+[    7.705852] RTW: txpath_1ss:0x1, num:1
+[    7.705991] RTW: rtw_rfctl_decide_init_chplan chplan:0x1B
+[    7.706001] RTW: rtw_rfctl_decide_init_chplan country code:"US"
+[    7.708391] RTW: rtw_regsty_chk_target_tx_power_valid return _FALSE for band:0, path:0, rs:0, t:-1
+[    7.716623] RTW: rtw_ndev_init(wlan0) if1 mac_addr=68:b9:d3:f1:5a:43
+[    7.718732] RTW: rtw_ndev_init(wlan1) if2 mac_addr=6a:b9:d3:f1:5a:43
+[    7.720970] usbcore: registered new interface driver rtl8811cu
+[    7.726972] RTW: module init ret=0
+[   10.869575] ark_dw_dmac e0000000.dma: of_xlate: src_id/dst_id=1 -> chan1 (nollp=0)
+[   10.887561] ark1668-i2s: hw_params stream=0 rate=48000 period_size=1024 periods=16 format=2
+[   10.907345] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 10911955739ns
+[   10.924768] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 10929375776ns
+[   10.931752] ark1668-sddac: ark_audio_mute mute=1 at 10936381431ns
+[   10.938116] ark1668-sddac: ark_audio_mute mute=0 at 10942722702ns
+[   10.960427] snd_ctl: elem_write card=0 iface=2 name='softmaster3' numid=3 values=0,0 at 10965025900ns
+[   10.988032] snd_ctl: elem_write card=0 iface=2 name='softmaster3' numid=3 values=115,115 at 10992629048ns
+[   11.027448] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 11032048468ns
+[   11.034434] ark1668-sddac: ark_audio_mute mute=1 at 11039062357ns
+[   11.040658] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 11045280863ns
+[   11.072973] ark_dw_dmac e0000000.dma: of_xlate: src_id/dst_id=1 -> chan1 (nollp=0)
+[   11.089061] ark1668-i2s: hw_params stream=0 rate=48000 period_size=1024 periods=16 format=2
+[   11.103365] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 11107970640ns
+[   11.117807] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 11122410455ns
+[   11.126125] ark1668-sddac: ark_audio_mute mute=1 at 11130755171ns
+[   11.135491] ark1668-sddac: ark_audio_mute mute=0 at 11140071579ns
+[   11.167118] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=0,0 at 11171717245ns
+[   11.185649] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=127,127 at 11190245974ns
+[   11.206595] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 11211198147ns
+[   11.206609] ark1668-sddac: ark_audio_mute mute=1 at 11211239295ns
+[   11.206636] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 11211264887ns
+[   11.221398] ark1668-sddac: get_l_playback_volume = 112 at 11226000394ns
+[   11.221776] ark1668-sddac: get_r_playback_volume = 112 at 11226394357ns
+[   11.225639] ark_dw_dmac e0000000.dma: of_xlate: src_id/dst_id=1 -> chan1 (nollp=0)
+[   11.232676] ark1668-i2s: hw_params stream=0 rate=48000 period_size=1024 periods=16 format=2
+[   11.233238] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 11237856036ns
+[   11.233314] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 11237936134ns
+[   11.233324] ark1668-sddac: ark_audio_mute mute=1 at 11237955085ns
+[   11.236088] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=0,0 at 11240690789ns
+[   11.236168] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=127,127 at 11240789727ns
+[   11.237080] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 11241689739ns
+[   11.237096] ark1668-sddac: ark_audio_mute mute=1 at 11241726048ns
+[   11.237123] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 11241750529ns
+[   11.250118] ark_dw_dmac e0000000.dma: of_xlate: src_id/dst_id=1 -> chan1 (nollp=0)
+[   11.250817] ark1668-i2s: hw_params stream=0 rate=48000 period_size=1024 periods=16 format=2
+[   11.251389] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 11256004739ns
+[   11.251467] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 11256089912ns
+[   11.251477] ark1668-sddac: ark_audio_mute mute=1 at 11256108134ns
+[   11.254666] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 11259272097ns
+[   11.254685] ark1668-sddac: ark_audio_mute mute=1 at 11259315616ns
+[   11.254712] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 11259340924ns
+[   11.256920] ark1668-sddac: get_l_playback_volume = 112 at 11261524245ns
+[   11.257026] ark1668-sddac: get_r_playback_volume = 112 at 11261647505ns
+[   11.260053] ark_dw_dmac e0000000.dma: of_xlate: src_id/dst_id=1 -> chan1 (nollp=0)
+[   11.260787] ark1668-i2s: hw_params stream=0 rate=48000 period_size=1024 periods=16 format=2
+[   11.268216] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 11272834134ns
+[   11.268301] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 11272923912ns
+[   11.268311] ark1668-sddac: ark_audio_mute mute=1 at 11272942443ns
+[   11.270953] snd_ctl: elem_write card=0 iface=2 name='softmaster4' numid=6 values=0,0 at 11275557307ns
+[   11.271037] snd_ctl: elem_write card=0 iface=2 name='softmaster4' numid=6 values=115,115 at 11275658789ns
+[   11.271948] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 11276559924ns
+[   11.271964] ark1668-sddac: ark_audio_mute mute=1 at 11276593678ns
+[   11.271991] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 11276620233ns
+[   11.282686] ark_dw_dmac e0000000.dma: of_xlate: src_id/dst_id=1 -> chan1 (nollp=0)
+[   11.283367] ark1668-i2s: hw_params stream=0 rate=48000 period_size=1024 periods=16 format=2
+[   11.291638] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 11296256838ns
+[   11.291718] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 11296340640ns
+[   11.291728] ark1668-sddac: ark_audio_mute mute=1 at 11296359208ns
+[   11.294783] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 11299389640ns
+[   11.294802] ark1668-sddac: ark_audio_mute mute=1 at 11299432394ns
+[   11.294832] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 11299459764ns
+[   11.296993] ark1668-sddac: get_l_playback_volume = 112 at 11301597690ns
+[   11.297090] ark1668-sddac: get_r_playback_volume = 112 at 11301713875ns
+[   11.300481] ark_dw_dmac e0000000.dma: of_xlate: src_id/dst_id=1 -> chan1 (nollp=0)
+[   11.301216] ark1668-i2s: hw_params stream=0 rate=48000 period_size=1024 periods=16 format=2
+[   11.310288] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 11314903702ns
+[   11.310369] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 11314992023ns
+[   11.310379] ark1668-sddac: ark_audio_mute mute=1 at 11315010307ns
+[   11.312998] snd_ctl: elem_write card=0 iface=2 name='softmaster1' numid=7 values=0,0 at 11317605208ns
+[   11.313086] snd_ctl: elem_write card=0 iface=2 name='softmaster1' numid=7 values=106,106 at 11317706678ns
+[   11.314037] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 11318647924ns
+[   11.314053] ark1668-sddac: ark_audio_mute mute=1 at 11318683554ns
+[   11.314080] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 11318709579ns
+[   11.318026] ark_dw_dmac e0000000.dma: of_xlate: src_id/dst_id=1 -> chan1 (nollp=0)
+[   11.318725] ark1668-i2s: hw_params stream=0 rate=48000 period_size=1024 periods=16 format=2
+[   11.328478] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 11333096653ns
+[   11.328561] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 11333181974ns
+[   11.328571] ark1668-sddac: ark_audio_mute mute=1 at 11333202838ns
+[   11.331611] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 11336216826ns
+[   11.331630] ark1668-sddac: ark_audio_mute mute=1 at 11336260443ns
+[   11.331657] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 11336285616ns
+[   11.333866] ark1668-sddac: get_l_playback_volume = 112 at 11338473048ns
+[   11.333965] ark1668-sddac: get_r_playback_volume = 112 at 11338587048ns
+[   11.337425] ark_dw_dmac e0000000.dma: of_xlate: src_id/dst_id=1 -> chan1 (nollp=0)
+[   11.338129] ark1668-i2s: hw_params stream=0 rate=48000 period_size=1024 periods=16 format=2
+[   11.345808] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 11350426208ns
+[   11.345891] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 11350512764ns
+[   11.345901] ark1668-sddac: ark_audio_mute mute=1 at 11350532603ns
+[   11.348931] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 11353536073ns
+[   11.348949] ark1668-sddac: ark_audio_mute mute=1 at 11353578752ns
+[   11.348975] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 11353604073ns
+[   11.359038] ark_dw_dmac e0000000.dma: of_xlate: src_id/dst_id=1 -> chan1 (nollp=0)
+[   11.359735] ark1668-i2s: hw_params stream=0 rate=48000 period_size=1024 periods=16 format=2
+[   11.360321] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 11364937702ns
+[   11.360396] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 11365019171ns
+[   11.360407] ark1668-sddac: ark_audio_mute mute=1 at 11365038258ns
+[   11.363419] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 11368024591ns
+[   11.363437] ark1668-sddac: ark_audio_mute mute=1 at 11368066394ns
+[   11.363463] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 11368091566ns
+[   11.374963] ark1668-sddac: get_l_playback_volume = 112 at 11379567764ns
+[   11.375064] ark1668-sddac: get_r_playback_volume = 112 at 11379688369ns
+[   11.378654] ark_dw_dmac e0000000.dma: of_xlate: src_id/dst_id=1 -> chan1 (nollp=0)
+[   11.379349] ark1668-i2s: hw_params stream=0 rate=44100 period_size=1024 periods=16 format=2
+[   11.379926] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 11384540159ns
+[   11.380002] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 11384624776ns
+[   11.380012] ark1668-sddac: ark_audio_mute mute=1 at 11384643258ns
+[   11.382639] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=0,0 at 11387245616ns
+[   11.382733] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=127,127 at 11387351715ns
+[   11.393535] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 11398145739ns
+[   11.393553] ark1668-sddac: ark_audio_mute mute=1 at 11398181418ns
+[   11.393578] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 11398206529ns
+[   11.397420] ark_dw_dmac e0000000.dma: of_xlate: src_id/dst_id=1 -> chan1 (nollp=0)
+[   11.398121] ark1668-i2s: hw_params stream=0 rate=48000 period_size=1024 periods=16 format=2
+[   11.398693] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 11403309233ns
+[   11.398774] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 11403394233ns
+[   11.398784] ark1668-sddac: ark_audio_mute mute=1 at 11403415937ns
+[   11.401919] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 11406524900ns
+[   11.401936] ark1668-sddac: ark_audio_mute mute=1 at 11406565850ns
+[   11.401961] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 11406590406ns
+[   11.411159] ark1668-sddac: get_l_playback_volume = 112 at 11415765850ns
+[   11.411264] ark1668-sddac: get_r_playback_volume = 112 at 11415886640ns
+[   12.466308] ark_display: ARKDISP_GET_SCREEN_INFO -> screen_id=0 800x480 120x72mm
+[   12.477750] snd_ctl: elem_write card=0 iface=2 name='softmaster1' numid=7 values=115,106 at 12482346542ns
+[   12.488629] snd_ctl: elem_write card=0 iface=2 name='softmaster1' numid=7 values=115,115 at 12493244134ns
+[   12.499932] snd_ctl: elem_write card=0 iface=2 name='softmaster3' numid=3 values=127,115 at 12504542566ns
+[   12.510685] snd_ctl: elem_write card=0 iface=2 name='softmaster3' numid=3 values=127,127 at 12515300628ns
+[   14.627996] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   14.645620] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   14.665629] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   14.684848] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   14.705535] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   14.725669] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=1 hue=0 saturation=128 brightness=128 contrast=128
+[   14.745619] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=1 hue=0 saturation=128 brightness=128 contrast=128
+[   14.765700] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=2 hue=0 saturation=128 brightness=128 contrast=128
+[   14.785610] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=2 hue=0 saturation=128 brightness=128 contrast=128
+[   14.815697] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=3 hue=0 saturation=128 brightness=128 contrast=128
+[   14.825683] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=3 hue=0 saturation=128 brightness=128 contrast=128
+[   14.845689] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=4 hue=0 saturation=128 brightness=128 contrast=128
+[   14.865596] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=4 hue=0 saturation=128 brightness=128 contrast=128
+[   14.905278] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   14.927549] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   14.955722] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=1 hue=0 saturation=128 brightness=128 contrast=128
+[   14.968030] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=1 hue=0 saturation=128 brightness=128 contrast=128
+[   14.986742] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=2 hue=0 saturation=128 brightness=128 contrast=128
+[   15.010335] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=2 hue=0 saturation=128 brightness=128 contrast=128
+[   15.032166] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=3 hue=0 saturation=128 brightness=128 contrast=128
+[   15.053724] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=3 hue=0 saturation=128 brightness=128 contrast=128
+[   15.075076] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=4 hue=0 saturation=128 brightness=128 contrast=128
+[   15.091966] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=4 hue=0 saturation=128 brightness=128 contrast=128
+[   15.118072] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   15.139979] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   15.173011] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=1 hue=0 saturation=128 brightness=128 contrast=128
+[   15.190708] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=1 hue=0 saturation=128 brightness=128 contrast=128
+[   15.211187] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=2 hue=0 saturation=128 brightness=128 contrast=128
+[   15.232966] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=2 hue=0 saturation=128 brightness=128 contrast=128
+[   15.262368] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=3 hue=0 saturation=128 brightness=128 contrast=128
+[   15.275178] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=3 hue=0 saturation=128 brightness=128 contrast=128
+[   15.290461] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=4 hue=0 saturation=128 brightness=128 contrast=128
+[   15.313308] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=4 hue=0 saturation=128 brightness=128 contrast=128
+[   15.376763] ark1668-sddac: get_l_playback_volume = 112 at 15381368355ns
+[   15.389753] snd_ctl: elem_write card=0 iface=2 name='Left Playback Volume' numid=1 values=118,0 at 15394348713ns
+[   15.400118] ark1668-sddac: set_l_playback_volume = 118 (I2S_DACR0=0x76) at 15404736331ns
+[   15.446213] ark1668-sddac: get_r_playback_volume = 112 at 15450818429ns
+[   15.464852] snd_ctl: elem_write card=0 iface=2 name='Right Playback Volume' numid=2 values=118,0 at 15469451022ns
+[   15.475294] ark1668-sddac: set_r_playback_volume = 118 (I2S_DACR0=0x7676) at 15479912948ns
+[   15.503114] ark1668-sddac: get_l_playback_volume = 118 at 15507718812ns
+[   15.519310] snd_ctl: elem_write card=0 iface=2 name='Left Playback Volume' numid=1 values=119,0 at 15523908405ns
+[   15.529612] ark1668-sddac: set_l_playback_volume = 119 (I2S_DACR0=0x7677) at 15534233479ns
+[   15.554613] ark1668-sddac: get_r_playback_volume = 118 at 15559218121ns
+[   15.561422] snd_ctl: elem_write card=0 iface=2 name='Right Playback Volume' numid=2 values=119,0 at 15566034133ns
+[   15.571809] ark1668-sddac: set_r_playback_volume = 119 (I2S_DACR0=0x7777) at 15576427960ns
+[   15.804438] ark-hsuart e4f00000.serial: no TX DMA channel available (no platform data) -- using PIO/interrupt-driven TX instead, this is expected on this board
+[   15.819854] ark-hsuart e4f00000.serial: no RX DMA channel available (no platform data) -- using PIO/interrupt-driven RX instead, this is expected on this board
+[   15.835530] ark_hsuart_set_termios 1652 hsuart0 baud:9600 c_cflag:0xcbd
+[   15.836461] ark_hsuart_set_termios 1652 hsuart0 baud:38400 c_cflag:0xcbf
+[   15.840933] ark-uart e8000000.uart: no TX DMA channel available (no platform data) -- using PIO/interrupt-driven TX instead, this is expected on this board
+[   15.856062] ark-uart e8000000.uart: no RX DMA channel available (no platform data) -- using PIO/interrupt-driven RX instead, this is expected on this board
+[   16.213192] [DIAG_ITU656_OPEN] container_of-dvr_dev=c848a040 g_dvr_dev=c848a040 (MATCH) start=c03da610 (want c03da610) stop=c03d84ac (want c03d84ac)
+[   16.236019] [DIAG_ITU656_IOCTL] cmd=0xc0046ee0 g_dvr_dev=c848a040 filp->private_data=c848a040 (MATCH) start=c03da610 (want c03da610, OK) stop=c03d84ac (want c03d84ac, OK)
+[   16.252734] [DIAG_ITU656_IOCTL] &priv_data=c848a22c select_channel=c03d7778 detect_signal=c03d6e80 get_progressive=c03d63d4 display_effect=c03d6968 dvr_start_cb=00000000 dvr_stop_cb=00000000
+[   16.276704] [DIAG_ITU656_IOCTL] cmd=0xc0046ee2 g_dvr_dev=c848a040 filp->private_data=c848a040 (MATCH) start=c03da610 (want c03da610, OK) stop=c03d84ac (want c03d84ac, OK)
+[   16.292166] [DIAG_ITU656_IOCTL] &priv_data=c848a22c select_channel=c03d7778 detect_signal=c03d6e80 get_progressive=c03d63d4 display_effect=c03d6968 dvr_start_cb=00000000 dvr_stop_cb=00000000
+[   16.333842] [DIAG_ITU656_IOCTL] cmd=0xc0046ee4 g_dvr_dev=c848a040 filp->private_data=c848a040 (MATCH) start=c03da610 (want c03da610, OK) stop=c03d84ac (want c03d84ac, OK)
+[   16.349194] [DIAG_ITU656_IOCTL] &priv_data=c848a22c select_channel=c03d7778 detect_signal=c03d6e80 get_progressive=c03d63d4 display_effect=c03d6968 dvr_start_cb=00000000 dvr_stop_cb=00000000
+[   16.396520] [DIAG_ITU656_IOCTL] cmd=0xc0046ee1 g_dvr_dev=c848a040 filp->private_data=c848a040 (MATCH) start=c03da610 (want c03da610, OK) stop=c03d84ac (want c03d84ac, OK)
+[   16.411927] [DIAG_ITU656_IOCTL] &priv_data=c848a22c select_channel=c03d7778 detect_signal=c03d6e80 get_progressive=c03d63d4 display_effect=c03d6968 dvr_start_cb=00000000 dvr_stop_cb=00000000
+[   16.629583] [DIAG_ITU656_IOCTL] cmd=0xc0046ee3 g_dvr_dev=c848a040 filp->private_data=c848a040 (MATCH) start=c03da610 (want c03da610, OK) stop=c03d84ac (want c03d84ac, OK)
+[   16.644980] [DIAG_ITU656_IOCTL] &priv_data=c848a22c select_channel=c03d7778 detect_signal=c03d6e80 get_progressive=c03d63d4 display_effect=c03d6968 dvr_start_cb=00000000 dvr_stop_cb=00000000
+[   16.662293] [DIAG_ITU656_IOCTL] cmd=0xc0046ee5 g_dvr_dev=c848a040 filp->private_data=c848a040 (MATCH) start=c03da610 (want c03da610, OK) stop=c03d84ac (want c03d84ac, OK)
+[   16.677611] [DIAG_ITU656_IOCTL] &priv_data=c848a22c select_channel=c03d7778 detect_signal=c03d6e80 get_progressive=c03d63d4 display_effect=c03d6968 dvr_start_cb=00000000 dvr_stop_cb=00000000
+[   17.120243] RTW: [HALMAC][ALWAYS]shall R reg twice!!
+[   18.426505] RTW: start_addr=(0x8000), end_addr=(0x10000), buffer_size=(0x8000), smp_number_max=(4096)
+[   18.448214] IPv6: ADDRCONF(NETDEV_UP): wlan0: link is not ready
+[   18.644739] ark-hsuart e4800000.serial: no TX DMA channel available (no platform data) -- using PIO/interrupt-driven TX instead, this is expected on this board
+[   18.659212] ark-hsuart e4800000.serial: no RX DMA channel available (no platform data) -- using PIO/interrupt-driven RX instead, this is expected on this board
+[   18.673559] ark_hsuart_set_termios 1652 hsuart1 baud:9600 c_cflag:0xcbd
+[   18.716019] ark_hsuart_set_termios 1652 hsuart1 baud:9600 c_cflag:0xdbd
+[   18.716108] ark_hsuart_set_termios 1652 hsuart1 baud:115200 c_cflag:0x1db2
+[   18.819915] ark_hsuart_set_termios 1652 hsuart1 baud:1500000 c_cflag:0x1dba
+[   20.996199] RTW: assoc success
+[   21.000941] RTW: set group key camid:0, addr:68:b9:d3:f1:5a:43, kid:1, type:AES
+[   22.648838] RTW: clear wep or group key for addr:68:b9:d3:f1:5a:43, camid:0
+[   22.651474] RTW: ERROR Free disconnecting network of scanned_queue failed due to pwlan == NULL
+[   22.651474]
+[   22.795176] RTW: ERROR Free disconnecting network of scanned_queue failed due to pwlan == NULL
+[   22.795176]
+[   24.166505] RTW: assoc success
+[   24.171290] RTW: set group key camid:0, addr:68:b9:d3:f1:5a:43, kid:1, type:AES
+[   33.598868] ark_display: ARKDISP_GET_SCREEN_INFO -> screen_id=0 800x480 120x72mm
+[   36.517328] RTW: ============ STA [f6:d6:cb:da:c0:aa]  ===================
+[   36.517343] RTW: mac_id : 2
+[   36.517350] RTW: wireless_mode : 0x14
+[   36.517357] RTW: mimo_type : 0
+[   36.517362] RTW: static smps : N
+[   36.517372] RTW: bw_mode : 20MHz, ra_bw_mode : 20MHz
+[   36.517377] RTW: rate_id : 5
+[   36.517385] RTW: rssi : -1 (%), rssi_level : 0
+[   36.517392] RTW: is_support_sgi : Y, is_vht_enable : N
+[   36.517398] RTW: disable_ra : N, disable_pt : N
+[   36.517403] RTW: is_noisy : N
+[   36.517409] RTW: txrx_state : 0
+[   36.517416] RTW: curr_tx_rate : CCK_1M (L)
+[   36.517422] RTW: curr_tx_bw : 20MHz
+[   36.517428] RTW: curr_retry_ratio : 0
+[   36.517435] RTW: ra_mask : 0x00000000000ffff0
+[   36.517435]
+[   36.522588] RTW: send eapol packet 1/4
+[   36.523438] RTW: set group key camid:0, addr:68:b9:d3:f1:5a:43, kid:1, type:AES
+[   36.525010] RTW: recv eapol packet 2/4
+[   36.527702] RTW: send eapol packet 3/4
+[   36.529956] RTW: recv eapol packet 4/4
+[   36.530806] RTW: set pairwise key camid:2, addr:f6:d6:cb:da:c0:aa, kid:0, type:AES
+[   40.021948] ark_dw_dmac e0000000.dma: of_xlate: src_id/dst_id=1 -> chan1 (nollp=0)
+[   40.031801] ark1668-i2s: hw_params stream=0 rate=48000 period_size=1024 periods=16 format=2
+[   40.042920] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 40047536872ns
+[   40.053373] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 40057989773ns
+[   40.061497] ark1668-sddac: ark_audio_mute mute=1 at 40066127575ns
+[   40.067795] ark1668-sddac: ark_audio_mute mute=0 at 40072420106ns
+[   42.133487] memalloc-cls memalloc: file open (6ebb35b1)
+[   42.136596] memalloc-cls memalloc: large alloc ok: VA=b69851da PA=0x4100000 SZ=1048576 (requested 1048576)
+[   42.137206] ark_display: ARKDISP_GET_SCREEN_INFO -> screen_id=0 800x480 120x72mm
+[   42.146349] layer=4: hide window.
+[   42.146349]
+[   42.146399] layer=4: init display x=0, y=0, w=800, h=480.
+[   42.146399]
+[   43.203896] memalloc-cls memalloc: file open (6ea7c4e5)
+[   43.214425] memalloc-cls memalloc: large alloc ok: VA=bbb4d024 PA=0x4200000 SZ=675840 (requested 675840)
+[   43.216751] memalloc-cls memalloc: large alloc ok: VA=833be5e7 PA=0x4300000 SZ=675840 (requested 675840)
+[   43.220075] memalloc-cls memalloc: large alloc ok: VA=13a3ddc9 PA=0x4400000 SZ=675840 (requested 675840)
+[   43.220718] memalloc-cls memalloc: large alloc ok: VA=3cb28f98 PA=0x40c1000 SZ=4096 (requested 4096)
+[   43.245558] layer=4: show window.
+[   43.245558]
+[  183.893226] ark1668_lcdfb: itu656 display task took 1525493ns
+[  227.483006] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=0,127 at 227487608373ns
+[  227.494301] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=0,0 at 227498917076ns
+[  227.534339] ark_dw_dmac e0000000.dma: of_xlate: src_id/dst_id=23 -> chan2 (nollp=0)
+[  227.543774] ark1668-i2s: hw_params stream=1 rate=48000 period_size=1024 periods=16 format=2
+[  227.556973] ark1668-i2s: trigger cmd=1 stream=1 (capture) at 227561584101ns
+[  227.734550] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=84,127 at 227739147990ns
+[  227.746631] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=84,84 at 227751240582ns
+[  227.783320] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=84,127 at 227787921990ns
+[  227.811047] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=84,84 at 227815649027ns
+[  237.651018] ark1668-i2s: trigger cmd=0 stream=1 (capture) at 237655622940ns
+[  285.064229] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=127,84 at 285068831738ns
+[  285.127538] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=127,127 at 285132139836ns
+[  285.141002] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=127,84 at 285145600750ns
+[  285.152003] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=127,127 at 285156600157ns
+[  285.292498] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=77,0 at 285297100688ns
+[  285.302472] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=77,77 at 285307089342ns
+[  285.313903] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=127,77 at 285318508392ns
+[  285.340368] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=127,127 at 285344967663ns
+[  287.721137] ark_dw_dmac e0000000.dma: of_xlate: src_id/dst_id=23 -> chan2 (nollp=0)
+[  287.730549] ark1668-i2s: hw_params stream=1 rate=48000 period_size=1024 periods=16 format=2
+[  287.749173] ark1668-i2s: trigger cmd=1 stream=1 (capture) at 287753783960ns
+[  291.997820] ark1668-i2s: trigger cmd=0 stream=1 (capture) at 292002430601ns
+[  292.703309] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=0,127 at 292707911564ns
+[  292.716369] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=0,0 at 292720980465ns
+[  292.739559] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=84,127 at 292744159021ns
+[  292.754844] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=84,84 at 292759452799ns
+[  292.768732] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=84,127 at 292773325700ns
+[  292.780431] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=84,84 at 292785043910ns
+[  293.039776] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=127,84 at 293044379947ns
+[  293.050916] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=127,127 at 293055480058ns
+[  293.063500] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=127,84 at 293068107589ns
+[  293.074522] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=127,127 at 293079140922ns
+[  293.150457] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=45,0 at 293155055799ns
+[  293.160317] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=45,45 at 293164935687ns
+[  293.175604] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=61,45 at 293180216033ns
+[  293.185298] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=61,61 at 293189921589ns
+[  293.200560] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=76,61 at 293205174786ns
+[  293.210296] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=76,76 at 293214918342ns
+[  293.225593] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=89,76 at 293230210428ns
+[  293.236720] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=89,89 at 293241325934ns
+[  293.250644] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=101,89 at 293255250885ns
+[  293.261093] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=101,101 at 293265707082ns
+[  293.275605] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=112,101 at 293280219231ns
+[  293.285628] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=112,112 at 293290249095ns
+[  293.300869] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=120,112 at 293305472873ns
+[  293.310832] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=120,120 at 293315452613ns
+[  293.325628] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=125,120 at 293330241206ns
+[  293.335351] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=125,125 at 293339978700ns
+[  293.350575] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=127,125 at 293355187033ns
+[  293.360637] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=127,127 at 293365256453ns
+[  296.019435] memalloc-cls memalloc: large free: VA=bbb4d024
+[  296.019851] memalloc-cls memalloc: large free: VA=833be5e7
+[  296.020228] memalloc-cls memalloc: large free: VA=13a3ddc9
+[  296.020552] memalloc-cls memalloc: large free: VA=3cb28f98
+[  296.020731] memalloc-cls memalloc: file release (6ea7c4e5)
+[  296.021009] memalloc-cls memalloc: large free: VA=b69851da
+[  296.021416] memalloc-cls memalloc: file release (6ebb35b1)
+[  296.021560] layer=4: hide window.
+[  296.021560]
+[  314.950113] memalloc-cls memalloc: file open (d94dff98)
+[  314.952939] memalloc-cls memalloc: large alloc ok: VA=b69851da PA=0x4100000 SZ=1048576 (requested 1048576)
+[  314.953419] layer=4: hide window.
+[  314.953419]
+[  314.953469] layer=4: init display x=0, y=0, w=800, h=480.
+[  314.953469]
+[  315.188246] memalloc-cls memalloc: file open (6ea7c4e5)
+[  315.193995] memalloc-cls memalloc: large alloc ok: VA=bbb4d024 PA=0x4200000 SZ=675840 (requested 675840)
+[  315.196282] memalloc-cls memalloc: large alloc ok: VA=833be5e7 PA=0x4300000 SZ=675840 (requested 675840)
+[  315.203489] memalloc-cls memalloc: large alloc ok: VA=13a3ddc9 PA=0x4400000 SZ=675840 (requested 675840)
+[  315.204163] memalloc-cls memalloc: large alloc ok: VA=3cb28f98 PA=0x40c1000 SZ=4096 (requested 4096)
+[  315.229009] layer=4: show window.
+[  315.229009]
+[  316.975055] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=0,127 at 316979649093ns
+[  316.987590] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=0,0 at 316992200290ns
+[  317.022191] ark_dw_dmac e0000000.dma: of_xlate: src_id/dst_id=23 -> chan2 (nollp=0)
+[  317.032074] ark1668-i2s: hw_params stream=1 rate=48000 period_size=1024 periods=16 format=2
+[  317.046438] ark1668-i2s: trigger cmd=1 stream=1 (capture) at 317051044451ns
+[  317.287301] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=84,127 at 317291902142ns
+[  317.298402] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=84,84 at 317303020315ns
+[  317.338305] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=84,127 at 317342902623ns
+[  317.359846] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=84,84 at 317364450562ns
+[  320.441954] ark1668-i2s: trigger cmd=0 stream=1 (capture) at 320446561710ns
+[  327.501941] ark_dw_dmac e0000000.dma: of_xlate: src_id/dst_id=23 -> chan2 (nollp=0)
+[  327.511365] ark1668-i2s: hw_params stream=1 rate=48000 period_size=1024 periods=16 format=2
+[  327.522954] ark1668-i2s: trigger cmd=1 stream=1 (capture) at 327527566055ns
+[  337.616494] ark1668-i2s: trigger cmd=0 stream=1 (capture) at 337621101375ns
+[  357.210040] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=127,84 at 357214643780ns
+[  357.221337] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=127,127 at 357225952620ns
+[  357.235380] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=127,84 at 357239979669ns
+[  357.248018] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=127,127 at 357252627151ns
+[  357.336500] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=52,0 at 357341104817ns
+[  357.346352] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=52,52 at 357350971854ns
+[  357.361621] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=67,52 at 357366235274ns
+[  357.371450] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=67,67 at 357376072002ns
+[  357.387843] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=82,67 at 357392439978ns
+[  357.398390] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=82,82 at 357403001089ns
+[  357.411683] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=94,82 at 357416298237ns
+[  357.421557] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=94,94 at 357426177978ns
+[  357.437717] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=106,94 at 357442324447ns
+[  357.447490] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=106,106 at 357452111768ns
+[  357.461685] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=115,106 at 357466298336ns
+[  357.474300] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=115,115 at 357478896867ns
+[  357.486685] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=122,115 at 357491293607ns
+[  357.499346] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=122,122 at 357503945558ns
+[  357.511711] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=127,122 at 357516318237ns
+[  357.521769] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=127,127 at 357526389015ns
+[  358.078858] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=0,127 at 358083463755ns
+[  358.090166] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=0,0 at 358094783101ns
+[  358.177124] ark_dw_dmac e0000000.dma: of_xlate: src_id/dst_id=23 -> chan2 (nollp=0)
+[  358.185729] ark1668-i2s: hw_params stream=1 rate=48000 period_size=1024 periods=16 format=2
+[  358.195367] ark1668-i2s: trigger cmd=1 stream=1 (capture) at 358199982101ns
+[  358.411590] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=84,127 at 358416192694ns
+[  358.450843] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=84,84 at 358455450262ns
+[  358.466018] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=84,127 at 358470614385ns
+[  358.498963] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=84,84 at 358503566471ns
+[  360.054501] ark1668-i2s: trigger cmd=0 stream=1 (capture) at 360059109323ns
+[  360.988603] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=127,84 at 360993203891ns
+[  361.001641] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=127,127 at 361006242163ns
+[  361.015718] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=127,84 at 361020326879ns
+[  361.032890] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=127,127 at 361037498187ns
+[  361.287504] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=120,0 at 361292106693ns
+[  361.315657] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=120,120 at 361320259138ns
+[  361.342223] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=127,120 at 361346821916ns
+[  361.353043] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=127,127 at 361357655768ns
+[  362.806258] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=0,127 at 362810864298ns
+[  362.817454] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=0,0 at 362822073237ns
+[  362.858914] ark_dw_dmac e0000000.dma: of_xlate: src_id/dst_id=23 -> chan2 (nollp=0)
+[  362.870656] ark1668-i2s: hw_params stream=1 rate=48000 period_size=1024 periods=16 format=2
+[  362.886628] ark1668-i2s: trigger cmd=1 stream=1 (capture) at 362891239311ns
+[  363.101636] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=84,127 at 363106240076ns
+[  363.113786] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=84,84 at 363118398298ns
+[  363.129524] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=84,127 at 363134122755ns
+[  363.161717] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=84,84 at 363166313878ns
+[  366.537757] ark1668-i2s: trigger cmd=0 stream=1 (capture) at 366542366199ns
+[  376.953144] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=127,84 at 376957746359ns
+[  376.973587] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=127,127 at 376978182556ns
+[  376.996714] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=127,84 at 377001315581ns
+[  377.007581] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=127,127 at 377012192260ns
+[  377.097719] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=53,0 at 377102322322ns
+[  377.107701] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=53,53 at 377112319050ns
+[  377.123043] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=68,53 at 377127643939ns
+[  377.133631] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=68,68 at 377138242815ns
+[  377.147862] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=82,68 at 377152475235ns
+[  377.160378] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=82,82 at 377164974359ns
+[  377.172905] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=95,82 at 377177515235ns
+[  377.182680] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=95,95 at 377187302828ns
+[  377.198762] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=106,95 at 377203366852ns
+[  377.208778] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=106,106 at 377213396457ns
+[  377.225019] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=116,106 at 377229614717ns
+[  377.236026] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=116,116 at 377240635680ns
+[  377.247878] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=123,116 at 377252490828ns
+[  377.257889] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=123,123 at 377262511223ns
+[  377.273125] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=127,123 at 377277725248ns
+[  377.283801] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=127,127 at 377288412408ns
+[  396.476868] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=0,127 at 396481474517ns
+[  396.488062] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=0,0 at 396492683456ns
+[  396.567617] ark_dw_dmac e0000000.dma: of_xlate: src_id/dst_id=23 -> chan2 (nollp=0)
+[  396.577150] ark1668-i2s: hw_params stream=1 rate=48000 period_size=1024 periods=16 format=2
+[  396.594146] ark1668-i2s: trigger cmd=1 stream=1 (capture) at 396598759382ns
+[  396.823427] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=84,127 at 396828031246ns
+[  396.841179] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=84,84 at 396845775863ns
+[  396.854008] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=84,127 at 396858618023ns
+[  396.885722] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=84,84 at 396890333357ns
+[  399.456046] ark1668-i2s: trigger cmd=0 stream=1 (capture) at 399460657431ns
+[  406.245219] ark_dw_dmac e0000000.dma: of_xlate: src_id/dst_id=23 -> chan2 (nollp=0)
+[  406.254617] ark1668-i2s: hw_params stream=1 rate=48000 period_size=1024 periods=16 format=2
+[  406.268762] ark1668-i2s: trigger cmd=1 stream=1 (capture) at 406273372467ns
+[  406.997097] ark1668-i2s: trigger cmd=0 stream=1 (capture) at 407001706479ns
+[  409.240292] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=127,84 at 409244894714ns
+[  409.251616] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=127,127 at 409256232664ns
+[  409.265902] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=127,84 at 409270499170ns
+[  409.278016] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=127,127 at 409282626899ns
+[  409.361707] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=50,0 at 409366311516ns
+[  409.375336] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=50,50 at 409379934911ns
+[  409.386796] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=66,50 at 409391403541ns
+[  409.396837] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=66,66 at 409401453874ns
+[  409.415735] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=82,66 at 409420339886ns
+[  409.425968] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=82,82 at 409430582800ns
+[  409.440370] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=94,82 at 409444970146ns
+[  409.450957] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=94,94 at 409455565862ns
+[  409.479313] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=111,94 at 409483917207ns
+[  409.489253] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=111,111 at 409493872331ns
+[  409.499476] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=118,111 at 409504094862ns
+[  409.512053] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=118,118 at 409516650170ns
+[  409.523086] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=124,118 at 409527696627ns
+[  409.535820] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=124,124 at 409540422306ns
+[  409.547039] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=127,124 at 409551648924ns
+[  409.560280] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=127,127 at 409564888195ns
+[  432.871716] memalloc-cls memalloc: large free: VA=bbb4d024
+[  432.872127] memalloc-cls memalloc: large free: VA=833be5e7
+[  432.872510] memalloc-cls memalloc: large free: VA=13a3ddc9
+[  432.872842] memalloc-cls memalloc: large free: VA=3cb28f98
+[  432.873021] memalloc-cls memalloc: file release (6ea7c4e5)
+[  432.873216] memalloc-cls memalloc: large free: VA=b69851da
+[  432.873581] memalloc-cls memalloc: file release (d94dff98)
+[  432.873748] layer=4: hide window.
+[  432.873748]
+[  624.153550] RTW: send eapol packet - WPA Group Key 1/2
+[  624.156167] RTW: recv eapol packet - WPA Group Key 2/2
+[  624.157496] RTW: set group key camid:0, addr:68:b9:d3:f1:5a:43, kid:2, type:AES
+[  627.385778] ark1668_lcdfb: itu656 display task took 1120518ns
+[  677.738329] ark1668_lcdfb: itu656 display task took 1550803ns
+[  706.143207] LCDTest: unhandled page fault (11) at 0x00000008, code 0x017
+[  706.143233] pgd = 37ff953d
+[  706.146179] [00000008] *pgd=026f5831, *pte=00000000, *ppte=00000000
+[  706.152479] CPU: 0 PID: 1424 Comm: LCDTest Not tainted 4.19.192 #168
+[  706.152486] Hardware name: Arkmicro arm soc Family
+[  706.152501] PC is at 0xb676a228
+[  706.152511] LR is at 0xb6717970
+[  706.152519] pc : [<b676a228>]    lr : [<b6717970>]    psr: 600d0010
+[  706.152527] sp : bec30390  ip : b6e7cf58  fp : 00035280
+[  706.152535] r10: b6e7fa74  r9 : 0002cfe8  r8 : b64ad660
+[  706.152543] r7 : ffff0fc0  r6 : 00028ba0  r5 : b6e7f9b8  r4 : 00028ba0
+[  706.152551] r3 : 00000000  r2 : 000005e0  r1 : 00000000  r0 : 00028ba0
+[  706.152562] Flags: nZCv  IRQs on  FIQs on  Mode USER_32  ISA ARM  Segment user
+[  706.152571] Control: 10c53c7d  Table: 02638059  DAC: 00000055
+[  706.152583] CPU: 0 PID: 1424 Comm: LCDTest Not tainted 4.19.192 #168
+[  706.152589] Hardware name: Arkmicro arm soc Family
+[  706.152633] [<c010e7e8>] (unwind_backtrace) from [<c010be74>] (show_stack+0x10/0x14)
+[  706.152658] [<c010be74>] (show_stack) from [<c010f148>] (__do_user_fault+0x114/0x118)
+[  706.152679] [<c010f148>] (__do_user_fault) from [<c010f308>] (do_page_fault+0x1bc/0x2c0)
+[  706.152698] [<c010f308>] (do_page_fault) from [<c010f58c>] (do_DataAbort+0x4c/0xec)
+[  706.152720] [<c010f58c>] (do_DataAbort) from [<c0101ca0>] (__dabt_usr+0x40/0x60)
+[  706.152730] Exception stack(0xc0c87fb0 to 0xc0c87ff8)
+[  706.152744] 7fa0:                                     00028ba0 00000000 000005e0 00000000
+[  706.152760] 7fc0: 00028ba0 b6e7f9b8 00028ba0 ffff0fc0 b64ad660 0002cfe8 b6e7fa74 00035280
+[  706.152773] 7fe0: b6e7cf58 bec30390 b6717970 b676a228 600d0010 ffffffff
+[  709.382171] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=0,127 at 709386781081ns
+[  709.393949] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=0,0 at 709398572007ns

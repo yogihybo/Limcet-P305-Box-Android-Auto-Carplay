@@ -236,11 +236,18 @@ ln -sf /dev/dvr /tmp/dev/dvr
 
 touchdriver="/msnprofile/ark1680_ts"
 
+# 2026-08-05: dropped the modprobe ark1680_ts/gt9xx calls that used to be
+# here. ark1680_ts is built into the 4.19.192 kernel (confirmed all
+# session -- it probes automatically at boot, no modprobe needed); gt9xx
+# doesn't exist anywhere in this kernel tree at all, built-in or module.
+# Both calls always silently no-op'd (`|| true`) regardless of which
+# branch ran -- the stale "3.4.0 driver not built for 4.19.192 yet"
+# comment was misleading, both had actually been resolved one way or the
+# other. The symlink selection below is the only part of this block that
+# still does anything real.
 if [ -e $touchdriver ]; then
-        modprobe ark1680_ts 2>/dev/null || true  # 3.4.0 driver not built for 4.19.192 yet
         ln -s   /msnprofile/touch_ark1680_ts_export /tmp/touch_export
 else
-        modprobe gt9xx 2>/dev/null || true        # 3.4.0 driver not built for 4.19.192 yet
         ln -s /msnprofile/touch_gt9xx_export /tmp/touch_export
 fi
 

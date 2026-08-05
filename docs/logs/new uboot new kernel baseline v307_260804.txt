@@ -1,0 +1,1706 @@
+  lcd-blend-sweep.sh                   - live devmem sweep of OSD1 blend-mode/format/Y2R registers (no rebuild needed)
+  lcd-overlay-watch.sh [secs]          - poll all 5 LCDC layer enable-bits/addrs, log only on change (for the red-overlay bug)
+  lcd-osd1ctl-directfb-watch.sh [--no-hardware|--no-systemonly|--stock-config] [secs] - watches OSD1_CTL rgb_order + OSD1 enable/addr while running start_msn_directfb; --stock-config replicates stock's exact real QWS_DISPLAY/directfbrc (no systemonly, clearing enabled) to test whether the black screen is a config gap or a real driver-stack bug
+  start_msn_linuxfb / start_msn_directfb - start MsnCoreApp on a specific QWS backend without editing start_msn
+  dmesg                                - now aliased to /usr/bin/dmesg --color=always (busybox lacks --color)
+  mem-dump <phys_addr> [len]           - hex-dump physical memory via mmap'd /dev/mem (works on DMA carve-outs plain dd can't reach)
+  mem-fill <phys_addr> <len> <pattern>  - fill physical memory with a repeating 32-bit pattern via mmap'd /dev/mem (stage a test frame, see tools/mem-fill/README.md)
+  hx170-test                           - direct standalone hx170dec H.264 decode test via libmfc.so, bypasses sink/AA entirely (see tools/hx170-test/README.md)
+  fb-scan [threshold]                  - locate solid-color regions in /dev/fb0, predict expected color for black cells via row-fit
+  lcdc-regdump [label]                 - dump every named ARK1668 LCDC register, for diffing a stock vs our-build run
+  pin-force <pin 2-9> <status|gpio-low|gpio-high|lcd> - force an LCD RGB data pin (r0-r7) to GPIO at a level, or restore it to LCD function
+  pinmux-watch [secs]                  - poll the LCD r0-r7/g0-g7/b0-b7 pad-mux registers, log any live function-select change
+  gpio-i2c-probe <sda-pin> <scl-pin>   - bit-bang I2C over two arbitrary sysfs GPIOs, scan for ACKs (hunt real chip wiring)
+  i2c-gpio-bruteforce <target-addr>    - try every candidate pin pair as SCL/SDA, checking for a real ACK from a known I2C address
+  i2c-read-raw /dev/i2c-N addr len     - plain multi-byte I2C read, no register-address write phase
+  pin-dump.sh                          - dump every ARK1668 pinmux pad's live hardware mux value via devmem
+=========================
+
+/ # Setting up environment for MsnCoreApp...
+Starting MsnCoreApp (DirectFB/GPU)...
+[8.511]  MSNCoreApp start
+[8.529]  MSNCoreApp exception init
+[8.551]  MSNCoreApp running
+QWS_ARK_TOUCH_DEVICE undefined, touch input disabled
+(*) Direct/Thread: Started 'SigHandler' (127) [CRITICAL - OTHER/0] <8388608>...
+
+   ~~~~~~~~~~~~~~~~~~~~~~~~~| DirectFB 1.7.7 |~~~~~~~~~~~~~~~~~~~~~~~~~~
+        (c) 2012-2015  DirectFB integrated media GmbH
+        (c) 2001-2015  The world wide DirectFB Open Source Community
+        (c) 2000-2004  Convergence (integrated media) GmbH
+      ----------------------------------------------------------------
+
+(*) DirectFB/Core: Single Application Core. (2026-07-25 07:03)
+[    9.225547] ark1668-i2s: hw_params stream=0 rate=48000 period_size=1024 periods=16 format=2
+(*) Direct/Memcpy: Using libc memcpy()
+[    9.243904] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 9251406295ns
+(*) Direct/Thread: Started 'Fusion Dispatch' (128[    9.257393] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 9264890505ns
+[    9.264976] ark1668-sddac: ark_audio_mute mute=1 at 9272497282ns
+[    9.273965] ark1668-sddac: ark_audio_mute mute=0 at 9281488122ns
+) [MESSAGING - OTHER/0] <8388608>...
+[    9.285286] snd_ctl: elem_write card=0 iface=2 name='softmaster3' numid=3 values=0,0 at 9292779443ns
+[    9.294935] snd_ctl: elem_write card=0 iface=2 name='softmaster3' numid=3 values=115,115 at 9302437319ns
+[    9.316967] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 9324459739ns
+[    9.323865] ark1668-sddac: ark_audio_mute mute=1 at 9331386653ns
+[    9.330015] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 9337527542ns
+[    9.344085] ark1668-i2s: hw_params stream=0 rate=48000 period_size=1024 periods=16 format=2
+[    9.353214] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 9360720381ns
+[    9.362280] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 9369793566ns
+[    9.369161] ark1668-sddac: ark_audio_mute mute=1 at 9376682048ns
+[    9.378148] ark1668-sddac: ark_audio_mute mute=0 at 9385671900ns
+[    9.387115] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=0,0 at 9394610875ns
+[    9.396350] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=127,127 at 9403857863ns
+[    9.407048] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 9414548863ns
+[    9.413943] ark1668-sddac: ark_audio_mute mute=1 at 9421464356ns
+[    9.420103] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 9427618863ns
+[    9.434348] ark1668-sddac: get_l_playback_volume = 112 at 9441845974ns
+[    9.441334] ark1668-sddac: get_r_playback_volume = 112 at 9448843517ns
+[    9.452489] ark1668-i2s: hw_params stream=0 rate=48000 period_size=1024 periods=16 format=2
+[    9.461519] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 9469024097ns
+[    9.470756] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 9478265245ns
+[    9.477642] ark1668-sddac: ark_audio_mute mute=1 at 9485164381ns
+[    9.486630] ark1668-sddac: ark_audio_mute mute=0 at 9494153394ns
+[    9.495538] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=0,0 at 9503035307ns
+[    9.505035] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=127,127 at 9512537739ns
+[    9.515852] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 9523355122ns
+[    9.522747] ark1668-sddac: ark_audio_mute mute=1 at 9530268356ns
+[    9.528849] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 9536365110ns
+[    9.542207] ark1668-i2s: hw_params stream=0 rate=48000 period_size=1024 periods=16 format=2
+[    9.551327] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 9558834085ns
+[    9.560469] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 9567979566ns
+[    9.567350] ark1668-sddac: ark_audio_mute mute=1 at 9574872492ns
+[    9.576338] ark1668-sddac: ark_audio_mute mute=0 at 9583862023ns
+[    9.585928] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 9593423640ns
+[    9.592828] ark1668-sddac: ark_audio_mute mute=1 at 9600349591ns
+[    9.598950] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 9606463628ns
+[    9.610056] ark1668-sddac: get_l_playback_volume = 112 at 9617554529ns
+[    9.616798] ark1668-sddac: get_r_playback_volume = 112 at 9624311813ns
+[    9.627302] ark1668-i2s: hw_params stream=0 rate=48000 period_size=1024 periods=16 format=2
+[    9.636408] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 9643913171ns
+[    9.645552] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 9653061714ns
+[    9.652434] ark1668-sddac: ark_audio_mute mute=1 at 9659957381ns
+[    9.661423] ark1668-sddac: ark_audio_mute mute=0 at 9668946381ns
+[    9.670433] snd_ctl: elem_write card=0 iface=2 name='softmaster4' numid=6 values=0,0 at 9677929184ns
+[    9.679757] snd_ctl: elem_write card=0 iface=2 name='softmaster4' numid=6 values=115,115 at 9687263295ns
+[    9.690547] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 9698047603ns
+[    9.697443] ark1668-sddac: ark_audio_mute mute=1 at 9704965270ns
+[    9.703603] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 9711116356ns
+[    9.716915] ark1668-i2s: hw_params stream=0 rate=48000 period_size=1024 periods=16 format=2
+[    9.726067] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 9733573468ns
+[    9.735209] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 9742717628ns
+[    9.742090] ark1668-sddac: ark_audio_mute mute=1 at 9749612356ns
+[    9.751078] ark1668-sddac: ark_audio_mute mute=0 at 9758601517ns
+[    9.760433] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 9767930616ns
+[    9.767331] ark1668-sddac: ark_audio_mute mute=1 at 9774852690ns
+[    9.773517] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 9781027727ns
+[    9.784603] ark1668-sddac: get_l_playback_volume = 112 at 9792103677ns
+[    9.791456] ark1668-sddac: get_r_playback_volume = 112 at 9798967863ns
+[    9.801946] ark1668-i2s: hw_params stream=0 rate=48000 period_size=1024 periods=16 format=2
+[    9.811086] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 9818591023ns
+[    9.820225] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 9827735603ns
+[    9.827109] ark1668-sddac: ark_audio_mute mute=1 at 9834631529ns
+[    9.836097] ark1668-sddac: ark_audio_mute mute=0 at 9843620406ns
+[    9.845095] snd_ctl: elem_write card=0 iface=2 name='softmaster1' numid=7 values=0,0 at 9852591714ns
+[    9.854431] snd_ctl: elem_write card=0 iface=2 name='softmaster1' numid=7 values=106,106 at 9861940702ns
+[    9.865264] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 9872763233ns
+[    9.872161] ark1668-sddac: ark_audio_mute mute=1 at 9879682838ns
+[    9.878328] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 9885839665ns
+[    9.891815] ark1668-i2s: hw_params stream=0 rate=48000 period_size=1024 periods=16 format=2
+[    9.900830] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 9908336924ns
+[    9.910064] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 9917573319ns
+[    9.916949] ark1668-sddac: ark_audio_mute mute=1 at 9924470603ns
+[    9.925937] ark1668-sddac: ark_audio_mute mute=0 at 9933460579ns
+[    9.935337] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 9942834912ns
+[    9.942236] ark1668-sddac: ark_audio_mute mute=1 at 9949757480ns
+[    9.948416] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 9955927517ns
+[    9.959583] ark1668-sddac: get_l_playback_volume = 112 at 9967082295ns
+[    9.966332] ark1668-sddac: get_r_playback_volume = 112 at 9973844245ns
+[    9.977026] ark1668-i2s: hw_params stream=0 rate=48000 period_size=1024 periods=16 format=2
+[    9.986033] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 9993540221ns
+[    9.995267] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 10002776110ns
+[   10.002239] ark1668-sddac: ark_audio_mute mute=1 at 10009761653ns
+[   10.011313] ark1668-sddac: ark_audio_mute mute=0 at 10018837110ns
+[   10.020726] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 10028222196ns
+[   10.027712] ark1668-sddac: ark_audio_mute mute=1 at 10035231924ns
+[   10.033983] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 10041493640ns
+[   10.047357] ark1668-i2s: hw_params stream=0 rate=48000 period_size=1024 periods=16 format=2
+[   10.056391] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 10063896826ns
+[   10.065721] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 10073230850ns
+[   10.072691] ark1668-sddac: ark_audio_mute mute=1 at 10080213603ns
+[   10.081765] ark1668-sddac: ark_audio_mute mute=0 at 10089289134ns
+[   10.091448] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 10098944813ns
+[   10.098433] ark1668-sddac: ark_audio_mute mute=1 at 10105955356ns
+[   10.104708] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 10112220542ns
+[   10.115904] ark1668-sddac: get_l_playback_volume = 112 at 10123404245ns
+[   10.122746] ark1668-sddac: get_r_playback_volume = 112 at 10130257159ns
+[   10.133763] ark1668-i2s: hw_params stream=0 rate=44100 period_size=1024 periods=16 format=2
+[   10.142773] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 10150279097ns
+[   10.152032] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 10159541344ns
+[   10.159000] ark1668-sddac: ark_audio_mute mute=1 at 10166522677ns
+[   10.168077] ark1668-sddac: ark_audio_mute mute=0 at 10175600603ns
+[   10.177102] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=0,0 at 10184597147ns
+[   10.186693] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=127,127 at 10194195517ns
+[   10.197388] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 10204888208ns
+[   10.204367] ark1668-sddac: ark_audio_mute mute=1 at 10211887517ns
+[   10.210561] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 10218076937ns
+[   10.224149] ark1668-i2s: hw_params stream=0 rate=48000 period_size=1024 periods=16 format=2
+[   10.233262] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 10240769406ns
+[   10.242417] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 10249928233ns
+[   10.249383] ark1668-sddac: ark_audio_mute mute=1 at 10256905826ns
+[   10.258457] ark1668-sddac: ark_audio_mute mute=0 at 10265981035ns
+[   10.267915] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 10275411850ns
+[   10.274901] ark1668-sddac: ark_audio_mute mute=1 at 10282422369ns
+[   10.281158] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 10288672221ns
+[   10.292344] ark1668-sddac: get_l_playback_volume = 112 at 10299842813ns
+[   10.299362] ark1668-sddac: get_r_playback_volume = 112 at 10306873369ns
+[10.364]  MsnCoreApp version: V3.21.09.0219
+[10.683]  MSNCore[   10.676619] ark_display: ARKDISP_GET_SCREEN_INFO -> screen_id=0 800x480 120x72mm
+App onFirstInit
+[10.692]  ark screen type: 0
+[10.693]  display s[   10.689814] snd_ctl: elem_write card=0 iface=2 name='softmaster1' numid=7 values=101,106 at 10697308270ns
+ize: QSize(800, [   10.700766] snd_ctl: elem_write card=0 iface=2 name='softmaster1' numid=7 values=101,101 at 10708271566ns
+480)  src size: [   10.712010] snd_ctl: elem_write card=0 iface=2 name='softmaster3' numid=3 values=127,115 at 10719513011ns
+[   10.722711] snd_ctl: elem_write card=0 iface=2 name='softmaster3' numid=3 values=127,127 at 10730220776ns
+
+[10.804]  Load App Plugin 12 "/usr/lib/libCarReversing.so"
+[10.856]  run thread: 0xb3fb6440
+[10.867]  Start Watch Car GPIO Signal: 1
+[10.887]  Load App Plugin 10 "/usr/lib/libLauncher-Car.so"
+[10.893]  MsnMainWindow::setRealVisible LauncherWindow(0x13e4f0) true
+[10.934]  Waite Event Ticks 11
+[10.941]  load wallpaper: "/msnprofile/wallpaper/800x480/"  size: QSize(0, 0)
+rm: can't remove '/tmp/app-*.bmp': No such file or directory
+[10.968]  MSNCoreApp show
+[11.043]  MsnWindowManager::setVisible true true
+
+
+Open reversing dev handle failed!
+
+
+[11.451]  MSNCoreApp hide boot logo
+sh: can't create /proc/display: nonexistent directory
+[11.471]  MSNCoreApp onSecondInit
+[11.471]  DiskDeviceWatcher::startWatcher
+Created device discovery thread
+[11.474]  usb_device_added /dev/bus/usb/002/002
+[11.475]  usb_device_added /dev/bus/usb/002/001
+[11.475]  usb_device_added /dev/bus/usb/001/002
+usb_device_open /dev/bus/usb/001/002
+usb_device_open open returned 31 writeable 1 errno 2
+usb_device_new /dev/bus/usb/001/002 fd: 31
+usb_device_new read returned 50 errno 2
+insert usb dev:/dev/bus/usb/001/002 vid:0x0781 pid:0x5567
+[11.477]  usb_device_added /dev/bus/usb/001/001
+usb_device_open /dev/bus/usb/001/001
+usb_device_open open returned 31 writeable 1 errno 2
+usb_device_new /dev/bus/usb/001/001 fd: 31
+usb_device_new read returned 43 errno 2
+insert usb dev:/dev/bus/usb/001/001 vid:0x1d6b pid:0x0002
+[11.479]  Start Load Driver
+insmod: can't read '/lib/modules/3.4.0/kernel/drivers/input/misc/pwm-beeper.ko': No such file or directory
+[11.868]  Load App Plugin 8 "/usr/lib/libSetting.so"
+[11.873]  Open backlight pwm : false
+[11.874]  init[   11.869069] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+BackLightValue 55 0 60
+[11.876]  BackLight PWM is not open!
+[   11.902762] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   11.922880] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   11.943303] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   11.962719] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   11.982428] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=1 hue=0 saturation=128 brightness=128 contrast=128
+[   11.999389] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=1 hue=0 saturation=128 brightness=128 contrast=128
+[   12.022789] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=2 hue=0 saturation=128 brightness=128 contrast=128
+[   12.036549] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=2 hue=0 saturation=128 brightness=128 contrast=128
+[   12.050512] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=3 hue=0 saturation=128 brightness=128 contrast=128
+[   12.072936] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=3 hue=0 saturation=128 brightness=128 contrast=128
+[   12.089838] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=4 hue=0 saturation=128 brightness=128 contrast=128
+[   12.112766] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=4 hue=0 saturation=128 brightness=128 contrast=128
+[   12.133095] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   12.152600] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   12.162476] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=1 hue=0 saturation=128 brightness=128 contrast=128
+[   12.181572] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=1 hue=0 saturation=128 brightness=128 contrast=128
+[   12.201968] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=2 hue=0 saturation=128 brightness=128 contrast=128
+[   12.220555] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=2 hue=0 saturation=128 brightness=128 contrast=128
+[   12.237629] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=3 hue=0 saturation=128 brightness=128 contrast=128
+[   12.256235] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=3 hue=0 saturation=128 brightness=128 contrast=128
+[   12.292756] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=4 hue=0 saturation=128 brightness=128 contrast=128
+[   12.322634] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=4 hue=0 saturation=128 brightness=128 contrast=128
+[   12.341680] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   12.364800] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=0 hue=0 saturation=64 brightness=128 contrast=128
+[   12.387017] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=1 hue=0 saturation=128 brightness=128 contrast=128
+[   12.407653] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=1 hue=0 saturation=64 brightness=128 contrast=128
+[   12.431962] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=2 hue=0 saturation=128 brightness=128 contrast=128
+[   12.452765] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=2 hue=0 saturation=64 brightness=128 contrast=128
+[   12.472860] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=3 hue=0 saturation=128 brightness=128 contrast=128
+[   12.492782] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=3 hue=0 saturation=64 brightness=128 contrast=128
+[   12.508826] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=4 hue=0 saturation=128 brightness=128 contrast=128
+[   12.533458] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=4 hue=0 saturation=64 brightness=128 contrast=128
+[   12.583613] ark1668-sddac: get_l_playback_volume = 112 at 12591111122ns
+[   12.590777] snd_ctl: elem_write card=0 iface=2 name='Left Playback Volume' numid=1 values=118,0 at 12598278665ns
+[   12.601106] ark1668-sddac: set_l_playback_volume = 118 (I2S_DACR0=0x76) at 12608617023ns
+[   12.611943] ark1668-sddac: get_r_playback_volume = 112 at 12619446035ns
+[   12.618716] snd_ctl: elem_write card=0 iface=2 name='Right Playback Volume' numid=2 values=118,0 at 12626224455ns
+[   12.629076] ark1668-sddac: set_r_playback_volume = 118 (I2S_DACR0=0x7676) at 12636590973ns
+SoundAdapter Create Failed, Not Support ICType: 0
+[12.[   12.641540] ark1668-sddac: get_l_playback_volume = 118 at 12649035393ns
+646]  Load App P[   12.649903] snd_ctl: elem_write card=0 iface=2 name='Left Playback Volume' numid=1 values=104,0 at 12657407677ns
+lugin 403 "/usr/[   12.661336] ark1668-sddac: set_l_playback_volume = 104 (I2S_DACR0=0x7668) at 12668849331ns
+lib/libMsnSound.so"
+[   12.673168] ark1668-sddac: get_r_playback_volume = 118 at 12680667875ns
+[   12.680012] snd_ctl: elem_write card=0 iface=2 name='Right Playback Volume' numid=2 values=104,0 at 12687519430ns
+[   12.690361] ark1668-sddac: set_r_playback_volume = 104 (I2S_DACR0=0x6868) at 12697875097ns
+syncDatas armsetting radar visible:0 datas:0 0 0 0
+[12.711]  Use Default NavKey Map, Key Channel:0x10!
+[12.711]  Read CtrlKeyMap: "10" Size: 22
+[12.712]  Use Default KnobMap: "16"
+[12.712]  Use Default KnobMap: "17"
+[12.935]  McuAdap[   12.928358] ark-hsuart e4f00000.serial: no TX DMA channel available (no platform data) -- using PIO/interrupt-driven TX instead, this is expected on this board
+ter: MCUAdapter_[   12.943719] ark-hsuart e4f00000.serial: no RX DMA channel available (no platform data) -- using PIO/interrupt-driven RX instead, this is expected on this board
+BoxP300 6
+[12.968]  Open MCU Serial Port  "/dev/ttyHS0"  Ret: true "[   12.965310] ark-uart e8000000.uart: no TX DMA channel available (no platform data) -- using PIO/interrupt-driven TX instead, this is expected on this board
+No such file or [   12.980472] ark-uart e8000000.uart: no RX DMA channel available (no platform data) -- using PIO/interrupt-driven RX instead, this is expected on this board
+directory"
+
+start serialPortProcessProc
+
+[13.003]  Open MCU Serial Port  "/dev/ttyS2"  Ret: true "No such file or directory"
+[13.004]  Load App Plugin 401 "/usr/lib/libMcuCenter.so"
+[13.147]  CanBusPlugin 0 0
+[13.148]  Load App Plugin 400 "/usr/lib/libCanBus.so"
+[13.258]  Load App Plugin 3 "/usr/lib/libBlueTooth.so"
+[13.261]  open touch monitor dev: /dev/input/event0 44
+[13.274]  BackLight PWM is not open!
+[13.303]  onLoadDriverFinished
+QMetaObject::connectSlotsByName: No matching signal for on_pushButton_clicked()
+net.ipv4.udp_mem = 8192 10240 16384
+net.ipv4.udp_rmem_min = 1048576
+insmod: can't read '/tmp/wlan.ko': No such file or directory
+[13.567]  DVRSetDialog visibale change: false
+[13.673]  MSN protocal type: 0  sendReadyData!
+[13.711]  MSNCoreApp onLoadStartupApp
+[13.712]  MSNCoreApp onEndInit
+[13.712]
+MsnCoreApp End init
+
+[13.827]  MsnLink StartService: "com.arkmicro.carplay"
+label2 = Home
+pcarplay_info->bridge_mode=0
+pcarplay_info->icurrent = 500
+pcarplay_info->ns_level = -1
+### ++ carplay initialize ++
+msg instance
+++ MsgEnQueue ++
+[14.233]  MsnLink StartService ret: "com.arkmicro.carplay" true ""
+[14.235]  MSNCoreApp exec
+### carplay dbus initialize true
+[14.317]  MsnLink::onServiceRegistered "com.arkmicro.carplay"
+[   14.322864] [DIAG_ITU656_OPEN] container_of-dvr_dev=c848b040 g_dvr_dev=c848b040 (MATCH) start=c03ce0cc (want c03ce0cc) stop=c03cbf68 (want c03cbf68)
+[14.377]  arkapi_[   14.370024] [DIAG_ITU656_IOCTL] cmd=0xc0046ee0 g_dvr_dev=c848b040 filp->private_data=c848b040 (MATCH) start=c03ce0cc (want c03ce0cc, OK) stop=c03cbf68 (want c03cbf68, OK)
+open_dvr() retry[   14.386744] [DIAG_ITU656_IOCTL] &priv_data=c848b22c select_channel=c03cb8c8 detect_signal=c03cb07c get_progressive=c03ca280 display_effect=c03cab64 dvr_start_cb=00000000 dvr_stop_cb=00000000
+_times: 1
+[   14.431508] [DIAG_ITU656_IOCTL] cmd=0xc0046ee2 g_dvr_dev=c848b040 filp->private_data=c848b040 (MATCH) start=c03ce0cc (want c03ce0cc, OK) stop=c03cbf68 (want c03cbf68, OK)
+[   14.446916] [DIAG_ITU656_IOCTL] &priv_data=c848b22c select_channel=c03cb8c8 detect_signal=c03cb07c get_progressive=c03ca280 display_effect=c03cab64 dvr_start_cb=00000000 dvr_stop_cb=00000000
+[   14.465251] [DIAG_ITU656_IOCTL] cmd=0xc0046ee4 g_dvr_dev=c848b040 filp->private_data=c848b040 (MATCH) start=c03ce0cc (want c03ce0cc, OK) stop=c03cbf68 (want c03cbf68, OK)
+[   14.480573] [DIAG_ITU656_IOCTL] &priv_data=c848b22c select_channel=c03cb8c8 detect_signal=c03cb07c get_progressive=c03ca280 display_effect=c03cab64 dvr_start_cb=00000000 dvr_stop_cb=00000000
+[   14.507700] [DIAG_ITU656_IOCTL] cmd=0xc0046ee1 g_dvr_dev=c848b040 filp->private_data=c848b040 (MATCH) start=c03ce0cc (want c03ce0cc, OK) stop=c03cbf68 (want c03cbf68, OK)
+[   14.523090] [DIAG_ITU656_IOCTL] &priv_data=c848b22c select_channel=c03cb8c8 detect_signal=c03cb07c get_progressive=c03ca280 display_effect=c03cab64 dvr_start_cb=00000000 dvr_stop_cb=00000000
+[   14.541386] [DIAG_ITU656_IOCTL] cmd=0xc0046ee3 g_dvr_dev=c848b040 filp->private_data=c848b040 (MATCH) start=c03ce0cc (want c03ce0cc, OK) stop=c03cbf68 (want c03cbf68, OK)
+[   14.556717] [DIAG_ITU656_IOCTL] &priv_data=c848b22c select_channel=c03cb8c8 detect_signal=c03cb07c get_progressive=c03ca280 display_effect=c03cab64 dvr_start_cb=00000000 dvr_stop_cb=00000000
+[   14.575131] [DIAG_ITU656_IOCTL] cmd=0xc0046ee5 g_dvr_dev=c848b040 filp->private_data=c848b040 (MATCH) start=c03ce0cc (want c03ce0cc, OK) stop=c03cbf68 (want c03cbf68, OK)
+[   14.590425] [DIAG_ITU656_IOCTL] &priv_data=c848b22c select_channel=c03cb8c8 detect_signal=c03cb07c get_progressive=c03ca280 display_effect=c03cab64 dvr_start_cb=00000000 dvr_stop_cb=00000000
+[14.622]  MSN protocal type: 0  sendReadyData!
+[14.934]  start bt service:/usr/bin/blueware
+[15.033]  MSN protocal type: 0  sendReadyData!
+[15.062]  Load App Plugin 13 "/usr/lib/libMsnCarAuto.so"
+[15.065]  MsnMainWindow::setRealVisible LauncherWindow(0x13e4f0, name = "LauncherWindow") false
+[15.068]  MsnMainWindow::setRealVisible CarAutoWindow(0x47d6d0) true
+[15.069]  mode app change: "MsnCoreApp" -> "MsnCarAuto"
+[15.070]
+======== refreshAppAudioChannel 11 0
+[15.070]  switchToAppAudioChannel, ModeApp: "MsnCarAuto"  AudioApp: "MsnCarAuto"  Channel: 0 Request: false
+[15.082]  Waite Event Ticks 10
+[   15.193380] ark_display: ARKDISP_GET_SCREEN_INFO -> screen_id=0 800x480 120x72mm
+gpio:31 value:0 changeget_shared_display_data May 29 2020-16:57:02.
+[15.209]  CarAutoWindow::retryConnect()
+[15.210]  isPhoneConnected 0
+[15.363]  Retry Open BlueTooth Serial Port,  Ret: true
+[15.364]  Write At atCommand: "AT+DEVSTAT"
+[   15.550079] IPv6: ADDRCONF(NETDEV_UP): wlan0: link is not ready
+udhcpd: started, v1.30.1
+ifconfig: SIOCGIFFLAGS: No such device
+[   15.707031] ark-hsuart e4800000.serial: no TX DMA channel available (no platform data) -- using PIO/interrupt-driven TX instead, this is expected on this board
+[   15.721489] ark-hsuart e4800000.serial: no RX DMA channel available (no platform data) -- using PIO/interrupt-driven RX instead, this is expected on this board
+x=0 y=0
+s_w=800 s_h=480
+v_w=800 v_h=480 screen_width_phy=154 screen_height_phy=87
+#pluginfo->btmac=56:fa:dd:e2:50:bf
+carplay_plugin_set_info:1505 err=0
+[15.809]  Write At atCommand: "AT+BTEN=1"
+mDNSResponder: mDNSResponder (Engineering Build) (May 29 2020 16:56:53) starting
+carplay_plugin_start:1728
+### carplay ++ usb_reader_thread ++
+### carplay -- usb_reader_thread --
+### -- carplay initialize --
+mDNSResponder: mDNS_AddDNSServer: Lock not held! mDNS_busy (0) mDNS_reentrancy (0)
+mDNSResponder: mDNSPlatformSourceAddrForDest: connect 1.1.1.1 failed errno 101 (Network is unreachable)
+[17.485]  Write At atCommand: "AT+ADDR"
+[17.487]  BlueToothAdapter_Blueware::onStartupConfig()
+[17.487]  Write At atCommand: "AT+HFPCFG"
+[17.488]  Write At atCommand: "AT+HFPDISC"
+[17.489]  Write At atCommand: "AT+ADDR"
+[17.490]  Write At atCommand: "AT+NAME"
+[17.491]  Write At atCommand: "AT+VER"
+[17.532]  Write At atCommand: "AT+PLIST"
+[17.533]  BT Local Address: "DC0D3014FC9F"
+[17.533]  Write At atCommand: "AT+NAME"
+[17.533]I msncoreapp.cpp@2964 enableHostApd start  enable: 1 timeout: 3000
+[17.534]  start  enableWLAN 0 17534
+stop wifi manager
+[17.670]  end  enableWLAN 0 17670
+[17.740]I msncoreapp.cpp@3059 enableHostApd hostapd started  true
+[17.740]  hostapd state: 2  pid: 218 ap type: 1
+[17.741]I msncoreapp.cpp@3098 enableHostApd end  1
+[17.741]  Write At atCommand: "AT+HFPCFG=0"
+[17.743]  BT Local Address: "DC0D3014FC9F"
+[17.743]  Write At atCommand: "AT+NAME"
+[19.740]I msncoreapp.cpp@2964 enableHostApd start  enable: 0 timeout: 100
+[19.741]  hostapd state: 2  pid: 218
+[19.914]  hostapd state: 0  pid: 0
+[19.914]I msncoreapp.cpp@3098 enableHostApd end  0
+[19.915]  Write At atCommand: "AT+HFPCONN=04006EAF29C4"
+[19.917]  Auto ConnectTime 8000
+[20.678]  Write At atCommand: "AT+A2DPMUTE=1"
+[20.682]  Bluetooth connected: "Pixel 9 Pro" "04006EAF29C4" "04:00:6E:AF:29:C4"
+[20.915]I msncoreapp.cpp@2964 enableHostApd start  enable: 1 timeout: 100
+[20.915]  start  enableWLAN 0 20915
+stop wifi manager
+[21.038]  end  enableWLAN 0 21038
+[21.095]I msncoreapp.cpp@3059 enableHostApd hostapd started  true
+[21.095]  hostapd state: 2  pid: 226 ap type: 1
+[21.096]I msncoreapp.cpp@3098 enableHostApd end  1
+[21.479]  MsnCoreApp::onDiskDeviceStatusChange 0 0
+[23.176]  recv bluetooth connect phone type: "unkown"
+[23.177]  onRecvUUID PhoneType: 0
+[23.177]  CarAutoWindow::retryConnect()
+[23.178]  isPhoneConnected 2
+[23.178]_ msncoreapp.cpp@2413 msnAppNotify ____ APP_NOTIFY_ENABLE_HOSTAPD 1
+[23.178]I msncoreapp.cpp@2964 enableHostApd start  enable: 1 timeout: 3000
+[23.179]  start  enableWLAN 0 23179
+stop wifi manager
+[23.298]  end  enableWLAN 0 23298
+[23.302]  hostapd state: 2  pid: 226 ap type: 1
+[23.303]I msncoreapp.cpp@3098 enableHostApd end  1
+[23.303]  refreshConnectType 11
+[23.303]_ msncoreapp.cpp@2413 msnAppNotify ____ APP_NOTIFY_ENABLE_HOSTAPD 1
+[23.304]I msncoreapp.cpp@2964 enableHostApd start  enable: 1 timeout: 3000
+[23.304]  start  enableWLAN 0 23304
+stop wifi manager
+[23.422]  end  enableWLAN 0 23422
+[23.426]  hostapd state: 2  pid: 226 ap type: 1
+[23.426]I msncoreapp.cpp@3098 enableHostApd end  1
+[23.446]  requestLinkStatus 11 3
+[23.447]  MsnLink StartService: "com.arkmicro.auto"
+ArkUtils::open_local_socket:266 sock = 3
+ArkUtils::open_local_socket:266 sock = 4
+initWlConnection:249
+
+IArkCallbacks::IArkCallbacks:35
+IArkCallbacks::IArkCallbacks:37 handle=00066ee0
+right_hand_driver : 0
+pcarplay_info->bridge_mode=0
+ArkAuto::init right_hand_driver : 0
+ArkAuto::init:68 mIsDongleMode=0
+ArkDbus::ArkDbus:66 handle=00067a18
+ArkDbus::init:115 mIsDongleMode=0
+ScreenWidth:800 ScreenHeight:480
+wirelessConnectionProc:187
+
+wirelessConnectionProc:189
+
+ArkAuto::run : 222
+[23.859]  MsnLink StartService ret: "com.arkmicro.auto" true ""
+[23.859]  ====================== requestAutoHandler ====================== 3
+[23.862]  current app is phone link app, not auto start carlife app! 13
+ArkDbus::reply_to_requestLinkStatus_call 223 param1=11 param2=3
+IArkCallbacks::requestLinkStatus:77 0
+IArkCallbacks::requestLinkStatus:83
+ArkDbus::onLinkStatusChange:175 mStatus=3
+Signal Sent
+ArkDbus::run 468
+[23.924]  MsnLink::onServiceRegistered "com.arkmicro.auto"
+[23.926]  MsnCoreApp::onLinkStatusChange 11 3
+[23.927]
+==========CarAuto onLinkStatusChange: 11 3 ==========
+
+
+==========CarAuto Status: 3 true ==========
+
+BtRfcommController::start : 404
+/dev/bw_aap is not symlink
+ArkUtils::open_local_socket:266 sock = 9
+BtRfcommController::start : 414
+rfcomm write: 00 09 00 04 08 01 10 00 18 00 20 bc 28
+rfcomm read: 00 16 00 05
+len=22 type=5
+rfcomm read: 08 01 10 00 1a 0e 35 36 31 37 31 46 44 41 50 30 30 31 54 45 20 00
+interface=wlan0
+wlan0 IP Address 192.168.43.1
+local wifi ip=192.168.43.1
+majorVer:1 minorVer0 deviceSerial:56171FDAP001TE status:0 channel:-1
+rfcomm write: 00 11 00 01 0a 0c 31 39 32 2e 31 36 38 2e 34 33 2e 31 10 ca 34
+rfcomm read: 00 00 00 02
+len=0 type=2
+Rfcomm Read timeout!!!
+ssid=carplay_fc9f
+passwd=88888888
+interface=wlan0
+local mac:68:b9:d3:f1:5a:43
+mac=68:b9:d3:f1:5a:43
+rfcomm write: 00 2d 00 03 0a 0c 63 61 72 70 6c 61 79 5f 66 63 39 66 12 08 38 38 38 38 38 38 38 38 1a 11 36 38 3a 62 39 3a 64 33 3a 66 31 3a 35 61 3a 34 33 20 08
+rfcomm read: 00 02 00 07
+len=2 type=7
+rfcomm read: 18 00
+ip: port:-1
+udhcpd: sending OFFER of 192.168.43.20
+udhcpd: sending ACK to 192.168.43.20
+rfcomm read: 00 02 00 06
+len=2 type=6
+rfcomm read: 08 00
+wirelessConnectionProc:206 Accept client connection
+wirelessConnectionProc:189
+
+ArkDbus::onLinkStatusChange:175 mStatus=9
+Signal Sent
++++ArkAuto::run : 262
+[27.454]  MsnCoreApp::onLinkStatusChange 11 9
+[27.454]
+==========CarAuto onLinkStatusChange: 11 9 ==========
+
+
+==========CarAuto Status: 3 true ==========
+
+Sink::init Sink : 0
+Creating new Video Sink...
+w=800 h=480 widthMargin=0  heightMargin=0
+w=1280 h=720 widthMargin=0  heightMargin=0
+w=800 h=480 widthMargin=0  heightMargin=0
+Creating new input source...
+Creating new Audio source...
+###Microphone::init:85 bridge_mode=0 audio=0
+Mic[   27.666904] ark1668-i2s: hw_params stream=0 rate=48000 period_size=1024 periods=16 format=2
+rophone::init:102
+Microphone i[   27.677940] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 27685447009ns
+nitialized!
+Cre[   27.688569] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 27696075676ns
+[   27.696670] ark1668-sddac: ark_audio_mute mute=1 at 27704192960ns
+[   27.705744] ark1668-sddac: ark_audio_mute mute=0 at 27713268454ns
+ating new Audio sink...
+open:174 m_handle_name=plug:softvol2 mode=0
+rate=48000 channels=2 bits_per_sample=16
+set_alsa_paramters:103 period_size=1024 buffer_size=16384
+open:190 ret=0 m_handle=0xb4a23840
+Creating new Audio sink...
+open:174 m_handle_name=plug:softvol1 mode=0
+rate=16000 channels=1 bits_per_sample=16
+set_alsa_paramters:103 period_size=341 buffer_size=5461
+open:190 ret=0 m_handle=0xb4a033e0
+Creating new Audio sink...
+open:174 m_handle_name=plug:softvol4 mode=0
+rate=16000 channels=1 bits_per_sample=16
+set_alsa_paramters:103 period_size=341 buffer_size=5461
+open:190 ret=0 m_handle=0xb4a52060
+bt addr=dc:0d:30:14:fc:9f
+Creating Bluetooth endpoint...
+BluetoothCallbacks:BluetoothCallbacks:21
+Creating Bluetooth endpoint...
+Transport type is wlan!
+Starting link, car major=1 minor=3
+Phone reported version major=1 minor=7
+ssl state=SSLv3 read server hello A -1
+ssl state=SSLv3 read finished A -1
+ssl state=SSL negotiation finished successfully 1
+SSL version=TLSv1.2 Cipher name=ECDHE-RSA-AES128-GCM-SHA256
+Verify returned: ok
+label:Android deviceName: Google Pixel 9 Pro
+#audio stream release
+VideoSinkCallbacks::setupCallback:222
+Source video config index is 0 w=800 h=480.
+
+VideoSinkCallbacks::playbackStartCallback:228 0xb19f9440
+m_screen_width=800 m_screen_height=480 mTVOutEnable=1
+VideoDecoder::SetVideoRe[   29.760439] ark_display: ARKDISP_GET_SCREEN_INFO -> screen_id=0 800x480 120x72mm
+solution:198 800 480 0 0
+VideoDecoder::open:116
+VideoDecoder::open:125 m_backcar=0
+VideoDecoder::video_init:337 fb_lock=-1 enable_vga:0
+video_init:350, 800, 480, 800, 480
+#video_init:351, 0, 0, 0, 0
+VideoDecoder::open:140
+ArkDbus::onLinkStatusChange:175 mStatus=4
+Signal Sent
+VideoSinkCallbacks::playbackStartCallback:235
+[29.794]  MsnLink status success: 11 4
+[29.795]  MsnCoreApp::onLinkStatusChange 11 4
+[29.796]
+==========CarAuto onLinkStatusChange: 11 4 ==========
+
+
+==========CarAuto Status: 4 false ==========
+
+[29.797]  requestLinkStatus 11 31
+[29.797]  ====================== requestAutoHandler ====================== 31
+[29.799]  APP_NOTIFY_ANDROIDAUTO_LINKCHANGE true
+ArkDbus::reply_to_requestLinkStatus_call 223 param1=11 param2=31
+ArkDbus::run 468
+VideoSinkCallbacks::codecConfigCallback:215
+Configuring codec
+**********VideoDecoder::play:166 Linking=0
+VideoSinkCallbacks::codecConfigCallback:217
+***PhoneStatusCallbacks:phoneStatusCallback:23 calls=0 ***
+ArkDbus::onLinkStatusChange:175 mStatus=15
+Signal Sent
+Granted audio focus
+[35.481]  MsnCoreApp::onLinkStatusChange 11 15
+[35.481]
+==========CarAuto onLinkStatusChange: 11 15 ==========
+
+
+==========CarAuto Status: 4 false ==========
+
+[35.482]  requestLinkStatus 11 31
+[35.482]  ====================== requestAutoHandler ====================== 31
+ArkDbus::reply_to_requestLinkStatus_call 223 param1=11 param2=31
+ArkDbus::run 468
+#audio stream release
+Granted audio focus
+playbackStartCallback:63 status=39 streamtype = 3
+ArkDbus::onLinkStatusChange:175 mStatus=39
+Signal Sent
+[36.921]  MsnCoreApp::onLinkStatusChange 11 39
+[36.921]
+==========CarAuto onLinkStatusChange: 11 39 ==========
+
+[36.921]  mode app change: "MsnCarAuto" -> "MsnCarAuto"
+[36.924]
+======== refreshAppAudioChannel 8388619 0
+[36.925]  switchToAppAudioChannel, ModeApp: "MsnCarAuto"  AudioApp: "MsnCarAuto"  Channel: 0 Request: false
+[36.925]  setAppVolumeMute "MsnCarAuto" false
+[36.925]
+======== refreshAppAudioChannel 8388619 0
+[36.926]  switchToAppAudioChannel, ModeApp: "MsnCarAuto"  AudioApp: "MsnCarAuto"  Channel: 3 Request: false
+
+==========CarAuto Status: 4 false ==========
+
+[36.927]  requestLinkStatus 11 31
+[36.927]  ====================== requestAutoHandler ====================== 31
+ArkDbus::reply_to_requestLinkStatus_call 223 param1=11 param2=31
+ArkDbus::run 468
+play:225
+play:225
+play:225
+play:225
+play:225
+play:225
+play:225
+play:225
+play:225
+play:225
+play:225
+play:225
+play:225
+play:225
+play:225
+play:225
+play:225
+play:225
+playbackStopCallback:75 status=40 streamtype = 3
+ArkDbus::onLinkStatusChange:175 mStatus=40
+Signal Sent
+[43.412]  MsnCoreApp::onLinkStatusChange 11 40
+[43.413]
+==========CarAuto onLinkStatusChange: 11 40 ==========
+
+
+==========CarAuto Status: 4 false ==========
+
+[43.413]  requestLinkStatus 11 31
+[43.413]  ====================== requestAutoHandler ====================== 31
+ArkDbus::reply_to_requestLinkStatus_call 223 param1=11 param2=31
+ArkDbus::run 468
+[   43.454109] ark1668-i2s: hw_params stream=1 rate=48000 period_size=1024 periods=16 format=2
+
+open:174 m_handle_name=default [   43.465118] ark1668-i2s: trigger cmd=1 stream=1 (capture) at 43472619971ns
+mode=1
+rate=16000 channels=1 bits_per_sample=16
+set_alsa_paramters:103 period_size=341 buffer_size=5461
+open:190 ret=0 m_handle=0x0008a928
+Microphone reader thread started.
+MicrophoneReaderThread::microphoneRequestCallback mOpen=0
+Microphone reader thread exit.
+[   45.307381] ark1668-i2s: trigger cmd=0 stream=1 (capture) at 45314875686ns
+Voice session notification, status = 1 autoStatus=[   48.335386] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=0,127 at 48342880291ns
+1
+
+ArkDbus::onLinkStat[   48.346527] pcm_dmaengine: period jitter: stream=0 actual=28972592ns expected=21333333ns (+35%)
+usChange:175 mStatus=33
+Signal Sent
+[48.342] [   48.359981] pcm_dmaengine: period jitter: stream=0 actual=13666457ns expected=21333333ns (-35%)
+ MsnCoreApp::onLinkStatusChange 11 33
+[48.342]
+======== refreshAppAudioChannel 8388619 8
+playbackStartCallback:63 status=35 streamtype = 1
+ArkDbus::onLinkStatusChange:175 mStatus=35
+Signal Sent
+Voice session notification, status = 2 autoStatus=1
+
+ArkDbus::onLinkStatusChange:175 mStatus=34
+Signal Sent
+Voice session notification, status = 2 autoStatus=1
+
+Voice session notification, status = 2 autoStatus=1
+
+[   48.419679] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=0,0 at 48427172699ns
+play:225
+[48.450]  switchToAppAudioChannel, ModeApp: "MsnCarAuto"  AudioApp: "MsnCarPlay"  Channel: 3 Request: true
+[48.450]
+==========CarAuto onLinkStatusChange: 11 33 ==========
+
+
+==========CarAuto Status: 4 false ==========
+
+[48.451]  requestLinkStatus 11 31
+[48.451]  ====================== requestAutoHandler ====================== 31
+ArkDbus::reply_to_requestLinkStatus_call 223 param1=11 param2=31
+ArkDbus::run 468
+playbackStopCallback:75 status=36 streamtype = 1
+ArkDbus::onLinkStatusChange:175 mStatus=36
+Signal Sent
+[48.530]  MsnCoreApp[   48.523936] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=84,127 at 48531424760ns
+::onLinkStatusChange 11 [   48.535463] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=84,84 at 48542961106ns
+35
+[48.531]
+=======[   48.546898] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=84,127 at 48554399859ns
+= refreshAppAudi[   48.558202] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=84,84 at 48565704476ns
+oChannel 8388619 12
+[   48.573306] pcm_dmaengine: period jitter: stream=0 actual=15370741ns expected=21333333ns (-27%)
+[48.590]  switchToAppAudioChannel, ModeApp: "MsnCarAuto"  AudioApp: "MsnCarPlay"  Channel: 3 Request: true
+[48.591]
+==========[   48.593730] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=127,84 at 48601220069ns
+CarAuto onLinkSt[   48.604387] pcm_dmaengine: period jitter: stream=0 actual=31091531ns expected=21333333ns (+45%)
+atusChange: 11 35 ==========
+
+
+==[   48.616529] pcm_dmaengine: period jitter: stream=0 actual=12129617ns expected=21333333ns (-43%)
+========CarAuto Status: 4 false ==========
+
+[48.591]  requestLinkStatus 11 3[   48.632690] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=127,127 at 48640166748ns
+1
+[48.591]  ==[   48.643451] pcm_dmaengine: period jitter: stream=0 actual=26935556ns expected=21333333ns (+26%)
+==================== requestAutoHandler ================[   48.657085] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=127,84 at 48664565291ns
+====== 31
+[48.595]  Ms[   48.668878] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=127,127 at 48676373699ns
+nCoreApp::onLinkStatusCh[   48.680717] pcm_dmaengine: period jitter: stream=0 actual=12845432ns expected=21333333ns (-39%)
+ange 11 34
+[48.596]
+======== refreshAppAudioChannel 8388619 4
+[48.596]  switchToAppAudioChannel, ModeApp: "MsnCarAuto"  AudioApp: "MsnCarPlay"  Channel: 3 Request: true
+[48.596]
+==========CarAuto onLinkStatusChange: 11 34 ==========
+
+
+==========CarAuto Status: 4 false ==========
+
+[48.598]  requestLinkStatus 11 31
+[48.598]  ====================== requestAutoHandler ====================== 31
+[48.600]  MsnCoreApp::onLinkStatusChange 11 36
+[48.600]
+======== refreshAppAudioChannel 8388619 0
+ArkDbus::reply_to_requestLinkStatus_call 223 param1=11 param2=31
+ArkDbus::run 468
+ArkDbus::reply_to_requestLinkStatus_call 223 param1=11 param2=31
+ArkDbus::run 468
+[48.700]  switchToAppAudioChannel, ModeApp: "MsnCarAuto"  AudioApp: "MsnCarAuto"  Channel: 3 Request: false
+[48.701]
+==========CarAuto onLinkStatusChange: 11 36 ==========
+
+
+==========CarAuto S[   48.767143] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=51,0 at 48774634390ns
+tatus: 4 false ==========
+
+[48.701]  requestLinkStat[   48.781654] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=51,51 at 48789132674ns
+us 11 31
+[48.7[   48.792378] pcm_dmaengine: period jitter: stream=0 actual=27075654ns expected=21333333ns (+26%)
+02]  ====================== requ[   48.803914] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=73,51 at 48811407291ns
+estAutoHandler =========[   48.815483] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=73,73 at 48822982674ns
+============= 31
+ArkDb[   48.827233] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=86,73 at 48834730019ns
+us::reply_to_requestLinkStatus_call 223 param1=1[   48.840942] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=86,86 at 48848421131ns
+1 param2=31
+ArkDbus::run 468
+[   48.853150] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=99,86 at 48860644600ns
+[   48.866649] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=99,99 at 48874130131ns
+[   48.880911] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=110,99 at 48888394982ns
+[   48.891496] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=110,110 at 48898989538ns
+[   48.902201] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=118,110 at 48909696378ns
+[   48.914633] dmaengine_pcm_dma_complete: 1 callbacks suppressed
+[   48.914657] pcm_dmaengine: period jitter: stream=0 actual=13345814ns expected=21333333ns (-37%)
+[   48.931160] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=118,118 at 48938649810ns
+[   48.944778] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=127,118 at 48952255501ns
+[   48.956069] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=127,127 at 48963563489ns
+[   48.978681] pcm_dmaengine: period jitter: stream=0 actual=12829888ns expected=21333333ns (-39%)
+#audio stream release
+ss=128 contrast=128
+BackLightValue 55 0 60
+[12.119]  BackLight PWM is not open!
+[   12.142529] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   12.162488] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   12.183058] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   12.202482] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   12.221986] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=1 hue=0 saturation=128 brightness=128 contrast=128
+[   12.238894] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=1 hue=0 saturation=128 brightness=128 contrast=128
+[   12.262524] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=2 hue=0 saturation=128 brightness=128 contrast=128
+[   12.277143] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=2 hue=0 saturation=128 brightness=128 contrast=128
+[   12.297873] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=3 hue=0 saturation=128 brightness=128 contrast=128
+[   12.312468] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=3 hue=0 saturation=128 brightness=128 contrast=128
+[   12.343036] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=4 hue=0 saturation=128 brightness=128 contrast=128
+[   12.355208] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=4 hue=0 saturation=128 brightness=128 contrast=128
+[   12.372931] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   12.392091] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   12.409584] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=1 hue=0 saturation=128 brightness=128 contrast=128
+[   12.421812] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=1 hue=0 saturation=128 brightness=128 contrast=128
+[   12.442465] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=2 hue=0 saturation=128 brightness=128 contrast=128
+[   12.460099] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=2 hue=0 saturation=128 brightness=128 contrast=128
+[   12.477214] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=3 hue=0 saturation=128 brightness=128 contrast=128
+[   12.496609] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=3 hue=0 saturation=128 brightness=128 contrast=128
+[   12.532636] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=4 hue=0 saturation=128 brightness=128 contrast=128
+[   12.562352] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=4 hue=0 saturation=128 brightness=128 contrast=128
+[   12.581813] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   12.604750] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=0 hue=0 saturation=64 brightness=128 contrast=128
+[   12.627039] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=1 hue=0 saturation=128 brightness=128 contrast=128
+[   12.647195] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=1 hue=0 saturation=64 brightness=128 contrast=128
+[   12.671915] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=2 hue=0 saturation=128 brightness=128 contrast=128
+[   12.692541] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=2 hue=0 saturation=64 brightness=128 contrast=128
+[   12.712577] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=3 hue=0 saturation=128 brightness=128 contrast=128
+[   12.732393] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=3 hue=0 saturation=64 brightness=128 contrast=128
+[   12.742177] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=4 hue=0 saturation=128 brightness=128 contrast=128
+[   12.773117] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=4 hue=0 saturation=64 brightness=128 contrast=128
+[   12.823248] ark1668-sddac: get_l_playback_volume = 112 at 12830981702ns
+[   12.830216] snd_ctl: elem_write card=0 iface=2 name='Left Playback Volume' numid=1 values=118,0 at 12837959257ns
+[   12.840566] ark1668-sddac: set_l_playback_volume = 118 (I2S_DACR0=0x76) at 12848315307ns
+[   12.851425] ark1668-sddac: get_r_playback_volume = 112 at 12859164159ns
+[   12.858201] snd_ctl: elem_write card=0 iface=2 name='Right Playback Volume' numid=2 values=118,0 at 12865945566ns
+[   12.868558] ark1668-sddac: set_r_playback_volume = 118 (I2S_DACR0=0x7676) at 12876308961ns
+SoundAdapter Create Failed, Not Support ICType: 0
+[12.[   12.880959] ark1668-sddac: get_l_playback_volume = 118 at 12888695146ns
+886]  Load App Plugin 403 "/usr/lib/libMsnSound.so"
+[   12.895680] snd_ctl: elem_write card=0 iface=2 name='Left Playback Volume' numid=1 values=104,0 at 12903410196ns
+[   12.906004] ark1668-sddac: set_l_playback_volume = 104 (I2S_DACR0=0x7668) at 12913752751ns
+[   12.916754] ark1668-sddac: get_r_playback_volume = 118 at 12924488122ns
+[   12.924172] snd_ctl: elem_write card=0 iface=2 name='Right Playback Volume' numid=2 values=104,0 at 12931907159ns
+[   12.934561] ark1668-sddac: set_r_playback_volume = 104 (I2S_DACR0=0x6868) at 12942310862ns
+syncDatas armsetting radar visible:0 datas:0 0 0 0
+[12.958]  Use Default NavKey Map, Key Channel:0x10!
+[12.959]  Read CtrlKeyMap: "10" Size: 22
+[12.961]  Use Default KnobMap: "16"
+[12.961]  Use Default KnobMap: "17"
+[13.320]  McuAdap[   13.313901] ark-hsuart e4f00000.serial: no TX DMA channel available (no platform data) -- using PIO/interrupt-driven TX instead, this is expected on this board
+ter: MCUAdapter_[   13.329178] ark-hsuart e4f00000.serial: no RX DMA channel available (no platform data) -- using PIO/interrupt-driven RX instead, this is expected on this board
+BoxP300 6
+[13.353]  Open MCU Serial Port  "/dev/ttyHS0"  Ret: true [   13.350532] ark-uart e8000000.uart: no TX DMA channel available (no platform data) -- using PIO/interrupt-driven TX instead, this is expected on this board
+"No such file or[   13.365757] ark-uart e8000000.uart: no RX DMA channel available (no platform data) -- using PIO/interrupt-driven RX instead, this is expected on this board
+ directory"
+
+start serialPortProcessProc
+
+[13.389]  Open MCU Serial Port  "/dev/ttyS2"  Ret: true "No such file or directory"
+[13.389]  Load App Plugin 401 "/usr/lib/libMcuCenter.so"
+[13.532]  CanBusPlugin 0 0
+[13.532]  Load App Plugin 400 "/usr/lib/libCanBus.so"
+[13.641]  Load App Plugin 3 "/usr/lib/libBlueTooth.so"
+[13.644]  open touch monitor dev: /dev/input/event0 44
+[13.654]  BackLight PWM is not open!
+[13.687]  onLoadDriverFinished
+QMetaObject::connectSlotsByName: No matching signal for on_pushButton_clicked()
+net.ipv4.udp_mem = 8192 10240 16384
+net.ipv4.udp_rmem_min = 1048576
+insmod: can't read '/tmp/wlan.ko': No such file or directory
+[13.934]  DVRSetDialog visibale change: false
+[14.040]  MSN protocal type: 0  sendReadyData!
+[14.079]  MSNCoreApp onLoadStartupApp
+[14.079]  MSNCoreApp onEndInit
+[14.079]
+MsnCoreApp End init
+
+[14.230]  MsnLink StartService: "com.arkmicro.carplay"
+label2 = Home
+pcarplay_info->bridge_mode=0
+pcarplay_info->icurrent = 500
+pcarplay_info->ns_level = -1
+### ++ carplay initialize ++
+msg instance
+++ MsgEnQueue ++
+[14.622]  MsnLink StartService ret: "com.arkmicro.carplay" true ""
+[14.624]  MSNCoreApp exec
+### carplay dbus initialize true
+[14.697]  MsnLink::onServiceRegistered "com.arkmicro.carplay"
+[   14.698623] [DIAG_ITU656_OPEN] container_of-dvr_dev=c848b040 g_dvr_dev=c848b040 (MATCH) start=c03ce0cc (want c03ce0cc) stop=c03cbf68 (want c03cbf68)
+[14.754]  arkapi_[   14.746703] [DIAG_ITU656_IOCTL] cmd=0xc0046ee0 g_dvr_dev=c848b040 filp->private_data=c848b040 (MATCH) start=c03ce0cc (want c03ce0cc, OK) stop=c03cbf68 (want c03cbf68, OK)
+open_dvr() retry[   14.763420] [DIAG_ITU656_IOCTL] &priv_data=c848b22c select_channel=c03cb8c8 detect_signal=c03cb07c get_progressive=c03ca280 display_effect=c03cab64 dvr_start_cb=00000000 dvr_stop_cb=00000000
+_times: 1
+[   14.814182] [DIAG_ITU656_IOCTL] cmd=0xc0046ee2 g_dvr_dev=c848b040 filp->private_data=c848b040 (MATCH) start=c03ce0cc (want c03ce0cc, OK) stop=c03cbf68 (want c03cbf68, OK)
+[   14.829527] [DIAG_ITU656_IOCTL] &priv_data=c848b22c select_channel=c03cb8c8 detect_signal=c03cb07c get_progressive=c03ca280 display_effect=c03cab64 dvr_start_cb=00000000 dvr_stop_cb=00000000
+[   14.847790] [DIAG_ITU656_IOCTL] cmd=0xc0046ee4 g_dvr_dev=c848b040 filp->private_data=c848b040 (MATCH) start=c03ce0cc (want c03ce0cc, OK) stop=c03cbf68 (want c03cbf68, OK)
+[   14.863096] [DIAG_ITU656_IOCTL] &priv_data=c848b22c select_channel=c03cb8c8 detect_signal=c03cb07c get_progressive=c03ca280 display_effect=c03cab64 dvr_start_cb=00000000 dvr_stop_cb=00000000
+[   14.888635] [DIAG_ITU656_IOCTL] cmd=0xc0046ee1 g_dvr_dev=c848b040 filp->private_data=c848b040 (MATCH) start=c03ce0cc (want c03ce0cc, OK) stop=c03cbf68 (want c03cbf68, OK)
+[   14.904020] [DIAG_ITU656_IOCTL] &priv_data=c848b22c select_channel=c03cb8c8 detect_signal=c03cb07c get_progressive=c03ca280 display_effect=c03cab64 dvr_start_cb=00000000 dvr_stop_cb=00000000
+[   14.922917] [DIAG_ITU656_IOCTL] cmd=0xc0046ee3 g_dvr_dev=c848b040 filp->private_data=c848b040 (MATCH) start=c03ce0cc (want c03ce0cc, OK) stop=c03cbf68 (want c03cbf68, OK)
+[   14.938224] [DIAG_ITU656_IOCTL] &priv_data=c848b22c select_channel=c03cb8c8 detect_signal=c03cb07c get_progressive=c03ca280 display_effect=c03cab64 dvr_start_cb=00000000 dvr_stop_cb=00000000
+[   14.956165] [DIAG_ITU656_IOCTL] cmd=0xc0046ee5 g_dvr_dev=c848b040 filp->private_data=c848b040 (MATCH) start=c03ce0cc (want c03ce0cc, OK) stop=c03cbf68 (want c03cbf68, OK)
+[   14.971464] [DIAG_ITU656_IOCTL] &priv_data=c848b22c select_channel=c03cb8c8 detect_signal=c03cb07c get_progressive=c03ca280 display_effect=c03cab64 dvr_start_cb=00000000 dvr_stop_cb=00000000
+[15.004]  MSN protocal type: 0  sendReadyData!
+[15.256]  start bt service:/usr/bin/blueware
+[   15.827794] IPv6: ADDRCONF(NETDEV_UP): wlan0: link is not ready
+ifconfig: SIOCGIFFLAGS: No such device
+x=0 y=0
+s_w=800 s_h=480
+v_w=800 v_h=480 screen_width_phy=154 screen_height_phy=87
+#pluginfo->btmac=56:fa:dd:e2:50:bf
+udhcpd: started, v1.30.1
+carplay_plugin_set_info:1505 err=0
+[17.124]  MSN protocal type: 0  sendReadyData!
+[17.126]  Retry Open BlueTooth Serial Port,  Ret: true
+[17.127]  Write At atCommand: "AT+DEVSTAT"
+mDNSResponder: mDNSResponder (Engineering Build) (May 29 2020 16:56:53) starting
+mDNSResponder: mDNS_AddDNSServer: Lock not held! mDNS_busy (0) mDNS_reentrancy (0)
+mDNSResponder: mDNSPlatformSourceAddrForDest: connect 1.1.1.1 failed errno 101 (Network is unreachable)
+carplay_plugin_start:1728
+### carplay ++ usb_reader_thread ++
+### carplay -- usb_reader_thread --
+### -- carplay initialize --
+[   17.627382] ark-hsuart e4800000.serial: no TX DMA channel available (no platform data) -- using PIO/interrupt-driven TX instead, this is expected on this board
+[   17.641813] ark-hsuart e4800000.serial: no RX DMA channel available (no platform data) -- using PIO/interrupt-driven RX instead, this is expected on this board
+[17.668]  Write At atCommand: "AT+BTEN=1"
+b[19.417]  Write At atCommand: "AT+ADDR"
+[19.419]  BlueToothAdapter_Blueware::onStartupConfig()
+[19.420]  Write At atCommand: "AT+HFPCFG"
+[19.421]  Write At atCommand: "AT+HFPDISC"
+[19.422]  Write At atCommand: "AT+ADDR"
+[19.423]  Write At atCommand: "AT+NAME"
+[19.423]  Write At atCommand: "AT+VER"
+[19.464]  Write At atCommand: "AT+PLIST"
+[19.465]  BT Local Address: "DC0D3014FC9F"
+[19.465]  Write At atCommand: "AT+NAME"
+[19.465]I msncoreapp.cpp@2964 enableHostApd start  enable: 1 timeout: 3000
+[19.466]  start  enableWLAN 0 19466
+gpio:31 value:0 changestop wifi manager
+u[19.589]  end  enableWLAN 0 19589
+[19.658]I msncoreapp.cpp@3059 enableHostApd hostapd started  true
+[19.659]  hostapd state: 2  pid: 221 ap type: 1
+[19.659]I msncoreapp.cpp@3098 enableHostApd end  1
+[19.660]  Write At atCommand: "AT+HFPCFG=0"
+[19.665]  BT Local Address: "DC0D3014FC9F"
+[19.666]  Write At atCommand: "AT+NAME"
+^C
+/ # [21.659]I msncoreapp.cpp@2964 enableHostApd start  enable: 0 timeout: 100
+[21.659]  hostapd state: 2  pid: 221
+[21.831]  hostapd state: 0  pid: 0
+[21.831]I msncoreapp.cpp@3098 enableHostApd end  0
+[21.832]  MsnCoreApp::onDiskDeviceStatusChange 0 0
+[21.838]  Write At atCommand: "AT+HFPCONN=04006EAF29C4"
+[21.839]  Auto ConnectTime 8000
+[22.832]I msncoreapp.cpp@2964 enableHostApd start  enable: 1 timeout: 100
+[22.832]  start  enableWLAN 0 22833
+stop wifi manager
+[22.972]  end  enableWLAN 0 22972
+[23.033]I msncoreapp.cpp@3059 enableHostApd hostapd started  true
+[23.034]  hostapd state: 2  pid: 229 ap type: 1
+[23.034]I msncoreapp.cpp@3098 enableHostApd end  1
+[23.299]  Write At atCommand: "AT+A2DPMUTE=1"
+[23.307]  Bluetooth connected: "Pixel 9 Pro" "04006EAF29C4" "04:00:6E:AF:29:C4"
+[25.799]  recv bluetooth connect phone type: "unkown"
+[25.799]  onRecvUUID PhoneType: 0
+[25.824]  Load App Plugin 13 "/usr/lib/libMsnCarAuto.so"
+[25.826]  MsnMainWindow::setRealVisible LauncherWindow(0x13e970, name = "LauncherWindow") false
+[25.829]  MsnMainWindow::setRealVisible CarAutoWindow(0x61f060) true
+[25.830]  mode app change: "MsnCoreApp" -> "MsnCarAuto"
+[25.831]
+======== refreshAppAudioChannel 8388635 0
+[25.831]  switchToAppAudioChannel, ModeApp: "MsnCarAuto"  AudioApp: "MsnCarAuto"  Channel: 0 Request: false
+[25.843]  Waite Event Ticks 11
+[   25.953204] ark_display: ARKDISP_GET_SCREEN_INFO -> screen_id=0 800x480 120x72mm
+get_shared_display_data May 29 2020-16:57:02.
+[25.969]  CarAutoWindow::retryConnect()
+[25.970]  isPhoneConnected 2
+[25.970]_ msncoreapp.cpp@2413 msnAppNotify ____ APP_NOTIFY_ENABLE_HOSTAPD 1
+[25.970]I msncoreapp.cpp@2964 enableHostApd start  enable: 1 timeout: 3000
+[25.970]  start  enableWLAN 0 25971
+stop wifi manager
+[26.088]  end  enableWLAN 0 26089
+[26.093]  hostapd state: 2  pid: 229 ap type: 1
+[26.093]I msncoreapp.cpp@3098 enableHostApd end  1
+[26.094]  refreshConnectType 11
+[26.094]_ msncoreapp.cpp@2413 msnAppNotify ____ APP_NOTIFY_ENABLE_HOSTAPD 1
+[26.094]I msncoreapp.cpp@2964 enableHostApd start  enable: 1 timeout: 3000
+[26.094]  start  enableWLAN 0 26095
+stop wifi manager
+[26.212]  end  enableWLAN 0 26213
+[26.216]  hostapd state: 2  pid: 229 ap type: 1
+[26.217]I msncoreapp.cpp@3098 enableHostApd end  1
+[26.238]  requestLinkStatus 11 3
+[26.239]  MsnLink StartService: "com.arkmicro.auto"
+ArkUtils::open_local_socket:266 sock = 3
+ArkUtils::open_local_socket:266 sock = 4
+initWlConnection:249
+
+IArkCallbacks::IArkCallbacks:35
+IArkCallbacks::IArkCallbacks:37 handle=00066ee0
+right_hand_driver : 0
+pcarplay_info->bridge_mode=0
+ArkAuto::init right_hand_driver : 0
+ArkAuto::init:68 mIsDongleMode=0
+ArkDbus::ArkDbus:66 handle=00067a18
+ArkDbus::init:115 mIsDongleMode=0
+ScreenWidth:800 ScreenHeight:480
+wirelessConnectionProc:187
+
+wirelessConnectionProc:189
+
+ArkAuto::run : 222
+[26.682]  MsnLink StartService ret: "com.arkmicro.auto" true ""
+[26.682]  ====================== requestAutoHandler ====================== 3
+ArkDbus::reply_to_requestLinkStatus_call 223 param1=11 param2=3
+IArkCallbacks::requestLinkStatus:77 0
+IArkCallbacks::requestLinkStatus:83
+ArkDbus::onLinkStatusChange:175 mStatus=3
+Signal Sent
+ArkDbus::run 468
+[26.795]  MsnLink::onServiceRegistered "com.arkmicro.auto"
+[26.796]  MsnCoreApp::onLinkStatusChange 11 3
+[26.796]
+==========CarAuto onLinkStatusChange: 11 3 ==========
+
+
+==========CarAuto Status: 3 true ==========
+
+BtRfcommController::start : 404
+/dev/bw_aap is not symlink
+ArkUtils::open_local_socket:266 sock = 9
+BtRfcommController::start : 414
+rfcomm write: 00 09 00 04 08 01 10 00 18 00 20 bc 28
+rfcomm read: 00 16 00 05
+len=22 type=5
+rfcomm read: 08 01 10 00 1a 0e 35 36 31 37 31 46 44 41 50 30 30 31 54 45 20 00
+interface=wlan0
+wlan0 IP Address 192.168.43.1
+local wifi ip=192.168.43.1
+majorVer:1 minorVer0 deviceSerial:56171FDAP001TE status:0 channel:-1
+rfcomm write: 00 11 00 01 0a 0c 31 39 32 2e 31 36 38 2e 34 33 2e 31 10 ca 34
+rfcomm read: 00 00 00 02
+len=0 type=2
+Rfcomm Read timeout!!!
+ssid=carplay_fc9f
+passwd=88888888
+interface=wlan0
+local mac:68:b9:d3:f1:5a:43
+mac=68:b9:d3:f1:5a:43
+rfcomm write: 00 2d 00 03 0a 0c 63 61 72 70 6c 61 79 5f 66 63 39 66 12 08 38 38 38 38 38 38 38 38 1a 11 36 38 3a 62 39 3a 64 33 3a 66 31 3a 35 61 3a 34 33 20 08
+rfcomm read: 00 02 00 07
+len=2 type=7
+rfcomm read: 18 00
+ip: port:-1
+^C
+/ # buudhcpd: sending OFFER of 192.168.43.20
+udhcpd: sending OFFER of 192.168.43.20
+sudhcpd: sending ACK to 192.168.43.20
+syrfcomm read: 00 02 00 06
+len=2 type=6
+rfcomm read: 08 00
+bwirelessConnectionProc:206 Accept client connection
+wirelessConnectionProc:189
+
+ox
+-/bin/sh: bussybox: not found
+/ # ArkDbus::onLinkStatusChange:175 mStatus=9
+Signal Sent
++++ArkAuto::run : 262
+[33.286]  MsnCoreApp::onLinkStatusChange 11 9
+[33.288]
+==========CarAuto onLinkStatusChange: 11 9 ==========
+
+
+==========CarAuto Status: 3 true ==========
+
+Sink::init Sink : 0
+Creating new Video Sink...
+w=800 h=480 widthMargin=0  heightMargin=0
+w=1280 h=720 widthMargin=0  heightMargin=0
+w=800 h=480 widthMargin=0  heightMargin=0
+Creating new input source...
+Creating new Audio source...
+###Microphone::init:85 bridge_mode=0 audio=0
+Mic[   33.430882] ark1668-i2s: hw_params stream=0 rate=48000 period_size=1024 periods=16 format=2
+rophone::init:102
+Microphone i[   33.442251] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 33449995614ns
+nitialized!
+Cre[   33.452671] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 33460414194ns
+[   33.460775] ark1668-sddac: ark_audio_mute mute=1 at 33468535786ns
+[   33.469849] ark1668-sddac: ark_audio_mute mute=0 at 33477611305ns
+ating new Audio sink...
+open:174 m_handle_name=plug:softvol2 mode=0
+rate=48000 channels=2 bits_per_sample=16
+set_alsa_paramters:103 period_size=1024 buffer_size=16384
+open:190 ret=0 m_handle=0xb4a23840
+Creating new Audio sink...
+open:174 m_handle_name=plug:softvol1 mode=0
+rate=16000 channels=1 bits_per_sample=16
+set_alsa_paramters:103 period_size=341 buffer_size=5461
+open:190 ret=0 m_handle=0xb4a033e0
+Creating new Audio sink...
+open:174 m_handle_name=plug:softvol4 mode=0
+rate=16000 channels=1 bits_per_sample=16
+set_alsa_paramters:103 period_size=341 buffer_size=5461
+open:190 ret=0 m_handle=0xb4a52060
+bt addr=dc:0d:30:14:fc:9f
+Creating Bluetooth endpoint...
+BluetoothCallbacks:BluetoothCallbacks:21
+Creating Bluetooth endpoint...
+Transport type is wlan!
+Starting link, car major=1 minor=3
+Phone reported version major=1 minor=7
+ssl state=SSLv3 read server hello A -1
+[   35.171249] pcm_dmaengine: period jitter: stream=0 actual=29875432ns expected=21333333ns (+40%)
+[   35.201542] pcm_dmaengine: period jitter: stream=0 actual=10140593ns expected=21333333ns (-52%)
+busybssl state=SSLv3 read finished A -1
+ossl state=SSL negotiation finished successfully 1
+SSL version=TLSv1.2 Cipher name=ECDHE-RSA-AES128-GCM-SHA256
+Verify returned: ok
+label:Android deviceName: Google Pixel 9 Pro
+x
+BusyBox v1.30.1 (2026-07-27 16:22:32 AEST) multi-call binary.
+BusyBox is copyrighted by many authors between 1998-2015.
+Licensed under GPLv2. See source distribution for detailed
+copyright notices.
+
+Usage: busybox [function [arguments]...]
+   or: busybox --list[-full]
+   or: busybox --show SCRIPT
+   or: busybox --install [-s] [DIR]
+   or: function [arguments]...
+
+        BusyBox is a multi-call binary that combines many common Unix
+        utilities into a single executable.  Most people will create a
+        link to busybox for each function they wish to use and BusyBox
+        will act like whatever it was invoked as.
+
+Currently defined functions:
+        [, [[, acpid, add-shell, addgroup, adduser, adjtimex, arch, arp,
+        arping, ash, awk, base64, basename, bc, beep, blkdiscard, blkid,
+        blockdev, bootchartd, brctl, bunzip2, bzcat, bzip2, cal, cat, chat,
+        chattr, chgrp, chmod, chown,[   35.952410] ark_display: ARKDISP_GET_SCREEN_INFO -> screen_id=0 800x480 120x72mm
+ chpasswd, chpst, chroot, chrt, chvt,
+        cksum, clear, cmp, comm, conspy, cp, cpio, crond, crontab, cryptpw,
+        cttyhack, cut, date, dc, dd, deallocvt, delgroup, deluser, depmod,
+        devmem, df, dhcprelay, diff, dirname, dmesg, dnsd, dnsdomainname,
+        dos2unix, dpkg, dpkg-deb, du, dumpkmap, dumpleases, echo, ed, egrep,
+        eject, env, envdir, envuidgid, ether-wake, expand, expr, factor,
+        fakeidentd, fallocate, false, fatattr, fbset, fbsplash, fdflush,
+        fdformat, fdisk, fgconsole, fgrep, find, findfs, flock, fold, free,
+        freeramdisk, fsck, fsck.minix, fsfreeze, fstrim, fsync, ftpd, ftpget,
+        ftpput, fuser, getopt, getty, grep, groups, gunzip, gzip, halt, hd,
+        hdparm, head, hexdump, hexedit, hostid, hostname, httpd, hush, hwclock,
+        i2cdetect, i2cdump, i2cget, i2cset, id, ifconfig, ifdown, ifenslave,
+        ifplugd, ifup, inetd, init, insmod, install, ionice, iostat, ip,
+        ipaddr, ipcalc, ipcrm, ipcs, iplink, ipneigh, iproute, iprule,
+        iptunnel, kbd_mode, kill, killall, killall5, klogd, last, less, link,
+        linux32, linux64, linuxrc, ln, loadfont, loadkmap, logger, login,
+        logname, logread, losetup, lpd, lpq, lpr, ls, lsattr, lsmod, lsof,
+        lspci, lsscsi, lsusb, lzcat, lzma, lzop, makedevs, makemime, man,
+        md5sum, mdev, mesg, microcom, mkdir, mkdosfs, mke2fs, mkfifo,
+        mkfs.ext2, mkfs.minix, mkfs.vfat, mknod, mkpasswd, mkswap, mktemp,
+        modinfo, modprobe, more, mount, mountpoint, mpstat, mt, mv, nameif,
+        nanddump, nandwrite, nbd-client, nc, netstat, nice, nl, nmeter, nohup,
+        nologin, nproc, nsenter, nslookup, ntpd, nuke, od, openvt, partprobe,
+        passwd, paste, patch, pgrep, pidof, ping, ping6, pipe_progress,
+        pivot_root, pkill, pmap, popmaildir, poweroff, powertop, printenv,
+        printf, ps, pscan, pstree, pwd, pwdx, raidautorun, rdate, rdev,
+        readahead, readlink, readprofile, realpath, reboot, reformime,
+        remove-shell, renice, reset, resize, resume, rev, rm, rmdir, rmmod,
+        route, rpm, rpm2cpio, rtcwake, run-init, run-parts, runlevel, runsv,
+        runsvdir, rx, script, scriptreplay, sed, sendmail, seq, setarch,
+#audio stream release
+        setconsole, setfattr, setfont, setkeycodes, setlogcons, setpriv,
+        setserial, setsid, setuidgid, sh, sha1sum, sha256sum, sha3sum,
+        sha512sum, showkey, shred, shuf, slattach, sleep, smemcap, softlimit,
+        sort, split, ssl_client, start-stop-daemon, stat, strings, stty, su,
+        sulogin, sum, sv, svc, svlogd, svok, swapoff, swapon, switch_root,
+        sync, sysctl, syslogd, tac, tail, tar, taskset, tc, tcpsvd, tee,
+        telnet, telnetd, test, tftp, tftpd, time, timeout, top, touch, tr,
+        traceroute, traceroute6, true, truncate, tty, ttysize, tunctl,
+        ubiattach, ubidetach, ubimkvol, ubirename, ubirmvol, ubirsvol,
+        ubiupdatevol, udhcpc, udhcpd, udpsvd, uevent, umount, uname, unexpand,
+        uniq, unix2dos, unlink, unlzma, unshare, unxz, unzip, uptime, users,
+        usleep, uudecode, uuencode, vconfig, vi, vlock, volname, w, wall,
+        watch, watchdog, wc, wget, which, who, whoami, whois, xargs, xxd, xz,
+        xzcat, yes, zcat, zcip
+/ # VideoSinkCallbacks::setupCallback:222
+Source video config index is 0 w=800 h=480.
+
+VideoSinkCallbacks::playbackStartCallback:228 0xb19f9440
+m_screen_width=800 m_screen_height=480 mTVOutEnable=1
+VideoDecoder::SetVideoResolution:198 800 480 0 0
+VideoDecoder::open:116
+VideoDecoder::open:125 m_backcar=0
+VideoDecoder::video_init:337 fb_lock=-1 enable_vga:0
+video_init:350, 800, 480, 800, 480
+#video_init:351, 0, 0, 0, 0
+VideoDecoder::open:140
+ArkDbus::onLinkStatusChange:175 mStatus=4
+Signal Sent
+VideoSinkCallbacks::playbackStartCallback:235
+[35.998]  MsnLink status success: 11 4
+[35.998]  MsnCoreApp::onLinkStatusChange 11 4
+[35.999]
+==========CarAuto onLinkStatusChange: 11 4 ==========
+
+
+==========CarAuto Status: 4 false ==========
+
+[35.999]  requestLinkStatus 11 31
+[35.999]  ====================== requestAutoHandler ====================== 31
+[36.002]  APP_NOTIFY_ANDROIDAUTO_LINKCHANGE true
+ArkDbus::reply_to_requestLinkStatus_call 223 param1=11 param2=31
+ArkDbus::run 468
+VideoSinkCallbacks::codecConfigCallback:215
+Configuring codec
+**********VideoDecoder::play:166 Linking=0
+VideoSinkCallbacks::codecConfigCallback:217
+***PhoneStatusCallbacks:phoneStatusCallback:23 calls=0 ***
+/ # busybox
+BusyBox v1.30.1 (2026-07-27 16:22:32 AEST) multi-call binary.
+BusyBox is copyrighted by many authors between 1998-2015.
+Licensed under GPLv2. See source distribution for detailed
+copyright notices.
+
+Usage: busybox [function [arguments]...]
+   or: busybox --list[-full]
+   or: busybox --show SCRIPT
+   or: busybox --install [-s] [DIR]
+   or: function [arguments]...
+
+        BusyBox is a multi-call binary that combines many common Unix
+        utilities into a single executable.  Most people will create a
+        link to busybox for each function they wish to use and BusyBox
+        will act like whatever it was invoked as.
+
+Currently defined functions:
+        [, [[, acpid, add-shell, addgroup, adduser, adjtimex, arch, arp,
+        arping, ash, awk, base64, basename, bc, beep, blkdiscard, blkid,
+        blockdev, bootchartd, brctl, bunzip2, bzcat, bzip2, cal, cat, chat,
+        chattr, chgrp, chmod, chown, chpasswd, chpst, chroot, chrt, chvt,
+        cksum, clear, cmp, comm, conspy, cp, cpio, crond, crontab, cryptpw,
+        cttyhack, cut, date, dc, dd, deallocvt, delgroup, deluser, depmod,
+        devmem, df, dhcprelay, diff, dirname, dmesg, dnsd, dnsdomainname,
+        dos2unix, dpkg, dpkg-deb, du, dumpkmap, dumpleases, echo, ed, egrep,
+        eject, env, envdir, envuidgid, ether-wake, expand, expr, factor,
+        fakeidentd, fallocate, false, fatattr, fbset, fbsplash, fdflush,
+        fdformat, fdisk, fgconsole, fgrep, find, findfs, flock, fold, free,
+        freeramdisk, fsck, fsck.minix, fsfreeze, fstrim, fsync, ftpd, ftpget,
+        ftpput, fuser, getopt, getty, grep, groups, gunzip, gzip, halt, hd,
+        hdparm, head, hexdump, hexedit, hostid, hostname, httpd, hush, hwclock,
+        i2cdetect, i2cdump, i2cget, i2cset, id, ifconfig, ifdown, ifenslave,
+        ifplugd, ifup, inetd, init, insmod, install, ionice, iostat, ip,
+        ipaddr, ipcalc, ipcrm, ipcs, iplink, ipneigh, iproute, iprule,
+        iptunnel, kbd_mode, kill, killall, killall5, klogd, last, less, link,
+        linux32, linux64, linuxrc, ln, loadfont, loadkmap, logger, login,
+        logname, logread, losetup, lpd, lpq, lpr, ls, lsattr, lsmod, lsof,
+        lspci, lsscsi, lsusb, lzcat, lzma, lzop, makedevs, makemime, man,
+        md5sum, mdev, mesg, microcom, mkdir, mkdosfs, mke2fs, mkfifo,
+        mkfs.ext2, mkfs.minix, mkfs.vfat, mknod, mkpasswd, mkswap, mktemp,
+        modinfo, modprobe, more, mount, mountpoint, mpstat, mt, mv, nameif,
+        nanddump, nandwrite, nbd-client, nc, netstat, nice, nl, nmeter, nohup,
+        nologin, nproc, nsenter, nslookup, ntpd, nuke, od, openvt, partprobe,
+        passwd, paste, patch, pgrep, pidof, ping, ping6, pipe_progress,
+        pivot_root, pkill, pmap, popmaildir, poweroff, powertop, printenv,
+        printf, ps, pscan, pstree, pwd, pwdx, raidautorun, rdate, rdev,
+        readahead, readlink, readprofile, realpath, reboot, reformime,
+        remove-shell, renice, reset, resize, resume, rev, rm, rmdir, rmmod,
+        route, rpm, rpm2cpio, rtcwake, run-init, run-parts, runlevel, runsv,
+        runsvdir, rx, script, scriptreplay, sed, sendmail, seq, setarch,
+        setconsole, setfattr, setfont, setkeycodes, setlogcons, setpriv,
+        setserial, setsid, setuidgid, sh, sha1sum, sha256sum, sha3sum,
+        sha512sum, showkey, shred, shuf, slattach, sleep, smemcap, softlimit,
+        sort, split, ssl_client, start-stop-daemon, stat, strings, stty, su,
+        sulogin, sum, sv, svc, svlogd, svok, swapoff, swapon, switch_root,
+        sync, sysctl, syslogd, tac, tail, tar, taskset, tc, tcpsvd, tee,
+        telnet, telnetd, test, tftp, tftpd, time, timeout, top, touch, tr,
+        traceroute, traceroute6, true, truncate, tty, ttysize, tunctl,
+        ubiattach, ubidetach, ubimkvol, ubirename, ubirmvol, ubirsvol,
+        ubiupdatevol, udhcpc, udhcpd, udpsvd, uevent, umount, uname, unexpand,
+        uniq, unix2dos, unlink, unlzma, unshare, unxz, unzip, uptime, users,
+        usleep, uudecode, uuencode, vconfig, vi, vlock, volname, w, wall,
+        watch, watchdog, wc, wget, which, who, whoami, whois, xargs, xxd, xz,
+        xzcat, yes, zcat, zcip
+/ # ls
+README.md                 lib                       root
+Settings                  linuxrc                   sbin
+bin                       lost+found                sys
+busybox-applets.manifest  media                     tmp
+data                      msnprofile                usr
+dev                       nanddata                  var
+etc                       proc
+/ # LinuxController::pingTimerExpired, do not receive ping in 5s, exit now!.
+ArkUtils::send_local_message:288 sock [   59.968725] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 59976459648ns
+[   59.976767] ark1668-sddac: ark_audio_mute mute=1 at 59984528315ns
+= 4 n =1
+Writer[   59.983062] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 59990813858ns
+ thread exiting.
+readBytes:548
+
+wifi transport exit because receiving quit cmd
+
+Encounted fatal error on read.
+ArkUtils::send_local_message:288 sock = 4 n =1
+Reader thread exiting.
+Reader thread joined
+Writer thread joined
+Teardown display called.
+VideoDecoder::free_input_buffer:323
+VideoDecoder::video_uninit:393
+Called ArkMediaPlayer teardown successfully
+Video sink shut down.
+~LinuxVideoSink 72
+~VideoSinkCallbacks 47
+Input source shut down.
+Called Microphone teardown successfully
+Audio source shut down.
+Called ArkMediaPlayer teardown successfully
+Audio sink shut down.
+Called ArkMediaPlayer teardown successfully
+Audio sink shut down.
+Called ArkMediaPlayer teardown successfully
+Audio sink shut down.
+Shutting down LinuxPhoneStatus.
+Sink shutdown complete!
+ArkDbus::onLinkStatusChange:175 mStatus=8
+Signal Sent
+BtRfcommController::stop : 422 start
+RfcommTransport::stop : 230
+ArkUtils::send_local_message:288 sock = 9 n =1
+~RfcommConnection:289
+read:291
+Rfcomm transport exit because receiving quit cmd
+Read header failed
+run:161 stop
+BtRfcommController::stop : 430 end
+run : 294
+[60.038]  MsnLink status exit: 11 8
+[60.039]  MsnCoreApp::onLinkStatusChange 11 8
+[60.039]
+==========CarAuto onLinkStatusChange: 11 8 ==========
+
+
+==========CarAuto Status: 8 true ==========
+
+[60.075]  MsnMainWindow::setRealVisible CarAutoWindow(0x61f060, name = "Android Auto") false
+[60.076]  MsnMainWindow::setRealVisible LauncherWindow(0x13e970, name = "LauncherWindow") true
+[60.087]  Waite Event Ticks 10
+[60.173]
+======== refreshAppAudioChannel 8388619 0
+[60.173]  switchToAppAudioChannel, ModeApp: "MsnCoreApp"  AudioApp: "MsnCoreApp"  Channel: 0 Request: false
+[60.174]  APP_NOTIFY_ANDROIDAUTO_LINKCHANGE false
+reboot
+/ # umount: can't unmount /var: Device or resource busy
+umount: can't unmount /tmp: Device or resource busy
+umount: can't unmount /sys: Device or resource busy
+umount[   76.354621] EXT4-fs (sda2): re-mounted. Opts: (null)
+: can't unmount /dev: Device or resource busy
+The system is going down NOW!
+udhcpd: received SIGTERM
+Sent SIGTERM to all processes
+processIOEvents read fd:34 closed!
+
+udhcpd: can't open '/data/udhcpd.leases': Read-only file system
+[76.562]  Record Error Log: /data/minidump/err-6.log
+sh: can't create /data/minidump/err-6.log: nonexistent directory
+AppVer:V3.21.09.0219
+SystemVer:
+HardwareInfos:01-0006-06-00-00-00-00-00
+ErrorCode:15
+CallStack:
+/usr/lib/libMsnCommons.so(+0x5d7d0)[0xb63d47d0]
+/lib/libc.so.6(__default_sa_restorer+0x0)[0xb522c710]
+/lib/libc.so.6(__select+0x74)[0xb52cb7e0]
+/usr/local/Qt4.7.4/lib/libQtCore.so.4(_Z14qt_safe_selectiP6fd_setS0_S0_PK7timeval+0x60)[0xb564aa40]
+/usr/local/Qt4.7.4/lib/libQtCore.so.4(_ZN27QEventDispatcherUNIXPrivate8doSelectE6QFlagsIN10QEventLoop17ProcessEventsFlagEEP7timeval+0x248)[0xb564f7c8]
+/usr/local/Qt4.7.4/lib/libQtCore.so.4(_ZN20QEventDispatcherUNIX13processEventsE6QFlagsIN10QEventLoop17ProcessEventsFlagEE+0xb0)[0xb564fc4c]
+/usr/local/Qt4.7.4/lib/libQtGui.so.4(+0x1cd680)[0xb5a64680]
+/usr/local/Qt4.7.4/lib/libQtCore.so.4(_ZN10QEventLoop13processEventsE6QFlagsINS_17ProcessEventsFlagEE+0x40)[0xb5620270]
+/usr/local/Qt4.7.4/lib/libQtCore.so.4(_ZN10QEventLoop4execE6QFlagsINS_17ProcessEventsFlagEE+0x100)[0xb56204b0]
+/usr/local/Qt4.7.4/lib/libQtCore.so.4(_ZN16QCoreApplication4execEv+0x8c)[0xb5624e34]
+MsnCoreApp[0x2021c]
+/lib/libc.so.6(__libc_start_main+0x110)[0xb5217174]
+[    0.000000] Booting Linux on physical CPU 0x0
+[    0.000000] Linux version 4.19.192 (osboxes@osboxes) (gcc version 7.3.1 20180425 [linaro-7.3-2018.05 revision d29120a424ecfbc167ef90065c0eeb7f91977701] (Linaro GCC 7.3-2018.05)) #159 Mon Aug 3 08:58:19 AEST 2026
+[    0.000000] CPU: ARMv7 Processor [410fc051] revision 1 (ARMv7), cr=10c53c7d
+[    0.000000] CPU: PIPT / VIPT nonaliasing data cache, VIPT aliasing instruction cache
+[    0.000000] OF: fdt: Machine model: Limcet P305/P306 Dashboard Head Unit
+[    0.000000] bootconsole [earlycon0] enabled
+[    0.000000] Memory policy: Data cache writeback
+[    0.000000] cma: Reserved 64 MiB at 0x04000000
+[    0.000000] On node 0 totalpages: 46080
+[    0.000000]   Normal zone: 405 pages used for memmap
+[    0.000000]   Normal zone: 0 pages reserved
+[    0.000000]   Normal zone: 46080 pages, LIFO batch:15
+[    0.000000] CPU: All CPU(s) started in SVC mode.
+[    0.000000] random: get_random_bytes called from start_kernel+0xa0/0x394 with crng_init=0
+[    0.000000] pcpu-alloc: s0 r0 d32768 u32768 alloc=1*32768
+[    0.000000] pcpu-alloc: [0] 0
+[    0.000000] Built 1 zonelists, mobility grouping off.  Total pages: 45675
+[    0.000000] Kernel command line: root=/dev/sda2 console=ttyS0,115200n8 mem=180M earlyprintk=serial rootfstype=ext4 rootwait rw screen=0 user_debug=8
+[    0.000000] Dentry cache hash table entries: 32768 (order: 5, 131072 bytes)
+[    0.000000] Inode-cache hash table entries: 16384 (order: 4, 65536 bytes)
+[    0.000000] Memory: 106816K/184320K available (6144K kernel code, 375K rwdata, 1444K rodata, 1024K init, 163K bss, 11968K reserved, 65536K cma-reserved)
+[    0.000000] Virtual kernel memory layout:
+[    0.000000]     vector  : 0xffff0000 - 0xffff1000   (   4 kB)
+[    0.000000]     fixmap  : 0xffc00000 - 0xfff00000   (3072 kB)
+[    0.000000]     vmalloc : 0xcb800000 - 0xff800000   ( 832 MB)
+[    0.000000]     lowmem  : 0xc0000000 - 0xcb400000   ( 180 MB)
+[    0.000000]     modules : 0xbf000000 - 0xc0000000   (  16 MB)
+[    0.000000]       .text : 0x(ptrval) - 0x(ptrval)   (7136 kB)
+[    0.000000]       .init : 0x(ptrval) - 0x(ptrval)   (1024 kB)
+[    0.000000]       .data : 0x(ptrval) - 0x(ptrval)   ( 376 kB)
+[    0.000000]        .bss : 0x(ptrval) - 0x(ptrval)   ( 164 kB)
+[    0.000000]
+[    0.000000] **********************************************************
+[    0.000000] **   NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE   **
+[    0.000000] **                                                      **
+[    0.000000] ** trace_printk() being used. Allocating extra memory.  **
+[    0.000000] **                                                      **
+[    0.000000] ** This means that this is a DEBUG kernel and it is     **
+[    0.000000] ** unsafe for production use.                           **
+[    0.000000] **                                                      **
+[    0.000000] ** If you see this message and you are not debugging    **
+[    0.000000] ** the kernel, report this immediately to your vendor!  **
+[    0.000000] **                                                      **
+[    0.000000] **   NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE   **
+[    0.000000] **********************************************************
+[    0.000000] NR_IRQS: 16, nr_irqs: 16, preallocated irqs: 16
+[    0.000000] VIC @(ptrval): id 0x00041192, vendor 0x41
+[    0.000000] VIC @(ptrval): id 0x00041192, vendor 0x41
+[    0.000000] L2C-310 dynamic clock gating enabled, standby mode enabled
+[    0.000000] L2C-310 cache controller enabled, 8 ways, 128 kB
+[    0.000000] L2C-310: CACHE_ID 0x410060c9, AUX_CTRL 0x06020000
+[    0.000000] clk cpupll rate 690000000.
+[    0.000000] clk syspll rate 324000000.
+[    0.000000] clk audpll rate 426000000.
+[    0.000000] clk ddrclk rate 426000000.
+[    0.000000] clk cpuclk rate 690000000.
+[    0.000000] clk axiclk rate 324000000.
+[    0.000000] clk ahbclk rate 162000000.
+[    0.000000] clk pclk rate 81000000.
+[    0.000000] clk uart4clk rate 24000000.
+[    0.000000] clk uart5clk rate 24000000.
+[    0.000000] clk gpuclk rate 324000000.
+[    0.000000] clk gpiodebounceclk rate 24000000.
+[    0.000000] clk lcdclk rate 324000000.
+[    0.000000] clk mfcclk rate 162000000.
+[    0.000000] clk rtc-clk rate 32768.
+[    0.000000] clk spi-clk rate 162000000.
+[    0.000000] clk i2s-dac-clk rate 240000000.
+[    0.000000] clk i2s-adc-clk rate 240000000.
+[    0.000000] clocksource: arkmicro,ark-timer: mask: 0xffffff max_cycles: 0xffffff, max_idle_ns: 92171119 ns
+[    0.000018] sched_clock: 24 bits at 81MHz, resolution 12ns, wraps every 103563053ns
+[    0.008560] Console: colour dummy device 80x30
+[    0.013209] Calibrating delay loop... 457.11 BogoMIPS (lpj=2285568)
+[    0.076603] pid_max: default: 32768 minimum: 301
+[    0.081735] Mount-cache hash table entries: 1024 (order: 0, 4096 bytes)
+[    0.088426] Mountpoint-cache hash table entries: 1024 (order: 0, 4096 bytes)
+Sent SIGKILL to all processes
+Requesting system reboot
+[   78.425801] reboot: Restarting system
+
+ARK1680 SoC Booter V 1.00
+SDMMC card successfully
+                       Not found ARKSDLDR.bin.
+check_loaderfile fail.
+FlashId: 0x98f18015
+
+ Device In The Table!!
+
+                      ChipSize: 0x00000080
+
+BlkSize: 0x00020000
+
+PageSize: 0x00000800
+
+SpareSize: 0x00000080
+
+BlkNum: 0x00000400
+
+PagePerBlk: 0x00000040
+
+ColCyc: 0x00000002
+
+RowCyc: 0x00000002
+
+EccCodeSize: 0x0000000d
+
+SegSize: 0x00000200
+NandOS_Loader...
+ARK169 2Gb 20180412-6-5-10_330_430_nboot: 0xc0000783
+DDR3 Data training successful
+samsung DDR3_128MX16
+
+Ark1680 SoC Remapped And DDR Init End . . .
+Launch Stepldr...
+NandStepLoader...
+change_clk enable clock successful
+SD get card RCA:0x%x
+change_clk enable clock successful
+Launch UBOOT from sd...
+
+
+U-Boot 2018.07-linux4ark_1.0 (Aug 03 2026 - 12:24:44 +1000)
+
+DRAM:  180 MiB
+NAND:  128 MiB
+MMC:   ARK_MMC0: 0
+In:    serial
+Out:   serial
+Err:   serial
+[bootlogo] ark_show_bootlogo() starting, screen_id=0
+switch to partitions #0, OK
+mmc0 is current device
+[arkdata.ini] loading -> `fatload mmc 0:1 0x2900000 arkdata.ini`
+7278 bytes read in 9 ms (789.1 KiB/s)
+[arkdata.ini] fatload reported filesize=0x1c6e (7278 bytes)
+[arkdata.ini] loaded 7278 bytes into RAM @ 0x2900000
+[arkdata.ini] done — 13/13 fields overridden from SD card, final timing (vbp=29 vfp=25 vsw=16 hbp=32 hfp=25 hsw=54 clk_freq=330000000 clk_div1=11 clk_div2=1 rgb_mode=0)
+[screen_info] screen_id=0
+[screen_info] ScreenType:0, subType:0,Width:800, Height:480,Format:7, TvoutType:12,screen_id:0,interlace:0
+[screen_info] RgbMode:0 ,BPP:32 ,pad_unset:0
+[screen_info] HFP:25,HBP:32,HSW:54,VBP:29,VFP:25,VSW:16,HSYNCPolarity:0x1,VSYNCPolarity:0x1 ,DEPolarity:0
+[screen_info] CLKSource:1,CLKFreq:330000000,CLKDIV1:11,CLKDIV2:1,CLKPolarity:0,LVDSCfg:0x0,FrameRate:0,
+[arkdata.ini] vpinfo: 20/20 fields overridden, osd1=(c128 b128 s64 h0)
+[bootlogo] ark_display_init() done
+[bootlogo] loading -> `fatload mmc 0:1 0xb400000 bootlogo.raw`
+1536000 bytes read in 528 ms (2.8 MiB/s)
+[bootlogo] fatload reported filesize=0x177000 (1536000 bytes), expected 0x177000 (800x480x32bpp)
+[bootlogo] pushing OSD1 image 800x480 @ 0xb400000 (DISP_RGB_888)
+[bootlogo] OSD1 layer enabled, splash should be visible now
+[lcdconsole] disabled at build time (ENABLE_LCDCONSOLE=0), serial-only
+[bootcheck] bootcount=1 bootlimit=3
+starting USB...
+USB0:   scanning bus 0 for devices... 1 USB Device(s) found
+       scanning usb for storage devices... 0 Storage Device(s) found
+[bootusb] booting kernel+DTB+rootfs from USB stick (usb 0:1), root=/dev/sda2
+[bootlogo] loading -> `fatload mmc 0:1 0xb400000 bootlogo_usb.raw`
+1536000 bytes read in 527 ms (2.8 MiB/s)
+[bootlogo] fatload reported filesize=0x177000 (1536000 bytes), expected 0x177000 (800x480x32bpp)
+[bootlogo] pushing OSD1 image 800x480 @ 0xb400000 (DISP_RGB_888)
+[bootlogo] OSD1 layer enabled, splash should be visible now
+** Bad device usb 0 **
+[bootusb] failed to load zImage from usb 0:1
+Booting stock kernel ...
+[arkdata.ini] done — 13/13 fields overridden from SD card, final timing (vbp=29 vfp=25 vsw=16 hbp=32 hfp=25 hsw=54 clk_freq=330000000 clk_div1=11 clk_div2=1 rgb_mode=0)
+[screen_info] screen_id=0
+[screen_info] ScreenType:0, subType:0,Width:800, Height:480,Format:7, TvoutType:12,screen_id:0,interlace:0
+[screen_info] RgbMode:0 ,BPP:32 ,pad_unset:0
+[screen_info] HFP:25,HBP:32,HSW:54,VBP:29,VFP:25,VSW:16,HSYNCPolarity:0x1,VSYNCPolarity:0x1 ,DEPolarity:0
+[screen_info] CLKSource:1,CLKFreq:330000000,CLKDIV1:11,CLKDIV2:1,CLKPolarity:0,LVDSCfg:0x0,FrameRate:0,
+[arkdata.ini] vpinfo: 20/20 fields overridden, osd1=(c128 b128 s64 h0)
+[disconfig] ark display init g_screen_id=0.
+[bootlogo] loading -> `fatload mmc 0:1 0xb400000 bootlogo_nand.raw`
+1536000 bytes read in 528 ms (2.8 MiB/s)
+[bootlogo] fatload reported filesize=0x177000 (1536000 bytes), expected 0x177000 (800x480x32bpp)
+[bootlogo] pushing OSD1 image 800x480 @ 0xb400000 (DISP_RGB_888)
+[bootlogo] OSD1 layer enabled, splash should be visible now
+[backcarcheck] gpio5=1, in_reverse=0.
+
+NAND read: device 0 offset 0x7920000, size 0x300000
+ 3145728 bytes read: OK
+
+NAND read: device 0 offset 0x1a0000, size 0x400000
+ 4194304 bytes read: OK
+Loaded kernel from NAND
+Kernel image @ 0x1000000 [ 0x000000 - 0x31acf0 ]
+Using machid 0x1068 from environment
+
+Starting kernel ...
+
+Uncompressing Linux... done, booting the kernel.
+machine ID r1 = 0x00001068
+[    1.350000] arktool display reg init
+## Error: "factory_reset" not defined
+sh: 1: unknown operand
+mount successfully!
+insmod: can't insert '/lib/modules/3.4.0/kernel/drivers/input/touchscreen/ark1680_ts.ko': File exists
+ln: /tmp/touch_export: File exists
+[6.835]  set display inch: QSize(120, 72) 5.50956
+[6.877]  init msn firset export ticks: 311
+[    7.290000] IrqLineVG=-1.
+/ # [8.399]  MSNCoreApp start
+[8.414]  MSNCoreApp exception init
+[8.427]  MSNCoreApp running
+[9.657]  Set Effect Process Priority -19  0
+QWS_ARK_TOUCH_DEVICE undefined, touch input disabled
+[10.293]  MsnCoreApp version: V3.21.09.0219
+[10.846]  MSNCoreApp onFirstInit
+[10.850]  ark screen type: 0
+[10.850]  display size: QSize(800, 480)  src size: QSize(800, 480)
+[10.929]  Load App Plugin 12 "/usr/lib/libCarReversing.so"
+[11.016]  Load App Plugin 10 "/usr/lib/libLauncher-Box.so"
+[11.033]  MsnMainWindow::setRealVisible LauncherWindow(0x1c41e8) true
+[11.087]  Waite Event Ticks 12
+[11.217]  load wallpaper: "/msnprofile/wallpaper/800x480/"  size: QSize(0, 0)
+rm: can't remove '/tmp/app-*.bmp': No such file or directory
+[11.239]  MSNCoreApp show
+[11.458]  MsnWindowManager::setVisible true true
+[11.469]  endCarReversing
+get_shared_display_data May 29 2020-16:57:02.
+[11.473]  setTrackOSDVisible false
+[11.476]  set_osd1_visible true
+QMetaObject::connectSlotsByName: No matching signal for on_pushButton_clicked()
+[12.438]  DVRSetDialog visibale change: false
+[12.463]  MSNCoreApp hide boot logo
+[12.475]  MSNCoreApp onSecondInit
+[12.479]  DiskDeviceWatcher::startWatcher
+Created device discovery thread
+[12.484]  Start Load Driver
+[12.884]  Load App Plugin 8 "/usr/lib/libSetting.so"
+[12.916]  Open backlight pwm : true
+SoundAdapter Create Failed, Not Support ICType: 0
+[12.998]  Load App Plugin 403 "/usr/lib/libMsnSound.so"
+syncDatas armsetting radar visible:0 datas:0 0 0 0
+[13.461]  McuAdapter: MCUAdapter_BoxP300 6
+[13.467]  Open MCU Serial Port  "/dev/ttyHS0"  Ret: true "No such file or directory"
+
+start serialPortProcessProc
+
+[13.478]  Open MCU Serial Port  "/dev/ttyS2"  Ret: true "No such file or directory"
+[13.478]  Load App Plugin 401 "/usr/lib/libMcuCenter.so"
+[13.625]  CanBusPlugin 0 0
+[13.625]  Load App Plugin 400 "/usr/lib/libCanBus.so"
+[13.743]  Load App Plugin 3 "/usr/lib/libBlueTooth.so"
+[13.761]  open touch monitor dev: /dev/input/event0 41
+[13.828]  usb_device_added /dev/bus/usb/002/001
+[13.830]  usb_device_added /dev/bus/usb/001/001
+usb_device_open /dev/bus/usb/001/001
+usb_device_open open returned 44 writeable 1 errno 2
+usb_device_new /dev/bus/usb/001/001 fd: 44
+usb_device_new read returned 43 errno 2
+insert usb dev:/dev/bus/usb/001/001 vid:0x1d6b pid:0x0002
+[13.834]  onLoadDriverFinished
+[13.894]  arkapi_open_dvr() retry_times: 1
+net.ipv4.udp_mem = 8192 10240 16384
+net.ipv4.udp_rmem_min = 1048576
+[   13.960000] track_setting=2
+[   13.960000] track_setting=3
+[14.003]  MSN protocal type: 0  sendReadyData!
+[14.246]  MSNCoreApp onLoadStartupApp
+[14.246]  MSNCoreApp onEndInit
+[14.246]
+MsnCoreApp End init
+
+[14.684]  MsnLink StartService: "com.arkmicro.carplay"
+label2 = TOYOTA
+pcarplay_info->bridge_mode=0
+pcarplay_info->icurrent = 500
+pcarplay_info->ns_level = 1
+### ++ carplay initialize ++
+msg instance
+++ MsgEnQueue ++
+[15.384]  MsnLink StartService ret: "com.arkmicro.carplay" true ""
+[15.387]  MSNCoreApp exec
+### carplay dbus initialize true
+[15.407]  MsnLink::onServiceRegistered "com.arkmicro.carplay"
+new device /dev/bus/usb/002/002
+[15.407]  usb_device_added /dev/bus/usb/002/002
+[15.432]  MSN protocal type: 0  sendReadyData!
+x=0 y=0
+s_w=800 s_h=480
+v_w=800 v_h=480 screen_width_phy=120 screen_height_phy=72
+#pluginfo->btmac=56:fa:dd:e2:50:bf
+carplay_plugin_set_info:1505 err=0
+mDNSResponder: mDNSResponder (Engineering Build) (May 29 2020 16:56:53) starting
+carplay_plugin_start:1728
+### carplay ++ usb_reader_thread ++
+### carplay -- usb_reader_thread --
+### -- carplay initialize --
+[15.991]  start bt service:/usr/bin/blueware
+[16.117]  MSN protocal type: 0  sendReadyData!
+[16.193]  Retry Open BlueTooth Serial Port,  Ret: true
+[16.193]  Write At atCommand: "AT+DEVSTAT"
+[16.407]  Write At atCommand: "AT+BTEN=1"
+udhcpd: started, v1.25.0
+mDNSResponder: mDNS_AddDNSServer: Lock not held! mDNS_busy (0) mDNS_reentrancy (0)
+mDNSResponder: mDNSPlatformSourceAddrForDest: connect 1.1.1.1 failed errno 101 (Network is unreachable)
+unknow disk type: "DOS/MBR boot sector; partition 1 : ID=0xc, active, start-CHS (0x10,0,1), end-CHS (0x3ff,3,32), startsector 2048, 129024 sectors; partition 2 : ID=0x83, start-CHS (0x3ff,3,32), end-CHS (0x3ff,3,32), startsector 133120, 612352 sectors; partition 3 : ID=0x83, start-CHS (0x3ff,3,32), end-CHS (0x3ff,3,32), startsector 747520, 301056 sectors"
+[17.324]  mount command: "mount /dev/mmcblk0p1 -o utf8 /media/sdisk/p1/"
+[17.549]  mount command: "mount /dev/mmcblk0p2 /media/sdisk/p2/"
+[17.788]  mount command: "mount /dev/mmcblk0p3 /media/sdisk/p3/"
+[18.708]  Write At atCommand: "AT+ADDR"
+[18.709]  BlueToothAdapter_Blueware::onStartupConfig()
+[18.709]  Write At atCommand: "AT+HFPCFG"
+[18.711]  Write At atCommand: "AT+HFPDISC"
+[18.712]  Write At atCommand: "AT+ADDR"
+[18.713]  Write At atCommand: "AT+NAME"
+[18.713]  Write At atCommand: "AT+VER"
+[18.741]  Write At atCommand: "AT+PLIST"
+[18.742]  BT Local Address: "DC0D3014FC9F"
+[18.742]  Write At atCommand: "AT+NAME"
+[18.744]I msncoreapp.cpp@2964 enableHostApd start  enable: 1 timeout: 3000
+[18.745]  start  enableWLAN 0 18745
+stop wifi manager
+[18.838]  end  enableWLAN 0 18838
+[18.882]I msncoreapp.cpp@3059 enableHostApd hostapd started  true
+[18.883]  hostapd state: 2  pid: 908 ap type: 1
+[18.883]I msncoreapp.cpp@3098 enableHostApd end  1
+[18.884]  Write At atCommand: "AT+HFPCFG=0"
+[18.884]  BT Local Address: "DC0D3014FC9F"
+[18.885]  Write At atCommand: "AT+NAME"
+[19.827]  MsnCoreApp::onDiskDeviceStatusChange 1 1
+[19.840]  run thread: 0x70cbb440
+[19.841]  onScannerFiles thread start: MsnThread(0x1dfe08)
+[20.845]  Load App Plugin 2 "/usr/lib/libMusicPlayer.so"
+[20.872]  MsnMainWindow::setRealVisible LauncherWindow(0x1c41e8, name = "LauncherWindow") false
+[20.878]  MsnMainWindow::setRealVisible MusicPlayerWindow(0x534050) true
+[20.879]  mode app change: "MsnCoreApp" -> "MusicPlayer"
+[20.879]
+======== refreshAppAudioChannel 131075 0
+[20.880]  switchToAppAudioChannel, ModeApp: "MusicPlayer"  AudioApp: "MusicPlayer"  Channel: 0 Request: false
+[20.962]  Waite Event Ticks 81
+QMetaObject::connectSlotsByName: No matching signal for on_btnBtMusic_clicked()
+[21.361]  setAppVolumeMute "MusicPlayer" true
+[21.362]
+======== refreshAppAudioChannel 131075 0
+[21.362]  switchToAppAudioChannel, ModeApp: "MusicPlayer"  AudioApp: "MusicPlayer"  Channel: 0 Request: false
+TagLib: Could not open file /media/udisk/p2/etc/bluetooth/RingTone.wav
+TagLib: FileRef::tag() - Called without a valid file.
+[21.692]I msncoreapp.cpp@2964 enableHostApd start  enable: 0 timeout: 100
+[21.693]  hostapd state: 2  pid: 908
+[21.854]  hostapd state: 0  pid: 0
+[21.854]I msncoreapp.cpp@3098 enableHostApd end  0
+[21.855]  Write At atCommand: "AT+HFPCONN=04006EAF29C4"
+[21.855]  Auto ConnectTime 8000
+[22.855]I msncoreapp.cpp@2964 enableHostApd start  enable: 1 timeout: 100
+[22.855]  start  enableWLAN 0 22855
+stop wifi manager
+[22.954]  end  enableWLAN 0 22954
+[22.995]I msncoreapp.cpp@3059 enableHostApd hostapd started  true
+[22.996]  hostapd state: 2  pid: 925 ap type: 1
+[22.996]I msncoreapp.cpp@3098 enableHostApd end  1
+[23.604]  onScannerFiles thread end: MsnThread(0x1dfe08)
+[23.607]  onScannerFinished 1 MsnThread(0x1dfe08) false
+[28.857]  Write At atCommand: "AT+HFPSTAT"
+[29.856]  Write At atCommand: "AT+HFPCONN=04006EAF29C4"
+[29.857]  Auto ConnectTime 16000
+[36.858]  Write At atCommand: "AT+HFPSTAT"
+[45.859]  Write At atCommand: "AT+HFPCONN=04006EAF29C4"
+[45.859]  Auto ConnectTime 24000
+[52.860]  Write At atCommand: "AT+HFPSTAT"
+[69.861]  Write At atCommand: "AT+HFPCONN=04006EAF29C4"
+[69.862]  Auto ConnectTime 32000
+[77.863]  Write At atCommand: "AT+HFPSTAT"
+[101.863]  Write At atCommand: "AT+HFPCONN=04006EAF29C4"
+[101.863]  Auto ConnectTime 40000

@@ -1,0 +1,611 @@
+[19.081]  Write At atCommand: "AT+ADDR"
+[19.083]  BlueToothAdapter_Blueware::onStartupConfig()
+[19.083]  Write At atCommand: "AT+HFPCFG"
+[19.084]  Write At atCommand: "AT+HFPDISC"
+[19.085]  Write At atCommand: "AT+ADDR"
+[19.086]  Write At atCommand: "AT+NAME"
+[19.087]  Write At atCommand: "AT+VER"
+[19.112]  Write At atCommand: "AT+PLIST"
+[19.113]  BT Local Address: "DC0D3014FC9F"
+[19.113]  Write At atCommand: "AT+NAME"
+[19.113]I msncoreapp.cpp@2964 enableHostApd start  enable: 1 timeout: 3000
+[19.114]  start  enableWLAN 0 19114
+stop wifi manager
+[19.229]  end  enableWLAN 0 19230
+[19.288]I msncoreapp.cpp@3059 enableHostApd hostapd started  true
+[19.289]  hostapd state: 2  pid: 365 ap type: 1
+[19.290]I msncoreapp.cpp@3098 enableHostApd end  1
+[19.291]  Write At atCommand: "AT+HFPCFG=0"
+[19.292]  BT Local Address: "DC0D3014FC9F"
+[19.292]  Write At atCommand: "AT+NAME"
+[19.299]  Write At atCommand: "AT+NAME=Limcet Box_fc9f"
+[19.301]  Write At atCommand: "AT+LENAME=Limcet Box_fc9f"
+[19.365]  Write At atCommand: "AT+NAME=Limcet Box_fc9f"
+[19.367]  Write At atCommand: "AT+LENAME=Limcet Box_fc9f"
+[19.368]  Write At atCommand: "AT+NAME=Limcet Box_fc9f"
+[19.369]  Write At atCommand: "AT+LENAME=Limcet Box_fc9f"
+[21.290]I msncoreapp.cpp@2964 enableHostApd start  enable: 0 timeout: 100
+[21.290]  hostapd state: 2  pid: 365
+[21.444]  hostapd state: 0  pid: 0
+[21.445]I msncoreapp.cpp@3098 enableHostApd end  0
+[22.361]  MsnCoreApp::onDiskDeviceStatusChange 0 0
+[22.445]I msncoreapp.cpp@2964 enableHostApd start  enable: 1 timeout: 100
+[22.446]  start  enableWLAN 0 22446
+stop wifi manager
+[22.530]  end  enableWLAN 0 22530
+[22.577]I msncoreapp.cpp@3059 enableHostApd hostapd started  true
+[22.578]  hostapd state: 2  pid: 376 ap type: 1
+[22.578]I msncoreapp.cpp@3098 enableHostApd end  1
+ for ch in 0 1 2 3 4 5 6 7; do
+    addr>      addr=$(printf "0x%x" $((0xe00003c8 + ch*4)))
+>      val=$(devmem $addr 32)
+>      bit11=$(( (val >> 11) & 1 ))
+    echo>      echo "channel $ch: DWC_PARAMS=$val  MBLK_EN=$bit11"
+>  done
+channel 0: DWC_PARAMS=0x00000000  MBLK_EN=0
+channel 1: DWC_PARAMS=0x49241CC0  MBLK_EN=1
+channel 2: DWC_PARAMS=0x29221CC0  MBLK_EN=1
+channel 3: DWC_PARAMS=0x29221CC0  MBLK_EN=1
+channel 4: DWC_PARAMS=0x39231CC0  MBLK_EN=1
+channel 5: DWC_PARAMS=0x39231FC0  MBLK_EN=1
+channel 6: DWC_PARAMS=0x39231FC0  MBLK_EN=1
+channel 7: DWC_PARAMS=0x39231FC0  MBLK_EN=1
+/ # ^C
+/ # dmesg
+[    0.000000] Booting Linux on physical CPU 0x0
+[    0.000000] Linux version 4.19.192 (osboxes@osboxes) (gcc version 7.3.1 20180425 [linaro-7.3-2018.05 revision d29120a424ecfbc167ef90065c0eeb7f91977701] (Linaro GCC 7.3-2018.05)) #163 Tue Aug 4 19:23:04 AEST 2026
+[    0.000000] CPU: ARMv7 Processor [410fc051] revision 1 (ARMv7), cr=10c53c7d
+[    0.000000] CPU: PIPT / VIPT nonaliasing data cache, VIPT aliasing instruction cache
+[    0.000000] OF: fdt: Machine model: Limcet P305/P306 Dashboard Head Unit
+[    0.000000] bootconsole [earlycon0] enabled
+[    0.000000] Memory policy: Data cache writeback
+[    0.000000] cma: Reserved 64 MiB at 0x04000000
+[    0.000000] On node 0 totalpages: 46080
+[    0.000000]   Normal zone: 405 pages used for memmap
+[    0.000000]   Normal zone: 0 pages reserved
+[    0.000000]   Normal zone: 46080 pages, LIFO batch:15
+[    0.000000] CPU: All CPU(s) started in SVC mode.
+[    0.000000] random: get_random_bytes called from start_kernel+0xa0/0x394 with crng_init=0
+[    0.000000] pcpu-alloc: s0 r0 d32768 u32768 alloc=1*32768
+[    0.000000] pcpu-alloc: [0] 0
+[    0.000000] Built 1 zonelists, mobility grouping off.  Total pages: 45675
+[    0.000000] Kernel command line: root=/dev/sda2 console=ttyS0,115200n8 mem=180M earlyprintk=serial rootfstype=ext4 rootwait rw screen=0 user_debug=8
+[    0.000000] Dentry cache hash table entries: 32768 (order: 5, 131072 bytes)
+[    0.000000] Inode-cache hash table entries: 16384 (order: 4, 65536 bytes)
+[    0.000000] Memory: 106540K/184320K available (6144K kernel code, 459K rwdata, 1552K rodata, 1024K init, 355K bss, 12244K reserved, 65536K cma-reserved)
+[    0.000000] Virtual kernel memory layout:
+                   vector  : 0xffff0000 - 0xffff1000   (   4 kB)
+                   fixmap  : 0xffc00000 - 0xfff00000   (3072 kB)
+                   vmalloc : 0xcb800000 - 0xff800000   ( 832 MB)
+                   lowmem  : 0xc0000000 - 0xcb400000   ( 180 MB)
+                   modules : 0xbf000000 - 0xc0000000   (  16 MB)
+                     .text : 0x(ptrval) - 0x(ptrval)   (7136 kB)
+                     .init : 0x(ptrval) - 0x(ptrval)   (1024 kB)
+                     .data : 0x(ptrval) - 0x(ptrval)   ( 460 kB)
+                      .bss : 0x(ptrval) - 0x(ptrval)   ( 356 kB)
+
+[    0.000000] **********************************************************
+[    0.000000] **   NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE   **
+[    0.000000] **                                                      **
+[    0.000000] ** trace_printk() being used. Allocating extra memory.  **
+[    0.000000] **                                                      **
+[    0.000000] ** This means that this is a DEBUG kernel and it is     **
+[    0.000000] ** unsafe for production use.                           **
+[    0.000000] **                                                      **
+[    0.000000] ** If you see this message and you are not debugging    **
+[    0.000000] ** the kernel, report this immediately to your vendor!  **
+[    0.000000] **                                                      **
+[    0.000000] **   NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE   **
+[    0.000000] **********************************************************
+[    0.000000] NR_IRQS: 16, nr_irqs: 16, preallocated irqs: 16
+[    0.000000] VIC @(ptrval): id 0x00041192, vendor 0x41
+[    0.000000] VIC @(ptrval): id 0x00041192, vendor 0x41
+[    0.000000] L2C-310 dynamic clock gating enabled, standby mode enabled
+[    0.000000] L2C-310 cache controller enabled, 8 ways, 128 kB
+[    0.000000] L2C-310: CACHE_ID 0x410060c9, AUX_CTRL 0x06020000
+[    0.000000] clk cpupll rate 690000000.
+[    0.000000] clk syspll rate 324000000.
+[    0.000000] clk audpll rate 426000000.
+[    0.000000] clk ddrclk rate 426000000.
+[    0.000000] clk cpuclk rate 690000000.
+[    0.000000] clk axiclk rate 324000000.
+[    0.000000] clk ahbclk rate 162000000.
+[    0.000000] clk pclk rate 81000000.
+[    0.000000] clk uart4clk rate 24000000.
+[    0.000000] clk uart5clk rate 24000000.
+[    0.000000] clk gpuclk rate 324000000.
+[    0.000000] clk gpiodebounceclk rate 24000000.
+[    0.000000] clk lcdclk rate 324000000.
+[    0.000000] clk mfcclk rate 162000000.
+[    0.000000] clk rtc-clk rate 32768.
+[    0.000000] clk spi-clk rate 162000000.
+[    0.000000] clk i2s-dac-clk rate 240000000.
+[    0.000000] clk i2s-adc-clk rate 240000000.
+[    0.000000] clocksource: arkmicro,ark-timer: mask: 0xffffff max_cycles: 0xffffff, max_idle_ns: 92171119 ns
+[    0.000020] sched_clock: 24 bits at 81MHz, resolution 12ns, wraps every 103563053ns
+[    0.008475] Console: colour dummy device 80x30
+[    0.013062] Calibrating delay loop... 457.11 BogoMIPS (lpj=2285568)
+[    0.076591] pid_max: default: 32768 minimum: 301
+[    0.081710] Mount-cache hash table entries: 1024 (order: 0, 4096 bytes)
+[    0.088397] Mountpoint-cache hash table entries: 1024 (order: 0, 4096 bytes)
+[    0.097263] CPU: Testing write buffer coherency: ok
+[    0.104265] Setting up static identity map for 0x100000 - 0x10003c
+[    0.116145] devtmpfs: initialized
+[    0.130167] VFP support v0.3: implementor 41 architecture 2 part 30 variant 5 rev 1
+[    0.138443] clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 19112604462750000 ns
+[    0.148403] futex hash table entries: 256 (order: -1, 3072 bytes)
+[    0.165673] pinctrl core: initialized pinctrl subsystem
+[    0.172388] NET: Registered protocol family 16
+[    0.207183] DMA: preallocated 256 KiB pool for atomic coherent allocations
+[    0.219861] Serial: Arkmicro UART driver
+[    0.226885] pinctrl-ark e4900000.pinctrl: initialized ark pinctrl driver
+[    0.249938] e4200000.uart: ttyS0 at MMIO 0xe4200000 (irq = 36, base_baud = 1500000) is a ARK
+[    0.258659] console [ttyS0] enabled
+[    0.265703] bootconsole [earlycon0] disabled
+[    0.275079] ark_tool: initialized on uart0 open (port for /proc/arktool, see drivers/misc/ark_tool.c)
+[    0.285420] e8000000.uart: ttyS2 at MMIO 0xe8000000 (irq = 60, base_baud = 1500000) is a ARK
+[    0.295332] e8100000.uart: ttyS3 at MMIO 0xe8100000 (irq = 61, base_baud = 1500000) is a ARK
+[    0.305396] e4f00000.serial: ttyHS0 at MMIO 0xe4f00000 (irq = 38, base_baud = 0) is a ARK HS UART
+[    0.315799] e4800000.serial: ttyHS1 at MMIO 0xe4800000 (irq = 44, base_baud = 0) is a ARK HS UART
+[    0.331147] ark-mcu-serial mcu-serial@0: probe done, rx handler registered
+[    0.354334] clk lcdclk rate 29454545.
+[    0.373685] ark1668_lcdfb e0500000.lcd: 16384KiB frame buffer at 0f000000 (mapped at (ptrval))
+[    0.382822] ark1668_lcdfb e0500000.lcd: fb0: ARK1668 LCDC at 0xe0500000 (mapped at (ptrval)), irq 25
+[    0.394445] ark_dw_dmac e0000000.dma: Arkmicro DMA Controller, 8 channels
+[    0.402250] SCSI subsystem initialized
+[    0.406112] libata version 3.00 loaded.
+[    0.406382] usbcore: registered new interface driver usbfs
+[    0.412076] usbcore: registered new interface driver hub
+[    0.417528] usbcore: registered new device driver usb
+[    0.424532] gpio-3 (i2c-gpio-0): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+[    0.434152] gpio-2 (i2c-gpio-0): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+[    0.443925] i2c i2c-1: Not I2C compliant: can't read SCL
+[    0.449278] i2c i2c-1: Bus may be unreliable
+[    0.453605] i2c-gpio i2c-gpio-0: using lines 3 (SDA) and 2 (SCL, no clock stretching)
+[    0.461692] gpio-9 (i2c-gpio-1): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+[    0.471237] gpio-121 (i2c-gpio-1): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+[    0.481123] i2c i2c-2: Not I2C compliant: can't read SCL
+[    0.486445] i2c i2c-2: Bus may be unreliable
+[    0.490769] i2c-gpio i2c-gpio-1: using lines 9 (SDA) and 121 (SCL, no clock stretching)
+[    0.498899] media: Linux media interface: v0.10
+[    0.503554] videodev: Linux video capture interface: v2.00
+[    0.509409] Advanced Linux Sound Architecture Driver Initialized.
+[    0.516967] clocksource: Switched to clocksource arkmicro,ark-timer
+[    0.572203] hx170dec e0900000.vdec: VDEC controller at 0x(ptrval), irq = 40, misc_minor = 63
+[    0.580766] hx170dec e0900000.vdec: Product ID: 0x6731 (revision 2.57.8)
+[    0.602198] NET: Registered protocol family 2
+[    0.607777] tcp_listen_portaddr_hash hash table entries: 512 (order: 0, 4096 bytes)
+[    0.615493] TCP established hash table entries: 2048 (order: 1, 8192 bytes)
+[    0.622607] TCP bind hash table entries: 2048 (order: 1, 8192 bytes)
+[    0.629042] TCP: Hash tables configured (established 2048 bind 2048)
+[    0.635611] UDP hash table entries: 256 (order: 0, 4096 bytes)
+[    0.641540] UDP-Lite hash table entries: 256 (order: 0, 4096 bytes)
+[    0.648220] NET: Registered protocol family 1
+[    0.654004] Initialise system trusted keyrings
+[    0.659002] workingset: timestamp_bits=14 max_order=16 bucket_order=2
+[    0.666369] ntfs: driver 2.1.32 [Flags: R/W DEBUG].
+[    0.674844] Key type asymmetric registered
+[    0.679038] Asymmetric key parser 'x509' registered
+[    0.683956] io scheduler noop registered (default)
+[    0.690073] memalloc-cls memalloc: allocator with major = 250
+[    0.691819] rn6752: dvr_rn6752_probe:init done
+[    0.696632] [DIAG_ITU656_PROBE] call #1: dvr_dev=c848a040 sizeof(struct dvr_dev)=588
+[    0.704542] [DIAG_ITU656_PROBE] dvr_dev=c848a040 &start=c848a224 start=c03da594 (want dvr_start=c03da594) &stop=c848a228 stop=c03d8430 (want dvr_stop=c03d8430)
+[    0.718881] [DIAG_ITU656_PROBE] priv_data after memcpy: &priv_data=c848a22c select_channel=c03d76fc (want c03d76fc) detect_signal=c03d6e04 (want c03d6e04) get_progressive=c03d6358 (want c03d6358) display_effect=c03d68ec (want c03d68ec)
+[    0.739800] [DIAG_ITU656_PROBE] priv_data after memcpy (cont): dvr_start_cb=00000000 (want 00000000) dvr_stop_cb=00000000 (want 00000000) enter_carback_cb=c03d7690 (want c03d7690) exit_carback_cb=c03d7634 (want c03d7634) dvr_config=00000000 (want 00000000)
+[    0.763798] get mirror type=0
+[    0.763813] carback_first_enter g_carback null error
+[    0.763833] [DIAG_ITU656_PROBE_END] dvr_dev=c848a040 start=c03da594 (want c03da594) stop=c03d8430 (want c03d8430)
+[    0.780786] ark_display: registered /dev/ark_display
+[    0.786722] nand: device found, Manufacturer ID: 0x98, Chip ID: 0xf1
+[    0.793253] nand: Toshiba NAND 128MiB 3,3V 8-bit
+[    0.797937] nand: 128 MiB, SLC, erase size: 128 KiB, page size: 2048, OOB size: 64
+[    0.805547] nand: WARNING: ark-nand: the ECC used on your system is too weak compared to the one required by the NAND chip
+[    0.816639] Scanning device for bad blocks
+[    0.893088] Bad eraseblock 768 at 0x000006000000
+[    0.923571] usbcore: registered new interface driver cdc_ether
+[    0.929593] usbcore: registered new interface driver cdc_subset
+[    0.935586] usbcore: registered new interface driver zaurus
+[    0.941347] usbcore: registered new interface driver ipheth
+[    0.947085] usbcore: registered new interface driver cdc_ncm
+[    0.953215] usbcore: registered new interface driver uas
+[    0.958787] usbcore: registered new interface driver usb-storage
+[    0.987200] musb-hdrc musb-hdrc.0: MUSB HDRC host driver
+[    0.992657] musb-hdrc musb-hdrc.0: new USB bus registered, assigned bus number 1
+[    1.001571] hub 1-0:1.0: USB hub found
+[    1.005449] hub 1-0:1.0: 1 port detected
+[    1.010117] musb-hdrc musb-hdrc.0: switch host (no negotiation): gpio_id=76 gpio_pwr=126
+[    1.329585] musb_ark_probe succss
+[    1.357121] ark_musb_disable 128: dma still active
+[    1.361982] musb-hdrc musb-hdrc.1: MUSB HDRC host driver
+[    1.367461] musb-hdrc musb-hdrc.1: new USB bus registered, assigned bus number 2
+[    1.376313] hub 2-0:1.0: USB hub found
+[    1.380271] hub 2-0:1.0: 1 port detected
+[    1.384511] musb-hdrc musb-hdrc.1: ark_musb_enable: dma not reactivated
+[    1.391571] musb-hdrc musb-hdrc.1: switch host (no negotiation): gpio_id=1 gpio_pwr=117
+[    1.710914] musb_ark_probe succss
+[    1.712294] udc-core: couldn't find an available UDC - added [g_ncm] to list of pending drivers
+[    1.721079] random: fast init done
+[    1.724842] ark1680_ts e4500000.tsc: probe: ADC/TSC MEM resource [mem 0xe4500000-0xe450003f]
+[    1.733444] ark1680_ts e4500000.tsc: probe: irq=20
+[    1.738318] ark1680_ts e4500000.tsc: probe: mapped syscon/pinmux block at phys 0xe4900000, size 0x200
+[    1.748256] input: ark1680-ts as /devices/platform/e4500000.tsc/input/input0
+[    1.755734] ark1680_ts e4500000.tsc: ARK1680 resistive touchscreen registered, irq=20, debug=0 (echo 1 > /sys/module/ark1680_ts/parameters/debug to trace samples)
+[    1.771357] rtc-ark e4c00000.rtc: rtc core: registered e4c00000.rtc as rtc0
+[    1.778670] i2c /dev entries driver
+[    1.783801] ark_wdt e4b00000.watchdog: initialized (timeout = 15 sec, nowayout = 0)
+[    1.792859] dw_mmc ec400000.mmc: Using PIO mode.
+[    1.797570] dw_mmc ec400000.mmc: Version ID is 220a
+[    1.802503] dw_mmc ec400000.mmc: DW MMC controller at irq 42,32 bit host data width,32 deep fifo
+[    1.824347] mmc_host mmc0: Bus speed (slot 0) = 24000000Hz (slot req 400000Hz, actual 400000HZ div = 30)
+[    1.847085] dw_mmc ec800000.mmc: Using external DMA controller.
+[    1.853118] dw_mmc ec800000.mmc: Version ID is 220a
+[    1.858117] dw_mmc ec800000.mmc: DW MMC controller at irq 54,32 bit host data width,32 deep fifo
+[    1.867119] mmc_host mmc1: card is non-removable.
+[    1.872108] usb 1-1: new high-speed USB device number 2 using musb-hdrc
+[    1.883112] mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 400000Hz, actual 400000HZ div = 30)
+[    1.907592] ark1668-i2s e4000000.i2s-dac: mem resource at 0xe4000000
+[    1.914027] ark1668-i2s e4000000.i2s-dac: releasing soft reset for I2S1 (DAC/internal I2S) at 0xe4000000
+[    1.923624] ark1668-i2s e4000000.i2s-dac: enabled internal I2S1 clock-gate bit at 0xe4a00000+0x1f0
+[    1.933324] ark1668-i2s e8200000.i2s-adc: mem resource at 0xe8200000
+[    1.939777] ark1668-i2s e8200000.i2s-adc: releasing soft reset for I2S2 (ADC/external I2S) at 0xe8200000
+[    1.949345] ark1668-i2s e8200000.i2s-adc: enabled external I2S2/CS4334 clock-gate bits at 0xe4a00000
+[    1.960143] NET: Registered protocol family 10
+[    1.966916] Segment Routing with IPv6
+[    1.970843] sit: IPv6, IPv4 and MPLS over IPv4 tunneling driver
+[    1.978046] NET: Registered protocol family 17
+[    1.983118] usb 2-1: new high-speed USB device number 2 using musb-hdrc
+[    1.991405] Loading compiled-in X.509 certificates
+[    2.003158] asoc-simple-card sound: e4000000.sddac <-> e4000000.i2s-dac mapping ok
+[    2.012825] asoc-simple-card sound: ahb:sdadc@0 <-> e8200000.i2s-adc mapping ok
+[    2.022817] rtc-ark e4c00000.rtc: setting system clock to 2024-02-19 09:12:36 UTC (1708333956)
+[    2.031887] ALSA device list:
+[    2.034872]   #0: ARK-SDDAC
+[    2.038107] mmc_host mmc0: Bus speed (slot 0) = 24000000Hz (slot req 25000000Hz, actual 24000000HZ div = 0)
+[    2.048016] mmc0: new SD card at address e126
+[    2.053731] mmcblk0: mmc0:e126 SU01G 969 MiB
+[    2.061565]  mmcblk0: p1 p2 p3
+[    2.066689] Waiting for root device /dev/sda2...
+[    2.077562] mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 300000Hz, actual 300000HZ div = 40)
+[    2.117038] usb 1-1: hub_port_init:4710 speed=3
+[    2.135610] mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 200000Hz, actual 200000HZ div = 60)
+[    2.145187] usb 2-1: hub_port_init:4710 speed=3
+[    2.151622] usb-storage 1-1:1.0: USB Mass Storage device detected
+[    2.158964] scsi host0: usb-storage 1-1:1.0
+[    2.200007] mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 100000Hz, actual 100000HZ div = 120)
+[    3.197886] scsi 0:0:0:0: Direct-Access     SanDisk  Cruzer Blade     8.02 PQ: 0 ANSI: 0 CCS
+[    3.208415] sd 0:0:0:0: Attached scsi generic sg0 type 0
+[    3.214659] sd 0:0:0:0: [sda] 7856127 512-byte logical blocks: (4.02 GB/3.75 GiB)
+[    3.222702] sd 0:0:0:0: [sda] Write Protect is off
+[    3.227585] sd 0:0:0:0: [sda] Mode Sense: 45 00 00 08
+[    3.227953] sd 0:0:0:0: [sda] No Caching mode page found
+[    3.233288] sd 0:0:0:0: [sda] Assuming drive cache: write through
+[    3.246436]  sda: sda1 sda2 sda3
+[    3.253364] sd 0:0:0:0: [sda] Attached SCSI removable disk
+[    3.291646] EXT4-fs (sda2): mounted filesystem with ordered data mode. Opts: (null)
+[    3.299502] VFS: Mounted root (ext4 filesystem) on device 8:2.
+[    3.326157] devtmpfs: mounted
+[    3.331708] Freeing unused kernel memory: 1024K
+[    3.336419] Run /sbin/init as init process
+[    3.437178] ark1668_lcdfb: LCD RGB888 r0-r7 pinmux reclaimed from any i2c-gpio pin theft (now 0x11111111)
+[    4.824474] EXT4-fs (sda3): mounted filesystem with ordered data mode. Opts: (null)
+[    4.864497] random: crng init done
+[    5.306772] cfg80211: Loading compiled-in X.509 certificates for regulatory database
+[    5.418075] cfg80211: Loaded X.509 cert 'sforshee: 00b28ddf47aef9cea7'
+[    5.438325] cfg80211: Loaded X.509 cert 'wens: 61c038651aabdcf94bd0ac7ff06c7248db18c600'
+[    6.013120] RTW: module init start
+[    6.013140] RTW: rtl8811cu v5.15.9.6-1-g3fe4f4b91.20250327_COEX20230331-5d5d
+[    6.013148] RTW: build time: Aug  4 2026 14:42:37
+[    6.013154] RTW: rtl8811cu BT-Coex version = COEX20230331-5d5d
+[    6.013815] RTW: [HALMAC]55772M
+               HALMAC_MAJOR_VER = 1
+               HALMAC_PROTOTYPE_VER = 6
+               HALMAC_MINOR_VER = 7
+               HALMAC_PATCH_VER = 15
+[    6.015190] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[    6.207942] RTW: HW EFUSE
+[    6.207965] RTW: 0x000: 29 81 00 BC  09 00 21 00  6E 04 A4 10  10 00 30 0B
+[    6.208020] RTW: 0x010: FF FF FF FF  FF FF FF FF  FF FF FF 02  FF FF FF FF
+[    6.208065] RTW: 0x020: FF FF 25 25  25 25 25 23  23 22 22 23  23 23 24 25
+[    6.208111] RTW: 0x030: 22 FF FF FF  FF FF 10 FF  FF FF 28 28  28 28 28 28
+[    6.208157] RTW: 0x040: 2C 2C 2C 2C  2C 02 FF FF  FF FF FF FF  FF FF FF FF
+[    6.208203] RTW: 0x050: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    6.208248] RTW: 0x060: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    6.208293] RTW: 0x070: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    6.208338] RTW: 0x080: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    6.208384] RTW: 0x090: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    6.208429] RTW: 0x0A0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    6.208475] RTW: 0x0B0: FF FF FF FF  FF FF FF FF  7F 2D 1B 00  FF FF FF FF
+[    6.208520] RTW: 0x0C0: FF 01 00 41  00 00 00 00  00 FF 22 FF  FF FF FF FF
+[    6.208565] RTW: 0x0D0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    6.208610] RTW: 0x0E0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    6.208655] RTW: 0x0F0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    6.208700] RTW: 0x100: DA 0B 11 C8  E3 46 02 68  B9 D3 F1 5A  43 09 03 52
+[    6.208746] RTW: 0x110: 65 61 6C 74  65 6B 0E 03  38 30 32 2E  31 31 61 63
+[    6.208792] RTW: 0x120: 20 4E 49 43  08 03 31 32  33 34 35 36  FF FF FF FF
+[    6.208838] RTW: 0x130: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    6.208884] RTW: 0x140: FF FF FF FF  00 00 31 0F  FF FF FF FF  FF FF FF FF
+[    6.208930] RTW: 0x150: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    6.208975] RTW: 0x160: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    6.209021] RTW: 0x170: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    6.209066] RTW: 0x180: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    6.209112] RTW: 0x190: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    6.209157] RTW: 0x1A0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    6.209202] RTW: 0x1B0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    6.209248] RTW: 0x1C0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    6.209292] RTW: 0x1D0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    6.209338] RTW: 0x1E0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    6.209382] RTW: 0x1F0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    6.219690] RTW: [HALMAC][ALWAYS]shall R reg twice!!
+[    6.308509] RTW: c2h_mac_hidden_rpt_hdl: 0x41
+[    6.308524] RTW: c2h_mac_hidden_rpt_hdl: 0x39
+[    6.308532] RTW: c2h_mac_hidden_rpt_hdl: 0xD1
+[    6.308539] RTW: c2h_mac_hidden_rpt_hdl: 0xFD
+[    6.308545] RTW: c2h_mac_hidden_rpt_hdl: 0xF2
+[    6.308551] RTW: c2h_mac_hidden_rpt_hdl: 0xFF
+[    6.308557] RTW: c2h_mac_hidden_rpt_hdl: 0x27
+[    6.308562] RTW: c2h_mac_hidden_rpt_hdl: 0xFF
+[    6.308573] RTW: uuid x:0x41 y:0x39 z:0x11 crc:0x7ee
+[    6.308580] RTW: hci_type:0x2
+[    6.308585] RTW: package_type:0x7
+[    6.308591] RTW: tr_switch:0x1
+[    6.308596] RTW: wl_func:0xf
+[    6.308602] RTW: hw_stype:0xf
+[    6.308607] RTW: bw:0x7
+[    6.308613] RTW: ant_num:0x1
+[    6.308618] RTW: protocol:0x3
+[    6.308625] RTW: nic:0x3
+[    6.308642] RTW: c2h_mac_hidden_rpt_2_hdl: 0xFF
+[    6.308649] RTW: c2h_mac_hidden_rpt_2_hdl: 0xFF
+[    6.308655] RTW: c2h_mac_hidden_rpt_2_hdl: 0xF8
+[    6.308662] RTW: c2h_mac_hidden_rpt_2_hdl: 0xFC
+[    6.308668] RTW: c2h_mac_hidden_rpt_2_hdl: 0xFF
+[    6.315214] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[    6.315450] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[    6.315739] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[    6.315967] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[    6.316219] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[    6.316467] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[    6.316715] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[    6.317040] RTW: [RF_PATH] ver_id.RF_TYPE:RF_1T1R
+[    6.317061] RTW: [RF_PATH] HALSPEC's rf_reg_trx_path_bmp:0x11, rf_reg_path_avail_num:1, max_tx_cnt:1
+[    6.317069] RTW: [RF_PATH] PG's trx_path_bmp:0x00, max_tx_cnt:0
+[    6.317078] RTW: [RF_PATH] Registry's trx_path_bmp:0x00, tx_path_lmt:0, rx_path_lmt:0
+[    6.317085] RTW: [RF_PATH] HALDATA's trx_path_bmp:0x11, max_tx_cnt:1
+[    6.317094] RTW: [RF_PATH] HALDATA's rf_type:RF_1T1R, NumTotalRFPath:1
+[    6.317104] RTW: [TRX_Nss] HALSPEC - tx_nss:1, rx_nss:1
+[    6.317111] RTW: [TRX_Nss] Registry - tx_nss:0, rx_nss:0
+[    6.317117] RTW: [TRX_Nss] HALDATA - tx_nss:1, rx_nss:1
+[    6.317128] RTW: txpath=0x1, rxpath=0x1
+[    6.317137] RTW: txpath_1ss:0x1, num:1
+[    6.317275] RTW: rtw_rfctl_decide_init_chplan chplan:0x1B
+[    6.317285] RTW: rtw_rfctl_decide_init_chplan country code:"US"
+[    6.319716] RTW: rtw_regsty_chk_target_tx_power_valid return _FALSE for band:0, path:0, rs:0, t:-1
+[    6.327375] RTW: rtw_ndev_init(wlan0) if1 mac_addr=68:b9:d3:f1:5a:43
+[    6.329579] RTW: rtw_ndev_init(wlan1) if2 mac_addr=6a:b9:d3:f1:5a:43
+[    6.331859] usbcore: registered new interface driver rtl8811cu
+[    6.337877] RTW: module init ret=0
+[    9.567497] ark1668-i2s: hw_params stream=0 rate=48000 period_size=1024 periods=16 format=2
+[    9.601104] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 9604133048ns
+[    9.633610] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 9636643579ns
+[    9.640510] ark1668-sddac: ark_audio_mute mute=1 at 9643561887ns
+[    9.647008] ark1668-sddac: ark_audio_mute mute=0 at 9650050566ns
+[    9.654363] ALSA: PCM: [Q] Lost interrupts?: (stream=0, delta=15368, new_hw_ptr=15368, old_hw_ptr=0)
+[    9.671763] snd_ctl: elem_write card=0 iface=2 name='softmaster3' numid=3 values=0,0 at 9674786110ns
+[    9.681071] pcm_dmaengine: period jitter: stream=0 actual=26727926ns expected=21333333ns (+25%)
+[    9.697128] ALSA: PCM: [Q] Lost interrupts?: (stream=0, delta=16132, new_hw_ptr=31752, old_hw_ptr=15620)
+[    9.717332] snd_ctl: elem_write card=0 iface=2 name='softmaster3' numid=3 values=115,115 at 9720354320ns
+[    9.727128] pcm_dmaengine: period jitter: stream=0 actual=29955876ns expected=21333333ns (+40%)
+[    9.739738] pcm_dmaengine: period jitter: stream=0 actual=12617260ns expected=21333333ns (-40%)
+[    9.761047] ALSA: PCM: [Q] Lost interrupts?: (stream=0, delta=15972, new_hw_ptr=48136, old_hw_ptr=32164)
+[    9.782819] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 9785847727ns
+[    9.789720] ark1668-sddac: ark_audio_mute mute=1 at 9792774196ns
+[    9.795889] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 9798934455ns
+[    9.830665] ark1668-i2s: hw_params stream=0 rate=48000 period_size=1024 periods=16 format=2
+[    9.846568] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 9849598628ns
+[    9.857706] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 9860746283ns
+[    9.865375] ark1668-sddac: ark_audio_mute mute=1 at 9868429628ns
+[    9.877070] ark1668-sddac: ark_audio_mute mute=0 at 9880103715ns
+[    9.884813] ALSA: PCM: [Q] Lost interrupts?: (stream=0, delta=15668, new_hw_ptr=15668, old_hw_ptr=0)
+[    9.899866] pcm_dmaengine: period jitter: stream=0 actual=15064692ns expected=21333333ns (-29%)
+[    9.921138] ALSA: PCM: [Q] Lost interrupts?: (stream=0, delta=15924, new_hw_ptr=31752, old_hw_ptr=15828)
+[    9.932918] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=0,0 at 9935947752ns
+[    9.944501] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=127,127 at 9947528085ns
+[    9.963818] ALSA: PCM: [Q] Lost interrupts?: (stream=0, delta=16372, new_hw_ptr=48136, old_hw_ptr=31764)
+[    9.974100] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 9977136480ns
+[    9.980993] ark1668-sddac: ark_audio_mute mute=1 at 9984047357ns
+[    9.987187] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 9990234900ns
+[   10.020591] ark1668-sddac: get_l_playback_volume = 112 at 10023618715ns
+[   10.033247] ark1668-sddac: get_r_playback_volume = 112 at 10036280245ns
+[   10.045498] ark1668-i2s: hw_params stream=0 rate=48000 period_size=1024 periods=16 format=2
+[   10.054563] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 10057603073ns
+[   10.063897] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 10066940505ns
+[   10.070865] ark1668-sddac: ark_audio_mute mute=1 at 10073920838ns
+[   10.077138] ark1668-sddac: ark_audio_mute mute=0 at 10080188431ns
+[   10.084648] ALSA: PCM: [Q] Lost interrupts?: (stream=0, delta=15368, new_hw_ptr=15368, old_hw_ptr=0)
+[   10.095593] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=0,0 at 10098622283ns
+[   10.105019] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=127,127 at 10108062085ns
+[   10.114729] pcm_dmaengine: period jitter: stream=0 actual=30112679ns expected=21333333ns (+41%)
+[   10.124669] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 10127702221ns
+[   10.131649] ark1668-sddac: ark_audio_mute mute=1 at 10134704579ns
+[   10.137911] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 10140958060ns
+[   10.151348] ark1668-i2s: hw_params stream=0 rate=48000 period_size=1024 periods=16 format=2
+[   10.160520] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 10163557147ns
+[   10.169756] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 10172800566ns
+[   10.176727] ark1668-sddac: ark_audio_mute mute=1 at 10179781826ns
+[   10.186192] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 10189222492ns
+[   10.193182] ark1668-sddac: ark_audio_mute mute=1 at 10196235357ns
+[   10.199470] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 10202515962ns
+[   10.210642] ark1668-sddac: get_l_playback_volume = 112 at 10213673196ns
+[   10.217702] ark1668-sddac: get_r_playback_volume = 112 at 10220742999ns
+[   10.228404] ark1668-i2s: hw_params stream=0 rate=48000 period_size=1024 periods=16 format=2
+[   10.237373] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 10240414443ns
+[   10.246624] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 10249669258ns
+[   10.253593] ark1668-sddac: ark_audio_mute mute=1 at 10256649036ns
+[   10.259833] ark1668-sddac: ark_audio_mute mute=0 at 10262882233ns
+[   10.267373] ALSA: PCM: [Q] Lost interrupts?: (stream=0, delta=15368, new_hw_ptr=15368, old_hw_ptr=0)
+[   10.278151] snd_ctl: elem_write card=0 iface=2 name='softmaster4' numid=6 values=0,0 at 10281182134ns
+[   10.287726] snd_ctl: elem_write card=0 iface=2 name='softmaster4' numid=6 values=115,115 at 10290766443ns
+[   10.297418] pcm_dmaengine: period jitter: stream=0 actual=30083346ns expected=21333333ns (+41%)
+[   10.307405] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 10310436332ns
+[   10.314386] ark1668-sddac: ark_audio_mute mute=1 at 10317439221ns
+[   10.320631] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 10323676961ns
+[   10.334059] ark1668-i2s: hw_params stream=0 rate=48000 period_size=1024 periods=16 format=2
+[   10.343134] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 10346172961ns
+[   10.352458] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 10355501875ns
+[   10.359427] ark1668-sddac: ark_audio_mute mute=1 at 10362483147ns
+[   10.367029] ark1668-sddac: ark_audio_mute mute=0 at 10370068307ns
+[   10.373215] ALSA: PCM: [Q] Lost interrupts?: (stream=0, delta=15368, new_hw_ptr=15368, old_hw_ptr=0)
+[   10.384437] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 10387466542ns
+[   10.391421] ark1668-sddac: ark_audio_mute mute=1 at 10394474616ns
+[   10.397649] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 10400697270ns
+[   10.408914] ark1668-sddac: get_l_playback_volume = 112 at 10411946887ns
+[   10.415870] ark1668-sddac: get_r_playback_volume = 112 at 10418912443ns
+[   10.426486] ark1668-i2s: hw_params stream=0 rate=48000 period_size=1024 periods=16 format=2
+[   10.435640] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 10438677727ns
+[   10.444882] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 10447927850ns
+[   10.451851] ark1668-sddac: ark_audio_mute mute=1 at 10454906455ns
+[   10.458125] ark1668-sddac: ark_audio_mute mute=0 at 10461174517ns
+[   10.465649] ALSA: PCM: [Q] Lost interrupts?: (stream=0, delta=15368, new_hw_ptr=15368, old_hw_ptr=0)
+[   10.476445] snd_ctl: elem_write card=0 iface=2 name='softmaster1' numid=7 values=0,0 at 10479475566ns
+[   10.486057] snd_ctl: elem_write card=0 iface=2 name='softmaster1' numid=7 values=106,106 at 10489096431ns
+[   10.495730] pcm_dmaengine: period jitter: stream=0 actual=30115210ns expected=21333333ns (+41%)
+[   10.505712] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 10508746826ns
+[   10.512694] ark1668-sddac: ark_audio_mute mute=1 at 10515749418ns
+[   10.518950] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 10521996937ns
+[   10.532382] ark1668-i2s: hw_params stream=0 rate=48000 period_size=1024 periods=16 format=2
+[   10.541578] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 10544614715ns
+[   10.550810] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 10553853863ns
+[   10.557781] ark1668-sddac: ark_audio_mute mute=1 at 10560836690ns
+[   10.567049] ark1668-sddac: ark_audio_mute mute=0 at 10570084727ns
+[   10.573625] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 10576665295ns
+[   10.580601] ark1668-sddac: ark_audio_mute mute=1 at 10583655715ns
+[   10.586835] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 10589882640ns
+[   10.598060] ark1668-sddac: get_l_playback_volume = 112 at 10601091418ns
+[   10.605019] ark1668-sddac: get_r_playback_volume = 112 at 10608062887ns
+[   10.615682] ark1668-i2s: hw_params stream=0 rate=48000 period_size=1024 periods=16 format=2
+[   10.624862] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 10627900826ns
+[   10.634104] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 10637146455ns
+[   10.641072] ark1668-sddac: ark_audio_mute mute=1 at 10644128073ns
+[   10.647347] ark1668-sddac: ark_audio_mute mute=0 at 10650394912ns
+[   10.656636] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 10659666196ns
+[   10.663619] ark1668-sddac: ark_audio_mute mute=1 at 10666674752ns
+[   10.669854] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 10672901381ns
+[   10.683356] ark1668-i2s: hw_params stream=0 rate=48000 period_size=1024 periods=16 format=2
+[   10.692553] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 10695591850ns
+[   10.701787] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 10704830258ns
+[   10.708755] ark1668-sddac: ark_audio_mute mute=1 at 10711809171ns
+[   10.717036] ark1668-sddac: ark_audio_mute mute=0 at 10720078739ns
+[   10.724647] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 10727679085ns
+[   10.731628] ark1668-sddac: ark_audio_mute mute=1 at 10734682418ns
+[   10.737849] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 10740897579ns
+[   10.749079] ark1668-sddac: get_l_playback_volume = 112 at 10752111480ns
+[   10.756030] ark1668-sddac: get_r_playback_volume = 112 at 10759073789ns
+[   10.766868] ark1668-i2s: hw_params stream=0 rate=44100 period_size=1024 periods=16 format=2
+[   10.776040] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 10779076628ns
+[   10.785283] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 10788327282ns
+[   10.792251] ark1668-sddac: ark_audio_mute mute=1 at 10795307418ns
+[   10.798519] ark1668-sddac: ark_audio_mute mute=0 at 10801568295ns
+[   10.807430] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=0,0 at 10810461826ns
+[   10.816915] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=127,127 at 10819957480ns
+[   10.827819] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 10830849505ns
+[   10.834801] ark1668-sddac: ark_audio_mute mute=1 at 10837855665ns
+[   10.841049] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 10844094480ns
+[   10.854481] ark1668-i2s: hw_params stream=0 rate=48000 period_size=1024 periods=16 format=2
+[   10.863668] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 10866705752ns
+[   10.872897] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 10875939492ns
+[   10.879867] ark1668-sddac: ark_audio_mute mute=1 at 10882921900ns
+[   10.887016] ark1668-sddac: ark_audio_mute mute=0 at 10890060085ns
+[   10.895663] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 10898693147ns
+[   10.902649] ark1668-sddac: ark_audio_mute mute=1 at 10905701998ns
+[   10.908924] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 10911968603ns
+[   10.920150] ark1668-sddac: get_l_playback_volume = 112 at 10923181245ns
+[   10.927203] ark1668-sddac: get_r_playback_volume = 112 at 10930245468ns
+[   11.285112] ark_display: ARKDISP_GET_SCREEN_INFO -> screen_id=0 800x480 120x72mm
+[   11.298041] snd_ctl: elem_write card=0 iface=2 name='softmaster1' numid=7 values=101,106 at 11301063603ns
+[   11.308876] snd_ctl: elem_write card=0 iface=2 name='softmaster1' numid=7 values=101,101 at 11311911937ns
+[   11.319962] snd_ctl: elem_write card=0 iface=2 name='softmaster3' numid=3 values=127,115 at 11323000295ns
+[   11.330677] snd_ctl: elem_write card=0 iface=2 name='softmaster3' numid=3 values=127,127 at 11333720468ns
+[   12.730468] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   12.757264] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   12.777254] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   12.797135] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   12.806909] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   12.835146] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=1 hue=0 saturation=128 brightness=128 contrast=128
+[   12.860369] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=1 hue=0 saturation=128 brightness=128 contrast=128
+[   12.874896] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=2 hue=0 saturation=128 brightness=128 contrast=128
+[   12.907248] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=2 hue=0 saturation=128 brightness=128 contrast=128
+[   12.917598] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=3 hue=0 saturation=128 brightness=128 contrast=128
+[   12.937119] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=3 hue=0 saturation=128 brightness=128 contrast=128
+[   12.962210] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=4 hue=0 saturation=128 brightness=128 contrast=128
+[   12.983723] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=4 hue=0 saturation=128 brightness=128 contrast=128
+[   13.007591] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   13.021922] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   13.047225] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=1 hue=0 saturation=128 brightness=128 contrast=128
+[   13.068884] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=1 hue=0 saturation=128 brightness=128 contrast=128
+[   13.097272] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=2 hue=0 saturation=128 brightness=128 contrast=128
+[   13.111188] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=2 hue=0 saturation=128 brightness=128 contrast=128
+[   13.126332] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=3 hue=0 saturation=128 brightness=128 contrast=128
+[   13.147255] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=3 hue=0 saturation=128 brightness=128 contrast=128
+[   13.160648] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=4 hue=0 saturation=128 brightness=128 contrast=128
+[   13.183891] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=4 hue=0 saturation=128 brightness=128 contrast=128
+[   13.199462] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   13.220855] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=0 hue=0 saturation=64 brightness=128 contrast=128
+[   13.249910] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=1 hue=0 saturation=128 brightness=128 contrast=128
+[   13.273015] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=1 hue=0 saturation=64 brightness=128 contrast=128
+[   13.290176] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=2 hue=0 saturation=128 brightness=128 contrast=128
+[   13.307592] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=2 hue=0 saturation=64 brightness=128 contrast=128
+[   13.327250] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=3 hue=0 saturation=128 brightness=128 contrast=128
+[   13.344528] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=3 hue=0 saturation=64 brightness=128 contrast=128
+[   13.363099] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=4 hue=0 saturation=128 brightness=128 contrast=128
+[   13.385686] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=4 hue=0 saturation=64 brightness=128 contrast=128
+[   13.422655] ark1668-sddac: get_l_playback_volume = 112 at 13425684566ns
+[   13.429963] snd_ctl: elem_write card=0 iface=2 name='Left Playback Volume' numid=1 values=118,0 at 13432996677ns
+[   13.440226] ark1668-sddac: set_l_playback_volume = 118 (I2S_DACR0=0x76) at 13443275159ns
+[   13.450823] ark1668-sddac: get_r_playback_volume = 112 at 13453854690ns
+[   13.457606] snd_ctl: elem_write card=0 iface=2 name='Right Playback Volume' numid=2 values=118,0 at 13460645060ns
+[   13.467993] ark1668-sddac: set_r_playback_volume = 118 (I2S_DACR0=0x7676) at 13471040011ns
+[   13.479334] ark1668-sddac: get_l_playback_volume = 118 at 13482364406ns
+[   13.486871] snd_ctl: elem_write card=0 iface=2 name='Left Playback Volume' numid=1 values=121,0 at 13489912196ns
+[   13.498521] ark1668-sddac: set_l_playback_volume = 121 (I2S_DACR0=0x7679) at 13501561702ns
+[   13.510352] ark1668-sddac: get_r_playback_volume = 118 at 13513384603ns
+[   13.518367] snd_ctl: elem_write card=0 iface=2 name='Right Playback Volume' numid=2 values=121,0 at 13521402344ns
+[   13.528732] ark1668-sddac: set_r_playback_volume = 121 (I2S_DACR0=0x7979) at 13531777591ns
+[   13.761868] ark-hsuart e4f00000.serial: no TX DMA channel available (no platform data) -- using PIO/interrupt-driven TX instead, this is expected on this board
+[   13.777274] ark-hsuart e4f00000.serial: no RX DMA channel available (no platform data) -- using PIO/interrupt-driven RX instead, this is expected on this board
+[   13.792956] ark_hsuart_set_termios 1652 hsuart0 baud:9600 c_cflag:0xcbd
+[   13.803401] ark_hsuart_set_termios 1652 hsuart0 baud:38400 c_cflag:0xcbf
+[   13.817572] ark-uart e8000000.uart: no TX DMA channel available (no platform data) -- using PIO/interrupt-driven TX instead, this is expected on this board
+[   13.832432] ark-uart e8000000.uart: no RX DMA channel available (no platform data) -- using PIO/interrupt-driven RX instead, this is expected on this board
+[   14.201772] [DIAG_ITU656_OPEN] container_of-dvr_dev=c848a040 g_dvr_dev=c848a040 (MATCH) start=c03da594 (want c03da594) stop=c03d8430 (want c03d8430)
+[   14.224636] [DIAG_ITU656_IOCTL] cmd=0xc0046ee0 g_dvr_dev=c848a040 filp->private_data=c848a040 (MATCH) start=c03da594 (want c03da594, OK) stop=c03d8430 (want c03d8430, OK)
+[   14.241384] [DIAG_ITU656_IOCTL] &priv_data=c848a22c select_channel=c03d76fc detect_signal=c03d6e04 get_progressive=c03d6358 display_effect=c03d68ec dvr_start_cb=00000000 dvr_stop_cb=00000000
+[   14.264787] [DIAG_ITU656_IOCTL] cmd=0xc0046ee2 g_dvr_dev=c848a040 filp->private_data=c848a040 (MATCH) start=c03da594 (want c03da594, OK) stop=c03d8430 (want c03d8430, OK)
+[   14.280272] [DIAG_ITU656_IOCTL] &priv_data=c848a22c select_channel=c03d76fc detect_signal=c03d6e04 get_progressive=c03d6358 display_effect=c03d68ec dvr_start_cb=00000000 dvr_stop_cb=00000000
+[   14.300731] [DIAG_ITU656_IOCTL] cmd=0xc0046ee4 g_dvr_dev=c848a040 filp->private_data=c848a040 (MATCH) start=c03da594 (want c03da594, OK) stop=c03d8430 (want c03d8430, OK)
+[   14.317086] [DIAG_ITU656_IOCTL] &priv_data=c848a22c select_channel=c03d76fc detect_signal=c03d6e04 get_progressive=c03d6358 display_effect=c03d68ec dvr_start_cb=00000000 dvr_stop_cb=00000000
+[   14.378029] [DIAG_ITU656_IOCTL] cmd=0xc0046ee1 g_dvr_dev=c848a040 filp->private_data=c848a040 (MATCH) start=c03da594 (want c03da594, OK) stop=c03d8430 (want c03d8430, OK)
+[   14.393422] [DIAG_ITU656_IOCTL] &priv_data=c848a22c select_channel=c03d76fc detect_signal=c03d6e04 get_progressive=c03d6358 display_effect=c03d68ec dvr_start_cb=00000000 dvr_stop_cb=00000000
+[   14.623853] [DIAG_ITU656_IOCTL] cmd=0xc0046ee3 g_dvr_dev=c848a040 filp->private_data=c848a040 (MATCH) start=c03da594 (want c03da594, OK) stop=c03d8430 (want c03d8430, OK)
+[   14.639275] [DIAG_ITU656_IOCTL] &priv_data=c848a22c select_channel=c03d76fc detect_signal=c03d6e04 get_progressive=c03d6358 display_effect=c03d68ec dvr_start_cb=00000000 dvr_stop_cb=00000000
+[   14.656578] [DIAG_ITU656_IOCTL] cmd=0xc0046ee5 g_dvr_dev=c848a040 filp->private_data=c848a040 (MATCH) start=c03da594 (want c03da594, OK) stop=c03d8430 (want c03d8430, OK)
+[   14.671892] [DIAG_ITU656_IOCTL] &priv_data=c848a22c select_channel=c03d76fc detect_signal=c03d6e04 get_progressive=c03d6358 display_effect=c03d68ec dvr_start_cb=00000000 dvr_stop_cb=00000000
+[   15.110698] RTW: [HALMAC][ALWAYS]shall R reg twice!!
+[   16.477236] RTW: start_addr=(0x8000), end_addr=(0x10000), buffer_size=(0x8000), smp_number_max=(4096)
+[   16.498457] IPv6: ADDRCONF(NETDEV_UP): wlan0: link is not ready
+[   17.348369] ark-hsuart e4800000.serial: no TX DMA channel available (no platform data) -- using PIO/interrupt-driven TX instead, this is expected on this board
+[   17.362803] ark-hsuart e4800000.serial: no RX DMA channel available (no platform data) -- using PIO/interrupt-driven RX instead, this is expected on this board
+[   17.377297] ark_hsuart_set_termios 1652 hsuart1 baud:9600 c_cflag:0xcbd
+[   17.378104] ark_hsuart_set_termios 1652 hsuart1 baud:9600 c_cflag:0xdbd
+[   17.378194] ark_hsuart_set_termios 1652 hsuart1 baud:115200 c_cflag:0x1db2
+[   17.481911] ark_hsuart_set_termios 1652 hsuart1 baud:1500000 c_cflag:0x1dba
+[   19.619423] RTW: assoc success
+[   19.624177] RTW: set group key camid:0, addr:68:b9:d3:f1:5a:43, kid:1, type:AES
+[   21.292634] RTW: clear wep or group key for addr:68:b9:d3:f1:5a:43, camid:0
+[   21.295073] RTW: ERROR Free disconnecting network of scanned_queue failed due to pwlan == NULL
+
+[   21.439031] RTW: ERROR Free disconnecting network of scanned_queue failed due to pwlan == NULL
+
+[   22.810293] RTW: assoc success
+[   22.815101] RTW: set group key camid:0, addr:68:b9:d3:f1:5a:43, kid:1, type:AES
+/ #

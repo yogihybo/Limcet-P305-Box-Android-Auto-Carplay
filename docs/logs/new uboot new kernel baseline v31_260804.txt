@@ -1,0 +1,1492 @@
+ite card=0 iface=2 name='softmaster' numid=4 values=127,84 at 123506265296ns
+=1
+
+ArkDbus::o[  123.508881] dmaengine_pcm_dma_complete: 3 callbacks suppressed
+nLinkStatusChang[  123.508904] pcm_dmaengine: period jitter: stream=0 actual=27539852ns expected=21333333ns (+29%)
+e:175 mStatus=34
+Signal Sent
+[123.505]  MsnCoreApp::onLinkStatusChange 11 34
+[123.[  123.532618] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=127,127 at 123541138617ns
+505]
+======== refreshAppAudioChannel 8388611 0
+Voice session notifi[  123.548326] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=127,84 at 123556843185ns
+cation, status = 2 autoStatus=1
+
+[  123.564177] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=127,127 at 123572691580ns
+[  123.574080] pcm_dmaengine: period jitter: stream=0 actual=28712790ns expected=21333333ns (+34%)
+[123.592]  switchToAppAudioChannel, ModeApp: "MsnCar[  123.588036] pcm_dmaengine: period jitter: stream=0 actual=13926840ns expected=21333333ns (-34%)
+Auto"  AudioApp: "MsnCarAuto"  Channel: 3 Request: false
+[123.593]
+==========CarAuto onLinkStatusChange: 11 34 ==========
+
+
+==========CarAuto Status: 4 false ==========
+
+[123.593]  requestLinkStatus 11 32
+[123.593]  ====================== requestAutoHandler ====================== 32
+ArkDbus::reply_to_requestLinkStatus_call 223 param1=11 param2=32
+ArkDbus::run 468
+[  123.668095] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=57,0 at 123676616530ns
+[  123.678046] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=57,57 at 123686583296ns
+[  123.695407] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=73,57 at 123703922901ns
+[  123.706022] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=73,73 at 123714555185ns
+[  123.718235] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=86,73 at 123726770691ns
+[  123.727976] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=86,86 at 123736517987ns
+[  123.743869] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=99,86 at 123752391568ns
+[  123.756327] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=99,99 at 123764838926ns
+[  123.766009] pcm_dmaengine: period jitter: stream=0 actual=28380062ns expected=21333333ns (+33%)
+[  123.776378] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=112,99 at 123784909432ns
+[  123.786343] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=112,112 at 123794883074ns
+[  123.799189] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=120,112 at 123807701580ns
+[  123.810078] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=120,120 at 123818607160ns
+[  123.820257] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=125,120 at 123828790679ns
+[  123.832991] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=125,125 at 123841505222ns
+[  123.844035] pcm_dmaengine: period jitter: stream=0 actual=13802691ns expected=21333333ns (-35%)
+[  123.855554] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=127,125 at 123864068987ns
+[  123.866567] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=127,127 at 123875099901ns
+Voice session notification, status = 1 autoStatus=1
+
+ArkDb[  124.139844] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=0,127 at 124148366530ns
+us::onLinkStatus[  124.150822] pcm_dmaengine: period jitter: stream=0 actual=29475839ns expected=21333333ns (+38%)
+Change:175 mStat[  124.161212] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=0,0 at 124169751271ns
+us=33
+Signal Sent
+Granted transient audio focus
+[124.147]  MsnCoreApp::onLinkStatusChange 11 33
+[124.148]
+======== refreshAppAudioChannel 8388611 8
+[124.183]  sw[  124.185371] pcm_dmaengine: period jitter: stream=0 actual=13590259ns expected=21333333ns (-36%)
+itchToAppAudioChannel, ModeApp: "MsnCarAuto"  AudioApp: "MsnCarPlay"  Channel: 3 Request: true
+[124.184]
+==========CarAuto onLinkStatusChange: 11 33 ==========
+
+
+==========CarAuto Status: 4 false ==========
+
+[124.184]  requestLinkStatus 11 32
+[124.185]  ====================== requestAutoHandler ====================== 32
+ArkDbus::reply_to_requestLinkStatus_call 223 param1=11 param2=32
+ArkDbus::run 468
+MicrophoneReaderThread::microphoneRequestCallback mOpen=1
+open:174 m_handle_name=default [  124.310591] ark1668-i2s: hw_params stream=1 rate=48000 period_size=1024 periods=16 format=2
+mode=1
+[  124.320692] pcm_dmaengine: period jitter: stream=0 actual=28538728ns expected=21333333ns (+33%)
+[  124.332158] ark1668-i2s: trigger cmd=1 stream=1 (capture) at 124340687851ns
+rate=16000 channels=1 bits_per_sample=16
+set_alsa_paramters:103 period_size=341 buffer_size=5461
+open:190 ret=0 m_handle=0x0009b3b8
+Microphone reader thread started.
+playbackStartCallback:63 status=35 streamtype = 1
+ArkDbus::onLinkStatusChange:175 mStatus=35
+Signal Sent
+[124.569]  MsnCoreApp::onLinkStatusChange[  124.564150] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=84,127 at 124572672876ns
+ 11 35
+[124.57[  124.575277] pcm_dmaengine: period jitter: stream=1 actual=29956111ns expected=21333333ns (+40%)
+1]
+======== r[  124.575370] pcm_dmaengine: period jitter: stream=0 actual=27374074ns expected=21333333ns (+28%)
+efreshAppAudioChannel 8388611 12
+play:225
+[  124.609194] pcm_dmaengine: period jitter: stream=1 actual=13047061ns expected=21333333ns (-38%)
+[  124.632369] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=84,84 at 124640882456ns
+[  124.654696] pcm_dmaengine: period jitter: stream=0 actual=12520568ns expected=21333333ns (-41%)
+[  124.672386] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=84,127 at 124680907000ns
+[  124.682249] pcm_dmaengine: period jitter: stream=1 actual=30431061ns expected=21333333ns (+42%)
+[  124.706468] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=84,84 at 124714995555ns
+[124.728]  switchToAppAudioChannel, ModeApp: "MsnCarAuto"  AudioApp: "MsnCarPlay"  Channel: 3 Request: true
+[124.732]
+==========CarAuto onLinkStatusChange: 11 35 ==========
+
+
+==========CarAuto Status: 4 false ==========
+
+[124.733]  requestLinkStatus 11 32
+[124.733]  ====================== requestAutoHandler ====================== 32
+ArkDbus::reply_to_requestLinkStatus_call 223 param1=11 param2=32
+ArkDbus::run 468
+play:225
+playbackStopCallback:75 status=36 streamtype = 1
+ArkDbus::onLinkStatusChange:175 mStatus=36
+Signal Sent
+[125.163]  MsnCoreApp::onLinkStatusChange 11 36
+[125.163]
+======== refreshAppAudioChannel 8388611 8
+[125.164]  switchToAppAudioChannel, ModeApp: "MsnCarAuto"  AudioApp: "MsnCarPlay"  Channel: 3 Request: true
+[125.164]
+==========CarAuto onLinkStatusChange: 11 36 ==========
+
+
+==========CarAuto Status: 4 false ==========
+
+[125.165]  requestLinkStatus 11 32
+[125.165]  ====================== requestAutoHandler ====================== 32
+ArkDbus::reply_to_requestLinkStatus_call 223 param1=11 param2=32
+ArkDbus::run 468
+MicrophoneReaderThr[  126.406454] ark1668-i2s: trigger cmd=0 stream=1 (capture) at 126414986468ns
+ead::microphoneRequestCallback mOpen=0
+Mic reader thread terminating due to close.
+playbackStartCallback:63 status=35 streamtype = 1
+ArkDbus::onLinkStatusChange:175 mStatus=35
+Signal Sent
+[126.663]  MsnCoreApp::onLinkStatusChange 11 35
+[126.664]
+======== refreshAppAudioChannel 8388611 12
+[126.664]  switchToAppAudioChannel, ModeApp: "MsnCarAuto"  AudioApp: "MsnCarPlay"  Channel: 3 Request: true
+[126.665]
+==========CarAuto onLinkStatusChange: 11 35 ==========
+
+
+==========CarAuto Status: 4 false ==========
+
+[126.666]  requestLinkStatus 11 32
+[126.666]  ====================== requestAutoHandler ====================== 32
+ArkDbus::reply_to_requestLinkStatus_call 223 param1=11 param2=32
+ArkDbus::run 468
+play:225
+play:225
+playbackStopCallback:75 status=36 streamtype = 1
+ArkDbus::onLinkStatusChange:175 mStatus=36
+Signal Sent
+[127.340]  MsnCoreApp::onLinkStatusChange 11 36
+[127.340]
+======== refreshAppAudioChannel 8388611 8
+[127.340]  switchToAppAudioChannel, ModeApp: "MsnCarAuto"  AudioApp: "MsnCarPlay"  Channel: 3 Request: true
+[127.341]
+==========CarAuto onLinkStatusChange: 11 36 ==========
+
+
+==========CarAuto Status: 4 false ==========
+
+[127.341]  requestLinkStatus 11 32
+[127.341]  ====================== requestAutoHandler ====================== 32
+ArkDbus::reply_to_requestLinkStatus_call 223 param1=11 param2=32
+ArkDbus::run 468
+Voice session notification, status = 2 autoStatus=1
+
+ArkDbus::onLi[  127.539203] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=127,84 at 127547725444ns
+nkStatusChange:175 mStatus=34
+Signal Sent
+[127.546]  MsnCoreApp::onLinkStatusChange 11 34
+[  127.557000] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=127,127 at 127565516987ns
+[127.547]
+======== refreshAppAudioCha[  127.570134] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=127,84 at 127578659098ns
+nnel 8388611 0
+Voice session notification, status = 2 autoStatus=1
+
+#audio stream release
+[  127.597440] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=127,127 at 127605954900ns
+[127.617]  switchToAppAudioChannel, ModeApp: "MsnCarAuto"  AudioApp: "MsnCarAuto"  Channel: 3 Request: false
+[127.618]
+==========CarAu[  127.621189] dmaengine_pcm_dma_complete: 3 callbacks suppressed
+to onLinkStatusC[  127.621213] pcm_dmaengine: period jitter: stream=0 actual=13766802ns expected=21333333ns (-35%)
+hange: 11 34 ==========
+
+
+==========CarAuto Status: 4 false ==========
+
+[127.619]  requestLinkStatus 11 32
+[127.619]  ====================== requestAutoHandler ====================== 32
+ArkDbus::reply_to_requestLinkStatus_call 223 param1=11 param2=32
+ArkDbus::run 468
+[  127.848803] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=125,0 at 127857324937ns
+[  127.874415] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=125,125 at 127882932135ns
+[  127.897386] pcm_dmaengine: period jitter: stream=0 actual=13078765ns expected=21333333ns (-38%)
+[  127.911387] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=127,125 at 127919902073ns
+[  127.939058] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=127,127 at 127947578999ns
+[  127.948928] pcm_dmaengine: period jitter: stream=0 actual=27495024ns expected=21333333ns (+28%)
+[  127.961387] pcm_dmaengine: period jitter: stream=0 actual=12436630ns expected=21333333ns (-41%)
+htop
+
+  CPU[###***                     15.6%] Tasks: 17, 32 thr, 44 kthr; 0 running
+  Mem[||||||||#@$$$$$$$$$$  39.8M/169M] Load average: 2.15 0.98 0.38
+  Swp[                           0K/0K] Uptime: 00:02:22
+
+  [Main] [I/O]
+  PID USER       PRI  NI  VIRT   RES   SHR S  CPU%-MEM%   TIME+  Command
+  334 0          -51   0  114M 10716  9404 S   4.5  6.2  0:13.16 /usr/bin/sink
+  345 0           20   0  1156   924   736 R   3.2  0.5  0:00.31 htop
+  327 0          -51   0  114M 10716  9404 S   2.6  6.2  0:02.03 /usr/bin/sink
+  285 0           20   0 89444  2920  2284 S   1.3  1.7  0:00.08 blueware /etc/b
+  335 0          -51   0  114M 10716  9404 S   1.3  6.2  0:03.48 /usr/bin/sink
+  322 0          -51   0  114M 10716  9404 S   0.6  6.2  0:00.81 /usr/bin/sink
+    1 0           20   0  1716  1004   964 S   0.0  0.6  0:01.83 init
+  100 0           20   0  1716  1148  1064 S   0.0  0.7  0:00.26 /sbin/mdev -df
+  107 0           20   0  1716   860   824 S   0.0  0.5  0:00.00 watchdog -t 5 -
+  168 0           20   0  4052  2180  2000 S   0.0  1.3  0:00.00 /usr/bin/sshd -
+  171 0           20   0 88608 32776 21728 S   0.0 18.9  0:12.94 MsnCoreApp -qws
+  172 0           20   0  1716  1268  1192 S   0.0  0.7  0:00.01 -/bin/sh
+  178 0           20   0  3000  1356  1244 S   0.0  0.8  0:00.00 /usr/bin/dbus-d
+  183 0           20   0  3000  1752  1616 S   0.0  1.0  0:00.17 /usr/bin/dbus-d
+  185 0           20   0 40516  8200  7596 S   0.0  4.7  0:00.28 EffectWatch
+  186 0           20   0 40516  8200  7596 S   0.0  4.7  0:00.00 EffectWatch
+F1Help  F2Setup F3SearchF4FilterF5Tree  F6SortByF7Nice -F8Nice +F9Kill  F10QuitVoice session notification, status = 1 autoStatus=1
+
+                                                  ArkDbus::onLinkStatusChange:175 mStatus=33
+             Signal Sent
+                        Granted tran[  143.078585] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=0,127 at 143087111220ns
+sient audio focu[  143.089836] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=0,0 at 143098375677ns
+s
+ [143.086]  MsnCoreApp::onLinkStatusChange 11 33
+                                                 [143.086]
+                                                            ======== refreshAppAudioChannel 8388611 8
+                      [143.108]  switchToAppAudioChannel, ModeApp: "MsnCarAuto"  AudioApp: "MsnCarPlay"  Channel: 3 Request: true
+                                                  [143.109]
+==========CarAuto onLinkStatusChange: 11 33 ==========
+
+
+==========CarAuto Status: 4 false ==========
+
+ [143.115]  requestLinkStatus 11 32
+                                    [143.116]  ====================== requestAutoHandler ====================== 32
+                                   ArkDbus::reply_to_requestLinkStatus_call 223 param1=11 param2=32
+                    ArkDbus::run 468
+                                    MicrophoneReaderThread::microphoneRequestCallback mOpen=1
+             open:174 m_handle_name=default m[  143.217168] ark1668-i2s: hw_params stream=1 rate=48000 period_size=1024 periods=16 format=2
+ode=1
+     [  143.229182] ark1668-i2s: trigger cmd=1 stream=1 (capture) at 143237704208ns
+rate=16000 channels=1 bits_per_sample=16
+                                        set_alsa_paramters:103 period_size=341 buffer_size=5461
+                open:190 ret=0 m_handle=0x000951d8
+                                                  Microphone reader thread started.
+   playbackStartCallback:63 status=35 streamtype = 1
+                                                    ArkDbus::onLinkStatusChange:175 mStatus=35
+               Signal Sent
+                          play:225
+                                  [143.463]  MsnCoreApp:[  143.476060] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=84,127 at 143484585985ns
+:onLinkStatusChange 11 35
+                          [143.484]
+                                     ======== refreshAppAudioC[  143.491583] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=84,84 at 143500105887ns
+hannel 8388611 12
+                  [  143.502331] pcm_dmaengine: period jitter: stream=0 actual=31487506ns expected=21333333ns (+47%)
+[  143.513354] pcm_dmaengine: period jitter: stream=0 actual=11167334ns expected=21333333ns (-47%)
+[  143.527536] pcm_dmaengine: period jitter: stream=1 actual=14521543ns expected=21333333ns (-31%)
+[  143.611776] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=84,12#####******304850ns     40.4               3
+[  143.621518] pcm_dmaengine: period jitter: stream=1 actual=29865580ns expected=21333333ns (+39%)                                   :23
+[  143.634199] pcm_dmaengine: period jitter: stream=1 actual=12703556ns expected=21333333ns (-40%)
+[  143.707673] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=84,84 at 143716205072ns       20  9408 S  16.7            42
+pl171225                 88608 32776 21728 R   7.7 18.9  0:13.06 MsnCoreApp -qws
+   35   [143.804]  switchToAppAudi20  9408 S   7.7p: "MsnCar3.60"  AudioApp: "Ms  346lay"  Channe-51   0  114M 10720  9408 S   7.1  6.2       11 /usr/bin/sink
+   4              20       156   924   736 R   4.5  0.5  0:00.38 htop
+====7=====CarAuto onLinkStatusChan20  9408 S   3.2====      2.08
+  330 0          -51   0  114M 10720  9408 S   3.2  6.2  0:00.59 /usr/bin/sink
+  322 0          -51   0  114M 10720  9408 S   1.3  6.2  0:00.83 /usr/bin/sink
+  284 0           20   0 89444  2920  2284 S   0.6  1.7  0:00.28 blueware /etc/b
+
+
+==========CarAuto Status: 4 false ==========
+
+                                    [143.805]  ====================== requestAutoHandler ====================== 32
+                                   ArkDbus::reply_to_requestLinkStatus_call 223                                                                                playbackStopCallback:75 status=36 streamtype = 1
+                                               ArkDbus::onLinkStatusChange:175 mStatus=36
+          Signal Sent
+                     [144.144]  MsnCoreApp::onLinkStatusChange 11 36
+                                                                     [144.145]
+                                                                               ======== refreshAppAudioChannel 8388611 8
+                                         [144.145]  switchToAppAudioChannel, ModeApp: "MsnCarAuto"  AudioApp: "MsnCarPlay"  Channel: 3 Request: true
+                                                                     [144.145]
+==========CarAuto onLinkStatusChange: 11 36 ==========
+
+
+==========CarAuto Status: 4 false ==========
+
+ [144.146]  requestLinkStatus 11 32
+                                    [144.146]  ====================== requestAutoHandler ====================== 32
+                                   ArkDbus::reply_to_requestLinkStatus_call 223 param1=11 param2=32
+                    ArkDbus::run 468
+                                    MicrophoneReaderThread::microphoneRequestCal[  145.265659] ark1668-i2s: trigger cmd=0 stream=1 (capture) at 145274189207ns
+lback mOpen=0
+             Mic reader thread terminating due to close.
+                                                        playbackStartCallback:63 status=35 streamtype = 1
+              ######***********  75.5inkStatusChange2175 mStatus=35
+                                                         4 1.00 0.39Signal Sent
+                                                       5                       [145.550]  MsnCoreApp::onLinkStatusChange 11 35
+                                               [145.551]
+                                                          ======== refreshAppAudioCh5nnel 8388611 12              16  9404                 03.9
+  334            -51   0  114M 10716  9404 S  10.9  6.2, ModeA63 /usr/bin/sink  Au171App: "MsnCar 20   0 90112 33052 21728 R   9.9 19.1  0:13.25 MsnCoreApp -qws
+    5             20       156   924   736 R   3.1  0.551]    44 htop
+  327=====CarAuto-51LinkSta14M 10716  9404 S   2.1  6.2  0:02.12 /usr/bin/sink
+   30                             16  9404 S   1.6          0.62
+  183             20      3000  1752  1616 S   0.5  1.0       18 /usr/bin/dbus-d
+==270=====CarAuto 20   0 89444  2920  2284 S   0.5  1.7       25 blueware /etc/b
+   76                                            5            09
+  322 0          -51   0  114M 10716  9404 S   0.5  6.2  0:00.84 /usr/bin/sink
+ [145.552]  requestLinkStatus 11 32
+                                    [145.552]  ====================== requestAutoHandler ====================== 32
+                                   ArkDbus::reply_to_requestLinkStatus_call 223 param1=11 param2=32
+                    ArkDbus::run 468
+                                                                               play:225
+       playbackStopCallback:75 status=36 streamtype = 1
+                                                       ArkDbus::onLinkStatusChange:175 mStatus=36
+                  Signal Sent
+                             [146.221]  MsnCoreApp::onLinkStatusChange 11 36
+                                                                             [146.222]
+        ======== refreshAppAudioChannel 8388611 8
+                                                  [146.222]  switchToAppAudioChannel, ModeApp: "MsnCarAuto"  AudioApp: "MsnCarPlay"  Channel: 3 Request: true
+                                                                              [146.222]
+==========CarAuto onLinkStatusChange: 11 36 ==========
+
+
+==========CarAuto Status: 4 false ==========
+
+ [146.223]  requestLinkStatus 11 32
+                                    [146.223]  ====================== requestAutoHandler ====================== 32
+                                   ArkDbus::reply_to_requestLinkStatus_call 223 param1=11 param2=32
+                    ArkDbus::run 468
+                                    Voice session notification, status = 2 autoStatus=1
+
+       [  146.403459] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=127,84 at 146411984010ns
+ArkDbus::onLinkS[  146.414722] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=127,127 at 146423260442ns
+tatusChange:175 mStatus=34
+                           Signal Sent
+                                      [146.411]  MsnCoreApp:[  146.429449] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=127,84 at 146437968788ns
+:onLinkStatusChange 11 34
+                          [146.[  146.442018] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=127,127 at 146450546911ns
+411]
+      ======== refreshAppAudioChannel 8388611 0
+                                                Voice session notification, status = 2 autoStatus=1
+
+                   #audio stream release
+                                        [146.470]  switchToAppAudioChannel, ModeApp: "MsnCarAuto"  AudioApp: "MsnCarAuto"  Channel: 3 Request: false
+                                                                     [146.471]
+==========CarAuto onLinkStatusChange: 11 34 ==========
+
+
+==========CarAuto Status: 4 false ==========
+
+ [146.47#***                     16.8
+                                    [146.471]  =======1.89========40= requestAutoHandler ====================== 32                    41
+                                   ArkDbus::reply_to_requestLinkStatus_call 223 param1=11 param2=32
+                    ArkDbus::run 468
+    4                               [  146.619 4.5 snd_ctl:14.53_write card=0 ifac345 name='softm 20   0  1156   924   736 R   3.2  0.5  0:00.98 htop
+  3276.650831] sn-51tl: e 114M 10716  9404 S   2.6  6.2  0:02.48 /usr/bin/sink    3357,97 at 1466-5165244ns14M 10716  9404 S   2.6  6.2  0:04.20 /usr/bin/sink
+  322 0          -51   0  114M 10716  9404 S   0.6  6.2  0:00.95 /usr/bin/sink
+[  146.734714] pcm_dmaengine: period jitter: stream=0 actual=13933679ns expected=21333333ns (-34%)
+[  146.771029] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=127,121 at 146779550368ns
+  171 0           20   0 88608 32776 21728 S   0.0 18.9  0:13.55 MsnCoreApp -qws
+[  146.782801] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=127,127 at 146791321751ns
+  183 0           20   0  3000  1752  1616 S   0.0  1.0  0:00.18 /usr/bin/dbus-d
+  185 0           20   0 40516  8200  7596 S   0.0  4.7  0:00.28 EffectWatch
+  186 0           20   0 40516  8200  7596 S   0.0  4.7  0:00.00 EffectWatch
+  187 0           20   0 40516  8200  7596 S   0.0  4.7  0:00.00 EffectWatch
+/ # htop
+
+  CPU[###***                     15.7%] Tasks: 17, 32 thr, 44 kthr; 0 running
+  Mem[||||||||#@$$$$$$$$$$  39.8M/169M] Load average: 1.69 1.00 0.41
+  Swp[                           0K/0K] Uptime: 00:02:56
+
+  [Main] [I/O]
+  PID USER       PRI  NI  VIRT   RES   SHR S  CPU%-MEM%   TIME+  Command
+  334 0          -51   0  114M 10716  9404 S   3.9  6.2  0:15.25 /usr/bin/sink
+  347 0           20   0  1156   924   736 R   3.9  0.5  0:00.60 htop
+  327 0          -51   0  114M 10716  9404 S   2.6  6.2  0:02.83 /usr/bin/sink
+  335 0          -51   0  114M 10716  9404 S   2.0  6.2  0:04.50 /usr/bin/sink
+  283 0           20   0 89444  2920  2284 S   0.7  1.7  0:00.13 blueware /etc/b
+  285 0           20   0 89444  2920  2284 S   0.7  1.7  0:00.09 blueware /etc/b
+    1 0           20   0  1716  1004   964 S   0.0  0.6  0:01.83 init
+  100 0           20   0  1716  1148  1064 S   0.0  0.7  0:00.26 /sbin/mdev -df
+  107 0           20   0  1716   860   824 S   0.0  0.5  0:00.00 watchdog -t 5 -
+  168 0           20   0  4052  2180  2000 S   0.0  1.3  0:00.00 /usr/bin/sshd -
+  171 0           20   0 88608 32776 21728 S   0.0 18.9  0:13.55 MsnCoreApp -qws
+  172 0           20   0  1716  1268  1192 S   0.0  0.7  0:00.01 -/bin/sh
+  178 0           20   0  3000  1356  1244 S   0.0  0.8  0:00.00 /usr/bin/dbus-d
+  183 0           20   0  3000  1752  1616 S   0.0  1.0  0:00.18 /usr/bin/dbus-d
+  185 0           20   0 40516  8200  7596 S   0.0  4.7  0:00.28 EffectWatch
+  186 0           20   0 40516  8200  7596 S   0.0  4.7  0:00.00 EffectWatch
+/ # killall EffectWatch
+/ # ArkDbus::onLinkStatusChange:175 mStatus=15
+Signal Sent
+Granted audio focus
+[189.415]  MsnCoreApp::onLinkStatusChange 11 15
+[189.416]
+==========CarAuto onLinkStatusChange: 11 15 ==========
+
+
+==========CarAuto Status: 4 false ==========
+
+[189.417]  requestLinkStatus 11 32
+[189.417]  ====================== requestAutoHandler ====================== 32
+ArkDbus::reply_to_requestLinkStatus_call 223 param1=11 param2=32
+ArkDbus::run 468
+playbackStartCallback:63 status=39 streamtype = 3
+ArkDbus::onLinkStatusChange:175 mStatus=39
+Signal Sent
+[189.580]  MsnCoreApp::onLinkStatusChange 11 39
+[189.581]
+==========CarAuto onLinkStatusChange: 11 39 ==========
+
+[189.581]  mode app change: "MsnCarAuto" -> "MsnCarAuto"
+[189.583]
+======== refreshAppAudioChannel 8388611 0
+[189.583]  switchToAppAudioChannel, ModeApp: "MsnCarAuto"  AudioApp: "MsnCarAuto"  Channel: 3 Request: false
+[189.584]  setAppVolumeMute "MsnCarAuto" false
+[189.584]
+======== refreshAppAudioChannel 8388611 0
+[189.584]  switchToAppAudioChannel, ModeApp: "MsnCarAuto"  AudioApp: "MsnCarAuto"  Channel: 3 Request: false
+
+==========CarAuto Status: 4 false ==========
+
+[189.584]  requestLinkStatus 11 32
+[189.585]  ====================== requestAutoHandler ====================== 32
+ArkDbus::reply_to_requestLinkStatus_call 223 param1=11 param2=32
+ArkDbus::run 468
+play:225
+play:225
+play:225
+play:225
+play:225
+play:225
+play:225
+play:225
+play:225
+play:225
+play:225
+play:225
+play:225
+play:225
+play:225
+play:225
+play:225
+play:225
+play:225
+play:225
+play:225
+play:225
+play:225
+play:225
+play:225
+play:225
+play:225
+play:225
+play:225
+play:225
+playbackStopCallback:75 status=40 streamtype = 3
+ArkDbus::onLinkStatusChange:175 mStatus=40
+Signal Sent
+[200.238]  MsnCoreApp::onLinkStatusChange 11 40
+[200.239]
+==========CarAuto onLinkStatusChange: 11 40 ==========
+
+
+==========CarAuto Status: 4 false ==========
+
+[200.239]  requestLinkStatus 11 32
+[200.240]  ====================== requestAutoHandler ====================== 32
+ArkDbus::reply_to_requestLinkStatus_call 223 param1=11 param2=32
+ArkDbus::run 468
+#audio stream release
+
+/ # ps
+PID   USER     TIME  COMMAND
+    1 root      0:01 init
+    2 root      0:00 [kthreadd]
+    3 root      0:00 [kworker/0:0-mm_]
+    4 root      0:00 [kworker/0:0H-mm]
+    5 root      0:00 [kworker/u2:0-ev]
+    6 root      0:00 [mm_percpu_wq]
+    7 root      0:01 [ksoftirqd/0]
+    8 root      0:00 [kdevtmpfs]
+    9 root      0:01 [kworker/0:1-eve]
+   10 root      0:00 [oom_reaper]
+   11 root      0:00 [writeback]
+   12 root      0:00 [crypto]
+   13 root      0:00 [kblockd]
+   14 root      0:00 [watchdogd]
+   15 root      0:00 [kswapd0]
+   28 root      0:00 [jpeg_queue]
+   29 root      0:00 [jpeg_decode]
+   30 root      0:00 [rn6752_eq_queue]
+   31 root      0:00 [kworker/u2:1-ev]
+   32 root      0:00 [mirror_queue]
+   33 root      0:00 [uas]
+   34 root      0:00 [kworker/0:2-eve]
+   35 root      0:00 [irq/20-ark1680_]
+   36 root      0:00 [kworker/0:3-mm_]
+   37 root      0:03 [kworker/0:4-eve]
+   38 root      0:00 [ipv6_addrconf]
+   39 root      0:00 [kworker/0:5-eve]
+   40 root      0:00 [kworker/0:6-mm_]
+   41 root      0:00 [mmc_complete]
+   42 root      0:00 [kworker/0:1H-kb]
+   43 root      0:00 [scsi_eh_0]
+   44 root      0:00 [scsi_tmf_0]
+   45 root      0:00 [usb-storage]
+   46 root      0:00 [kworker/u2:2-ev]
+   47 root      0:00 [jbd2/sda2-8]
+   48 root      0:00 [ext4-rsv-conver]
+  100 root      0:00 /sbin/mdev -df
+  107 root      0:00 watchdog -t 5 -T 15 /dev/watchdog
+  118 root      0:00 [jbd2/sda3-8]
+  119 root      0:00 [ext4-rsv-conver]
+  157 root      0:00 [cfg80211]
+  168 root      0:00 /usr/bin/sshd -f /etc/ssh/sshd_config
+  171 root      0:13 MsnCoreApp -qws
+  172 root      0:00 -/bin/sh
+  178 root      0:00 /usr/bin/dbus-daemon --fork --print-pid 4 --print-address
+  183 root      0:00 /usr/bin/dbus-daemon --fork --print-pid 4 --print-address
+  257 root      0:00 /usr/bin/carplay
+  264 root      0:00 [RTW_CMD_THREAD]
+  269 root      0:00 blueware /etc/blueware-bw123.properties
+  270 root      0:01 blueware /etc/blueware-bw123.properties
+  274 root      0:00 udhcpd -f /etc/udhcpd.conf wlan0
+  290 nobody    0:00 mdnsd
+  312 root      0:00 hostapd /tmp/hostapd.conf
+  320 root      0:32 {automain} /usr/bin/sink
+  328 root      0:00 [kworker/u2:3-ev]
+  337 root      0:00 [kworker/u2:4-ev]
+  338 root      0:00 [kworker/u2:5-ev]
+  340 root      0:00 [kworker/u2:6-ev]
+  341 root      0:00 [kworker/u2:7-ev]
+  349 root      0:00 ps
+/ # htop
+
+  CPU[############*********      63.6%] Tasks: 16, 30 thr, 44 kthr; 0 running
+  Mem[||||||||#@$$$$$$$$$$  39.1M/169M] Load average: 1.32 1.10 0.51
+  Swp[                           0K/0K] Uptime: 00:04:39
+
+  [Setup]
+
+  CPU[############*********      63.6%] Tasks: 16, 30 thr, 44 kthr; 0 running
+  Mem[||||||||#@$$$$$$$$$$  39.1M/169M] Load average: 1.32 1.10 0.51
+  Swp[                           0K/0K] Uptime: 00:04:39
+
+  [Setup]
+
+  CPU[######****                 30.3%] Tasks: 16, 30 thr, 44 kthr; 0 running
+  Mem[||||||||#@$$$$$$$$$$  39.1M/169M] Load average: 1.29 1.10 0.51
+  Swp[                           0K/0K] Uptime: 00:04:44
+
+  [Setup]
+
+  CPU[######****                 30.3%] Tasks: 16, 30 thr, 44 kthr; 0 running
+  Mem[||||||||#@$$$$$$$$$$  39.1M/169M] Load average: 1.29 1.10 0.51
+  Swp[                           0K/0K] Uptime: 00:04:44
+
+  [Setup]
+
+  CPU[######****                 30.3%] Tasks: 16, 30 thr, 44 kthr; 0 running
+  Mem[||||||||#@$$$$$$$$$$  39.1M/169M] Load average: 1.29 1.10 0.51
+  Swp[                           0K/0K] Uptime: 00:04:44
+
+  [Setup]
+Categories       Screens              Active Columns       Available Columns
+Display options  Main                 PID                  PID - Process/thread
+Header layout    I/O                  USER                 STATE - Process state
+Meters                                PRIORITY             PPID - Parent process
+Screens                               NICE                 PGRP
+Colors                                M_VIRT               SESSION - Process's s
+                                      M_RESIDENT           TTY - Controlling ter
+                                      M_SHARE              TPGID - Process ID of
+                                      STATE                MINFLT - Number of mi
+                                      PERCENT_CPU          CMINFLT - Children pr
+                                      PERCENT_MEM          MAJFLT - Number of ma
+                                      TIME                 CMAJFLT - Children pr
+                                      Command              UTIME - User CPU time
+                                                           STIME - System CPU ti
+                                                           CUTIME - Children pro
+                                                           CSTIME - Children pro
+                                                           PRIORITY - Kernel's i
+/ # PU%-MEM%   TIME+  Command
+-/bin/sh: PU%-MEM%: not found
+/ #   334 0          -51   0  114M 10744  9404 S   3.9  6.2  0:21.02 /usr/bin/si
+nk
+-/bin/sh: 334: not found
+/ #   350 0           20   0  1156   920   736 R   3.9  0.5  0:02.41 htop
+-/bin/sh: 350: not found
+/ #   335 0          -51   0  114M 10744  9404 S   1.9  6.2  0:06.13 /usr/bin/si
+nk
+-/bin/sh: 335: not found
+/ #   327 0          -51   0  114M 10744  9404 S   1.3  6.2  0:05.01 /usr/bin/si
+nk
+-/bin/sh: 327: not found
+/ #   322 0          -51   0  114M 10744  9404 S   0.6  6.2  0:01.66 /usr/bin/si
+nk
+-/bin/sh: 322: not found
+/ #   332 0          -51   0  114M 10744  9404 S   0.6  6.2  0:00.17 /usr/bin/si
+nk
+-/bin/sh: 332: not found
+/ #     1 0           20   0  1716  1004   964 S   0.0  0.6  0:01.83 init
+-/bin/sh: 1: not found
+/ #   100 0           20   0  1716  1148  1064 S   0.0  0.7  0:00.26 /sbin/mdev
+-df
+-/bin/sh: 100: not found
+/ #   107 0           20   0  1716   860   824 S   0.0  0.5  0:00.00 watchdog -t
+ 5 -
+-/bin/sh: 107: not found
+/ #   168 0           20   0  4052  2180  2000 S   0.0  1.3  0:00.00 /usr/bin/ss
+hd -
+-/bin/sh: 168: not found
+/ #   171 0           20   0 88608 32776 21728 S   0.0 18.9  0:13.76 MsnCoreApp
+-qws
+-/bin/sh: 171: not found
+/ #   172 0           20   0  1716  1268  1192 S   0.0  0.7  0:00.04 -/bin/sh
+-/bin/sh: 172: not found
+/ #   178 0           20   0  3000  1356  1244 S   0.0  0.8  0:00.00 /usr/bin/db
+us-d
+-/bin/sh: 178: not found
+/ #   183 0           20   0  3000  1752  1616 S   0.0  1.0  0:00.19 /usr/bin/db
+us-d
+-/bin/sh: 183: not found
+/ #   190 0           20   0 88608 32776 21728 S   0.0 18.9  0:00.00 MsnCoreApp
+-
+-/bin/sh: 190: not found
+/ #   190 0           20   0 88608 32776 21728 S   0.0 18.9  0:00.00 MsnCoreApp
+-/bin/sh: 190: not found
+/ # htop
+
+  CPU[###****                    17.2%] Tasks: 16, 30 thr, 39 kthr; 0 running
+  Mem[||||||||#@$$$$$$$$$$  39.0M/169M] Load average: 1.38 1.18 0.59
+  Swp[                           0K/0K] Uptime: 00:05:55
+
+  [Main] [I/O]
+  PID USER       PRI  NI  VIRT   RES   SHR S  CPU%-MEM%   TIME+  Command
+  334 0          -51   0  114M 10752  9404 S   4.5  6.2  0:24.36 /usr/bin/sink
+  351 0           20   0  1156   920   736 R   3.8  0.5  0:02.07 htop
+  327 0          -51   0  114M 10752  9404 S   2.5  6.2  0:06.79 /usr/bin/sink
+  335 0          -51   0  114M 10752  9404 S   1.9  6.2  0:07.27 /usr/bin/sink
+  322 0          -51   0  114M 10752  9404 S   0.6  6.2  0:02.16 /usr/bin/sink
+    1 0           20   0  1716  1004   964 S   0.0  0.6  0:01.83 init
+  100 0           20   0  1716  1148  1064 S   0.0  0.7  0:00.26 /sbin/mdev -df
+  107 0           20   0  1716   860   824 S   0.0  0.5  0:00.00 watchdog -t 5 -
+  168 0           20   0  4052  2180  2000 S   0.0  1.3  0:00.00 /usr/bin/sshd -
+  171 0           20   0 88608 32776 21728 S   0.0 18.9  0:13.77 MsnCoreApp -qws
+  172 0           20   0  1716  1276  1192 S   0.0  0.7  0:00.10 -/bin/sh
+  178 0           20   0  3000  1356  1244 S   0.0  0.8  0:00.00 /usr/bin/dbus-d
+  183 0           20   0  3000  1752  1616 S   0.0  1.0  0:00.19 /usr/bin/dbus-d
+  190 0           20   0 88608 32776 21728 S   0.0 18.9  0:00.00 MsnCoreApp -qws
+  246 0           20   0 88608 32776 21728 S   0.0 18.9  0:00.03 MsnCoreApp -qws
+  257 0           20   0 83060  8064  7260 S   0.0  4.7  0:00.18 /usr/bin/carpla
+F1Help  F2Setup F3SearchF4FilterF5Tree  F6SortByF7Nice -F8Nice +F9Kill  F10QuitArkDbus::onLinkStatusChange:175 mStatus=15
+                                          Signal Sent
+                                                     Granted audio focus
+                                                                        [355.324]  MsnCoreApp::onLinkStatusChange 11 15
+                                        [355.325]
+==========CarAuto onLinkStatusChange: 11 15 ==========
+
+
+==========CarAuto Status: 4 false ==========
+
+ [355.325]  requestLinkStatus 11 32
+                                    [355.325]  ====================== requestAutoHandler ====================== 32
+                                   ArkDbus::reply_to_requestLinkStatus_call 223 param1=11 param2=32
+                    ArkDbus::run 468
+                                    playbackStartCallback:63 status=39 streamtype = 3
+     ArkDbus::onLinkStatusChange:175 mStatus=39
+                                                Signal Sent
+                                                           play:225
+                                                                   [355.497]  MsnCoreApp::onLinkStatusChange 11 39
+                                   [355.497]
+==========CarAuto onLinkStatusChange: 11 39 ==========
+
+ [355.497]  mode app change: "MsnCarAuto" -> "MsnCarAuto"
+                                                          [355.498]
+                                                                     ======== refreshAppA#######******388611 0   46.7
+                               1355.499]  switchToAppAudi5 1.17el, ModeApp: "MsnCarAuto"  AudioApp: "MsnCarAuto"  Channel: 3 Request: f6lse
+                                                            [355.499]  setAppVolumeMute "MsnCarAuto" false
+                           [355.499]
+               ****               0.0 ========19.1reshAppAudio65annel 8388611 0
+  17                     88608 32776 21728 S   9.9 18.9  0:13.92 MsnCoreApp -qws3555199]  switchT 20pAudioC156   920   736 R   3.3  0.58 0:02.12 htop         o"  327nnel: 3 Request: false                    2.0          6.82
+    9                                          2.0          0.65
+  322 0          -5*   0  114M 1038.9 9404 S   1.3  6.2  0:02.18 /usr/bin/sink
+  335 0          -51   0  114M 10752  9404 S  20.0  6.2  0:07.97 /usr/bin/sink
+  329 0          -51   0  114M 10752  9404 S   4.4  6.29 0:00.72 /usr/bin/sink
+  283 0           20   0 89444  2928  2284 S   0.8  1.7  0:00.18 blueware /etc/b
+  335=====CarAuto Status: 4 false ==========   3.1          7.34
+    7         *                   9.0            5          6.86
+  284.500]  reque 20   0 89444  2928  228     19.1  1.7 40 1.19 0.60eware /etc/b
+   51             20       156   920   736 R   3.8  6:01 0:02.24 htop         ut  327            -51      814M 10752  9404 S   2.5  6.2  0:06.90 /usr/bin/sinkws
+   29                                          2.5          0.76               p  33525                                        1.3          7.3
+  270  play:2******               8.9            5            58 blueware /etc/b
+  227 0          -51   0 8314M 10752  9404 S   2.5  6.2  0:06.94 /usr/bin/sinkla
+  179 0           20   0 88608 32776 21728 S   0.0 18.92 0:10.80 MsnCoreApp -qws
+  351          pl 20225    156   920   736 R        0.5  0:02.28 htop
+                       play:225                  9             9
+             ##                     6                          1               play:225                                          1            8
+    9  play:225                                3.8     4    0.86
+  351          pl 20225    156   920   736 R   3.8  0.5  0:02.34 htop
+  327            -51       14M 10752  9404 S        6.2  0:06.98 /usr/bin/sink play:225                                        2.5            43
+       play:2**                   6.8          1.0          6.13
+  332 0          -51   0  114M 10752  9404 S   1.2  6.2 61 1.24 0.62r/bin/sink
+  284 0           20   0 89444  2928  2284 S   0.2  1.76 0:00.49 blueware /etc/b
+               play:225                        1.9          7.01
+                       play:225                1.9             6
+  270 0           20   0 89444  2928  2288 S   0.6  1.7  0:00.42 blueware /etc/b
+  226 0           20   0 88608 32776 21728 S  20.6 18.9  0:02.49 MsnCoreApp -qws
+lay:225                                          9             7
+       play:225                                               44
+               play:225                        2.6             5
+                                                               9               p       play:225                                                5
+               play:225
+                       play:225
+  190 0           20   0 88608 32776 21728 S   0.0 18.9  0:00.00 MsnCoreApp -qws
+                                                                               play:225
+       play:225
+               play:225
+       #***            play:225  11.5
+                               play:225                 46 1.24 0.65
+  246 0           20   0 88608 32776 21728 S   0.0 18.49 0:00.03 MsnCoreApp -qws
+                                                                               p  [Main] [I/O]lback:75 status=40 streamtype = 3
+                 PRI  NI  VIRT   RES   SHR S  CPU%-MEM%   TIME+  Commandge:175 m  334s=40        -51   0  114M 10752  9404 S   4.7  6.2  0:28.33 /usr/bin/sink
+  351 0           20   0  1156   920   736 R   4.1  0.5  0:03.78 htop
+  327 0          -51   0  114M 10752  9404 S   2.0  6.2  0:08.01 /usr/bin/sink
+  335 0          -51   0  114M 10752  9404 S   1.4  6.2  0:08.27 /usr/bin/sink
+  322 0          -51   0  114M 10752  9404 S   0.7  6.2  0:02.51 /usr/bin/sink
+    1 0           20   0  1716  1004   964 S   0.0  0.6  0:01.83 init
+  100=====CarAuto 20   0  1716  1148  1064 S   0.0  0.7  0:00.26 /sbin/mdev -df
+   07             20   0  1716   860   824 S   0.0  0.5  0:00.00 watchdog -t 5 -
+ [368.147]  reque 20   0  4052  2180  2000 S   0.0  1.3  0:00.00 /usr/bin/sshd -
+  171 0           20   0 88608 32776 21728 S   0.0 18.9  0:13.99 MsnCoreApp -qws
+oH172ler ======== 20   0  1716  1276  1192 S   0.0  0.7  0:00.10 -/bin/sh
+  178             20   0  3000  1356  1244 S   0.0  0.8  0:00.00 /usr/bin/dbus-dpa1831=11 param2= 20   0  3000  1752  1616 S   0.0  1.0  0:00.20 /usr/bin/dbus-d
+  190             20   0 88608 32776 21728 S   0.0 18.9  0:00.00 MsnCoreApp -qws
+  246 0           20   0 88608 32776 21728 S   0.0 18.9  0:00.03 MsnCoreApp -qws
+  257 0           20   0 83060  8064  7260 S   0.0  4.7  0:00.18 /usr/bin/carpla
+/ # htop
+
+  CPU[##***                      12.1%] Tasks: 16, 30 thr, 33 kthr; 0 running
+  Mem[||||||||#@$$$$$$$$$$  38.9M/169M] Load average: 1.44 1.29 0.72
+  Swp[                           0K/0K] Uptime: 00:08:18
+
+  [Main] [I/O]
+  PID USER       PRI  NI  VIRT   RES   SHR S  CPU%-MEM%   TIME+  Command
+  334 0          -51   0  114M 10752  9404 S   4.0  6.2  0:31.58 /usr/bin/sink
+  352 0           20   0  1156   920   736 R   3.4  0.5  0:02.90 htop
+  327 0          -51   0  114M 10752  9404 S   2.0  6.2  0:09.97 /usr/bin/sink
+  335 0          -51   0  114M 10752  9404 S   1.3  6.2  0:09.70 /usr/bin/sink
+    1 0           20   0  1716  1004   964 S   0.0  0.6  0:01.83 init
+  100 0           20   0  1716  1148  1064 S   0.0  0.7  0:00.26 /sbin/mdev -df
+  107 0           20   0  1716   860   824 S   0.0  0.5  0:00.01 watchdog -t 5 -
+  168 0           20   0  4052  2180  2000 S   0.0  1.3  0:00.00 /usr/bin/sshd -
+  171 0           20   0 88608 32776 21728 S   0.0 18.9  0:14.00 MsnCoreApp -qws
+  172 0           20   0  1716  1276  1192 S   0.0  0.7  0:00.10 -/bin/sh
+  178 0           20   0  3000  1356  1244 S   0.0  0.8  0:00.00 /usr/bin/dbus-d
+  183 0           20   0  3000  1752  1616 S   0.0  1.0  0:00.20 /usr/bin/dbus-d
+  190 0           20   0 88608 32776 21728 S   0.0 18.9  0:00.00 MsnCoreApp -qws
+  246 0           20   0 88608 32776 21728 S   0.0 18.9  0:00.03 MsnCoreApp -qws
+  257 0           20   0 83060  8064  7260 S   0.0  4.7  0:00.18 /usr/bin/carpla
+  261 0           20   0 83060  8064  7260 S   0.0  4.7  0:00.00 /usr/bin/carpla
+/ # dmesg
+[    0.412119] usbcore: registered new device driver usb
+[    0.419071] gpio-3 (i2c-gpio-0): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+[    0.428664] gpio-2 (i2c-gpio-0): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+[    0.438424] i2c i2c-1: Not I2C compliant: can't read SCL
+[    0.443815] i2c i2c-1: Bus may be unreliable
+[    0.448100] i2c-gpio i2c-gpio-0: using lines 3 (SDA) and 2 (SCL, no clock stretching)
+[    0.456174] gpio-9 (i2c-gpio-1): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+[    0.465713] gpio-121 (i2c-gpio-1): enforced open drain please flag it properly in DT/ACPI DSDT/board file
+[    0.475638] i2c i2c-2: Not I2C compliant: can't read SCL
+[    0.481008] i2c i2c-2: Bus may be unreliable
+[    0.485289] i2c-gpio i2c-gpio-1: using lines 9 (SDA) and 121 (SCL, no clock stretching)
+[    0.493451] media: Linux media interface: v0.10
+[    0.498069] videodev: Linux video capture interface: v2.00
+[    0.503978] Advanced Linux Sound Architecture Driver Initialized.
+[    0.511466] clocksource: Switched to clocksource arkmicro,ark-timer
+[    0.572235] hx170dec e0900000.vdec: VDEC controller at 0x(ptrval), irq = 40, misc_minor = 63
+[    0.580757] hx170dec e0900000.vdec: Product ID: 0x6731 (revision 2.57.8)
+[    0.602680] NET: Registered protocol family 2
+[    0.608095] tcp_listen_portaddr_hash hash table entries: 512 (order: 0, 4096 bytes)
+[    0.615932] TCP established hash table entries: 2048 (order: 1, 8192 bytes)
+[    0.622983] TCP bind hash table entries: 2048 (order: 1, 8192 bytes)
+[    0.629394] TCP: Hash tables configured (established 2048 bind 2048)
+[    0.635992] UDP hash table entries: 256 (order: 0, 4096 bytes)
+[    0.641913] UDP-Lite hash table entries: 256 (order: 0, 4096 bytes)
+[    0.648560] NET: Registered protocol family 1
+[    0.654243] Initialise system trusted keyrings
+[    0.659160] workingset: timestamp_bits=14 max_order=16 bucket_order=2
+[    0.666638] ntfs: driver 2.1.32 [Flags: R/W DEBUG].
+[    0.675053] Key type asymmetric registered
+[    0.679173] Asymmetric key parser 'x509' registered
+[    0.684198] io scheduler noop registered (default)
+[    0.690222] memalloc-cls memalloc: allocator with major = 250
+[    0.692101] rn6752: dvr_rn6752_probe:init done
+[    0.696964] [DIAG_ITU656_PROBE] call #1: dvr_dev=c848b040 sizeof(struct dvr_dev)=588
+[    0.704805] [DIAG_ITU656_PROBE] dvr_dev=c848b040 &start=c848b224 start=c03e24e4 (want dvr_start=c03e24e4) &stop=c848b228 stop=c03e24f4 (want dvr_stop=c03e24f4)
+[    0.719133] [DIAG_ITU656_PROBE] priv_data after memcpy: &priv_data=c848b22c select_channel=c03e00f4 (want c03e00f4) detect_signal=c03df9c0 (want c03df9c0) get_progressive=c03dea7c (want c03dea7c) display_effect=c03df4ac (want c03df4ac)
+[    0.740057] [DIAG_ITU656_PROBE] priv_data after memcpy (cont): dvr_start_cb=00000000 (want 00000000) dvr_stop_cb=00000000 (want 00000000) enter_carback_cb=c03df9fc (want c03df9fc) exit_carback_cb=c03ded04 (want c03ded04) dvr_config=00000000 (want 00000000)
+[    0.764050] get mirror type=0
+[    0.764064] carback_first_enter g_carback null error
+[    0.764083] [DIAG_ITU656_PROBE_END] dvr_dev=c848b040 start=c03e24e4 (want c03e24e4) stop=c03e24f4 (want c03e24f4)
+[    0.780973] ark_display: registered /dev/ark_display
+[    0.787080] nand: device found, Manufacturer ID: 0x98, Chip ID: 0xf1
+[    0.793549] nand: Toshiba NAND 128MiB 3,3V 8-bit
+[    0.798177] nand: 128 MiB, SLC, erase size: 128 KiB, page size: 2048, OOB size: 64
+[    0.805830] nand: WARNING: ark-nand: the ECC used on your system is too weak compared to the one required by the NAND chip
+[    0.816936] Scanning device for bad blocks
+[    0.893276] Bad eraseblock 768 at 0x000006000000
+[    0.923689] usbcore: registered new interface driver cdc_ether
+[    0.929623] usbcore: registered new interface driver cdc_subset
+[    0.935763] usbcore: registered new interface driver zaurus
+[    0.941433] usbcore: registered new interface driver ipheth
+[    0.947183] usbcore: registered new interface driver cdc_ncm
+[    0.953330] usbcore: registered new interface driver uas
+[    0.958768] usbcore: registered new interface driver usb-storage
+[    0.991685] musb-hdrc musb-hdrc.0: MUSB HDRC host driver
+[    0.997083] musb-hdrc musb-hdrc.0: new USB bus registered, assigned bus number 1
+[    1.006035] hub 1-0:1.0: USB hub found
+[    1.009917] hub 1-0:1.0: 1 port detected
+[    1.014528] musb-hdrc musb-hdrc.0: switch host (no negotiation): gpio_id=76 gpio_pwr=126
+[    1.334003] musb_ark_probe succss
+[    1.361612] ark_musb_disable 128: dma still active
+[    1.366475] musb-hdrc musb-hdrc.1: MUSB HDRC host driver
+[    1.371909] musb-hdrc musb-hdrc.1: new USB bus registered, assigned bus number 2
+[    1.380764] hub 2-0:1.0: USB hub found
+[    1.384729] hub 2-0:1.0: 1 port detected
+[    1.388883] musb-hdrc musb-hdrc.1: ark_musb_enable: dma not reactivated
+[    1.396024] musb-hdrc musb-hdrc.1: switch host (no negotiation): gpio_id=1 gpio_pwr=117
+[    1.711469] random: fast init done
+[    1.718800] musb_ark_probe succss
+[    1.720163] udc-core: couldn't find an available UDC - added [g_ncm] to list of pending drivers
+[    1.729258] ark1680_ts e4500000.tsc: probe: ADC/TSC MEM resource [mem 0xe4500000-0xe450003f]
+[    1.737896] ark1680_ts e4500000.tsc: probe: irq=20
+[    1.742772] ark1680_ts e4500000.tsc: probe: mapped syscon/pinmux block at phys 0xe4900000, size 0x200
+[    1.752682] input: ark1680-ts as /devices/platform/e4500000.tsc/input/input0
+[    1.760195] ark1680_ts e4500000.tsc: ARK1680 resistive touchscreen registered, irq=20, debug=0 (echo 1 > /sys/module/ark1680_ts/parameters/debug to trace samples)
+[    1.775821] rtc-ark e4c00000.rtc: rtc core: registered e4c00000.rtc as rtc0
+[    1.783089] i2c /dev entries driver
+[    1.788246] ark_wdt e4b00000.watchdog: initialized (timeout = 15 sec, nowayout = 0)
+[    1.797214] dw_mmc ec400000.mmc: Using PIO mode.
+[    1.801922] dw_mmc ec400000.mmc: Version ID is 220a
+[    1.806899] dw_mmc ec400000.mmc: DW MMC controller at irq 42,32 bit host data width,32 deep fifo
+[    1.828666] mmc_host mmc0: Bus speed (slot 0) = 24000000Hz (slot req 400000Hz, actual 400000HZ div = 30)
+[    1.851390] dw_mmc ec800000.mmc: Using external DMA controller.
+[    1.857497] dw_mmc ec800000.mmc: Version ID is 220a
+[    1.862540] dw_mmc ec800000.mmc: DW MMC controller at irq 54,32 bit host data width,32 deep fifo
+[    1.871523] mmc_host mmc1: card is non-removable.
+[    1.876539] usb 1-1: new high-speed USB device number 2 using musb-hdrc
+[    1.887015] mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 400000Hz, actual 400000HZ div = 30)
+[    1.911387] ark1668-i2s e4000000.i2s-dac: mem resource at 0xe4000000
+[    1.917876] ark1668-i2s e4000000.i2s-dac: releasing soft reset for I2S1 (DAC/internal I2S) at 0xe4000000
+[    1.927459] ark1668-i2s e4000000.i2s-dac: enabled internal I2S1 clock-gate bit at 0xe4a00000+0x1f0
+[    1.937162] ark1668-i2s e8200000.i2s-adc: mem resource at 0xe8200000
+[    1.943649] ark1668-i2s e8200000.i2s-adc: releasing soft reset for I2S2 (ADC/external I2S) at 0xe8200000
+[    1.953198] ark1668-i2s e8200000.i2s-adc: enabled external I2S2/CS4334 clock-gate bits at 0xe4a00000
+[    1.963981] NET: Registered protocol family 10
+[    1.970609] Segment Routing with IPv6
+[    1.974561] sit: IPv6, IPv4 and MPLS over IPv4 tunneling driver
+[    1.981768] NET: Registered protocol family 17
+[    1.986699] usb 2-1: new high-speed USB device number 2 using musb-hdrc
+[    1.994997] Loading compiled-in X.509 certificates
+[    2.007029] asoc-simple-card sound: e4000000.sddac <-> e4000000.i2s-dac mapping ok
+[    2.016732] asoc-simple-card sound: ahb:sdadc@0 <-> e8200000.i2s-adc mapping ok
+[    2.026652] rtc-ark e4c00000.rtc: setting system clock to 2024-02-19 09:33:04 UTC (1708335184)
+[    2.035730] ALSA device list:
+[    2.038713]   #0: ARK-SDDAC
+[    2.041956] mmc_host mmc0: Bus speed (slot 0) = 24000000Hz (slot req 25000000Hz, actual 24000000HZ div = 0)
+[    2.051837] mmc0: new SD card at address e126
+[    2.057671] mmcblk0: mmc0:e126 SU01G 969 MiB
+[    2.065456]  mmcblk0: p1 p2 p3
+[    2.070505] Waiting for root device /dev/sda2...
+[    2.081420] mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 300000Hz, actual 300000HZ div = 40)
+[    2.121522] usb 1-1: hub_port_init:4710 speed=3
+[    2.131585] mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 200000Hz, actual 200000HZ div = 60)
+[    2.141517] usb 2-1: hub_port_init:4710 speed=3
+[    2.153242] usb-storage 1-1:1.0: USB Mass Storage device detected
+[    2.160510] scsi host0: usb-storage 1-1:1.0
+[    2.200508] mmc_host mmc1: Bus speed (slot 0) = 24000000Hz (slot req 100000Hz, actual 100000HZ div = 120)
+[    3.192382] scsi 0:0:0:0: Direct-Access     SanDisk  Cruzer Blade     8.02 PQ: 0 ANSI: 0 CCS
+[    3.202891] sd 0:0:0:0: Attached scsi generic sg0 type 0
+[    3.209152] sd 0:0:0:0: [sda] 7856127 512-byte logical blocks: (4.02 GB/3.75 GiB)
+[    3.217229] sd 0:0:0:0: [sda] Write Protect is off
+[    3.222109] sd 0:0:0:0: [sda] Mode Sense: 45 00 00 08
+[    3.222508] sd 0:0:0:0: [sda] No Caching mode page found
+[    3.227841] sd 0:0:0:0: [sda] Assuming drive cache: write through
+[    3.240727]  sda: sda1 sda2 sda3
+[    3.248049] sd 0:0:0:0: [sda] Attached SCSI removable disk
+[    3.277752] EXT4-fs (sda2): mounted filesystem with ordered data mode. Opts: (null)
+[    3.285665] VFS: Mounted root (ext4 filesystem) on device 8:2.
+[    3.312292] devtmpfs: mounted
+[    3.317738] Freeing unused kernel memory: 1024K
+[    3.322555] Run /sbin/init as init process
+[    3.431628] ark1668_lcdfb: LCD RGB888 r0-r7 pinmux reclaimed from any i2c-gpio pin theft (now 0x11111111)
+[    4.283408] EXT4-fs (sda3): mounted filesystem with ordered data mode. Opts: (null)
+[    4.405845] random: crng init done
+[    4.750451] cfg80211: Loading compiled-in X.509 certificates for regulatory database
+[    4.952860] cfg80211: Loaded X.509 cert 'sforshee: 00b28ddf47aef9cea7'
+[    4.988666] cfg80211: Loaded X.509 cert 'wens: 61c038651aabdcf94bd0ac7ff06c7248db18c600'
+[    5.633358] RTW: module init start
+[    5.633378] RTW: rtl8811cu v5.15.9.6-1-g3fe4f4b91.20250327_COEX20230331-5d5d
+[    5.633386] RTW: build time: Aug  4 2026 11:51:25
+[    5.633392] RTW: rtl8811cu BT-Coex version = COEX20230331-5d5d
+[    5.639221] RTW: [HALMAC]55772M
+               HALMAC_MAJOR_VER = 1
+               HALMAC_PROTOTYPE_VER = 6
+               HALMAC_MINOR_VER = 7
+               HALMAC_PATCH_VER = 15
+[    5.640427] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[    5.818175] RTW: HW EFUSE
+[    5.818199] RTW: 0x000: 29 81 00 BC  09 00 21 00  6E 04 A4 10  10 00 30 0B
+[    5.818262] RTW: 0x010: FF FF FF FF  FF FF FF FF  FF FF FF 02  FF FF FF FF
+[    5.818316] RTW: 0x020: FF FF 25 25  25 25 25 23  23 22 22 23  23 23 24 25
+[    5.818370] RTW: 0x030: 22 FF FF FF  FF FF 10 FF  FF FF 28 28  28 28 28 28
+[    5.818423] RTW: 0x040: 2C 2C 2C 2C  2C 02 FF FF  FF FF FF FF  FF FF FF FF
+[    5.818478] RTW: 0x050: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    5.818532] RTW: 0x060: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    5.818585] RTW: 0x070: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    5.818639] RTW: 0x080: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    5.818692] RTW: 0x090: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    5.818745] RTW: 0x0A0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    5.818799] RTW: 0x0B0: FF FF FF FF  FF FF FF FF  7F 2D 1B 00  FF FF FF FF
+[    5.818853] RTW: 0x0C0: FF 01 00 41  00 00 00 00  00 FF 22 FF  FF FF FF FF
+[    5.818907] RTW: 0x0D0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    5.818960] RTW: 0x0E0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    5.819014] RTW: 0x0F0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    5.819068] RTW: 0x100: DA 0B 11 C8  E3 46 02 68  B9 D3 F1 5A  43 09 03 52
+[    5.819122] RTW: 0x110: 65 61 6C 74  65 6B 0E 03  38 30 32 2E  31 31 61 63
+[    5.819177] RTW: 0x120: 20 4E 49 43  08 03 31 32  33 34 35 36  FF FF FF FF
+[    5.819231] RTW: 0x130: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    5.819285] RTW: 0x140: FF FF FF FF  00 00 31 0F  FF FF FF FF  FF FF FF FF
+[    5.819340] RTW: 0x150: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    5.819394] RTW: 0x160: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    5.819448] RTW: 0x170: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    5.819502] RTW: 0x180: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    5.819556] RTW: 0x190: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    5.819609] RTW: 0x1A0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    5.819663] RTW: 0x1B0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    5.819717] RTW: 0x1C0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    5.819771] RTW: 0x1D0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    5.819825] RTW: 0x1E0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    5.819878] RTW: 0x1F0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF
+[    5.829727] RTW: [HALMAC][ALWAYS]shall R reg twice!!
+[    5.913728] RTW: c2h_mac_hidden_rpt_hdl: 0x41
+[    5.913745] RTW: c2h_mac_hidden_rpt_hdl: 0x39
+[    5.913754] RTW: c2h_mac_hidden_rpt_hdl: 0xD1
+[    5.913762] RTW: c2h_mac_hidden_rpt_hdl: 0xFD
+[    5.913769] RTW: c2h_mac_hidden_rpt_hdl: 0xF2
+[    5.913776] RTW: c2h_mac_hidden_rpt_hdl: 0xFF
+[    5.913783] RTW: c2h_mac_hidden_rpt_hdl: 0x27
+[    5.913790] RTW: c2h_mac_hidden_rpt_hdl: 0xFF
+[    5.913804] RTW: uuid x:0x41 y:0x39 z:0x11 crc:0x7ee
+[    5.913811] RTW: hci_type:0x2
+[    5.913818] RTW: package_type:0x7
+[    5.913824] RTW: tr_switch:0x1
+[    5.913830] RTW: wl_func:0xf
+[    5.913836] RTW: hw_stype:0xf
+[    5.913842] RTW: bw:0x7
+[    5.913847] RTW: ant_num:0x1
+[    5.913853] RTW: protocol:0x3
+[    5.913859] RTW: nic:0x3
+[    5.913877] RTW: c2h_mac_hidden_rpt_2_hdl: 0xFF
+[    5.913885] RTW: c2h_mac_hidden_rpt_2_hdl: 0xFF
+[    5.913891] RTW: c2h_mac_hidden_rpt_2_hdl: 0xF8
+[    5.913898] RTW: c2h_mac_hidden_rpt_2_hdl: 0xFC
+[    5.913905] RTW: c2h_mac_hidden_rpt_2_hdl: 0xFF
+[    5.920447] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[    5.920723] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[    5.920946] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[    5.921197] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[    5.921499] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[    5.921727] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[    5.921935] RTW: ERROR [HALMAC][ERR]Dump efuse in suspend
+[    5.922172] RTW: [RF_PATH] ver_id.RF_TYPE:RF_1T1R
+[    5.922190] RTW: [RF_PATH] HALSPEC's rf_reg_trx_path_bmp:0x11, rf_reg_path_avail_num:1, max_tx_cnt:1
+[    5.922199] RTW: [RF_PATH] PG's trx_path_bmp:0x00, max_tx_cnt:0
+[    5.922209] RTW: [RF_PATH] Registry's trx_path_bmp:0x00, tx_path_lmt:0, rx_path_lmt:0
+[    5.922219] RTW: [RF_PATH] HALDATA's trx_path_bmp:0x11, max_tx_cnt:1
+[    5.922228] RTW: [RF_PATH] HALDATA's rf_type:RF_1T1R, NumTotalRFPath:1
+[    5.922240] RTW: [TRX_Nss] HALSPEC - tx_nss:1, rx_nss:1
+[    5.922248] RTW: [TRX_Nss] Registry - tx_nss:0, rx_nss:0
+[    5.922254] RTW: [TRX_Nss] HALDATA - tx_nss:1, rx_nss:1
+[    5.922266] RTW: txpath=0x1, rxpath=0x1
+[    5.922276] RTW: txpath_1ss:0x1, num:1
+[    5.922439] RTW: rtw_rfctl_decide_init_chplan chplan:0x1B
+[    5.922450] RTW: rtw_rfctl_decide_init_chplan country code:"US"
+[    5.924901] RTW: rtw_regsty_chk_target_tx_power_valid return _FALSE for band:0, path:0, rs:0, t:-1
+[    5.932429] RTW: rtw_ndev_init(wlan0) if1 mac_addr=68:b9:d3:f1:5a:43
+[    5.934605] RTW: rtw_ndev_init(wlan1) if2 mac_addr=6a:b9:d3:f1:5a:43
+[    5.936943] usbcore: registered new interface driver rtl8811cu
+[    5.942917] RTW: module init ret=0
+[    9.102682] ark1668-i2s: hw_params stream=0 rate=48000 period_size=1024 periods=16 format=2
+[    9.122512] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 9131043134ns
+[    9.139354] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 9147881023ns
+[    9.146253] ark1668-sddac: ark_audio_mute mute=1 at 9154807689ns
+[    9.152523] ark1668-sddac: ark_audio_mute mute=0 at 9161071430ns
+[    9.176505] snd_ctl: elem_write card=0 iface=2 name='softmaster3' numid=3 values=0,0 at 9185027455ns
+[    9.201752] snd_ctl: elem_write card=0 iface=2 name='softmaster3' numid=3 values=115,115 at 9210275850ns
+[    9.224104] pcm_dmaengine: period jitter: stream=0 actual=12702136ns expected=21333333ns (-40%)
+[    9.243929] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 9252454109ns
+[    9.250828] ark1668-sddac: ark_audio_mute mute=1 at 9259383924ns
+[    9.257010] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 9265557047ns
+[    9.294978] ark1668-i2s: hw_params stream=0 rate=48000 period_size=1024 periods=16 format=2
+[    9.309169] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 9317699887ns
+[    9.320090] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 9328629010ns
+[    9.327896] ark1668-sddac: ark_audio_mute mute=1 at 9336452405ns
+[    9.334135] ark1668-sddac: ark_audio_mute mute=0 at 9342684430ns
+[    9.370476] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=0,0 at 9378996874ns
+[    9.381162] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=127,127 at 9389692047ns
+[    9.392237] pcm_dmaengine: period jitter: stream=0 actual=30043333ns expected=21333333ns (+40%)
+[    9.404850] pcm_dmaengine: period jitter: stream=0 actual=12631729ns expected=21333333ns (-40%)
+[    9.416946] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 9425474566ns
+[    9.423844] ark1668-sddac: ark_audio_mute mute=1 at 9432397924ns
+[    9.430023] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 9438568393ns
+[    9.461187] ark1668-sddac: get_l_playback_volume = 112 at 9469714146ns
+[    9.473807] ark1668-sddac: get_r_playback_volume = 112 at 9482342455ns
+[    9.486505] ark1668-i2s: hw_params stream=0 rate=48000 period_size=1024 periods=16 format=2
+[    9.495600] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 9504140479ns
+[    9.504755] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 9513298072ns
+[    9.511639] ark1668-sddac: ark_audio_mute mute=1 at 9520195072ns
+[    9.520378] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=0,0 at 9528904516ns
+[    9.529890] ark1668-sddac: ark_audio_mute mute=0 at 9538433467ns
+[    9.536084] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=127,127 at 9544623726ns
+[    9.546746] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 9555276936ns
+[    9.553640] ark1668-sddac: ark_audio_mute mute=1 at 9562194615ns
+[    9.559803] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 9568350220ns
+[    9.573185] ark1668-i2s: hw_params stream=0 rate=48000 period_size=1024 periods=16 format=2
+[    9.582268] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 9590807788ns
+[    9.591331] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 9599877837ns
+[    9.598212] ark1668-sddac: ark_audio_mute mute=1 at 9606768010ns
+[    9.604421] ark1668-sddac: ark_audio_mute mute=0 at 9612969356ns
+[    9.613791] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 9622320146ns
+[    9.620690] ark1668-sddac: ark_audio_mute mute=1 at 9629245381ns
+[    9.626826] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 9635373936ns
+[    9.637907] ark1668-sddac: get_l_playback_volume = 112 at 9646438010ns
+[    9.644850] ark1668-sddac: get_r_playback_volume = 112 at 9653392837ns
+[    9.655139] ark1668-i2s: hw_params stream=0 rate=48000 period_size=1024 periods=16 format=2
+[    9.664256] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 9672795652ns
+[    9.673415] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 9681956763ns
+[    9.680298] ark1668-sddac: ark_audio_mute mute=1 at 9688853665ns
+[    9.689044] snd_ctl: elem_write card=0 iface=2 name='softmaster4' numid=6 values=0,0 at 9697571800ns
+[    9.698562] ark1668-sddac: ark_audio_mute mute=0 at 9707107097ns
+[    9.704761] snd_ctl: elem_write card=0 iface=2 name='softmaster4' numid=6 values=115,115 at 9713300282ns
+[    9.715424] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 9723954269ns
+[    9.722318] ark1668-sddac: ark_audio_mute mute=1 at 9730872924ns
+[    9.728440] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 9736986924ns
+[    9.741868] ark1668-i2s: hw_params stream=0 rate=48000 period_size=1024 periods=16 format=2
+[    9.750910] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 9759451726ns
+[    9.760052] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 9768594800ns
+[    9.766935] ark1668-sddac: ark_audio_mute mute=1 at 9775491763ns
+[    9.773120] ark1668-sddac: ark_audio_mute mute=0 at 9781666479ns
+[    9.782431] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 9790962479ns
+[    9.789332] ark1668-sddac: ark_audio_mute mute=1 at 9797886590ns
+[    9.795454] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 9804001578ns
+[    9.806554] ark1668-sddac: get_l_playback_volume = 112 at 9815084726ns
+[    9.813312] ark1668-sddac: get_r_playback_volume = 112 at 9821857751ns
+[    9.823986] ark1668-i2s: hw_params stream=0 rate=48000 period_size=1024 periods=16 format=2
+[    9.833064] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 9841605516ns
+[    9.842203] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 9850746911ns
+[    9.849085] ark1668-sddac: ark_audio_mute mute=1 at 9857641134ns
+[    9.857853] snd_ctl: elem_write card=0 iface=2 name='softmaster1' numid=7 values=0,0 at 9866380381ns
+[    9.867347] ark1668-sddac: ark_audio_mute mute=0 at 9875893319ns
+[    9.873551] snd_ctl: elem_write card=0 iface=2 name='softmaster1' numid=7 values=106,106 at 9882089060ns
+[    9.884206] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 9892738158ns
+[    9.891100] ark1668-sddac: ark_audio_mute mute=1 at 9899654578ns
+[    9.897223] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 9905770652ns
+[    9.910494] ark1668-i2s: hw_params stream=0 rate=48000 period_size=1024 periods=16 format=2
+[    9.919629] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 9928166973ns
+[    9.928773] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 9937313183ns
+[    9.935655] ark1668-sddac: ark_audio_mute mute=1 at 9944210800ns
+[    9.941839] ark1668-sddac: ark_audio_mute mute=0 at 9950388776ns
+[    9.951110] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 9959639566ns
+[    9.958009] ark1668-sddac: ark_audio_mute mute=1 at 9966564788ns
+[    9.964153] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 9972699023ns
+[    9.975237] ark1668-sddac: get_l_playback_volume = 112 at 9983768158ns
+[    9.982002] ark1668-sddac: get_r_playback_volume = 112 at 9990548306ns
+[    9.992751] ark1668-i2s: hw_params stream=0 rate=48000 period_size=1024 periods=16 format=2
+[   10.001832] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 10010370578ns
+[   10.010988] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 10019533294ns
+[   10.017955] ark1668-sddac: ark_audio_mute mute=1 at 10026511381ns
+[   10.024231] ark1668-sddac: ark_audio_mute mute=0 at 10032780553ns
+[   10.033573] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 10042101763ns
+[   10.040558] ark1668-sddac: ark_audio_mute mute=1 at 10049112195ns
+[   10.046830] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 10055374344ns
+[   10.060250] ark1668-i2s: hw_params stream=0 rate=48000 period_size=1024 periods=16 format=2
+[   10.069275] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 10077811726ns
+[   10.078818] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 10087353936ns
+[   10.085793] ark1668-sddac: ark_audio_mute mute=1 at 10094348726ns
+[   10.092077] ark1668-sddac: ark_audio_mute mute=0 at 10100626603ns
+[   10.101405] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 10109934158ns
+[   10.108389] ark1668-sddac: ark_audio_mute mute=1 at 10116944615ns
+[   10.114666] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 10123212504ns
+[   10.125814] ark1668-sddac: get_l_playback_volume = 112 at 10134348084ns
+[   10.132666] ark1668-sddac: get_r_playback_volume = 112 at 10141211418ns
+[   10.143622] ark1668-i2s: hw_params stream=0 rate=44100 period_size=1024 periods=16 format=2
+[   10.152629] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 10161168442ns
+[   10.161952] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 10170492245ns
+[   10.168921] ark1668-sddac: ark_audio_mute mute=1 at 10177477023ns
+[   10.177770] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=0,0 at 10186298739ns
+[   10.187300] ark1668-sddac: ark_audio_mute mute=0 at 10195846590ns
+[   10.193659] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=127,127 at 10202197097ns
+[   10.204348] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 10212882627ns
+[   10.211332] ark1668-sddac: ark_audio_mute mute=1 at 10219886084ns
+[   10.217582] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 10226130294ns
+[   10.230937] ark1668-i2s: hw_params stream=0 rate=48000 period_size=1024 periods=16 format=2
+[   10.240033] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 10248573368ns
+[   10.249259] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 10257800479ns
+[   10.256228] ark1668-sddac: ark_audio_mute mute=1 at 10264783887ns
+[   10.262499] ark1668-sddac: ark_audio_mute mute=0 at 10271048813ns
+[   10.271932] ark1668-i2s: trigger cmd=0 stream=0 (playback) at 10280460010ns
+[   10.278915] ark1668-sddac: ark_audio_mute mute=1 at 10287470208ns
+[   10.285165] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=1 at 10293712109ns
+[   10.296333] ark1668-sddac: get_l_playback_volume = 112 at 10304864418ns
+[   10.303179] ark1668-sddac: get_r_playback_volume = 112 at 10311724306ns
+[   10.650669] ark_display: ARKDISP_GET_SCREEN_INFO -> screen_id=0 800x480 120x72mm
+[   10.663505] snd_ctl: elem_write card=0 iface=2 name='softmaster1' numid=7 values=101,106 at 10672026739ns
+[   10.674299] snd_ctl: elem_write card=0 iface=2 name='softmaster1' numid=7 values=101,101 at 10682833701ns
+[   10.685444] snd_ctl: elem_write card=0 iface=2 name='softmaster3' numid=3 values=127,115 at 10693981739ns
+[   10.696118] snd_ctl: elem_write card=0 iface=2 name='softmaster3' numid=3 values=127,127 at 10704661911ns
+[   12.062932] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   12.091741] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   12.110920] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   12.129075] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   12.151675] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   12.170968] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=1 hue=0 saturation=128 brightness=128 contrast=128
+[   12.183343] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=1 hue=0 saturation=128 brightness=128 contrast=128
+[   12.208464] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=2 hue=0 saturation=128 brightness=128 contrast=128
+[   12.229876] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=2 hue=0 saturation=128 brightness=128 contrast=128
+[   12.253960] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=3 hue=0 saturation=128 brightness=128 contrast=128
+[   12.272249] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=3 hue=0 saturation=128 brightness=128 contrast=128
+[   12.297372] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=4 hue=0 saturation=128 brightness=128 contrast=128
+[   12.318782] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=4 hue=0 saturation=128 brightness=128 contrast=128
+[   12.345223] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   12.363773] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   12.386956] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=1 hue=0 saturation=128 brightness=128 contrast=128
+[   12.408194] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=1 hue=0 saturation=128 brightness=128 contrast=128
+[   12.429464] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=2 hue=0 saturation=128 brightness=128 contrast=128
+[   12.453965] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=2 hue=0 saturation=128 brightness=128 contrast=128
+[   12.469141] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=3 hue=0 saturation=128 brightness=128 contrast=128
+[   12.491340] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=3 hue=0 saturation=128 brightness=128 contrast=128
+[   12.508229] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=4 hue=0 saturation=128 brightness=128 contrast=128
+[   12.526137] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=4 hue=0 saturation=128 brightness=128 contrast=128
+[   12.541450] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=0 hue=0 saturation=128 brightness=128 contrast=128
+[   12.551372] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=0 hue=0 saturation=64 brightness=128 contrast=128
+[   12.591034] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=1 hue=0 saturation=128 brightness=128 contrast=128
+[   12.617496] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=1 hue=0 saturation=64 brightness=128 contrast=128
+[   12.638717] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=2 hue=0 saturation=128 brightness=128 contrast=128
+[   12.659795] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=2 hue=0 saturation=64 brightness=128 contrast=128
+[   12.681363] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=3 hue=0 saturation=128 brightness=128 contrast=128
+[   12.699867] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=3 hue=0 saturation=64 brightness=128 contrast=128
+[   12.715789] ark_display: ARKDISP_GET_VDE_CFG -> layer_id=4 hue=0 saturation=128 brightness=128 contrast=128
+[   12.725811] ark_display: ARKDISP_SET_VDE_CFG -> layer_id=4 hue=0 saturation=64 brightness=128 contrast=128
+[   12.762485] ark1668-sddac: get_l_playback_volume = 112 at 12771016121ns
+[   12.769447] snd_ctl: elem_write card=0 iface=2 name='Left Playback Volume' numid=1 values=118,0 at 12777985701ns
+[   12.779777] ark1668-sddac: set_l_playback_volume = 118 (I2S_DACR0=0x76) at 12788322343ns
+[   12.790377] ark1668-sddac: get_r_playback_volume = 112 at 12798907800ns
+[   12.797311] snd_ctl: elem_write card=0 iface=2 name='Right Playback Volume' numid=2 values=118,0 at 12805845714ns
+[   12.807653] ark1668-sddac: set_r_playback_volume = 118 (I2S_DACR0=0x7676) at 12816200615ns
+[   12.818747] ark1668-sddac: get_l_playback_volume = 118 at 12827277788ns
+[   12.827153] snd_ctl: elem_write card=0 iface=2 name='Left Playback Volume' numid=1 values=121,0 at 12835690121ns
+[   12.838579] ark1668-sddac: set_l_playback_volume = 121 (I2S_DACR0=0x7679) at 12847125985ns
+[   12.850372] ark1668-sddac: get_r_playback_volume = 118 at 12858903158ns
+[   12.857847] snd_ctl: elem_write card=0 iface=2 name='Right Playback Volume' numid=2 values=121,0 at 12866386565ns
+[   12.868224] ark1668-sddac: set_r_playback_volume = 121 (I2S_DACR0=0x7979) at 12876771775ns
+[   13.099212] ark-hsuart e4f00000.serial: no TX DMA channel available (no platform data) -- using PIO/interrupt-driven TX instead, this is expected on this board
+[   13.114629] ark-hsuart e4f00000.serial: no RX DMA channel available (no platform data) -- using PIO/interrupt-driven RX instead, this is expected on this board
+[   13.130276] ark_hsuart_set_termios 1652 hsuart0 baud:9600 c_cflag:0xcbd
+[   13.131206] ark_hsuart_set_termios 1652 hsuart0 baud:38400 c_cflag:0xcbf
+[   13.135729] ark-uart e8000000.uart: no TX DMA channel available (no platform data) -- using PIO/interrupt-driven TX instead, this is expected on this board
+[   13.150931] ark-uart e8000000.uart: no RX DMA channel available (no platform data) -- using PIO/interrupt-driven RX instead, this is expected on this board
+[   13.500288] [DIAG_ITU656_OPEN] container_of-dvr_dev=c848b040 g_dvr_dev=c848b040 (MATCH) start=c03e24e4 (want c03e24e4) stop=c03e24f4 (want c03e24f4)
+[   13.522069] [DIAG_ITU656_IOCTL] cmd=0xc0046ee0 g_dvr_dev=c848b040 filp->private_data=c848b040 (MATCH) start=c03e24e4 (want c03e24e4, OK) stop=c03e24f4 (want c03e24f4, OK)
+[   13.538781] [DIAG_ITU656_IOCTL] &priv_data=c848b22c select_channel=c03e00f4 detect_signal=c03df9c0 get_progressive=c03dea7c display_effect=c03df4ac dvr_start_cb=00000000 dvr_stop_cb=00000000
+[   13.563301] [DIAG_ITU656_IOCTL] cmd=0xc0046ee2 g_dvr_dev=c848b040 filp->private_data=c848b040 (MATCH) start=c03e24e4 (want c03e24e4, OK) stop=c03e24f4 (want c03e24f4, OK)
+[   13.578765] [DIAG_ITU656_IOCTL] &priv_data=c848b22c select_channel=c03e00f4 detect_signal=c03df9c0 get_progressive=c03dea7c display_effect=c03df4ac dvr_start_cb=00000000 dvr_stop_cb=00000000
+[   13.621678] [DIAG_ITU656_IOCTL] cmd=0xc0046ee4 g_dvr_dev=c848b040 filp->private_data=c848b040 (MATCH) start=c03e24e4 (want c03e24e4, OK) stop=c03e24f4 (want c03e24f4, OK)
+[   13.637040] [DIAG_ITU656_IOCTL] &priv_data=c848b22c select_channel=c03e00f4 detect_signal=c03df9c0 get_progressive=c03dea7c display_effect=c03df4ac dvr_start_cb=00000000 dvr_stop_cb=00000000
+[   13.682675] [DIAG_ITU656_IOCTL] cmd=0xc0046ee1 g_dvr_dev=c848b040 filp->private_data=c848b040 (MATCH) start=c03e24e4 (want c03e24e4, OK) stop=c03e24f4 (want c03e24f4, OK)
+[   13.698083] [DIAG_ITU656_IOCTL] &priv_data=c848b22c select_channel=c03e00f4 detect_signal=c03df9c0 get_progressive=c03dea7c display_effect=c03df4ac dvr_start_cb=00000000 dvr_stop_cb=00000000
+[   13.930017] [DIAG_ITU656_IOCTL] cmd=0xc0046ee3 g_dvr_dev=c848b040 filp->private_data=c848b040 (MATCH) start=c03e24e4 (want c03e24e4, OK) stop=c03e24f4 (want c03e24f4, OK)
+[   13.945421] [DIAG_ITU656_IOCTL] &priv_data=c848b22c select_channel=c03e00f4 detect_signal=c03df9c0 get_progressive=c03dea7c display_effect=c03df4ac dvr_start_cb=00000000 dvr_stop_cb=00000000
+[   13.962722] [DIAG_ITU656_IOCTL] cmd=0xc0046ee5 g_dvr_dev=c848b040 filp->private_data=c848b040 (MATCH) start=c03e24e4 (want c03e24e4, OK) stop=c03e24f4 (want c03e24f4, OK)
+[   13.978018] [DIAG_ITU656_IOCTL] &priv_data=c848b22c select_channel=c03e00f4 detect_signal=c03df9c0 get_progressive=c03dea7c display_effect=c03df4ac dvr_start_cb=00000000 dvr_stop_cb=00000000
+[   14.412777] RTW: [HALMAC][ALWAYS]shall R reg twice!!
+[   15.736250] RTW: start_addr=(0x8000), end_addr=(0x10000), buffer_size=(0x8000), smp_number_max=(4096)
+[   15.755581] IPv6: ADDRCONF(NETDEV_UP): wlan0: link is not ready
+[   15.828445] ark-hsuart e4800000.serial: no TX DMA channel available (no platform data) -- using PIO/interrupt-driven TX instead, this is expected on this board
+[   15.842898] ark-hsuart e4800000.serial: no RX DMA channel available (no platform data) -- using PIO/interrupt-driven RX instead, this is expected on this board
+[   15.857254] ark_hsuart_set_termios 1652 hsuart1 baud:9600 c_cflag:0xcbd
+[   15.902939] ark_hsuart_set_termios 1652 hsuart1 baud:9600 c_cflag:0xdbd
+[   15.903616] ark_hsuart_set_termios 1652 hsuart1 baud:115200 c_cflag:0x1db2
+[   16.052869] ark_hsuart_set_termios 1652 hsuart1 baud:1500000 c_cflag:0x1dba
+[   18.176660] RTW: assoc success
+[   18.181399] RTW: set group key camid:0, addr:68:b9:d3:f1:5a:43, kid:1, type:AES
+[   19.823692] RTW: clear wep or group key for addr:68:b9:d3:f1:5a:43, camid:0
+[   19.826177] RTW: ERROR Free disconnecting network of scanned_queue failed due to pwlan == NULL
+
+[   19.969004] RTW: ERROR Free disconnecting network of scanned_queue failed due to pwlan == NULL
+
+[   21.334775] RTW: assoc success
+[   21.339494] RTW: set group key camid:0, addr:68:b9:d3:f1:5a:43, kid:1, type:AES
+[   23.389763] ark_display: ARKDISP_GET_SCREEN_INFO -> screen_id=0 800x480 120x72mm
+[   30.155676] RTW: ============ STA [f6:d6:cb:da:c0:aa]  ===================
+[   30.155693] RTW: mac_id : 2
+[   30.155702] RTW: wireless_mode : 0x14
+[   30.155709] RTW: mimo_type : 0
+[   30.155715] RTW: static smps : N
+[   30.155723] RTW: bw_mode : 20MHz, ra_bw_mode : 20MHz
+[   30.155729] RTW: rate_id : 5
+[   30.155738] RTW: rssi : -1 (%), rssi_level : 0
+[   30.155744] RTW: is_support_sgi : Y, is_vht_enable : N
+[   30.155752] RTW: disable_ra : N, disable_pt : N
+[   30.155757] RTW: is_noisy : N
+[   30.155763] RTW: txrx_state : 0
+[   30.155772] RTW: curr_tx_rate : CCK_1M (L)
+[   30.155778] RTW: curr_tx_bw : 20MHz
+[   30.155784] RTW: curr_retry_ratio : 0
+[   30.155791] RTW: ra_mask : 0x00000000000ffff0
+
+[   30.160918] RTW: send eapol packet 1/4
+[   30.161937] RTW: set group key camid:0, addr:68:b9:d3:f1:5a:43, kid:1, type:AES
+[   30.164984] RTW: recv eapol packet 2/4
+[   30.166274] RTW: send eapol packet 3/4
+[   30.168437] RTW: recv eapol packet 4/4
+[   30.169265] RTW: set pairwise key camid:2, addr:f6:d6:cb:da:c0:aa, kid:0, type:AES
+[   31.978986] RTW: OnDisassoc(wlan0) reason=8, ta=f6:d6:cb:da:c0:aa
+[   31.983214] RTW: clear key for addr:f6:d6:cb:da:c0:aa, camid:2
+[   33.023694] RTW: ============ STA [f6:d6:cb:da:c0:aa]  ===================
+[   33.023708] RTW: mac_id : 2
+[   33.023716] RTW: wireless_mode : 0x14
+[   33.023723] RTW: mimo_type : 0
+[   33.023729] RTW: static smps : N
+[   33.023737] RTW: bw_mode : 20MHz, ra_bw_mode : 20MHz
+[   33.023743] RTW: rate_id : 5
+[   33.023752] RTW: rssi : -1 (%), rssi_level : 0
+[   33.023759] RTW: is_support_sgi : Y, is_vht_enable : N
+[   33.023766] RTW: disable_ra : N, disable_pt : N
+[   33.023771] RTW: is_noisy : N
+[   33.023777] RTW: txrx_state : 0
+[   33.023785] RTW: curr_tx_rate : CCK_1M (L)
+[   33.023792] RTW: curr_tx_bw : 20MHz
+[   33.023798] RTW: curr_retry_ratio : 0
+[   33.023805] RTW: ra_mask : 0x00000000000ffff0
+
+[   33.026593] RTW: send eapol packet 1/4
+[   33.028795] RTW: recv eapol packet 2/4
+[   33.030208] RTW: send eapol packet 3/4
+[   33.032735] RTW: recv eapol packet 4/4
+[   33.033564] RTW: set pairwise key camid:2, addr:f6:d6:cb:da:c0:aa, kid:0, type:AES
+[   34.734835] ark1668-i2s: hw_params stream=0 rate=48000 period_size=1024 periods=16 format=2
+[   34.745835] ark1668-sddac: digital_mute (ASoC-driven, no-op, matches stock) mute=0 at 34754374613ns
+[   34.756629] ark1668-i2s: trigger cmd=1 stream=0 (playback) at 34765168996ns
+[   34.764730] ark1668-sddac: ark_audio_mute mute=1 at 34773286057ns
+[   34.771511] ark1668-sddac: ark_audio_mute mute=0 at 34780052045ns
+[   36.779726] memalloc-cls memalloc: file open (87cceaec)
+[   36.783191] memalloc-cls memalloc: large alloc ok: VA=770ae96f PA=0x4200000 SZ=1048576 (requested 1048576)
+[   36.783835] ark_display: ARKDISP_GET_SCREEN_INFO -> screen_id=0 800x480 120x72mm
+[   36.793904] layer=4: hide window.
+
+[   36.793953] layer=4: init display x=0, y=0, w=800, h=480.
+
+[   37.700111] memalloc-cls memalloc: file open (89c10d99)
+[   37.710410] memalloc-cls memalloc: large alloc ok: VA=6f676784 PA=0x4300000 SZ=675840 (requested 675840)
+[   37.713488] memalloc-cls memalloc: large alloc ok: VA=54c6def1 PA=0x4400000 SZ=675840 (requested 675840)
+[   37.715676] memalloc-cls memalloc: large alloc ok: VA=c0f0f8aa PA=0x4500000 SZ=675840 (requested 675840)
+[   37.716317] memalloc-cls memalloc: large alloc ok: VA=34166f8b PA=0x4041000 SZ=4096 (requested 4096)
+[   37.741178] layer=4: show window.
+
+[   70.530964] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=0,127 at 70539474968ns
+[   70.541802] pcm_dmaengine: period jitter: stream=0 actual=31098951ns expected=21333333ns (+45%)
+[   70.554052] pcm_dmaengine: period jitter: stream=0 actual=12239333ns expected=21333333ns (-42%)
+[   70.575245] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=0,0 at 70583765523ns
+[   70.729996] ark1668-i2s: hw_params stream=1 rate=48000 period_size=1024 periods=16 format=2
+[   70.744874] ark1668-i2s: trigger cmd=1 stream=1 (capture) at 70753397733ns
+[   70.751991] pcm_dmaengine: period jitter: stream=0 actual=27956172ns expected=21333333ns (+31%)
+[   70.766750] pcm_dmaengine: period jitter: stream=0 actual=14739272ns expected=21333333ns (-30%)
+[   70.992787] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=84,127 at 71001309523ns
+[   71.042670] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=84,84 at 71051198795ns
+[   71.052111] pcm_dmaengine: period jitter: stream=1 actual=30241753ns expected=21333333ns (+41%)
+[   71.052197] pcm_dmaengine: period jitter: stream=0 actual=29536741ns expected=21333333ns (+38%)
+[   71.085891] pcm_dmaengine: period jitter: stream=1 actual=15837889ns expected=21333333ns (-25%)
+[   71.105847] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=84,127 at 71114376782ns
+[   71.115701] pcm_dmaengine: period jitter: stream=1 actual=29684827ns expected=21333333ns (+39%)
+[   71.128544] pcm_dmaengine: period jitter: stream=1 actual=12977494ns expected=21333333ns (-39%)
+[   71.159557] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=84,84 at 71168081819ns
+[   72.656865] ark1668-i2s: trigger cmd=0 stream=1 (capture) at 72665381486ns
+[   73.807862] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=127,84 at 73816382782ns
+[   73.825023] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=127,127 at 73833533671ns
+[   73.836851] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=127,84 at 73845380202ns
+[   73.847692] dmaengine_pcm_dma_complete: 1 callbacks suppressed
+[   73.847779] pcm_dmaengine: period jitter: stream=0 actual=28885198ns expected=21333333ns (+35%)
+[   73.881417] pcm_dmaengine: period jitter: stream=0 actual=14287839ns expected=21333333ns (-33%)
+[   73.899994] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=127,127 at 73908509276ns
+[   73.909751] pcm_dmaengine: period jitter: stream=0 actual=28376815ns expected=21333333ns (+33%)
+[   73.924527] pcm_dmaengine: period jitter: stream=0 actual=14747839ns expected=21333333ns (-30%)
+[   74.124950] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=95,0 at 74133470868ns
+[   74.166085] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=95,95 at 74174602942ns
+[   74.177974] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=116,95 at 74186496239ns
+[   74.187944] pcm_dmaengine: period jitter: stream=0 actual=29159815ns expected=21333333ns (+36%)
+[   74.201372] pcm_dmaengine: period jitter: stream=0 actual=13502543ns expected=21333333ns (-36%)
+[   74.222117] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=116,116 at 74230634004ns
+[   74.232093] pcm_dmaengine: period jitter: stream=0 actual=30594889ns expected=21333333ns (+43%)
+[   74.244096] pcm_dmaengine: period jitter: stream=0 actual=12124987ns expected=21333333ns (-43%)
+[   74.280319] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=127,116 at 74288834535ns
+[   74.293265] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=127,127 at 74301782263ns
+[   84.037680] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=0,127 at 84046203127ns
+[   84.051296] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=0,0 at 84059816411ns
+[   84.070161] ark1668-i2s: hw_params stream=1 rate=48000 period_size=1024 periods=16 format=2
+[   84.082047] ark1668-i2s: trigger cmd=1 stream=1 (capture) at 84090581164ns
+[   84.324477] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=84,127 at 84333000756ns
+[   84.337066] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=84,84 at 84345590633ns
+[   84.347698] pcm_dmaengine: period jitter: stream=1 actual=30857197ns expected=21333333ns (+44%)
+[   84.359058] pcm_dmaengine: period jitter: stream=1 actual=11477840ns expected=21333333ns (-46%)
+[   84.400511] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=84,127 at 84409027534ns
+[   84.410379] pcm_dmaengine: period jitter: stream=1 actual=29991296ns expected=21333333ns (+40%)
+[   84.423081] pcm_dmaengine: period jitter: stream=1 actual=12681531ns expected=21333333ns (-40%)
+[   84.438956] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=84,84 at 84447482201ns
+[   84.448969] pcm_dmaengine: period jitter: stream=0 actual=28490568ns expected=21333333ns (+33%)
+[   86.533782] ark1668-i2s: trigger cmd=0 stream=1 (capture) at 86542315003ns
+[   87.683090] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=127,84 at 87691600460ns
+[   87.693919] dmaengine_pcm_dma_complete: 1 callbacks suppressed
+[   87.693938] pcm_dmaengine: period jitter: stream=0 actual=31238593ns expected=21333333ns (+46%)
+[   87.722375] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=127,127 at 87730884768ns
+[   87.736104] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=127,84 at 87744630682ns
+[   87.748031] pcm_dmaengine: period jitter: stream=0 actual=14621778ns expected=21333333ns (-31%)
+[   87.760940] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=127,127 at 87769456682ns
+[   87.880966] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=73,0 at 87889487929ns
+[   87.903395] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=73,73 at 87911915608ns
+[   87.914346] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=90,73 at 87922873472ns
+[   87.936634] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=90,90 at 87945151213ns
+[   87.947360] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=106,90 at 87955891781ns
+[   87.961377] pcm_dmaengine: period jitter: stream=0 actual=15125902ns expected=21333333ns (-29%)
+[   88.001879] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=106,106 at 88010399571ns
+[   88.011615] pcm_dmaengine: period jitter: stream=0 actual=28922432ns expected=21333333ns (+35%)
+[   88.025383] pcm_dmaengine: period jitter: stream=0 actual=13738309ns expected=21333333ns (-35%)
+[   88.042320] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=127,106 at 88050838312ns
+[   88.052109] pcm_dmaengine: period jitter: stream=0 actual=26757000ns expected=21333333ns (+25%)
+[   88.068032] pcm_dmaengine: period jitter: stream=0 actual=15902778ns expected=21333333ns (-25%)
+[   88.081707] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=127,127 at 88090231349ns
+[   92.403709] memalloc-cls memalloc: large free: VA=6f676784
+[   92.404100] memalloc-cls memalloc: large free: VA=54c6def1
+[   92.404455] memalloc-cls memalloc: large free: VA=c0f0f8aa
+[   92.404785] memalloc-cls memalloc: large free: VA=34166f8b
+[   92.404932] memalloc-cls memalloc: file release (89c10d99)
+[   92.405250] memalloc-cls memalloc: large free: VA=770ae96f
+[   92.405627] memalloc-cls memalloc: file release (87cceaec)
+[   92.405803] layer=4: hide window.
+
+[  106.588151] memalloc-cls memalloc: file open (89c10d99)
+[  106.591208] memalloc-cls memalloc: large alloc ok: VA=770ae96f PA=0x4200000 SZ=1048576 (requested 1048576)
+[  106.591809] layer=4: hide window.
+
+[  106.591856] layer=4: init display x=0, y=0, w=800, h=480.
+
+[  106.851931] memalloc-cls memalloc: file open (7398ab4b)
+[  106.858713] memalloc-cls memalloc: large alloc ok: VA=6f676784 PA=0x4300000 SZ=675840 (requested 675840)
+[  106.862583] memalloc-cls memalloc: large alloc ok: VA=54c6def1 PA=0x4400000 SZ=675840 (requested 675840)
+[  106.864880] memalloc-cls memalloc: large alloc ok: VA=c0f0f8aa PA=0x4500000 SZ=675840 (requested 675840)
+[  106.865479] memalloc-cls memalloc: large alloc ok: VA=34166f8b PA=0x4041000 SZ=4096 (requested 4096)
+[  106.890272] layer=4: show window.
+
+[  108.999671] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=0,127 at 109008190161ns
+[  109.013678] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=0,0 at 109022192124ns
+[  109.024323] pcm_dmaengine: period jitter: stream=0 actual=28204877ns expected=21333333ns (+32%)
+[  109.038726] pcm_dmaengine: period jitter: stream=0 actual=14369580ns expected=21333333ns (-32%)
+[  109.079690] ark1668-i2s: hw_params stream=1 rate=48000 period_size=1024 periods=16 format=2
+[  109.089513] pcm_dmaengine: period jitter: stream=0 actual=29495062ns expected=21333333ns (+38%)
+[  109.100781] ark1668-i2s: trigger cmd=1 stream=1 (capture) at 109109318433ns
+[  109.124008] pcm_dmaengine: period jitter: stream=0 actual=15025456ns expected=21333333ns (-29%)
+[  109.410325] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=84,127 at 109418848618ns
+[  109.429382] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=84,84 at 109437895482ns
+[  109.441623] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=84,127 at 109450156322ns
+[  109.451322] pcm_dmaengine: period jitter: stream=1 actual=29948308ns expected=21333333ns (+40%)
+[  109.451405] pcm_dmaengine: period jitter: stream=0 actual=28566951ns expected=21333333ns (+33%)
+[  109.480003] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=84,84 at 109488515717ns
+[  109.505815] pcm_dmaengine: period jitter: stream=1 actual=15887012ns expected=21333333ns (-25%)
+[  109.529357] pcm_dmaengine: period jitter: stream=0 actual=12836642ns expected=21333333ns (-39%)
+[  111.326401] ark1668-i2s: trigger cmd=0 stream=1 (capture) at 111334928309ns
+[  112.463060] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=127,84 at 112471579729ns
+[  112.474320] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=127,127 at 112482856988ns
+[  112.491051] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=127,84 at 112499561482ns
+[  112.502213] pcm_dmaengine: period jitter: stream=0 actual=28238247ns expected=21333333ns (+32%)
+[  112.513960] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=127,127 at 112522489173ns
+[  112.537401] pcm_dmaengine: period jitter: stream=0 actual=12420493ns expected=21333333ns (-41%)
+[  112.784574] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=125,0 at 112793094544ns
+[  112.810218] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=125,125 at 112818735297ns
+[  112.821869] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=127,125 at 112830396865ns
+[  112.836041] pcm_dmaengine: period jitter: stream=0 actual=15805938ns expected=21333333ns (-25%)
+[  112.871993] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=127,127 at 112880517099ns
+[  114.505241] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=0,127 at 114513762791ns
+[  114.516418] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=0,0 at 114524957556ns
+[  114.527139] pcm_dmaengine: period jitter: stream=0 actual=27068765ns expected=21333333ns (+26%)
+[  114.542725] pcm_dmaengine: period jitter: stream=0 actual=15599544ns expected=21333333ns (-26%)
+[  114.640213] ark1668-i2s: hw_params stream=1 rate=48000 period_size=1024 periods=16 format=2
+[  114.653027] ark1668-i2s: trigger cmd=1 stream=1 (capture) at 114661560408ns
+[  114.901084] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=84,127 at 114909607754ns
+[  114.912127] pcm_dmaengine: period jitter: stream=0 actual=28114506ns expected=21333333ns (+31%)
+[  114.926959] pcm_dmaengine: period jitter: stream=0 actual=14784050ns expected=21333333ns (-30%)
+[  114.951376] pcm_dmaengine: period jitter: stream=1 actual=14100419ns expected=21333333ns (-33%)
+[  114.971199] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=84,84 at 114979723741ns
+[  114.980791] pcm_dmaengine: period jitter: stream=1 actual=29439087ns expected=21333333ns (+37%)
+[  114.994047] pcm_dmaengine: period jitter: stream=1 actual=13238160ns expected=21333333ns (-37%)
+[  115.014820] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=84,127 at 115023345013ns
+[  115.032198] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=84,84 at 115040719865ns
+[  116.893695] ark1668-i2s: trigger cmd=0 stream=1 (capture) at 116902224618ns
+[  123.497743] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=127,84 at 123506265296ns
+[  123.508881] dmaengine_pcm_dma_complete: 3 callbacks suppressed
+[  123.508904] pcm_dmaengine: period jitter: stream=0 actual=27539852ns expected=21333333ns (+29%)
+[  123.532618] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=127,127 at 123541138617ns
+[  123.548326] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=127,84 at 123556843185ns
+[  123.564177] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=127,127 at 123572691580ns
+[  123.574080] pcm_dmaengine: period jitter: stream=0 actual=28712790ns expected=21333333ns (+34%)
+[  123.588036] pcm_dmaengine: period jitter: stream=0 actual=13926840ns expected=21333333ns (-34%)
+[  123.668095] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=57,0 at 123676616530ns
+[  123.678046] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=57,57 at 123686583296ns
+[  123.695407] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=73,57 at 123703922901ns
+[  123.706022] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=73,73 at 123714555185ns
+[  123.718235] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=86,73 at 123726770691ns
+[  123.727976] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=86,86 at 123736517987ns
+[  123.743869] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=99,86 at 123752391568ns
+[  123.756327] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=99,99 at 123764838926ns
+[  123.766009] pcm_dmaengine: period jitter: stream=0 actual=28380062ns expected=21333333ns (+33%)
+[  123.776378] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=112,99 at 123784909432ns
+[  123.786343] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=112,112 at 123794883074ns
+[  123.799189] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=120,112 at 123807701580ns
+[  123.810078] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=120,120 at 123818607160ns
+[  123.820257] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=125,120 at 123828790679ns
+[  123.832991] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=125,125 at 123841505222ns
+[  123.844035] pcm_dmaengine: period jitter: stream=0 actual=13802691ns expected=21333333ns (-35%)
+[  123.855554] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=127,125 at 123864068987ns
+[  123.866567] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=127,127 at 123875099901ns
+[  124.139844] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=0,127 at 124148366530ns
+[  124.150822] pcm_dmaengine: period jitter: stream=0 actual=29475839ns expected=21333333ns (+38%)
+[  124.161212] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=0,0 at 124169751271ns
+[  124.185371] pcm_dmaengine: period jitter: stream=0 actual=13590259ns expected=21333333ns (-36%)
+[  124.310591] ark1668-i2s: hw_params stream=1 rate=48000 period_size=1024 periods=16 format=2
+[  124.320692] pcm_dmaengine: period jitter: stream=0 actual=28538728ns expected=21333333ns (+33%)
+[  124.332158] ark1668-i2s: trigger cmd=1 stream=1 (capture) at 124340687851ns
+[  124.564150] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=84,127 at 124572672876ns
+[  124.575277] pcm_dmaengine: period jitter: stream=1 actual=29956111ns expected=21333333ns (+40%)
+[  124.575370] pcm_dmaengine: period jitter: stream=0 actual=27374074ns expected=21333333ns (+28%)
+[  124.609194] pcm_dmaengine: period jitter: stream=1 actual=13047061ns expected=21333333ns (-38%)
+[  124.632369] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=84,84 at 124640882456ns
+[  124.654696] pcm_dmaengine: period jitter: stream=0 actual=12520568ns expected=21333333ns (-41%)
+[  124.672386] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=84,127 at 124680907000ns
+[  124.682249] pcm_dmaengine: period jitter: stream=1 actual=30431061ns expected=21333333ns (+42%)
+[  124.706468] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=84,84 at 124714995555ns
+[  126.406454] ark1668-i2s: trigger cmd=0 stream=1 (capture) at 126414986468ns
+[  127.539203] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=127,84 at 127547725444ns
+[  127.557000] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=127,127 at 127565516987ns
+[  127.570134] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=127,84 at 127578659098ns
+[  127.597440] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=127,127 at 127605954900ns
+[  127.621189] dmaengine_pcm_dma_complete: 3 callbacks suppressed
+[  127.621213] pcm_dmaengine: period jitter: stream=0 actual=13766802ns expected=21333333ns (-35%)
+[  127.848803] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=125,0 at 127857324937ns
+[  127.874415] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=125,125 at 127882932135ns
+[  127.897386] pcm_dmaengine: period jitter: stream=0 actual=13078765ns expected=21333333ns (-38%)
+[  127.911387] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=127,125 at 127919902073ns
+[  127.939058] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=127,127 at 127947578999ns
+[  127.948928] pcm_dmaengine: period jitter: stream=0 actual=27495024ns expected=21333333ns (+28%)
+[  127.961387] pcm_dmaengine: period jitter: stream=0 actual=12436630ns expected=21333333ns (-41%)
+[  143.078585] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=0,127 at 143087111220ns
+[  143.089836] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=0,0 at 143098375677ns
+[  143.217168] ark1668-i2s: hw_params stream=1 rate=48000 period_size=1024 periods=16 format=2
+[  143.229182] ark1668-i2s: trigger cmd=1 stream=1 (capture) at 143237704208ns
+[  143.476060] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=84,127 at 143484585985ns
+[  143.491583] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=84,84 at 143500105887ns
+[  143.502331] pcm_dmaengine: period jitter: stream=0 actual=31487506ns expected=21333333ns (+47%)
+[  143.513354] pcm_dmaengine: period jitter: stream=0 actual=11167334ns expected=21333333ns (-47%)
+[  143.527536] pcm_dmaengine: period jitter: stream=1 actual=14521543ns expected=21333333ns (-31%)
+[  143.611776] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=84,127 at 143620304850ns
+[  143.621518] pcm_dmaengine: period jitter: stream=1 actual=29865580ns expected=21333333ns (+39%)
+[  143.634199] pcm_dmaengine: period jitter: stream=1 actual=12703556ns expected=21333333ns (-40%)
+[  143.707673] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=84,84 at 143716205072ns
+[  145.265659] ark1668-i2s: trigger cmd=0 stream=1 (capture) at 145274189207ns
+[  146.403459] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=127,84 at 146411984010ns
+[  146.414722] snd_ctl: elem_write card=0 iface=2 name='softmaster' numid=4 values=127,127 at 146423260442ns
+[  146.429449] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=127,84 at 146437968788ns
+[  146.442018] snd_ctl: elem_write card=0 iface=2 name='softmaster5' numid=8 values=127,127 at 146450546911ns
+[  146.619138] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=97,0 at 146627659084ns
+[  146.650831] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=97,97 at 146659365244ns
+[  146.682075] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=121,97 at 146690594393ns
+[  146.710809] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=121,121 at 146719326244ns
+[  146.720964] pcm_dmaengine: period jitter: stream=0 actual=27377543ns expected=21333333ns (+28%)
+[  146.734714] pcm_dmaengine: period jitter: stream=0 actual=13933679ns expected=21333333ns (-34%)
+[  146.771029] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=127,121 at 146779550368ns
+[  146.782801] snd_ctl: elem_write card=0 iface=2 name='softmaster2' numid=5 values=127,127 at 146791321751ns
+/ #

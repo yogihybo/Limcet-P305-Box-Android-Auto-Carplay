@@ -1,7 +1,7 @@
 # Vendor BSP Research (ark1668ed-bsp / cstech-ip17-rootfs)
 
 **Status:** Reference
-**Last Updated:** 2026-08-04
+**Last Updated:** 2026-08-05
 
 ## Overview
 
@@ -526,3 +526,116 @@ In rough priority order:
   `/home/osboxes/Downloads/cstech-ip17-rootfs` — neither is tracked in any repo, both are
   personal Downloads on this machine (see `docs/SOURCES.md` for how this project usually
   registers reference-only external sources).
+
+---
+
+## 6. `ArkPro` (github.com/cphatt/ArkPro) — public vendor reference app, ARK1680 generation
+
+**Cloned:** `/home/osboxes/Downloads/ArkPro` (not tracked in any repo, personal Downloads),
+358MB, 1650 files, last upstream push 2017-10-31.
+
+This is ArkMicro's own Qt4-based automotive head-unit application framework — genuine
+vendor source, publicly available on GitHub, no license attached. It targets ARK1680
+("ec803"), the same **earlier/sibling chip generation** as `cstech-ip17-rootfs` in §1
+above, not our ARK1668. Architecture is a service-oriented split communicating over D-Bus:
+`Launcher` (the main Qt UI, dozens of widgets under `UserInterface/MainWidget/*` —
+CarPlay/CarLife/MirrorLink, AV, Disk, FM, Home, Setting, Volume), plus standalone service
+processes (`AudioService`, `AutoConnect`, `DbusService`, `DiskDeviceWatcher`,
+`EventEngine`, `MultimediaService`, `SettingPersistent`, `SettingService`). `AVService`
+carries a full embedded BSP snapshot (`kernel/`, `arm-lib/`, `uboot/`) under a
+Chinese-named subfolder ("背光和vp调节" = "backlight and vp adjustment").
+
+Given the scale, this was a targeted pass against this project's own open/recent
+investigations rather than an exhaustive file-by-file read (most of `Launcher`'s ~100 UI
+widget files are generic Qt boilerplate for screens/features not relevant to a
+one-generation-removed device).
+
+### 6a. Decisive confirmation: real on-device D-Bus protocol matches ArkPro's proxy exactly
+
+`Launcher/BusinessLogic/Link/CarplayLinkProxy.{h,cpp}` (qdbusxml2cpp-generated) defines
+interface `Local.DbusServer.Carplay` with:
+
+```cpp
+QDBusPendingReply<> requestLinkStatus(int type, int status);
+QDBusPendingReply<> requestTouchStatus(int deviceType, int touchType, const QString &touchPointXml);
+// signals:
+void onLinkStatusChange(int type, int status);
+void onTouchStatusChange(int type, int x_src, int y_src, int x_dst, int y_dst);
+```
+
+This is an **exact signature match** against real on-device log output already captured
+in `docs/logs/android auto log v1/v2/v3.txt` (`ArkDbus::reply_to_requestLinkStatus_call
+223 param1=11 param2=3`, `IArkCallbacks::requestLinkStatus:77`, etc.) — independent
+confirmation that MsnCoreApp's `sink`/`ArkDbus` layer is a direct descendant of this same
+`Local.DbusServer.Carplay` D-Bus contract, not a from-scratch reimplementation. `type=11`
+recurs across all three logs and looks like a fixed link/device-type constant; `status`
+values seen live: 3, 4, 8, 9, 15, 31, 32, 39, 40 — an enum this project hasn't fully
+decoded yet.
+
+**Real gap found**: the logs also show `ArkDbus::reply_to_requestWheelStatus_call` and
+`ArkDbus::reply_to_requestKeyValue_call` — neither exists in ArkPro's
+`CarplayLinkProxy.h`. The on-device protocol is a **superset** of what's in this public
+snapshot (steering-wheel-control passthrough and a generic key/value call were added
+after ArkPro's 2017 vintage). Don't assume ArkPro's interface is complete — treat it as a
+confirmed common ancestor, not the current spec.
+
+### 6b. `ark_display_fb.h` / `ark_display.h` — already covered, still the best hit
+
+The embedded kernel driver headers under
+`AVService/背光和vp调节/kernel/drivers/ark/display/` were spot-checked via GitHub API
+before cloning (see prior session). `ARKFB_SHOW_WINDOW=ARK_IO(43)` /
+`ARKFB_HIDE_WINDOW=ARK_IO(44)` match this project's own disassembly-derived,
+hardware-confirmed ioctl numbers exactly ([[project_hide_window_ioctl_fix]] memory) — the
+single most valuable independent validation this pass produced. Full ioctl table also
+exposes several ioctls this project hasn't independently confirmed numbers for yet:
+`ARKFB_SET_OSD_ALPHA` (49), `ARKFB_GET/SET_OSD_CFG` (51/52), `ARKFB_SET_PRIORITY` (47),
+`ARKFB_SET_WINDOW_POINT` (53) — worth checking against our own `ark1668_lcdfb.c` ioctl
+numbers if any OSD-alpha or window-priority bugs come up again.
+
+### 6c. `DiskDeviceWatcher` — different mechanism than ours, not a gap
+
+`DiskDeviceWatcher/DiskDeviceWatcher.cpp` implements USB hotplug detection via a **raw
+`NETLINK_KOBJECT_UEVENT` socket read directly in the Qt app** (regex-parsing
+`add@/.../block/...` uevent lines), not via `mdev`/`mdev.conf`. This is architecturally
+different from this project's just-implemented, hardware-confirmed
+[[project_usb_udisk_automount]] approach (`mdev.conf` + `usb_domount.sh` shell hooks).
+Both are valid ways to solve the same problem — this is a **generation/design
+difference**, not evidence our mdev-based approach is wrong. No action needed.
+
+### 6d. `SettingPersistent` — confirms the settings-persistence pattern, not the values
+
+`SettingPersistent/SettingPersistent.cpp` stores `Language`/`Brightness`/`Contrast`/`Hue`
+in a `QSettings` INI file at `/data/Setting.ini` (`/tmp/Setting.ini` under a `gcc`/x86
+dev build), with `settings.sync()` called on every write. This confirms the general
+pattern already found on our own device
+([[project_language_setting_userdata]] — `/data/msncfg/Setting.config` as the live
+runtime source, `FactoryConfig.ini` only seeding it once) is a genuine platform-wide
+ArkMicro convention, not something specific to our board. Default values don't transfer
+(`Language` defaults to `1` here vs. our device's `4096`/`4097` — different enum scale
+for a different generation) so this doesn't resolve the open Language-default question.
+
+### 6e. `AutoConnect` — false lead, not Android-Auto-related
+
+Despite the name, `AutoConnect/AutoConnect.cpp` is a generic Qt signal/slot
+auto-connection-by-namesake utility (reflection over `QMetaObject` to wire up
+same-named signals/slots between two `QObject`s) — nothing to do with Android Auto or USB
+accessory connection. Ruled out.
+
+### 6f. Not present in this snapshot
+
+No DVR/reverse-camera kernel driver source (only the userspace `arkapi_dvr_*` function
+declarations in `ark_api.h`, spot-checked earlier — no implementation body), no CAN bus
+code, no MCU-handshake/UART protocol code searchable anywhere in the tree. The PWM/
+backlight driver (`kernel/drivers/ark/pwm/ark_pwm.c`) is `/proc`-driven, not ioctl-driven,
+and this project's backlight handling is already documented elsewhere
+(`docs/HARDWARE_AND_SOC_REFERENCE.md`) — no new finding there.
+
+### 6g. Net assessment
+
+Valuable primarily as **independent corroboration** of two already-resolved findings
+(the show/hide-window ioctl numbers, the `/data`-based settings-persistence pattern) plus
+one genuinely new, concrete lead (§6a's `Local.DbusServer.Carplay` interface and its
+`type`/`status` enum, with named gaps — `requestWheelStatus`, `requestKeyValue` — for
+anyone decoding the wired-AA/CarPlay control-channel protocol further). Not a source of
+directly reusable code for this project (wrong chip generation, wrong Qt-app
+architecture at the top level) the way `ark1668ed-bsp` was in §2-§5.

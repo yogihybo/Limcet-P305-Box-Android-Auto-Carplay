@@ -579,18 +579,61 @@ snapshot (steering-wheel-control passthrough and a generic key/value call were a
 after ArkPro's 2017 vintage). Don't assume ArkPro's interface is complete — treat it as a
 confirmed common ancestor, not the current spec.
 
-### 6b. `ark_display_fb.h` / `ark_display.h` — already covered, still the best hit
+### 6b. `ark_display_fb.h` ioctl table — direct line-by-line diff against our driver, much stronger match than first thought
 
-The embedded kernel driver headers under
-`AVService/背光和vp调节/kernel/drivers/ark/display/` were spot-checked via GitHub API
-before cloning (see prior session). `ARKFB_SHOW_WINDOW=ARK_IO(43)` /
-`ARKFB_HIDE_WINDOW=ARK_IO(44)` match this project's own disassembly-derived,
-hardware-confirmed ioctl numbers exactly ([[project_hide_window_ioctl_fix]] memory) — the
-single most valuable independent validation this pass produced. Full ioctl table also
-exposes several ioctls this project hasn't independently confirmed numbers for yet:
-`ARKFB_SET_OSD_ALPHA` (49), `ARKFB_GET/SET_OSD_CFG` (51/52), `ARKFB_SET_PRIORITY` (47),
-`ARKFB_SET_WINDOW_POINT` (53) — worth checking against our own `ark1668_lcdfb.c` ioctl
-numbers if any OSD-alpha or window-priority bugs come up again.
+Follow-up pass: diffed ArkPro's full `ARKFB_*` ioctl table (`ark_display_fb.h`) against
+the actual implementation in this project's own
+`linux-arkmicro/linux/drivers/video/fbdev/arkmicro/ark1668_lcdc_funcs.c` +
+`ark_lcdc_common.h` (not the empty `ark1668_lcdfb.c` — the real ioctl switch lives in
+`ark1668_lcdc_funcs.c`, `.fb_ioctl = ark1668_lcdfb_ioctl` just wires it up). That header
+carries two generations of ioctl definitions side by side: an older "reconstructed"
+guess set (commented as not what stock actually calls) and a `_REAL`/disassembly- or
+decompile-confirmed set (each with its own dated comment citing
+`docs/DEVICE_TEST_CHECKLIST_2026-07-18.md`). Only the confirmed set is meaningful to
+compare.
+
+**Every one of our disassembly-confirmed ioctl numbers matches ArkPro's vendor-source
+number at the same `nr`, same `_IOW`/`_IOR`/`_IO` direction, same operation** — not just
+the show/hide-window pair already known about:
+
+| nr | direction | ArkPro (ARK1680, 2013) | Ours (ARK1668, disassembly-confirmed) | Match |
+|----|-----------|-------------------------|----------------------------------------|-------|
+| 38 | `_IO` | `ARKFB_WAITFORVSYNC` | `ARKFB_WAITFORVSYNC` | exact |
+| 41 | `_IOW` | `ARKFB_SET_BLEND` | `ARKFB_SET_BLEND` (real, §65) | exact |
+| 42 | `_IOW` | `ARKFB_SET_WINDOW_ADDR` | `ARKFB_SET_FB_ADDR` (real, §73) | same op, renamed |
+| 43 | `_IO` | `ARKFB_SHOW_WINDOW` | `ARKFB_SHOW_WINDOW_REAL` | exact ([[project_hide_window_ioctl_fix]]) |
+| 44 | `_IO` | `ARKFB_HIDE_WINDOW` | `ARKFB_HIDE_WINDOW_REAL` | exact ([[project_hide_window_ioctl_fix]]) |
+| 54 | `_IOR` | `ARKFB_GET_WINDOW_ADDR` | `ARKFB_GET_FB_ADDR` (real) | same op, renamed |
+| 55 | `_IOW` | `ARKFB_UPDATE_VIDEO_WINDOW` | `ARKFB_INIT_VIDEO_DISPLAY` (real) | same op family |
+| 56 | `_IOW` | `ARKFB_SET_VIDEO_WINDOW_ADDR` | `ARKFB_SET_VIDEO_ADDR_RAW` (real) | exact |
+
+Seven confirmed matches, all on the *disassembly-confirmed* side of our header, zero
+mismatches. This is decisive independent validation of essentially the entire real ioctl
+table this project reverse-engineered the hard way (Ghidra decompile + ARM disassembly of
+the real deployed `libarkcmn.so`/stock kernel), not just the two ioctls already known
+about. Strengthens confidence in that whole reverse-engineering effort — the numbering
+scheme (`nr` + `_IOW`/`_IOR`/`_IO` direction) is a genuine stable ArkMicro platform
+convention carried across at least two SoC generations, not something that drifted.
+
+**Correction to the prior note in this section**: earlier I flagged `ARKFB_SET_OSD_ALPHA`
+(49), `ARKFB_GET/SET_OSD_CFG` (51/52), `ARKFB_SET_PRIORITY` (47), `ARKFB_SET_WINDOW_POINT`
+(53) as "worth checking against our numbers." Having now done that check: **don't** —
+those exact `nr` values are already used on our board for different, independently
+disassembly-confirmed ioctls (47=`ARKFB_SET_REG_VALUE`, 49=`ARKFB_GET_WINDOW_ADDR`,
+51=`ARKFB_SET_SCREEN_INFO`, 52=`ARKFB_GET_PLATFORM_INFO`, 53=`ARKFB_GET_WINDOW_FORMAT`).
+The `nr` space was evidently reused for different purposes as the window/layer model
+evolved between ARK1680 and ARK1668 — same convention, different assignment. Treat any
+`nr` above 44 as generation-specific unless independently confirmed like the table above.
+
+One open item this comparison surfaces: our own `ARKFB_SET_WINDOW_PRIORITY` (`nr` 63, a
+5-layer-priority struct: video/video2/win1/win2/win3) has **no disassembly-confirmed
+`_REAL` counterpart** in our header, unlike every other ioctl in the confirmed set — it's
+implemented with vendor-realistic detail (matches naming of real
+`ark1668_lcdc_set_video_priority()` etc.) but wasn't flagged with the usual "confirmed via
+disassembly, see checklist §NN" comment the others have. ArkPro's `ARKFB_SET_PRIORITY`
+(47, a single `ark_osd_priority` struct) doesn't help confirm it — different `nr`,
+different shape, different generation. Worth flagging next time this ioctl is touched: it
+may still be an unverified assumption, not a confirmed number.
 
 ### 6c. `DiskDeviceWatcher` — different mechanism than ours, not a gap
 
@@ -621,21 +664,57 @@ auto-connection-by-namesake utility (reflection over `QMetaObject` to wire up
 same-named signals/slots between two `QObject`s) — nothing to do with Android Auto or USB
 accessory connection. Ruled out.
 
-### 6f. Not present in this snapshot
+### 6f. Audio driver comparison — ours has already surpassed ArkPro's, no gap
 
-No DVR/reverse-camera kernel driver source (only the userspace `arkapi_dvr_*` function
-declarations in `ark_api.h`, spot-checked earlier — no implementation body), no CAN bus
-code, no MCU-handshake/UART protocol code searchable anywhere in the tree. The PWM/
-backlight driver (`kernel/drivers/ark/pwm/ark_pwm.c`) is `/proc`-driven, not ioctl-driven,
-and this project's backlight handling is already documented elsewhere
-(`docs/HARDWARE_AND_SOC_REFERENCE.md`) — no new finding there.
+Diffed `kernel/drivers/ark/audio/ark_i2s.c` (536 lines) and `ark-sddac-codec.c` (332
+lines) against our own `ark1668_i2s.c` (953 lines) and `ark1668-sddac-codec.c` (312
+lines). Ours is substantially larger for the I2S driver specifically — expected, given
+the extensive DMA/scheduling work from the just-resolved
+[[project_aa_audio_stutter_investigation]] (tasklet priority, DMA channel priority,
+dmaengine_pcm bypass — none of which existed in this 2012-2013-era ARK1680 driver). The
+register-bitfield header (`ark_i2s_sddac_regs.h`) diff shows our version has *more*
+bitfield definitions (`ARK_SYS_I2S_BCLK/MCLK/SADATA/SYNC`), not fewer. No gap here —
+this is an area where the project's own hardware-confirmed work has already moved past
+what this reference snapshot offers.
 
-### 6g. Net assessment
+### 6g. `display_effect` fn-pointer (the open ITU656 second-Oops bug) — genuinely absent, ArkPro can't help
 
-Valuable primarily as **independent corroboration** of two already-resolved findings
-(the show/hide-window ioctl numbers, the `/data`-based settings-persistence pattern) plus
-one genuinely new, concrete lead (§6a's `Local.DbusServer.Carplay` interface and its
+Checked whether ArkPro's driver tree could shed light on
+[[project_itu656_dvr_ioctl_second_oops]] (a `display_effect` function-pointer struct
+member getting corrupted). Confirmed: **no `itu656` driver, no `rn6752`/`ark7116`
+camera-decoder-chip code, no `display_effect`/`dvr_start_cb`/`get_progressive` struct
+member anywhere in the ArkPro tree.** That whole subsystem (`ark1668_itu656.c`,
+`ark1668_vin.h`, the `priv_data` ops struct with `display_effect`) is genuinely
+ARK1668-specific hardware (an external analog-video decoder chip, `rn6752`) that doesn't
+exist in the ARK1680 generation at all — not a case of ArkPro having an older/different
+version of the same struct, the concept isn't present. This bug needs to keep being
+chased on our own kernel tree/live hardware; this vendor reference has nothing to
+contribute to it.
+
+### 6h. Not present in this snapshot
+
+No DVR/reverse-camera kernel driver source beyond the userspace `arkapi_dvr_*` function
+declarations in `ark_api.h` (spot-checked earlier — no implementation body, see §6g for
+why), no CAN bus code, no MCU-handshake/UART protocol code searchable anywhere in the
+tree. The PWM/backlight driver (`kernel/drivers/ark/pwm/ark_pwm.c`) is `/proc`-driven,
+not ioctl-driven, and this project's backlight handling is already documented elsewhere
+(`docs/HARDWARE_AND_SOC_REFERENCE.md`) — no new finding there. `ark_display_v4l2.c`
+implements the ARK1680 camera-capture path via **standard V4L2** (`video_ioctl2`, no
+custom ioctls) rather than a private ioctl device — confirms the two generations took
+different architectural approaches to camera capture, so it's not useful as a structural
+reference for our custom-ioctl `itu656` driver either.
+
+### 6i. Net assessment
+
+More valuable than first assessed. §6b's ioctl-table diff is genuine, strong independent
+corroboration of nearly this project's entire disassembly-confirmed display ioctl table
+(7 of 7 checked numbers match ArkPro's vendor source exactly in `nr` + direction), not
+just the two ioctls already known about — and it surfaced one real open gap
+(`ARKFB_SET_WINDOW_PRIORITY` still lacks a confirmed-via-disassembly citation). Also
+confirms the `/data`-based settings-persistence pattern (§6d) and produces one genuinely
+new, concrete lead for continued work (§6a's `Local.DbusServer.Carplay` interface and its
 `type`/`status` enum, with named gaps — `requestWheelStatus`, `requestKeyValue` — for
-anyone decoding the wired-AA/CarPlay control-channel protocol further). Not a source of
-directly reusable code for this project (wrong chip generation, wrong Qt-app
-architecture at the top level) the way `ark1668ed-bsp` was in §2-§5.
+anyone decoding the wired-AA/CarPlay control-channel protocol further). Confirmed **not**
+useful for the open ITU656/`display_effect` bug (§6g — genuinely absent hardware/code) or
+as directly reusable code anywhere (wrong chip generation, wrong Qt-app architecture at
+the top level, audio driver already surpassed) the way `ark1668ed-bsp` was in §2-§5.

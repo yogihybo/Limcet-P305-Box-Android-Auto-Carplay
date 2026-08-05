@@ -718,3 +718,66 @@ anyone decoding the wired-AA/CarPlay control-channel protocol further). Confirme
 useful for the open ITU656/`display_effect` bug (§6g — genuinely absent hardware/code) or
 as directly reusable code anywhere (wrong chip generation, wrong Qt-app architecture at
 the top level, audio driver already surpassed) the way `ark1668ed-bsp` was in §2-§5.
+
+### 6j. Is the application itself buildable? Yes — and it already was, by the vendor
+
+Checked whether `ArkSdk.pro` (the top-level `TEMPLATE = subdirs` project covering all 13
+components) is actually a complete, buildable source tree, or just a source dump.
+
+**Source completeness, static checks:**
+- All D-Bus proxy/adaptor code (`CarplayLinkProxy`, `MirrorLinkProxy`, `CarlifeLinkProxy`,
+  `SettingServiceProxy`, `MultimediaServiceProxy`, `AudioServiceProxy`) is **checked in
+  pre-generated**, not produced by a `DBUS_ADAPTORS`/`DBUS_INTERFACES` qmake build step —
+  confirmed no `.pro` file uses either directive. The raw `.xml` interface definitions
+  present alongside them are reference copies only, not live build inputs. No codegen gap.
+- `Launcher.pro` has a handful of `#`-commented `SOURCES`/`HEADERS` lines
+  (`LinkWidget/CarplayLinkWidget/*`, `MusicInformation.*`) — checked whether anything
+  live still references the disabled copy: it doesn't. `LinkWidget.cpp` has its own
+  `#include`/instantiation of that same class commented out in matching fashion, and the
+  actually-used `CarplayLinkWidget` lives in a separate, still-compiled directory
+  (`UserInterface/MainWidget/CarPlayWidget/CarplayLinkWidget/`) — a leftover duplicate
+  from a refactor, not a build-breaking omission.
+- **Real structural bug found**: `MultimediaService/MultimediaService.pro` unconditionally
+  links `-L$$PWD/TagLib/Library/arm -ltag -lConvert -lQtConvert` under a bare
+  `unix:!macx` guard, with no x86 branch — unlike `ArkSdk.pri`'s `-larkcmn`, which is
+  properly gated behind an `arm-none-linux-gnueabi-gcc` compiler-name check. Those three
+  `.so` files are genuine ARM EABI5 shared objects (confirmed via `file`), so this line
+  would fail an x86 link on its face. In practice this is harmless: `CONFIG +=
+  staticlib` means qmake never actually invokes the linker for this target (`LIBS +=` is
+  a no-op for a `.a` archive step), and the top-level `MultimediaService.pro` (the one in
+  `ArkSdk.pro`'s `SUBDIRS`) doesn't even compile `ID3TagParser.cpp` — the one file that
+  calls into TagLib — so no unresolved symbol ever reaches a real link step either. Still
+  a genuine authoring bug in the vendor's own project file (harmless only by accident),
+  and a second oddity sits right next to it: `QMAKE_POST_LINK` is assigned twice in the
+  same file, so the second assignment (`rm -f .../Launcher/$$ARCHITECTURE/Launcher`)
+  silently discards the first (`Script.sh`) — looks like a copy-paste leftover from
+  another component's `.pro` file, not intentional.
+
+**Decisive practical evidence — don't need to guess, the vendor already built it**:
+`Package/Launcher/x86/Launcher` is a genuine, unstripped **x86-64 ELF executable with
+debug_info** checked into the repo (confirmed via `file`), alongside matching `.o`/`.a`
+build output for every component in both `arm/` and `x86/` subfolders under `Package/`.
+This is conclusive: the vendor's own build system produced a complete, working desktop
+build of this exact source tree, not just the ARM target. We don't need to prove
+buildability by rebuilding — the artifact already answers it.
+
+**The actual blocker on this machine isn't source completeness, it's toolchain age**:
+`ldd` on that x86-64 binary shows `libQtCore.so.4`, `libQtGui.so.4`,
+`libQtDBus.so.4`, `libQtXml.so.4`, `libQtSvg.so.4`, `libQtSerialPort.so.1` — all
+**Qt4**, not Qt5, none present on this machine, and Qt4 has been out of Debian's repos
+for years (`libqt4-core` etc. don't exist in bookworm). Cross-checked against
+`cstech-ip17-rootfs` (§1): it ships a genuine **Qt 4.7.4** ARM build at
+`/usr/local/Qt4.7.4/lib/` — confirms the whole ArkMicro platform family, including our
+own board's MsnCoreApp, standardizes on that exact Qt4 version. Not directly usable here
+(ARM binaries, wrong architecture for running the x86 `Launcher` executable), but
+confirms what version we'd need to target for a real from-source rebuild. Some source
+files do carry `#if QT_VERSION >= 0x050000` guards (e.g. `AutoConnect.cpp`), suggesting
+partial, inconsistent effort toward Qt5 portability that was never fully carried through
+the whole tree.
+
+**Practical options, in order of effort**: (1) treat the checked-in `Package/` binaries
+and objects as sufficient — no rebuild needed to read/run/inspect this reference
+implementation; (2) run the existing unstripped x86-64 `Launcher` binary inside an old
+Debian/Ubuntu release (or container) that still carries Qt4 packages, to see the
+reference UI live; (3) attempt a real Qt5 port using the existing `QT_VERSION` guards as
+a starting point — genuine, non-trivial work across ~1650 files, not attempted here.

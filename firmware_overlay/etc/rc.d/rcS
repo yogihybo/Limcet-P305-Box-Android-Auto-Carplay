@@ -79,140 +79,22 @@ sync
 sysctl -w net.core.busy_poll=50 >/dev/null 2>&1
 sysctl -w net.core.busy_read=50 >/dev/null 2>&1
 
-# 2026-08-04: disable RT throttling -- AA audio-stutter investigation,
-# found live via `dmesg | grep "RT throttling"`: `sched: RT throttling
-# activated`. Linux's RT scheduler has a built-in safety net
-# (kernel.sched_rt_runtime_us, default 950000 out of a 1000000us
-# sched_rt_period_us) that caps how much CPU time ALL real-time-
-# priority threads combined may consume system-wide -- once that
-# budget is exhausted within a period, the kernel stops EVERY RT
-# thread from running at all for the rest of that period, forcing a
-# fallback to normal (SCHED_OTHER) threads. sink's 8 threads at chrt's
-# RT priority 50 (2026-08-02 mitigation), plus this same file's own
-# ksoftirqd/0 elevation to RT priority 60 (added earlier the same day
-# as this fix), together were apparently enough combined RT CPU demand
-# on this single-core SoC to cross that 95% ceiling and trip it.
-# Critically, tripping it doesn't throttle just the greedy thread --
-# it silences EVERY RT thread simultaneously, including the very
-# audio-delivery thread the chrt -f 50 mitigation exists to protect --
-# a real, newly-confirmed candidate for periodic stalls that look
-# exactly like the stutter this whole investigation is chasing, and
-# one this reconstruction's own RT-priority mitigations may have
-# introduced or worsened rather than fixed.
+# REMOVED 2026-08-05 (see git history for the full removed block): RT
+# throttling disable (kernel.sched_rt_runtime_us=-1), ksoftirqd/0
+# real-time priority elevation, and TCP congestion control override
+# (reno) -- three mitigations from the 2026-08-04 AA audio-stutter
+# investigation, tested together and confirmed NOT sufficient on their
+# own (see project_aa_audio_stutter_investigation memory). The actual
+# fix landed 2026-08-05 at the kernel/driver level instead (DMA channel
+# priority over eMMC, cyclic-DMA tasklet on HI softirq, a genuine
+# vendor MUSB regression revert, and bypassing the generic
+# dmaengine_pcm framework -- see linux-arkmicro commits 7e6d93657/
+# 886e8b56c/c195cb9de/3ec51480d), which was hardware-confirmed and
+# isolation-tested to be both necessary and sufficient without any of
+# these userspace-side mitigations. Reverted to stock's actual
+# defaults (no chrt, no RT-priority juggling, no congestion-control
+# override) now that the real fix doesn't need them propping it up.
 #
-# NOT a version-driven divergence like the TCP reno/cubic fix below --
-# this global RT-throttling mechanism has existed since long before
-# Linux 3.4, stock almost certainly has it compiled in too. The real
-# difference is that stock's own service file launches sink completely
-# bare (`Exec=/usr/bin/sink`, confirmed via the real stock rootfs dump)
-# -- stock never runs ANY userspace thread at real-time priority at
-# all, so this throttling mechanism is simply never relevant there.
-# This is 100% a side effect of this reconstruction's own chrt -f 50
-# mitigation (compounded by the ksoftirqd fix layered on top of it),
-# not a kernel-version issue.
-#
-# Fix: disable the ceiling entirely (-1 = unlimited) rather than tune
-# it, since the RT thread set here is small, fully audited, and under
-# this project's own control (sink's threads + ksoftirqd/0) -- the
-# throttling safety net exists to protect against runaway/buggy RT
-# code in an untrusted or unknown workload, not something a properly-
-# tuned, fully-understood RT configuration should need active. Real
-# tradeoff, stated plainly: this removes Linux's own protection against
-# a genuinely hung/runaway RT thread starving the whole system forever
-# -- acceptable here because the RT thread set is small and known, not
-# because the risk doesn't exist. NOT YET HARDWARE-TESTED.
-sysctl -w kernel.sched_rt_runtime_us=-1 >/dev/null 2>&1
-
-# 2026-08-04: elevate ksoftirqd/0 above sink's own real-time priority --
-# AA audio-stutter investigation, new lead from a live pcm_dmaengine
-# period-jitter capture (docs/logs/"new uboot new kernel baseline
-# v31_260804.txt"): both playback and capture periods swing +-25-47%
-# around their expected 21.333ms interval, persistently, from the very
-# first period -- not an occasional glitch.
-#
-# Mechanism: the DMA controller backing ark1668-i2s (drivers/dma/
-# ark-dma.c, a DesignWare dw_dma core) completes transfers via the
-# classic hardirq-schedules-a-tasklet pattern (dw_dma_interrupt ->
-# tasklet_schedule -> dw_dma_tasklet -> dmaengine_pcm_dma_complete,
-# where the period-jitter instrumentation lives). Tasklets normally run
-# in softirq context immediately after the hard IRQ returns -- fast,
-# low jitter. But under softirq load, Linux defers further softirq
-# processing to ksoftirqd/0, a plain SCHED_OTHER kernel thread with no
-# elevated priority. Meanwhile com.arkmicro.auto.service already
-# launches sink under `chrt -f 50` (2026-08-02 mitigation) -- since
-# rt priority is inherited by every thread a process spawns and
-# libAndroidAuto.so's own per-thread priority mechanism is confirmed
-# never called (see project_aa_audio_stutter_investigation memory),
-# ALL of sink's threads (8 confirmed running concurrently in the same
-# capture) sit at that same RT priority, uniformly, with zero
-# differentiation between them. On this single-core SoC (confirmed:
-# every kworker is kworker/0:*, no kworker/1:*), an RT thread always
-# preempts SCHED_OTHER -- so whenever the DMA completion work gets
-# pushed onto ksoftirqd/0, it has to wait behind however many of
-# sink's 8 equal-priority threads happen to be runnable, round-robining
-# unpredictably. That lines up with the observed jitter: most periods
-# complete fast (softirq ran inline after the hardirq), the rest lag by
-# tens of percent (deferred to a starved ksoftirqd).
-#
-# Fix: give ksoftirqd/0 a higher real-time priority (60) than sink's
-# threads (50), so the actual audio-critical kernel-side completion
-# work can always preempt sink's own (individually not time-critical)
-# threads instead of competing with them as an equal. Iterates /proc
-# directly rather than relying on busybox pgrep's pattern-matching
-# behavior against a comm containing "/" (untested/unreliable in this
-# busybox build) -- matches this project's existing convention of
-# preferring plain /proc/awk parsing over assuming tool-specific
-# pattern syntax works as expected (see usb_domount.sh).
-#
-# NOT a restoration of stock behavior: stock runs Linux 3.4 on a
-# different DMA/audio driver stack entirely, and no archived stock
-# capture (docs/logs/archived/) shows any process-priority information
-# at all -- there's nothing to compare against. This is a deliberate
-# reconstruction-side mitigation, same class as the busy_poll sysctls
-# above and the chrt -f 50 sink mitigation this fix responds to.
-# NOT YET HARDWARE-TESTED.
-for p in /proc/[0-9]*; do
-	if [ "$(cat "$p/comm" 2>/dev/null)" = "ksoftirqd/0" ]; then
-		chrt -f -p 60 "${p#/proc/}" 2>/dev/null
-	fi
-done
-
-# 2026-08-04: match stock's real TCP congestion control algorithm --
-# AA audio-stutter investigation, static comparison against stock's own
-# vmlinux. `strings` on stock's real dumped kernel
-# (firmware_dumps/"Prado firmware dump"/mtd5_kernel/extracted/vmlinux.elf)
-# surfaced its actual compiled source path
-# (/workspace/ark0618system/kernels/linux-3.4/net/ipv4/tcp_cong.c) and
-# only two congestion-control algorithm name strings: "reno" and
-# "highspeed" -- no "cubic" anywhere. Confirmed live, not just inferred:
-# stock's own real boot dmesg (docs/logs/archived/"dmesg live device
-# kernel 3.4 dmeg_260715.txt") prints `TCP: reno registered` /
-# `TCP: highspeed registered` at boot -- cubic is never registered at
-# all. Since nothing else selects a different default, stock's real,
-# live, active default congestion control is Reno -- the old
-# conservative linear-growth algorithm. This kernel's defconfig instead
-# builds CUBIC as the default (CONFIG_DEFAULT_TCP_CONG="cubic",
-# CONFIG_TCP_CONG_CUBIC=y) -- the modern default virtually every current
-# Linux distribution ships, but NOT what stock actually runs. This is a
-# genuine, version-driven divergence (congestion-control defaults
-# changed across kernel releases between 3.4 and 4.19) independent of
-# anything `sink` itself does -- `sink` never calls setsockopt for this,
-# so the algorithm is purely a kernel-side default either way.
-#
-# Unlike every other mitigation in this file, this one is an actual
-# STOCK RESTORATION, not a new deviation: `tcp_reno` is unconditionally
-# compiled into net/ipv4/tcp_cong.c itself (the mandatory fallback
-# implementation, not a separate CONFIG_TCP_CONG_RENO-gated module), so
-# switching to it is a plain runtime sysctl, no kernel rebuild needed,
-# trivially reversible.
-#
-# Cubic and Reno have real behavioral differences under real-world
-# packet loss/reordering (a WiFi link's realistic operating condition)
-# -- different congestion-window growth curves and loss-recovery
-# timing -- worth testing directly rather than reasoning further from
-# static analysis alone. NOT YET HARDWARE-TESTED.
-sysctl -w net.ipv4.tcp_congestion_control=reno >/dev/null 2>&1
-
 # 2026-08-04: actually activate ALSA's XRUN debug logging -- AA audio-
 # stutter investigation. CONFIG_SND_PCM_XRUN_DEBUG=y (already enabled
 # in this kernel's defconfig) only compiles IN the capability; it does
@@ -243,33 +125,15 @@ for f in /proc/asound/card0/pcm0p/xrun_debug /proc/asound/card0/pcm0c/xrun_debug
 	[ -e "$f" ] && echo 1 > "$f" 2>/dev/null
 done
 
-# 2026-08-04: poll /proc/sched_debug for RT-throttling recurrence -- AA
-# audio-stutter investigation. The `sched: RT throttling activated`
-# dmesg line (kernel/sched/rt.c) uses printk_deferred_once -- it fires
-# exactly ONCE, ever, then stays permanently silent even if throttling
-# keeps recurring hundreds more times after. We confirmed it fired at
-# least once (2026-08-04 hw test) but have no visibility into how
-# often or how continuously it's actually still happening -- a real
-# blind spot given `kernel.sched_rt_runtime_us=-1` (this same file,
-# above) is meant to have already disabled the mechanism entirely; if
-# the counters below are STILL climbing after that, either the sysctl
-# isn't taking effect the way expected or something else is resetting
-# it, either of which would be a real, actionable finding.
-# CONFIG_SCHED_DEBUG=y (already enabled) exposes each CPU's RT
-# run-queue state directly via /proc/sched_debug -- `.rt_throttled`
-# (0 or 1, current state) and `.rt_time` (accumulated ns of RT runtime
-# this period, resets each sched_rt_period_us) are logged every 2s to
-# a plain file (not dmesg, avoids adding to that buffer's pressure) so
-# a full test session's throttling history survives for post-hoc
-# correlation against dmesg timestamps (/proc/uptime is the same
-# monotonic clock dmesg's `[ N.NNNNNN]` prefix uses).
-(while true; do
-	sleep 2
-	{
-		echo "=== $(cat /proc/uptime) ==="
-		grep -A3 "^rt_rq\[" /proc/sched_debug 2>/dev/null
-	} >> /data/sched_debug_rt.log
-done) &
+# REMOVED 2026-08-05: the /proc/sched_debug RT-throttling poller this
+# same file used to have here. Its only purpose was watching for
+# recurrence of `kernel.sched_rt_runtime_us=-1` (RT throttle disable)
+# not actually taking effect -- that sysctl and the RT-priority
+# mitigations it was compensating for are both gone now (see the
+# removed-mitigations comment near the top of this file), so there's
+# nothing left for this poller to watch for. Also stops an unbounded,
+# uncapped background file (/data/sched_debug_rt.log) from growing
+# forever.
 
 # Set each MUSB controller's operating mode (usb1's CarPlay wired/WiFi
 # role, and a fast-path for USB-stick test boots) -- see

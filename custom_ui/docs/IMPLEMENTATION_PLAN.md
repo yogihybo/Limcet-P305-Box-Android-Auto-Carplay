@@ -194,8 +194,29 @@ hardware-confirmed.
   - **Not yet hardware-tested** — the SSL handshake byte exchange has
     only been verified against aasdk's own class contracts and the
     `BluetoothService.cpp` reference pattern, not against a live phone.
-- [ ] Answer service discovery with a real response, open the actual
-      media/input/sensor channels
+- [x] Answer service discovery with a real response —
+      `Session::onServiceDiscoveryRequest` now builds and sends a real
+      `ServiceDiscoveryResponse` (`sendServiceDiscoveryResponse`,
+      confirmed protocol contract, not speculative) with basic
+      headunit info, but **deliberately advertises zero channels** —
+      no video/audio/input/sensor service is implemented yet, and
+      advertising a channel we can't actually open would be worse than
+      advertising none. This is a genuine open question for hardware
+      testing: does the phone accept a control-channel-only session
+      and sit idle, or treat an empty channel list as an unsupported
+      head unit and disconnect? Either answer is useful.
+      Also implemented `onPingRequest` → `sendPingResponse` (echoes
+      the timestamp back — confirmed protocol contract per
+      `PingResponse`'s single required field, this is the AA
+      keep-alive mechanism, not something to leave unanswered). Linked
+      clean, zero `GLIBC` references, all other targets still build
+      (binary grew ~15MB — `ServiceDiscoveryResponse`'s `channels`
+      field type transitively pulls in every service-specific
+      protobuf message's generated code, even unused ones; expected
+      protobuf behavior, not a bug).
+- [ ] Open the actual media/input/sensor channels (advertise them in
+      `ServiceDiscoveryResponse.channels` once implemented — not
+      before, per the reasoning above)
 - [ ] Implement this app's own `LinuxVideoSink`/`LinuxAudioSink`/
       `LinuxAudioSource`/`LinuxController`-equivalent classes against
       `aasdk`'s interfaces (naming/shape already confirmed via

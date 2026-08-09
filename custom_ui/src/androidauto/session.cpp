@@ -80,9 +80,29 @@ void Session::onHandshake(const aasdk::common::DataConstBuffer &payload) {
 void Session::onServiceDiscoveryRequest(
     const aap_protobuf::service::control::message::ServiceDiscoveryRequest &request) {
     std::printf("androidauto: service discovery request from '%s'\n", request.device_name().c_str());
-    // Not yet answered with a real service discovery response (that
-    // requires actually describing the services we support -- media
-    // sink, input, sensor, etc.) -- see docs/IMPLEMENTATION_PLAN.md.
+
+    // Deliberately advertises ZERO channels for now -- no video/audio/
+    // input/sensor service is implemented yet (see
+    // docs/IMPLEMENTATION_PLAN.md Phase 2), and advertising a channel
+    // we can't actually open would be worse than advertising none.
+    // This is the next real unknown to test on hardware: does the
+    // phone accept a control-channel-only session and just sit idle,
+    // or does it treat an empty channel list as a failed/unsupported
+    // head unit and disconnect? Either answer is useful information.
+    aap_protobuf::service::control::message::ServiceDiscoveryResponse response;
+    response.mutable_headunit_info()->set_head_unit_make("custom_ui");
+    response.mutable_headunit_info()->set_head_unit_model("prado-firmware-reconstruction");
+    response.set_display_name("custom_ui");
+    response.set_driver_position(aap_protobuf::service::control::message::DRIVER_POSITION_LEFT);
+
+    auto promise = aasdk::channel::SendPromise::defer(strand_);
+    promise->then(
+        []() { std::printf("androidauto: service discovery response sent\n"); },
+        [](const aasdk::error::Error &e) {
+            std::printf("androidauto: service discovery response send failed: %s\n", e.what());
+        });
+    controlChannel_->sendServiceDiscoveryResponse(response, promise);
+
     controlChannel_->receive(this->shared_from_this());
 }
 
@@ -116,7 +136,22 @@ void Session::onVoiceSessionRequest(
     controlChannel_->receive(this->shared_from_this());
 }
 
-void Session::onPingRequest(const aap_protobuf::service::control::message::PingRequest &) {
+void Session::onPingRequest(const aap_protobuf::service::control::message::PingRequest &request) {
+    // Confirmed protocol contract (IControlServiceChannel::
+    // sendPingResponse), not speculative -- the phone uses ping/pong
+    // as a keep-alive; echoing the timestamp back is the whole
+    // contract, per PingResponse's own single required field.
+    aap_protobuf::service::control::message::PingResponse response;
+    response.set_timestamp(request.timestamp());
+
+    auto promise = aasdk::channel::SendPromise::defer(strand_);
+    promise->then(
+        []() {},
+        [](const aasdk::error::Error &e) {
+            std::printf("androidauto: ping response send failed: %s\n", e.what());
+        });
+    controlChannel_->sendPingResponse(response, promise);
+
     controlChannel_->receive(this->shared_from_this());
 }
 

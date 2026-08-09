@@ -9,6 +9,8 @@
 #include <aasdk/Channel/Control/IControlServiceChannel.hpp>
 #include <aasdk/Channel/Control/IControlServiceChannelEventHandler.hpp>
 
+#include "androidauto/input_channel.h"
+
 namespace androidauto {
 
 // Drives the real Android Auto control-channel handshake over an
@@ -86,6 +88,12 @@ private:
     boost::asio::io_service::strand strand_;
     aasdk::messenger::ICryptor::Pointer cryptor_;
     aasdk::channel::control::IControlServiceChannel::Pointer controlChannel_;
+    // Constructed and armed (start()'d) alongside the control channel
+    // in Session::start(), on the same Messenger -- so it's ready to
+    // catch the phone's ChannelOpenRequest whenever it decides to send
+    // one, independent of when/whether ServiceDiscoveryResponse
+    // actually gets answered.
+    InputChannel::Pointer inputChannel_;
 };
 
 }  // namespace androidauto

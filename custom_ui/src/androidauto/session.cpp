@@ -3,6 +3,7 @@
 #include <cstdio>
 
 #include <aasdk/Transport/SSLWrapper.hpp>
+#include <aasdk/Messenger/ChannelId.hpp>
 #include <aasdk/Messenger/Cryptor.hpp>
 #include <aasdk/Messenger/MessageInStream.hpp>
 #include <aasdk/Messenger/MessageOutStream.hpp>
@@ -26,6 +27,9 @@ void Session::start(aasdk::transport::ITransport::Pointer transport) {
 
     controlChannel_ = std::make_shared<aasdk::channel::control::ControlServiceChannel>(strand_, messenger);
     controlChannel_->receive(this->shared_from_this());
+
+    inputChannel_ = std::make_shared<InputChannel>(strand_, messenger);
+    inputChannel_->start();
 
     auto promise = aasdk::channel::SendPromise::defer(strand_);
     promise->then(
@@ -81,19 +85,25 @@ void Session::onServiceDiscoveryRequest(
     const aap_protobuf::service::control::message::ServiceDiscoveryRequest &request) {
     std::printf("androidauto: service discovery request from '%s'\n", request.device_name().c_str());
 
-    // Deliberately advertises ZERO channels for now -- no video/audio/
-    // input/sensor service is implemented yet (see
-    // docs/IMPLEMENTATION_PLAN.md Phase 2), and advertising a channel
-    // we can't actually open would be worse than advertising none.
-    // This is the next real unknown to test on hardware: does the
-    // phone accept a control-channel-only session and just sit idle,
-    // or does it treat an empty channel list as a failed/unsupported
-    // head unit and disconnect? Either answer is useful information.
+    // Advertises InputSourceService (touch only, 800x480 matching this
+    // device's real framebuffer -- see docs/ARCHITECTURE.md's Display
+    // section) -- video/audio/sensor services still aren't implemented,
+    // so still not advertised (advertising a channel we can't actually
+    // open would be worse than not advertising it).
     aap_protobuf::service::control::message::ServiceDiscoveryResponse response;
     response.mutable_headunit_info()->set_head_unit_make("custom_ui");
     response.mutable_headunit_info()->set_head_unit_model("prado-firmware-reconstruction");
     response.set_display_name("custom_ui");
     response.set_driver_position(aap_protobuf::service::control::message::DRIVER_POSITION_LEFT);
+
+    auto *inputService = response.add_channels();
+    // See input_channel.h's header comment for the service_id-numbering
+    // caveat -- this uses aasdk's own ChannelId ordinal as a best-
+    // available proxy, not an independently confirmed wire value.
+    inputService->set_id(static_cast<std::int32_t>(aasdk::messenger::ChannelId::INPUT_SOURCE));
+    auto *touchscreen = inputService->mutable_input_source_service()->add_touchscreen();
+    touchscreen->set_width(800);
+    touchscreen->set_height(480);
 
     auto promise = aasdk::channel::SendPromise::defer(strand_);
     promise->then(

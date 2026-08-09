@@ -198,23 +198,44 @@ hardware-confirmed.
       `Session::onServiceDiscoveryRequest` now builds and sends a real
       `ServiceDiscoveryResponse` (`sendServiceDiscoveryResponse`,
       confirmed protocol contract, not speculative) with basic
-      headunit info, but **deliberately advertises zero channels** —
-      no video/audio/input/sensor service is implemented yet, and
-      advertising a channel we can't actually open would be worse than
-      advertising none. This is a genuine open question for hardware
-      testing: does the phone accept a control-channel-only session
-      and sit idle, or treat an empty channel list as an unsupported
-      head unit and disconnect? Either answer is useful.
+      headunit info.
       Also implemented `onPingRequest` → `sendPingResponse` (echoes
       the timestamp back — confirmed protocol contract per
       `PingResponse`'s single required field, this is the AA
-      keep-alive mechanism, not something to leave unanswered). Linked
-      clean, zero `GLIBC` references, all other targets still build
-      (binary grew ~15MB — `ServiceDiscoveryResponse`'s `channels`
-      field type transitively pulls in every service-specific
-      protobuf message's generated code, even unused ones; expected
-      protobuf behavior, not a bug).
-- [ ] Open the actual media/input/sensor channels (advertise them in
+      keep-alive mechanism, not something to leave unanswered).
+- [x] First real channel: `InputSourceService` (touch only) —
+      `src/androidauto/input_channel.{h,cpp}` (`InputChannel`)
+      implements `IInputSourceServiceEventHandler`: accepts the
+      phone's `ChannelOpenRequest` unconditionally (no real reason to
+      refuse), logs `KeyBindingRequest` (steering-wheel/hardware-key
+      mapping — this device's touch-only UI has no wheel to bind, not
+      handled), and exposes `sendTouch()` for pushing real touch
+      events once wired to a HAL source. `Session::start()` now
+      constructs and arms an `InputChannel` alongside the control
+      channel (same `Messenger`), and `ServiceDiscoveryResponse` now
+      actually advertises it — `Service.id` uses
+      `static_cast<int32_t>(aasdk::messenger::ChannelId::INPUT_SOURCE)`
+      as a best-available proxy for the real wire service ID (no
+      authoritative source or captured traffic for this specific
+      value was found — `docs/logs/` covers the Bluetooth
+      pre-connection dance, not an aasdk-level session; worth
+      confirming against a real capture if a phone doesn't recognize
+      the channel), touchscreen advertised as 800×480 (matches this
+      device's real framebuffer, `docs/ARCHITECTURE.md`'s Display
+      section). **Not yet connected to a real touch source** — LVGL
+      owns `/dev/input/eventN` exclusively for the UI's own rendering;
+      forwarding real touches to Android Auto needs its own separate
+      evdev reader (evdev supports multiple concurrent readers, this
+      is a well-defined next increment, not a redesign).
+      Linked clean, zero `GLIBC` references, all other targets still
+      build (binary grew further — `ServiceDiscoveryResponse`'s
+      `channels` field type transitively pulls in every service-
+      specific protobuf message's generated code, even unused ones;
+      expected protobuf behavior, not a bug).
+- [ ] Wire a real touch source into `InputChannel::sendTouch()` — a
+      second evdev reader over the touch device, independent of
+      LVGL's own consumption of it
+- [ ] Open the remaining media/sensor channels (advertise in
       `ServiceDiscoveryResponse.channels` once implemented — not
       before, per the reasoning above)
 - [ ] Implement this app's own `LinuxVideoSink`/`LinuxAudioSink`/

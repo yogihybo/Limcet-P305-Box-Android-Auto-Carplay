@@ -69,6 +69,32 @@ hardware-confirmed.
 
 ## Phase 2 — Android Auto via aasdk
 
+- [x] Resolve `aasdk`'s external dependency gaps (`find_package`s in
+      its `CMakeLists.txt`): none of this repo's existing cross
+      toolchains bundle headers for OpenSSL/libusb, and none bundle
+      Boost at all; the target rootfs ships `libssl.so.1.1`/
+      `libusb-1.0.so.0.1.0`/`libprotobuf.so.8.0.0` but no Boost, and
+      linking against the target's own `.so`s was rejected (ABI
+      gamble, reintroduces a glibc dependency). Decision: statically
+      cross-compile all three from source, same pattern as everything
+      else in this project that's had to cross the glibc-2.27 line.
+  - [x] Boost 1.87.0 (`boost_log`+`boost_log_setup`, only compiled
+        targets aasdk's actual `#include`s need — `system`/`asio`/
+        `algorithm`/`core`/`endian` are header-only since Boost 1.69)
+        — `third_party/build_boost.sh`
+  - [x] OpenSSL 1.1.1w (`libssl.a`+`libcrypto.a`) —
+        `third_party/build_openssl.sh`
+  - [x] libusb 1.0.29 (`libusb-1.0.a`, static, `--disable-udev` +
+        netlink hotplug fallback) — `third_party/build_libusb.sh`
+  - [x] Protobuf/Abseil — turned out to need **no separate work**:
+        aasdk's own `CMakeLists.txt` has `SKIP_BUILD_PROTOBUF` default
+        `OFF`, so it fetches and builds Protobuf v30.0 + Abseil itself
+        via `FetchContent`.
+  - All three verified as genuine ARM static archives (`file` on
+    extracted `.o` members shows `ELF 32-bit LSB relocatable, ARM,
+    EABI5`), not yet wired into `custom_ui/Makefile` or actually
+    linked against `aasdk` itself.
+- [ ] Cross-compile `aasdk` itself against these three dependencies
 - [ ] Implement this app's own `LinuxVideoSink`/`LinuxAudioSink`/
       `LinuxAudioSource`/`LinuxController`-equivalent classes against
       `aasdk`'s interfaces (naming/shape already confirmed via
@@ -80,14 +106,28 @@ hardware-confirmed.
 
 ## Phase 3 — Settings
 
+- [ ] Replicate the settings module itself: a config-backed settings
+      store mirroring stock's two-layer model — `FactoryConfig.ini`
+      as one-time seed, `/data/msncfg/Setting.config` as the live,
+      persisted layer actually read at runtime (see
+      `project_language_setting_userdata` memory) — plus the field
+      set already disassembly-confirmed in `docs/SETTINGS_REFERENCE.md`
+      (language, CAN type, Bluetooth type, mirroring-link type, screen
+      type, etc. — cross-check `project_msnproductinfo_config_exploration`
+      memory for which of these fields actually do anything on this
+      device vs. are dead/overridden at runtime, so the replacement
+      doesn't reimplement no-op settings as if they were real)
 - [ ] Display settings screen backed by `/dev/ark_display`
       (`ARKDISP_GET/SET_VDE_CFG`)
-- [ ] Read/write live settings against `/data/msncfg/Setting.config`
-      (the actual live layer, not just the static `.ini` factory
-      defaults — see `project_language_setting_userdata` memory)
-- [ ] Bluetooth / WiFi / volume screens
+- [ ] Replacement Bluetooth menu: pairing/device-list UI, backed by
+      whatever the real BT stack on this device is (need to confirm —
+      likely BlueZ over the SoC's own BT/WiFi combo chip, not
+      `sink`/CarPlay's own BT usage which is a separate concern) —
+      device list, pair/connect/forget, connected-device status
+- [ ] WiFi / volume screens
 - **Milestone**: adjusting a setting in the new UI visibly changes
-  device behaviour and survives a reboot.
+  device behaviour and survives a reboot; pairing a phone over the new
+  Bluetooth menu results in a real paired/connected device.
 
 ## Phase 4 — Reversing camera
 

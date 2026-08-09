@@ -307,6 +307,37 @@ Plan:
       dev machine, for local testing).
 - [ ] SDP service record registration (needed for a real phone to
       discover the RFCOMM channel at all — see gap above)
+  - **Found a bigger blocker while scoping this**: this device has
+    **no standard BlueZ userspace stack at all** — no `bluetoothd`,
+    no `libbluetooth.so`, no `hciconfig`/`hcitool`/`sdptool` anywhere
+    in the rootfs (checked directly, not assumed). What it has instead
+    is Realtek's own `rtkbt` (`etc/bluetooth/rtkbt.conf`,
+    `rtl8821cs_fw` — matches the already-known `rtl8811cu`/`rtl8821cs`
+    combo chip from `project_wifi_rtl8811cu_recv_hdl_fix` memory) plus
+    a closed vendor `libBlueTooth.so` that `MsnCoreApp` presumably
+    calls into directly. This means:
+    - No `bluetoothd`/D-Bus to register an SDP record with the normal
+      way (`org.bluez.ProfileManager1`) — would need to implement the
+      raw SDP protocol ourselves (a simple, documented binary protocol
+      over L2CAP PSM 1) or find another path in.
+    - **Unconfirmed**: how/when `hci0` actually comes up on this
+      device at all — no reference to `hciattach`/`rtk_hciattach` in
+      `rcS` or anywhere else in plaintext init scripts, so it's likely
+      brought up on-demand by `MsnCoreApp`'s own `libBlueTooth.so`
+      call into the vendor stack the first time BT is actually used
+      (matching the `project_limcet_activation_gate` on-demand-
+      activation pattern already seen for other subsystems on this
+      device), not a boot-time service we can just assume is running.
+    - **Real risk of interfering with the stock app's own BT usage**
+      (phone-call Bluetooth, existing pairing state) if this project
+      starts managing adapter power/discoverability state blindly
+      without understanding how `libBlueTooth.so`/`MsnCoreApp` already
+      use it — this needs device investigation (dmesg for when `hci0`
+      appears, whether it's present at boot or only after a UI
+      trigger) before writing adapter-management code, not a guess.
+    - **Deliberately paused here rather than guessing further** — this
+      is a real decision point, not a research task with a knowable
+      answer from documentation alone.
 - [ ] Reuse (not reinvent) the stock dynamic-AP mechanism —
       confirm whether `hostapd`/`wifi_ap.sh`'s existing per-connection
       logic (already fixed once this project, see

@@ -166,9 +166,9 @@ whatever IP:port was exchanged — this pre-connection dance is a
 lightweight bootstrap entirely separate from the encrypted aasdk
 protocol, not something that goes through aasdk's `Messenger` at all.
 
-`src/androidauto/bw_aap_client.{h,cpp}` implements steps 1-3 above
-(steps 4-5 are the next increment, once 1-3 are confirmed against a
-real phone). **Not yet hardware-tested** — this is a faithful
+`src/androidauto/bw_aap_client.{h,cpp}` implements all 5 steps above
+(`startHandshake()` for 1-3, `respondToInfoRequest()` for 4-5).
+**Not yet hardware-tested** — this is a faithful
 reconstruction of real captured stock traffic, not confirmed to work
 when driven by our own code. Also unconfirmed: whether `/dev/bw_aap`
 accepts more than one simultaneous client (if `sink`/`MsnCoreApp`

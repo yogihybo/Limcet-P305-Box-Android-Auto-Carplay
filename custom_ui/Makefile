@@ -85,6 +85,24 @@ AASDK_LIBS      := -Wl,--start-group \
                     $(wildcard $(AASDK_DEPS_DIR)/protobuf-arm-install/lib/*.a) \
                     -Wl,--end-group -lpthread -ldl -lrt
 
+# Same static-NSS-init crash this project already hit and fixed for
+# nano/htop/tmux/gdbserver/busybox (tools/nss-stub/README.md):
+# libcrypto.a references dlopen/getaddrinfo/gethostbyname internally
+# (engine loading, BIO_lookup_ex) -- the link itself only warns
+# ("Using 'dlopen' in statically linked applications requires..."),
+# but this project has already confirmed on real hardware that those
+# warnings are NOT harmless here: any static binary that references
+# those symbols pulls in glibc's static-dlopen-NSS init machinery,
+# which asserts and crashes at process startup on this toolchain/
+# kernel combination, whether or not the code path is ever exercised.
+# Reusing tools/nss-stub/nss_stub_busybox.c as-is (not duplicating it)
+# -- it already wraps exactly this symbol set (dlopen family +
+# getaddrinfo/gethostbyname family), unlike nss_stub.c which wraps the
+# getpwnam/getgrgid family instead (this binary never references those).
+NSS_STUB_SRC   := ../tools/nss-stub/nss_stub_busybox.c
+NSS_STUB_OBJ   := $(BUILD_DIR)/aasdk-test-obj/nss_stub_busybox.o
+AASDK_WRAP_FLAGS := -Wl,--wrap=dlopen,--wrap=dlerror,--wrap=dlsym,--wrap=dlclose,--wrap=getaddrinfo,--wrap=freeaddrinfo,--wrap=gai_strerror,--wrap=gethostbyname,--wrap=gethostbyname2,--wrap=gethostbyaddr,--wrap=getservbyname,--wrap=getservbyport
+
 # --- carplay sidecar binary ---
 # -ldbus-1 goes back in once this actually links libdbus -- needs its
 # headers/lib sourced from the target rootfs or cross-built, neither of
@@ -122,13 +140,17 @@ $(BUILD_DIR)/ui-obj/androidauto/%.o: src/androidauto/%.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) $(AASDK_INCLUDES) -c -o $@ $<
 
-$(AASDK_TEST_TARGET): $(AASDK_TEST_OBJS) $(AASDK_OBJS)
+$(AASDK_TEST_TARGET): $(AASDK_TEST_OBJS) $(AASDK_OBJS) $(NSS_STUB_OBJ)
 	@mkdir -p $(dir $@)
-	$(CXX) $(LDFLAGS) -o $@ $^ $(AASDK_LIBS)
+	$(CXX) $(LDFLAGS) $(AASDK_WRAP_FLAGS) -o $@ $^ $(AASDK_LIBS)
 
 $(BUILD_DIR)/aasdk-test-obj/%.o: tools/androidauto-usb-probe-test/%.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) $(AASDK_INCLUDES) -Isrc -c -o $@ $<
+
+$(NSS_STUB_OBJ): $(NSS_STUB_SRC)
+	@mkdir -p $(dir $@)
+	$(CC) -O2 -c -o $@ $<
 
 $(BUILD_DIR)/lvgl-obj/%.o: $(LVGL_DIR)/%.c
 	@mkdir -p $(dir $@)

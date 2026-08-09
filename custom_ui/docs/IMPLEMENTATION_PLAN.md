@@ -158,6 +158,44 @@ hardware-confirmed.
       change. **Not yet hardware-tested** — this proves the link graph
       resolves, not that USB hotplug detection actually works on the
       device.
+- [x] Control-channel handshake: `src/androidauto/session.{h,cpp}`
+      (`androidauto::Session`) implements aasdk's
+      `IControlServiceChannelEventHandler` for real — wraps an
+      AOAP-negotiated device in `AOAPDevice` → `USBTransport` →
+      `Cryptor`/`MessageInStream`/`MessageOutStream` → `Messenger` →
+      `ControlServiceChannel`, sends the version request, then drives
+      aasdk's OpenSSL-BIO `Cryptor` through the handshake loop (head
+      unit is the TLS *client* — `Cryptor::init()` calls
+      `SSL_set_connect_state`), logging the service discovery request
+      once received. Every `on*()` handler re-arms
+      `controlChannel_->receive()` itself — confirmed via
+      `ControlServiceChannel.cpp`'s own `messageHandler()` that it does
+      **not** auto-rearm after dispatching a known message, only its
+      unhandled-message-id fallback does (cross-checked against the
+      same pattern in aasdk's own working `BluetoothService.cpp`).
+      `usb_probe.cpp` now starts a real `Session` on AOAP detection
+      instead of just logging it. Not yet answering service discovery
+      with a real response, and no media/input/sensor channels open
+      yet — next increment.
+  - **Found and fixed a second real static-NSS-init crash** (the same
+    class this project already hit and fixed for
+    nano/htop/tmux/gdbserver/busybox, `tools/nss-stub/README.md`):
+    `libcrypto.a` references `dlopen`/`getaddrinfo`/`gethostbyname`
+    internally (engine loading, `BIO_lookup_ex`) — link-time-only
+    warnings, but this project has already confirmed on real hardware
+    that those warnings are not harmless on this toolchain/kernel
+    combination. Fixed by reusing (not duplicating)
+    `tools/nss-stub/nss_stub_busybox.c` — it already wraps exactly this
+    symbol set — via `--wrap` flags scoped to the
+    `androidauto-usb-probe-test` link only (the base UI/sidecar don't
+    link OpenSSL and don't have this problem). Confirmed clean: no more
+    dlopen/getaddrinfo linker warnings, zero `GLIBC` symbol references,
+    `__wrap_*` symbols present in the binary.
+  - **Not yet hardware-tested** — the SSL handshake byte exchange has
+    only been verified against aasdk's own class contracts and the
+    `BluetoothService.cpp` reference pattern, not against a live phone.
+- [ ] Answer service discovery with a real response, open the actual
+      media/input/sensor channels
 - [ ] Implement this app's own `LinuxVideoSink`/`LinuxAudioSink`/
       `LinuxAudioSource`/`LinuxController`-equivalent classes against
       `aasdk`'s interfaces (naming/shape already confirmed via

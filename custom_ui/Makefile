@@ -70,7 +70,8 @@ AASDK_INCLUDES  := -I$(AASDK_DIR)/include \
                     -I$(AASDK_DEPS_DIR)/openssl-arm-install/include \
                     -I$(AASDK_DEPS_DIR)/libusb-arm-install/include \
                     -I$(AASDK_DEPS_DIR)/libusb-arm-install/include/libusb-1.0 \
-                    -I$(AASDK_DEPS_DIR)/protobuf-arm-install/include
+                    -I$(AASDK_DEPS_DIR)/protobuf-arm-install/include \
+                    -Ithird_party/bluez_uapi
 # --start-group/--end-group: aasdk, aap_protobuf, protobuf, and Abseil
 # static-link against each other in ways plain left-to-right link order
 # can't always resolve in one pass -- --start-group lets ld retry the
@@ -127,7 +128,18 @@ AASDK_TEST_OBJS    := $(BUILD_DIR)/aasdk-test-obj/main.o
 WIRELESS_TEST_TARGET := $(BUILD_DIR)/androidauto-wireless-probe-test
 WIRELESS_TEST_OBJS   := $(BUILD_DIR)/wireless-test-obj/main.o
 
-.PHONY: all clean ui carplay-sidecar androidauto-usb-probe-test androidauto-wireless-probe-test
+# --- androidauto-bluetooth-rfcomm-test: raw RFCOMM socket-layer proof ---
+# See tools/androidauto-bluetooth-rfcomm-test/main.cpp -- NOT a full
+# Android Auto session, just the socket plumbing (BluetoothRFCOMMTransport
+# + accept_rfcomm_connection). Only needs libpthread, not the full
+# AASDK_LIBS -- doesn't touch Boost/OpenSSL/Protobuf/aasdk's Messenger
+# stack at all, just aasdk::transport::Transport's base class.
+BT_TEST_TARGET := $(BUILD_DIR)/androidauto-bluetooth-rfcomm-test
+BT_TEST_OBJS   := $(BUILD_DIR)/bt-test-obj/main.o
+BT_TRANSPORT_OBJS := $(BUILD_DIR)/ui-obj/androidauto/bluetooth_transport.o \
+                      $(BUILD_DIR)/ui-obj/androidauto/bluetooth_rfcomm_server.o
+
+.PHONY: all clean ui carplay-sidecar androidauto-usb-probe-test androidauto-wireless-probe-test androidauto-bluetooth-rfcomm-test
 
 all: ui carplay-sidecar
 
@@ -135,6 +147,7 @@ ui: $(UI_TARGET)
 carplay-sidecar: $(SIDECAR_TARGET)
 androidauto-usb-probe-test: $(AASDK_TEST_TARGET)
 androidauto-wireless-probe-test: $(WIRELESS_TEST_TARGET)
+androidauto-bluetooth-rfcomm-test: $(BT_TEST_TARGET)
 
 $(UI_TARGET): $(UI_OBJS) $(LVGL_OBJS)
 	@mkdir -p $(dir $@)
@@ -165,6 +178,14 @@ $(WIRELESS_TEST_TARGET): $(WIRELESS_TEST_OBJS) $(AASDK_OBJS) $(NSS_STUB_OBJ)
 	$(CXX) $(LDFLAGS) $(AASDK_WRAP_FLAGS) -o $@ $^ $(AASDK_LIBS)
 
 $(BUILD_DIR)/wireless-test-obj/%.o: tools/androidauto-wireless-probe-test/%.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) $(AASDK_INCLUDES) -Isrc -c -o $@ $<
+
+$(BT_TEST_TARGET): $(BT_TEST_OBJS) $(BT_TRANSPORT_OBJS) $(NSS_STUB_OBJ)
+	@mkdir -p $(dir $@)
+	$(CXX) $(LDFLAGS) $(AASDK_WRAP_FLAGS) -o $@ $^ $(AASDK_LIBS)
+
+$(BUILD_DIR)/bt-test-obj/%.o: tools/androidauto-bluetooth-rfcomm-test/%.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) $(AASDK_INCLUDES) -Isrc -c -o $@ $<
 

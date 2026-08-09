@@ -86,15 +86,31 @@ hardware-confirmed.
         `third_party/build_openssl.sh`
   - [x] libusb 1.0.29 (`libusb-1.0.a`, static, `--disable-udev` +
         netlink hotplug fallback) — `third_party/build_libusb.sh`
-  - [x] Protobuf/Abseil — turned out to need **no separate work**:
-        aasdk's own `CMakeLists.txt` has `SKIP_BUILD_PROTOBUF` default
-        `OFF`, so it fetches and builds Protobuf v30.0 + Abseil itself
-        via `FetchContent`.
-  - All three verified as genuine ARM static archives (`file` on
+  - [x] Protobuf 25.3 + Abseil (`lts_2023_08_02`, pinned by
+        protobuf's own `.gitmodules`) — **correction**: earlier notes
+        here claimed this needed no separate work because aasdk
+        "fetches Protobuf itself via `FetchContent`" — false, the only
+        `FetchContent_Declare` anywhere in aasdk's CMake is for
+        googletest. aasdk's `protobuf/CMakeLists.txt` (non-macOS
+        branch) does a plain `find_path`/`find_library`/`find_program`
+        for an already-installed protobuf and hard `FATAL_ERROR`s if
+        missing. Needed two separate builds: a **host-native** `protoc`
+        binary (Google's own prebuilt release binary, since a
+        cross-compiled ARM `protoc` can't run on this build host) and
+        a **cross-compiled ARM static** `libprotobuf` for target
+        linking — `third_party/build_protobuf.sh`. The plain
+        `protobuf-25.3.tar.gz` source release ships `third_party/
+        abseil-cpp` as an empty submodule placeholder, not vendored
+        source — the script clones it separately at the pinned tag.
+  - All four verified as genuine ARM static archives (`file` on
     extracted `.o` members shows `ELF 32-bit LSB relocatable, ARM,
-    EABI5`), not yet wired into `custom_ui/Makefile` or actually
-    linked against `aasdk` itself.
-- [ ] Cross-compile `aasdk` itself against these three dependencies
+    EABI5`), not yet wired into `custom_ui/Makefile`.
+- [~] Cross-compile `aasdk` itself against these four dependencies —
+      `third_party/build_aasdk.sh` written (also patches aasdk's
+      `CMakeLists.txt`/`protobuf/CMakeLists.txt` to force STATIC
+      libraries, both default to SHARED on non-macOS), first run hit
+      the Protobuf gap above, retrying once `build_protobuf.sh`
+      finishes
 - [ ] Implement this app's own `LinuxVideoSink`/`LinuxAudioSink`/
       `LinuxAudioSource`/`LinuxController`-equivalent classes against
       `aasdk`'s interfaces (naming/shape already confirmed via

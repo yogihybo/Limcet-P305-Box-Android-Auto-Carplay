@@ -1,7 +1,7 @@
 #!/bin/bash
 # Cross-compile aasdk itself (this must run AFTER build_boost.sh,
-# build_openssl.sh, and build_libusb.sh -- it links against their
-# outputs).
+# build_openssl.sh, build_libusb.sh, AND build_protobuf.sh -- it links
+# against all four's outputs).
 #
 # Patches aasdk's own CMakeLists.txt (and protobuf/CMakeLists.txt)
 # in-place before configuring: both unconditionally build SHARED
@@ -47,13 +47,15 @@ mkdir -p "$AASDK_DIR/build-arm"
 cd "$AASDK_DIR/build-arm"
 
 echo "==> Configuring aasdk..."
+PATH="$DEPS_DIR/protoc-host/bin:$PATH" \
 cmake \
     -DCMAKE_TOOLCHAIN_FILE="$DEPS_DIR/arm-toolchain.cmake" \
     -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_PREFIX_PATH="$DEPS_DIR/boost-arm-install;$DEPS_DIR/openssl-arm-install;$DEPS_DIR/libusb-arm-install" \
+    -DCMAKE_PREFIX_PATH="$DEPS_DIR/boost-arm-install;$DEPS_DIR/openssl-arm-install;$DEPS_DIR/libusb-arm-install;$DEPS_DIR/protobuf-arm-install" \
     -DBoost_USE_STATIC_LIBS=ON \
     -DBUILD_SHARED_LIBS=OFF \
     -DAASDK_TEST=OFF \
+    -DPROTOBUF_PROTOC_EXECUTABLE="$DEPS_DIR/protoc-host/bin/protoc" \
     ..
 
 echo "==> Building..."

@@ -78,10 +78,18 @@ hardware-confirmed.
       gamble, reintroduces a glibc dependency). Decision: statically
       cross-compile all three from source, same pattern as everything
       else in this project that's had to cross the glibc-2.27 line.
-  - [x] Boost 1.87.0 (`boost_log`+`boost_log_setup`, only compiled
-        targets aasdk's actual `#include`s need — `system`/`asio`/
-        `algorithm`/`core`/`endian` are header-only since Boost 1.69)
-        — `third_party/build_boost.sh`
+  - [x] Boost **1.83.0** (not the newest release — pinned to match
+        Ubuntu 24.04's `libboost-all-dev`, what aasdk's own CI actually
+        builds against) — full build+install, not just
+        `boost_log`+`boost_log_setup` (see script comment: a scoped
+        build breaks `cmake --install`, which expects every configured
+        library present) — `third_party/build_boost.sh`. **Correction**:
+        an earlier attempt used 1.87.0, which compiled fine standalone
+        but broke cross-compiling `aasdk` itself — aasdk's own source
+        still uses `boost::asio::io_service`/`io_context::strand`
+        directly, both fully removed from Boost.Asio by 1.87 (confirmed
+        by hitting "'boost::asio::io_service' has not been declared").
+        1.83 still has them.
   - [x] OpenSSL 1.1.1w (`libssl.a`+`libcrypto.a`) —
         `third_party/build_openssl.sh`
   - [x] libusb 1.0.29 (`libusb-1.0.a`, static, `--disable-udev` +
@@ -105,12 +113,30 @@ hardware-confirmed.
   - All four verified as genuine ARM static archives (`file` on
     extracted `.o` members shows `ELF 32-bit LSB relocatable, ARM,
     EABI5`), not yet wired into `custom_ui/Makefile`.
-- [~] Cross-compile `aasdk` itself against these four dependencies —
-      `third_party/build_aasdk.sh` written (also patches aasdk's
-      `CMakeLists.txt`/`protobuf/CMakeLists.txt` to force STATIC
-      libraries, both default to SHARED on non-macOS), first run hit
-      the Protobuf gap above, retrying once `build_protobuf.sh`
-      finishes
+- [x] Cross-compile `aasdk` itself against these four dependencies —
+      `third_party/build_aasdk.sh`. `libaasdk.a` (74MB) +
+      `libaap_protobuf.a` (263MB) built clean, confirmed genuine ARM
+      static object code. Needed three fixes beyond the dependency
+      gaps above, all now handled by the script:
+      1. `add_library(aasdk SHARED ...)`/`add_library(aap_protobuf
+         SHARED ...)` — both default to SHARED on non-macOS, patched
+         to STATIC (`sed -i`, not upstreamed — aasdk's own Darwin-only
+         STATIC branch suggests this was a deliberate narrow choice)
+      2. `set(Boost_USE_STATIC_LIBS OFF)` — a plain (non-CACHE) `set()`
+         in aasdk's `CMakeLists.txt` silently shadows the
+         `-DBoost_USE_STATIC_LIBS=ON` command-line flag; patched the
+         default directly, also dropped `-DBOOST_ALL_DYN_LINK`
+      3. Protobuf variable case mismatch: `protobuf/CMakeLists.txt`'s
+         manual `find_path`/`find_library` populate mixed-case
+         `Protobuf_INCLUDE_DIR`/`Protobuf_LIBRARY`, but both
+         `include_directories()`/`target_link_libraries()` calls (in
+         that file and the top-level one) reference all-caps
+         `PROTOBUF_INCLUDE_DIR`/`PROTOBUF_LIBRARIES` — a variable that
+         was never actually set by that path. Fixed by passing the
+         all-caps names explicitly as `-D` cache overrides so every
+         scope agrees regardless of which spelling a given
+         `CMakeLists.txt` line uses.
+      Not yet wired into `custom_ui/Makefile`.
 - [ ] Implement this app's own `LinuxVideoSink`/`LinuxAudioSink`/
       `LinuxAudioSource`/`LinuxController`-equivalent classes against
       `aasdk`'s interfaces (naming/shape already confirmed via

@@ -20,6 +20,20 @@
 # -DAASDK_TEST=OFF: skips aasdk's own googletest FetchContent (a test
 # suite we don't need, and one more thing to cross-compile/network-fetch
 # for no benefit here).
+#
+# Protobuf variable case mismatch: aasdk's protobuf/CMakeLists.txt
+# manually finds protobuf into mixed-case `Protobuf_INCLUDE_DIR`/
+# `Protobuf_LIBRARY`, but its own include_directories()/
+# target_link_libraries() calls (and the top-level CMakeLists.txt's)
+# reference the all-caps `PROTOBUF_INCLUDE_DIR`/`PROTOBUF_LIBRARIES` --
+# a different, never-actually-set variable name. `aap_protobuf` built
+# anyway (apparently via CMake's bundled FindProtobuf.cmake module,
+# `include()`-d for its `protobuf_generate_cpp()` macro, incidentally
+# also running its own internal search); the top-level `aasdk` target
+# did not (confirmed: "google/protobuf/message.h: No such file"). Fix:
+# pass the all-caps variables explicitly as cache entries on the
+# command line below, so every scope sees the same values regardless
+# of which spelling a given CMakeLists.txt line happens to use.
 
 set -e
 
@@ -31,6 +45,16 @@ CROSS_COMPILE="${CROSS_COMPILE:-arm-linux-gnueabihf-}"
 echo "==> Patching aasdk to build static libs (SHARED -> STATIC, non-macOS branch)..."
 sed -i 's/add_library(aasdk SHARED/add_library(aasdk STATIC/' "$AASDK_DIR/CMakeLists.txt"
 sed -i 's/add_library(aap_protobuf SHARED/add_library(aap_protobuf STATIC/' "$AASDK_DIR/protobuf/CMakeLists.txt"
+# CMakeLists.txt's own `set(Boost_USE_STATIC_LIBS OFF)` (a plain, non-
+# CACHE set()) shadows our -DBoost_USE_STATIC_LIBS=ON command-line flag
+# for the rest of that directory scope -- confirmed by hitting
+# "Could not find a configuration file for package boost_log_setup
+# that exactly matches requested version" (it found the -static
+# variant but wasn't looking for it). Patch the default directly, and
+# drop -DBOOST_ALL_DYN_LINK (a dynamic-import declspec macro that has
+# no business being defined when linking Boost statically).
+sed -i 's/set(Boost_USE_STATIC_LIBS OFF)/set(Boost_USE_STATIC_LIBS ON)/' "$AASDK_DIR/CMakeLists.txt"
+sed -i '/add_definitions(-DBOOST_ALL_DYN_LINK)/d' "$AASDK_DIR/CMakeLists.txt"
 
 cat > "$DEPS_DIR/arm-toolchain.cmake" <<EOF
 set(CMAKE_SYSTEM_NAME Linux)
@@ -56,6 +80,8 @@ cmake \
     -DBUILD_SHARED_LIBS=OFF \
     -DAASDK_TEST=OFF \
     -DPROTOBUF_PROTOC_EXECUTABLE="$DEPS_DIR/protoc-host/bin/protoc" \
+    -DPROTOBUF_INCLUDE_DIR="$DEPS_DIR/protobuf-arm-install/include" \
+    -DPROTOBUF_LIBRARIES="$DEPS_DIR/protobuf-arm-install/lib/libprotobuf.a" \
     ..
 
 echo "==> Building..."

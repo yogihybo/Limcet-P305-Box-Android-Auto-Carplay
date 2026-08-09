@@ -117,16 +117,24 @@ SIDECAR_INCLUDES := -Isidecars/carplay
 # See tools/androidauto-usb-probe-test/main.cpp -- not part of `all`,
 # build explicitly with `make androidauto-usb-probe-test`.
 AASDK_TEST_TARGET := $(BUILD_DIR)/androidauto-usb-probe-test
-AASDK_TEST_SRCS    := tools/androidauto-usb-probe-test/main.cpp
 AASDK_TEST_OBJS    := $(BUILD_DIR)/aasdk-test-obj/main.o
 
-.PHONY: all clean ui carplay-sidecar androidauto-usb-probe-test
+# --- androidauto-wireless-probe-test: Session over TCPTransport ---
+# See tools/androidauto-wireless-probe-test/main.cpp. Shares
+# AASDK_LIBS/AASDK_WRAP_FLAGS/NSS_STUB_OBJ with the USB probe test --
+# same dependency set (this is TCP, not USB, but still needs
+# libusb linked in since it's part of AASDK_LIBS's --start-group).
+WIRELESS_TEST_TARGET := $(BUILD_DIR)/androidauto-wireless-probe-test
+WIRELESS_TEST_OBJS   := $(BUILD_DIR)/wireless-test-obj/main.o
+
+.PHONY: all clean ui carplay-sidecar androidauto-usb-probe-test androidauto-wireless-probe-test
 
 all: ui carplay-sidecar
 
 ui: $(UI_TARGET)
 carplay-sidecar: $(SIDECAR_TARGET)
 androidauto-usb-probe-test: $(AASDK_TEST_TARGET)
+androidauto-wireless-probe-test: $(WIRELESS_TEST_TARGET)
 
 $(UI_TARGET): $(UI_OBJS) $(LVGL_OBJS)
 	@mkdir -p $(dir $@)
@@ -151,6 +159,14 @@ $(BUILD_DIR)/aasdk-test-obj/%.o: tools/androidauto-usb-probe-test/%.cpp
 $(NSS_STUB_OBJ): $(NSS_STUB_SRC)
 	@mkdir -p $(dir $@)
 	$(CC) -O2 -c -o $@ $<
+
+$(WIRELESS_TEST_TARGET): $(WIRELESS_TEST_OBJS) $(AASDK_OBJS) $(NSS_STUB_OBJ)
+	@mkdir -p $(dir $@)
+	$(CXX) $(LDFLAGS) $(AASDK_WRAP_FLAGS) -o $@ $^ $(AASDK_LIBS)
+
+$(BUILD_DIR)/wireless-test-obj/%.o: tools/androidauto-wireless-probe-test/%.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) $(AASDK_INCLUDES) -Isrc -c -o $@ $<
 
 $(BUILD_DIR)/lvgl-obj/%.o: $(LVGL_DIR)/%.c
 	@mkdir -p $(dir $@)

@@ -236,18 +236,48 @@ vendored to reproduce this on our side:
   `Messenger`/`Cryptor`/channel code, different transport underneath
 
 Plan:
+- [x] Factor `Session` so the transport is swappable, not a second
+      copy of the class — `Session::start()` now takes an
+      `aasdk::transport::ITransport::Pointer` directly instead of
+      constructing a `USBTransport` internally; `usb_probe.cpp`
+      constructs `AOAPDevice`+`USBTransport` itself and passes it in.
+      Confirmed: base UI/sidecar targets and the USB probe test all
+      still build clean after the refactor.
+- [x] `TCPTransport`-based path proven: new
+      `src/androidauto/wireless_probe.{h,cpp}` +
+      `tools/androidauto-wireless-probe-test` connects OUT to a given
+      host:port (confirmed by reading `aasdk::tcp::ITCPWrapper`'s
+      actual interface that aasdk only implements the TCP **client**
+      side — `connect`/`asyncConnect`, no `accept`/`listen` — meaning
+      aasdk's own design already expects the head unit to connect to
+      the phone, not run a listening socket; matches the real Android
+      Auto Wireless architecture where the phone hosts the TCP
+      service) and drives the same `Session` handshake as the USB
+      path. Linked clean, zero `GLIBC` symbol references, same
+      `nss_stub_busybox.c` treatment applied (shares `AASDK_LIBS`).
+      Host/port must be supplied manually for now (default port 5277
+      is a commonly-cited guess from other open-source
+      implementations, **not independently confirmed** against this
+      project's own traffic captures) — no automatic discovery yet,
+      that's the BT/WifiProjection item below.
 - [ ] Reuse (not reinvent) the stock dynamic-AP mechanism —
       confirm whether `hostapd`/`wifi_ap.sh`'s existing per-connection
       logic (already fixed once this project, see
       `project_static_wifi_ap_vs_dynamic`) can be driven from our own
       code, or needs its own equivalent
 - [ ] `BluetoothService` event handler (mirrors `Session`'s
-      `IControlServiceChannelEventHandler` pattern) to drive pairing
+      `IControlServiceChannelEventHandler` pattern) to drive pairing —
+      **needs more research before writing code**: the exact real-world
+      message sequence the phone's own AA app expects for BT-triggered
+      wireless discovery/handoff isn't confirmed yet (aasdk's
+      `BluetoothService`/`WifiProjectionService` channels are real and
+      vendored, but whether they're used for the *initial* discovery
+      handshake or only for secondary things like handing the car's
+      Bluetooth MAC to the phone for HFP pairing is still an open
+      question — guessing wrong here risks a component that looks
+      plausible but doesn't match the phone's actual behavior)
 - [ ] `WifiProjectionService` event handler to send AP credentials once
       paired
-- [ ] A `TCPTransport`-based variant of `Session::start()` (today it's
-      hardcoded to `USBTransport`/`AOAPDevice` — needs factoring so the
-      transport is swappable, not a second copy of the class)
 - **Milestone**: a phone pairs over Bluetooth, receives AP credentials,
   joins the head unit's WiFi, and the control-channel handshake
   (already working over USB) completes over TCP instead — provable on

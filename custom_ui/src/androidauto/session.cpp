@@ -2,8 +2,6 @@
 
 #include <cstdio>
 
-#include <aasdk/USB/AOAPDevice.hpp>
-#include <aasdk/Transport/USBTransport.hpp>
 #include <aasdk/Transport/SSLWrapper.hpp>
 #include <aasdk/Messenger/Cryptor.hpp>
 #include <aasdk/Messenger/MessageInStream.hpp>
@@ -13,14 +11,11 @@
 
 namespace androidauto {
 
-Session::Session(boost::asio::io_service &ioService, aasdk::usb::IUSBWrapper &usbWrapper)
-    : ioService_(ioService), usbWrapper_(usbWrapper), strand_(ioService) {
+Session::Session(boost::asio::io_service &ioService)
+    : ioService_(ioService), strand_(ioService) {
 }
 
-void Session::start(aasdk::usb::DeviceHandle deviceHandle) {
-    auto aoapDevice = aasdk::usb::AOAPDevice::create(usbWrapper_, ioService_, deviceHandle);
-    auto transport = std::make_shared<aasdk::transport::USBTransport>(ioService_, std::move(aoapDevice));
-
+void Session::start(aasdk::transport::ITransport::Pointer transport) {
     auto sslWrapper = std::make_shared<aasdk::transport::SSLWrapper>();
     cryptor_ = std::make_shared<aasdk::messenger::Cryptor>(std::move(sslWrapper));
     cryptor_->init();

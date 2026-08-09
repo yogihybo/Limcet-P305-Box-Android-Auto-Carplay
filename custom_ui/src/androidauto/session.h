@@ -4,27 +4,35 @@
 
 #include <boost/asio.hpp>
 
-#include <aasdk/USB/IUSBWrapper.hpp>
+#include <aasdk/Transport/ITransport.hpp>
 #include <aasdk/Messenger/ICryptor.hpp>
 #include <aasdk/Channel/Control/IControlServiceChannel.hpp>
 #include <aasdk/Channel/Control/IControlServiceChannelEventHandler.hpp>
 
 namespace androidauto {
 
-// Drives the real Android Auto control-channel handshake against a
-// device aasdk::usb::USBHub has already negotiated into AOAP
-// accessory mode: sends the version request, then drives aasdk's
-// OpenSSL-BIO-based Cryptor through the handshake loop (the head unit
-// is the TLS *client* here -- Cryptor::init() calls
+// Drives the real Android Auto control-channel handshake over an
+// already-established transport: sends the version request, then
+// drives aasdk's OpenSSL-BIO-based Cryptor through the handshake loop
+// (the head unit is the TLS *client* here -- Cryptor::init() calls
 // SSL_set_connect_state internally), then logs the service discovery
 // request once the phone sends it.
 //
+// Deliberately transport-agnostic (takes an aasdk::transport::ITransport
+// already wrapping either a USB AOAP device or a TCP socket) -- the
+// control-channel/Messenger/Cryptor logic is identical either way, only
+// how bytes get to the phone differs. See usb_probe.cpp for the wired
+// (USBTransport) caller; the wireless (TCPTransport) caller lands
+// alongside the Bluetooth/WifiProjection pairing flow -- see
+// docs/IMPLEMENTATION_PLAN.md Phase 2's "Wireless AA" section for why
+// that's a required path here, not a nice-to-have (the device's one
+// external USB port is normally occupied by the boot rootfs drive).
+//
 // Scoped deliberately: does not yet send a service discovery
 // RESPONSE or open any actual media/input/sensor channel -- that's
-// the next increment (see docs/IMPLEMENTATION_PLAN.md Phase 2). The
-// receive()-then-re-arm pattern used throughout (call
-// controlChannel_->receive(shared_from_this()) again at the end of
-// every on*() handler) mirrors aasdk's own internal
+// the next increment. The receive()-then-re-arm pattern used
+// throughout (call controlChannel_->receive(shared_from_this()) again
+// at the end of every on*() handler) mirrors aasdk's own internal
 // src/Channel/Bluetooth/BluetoothService.cpp, the reference used to
 // confirm ControlServiceChannel does NOT auto-rearm itself after
 // dispatching a known message -- only its own "unhandled message id"
@@ -38,13 +46,13 @@ class Session : public aasdk::channel::control::IControlServiceChannelEventHandl
 public:
     using Pointer = std::shared_ptr<Session>;
 
-    Session(boost::asio::io_service &ioService, aasdk::usb::IUSBWrapper &usbWrapper);
+    Session(boost::asio::io_service &ioService);
 
-    // deviceHandle must already be AOAP-negotiated (i.e. resolved by
-    // aasdk::usb::USBHub's accessory-mode query chain, as in
-    // androidauto::run_usb_probe). Wraps it in a USBTransport +
+    // transport must already be established and ready to exchange
+    // bytes (a USBTransport wrapping an AOAP-negotiated device, or a
+    // TCPTransport wrapping a connected socket). Wraps it in a
     // Messenger + ControlServiceChannel and sends the version request.
-    void start(aasdk::usb::DeviceHandle deviceHandle);
+    void start(aasdk::transport::ITransport::Pointer transport);
 
     void onVersionResponse(uint16_t majorCode, uint16_t minorCode,
                             aap_protobuf::shared::MessageStatus status) override;
@@ -75,7 +83,6 @@ private:
     void continueSSLHandshake();
 
     boost::asio::io_service &ioService_;
-    aasdk::usb::IUSBWrapper &usbWrapper_;
     boost::asio::io_service::strand strand_;
     aasdk::messenger::ICryptor::Pointer cryptor_;
     aasdk::channel::control::IControlServiceChannel::Pointer controlChannel_;

@@ -84,13 +84,34 @@ public:
     // (type 3, step 5) with the given AP credentials. securityMode uses
     // aap_protobuf::service::wifiprojection::message::WifiSecurityMode's
     // numeric values -- the real captured traffic used the raw value 8
-    // (WPA2_ENTERPRISE per that enum), which is a semantically odd
-    // choice for a plain WPA2-personal passphrase-secured AP; passed
-    // through as-is by default in the test driver to match known-good
-    // captured bytes rather than what "should" be logically correct,
-    // since fidelity to what's proven to work on stock hardware is
-    // safer than a guess. Returns false if WIFI_INFO_REQUEST doesn't
-    // arrive within the timeout, or on send failure.
+    // (WPA2_ENTERPRISE per that enum), passed through as-is by default
+    // to match known-good captured bytes rather than guess.
+    //
+    // CROSS-CHECKED against firmware_source/mtd6_rootfs/etc/hostapd/
+    // hostapd.conf (the real static template, `wpa_passphrase=88888888`
+    // -- matches the captured password exactly) and found a genuine
+    // discrepancy worth flagging, not just a "seems odd" hunch: that
+    // config uses `wpa=2`/`wpa_key_mgmt=WPA-PSK` -- ordinary WPA2
+    // *personal*, not enterprise. So either (a) the vendored
+    // WifiSecurityMode enum's numbering doesn't match what this
+    // firmware actually transmits (same class of issue as
+    // WifiVersionRequest/Response), or (b) this field isn't load-
+    // bearing and phones ignore it in practice. If value 8 doesn't
+    // work when hardware-tested, try WPA2_PERSONAL (5) next -- that's
+    // what the real AP config actually is.
+    //
+    // Also cross-checked: the real SSID observed was "carplay_fc9f",
+    // not the static template's "carplay_wifi" -- MsnCoreApp rewrites
+    // the SSID at runtime with a device-specific suffix matching the
+    // last 4 hex chars of the Bluetooth MAC (blueware's own captured
+    // log showed the same "fc9f" suffix on its broadcast name,
+    // "Limcet Box_fc9f", for BD_ADDR DC0D3014FC9F) -- the password
+    // appears to stay fixed at "88888888" across instances. Not
+    // reverse-engineered further (closed binary); pass whatever the
+    // real live AP's actual SSID/password are once that's wired up.
+    //
+    // Returns false if WIFI_INFO_REQUEST doesn't arrive within the
+    // timeout, or on send failure.
     bool respondToInfoRequest(const std::string &ssid, const std::string &password,
                                const std::string &bssid, int securityMode, int timeoutSeconds);
 

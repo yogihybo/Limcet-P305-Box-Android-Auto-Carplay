@@ -42,7 +42,17 @@
 
 set -e
 
-BOOST_VERSION="1.87.0"
+# Pinned to 1.83.0 (not the newest release) -- matches Ubuntu 24.04's
+# libboost-all-dev, which is what aasdk's own CI (.github/workflows/
+# ci.yml, runs-on: ubuntu-24.04) actually builds and tests against.
+# This is load-bearing, not cosmetic: aasdk's own source still uses
+# `boost::asio::io_service` / `boost::asio::io_context::strand`
+# directly (confirmed by grepping its Channel/Messenger headers) --
+# both were fully removed from Boost.Asio by 1.87 (confirmed by
+# actually hitting "'boost::asio::io_service' has not been declared"
+# cross-compiling aasdk against a first attempt at Boost 1.87.0).
+# 1.83 still has them.
+BOOST_VERSION="1.83.0"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${BOOST_BUILD_DIR:-$HOME/build-deps}"
 CROSS_COMPILE="${CROSS_COMPILE:-arm-linux-gnueabihf-}"
@@ -51,9 +61,13 @@ mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR"
 
 if [[ ! -d "boost-${BOOST_VERSION}" ]]; then
-    echo "==> Downloading Boost ${BOOST_VERSION} (CMake release, ~130MB)..."
+    # 1.83.0 predates the separate slimmed-down "-cmake" release
+    # asset (that naming starts a couple releases later) -- use the
+    # full source release instead, which still has the same top-level
+    # CMakeLists.txt/CMake support, just bundled with everything else.
+    echo "==> Downloading Boost ${BOOST_VERSION} (full source release)..."
     curl -sL -o boost.tar.gz \
-        "https://github.com/boostorg/boost/releases/download/boost-${BOOST_VERSION}/boost-${BOOST_VERSION}-cmake.tar.gz"
+        "https://github.com/boostorg/boost/releases/download/boost-${BOOST_VERSION}/boost-${BOOST_VERSION}.tar.gz"
     tar xzf boost.tar.gz
     rm boost.tar.gz
 fi

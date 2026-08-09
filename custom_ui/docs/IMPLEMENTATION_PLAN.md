@@ -335,9 +335,17 @@ Plan:
       use it — this needs device investigation (dmesg for when `hci0`
       appears, whether it's present at boot or only after a UI
       trigger) before writing adapter-management code, not a guess.
-    - **Deliberately paused here rather than guessing further** — this
-      is a real decision point, not a research task with a knowable
-      answer from documentation alone.
+    - **User decision (2026-08-10)**: investigate the live device
+      before writing more code here, rather than guessing or
+      implementing raw SDP blind. `scripts/diagnose_bluetooth.sh`
+      written — a read-only device-side script (does not touch
+      adapter state, does not start/stop anything) that reports
+      `hci0` presence, rfkill state, recent kernel-log Bluetooth
+      lines, running processes, and whether `dbus-daemon` is up.
+      Meant to be run twice: once right after boot, once after using
+      the stock Bluetooth settings screen, to see whether `hci0` is
+      boot-time or on-demand and what already owns it. **Awaiting
+      results before proceeding.**
 - [ ] Reuse (not reinvent) the stock dynamic-AP mechanism —
       confirm whether `hostapd`/`wifi_ap.sh`'s existing per-connection
       logic (already fixed once this project, see

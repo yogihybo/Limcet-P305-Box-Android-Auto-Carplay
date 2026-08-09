@@ -1,0 +1,6 @@
+[submodule "custom_ui/third_party/lvgl"]
+	path = custom_ui/third_party/lvgl
+	url = https://github.com/lvgl/lvgl.git
+[submodule "custom_ui/third_party/aasdk"]
+	path = custom_ui/third_party/aasdk
+	url = https://github.com/opencardev/aasdk.git

@@ -1,14 +1,22 @@
 #!/bin/bash
-# Cross-compile the Boost libraries aasdk actually needs a compiled
-# artifact for (boost_log, boost_log_setup -- everything else aasdk
-# uses, per its own CMakeLists.txt COMPONENTS list plus a grep of its
-# #includes, is header-only: system, asio, algorithm, core, endian).
+# Cross-compile Boost for aasdk. aasdk's own #includes/CMakeLists.txt
+# COMPONENTS list only need boost_log/boost_log_setup compiled
+# (everything else it uses -- system, asio, algorithm, core, endian --
+# is header-only). BUT: building only those two targets and then
+# running `cmake --install` fails -- Boost's CMake install() rules are
+# generated for every configured library regardless of what actually
+# got built, so `cmake --install` errors on the first unbuilt library's
+# missing .a (e.g. libboost_charconv.a) with no per-component way to
+# skip it (no COMPONENT tagging in Boost's own BoostInstall.cmake to
+# filter by). So: build everything, then install everything, once.
+# Slower (full Boost build) but the only option that leaves a clean,
+# find_package(Boost)-discoverable install tree.
 #
 # Not vendored as a git submodule or committed as binary blobs -- the
-# Boost source release is ~130MB and we only need ~10MB of compiled
-# .a output, so this script (matching this repo's existing build_*.sh
-# convention for external components) is the reproducible artifact
-# instead. Run once before building anything that links aasdk.
+# Boost source release is ~130MB, so this script (matching this repo's
+# existing build_*.sh convention for external components) is the
+# reproducible artifact instead. Run once before building anything
+# that links aasdk.
 #
 # Static linking is load-bearing, not a style choice, same reasoning as
 # custom_ui/Makefile's own -static: this repo's cross toolchain targets
@@ -71,13 +79,16 @@ cmake -DCMAKE_TOOLCHAIN_FILE="$BUILD_DIR/arm-toolchain.cmake" \
       -DBUILD_SHARED_LIBS=OFF \
       ..
 
-echo "==> Building boost_log + boost_log_setup (and their transitive deps)..."
-cmake --build . --target boost_log boost_log_setup -j"$(nproc)"
+echo "==> Building all of Boost (needed for a clean 'cmake --install', see note above)..."
+cmake --build . -j"$(nproc)"
+
+echo "==> Installing to $BUILD_DIR/boost-arm-install..."
+cmake --install . --prefix "$BUILD_DIR/boost-arm-install"
 
 echo
-echo "✔ Static libs: $BUILD_DIR/boost-${BOOST_VERSION}/build-arm/stage/lib/*.a"
-echo "✔ Headers (header-only Boost.System/Asio/etc included): $BUILD_DIR/boost-${BOOST_VERSION}/libs/*/include, $BUILD_DIR/boost-${BOOST_VERSION}/boost/"
+echo "✔ Installed: $BUILD_DIR/boost-arm-install/{include,lib}"
 echo
-echo "Point custom_ui's build at these paths -- not yet wired into"
-echo "custom_ui/Makefile, that lands alongside the actual aasdk"
-echo "integration work (Phase 2, see docs/IMPLEMENTATION_PLAN.md)."
+echo "Add $BUILD_DIR/boost-arm-install to CMAKE_PREFIX_PATH (along with"
+echo "the OpenSSL/libusb install prefixes) when configuring aasdk, with"
+echo "-DBoost_USE_STATIC_LIBS=ON (aasdk's CMakeLists.txt defaults this"
+echo "OFF, but we only built static .a files)."

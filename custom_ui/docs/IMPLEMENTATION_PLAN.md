@@ -106,28 +106,49 @@ hardware-confirmed.
 
 ## Phase 3 — Settings
 
+**Design principle: same options as stock, better format.** Not a
+1:1 UI clone of stock's settings screens — a single unified config UI
+covering the same functional options (nothing added, nothing silently
+dropped), reorganized into **Basic** and **Advanced** tiers instead of
+stock's flat/scattered menu structure:
+- **Basic tier**: the handful of settings a normal daily user actually
+  touches — language, volume/audio balance, display brightness/
+  contrast, Bluetooth pairing, WiFi. Front and center, no digging.
+- **Advanced tier**: everything else confirmed live in
+  `docs/SETTINGS_REFERENCE.md`/`project_msnproductinfo_config_exploration`
+  (CAN type, screen type, mirroring-link type, factory/diagnostic-ish
+  fields) — one tap away behind an "Advanced" entry point, not deleted,
+  not hidden entirely, just out of the way of the common path.
+- Fields confirmed dead/no-op at runtime (per
+  `project_msnproductinfo_config_exploration` memory — e.g.
+  `MirroringLinkType` has no effect on this device, `ScreenType` gets
+  overwritten by the MCU) are explicitly **not** reimplemented as if
+  they were real; note them in `docs/SETTINGS_REFERENCE.md` instead if
+  not already there.
+
 - [ ] Replicate the settings module itself: a config-backed settings
       store mirroring stock's two-layer model — `FactoryConfig.ini`
       as one-time seed, `/data/msncfg/Setting.config` as the live,
       persisted layer actually read at runtime (see
-      `project_language_setting_userdata` memory) — plus the field
-      set already disassembly-confirmed in `docs/SETTINGS_REFERENCE.md`
-      (language, CAN type, Bluetooth type, mirroring-link type, screen
-      type, etc. — cross-check `project_msnproductinfo_config_exploration`
-      memory for which of these fields actually do anything on this
-      device vs. are dead/overridden at runtime, so the replacement
-      doesn't reimplement no-op settings as if they were real)
-- [ ] Display settings screen backed by `/dev/ark_display`
-      (`ARKDISP_GET/SET_VDE_CFG`)
+      `project_language_setting_userdata` memory)
+- [ ] `ui/settings`: single settings screen/menu with a Basic/Advanced
+      tier switch, backed by the config store above — not a
+      per-category screen tree like stock
+- [ ] Display settings backed by `/dev/ark_display`
+      (`ARKDISP_GET/SET_VDE_CFG`) — Basic tier
 - [ ] Replacement Bluetooth menu: pairing/device-list UI, backed by
       whatever the real BT stack on this device is (need to confirm —
       likely BlueZ over the SoC's own BT/WiFi combo chip, not
       `sink`/CarPlay's own BT usage which is a separate concern) —
-      device list, pair/connect/forget, connected-device status
-- [ ] WiFi / volume screens
+      device list, pair/connect/forget, connected-device status —
+      Basic tier
+- [ ] WiFi / volume screens — Basic tier
+- [ ] Remaining `SETTINGS_REFERENCE.md` fields (CAN type, screen type,
+      etc.) — Advanced tier
 - **Milestone**: adjusting a setting in the new UI visibly changes
   device behaviour and survives a reboot; pairing a phone over the new
-  Bluetooth menu results in a real paired/connected device.
+  Bluetooth menu results in a real paired/connected device; Basic vs.
+  Advanced tiers are visibly distinct in the running UI.
 
 ## Phase 4 — Reversing camera
 

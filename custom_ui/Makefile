@@ -43,9 +43,47 @@ LVGL_SRCS     := $(shell find $(LVGL_DIR)/src -name '*.c')
 LVGL_OBJS     := $(patsubst $(LVGL_DIR)/%.c,$(BUILD_DIR)/lvgl-obj/%.o,$(LVGL_SRCS))
 
 # --- main UI binary ---
+# src/androidauto excluded here on purpose -- it needs aasdk/Boost/
+# OpenSSL/libusb/Protobuf, and the base UI (screens, HAL, settings)
+# should keep building fast and dependency-light. It's linked in for
+# real once the actual Android Auto session/service integration lands
+# (see docs/IMPLEMENTATION_PLAN.md Phase 2) -- until then it's only
+# exercised by the androidauto-usb-probe-test target below.
 UI_TARGET     := $(BUILD_DIR)/custom_ui
-UI_SRCS       := $(shell find src -name '*.cpp')
+UI_SRCS       := $(filter-out src/androidauto/%,$(shell find src -name '*.cpp'))
 UI_OBJS       := $(patsubst src/%.cpp,$(BUILD_DIR)/ui-obj/%.o,$(UI_SRCS))
+
+# --- Android Auto (aasdk-backed) sources, shared by the future real
+#     integration and the standalone probe test below ---
+AASDK_SRCS    := $(shell find src/androidauto -name '*.cpp')
+AASDK_OBJS    := $(patsubst src/%.cpp,$(BUILD_DIR)/ui-obj/%.o,$(AASDK_SRCS))
+
+# Statically cross-compiled by third_party/build_{boost,openssl,libusb,
+# protobuf,aasdk}.sh -- artifacts land outside the repo (too large to
+# vendor, same reasoning as every other build_*.sh here). Override
+# AASDK_DEPS_DIR if yours live somewhere other than the scripts' default.
+AASDK_DEPS_DIR  ?= $(HOME)/build-deps
+AASDK_DIR       := third_party/aasdk
+AASDK_INCLUDES  := -I$(AASDK_DIR)/include \
+                    -I$(AASDK_DIR)/build-arm/protobuf \
+                    -I$(AASDK_DEPS_DIR)/boost-arm-install/include \
+                    -I$(AASDK_DEPS_DIR)/openssl-arm-install/include \
+                    -I$(AASDK_DEPS_DIR)/libusb-arm-install/include \
+                    -I$(AASDK_DEPS_DIR)/libusb-arm-install/include/libusb-1.0 \
+                    -I$(AASDK_DEPS_DIR)/protobuf-arm-install/include
+# --start-group/--end-group: aasdk, aap_protobuf, protobuf, and Abseil
+# static-link against each other in ways plain left-to-right link order
+# can't always resolve in one pass -- --start-group lets ld retry the
+# whole set until every symbol resolves.
+AASDK_LIBS      := -Wl,--start-group \
+                    $(AASDK_DIR)/build-arm/lib/libaasdk.a \
+                    $(AASDK_DIR)/build-arm/lib/libaap_protobuf.a \
+                    $(wildcard $(AASDK_DEPS_DIR)/boost-arm-install/lib/*.a) \
+                    $(AASDK_DEPS_DIR)/libusb-arm-install/lib/libusb-1.0.a \
+                    $(AASDK_DEPS_DIR)/openssl-arm-install/lib/libssl.a \
+                    $(AASDK_DEPS_DIR)/openssl-arm-install/lib/libcrypto.a \
+                    $(wildcard $(AASDK_DEPS_DIR)/protobuf-arm-install/lib/*.a) \
+                    -Wl,--end-group -lpthread -ldl -lrt
 
 # --- carplay sidecar binary ---
 # -ldbus-1 goes back in once this actually links libdbus -- needs its
@@ -57,12 +95,20 @@ SIDECAR_SRCS   := $(shell find sidecars/carplay -name '*.cpp')
 SIDECAR_OBJS   := $(patsubst sidecars/carplay/%.cpp,$(BUILD_DIR)/sidecar-obj/%.o,$(SIDECAR_SRCS))
 SIDECAR_INCLUDES := -Isidecars/carplay
 
-.PHONY: all clean ui carplay-sidecar
+# --- androidauto-usb-probe-test: standalone aasdk link-graph proof ---
+# See tools/androidauto-usb-probe-test/main.cpp -- not part of `all`,
+# build explicitly with `make androidauto-usb-probe-test`.
+AASDK_TEST_TARGET := $(BUILD_DIR)/androidauto-usb-probe-test
+AASDK_TEST_SRCS    := tools/androidauto-usb-probe-test/main.cpp
+AASDK_TEST_OBJS    := $(BUILD_DIR)/aasdk-test-obj/main.o
+
+.PHONY: all clean ui carplay-sidecar androidauto-usb-probe-test
 
 all: ui carplay-sidecar
 
 ui: $(UI_TARGET)
 carplay-sidecar: $(SIDECAR_TARGET)
+androidauto-usb-probe-test: $(AASDK_TEST_TARGET)
 
 $(UI_TARGET): $(UI_OBJS) $(LVGL_OBJS)
 	@mkdir -p $(dir $@)
@@ -71,6 +117,18 @@ $(UI_TARGET): $(UI_OBJS) $(LVGL_OBJS)
 $(BUILD_DIR)/ui-obj/%.o: src/%.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+$(BUILD_DIR)/ui-obj/androidauto/%.o: src/androidauto/%.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) $(AASDK_INCLUDES) -c -o $@ $<
+
+$(AASDK_TEST_TARGET): $(AASDK_TEST_OBJS) $(AASDK_OBJS)
+	@mkdir -p $(dir $@)
+	$(CXX) $(LDFLAGS) -o $@ $^ $(AASDK_LIBS)
+
+$(BUILD_DIR)/aasdk-test-obj/%.o: tools/androidauto-usb-probe-test/%.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) $(AASDK_INCLUDES) -Isrc -c -o $@ $<
 
 $(BUILD_DIR)/lvgl-obj/%.o: $(LVGL_DIR)/%.c
 	@mkdir -p $(dir $@)

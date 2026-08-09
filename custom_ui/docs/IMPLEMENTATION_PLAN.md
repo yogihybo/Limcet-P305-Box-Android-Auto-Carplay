@@ -136,7 +136,28 @@ hardware-confirmed.
          all-caps names explicitly as `-D` cache overrides so every
          scope agrees regardless of which spelling a given
          `CMakeLists.txt` line uses.
-      Not yet wired into `custom_ui/Makefile`.
+- [x] Wire aasdk into `custom_ui/Makefile` and prove the full static
+      link graph resolves on real target code, not just aasdk's own
+      build. Added `src/androidauto/usb_probe.{h,cpp}` (real usage of
+      `aasdk::usb::USBHub`/`AccessoryModeQueryChainFactory` — the
+      actual AOAP wired-handshake detection path, Google vendor/product
+      ID `0x18D1`/`0x2D00`) plus a standalone
+      `tools/androidauto-usb-probe-test` driver, linked via a new
+      `androidauto-usb-probe-test` Makefile target (`AASDK_LIBS`
+      pulling in all of aasdk/Boost/OpenSSL/libusb/Protobuf/Abseil
+      inside a `--start-group`/`--end-group`, since those libs
+      static-link against each other in ways a single left-to-right
+      pass can't always resolve). **Result: linked clean on the first
+      attempt** — a 10.5MB fully static ARM binary, confirmed zero
+      `GLIBC` symbol version references. `src/androidauto/` is
+      deliberately excluded from the main `custom_ui`/`ui` target's
+      sources so the base UI build stays fast and dependency-light
+      until real protocol/service integration lands; build it
+      explicitly with `make androidauto-usb-probe-test`. Confirmed
+      `make all` (the base UI + sidecar) still builds clean after this
+      change. **Not yet hardware-tested** — this proves the link graph
+      resolves, not that USB hotplug detection actually works on the
+      device.
 - [ ] Implement this app's own `LinuxVideoSink`/`LinuxAudioSink`/
       `LinuxAudioSource`/`LinuxController`-equivalent classes against
       `aasdk`'s interfaces (naming/shape already confirmed via

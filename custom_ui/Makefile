@@ -129,6 +129,14 @@ WIRELESS_TEST_TARGET := $(BUILD_DIR)/androidauto-wireless-probe-test
 WIRELESS_TEST_OBJS   := $(BUILD_DIR)/wireless-test-obj/main.o
 
 # --- androidauto-bluetooth-rfcomm-test: raw RFCOMM socket-layer proof ---
+# SUPERSEDED as the wireless-AA discovery approach (kept buildable,
+# still legitimate generic code) -- built on the assumption of a
+# standard Linux BlueZ stack (AF_BLUETOOTH/BTPROTO_RFCOMM kernel
+# sockets + our own SDP server), but real captured traffic
+# (docs/logs/android auto log v{1,2,3}.txt) confirmed this device's
+# actual Bluetooth stack is Feasycom's closed `blueware` daemon, which
+# exposes a local Unix socket (/dev/bw_aap) instead -- see
+# BW_AAP_TEST_TARGET below, that's the real path forward.
 # See tools/androidauto-bluetooth-rfcomm-test/main.cpp -- NOT a full
 # Android Auto session, just the socket plumbing (BluetoothRFCOMMTransport
 # + accept_rfcomm_connection). Only needs libpthread, not the full
@@ -139,7 +147,16 @@ BT_TEST_OBJS   := $(BUILD_DIR)/bt-test-obj/main.o
 BT_TRANSPORT_OBJS := $(BUILD_DIR)/ui-obj/androidauto/bluetooth_transport.o \
                       $(BUILD_DIR)/ui-obj/androidauto/bluetooth_rfcomm_server.o
 
-.PHONY: all clean ui carplay-sidecar androidauto-usb-probe-test androidauto-wireless-probe-test androidauto-bluetooth-rfcomm-test
+# --- androidauto-bw-aap-test: real /dev/bw_aap wireless-AA discovery ---
+# See tools/androidauto-bw-aap-test/main.cpp and
+# src/androidauto/bw_aap_client.h for the full story -- this is the
+# confirmed-real path (see comment above), replaying an actual
+# captured message sequence against blueware's own local socket.
+BW_AAP_TEST_TARGET := $(BUILD_DIR)/androidauto-bw-aap-test
+BW_AAP_TEST_OBJS   := $(BUILD_DIR)/bw-aap-test-obj/main.o
+BW_AAP_CLIENT_OBJS := $(BUILD_DIR)/ui-obj/androidauto/bw_aap_client.o
+
+.PHONY: all clean ui carplay-sidecar androidauto-usb-probe-test androidauto-wireless-probe-test androidauto-bluetooth-rfcomm-test androidauto-bw-aap-test
 
 all: ui carplay-sidecar
 
@@ -148,6 +165,7 @@ carplay-sidecar: $(SIDECAR_TARGET)
 androidauto-usb-probe-test: $(AASDK_TEST_TARGET)
 androidauto-wireless-probe-test: $(WIRELESS_TEST_TARGET)
 androidauto-bluetooth-rfcomm-test: $(BT_TEST_TARGET)
+androidauto-bw-aap-test: $(BW_AAP_TEST_TARGET)
 
 $(UI_TARGET): $(UI_OBJS) $(LVGL_OBJS)
 	@mkdir -p $(dir $@)
@@ -186,6 +204,14 @@ $(BT_TEST_TARGET): $(BT_TEST_OBJS) $(BT_TRANSPORT_OBJS) $(NSS_STUB_OBJ)
 	$(CXX) $(LDFLAGS) $(AASDK_WRAP_FLAGS) -o $@ $^ $(AASDK_LIBS)
 
 $(BUILD_DIR)/bt-test-obj/%.o: tools/androidauto-bluetooth-rfcomm-test/%.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) $(AASDK_INCLUDES) -Isrc -c -o $@ $<
+
+$(BW_AAP_TEST_TARGET): $(BW_AAP_TEST_OBJS) $(BW_AAP_CLIENT_OBJS) $(NSS_STUB_OBJ)
+	@mkdir -p $(dir $@)
+	$(CXX) $(LDFLAGS) $(AASDK_WRAP_FLAGS) -o $@ $^ $(AASDK_LIBS)
+
+$(BUILD_DIR)/bw-aap-test-obj/%.o: tools/androidauto-bw-aap-test/%.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) $(AASDK_INCLUDES) -Isrc -c -o $@ $<
 

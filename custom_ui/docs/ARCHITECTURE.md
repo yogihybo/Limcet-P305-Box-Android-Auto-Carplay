@@ -109,6 +109,78 @@ Plan: vendor `aasdk` under `third_party/`, implement this app's own
 video/audio/input sink classes against its interfaces directly — no
 dependency on the vendor's `libAndroidAuto.so` at all for this half.
 
+## Wireless AA discovery — via `blueware`'s `/dev/bw_aap` socket (confirmed from real traffic)
+
+This device has **no standard Linux BlueZ stack** — no `bluetoothd`, no
+`libbluetooth.so`, no `hciconfig`/`hcitool`/`sdptool` anywhere in the
+rootfs (checked directly). Bluetooth is Feasycom's own closed
+`blueware` daemon (`/usr/bin/blueware`, talks to the BT chip over UART
+at `/dev/ttyHS1`, config at `/etc/blueware-bw*.properties` — see
+`docs/logs/bluetooth log stock_260718.txt`), which implements HCI/
+RFCOMM/SDP entirely in userspace and exposes app-facing local Unix
+domain sockets instead of kernel `AF_BLUETOOTH` sockets — `/dev/bw_iap`
+for iAP2 (CarPlay) and **`/dev/bw_aap` for AAP (Android Auto
+Protocol)**.
+
+Confirmed from real captured traffic — `docs/logs/android auto log
+v{1,2,3}.txt`, stock `sink` binary, class `BtRfcommController` — a
+small, separate pre-connection protobuf schema
+(`aap_protobuf::aaw::*`, vendored in `aasdk`'s `protobuf/aap_protobuf/
+aaw/` — "aaw" = Android Auto Wireless) is exchanged directly over
+`/dev/bw_aap`, length/type-framed:
+
+```
+[uint16 length, big-endian][uint16 type, big-endian][protobuf payload]
+```
+
+`type` matches `aap_protobuf::aaw::MessageId`: `WIFI_START_REQUEST=1`,
+`WIFI_INFO_REQUEST=2`, `WIFI_INFO_RESPONSE=3`, `WIFI_VERSION_REQUEST=4`,
+`WIFI_VERSION_RESPONSE=5`. Real observed sequence:
+
+1. HU → phone: `WIFI_VERSION_REQUEST` (type 4) — **note**: the
+   vendored `.proto` declares this message empty
+   (`message WifiVersionRequest {}`), but the real captured frame has
+   a 9-byte payload — the vendored proto is evidently incomplete here,
+   so this is replayed as known-good raw bytes, not constructed from
+   the proto (see `src/androidauto/bw_aap_client.cpp`)
+2. phone → HU: `WIFI_VERSION_RESPONSE` (type 5) — `sink`'s own log
+   dump shows `majorVer`/`minorVer`/`deviceSerial`/`status`/`channel`
+   fields, which also doesn't cleanly match the vendored proto's 4
+   anonymous `unknown_value_*` fields — logged raw, not parsed yet
+3. HU → phone: `WIFI_START_REQUEST` (type 1, `ip_address`/`port`) —
+   **this proto is clean and confirmed field-for-field** against the
+   capture; this is the head unit telling the phone where to connect
+   (its own local WiFi AP address + a port)
+4. phone → HU: `WIFI_INFO_REQUEST` (type 2, empty — matches its proto
+   exactly, genuinely has no fields)
+5. HU → phone: `WIFI_INFO_RESPONSE` (type 3, `ssid`/`password`/
+   `bssid`/`security_mode`) — **also confirmed field-for-field**
+   against the capture (`ssid="carplay_fc9f"`,
+   `password="88888888"`, `bssid="68:b9:d3:f1:5a:43"` all decode
+   exactly from the raw bytes)
+
+After this, the real Android Auto session (aasdk's `Messenger`/
+`Cryptor`/`ControlServiceChannel` — the stuff `Session` already
+implements, see `src/androidauto/session.h`) runs over plain TCP to
+whatever IP:port was exchanged — this pre-connection dance is a
+lightweight bootstrap entirely separate from the encrypted aasdk
+protocol, not something that goes through aasdk's `Messenger` at all.
+
+`src/androidauto/bw_aap_client.{h,cpp}` implements steps 1-3 above
+(steps 4-5 are the next increment, once 1-3 are confirmed against a
+real phone). **Not yet hardware-tested** — this is a faithful
+reconstruction of real captured stock traffic, not confirmed to work
+when driven by our own code. Also unconfirmed: whether `/dev/bw_aap`
+accepts more than one simultaneous client (if `sink`/`MsnCoreApp`
+already holds it open, our own connection may fail or interfere).
+
+This **supersedes** an earlier, wrong-assumption approach
+(`src/androidauto/bluetooth_transport.h` /
+`bluetooth_rfcomm_server.h`, a raw `AF_BLUETOOTH`/`BTPROTO_RFCOMM`
+kernel-socket transport + our own SDP server) built before this
+traffic capture was checked — kept in the tree as legitimate generic
+code, but not the path forward for this device.
+
 ## Reversing camera
 
 - `/dev/dvr` (ITU656/rn6752 driver stack, this project's own kernel

@@ -305,63 +305,71 @@ Plan:
       listener yet — only a peer that already knows the channel number
       can connect (e.g. manual `rfcomm connect` from a paired Linux
       dev machine, for local testing).
-- [ ] SDP service record registration (needed for a real phone to
-      discover the RFCOMM channel at all — see gap above)
-  - **Found a bigger blocker while scoping this**: this device has
-    **no standard BlueZ userspace stack at all** — no `bluetoothd`,
-    no `libbluetooth.so`, no `hciconfig`/`hcitool`/`sdptool` anywhere
-    in the rootfs (checked directly, not assumed). What it has instead
-    is Realtek's own `rtkbt` (`etc/bluetooth/rtkbt.conf`,
-    `rtl8821cs_fw` — matches the already-known `rtl8811cu`/`rtl8821cs`
-    combo chip from `project_wifi_rtl8811cu_recv_hdl_fix` memory) plus
-    a closed vendor `libBlueTooth.so` that `MsnCoreApp` presumably
-    calls into directly. This means:
-    - No `bluetoothd`/D-Bus to register an SDP record with the normal
-      way (`org.bluez.ProfileManager1`) — would need to implement the
-      raw SDP protocol ourselves (a simple, documented binary protocol
-      over L2CAP PSM 1) or find another path in.
-    - **Unconfirmed**: how/when `hci0` actually comes up on this
-      device at all — no reference to `hciattach`/`rtk_hciattach` in
-      `rcS` or anywhere else in plaintext init scripts, so it's likely
-      brought up on-demand by `MsnCoreApp`'s own `libBlueTooth.so`
-      call into the vendor stack the first time BT is actually used
-      (matching the `project_limcet_activation_gate` on-demand-
-      activation pattern already seen for other subsystems on this
-      device), not a boot-time service we can just assume is running.
-    - **Real risk of interfering with the stock app's own BT usage**
-      (phone-call Bluetooth, existing pairing state) if this project
-      starts managing adapter power/discoverability state blindly
-      without understanding how `libBlueTooth.so`/`MsnCoreApp` already
-      use it — this needs device investigation (dmesg for when `hci0`
-      appears, whether it's present at boot or only after a UI
-      trigger) before writing adapter-management code, not a guess.
-    - **User decision (2026-08-10)**: investigate the live device
-      before writing more code here, rather than guessing or
-      implementing raw SDP blind. `scripts/diagnose_bluetooth.sh`
-      written — a read-only device-side script (does not touch
-      adapter state, does not start/stop anything) that reports
-      `hci0` presence, rfkill state, recent kernel-log Bluetooth
-      lines, running processes, and whether `dbus-daemon` is up.
-      Meant to be run twice: once right after boot, once after using
-      the stock Bluetooth settings screen, to see whether `hci0` is
-      boot-time or on-demand and what already owns it. **Awaiting
-      results before proceeding.**
+- [x] **Blocker resolved — real solution found, not the raw-RFCOMM/SDP
+      path.** The "no BlueZ stack" finding below was real, but the
+      user's "investigate the live device first" decision led straight
+      to it: `docs/logs/` already contains real captured Bluetooth
+      traffic from stock firmware (`bluetooth log stock_260718.txt`,
+      `android auto log v{1,2,3}.txt`) — checking those (per explicit
+      instruction) revealed the actual mechanism directly, no live
+      device session needed. See `docs/ARCHITECTURE.md`'s new
+      "Wireless AA discovery" section for the full writeup. Summary:
+      this device's Bluetooth is Feasycom's closed `blueware` daemon
+      (UART-attached, not kernel `AF_BLUETOOTH` at all), which exposes
+      a local Unix socket `/dev/bw_aap` speaking a small, separate
+      length/type-framed protobuf schema (`aap_protobuf::aaw::*`,
+      already vendored in `aasdk`) for exactly this pre-connection
+      WiFi-credential handoff. Real message sequence decoded
+      field-for-field against the captured bytes (`WIFI_START_REQUEST`/
+      `WIFI_INFO_RESPONSE` match their `.proto`s exactly;
+      `WIFI_VERSION_REQUEST`/`RESPONSE` don't, vendored protos
+      evidently incomplete there — handled by replaying known-good raw
+      bytes instead of trusting them).
+      `src/androidauto/bw_aap_client.{h,cpp}` implements the confirmed
+      steps 1-3 (version handshake + sending our own AP connect
+      target); `tools/androidauto-bw-aap-test` drives it and logs
+      whatever follows. Linked clean, zero `GLIBC` references. **Not
+      yet hardware-tested** — faithful reconstruction of real captured
+      traffic, not confirmed against a live phone driven by our own
+      code; also unconfirmed whether `/dev/bw_aap` tolerates a second
+      simultaneous client if `sink`/`MsnCoreApp` already holds it open.
+      **Supersedes** the raw `AF_BLUETOOTH`/`BTPROTO_RFCOMM` + SDP
+      approach below (`bluetooth_transport.h`/
+      `bluetooth_rfcomm_server.h`) — kept in the tree as legitimate
+      generic code, but not the path forward here since this device
+      never had a BlueZ stack to register an SDP record with in the
+      first place.
+      `scripts/diagnose_bluetooth.sh` (written before this finding, for
+      the originally-planned live-device investigation) is no longer
+      the critical path but still a reasonable sanity check before
+      hardware-testing the `bw_aap` client — the underlying "no BlueZ
+      stack" fact it was written to help confirm turned out to be
+      true, just resolved through log archaeology instead of a live
+      session.
 - [ ] Reuse (not reinvent) the stock dynamic-AP mechanism —
       confirm whether `hostapd`/`wifi_ap.sh`'s existing per-connection
       logic (already fixed once this project, see
       `project_static_wifi_ap_vs_dynamic`) can be driven from our own
-      code, or needs its own equivalent
-- [ ] `BluetoothService` event handler (mirrors `Session`'s
-      `IControlServiceChannelEventHandler` pattern) to drive pairing,
-      run over `BluetoothRFCOMMTransport` — exact trigger sequence
-      still needs confirming against a live capture (see research
-      pass above)
-- [ ] `WifiProjectionService` event handler to send AP credentials once
-      paired
-- **Milestone**: a phone pairs over Bluetooth, receives AP credentials,
-  joins the head unit's WiFi, and the control-channel handshake
-  (already working over USB) completes over TCP instead — provable on
-  this dev unit without needing the external USB port free.
+      code, or needs its own equivalent — feeds `BwAapClient::
+      startHandshake()`'s `apIpAddress`/`apPort` and the
+      `WIFI_INFO_RESPONSE` SSID/password once step 4-5 below is
+      implemented
+- [ ] Implement `WIFI_INFO_REQUEST`/`WIFI_INFO_RESPONSE` (steps 4-5,
+      `BwAapClient` currently stops after step 3) — send our own AP's
+      SSID/password/BSSID/security mode once the phone asks for them
+- [ ] Hardware-test `BwAapClient` against a real phone — first close
+      look at whether the phone actually responds sensibly to our
+      replayed `WIFI_VERSION_REQUEST` bytes and our own
+      `WIFI_START_REQUEST`, and whether `/dev/bw_aap` tolerates our
+      code connecting to it (see open questions above)
+- [ ] Once the phone connects to our AP + TCP port: confirm the real
+      aasdk session (`Session`, already working) actually starts a
+      normal handshake against it, same as the manual wireless-probe
+      test today
+- **Milestone**: a phone gets WiFi credentials over `/dev/bw_aap`,
+  joins the head unit's AP, and the control-channel handshake (already
+  working over USB and manual TCP) completes automatically — provable
+  on this dev unit without needing the external USB port free.
 
 ## Phase 3 — Settings
 

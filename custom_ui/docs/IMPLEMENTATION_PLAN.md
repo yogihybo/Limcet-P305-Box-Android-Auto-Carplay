@@ -205,6 +205,54 @@ hardware-confirmed.
 - **Milestone**: an Android Auto session connects and displays through
   the new UI end to end.
 
+### Wireless AA — elevated to a required path, not a later nice-to-have
+
+**Reason this isn't deferred**: the device has exactly one external USB
+connector (`usb0` — confirmed in `project_usb_physical_port_mapping`
+memory; `usb1` is internal/WiFi-only), and on this dev unit that port
+is currently occupied by the USB flash drive the rootfs itself boots
+from. There is no free external port to plug a wired phone into for
+testing right now, and on production hardware, dedicating the one
+external port to a permanent CarPlay/AA cable is a real usability
+tradeoff most users won't want anyway (that's why stock's own wireless
+path exists at all). Wireless AA needs to work whether or not wired
+ever does.
+
+The stock firmware already does this exact dance (see
+`project_wireless_carplay_aa_channel_plan` /
+`project_static_wifi_ap_vs_dynamic` memories): `sink` spins up a
+per-connection dynamic `hostapd` AP and hands its credentials to the
+phone over Bluetooth. `aasdk` has both protocol pieces already
+vendored to reproduce this on our side:
+- `aasdk::channel::bluetooth::BluetoothService` — pairing/handshake
+  over BT (already compiled as part of `libaasdk.a`)
+- `aasdk::channel::wifiprojection::WifiProjectionService` —
+  `WifiCredentialsRequest`/`WifiCredentialsResponse`
+  (SSID/password/security mode) handed to the phone over that same BT
+  link once paired
+- `aasdk::transport::TCPTransport` — once the phone joins the AP, the
+  real AA session (`Session`'s `ControlServiceChannel` and everything
+  built on top of it) runs over this instead of `USBTransport` — same
+  `Messenger`/`Cryptor`/channel code, different transport underneath
+
+Plan:
+- [ ] Reuse (not reinvent) the stock dynamic-AP mechanism —
+      confirm whether `hostapd`/`wifi_ap.sh`'s existing per-connection
+      logic (already fixed once this project, see
+      `project_static_wifi_ap_vs_dynamic`) can be driven from our own
+      code, or needs its own equivalent
+- [ ] `BluetoothService` event handler (mirrors `Session`'s
+      `IControlServiceChannelEventHandler` pattern) to drive pairing
+- [ ] `WifiProjectionService` event handler to send AP credentials once
+      paired
+- [ ] A `TCPTransport`-based variant of `Session::start()` (today it's
+      hardcoded to `USBTransport`/`AOAPDevice` — needs factoring so the
+      transport is swappable, not a second copy of the class)
+- **Milestone**: a phone pairs over Bluetooth, receives AP credentials,
+  joins the head unit's WiFi, and the control-channel handshake
+  (already working over USB) completes over TCP instead — provable on
+  this dev unit without needing the external USB port free.
+
 ## Phase 3 — Settings
 
 **Design principle: same options as stock, better format.** Not a

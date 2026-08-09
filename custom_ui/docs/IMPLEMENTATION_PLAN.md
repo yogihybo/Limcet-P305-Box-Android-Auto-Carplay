@@ -260,22 +260,63 @@ Plan:
       implementations, **not independently confirmed** against this
       project's own traffic captures) — no automatic discovery yet,
       that's the BT/WifiProjection item below.
+- [x] Research pass (web search, not guessed): confirmed the
+      high-level architecture aasdk's vendored `BluetoothService`/
+      `WifiProjectionService` channels imply is correct, not a wrong
+      guess — "Bluetooth is used to advertise the head unit and
+      negotiate the wireless connection while actual media data flows
+      over Wi-Fi" and "After WiFi credentials are exchanged via
+      Bluetooth, the Bluetooth connection is closed" (via
+      [nisargjhaveri/WirelessAndroidAutoDongle](https://github.com/nisargjhaveri/WirelessAndroidAutoDongle)
+      and [aa-proxy-rs](https://github.com/aa-proxy/aa-proxy-rs), two
+      mature open-source AA-wireless-dongle implementations). Also
+      confirmed via reading `aasdk::tcp::ITCPWrapper`'s actual
+      interface (see the wireless-probe entry above) that the head
+      unit connects OUT to the phone over TCP for the real session —
+      matches "the phone hosts the AA TCP service, headunit connects
+      to phone's IP." **Still not confirmed**: the exact byte-level
+      message sequence/timing (does BT pairing alone trigger
+      `WifiProjectionService`, or does the head unit need to send
+      something first?) — see `project_wireless_carplay_aa_channel_plan`/
+      `project_static_wifi_ap_vs_dynamic` memories for what's already
+      known about the stock `sink` binary's own behavior, which is the
+      most authoritative reference available short of a live capture.
+- [x] Raw Bluetooth RFCOMM socket layer, independent of the still-open
+      sequence question above (confirmed aasdk itself has **no**
+      Bluetooth transport at all — grepped its full source tree — so
+      this is genuinely new code, not a wrapper around something
+      aasdk already provides): `third_party/bluez_uapi/bluetooth/{bluetooth,rfcomm}.h`
+      (minimal vendored subset of BlueZ's public, stable UAPI headers —
+      no `bluez-dev` package available and no root to install one, same
+      constraint as every other `build_*.sh` dependency this project
+      has hit), `src/androidauto/bluetooth_transport.{h,cpp}`
+      (`BluetoothRFCOMMTransport`, implements `aasdk::transport::Transport`
+      over a raw socket via `boost::asio::posix::stream_descriptor`,
+      mirroring exactly how `TCPTransport` wraps `ITCPEndpoint`),
+      `src/androidauto/bluetooth_rfcomm_server.{h,cpp}` (blocking
+      accept helper), and a standalone
+      `tools/androidauto-bluetooth-rfcomm-test` that listens and
+      hex-dumps received bytes — **deliberately not yet running a full
+      `Session` over it**, since the message sequence on top is still
+      unconfirmed. Linked clean, zero `GLIBC` symbol references.
+      **Known real gap**: no SDP service record registration, so a real
+      phone's AA app (which discovers the head unit's RFCOMM channel
+      via SDP, not a fixed/guessed channel number) can't find this
+      listener yet — only a peer that already knows the channel number
+      can connect (e.g. manual `rfcomm connect` from a paired Linux
+      dev machine, for local testing).
+- [ ] SDP service record registration (needed for a real phone to
+      discover the RFCOMM channel at all — see gap above)
 - [ ] Reuse (not reinvent) the stock dynamic-AP mechanism —
       confirm whether `hostapd`/`wifi_ap.sh`'s existing per-connection
       logic (already fixed once this project, see
       `project_static_wifi_ap_vs_dynamic`) can be driven from our own
       code, or needs its own equivalent
 - [ ] `BluetoothService` event handler (mirrors `Session`'s
-      `IControlServiceChannelEventHandler` pattern) to drive pairing —
-      **needs more research before writing code**: the exact real-world
-      message sequence the phone's own AA app expects for BT-triggered
-      wireless discovery/handoff isn't confirmed yet (aasdk's
-      `BluetoothService`/`WifiProjectionService` channels are real and
-      vendored, but whether they're used for the *initial* discovery
-      handshake or only for secondary things like handing the car's
-      Bluetooth MAC to the phone for HFP pairing is still an open
-      question — guessing wrong here risks a component that looks
-      plausible but doesn't match the phone's actual behavior)
+      `IControlServiceChannelEventHandler` pattern) to drive pairing,
+      run over `BluetoothRFCOMMTransport` — exact trigger sequence
+      still needs confirming against a live capture (see research
+      pass above)
 - [ ] `WifiProjectionService` event handler to send AP credentials once
       paired
 - **Milestone**: a phone pairs over Bluetooth, receives AP credentials,

@@ -361,13 +361,29 @@ Plan:
       (ssid/password/bssid/security_mode — all confirmed field-clean
       against the capture). `security_mode` defaults to the raw value
       `8` observed in real captured traffic (numerically
-      `WPA2_ENTERPRISE` in `WifiSecurityMode`'s enum — semantically odd
-      for a plain passphrase AP, but fidelity to known-working captured
-      bytes over a "should be correct" guess). `tools/
-      androidauto-bw-aap-test` now drives the full 5-step sequence
-      (`<ap-ip> <ap-port> <ssid> <password> <bssid> [security-mode=8]
-      [seconds=15]`) and keeps listening/hex-dumping afterward. Linked
-      clean, zero `GLIBC` references, all other targets still build.
+      `WPA2_ENTERPRISE` in `WifiSecurityMode`'s enum). **Cross-checked
+      against `firmware_source/mtd6_rootfs/etc/hostapd/hostapd.conf`**
+      (the real static config template — `wpa_passphrase=88888888`
+      matches the captured password exactly) and found a genuine
+      discrepancy: that config is `wpa=2`/`wpa_key_mgmt=WPA-PSK`,
+      ordinary WPA2 *personal*, not enterprise — so either the vendored
+      `WifiSecurityMode` enum's numbering doesn't match what this
+      firmware actually transmits (same issue class as
+      `WifiVersionRequest`/`Response`), or the field isn't load-bearing
+      and phones ignore it. Try `WPA2_PERSONAL` (5) if `8` doesn't work
+      when hardware-tested — documented as a fallback, not guessed
+      blind. Also cross-checked: the real captured SSID
+      (`carplay_fc9f`) isn't the static template's `carplay_wifi` —
+      `MsnCoreApp` rewrites it at runtime with a suffix matching the
+      last 4 hex chars of the Bluetooth MAC (`blueware`'s own log
+      shows the same `fc9f` suffix on its BT broadcast name, "Limcet
+      Box_fc9f", for BD_ADDR `DC0D3014FC9F`) — password stays fixed at
+      `88888888` across instances, not reverse-engineered further
+      (closed binary). `tools/androidauto-bw-aap-test` now drives the
+      full 5-step sequence (`<ap-ip> <ap-port> <ssid> <password>
+      <bssid> [security-mode=8] [seconds=15]`) and keeps listening/
+      hex-dumping afterward. Linked clean, zero `GLIBC` references, all
+      other targets still build.
 - [ ] Hardware-test `BwAapClient` against a real phone — first close
       look at whether the phone actually responds sensibly to our
       replayed `WIFI_VERSION_REQUEST` bytes and our own

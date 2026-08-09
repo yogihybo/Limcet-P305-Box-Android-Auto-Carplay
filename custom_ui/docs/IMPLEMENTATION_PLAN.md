@@ -21,32 +21,51 @@ hardware-confirmed.
 
 ## Phase 0 — Toolchain & vendoring
 
-- [ ] Vendor LVGL v9 under `third_party/lvgl` (git submodule, pin to a
-      specific tagged release, not a moving branch)
-- [ ] Vendor `aasdk` under `third_party/aasdk` (git submodule)
-- [ ] Confirm `aasdk` actually cross-compiles for this target — watch
-      for the same host-toolchain-vs-target-glibc mismatch this project
-      already solved once for static binaries
-      (`tools/nss-stub/README.md`); target rootfs glibc is old (2.27)
-- **Milestone**: an LVGL v9 "hello world" (single coloured screen, no
-  app logic) builds, copies to the device, and renders on the real
-  panel via `/dev/fb0`.
+- [x] Vendor LVGL v9 under `third_party/lvgl` (git submodule, pinned to
+      tag `v9.5.0`)
+- [x] Vendor `aasdk` under `third_party/aasdk` (git submodule, pinned
+      to tag `v4.1.20260426` — the actively-maintained `opencardev`
+      fork; the original `f1x/aasdk` repo no longer exists)
+- [x] Confirmed the real host-toolchain-vs-target-glibc mismatch this
+      project already solved once for busybox
+      (`tools/nss-stub/README.md`) applies here too: this repo's cross
+      toolchain produces binaries needing `GLIBC_2.28`/`2.33`/`2.34`,
+      target's real runtime glibc is `2.27`. Fixed by static-linking
+      (`-static` in the `Makefile`, confirmed via `objdump` that the
+      resulting binary has zero GLIBC symbol version references) — no
+      `nss-stub` treatment needed on top, confirmed no NSS/dlopen
+      warnings at static-link time.
+- [x] Full LVGL v9 C source tree (~500 files, everything including
+      optional widgets/backends) confirmed compiles clean end to end
+      with the cross toolchain.
+- [~] `aasdk` cross-compile validation not yet attempted — needs Boost
+      resolved first (see Phase 2 below, task #6)
+- **Milestone**: [x] code-complete, **not yet hardware-confirmed** — an
+  LVGL v9 screen with one interactive button builds and static-links
+  cleanly (`build/custom_ui`); needs the user to actually run it on the
+  device against real `/dev/fb0`/`/dev/input/event0` to close this out.
 
 (`libdbus` cross-build setup moves to Phase 7 now — it's only needed by
 `carplay-sidecar`, which is deferred.)
 
 ## Phase 1 — HAL + core app skeleton
 
-- [ ] `src/hal`: framebuffer init via LVGL's `lv_linux_fbdev` driver
-- [ ] `src/hal`: touch input via LVGL's `lv_evdev` driver against
-      `/dev/input/eventN`
-- [ ] `src/core`: minimal screen manager (push/pop/switch screens) and
-      main event loop
-- [ ] rcS test hook: launch `custom_ui` standalone (not yet replacing
-      `MsnCoreApp`) for on-device iteration without reflashing
-- **Milestone**: a touch-responsive placeholder home screen (at least
-  one button that visibly does something) running standalone on the
-  device.
+- [x] `src/hal/display.{h,cpp}`: framebuffer init via LVGL's
+      `lv_linux_fbdev` driver against `/dev/fb0`
+- [x] `src/hal/touch.{h,cpp}`: touch input via `lv_evdev` against
+      `/dev/input/event0`, non-fatal if unavailable
+- [x] `src/core/screen_manager.{h,cpp}`: minimal push/pop screen stack;
+      `src/main.cpp` is now just wiring + the `lv_timer_handler()` loop
+- [x] `src/ui/home_screen.{h,cpp}`: the Phase 0/1 test screen, now a
+      proper screen factory instead of inline code in `main()`
+- [x] Device-side test launcher, `scripts/run_on_device.sh` — **not**
+      an `rcS` hook (that only takes effect after a reflash, which
+      defeats "iterate without reflashing"); stops `MsnCoreApp` to free
+      `/dev/fb0`, runs `custom_ui`, leaves the next real boot untouched
+- **Milestone**: code-complete, structurally done (HAL/core/ui properly
+  separated, confirmed still builds clean + fully static). **Still not
+  yet hardware-confirmed** — same open item as Phase 0, needs the user
+  to actually run it on the device.
 
 ## Phase 2 — Android Auto via aasdk
 

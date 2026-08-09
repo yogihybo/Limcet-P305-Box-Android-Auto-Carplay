@@ -74,14 +74,25 @@ public:
 
     void close();
 
-    // Drives the confirmed message sequence: sends WIFI_VERSION_REQUEST,
-    // waits for WIFI_VERSION_RESPONSE (logged raw, not parsed), then
-    // sends WIFI_START_REQUEST with the given AP connect target. This
-    // is as far as this class goes for now -- handling the
-    // WIFI_INFO_REQUEST/WIFI_INFO_RESPONSE exchange that follows (steps
-    // 4-5 above) is the next increment, once step 1-3 is confirmed
-    // against a real phone.
+    // Drives steps 1-3: sends WIFI_VERSION_REQUEST, waits for
+    // WIFI_VERSION_RESPONSE (logged raw, not parsed), then sends
+    // WIFI_START_REQUEST with the given AP connect target.
     bool startHandshake(const std::string &apIpAddress, std::uint16_t apPort);
+
+    // Waits (bounded by timeoutSeconds) for the phone's
+    // WIFI_INFO_REQUEST (type 2, step 4), then sends WIFI_INFO_RESPONSE
+    // (type 3, step 5) with the given AP credentials. securityMode uses
+    // aap_protobuf::service::wifiprojection::message::WifiSecurityMode's
+    // numeric values -- the real captured traffic used the raw value 8
+    // (WPA2_ENTERPRISE per that enum), which is a semantically odd
+    // choice for a plain WPA2-personal passphrase-secured AP; passed
+    // through as-is by default in the test driver to match known-good
+    // captured bytes rather than what "should" be logically correct,
+    // since fidelity to what's proven to work on stock hardware is
+    // safer than a guess. Returns false if WIFI_INFO_REQUEST doesn't
+    // arrive within the timeout, or on send failure.
+    bool respondToInfoRequest(const std::string &ssid, const std::string &password,
+                               const std::string &bssid, int securityMode, int timeoutSeconds);
 
     // Returns false on read error/timeout. On success, fills type and
     // payload with what was received. Public so a test driver can keep

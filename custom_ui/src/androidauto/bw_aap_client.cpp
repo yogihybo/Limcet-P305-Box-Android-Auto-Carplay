@@ -11,6 +11,7 @@
 #include <unistd.h>
 
 #include <aap_protobuf/aaw/WifiStartRequest.pb.h>
+#include <aap_protobuf/aaw/WifiInfoResponse.pb.h>
 
 namespace androidauto {
 
@@ -150,6 +151,38 @@ bool BwAapClient::startHandshake(const std::string &apIpAddress, std::uint16_t a
     std::printf("androidauto: sending WIFI_START_REQUEST (ip=%s port=%u)\n", apIpAddress.c_str(),
                 apPort);
     return this->sendFrame(1, startRequestPayload);
+}
+
+bool BwAapClient::respondToInfoRequest(const std::string &ssid, const std::string &password,
+                                        const std::string &bssid, int securityMode,
+                                        int timeoutSeconds) {
+    std::uint16_t requestType = 0;
+    std::string requestPayload;
+    std::printf("androidauto: waiting for WIFI_INFO_REQUEST...\n");
+    if (!this->receiveFrame(requestType, requestPayload, timeoutSeconds)) {
+        return false;
+    }
+    if (requestType != 2) {
+        std::fprintf(stderr, "androidauto: expected WIFI_INFO_REQUEST (type 2), got %u\n", requestType);
+        return false;
+    }
+    std::printf("androidauto: got WIFI_INFO_REQUEST, sending WIFI_INFO_RESPONSE "
+                "(ssid=%s bssid=%s security_mode=%d)\n",
+                ssid.c_str(), bssid.c_str(), securityMode);
+
+    aap_protobuf::aaw::WifiInfoResponse infoResponse;
+    infoResponse.set_ssid(ssid);
+    infoResponse.set_password(password);
+    infoResponse.set_bssid(bssid);
+    infoResponse.set_security_mode(
+        static_cast<aap_protobuf::service::wifiprojection::message::WifiSecurityMode>(securityMode));
+
+    std::string infoResponsePayload;
+    if (!infoResponse.SerializeToString(&infoResponsePayload)) {
+        std::fprintf(stderr, "androidauto: failed to serialize WifiInfoResponse\n");
+        return false;
+    }
+    return this->sendFrame(3, infoResponsePayload);
 }
 
 }  // namespace androidauto

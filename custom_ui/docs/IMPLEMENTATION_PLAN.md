@@ -351,12 +351,23 @@ Plan:
       logic (already fixed once this project, see
       `project_static_wifi_ap_vs_dynamic`) can be driven from our own
       code, or needs its own equivalent — feeds `BwAapClient::
-      startHandshake()`'s `apIpAddress`/`apPort` and the
-      `WIFI_INFO_RESPONSE` SSID/password once step 4-5 below is
-      implemented
-- [ ] Implement `WIFI_INFO_REQUEST`/`WIFI_INFO_RESPONSE` (steps 4-5,
-      `BwAapClient` currently stops after step 3) — send our own AP's
-      SSID/password/BSSID/security mode once the phone asks for them
+      startHandshake()`'s `apIpAddress`/`apPort` and
+      `respondToInfoRequest()`'s SSID/password/BSSID with the real,
+      live values instead of test-tool command-line args
+- [x] Implement `WIFI_INFO_REQUEST`/`WIFI_INFO_RESPONSE` (steps 4-5) —
+      `BwAapClient::respondToInfoRequest()` waits for the phone's
+      `WIFI_INFO_REQUEST` (type 2) then sends `WIFI_INFO_RESPONSE`
+      (type 3) built via aasdk's generated `WifiInfoResponse` class
+      (ssid/password/bssid/security_mode — all confirmed field-clean
+      against the capture). `security_mode` defaults to the raw value
+      `8` observed in real captured traffic (numerically
+      `WPA2_ENTERPRISE` in `WifiSecurityMode`'s enum — semantically odd
+      for a plain passphrase AP, but fidelity to known-working captured
+      bytes over a "should be correct" guess). `tools/
+      androidauto-bw-aap-test` now drives the full 5-step sequence
+      (`<ap-ip> <ap-port> <ssid> <password> <bssid> [security-mode=8]
+      [seconds=15]`) and keeps listening/hex-dumping afterward. Linked
+      clean, zero `GLIBC` references, all other targets still build.
 - [ ] Hardware-test `BwAapClient` against a real phone — first close
       look at whether the phone actually responds sensibly to our
       replayed `WIFI_VERSION_REQUEST` bytes and our own

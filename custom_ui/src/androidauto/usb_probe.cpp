@@ -11,6 +11,8 @@
 #include <aasdk/USB/AccessoryModeQueryChainFactory.hpp>
 #include <aasdk/USB/USBHub.hpp>
 
+#include "androidauto/session.h"
+
 namespace androidauto {
 
 bool run_usb_probe(int seconds) {
@@ -28,8 +30,11 @@ bool run_usb_probe(int seconds) {
 
     auto promise = aasdk::usb::IUSBHub::Promise::defer(ioService);
     promise->then(
-        [](aasdk::usb::DeviceHandle) {
-            std::printf("androidauto: USB device passed AOAP accessory-mode query chain\n");
+        [&usbWrapper, &ioService](aasdk::usb::DeviceHandle deviceHandle) {
+            std::printf("androidauto: USB device passed AOAP accessory-mode query chain, "
+                        "starting session\n");
+            auto session = std::make_shared<Session>(ioService, usbWrapper);
+            session->start(std::move(deviceHandle));
         },
         [](const aasdk::error::Error &error) {
             std::printf("androidauto: USB hub stopped: %s\n", error.what());

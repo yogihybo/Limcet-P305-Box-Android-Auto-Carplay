@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <memory>
 
 #include <boost/asio.hpp>
@@ -15,11 +16,12 @@ namespace androidauto {
 // no real reason to refuse), logs KeyBindingRequest (steering-wheel/
 // hardware-key mapping -- not handled, this device's touch-only UI
 // doesn't have a wheel to bind), and exposes sendTouch() for the app
-// to push real touch events once wired to a HAL touch source (see
-// docs/IMPLEMENTATION_PLAN.md Phase 2 -- not yet connected to
-// src/hal/touch.h; LVGL owns that evdev fd exclusively for the UI's
-// own rendering, forwarding touch to Android Auto needs its own
-// separate evdev reader, that's the next increment after this one).
+// to push real touch events. Now wired to a real source --
+// src/androidauto/touch_forwarder.h (TouchForwarder) opens its own,
+// second evdev fd (independent of src/hal/touch.h, which LVGL owns
+// exclusively for the UI's own rendering) and calls sendTouch()
+// directly. See setChannelOpenCallback() below for how Session gates
+// TouchForwarder::start() on this channel actually being open.
 //
 // The receive()-then-re-arm pattern mirrors Session/BluetoothService
 // -- aasdk's InputSourceService.cpp does NOT auto-rearm after
@@ -48,6 +50,20 @@ public:
     // ChannelOpenRequest whenever it arrives.
     void start();
 
+    // Invoked once, synchronously, from onChannelOpenRequest() -- the
+    // signal that the phone has actually opened this channel and is
+    // ready to receive InputReports. Session uses this to gate
+    // TouchForwarder::start() (see session.cpp): sending touch events
+    // before the phone has opened the channel isn't a documented-valid
+    // aasdk sequence, and there's no reason to have a second evdev fd
+    // open before it's needed. Fired before the async
+    // ChannelOpenResponse send even completes -- fine, since all this
+    // does is arm a local read loop, it doesn't send anything over the
+    // channel itself. Not called again on subsequent opens (aasdk
+    // doesn't appear to re-request an already-open channel, and this
+    // class doesn't track re-open semantics either way).
+    void setChannelOpenCallback(std::function<void()> callback);
+
     // timestamp is microseconds, matching InputReport's own
     // documented-by-usage convention elsewhere in aasdk (not
     // independently confirmed against a real phone).
@@ -62,6 +78,7 @@ public:
 private:
     boost::asio::io_service::strand &strand_;
     aasdk::channel::inputsource::IInputSourceService::Pointer channel_;
+    std::function<void()> channelOpenCallback_;
 };
 
 }  // namespace androidauto

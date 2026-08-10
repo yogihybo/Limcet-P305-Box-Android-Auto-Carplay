@@ -232,9 +232,29 @@ hardware-confirmed.
       `channels` field type transitively pulls in every service-
       specific protobuf message's generated code, even unused ones;
       expected protobuf behavior, not a bug).
-- [ ] Wire a real touch source into `InputChannel::sendTouch()` — a
-      second evdev reader over the touch device, independent of
-      LVGL's own consumption of it
+- [x] Wire a real touch source into `InputChannel::sendTouch()` —
+      `src/androidauto/touch_forwarder.{h,cpp}` (`TouchForwarder`)
+      opens a second, independent evdev fd on the same device node
+      LVGL already reads exclusively (evdev supports multiple
+      concurrent readers, confirmed safe). Confirmed against this
+      project's own reconstructed `ark1680_ts.c` kernel driver:
+      **Protocol A, not B** (single-touch only, no `ABS_MT_*` — this
+      is a real finding from reading the driver source, not a guess),
+      and raw coordinates are 12-bit ADC counts
+      (`input_set_abs_params(ABS_X/Y, 0, 4095, ...)`), so the class
+      does the same `EVIOCGABS` calibration query + linear scale into
+      800×480 that LVGL's own `lv_evdev.c` does, landing touches in
+      the same coordinate space already advertised in
+      `ServiceDiscoveryResponse`. Async I/O mirrors
+      `bluetooth_transport.cpp` (`boost::asio::posix::stream_descriptor`).
+      `Session::start()` wires it: constructs a `TouchForwarder`
+      alongside the `InputChannel`, and starts it only once the phone
+      actually opens the input channel (via
+      `InputChannel::setChannelOpenCallback()`), not eagerly at
+      construction — no reason to hold a second touch fd open before
+      it's needed. Linked clean, zero `GLIBC` references, all other
+      targets still build. **Not yet hardware-tested** against a live
+      touch panel or a live phone.
 - [ ] Open the remaining media/sensor channels (advertise in
       `ServiceDiscoveryResponse.channels` once implemented — not
       before, per the reasoning above)
@@ -488,13 +508,25 @@ stock's flat/scattered menu structure:
 
 ## Phase 4 — Reversing camera
 
-- [ ] Resolve the open question: does reversing-camera video go
-      through `sink`'s own `ArkReverse`/`VideoDecoder::EnterBackCar()`
-      path, or is it fully independent of the CarPlay/AA pipeline?
-      (If it turns out to be `sink`-mediated, this may end up
-      deferred alongside CarPlay rather than done here — check early.)
-- [ ] Wire `/dev/dvr` (`ARK_DVR_*` ioctls) + reverse-gear GPIO event
-      into a camera-preview screen
+- [x] Resolved the open question: reversing-camera video is fully
+      independent of the CarPlay/AA and `sink` pipelines — the ITU656
+      decode pipeline is composited directly onto its own hardware
+      display layer (`DISPLAY_LAYER=4`) by the LCDC itself, not
+      delivered to userspace. See `docs/ARCHITECTURE.md`'s "Reversing
+      camera" section for the full finding
+      (`ARK_DVR_GETFRAME` is a compiled-in no-op).
+- [x] Wired `/dev/dvr` (`ARK_DVR_*` ioctls) + `/dev/carback`
+      (`CARBACK_IOCTL_*` app-ready handshake + reverse-gear state
+      change) into a camera-preview screen: `src/hal/camera.{h,cpp}`
+      (HAL), `src/core/reverse_gear_watcher.{h,cpp}` (blocking-read
+      listener thread), `src/ui/reverse_camera_screen.{h,cpp}` (pushed/
+      popped via the existing `core::ScreenManager` pattern). Since the
+      HAL cannot pull frames into an LVGL canvas (see above), the
+      screen's job is limited to starting/stopping the pipeline,
+      acking the enter/exit handshake, and not opaquely covering the
+      camera's own hardware layer. Linked clean, zero `GLIBC`
+      references, all other targets still build. **Not yet
+      hardware-tested.**
 - **Milestone**: shifting into reverse automatically shows the camera
   feed through the new UI.
 

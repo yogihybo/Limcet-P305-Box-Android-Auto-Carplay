@@ -10,6 +10,7 @@
 #include <aasdk/Channel/Control/IControlServiceChannelEventHandler.hpp>
 
 #include "androidauto/input_channel.h"
+#include "androidauto/touch_forwarder.h"
 
 namespace androidauto {
 
@@ -94,6 +95,13 @@ private:
     // one, independent of when/whether ServiceDiscoveryResponse
     // actually gets answered.
     InputChannel::Pointer inputChannel_;
+    // Constructed alongside inputChannel_ in Session::start(), but its
+    // own start() (opening the second evdev fd) is deferred until
+    // inputChannel_'s channel-open callback fires -- see
+    // touch_forwarder.h and input_channel.h's setChannelOpenCallback()
+    // for why: no reason to hold a second touch fd open before the
+    // phone has actually opened the channel to receive events on.
+    TouchForwarder::Pointer touchForwarder_;
 };
 
 }  // namespace androidauto

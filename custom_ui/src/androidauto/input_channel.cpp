@@ -16,6 +16,10 @@ void InputChannel::start() {
     channel_->receive(this->shared_from_this());
 }
 
+void InputChannel::setChannelOpenCallback(std::function<void()> callback) {
+    channelOpenCallback_ = std::move(callback);
+}
+
 void InputChannel::sendTouch(std::uint32_t x, std::uint32_t y, std::uint32_t pointerId,
                               aap_protobuf::service::inputsource::message::PointerAction action,
                               std::uint64_t timestampMicros) {
@@ -51,6 +55,13 @@ void InputChannel::onChannelOpenRequest(
             std::printf("androidauto: input channel open response send failed: %s\n", e.what());
         });
     channel_->sendChannelOpenResponse(response, promise);
+
+    // Fired here, not inside the promise's success callback -- see this
+    // class's header comment for why that's fine (arms a local read
+    // loop, doesn't itself touch the channel).
+    if (channelOpenCallback_) {
+        channelOpenCallback_();
+    }
 
     channel_->receive(this->shared_from_this());
 }

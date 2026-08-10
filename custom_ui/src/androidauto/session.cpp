@@ -29,6 +29,26 @@ void Session::start(aasdk::transport::ITransport::Pointer transport) {
     controlChannel_->receive(this->shared_from_this());
 
     inputChannel_ = std::make_shared<InputChannel>(strand_, messenger);
+
+    // touchForwarder_ opens its own second evdev fd against the same
+    // device node LVGL already reads (see touch_forwarder.h) -- deferred
+    // until the phone actually opens the input channel, not started
+    // eagerly here alongside construction. weak_ptr in the callback:
+    // Session doesn't want to keep a TouchForwarder alive past its own
+    // lifetime, and the callback is stored on inputChannel_, which
+    // outlives this particular capture concern anyway, but weak_ptr
+    // costs nothing and avoids a subtle lifetime assumption either way.
+    touchForwarder_ = std::make_shared<TouchForwarder>(ioService_, inputChannel_);
+    std::weak_ptr<TouchForwarder> weakTouchForwarder = touchForwarder_;
+    inputChannel_->setChannelOpenCallback([weakTouchForwarder]() {
+        if (auto forwarder = weakTouchForwarder.lock()) {
+            if (!forwarder->start()) {
+                std::printf("androidauto: touch forwarder failed to start -- "
+                             "Android Auto session continues without touch input\n");
+            }
+        }
+    });
+
     inputChannel_->start();
 
     auto promise = aasdk::channel::SendPromise::defer(strand_);

@@ -2,6 +2,9 @@
 
 #include <cstdio>
 
+#include "core/navigation.h"
+#include "ui/settings_screen.h"
+
 namespace ui {
 
 namespace {
@@ -13,6 +16,10 @@ void counter_btn_event_cb(lv_event_t * e) {
     char buf[32];
     std::snprintf(buf, sizeof(buf), "Touched: %d", count);
     lv_label_set_text(label, buf);
+}
+
+void settings_btn_event_cb(lv_event_t *) {
+    core::navigation::push(create_settings_screen);
 }
 
 }  // namespace
@@ -36,6 +43,12 @@ lv_obj_t * create_home_screen() {
     lv_obj_add_event_cb(btn, counter_btn_event_cb, LV_EVENT_CLICKED, label);
     lv_obj_t * btn_label = lv_label_create(btn);
     lv_label_set_text(btn_label, "Touch me");
+
+    lv_obj_t * settings_btn = lv_button_create(scr);
+    lv_obj_align(settings_btn, LV_ALIGN_TOP_RIGHT, -12, 12);
+    lv_obj_add_event_cb(settings_btn, settings_btn_event_cb, LV_EVENT_CLICKED, nullptr);
+    lv_obj_t * settings_btn_label = lv_label_create(settings_btn);
+    lv_label_set_text(settings_btn_label, "Settings");
 
     return scr;
 }

@@ -1,5 +1,6 @@
-// Placeholder home screen -- Phase 0/1 milestone content only. Real
-// launcher/app-switcher work is Phase 5 (see docs/IMPLEMENTATION_PLAN.md).
+// Launcher / home screen -- Phase 5 (docs/IMPLEMENTATION_PLAN.md). Root
+// screen of the app (main.cpp's first ScreenManager::push()); a grid of
+// tiles for every real destination this app has today.
 #pragma once
 
 #include "lvgl.h"

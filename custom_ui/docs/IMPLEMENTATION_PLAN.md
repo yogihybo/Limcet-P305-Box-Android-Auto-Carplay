@@ -612,12 +612,55 @@ stock's flat/scattered menu structure:
 
 ## Phase 5 — Launcher polish ("improve on stock" work)
 
-- [ ] App switcher / home screen layout
-- [ ] Theming pass — this is the actual visual-improvement deliverable
-      the project exists for; no fixed scope here, iterate against
-      real usage
-- **Milestone**: subjective — a distinct, demonstrably nicer UI than
-  stock, shown running on the device.
+- [x] App switcher / home screen layout — `src/ui/home_screen.{h,cpp}`
+      rewritten from the Phase 0/1 touch-counter placeholder into a
+      real launcher: a centered, wrapping tile grid
+      (`LV_FLEX_FLOW_ROW_WRAP`) with 4 tiles for the destinations that
+      actually exist today — Android Auto, Bluetooth
+      (`ui::create_bluetooth_screen()`), Reverse Camera preview
+      (`ui::create_reverse_camera_screen()`), Settings
+      (`ui::create_settings_screen()`) — each pushed via the existing
+      `core::navigation::push()` helper, same as every other screen
+      transition. Two new things landed alongside it:
+      - `src/ui/android_auto_screen.{h,cpp}` — the AA tile's
+        destination. The real session (`src/androidauto/`, aasdk-backed)
+        is deliberately **not** linked into the `custom_ui` binary yet
+        (see `Makefile`'s `UI_SRCS` comment — it only builds into the
+        separate `androidauto-*-test` tools until Phase 2's real
+        integration lands), so this screen shows accurate status/how-
+        to-connect text rather than fabricating a live connection
+        state it has no way to observe.
+      - `src/ui/reverse_camera_screen.cpp` gained a real "Exit preview"
+        back button. It didn't have one before because it was only
+        ever meant to be pushed/popped by `core::ReverseGearWatcher`
+        (gear-triggered) — but auditing that path for this work found
+        `ReverseGearWatcher` is implemented
+        (`src/core/reverse_gear_watcher.{h,cpp}`) and was never
+        actually instantiated in `main.cpp`, despite Phase 4 being
+        checked off above. So today the home screen's "Reverse Camera"
+        tile is a manual preview and the *only* way to reach this
+        screen at all; wiring up the automatic gear-triggered path is
+        still open (not this phase's scope — flagged here since it's
+        directly relevant).
+- [x] Theming pass — dark automotive look consistent with the settings/
+      bluetooth screens landed this session (`0x14141e` background,
+      `0x66aaff` accent for headers/icons, `0x999999` secondary text).
+      Home screen tiles use a shared `lv_style_t` pair (base + a
+      `LV_STATE_PRESSED` override with an accent border) applied once
+      and reused across all 4 tiles rather than any runtime theme
+      system — matches the plan's own "no fixed scope, no
+      theme-switcher" framing. No fixed-scope theming system was built;
+      this is styling of the actual running screens only.
+- **Milestone**: builds clean (`make ui`, zero `error:`, zero `GLIBC`
+  references — confirmed via `arm-linux-gnueabihf-objdump -T`, not a
+  dynamic object at all under `-static`); full regression build
+  (`make ui carplay-sidecar androidauto-usb-probe-test
+  androidauto-wireless-probe-test androidauto-bluetooth-rfcomm-test
+  androidauto-bw-aap-test`) also zero `error:` lines, no regressions.
+  **Not yet hardware-tested** — nobody has run this on the real device
+  yet, so "distinct, demonstrably nicer UI than stock" is only
+  confirmed by code review and a clean cross-build, not by seeing it
+  running on hardware.
 
 ## Phase 6 — Firmware integration (CarPlay-less baseline)
 

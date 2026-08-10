@@ -482,29 +482,109 @@ stock's flat/scattered menu structure:
   they were real; note them in `docs/SETTINGS_REFERENCE.md` instead if
   not already there.
 
-- [ ] Replicate the settings module itself: a config-backed settings
-      store mirroring stock's two-layer model — `FactoryConfig.ini`
-      as one-time seed, `/data/msncfg/Setting.config` as the live,
-      persisted layer actually read at runtime (see
-      `project_language_setting_userdata` memory)
-- [ ] `ui/settings`: single settings screen/menu with a Basic/Advanced
-      tier switch, backed by the config store above — not a
-      per-category screen tree like stock
-- [ ] Display settings backed by `/dev/ark_display`
-      (`ARKDISP_GET/SET_VDE_CFG`) — Basic tier
-- [ ] Replacement Bluetooth menu: pairing/device-list UI, backed by
-      whatever the real BT stack on this device is (need to confirm —
-      likely BlueZ over the SoC's own BT/WiFi combo chip, not
-      `sink`/CarPlay's own BT usage which is a separate concern) —
-      device list, pair/connect/forget, connected-device status —
-      Basic tier
-- [ ] WiFi / volume screens — Basic tier
-- [ ] Remaining `SETTINGS_REFERENCE.md` fields (CAN type, screen type,
-      etc.) — Advanced tier
-- **Milestone**: adjusting a setting in the new UI visibly changes
-  device behaviour and survives a reboot; pairing a phone over the new
-  Bluetooth menu results in a real paired/connected device; Basic vs.
-  Advanced tiers are visibly distinct in the running UI.
+- [x] Replicate the settings module itself: `src/core/config_store.{h,cpp}`
+      (`core::ConfigStore`) mirrors stock's real two-layer model —
+      loads `/data/msncfg/Setting.config` (live layer) first,
+      `/msnprofile/FactoryConfig.ini` and `/msnprofile/MsnProductInfo.ini`
+      second as a one-time seed for keys not already in the live layer
+      (see `project_language_setting_userdata` memory), and `save()`
+      writes ONLY the live layer back out, never the ini seeds. Format
+      cross-checked against a real captured
+      `firmware_source/mtd7_userdata/msncfg/Setting.config` dump
+      (`[General]` / flat `key=value`) and against
+      `ArkPro/SettingPersistent/SettingPersistent.cpp` (a real vendor
+      SDK reference surfaced mid-session) — that reference confirms the
+      field-naming convention (`Brightness`/`Contrast`/`Language`) but
+      uses a different path/format (`/data/Setting.ini`, Qt
+      `QSettings`) for what looks like a different/older product
+      variant; this device's own real dump is what the implementation
+      follows. `core::default_store()` is a process-wide lazy
+      singleton so every screen sees the same in-memory state.
+      **Not yet hardware-tested** — no live device to write to.
+- [x] `ui/settings_screen.{h,cpp}`: single settings screen with an
+      `lv_tabview` Basic/Advanced tier switch, backed by the config
+      store above — not a per-category screen tree like stock. Pushed/
+      popped via the existing `core::ScreenManager` pattern (see
+      `src/ui/reverse_camera_screen.{h,cpp}`) through a new
+      `src/core/navigation.{h,cpp}` helper (`core::navigation::push/pop`)
+      — a thin same-thread global accessor letting button event
+      callbacks reach the one `ScreenManager` instance `main()` owns,
+      since `ScreenManager::ScreenFactory` is a plain function pointer
+      with no captured state (see that header's comment for why this
+      is thread-safe: LVGL event callbacks only ever run on the
+      `lv_timer_handler()` thread, same as `ScreenManager` itself).
+      Reachable from a new "Settings" button on the home screen.
+- [x] Display settings backed by `/dev/ark_display`
+      (`ARKDISP_GET/SET_VDE_CFG`) — `src/hal/display_ctrl.{h,cpp}`,
+      Basic tier (Brightness/Contrast/Saturation sliders on the OSD1/
+      GUI layer). Ioctl numbers and the `ark_disp_vde_cfg_arg` struct
+      layout confirmed against the real vendor header
+      (`arkpro_custom/vendor/AVService/display.h`), not guessed. Slider
+      range (0-255) matches the real captured `Setting.config` values
+      but the ioctl's own valid range isn't independently confirmed —
+      flagged as an assumption in the source comment. **Not yet
+      hardware-tested.**
+- [x] Replacement Bluetooth menu: `src/ui/bluetooth_screen.{h,cpp}` +
+      `src/hal/bluetooth.{h,cpp}` — device list (PLIST), connect
+      (HFPCONN=<mac>), discoverable toggle (SCAN=1), adapter address
+      (ADDR), editable device name (NAME=<name>). Confirmed the real BT
+      stack question this checklist item flagged as open: this device
+      has **no BlueZ/AF_BLUETOOTH stack at all** — Bluetooth goes
+      through Feasycom's closed `blueware` daemon via a plain-text
+      AT-command channel at `/dev/bw_serial` (decompiled from the real
+      `libBlueTooth.so`, `docs/WIRELESS_AND_INIT.md`, cross-checked
+      against `docs/VENDOR_BSP_RESEARCH.md` section 4c — two
+      independent real-source confirmations of the same vocabulary).
+      This is a **different** channel from
+      `src/androidauto/bw_aap_client.h`'s `/dev/bw_aap` (that one is
+      narrowly scoped to Android-Auto-Wireless WiFi-credential
+      handoff, protobuf-framed, already built in Phase 2) — checked the
+      existing `src/androidauto/` code first per this task's
+      instructions before building anything new, and confirmed it's
+      not the right plumbing to reuse for general BT device management.
+      Cross-checked against `ArkPro/AutoConnect/AutoConnect.cpp` (real
+      vendor SDK source surfaced mid-session) — confirms
+      `project_vendor_bsp_research`'s prior finding that `AutoConnect`
+      is just Qt signal/slot-by-name wiring, unrelated to Bluetooth;
+      no pairing state machine found there to reuse.
+      **Known real gap, not an oversight**: no confirmed AT command for
+      "forget/unpair a device" exists in either source this project has
+      access to, so that's not implemented; pairing is phone-initiated
+      (`SCAN=1` discoverability), matching how this class of AA/CarPlay
+      box works generally. PLIST's exact response field grammar
+      (name/MAC/RSSI sub-fields) was never confirmed against real
+      captured traffic either, so the device list shows raw response
+      lines, not parsed fields. **Not yet hardware-tested.**
+- [x] WiFi / volume screens — Basic tier. Volume is a real editable
+      slider (`Setting.config`'s `Volume` key). WiFi is deliberately
+      informational, not a "join network" flow — this device doesn't
+      act as a WiFi client; it hosts its own dynamic `hostapd` AP for
+      wireless Android Auto/CarPlay, credentials handed to the phone
+      over Bluetooth per-connection (see
+      `project_wireless_carplay_aa_channel_plan` memory and
+      `docs/ARCHITECTURE.md`'s "Wireless AA discovery" section) — there
+      is no user-facing network-selection concept to build here.
+- [x] Remaining `SETTINGS_REFERENCE.md` fields — Advanced tier, in
+      `ui/settings_screen.cpp`'s `build_advanced_tab()`: read-only rows
+      for the hardware-profile fields (`McuType`, `CanType`,
+      `ScreenType`, `ResolutionType`, `BlueToothType`, `RadioType`,
+      `MirroringLinkType`) each annotated with its confirmed real
+      behavior (e.g. `CanType` shown locked with the touch/knob-input-
+      breaking warning, `MirroringLinkType` and `ResolutionType` marked
+      confirmed-dead per this doc rather than exposed as if they did
+      something — the explicit design-principle requirement above),
+      plus real editable controls for the confirmed-live behavioral
+      fields (`ReversingVolumeCut`, `AECDelay`, `RightHandCarDriver`,
+      `DisableWindowEffect`, `TouchCalibrateAction`, `AutoStartCarLink`).
+- **Milestone**: NOT YET MET — code-complete and builds clean
+  (`make ui` zero `error:` diagnostics, zero `GLIBC` symbol
+  references), but "adjusting a setting visibly changes device
+  behaviour and survives a reboot" / "pairing a phone results in a
+  real paired/connected device" both require a live device, which this
+  session did not have access to. Per this project's own
+  `feedback_bootlog_evidence_weak` lesson, a clean build is not
+  functional confirmation — treat every item above as **code-complete,
+  not hardware-confirmed** until run on the real device.
 
 ## Phase 4 — Reversing camera
 

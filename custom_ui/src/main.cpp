@@ -9,6 +9,7 @@
 #include "lvgl.h"
 #include "hal/display.h"
 #include "hal/touch.h"
+#include "core/navigation.h"
 #include "core/screen_manager.h"
 #include "ui/home_screen.h"
 
@@ -21,6 +22,9 @@ int main() {
     hal::init_touch("/dev/input/event0");  // non-fatal if unavailable
 
     core::ScreenManager screens;
+    core::navigation::init(screens);  // lets Settings/Bluetooth screens
+                                       // push/pop without a captured
+                                       // ScreenManager* -- see core/navigation.h
     screens.push(ui::create_home_screen);
 
     std::printf("custom_ui: LVGL initialized, running main loop\n");

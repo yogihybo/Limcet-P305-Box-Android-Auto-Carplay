@@ -183,14 +183,40 @@ code, but not the path forward for this device.
 
 ## Reversing camera
 
-- `/dev/dvr` (ITU656/rn6752 driver stack, this project's own kernel
-  reconstruction) — `ARK_DVR_*` ioctls for camera preview.
-- Reverse-gear detection: GPIO-based, `ark-carback` kernel driver.
-- `sink` itself also has an `ArkReverse` class
-  (`init`/`run`/`uninit`/`watchHandleIsExist`) and `VideoDecoder::
-  EnterBackCar()`/`ExitBackCar()` — worth checking whether reversing
-  camera display goes through `sink`'s own video pipeline or is fully
-  independent; not yet investigated.
+Implemented in `src/hal/camera.{h,cpp}` (HAL), `src/core/reverse_gear_watcher.{h,cpp}`
+(gear-state listener thread), and `src/ui/reverse_camera_screen.{h,cpp}`
+(pushed/popped via the existing `core::ScreenManager` pattern). Not yet
+hardware-tested.
+
+- `/dev/dvr` (`ARK_DVR_*` ioctls, driver:
+  `linux-arkmicro/linux/drivers/soc/arkmicro/itu656/ark1668_itu656.c`)
+  controls the ITU656/RN6752 camera decode pipeline (start/stop,
+  channel select, brightness/contrast/hue/mirror).
+  **Resolved**: `ARK_DVR_GETFRAME` is a compiled-in no-op in this
+  driver (empty switch case) — there is genuinely no software
+  frame-readback path. The decoded video is composited directly onto
+  its own hardware display layer (`DISPLAY_LAYER=4`, separate from our
+  LVGL/fb0 GUI layer) by the LCDC itself, not delivered to userspace
+  as pixel data. This answers the open question below about whether
+  reversing-camera display goes through `sink`'s own video pipeline or
+  is independent — it's independent, and always was, at the hardware
+  level. The HAL therefore only starts/stops the pipeline and adjusts
+  image parameters; it cannot and does not pull frames into an LVGL
+  canvas. The picture appears (or doesn't) independent of anything
+  this process draws, as long as our own GUI layer isn't opaquely
+  covering the camera layer.
+- `/dev/carback` (device node name from the driver's own
+  `device_create()` call — **not** `/dev/ark_carback`, that's only the
+  platform driver's printk-prefix name, same naming trap already hit
+  once for `hx170dec`) — `CARBACK_IOCTL_*` app-ready coordination
+  protocol plus blocking `read()`/`poll()`/`fasync` for reverse-gear
+  state changes. `carback_int_work()` in the kernel driver waits up to
+  500ms for `APP_ENTER_DONE`/`APP_EXIT_DONE` acks before forcibly
+  hiding/showing the GUI layer itself on a fixed timeout, so a missed
+  ack degrades to an abrupt layer switch rather than a hang.
+- Both devices are optional at runtime by design (same non-fatal
+  pattern as `hal::init_touch`) — a build/device without the
+  reversing-camera hardware wired should still boot the rest of the UI.
 
 ## CAN bus
 

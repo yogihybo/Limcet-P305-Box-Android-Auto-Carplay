@@ -35,7 +35,7 @@ int main() {
     }
     std::printf("custom_ui: display initialized\n");
 
-    lv_indev_t * touch = hal::init_touch("/dev/input/event0");  // non-fatal if unavailable
+    lv_indev_t * touch = hal::init_touch("/dev/ttyHS0");  // non-fatal if unavailable
     std::printf("custom_ui: touch %s\n", touch ? "initialized" : "unavailable (continuing without it)");
 
     core::ScreenManager screens;

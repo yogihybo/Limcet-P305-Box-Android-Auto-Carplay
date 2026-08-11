@@ -43,12 +43,13 @@ LVGL_SRCS     := $(shell find $(LVGL_DIR)/src -name '*.c')
 LVGL_OBJS     := $(patsubst $(LVGL_DIR)/%.c,$(BUILD_DIR)/lvgl-obj/%.o,$(LVGL_SRCS))
 
 # --- main UI binary ---
-# src/androidauto excluded here on purpose -- it needs aasdk/Boost/
-# OpenSSL/libusb/Protobuf, and the base UI (screens, HAL, settings)
-# should keep building fast and dependency-light. It's linked in for
-# real once the actual Android Auto session/service integration lands
-# (see docs/IMPLEMENTATION_PLAN.md Phase 2) -- until then it's only
-# exercised by the androidauto-usb-probe-test target below.
+# src/androidauto now linked in for real (2026-08-11) -- wireless
+# Android Auto session integration, see
+# src/androidauto/wireless_session_manager.h and
+# docs/IMPLEMENTATION_PLAN.md Phase 2. Pulls in aasdk/Boost/OpenSSL/
+# libusb/Protobuf, same AASDK_INCLUDES/AASDK_LIBS/AASDK_WRAP_FLAGS/
+# NSS_STUB_OBJ the standalone probe-test targets below already use --
+# UI_TARGET's own link rule now uses those instead of plain LIBS.
 UI_TARGET     := $(BUILD_DIR)/custom_ui
 UI_SRCS       := $(filter-out src/androidauto/%,$(shell find src -name '*.cpp'))
 UI_OBJS       := $(patsubst src/%.cpp,$(BUILD_DIR)/ui-obj/%.o,$(UI_SRCS))
@@ -167,13 +168,17 @@ androidauto-wireless-probe-test: $(WIRELESS_TEST_TARGET)
 androidauto-bluetooth-rfcomm-test: $(BT_TEST_TARGET)
 androidauto-bw-aap-test: $(BW_AAP_TEST_TARGET)
 
-$(UI_TARGET): $(UI_OBJS) $(LVGL_OBJS)
+$(UI_TARGET): $(UI_OBJS) $(AASDK_OBJS) $(LVGL_OBJS) $(NSS_STUB_OBJ)
 	@mkdir -p $(dir $@)
-	$(CXX) $(LDFLAGS) -o $@ $^ $(LIBS)
+	$(CXX) $(LDFLAGS) $(AASDK_WRAP_FLAGS) -o $@ $^ $(AASDK_LIBS)
 
+# AASDK_INCLUDES added here too (not just the src/androidauto/%.o rule
+# below) since main.cpp/ui/android_auto_screen.cpp now #include real
+# androidauto/ headers (WirelessSessionManager) to drive a session --
+# harmless extra -I paths for the files that don't need them.
 $(BUILD_DIR)/ui-obj/%.o: src/%.cpp
 	@mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) -c -o $@ $<
+	$(CXX) $(CXXFLAGS) $(AASDK_INCLUDES) -c -o $@ $<
 
 $(BUILD_DIR)/ui-obj/androidauto/%.o: src/androidauto/%.cpp
 	@mkdir -p $(dir $@)

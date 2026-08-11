@@ -52,6 +52,10 @@ lv_obj_t * create_tile(lv_obj_t * parent, const char * symbol, const char * labe
     lv_obj_set_style_radius(tile, 20, 0);
     lv_obj_set_style_bg_color(tile, theme::surface_pressed(), LV_STATE_PRESSED);
     lv_obj_set_style_bg_opa(tile, LV_OPA_60, LV_STATE_PRESSED);
+    // Knob focus ring -- see theme::style_focusable()'s comment. Without
+    // this, selecting a tile via the knob moved the logical focus but
+    // showed nothing on screen.
+    theme::style_focusable(tile);
     lv_obj_set_flex_flow(tile, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(tile, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_row(tile, 12, 0);

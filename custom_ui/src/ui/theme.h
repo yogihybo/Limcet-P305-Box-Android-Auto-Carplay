@@ -147,4 +147,15 @@ void style_list_button(lv_obj_t * btn);
 // LVGL control bolted onto an otherwise big-target app.
 void style_tabview(lv_obj_t * tabview);
 
+// Adds ONLY the knob/encoder focus-ring outline (LV_STATE_FOCUSED) --
+// every other style_*() helper above already includes this, so most
+// callers never need it directly. Exists for objects that are
+// knob-navigable but don't go through any of those helpers, e.g.
+// home_screen.cpp's launcher tiles (hand-styled, not a card/button/
+// list-row in the shared-style sense). Without an explicit focus
+// indicator, core::navigation::focus_group() still moves the logical
+// selection via the knob correctly, but nothing on screen shows which
+// item is currently selected -- a real, reported gap this closes.
+void style_focusable(lv_obj_t * obj);
+
 }  // namespace ui::theme

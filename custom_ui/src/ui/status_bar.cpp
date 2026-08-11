@@ -91,40 +91,46 @@ void create(lv_obj_t * scr) {
     lv_obj_t * bar = lv_obj_create(scr);
     lv_obj_remove_style_all(bar);
     lv_obj_set_size(bar, LV_PCT(100), kHeight);
-    lv_obj_align(bar, LV_ALIGN_TOP_MID, 0, 0);
+    lv_obj_align(bar, LV_ALIGN_BOTTOM_MID, 0, 0);
     lv_obj_set_style_bg_color(bar, theme::surface(), 0);
     lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_side(bar, LV_BORDER_SIDE_BOTTOM, 0);
+    // Divider on the TOP edge now -- bar sits at the bottom of the
+    // screen, so the seam between it and the rest of the content is
+    // above it, not below.
+    lv_obj_set_style_border_side(bar, LV_BORDER_SIDE_TOP, 0);
     lv_obj_set_style_border_width(bar, 1, 0);
     lv_obj_set_style_border_color(bar, theme::surface_border(), 0);
-    lv_obj_set_style_pad_hor(bar, 12, 0);
+    lv_obj_set_style_pad_hor(bar, 16, 0);
     lv_obj_set_style_pad_ver(bar, 0, 0);
     lv_obj_set_flex_flow(bar, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(bar, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_clear_flag(bar, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_clear_flag(bar, LV_OBJ_FLAG_CLICKABLE);
 
+    // montserrat_20, not _14 -- the whole point of doubling kHeight was
+    // to make this bar's content actually legible at a glance, not
+    // just occupy more empty space.
     lv_obj_t * clock_label = lv_label_create(bar);
     lv_label_set_text(clock_label, "--:--");
     lv_obj_set_style_text_color(clock_label, theme::text_primary(), 0);
-    lv_obj_set_style_text_font(clock_label, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_font(clock_label, &lv_font_montserrat_20, 0);
 
     lv_obj_t * icons = lv_obj_create(bar);
     lv_obj_remove_style_all(icons);
     lv_obj_set_size(icons, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(icons, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(icons, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_column(icons, 10, 0);
+    lv_obj_set_style_pad_column(icons, 16, 0);
     lv_obj_clear_flag(icons, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t * aa_icon = lv_label_create(icons);
     lv_label_set_text(aa_icon, LV_SYMBOL_USB);
-    lv_obj_set_style_text_font(aa_icon, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_font(aa_icon, &lv_font_montserrat_20, 0);
     lv_obj_set_style_text_color(aa_icon, theme::text_secondary(), 0);
 
     lv_obj_t * bt_icon = lv_label_create(icons);
     lv_label_set_text(bt_icon, LV_SYMBOL_BLUETOOTH);
-    lv_obj_set_style_text_font(bt_icon, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_font(bt_icon, &lv_font_montserrat_20, 0);
     lv_obj_set_style_text_color(bt_icon, theme::text_secondary(), 0);
 
     auto * widgets = new Widgets{clock_label, bt_icon, aa_icon};

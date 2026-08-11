@@ -24,6 +24,7 @@ struct SharedStyles {
     lv_style_t step_btn_pressed;
     lv_style_t list_btn;
     lv_style_t list_btn_pressed;
+    lv_style_t focus_ring;
 
     SharedStyles() {
         lv_style_init(&card);
@@ -125,6 +126,17 @@ struct SharedStyles {
 
         lv_style_init(&list_btn_pressed);
         lv_style_set_bg_color(&list_btn_pressed, surface_pressed());
+
+        // Knob/encoder focus indicator -- see style_focusable()'s
+        // comment. An outline (drawn OUTSIDE the widget's box, unlike
+        // border) so it never eats into padding/content or shifts
+        // layout, just traces a ring around whatever's currently
+        // selected via core::navigation::focus_group().
+        lv_style_init(&focus_ring);
+        lv_style_set_outline_width(&focus_ring, 3);
+        lv_style_set_outline_color(&focus_ring, accent());
+        lv_style_set_outline_opa(&focus_ring, LV_OPA_COVER);
+        lv_style_set_outline_pad(&focus_ring, 3);
     }
 };
 
@@ -151,13 +163,11 @@ lv_obj_t * add_back_button(lv_obj_t * scr, lv_event_cb_t cb) {
     lv_obj_remove_style_all(btn);
     lv_obj_add_style(btn, &styles().back_btn, 0);
     lv_obj_add_style(btn, &styles().back_btn_pressed, LV_STATE_PRESSED);
+    lv_obj_add_style(btn, &styles().focus_ring, LV_STATE_FOCUSED);
     lv_obj_set_size(btn, kMinTouchTarget, kMinTouchTarget);
-    // Offset down by the status bar's height -- see
-    // create_screen_with_header() below, which is add_back_button()'s
-    // only real caller today: every non-home screen has a status bar
-    // sitting at y=[0, status_bar::kHeight) now, and this button would
-    // otherwise sit half-hidden underneath it.
-    lv_obj_align(btn, LV_ALIGN_TOP_LEFT, 10, 10 + status_bar::kHeight);
+    // Status bar (ui/status_bar.h) is pinned to the BOTTOM of the
+    // screen now, not the top, so the header doesn't need to dodge it.
+    lv_obj_align(btn, LV_ALIGN_TOP_LEFT, 10, 10);
     lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, nullptr);
 
     lv_obj_t * icon = lv_label_create(btn);
@@ -176,7 +186,7 @@ lv_obj_t * add_title(lv_obj_t * scr, const char * text) {
     lv_label_set_text(title, text);
     lv_obj_set_style_text_color(title, text_primary(), 0);
     lv_obj_set_style_text_font(title, &lv_font_montserrat_20, 0);
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 24 + status_bar::kHeight);
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 24);
     return title;
 }
 
@@ -185,9 +195,11 @@ lv_obj_t * create_screen_with_header(lv_obj_t ** out_scr, const char * title, lv
     lv_obj_set_style_bg_color(scr, bg(), 0);
     *out_scr = scr;
 
-    // Status bar first (see ui/status_bar.h -- the persistent AA-style
-    // top bar every screen but reverse_camera_screen.cpp gets), then
-    // the back button/title underneath it, not overlapping.
+    // Status bar (see ui/status_bar.h -- the persistent AA-style bottom
+    // bar every screen but reverse_camera_screen.cpp gets); order
+    // relative to the back button/title below doesn't matter, both are
+    // absolutely positioned and don't overlap (bar is pinned to the
+    // bottom edge).
     status_bar::create(scr);
     add_back_button(scr, back_cb);
     return add_title(scr, title);
@@ -205,12 +217,14 @@ void style_icon_badge(lv_obj_t * obj) {
 void style_primary_button(lv_obj_t * btn) {
     lv_obj_add_style(btn, &styles().primary_btn, 0);
     lv_obj_add_style(btn, &styles().primary_btn_pressed, LV_STATE_PRESSED);
+    lv_obj_add_style(btn, &styles().focus_ring, LV_STATE_FOCUSED);
     lv_obj_set_style_text_font(btn, &lv_font_montserrat_24, 0);
 }
 
 void style_step_button(lv_obj_t * btn) {
     lv_obj_add_style(btn, &styles().step_btn, 0);
     lv_obj_add_style(btn, &styles().step_btn_pressed, LV_STATE_PRESSED);
+    lv_obj_add_style(btn, &styles().focus_ring, LV_STATE_FOCUSED);
 }
 
 void style_section_label(lv_obj_t * label) {
@@ -224,6 +238,11 @@ void style_secondary_text(lv_obj_t * label) {
 void style_list_button(lv_obj_t * btn) {
     lv_obj_add_style(btn, &styles().list_btn, 0);
     lv_obj_add_style(btn, &styles().list_btn_pressed, LV_STATE_PRESSED);
+    lv_obj_add_style(btn, &styles().focus_ring, LV_STATE_FOCUSED);
+}
+
+void style_focusable(lv_obj_t * obj) {
+    lv_obj_add_style(obj, &styles().focus_ring, LV_STATE_FOCUSED);
 }
 
 void style_tabview(lv_obj_t * tabview) {

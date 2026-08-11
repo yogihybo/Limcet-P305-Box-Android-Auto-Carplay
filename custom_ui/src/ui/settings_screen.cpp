@@ -8,6 +8,7 @@
 #include "core/navigation.h"
 #include "hal/display_ctrl.h"
 #include "ui/bluetooth_screen.h"
+#include "ui/status_bar.h"
 #include "ui/theme.h"
 
 namespace ui {
@@ -172,6 +173,7 @@ lv_obj_t * add_stepper_row(lv_obj_t * parent, const char * label_text, int min, 
     auto * minus_ctx = new StepperBtnCtx{ctx, -1};
     lv_obj_add_event_cb(minus_btn, stepper_btn_clicked_cb, LV_EVENT_CLICKED, minus_ctx);
     lv_obj_add_event_cb(minus_btn, destroy_stepper_btn_ctx_cb, LV_EVENT_DELETE, minus_ctx);
+    lv_group_add_obj(core::navigation::focus_group(), minus_btn);
 
     lv_obj_t * value_label = lv_label_create(controls);
     lv_obj_set_style_text_font(value_label, &lv_font_montserrat_24, 0);
@@ -190,6 +192,7 @@ lv_obj_t * add_stepper_row(lv_obj_t * parent, const char * label_text, int min, 
     auto * plus_ctx = new StepperBtnCtx{ctx, +1};
     lv_obj_add_event_cb(plus_btn, stepper_btn_clicked_cb, LV_EVENT_CLICKED, plus_ctx);
     lv_obj_add_event_cb(plus_btn, destroy_stepper_btn_ctx_cb, LV_EVENT_DELETE, plus_ctx);
+    lv_group_add_obj(core::navigation::focus_group(), plus_btn);
 
     if (vde_field != VdeField::None) {
         apply_vde(FieldCtx{section, key, vde_field}, initial);  // push the seeded/live value to hardware once at build time
@@ -215,6 +218,7 @@ void add_switch_row(lv_obj_t * parent, const char * label_text, const std::strin
     auto * ctx = new FieldCtx{section, key};
     lv_obj_add_event_cb(sw, switch_changed_cb, LV_EVENT_VALUE_CHANGED, ctx);
     lv_obj_add_event_cb(sw, destroy_ctx_cb, LV_EVENT_DELETE, ctx);
+    lv_group_add_obj(core::navigation::focus_group(), sw);
 }
 
 // ---- Language dropdown (Basic tier) -----------------------------------
@@ -276,6 +280,7 @@ void add_language_row(lv_obj_t * parent) {
     }
     lv_dropdown_set_selected(dd, selected_idx);
     lv_obj_add_event_cb(dd, language_changed_cb, LV_EVENT_VALUE_CHANGED, nullptr);
+    lv_group_add_obj(core::navigation::focus_group(), dd);
 }
 
 // ---- navigation buttons ------------------------------------------------
@@ -325,6 +330,7 @@ void build_basic_tab(lv_obj_t * tab) {
     lv_obj_t * bt_btn = lv_button_create(bt_row);
     theme::style_primary_button(bt_btn);
     lv_obj_add_event_cb(bt_btn, bluetooth_btn_cb, LV_EVENT_CLICKED, nullptr);
+    lv_group_add_obj(core::navigation::focus_group(), bt_btn);
     lv_obj_t * bt_btn_label = lv_label_create(bt_btn);
     lv_label_set_text(bt_btn_label, "Pairing / Devices >");
 
@@ -406,11 +412,11 @@ lv_obj_t * create_settings_screen() {
     theme::create_screen_with_header(&scr, "Settings", back_btn_cb);
 
     lv_obj_t * tabview = lv_tabview_create(scr);
-    // 80% -> 74%: same status-bar clearance reasoning as
-    // bluetooth_screen.cpp's content card -- the back button now sits
-    // status_bar::kHeight lower than before.
+    // The status bar (ui/status_bar.h) now sits at the literal bottom
+    // of the screen, so the tabview needs to stop short of it instead
+    // of running to the screen edge.
     lv_obj_set_size(tabview, LV_PCT(100), LV_PCT(74));
-    lv_obj_align(tabview, LV_ALIGN_BOTTOM_MID, 0, 0);
+    lv_obj_align(tabview, LV_ALIGN_BOTTOM_MID, 0, -status_bar::kHeight);
     theme::style_tabview(tabview);
 
     lv_obj_t * basic_tab = lv_tabview_add_tab(tabview, "Basic");

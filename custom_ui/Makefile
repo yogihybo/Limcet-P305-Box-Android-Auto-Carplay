@@ -130,6 +130,17 @@ SIDECAR_INCLUDES := -Isidecars/carplay
 ANDROIDAUTO_SIDECAR_TARGET := $(BUILD_DIR)/androidauto-sidecar
 ANDROIDAUTO_SIDECAR_OBJS   := $(BUILD_DIR)/androidauto-sidecar-obj/main.o
 
+# core/hal_config.cpp (see src/core/hal_config.h) lives under src/core/,
+# so it's part of UI_SRCS/UI_OBJS (the main custom_ui binary) but NOT
+# AASDK_SRCS/AASDK_OBJS (src/androidauto/ only) -- yet
+# androidauto/wireless_session_manager.cpp, which IS in AASDK_SRCS,
+# reads it too. Pulled in explicitly here rather than moving the file
+# into src/androidauto/, since it's genuinely shared, non-aasdk-specific
+# code (custom_ui's own hal/bluetooth.cpp uses it as well). Builds via
+# the existing generic $(BUILD_DIR)/ui-obj/%.o pattern rule below --
+# no aasdk/boost includes needed for this file.
+HAL_CONFIG_OBJ := $(BUILD_DIR)/ui-obj/core/hal_config.o
+
 # --- androidauto-usb-probe-test: standalone aasdk link-graph proof ---
 # See tools/androidauto-usb-probe-test/main.cpp -- not part of `all`,
 # build explicitly with `make androidauto-usb-probe-test`.
@@ -196,7 +207,7 @@ $(BUILD_DIR)/ui-obj/androidauto/%.o: src/androidauto/%.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) $(AASDK_INCLUDES) -c -o $@ $<
 
-$(ANDROIDAUTO_SIDECAR_TARGET): $(ANDROIDAUTO_SIDECAR_OBJS) $(AASDK_OBJS) $(NSS_STUB_OBJ)
+$(ANDROIDAUTO_SIDECAR_TARGET): $(ANDROIDAUTO_SIDECAR_OBJS) $(AASDK_OBJS) $(HAL_CONFIG_OBJ) $(NSS_STUB_OBJ)
 	@mkdir -p $(dir $@)
 	$(CXX) $(LDFLAGS) $(AASDK_WRAP_FLAGS) -o $@ $^ $(AASDK_LIBS)
 

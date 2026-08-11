@@ -31,13 +31,6 @@ struct H264DecOutput {
     uint8_t pad[64];
 };
 
-struct H264DecPicture {
-    // See this file's header comment -- layout not yet reverse-
-    // engineered, oversized padding so writes from libmfc.so don't
-    // overrun this buffer.
-    uint8_t pad[256];
-};
-
 struct MemallocParams {
     uint32_t busAddress;
     uint32_t size;
@@ -167,16 +160,17 @@ bool HantroH264Decoder::decodeFrame(const uint8_t * data, size_t len) {
     if (pictureRet != 0) {
         // Not necessarily an error -- H264DecNextPicture legitimately
         // returns non-zero when no picture is ready yet (e.g. still
-        // buffering reference frames). See class header comment: even
-        // when this DOES return 0 (picture ready), the actual pixel
-        // data isn't retrievable yet.
+        // buffering reference frames).
         return false;
     }
 
-    std::printf("androidauto::HantroH264Decoder: picture ready (picId=%u) -- TODO: "
-               "H264DecPicture plane-address layout not yet reverse-engineered, "
-               "can't push this to the display hardware layer yet\n",
-               frameCounter_);
+    lastPicture_ = picture;
+    std::printf("androidauto::HantroH264Decoder: picture ready picId=%u %ux%u "
+               "busAddr=0x%08x format=%u errMBs=%u -- TODO: not yet pushed to "
+               "the display hardware layer\n",
+               picture.picId, picture.picWidth, picture.picHeight,
+               picture.outputPictureBusAddress, picture.outputFormat,
+               picture.nbrOfErrMBs);
     return true;
 }
 

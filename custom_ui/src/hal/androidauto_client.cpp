@@ -66,10 +66,12 @@ void AndroidAutoClient::disconnect() {
     }
 }
 
-bool AndroidAutoClient::ensureConnected() {
+bool AndroidAutoClient::ensureConnected(bool allow_spawn) {
     if (fd_ >= 0) return true;
 
-    trySpawnSidecar();
+    if (allow_spawn) {
+        trySpawnSidecar();
+    }
 
     int fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (fd < 0) return false;
@@ -118,11 +120,11 @@ bool AndroidAutoClient::requestConnect() {
     return false;
 }
 
-std::string AndroidAutoClient::statusLine() {
+std::string AndroidAutoClient::statusLine(bool allow_spawn) {
     std::lock_guard<std::mutex> lock(mutex_);
     std::string reply;
     for (int attempt = 0; attempt < 2; ++attempt) {
-        if (ensureConnected() && sendCommand("STATUS", reply)) {
+        if (ensureConnected(allow_spawn) && sendCommand("STATUS", reply)) {
             return reply;
         }
         disconnect();

@@ -60,10 +60,22 @@ public:
     // "ERR sidecar unreachable" if the socket couldn't be reached at
     // all -- callers don't need to distinguish these, just display the
     // line).
-    std::string statusLine();
+    //
+    // `allow_spawn` (default true, ui/android_auto_screen.cpp's usage):
+    // a failed connection attempt spawns the sidecar (trySpawnSidecar()
+    // in the .cpp), matching the "opening the Android Auto screen is
+    // what starts the sidecar" behavior documented above. Pass false
+    // to only observe whatever's already running, without ever
+    // starting it -- ui/status_bar.cpp does this, since a status glyph
+    // that's on every screen (not just this one) launching the aasdk-
+    // backed sidecar just because the home screen happens to be on
+    // display would turn it into a de-facto always-on background
+    // service, which the header comment above explicitly says this is
+    // not.
+    std::string statusLine(bool allow_spawn = true);
 
 private:
-    bool ensureConnected();
+    bool ensureConnected(bool allow_spawn = true);
     void disconnect();
     // Sends `line` (a bare command, no trailing newline needed) and
     // reads exactly one reply line. Returns false (leaving reply

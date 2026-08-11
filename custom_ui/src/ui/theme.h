@@ -130,4 +130,21 @@ void style_section_label(lv_obj_t * label);
 // notes) -- the 0x999999 gray every screen already used ad hoc.
 void style_secondary_text(lv_obj_t * label);
 
+// One row button inside an lv_list (bluetooth_screen.cpp's paired-
+// device list) -- taller (kMinTouchTarget, LVGL's own default list
+// button is well under that) and left-aligned with breathing room,
+// replacing the stock lv_list button look (thin row, tight padding,
+// small text) that reads as generic-LVGL rather than matching the
+// rest of this app's big-target, AA-flavored controls.
+void style_list_button(lv_obj_t * btn);
+
+// Applied once to an lv_tabview right after creation
+// (settings_screen.cpp's Basic/Advanced tabs) -- makes the tab bar
+// itself (LV_PART_ITEMS, the row of tab buttons) tall enough to clear
+// kMinTouchTarget and gives the selected tab's underline indicator the
+// accent color instead of the default theme's, so switching tabs reads
+// as a deliberate, easy-to-hit action rather than a small default
+// LVGL control bolted onto an otherwise big-target app.
+void style_tabview(lv_obj_t * tabview);
+
 }  // namespace ui::theme

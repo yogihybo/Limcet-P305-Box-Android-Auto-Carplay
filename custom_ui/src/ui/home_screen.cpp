@@ -5,6 +5,7 @@
 #include "ui/bluetooth_screen.h"
 #include "ui/reverse_camera_screen.h"
 #include "ui/settings_screen.h"
+#include "ui/status_bar.h"
 #include "ui/theme.h"
 
 namespace ui {
@@ -91,16 +92,24 @@ lv_obj_t * create_home_screen() {
     lv_obj_t * scr = lv_obj_create(nullptr);
     lv_obj_set_style_bg_color(scr, theme::bg(), 0);
 
+    // Persistent status bar (see ui/status_bar.h) -- same component
+    // every other screen gets via theme::create_screen_with_header(),
+    // added directly here since home_screen builds its own header
+    // (left-aligned title + subtitle, no back button) rather than
+    // using that helper.
+    status_bar::create(scr);
+
     // Header -- simple app title, matches the top-mid title convention
     // used by every other screen (settings_screen.cpp,
     // bluetooth_screen.cpp), just left-aligned with a subtitle instead
     // of centered, and without a back button since this is the root of
-    // the stack.
+    // the stack. Offset down by the status bar's height, same reasoning
+    // as theme.cpp's create_screen_with_header().
     lv_obj_t * title = lv_label_create(scr);
     lv_label_set_text(title, "Prado");
     lv_obj_set_style_text_color(title, theme::text_primary(), 0);
     lv_obj_set_style_text_font(title, &lv_font_montserrat_20, 0);
-    lv_obj_align(title, LV_ALIGN_TOP_LEFT, 20, 16);
+    lv_obj_align(title, LV_ALIGN_TOP_LEFT, 20, 16 + status_bar::kHeight);
 
     lv_obj_t * subtitle = lv_label_create(scr);
     lv_label_set_text(subtitle, "Home");

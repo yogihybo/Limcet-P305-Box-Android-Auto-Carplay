@@ -1,6 +1,7 @@
 #include "ui/theme.h"
 
 #include "core/navigation.h"
+#include "ui/status_bar.h"
 
 namespace ui::theme {
 
@@ -21,6 +22,8 @@ struct SharedStyles {
     lv_style_t primary_btn_pressed;
     lv_style_t step_btn;
     lv_style_t step_btn_pressed;
+    lv_style_t list_btn;
+    lv_style_t list_btn_pressed;
 
     SharedStyles() {
         lv_style_init(&card);
@@ -102,6 +105,26 @@ struct SharedStyles {
         lv_style_init(&step_btn_pressed);
         lv_style_set_bg_color(&step_btn_pressed, accent());
         lv_style_set_text_color(&step_btn_pressed, lv_color_hex(0x0a0a12));
+
+        // lv_list row (bluetooth_screen.cpp's paired-device list) --
+        // the stock lv_list button style is a thin, tightly-padded row;
+        // this instead matches the rest of the app's big-target
+        // language: kMinTouchTarget tall, generous left padding, no
+        // border (list rows are separated by the parent list's own
+        // divider lines, not per-row borders).
+        lv_style_init(&list_btn);
+        lv_style_set_bg_color(&list_btn, surface());
+        lv_style_set_bg_opa(&list_btn, LV_OPA_COVER);
+        lv_style_set_border_width(&list_btn, 0);
+        lv_style_set_radius(&list_btn, 0);
+        lv_style_set_text_color(&list_btn, text_primary());
+        lv_style_set_text_font(&list_btn, &lv_font_montserrat_20);
+        lv_style_set_min_height(&list_btn, kMinTouchTarget);
+        lv_style_set_pad_hor(&list_btn, 14);
+        lv_style_set_pad_ver(&list_btn, 8);
+
+        lv_style_init(&list_btn_pressed);
+        lv_style_set_bg_color(&list_btn_pressed, surface_pressed());
     }
 };
 
@@ -129,7 +152,12 @@ lv_obj_t * add_back_button(lv_obj_t * scr, lv_event_cb_t cb) {
     lv_obj_add_style(btn, &styles().back_btn, 0);
     lv_obj_add_style(btn, &styles().back_btn_pressed, LV_STATE_PRESSED);
     lv_obj_set_size(btn, kMinTouchTarget, kMinTouchTarget);
-    lv_obj_align(btn, LV_ALIGN_TOP_LEFT, 10, 10);
+    // Offset down by the status bar's height -- see
+    // create_screen_with_header() below, which is add_back_button()'s
+    // only real caller today: every non-home screen has a status bar
+    // sitting at y=[0, status_bar::kHeight) now, and this button would
+    // otherwise sit half-hidden underneath it.
+    lv_obj_align(btn, LV_ALIGN_TOP_LEFT, 10, 10 + status_bar::kHeight);
     lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, nullptr);
 
     lv_obj_t * icon = lv_label_create(btn);
@@ -148,7 +176,7 @@ lv_obj_t * add_title(lv_obj_t * scr, const char * text) {
     lv_label_set_text(title, text);
     lv_obj_set_style_text_color(title, text_primary(), 0);
     lv_obj_set_style_text_font(title, &lv_font_montserrat_20, 0);
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 24);
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 24 + status_bar::kHeight);
     return title;
 }
 
@@ -157,6 +185,10 @@ lv_obj_t * create_screen_with_header(lv_obj_t ** out_scr, const char * title, lv
     lv_obj_set_style_bg_color(scr, bg(), 0);
     *out_scr = scr;
 
+    // Status bar first (see ui/status_bar.h -- the persistent AA-style
+    // top bar every screen but reverse_camera_screen.cpp gets), then
+    // the back button/title underneath it, not overlapping.
+    status_bar::create(scr);
     add_back_button(scr, back_cb);
     return add_title(scr, title);
 }
@@ -187,6 +219,26 @@ void style_section_label(lv_obj_t * label) {
 
 void style_secondary_text(lv_obj_t * label) {
     lv_obj_set_style_text_color(label, text_secondary(), 0);
+}
+
+void style_list_button(lv_obj_t * btn) {
+    lv_obj_add_style(btn, &styles().list_btn, 0);
+    lv_obj_add_style(btn, &styles().list_btn_pressed, LV_STATE_PRESSED);
+}
+
+void style_tabview(lv_obj_t * tabview) {
+    // LV_PART_ITEMS on the tabview object itself addresses the tab-bar
+    // buttons (LVGL's own convention for tabview -- there's no separate
+    // "tab bar" child object to style directly). Taller + bigger font
+    // than the default theme's tab buttons, accent-colored selected
+    // indicator/text instead of the base theme's, matching this app's
+    // kMinTouchTarget-everywhere rule.
+    lv_obj_set_style_min_height(tabview, kMinTouchTarget, LV_PART_ITEMS);
+    lv_obj_set_style_text_font(tabview, &lv_font_montserrat_20, LV_PART_ITEMS);
+    lv_obj_set_style_text_color(tabview, accent(), LV_PART_ITEMS | LV_STATE_CHECKED);
+    lv_obj_set_style_border_color(tabview, accent(), LV_PART_ITEMS | LV_STATE_CHECKED);
+    lv_obj_set_style_bg_color(tabview, surface(), LV_PART_ITEMS);
+    lv_obj_set_style_bg_opa(tabview, LV_OPA_COVER, LV_PART_ITEMS);
 }
 
 }  // namespace ui::theme

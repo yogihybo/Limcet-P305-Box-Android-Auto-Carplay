@@ -77,8 +77,10 @@ void refresh_device_list(lv_obj_t ** widgets) {
     }
 
     for (const auto & line : lines) {
-        lv_obj_t * btn = lv_list_add_button(list, nullptr, line.c_str());
+        lv_obj_t * btn = lv_list_add_button(list, LV_SYMBOL_BLUETOOTH, line.c_str());
+        theme::style_list_button(btn);
         lv_obj_add_event_cb(btn, device_row_clicked_cb, LV_EVENT_CLICKED, widgets);
+        lv_group_add_obj(core::navigation::focus_group(), btn);
     }
     status_label_set(status_label, "Tap a device to connect (HFP)");
 }
@@ -111,7 +113,11 @@ lv_obj_t * create_bluetooth_screen() {
 
     lv_obj_t * content = lv_obj_create(scr);
     theme::style_card(content);
-    lv_obj_set_size(content, LV_PCT(94), LV_PCT(78));
+    // 78% -> 74%: the status bar (ui/status_bar.h) now pushes the back
+    // button/title down by status_bar::kHeight, so this card needs a
+    // little less height to keep clear of the back button's bottom
+    // edge instead of visually touching it.
+    lv_obj_set_size(content, LV_PCT(94), LV_PCT(74));
     lv_obj_align(content, LV_ALIGN_BOTTOM_MID, 0, -6);
     lv_obj_set_flex_flow(content, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_all(content, 14, 0);

@@ -14,9 +14,12 @@
 //                replies "OK"
 //   "STATUS"  -> replies "STATE <state_name> <message...>"
 //   (anything else) -> replies "ERR unknown command"
-// One thread per accepted connection (expected connection count: 1,
-// the UI process) -- each thread services that connection's
-// request/reply loop until it errors or the peer closes, matching this
+// One thread per accepted connection (expected connection count: 2 as
+// of the status-bar work in src/ui/status_bar.cpp -- android_auto_screen.cpp's
+// own poll timer, plus status_bar.cpp's independent, non-spawning
+// client used for the persistent top-bar connectivity glyph on every
+// other screen) -- each thread services that connection's request/
+// reply loop until it errors or the peer closes, matching this
 // codebase's general "blocking I/O gets its own thread" convention
 // (e.g. hal::McuInputHal, core::ReverseGearWatcher).
 //

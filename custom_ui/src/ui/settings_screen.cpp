@@ -406,8 +406,12 @@ lv_obj_t * create_settings_screen() {
     theme::create_screen_with_header(&scr, "Settings", back_btn_cb);
 
     lv_obj_t * tabview = lv_tabview_create(scr);
-    lv_obj_set_size(tabview, LV_PCT(100), LV_PCT(80));
+    // 80% -> 74%: same status-bar clearance reasoning as
+    // bluetooth_screen.cpp's content card -- the back button now sits
+    // status_bar::kHeight lower than before.
+    lv_obj_set_size(tabview, LV_PCT(100), LV_PCT(74));
     lv_obj_align(tabview, LV_ALIGN_BOTTOM_MID, 0, 0);
+    theme::style_tabview(tabview);
 
     lv_obj_t * basic_tab = lv_tabview_add_tab(tabview, "Basic");
     lv_obj_t * advanced_tab = lv_tabview_add_tab(tabview, "Advanced");

@@ -33,32 +33,49 @@ void reverse_camera_btn_cb(lv_event_t *) {
     core::navigation::push(create_reverse_camera_screen);
 }
 
-// One launcher tile: an icon glyph over a label, centered, fixed size,
-// styled via the shared card style in ui/theme.h (LVGL applies the
-// pressed style on top of the base one automatically for
-// LV_STATE_PRESSED -- no per-tile event-driven color logic needed).
+// One launcher tile: a big solid-accent circular icon badge (see
+// ui/theme.h's top comment -- this is the specific thing that makes
+// the grid read as "Android Auto app icons" rather than "bordered
+// settings-app cards") with a label underneath. No visible border on
+// the tile itself -- LVGL applies a soft rounded highlight behind the
+// whole tile on press (set below) instead, so the badge alone doesn't
+// have to double as the only interactive-looking element.
 lv_obj_t * create_tile(lv_obj_t * parent, const char * symbol, const char * label_text,
                         lv_event_cb_t cb) {
     lv_obj_t * tile = lv_button_create(parent);
-    lv_obj_set_size(tile, 168, 148);
     lv_obj_remove_style_all(tile);
-    theme::style_card(tile);
+    lv_obj_set_size(tile, 170, LV_SIZE_CONTENT);
+    lv_obj_set_style_bg_opa(tile, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(tile, 0, 0);
+    lv_obj_set_style_shadow_width(tile, 0, 0);
+    lv_obj_set_style_radius(tile, 20, 0);
+    lv_obj_set_style_bg_color(tile, theme::surface_pressed(), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_opa(tile, LV_OPA_60, LV_STATE_PRESSED);
     lv_obj_set_flex_flow(tile, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(tile, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_row(tile, 12, 0);
+    lv_obj_set_style_pad_top(tile, 10, 0);
+    lv_obj_set_style_pad_bottom(tile, 10, 0);
     lv_obj_add_event_cb(tile, cb, LV_EVENT_CLICKED, nullptr);
 
-    lv_obj_t * icon = lv_label_create(tile);
+    lv_obj_t * badge = lv_obj_create(tile);
+    lv_obj_remove_style_all(badge);
+    lv_obj_set_size(badge, theme::kIconBadgeDiameter, theme::kIconBadgeDiameter);
+    theme::style_icon_badge(badge);
+    lv_obj_clear_flag(badge, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_clear_flag(badge, LV_OBJ_FLAG_CLICKABLE);
+
+    lv_obj_t * icon = lv_label_create(badge);
     lv_label_set_text(icon, symbol);
-    lv_obj_set_style_text_color(icon, theme::accent(), 0);
-    // Twice the default 14px font -- easier to tap accurately given the
-    // touch-calibration issues seen on real hardware, and just plain
-    // easier to read/hit while driving.
-    lv_obj_set_style_text_font(icon, &lv_font_montserrat_28, 0);
-    lv_obj_set_style_pad_bottom(icon, 10, 0);
+    // Twice the size of the old flat-card icon -- a big, glanceable
+    // glyph is the whole point of the badge treatment.
+    lv_obj_set_style_text_font(icon, &lv_font_montserrat_48, 0);
+    lv_obj_center(icon);
 
     lv_obj_t * label = lv_label_create(tile);
     lv_label_set_text(label, label_text);
     lv_obj_set_style_text_color(label, theme::text_primary(), 0);
+    lv_obj_set_style_text_font(label, &lv_font_montserrat_20, 0);
 
     // Knob navigation -- see hal/knob.h. LVGL auto-removes this from
     // the group when the tile itself is deleted (screen popped/
@@ -101,7 +118,7 @@ lv_obj_t * create_home_screen() {
     lv_obj_set_flex_align(grid, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_all(grid, 0, 0);
     lv_obj_set_style_pad_row(grid, 20, 0);
-    lv_obj_set_style_pad_column(grid, 20, 0);
+    lv_obj_set_style_pad_column(grid, 16, 0);
     lv_obj_set_style_bg_opa(grid, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(grid, 0, 0);
     lv_obj_clear_flag(grid, LV_OBJ_FLAG_SCROLLABLE);

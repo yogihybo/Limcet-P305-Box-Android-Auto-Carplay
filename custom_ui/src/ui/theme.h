@@ -7,12 +7,33 @@
 // manually-darkened background, which is what every screen did before
 // this file existed.
 //
+// Two things this file optimizes for, not just color matching:
+//
+// 1. Reads as "Android Auto app grid", not "generic dark app": real AA/
+//    AAOS launcher tiles are one big glyph on a solid colored circular
+//    badge with a short label underneath, no visible card border, and
+//    a LOT of tap-target area relative to the visible icon. See
+//    style_icon_badge() / kIconBadgeDiameter below -- home_screen.cpp's
+//    tiles use these now instead of a bordered rectangular card with a
+//    small icon in the corner.
+//
+// 2. Driving-safety sizing: Google's own Android Auto design guidelines
+//    call for large touch targets and glanceable, low-precision
+//    controls -- nothing that needs sustained visual attention or fine
+//    motor control while the vehicle is moving. Concretely here: no
+//    drag-sliders anywhere in this app any more (settings_screen.cpp's
+//    Brightness/Contrast/Saturation/Volume rows are now big +/- stepper
+//    buttons via style_step_button(), not lv_slider_create()); every
+//    interactive element sized at or above kMinTouchTarget; bigger
+//    fonts throughout (LV_FONT_MONTSERRAT_24 for button/value text,
+//    _48 for launcher icon glyphs).
+//
 // theme::init() calls lv_theme_default_init() with this palette and
-// dark=true, so every default widget (button, switch, slider,
-// dropdown, tabview, textarea) picks up consistent colors automatically
-// without per-screen styling -- screens only need the helpers below
-// for the things the default theme doesn't cover (cards, the header
-// affordance, section labels).
+// dark=true, so every default widget (button, switch, dropdown,
+// tabview, textarea) picks up consistent colors automatically without
+// per-screen styling -- screens only need the helpers below for the
+// things the default theme doesn't cover (cards, icon badges, the
+// header affordance, steppers, section labels).
 #pragma once
 
 #include "lvgl.h"
@@ -33,6 +54,18 @@ inline lv_color_t text_primary()   { return lv_color_white(); }
 inline lv_color_t text_secondary() { return lv_color_hex(0x999999); }
 inline lv_color_t success()        { return lv_color_hex(0x4caf50); }
 inline lv_color_t danger()         { return lv_color_hex(0xe05252); }
+
+// ---- driving-safety sizing -----------------------------------------------
+// Google's Android Auto design guidelines specify a 76dp minimum touch
+// target; this device's panel isn't dp-scaled (no known DPI figure to
+// convert against), so kMinTouchTarget is a direct pixel floor picked
+// to look/feel comparable at this screen's real 800x480 -- every
+// interactive element created via the helpers below meets or exceeds
+// it. Not a substitute for real hardware/usability testing with the
+// actual touch digitizer, just the concrete number every style here is
+// built around.
+constexpr int32_t kMinTouchTarget = 64;
+constexpr int32_t kIconBadgeDiameter = 96;
 
 // ---- setup ---------------------------------------------------------------
 
@@ -59,16 +92,34 @@ lv_obj_t * create_screen_with_header(lv_obj_t ** out_scr, const char * title, lv
 
 // ---- reusable element styles -----------------------------------------
 
-// Rounded, bordered surface -- same visual as home_screen's launcher
-// tiles, generalized for any content card (status panels, list
-// containers, grouped settings rows).
+// Rounded, bordered surface -- used for content panels/list containers
+// (android_auto_screen.cpp's status card, bluetooth_screen.cpp's
+// device list panel) -- NOT used for home-screen tiles any more, see
+// style_icon_badge().
 void style_card(lv_obj_t * obj);
+
+// The circular, accent-filled icon badge behind a launcher tile's
+// glyph -- the specific thing that makes home_screen.cpp's tiles read
+// as "AA app grid" instead of "bordered card with an icon in it".
+// `obj` should be a plain lv_obj_t (not a button -- the tile itself is
+// the button; this is just the colored circle drawn behind its icon).
+void style_icon_badge(lv_obj_t * obj);
 
 // Accent-filled, rounded call-to-action button (e.g. "Connect
 // (Wireless)", "Save", "Refresh") -- replaces the default theme's
 // button look where a screen wants to draw attention to one primary
-// action.
+// action. Sized to at least kMinTouchTarget in height.
 void style_primary_button(lv_obj_t * btn);
+
+// One half (either the "-" or the "+") of a stepper control -- a big,
+// square, accent-outlined button, kMinTouchTarget square. See
+// settings_screen.cpp's add_stepper_row(), which replaced every
+// drag-slider in this app with one of these pairs: dragging a thin
+// slider precisely while driving is exactly the kind of sustained-
+// attention/fine-motor-control interaction Android Auto's own design
+// guidelines steer away from; a big flat +/- tap is a single glance
+// and a single tap.
+void style_step_button(lv_obj_t * btn);
 
 // Small accent-colored caps-style label used for section headings
 // ("Display", "Audio", "Status", "Notes") -- every screen was already

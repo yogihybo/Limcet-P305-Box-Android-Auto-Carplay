@@ -68,8 +68,22 @@
 #define LV_STDARG_INCLUDE       <stdarg.h>
 
 #if LV_USE_STDLIB_MALLOC == LV_STDLIB_BUILTIN
-    /** Size of memory available for `lv_malloc()` in bytes (>= 2kB) */
-    #define LV_MEM_SIZE (64 * 1024U)          /**< [bytes] */
+    /** Size of memory available for `lv_malloc()` in bytes (>= 2kB)
+     *
+     * Real hardware finding (2026-08-11): the stock 64KB default is far
+     * too small for this target -- a single lv_linux_fbdev draw buffer
+     * alone (800px wide * 4 bytes/px * LV_LINUX_FBDEV_BUFFER_SIZE=60
+     * lines = 192000 bytes) is 3x the entire old pool, before counting
+     * any of this app's own widgets/screens/styles. lv_malloc() silently
+     * returned NULL for that one allocation, which under
+     * LV_USE_ASSERT_MALLOC=1 hit LV_ASSERT_HANDLER below -- a bare
+     * while(1), a sane default for a bare-metal MCU target where you'd
+     * attach a debugger, but on this Linux target it just manifested as
+     * an unexplained silent hang (alive, spinning, zero further output,
+     * no crash) that took real hardware instrumentation to trace back
+     * to this line. This is a Linux target with real RAM (not a tiny
+     * MCU) -- sized generously rather than cutting it close again. */
+    #define LV_MEM_SIZE (4 * 1024U * 1024U)   /**< [bytes] */
 
     /** Size of the memory expand for `lv_malloc()` in bytes */
     #define LV_MEM_POOL_EXPAND_SIZE 0
@@ -509,9 +523,23 @@
 #define LV_USE_ASSERT_MEM_INTEGRITY 0   /**< Check the integrity of `lv_mem` after critical operations. (Slow) */
 #define LV_USE_ASSERT_OBJ           0   /**< Check the object's type and existence (e.g. not deleted). (Slow) */
 
-/** Add a custom handler when assert happens e.g. to restart MCU. */
-#define LV_ASSERT_HANDLER_INCLUDE <stdint.h>
-#define LV_ASSERT_HANDLER while(1);     /**< Halt by default */
+/** Add a custom handler when assert happens e.g. to restart MCU.
+ *
+ * Real hardware finding (2026-08-11): the stock `while(1);` halt (sane
+ * for a bare-metal MCU target where you'd attach a debugger) silently
+ * hung this Linux app with zero output when LV_MEM_SIZE was too small
+ * for lv_linux_fbdev's draw buffer (see that #define's own comment) --
+ * looked identical to a kernel/mmap hang from the outside and took real
+ * hardware instrumentation to trace back to an LVGL assert. Fail loudly
+ * instead: print to stderr and abort() so any future assert produces an
+ * immediate, unambiguous crash with a message, not a silent spin. */
+#define LV_ASSERT_HANDLER_INCLUDE <stdio.h>
+#define LV_ASSERT_HANDLER \
+    do { \
+        fprintf(stderr, "LVGL assert failed at %s:%d\n", __FILE__, __LINE__); \
+        fflush(stderr); \
+        __builtin_trap(); \
+    } while(0);
 
 /*-------------
  * Debug

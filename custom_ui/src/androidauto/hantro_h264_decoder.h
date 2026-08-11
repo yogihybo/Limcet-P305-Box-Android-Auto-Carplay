@@ -34,21 +34,26 @@
 // disassembly of THIS target's own H264DecNextPicture, though -- that
 // remains the fully conclusive check, just no longer the only lead.
 //
-// KNOWN, SEPARATE GAP: the official API's H264DecInit takes FOUR
-// arguments after the instance pointer (noOutputReordering,
-// useVideoFreezeConcealment, useDisplaySmoothing, DecDpbFlags
-// dpbFlags) in every version of h264decapi.h found -- our own earlier
-// decompile of this target's H264DecInit only recovered THREE. Two
-// explanations, unresolved: either this target's libmfc.so genuinely
-// exports an older/trimmed 3-arg variant, or the decompile simply
-// didn't trace the ARM EABI r3 (4th) argument because nothing inside
-// the function used it, in which case open() below is currently
-// passing that hardware call whatever garbage happened to sit in r3
-// (harmless so far only in the sense that H264DecInit still succeeded
-// on real hardware in hx170-test.c -- doesn't rule out a subtler
-// effect like an unintended tiled reference-frame format). Flagged,
-// not fixed here -- needs a disassembly check of H264DecInit's own
-// prologue before changing the call site.
+// RESOLVED (was flagged as a gap, checked via Ghidra): the official
+// current API's H264DecInit takes FOUR arguments after the instance
+// pointer (noOutputReordering, useVideoFreezeConcealment,
+// useDisplaySmoothing, DecDpbFlags dpbFlags), which didn't match our
+// earlier decompile of this target recovering only THREE. Re-checked
+// directly against this target's real libmfc.so: the exported
+// "H264DecInit" symbol is actually a thin stub that jumps through a
+// function-pointer slot (PTR_H264DecInit_00083774); decompiling the
+// stub alone reports a bogus `(void)` signature. Resolving that
+// pointer and decompiling the real implementation at 0x1ba90 confirms
+// it genuinely takes exactly THREE arguments after the instance
+// pointer -- our existing 3-zero call site below is correct. This
+// target ships an older/trimmed API variant (closer to the ~2010-era
+// ST-Ericsson dmw96 lineage than VeriSilicon's current 4-arg version):
+// param_2/param_4 are forwarded into h264bsdInit(ctx, param_2,
+// param_4) (bitstream-layer init flags), param_3 is conditionally
+// zeroed when the ASIC ID reads 0x8170 before being stored into the
+// decoder context struct -- exact semantic mapping to the official
+// parameter names not pinned down, but the call site's argument COUNT
+// is now hardware-confirmed correct, not a guess.
 //
 // Struct layouts/other API signatures below are otherwise still the
 // ones copied from tools/hx170-test/hx170-test.c (confirmed via Ghidra

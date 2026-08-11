@@ -15,24 +15,20 @@
 
 #include "androidauto/bw_aap_client.h"
 #include "androidauto/session.h"
+#include "core/hal_config.h"
 
 namespace androidauto {
 
 namespace {
 
-// See wireless_session_manager.h's header comment: real, working
-// values from firmware_overlay/etc/wifi_ap.sh /
-// firmware_source/mtd6_rootfs/etc/hostapd/hostapd.conf, not guessed.
-constexpr const char * kApScript = "/etc/wifi_ap.sh";
-constexpr const char * kApAddress = "192.168.43.1";
-constexpr const char * kApSsid = "carplay_wifi";
-constexpr const char * kApPassword = "88888888";
-// Real captured value (docs/logs/android auto log v{1,2,3}.txt), see
-// bw_aap_client.h's own comment on the WPA2_ENTERPRISE-vs-actual-
-// WPA2-Personal discrepancy this doesn't yet resolve.
-constexpr int kApSecurityMode = 8;
-// UNCONFIRMED -- see header comment.
-constexpr std::uint16_t kSessionPort = 5277;
+// Real, working values from firmware_overlay/etc/wifi_ap.sh /
+// firmware_source/mtd6_rootfs/etc/hostapd/hostapd.conf, not guessed --
+// see wireless_session_manager.h's header comment. Configurable now
+// (core/hal_config.h / firmware_overlay/etc/custom_ui/hal.conf)
+// instead of hardcoded here; ApSecurityMode's real captured value
+// (docs/logs/android auto log v{1,2,3}.txt) and SessionPort's
+// UNCONFIRMED status are both still exactly as documented there, just
+// moved to the shared config file's defaults.
 
 std::string readWlan0Mac() {
     std::ifstream f("/sys/class/net/wlan0/address");
@@ -94,7 +90,7 @@ bool WirelessSessionManager::ensureAccessPointUp() {
     // udhcpd &) already background themselves internally -- this call
     // returns once the script's own setup (module load, wlan0-exists
     // poll loop, up to ~30s per its own comment) finishes.
-    int rc = std::system(kApScript);
+    int rc = std::system(core::hal_config().wifi_ap_script().c_str());
     if (rc != 0) {
         return false;
     }
@@ -111,7 +107,7 @@ bool WirelessSessionManager::discoverPhoneIp(std::string & outIp, int timeoutSec
             std::string ip, hwType, flags, hwAddr, mask, device;
             iss >> ip >> hwType >> flags >> hwAddr >> mask >> device;
             if (device != "wlan0") continue;
-            if (ip == kApAddress) continue;
+            if (ip == core::hal_config().wifi_ap_address()) continue;
             if (ip.rfind("192.168.43.", 0) != 0) continue;
             if (flags == "0x0") continue;  // incomplete entry
             outIp = ip;
@@ -142,14 +138,16 @@ void WirelessSessionManager::run() {
         return;
     }
 
-    if (!bwAap.startHandshake(kApAddress, kSessionPort)) {
+    const core::HalConfig & cfg = core::hal_config();
+    if (!bwAap.startHandshake(cfg.wifi_ap_address(), cfg.wifi_session_port())) {
         setStatus(WirelessSessionState::Failed, "BW_AAP handshake (version request/response) failed");
         return;
     }
 
     setStatus(WirelessSessionState::WaitingForWifiJoin,
               "Waiting for phone to request WiFi credentials...");
-    if (!bwAap.respondToInfoRequest(kApSsid, kApPassword, bssid, kApSecurityMode, 30)) {
+    if (!bwAap.respondToInfoRequest(cfg.wifi_ap_ssid(), cfg.wifi_ap_password(), bssid,
+                                     cfg.wifi_ap_security_mode(), 30)) {
         setStatus(WirelessSessionState::Failed,
                   "Phone never requested WiFi credentials (WIFI_INFO_REQUEST timeout)");
         return;
@@ -164,12 +162,12 @@ void WirelessSessionManager::run() {
     }
 
     setStatus(WirelessSessionState::Connecting,
-              "Connecting to " + phoneIp + ":" + std::to_string(kSessionPort) + "...");
+              "Connecting to " + phoneIp + ":" + std::to_string(cfg.wifi_session_port()) + "...");
 
     boost::asio::io_service ioService;
     aasdk::tcp::TCPWrapper tcpWrapper;
     auto socket = std::make_shared<boost::asio::ip::tcp::socket>(ioService);
-    auto ec = tcpWrapper.connect(*socket, phoneIp, kSessionPort);
+    auto ec = tcpWrapper.connect(*socket, phoneIp, cfg.wifi_session_port());
     if (ec) {
         setStatus(WirelessSessionState::Failed, "TCP connect failed: " + ec.message());
         return;

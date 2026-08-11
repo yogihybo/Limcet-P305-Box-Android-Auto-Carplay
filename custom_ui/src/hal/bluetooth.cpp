@@ -10,6 +10,8 @@
 #include <termios.h>
 #include <unistd.h>
 
+#include "core/hal_config.h"
+
 namespace hal {
 
 void ensure_bluetooth_daemon_running() {
@@ -17,38 +19,38 @@ void ensure_bluetooth_daemon_running() {
         return;  // already running
     }
     std::printf("hal::ensure_bluetooth_daemon_running: blueware not running, starting it\n");
-    // Fixed system path, not resolved relative to our own binary --
-    // this is a vendor daemon already installed on the device rootfs,
-    // not something shipped alongside custom_ui (contrast
-    // androidauto_client.cpp's trySpawnSidecar(), which DOES resolve
-    // relative to /proc/self/exe for that reason).
-    //
-    // The explicit properties-file argument matters and was originally
-    // missing here: the real stock app never launches blueware bare.
-    // docs/WIRELESS_AND_INIT.md section 5 decompiled
+    // Daemon path/properties-file argument/log redirect are all
+    // configurable now -- see core/hal_config.h -- rather than
+    // hardcoded here. The properties-file argument matters and was
+    // originally missing entirely: the real stock app never launches
+    // blueware bare. docs/WIRELESS_AND_INIT.md section 5 decompiled
     // BlueToothAdapter_Blueware::initBlueToothAdapter() (0x47728) and
     // found it always passes one of two config paths depending on a
     // board-variant flag byte:
     //   blueware /etc/blueware-bw121.properties > /dev/null 2>&1 &
     //   blueware /etc/blueware-bw123.properties > /dev/null 2>&1 &
     // This board is confirmed the bw121 variant (MODULE_TYPE=BW121,
-    // same doc section) -- hardcoded here since custom_ui only targets
-    // this specific device, not a product line spanning both variants.
-    // (Redirecting to /tmp/blueware.log instead of /dev/null is a
-    // deliberate improvement, not a divergence -- the same doc section
-    // notes the real app's `> /dev/null 2>&1` throws away blueware's
-    // own detailed bpio_init/GPIO91 error messages, which would
-    // otherwise be the single most direct way to diagnose a BT-enable
-    // failure.)
-    if (std::system("/usr/bin/blueware /etc/blueware-bw121.properties "
-                     ">/tmp/blueware.log 2>&1 &") != 0) {
-        std::fprintf(stderr, "hal::ensure_bluetooth_daemon_running: failed to launch "
-                     "/usr/bin/blueware\n");
+    // same doc section) -- that's what hal.conf's shipped default
+    // (firmware_overlay/etc/custom_ui/hal.conf) points at.
+    // (Redirecting to a log file instead of /dev/null is a deliberate
+    // improvement over the real app, not a divergence worth losing --
+    // the same doc section notes the real app's `> /dev/null 2>&1`
+    // throws away blueware's own detailed bpio_init/GPIO91 error
+    // messages, which would otherwise be the single most direct way to
+    // diagnose a BT-enable failure.)
+    const core::HalConfig & cfg = core::hal_config();
+    std::string cmd = cfg.bluetooth_daemon_path() + " " + cfg.bluetooth_properties_path() +
+                       " >" + cfg.bluetooth_log_path() + " 2>&1 &";
+    if (std::system(cmd.c_str()) != 0) {
+        std::fprintf(stderr, "hal::ensure_bluetooth_daemon_running: failed to launch '%s'\n",
+                     cmd.c_str());
     }
 }
 
 bool init_bluetooth(BluetoothHandle & out, const char * path) {
     ensure_bluetooth_daemon_running();
+
+    std::string resolved_path = path ? path : core::hal_config().bluetooth_serial_port();
 
     // Retry briefly -- blueware needs a moment after spawning to
     // create /dev/bw_serial. If it was already running (the common
@@ -57,10 +59,10 @@ bool init_bluetooth(BluetoothHandle & out, const char * path) {
     constexpr int kMaxAttempts = 20;
     constexpr int kRetryDelayUs = 100000;  // 100ms -> up to ~2s total
     for (int attempt = 0; attempt < kMaxAttempts; ++attempt) {
-        out.fd = open(path, O_RDWR | O_NOCTTY);
+        out.fd = open(resolved_path.c_str(), O_RDWR | O_NOCTTY);
         if (out.fd >= 0) {
-            std::printf("hal::init_bluetooth: %s opened (attempt %d/%d)\n", path, attempt + 1,
-                        kMaxAttempts);
+            std::printf("hal::init_bluetooth: %s opened (attempt %d/%d)\n",
+                        resolved_path.c_str(), attempt + 1, kMaxAttempts);
             return true;
         }
         if (attempt + 1 < kMaxAttempts) {
@@ -68,7 +70,7 @@ bool init_bluetooth(BluetoothHandle & out, const char * path) {
         }
     }
     std::fprintf(stderr, "hal::init_bluetooth: warning: %s unavailable after %d attempts (%s)\n",
-                 path, kMaxAttempts, std::strerror(errno));
+                 resolved_path.c_str(), kMaxAttempts, std::strerror(errno));
     return false;
 }
 

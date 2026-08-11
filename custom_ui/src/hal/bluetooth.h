@@ -68,28 +68,34 @@ struct BluetoothHandle {
     int fd = -1;
 };
 
-// Starts /usr/bin/blueware (Feasycom's Bluetooth daemon -- see top
-// comment) if it isn't already running (checked via `pidof blueware`).
-// /dev/bw_serial doesn't exist until this daemon creates it, and
-// nothing in this device's boot scripts (rc.d/rcS, inittab) starts it
-// automatically -- on stock firmware it was launched by MsnCoreApp at
-// runtime; since custom_ui replaces that app, nothing did this until
-// now. Fire-and-forget (std::system(...) with a trailing `&`), same
-// pattern as androidauto_client.cpp's trySpawnSidecar(). Safe to call
-// more than once (the pidof check makes a second call a no-op) --
-// init_bluetooth() below also calls this itself, so callers don't
-// strictly need to call it directly, but main.cpp does anyway, early
-// at startup, to give the daemon maximal time to come up before the
-// first screen tries to open /dev/bw_serial.
+// Starts the blueware daemon (see core/hal_config.h for the
+// configurable path/properties file -- Feasycom's Bluetooth daemon,
+// see top comment) if it isn't already running (checked via `pidof
+// blueware`). /dev/bw_serial doesn't exist until this daemon creates
+// it, and nothing in this device's boot scripts (rc.d/rcS, inittab)
+// starts it automatically -- on stock firmware it was launched by
+// MsnCoreApp at runtime; since custom_ui replaces that app, nothing
+// did this until now. Fire-and-forget (std::system(...) with a
+// trailing `&`), same pattern as androidauto_client.cpp's
+// trySpawnSidecar(). Safe to call more than once (the pidof check
+// makes a second call a no-op) -- init_bluetooth() below also calls
+// this itself, so callers don't strictly need to call it directly, but
+// main.cpp does anyway, early at startup, to give the daemon maximal
+// time to come up before the first screen tries to open /dev/bw_serial.
 void ensure_bluetooth_daemon_running();
 
-// Opens /dev/bw_serial, calling ensure_bluetooth_daemon_running()
+// Opens the AT-command serial port (core::hal_config().bluetooth_serial_port(),
+// "/dev/bw_serial" by default), calling ensure_bluetooth_daemon_running()
 // first and retrying briefly (the daemon needs a moment after
 // spawning to create the node) if it wasn't already up. Non-fatal
 // pattern, same as every other optional-hardware HAL in this
 // codebase -- returns false (fd stays -1) if the node still isn't
 // there after retrying, logged not fatal.
-bool init_bluetooth(BluetoothHandle & out, const char * path = "/dev/bw_serial");
+//
+// path defaults to nullptr, meaning "use the configured serial port" --
+// pass an explicit path only to override it for a one-off call (e.g. a
+// test/diagnostic screen probing a different node).
+bool init_bluetooth(BluetoothHandle & out, const char * path = nullptr);
 
 // Sends AT+<command>\r\n (this function adds the "AT+" prefix and
 // "\r\n" terminator -- pass just the token, e.g. "SCAN=1", not the

@@ -9,6 +9,7 @@
 
 #include "hal/androidauto_client.h"
 #include "core/navigation.h"
+#include "ui/status_bar.h"
 #include "ui/theme.h"
 
 namespace ui {
@@ -92,8 +93,12 @@ lv_obj_t * create_android_auto_screen() {
 
     lv_obj_t * content = lv_obj_create(scr);
     theme::style_card(content);
-    lv_obj_set_size(content, LV_PCT(90), LV_PCT(72));
-    lv_obj_align(content, LV_ALIGN_BOTTOM_MID, 0, -10);
+    // Bottom offset -10 -> -(status_bar::kHeight + 8): the status bar
+    // (ui/status_bar.h) now sits at the literal bottom of the screen,
+    // so this card needs to stop short of it instead of running to the
+    // screen edge. Height 72% -> 66% to match.
+    lv_obj_set_size(content, LV_PCT(90), LV_PCT(66));
+    lv_obj_align(content, LV_ALIGN_BOTTOM_MID, 0, -(status_bar::kHeight + 8));
     lv_obj_set_flex_flow(content, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_all(content, 16, 0);
     lv_obj_set_style_pad_row(content, 10, 0);
@@ -101,6 +106,7 @@ lv_obj_t * create_android_auto_screen() {
     lv_obj_t * connect_btn = lv_button_create(content);
     theme::style_primary_button(connect_btn);
     lv_obj_add_event_cb(connect_btn, connect_btn_cb, LV_EVENT_CLICKED, nullptr);
+    lv_group_add_obj(core::navigation::focus_group(), connect_btn);
     lv_obj_t * connect_label = lv_label_create(connect_btn);
     lv_label_set_text(connect_label, "Connect (Wireless)");
 

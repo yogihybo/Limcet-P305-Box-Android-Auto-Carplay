@@ -5,7 +5,6 @@
 // is now just wiring + the LVGL tick loop. See docs/IMPLEMENTATION_PLAN.md.
 
 #include <cstdio>
-#include <ctime>
 #include <unistd.h>
 #include "lvgl.h"
 #include "hal/display.h"
@@ -16,16 +15,6 @@
 #include "core/screen_manager.h"
 #include "ui/home_screen.h"
 #include "ui/theme.h"
-
-namespace {
-
-double monotonic_seconds() {
-    struct timespec ts {};
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return static_cast<double>(ts.tv_sec) + static_cast<double>(ts.tv_nsec) / 1e9;
-}
-
-}  // namespace
 
 int main() {
     std::printf("custom_ui: starting, lv_init()...\n");
@@ -72,28 +61,16 @@ int main() {
 
     std::printf("custom_ui: LVGL initialized, running main loop\n");
 
-    // Heartbeat: prints actual loop iterations/sec once a second. This
-    // is a direct empirical check of whether usleep(5000) is really
-    // sleeping ~5ms on this device's kernel (see the CPU-usage
-    // discussion in project notes) -- if this prints a number far
-    // above ~200/sec, usleep() is returning far faster than requested
-    // (a real, separate finding from the display-visibility issue).
-    long iterations = 0;
-    double last_report = monotonic_seconds();
-
+    // Per-iteration heartbeat logging (iterations/sec once a second)
+    // was removed here -- it was a one-time diagnostic for a real bug
+    // (LV_MEM_SIZE too small -> lv_malloc() NULL -> the default assert
+    // handler's while(1) spin, which looked like a hang; see
+    // lv_conf.h's LV_MEM_SIZE comment), confirmed fixed and hardware-
+    // tested. Left logging on afterward, it just drowned out real
+    // error output on every boot.
     while (true) {
         lv_timer_handler();
         usleep(5000);
-
-        ++iterations;
-        double now = monotonic_seconds();
-        double elapsed = now - last_report;
-        if (elapsed >= 1.0) {
-            std::printf("custom_ui: heartbeat -- %.1f loop iterations/sec over the last %.2fs\n",
-                        static_cast<double>(iterations) / elapsed, elapsed);
-            iterations = 0;
-            last_report = now;
-        }
     }
 
     return 0;

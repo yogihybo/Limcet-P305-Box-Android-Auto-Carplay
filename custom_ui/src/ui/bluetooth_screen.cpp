@@ -7,6 +7,7 @@
 #include "core/config_store.h"
 #include "core/navigation.h"
 #include "hal/bluetooth.h"
+#include "ui/status_bar.h"
 #include "ui/theme.h"
 
 namespace ui {
@@ -113,12 +114,11 @@ lv_obj_t * create_bluetooth_screen() {
 
     lv_obj_t * content = lv_obj_create(scr);
     theme::style_card(content);
-    // 78% -> 74%: the status bar (ui/status_bar.h) now pushes the back
-    // button/title down by status_bar::kHeight, so this card needs a
-    // little less height to keep clear of the back button's bottom
-    // edge instead of visually touching it.
-    lv_obj_set_size(content, LV_PCT(94), LV_PCT(74));
-    lv_obj_align(content, LV_ALIGN_BOTTOM_MID, 0, -6);
+    // The status bar (ui/status_bar.h) now sits at the literal bottom
+    // of the screen, so this card needs to stop short of it instead of
+    // running to the screen edge.
+    lv_obj_set_size(content, LV_PCT(94), LV_PCT(68));
+    lv_obj_align(content, LV_ALIGN_BOTTOM_MID, 0, -(status_bar::kHeight + 6));
     lv_obj_set_flex_flow(content, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_all(content, 14, 0);
     lv_obj_set_style_pad_row(content, 8, 0);
@@ -152,6 +152,8 @@ lv_obj_t * create_bluetooth_screen() {
     lv_obj_t * name_save_btn = lv_button_create(name_row);
     theme::style_primary_button(name_save_btn);
     lv_obj_add_event_cb(name_save_btn, name_save_btn_cb, LV_EVENT_CLICKED, name_ta);
+    lv_group_add_obj(core::navigation::focus_group(), name_ta);
+    lv_group_add_obj(core::navigation::focus_group(), name_save_btn);
     lv_obj_t * name_save_label = lv_label_create(name_save_btn);
     lv_label_set_text(name_save_label, "Save");
 
@@ -170,6 +172,7 @@ lv_obj_t * create_bluetooth_screen() {
     lv_obj_set_flex_grow(discoverable_label, 1);
     lv_obj_t * discoverable_sw = lv_switch_create(discoverable_row);
     lv_obj_add_event_cb(discoverable_sw, discoverable_switch_cb, LV_EVENT_VALUE_CHANGED, nullptr);
+    lv_group_add_obj(core::navigation::focus_group(), discoverable_sw);
 
     // Paired-device list + refresh. widgets[] is heap-allocated (2
     // lv_obj_t* -- list, status label) and intentionally leaked for
@@ -206,6 +209,7 @@ lv_obj_t * create_bluetooth_screen() {
 
     auto * widgets = new lv_obj_t *[2]{list, status_label};
     lv_obj_add_event_cb(refresh_btn, refresh_btn_cb, LV_EVENT_CLICKED, widgets);
+    lv_group_add_obj(core::navigation::focus_group(), refresh_btn);
 
     refresh_device_list(widgets);
 

@@ -148,10 +148,50 @@ in the binaries — so labelling `0x05/0x06/0x12` as ACC/IGN vs reverse-flag vs
 illumination would be a guess and is deliberately left open. (An earlier draft's
 `0x1D` "main command" was a `cmp`-frequency artifact and is wrong.)
 
-**Outbound** (`makeMCUProtocol` at `0x31e60`, called by `syncSettingDataToMcu` /
-`translateApp` / etc.): the command byte is not passed as a nearby inline
-constant, so the outbound command set is **not yet enumerated** — noted here as an
-open item rather than guessed.
+**Outbound (Linux → STM32) — enumerated 2026-08-06.** `makeMCUProtocol(QByteArray&,
+unsigned char cmd, const char* data, unsigned char len)` builds the same frame
+shape as inbound: `[0x2E][cmd][len][payload...][checksum]` (traced from its own
+body, `0x31e60` in the original Prado dump / `0x35ec0` in the current
+holden-binaries build — see note below on why there are two addresses).
+`translateApp` does **not** call it — that's UI title-string lookup only; the
+doc's earlier "etc." was vague, the real callers are below.
+
+Two binary generations exist in this repo and give different call-site
+counts — **use the current one, not the older dump, when reasoning about what
+the real car sends**: `firmware_dumps/Prado firmware dump/.../libMcuCenter.so`
+is the original Prado capture (`V3.10.3.0212`); `firmware_source/mtd6_rootfs/.../libMcuCenter.so`
+is the Holden-sourced binary confirmed to be what's *actually running* on the
+real unit today (`V3.21.09.0219` — see [[project_holden_prado_binary_provenance]]
+/ the `2a0d1bc` commit). The older dump has 6 outbound call sites; the current
+one has those same 6 plus 4 more that don't exist in the older binary at all
+(new outbound traffic added between firmware revisions). All addresses below
+are from the **current** (`firmware_source`) binary unless marked "(older dump
+only)".
+
+| Cmd | Caller | Payload (as built) | Function | Confidence |
+|:--:|:--:|---|---|---|
+| `0x81` | `onInited` (`0x392d0`) | 1 byte, fixed `0x01` | sent once during MCU init/handshake | high (both binaries, identical call) |
+| `0x81` | `onRecvMcuProtocol` (`0x3d0ac`) | 1 byte, fixed `0x01` | sent back out while handling some inbound command — looks like a generic ACK, not the handshake byte itself | med |
+| `0x82` | `showApp` (`0x36028`), only when `appId==0xCC` (204) | 4 bytes, a value read from a fixed struct offset (`[r3+20]`) | notifies MCU when app `0xCC` is shown; no app-ID table exists yet in this repo to say what app `0xCC` is (worth checking against `MSN_APP_ARCHITECTURE.html` / a live `showApp` trace) | med |
+| `0x84` | `msnAppStateChange` (`0x3623c`, `0x362f4`) | 2 bytes | app foreground/state-change notify. `msnAppStateChange(y,y)` decodes one-hot flags at bits 24–27 of the new-state value first — bit24/bit25 short-circuit to a purely internal `onModeAppChanged()` call with **no** MCU send; anything else (bit26/bit27/unmatched) reaches the generic path, which masks old vs. new state and sends `[0x00,0x00]` if it changed or `[0x00,0x03]` if the masked value is unchanged. No enum names for the bitflags exist in the binary — labelling them app states (foreground/background/etc.) is a plausible guess, not confirmed | med-low |
+| `0x85` | `onRecvAppProtocol` (`0x363ec`) | variable, two length-clamped (max 20) fields | reply/ack sent back out in response to an inbound "app protocol" frame | med |
+| `0x87` | `onItemListViewClicked` (`0x3b920`) | 4 bytes, built right after a `QString::toLocal8Bit()` call on the clicked item's text | echoes a list-item click to the MCU (settings list / menu selection) | med |
+| `0xA0` | `syncSettingDataToMcu` (`0x38f5c`) | 2 bytes: `[settingId, value]`, both truncated to a byte | **generic UI-setting sync channel** — `syncSettingDataToMcu(int settingId)` sends whatever the resolved `MsnIniConfig` value is for that ID; settingId `10`/`11`/`12` get special-cased first (internal `MsnEvent` dispatch + a value remap: `(v+1)*5` style curve, and id 11 gets forced to resend as id 12) but still funnel back through this same `0xA0` send. This is the most likely place a "rear DVD" setting would ride if the factory build models it as an `MsnIniConfig` item | high (mechanism), open (which settingId, if any, is DVD-related) |
+| `0xE1` | `onSendUpdateReadyTimer` (`0x36720`, older dump `0x36598`+`0x36720` offset) | 2 bytes, high/low split of a 16-bit field | periodic ping during the firmware-update flow (pairs with inbound `0xE2`/`0xE4`, see table above) — likely "still waiting to update" / progress | high (both binaries, identical call) |
+| `0xE3` | `onRecvMcuProtocol` (`0x3f174`, older dump `0x398d4`) | variable | sent while processing an inbound command inside the same `0xE2`/`0xE4` update flow — likely "ack chunk" / "request next chunk" | med |
+
+**Net read for the rear-DVD investigation**: none of these 8 outbound commands
+name or obviously relate to a rear DVD/RSE unit or a CAN-passthrough function —
+they're app-lifecycle notification (`0x82`/`0x84`/`0x87`), a generic settings-sync
+channel (`0xA0`), handshake/ack (`0x81`), and firmware-update flow (`0xE1`/`0xE3`).
+`0xA0` is the one open door: if the factory profile models rear-DVD control as
+just another numbered `MsnIniConfig` setting, it would ride this channel
+already and only need the right settingId triggered from the UI — but no
+DVD-shaped settingId has been identified yet. `0x82`'s app-ID `0xCC` is a loose
+thread worth chasing (no app-ID table exists in this repo) but is speculative.
+This does **not** rule out a CAN-relay path that bypasses this MCU protocol
+entirely — see the handoff doc's step 3 (does the STM32 relay non-SWC CAN IDs
+at all) for that.
 
 ---
 
@@ -586,6 +626,183 @@ All events arrive at the ARK1668 via `/dev/ttyHS0` using the Limcet protocol (`M
 > Net effect: the MCU↔ARK1668 UART link being "confirmed functional" via
 > touch no longer holds — that claim should be re-derived from something
 > else (e.g. SWC/CAN activity) if needed elsewhere in this doc.
+
+> **↩️ RE-OPENED (2026-08-10):** touch-via-MCU has now been confirmed on
+> the live device again, directly contradicting the 2026-07-11 retraction
+> above. Both can't be right as stated — this needs reconciliation, not a
+> silent overwrite of either finding (see `feedback_crosscheck_prior_findings`
+> project convention).
+>
+> **Evidence**: running `tools/mcu-handshake/mcu-handshake` (the
+> `/dev/ttyHS0`-at-38400-baud MCU protocol listener documented in that
+> tool's own README — see the `[0x2E][cmd][len][payload...][checksum]`
+> frame format described there) while touching the screen showed specific
+> logged codes correlating directly with touch input. This is a real,
+> live capture, not a static-disassembly guess — and it directly
+> contradicts retraction finding #2 above (a prior `/dev/ttyHS0` hexdump
+> that showed **zero traffic at all**). That prior capture was either
+> taken under different conditions (touch not actually exercised during
+> the capture window, MCU not in the right mode, etc.) or something about
+> the setup differed — worth checking what was different between the two
+> tests if this needs fully settling.
+>
+> **Capture (2026-08-10)**, `mcu-handshake` run against `/dev/ttyHS0`,
+> `--no-hello` not used (default hello sequence sent):
+> ```
+> [*] Listening for MCU frames. Press Ctrl+C to stop.
+> [+] CMD 0x7F from MCU, len=16
+> [+] CMD 0x01 from MCU, len=6
+> [+] CMD 0x40 from MCU, len=1
+> [+] CMD 0x30 from MCU, len=2
+> [+] CMD 0x12 from MCU, len=3
+> [+] CMD 0x01 from MCU, len=6
+> [+] CMD 0x12 from MCU, len=3
+> [+] CMD 0x20 (status query) from MCU: b3=85 b4=2 b5=144 b6=0 b7=1 -- no wire reply sent
+> [+] CMD 0x20 (status query) from MCU: b3=46 b4=2 b5=132 b6=0 b7=2 -- no wire reply sent
+> [+] CMD 0x20 (status query) from MCU: b3=34 b4=2 b5=128 b6=0 b7=2 -- no wire reply sent
+> [+] CMD 0x20 (status query) from MCU: b3=28 b4=2 b5=127 b6=0 b7=2 -- no wire reply sent
+> [+] CMD 0x20 (status query) from MCU: b3=27 b4=2 b5=126 b6=0 b7=2 -- no wire reply sent
+> [+] CMD 0x20 (status query) from MCU: b3=25 b4=2 b5=126 b6=0 b7=2 -- no wire reply sent
+> [+] CMD 0x20 (status query) from MCU: b3=23 b4=2 b5=126 b6=0 b7=2 -- no wire reply sent
+> ```
+> This confirms real, non-zero `/dev/ttyHS0` traffic (settling retraction
+> finding #2 above — that capture must have missed this for some other
+> reason, e.g. MCU not yet in its normal running mode, or genuinely no
+> `CMD 0x20` traffic during that specific window). What it does NOT yet
+> establish on its own: whether `b3`/`b5` are actually touch X/Y
+> coordinates, versus some other quantity that happens to correlate with
+> touch in time (e.g. a pressure/proximity value ramping to a steady
+> contact reading, or an unrelated ADC settling for a different reason
+> during the same window). The pattern here — both fields smoothly
+> decreasing then flattening out over ~7 samples — reads as consistent
+> with either interpretation; `b3`'s range (23-85) and `b5`'s range
+> (126-144) are also far too small to be raw 800x480 pixel coordinates
+> directly, so if these are touch-related they'd have to be coarsely
+> quantized or represent something other than absolute screen position
+> (e.g. a delta, a pressure/contact-area value, or a coordinate in some
+> other MCU-side unit).
+>
+> **Follow-up capture (2026-08-10), touching all four corners in
+> sequence**:
+> ```
+> [+] CMD 0x20 (status query) from MCU: b3=29 b4=0 b5=25  b6=0 b7=1 -- no wire reply sent
+> [+] CMD 0x20 (status query) from MCU: b3=38 b4=0 b5=26  b6=0 b7=2 -- no wire reply sent
+> [+] CMD 0x20 (status query) from MCU: b3=0  b4=0 b5=0   b6=0 b7=0 -- no wire reply sent
+> [+] CMD 0x20 (status query) from MCU: b3=5  b4=0 b5=159 b6=1 b7=1 -- no wire reply sent
+> [+] CMD 0x20 (status query) from MCU: b3=0  b4=0 b5=0   b6=0 b7=0 -- no wire reply sent
+> [+] CMD 0x20 (status query) from MCU: b3=9  b4=0 b5=155 b6=1 b7=1 -- no wire reply sent
+> [+] CMD 0x20 (status query) from MCU: b3=8  b4=0 b5=156 b6=1 b7=2 -- no wire reply sent
+> [+] CMD 0x20 (status query) from MCU: b3=8  b4=0 b5=157 b6=1 b7=2 -- no wire reply sent
+> [+] CMD 0x20 (status query) from MCU: b3=0  b4=0 b5=0   b6=0 b7=0 -- no wire reply sent
+> [+] CMD 0x20 (status query) from MCU: b3=32 b4=3 b5=199 b6=1 b7=1 -- no wire reply sent
+> [+] CMD 0x20 (status query) from MCU: b3=0  b4=0 b5=0   b6=0 b7=0 -- no wire reply sent
+> [+] CMD 0x20 (status query) from MCU: b3=32 b4=3 b5=21  b6=0 b7=1 -- no wire reply sent
+> [+] CMD 0x20 (status query) from MCU: b3=0  b4=0 b5=0   b6=0 b7=0 -- no wire reply sent
+> ```
+> Grouping by the all-zero (`b3=b4=b5=b6=b7=0`) frames as touch-release/
+> idle separators gives 5 distinct touch events:
+>
+> | Group | b3 | b4 | b5 | b6 | b7 |
+> |---|---|---|---|---|---|
+> | 1 | 29, 38 | 0 | 25, 26 | 0 | 1, 2 |
+> | 2 | 5 | 0 | 159 | 1 | 1 |
+> | 3 | 9, 8, 8 | 0 | 155, 156, 157 | 1 | 1, 2, 2 |
+> | 4 | 32 | 3 | 199 | 1 | 1 |
+> | 5 | 32 | 3 | 21 | 0 | 1 |
+>
+> **This is materially stronger evidence than the single-corner capture
+> above**, for two reasons:
+> 1. `b6`+`b5` splits cleanly into two clusters: `b6=0, b5≈21-26` vs.
+>    `b6=1, b5≈155-199`. Consistent with `b6` acting as a high bit and
+>    `(b6<<8)|b5` being a Y coordinate — ≈21-26 near the top of a
+>    ~480px-tall screen, ≈411-455 (`256+155` .. `256+199`) near the
+>    bottom. Two clusters matching two halves of the screen is exactly
+>    what corner-touches should produce.
+> 2. `b3` also splits low (5, 8-9) vs. high (29-38, 32) — consistent
+>    with a coarsely-quantized X, left vs. right.
+> 3. **Group 3's samples are nearly flat while held** (`8, 8, 8` /
+>    `155, 156, 157`) — unlike the single-corner capture's smooth
+>    decay-then-flatten, a steady, repeating value across multiple
+>    samples during sustained contact is a real coordinate signature,
+>    not a settling/decay artifact. This is the key thing that was
+>    missing before to distinguish "real coordinate" from "coincidentally
+>    correlated other reading."
+>
+> **✅ CONFIRMED (2026-08-10)** — touch order for the capture above:
+> top-left, bottom-left, bottom-right, top-right. Group 2+3 are almost
+> certainly one physical touch that double-registered (identical
+> `b3≈5-9`/`b5≈155-159`/`b4=0`/`b6=1` across both) rather than a 5th
+> corner, giving exactly 4 groups for 4 corners:
+>
+> | Corner | b3, b4 | b5, b6 |
+> |---|---|---|
+> | top-left | 29-38, 0 | 25-26, 0 |
+> | bottom-left | 5-9, 0 | 155-159, 1 |
+> | bottom-right | 32, 3 | 199, 1 |
+> | top-right | 32, 3 | 21, 0 |
+>
+> Treating `b4`/`b6` as high bytes, `X = (b4<<8)|b3` and
+> `Y = (b6<<8)|b5`:
+> - top-left: X≈29-38, Y≈25-26 — both near (0,0) ✓
+> - bottom-left: X≈5-9, Y≈411-415 — left edge, near the bottom of a
+>   480px-tall screen ✓
+> - bottom-right: X=768+32=**800**, Y=256+199=455 — **exactly the real
+>   screen width**, near the bottom ✓
+> - top-right: X=768+32=**800**, Y=21 — exactly the screen width, near
+>   the top ✓
+>
+> Both right-edge touches computing to **X=800 exactly** (the real,
+> confirmed screen width used throughout this project, e.g.
+> `custom_ui`'s `TouchForwarder`/`ServiceDiscoveryResponse`) is decisive
+> — this isn't a coincidental correlation, `CMD 0x20`'s payload is a real
+> touch-coordinate report: **`X = (b4<<8)|b3`, `Y = (b6<<8)|b5`, both in
+> direct screen pixels, no further scaling needed.** `b7` (values seen:
+> 1, 2) is still unconfirmed but its position in the sequence (1 on
+> touch-down, 2 on subsequent samples during a hold — see group 3's
+> `1,2,2`) is consistent with a touch-down-vs-touch-move state bit.
+>
+> **✅ DECIDED (2026-08-11)** — direct hardware test, `MsnCoreApp` fully
+> disabled (ruling out an `EVIOCGRAB` exclusive-open explanation): a
+> standalone evdev listener on `/dev/input/event0` received **zero**
+> touch events while the touchscreen was actively touched. This settles
+> the question the entry above left open: the local ADC touch controller
+> path (`ark1680_ts.c`'s direct `readl()` of the on-SoC ADC/TSC register
+> block) does **not** deliver working touch data on this hardware,
+> despite the driver appearing to function (probes cleanly, no errors) —
+> either the physical panel isn't actually wired to that ADC block on
+> this product, or something else in that path is broken. **Real touch
+> input on this device is the MCU's `CMD 0x20` frames over
+> `/dev/ttyHS0`**, confirmed above with exact-pixel-match coordinates.
+>
+> **Net conclusion — corrected from the note above**: the 2026-07-11
+> retraction was wrong on the substance (touch genuinely does depend on
+> the MCU) even though its supporting evidence (the `ts.conf`/`profile`
+> config pointing at evdev) was accurately read — that config describes
+> what `tslib` is *told* to read, not where working data actually comes
+> from, and this session's direct test shows those aren't the same thing
+> on this specific board. **This has a real, direct consequence for
+> `custom_ui`**: both `src/hal/touch.cpp` (LVGL's own touch input for
+> this app's UI) and `src/androidauto/touch_forwarder.h` (Android Auto
+> touch forwarding) are currently built entirely around reading
+> `/dev/input/event0` — exactly the path just confirmed dead on this
+> hardware. Both need a real redesign around reading the MCU protocol
+> (`/dev/ttyHS0`, `CMD 0x20` frames, `X=(b4<<8)|b3`/`Y=(b6<<8)|b5`)
+> directly instead of evdev. See `custom_ui/docs/IMPLEMENTATION_PLAN.md`
+> and `ARCHITECTURE.md` for the tracking entries once that work lands.
+>
+> **Reconciliation**: this doesn't necessarily mean `ark1680_ts.c`/`gt9xx.ko`
+> (the kernel evdev device tslib/`custom_ui` both already read touch
+> from) is wrong or unused — it's possible that driver is itself fed by
+> MCU-relayed data (receiving touch samples over UART and injecting them
+> into the kernel input subsystem as evdev events) rather than reading a
+> directly-wired I2C/SPI touch controller. If so, both findings are
+> simultaneously true: the evdev read point `custom_ui`'s
+> `TouchForwarder` and stock's `tslib` both use is still correct and
+> doesn't need to change, but the data's real *origin* is the MCU, not a
+> directly-attached touch ASIC as `ARK1680_TS_REVERSE_ENGINEERING.md`
+> currently assumes. Needs checking against that doc's own driver-source
+> citations to see whether `ark1680_ts.c` actually reads a local ADC/bus
+> or relays UART frames from elsewhere.
 
 ---
 

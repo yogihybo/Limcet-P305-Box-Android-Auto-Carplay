@@ -82,11 +82,20 @@ lv_obj_t * create_tile(lv_obj_t * parent, const char * symbol, const char * labe
     lv_obj_t * icon = lv_label_create(tile);
     lv_label_set_text(icon, symbol);
     lv_obj_set_style_text_color(icon, lv_color_hex(0x66aaff), 0);
+    // Twice the default 14px font -- easier to tap accurately given the
+    // touch-calibration issues seen on real hardware, and just plain
+    // easier to read/hit while driving.
+    lv_obj_set_style_text_font(icon, &lv_font_montserrat_28, 0);
     lv_obj_set_style_pad_bottom(icon, 10, 0);
 
     lv_obj_t * label = lv_label_create(tile);
     lv_label_set_text(label, label_text);
     lv_obj_set_style_text_color(label, lv_color_white(), 0);
+
+    // Knob navigation -- see hal/knob.h. LVGL auto-removes this from
+    // the group when the tile itself is deleted (screen popped/
+    // recreated), so no manual cleanup needed here.
+    lv_group_add_obj(core::navigation::focus_group(), tile);
 
     return tile;
 }

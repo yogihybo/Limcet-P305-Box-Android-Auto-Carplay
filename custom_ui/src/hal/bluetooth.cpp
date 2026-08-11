@@ -22,7 +22,26 @@ void ensure_bluetooth_daemon_running() {
     // not something shipped alongside custom_ui (contrast
     // androidauto_client.cpp's trySpawnSidecar(), which DOES resolve
     // relative to /proc/self/exe for that reason).
-    if (std::system("/usr/bin/blueware >/tmp/blueware.log 2>&1 &") != 0) {
+    //
+    // The explicit properties-file argument matters and was originally
+    // missing here: the real stock app never launches blueware bare.
+    // docs/WIRELESS_AND_INIT.md section 5 decompiled
+    // BlueToothAdapter_Blueware::initBlueToothAdapter() (0x47728) and
+    // found it always passes one of two config paths depending on a
+    // board-variant flag byte:
+    //   blueware /etc/blueware-bw121.properties > /dev/null 2>&1 &
+    //   blueware /etc/blueware-bw123.properties > /dev/null 2>&1 &
+    // This board is confirmed the bw121 variant (MODULE_TYPE=BW121,
+    // same doc section) -- hardcoded here since custom_ui only targets
+    // this specific device, not a product line spanning both variants.
+    // (Redirecting to /tmp/blueware.log instead of /dev/null is a
+    // deliberate improvement, not a divergence -- the same doc section
+    // notes the real app's `> /dev/null 2>&1` throws away blueware's
+    // own detailed bpio_init/GPIO91 error messages, which would
+    // otherwise be the single most direct way to diagnose a BT-enable
+    // failure.)
+    if (std::system("/usr/bin/blueware /etc/blueware-bw121.properties "
+                     ">/tmp/blueware.log 2>&1 &") != 0) {
         std::fprintf(stderr, "hal::ensure_bluetooth_daemon_running: failed to launch "
                      "/usr/bin/blueware\n");
     }

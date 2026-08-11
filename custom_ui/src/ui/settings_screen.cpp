@@ -302,10 +302,7 @@ void bluetooth_btn_cb(lv_event_t *) {
 
 // ---- tab builders --------------------------------------------------
 
-void build_basic_tab(lv_obj_t * tab) {
-    lv_obj_set_flex_flow(tab, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_style_pad_row(tab, 4, 0);
-
+void build_display_audio_general(lv_obj_t * tab) {
     lv_obj_t * display_header = lv_label_create(tab);
     lv_label_set_text(display_header, "Display");
     theme::style_section_label(display_header);
@@ -360,13 +357,14 @@ void build_basic_tab(lv_obj_t * tab) {
     theme::style_secondary_text(wifi_value);
 }
 
-void build_advanced_tab(lv_obj_t * tab) {
-    lv_obj_set_flex_flow(tab, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_style_pad_row(tab, 4, 0);
+void build_hardware_profile_and_behaviour(lv_obj_t * tab) {
+    lv_obj_t * hw_header = lv_label_create(tab);
+    lv_label_set_text(hw_header, "Hardware profile");
+    theme::style_section_label(hw_header);
 
     lv_obj_t * warn = lv_label_create(tab);
     lv_label_set_text(warn,
-                       "Advanced / factory fields. Read-only entries reflect confirmed "
+                       "Factory fields. Read-only entries reflect confirmed "
                        "hardware-profile values this project's disassembly work has traced --");
     lv_label_set_long_mode(warn, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(warn, LV_PCT(100));
@@ -418,18 +416,23 @@ lv_obj_t * create_settings_screen() {
     lv_obj_t * scr = nullptr;
     theme::create_screen_with_header(&scr, "Settings", back_btn_cb);
 
-    lv_obj_t * tabview = lv_tabview_create(scr);
-    // The status bar (ui/status_bar.h) now sits at the literal bottom
-    // of the screen, so the tabview needs to stop short of it instead
-    // of running to the screen edge.
-    lv_obj_set_size(tabview, LV_PCT(100), LV_PCT(74));
-    lv_obj_align(tabview, LV_ALIGN_BOTTOM_MID, 0, -status_bar::kHeight);
-    theme::style_tabview(tabview);
+    // Single scrollable column -- merged from what used to be separate
+    // "Basic"/"Advanced" tabview tabs per request. All the same rows
+    // still exist, just in one continuous list instead of split behind
+    // a tab switch.
+    lv_obj_t * content = lv_obj_create(scr);
+    lv_obj_remove_style_all(content);
+    // The status bar (ui/status_bar.h) sits at the literal bottom of
+    // the screen, so this needs to stop short of it instead of running
+    // to the screen edge -- same sizing the old tabview used.
+    lv_obj_set_size(content, LV_PCT(100), LV_PCT(74));
+    lv_obj_align(content, LV_ALIGN_BOTTOM_MID, 0, -status_bar::kHeight);
+    lv_obj_set_flex_flow(content, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(content, 4, 0);
+    lv_obj_set_style_pad_all(content, 14, 0);
 
-    lv_obj_t * basic_tab = lv_tabview_add_tab(tabview, "Basic");
-    lv_obj_t * advanced_tab = lv_tabview_add_tab(tabview, "Advanced");
-    build_basic_tab(basic_tab);
-    build_advanced_tab(advanced_tab);
+    build_display_audio_general(content);
+    build_hardware_profile_and_behaviour(content);
 
     return scr;
 }

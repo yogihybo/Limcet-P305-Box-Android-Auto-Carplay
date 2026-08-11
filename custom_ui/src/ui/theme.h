@@ -138,15 +138,6 @@ void style_secondary_text(lv_obj_t * label);
 // rest of this app's big-target, AA-flavored controls.
 void style_list_button(lv_obj_t * btn);
 
-// Applied once to an lv_tabview right after creation
-// (settings_screen.cpp's Basic/Advanced tabs) -- makes the tab bar
-// itself (LV_PART_ITEMS, the row of tab buttons) tall enough to clear
-// kMinTouchTarget and gives the selected tab's underline indicator the
-// accent color instead of the default theme's, so switching tabs reads
-// as a deliberate, easy-to-hit action rather than a small default
-// LVGL control bolted onto an otherwise big-target app.
-void style_tabview(lv_obj_t * tabview);
-
 // Adds ONLY the knob/encoder focus-ring outline (LV_STATE_FOCUSED) --
 // every other style_*() helper above already includes this, so most
 // callers never need it directly. Exists for objects that are

@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <unistd.h>
 #include "lvgl.h"
+#include "hal/bluetooth.h"
 #include "hal/display.h"
 #include "hal/knob.h"
 #include "hal/mcu_input.h"
@@ -33,6 +34,19 @@ int main() {
     // screen is created, see ui/theme.h.
     ui::theme::init(disp);
     std::printf("custom_ui: theme applied\n");
+
+    // Starts /usr/bin/blueware (see hal/bluetooth.h) as early as
+    // possible -- nothing else on this device auto-starts it (stock
+    // firmware's MsnCoreApp did, at runtime; custom_ui replaces that
+    // app and nothing filled the gap until now). Fire-and-forget, not
+    // awaited here: hal::init_bluetooth() (called lazily by the first
+    // screen that needs it -- see bluetooth_screen.cpp/status_bar.cpp)
+    // retries opening /dev/bw_serial for a couple of seconds on its
+    // own, which is what actually covers the daemon's startup time;
+    // this call just gives it a head start so that retry loop is
+    // usually a no-op by the time anything needs it.
+    hal::ensure_bluetooth_daemon_running();
+    std::printf("custom_ui: bluetooth daemon launch requested\n");
 
     // Process-lifetime, intentionally never freed -- same convention as
     // every other process-lifetime singleton in this codebase. Touch,

@@ -53,6 +53,7 @@ void device_row_clicked_cb(lv_event_t * e) {
     lv_obj_t * status_label = widgets[1];
 
     const char * text = lv_list_get_button_text(list, btn);
+    std::printf("ui::bluetooth_screen: device row tapped: '%s'\n", text ? text : "");
     hal::BluetoothHandle & h = bt_handle();
     bool ok = hal::connect_device(h, text ? text : "");
     status_label_set(status_label, ok ? "HFPCONN sent" : "HFPCONN failed / no response");

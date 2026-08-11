@@ -8,6 +8,7 @@
 #include "core/navigation.h"
 #include "hal/display_ctrl.h"
 #include "ui/bluetooth_screen.h"
+#include "ui/theme.h"
 
 namespace ui {
 
@@ -61,7 +62,7 @@ void add_readonly_row(lv_obj_t * parent, const char * label_text, const std::str
         text += ")";
     }
     lv_label_set_text(value_label, text.c_str());
-    lv_obj_set_style_text_color(value_label, lv_color_hex(0x999999), 0);
+    theme::style_secondary_text(value_label);
 }
 
 // ---- value-changed contexts, shared by sliders/switches/dropdowns ---
@@ -233,7 +234,7 @@ void build_basic_tab(lv_obj_t * tab) {
 
     lv_obj_t * display_header = lv_label_create(tab);
     lv_label_set_text(display_header, "Display");
-    lv_obj_set_style_text_color(display_header, lv_color_hex(0x66aaff), 0);
+    theme::style_section_label(display_header);
 
     // Range 0-255 mirrors the real captured Setting.config values
     // (Brightness=128, Contrast=128, Saturation=64 -- see
@@ -248,18 +249,19 @@ void build_basic_tab(lv_obj_t * tab) {
 
     lv_obj_t * audio_header = lv_label_create(tab);
     lv_label_set_text(audio_header, "Audio");
-    lv_obj_set_style_text_color(audio_header, lv_color_hex(0x66aaff), 0);
+    theme::style_section_label(audio_header);
 
     add_slider_row(tab, "Volume", 0, 40, "Volume", "General");
 
     lv_obj_t * general_header = lv_label_create(tab);
     lv_label_set_text(general_header, "General");
-    lv_obj_set_style_text_color(general_header, lv_color_hex(0x66aaff), 0);
+    theme::style_section_label(general_header);
 
     add_language_row(tab);
 
     lv_obj_t * bt_row = add_row(tab, "Bluetooth");
     lv_obj_t * bt_btn = lv_button_create(bt_row);
+    theme::style_primary_button(bt_btn);
     lv_obj_add_event_cb(bt_btn, bluetooth_btn_cb, LV_EVENT_CLICKED, nullptr);
     lv_obj_t * bt_btn_label = lv_label_create(bt_btn);
     lv_label_set_text(bt_btn_label, "Pairing / Devices >");
@@ -280,7 +282,7 @@ void build_basic_tab(lv_obj_t * tab) {
                   "Managed automatically (WLANType=%d) -- AP for wireless AA/CarPlay",
                   wlan_type);
     lv_label_set_text(wifi_value, wifi_buf);
-    lv_obj_set_style_text_color(wifi_value, lv_color_hex(0x999999), 0);
+    theme::style_secondary_text(wifi_value);
 }
 
 void build_advanced_tab(lv_obj_t * tab) {
@@ -293,7 +295,7 @@ void build_advanced_tab(lv_obj_t * tab) {
                        "hardware-profile values this project's disassembly work has traced --");
     lv_label_set_long_mode(warn, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(warn, LV_PCT(100));
-    lv_obj_set_style_text_color(warn, lv_color_hex(0x999999), 0);
+    theme::style_secondary_text(warn);
 
     core::ConfigStore & store = core::default_store();
 
@@ -322,7 +324,7 @@ void build_advanced_tab(lv_obj_t * tab) {
 
     lv_obj_t * behaviour_header = lv_label_create(tab);
     lv_label_set_text(behaviour_header, "Behaviour");
-    lv_obj_set_style_text_color(behaviour_header, lv_color_hex(0x66aaff), 0);
+    theme::style_section_label(behaviour_header);
 
     // FactoryConfig.ini fields confirmed live via disassembly (section
     // 2 of SETTINGS_REFERENCE.md) -- safe to expose as real editable
@@ -338,22 +340,11 @@ void build_advanced_tab(lv_obj_t * tab) {
 }  // namespace
 
 lv_obj_t * create_settings_screen() {
-    lv_obj_t * scr = lv_obj_create(nullptr);
-    lv_obj_set_style_bg_color(scr, lv_color_hex(0x14141e), 0);
-
-    lv_obj_t * back_btn = lv_button_create(scr);
-    lv_obj_align(back_btn, LV_ALIGN_TOP_LEFT, 8, 8);
-    lv_obj_add_event_cb(back_btn, back_btn_cb, LV_EVENT_CLICKED, nullptr);
-    lv_obj_t * back_label = lv_label_create(back_btn);
-    lv_label_set_text(back_label, "< Back");
-
-    lv_obj_t * title = lv_label_create(scr);
-    lv_label_set_text(title, "Settings");
-    lv_obj_set_style_text_color(title, lv_color_white(), 0);
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 12);
+    lv_obj_t * scr = nullptr;
+    theme::create_screen_with_header(&scr, "Settings", back_btn_cb);
 
     lv_obj_t * tabview = lv_tabview_create(scr);
-    lv_obj_set_size(tabview, LV_PCT(100), LV_PCT(85));
+    lv_obj_set_size(tabview, LV_PCT(100), LV_PCT(80));
     lv_obj_align(tabview, LV_ALIGN_BOTTOM_MID, 0, 0);
 
     lv_obj_t * basic_tab = lv_tabview_add_tab(tabview, "Basic");

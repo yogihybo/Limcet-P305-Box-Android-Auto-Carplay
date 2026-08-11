@@ -15,6 +15,7 @@
 #include "core/navigation.h"
 #include "core/screen_manager.h"
 #include "ui/home_screen.h"
+#include "ui/theme.h"
 
 namespace {
 
@@ -31,11 +32,18 @@ int main() {
     lv_init();
     std::printf("custom_ui: lv_init() done\n");
 
-    if (!hal::init_display("/dev/fb0")) {
+    lv_display_t * disp = hal::init_display("/dev/fb0");
+    if (!disp) {
         std::fprintf(stderr, "custom_ui: hal::init_display() failed, exiting\n");
         return 1;
     }
     std::printf("custom_ui: display initialized\n");
+
+    // Dark/accent theme for every default-styled widget (buttons,
+    // switches, sliders, dropdowns, tabview) -- must run before any
+    // screen is created, see ui/theme.h.
+    ui::theme::init(disp);
+    std::printf("custom_ui: theme applied\n");
 
     // Process-lifetime, intentionally never freed -- same convention as
     // every other process-lifetime singleton in this codebase. Touch,

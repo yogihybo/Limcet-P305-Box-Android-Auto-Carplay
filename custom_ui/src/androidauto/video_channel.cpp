@@ -89,9 +89,62 @@ void VideoChannel::onMediaIndication(const aasdk::common::DataConstBuffer & buff
 
 void VideoChannel::decodeBuffer(const aasdk::common::DataConstBuffer & buffer) {
     if (decoderOpen_) {
-        decoder_.decodeFrame(buffer.cdata, buffer.size);
+        if (decoder_.decodeFrame(buffer.cdata, buffer.size)) {
+            pushDecodedFrame();
+        }
     }
     sendAck();
+}
+
+void VideoChannel::pushDecodedFrame() {
+    const H264DecPicture & pic = decoder_.last_picture();
+
+    // outputFormat 1 = 8x4 tiled -- hal::set_frame_addr()'s chroma
+    // offset math (width*height bytes past the Y plane start) is only
+    // valid for raster-scan (outputFormat 0). Tiled layout uses a
+    // completely different addressing scheme this code doesn't
+    // implement -- bail with a clear log rather than push a garbled
+    // frame. Which format the decoder actually picks isn't controlled
+    // by this class (H264DecInit's args, see hantro_h264_decoder.h);
+    // not yet observed on real hardware which one this device uses.
+    if (pic.outputFormat != 0) {
+        std::printf("androidauto: video: decoded picture is tiled (outputFormat=%u), "
+                   "not raster scan -- display push not implemented for this layout, "
+                   "skipping frame\n", pic.outputFormat);
+        return;
+    }
+
+    if (!videoLayerOpen_) {
+        videoLayerOpen_ = hal::init_video_layer(videoLayer_);
+        if (!videoLayerOpen_) {
+            std::printf("androidauto: video layer unavailable -- decoded frames have nowhere "
+                       "to go\n");
+            return;
+        }
+    }
+
+    if (!videoLayerConfigured_ || pic.picWidth != configuredWidth_ ||
+        pic.picHeight != configuredHeight_) {
+        if (!hal::configure_video_layer(videoLayer_, pic.picWidth, pic.picHeight)) {
+            return;
+        }
+        configuredWidth_ = pic.picWidth;
+        configuredHeight_ = pic.picHeight;
+        videoLayerConfigured_ = true;
+    }
+
+    if (!hal::set_frame_addr(videoLayer_, pic.outputPictureBusAddress, pic.picWidth,
+                              pic.picHeight)) {
+        return;
+    }
+
+    // Show once, after the first real frame address has actually been
+    // set -- showing an unconfigured/zero-address window earlier would
+    // just display garbage for one frame's worth of time.
+    if (!videoLayerShown_) {
+        hal::show_video_layer(videoLayer_);
+        videoLayerShown_ = true;
+    }
 }
 
 void VideoChannel::sendAck() {

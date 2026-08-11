@@ -141,6 +141,13 @@ ANDROIDAUTO_SIDECAR_OBJS   := $(BUILD_DIR)/androidauto-sidecar-obj/main.o
 # no aasdk/boost includes needed for this file.
 HAL_CONFIG_OBJ := $(BUILD_DIR)/ui-obj/core/hal_config.o
 
+# Same cross-binary situation as HAL_CONFIG_OBJ above: hal/video_layer.cpp
+# (see src/hal/video_layer.h) is part of custom_ui's own UI_SRCS, but
+# androidauto/video_channel.cpp -- in AASDK_SRCS, built into the
+# separate androidauto-sidecar binary -- calls into it directly to push
+# decoded frames to the hardware video-overlay layer.
+VIDEO_LAYER_OBJ := $(BUILD_DIR)/ui-obj/hal/video_layer.o
+
 # --- androidauto-usb-probe-test: standalone aasdk link-graph proof ---
 # See tools/androidauto-usb-probe-test/main.cpp -- not part of `all`,
 # build explicitly with `make androidauto-usb-probe-test`.
@@ -216,7 +223,7 @@ $(BUILD_DIR)/ui-obj/androidauto/%.o: src/androidauto/%.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) $(AASDK_INCLUDES) -c -o $@ $<
 
-$(ANDROIDAUTO_SIDECAR_TARGET): $(ANDROIDAUTO_SIDECAR_OBJS) $(AASDK_OBJS) $(HAL_CONFIG_OBJ) $(NSS_STUB_OBJ)
+$(ANDROIDAUTO_SIDECAR_TARGET): $(ANDROIDAUTO_SIDECAR_OBJS) $(AASDK_OBJS) $(HAL_CONFIG_OBJ) $(VIDEO_LAYER_OBJ) $(NSS_STUB_OBJ)
 	@mkdir -p $(dir $@)
 	$(CXX) $(LDFLAGS) $(AASDK_WRAP_FLAGS) -o $@ $^ $(AASDK_LIBS)
 

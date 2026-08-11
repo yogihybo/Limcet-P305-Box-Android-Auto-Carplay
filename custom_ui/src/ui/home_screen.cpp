@@ -130,6 +130,14 @@ lv_obj_t * create_home_screen() {
     lv_obj_set_flex_flow(grid, LV_FLEX_FLOW_ROW_WRAP);
     lv_obj_set_flex_align(grid, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_all(grid, 0, 0);
+    // Vertical padding isn't for the tiles themselves -- it's room for
+    // theme::style_focusable()'s knob focus ring, which draws OUTSIDE
+    // each tile's own box (outline_width 3 + outline_pad 3 = ~6px).
+    // LVGL clips a child's drawing to its PARENT's bounds, and this
+    // grid is LV_SIZE_CONTENT with zero margin around its one row of
+    // tiles, so the ring was getting clipped top/bottom against the
+    // grid's own edge -- confirmed on real hardware.
+    lv_obj_set_style_pad_ver(grid, 8, 0);
     lv_obj_set_style_pad_row(grid, 20, 0);
     lv_obj_set_style_pad_column(grid, 16, 0);
     lv_obj_set_style_bg_opa(grid, LV_OPA_TRANSP, 0);

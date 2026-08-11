@@ -123,6 +123,11 @@ struct SharedStyles {
         lv_style_set_min_height(&list_btn, kMinTouchTarget);
         lv_style_set_pad_hor(&list_btn, 14);
         lv_style_set_pad_ver(&list_btn, 8);
+        // Gap between rows for the knob focus ring (see
+        // style_focusable()) -- without it, adjacent rows sat flush
+        // against each other with nowhere for the ring to draw,
+        // clipping top/bottom. Confirmed on real hardware.
+        lv_style_set_margin_ver(&list_btn, 4);
 
         lv_style_init(&list_btn_pressed);
         lv_style_set_bg_color(&list_btn_pressed, surface_pressed());

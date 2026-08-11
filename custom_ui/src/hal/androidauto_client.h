@@ -18,6 +18,17 @@
 // up, so a sidecar that starts after the UI process doesn't need any
 // particular startup ordering.
 //
+// androidauto-sidecar is NOT an always-on background service -- there
+// is no separate manual launch step or rcS entry for it. This class
+// launches it itself (see trySpawnSidecar() in the .cpp) the first
+// time any method here can't connect, which in practice means
+// "Android Auto mode is active" (the user opened ui/android_auto_screen.cpp,
+// which polls statusLine() immediately) is what actually starts the
+// process. Non-blocking -- spawns and returns immediately rather than
+// waiting for the socket to appear, so this never freezes the LVGL
+// main thread; the caller just sees one or two "sidecar unreachable"
+// status ticks before the sidecar finishes binding its socket.
+//
 // NOT YET hardware-tested -- sidecars/androidauto doesn't exist as a
 // running service on the device yet, this is the wiring for when it
 // does.

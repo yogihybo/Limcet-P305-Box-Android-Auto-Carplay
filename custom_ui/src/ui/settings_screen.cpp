@@ -65,7 +65,7 @@ void add_readonly_row(lv_obj_t * parent, const char * label_text, const std::str
     theme::style_secondary_text(value_label);
 }
 
-// ---- value-changed contexts, shared by sliders/switches/dropdowns ---
+// ---- value-changed contexts, shared by steppers/switches/dropdowns ---
 
 enum class VdeField { None, Hue, Saturation, Brightness, Contrast };
 
@@ -94,43 +94,105 @@ void apply_vde(const FieldCtx & ctx, int value) {
     hal::set_vde_config(h, hal::DisplayLayer::Osd1, cfg);
 }
 
-// Sliders fire VALUE_CHANGED continuously while dragging -- update the
-// in-memory store (and, for display fields, the live hardware) on
-// every event for immediate visual feedback, but only persist to disk
-// (ConfigStore::save(), a real file write) once the drag ends.
-void slider_value_changed_cb(lv_event_t * e) {
-    auto * ctx = static_cast<FieldCtx *>(lv_event_get_user_data(e));
-    lv_obj_t * slider = static_cast<lv_obj_t *>(lv_event_get_target(e));
-    int value = lv_slider_get_value(slider);
-    core::default_store().set_int(ctx->key, value, ctx->section);
-    apply_vde(*ctx, value);
+// Stepper controls replace what used to be lv_slider_create() drag-
+// sliders here -- see ui/theme.h's top comment: dragging a thin slider
+// precisely is exactly the kind of sustained-attention, fine-motor-
+// control interaction Android Auto's own design guidelines steer away
+// from. A big flat "-"/"+" (theme::style_step_button(), each
+// theme::kMinTouchTarget square) is a single glance and a single tap,
+// and every tap is a discrete, immediately-persisted change -- no
+// separate "drag ended" event to distinguish, unlike the old slider
+// code's value-changed-vs-released split.
+struct StepperCtx {
+    std::string section;
+    std::string key;
+    VdeField vde_field;
+    int min;
+    int max;
+    int step;
+    int value;
+    lv_obj_t * value_label;
+};
+
+struct StepperBtnCtx {
+    StepperCtx * shared;
+    int dir;  // -1 or +1
+};
+
+void destroy_stepper_ctx_cb(lv_event_t * e) {
+    delete static_cast<StepperCtx *>(lv_event_get_user_data(e));
 }
 
-void slider_released_cb(lv_event_t *) {
-    core::default_store().save();
+void destroy_stepper_btn_ctx_cb(lv_event_t * e) {
+    delete static_cast<StepperBtnCtx *>(lv_event_get_user_data(e));
 }
 
-lv_obj_t * add_slider_row(lv_obj_t * parent, const char * label_text, int min, int max,
-                           const std::string & key, const std::string & section,
-                           VdeField vde_field = VdeField::None) {
+void stepper_btn_clicked_cb(lv_event_t * e) {
+    auto * btn_ctx = static_cast<StepperBtnCtx *>(lv_event_get_user_data(e));
+    StepperCtx * ctx = btn_ctx->shared;
+
+    int new_value = ctx->value + btn_ctx->dir * ctx->step;
+    if (new_value < ctx->min) new_value = ctx->min;
+    if (new_value > ctx->max) new_value = ctx->max;
+    if (new_value == ctx->value) return;
+    ctx->value = new_value;
+
+    lv_label_set_text_fmt(ctx->value_label, "%d", ctx->value);
+    core::default_store().set_int(ctx->key, ctx->value, ctx->section);
+    apply_vde(FieldCtx{ctx->section, ctx->key, ctx->vde_field}, ctx->value);
+    core::default_store().save();  // discrete tap -- safe to persist immediately, same as switch_changed_cb
+}
+
+lv_obj_t * add_stepper_row(lv_obj_t * parent, const char * label_text, int min, int max, int step,
+                            const std::string & key, const std::string & section,
+                            VdeField vde_field = VdeField::None) {
     lv_obj_t * row = add_row(parent, label_text);
 
     int initial = core::default_store().get_int(key, (min + max) / 2, section);
     if (initial < min) initial = min;
     if (initial > max) initial = max;
+    initial = min + ((initial - min) / step) * step;  // snap to the step grid
 
-    lv_obj_t * slider = lv_slider_create(row);
-    lv_obj_set_width(slider, 180);
-    lv_slider_set_range(slider, min, max);
-    lv_slider_set_value(slider, initial, LV_ANIM_OFF);
+    auto * ctx = new StepperCtx{section, key, vde_field, min, max, step, initial, nullptr};
+    lv_obj_add_event_cb(row, destroy_stepper_ctx_cb, LV_EVENT_DELETE, ctx);
 
-    auto * ctx = new FieldCtx{section, key, vde_field};
-    lv_obj_add_event_cb(slider, slider_value_changed_cb, LV_EVENT_VALUE_CHANGED, ctx);
-    lv_obj_add_event_cb(slider, slider_released_cb, LV_EVENT_RELEASED, ctx);
-    lv_obj_add_event_cb(slider, destroy_ctx_cb, LV_EVENT_DELETE, ctx);
+    lv_obj_t * controls = lv_obj_create(row);
+    lv_obj_remove_style_all(controls);
+    lv_obj_set_size(controls, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(controls, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(controls, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(controls, 10, 0);
+
+    lv_obj_t * minus_btn = lv_button_create(controls);
+    lv_obj_remove_style_all(minus_btn);
+    theme::style_step_button(minus_btn);
+    lv_obj_t * minus_label = lv_label_create(minus_btn);
+    lv_label_set_text(minus_label, LV_SYMBOL_MINUS);
+    lv_obj_center(minus_label);
+    auto * minus_ctx = new StepperBtnCtx{ctx, -1};
+    lv_obj_add_event_cb(minus_btn, stepper_btn_clicked_cb, LV_EVENT_CLICKED, minus_ctx);
+    lv_obj_add_event_cb(minus_btn, destroy_stepper_btn_ctx_cb, LV_EVENT_DELETE, minus_ctx);
+
+    lv_obj_t * value_label = lv_label_create(controls);
+    lv_obj_set_style_text_font(value_label, &lv_font_montserrat_24, 0);
+    lv_obj_set_style_text_color(value_label, theme::text_primary(), 0);
+    lv_obj_set_width(value_label, 60);
+    lv_obj_set_style_text_align(value_label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_label_set_text_fmt(value_label, "%d", initial);
+    ctx->value_label = value_label;
+
+    lv_obj_t * plus_btn = lv_button_create(controls);
+    lv_obj_remove_style_all(plus_btn);
+    theme::style_step_button(plus_btn);
+    lv_obj_t * plus_label = lv_label_create(plus_btn);
+    lv_label_set_text(plus_label, LV_SYMBOL_PLUS);
+    lv_obj_center(plus_label);
+    auto * plus_ctx = new StepperBtnCtx{ctx, +1};
+    lv_obj_add_event_cb(plus_btn, stepper_btn_clicked_cb, LV_EVENT_CLICKED, plus_ctx);
+    lv_obj_add_event_cb(plus_btn, destroy_stepper_btn_ctx_cb, LV_EVENT_DELETE, plus_ctx);
 
     if (vde_field != VdeField::None) {
-        apply_vde(*ctx, initial);  // push the seeded/live value to hardware once at build time
+        apply_vde(FieldCtx{section, key, vde_field}, initial);  // push the seeded/live value to hardware once at build time
     }
     return row;
 }
@@ -243,15 +305,15 @@ void build_basic_tab(lv_obj_t * tab) {
     // `unsigned int`, no documented bound found), so this assumes the
     // same 0-255 scale the persisted config already uses. Flagged as
     // an assumption, not hardware-verified.
-    add_slider_row(tab, "Brightness", 0, 255, "Brightness", "General", VdeField::Brightness);
-    add_slider_row(tab, "Contrast", 0, 255, "Contrast", "General", VdeField::Contrast);
-    add_slider_row(tab, "Saturation", 0, 255, "Saturation", "General", VdeField::Saturation);
+    add_stepper_row(tab, "Brightness", 0, 255, 17, "Brightness", "General", VdeField::Brightness);
+    add_stepper_row(tab, "Contrast", 0, 255, 17, "Contrast", "General", VdeField::Contrast);
+    add_stepper_row(tab, "Saturation", 0, 255, 17, "Saturation", "General", VdeField::Saturation);
 
     lv_obj_t * audio_header = lv_label_create(tab);
     lv_label_set_text(audio_header, "Audio");
     theme::style_section_label(audio_header);
 
-    add_slider_row(tab, "Volume", 0, 40, "Volume", "General");
+    add_stepper_row(tab, "Volume", 0, 40, 4, "Volume", "General");
 
     lv_obj_t * general_header = lv_label_create(tab);
     lv_label_set_text(general_header, "General");
@@ -329,8 +391,8 @@ void build_advanced_tab(lv_obj_t * tab) {
     // FactoryConfig.ini fields confirmed live via disassembly (section
     // 2 of SETTINGS_REFERENCE.md) -- safe to expose as real editable
     // controls.
-    add_slider_row(tab, "Reversing volume cut (%)", 0, 100, "ReversingVolumeCut", "General");
-    add_slider_row(tab, "AEC delay (ms)", 0, 300, "AECDelay", "General");
+    add_stepper_row(tab, "Reversing volume cut (%)", 0, 100, 10, "ReversingVolumeCut", "General");
+    add_stepper_row(tab, "AEC delay (ms)", 0, 300, 25, "AECDelay", "General");
     add_switch_row(tab, "Right-hand drive layout", "RightHandCarDriver", "General", false);
     add_switch_row(tab, "Disable window transitions", "DisableWindowEffect", "General", false);
     add_switch_row(tab, "Touch idle auto-calibrate", "TouchCalibrateAction", "General", false);

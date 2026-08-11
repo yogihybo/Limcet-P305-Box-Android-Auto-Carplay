@@ -51,6 +51,28 @@ void Session::start(aasdk::transport::ITransport::Pointer transport) {
 
     inputChannel_->start();
 
+    // Video + the three audio sink channels, constructed and armed
+    // alongside inputChannel_ -- see session.h's member comment and
+    // Session::onServiceDiscoveryRequest() for the matching
+    // advertisement. PCM device strings/rates are the real confirmed
+    // routes from docs/AUDIO_SUBSYSTEM_INVESTIGATION.md (SYSTEM_AUDIO's
+    // plug:softvol4 route is an explicitly-flagged approximation, not
+    // an independently confirmed 1:1 mapping -- see that doc).
+    videoChannel_ = std::make_shared<VideoChannel>(strand_, messenger);
+    videoChannel_->start();
+
+    audioChannelMedia_ = std::make_shared<AudioChannel>(
+        strand_, messenger, aasdk::messenger::ChannelId::MEDIA_SINK_MEDIA_AUDIO, "plug:softvol2", 48000, 2);
+    audioChannelMedia_->start();
+
+    audioChannelGuidance_ = std::make_shared<AudioChannel>(
+        strand_, messenger, aasdk::messenger::ChannelId::MEDIA_SINK_GUIDANCE_AUDIO, "plug:softvol1", 16000, 1);
+    audioChannelGuidance_->start();
+
+    audioChannelSystem_ = std::make_shared<AudioChannel>(
+        strand_, messenger, aasdk::messenger::ChannelId::MEDIA_SINK_SYSTEM_AUDIO, "plug:softvol4", 16000, 1);
+    audioChannelSystem_->start();
+
     auto promise = aasdk::channel::SendPromise::defer(strand_);
     promise->then(
         []() { std::printf("androidauto: version request sent\n"); },
@@ -107,9 +129,13 @@ void Session::onServiceDiscoveryRequest(
 
     // Advertises InputSourceService (touch only, 800x480 matching this
     // device's real framebuffer -- see docs/ARCHITECTURE.md's Display
-    // section) -- video/audio/sensor services still aren't implemented,
-    // so still not advertised (advertising a channel we can't actually
-    // open would be worse than not advertising it).
+    // section), one MediaSinkService for video (VIDEO_800x480 H264_BP,
+    // the exact real screen resolution -- no scaling needed) and one
+    // each for the three audio types this app can actually play (see
+    // Session::start()'s PCM route comment). Sensor services still
+    // aren't implemented, so still not advertised -- advertising a
+    // channel we can't actually open would be worse than not
+    // advertising it.
     aap_protobuf::service::control::message::ServiceDiscoveryResponse response;
     response.mutable_headunit_info()->set_head_unit_make("custom_ui");
     response.mutable_headunit_info()->set_head_unit_model("prado-firmware-reconstruction");
@@ -124,6 +150,51 @@ void Session::onServiceDiscoveryRequest(
     auto *touchscreen = inputService->mutable_input_source_service()->add_touchscreen();
     touchscreen->set_width(800);
     touchscreen->set_height(480);
+
+    auto *videoService = response.add_channels();
+    videoService->set_id(static_cast<std::int32_t>(aasdk::messenger::ChannelId::MEDIA_SINK_VIDEO));
+    auto *videoSink = videoService->mutable_media_sink_service();
+    videoSink->set_available_type(
+        aap_protobuf::service::media::shared::message::MEDIA_CODEC_VIDEO_H264_BP);
+    auto *videoConfig = videoSink->add_video_configs();
+    videoConfig->set_codec_resolution(
+        aap_protobuf::service::media::sink::message::VIDEO_800x480);
+    videoConfig->set_frame_rate(aap_protobuf::service::media::sink::message::VIDEO_FPS_30);
+    videoConfig->set_video_codec_type(
+        aap_protobuf::service::media::shared::message::MEDIA_CODEC_VIDEO_H264_BP);
+
+    auto *mediaAudioService = response.add_channels();
+    mediaAudioService->set_id(
+        static_cast<std::int32_t>(aasdk::messenger::ChannelId::MEDIA_SINK_MEDIA_AUDIO));
+    auto *mediaAudioSink = mediaAudioService->mutable_media_sink_service();
+    mediaAudioSink->set_available_type(aap_protobuf::service::media::shared::message::MEDIA_CODEC_AUDIO_PCM);
+    mediaAudioSink->set_audio_type(aap_protobuf::service::media::sink::message::AUDIO_STREAM_MEDIA);
+    auto *mediaAudioConfig = mediaAudioSink->add_audio_configs();
+    mediaAudioConfig->set_sampling_rate(48000);
+    mediaAudioConfig->set_number_of_bits(16);
+    mediaAudioConfig->set_number_of_channels(2);
+
+    auto *guidanceAudioService = response.add_channels();
+    guidanceAudioService->set_id(
+        static_cast<std::int32_t>(aasdk::messenger::ChannelId::MEDIA_SINK_GUIDANCE_AUDIO));
+    auto *guidanceAudioSink = guidanceAudioService->mutable_media_sink_service();
+    guidanceAudioSink->set_available_type(aap_protobuf::service::media::shared::message::MEDIA_CODEC_AUDIO_PCM);
+    guidanceAudioSink->set_audio_type(aap_protobuf::service::media::sink::message::AUDIO_STREAM_GUIDANCE);
+    auto *guidanceAudioConfig = guidanceAudioSink->add_audio_configs();
+    guidanceAudioConfig->set_sampling_rate(16000);
+    guidanceAudioConfig->set_number_of_bits(16);
+    guidanceAudioConfig->set_number_of_channels(1);
+
+    auto *systemAudioService = response.add_channels();
+    systemAudioService->set_id(
+        static_cast<std::int32_t>(aasdk::messenger::ChannelId::MEDIA_SINK_SYSTEM_AUDIO));
+    auto *systemAudioSink = systemAudioService->mutable_media_sink_service();
+    systemAudioSink->set_available_type(aap_protobuf::service::media::shared::message::MEDIA_CODEC_AUDIO_PCM);
+    systemAudioSink->set_audio_type(aap_protobuf::service::media::sink::message::AUDIO_STREAM_SYSTEM_AUDIO);
+    auto *systemAudioConfig = systemAudioSink->add_audio_configs();
+    systemAudioConfig->set_sampling_rate(16000);
+    systemAudioConfig->set_number_of_bits(16);
+    systemAudioConfig->set_number_of_channels(1);
 
     auto promise = aasdk::channel::SendPromise::defer(strand_);
     promise->then(

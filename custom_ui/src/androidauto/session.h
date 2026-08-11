@@ -9,8 +9,10 @@
 #include <aasdk/Channel/Control/IControlServiceChannel.hpp>
 #include <aasdk/Channel/Control/IControlServiceChannelEventHandler.hpp>
 
+#include "androidauto/audio_channel.h"
 #include "androidauto/input_channel.h"
 #include "androidauto/touch_forwarder.h"
+#include "androidauto/video_channel.h"
 
 namespace androidauto {
 
@@ -102,6 +104,17 @@ private:
     // for why: no reason to hold a second touch fd open before the
     // phone has actually opened the channel to receive events on.
     TouchForwarder::Pointer touchForwarder_;
+
+    // Constructed and armed alongside the other channels in
+    // Session::start(). videoChannel_ decodes via HantroH264Decoder
+    // (real hardware decode works; actually displaying a frame doesn't
+    // yet, see that class's header comment for the specific gap).
+    // audioChannel*_ play via AlsaOutput against the real, confirmed
+    // PCM device routes for each audio type -- see alsa_output.h.
+    VideoChannel::Pointer videoChannel_;
+    AudioChannel::Pointer audioChannelMedia_;
+    AudioChannel::Pointer audioChannelGuidance_;
+    AudioChannel::Pointer audioChannelSystem_;
 };
 
 }  // namespace androidauto

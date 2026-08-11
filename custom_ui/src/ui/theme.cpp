@@ -250,19 +250,4 @@ void style_focusable(lv_obj_t * obj) {
     lv_obj_add_style(obj, &styles().focus_ring, LV_STATE_FOCUSED);
 }
 
-void style_tabview(lv_obj_t * tabview) {
-    // LV_PART_ITEMS on the tabview object itself addresses the tab-bar
-    // buttons (LVGL's own convention for tabview -- there's no separate
-    // "tab bar" child object to style directly). Taller + bigger font
-    // than the default theme's tab buttons, accent-colored selected
-    // indicator/text instead of the base theme's, matching this app's
-    // kMinTouchTarget-everywhere rule.
-    lv_obj_set_style_min_height(tabview, kMinTouchTarget, LV_PART_ITEMS);
-    lv_obj_set_style_text_font(tabview, &lv_font_montserrat_20, LV_PART_ITEMS);
-    lv_obj_set_style_text_color(tabview, accent(), LV_PART_ITEMS | LV_STATE_CHECKED);
-    lv_obj_set_style_border_color(tabview, accent(), LV_PART_ITEMS | LV_STATE_CHECKED);
-    lv_obj_set_style_bg_color(tabview, surface(), LV_PART_ITEMS);
-    lv_obj_set_style_bg_opa(tabview, LV_OPA_COVER, LV_PART_ITEMS);
-}
-
 }  // namespace ui::theme

@@ -4,6 +4,8 @@
 #include <cstdlib>
 #include <fstream>
 
+#include <unistd.h>
+
 namespace core {
 
 namespace {
@@ -15,11 +17,34 @@ std::string trim(const std::string & s) {
     return s.substr(start, end - start + 1);
 }
 
+// Directory containing the running binary, via /proc/self/exe -- same
+// technique as androidauto_client.cpp's trySpawnSidecar(). Empty
+// string if it can't be resolved (e.g. /proc unavailable) rather than
+// throwing/asserting -- this is a "nice to have" search path, not a
+// required one.
+std::string executable_dir() {
+    char exePath[512];
+    ssize_t len = readlink("/proc/self/exe", exePath, sizeof(exePath) - 1);
+    if (len <= 0) return "";
+    exePath[len] = '\0';
+
+    std::string dir(exePath);
+    auto slash = dir.find_last_of('/');
+    if (slash == std::string::npos) return "";
+    dir.resize(slash);
+    return dir;
+}
+
 }  // namespace
 
 HalConfig::HalConfig() {
     // First path that exists wins -- see class comment, no merging
     // across paths (unlike ConfigStore's live+factory layering).
+    std::string exe_dir = executable_dir();
+    if (!exe_dir.empty() && load_file(exe_dir + "/hal.conf")) {
+        std::printf("core::HalConfig: loaded %s/hal.conf\n", exe_dir.c_str());
+        return;
+    }
     if (load_file("/data/custom_ui/hal.conf")) {
         std::printf("core::HalConfig: loaded /data/custom_ui/hal.conf\n");
         return;

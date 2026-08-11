@@ -18,20 +18,33 @@
 // File format: flat INI, `[Section]` headers, `Key=Value` lines,
 // `#`-prefixed comment lines, same style as the vendor .ini files
 // ConfigStore already parses (familiar to anyone editing this repo's
-// config files). Search order -- first path that exists wins, parsed
-// in full (no merging across paths, unlike ConfigStore's live+factory
-// layering, since there's no "factory default that shouldn't be
-// touched" concept here):
-//   1. /data/custom_ui/hal.conf   -- writable userdata partition, a
-//      real device deployment's actual edit target; survives a
+// config files). Tracked source: custom_ui/etc/hal.conf -- the
+// Makefile stages a copy into build/hal.conf on every `make ui`/
+// `make androidauto-sidecar`, right next to the compiled binaries, so
+// scp'ing build/ to the device (this project's actual fast-iteration
+// workflow, see scripts/run_on_device.sh -- custom_ui isn't wired into
+// a real firmware_overlay image build yet) carries the config along
+// automatically with no on-device setup.
+//
+// Search order -- first path that exists wins, parsed in full (no
+// merging across paths, unlike ConfigStore's live+factory layering,
+// since there's no "factory default that shouldn't be touched" concept
+// here):
+//   1. <directory containing the running binary>/hal.conf -- resolved
+//      via /proc/self/exe, same technique as
+//      androidauto_client.cpp's trySpawnSidecar(). The build/hal.conf
+//      staging above lands here once scp'd alongside the binary.
+//   2. /data/custom_ui/hal.conf -- writable userdata partition, the
+//      real edit target on a properly deployed device; survives a
 //      firmware-image reflash the way /etc wouldn't.
-//   2. /etc/custom_ui/hal.conf    -- shipped default, tracked in this
-//      repo at firmware_overlay/etc/custom_ui/hal.conf.
-// If neither exists (e.g. a dev host build, or a firmware image that
-// hasn't deployed the overlay file yet), every getter below falls
-// back to the same literal values this project had hardcoded before
-// -- non-fatal, matching every other optional-file pattern in this
-// codebase.
+//   3. /etc/custom_ui/hal.conf -- would be a real firmware image's
+//      shipped default. Nothing deploys a file there today (see
+//      above), kept as a search path for when custom_ui does get
+//      wired into a real image build.
+// If none exist (e.g. a dev host build with no config file around at
+// all), every getter below falls back to the same literal values this
+// project had hardcoded before -- non-fatal, matching every other
+// optional-file pattern in this codebase.
 #pragma once
 
 #include <cstdint>

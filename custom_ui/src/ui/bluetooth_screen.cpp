@@ -143,6 +143,11 @@ lv_obj_t * create_bluetooth_screen() {
     lv_obj_set_flex_flow(name_row, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(name_row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER,
                            LV_FLEX_ALIGN_CENTER);
+    // Room for name_save_btn's knob focus ring -- this row is
+    // LV_SIZE_CONTENT and wraps tightly around its tallest child (the
+    // button), leaving no slack for the ring otherwise. Same fix as
+    // home_screen.cpp's tile grid.
+    lv_obj_set_style_pad_ver(name_row, 6, 0);
 
     lv_obj_t * name_ta = lv_textarea_create(name_row);
     lv_textarea_set_one_line(name_ta, true);
@@ -168,6 +173,7 @@ lv_obj_t * create_bluetooth_screen() {
     lv_obj_set_flex_flow(discoverable_row, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(discoverable_row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER,
                            LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_ver(discoverable_row, 6, 0);  // focus ring clearance, see name_row above
     lv_obj_t * discoverable_label = lv_label_create(discoverable_row);
     lv_label_set_text(discoverable_label, "Discoverable to phones");
     lv_obj_set_flex_grow(discoverable_label, 1);
@@ -190,6 +196,7 @@ lv_obj_t * create_bluetooth_screen() {
     lv_obj_set_flex_flow(list_header_row, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(list_header_row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER,
                            LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_ver(list_header_row, 6, 0);  // focus ring clearance, see name_row above
     lv_obj_t * list_title = lv_label_create(list_header_row);
     lv_label_set_text(list_title, "Paired devices");
     theme::style_section_label(list_title);
@@ -203,6 +210,12 @@ lv_obj_t * create_bluetooth_screen() {
     lv_obj_set_flex_grow(list, 1);
     lv_obj_set_style_bg_opa(list, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(list, 0, 0);
+    // Room for the first/last row's knob focus ring against the
+    // list's own scroll-clip boundary -- theme::style_list_button()'s
+    // margin_ver only creates a gap BETWEEN rows, not at the very top/
+    // bottom of the list itself. Confirmed clipped on real hardware
+    // without this.
+    lv_obj_set_style_pad_ver(list, 6, 0);
 
     lv_obj_t * status_label = lv_label_create(content);
     lv_label_set_text(status_label, "");

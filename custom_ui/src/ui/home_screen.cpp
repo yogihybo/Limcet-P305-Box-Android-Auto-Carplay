@@ -98,27 +98,10 @@ lv_obj_t * create_home_screen() {
 
     // Persistent status bar (see ui/status_bar.h) -- same component
     // every other screen gets via theme::create_screen_with_header(),
-    // added directly here since home_screen builds its own header
-    // (left-aligned title + subtitle, no back button) rather than
-    // using that helper.
+    // added directly here since home_screen has no title/back-button
+    // header of its own (removed per request -- just the status bar
+    // plus the tile grid below it).
     status_bar::create(scr);
-
-    // Header -- simple app title, matches the top-mid title convention
-    // used by every other screen (settings_screen.cpp,
-    // bluetooth_screen.cpp), just left-aligned with a subtitle instead
-    // of centered, and without a back button since this is the root of
-    // the stack. Offset down by the status bar's height, same reasoning
-    // as theme.cpp's create_screen_with_header().
-    lv_obj_t * title = lv_label_create(scr);
-    lv_label_set_text(title, "Prado");
-    lv_obj_set_style_text_color(title, theme::text_primary(), 0);
-    lv_obj_set_style_text_font(title, &lv_font_montserrat_20, 0);
-    lv_obj_align(title, LV_ALIGN_TOP_LEFT, 20, 16 + status_bar::kHeight);
-
-    lv_obj_t * subtitle = lv_label_create(scr);
-    lv_label_set_text(subtitle, "Home");
-    theme::style_secondary_text(subtitle);
-    lv_obj_align_to(subtitle, title, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 4);
 
     // Tile grid -- centered row, wraps if it ever grows past what fits
     // on one line at 800x480. New destinations get added here as they
@@ -126,7 +109,7 @@ lv_obj_t * create_home_screen() {
     lv_obj_t * grid = lv_obj_create(scr);
     lv_obj_remove_style_all(grid);
     lv_obj_set_size(grid, LV_PCT(94), LV_SIZE_CONTENT);
-    lv_obj_align(grid, LV_ALIGN_CENTER, 0, 10);
+    lv_obj_align(grid, LV_ALIGN_CENTER, 0, status_bar::kHeight / 2);
     lv_obj_set_flex_flow(grid, LV_FLEX_FLOW_ROW_WRAP);
     lv_obj_set_flex_align(grid, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_all(grid, 0, 0);

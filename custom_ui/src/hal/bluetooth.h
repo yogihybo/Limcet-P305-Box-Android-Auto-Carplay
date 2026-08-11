@@ -23,7 +23,15 @@
 // other framing/checksum/length prefix. Incoming lines are
 // `+PREFIX=value` (also `\r\n`-terminated) -- confirmed prefixes
 // include `+PLIST=`, `+ADDR=`, `+NAME=`, `+PIN=`, `+PAIRED=0`,
-// `+HFPSTAT=`, `+HFPDEV=`, `+DEVSTAT=`, `+A2DPSTAT=`, `+VER=`. The
+// `+HFPSTAT=`, `+HFPDEV=`, `+DEVSTAT=`, `+A2DPSTAT=`, `+VER=`, plus
+// two seen live on real hardware (2026-08-12) but NOT in either
+// decompiled source: `+HFPSIG=` (unsolicited, meaning unknown -- shows
+// up even with nothing paired/connected) and `+AAPSTAT=`/`+AAPDEV=`
+// (also unsolicited, almost certainly Android-Auto-wireless-pairing
+// discovery status -- `+AAPDEV=04006EAF29C4<sep>Pixel 9 Pro` appeared
+// the moment a real AA-capable phone was nearby, `+AAPSTAT=` cycled
+// 1/2/3 around it). Both are emitted independent of anything this app
+// sends -- see send_command()'s own comment for why that matters. The
 // stock app's own `onReadLine()` field-by-field parse of these was
 // NOT fully decompiled (docs/WIRELESS_AND_INIT.md flags it as an 8.8
 // KB not-yet-decompiled function) -- so this class exposes raw
@@ -99,14 +107,53 @@ bool init_bluetooth(BluetoothHandle & out, const char * path = nullptr);
 
 // Sends AT+<command>\r\n (this function adds the "AT+" prefix and
 // "\r\n" terminator -- pass just the token, e.g. "SCAN=1", not the
-// full line) and collects whatever "+PREFIX=..." response line(s)
-// arrive within timeout_ms. Returns false on write failure or if
-// nothing was read before the timeout. Exposed publicly so a
-// Settings/diagnostic screen can issue any of the vocabulary above
-// without this class needing a dedicated wrapper for every single
-// one.
+// full line) and collects response line(s) arriving within timeout_ms.
+// Returns false on write failure or if nothing was read before the
+// timeout. Exposed publicly so a Settings/diagnostic screen can issue
+// any of the vocabulary above without this class needing a dedicated
+// wrapper for every single one.
+//
+// IMPORTANT, confirmed on real hardware (2026-08-12): blueware emits
+// unsolicited status lines on this same serial link independent of
+// anything sent to it -- e.g. `+HFPSIG=`, and (newly observed, not
+// previously documented anywhere) `+AAPSTAT=`/`+AAPDEV=`, almost
+// certainly Android-Auto-wireless-pairing discovery status, broadcast
+// the moment an AA-capable phone is nearby. Because this function just
+// collects EVERYTHING that arrives in the timeout window with no way
+// to distinguish "reply to what I just sent" from "unrelated broadcast
+// that happened to land in the same window," a real capture showed a
+// PLIST call's response_lines polluted with an unrelated `+HFPSIG=0`
+// line, which the caller (list_paired_devices(), at the time) had no
+// way to tell apart from an actual device entry -- got treated as one,
+// and sending it back via HFPCONN predictably failed (ERR002).
+//
+// `expected_prefix`, when non-empty, is the fix for exactly that: only
+// lines starting with it are kept, WITH the prefix itself stripped off
+// before being returned -- e.g. pass "+PLIST=" and get back only real
+// device-list lines, prefix-free. Leave empty (default) for commands
+// where no specific reply prefix is confirmed/expected, or where the
+// caller genuinely wants the raw stream (e.g. a future diagnostic
+// screen dumping whatever blueware says). This does NOT solve the
+// deeper architectural issue -- a real fix would need a background
+// reader continuously dispatching by prefix (same one-reader-thread
+// pattern as hal/mcu_input.h) rather than "write, then blindly read
+// for N ms" -- flagged here, not fixed, since nothing today actually
+// needs to observe +AAPSTAT=/+AAPDEV= broadcasts that can arrive at
+// arbitrary times outside of any call to this function.
 bool send_command(BluetoothHandle & h, const std::string & command,
-                   std::vector<std::string> & response_lines, int timeout_ms = 2000);
+                   std::vector<std::string> & response_lines, int timeout_ms = 2000,
+                   const std::string & expected_prefix = "");
+
+// Splits a device-list entry of the form "<12-hex-char MAC><1 separator
+// byte><name...>" into `mac` (uppercase hex, no colons -- matches the
+// exact form confirmed on real hardware in a `+AAPDEV=` broadcast,
+// `04006EAF29C4` + separator + `Pixel 9 Pro`) and `name`. Returns false
+// (leaving both empty) if `entry` doesn't start with 12 hex digits --
+// callers should fall back to treating the whole entry as an opaque
+// identifier in that case, not assume this always matches (PLIST's own
+// per-entry format hasn't actually been observed yet, only inferred
+// from this same vendor stack's AAPDEV shape).
+bool split_mac_and_name(const std::string & entry, std::string & mac, std::string & name);
 
 // BTEN=1 / BTEN=0
 bool set_adapter_enabled(BluetoothHandle & h, bool enabled);
@@ -116,8 +163,12 @@ bool set_adapter_enabled(BluetoothHandle & h, bool enabled);
 // the name suggesting otherwise).
 bool set_discoverable(BluetoothHandle & h, bool discoverable);
 
-// PLIST -- raw response lines, one (probable) device per line, format
-// unconfirmed (see top comment).
+// PLIST -- filtered to +PLIST= lines only (prefix stripped), see
+// send_command()'s comment for why that filter is load-bearing, not
+// cosmetic (a real hardware capture showed an unrelated broadcast line
+// polluting this list before the filter existed). Each entry's own
+// internal field grammar is still unconfirmed beyond the MAC prefix --
+// see split_mac_and_name().
 bool list_paired_devices(BluetoothHandle & h, std::vector<std::string> & devices);
 
 // HFPCONN=<mac>

@@ -74,9 +74,16 @@ bool BwAapClient::sendFrame(std::uint16_t type, const std::string &payload) {
     frame.push_back(static_cast<unsigned char>(type & 0xff));
     frame.insert(frame.end(), payload.begin(), payload.end());
 
+    std::printf("androidauto: bw_aap: sendFrame type=%u length=%u:", type, length);
+    for (unsigned char byte : frame) {
+        std::printf(" %02x", byte);
+    }
+    std::printf("\n");
+
     ssize_t written = ::write(fd_, frame.data(), frame.size());
     if (written != static_cast<ssize_t>(frame.size())) {
-        std::fprintf(stderr, "androidauto: bw_aap write failed: %s\n", std::strerror(errno));
+        std::fprintf(stderr, "androidauto: bw_aap write failed (wrote %zd/%zu bytes): %s\n", written,
+                     frame.size(), std::strerror(errno));
         return false;
     }
     return true;
@@ -91,14 +98,16 @@ bool BwAapClient::receiveFrame(std::uint16_t &type, std::string &payload, int ti
 
     int ready = ::select(fd_ + 1, &readSet, nullptr, nullptr, &tv);
     if (ready <= 0) {
-        std::fprintf(stderr, "androidauto: bw_aap read timeout/error\n");
+        std::fprintf(stderr, "androidauto: bw_aap receiveFrame: timeout/error after %ds (select "
+                     "returned %d)\n", timeoutSeconds, ready);
         return false;
     }
 
     unsigned char header[4];
     ssize_t headerRead = ::read(fd_, header, sizeof(header));
     if (headerRead != static_cast<ssize_t>(sizeof(header))) {
-        std::fprintf(stderr, "androidauto: bw_aap header read failed: %s\n", std::strerror(errno));
+        std::fprintf(stderr, "androidauto: bw_aap header read failed (got %zd/%zu bytes): %s\n",
+                     headerRead, sizeof(header), std::strerror(errno));
         return false;
     }
 
@@ -109,10 +118,12 @@ bool BwAapClient::receiveFrame(std::uint16_t &type, std::string &payload, int ti
     if (length > 0) {
         ssize_t payloadRead = ::read(fd_, &payload[0], length);
         if (payloadRead != static_cast<ssize_t>(length)) {
-            std::fprintf(stderr, "androidauto: bw_aap payload read failed: %s\n", std::strerror(errno));
+            std::fprintf(stderr, "androidauto: bw_aap payload read failed (got %zd/%u bytes): %s\n",
+                         payloadRead, length, std::strerror(errno));
             return false;
         }
     }
+    std::printf("androidauto: bw_aap: receiveFrame type=%u length=%u\n", type, length);
     return true;
 }
 

@@ -53,9 +53,21 @@ void device_row_clicked_cb(lv_event_t * e) {
     lv_obj_t * status_label = widgets[1];
 
     const char * text = lv_list_get_button_text(list, btn);
-    std::printf("ui::bluetooth_screen: device row tapped: '%s'\n", text ? text : "");
+    std::string entry = text ? text : "";
+    std::printf("ui::bluetooth_screen: device row tapped: '%s'\n", entry.c_str());
+
+    // hal::list_paired_devices() now strips the "+PLIST=" prefix (see
+    // hal/bluetooth.h) but PLIST's own per-entry field grammar past
+    // that is still unconfirmed -- split_mac_and_name() applies the
+    // same "12 hex chars + 1 separator + name" shape confirmed for a
+    // real +AAPDEV= line (same vendor stack) and falls back to treating
+    // the whole entry as the identifier if it doesn't match, so this
+    // stays correct either way.
+    std::string mac, name;
+    std::string connect_id = hal::split_mac_and_name(entry, mac, name) ? mac : entry;
+
     hal::BluetoothHandle & h = bt_handle();
-    bool ok = hal::connect_device(h, text ? text : "");
+    bool ok = hal::connect_device(h, connect_id);
     status_label_set(status_label, ok ? "HFPCONN sent" : "HFPCONN failed / no response");
 }
 
@@ -121,6 +133,14 @@ lv_obj_t * create_bluetooth_screen() {
     lv_obj_set_size(content, LV_PCT(94), LV_PCT(68));
     lv_obj_align(content, LV_ALIGN_BOTTOM_MID, 0, -(status_bar::kHeight + 6));
     lv_obj_set_flex_flow(content, LV_FLEX_FLOW_COLUMN);
+    // lv_obj_create() is scrollable by default -- content's own children
+    // (address/name/discoverable/list-header rows + the device list)
+    // overflow its fixed LV_PCT(68) height, so without this the OUTER
+    // card itself became the scroll target instead of the inner `list`
+    // below, which is the one actually meant to scroll. Real hardware
+    // symptom this caused: paired-device list partially hidden with
+    // scrolling not doing anything useful.
+    lv_obj_clear_flag(content, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_pad_all(content, 14, 0);
     lv_obj_set_style_pad_row(content, 8, 0);
 

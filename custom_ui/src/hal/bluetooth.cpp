@@ -1,5 +1,6 @@
 #include "hal/bluetooth.h"
 
+#include <cctype>
 #include <cerrno>
 #include <cstdio>
 #include <cstdlib>
@@ -75,7 +76,8 @@ bool init_bluetooth(BluetoothHandle & out, const char * path) {
 }
 
 bool send_command(BluetoothHandle & h, const std::string & command,
-                   std::vector<std::string> & response_lines, int timeout_ms) {
+                   std::vector<std::string> & response_lines, int timeout_ms,
+                   const std::string & expected_prefix) {
     response_lines.clear();
     if (h.fd < 0) return false;
 
@@ -117,23 +119,54 @@ bool send_command(BluetoothHandle & h, const std::string & command,
         buffer.append(chunk, static_cast<size_t>(n));
     }
 
-    // Split on \r\n / \n, drop empty lines.
+    // Split on \r\n / \n, drop empty lines. If expected_prefix is set,
+    // also drop any line NOT starting with it (see this function's own
+    // header comment -- blueware emits unsolicited status broadcasts
+    // on this same link independent of what was sent, and without this
+    // filter they silently end up mixed into the caller's result) and
+    // strip the prefix off the ones that match.
+    auto keep = [&](std::string entry) {
+        while (!entry.empty() && (entry.back() == '\r')) entry.pop_back();
+        if (entry.empty()) return;
+        if (!expected_prefix.empty()) {
+            if (entry.rfind(expected_prefix, 0) != 0) {
+                std::printf("hal::send_command: dropping unrelated line '%s' (expected prefix "
+                           "'%s')\n", entry.c_str(), expected_prefix.c_str());
+                return;
+            }
+            entry.erase(0, expected_prefix.size());
+        }
+        response_lines.push_back(entry);
+    };
+
     size_t start = 0;
     for (size_t i = 0; i < buffer.size(); ++i) {
         if (buffer[i] == '\n') {
-            std::string entry = buffer.substr(start, i - start);
-            while (!entry.empty() && (entry.back() == '\r')) entry.pop_back();
-            if (!entry.empty()) response_lines.push_back(entry);
+            keep(buffer.substr(start, i - start));
             start = i + 1;
         }
     }
     if (start < buffer.size()) {
-        std::string entry = buffer.substr(start);
-        while (!entry.empty() && (entry.back() == '\r')) entry.pop_back();
-        if (!entry.empty()) response_lines.push_back(entry);
+        keep(buffer.substr(start));
     }
 
     return !response_lines.empty();
+}
+
+bool split_mac_and_name(const std::string & entry, std::string & mac, std::string & name) {
+    mac.clear();
+    name.clear();
+    if (entry.size() < 13) return false;  // 12 hex chars + at least 1 separator byte
+    for (int i = 0; i < 12; ++i) {
+        if (!std::isxdigit(static_cast<unsigned char>(entry[i]))) return false;
+    }
+    mac = entry.substr(0, 12);
+    // Exactly one separator byte observed on real hardware (a non-
+    // printable byte between the MAC and the device name in a real
+    // +AAPDEV= line) -- skip it, whatever it is, rather than assuming
+    // it's a space/comma/etc.
+    name = entry.size() > 13 ? entry.substr(13) : "";
+    return true;
 }
 
 bool set_adapter_enabled(BluetoothHandle & h, bool enabled) {
@@ -155,7 +188,7 @@ bool set_discoverable(BluetoothHandle & h, bool discoverable) {
 }
 
 bool list_paired_devices(BluetoothHandle & h, std::vector<std::string> & devices) {
-    return send_command(h, "PLIST", devices);
+    return send_command(h, "PLIST", devices, 2000, "+PLIST=");
 }
 
 bool connect_device(BluetoothHandle & h, const std::string & mac) {

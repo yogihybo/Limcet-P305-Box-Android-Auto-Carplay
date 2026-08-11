@@ -7,6 +7,7 @@
 #include "core/config_store.h"
 #include "core/navigation.h"
 #include "hal/bluetooth.h"
+#include "ui/theme.h"
 
 namespace ui {
 
@@ -105,24 +106,15 @@ void name_save_btn_cb(lv_event_t * e) {
 }  // namespace
 
 lv_obj_t * create_bluetooth_screen() {
-    lv_obj_t * scr = lv_obj_create(nullptr);
-    lv_obj_set_style_bg_color(scr, lv_color_hex(0x14141e), 0);
-
-    lv_obj_t * back_btn = lv_button_create(scr);
-    lv_obj_align(back_btn, LV_ALIGN_TOP_LEFT, 8, 8);
-    lv_obj_add_event_cb(back_btn, back_btn_cb, LV_EVENT_CLICKED, nullptr);
-    lv_obj_t * back_label = lv_label_create(back_btn);
-    lv_label_set_text(back_label, "< Back");
-
-    lv_obj_t * title = lv_label_create(scr);
-    lv_label_set_text(title, "Bluetooth");
-    lv_obj_set_style_text_color(title, lv_color_white(), 0);
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 12);
+    lv_obj_t * scr = nullptr;
+    theme::create_screen_with_header(&scr, "Bluetooth", back_btn_cb);
 
     lv_obj_t * content = lv_obj_create(scr);
-    lv_obj_set_size(content, LV_PCT(94), LV_PCT(82));
+    theme::style_card(content);
+    lv_obj_set_size(content, LV_PCT(94), LV_PCT(78));
     lv_obj_align(content, LV_ALIGN_BOTTOM_MID, 0, -6);
     lv_obj_set_flex_flow(content, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_all(content, 14, 0);
     lv_obj_set_style_pad_row(content, 8, 0);
 
     // Adapter address, informational (ADDR command).
@@ -133,7 +125,7 @@ lv_obj_t * create_bluetooth_screen() {
     } else {
         lv_label_set_text(addr_label, "This device: (address unavailable)");
     }
-    lv_obj_set_style_text_color(addr_label, lv_color_hex(0x999999), 0);
+    theme::style_secondary_text(addr_label);
 
     // Device name -- editable, backed by NAME=<devname> + the
     // Setting.config [BlueTooth]/DeviceName field (see
@@ -152,6 +144,7 @@ lv_obj_t * create_bluetooth_screen() {
     lv_textarea_set_text(name_ta, current_name.c_str());
 
     lv_obj_t * name_save_btn = lv_button_create(name_row);
+    theme::style_primary_button(name_save_btn);
     lv_obj_add_event_cb(name_save_btn, name_save_btn_cb, LV_EVENT_CLICKED, name_ta);
     lv_obj_t * name_save_label = lv_label_create(name_save_btn);
     lv_label_set_text(name_save_label, "Save");
@@ -189,17 +182,21 @@ lv_obj_t * create_bluetooth_screen() {
                            LV_FLEX_ALIGN_CENTER);
     lv_obj_t * list_title = lv_label_create(list_header_row);
     lv_label_set_text(list_title, "Paired devices");
+    theme::style_section_label(list_title);
     lv_obj_t * refresh_btn = lv_button_create(list_header_row);
+    theme::style_primary_button(refresh_btn);
     lv_obj_t * refresh_label = lv_label_create(refresh_btn);
     lv_label_set_text(refresh_label, "Refresh");
 
     lv_obj_t * list = lv_list_create(content);
     lv_obj_set_width(list, LV_PCT(100));
     lv_obj_set_flex_grow(list, 1);
+    lv_obj_set_style_bg_opa(list, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(list, 0, 0);
 
     lv_obj_t * status_label = lv_label_create(content);
     lv_label_set_text(status_label, "");
-    lv_obj_set_style_text_color(status_label, lv_color_hex(0x999999), 0);
+    theme::style_secondary_text(status_label);
 
     auto * widgets = new lv_obj_t *[2]{list, status_label};
     lv_obj_add_event_cb(refresh_btn, refresh_btn_cb, LV_EVENT_CLICKED, widgets);

@@ -9,6 +9,7 @@
 
 #include "hal/androidauto_client.h"
 #include "core/navigation.h"
+#include "ui/theme.h"
 
 namespace ui {
 
@@ -48,10 +49,10 @@ ParsedStatus parse_status_line(const std::string & line) {
 }
 
 lv_color_t color_for_state_name(const std::string & name) {
-    if (name == "Connected") return lv_color_hex(0x4caf50);
-    if (name == "Failed" || name == "Unreachable") return lv_color_hex(0xe05252);
-    if (name == "Idle") return lv_color_hex(0x999999);
-    return lv_color_hex(0x66aaff);
+    if (name == "Connected") return theme::success();
+    if (name == "Failed" || name == "Unreachable") return theme::danger();
+    if (name == "Idle") return theme::text_secondary();
+    return theme::accent();
 }
 
 void back_btn_cb(lv_event_t *) {
@@ -86,36 +87,26 @@ void screen_delete_cb(lv_event_t * e) {
 }  // namespace
 
 lv_obj_t * create_android_auto_screen() {
-    lv_obj_t * scr = lv_obj_create(nullptr);
-    lv_obj_set_style_bg_color(scr, lv_color_hex(0x14141e), 0);
-
-    lv_obj_t * back_btn = lv_button_create(scr);
-    lv_obj_align(back_btn, LV_ALIGN_TOP_LEFT, 8, 8);
-    lv_obj_add_event_cb(back_btn, back_btn_cb, LV_EVENT_CLICKED, nullptr);
-    lv_obj_t * back_label = lv_label_create(back_btn);
-    lv_label_set_text(back_label, LV_SYMBOL_LEFT " Back");
-
-    lv_obj_t * title = lv_label_create(scr);
-    lv_label_set_text(title, "Android Auto");
-    lv_obj_set_style_text_color(title, lv_color_white(), 0);
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 12);
+    lv_obj_t * scr = nullptr;
+    theme::create_screen_with_header(&scr, "Android Auto", back_btn_cb);
 
     lv_obj_t * content = lv_obj_create(scr);
-    lv_obj_set_size(content, LV_PCT(90), LV_PCT(75));
+    theme::style_card(content);
+    lv_obj_set_size(content, LV_PCT(90), LV_PCT(72));
     lv_obj_align(content, LV_ALIGN_BOTTOM_MID, 0, -10);
-    lv_obj_set_style_bg_opa(content, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(content, 0, 0);
     lv_obj_set_flex_flow(content, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_all(content, 16, 0);
     lv_obj_set_style_pad_row(content, 10, 0);
 
     lv_obj_t * connect_btn = lv_button_create(content);
+    theme::style_primary_button(connect_btn);
     lv_obj_add_event_cb(connect_btn, connect_btn_cb, LV_EVENT_CLICKED, nullptr);
     lv_obj_t * connect_label = lv_label_create(connect_btn);
     lv_label_set_text(connect_label, "Connect (Wireless)");
 
     lv_obj_t * state_header = lv_label_create(content);
     lv_label_set_text(state_header, "Status");
-    lv_obj_set_style_text_color(state_header, lv_color_hex(0x66aaff), 0);
+    theme::style_section_label(state_header);
 
     ParsedStatus initial = parse_status_line(client().statusLine());
     lv_obj_t * state_body = lv_label_create(content);
@@ -130,7 +121,7 @@ lv_obj_t * create_android_auto_screen() {
 
     lv_obj_t * how_header = lv_label_create(content);
     lv_label_set_text(how_header, "Notes");
-    lv_obj_set_style_text_color(how_header, lv_color_hex(0x66aaff), 0);
+    theme::style_section_label(how_header);
 
     lv_obj_t * how_body = lv_label_create(content);
     lv_label_set_long_mode(how_body, LV_LABEL_LONG_WRAP);
@@ -144,7 +135,7 @@ lv_obj_t * create_android_auto_screen() {
                        "the phone must already be Bluetooth-paired first from the "
                        "Bluetooth screen. Not yet hardware-tested end to end -- video/audio "
                        "channels aren't implemented yet even once connected.");
-    lv_obj_set_style_text_color(how_body, lv_color_hex(0x999999), 0);
+    theme::style_secondary_text(how_body);
 
     // widgets[] intentionally leaked for the screen's lifetime, same
     // pattern as every other process-lifetime singleton array in this

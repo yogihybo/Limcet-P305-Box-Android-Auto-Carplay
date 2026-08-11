@@ -16,18 +16,52 @@
 // decompile of the deployed libmfc.so cross-checked against
 // H264DecDecode's own input-validation code -- not re-derived here.
 //
-// KNOWN GAP, stated plainly: H264DecPicture's actual field layout
-// (where the decoded frame's luma/chroma plane bus addresses live) is
-// NOT yet reverse-engineered -- hx170-test.c only ever read the call's
-// return code, never decoded individual fields (see its own comment).
-// decodeFrame() below therefore reports whether a picture became ready
-// (H264DecNextPicture's return value), but callers cannot yet retrieve
-// the actual decoded pixel data or push it to the display hardware.
-// The concrete next step to close this gap: decompile
-// H264DecNextPicture's own write pattern into its output struct
-// (mirroring how H264DecInput's field order was confirmed via
-// H264DecDecode's read pattern) -- a real, scoped task, not a guess to
-// take blindly.
+// H264DecPicture's field layout: sourced from real, redistributed
+// copies of Hantro/VeriSilicon's own official H.264 decoder host SDK
+// (h264decapi.h), found via a GitHub code search and cross-checked
+// across THREE independent vendor BSPs spanning different hardware
+// generations -- Microchip/Atmel's linux4sam/g1_decoder (SAMA5D4,
+// BSD-relicensed redistribution, current), ST-Ericsson's
+// Astralix/hardware_drivers dmw96/g1_decoder (~2010-era, missing only
+// the later-added picCodingType field), and VeriSilicon's own current
+// vpe repo (sdk_inc/VC8000D). All three agree on field order for
+// H264DecPicture, and -- importantly -- all three also match our own
+// already-decompile-confirmed H264DecInput/H264DecOutput field orders
+// exactly (pStream/streamBusAddress/dataLen/picId; pStrmCurrPos/
+// strmCurrBusAddress/dataLeft), which is strong corroborating evidence
+// this device's libmfc.so is genuinely this same Hantro G1 host SDK,
+// not a divergent fork. Not yet independently confirmed against a
+// disassembly of THIS target's own H264DecNextPicture, though -- that
+// remains the fully conclusive check, just no longer the only lead.
+//
+// KNOWN, SEPARATE GAP: the official API's H264DecInit takes FOUR
+// arguments after the instance pointer (noOutputReordering,
+// useVideoFreezeConcealment, useDisplaySmoothing, DecDpbFlags
+// dpbFlags) in every version of h264decapi.h found -- our own earlier
+// decompile of this target's H264DecInit only recovered THREE. Two
+// explanations, unresolved: either this target's libmfc.so genuinely
+// exports an older/trimmed 3-arg variant, or the decompile simply
+// didn't trace the ARM EABI r3 (4th) argument because nothing inside
+// the function used it, in which case open() below is currently
+// passing that hardware call whatever garbage happened to sit in r3
+// (harmless so far only in the sense that H264DecInit still succeeded
+// on real hardware in hx170-test.c -- doesn't rule out a subtler
+// effect like an unintended tiled reference-frame format). Flagged,
+// not fixed here -- needs a disassembly check of H264DecInit's own
+// prologue before changing the call site.
+//
+// Struct layouts/other API signatures below are otherwise still the
+// ones copied from tools/hx170-test/hx170-test.c (confirmed via Ghidra
+// decompile of the deployed libmfc.so, cross-checked against
+// H264DecDecode's own input-validation code).
+//
+// Even with the struct now real, decodeFrame() only reports whether a
+// picture became ready and exposes its fields via last_picture() --
+// actually pushing decoded pixel data to the display hardware (the
+// ARKFB_SET_FB_ADDR/SHOW_WINDOW_REAL ioctl path, already confirmed
+// working elsewhere in this project) is still a separate, not-yet-done
+// step, and NV12/tiled output-format handling on that path is
+// unverified.
 //
 // NOT YET hardware-tested against real streamed H.264 data (only ever
 // exercised against hx170-test's own minimal hand-built SPS+PPS+IDR
@@ -38,6 +72,31 @@
 #include <cstdint>
 
 namespace androidauto {
+
+// Real field layout of Hantro's H264DecPicture -- see this file's
+// header comment for provenance (three independent redistributed
+// copies of the official h264decapi.h). DecOutFrmFormat/DecPicCodingType
+// are plain u32-sized C enums in the original SDK; kept as uint32_t
+// here rather than pulling in decapicommon.h.
+struct H264DecPicture {
+    uint32_t picWidth;
+    uint32_t picHeight;
+    uint32_t cropLeftOffset;
+    uint32_t cropOutWidth;
+    uint32_t cropTopOffset;
+    uint32_t cropOutHeight;
+    const uint32_t * pOutputPicture;
+    uint32_t outputPictureBusAddress;
+    uint32_t picId;
+    uint32_t picCodingType;
+    uint32_t isIdrPicture;
+    uint32_t nbrOfErrMBs;
+    uint32_t interlaced;
+    uint32_t fieldPicture;
+    uint32_t topField;
+    uint32_t viewId;
+    uint32_t outputFormat;  // DecOutFrmFormat: 0=raster scan, 1=8x4 tiled
+};
 
 class HantroH264Decoder {
 public:
@@ -54,10 +113,15 @@ public:
 
     // Copies `data`/`len` into the DMA input buffer (growing it if
     // needed) and calls H264DecDecode, then H264DecNextPicture. Returns
-    // true if a picture became ready (H264DecNextPicture returned 0) --
-    // see class header comment for why the actual decoded frame data
-    // isn't retrievable yet even when this returns true.
+    // true if a picture became ready (H264DecNextPicture returned 0),
+    // in which case last_picture() reflects the ready frame's real
+    // fields (width/height/crop/output buffer address/format) -- see
+    // class header comment: pushing that buffer to the display is
+    // still a separate, not-yet-done step.
     bool decodeFrame(const uint8_t * data, size_t len);
+
+    // Valid only after decodeFrame() returns true.
+    const H264DecPicture & last_picture() const { return lastPicture_; }
 
     void close();
 
@@ -69,7 +133,7 @@ private:
 
     int (*h264DecInit_)(void **, uint32_t, uint32_t, uint32_t) = nullptr;
     int (*h264DecDecode_)(void *, void *, void *) = nullptr;
-    int (*h264DecNextPicture_)(void *, void *, uint32_t) = nullptr;
+    int (*h264DecNextPicture_)(void *, H264DecPicture *, uint32_t) = nullptr;
     void (*h264DecRelease_)(void *) = nullptr;
 
     // /tmp/dev/memalloc DMA buffer, see hx170-test.c's mem_alloc() --
@@ -81,6 +145,7 @@ private:
     int dmaFd_ = -1;
 
     uint32_t frameCounter_ = 0;
+    H264DecPicture lastPicture_{};
 };
 
 }  // namespace androidauto

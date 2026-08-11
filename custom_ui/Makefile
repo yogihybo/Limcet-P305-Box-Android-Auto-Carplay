@@ -5,9 +5,12 @@
 # (arm-linux-gnueabihf-*, matches linux-arkmicro/env.source's
 # CROSS_COMPILE). Override CROSS_COMPILE on the command line if needed.
 #
-# Two binaries: the main UI (src/) and the carplay sidecar
-# (sidecars/carplay/), built and run as separate processes -- see
-# docs/ARCHITECTURE.md for why. `make all` builds both. Use -j for
+# Three binaries: the main UI (src/), the carplay sidecar
+# (sidecars/carplay/), and the androidauto sidecar
+# (sidecars/androidauto/), built and run as separate processes -- see
+# docs/ARCHITECTURE.md for why (isolating heavy per-integration
+# dependency stacks -- libdbus, aasdk/Boost/OpenSSL/Protobuf -- from
+# the core UI/HAL binary). `make all` builds all three. Use -j for
 # parallel builds (LVGL alone is ~500 source files).
 
 CROSS_COMPILE ?= arm-linux-gnueabihf-
@@ -43,13 +46,16 @@ LVGL_SRCS     := $(shell find $(LVGL_DIR)/src -name '*.c')
 LVGL_OBJS     := $(patsubst $(LVGL_DIR)/%.c,$(BUILD_DIR)/lvgl-obj/%.o,$(LVGL_SRCS))
 
 # --- main UI binary ---
-# src/androidauto now linked in for real (2026-08-11) -- wireless
-# Android Auto session integration, see
-# src/androidauto/wireless_session_manager.h and
-# docs/IMPLEMENTATION_PLAN.md Phase 2. Pulls in aasdk/Boost/OpenSSL/
-# libusb/Protobuf, same AASDK_INCLUDES/AASDK_LIBS/AASDK_WRAP_FLAGS/
-# NSS_STUB_OBJ the standalone probe-test targets below already use --
-# UI_TARGET's own link rule now uses those instead of plain LIBS.
+# src/androidauto excluded here on purpose, same reasoning as
+# carplay-sidecar (docs/ARCHITECTURE.md): briefly linked in directly
+# (2026-08-11) to prove the link graph resolves inside the real app,
+# then moved back out into its own process, sidecars/androidauto/ --
+# aasdk/Boost/OpenSSL/libusb/Protobuf is a heavy dependency stack (the
+# binary was ~50MB with it linked in, vs ~2.3MB without) that shouldn't
+# live in the same process as the UI/HAL/settings code, any more than
+# libdbus should for CarPlay. custom_ui talks to androidauto-sidecar
+# over a small local socket protocol via src/hal/androidauto_client.h
+# instead -- zero aasdk knowledge in this binary.
 UI_TARGET     := $(BUILD_DIR)/custom_ui
 UI_SRCS       := $(filter-out src/androidauto/%,$(shell find src -name '*.cpp'))
 UI_OBJS       := $(patsubst src/%.cpp,$(BUILD_DIR)/ui-obj/%.o,$(UI_SRCS))
@@ -115,6 +121,15 @@ SIDECAR_SRCS   := $(shell find sidecars/carplay -name '*.cpp')
 SIDECAR_OBJS   := $(patsubst sidecars/carplay/%.cpp,$(BUILD_DIR)/sidecar-obj/%.o,$(SIDECAR_SRCS))
 SIDECAR_INCLUDES := -Isidecars/carplay
 
+# --- androidauto-sidecar: real Android Auto session, own process ---
+# See sidecars/androidauto/main.cpp and src/hal/androidauto_client.h --
+# owns androidauto::WirelessSessionManager (and therefore all of
+# AASDK_OBJS/AASDK_LIBS) in isolation from the main UI binary, exposing
+# a small local socket protocol instead. Shares the exact same
+# dependency set as the probe-test targets below.
+ANDROIDAUTO_SIDECAR_TARGET := $(BUILD_DIR)/androidauto-sidecar
+ANDROIDAUTO_SIDECAR_OBJS   := $(BUILD_DIR)/androidauto-sidecar-obj/main.o
+
 # --- androidauto-usb-probe-test: standalone aasdk link-graph proof ---
 # See tools/androidauto-usb-probe-test/main.cpp -- not part of `all`,
 # build explicitly with `make androidauto-usb-probe-test`.
@@ -157,32 +172,37 @@ BW_AAP_TEST_TARGET := $(BUILD_DIR)/androidauto-bw-aap-test
 BW_AAP_TEST_OBJS   := $(BUILD_DIR)/bw-aap-test-obj/main.o
 BW_AAP_CLIENT_OBJS := $(BUILD_DIR)/ui-obj/androidauto/bw_aap_client.o
 
-.PHONY: all clean ui carplay-sidecar androidauto-usb-probe-test androidauto-wireless-probe-test androidauto-bluetooth-rfcomm-test androidauto-bw-aap-test
+.PHONY: all clean ui carplay-sidecar androidauto-sidecar androidauto-usb-probe-test androidauto-wireless-probe-test androidauto-bluetooth-rfcomm-test androidauto-bw-aap-test
 
-all: ui carplay-sidecar
+all: ui carplay-sidecar androidauto-sidecar
 
 ui: $(UI_TARGET)
 carplay-sidecar: $(SIDECAR_TARGET)
+androidauto-sidecar: $(ANDROIDAUTO_SIDECAR_TARGET)
 androidauto-usb-probe-test: $(AASDK_TEST_TARGET)
 androidauto-wireless-probe-test: $(WIRELESS_TEST_TARGET)
 androidauto-bluetooth-rfcomm-test: $(BT_TEST_TARGET)
 androidauto-bw-aap-test: $(BW_AAP_TEST_TARGET)
 
-$(UI_TARGET): $(UI_OBJS) $(AASDK_OBJS) $(LVGL_OBJS) $(NSS_STUB_OBJ)
+$(UI_TARGET): $(UI_OBJS) $(LVGL_OBJS)
 	@mkdir -p $(dir $@)
-	$(CXX) $(LDFLAGS) $(AASDK_WRAP_FLAGS) -o $@ $^ $(AASDK_LIBS)
+	$(CXX) $(LDFLAGS) -o $@ $^ $(LIBS)
 
-# AASDK_INCLUDES added here too (not just the src/androidauto/%.o rule
-# below) since main.cpp/ui/android_auto_screen.cpp now #include real
-# androidauto/ headers (WirelessSessionManager) to drive a session --
-# harmless extra -I paths for the files that don't need them.
 $(BUILD_DIR)/ui-obj/%.o: src/%.cpp
 	@mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) $(AASDK_INCLUDES) -c -o $@ $<
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
 $(BUILD_DIR)/ui-obj/androidauto/%.o: src/androidauto/%.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) $(AASDK_INCLUDES) -c -o $@ $<
+
+$(ANDROIDAUTO_SIDECAR_TARGET): $(ANDROIDAUTO_SIDECAR_OBJS) $(AASDK_OBJS) $(NSS_STUB_OBJ)
+	@mkdir -p $(dir $@)
+	$(CXX) $(LDFLAGS) $(AASDK_WRAP_FLAGS) -o $@ $^ $(AASDK_LIBS)
+
+$(BUILD_DIR)/androidauto-sidecar-obj/%.o: sidecars/androidauto/%.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) $(AASDK_INCLUDES) -Isrc -c -o $@ $<
 
 $(AASDK_TEST_TARGET): $(AASDK_TEST_OBJS) $(AASDK_OBJS) $(NSS_STUB_OBJ)
 	@mkdir -p $(dir $@)

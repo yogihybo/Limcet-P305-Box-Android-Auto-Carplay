@@ -1,12 +1,13 @@
-// Wireless Android Auto session integration -- see
-// src/androidauto/wireless_session_manager.h for the full real
-// protocol/architecture this screen drives: AP bring-up
-// (firmware_overlay/etc/wifi_ap.sh) -> Bluetooth-relayed credential
-// handoff (BwAapClient) -> phone joins the AP -> aasdk Session over
-// TCPTransport. NOT YET hardware-tested end to end.
+// Wireless Android Auto session integration -- talks to
+// androidauto-sidecar (a separate process, see
+// sidecars/androidauto/main.cpp) over a small local socket protocol
+// via hal::AndroidAutoClient. This binary itself has NO aasdk/Boost/
+// Protobuf knowledge -- see docs/ARCHITECTURE.md's carplay-sidecar
+// section for the same "heavy dependency stays isolated in its own
+// process" reasoning this mirrors.
 #include "ui/android_auto_screen.h"
 
-#include "androidauto/wireless_session_manager.h"
+#include "hal/androidauto_client.h"
 #include "core/navigation.h"
 
 namespace ui {
@@ -15,34 +16,42 @@ namespace {
 
 // Process-lifetime, intentionally never freed -- same convention as
 // every other process-lifetime singleton in this codebase (e.g.
-// bluetooth_screen.cpp's bt_handle()). Deliberately NOT tied to this
-// screen's own lifetime: once a session starts connecting, navigating
-// away and back shouldn't tear it down or restart it.
-androidauto::WirelessSessionManager & session_manager() {
-    static androidauto::WirelessSessionManager manager;
-    return manager;
+// bluetooth_screen.cpp's bt_handle()).
+hal::AndroidAutoClient & client() {
+    static hal::AndroidAutoClient c;
+    return c;
 }
 
-const char * state_label(androidauto::WirelessSessionState s) {
-    switch (s) {
-        case androidauto::WirelessSessionState::Idle: return "Idle";
-        case androidauto::WirelessSessionState::StartingAccessPoint: return "Starting WiFi AP";
-        case androidauto::WirelessSessionState::BluetoothHandshake: return "Bluetooth handshake";
-        case androidauto::WirelessSessionState::WaitingForWifiJoin: return "Waiting for phone";
-        case androidauto::WirelessSessionState::Connecting: return "Connecting";
-        case androidauto::WirelessSessionState::Connected: return "Connected";
-        case androidauto::WirelessSessionState::Failed: return "Failed";
+struct ParsedStatus {
+    std::string name;
+    std::string detail;
+};
+
+// Parses androidauto_client.h's raw reply line ("STATE <name>
+// <message...>", "OK", or "ERR <reason>") into a (name, detail) pair
+// for display. Deliberately just string splitting -- the client
+// intentionally has no shared enum with the sidecar (see
+// androidauto_client.h's header comment on why), so this is the UI's
+// own best-effort parse of the sidecar's text protocol, not a strict
+// contract either side depends on.
+ParsedStatus parse_status_line(const std::string & line) {
+    if (line.rfind("STATE ", 0) == 0) {
+        std::string rest = line.substr(6);
+        auto sp = rest.find(' ');
+        if (sp == std::string::npos) return {rest, ""};
+        return {rest.substr(0, sp), rest.substr(sp + 1)};
     }
-    return "Unknown";
+    if (line.rfind("ERR ", 0) == 0) {
+        return {"Unreachable", line.substr(4)};
+    }
+    return {"Unknown", line};
 }
 
-lv_color_t state_color(androidauto::WirelessSessionState s) {
-    switch (s) {
-        case androidauto::WirelessSessionState::Connected: return lv_color_hex(0x4caf50);
-        case androidauto::WirelessSessionState::Failed: return lv_color_hex(0xe05252);
-        case androidauto::WirelessSessionState::Idle: return lv_color_hex(0x999999);
-        default: return lv_color_hex(0x66aaff);
-    }
+lv_color_t color_for_state_name(const std::string & name) {
+    if (name == "Connected") return lv_color_hex(0x4caf50);
+    if (name == "Failed" || name == "Unreachable") return lv_color_hex(0xe05252);
+    if (name == "Idle") return lv_color_hex(0x999999);
+    return lv_color_hex(0x66aaff);
 }
 
 void back_btn_cb(lv_event_t *) {
@@ -50,23 +59,23 @@ void back_btn_cb(lv_event_t *) {
 }
 
 void connect_btn_cb(lv_event_t *) {
-    session_manager().start();
+    client().requestConnect();
 }
 
-// Polls session_manager() and refreshes the status widgets -- created
+// Polls the sidecar and refreshes the status widgets -- created
 // against this screen, deleted alongside it (LV_EVENT_DELETE below) so
-// it never fires against freed widgets after navigating away.
-// session_manager() itself keeps running regardless (see its own
-// comment).
+// it never fires against freed widgets after navigating away. The
+// sidecar process itself (and whatever session it's driving) keeps
+// running regardless of this screen's lifecycle.
 void poll_timer_cb(lv_timer_t * timer) {
     auto * widgets = static_cast<lv_obj_t **>(lv_timer_get_user_data(timer));
     lv_obj_t * state_label_obj = widgets[0];
     lv_obj_t * detail_label_obj = widgets[1];
 
-    auto state = session_manager().state();
-    lv_label_set_text(state_label_obj, state_label(state));
-    lv_obj_set_style_text_color(state_label_obj, state_color(state), 0);
-    lv_label_set_text(detail_label_obj, session_manager().statusMessage().c_str());
+    ParsedStatus status = parse_status_line(client().statusLine());
+    lv_label_set_text(state_label_obj, status.name.c_str());
+    lv_obj_set_style_text_color(state_label_obj, color_for_state_name(status.name), 0);
+    lv_label_set_text(detail_label_obj, status.detail.c_str());
 }
 
 void screen_delete_cb(lv_event_t * e) {
@@ -108,14 +117,15 @@ lv_obj_t * create_android_auto_screen() {
     lv_label_set_text(state_header, "Status");
     lv_obj_set_style_text_color(state_header, lv_color_hex(0x66aaff), 0);
 
+    ParsedStatus initial = parse_status_line(client().statusLine());
     lv_obj_t * state_body = lv_label_create(content);
-    lv_label_set_text(state_body, state_label(session_manager().state()));
-    lv_obj_set_style_text_color(state_body, state_color(session_manager().state()), 0);
+    lv_label_set_text(state_body, initial.name.c_str());
+    lv_obj_set_style_text_color(state_body, color_for_state_name(initial.name), 0);
 
     lv_obj_t * detail_body = lv_label_create(content);
     lv_label_set_long_mode(detail_body, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(detail_body, LV_PCT(100));
-    lv_label_set_text(detail_body, session_manager().statusMessage().c_str());
+    lv_label_set_text(detail_body, initial.detail.c_str());
     lv_obj_set_style_text_color(detail_body, lv_color_hex(0xcccccc), 0);
 
     lv_obj_t * how_header = lv_label_create(content);
@@ -127,9 +137,11 @@ lv_obj_t * create_android_auto_screen() {
     lv_obj_set_width(how_body, LV_PCT(100));
     lv_label_set_text(how_body,
                        "Wireless only for now (this device's one external USB port is "
-                       "normally occupied by the boot rootfs drive). Starts this app's own "
-                       "WiFi AP (SSID \"carplay_wifi\"), then a Bluetooth-relayed credential "
-                       "handoff -- the phone must already be Bluetooth-paired first from the "
+                       "normally occupied by the boot rootfs drive). Driven by the "
+                       "androidauto-sidecar process -- if status shows \"Unreachable\", "
+                       "that process isn't running. Starts this app's own WiFi AP (SSID "
+                       "\"carplay_wifi\"), then a Bluetooth-relayed credential handoff -- "
+                       "the phone must already be Bluetooth-paired first from the "
                        "Bluetooth screen. Not yet hardware-tested end to end -- video/audio "
                        "channels aren't implemented yet even once connected.");
     lv_obj_set_style_text_color(how_body, lv_color_hex(0x999999), 0);

@@ -11,13 +11,20 @@
 // same "one fixed config, no real negotiation" reasoning as
 // AudioChannel.
 //
-// NOT YET hardware-tested. Even once a phone connects and streams
-// real H.264 data, decoded frames can't reach the screen yet -- see
-// hantro_h264_decoder.h's header comment for the specific, scoped gap
-// (H264DecPicture's plane-address layout isn't reverse-engineered).
-// This class still does everything up to that point for real: channel
-// open, setup negotiation, focus grant, and feeding real received data
-// into the real decoder.
+// Decoded frames now get pushed to the real hardware video-overlay
+// layer (hal/video_layer.h -- /dev/fb1, ground-truth confirmed from
+// this device's own kernel driver source as the VIDEO2/"phonelink"
+// layer) via pushDecodedFrame(), called from decodeBuffer() once
+// HantroH264Decoder reports a picture ready. See video_layer.h's own
+// top comment for exactly what's ground-truth-confirmed (the ioctl
+// numbers/struct/device node) vs. still an assumption (the semi-planar
+// chroma-offset math, not yet checked against a real decoded frame).
+//
+// NOT YET hardware-tested end to end -- channel open, setup
+// negotiation, focus grant, feeding real received data into the real
+// decoder, and now the display push are all implemented for real, but
+// nothing here has been exercised against an actual phone connection
+// and a real decoded frame yet.
 #pragma once
 
 #include <cstdint>
@@ -30,6 +37,7 @@
 #include <aasdk/Messenger/IMessenger.hpp>
 
 #include "androidauto/hantro_h264_decoder.h"
+#include "hal/video_layer.h"
 
 namespace androidauto {
 
@@ -61,12 +69,25 @@ public:
 private:
     void decodeBuffer(const aasdk::common::DataConstBuffer & buffer);
     void sendAck();
+    // Pushes decoder_.last_picture() to hal::video_layer -- lazily
+    // opens/configures the layer on the first ready picture (width/
+    // height aren't known before then), reconfigures if the picture's
+    // own dimensions ever change mid-session, then just updates the
+    // frame address on every subsequent call.
+    void pushDecodedFrame();
 
     boost::asio::io_service::strand & strand_;
     aasdk::channel::mediasink::video::IVideoMediaSinkService::Pointer channel_;
 
     HantroH264Decoder decoder_;
     bool decoderOpen_ = false;
+
+    hal::VideoLayerHandle videoLayer_;
+    bool videoLayerOpen_ = false;
+    bool videoLayerConfigured_ = false;
+    bool videoLayerShown_ = false;
+    uint32_t configuredWidth_ = 0;
+    uint32_t configuredHeight_ = 0;
 
     int32_t sessionId_ = 0;
     uint64_t ackCount_ = 0;

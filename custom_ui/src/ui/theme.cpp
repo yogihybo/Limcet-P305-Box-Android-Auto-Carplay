@@ -97,11 +97,15 @@ struct SharedStyles {
         lv_style_set_bg_opa(&step_btn, LV_OPA_COVER);
         lv_style_set_border_width(&step_btn, 2);
         lv_style_set_border_color(&step_btn, accent());
-        lv_style_set_radius(&step_btn, 14);
+        lv_style_set_radius(&step_btn, 10);
         lv_style_set_text_color(&step_btn, accent());
-        lv_style_set_text_font(&step_btn, &lv_font_montserrat_24);
+        // Smaller than the row's other text (montserrat_24) to fit the
+        // +/- glyph inside kStepButtonSize without clipping now that
+        // the button itself is half its old size. montserrat_14 is the
+        // smallest size this build enables (see lv_conf.h).
+        lv_style_set_text_font(&step_btn, &lv_font_montserrat_14);
         lv_style_set_shadow_width(&step_btn, 0);
-        lv_style_set_size(&step_btn, kMinTouchTarget, kMinTouchTarget);
+        lv_style_set_size(&step_btn, kStepButtonSize, kStepButtonSize);
 
         lv_style_init(&step_btn_pressed);
         lv_style_set_bg_color(&step_btn_pressed, accent());

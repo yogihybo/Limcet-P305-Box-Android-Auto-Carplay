@@ -2,6 +2,7 @@
 
 #include <cerrno>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 
 #include <fcntl.h>
@@ -11,14 +12,45 @@
 
 namespace hal {
 
-bool init_bluetooth(BluetoothHandle & out, const char * path) {
-    out.fd = open(path, O_RDWR | O_NOCTTY);
-    if (out.fd < 0) {
-        std::fprintf(stderr, "hal::init_bluetooth: warning: %s unavailable (%s)\n", path,
-                     std::strerror(errno));
-        return false;
+void ensure_bluetooth_daemon_running() {
+    if (std::system("pidof blueware >/dev/null 2>&1") == 0) {
+        return;  // already running
     }
-    return true;
+    std::printf("hal::ensure_bluetooth_daemon_running: blueware not running, starting it\n");
+    // Fixed system path, not resolved relative to our own binary --
+    // this is a vendor daemon already installed on the device rootfs,
+    // not something shipped alongside custom_ui (contrast
+    // androidauto_client.cpp's trySpawnSidecar(), which DOES resolve
+    // relative to /proc/self/exe for that reason).
+    if (std::system("/usr/bin/blueware >/tmp/blueware.log 2>&1 &") != 0) {
+        std::fprintf(stderr, "hal::ensure_bluetooth_daemon_running: failed to launch "
+                     "/usr/bin/blueware\n");
+    }
+}
+
+bool init_bluetooth(BluetoothHandle & out, const char * path) {
+    ensure_bluetooth_daemon_running();
+
+    // Retry briefly -- blueware needs a moment after spawning to
+    // create /dev/bw_serial. If it was already running (the common
+    // case once one screen has already triggered this), the first
+    // attempt succeeds immediately and no delay is added.
+    constexpr int kMaxAttempts = 20;
+    constexpr int kRetryDelayUs = 100000;  // 100ms -> up to ~2s total
+    for (int attempt = 0; attempt < kMaxAttempts; ++attempt) {
+        out.fd = open(path, O_RDWR | O_NOCTTY);
+        if (out.fd >= 0) {
+            std::printf("hal::init_bluetooth: %s opened (attempt %d/%d)\n", path, attempt + 1,
+                        kMaxAttempts);
+            return true;
+        }
+        if (attempt + 1 < kMaxAttempts) {
+            usleep(kRetryDelayUs);
+        }
+    }
+    std::fprintf(stderr, "hal::init_bluetooth: warning: %s unavailable after %d attempts (%s)\n",
+                 path, kMaxAttempts, std::strerror(errno));
+    return false;
 }
 
 bool send_command(BluetoothHandle & h, const std::string & command,
@@ -106,8 +138,20 @@ bool list_paired_devices(BluetoothHandle & h, std::vector<std::string> & devices
 }
 
 bool connect_device(BluetoothHandle & h, const std::string & mac) {
+    std::printf("hal::connect_device: sending HFPCONN=%s\n", mac.c_str());
     std::vector<std::string> resp;
-    return send_command(h, "HFPCONN=" + mac, resp);
+    bool ok = send_command(h, "HFPCONN=" + mac, resp);
+    if (ok) {
+        std::printf("hal::connect_device: HFPCONN=%s -> %zu response line(s):\n", mac.c_str(),
+                    resp.size());
+        for (const auto & line : resp) {
+            std::printf("hal::connect_device:   %s\n", line.c_str());
+        }
+    } else {
+        std::fprintf(stderr, "hal::connect_device: HFPCONN=%s got no response (write failed or "
+                     "timed out)\n", mac.c_str());
+    }
+    return ok;
 }
 
 bool set_device_name(BluetoothHandle & h, const std::string & name) {

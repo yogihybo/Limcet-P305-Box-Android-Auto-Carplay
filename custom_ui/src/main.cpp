@@ -9,6 +9,8 @@
 #include <unistd.h>
 #include "lvgl.h"
 #include "hal/display.h"
+#include "hal/knob.h"
+#include "hal/mcu_input.h"
 #include "hal/touch.h"
 #include "core/navigation.h"
 #include "core/screen_manager.h"
@@ -35,8 +37,23 @@ int main() {
     }
     std::printf("custom_ui: display initialized\n");
 
-    lv_indev_t * touch = hal::init_touch("/dev/ttyHS0");  // non-fatal if unavailable
+    // Process-lifetime, intentionally never freed -- same convention as
+    // every other process-lifetime singleton in this codebase. Touch,
+    // knob rotation, and knob push-button all share this one
+    // /dev/ttyHS0 connection -- see hal/mcu_input.h for why (one reader
+    // thread per fd).
+    static hal::McuInputHal mcu_input("/dev/ttyHS0");
+    bool mcu_ok = mcu_input.start();
+    std::printf("custom_ui: MCU input (touch/knob) %s\n", mcu_ok ? "started" : "unavailable");
+
+    lv_indev_t * touch = mcu_ok ? hal::init_touch(mcu_input) : nullptr;
     std::printf("custom_ui: touch %s\n", touch ? "initialized" : "unavailable (continuing without it)");
+
+    lv_indev_t * knob = mcu_ok ? hal::init_knob(mcu_input) : nullptr;
+    if (knob) {
+        lv_indev_set_group(knob, core::navigation::focus_group());
+    }
+    std::printf("custom_ui: knob %s\n", knob ? "initialized" : "unavailable (continuing without it)");
 
     core::ScreenManager screens;
     core::navigation::init(screens);  // lets Settings/Bluetooth screens

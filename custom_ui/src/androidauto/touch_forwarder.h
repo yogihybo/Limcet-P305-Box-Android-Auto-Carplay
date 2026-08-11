@@ -13,6 +13,36 @@
 
 namespace androidauto {
 
+// ⚠️ REAL HARDWARE FINDING (2026-08-11), design assumption below not
+// currently valid on this board: this class reads a SECOND evdev fd on
+// /dev/input/event0, on the assumption that's where real touch data
+// lives. A direct test (MsnCoreApp fully disabled, ruling out an
+// EVIOCGRAB exclusive-open explanation) showed /dev/input/event0
+// delivers zero touch events on this hardware -- real touch coordinates
+// are relayed by the Limcet MCU over /dev/ttyHS0 instead. See
+// docs/MCU_ADAPTERS.md's "MCU role -- key/status events" section for
+// the full capture/analysis trail (confirmed protocol: CMD 0x20 frames,
+// X=(b4<<8)|b3, Y=(b6<<8)|b5), and src/hal/mcu_touch.h for the userspace
+// HAL that already reads this protocol and is wired into
+// src/hal/touch.cpp for the local UI's own touch input.
+//
+// NOT YET updated to match here -- when Phase 2's real aasdk session
+// integration lands, this class needs the same fix: read from
+// hal::McuTouchHal (or a shared instance of it) instead of opening a
+// second /dev/input/event0 fd. Safe to do the same way touch.cpp
+// already does: custom_ui and MsnCoreApp are never run concurrently
+// (the existing /dev/fb0 handoff model), so exclusively opening
+// /dev/ttyHS0 here doesn't conflict with anything -- no kernel changes
+// needed, no backwards-compatibility concern. Deferred purely because
+// androidauto/'s aasdk session isn't even linked into custom_ui's own
+// binary today (a separate standalone test-tool build target, see
+// Makefile), so nothing currently exercises this path -- not deferred
+// for any technical blocker.
+//
+// Original design rationale below, still accurate for what this class
+// actually does today (reads evdev) -- just not accurate about that
+// data being real touch input on this hardware:
+//
 // Forwards real touch events to Android Auto's InputSourceService, over a
 // SECOND, independent evdev fd on the same device node LVGL already reads
 // for the UI's own rendering (see src/hal/touch.h). Evdev is a standard

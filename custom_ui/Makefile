@@ -187,9 +187,18 @@ BW_AAP_CLIENT_OBJS := $(BUILD_DIR)/ui-obj/androidauto/bw_aap_client.o
 
 all: ui carplay-sidecar androidauto-sidecar
 
-ui: $(UI_TARGET)
+ui: $(UI_TARGET) $(BUILD_DIR)/hal.conf
 carplay-sidecar: $(SIDECAR_TARGET)
-androidauto-sidecar: $(ANDROIDAUTO_SIDECAR_TARGET)
+androidauto-sidecar: $(ANDROIDAUTO_SIDECAR_TARGET) $(BUILD_DIR)/hal.conf
+
+# Staged copy of the tracked config (see src/core/hal_config.h) right
+# next to the compiled binaries -- both `ui` and `androidauto-sidecar`
+# depend on this so scp'ing build/ to the device (this project's real
+# test workflow, see scripts/run_on_device.sh) carries the config along
+# automatically, no /etc or /data setup needed on-device.
+$(BUILD_DIR)/hal.conf: etc/hal.conf
+	@mkdir -p $(dir $@)
+	cp $< $@
 androidauto-usb-probe-test: $(AASDK_TEST_TARGET)
 androidauto-wireless-probe-test: $(WIRELESS_TEST_TARGET)
 androidauto-bluetooth-rfcomm-test: $(BT_TEST_TARGET)

@@ -1,4 +1,4 @@
-#include "hal/mcu_touch.h"
+#include "hal/mcu_input.h"
 
 #include <cerrno>
 #include <cstdio>
@@ -16,6 +16,12 @@ namespace {
 // real baud, see tools/mcu-handshake/mcu-handshake.c's own comment.
 constexpr int kBaud = B38400;
 
+// CMD 0x02 knob/button codes -- see this file's header comment for the
+// live-capture evidence.
+constexpr unsigned char kKnobClockwise = 65;
+constexpr unsigned char kKnobCounterClockwise = 64;
+constexpr unsigned char kKnobPush = 13;
+
 // MCUAdapter_BoxP300::getPackageCheckSum() -- plain byte sum, one's
 // complemented, over cmd+len+payload (not the leading 0x2E signature).
 // Identical to mcu-handshake.c's calc_mcu_checksum().
@@ -28,7 +34,7 @@ unsigned char mcu_checksum(const unsigned char * data, int len) {
 bool set_interface_attribs(int fd) {
     struct termios tty {};
     if (tcgetattr(fd, &tty) < 0) {
-        perror("hal::McuTouchHal: tcgetattr");
+        perror("hal::McuInputHal: tcgetattr");
         return false;
     }
 
@@ -50,7 +56,7 @@ bool set_interface_attribs(int fd) {
     tty.c_cc[VTIME] = 1;
 
     if (tcsetattr(fd, TCSANOW, &tty) != 0) {
-        perror("hal::McuTouchHal: tcsetattr");
+        perror("hal::McuInputHal: tcsetattr");
         return false;
     }
     return true;
@@ -75,17 +81,18 @@ void send_mcu_frame(int fd, unsigned char cmd, const unsigned char * payload, in
     frame[idx++] = chk;
 
     if (write(fd, frame, idx) < 0) {
-        perror("hal::McuTouchHal: write (send_mcu_frame)");
+        perror("hal::McuInputHal: write (send_mcu_frame)");
     }
 }
 
 // Matches send_startup_sequence() in mcu-handshake.c -- see that file's
 // header comment for full provenance (disassembly of
 // MCUAdapter_BoxP300 in libMcuCenter.so). Sent here because every real
-// capture of CMD 0x20 touch traffic this project has was taken with
-// this sequence already sent (mcu-handshake's default) -- whether it's
-// strictly required for the MCU to report touch isn't confirmed, but
-// it's cheap/harmless and matches the only known-working configuration.
+// capture of MCU traffic this project has was taken with this sequence
+// already sent (mcu-handshake's default) -- whether it's strictly
+// required for the MCU to report touch/knob/button events isn't
+// confirmed, but it's cheap/harmless and matches the only known-working
+// configuration.
 void send_startup_sequence(int fd) {
     unsigned char hello_payload = 0x01;
     unsigned char mode4_payload[9] = {0x01, 0x08, 0, 0, 0, 0, 0, 0, 0};
@@ -156,9 +163,9 @@ int read_mcu_frame(int fd, unsigned char * out_cmd, unsigned char * out_payload,
 
 }  // namespace
 
-McuTouchHal::McuTouchHal(std::string port) : port_(std::move(port)) {}
+McuInputHal::McuInputHal(std::string port) : port_(std::move(port)) {}
 
-McuTouchHal::~McuTouchHal() {
+McuInputHal::~McuInputHal() {
     running_.store(false, std::memory_order_release);
     if (thread_.joinable()) {
         // read_mcu_frame() blocks in read() with no timeout -- closing
@@ -173,10 +180,10 @@ McuTouchHal::~McuTouchHal() {
     }
 }
 
-bool McuTouchHal::start() {
+bool McuInputHal::start() {
     fd_ = open(port_.c_str(), O_RDWR | O_NOCTTY);
     if (fd_ < 0) {
-        std::fprintf(stderr, "hal::McuTouchHal: couldn't open %s: %s\n", port_.c_str(),
+        std::fprintf(stderr, "hal::McuInputHal: couldn't open %s: %s\n", port_.c_str(),
                      std::strerror(errno));
         return false;
     }
@@ -189,11 +196,11 @@ bool McuTouchHal::start() {
     send_startup_sequence(fd_);
 
     running_.store(true, std::memory_order_release);
-    thread_ = std::thread(&McuTouchHal::run, this);
+    thread_ = std::thread(&McuInputHal::run, this);
     return true;
 }
 
-void McuTouchHal::run() {
+void McuInputHal::run() {
     unsigned char cmd, payload[256], len;
     while (running_.load(std::memory_order_acquire)) {
         int r = read_mcu_frame(fd_, &cmd, payload, &len);
@@ -204,39 +211,58 @@ void McuTouchHal::run() {
             continue;
         }
 
-        if (cmd != 0x20 || len < 5) continue;
+        if (cmd == 0x20 && len >= 5) {
+            unsigned char b3 = payload[0];
+            unsigned char b4 = payload[1];
+            unsigned char b5 = payload[2];
+            unsigned char b6 = payload[3];
+            unsigned char b7 = payload[4];
 
-        unsigned char b3 = payload[0];
-        unsigned char b4 = payload[1];
-        unsigned char b5 = payload[2];
-        unsigned char b6 = payload[3];
-        unsigned char b7 = payload[4];
+            // All-zero payload == release/idle, confirmed directly in
+            // the corner-touch capture (docs/MCU_ADAPTERS.md) -- every
+            // touch event was bounded by one of these on each side.
+            bool released = (b3 == 0 && b4 == 0 && b5 == 0 && b6 == 0 && b7 == 0);
 
-        // All-zero payload == release/idle, confirmed directly in the
-        // corner-touch capture (docs/MCU_ADAPTERS.md) -- every touch
-        // event was bounded by one of these on each side.
-        bool released = (b3 == 0 && b4 == 0 && b5 == 0 && b6 == 0 && b7 == 0);
+            if (released) {
+                touch_pressed_.store(false, std::memory_order_release);
+                continue;
+            }
 
-        if (released) {
-            pressed_.store(false, std::memory_order_release);
-            continue;
+            int32_t x = (static_cast<int32_t>(b4) << 8) | b3;
+            int32_t y = (static_cast<int32_t>(b6) << 8) | b5;
+
+            x_.store(x, std::memory_order_relaxed);
+            y_.store(y, std::memory_order_relaxed);
+            touch_pressed_.store(true, std::memory_order_release);
+        } else if (cmd == 0x02 && len >= 2) {
+            unsigned char b3 = payload[0];
+            unsigned char b4 = payload[1];
+
+            if (b3 == kKnobClockwise && b4 == 1) {
+                knob_ticks_.fetch_add(1, std::memory_order_relaxed);
+            } else if (b3 == kKnobCounterClockwise && b4 == 1) {
+                knob_ticks_.fetch_sub(1, std::memory_order_relaxed);
+            } else if (b3 == kKnobPush) {
+                knob_pressed_.store(b4 == 1, std::memory_order_release);
+            }
         }
-
-        int32_t x = (static_cast<int32_t>(b4) << 8) | b3;
-        int32_t y = (static_cast<int32_t>(b6) << 8) | b5;
-
-        x_.store(x, std::memory_order_relaxed);
-        y_.store(y, std::memory_order_relaxed);
-        pressed_.store(true, std::memory_order_release);
     }
 }
 
-McuTouchState McuTouchHal::get_state() const {
+McuTouchState McuInputHal::get_touch_state() const {
     McuTouchState s;
-    s.pressed = pressed_.load(std::memory_order_acquire);
+    s.pressed = touch_pressed_.load(std::memory_order_acquire);
     s.x = x_.load(std::memory_order_relaxed);
     s.y = y_.load(std::memory_order_relaxed);
     return s;
+}
+
+int32_t McuInputHal::consume_knob_ticks() {
+    return knob_ticks_.exchange(0, std::memory_order_relaxed);
+}
+
+bool McuInputHal::get_knob_pressed() const {
+    return knob_pressed_.load(std::memory_order_acquire);
 }
 
 }  // namespace hal

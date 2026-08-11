@@ -314,15 +314,15 @@ void build_display_audio_general(lv_obj_t * tab) {
     // `unsigned int`, no documented bound found), so this assumes the
     // same 0-255 scale the persisted config already uses. Flagged as
     // an assumption, not hardware-verified.
-    add_stepper_row(tab, "Brightness", 0, 255, 17, "Brightness", "General", VdeField::Brightness);
-    add_stepper_row(tab, "Contrast", 0, 255, 17, "Contrast", "General", VdeField::Contrast);
-    add_stepper_row(tab, "Saturation", 0, 255, 17, "Saturation", "General", VdeField::Saturation);
+    add_stepper_row(tab, "Brightness", 0, 255, 5, "Brightness", "General", VdeField::Brightness);
+    add_stepper_row(tab, "Contrast", 0, 255, 5, "Contrast", "General", VdeField::Contrast);
+    add_stepper_row(tab, "Saturation", 0, 255, 5, "Saturation", "General", VdeField::Saturation);
 
     lv_obj_t * audio_header = lv_label_create(tab);
     lv_label_set_text(audio_header, "Audio");
     theme::style_section_label(audio_header);
 
-    add_stepper_row(tab, "Volume", 0, 40, 4, "Volume", "General");
+    add_stepper_row(tab, "Volume", 0, 40, 1, "Volume", "General");
 
     lv_obj_t * general_header = lv_label_create(tab);
     lv_label_set_text(general_header, "General");
@@ -402,8 +402,8 @@ void build_hardware_profile_and_behaviour(lv_obj_t * tab) {
     // FactoryConfig.ini fields confirmed live via disassembly (section
     // 2 of SETTINGS_REFERENCE.md) -- safe to expose as real editable
     // controls.
-    add_stepper_row(tab, "Reversing volume cut (%)", 0, 100, 10, "ReversingVolumeCut", "General");
-    add_stepper_row(tab, "AEC delay (ms)", 0, 300, 25, "AECDelay", "General");
+    add_stepper_row(tab, "Reversing volume cut (%)", 0, 100, 5, "ReversingVolumeCut", "General");
+    add_stepper_row(tab, "AEC delay (ms)", 0, 300, 10, "AECDelay", "General");
     add_switch_row(tab, "Right-hand drive layout", "RightHandCarDriver", "General", false);
     add_switch_row(tab, "Disable window transitions", "DisableWindowEffect", "General", false);
     add_switch_row(tab, "Touch idle auto-calibrate", "TouchCalibrateAction", "General", false);

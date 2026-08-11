@@ -67,6 +67,14 @@ inline lv_color_t danger()         { return lv_color_hex(0xe05252); }
 constexpr int32_t kMinTouchTarget = 64;
 constexpr int32_t kIconBadgeDiameter = 96;
 
+// Deliberate, requested exception to the kMinTouchTarget floor above:
+// the settings_screen.cpp stepper +/- buttons (style_step_button())
+// were sized at kMinTouchTarget and the user asked for them 50%
+// smaller. Half of kMinTouchTarget falls under Google's AA 76dp
+// guideline this file otherwise targets -- accepted knowingly for
+// these buttons specifically, not applied anywhere else.
+constexpr int32_t kStepButtonSize = kMinTouchTarget / 2;
+
 // ---- setup ---------------------------------------------------------------
 
 // Applies the dark/accent default theme to `disp` -- call once, right

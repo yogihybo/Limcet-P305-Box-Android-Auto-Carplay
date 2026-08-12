@@ -15,6 +15,31 @@
 
 namespace hal {
 
+namespace {
+
+// 2026-08-12: send_command() (and by extension every wrapper below)
+// used to treat "got any response at all" as success -- a real
+// hardware capture showed HFPCONN reply with "ERR002" and this code
+// still reported the connect attempt as successful (non-empty
+// response_lines), because nothing ever looked AT the response
+// content. "ERR<code>" is the confirmed real prefix for an
+// adapter-reported failure (both decompiled sources' vocabulary uses
+// bare "OK" for success acks and "ERR<code>" for failures -- see
+// hal/bluetooth.h's top comment). No documented meaning for specific
+// ERR codes exists in either source, so this only detects the presence
+// of one, not what it means.
+bool find_error_response(const std::vector<std::string> & lines, std::string & err_out) {
+    for (const auto & line : lines) {
+        if (line.rfind("ERR", 0) == 0) {
+            err_out = line;
+            return true;
+        }
+    }
+    return false;
+}
+
+}  // namespace
+
 void ensure_bluetooth_daemon_running() {
     if (std::system("pidof blueware >/dev/null 2>&1") == 0) {
         std::printf("hal::ensure_bluetooth_daemon_running: blueware already running\n");
@@ -153,6 +178,20 @@ bool send_command(BluetoothHandle & h, const std::string & command,
         keep(buffer.substr(start));
     }
 
+    // Diagnostic only -- deliberately does NOT affect the return value.
+    // send_command()'s contract is "did we get a response", not "did
+    // the command succeed" (different commands have different success
+    // shapes, e.g. PLIST's success IS an empty list), so this just
+    // makes an adapter-reported failure visible in the log for every
+    // command uniformly; callers that have a clear success/failure
+    // contract (connect_device(), set_device_name(), etc.) check for it
+    // themselves and act on it.
+    std::string err;
+    if (find_error_response(response_lines, err)) {
+        std::fprintf(stderr, "hal::send_command: adapter reported '%s' for command '%s'\n",
+                     err.c_str(), command.c_str());
+    }
+
     return !response_lines.empty();
 }
 
@@ -174,20 +213,39 @@ bool split_mac_and_name(const std::string & entry, std::string & mac, std::strin
 
 bool set_adapter_enabled(BluetoothHandle & h, bool enabled) {
     std::vector<std::string> resp;
-    return send_command(h, enabled ? "BTEN=1" : "BTEN=0", resp);
+    if (!send_command(h, enabled ? "BTEN=1" : "BTEN=0", resp)) {
+        return false;
+    }
+    std::string err;
+    if (find_error_response(resp, err)) {
+        std::fprintf(stderr, "hal::set_adapter_enabled(%d): adapter reported '%s'\n", enabled,
+                     err.c_str());
+        return false;
+    }
+    return true;
 }
 
 bool set_discoverable(BluetoothHandle & h, bool discoverable) {
     std::vector<std::string> resp;
     // Only SCAN=1 is confirmed vocabulary (see header) -- still allow
     // the false case to be requested by the caller without silently
-    // no-op'ing, but flag it as unconfirmed on the wire.
+    // no-op'ing, but flag it as unconfirmed on the wire. printf, not
+    // stderr -- this is a known documentation caveat about the AT
+    // command itself, not a failure of this specific call.
     if (!discoverable) {
-        std::fprintf(stderr,
-                     "hal::set_discoverable: no confirmed SCAN=0 command exists, sending it "
-                     "anyway (unconfirmed)\n");
+        std::printf("hal::set_discoverable: no confirmed SCAN=0 command exists, sending it "
+                    "anyway (unconfirmed)\n");
     }
-    return send_command(h, discoverable ? "SCAN=1" : "SCAN=0", resp);
+    if (!send_command(h, discoverable ? "SCAN=1" : "SCAN=0", resp)) {
+        return false;
+    }
+    std::string err;
+    if (find_error_response(resp, err)) {
+        std::fprintf(stderr, "hal::set_discoverable(%d): adapter reported '%s'\n", discoverable,
+                     err.c_str());
+        return false;
+    }
+    return true;
 }
 
 bool list_paired_devices(BluetoothHandle & h, std::vector<std::string> & devices) {
@@ -197,33 +255,71 @@ bool list_paired_devices(BluetoothHandle & h, std::vector<std::string> & devices
 bool connect_device(BluetoothHandle & h, const std::string & mac) {
     std::printf("hal::connect_device: sending HFPCONN=%s\n", mac.c_str());
     std::vector<std::string> resp;
-    bool ok = send_command(h, "HFPCONN=" + mac, resp);
-    if (ok) {
-        std::printf("hal::connect_device: HFPCONN=%s -> %zu response line(s):\n", mac.c_str(),
-                    resp.size());
-        for (const auto & line : resp) {
-            std::printf("hal::connect_device:   %s\n", line.c_str());
-        }
-    } else {
-        std::fprintf(stderr, "hal::connect_device: HFPCONN=%s got no response (write failed or "
-                     "timed out)\n", mac.c_str());
+    if (!send_command(h, "HFPCONN=" + mac, resp)) {
+        // send_command() itself already logged the specific reason
+        // (write failure with errno, or nothing further if it was
+        // simply a timeout) -- no need to guess at which one here.
+        std::fprintf(stderr, "hal::connect_device: HFPCONN=%s got no response\n", mac.c_str());
+        return false;
     }
-    return ok;
+    std::printf("hal::connect_device: HFPCONN=%s -> %zu response line(s):\n", mac.c_str(),
+                resp.size());
+    for (const auto & line : resp) {
+        std::printf("hal::connect_device:   %s\n", line.c_str());
+    }
+    // 2026-08-12 FIX: this used to return `ok` from send_command()
+    // directly, i.e. "did we get ANY response" -- a real hardware
+    // capture showed HFPCONN reply with "ERR002" and this function
+    // still reported success (the UI showed "HFPCONN sent") because a
+    // non-empty response was all it ever checked for. See
+    // find_error_response()'s own comment.
+    std::string err;
+    if (find_error_response(resp, err)) {
+        std::fprintf(stderr, "hal::connect_device: HFPCONN=%s failed: adapter reported '%s'\n",
+                     mac.c_str(), err.c_str());
+        return false;
+    }
+    return true;
 }
 
 bool set_device_name(BluetoothHandle & h, const std::string & name) {
     std::vector<std::string> resp;
-    return send_command(h, "NAME=" + name, resp);
+    if (!send_command(h, "NAME=" + name, resp)) {
+        return false;
+    }
+    std::string err;
+    if (find_error_response(resp, err)) {
+        std::fprintf(stderr, "hal::set_device_name('%s'): adapter reported '%s'\n", name.c_str(),
+                     err.c_str());
+        return false;
+    }
+    return true;
 }
 
 bool set_pairing_pin(BluetoothHandle & h, const std::string & pin) {
     std::vector<std::string> resp;
-    return send_command(h, "PIN=" + pin, resp);
+    if (!send_command(h, "PIN=" + pin, resp)) {
+        return false;
+    }
+    std::string err;
+    if (find_error_response(resp, err)) {
+        std::fprintf(stderr, "hal::set_pairing_pin: adapter reported '%s'\n", err.c_str());
+        return false;
+    }
+    return true;
 }
 
 bool get_adapter_address(BluetoothHandle & h, std::string & address) {
     std::vector<std::string> resp;
     if (!send_command(h, "ADDR", resp) || resp.empty()) {
+        return false;
+    }
+    // Same fix as connect_device()/set_device_name()/etc -- without
+    // this check, an "ERR<code>" response would get treated as if it
+    // were the adapter's own address string.
+    std::string err;
+    if (find_error_response(resp, err)) {
+        std::fprintf(stderr, "hal::get_adapter_address: adapter reported '%s'\n", err.c_str());
         return false;
     }
     address = resp.front();

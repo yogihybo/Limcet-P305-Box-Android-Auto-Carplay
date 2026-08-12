@@ -51,29 +51,35 @@ void Session::start(aasdk::transport::ITransport::Pointer transport) {
         }
     });
 
-    inputChannel_->start();
+    // 2026-08-12: inputChannel_->start() (i.e. channel_->receive(),
+    // arming it for the phone's ChannelOpenRequest) used to happen
+    // right here, before the version/handshake/ServiceDiscovery dance
+    // even begins. Moved to onServiceDiscoveryRequest(), after
+    // sendServiceDiscoveryResponse() actually confirms sent -- matches
+    // github.com/mossyhub/openautolink's live_session.cpp exactly,
+    // whose own comment at that point reads "NOW start all service
+    // handlers -- after TLS + auth + discovery are complete". Only the
+    // *construction* of these channel objects (below) stays here;
+    // that's just allocating C++ objects, not touching the wire.
 
-    // Video + the three audio sink channels, constructed and armed
-    // alongside inputChannel_ -- see session.h's member comment and
+    // Video + the three audio sink channels, constructed alongside
+    // inputChannel_ -- see session.h's member comment and
     // Session::onServiceDiscoveryRequest() for the matching
-    // advertisement. PCM device strings/rates are the real confirmed
-    // routes from docs/AUDIO_SUBSYSTEM_INVESTIGATION.md (SYSTEM_AUDIO's
+    // advertisement and the deferred start() calls. PCM device
+    // strings/rates are the real confirmed routes from
+    // docs/AUDIO_SUBSYSTEM_INVESTIGATION.md (SYSTEM_AUDIO's
     // plug:softvol4 route is an explicitly-flagged approximation, not
     // an independently confirmed 1:1 mapping -- see that doc).
     videoChannel_ = std::make_shared<VideoChannel>(strand_, messenger);
-    videoChannel_->start();
 
     audioChannelMedia_ = std::make_shared<AudioChannel>(
         strand_, messenger, aasdk::messenger::ChannelId::MEDIA_SINK_MEDIA_AUDIO, "plug:softvol2", 48000, 2);
-    audioChannelMedia_->start();
 
     audioChannelGuidance_ = std::make_shared<AudioChannel>(
         strand_, messenger, aasdk::messenger::ChannelId::MEDIA_SINK_GUIDANCE_AUDIO, "plug:softvol1", 16000, 1);
-    audioChannelGuidance_->start();
 
     audioChannelSystem_ = std::make_shared<AudioChannel>(
         strand_, messenger, aasdk::messenger::ChannelId::MEDIA_SINK_SYSTEM_AUDIO, "plug:softvol4", 16000, 1);
-    audioChannelSystem_->start();
 
     auto promise = aasdk::channel::SendPromise::defer(strand_);
     promise->then(
@@ -204,6 +210,34 @@ void Session::onServiceDiscoveryRequest(
     response.set_display_name("custom_ui");
     response.set_driver_position(aap_protobuf::service::control::message::DRIVER_POSITION_LEFT);
 
+    // 2026-08-12: found by diffing against github.com/mossyhub/openautolink's
+    // own live_session.cpp (a real, currently-working AA wireless
+    // implementation using the exact same aap_protobuf-based aasdk this
+    // project vendors) -- its onServiceDiscoveryRequest() explicitly
+    // labels this trio "v1.6 protocol fields" (matching this project's
+    // own AASDK_MINOR=6, see third_party/aasdk/include/aasdk/Version.hpp)
+    // and, distinctly from everything above, ALSO populates every
+    // `[deprecated = true]` top-level field in ServiceDiscoveryResponse.proto
+    // (make/model/year/vehicle_id/head_unit_make/model/software_build/
+    // software_version) alongside the modern headunit_info submessage,
+    // with its own comment calling them out as needed "for backward
+    // compat" -- i.e. some real phone-side AA versions still validate
+    // the legacy fields despite the proto marking them deprecated. This
+    // project only ever set headunit_info, never these -- a real,
+    // concrete candidate for the "Communication error 2 - incompatible
+    // software" screen seen on real hardware (proto2 omits an unset
+    // optional field from the wire entirely, so these were completely
+    // absent, not just empty).
+    response.set_probe_for_support(false);
+    response.set_make("custom_ui");
+    response.set_model("prado-firmware-reconstruction");
+    response.set_year("2026");
+    response.set_vehicle_id("prado-custom-ui-001");
+    response.set_head_unit_make("custom_ui");
+    response.set_head_unit_model("prado-firmware-reconstruction");
+    response.set_head_unit_software_build("1");
+    response.set_head_unit_software_version("1.0");
+
     // 2026-08-12: added per opencardev/openauto's own
     // onServiceDiscoveryRequest() -- unlike AuthComplete/AudioFocus
     // Response/ByeByeResponse/NavFocusResponse (all required, found
@@ -274,17 +308,50 @@ void Session::onServiceDiscoveryRequest(
 
     auto promise = aasdk::channel::SendPromise::defer(strand_);
     promise->then(
-        []() { std::printf("androidauto: service discovery response sent\n"); },
+        [this, self = shared_from_this()]() {
+            std::printf("androidauto: service discovery response sent\n");
+
+            // 2026-08-12: only now -- confirmed sent, not just enqueued
+            // -- do the other channels arm receive() for the phone's
+            // ChannelOpenRequest, matching openautolink's
+            // live_session.cpp exactly (see this function's own
+            // comment in Session::start()). Previously these started
+            // immediately in Session::start(), before the phone had
+            // even sent VersionRequest.
+            videoChannel_->start();
+            audioChannelMedia_->start();
+            audioChannelGuidance_->start();
+            audioChannelSystem_->start();
+            inputChannel_->start();
+
+            // Same reference: sends the first ping immediately (not
+            // after waiting a full interval_ms) then falls into the
+            // regular schedule.
+            sendPing();
+            schedulePing();
+        },
         [](const aasdk::error::Error &e) {
             std::printf("androidauto: service discovery response send failed: %s\n", e.what());
         });
     controlChannel_->sendServiceDiscoveryResponse(response, promise);
 
     controlChannel_->receive(this->shared_from_this());
+}
 
-    // Session is now established -- start honoring the ping_configuration
-    // contract advertised above. See session.h's schedulePing() comment.
-    schedulePing();
+void Session::sendPing() {
+    auto timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
+                          std::chrono::system_clock::now().time_since_epoch())
+                          .count();
+    aap_protobuf::service::control::message::PingRequest request;
+    request.set_timestamp(timestamp);
+
+    auto promise = aasdk::channel::SendPromise::defer(strand_);
+    promise->then(
+        []() {},
+        [](const aasdk::error::Error &e) {
+            std::printf("androidauto: ping request send failed: %s\n", e.what());
+        });
+    controlChannel_->sendPingRequest(request, promise);
 }
 
 void Session::schedulePing() {
@@ -297,21 +364,7 @@ void Session::schedulePing() {
         if (ec || stopping_) {
             return;  // cancelled (session stopping) -- not an error to report
         }
-
-        auto timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
-                              std::chrono::system_clock::now().time_since_epoch())
-                              .count();
-        aap_protobuf::service::control::message::PingRequest request;
-        request.set_timestamp(timestamp);
-
-        auto promise = aasdk::channel::SendPromise::defer(strand_);
-        promise->then(
-            []() {},
-            [](const aasdk::error::Error &e) {
-                std::printf("androidauto: ping request send failed: %s\n", e.what());
-            });
-        controlChannel_->sendPingRequest(request, promise);
-
+        sendPing();
         schedulePing();
     }));
 }

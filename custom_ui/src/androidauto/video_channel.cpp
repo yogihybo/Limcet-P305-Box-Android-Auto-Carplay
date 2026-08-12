@@ -2,6 +2,8 @@
 
 #include <cstdio>
 
+#include "androidauto/video_visibility.h"
+
 namespace androidauto {
 
 VideoChannel::VideoChannel(boost::asio::io_service::strand & strand,
@@ -138,12 +140,26 @@ void VideoChannel::pushDecodedFrame() {
         return;
     }
 
-    // Show once, after the first real frame address has actually been
-    // set -- showing an unconfigured/zero-address window earlier would
-    // just display garbage for one frame's worth of time.
-    if (!videoLayerShown_) {
+    // 2026-08-12: reconciles the hardware layer's actual shown/hidden
+    // state against video_visible() on every frame, instead of a
+    // one-shot "show after the first real frame" -- see
+    // video_visibility.h's own comment for why: with auto-start,
+    // decode can be running well before the user has selected the AA
+    // icon, and this layer previously had no way to stay hidden until
+    // they do. Still gated on the first real frame address having been
+    // set (showing an unconfigured/zero-address window would display
+    // garbage for one frame's worth of time) -- video_visible() alone
+    // can't have gone true before that anyway, since nothing calls
+    // setVisible(true) before the AA screen -- which only opens once a
+    // session exists -- is on screen, but the ordering guard costs
+    // nothing to keep explicit.
+    bool wantVisible = video_visible().load(std::memory_order_acquire);
+    if (wantVisible && !videoLayerShown_) {
         hal::show_video_layer(videoLayer_);
         videoLayerShown_ = true;
+    } else if (!wantVisible && videoLayerShown_) {
+        hal::hide_video_layer(videoLayer_);
+        videoLayerShown_ = false;
     }
 }
 

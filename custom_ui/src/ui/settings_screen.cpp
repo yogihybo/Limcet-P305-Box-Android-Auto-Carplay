@@ -144,12 +144,17 @@ lv_obj_t * add_stepper_row(lv_obj_t * parent, const char * label_text, int min, 
     lv_obj_set_flex_align(controls, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_column(controls, 10, 0);
     // Room for the -/+ buttons' knob focus ring -- this container is
-    // LV_SIZE_CONTENT and wraps tightly around the buttons (its
-    // tallest/only-height child), leaving no slack for the ring
+    // LV_SIZE_CONTENT and wraps tightly around the buttons (its only
+    // children, both top/bottom AND left/right since minus/plus sit at
+    // the row's own left/right edges), leaving no slack for the ring
     // otherwise. row's own pad_all=8 (add_row()) doesn't help here --
     // the ring gets clipped against its DIRECT parent (this container),
-    // not the grandparent row. Confirmed clipped on real hardware.
-    lv_obj_set_style_pad_ver(controls, 6, 0);
+    // not the grandparent row. Confirmed clipped on real hardware
+    // (initially only pad_ver was added, which fixed top/bottom but
+    // left the outer left/right edges still clipping).
+    // outline_width(3) + outline_pad(3) in theme.cpp's focus_ring style
+    // = 6px the ring extends beyond the button on every side.
+    lv_obj_set_style_pad_all(controls, 6, 0);
 
     lv_obj_t * minus_btn = lv_button_create(controls);
     lv_obj_remove_style_all(minus_btn);

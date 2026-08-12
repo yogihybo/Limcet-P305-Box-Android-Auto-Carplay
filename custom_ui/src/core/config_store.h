@@ -1,6 +1,5 @@
-// Settings config store -- mirrors stock's real two-layer model
-// documented in docs/SETTINGS_REFERENCE.md and cross-checked against
-// a real captured userdata dump
+// Settings config store -- the live settings layer, matching the real
+// on-disk format cross-checked against a real captured userdata dump
 // (firmware_source/mtd7_userdata/msncfg/Setting.config):
 //
 //   [General]
@@ -12,37 +11,45 @@
 //   AutoStartCarLink=true
 //   Language=4096
 //
-// Load order (see project_language_setting_userdata memory +
-// docs/ARCHITECTURE.md "Settings / config files"):
-//   1. `/data/msncfg/Setting.config` -- the LIVE layer. Once a device
-//      has provisioned, this wins over the ini files on every
-//      subsequent boot.
-//   2. `/msnprofile/FactoryConfig.ini` and `/msnprofile/MsnProductInfo.ini`
-//      -- one-time factory seed, only consulted for keys NOT already
-//      present in the live layer (first-boot / not-yet-provisioned
-//      case).
+// 2026-08-12 REVISED (twice): this used to also read the stock MSN
+// ini seed files (`/msnprofile/FactoryConfig.ini` /
+// `MsnProductInfo.ini`) as a first-boot fallback for keys not yet in
+// the live layer. Per explicit request, this app no longer consults
+// those files AT ALL -- they're the real stock firmware's own factory
+// seed, shared with the original MsnCoreApp binary this project can
+// still dual-boot into, and coupling our own settings resolution to
+// their format/presence was exactly the thing to remove. Instead,
+// custom_ui ships its OWN bundled default-seed file (tracked source:
+// custom_ui/etc/default_settings.conf, same simple flat
+// [Section]/key=value format as Setting.config itself -- see
+// hal_config.h's hal.conf for the established sibling pattern this
+// follows: staged into build/ by the Makefile, resolved at runtime via
+// resolve_default_seed_path()'s exe-dir -> /data/custom_ui ->
+// /etc/custom_ui search order, first match wins).
 //
-// 2026-08-12 REVISED: after the ini-seeded fallback resolves a key,
-// load() now promotes it straight into the live layer in memory (see
-// load()'s own comment) instead of leaving it as a read-through ini
-// value -- and default_store() saves once right after loading. The
-// effect: `/data/msncfg/Setting.config` becomes the sole, self-
-// contained source of truth for this app from the moment it first
-// runs, not just for keys the user happens to touch. The two ini
-// files are still read (this device's real factory image ships them,
-// and a fresh/wiped device needs SOME seed), but only ever on this one
-// bootstrap pass -- everything this app does afterwards, including
-// every settings screen, reads and writes ONLY the live layer, never
-// falls back to or re-reads the ini files again. Never writes the ini
-// files themselves -- those stay the factory-owned seed, not something
+// Load order:
+//   1. `/data/msncfg/Setting.config` -- the LIVE layer. Wins over the
+//      bundled seed on every boot once anything has ever been saved.
+//   2. custom_ui's bundled default_settings.conf -- consulted only for
+//      keys NOT already present in the live layer (first-boot /
+//      not-yet-provisioned case).
+//
+// load() promotes every resolved key -- whether it came from the live
+// layer or the bundled seed -- into the live layer in memory, and
+// default_store() saves once right after loading. The effect:
+// `/data/msncfg/Setting.config` becomes the sole, self-contained
+// source of truth for this app from the moment it first runs, not
+// just for keys the user happens to touch, and the bundled seed file
+// is never consulted again after that one bootstrap pass. Never writes
+// the bundled seed itself -- that's the shipped default, not something
 // this app mutates.
 //
 // Sections: `Setting.config` observed so far only has [General], but
-// FactoryConfig.ini has [General]/[BlueTooth]/[Sound]/[Radio], and per
-// SETTINGS_REFERENCE.md some SKUs place General-section keys before
-// any header at all. Keys are stored flat as "Section/Key" (default
-// section "General" for headerless/unsectioned lines) so every real
-// on-disk layout parses the same way.
+// the bundled seed also carries [BlueTooth] (DeviceName etc, per
+// SETTINGS_REFERENCE.md) -- some SKUs place General-section keys
+// before any header at all, so keys are stored flat as "Section/Key"
+// (default section "General" for headerless/unsectioned lines) to
+// parse either layout the same way.
 #pragma once
 
 #include <map>
@@ -53,24 +60,18 @@ namespace core {
 class ConfigStore {
 public:
     // live_path is the userdata layer this store reads AND writes.
-    // The two ini paths are read-only factory seeds, only consulted
-    // for keys not already found in live_path.
-    ConfigStore(std::string live_path,
-                std::string factory_config_ini_path,
-                std::string product_info_ini_path);
+    ConfigStore(std::string live_path);
 
-    // Loads all three files (see class comment for precedence), then
-    // promotes every resolved key -- whether it came from the live
-    // layer or an ini fallback -- into the live layer in memory, so a
-    // subsequent save() makes the live file fully self-contained (see
-    // class comment's 2026-08-12 note). Safe to call if any/all paths
-    // are missing (e.g. running this UI on a dev host, or a fresh
-    // device with no ini seed either) -- missing files are silently
-    // skipped, get_*() falls back to caller-supplied defaults in that
-    // case.
+    // Loads the live layer, then the bundled default seed (see class
+    // comment for precedence and search order), then promotes every
+    // resolved key into the live layer in memory so a subsequent
+    // save() makes the live file fully self-contained. Safe to call if
+    // either/both are missing (e.g. running this UI on a dev host) --
+    // missing files are silently skipped, get_*() falls back to
+    // caller-supplied defaults in that case.
     void load();
 
-    // Writes the live layer only (never the ini seeds) back to
+    // Writes the live layer only (never the bundled seed) back to
     // live_path, creating /data/msncfg/ if it doesn't exist yet (a
     // not-yet-provisioned device won't have it). Returns false on
     // write failure (logs the reason) -- callers should treat this as
@@ -105,19 +106,20 @@ private:
     static std::string make_map_key(const std::string & section, const std::string & key);
     void parse_file(const std::string & path, bool is_live_layer);
 
+    // exe-dir/default_settings.conf -> /data/custom_ui/default_settings.conf
+    // -> /etc/custom_ui/default_settings.conf, first match wins -- same
+    // search order and reasoning as hal_config.cpp's HalConfig::HalConfig().
+    static std::string resolve_default_seed_path();
+
     std::string live_path_;
-    std::string factory_config_ini_path_;
-    std::string product_info_ini_path_;
     std::map<std::string, Entry> values_;
 };
 
-// Process-wide store against this device's real, confirmed paths
-// (docs/SETTINGS_REFERENCE.md):
-//   live:    /data/msncfg/Setting.config
-//   factory: /msnprofile/FactoryConfig.ini, /msnprofile/MsnProductInfo.ini
-// Lazily load()ed on first call, and saved once immediately after --
-// see load()'s comment: this makes the live file self-contained from
-// this app's very first run, decoupled from the ini seed files from
+// Process-wide store against this device's real, confirmed live path
+// (docs/SETTINGS_REFERENCE.md): /data/msncfg/Setting.config. Lazily
+// load()ed on first call, and saved once immediately after -- see
+// load()'s comment: this makes the live file self-contained from this
+// app's very first run, decoupled from the bundled default seed from
 // then on. Settings/Bluetooth screens should use this rather than
 // constructing their own ConfigStore, so every screen sees (and edits)
 // the same in-memory state.

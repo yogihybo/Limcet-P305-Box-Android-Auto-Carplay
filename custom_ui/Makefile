@@ -201,7 +201,7 @@ BW_AAP_TEST_TARGET := $(BUILD_DIR)/androidauto-bw-aap-test
 BW_AAP_TEST_OBJS   := $(BUILD_DIR)/bw-aap-test-obj/main.o
 BW_AAP_CLIENT_OBJS := $(BUILD_DIR)/ui-obj/androidauto/bw_aap_client.o
 
-.PHONY: all clean ui carplay-sidecar androidauto-sidecar androidauto-usb-probe-test androidauto-wireless-probe-test androidauto-bluetooth-rfcomm-test androidauto-bw-aap-test
+.PHONY: all clean ui carplay-sidecar androidauto-sidecar androidauto-usb-probe-test androidauto-wireless-probe-test androidauto-bluetooth-rfcomm-test androidauto-bw-aap-test wifi-syn-sniff
 
 all: ui carplay-sidecar androidauto-sidecar
 
@@ -228,6 +228,15 @@ androidauto-usb-probe-test: $(AASDK_TEST_TARGET)
 androidauto-wireless-probe-test: $(WIRELESS_TEST_TARGET)
 androidauto-bluetooth-rfcomm-test: $(BT_TEST_TARGET)
 androidauto-bw-aap-test: $(BW_AAP_TEST_TARGET)
+wifi-syn-sniff: $(BUILD_DIR)/wifi-syn-sniff
+
+# See tools/wifi-syn-sniff/main.cpp -- raw AF_PACKET SYN watcher, no
+# aasdk/Boost/etc dependency at all (plain libc only), so this is a
+# single standalone compile+link rule rather than reusing any of the
+# other test tools' object-list plumbing above.
+$(BUILD_DIR)/wifi-syn-sniff: tools/wifi-syn-sniff/main.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) -static -o $@ $<
 
 $(UI_TARGET): $(UI_OBJS) $(LVGL_OBJS)
 	@mkdir -p $(dir $@)

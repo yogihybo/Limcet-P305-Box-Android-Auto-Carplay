@@ -377,14 +377,32 @@ void Session::onAudioFocusRequest(
     // 2026-08-12: this used to just log and re-arm receive(), never
     // replying at all -- found missing by the same reference diff that
     // caught the missing AuthComplete send (opencardev/openauto's
-    // AndroidAutoEntity::onAudioFocusRequest()). GAIN vs LOSS mirrors
-    // that reference exactly: AUDIO_FOCUS_RELEASE -> LOSS (the phone is
-    // giving focus back), anything else -> GAIN (the phone wants to
-    // play).
-    auto state = request.audio_focus_type() ==
-                         aap_protobuf::service::control::message::AUDIO_FOCUS_RELEASE
-                     ? aap_protobuf::service::control::message::AUDIO_FOCUS_STATE_LOSS
-                     : aap_protobuf::service::control::message::AUDIO_FOCUS_STATE_GAIN;
+    // AndroidAutoEntity::onAudioFocusRequest()).
+    //
+    // 2026-08-12 REVISED: the GAIN/LOSS-only mapping above collapsed
+    // GAIN_TRANSIENT and GAIN_TRANSIENT_MAY_DUCK into plain GAIN --
+    // found by diffing against github.com/mossyhub/openautolink's
+    // live_session.cpp (HeadlessAutoEntity::onAudioFocusRequest()),
+    // which keeps GAIN_TRANSIENT/GAIN_TRANSIENT_MAY_DUCK distinct as
+    // AUDIO_FOCUS_STATE_GAIN_TRANSIENT. Matters for correct behavior on
+    // the phone side (a transient/may-duck request is meant to be
+    // brief and coexist with other audio, e.g. turn-by-turn guidance
+    // over media -- collapsing it to a plain GAIN told the phone we'd
+    // taken full, non-transient focus instead).
+    aap_protobuf::service::control::message::AudioFocusStateType state;
+    switch (request.audio_focus_type()) {
+        case aap_protobuf::service::control::message::AUDIO_FOCUS_GAIN:
+            state = aap_protobuf::service::control::message::AUDIO_FOCUS_STATE_GAIN;
+            break;
+        case aap_protobuf::service::control::message::AUDIO_FOCUS_GAIN_TRANSIENT:
+        case aap_protobuf::service::control::message::AUDIO_FOCUS_GAIN_TRANSIENT_MAY_DUCK:
+            state = aap_protobuf::service::control::message::AUDIO_FOCUS_STATE_GAIN_TRANSIENT;
+            break;
+        case aap_protobuf::service::control::message::AUDIO_FOCUS_RELEASE:
+        default:
+            state = aap_protobuf::service::control::message::AUDIO_FOCUS_STATE_LOSS;
+            break;
+    }
 
     aap_protobuf::service::control::message::AudioFocusNotification response;
     response.set_focus_state(state);

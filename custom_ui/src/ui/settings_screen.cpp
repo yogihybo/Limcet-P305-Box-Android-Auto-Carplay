@@ -351,11 +351,13 @@ void build_hardware_profile_and_behaviour(lv_obj_t * tab) {
     lv_obj_set_width(warn, LV_PCT(100));
     theme::style_secondary_text(warn);
 
-    // Hardware profile (MsnProductInfo.ini) -- editable per request.
-    // Changing these live has no defined behavior on a provisioned
-    // device (they gate boot-time hardware detection, not something
-    // this app previously let a user edit post-boot) -- see
-    // docs/SETTINGS_REFERENCE.md section 1. Ranges below come from the
+    // Hardware profile -- editable per request. Seeded from
+    // etc/default_settings.conf now, not read from the stock MSN ini
+    // files at all (see core/config_store.h). Changing these live has
+    // no defined behavior on a provisioned device (they gate boot-time
+    // hardware detection, not something this app previously let a
+    // user edit post-boot) -- see docs/SETTINGS_REFERENCE.md section
+    // 1. Ranges below come from the
     // full disassembly-confirmed value tables in MCU_ADAPTERS.md
     // (McuType) / CANBUS.md (CanType); the rest are small enums with
     // only 1-2 real observed values, given generous headroom rather
@@ -372,9 +374,9 @@ void build_hardware_profile_and_behaviour(lv_obj_t * tab) {
     lv_label_set_text(behaviour_header, "Behaviour");
     theme::style_section_label(behaviour_header);
 
-    // FactoryConfig.ini fields confirmed live via disassembly (section
-    // 2 of SETTINGS_REFERENCE.md) -- safe to expose as real editable
-    // controls.
+    // Fields confirmed live via disassembly (section 2 of
+    // SETTINGS_REFERENCE.md, same bundled-seed sourcing as above) --
+    // safe to expose as real editable controls.
     add_stepper_row(tab, "Reversing volume cut (%)", 0, 100, 5, "ReversingVolumeCut", "General");
     add_stepper_row(tab, "AEC delay (ms)", 0, 300, 10, "AECDelay", "General");
     add_switch_row(tab, "Right-hand drive layout", "RightHandCarDriver", "General", false);

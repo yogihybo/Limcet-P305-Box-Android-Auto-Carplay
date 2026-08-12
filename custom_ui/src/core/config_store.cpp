@@ -8,6 +8,7 @@
 #include <sstream>
 
 #include <sys/stat.h>
+#include <unistd.h>
 
 namespace core {
 
@@ -32,13 +33,31 @@ void mkdir_parents(const std::string & path) {
     }
 }
 
+// Directory containing the running binary, via /proc/self/exe -- same
+// technique as hal_config.cpp's executable_dir() (this class deliberately
+// doesn't depend on core::hal_config() -- keeps this a self-contained
+// settings-only module).
+std::string executable_dir() {
+    char exePath[512];
+    ssize_t len = readlink("/proc/self/exe", exePath, sizeof(exePath) - 1);
+    if (len <= 0) return "";
+    exePath[len] = '\0';
+
+    std::string dir(exePath);
+    auto slash = dir.find_last_of('/');
+    if (slash == std::string::npos) return "";
+    dir.resize(slash);
+    return dir;
+}
+
+bool file_exists(const std::string & path) {
+    std::ifstream f(path);
+    return f.is_open();
+}
+
 }  // namespace
 
-ConfigStore::ConfigStore(std::string live_path, std::string factory_config_ini_path,
-                          std::string product_info_ini_path)
-    : live_path_(std::move(live_path)),
-      factory_config_ini_path_(std::move(factory_config_ini_path)),
-      product_info_ini_path_(std::move(product_info_ini_path)) {}
+ConfigStore::ConfigStore(std::string live_path) : live_path_(std::move(live_path)) {}
 
 std::string ConfigStore::make_map_key(const std::string & section, const std::string & key) {
     return section + "/" + key;
@@ -70,32 +89,47 @@ void ConfigStore::parse_file(const std::string & path, bool is_live_layer) {
         std::string map_key = make_map_key(section, key);
 
         // Live layer entries always win and are always overwritable;
-        // ini-seed entries only fill gaps the live layer hasn't
-        // already claimed (first file loaded for a given key wins
-        // among the ini seeds, live layer loaded first overall).
+        // the bundled seed only fills gaps the live layer hasn't
+        // already claimed.
         auto it = values_.find(map_key);
         if (it != values_.end() && it->second.from_live) {
             continue;
         }
         if (it != values_.end() && !is_live_layer) {
-            continue;  // an earlier ini already seeded this key
+            continue;  // already seeded
         }
         values_[map_key] = Entry{value, is_live_layer};
     }
 }
 
+std::string ConfigStore::resolve_default_seed_path() {
+    constexpr const char * kFilename = "default_settings.conf";
+    std::string exe_dir = executable_dir();
+    if (!exe_dir.empty() && file_exists(exe_dir + "/" + kFilename)) {
+        return exe_dir + "/" + kFilename;
+    }
+    std::string data_path = std::string("/data/custom_ui/") + kFilename;
+    if (file_exists(data_path)) {
+        return data_path;
+    }
+    std::string etc_path = std::string("/etc/custom_ui/") + kFilename;
+    if (file_exists(etc_path)) {
+        return etc_path;
+    }
+    return "";  // none found -- load()'s parse_file() no-ops on an empty/missing path
+}
+
 void ConfigStore::load() {
     values_.clear();
     parse_file(live_path_, /*is_live_layer=*/true);
-    parse_file(factory_config_ini_path_, /*is_live_layer=*/false);
-    parse_file(product_info_ini_path_, /*is_live_layer=*/false);
+    parse_file(resolve_default_seed_path(), /*is_live_layer=*/false);
 
-    // Decouple from the ini seed files from here on -- promote every
-    // key resolved above (whether it came from the live layer or an
-    // ini fallback) into the live layer in memory. See this class's
-    // header comment (2026-08-12 note): the next save() then makes
-    // live_path_ a full, self-contained copy of the resolved config,
-    // not just the subset the user has explicitly touched.
+    // Decouple from the bundled seed file from here on -- promote
+    // every key resolved above (whether it came from the live layer
+    // or the seed) into the live layer in memory. See this class's
+    // header comment: the next save() then makes live_path_ a full,
+    // self-contained copy of the resolved config, not just the subset
+    // the user has explicitly touched.
     for (auto & [map_key, entry] : values_) {
         entry.from_live = true;
     }
@@ -111,9 +145,9 @@ bool ConfigStore::save() {
     }
 
     // Only ever writes keys that are (now) part of the live layer --
-    // matches the real device's own Setting.config, which per the
-    // real dump only ever carries a handful of live-overridable keys,
-    // not a full copy of every ini field.
+    // after load()'s promotion step (see its comment) that's every key
+    // this app knows about, so this ends up as a full self-contained
+    // copy, not just a handful of user-touched overrides.
     std::string current_section;
     for (auto & [map_key, entry] : values_) {
         if (!entry.from_live) continue;
@@ -172,8 +206,7 @@ void ConfigStore::set_string(const std::string & key, const std::string & value,
 }
 
 ConfigStore & default_store() {
-    static ConfigStore store("/data/msncfg/Setting.config", "/msnprofile/FactoryConfig.ini",
-                              "/msnprofile/MsnProductInfo.ini");
+    static ConfigStore store("/data/msncfg/Setting.config");
     static bool loaded = false;
     if (!loaded) {
         store.load();

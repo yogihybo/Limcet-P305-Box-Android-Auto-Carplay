@@ -194,7 +194,7 @@ BW_AAP_CLIENT_OBJS := $(BUILD_DIR)/ui-obj/androidauto/bw_aap_client.o
 
 all: ui carplay-sidecar androidauto-sidecar
 
-ui: $(UI_TARGET) $(BUILD_DIR)/hal.conf
+ui: $(UI_TARGET) $(BUILD_DIR)/hal.conf $(BUILD_DIR)/default_settings.conf
 carplay-sidecar: $(SIDECAR_TARGET)
 androidauto-sidecar: $(ANDROIDAUTO_SIDECAR_TARGET) $(BUILD_DIR)/hal.conf
 
@@ -204,6 +204,13 @@ androidauto-sidecar: $(ANDROIDAUTO_SIDECAR_TARGET) $(BUILD_DIR)/hal.conf
 # test workflow, see scripts/run_on_device.sh) carries the config along
 # automatically, no /etc or /data setup needed on-device.
 $(BUILD_DIR)/hal.conf: etc/hal.conf
+	@mkdir -p $(dir $@)
+	cp $< $@
+
+# Staged copy of the bundled settings seed (see src/core/config_store.h)
+# -- same reasoning as hal.conf above. Only `ui` reads this (androidauto-
+# sidecar has no ConfigStore dependency).
+$(BUILD_DIR)/default_settings.conf: etc/default_settings.conf
 	@mkdir -p $(dir $@)
 	cp $< $@
 androidauto-usb-probe-test: $(AASDK_TEST_TARGET)

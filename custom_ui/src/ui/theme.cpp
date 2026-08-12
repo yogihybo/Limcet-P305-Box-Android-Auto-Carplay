@@ -173,10 +173,19 @@ lv_obj_t * add_back_button(lv_obj_t * scr, lv_event_cb_t cb) {
     lv_obj_add_style(btn, &styles().back_btn, 0);
     lv_obj_add_style(btn, &styles().back_btn_pressed, LV_STATE_PRESSED);
     lv_obj_add_style(btn, &styles().focus_ring, LV_STATE_FOCUSED);
+    // Scoped override, smaller than the shared focus_ring style's
+    // outline_width(3)/outline_pad(3) -- this button sits close enough
+    // to a screen's content below it (e.g. settings_screen.cpp's first
+    // row) that the full-size ring was overlapping it. 20% smaller,
+    // rounded to the nearest integer pixel (3 * 0.8 = 2.4 -> 2).
+    lv_obj_set_style_outline_width(btn, 2, LV_STATE_FOCUSED);
+    lv_obj_set_style_outline_pad(btn, 2, LV_STATE_FOCUSED);
     lv_obj_set_size(btn, kMinTouchTarget, kMinTouchTarget);
     // Status bar (ui/status_bar.h) is pinned to the BOTTOM of the
     // screen now, not the top, so the header doesn't need to dodge it.
-    lv_obj_align(btn, LV_ALIGN_TOP_LEFT, 10, 10);
+    // Moved down 10px (10 -> 20) -- was overlapping the first row of
+    // screen content below it (e.g. settings_screen.cpp).
+    lv_obj_align(btn, LV_ALIGN_TOP_LEFT, 10, 20);
     lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, nullptr);
 
     lv_obj_t * icon = lv_label_create(btn);

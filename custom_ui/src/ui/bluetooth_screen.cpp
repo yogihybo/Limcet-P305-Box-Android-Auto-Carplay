@@ -305,9 +305,9 @@ lv_obj_t * create_bluetooth_screen() {
     lv_label_set_text(addr_label, "This device: (looking up address...)");
     theme::style_secondary_text(addr_label);
 
-    // Device name -- editable, backed by NAME=<devname> + the
-    // Setting.config [BlueTooth]/DeviceName field (see
-    // docs/SETTINGS_REFERENCE.md section 2.7).
+    // Device name -- editable, backed by NAME=<devname> + this app's
+    // own live settings file's [BlueTooth]/DeviceName field (see
+    // core/config_store.h and docs/SETTINGS_REFERENCE.md section 2.7).
     lv_obj_t * name_row = lv_obj_create(content);
     lv_obj_set_width(name_row, LV_PCT(100));
     lv_obj_set_height(name_row, LV_SIZE_CONTENT);

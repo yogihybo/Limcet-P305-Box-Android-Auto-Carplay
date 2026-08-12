@@ -1,8 +1,8 @@
-// Settings screen -- Phase 3 (docs/IMPLEMENTATION_PLAN.md). Tiered
-// Basic/Advanced menu backed by core::ConfigStore (the live
-// /data/msncfg/Setting.config layer, factory .ini as fallback seed --
-// see core/config_store.h) and, for display adjustments, the real
-// /dev/ark_display VDE ioctls (hal/display_ctrl.h).
+// Settings screen -- Phase 3 (docs/IMPLEMENTATION_PLAN.md). Backed by
+// core::ConfigStore (this app's own live settings layer, entirely
+// separate from stock's msncfg -- see core/config_store.h) and, for
+// display adjustments, the real /dev/ark_display VDE ioctls
+// (hal/display_ctrl.h).
 //
 // "Same options as stock, better format" (see IMPLEMENTATION_PLAN.md's
 // Phase 3 design principle) -- Basic tier covers the handful of

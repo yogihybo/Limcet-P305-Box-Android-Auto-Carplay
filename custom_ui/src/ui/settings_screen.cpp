@@ -318,10 +318,18 @@ void build_display_audio_general(lv_obj_t * tab) {
     lv_obj_t * bt_row = add_row(tab, "Bluetooth");
     lv_obj_t * bt_btn = lv_button_create(bt_row);
     theme::style_primary_button(bt_btn);
+    // style_primary_button()'s pad_hor=28/font_24 is sized for a
+    // standalone CTA -- next to a row label it read as oversized, so
+    // this row-scoped override shrinks padding/font to fit a nav
+    // button instead. min_height stays at kMinTouchTarget (unset here)
+    // for the touch-target floor; only width/visual weight shrinks.
+    lv_obj_set_style_pad_hor(bt_btn, 14, 0);
+    lv_obj_set_style_pad_ver(bt_btn, 8, 0);
+    lv_obj_set_style_text_font(bt_btn, &lv_font_montserrat_14, 0);
     lv_obj_add_event_cb(bt_btn, bluetooth_btn_cb, LV_EVENT_CLICKED, nullptr);
     lv_group_add_obj(core::navigation::focus_group(), bt_btn);
     lv_obj_t * bt_btn_label = lv_label_create(bt_btn);
-    lv_label_set_text(bt_btn_label, "Pairing / Devices >");
+    lv_label_set_text(bt_btn_label, "Manage >");
 
     // WiFi -- this device doesn't join networks as a client; it hosts
     // its own dynamic hostapd AP for wireless Android Auto/CarPlay
@@ -343,15 +351,27 @@ void build_display_audio_general(lv_obj_t * tab) {
 }
 
 void build_hardware_profile_and_behaviour(lv_obj_t * tab) {
+    lv_obj_t * behaviour_header = lv_label_create(tab);
+    lv_label_set_text(behaviour_header, "Behaviour");
+    theme::style_section_label(behaviour_header);
+
+    // Fields confirmed live via disassembly (section 2 of
+    // SETTINGS_REFERENCE.md, seeded from etc/default_settings.conf,
+    // see core/config_store.h) -- safe to expose as real editable
+    // controls.
+    add_stepper_row(tab, "Reversing volume cut (%)", 0, 100, 5, "ReversingVolumeCut", "General");
+    add_stepper_row(tab, "AEC delay (ms)", 0, 300, 10, "AECDelay", "General");
+    add_switch_row(tab, "Right-hand drive layout", "RightHandCarDriver", "General", false);
+    add_switch_row(tab, "Disable window transitions", "DisableWindowEffect", "General", false);
+    add_switch_row(tab, "Touch idle auto-calibrate", "TouchCalibrateAction", "General", false);
+    add_switch_row(tab, "Auto-start phone projection", "AutoStartCarLink", "General", true);
+
     lv_obj_t * hw_header = lv_label_create(tab);
-    lv_label_set_text(hw_header, "Hardware profile");
+    lv_label_set_text(hw_header, "Hardware");
     theme::style_section_label(hw_header);
 
     lv_obj_t * warn = lv_label_create(tab);
-    lv_label_set_text(warn,
-                       "Factory fields, now editable per request. CAUTION: CAN Type != 0 is "
-                       "documented to break touch/knob input on this device (see CANBUS.md) -- "
-                       "change it only if you know what you're doing.");
+    lv_label_set_text(warn, "Factory fields - only edit if you know what you're doing.");
     lv_label_set_long_mode(warn, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(warn, LV_PCT(100));
     theme::style_secondary_text(warn);
@@ -362,11 +382,13 @@ void build_hardware_profile_and_behaviour(lv_obj_t * tab) {
     // no defined behavior on a provisioned device (they gate boot-time
     // hardware detection, not something this app previously let a
     // user edit post-boot) -- see docs/SETTINGS_REFERENCE.md section
-    // 1. Ranges below come from the
-    // full disassembly-confirmed value tables in MCU_ADAPTERS.md
-    // (McuType) / CANBUS.md (CanType); the rest are small enums with
-    // only 1-2 real observed values, given generous headroom rather
-    // than an exact confirmed range.
+    // 1. Ranges below come from the full disassembly-confirmed value
+    // tables in MCU_ADAPTERS.md (McuType) / CANBUS.md (CanType); the
+    // rest are small enums with only 1-2 real observed values, given
+    // generous headroom rather than an exact confirmed range. CAN Type
+    // specifically is documented (CANBUS.md) to break touch/knob input
+    // on this device if set to anything other than 0 -- included here
+    // anyway per request, covered by the warning label above.
     add_stepper_row(tab, "MCU Type", 1, 30, 1, "McuType", "General");
     add_stepper_row(tab, "CAN Type", 0, 16, 1, "CanType", "General");
     add_stepper_row(tab, "Screen Type", 0, 255, 1, "ScreenType", "General");
@@ -374,20 +396,6 @@ void build_hardware_profile_and_behaviour(lv_obj_t * tab) {
     add_stepper_row(tab, "BlueTooth Type", 0, 10, 1, "BlueToothType", "General");
     add_stepper_row(tab, "Radio Type", 0, 10, 1, "RadioType", "General");
     add_stepper_row(tab, "Mirroring Link Type", 0, 5, 1, "MirroringLinkType", "General");
-
-    lv_obj_t * behaviour_header = lv_label_create(tab);
-    lv_label_set_text(behaviour_header, "Behaviour");
-    theme::style_section_label(behaviour_header);
-
-    // Fields confirmed live via disassembly (section 2 of
-    // SETTINGS_REFERENCE.md, same bundled-seed sourcing as above) --
-    // safe to expose as real editable controls.
-    add_stepper_row(tab, "Reversing volume cut (%)", 0, 100, 5, "ReversingVolumeCut", "General");
-    add_stepper_row(tab, "AEC delay (ms)", 0, 300, 10, "AECDelay", "General");
-    add_switch_row(tab, "Right-hand drive layout", "RightHandCarDriver", "General", false);
-    add_switch_row(tab, "Disable window transitions", "DisableWindowEffect", "General", false);
-    add_switch_row(tab, "Touch idle auto-calibrate", "TouchCalibrateAction", "General", false);
-    add_switch_row(tab, "Auto-start phone projection", "AutoStartCarLink", "General", true);
 }
 
 }  // namespace

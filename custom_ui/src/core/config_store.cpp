@@ -89,6 +89,16 @@ void ConfigStore::load() {
     parse_file(live_path_, /*is_live_layer=*/true);
     parse_file(factory_config_ini_path_, /*is_live_layer=*/false);
     parse_file(product_info_ini_path_, /*is_live_layer=*/false);
+
+    // Decouple from the ini seed files from here on -- promote every
+    // key resolved above (whether it came from the live layer or an
+    // ini fallback) into the live layer in memory. See this class's
+    // header comment (2026-08-12 note): the next save() then makes
+    // live_path_ a full, self-contained copy of the resolved config,
+    // not just the subset the user has explicitly touched.
+    for (auto & [map_key, entry] : values_) {
+        entry.from_live = true;
+    }
 }
 
 bool ConfigStore::save() {
@@ -167,6 +177,13 @@ ConfigStore & default_store() {
     static bool loaded = false;
     if (!loaded) {
         store.load();
+        // Persist immediately -- see load()'s comment: this makes
+        // Setting.config self-contained from this app's very first
+        // run rather than waiting for the user to touch a setting.
+        // Best-effort/non-fatal, same as every other optional-write
+        // pattern in this codebase (e.g. a dev host build has nowhere
+        // real to write this).
+        store.save();
         loaded = true;
     }
     return store;

@@ -1,7 +1,9 @@
 #include "hal/bluetooth.h"
 
+#include <algorithm>
 #include <cctype>
 #include <cerrno>
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -152,18 +154,44 @@ bool send_command(BluetoothHandle & h, const std::string & command,
     // there's no confirmed terminator marking "response complete" for
     // any given command, so this reads whatever arrives inside the
     // window rather than waiting for a specific sentinel.
+    //
+    // 2026-08-12 FIX: this used to call select() with the FULL
+    // timeout_ms on every single iteration, not a shrinking budget --
+    // meaning this function always blocked for at least timeout_ms
+    // (2000ms by default) even when the real reply arrived in a few
+    // milliseconds, since it kept re-arming a fresh full-length wait
+    // after every chunk read. Real symptom: the Bluetooth screen (two
+    // sequential send_command() calls, get_adapter_address() then
+    // list_paired_devices(), both on the LVGL main thread before the
+    // screen is even shown) took several guaranteed seconds to appear.
+    // Now: wait up to the full timeout_ms for the FIRST byte (blueware
+    // may genuinely be slow to start replying), but once data has
+    // started arriving, only wait kIdleGapMs for MORE before deciding
+    // the response is complete -- still bounded by the original
+    // timeout_ms as an absolute ceiling either way, so a burst of
+    // continuous unsolicited broadcast traffic can't make this hang
+    // indefinitely.
+    constexpr int kIdleGapMs = 300;
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
+    bool gotAnyData = false;
     std::string buffer;
     for (;;) {
+        auto now = std::chrono::steady_clock::now();
+        if (now >= deadline) break;
+        auto remainingMs =
+            std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now).count();
+        long long waitMs = gotAnyData ? std::min<long long>(kIdleGapMs, remainingMs) : remainingMs;
+
         fd_set read_set;
         FD_ZERO(&read_set);
         FD_SET(h.fd, &read_set);
         struct timeval tv {};
-        tv.tv_sec = timeout_ms / 1000;
-        tv.tv_usec = (timeout_ms % 1000) * 1000;
+        tv.tv_sec = waitMs / 1000;
+        tv.tv_usec = (waitMs % 1000) * 1000;
 
         int ready = ::select(h.fd + 1, &read_set, nullptr, nullptr, &tv);
         if (ready <= 0) {
-            break;  // timeout or error -- stop collecting
+            break;  // idle gap (or overall timeout) elapsed with nothing new -- stop collecting
         }
 
         char chunk[256];
@@ -172,6 +200,7 @@ bool send_command(BluetoothHandle & h, const std::string & command,
             break;
         }
         buffer.append(chunk, static_cast<size_t>(n));
+        gotAnyData = true;
     }
 
     // Split on \r\n / \n, drop empty lines. If expected_prefix is set,

@@ -1,7 +1,11 @@
 #include "ui/bluetooth_screen.h"
 
+#include <atomic>
 #include <cstdio>
+#include <memory>
+#include <mutex>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "core/config_store.h"
@@ -18,8 +22,76 @@ void back_btn_cb(lv_event_t *) {
     core::navigation::pop();
 }
 
+// Backing state for one background load (address + paired-device
+// list). Heap-allocated, one per load attempt (screen creation, or
+// each Refresh tap) -- see BtLoadWorker's own comment for why this
+// project's usual "leak it, no shutdown path" convention applies here
+// too rather than trying to cancel/join the thread.
+struct BtLoadState {
+    std::mutex mtx;
+    std::atomic<bool> ready{false};
+    bool hw_present = false;
+    bool address_ok = false;
+    std::string address;
+    bool devices_ok = false;
+    std::vector<std::string> devices;
+};
+
+struct BtScreenWidgets {
+    lv_obj_t * addr_label;
+    lv_obj_t * list;
+    lv_obj_t * status_label;
+    lv_obj_t * refresh_btn;
+    // Shown over `list` while a load is in flight -- lv_obj_delete()'d
+    // (and reset to nullptr) once that load's poll timer sees
+    // BtLoadState::ready. Re-created fresh for each load rather than
+    // reused, simplest way to avoid tracking a "currently visible"
+    // flag across repeated Refresh taps.
+    lv_obj_t * spinner;
+};
+
 void status_label_set(lv_obj_t * label, const char * text) {
     lv_label_set_text(label, text);
+}
+
+// 2026-08-12: runs hal::get_adapter_address() + hal::list_paired_devices()
+// off the LVGL main thread -- both go through hal::send_command(),
+// which even after fixing its always-blocks-the-full-timeout bug can
+// still take a real, nonzero round-trip. Running them synchronously
+// inside create_bluetooth_screen() (the previous design) meant the
+// screen couldn't even render its first frame until both finished --
+// this project's LVGL main loop only gets to flush/draw between
+// lv_timer_handler() calls, so any synchronous work in screen creation
+// delays the very first frame, not just the data. `state` is a raw
+// pointer, not shared_ptr -- the thread is detached and simply keeps
+// writing into its own private, heap-allocated BtLoadState even if the
+// screen (and its poll timer) has already been torn down by the time
+// it finishes; nothing else ever touches that same BtLoadState, so
+// there's no use-after-free risk, just a small bounded leak matching
+// this file's own established "widgets[] intentionally leaked, no
+// shutdown path" convention (see the old comment this replaced).
+void bt_load_worker(BtLoadState * state) {
+    hal::BluetoothHandle & h = hal::shared_handle();
+    bool hw_present = h.fd >= 0;
+
+    std::string address;
+    bool address_ok = hw_present && hal::get_adapter_address(h, address);
+
+    std::vector<std::string> devices;
+    bool devices_ok = hw_present && hal::list_paired_devices(h, devices);
+
+    {
+        std::lock_guard<std::mutex> lock(state->mtx);
+        state->hw_present = hw_present;
+        state->address_ok = address_ok;
+        state->address = std::move(address);
+        state->devices_ok = devices_ok;
+        state->devices = std::move(devices);
+    }
+    // release: everything written above must be visible to whichever
+    // thread observes ready==true next (the poll timer, on the LVGL
+    // main thread, which pairs this with an acquire load).
+    state->ready.store(true, std::memory_order_release);
 }
 
 // Re-issues PLIST and repopulates the device list widget with one
@@ -36,11 +108,9 @@ void status_label_set(lv_obj_t * label, const char * text) {
 // created, below.
 void device_row_clicked_cb(lv_event_t * e) {
     lv_obj_t * btn = static_cast<lv_obj_t *>(lv_event_get_target(e));
-    auto * widgets = static_cast<lv_obj_t **>(lv_event_get_user_data(e));
-    lv_obj_t * list = widgets[0];
-    lv_obj_t * status_label = widgets[1];
+    auto * w = static_cast<BtScreenWidgets *>(lv_event_get_user_data(e));
 
-    const char * text = lv_list_get_button_text(list, btn);
+    const char * text = lv_list_get_button_text(w->list, btn);
     std::string entry = text ? text : "";
     std::printf("ui::bluetooth_screen: device row tapped: '%s'\n", entry.c_str());
 
@@ -56,40 +126,124 @@ void device_row_clicked_cb(lv_event_t * e) {
 
     hal::BluetoothHandle & h = hal::shared_handle();
     bool ok = hal::connect_device(h, connect_id);
-    status_label_set(status_label, ok ? "HFPCONN sent" : "HFPCONN failed / no response");
+    status_label_set(w->status_label, ok ? "HFPCONN sent" : "HFPCONN failed / no response");
 }
 
-void refresh_device_list(lv_obj_t ** widgets) {
-    lv_obj_t * list = widgets[0];
-    lv_obj_t * status_label = widgets[1];
-
-    lv_obj_clean(list);
-    hal::BluetoothHandle & h = hal::shared_handle();
-    if (h.fd < 0) {
-        lv_list_add_text(list, "/dev/bw_serial unavailable");
-        status_label_set(status_label, "Bluetooth hardware not detected");
+// Populates `list` from a finished load's results -- shared by the
+// initial-load poll callback and the Refresh button's poll callback,
+// so the two can't drift out of sync with each other.
+void populate_device_list(BtScreenWidgets * w, bool hw_present, bool devices_ok,
+                           const std::vector<std::string> & devices) {
+    lv_obj_clean(w->list);
+    if (!hw_present) {
+        lv_list_add_text(w->list, "/dev/bw_serial unavailable");
+        status_label_set(w->status_label, "Bluetooth hardware not detected");
         return;
     }
-
-    std::vector<std::string> lines;
-    if (!hal::list_paired_devices(h, lines) || lines.empty()) {
-        lv_list_add_text(list, "(no response / no paired devices)");
-        status_label_set(status_label, "PLIST returned nothing");
+    if (!devices_ok || devices.empty()) {
+        lv_list_add_text(w->list, "(no response / no paired devices)");
+        status_label_set(w->status_label, "PLIST returned nothing");
         return;
     }
-
-    for (const auto & line : lines) {
-        lv_obj_t * btn = lv_list_add_button(list, LV_SYMBOL_BLUETOOTH, line.c_str());
+    for (const auto & line : devices) {
+        lv_obj_t * btn = lv_list_add_button(w->list, LV_SYMBOL_BLUETOOTH, line.c_str());
         theme::style_list_button(btn);
-        lv_obj_add_event_cb(btn, device_row_clicked_cb, LV_EVENT_CLICKED, widgets);
+        lv_obj_add_event_cb(btn, device_row_clicked_cb, LV_EVENT_CLICKED, w);
         lv_group_add_obj(core::navigation::focus_group(), btn);
     }
-    status_label_set(status_label, "Tap a device to connect (HFP)");
+    status_label_set(w->status_label, "Tap a device to connect (HFP)");
+}
+
+// Polls one BtLoadState until ready, then applies its results to the
+// screen and stops itself (lv_timer_pause(), not lv_timer_delete() --
+// this file's screen_delete_cb is the single authority for actually
+// deleting timers, so a load that finishes normally and a screen that
+// gets closed mid-load can never race to double-free the same timer).
+void bt_load_poll_cb(lv_timer_t * timer) {
+    auto * ctx = static_cast<std::pair<BtScreenWidgets *, BtLoadState *> *>(
+        lv_timer_get_user_data(timer));
+    BtScreenWidgets * w = ctx->first;
+    BtLoadState * state = ctx->second;
+
+    // acquire: pairs with bt_load_worker()'s release store -- makes
+    // every field written under state->mtx visible here once true.
+    if (!state->ready.load(std::memory_order_acquire)) {
+        return;
+    }
+
+    bool hw_present, address_ok, devices_ok;
+    std::string address;
+    std::vector<std::string> devices;
+    {
+        std::lock_guard<std::mutex> lock(state->mtx);
+        hw_present = state->hw_present;
+        address_ok = state->address_ok;
+        address = state->address;
+        devices_ok = state->devices_ok;
+        devices = state->devices;
+    }
+
+    if (address_ok) {
+        lv_label_set_text(w->addr_label, ("This device: " + address).c_str());
+    } else {
+        lv_label_set_text(w->addr_label, "This device: (address unavailable)");
+    }
+
+    populate_device_list(w, hw_present, devices_ok, devices);
+
+    if (w->spinner) {
+        lv_obj_delete(w->spinner);
+        w->spinner = nullptr;
+    }
+    lv_obj_clear_state(w->refresh_btn, LV_STATE_DISABLED);
+
+    lv_timer_pause(timer);
+    delete state;   // safe: nothing else reads it once ready has been consumed here
+    delete ctx;
+}
+
+// Spawns a fresh background load (see bt_load_worker()) and a poll
+// timer to pick up its result -- used both for the screen's initial
+// load and every Refresh tap, so they can't drift into two different
+// code paths. Shows a spinner over `list` and disables the Refresh
+// button for the duration, so a second tap can't overlap a load
+// already in flight (simpler than tracking/cancelling concurrent
+// BtLoadStates).
+void start_bt_load(BtScreenWidgets * w) {
+    lv_obj_clean(w->list);
+    if (w->spinner) {
+        lv_obj_delete(w->spinner);
+    }
+    w->spinner = lv_spinner_create(w->list);
+    lv_obj_set_size(w->spinner, 48, 48);
+    lv_obj_center(w->spinner);
+    status_label_set(w->status_label, "Loading...");
+    lv_obj_add_state(w->refresh_btn, LV_STATE_DISABLED);
+
+    auto * state = new BtLoadState();
+    auto * ctx = new std::pair<BtScreenWidgets *, BtLoadState *>(w, state);
+    lv_timer_t * timer = lv_timer_create(bt_load_poll_cb, 100, ctx);
+
+    std::thread(bt_load_worker, state).detach();
+
+    // Not stored on `w` -- deleted directly via its own LV_EVENT_DELETE
+    // hook on the screen, same pattern status_bar.cpp's screen_delete_cb
+    // uses, rather than this struct owning a timer pointer that would
+    // need updating on every start_bt_load() call (Refresh can trigger
+    // this more than once per screen visit). lv_obj_get_screen(), not
+    // lv_screen_active() -- this can run from the Refresh button's
+    // click handler, at which point this screen is still the active
+    // one, but relying on "whatever's currently active" instead of
+    // walking up from a widget we KNOW belongs to this screen is
+    // fragile for no reason.
+    lv_obj_add_event_cb(lv_obj_get_screen(w->list), [](lv_event_t * e) {
+        lv_timer_delete(static_cast<lv_timer_t *>(lv_event_get_user_data(e)));
+    }, LV_EVENT_DELETE, timer);
 }
 
 void refresh_btn_cb(lv_event_t * e) {
-    auto * widgets = static_cast<lv_obj_t **>(lv_event_get_user_data(e));
-    refresh_device_list(widgets);
+    auto * w = static_cast<BtScreenWidgets *>(lv_event_get_user_data(e));
+    start_bt_load(w);
 }
 
 void discoverable_switch_cb(lv_event_t * e) {
@@ -105,6 +259,10 @@ void name_save_btn_cb(lv_event_t * e) {
     hal::set_device_name(hal::shared_handle(), name);
     core::default_store().set_string("DeviceName", name, "BlueTooth");
     core::default_store().save();
+}
+
+void widgets_delete_cb(lv_event_t * e) {
+    delete static_cast<BtScreenWidgets *>(lv_event_get_user_data(e));
 }
 
 }  // namespace
@@ -136,14 +294,12 @@ lv_obj_t * create_bluetooth_screen() {
     lv_obj_set_style_pad_all(content, 10, 0);
     lv_obj_set_style_pad_row(content, 6, 0);
 
-    // Adapter address, informational (ADDR command).
+    // Adapter address, informational (ADDR command). Populated
+    // asynchronously by start_bt_load() below -- see that function's
+    // comment for why this screen no longer blocks on the ADDR/PLIST
+    // round trips before rendering its first frame.
     lv_obj_t * addr_label = lv_label_create(content);
-    std::string address;
-    if (hal::shared_handle().fd >= 0 && hal::get_adapter_address(hal::shared_handle(), address)) {
-        lv_label_set_text(addr_label, ("This device: " + address).c_str());
-    } else {
-        lv_label_set_text(addr_label, "This device: (address unavailable)");
-    }
+    lv_label_set_text(addr_label, "This device: (looking up address...)");
     theme::style_secondary_text(addr_label);
 
     // Device name -- editable, backed by NAME=<devname> + the
@@ -208,15 +364,6 @@ lv_obj_t * create_bluetooth_screen() {
     lv_obj_add_event_cb(discoverable_sw, discoverable_switch_cb, LV_EVENT_VALUE_CHANGED, nullptr);
     lv_group_add_obj(core::navigation::focus_group(), discoverable_sw);
 
-    // Paired-device list + refresh. widgets[] is heap-allocated (2
-    // lv_obj_t* -- list, status label) and intentionally leaked for
-    // the screen's lifetime, same pattern as every other
-    // process-lifetime singleton in this file -- ScreenManager::pop()
-    // deletes the LVGL objects themselves but this array is a plain
-    // heap block LVGL doesn't know about; freeing it on LV_EVENT_DELETE
-    // would be more correct but the leak is bounded (one screen visit
-    // = one small array) and this app has no shutdown path today
-    // (see core/reverse_gear_watcher.cpp's destructor comment).
     lv_obj_t * list_header_row = lv_obj_create(content);
     lv_obj_set_width(list_header_row, LV_PCT(100));
     lv_obj_set_height(list_header_row, LV_SIZE_CONTENT);
@@ -253,11 +400,17 @@ lv_obj_t * create_bluetooth_screen() {
     lv_label_set_text(status_label, "");
     theme::style_secondary_text(status_label);
 
-    auto * widgets = new lv_obj_t *[2]{list, status_label};
+    // Heap-allocated, freed via LV_EVENT_DELETE on the screen (see
+    // widgets_delete_cb) -- unlike the old plain lv_obj_t*[2] this
+    // replaces, this one is properly cleaned up rather than
+    // intentionally leaked, since it's referenced by every load's poll
+    // timer for the screen's whole lifetime, not just at creation.
+    auto * widgets = new BtScreenWidgets{addr_label, list, status_label, refresh_btn, nullptr};
+    lv_obj_add_event_cb(scr, widgets_delete_cb, LV_EVENT_DELETE, widgets);
     lv_obj_add_event_cb(refresh_btn, refresh_btn_cb, LV_EVENT_CLICKED, widgets);
     lv_group_add_obj(core::navigation::focus_group(), refresh_btn);
 
-    refresh_device_list(widgets);
+    start_bt_load(widgets);
 
     return scr;
 }

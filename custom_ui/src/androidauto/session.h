@@ -87,8 +87,25 @@ private:
     // handshake bytes arrive (onHandshake), until cryptor_->isActive().
     void continueSSLHandshake();
 
+    // 2026-08-12: the previously-deferred Pinger, now implemented --
+    // real hardware got all the way through ServiceDiscoveryResponse
+    // and then had every channel die together a few seconds later
+    // (AASDK_ERROR TCP eof), the signature of the PHONE dropping the
+    // connection, not a per-channel rejection. onServiceDiscoveryRequest()
+    // advertises ping_configuration (interval_ms=1000,
+    // tracked_ping_count=5) as a contract for how often the HEAD UNIT
+    // will ping -- with no Pinger, that contract was never honored, so
+    // the phone concluded the head unit was unresponsive and closed
+    // the socket. Started once ServiceDiscoveryResponse is sent (there
+    // is nothing meaningful to ping before the session is actually
+    // established), stopped on a clean ByeBye or a real channel error
+    // so it doesn't keep firing sendPingRequest() into a dead channel.
+    void schedulePing();
+
     boost::asio::io_service &ioService_;
     boost::asio::io_service::strand strand_;
+    boost::asio::steady_timer pingTimer_;
+    bool stopping_ = false;
     aasdk::messenger::ICryptor::Pointer cryptor_;
     aasdk::channel::control::IControlServiceChannel::Pointer controlChannel_;
     // Constructed and armed (start()'d) alongside the control channel

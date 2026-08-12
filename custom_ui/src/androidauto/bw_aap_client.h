@@ -140,12 +140,33 @@ public:
     // observing frames past what startHandshake() itself handles (e.g.
     // the WIFI_INFO_REQUEST/WIFI_INFO_RESPONSE exchange -- steps 4-5 in
     // the header comment above -- not yet driven by this class).
+    //
+    // 2026-08-12: checks a one-frame pending buffer first (see
+    // pushBackFrame()) before touching the socket at all -- see that
+    // function's comment for why this exists: a real hardware
+    // regression where startHandshake()'s WIFI_START_RESPONSE wait
+    // read the phone's WIFI_INFO_REQUEST by mistake (this vendor stack
+    // apparently never sends a type-7 reply) and discarded it, causing
+    // respondToInfoRequest()'s own wait to time out on a frame that had
+    // already arrived and been thrown away.
     bool receiveFrame(std::uint16_t &type, std::string &payload, int timeoutSeconds);
 
 private:
     bool sendFrame(std::uint16_t type, const std::string &payload);
 
+    // Stashes a frame this class read speculatively (e.g. while
+    // startHandshake() is only hoping for a WIFI_START_RESPONSE) but
+    // turned out to be something else -- the next receiveFrame() call
+    // returns it instead of reading a fresh one from the socket, so no
+    // frame is ever silently lost to a wrong guess about what's coming
+    // next. At most one frame is ever buffered (this protocol is
+    // strictly request/response, never concurrent streams).
+    void pushBackFrame(std::uint16_t type, std::string payload);
+
     int fd_ = -1;
+    bool hasPendingFrame_ = false;
+    std::uint16_t pendingType_ = 0;
+    std::string pendingPayload_;
 };
 
 }  // namespace androidauto

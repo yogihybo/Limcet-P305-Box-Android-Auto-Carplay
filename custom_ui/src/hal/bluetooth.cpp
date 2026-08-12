@@ -17,6 +17,7 @@ namespace hal {
 
 void ensure_bluetooth_daemon_running() {
     if (std::system("pidof blueware >/dev/null 2>&1") == 0) {
+        std::printf("hal::ensure_bluetooth_daemon_running: blueware already running\n");
         return;  // already running
     }
     std::printf("hal::ensure_bluetooth_daemon_running: blueware not running, starting it\n");
@@ -42,6 +43,8 @@ void ensure_bluetooth_daemon_running() {
     const core::HalConfig & cfg = core::hal_config();
     std::string cmd = cfg.bluetooth_daemon_path() + " " + cfg.bluetooth_properties_path() +
                        " >" + cfg.bluetooth_log_path() + " 2>&1 &";
+    std::printf("hal::ensure_bluetooth_daemon_running: launching '%s' (log: %s)\n", cmd.c_str(),
+                cfg.bluetooth_log_path().c_str());
     if (std::system(cmd.c_str()) != 0) {
         std::fprintf(stderr, "hal::ensure_bluetooth_daemon_running: failed to launch '%s'\n",
                      cmd.c_str());

@@ -90,7 +90,24 @@ bool BwAapClient::sendFrame(std::uint16_t type, const std::string &payload) {
     return true;
 }
 
+void BwAapClient::pushBackFrame(std::uint16_t type, std::string payload) {
+    hasPendingFrame_ = true;
+    pendingType_ = type;
+    pendingPayload_ = std::move(payload);
+    std::printf("androidauto: bw_aap: pushing back unconsumed type=%u frame for the next "
+                "receiveFrame() call\n", type);
+}
+
 bool BwAapClient::receiveFrame(std::uint16_t &type, std::string &payload, int timeoutSeconds) {
+    if (hasPendingFrame_) {
+        type = pendingType_;
+        payload = std::move(pendingPayload_);
+        hasPendingFrame_ = false;
+        std::printf("androidauto: bw_aap: receiveFrame returning pending type=%u frame (no socket "
+                    "read)\n", type);
+        return true;
+    }
+
     fd_set readSet;
     FD_ZERO(&readSet);
     FD_SET(fd_, &readSet);
@@ -170,7 +187,14 @@ bool BwAapClient::startHandshake(const std::string &apIpAddress, std::uint16_t a
     // See this function's header comment (2026-08-12) -- wait briefly
     // for an optional WIFI_START_RESPONSE (type 7). Not receiving one
     // is NOT a handshake failure, just nothing to override outIp/
-    // outPort with.
+    // outPort with. IMPORTANT: if what actually arrives is a DIFFERENT
+    // frame (real hardware showed this happens -- the phone can send
+    // WIFI_INFO_REQUEST here instead of ever sending a type-7 reply),
+    // push it back via pushBackFrame() rather than discarding it, so
+    // respondToInfoRequest()'s own receiveFrame() call picks it up
+    // instead of timing out on a frame that already arrived and would
+    // otherwise have been silently thrown away -- a real regression
+    // this project hit the first time this wait was added.
     std::uint16_t startRespType = 0;
     std::string startRespPayload;
     if (!this->receiveFrame(startRespType, startRespPayload, 5)) {
@@ -179,8 +203,9 @@ bool BwAapClient::startHandshake(const std::string &apIpAddress, std::uint16_t a
         return true;
     }
     if (startRespType != 7) {
-        std::printf("androidauto: expected WIFI_START_RESPONSE (type 7) but got type=%u instead, "
-                    "ignoring\n", startRespType);
+        std::printf("androidauto: expected WIFI_START_RESPONSE (type 7) but got type=%u instead "
+                    "-- pushing it back for whoever reads next\n", startRespType);
+        this->pushBackFrame(startRespType, std::move(startRespPayload));
         return true;
     }
 

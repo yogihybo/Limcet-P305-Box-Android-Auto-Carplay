@@ -81,7 +81,7 @@ private:
     std::string bluetooth_daemon_path_ = "/usr/bin/blueware";
     std::string bluetooth_properties_path_ = "/etc/blueware-bw121.properties";
     std::string bluetooth_serial_port_ = "/dev/bw_serial";
-    std::string bluetooth_log_path_ = "/tmp/blueware.log";
+    std::string bluetooth_log_path_ = "/dev/null";
 
     std::string wifi_ap_script_ = "/etc/wifi_ap.sh";
     std::string wifi_ap_address_ = "192.168.43.1";

@@ -22,8 +22,8 @@ std::string trim(const std::string & s) {
 }
 
 // Recursively creates the parent directory chain for `path` (e.g.
-// /data/msncfg/Setting.config -> mkdir /data, mkdir /data/msncfg).
-// A not-yet-provisioned device may not have /data/msncfg/ yet.
+// /data/custom_ui/settings.conf -> mkdir /data, mkdir /data/custom_ui).
+// A not-yet-provisioned device may not have /data/custom_ui/ yet.
 void mkdir_parents(const std::string & path) {
     size_t pos = path.find('/', 1);
     while (pos != std::string::npos) {
@@ -206,13 +206,13 @@ void ConfigStore::set_string(const std::string & key, const std::string & value,
 }
 
 ConfigStore & default_store() {
-    static ConfigStore store("/data/msncfg/Setting.config");
+    static ConfigStore store("/data/custom_ui/settings.conf");
     static bool loaded = false;
     if (!loaded) {
         store.load();
-        // Persist immediately -- see load()'s comment: this makes
-        // Setting.config self-contained from this app's very first
-        // run rather than waiting for the user to touch a setting.
+        // Persist immediately -- see load()'s comment: this makes the
+        // live file self-contained from this app's very first run
+        // rather than waiting for the user to touch a setting.
         // Best-effort/non-fatal, same as every other optional-write
         // pattern in this codebase (e.g. a dev host build has nowhere
         // real to write this).

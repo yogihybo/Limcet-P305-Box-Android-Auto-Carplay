@@ -162,12 +162,14 @@ void ensure_bluetooth_daemon_running() {
     // This board is confirmed the bw121 variant (MODULE_TYPE=BW121,
     // same doc section) -- that's what hal.conf's shipped default
     // (firmware_overlay/etc/custom_ui/hal.conf) points at.
-    // (Redirecting to a log file instead of /dev/null is a deliberate
-    // improvement over the real app, not a divergence worth losing --
-    // the same doc section notes the real app's `> /dev/null 2>&1`
-    // throws away blueware's own detailed bpio_init/GPIO91 error
-    // messages, which would otherwise be the single most direct way to
-    // diagnose a BT-enable failure.)
+    // (Redirecting to a log file instead of /dev/null was tried as an
+    // improvement over the real app -- the same doc section notes the
+    // real app's `> /dev/null 2>&1` throws away blueware's own detailed
+    // bpio_init/GPIO91 error messages -- but per explicit request this
+    // reverted back to /dev/null, matching stock exactly: not needed in
+    // practice, and it's one more file quietly growing on /tmp. Still
+    // fully configurable via hal.conf's LogPath if it's needed again for
+    // a specific debugging session.)
     const core::HalConfig & cfg = core::hal_config();
     std::string cmd = cfg.bluetooth_daemon_path() + " " + cfg.bluetooth_properties_path() +
                        " >" + cfg.bluetooth_log_path() + " 2>&1 &";

@@ -67,6 +67,7 @@
 // NOT hardware-tested by this project yet.
 #pragma once
 
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -118,6 +119,42 @@ bool init_bluetooth(BluetoothHandle & out, const char * path = nullptr);
 // share this one handle instead.
 BluetoothHandle & shared_handle();
 
+// 2026-08-12: send_command() used to do its own one-shot ::read() per
+// call, meaning unsolicited broadcasts (+AAPSTAT=/+AAPDEV=/+HFPSIG=,
+// see top comment) were only ever visible if they happened to land
+// inside SOME OTHER command's response window -- there was no way to
+// observe them continuously. This starts a single persistent
+// background reader thread that owns ALL reads on h.fd from here on;
+// send_command() itself is now built on top of it (see the .cpp) via a
+// shared request/dispatch queue, instead of racing a second reader on
+// the same fd (which would just reintroduce the exact kind of
+// interleaving bugs this project spent real effort fixing this
+// session). shared_handle() calls this itself once its fd opens
+// successfully -- callers don't need to call it directly unless
+// they're using a BluetoothHandle NOT obtained via shared_handle()
+// (uncommon; every current caller in this codebase uses the shared
+// one). Idempotent -- a second call on the same handle is a no-op.
+void start_bluetooth_reader(BluetoothHandle & h);
+
+// Registers `callback` to be invoked (from the background reader
+// thread started by start_bluetooth_reader() -- keep it fast and
+// non-blocking, and do NOT call back into send_command()/anything
+// LVGL-related directly from it) for every complete line the reader
+// sees, matched to an outstanding send_command() request or not.
+// `line` is the raw, unprefixed-untouched text (e.g. "+AAPDEV=
+// 04006EAF29C4<sep>Pixel 9 Pro"), same shape confirmed on real
+// hardware (see this file's top comment) -- callers match whatever
+// prefix they care about themselves, same convention send_command()'s
+// own expected_prefix parameter uses. Real use: auto-starting the
+// wireless Android Auto session when a +AAPDEV= broadcast confirms a
+// phone nearby has already been detected as Android-Auto-capable (see
+// docs -- blueware's own AAP_ENABLE=1 feature runs the same Bluetooth
+// SDP query against bonded devices Google's own AA app does, checking
+// for the well-known Android Auto Wireless service UUID
+// 4de17a00-52cb-11e6-bdf4-0800200c9a66; +AAPDEV= is blueware reporting
+// a real match, not a guess).
+void watch_bluetooth_broadcasts(std::function<void(const std::string & line)> callback);
+
 // PLIST, then HFPCONN to the first entry if any paired device exists --
 // matches this device's real factory default (FactoryConfig.ini
 // [BlueTooth] AutoConnect=1, see docs/SETTINGS_REFERENCE.md section
@@ -159,13 +196,21 @@ bool auto_reconnect_paired_device(BluetoothHandle & h);
 // device-list lines, prefix-free. Leave empty (default) for commands
 // where no specific reply prefix is confirmed/expected, or where the
 // caller genuinely wants the raw stream (e.g. a future diagnostic
-// screen dumping whatever blueware says). This does NOT solve the
-// deeper architectural issue -- a real fix would need a background
-// reader continuously dispatching by prefix (same one-reader-thread
-// pattern as hal/mcu_input.h) rather than "write, then blindly read
-// for N ms" -- flagged here, not fixed, since nothing today actually
-// needs to observe +AAPSTAT=/+AAPDEV= broadcasts that can arrive at
-// arbitrary times outside of any call to this function.
+// screen dumping whatever blueware says).
+//
+// 2026-08-12: this used to do its own one-shot write-then-::read()
+// per call ("write, then blindly read for N ms"), which meant
+// +AAPSTAT=/+AAPDEV= broadcasts arriving OUTSIDE some other call's
+// timeout window were simply never seen at all -- exactly the gap this
+// comment used to flag as "not fixed, since nothing today actually
+// needs to observe [them]". Something now does (auto-starting the
+// wireless AA session, see watch_bluetooth_broadcasts() above), so
+// this is now built on top of start_bluetooth_reader()'s single
+// persistent background reader + dispatch queue instead: every line
+// the reader sees is checked against watch_bluetooth_broadcasts()'s
+// observers AND against whichever send_command() call (if any) is
+// currently outstanding, so broadcasts are visible continuously, not
+// just within a command's own response window.
 bool send_command(BluetoothHandle & h, const std::string & command,
                    std::vector<std::string> & response_lines, int timeout_ms = 2000,
                    const std::string & expected_prefix = "");

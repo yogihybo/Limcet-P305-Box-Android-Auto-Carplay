@@ -4,12 +4,14 @@
 #include <cctype>
 #include <cerrno>
 #include <chrono>
+#include <condition_variable>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <mutex>
+#include <thread>
 
 #include <fcntl.h>
-#include <sys/select.h>
 #include <termios.h>
 #include <unistd.h>
 
@@ -38,6 +40,105 @@ bool find_error_response(const std::vector<std::string> & lines, std::string & e
         }
     }
     return false;
+}
+
+// 2026-08-12: backs start_bluetooth_reader()/watch_bluetooth_broadcasts()
+// -- see hal/bluetooth.h's comments on both for the "why". One reader
+// thread owns all ::read()s on the shared fd for the whole process;
+// send_command() no longer touches the fd directly at all, it just
+// posts a request here and waits on a condition variable for matching
+// lines to arrive, exactly the same one-reader-thread-plus-dispatch
+// pattern hal/mcu_input.h already uses for its own serial link.
+struct ReaderState {
+    // Serializes whole request/response exchanges -- exactly one
+    // outstanding send_command() call at a time, matching how this
+    // AT-command protocol has always been used in practice (no
+    // pipelining, no confirmed way to tell two commands' replies
+    // apart if they were ever interleaved).
+    std::mutex request_mtx;
+
+    // Guards everything below -- touched by both send_command() (the
+    // waiting side) and reader_loop() (the producing side, running on
+    // its own thread).
+    std::mutex line_mtx;
+    std::condition_variable line_cv;
+    bool request_active = false;
+    std::string expected_prefix;
+    std::vector<std::string> matched_lines;
+
+    // Broadcast observers -- see watch_bluetooth_broadcasts()'s own
+    // comment. Called directly from reader_loop()'s thread, so callers
+    // must keep them fast and must not call back into send_command()
+    // (would deadlock against request_mtx if a broadcast callback ever
+    // tried to issue its own AT command synchronously from here).
+    std::mutex observer_mtx;
+    std::vector<std::function<void(const std::string &)>> observers;
+
+    bool started = false;
+};
+
+ReaderState & reader_state() {
+    static ReaderState state;
+    return state;
+}
+
+// Runs for the process's whole lifetime once started -- no shutdown
+// path, same convention as every other background reader in this
+// codebase (hal::McuInputHal, core::ReverseGearWatcher). Splits raw
+// bytes into \r\n/\n-terminated lines (same trimming rules
+// send_command() used to do inline) and, for each complete line:
+// dispatches to every registered broadcast observer, THEN checks
+// whether a send_command() call is currently waiting and whether this
+// line matches its expected_prefix (or no filter was set) -- if so,
+// appends it (prefix-stripped, same as before) to matched_lines and
+// wakes the waiter.
+void reader_loop(int fd) {
+    std::string buffer;
+    char chunk[256];
+    for (;;) {
+        ssize_t n = ::read(fd, chunk, sizeof(chunk));
+        if (n <= 0) {
+            std::fprintf(stderr, "hal::bluetooth reader: read() returned %zd, stopping (%s)\n", n,
+                         std::strerror(errno));
+            return;
+        }
+        buffer.append(chunk, static_cast<size_t>(n));
+
+        size_t start = 0;
+        for (size_t i = 0; i < buffer.size(); ++i) {
+            if (buffer[i] != '\n') continue;
+            std::string entry = buffer.substr(start, i - start);
+            start = i + 1;
+            while (!entry.empty() && entry.back() == '\r') entry.pop_back();
+            if (entry.empty()) continue;
+
+            ReaderState & rs = reader_state();
+
+            {
+                std::lock_guard<std::mutex> lock(rs.observer_mtx);
+                for (auto & observer : rs.observers) {
+                    observer(entry);
+                }
+            }
+
+            {
+                std::lock_guard<std::mutex> lock(rs.line_mtx);
+                if (rs.request_active) {
+                    if (rs.expected_prefix.empty() || entry.rfind(rs.expected_prefix, 0) == 0) {
+                        if (!rs.expected_prefix.empty()) {
+                            entry.erase(0, rs.expected_prefix.size());
+                        }
+                        rs.matched_lines.push_back(std::move(entry));
+                        rs.line_cv.notify_one();
+                    } else {
+                        std::printf("hal::send_command: dropping unrelated line '%s' (expected "
+                                    "prefix '%s')\n", entry.c_str(), rs.expected_prefix.c_str());
+                    }
+                }
+            }
+        }
+        buffer.erase(0, start);
+    }
 }
 
 }  // namespace
@@ -138,6 +239,20 @@ bool send_command(BluetoothHandle & h, const std::string & command,
     response_lines.clear();
     if (h.fd < 0) return false;
 
+    ReaderState & rs = reader_state();
+    // Serializes whole exchanges across every caller (UI thread doing
+    // PLIST/ADDR, watch_bluetooth_broadcasts() callers that might issue
+    // their own commands, etc.) -- exactly one outstanding request at a
+    // time. Held for this whole function, released on return.
+    std::lock_guard<std::mutex> request_lock(rs.request_mtx);
+
+    {
+        std::lock_guard<std::mutex> lock(rs.line_mtx);
+        rs.matched_lines.clear();
+        rs.expected_prefix = expected_prefix;
+        rs.request_active = true;
+    }
+
     // Confirmed literal template from BlueToothAdapter_Blueware::
     // writeCommand() -- see this header's top comment.
     std::string line = "AT+" + command + "\r\n";
@@ -145,93 +260,50 @@ bool send_command(BluetoothHandle & h, const std::string & command,
     if (written != static_cast<ssize_t>(line.size())) {
         std::fprintf(stderr, "hal::send_command: write failed for '%s' (%s)\n", command.c_str(),
                      std::strerror(errno));
+        std::lock_guard<std::mutex> lock(rs.line_mtx);
+        rs.request_active = false;
         return false;
     }
 
-    // Collect response bytes until timeout_ms elapses with nothing
-    // further pending -- blueware may reply with more than one
-    // "+PREFIX=..." line (e.g. PLIST enumerating several devices), and
-    // there's no confirmed terminator marking "response complete" for
-    // any given command, so this reads whatever arrives inside the
-    // window rather than waiting for a specific sentinel.
+    // Wait for matching lines to arrive, dispatched by reader_loop()
+    // (see its own comment) running on the background reader thread.
+    // blueware may reply with more than one "+PREFIX=..." line (e.g.
+    // PLIST enumerating several devices), and there's no confirmed
+    // terminator marking "response complete" for any given command, so
+    // this waits for whatever arrives inside the window rather than a
+    // specific sentinel.
     //
-    // 2026-08-12 FIX: this used to call select() with the FULL
-    // timeout_ms on every single iteration, not a shrinking budget --
-    // meaning this function always blocked for at least timeout_ms
-    // (2000ms by default) even when the real reply arrived in a few
-    // milliseconds, since it kept re-arming a fresh full-length wait
-    // after every chunk read. Real symptom: the Bluetooth screen (two
-    // sequential send_command() calls, get_adapter_address() then
-    // list_paired_devices(), both on the LVGL main thread before the
-    // screen is even shown) took several guaranteed seconds to appear.
-    // Now: wait up to the full timeout_ms for the FIRST byte (blueware
-    // may genuinely be slow to start replying), but once data has
-    // started arriving, only wait kIdleGapMs for MORE before deciding
-    // the response is complete -- still bounded by the original
-    // timeout_ms as an absolute ceiling either way, so a burst of
-    // continuous unsolicited broadcast traffic can't make this hang
-    // indefinitely.
+    // 2026-08-12: wait up to the full timeout_ms for the FIRST line
+    // (blueware may genuinely be slow to start replying), but once at
+    // least one has arrived, only wait kIdleGapMs for MORE before
+    // deciding the response is complete -- still bounded by the
+    // original timeout_ms as an absolute ceiling either way, so a burst
+    // of continuous unsolicited broadcast traffic can't make this hang
+    // indefinitely. (This replaced an earlier version of this same idea
+    // built directly on select()/::read() -- functionally identical
+    // timing, just now waiting on the shared reader's condition
+    // variable instead of polling the fd directly, since the fd itself
+    // is now owned exclusively by the background reader thread.)
     constexpr int kIdleGapMs = 300;
     auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
-    bool gotAnyData = false;
-    std::string buffer;
-    for (;;) {
-        auto now = std::chrono::steady_clock::now();
-        if (now >= deadline) break;
-        auto remainingMs =
-            std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now).count();
-        long long waitMs = gotAnyData ? std::min<long long>(kIdleGapMs, remainingMs) : remainingMs;
-
-        fd_set read_set;
-        FD_ZERO(&read_set);
-        FD_SET(h.fd, &read_set);
-        struct timeval tv {};
-        tv.tv_sec = waitMs / 1000;
-        tv.tv_usec = (waitMs % 1000) * 1000;
-
-        int ready = ::select(h.fd + 1, &read_set, nullptr, nullptr, &tv);
-        if (ready <= 0) {
-            break;  // idle gap (or overall timeout) elapsed with nothing new -- stop collecting
-        }
-
-        char chunk[256];
-        ssize_t n = ::read(h.fd, chunk, sizeof(chunk));
-        if (n <= 0) {
-            break;
-        }
-        buffer.append(chunk, static_cast<size_t>(n));
-        gotAnyData = true;
-    }
-
-    // Split on \r\n / \n, drop empty lines. If expected_prefix is set,
-    // also drop any line NOT starting with it (see this function's own
-    // header comment -- blueware emits unsolicited status broadcasts
-    // on this same link independent of what was sent, and without this
-    // filter they silently end up mixed into the caller's result) and
-    // strip the prefix off the ones that match.
-    auto keep = [&](std::string entry) {
-        while (!entry.empty() && (entry.back() == '\r')) entry.pop_back();
-        if (entry.empty()) return;
-        if (!expected_prefix.empty()) {
-            if (entry.rfind(expected_prefix, 0) != 0) {
-                std::printf("hal::send_command: dropping unrelated line '%s' (expected prefix "
-                           "'%s')\n", entry.c_str(), expected_prefix.c_str());
-                return;
+    {
+        std::unique_lock<std::mutex> lock(rs.line_mtx);
+        for (;;) {
+            auto now = std::chrono::steady_clock::now();
+            if (now >= deadline) break;
+            auto remaining = deadline - now;
+            auto wait_for = rs.matched_lines.empty()
+                                 ? remaining
+                                 : std::min<std::chrono::steady_clock::duration>(
+                                       std::chrono::milliseconds(kIdleGapMs), remaining);
+            if (rs.line_cv.wait_for(lock, wait_for) == std::cv_status::timeout) {
+                break;  // idle gap (or overall timeout) elapsed with nothing new
             }
-            entry.erase(0, expected_prefix.size());
+            // Otherwise a new line arrived (or a spurious wakeup) --
+            // loop back around and re-evaluate the deadline/idle gap.
         }
-        response_lines.push_back(entry);
-    };
-
-    size_t start = 0;
-    for (size_t i = 0; i < buffer.size(); ++i) {
-        if (buffer[i] == '\n') {
-            keep(buffer.substr(start, i - start));
-            start = i + 1;
-        }
-    }
-    if (start < buffer.size()) {
-        keep(buffer.substr(start));
+        response_lines = rs.matched_lines;
+        rs.request_active = false;
     }
 
     // Diagnostic only -- deliberately does NOT affect the return value.
@@ -249,6 +321,20 @@ bool send_command(BluetoothHandle & h, const std::string & command,
     }
 
     return !response_lines.empty();
+}
+
+void start_bluetooth_reader(BluetoothHandle & h) {
+    if (h.fd < 0) return;
+    ReaderState & rs = reader_state();
+    if (rs.started) return;
+    rs.started = true;
+    std::thread(reader_loop, h.fd).detach();
+}
+
+void watch_bluetooth_broadcasts(std::function<void(const std::string &)> callback) {
+    ReaderState & rs = reader_state();
+    std::lock_guard<std::mutex> lock(rs.observer_mtx);
+    rs.observers.push_back(std::move(callback));
 }
 
 bool split_mac_and_name(const std::string & entry, std::string & mac, std::string & name) {
@@ -400,6 +486,12 @@ BluetoothHandle & shared_handle() {
     static bool tried = false;
     if (!tried) {
         init_bluetooth(handle);  // non-fatal if /dev/bw_serial is absent
+        // Starts the persistent background reader the moment the fd is
+        // usable -- see start_bluetooth_reader()'s own comment. Every
+        // caller in this codebase uses this shared handle, so this is
+        // the one natural place to do it rather than requiring every
+        // call site to remember to.
+        start_bluetooth_reader(handle);
         tried = true;
     }
     return handle;

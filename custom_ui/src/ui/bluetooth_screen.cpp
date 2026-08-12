@@ -164,7 +164,9 @@ lv_obj_t * create_bluetooth_screen() {
     lv_obj_t * name_ta = lv_textarea_create(name_row);
     lv_textarea_set_one_line(name_ta, true);
     lv_obj_set_flex_grow(name_ta, 1);
-    std::string current_name = core::default_store().get_string("DeviceName", "Limcet Box", "BlueTooth");
+    // Fallback matches etc/default_settings.conf's own DeviceName --
+    // deliberately not stock's "Limcet Box", see that file's comment.
+    std::string current_name = core::default_store().get_string("DeviceName", "Prado CustomUI", "BlueTooth");
     lv_textarea_set_text(name_ta, current_name.c_str());
 
     lv_obj_t * name_save_btn = lv_button_create(name_row);

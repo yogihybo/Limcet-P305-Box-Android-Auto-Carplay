@@ -38,15 +38,25 @@ int main() {
     // Starts /usr/bin/blueware (see hal/bluetooth.h) as early as
     // possible -- nothing else on this device auto-starts it (stock
     // firmware's MsnCoreApp did, at runtime; custom_ui replaces that
-    // app and nothing filled the gap until now). Fire-and-forget, not
-    // awaited here: hal::init_bluetooth() (called lazily by the first
-    // screen that needs it -- see bluetooth_screen.cpp/status_bar.cpp)
-    // retries opening /dev/bw_serial for a couple of seconds on its
-    // own, which is what actually covers the daemon's startup time;
-    // this call just gives it a head start so that retry loop is
-    // usually a no-op by the time anything needs it.
+    // app and nothing filled the gap until now).
     hal::ensure_bluetooth_daemon_running();
     std::printf("custom_ui: bluetooth daemon launch requested\n");
+
+    // 2026-08-12: opens hal::shared_handle() (the one process-wide BT
+    // handle -- status_bar.cpp and bluetooth_screen.cpp now use this
+    // same one instead of each independently opening their own fd) and
+    // attempts to reconnect the last paired device immediately, matching
+    // this device's real factory default (FactoryConfig.ini's
+    // AutoConnect=1) that custom_ui never actually implemented before --
+    // a previously-connected phone stayed unconnected until a user
+    // manually opened Settings -> Bluetooth. init_bluetooth() itself
+    // retries opening /dev/bw_serial for a couple of seconds, covering
+    // blueware's own startup time from the ensure_bluetooth_daemon_running()
+    // call just above.
+    hal::BluetoothHandle & bt = hal::shared_handle();
+    if (bt.fd >= 0) {
+        hal::auto_reconnect_paired_device(bt);
+    }
 
     // Process-lifetime, intentionally never freed -- same convention as
     // every other process-lifetime singleton in this codebase. Touch,

@@ -237,4 +237,30 @@ void close_bluetooth(BluetoothHandle & h) {
     }
 }
 
+BluetoothHandle & shared_handle() {
+    static BluetoothHandle handle;
+    static bool tried = false;
+    if (!tried) {
+        init_bluetooth(handle);  // non-fatal if /dev/bw_serial is absent
+        tried = true;
+    }
+    return handle;
+}
+
+bool auto_reconnect_paired_device(BluetoothHandle & h) {
+    if (h.fd < 0) {
+        std::printf("hal::auto_reconnect_paired_device: no bluetooth handle, skipping\n");
+        return false;
+    }
+    std::vector<std::string> devices;
+    if (!list_paired_devices(h, devices) || devices.empty()) {
+        std::printf("hal::auto_reconnect_paired_device: no paired devices to reconnect to\n");
+        return false;
+    }
+    std::string mac, name;
+    std::string connect_id = split_mac_and_name(devices.front(), mac, name) ? mac : devices.front();
+    std::printf("hal::auto_reconnect_paired_device: reconnecting to '%s'\n", connect_id.c_str());
+    return connect_device(h, connect_id);
+}
+
 }  // namespace hal

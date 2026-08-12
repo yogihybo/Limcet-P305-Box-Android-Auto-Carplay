@@ -11,12 +11,11 @@ namespace ui::status_bar {
 
 namespace {
 
-// Process-lifetime singletons, same pattern as every other HAL handle
-// in this codebase (bluetooth_screen.cpp's bt_handle(), settings_screen.cpp's
-// display_handle()) -- opened/connected lazily once, shared by every
-// screen's status bar instance rather than one per screen visit, so
-// navigating around the app doesn't repeatedly reopen /dev/bw_serial or
-// reconnect the sidecar socket.
+// Process-lifetime singleton, same pattern as every other HAL handle
+// in this codebase (settings_screen.cpp's display_handle()) --
+// connected lazily once, shared by every screen's status bar instance
+// rather than one per screen visit, so navigating around the app
+// doesn't repeatedly reconnect the sidecar socket.
 //
 // Deliberately a SEPARATE hal::AndroidAutoClient from android_auto_screen.cpp's
 // own -- see status_bar.h's top comment for why a second socket
@@ -25,16 +24,6 @@ namespace {
 hal::AndroidAutoClient & aa_client() {
     static hal::AndroidAutoClient c;
     return c;
-}
-
-hal::BluetoothHandle & bt_handle() {
-    static hal::BluetoothHandle handle;
-    static bool tried = false;
-    if (!tried) {
-        hal::init_bluetooth(handle);  // non-fatal if /dev/bw_serial is absent
-        tried = true;
-    }
-    return handle;
 }
 
 struct Widgets {
@@ -68,8 +57,10 @@ void poll_timer_cb(lv_timer_t * timer) {
     // Bluetooth: hardware-reachable signal only, see status_bar.h's top
     // comment -- fd validity doesn't change at runtime once opened, but
     // re-checking is nearly free and stays correct if a caller ever
-    // makes init_bluetooth() retry-capable in the future.
-    bool bt_ok = bt_handle().fd >= 0;
+    // makes init_bluetooth() retry-capable in the future. Shared handle
+    // (hal::shared_handle()) -- main.cpp opens it at startup, this just
+    // reads its already-resolved fd.
+    bool bt_ok = hal::shared_handle().fd >= 0;
     lv_obj_set_style_text_color(w->bt_icon, bt_ok ? theme::accent() : theme::text_secondary(), 0);
 
     bool aa_ok = is_aa_connected(aa_client().statusLine(/*allow_spawn=*/false));

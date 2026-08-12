@@ -48,7 +48,13 @@ void trySpawnSidecar() {
     if (slash == std::string::npos) return;
     dir.resize(slash);
 
-    std::string cmd = dir + "/androidauto-sidecar > /tmp/androidauto-sidecar.log 2>&1 &";
+    // No stdout/stderr redirect -- inherits this process's own fds, so
+    // the sidecar's logging (wireless_session_manager.cpp,
+    // bw_aap_client.cpp, etc.) lands in the same console as custom_ui's
+    // own, instead of the easy-to-miss /tmp/androidauto-sidecar.log
+    // this used to redirect to. Per explicit request during real
+    // hardware AA connection debugging.
+    std::string cmd = dir + "/androidauto-sidecar &";
     std::system(cmd.c_str());
 }
 }  // namespace

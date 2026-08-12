@@ -3,6 +3,8 @@
 #include <chrono>
 #include <cstdio>
 
+#include "androidauto/log_timing.h"
+
 #include <aasdk/Transport/SSLWrapper.hpp>
 #include <aasdk/Messenger/ChannelId.hpp>
 #include <aasdk/Messenger/Cryptor.hpp>
@@ -19,6 +21,12 @@ Session::Session(boost::asio::io_service &ioService)
 }
 
 void Session::start(aasdk::transport::ITransport::Pointer transport) {
+    // 2026-08-12: zero point for every [+Xms] timestamp in this file's
+    // logging (see log_timing.h) -- added per explicit request, after a
+    // live-debugger capture plan was judged too complicated for what's
+    // actually needed: a precise timeline of a single hardware run.
+    markSessionStart();
+
     auto sslWrapper = std::make_shared<aasdk::transport::SSLWrapper>();
     cryptor_ = std::make_shared<aasdk::messenger::Cryptor>(std::move(sslWrapper));
     cryptor_->init();
@@ -45,8 +53,9 @@ void Session::start(aasdk::transport::ITransport::Pointer transport) {
     inputChannel_->setChannelOpenCallback([weakTouchForwarder]() {
         if (auto forwarder = weakTouchForwarder.lock()) {
             if (!forwarder->start()) {
-                std::printf("androidauto: touch forwarder failed to start -- "
-                             "Android Auto session continues without touch input\n");
+                std::printf("[+%ldms] androidauto: touch forwarder failed to start -- "
+                             "Android Auto session continues without touch input\n",
+                             elapsedMs());
             }
         }
     });
@@ -85,11 +94,11 @@ void Session::start(aasdk::transport::ITransport::Pointer transport) {
 
     auto promise = aasdk::channel::SendPromise::defer(strand_);
     promise->then(
-        []() { std::printf("androidauto: version request sent\n"); },
+        []() { std::printf("[+%ldms] androidauto: version request sent\n", elapsedMs()); },
         [](const aasdk::error::Error &e) {
-            std::printf("androidauto: version request send failed: %s\n", e.what());
+            std::printf("[+%ldms] androidauto: version request send failed: %s\n", elapsedMs(), e.what());
         });
-    std::printf("androidauto: AOAP device ready, sending version request...\n");
+    std::printf("[+%ldms] androidauto: AOAP device ready, sending version request...\n", elapsedMs());
     controlChannel_->sendVersionRequest(promise);
 }
 
@@ -98,10 +107,10 @@ void Session::continueSSLHandshake() {
     try {
         active = cryptor_->doHandshake();
     } catch (const aasdk::error::Error &e) {
-        std::printf("androidauto: SSL handshake failed: %s\n", e.what());
+        std::printf("[+%ldms] androidauto: SSL handshake failed: %s\n", elapsedMs(), e.what());
         return;
     }
-    std::printf("androidauto: continueSSLHandshake: doHandshake() active=%d\n", active);
+    std::printf("[+%ldms] androidauto: continueSSLHandshake: doHandshake() active=%d\n", elapsedMs(), active);
 
     auto outBuffer = cryptor_->readHandshakeBuffer();
     // 2026-08-12: logging every call unconditionally (even an empty
@@ -113,7 +122,7 @@ void Session::continueSSLHandshake() {
     // response to the phone's last payload, or whether outBuffer was
     // empty when the phone's own OpenSSL state machine may have still
     // been expecting one more message from us.
-    std::printf("androidauto: continueSSLHandshake: outBuffer size=%zu\n", outBuffer.size());
+    std::printf("[+%ldms] androidauto: continueSSLHandshake: outBuffer size=%zu\n", elapsedMs(), outBuffer.size());
     // NOTE: opencardev/openauto's onHandshake() sends readHandshakeBuffer()
     // unconditionally whenever doHandshake() isn't yet active (no empty
     // check), only branching to AuthComplete once active -- this
@@ -131,15 +140,15 @@ void Session::continueSSLHandshake() {
     if (!outBuffer.empty()) {
         auto promise = aasdk::channel::SendPromise::defer(strand_);
         promise->then(
-            []() { std::printf("androidauto: handshake buffer sent\n"); },
+            []() { std::printf("[+%ldms] androidauto: handshake buffer sent\n", elapsedMs()); },
             [](const aasdk::error::Error &e) {
-                std::printf("androidauto: handshake send failed: %s\n", e.what());
+                std::printf("[+%ldms] androidauto: handshake send failed: %s\n", elapsedMs(), e.what());
             });
         controlChannel_->sendHandshake(std::move(outBuffer), promise);
     }
 
     if (active) {
-        std::printf("androidauto: SSL handshake complete\n");
+        std::printf("[+%ldms] androidauto: SSL handshake complete\n", elapsedMs());
 
         // 2026-08-12 FIX: this was the actual bug behind a real
         // hardware TCP EOF right after "SSL handshake complete" --
@@ -156,9 +165,9 @@ void Session::continueSSLHandshake() {
         authComplete.set_status(aap_protobuf::shared::MessageStatus::STATUS_SUCCESS);
         auto authPromise = aasdk::channel::SendPromise::defer(strand_);
         authPromise->then(
-            []() { std::printf("androidauto: auth complete sent\n"); },
+            []() { std::printf("[+%ldms] androidauto: auth complete sent\n", elapsedMs()); },
             [](const aasdk::error::Error &e) {
-                std::printf("androidauto: auth complete send failed: %s\n", e.what());
+                std::printf("[+%ldms] androidauto: auth complete send failed: %s\n", elapsedMs(), e.what());
             });
         controlChannel_->sendAuthComplete(authComplete, authPromise);
     }
@@ -166,7 +175,7 @@ void Session::continueSSLHandshake() {
 
 void Session::onVersionResponse(uint16_t majorCode, uint16_t minorCode,
                                  aap_protobuf::shared::MessageStatus status) {
-    std::printf("androidauto: version response %u.%u, status=%d\n", majorCode, minorCode,
+    std::printf("[+%ldms] androidauto: version response %u.%u, status=%d\n", elapsedMs(), majorCode, minorCode,
                 static_cast<int>(status));
 
     // 2026-08-12: this used to unconditionally proceed to the SSL
@@ -178,7 +187,7 @@ void Session::onVersionResponse(uint16_t majorCode, uint16_t minorCode,
     // attempting a handshake after a real version mismatch would be a
     // confusing, nonsensical failure mode instead of a clear one.
     if (status == aap_protobuf::shared::MessageStatus::STATUS_NO_COMPATIBLE_VERSION) {
-        std::printf("androidauto: version mismatch, not proceeding to handshake\n");
+        std::printf("[+%ldms] androidauto: version mismatch, not proceeding to handshake\n", elapsedMs());
         return;
     }
 
@@ -187,7 +196,7 @@ void Session::onVersionResponse(uint16_t majorCode, uint16_t minorCode,
 }
 
 void Session::onHandshake(const aasdk::common::DataConstBuffer &payload) {
-    std::printf("androidauto: handshake payload received (%zu bytes)\n", payload.size);
+    std::printf("[+%ldms] androidauto: handshake payload received (%zu bytes)\n", elapsedMs(), payload.size);
     cryptor_->writeHandshakeBuffer(payload);
     this->continueSSLHandshake();
     controlChannel_->receive(this->shared_from_this());
@@ -195,7 +204,8 @@ void Session::onHandshake(const aasdk::common::DataConstBuffer &payload) {
 
 void Session::onServiceDiscoveryRequest(
     const aap_protobuf::service::control::message::ServiceDiscoveryRequest &request) {
-    std::printf("androidauto: service discovery request from '%s'\n", request.device_name().c_str());
+    std::printf("[+%ldms] androidauto: service discovery request from '%s'\n", elapsedMs(),
+                request.device_name().c_str());
 
     // Advertises InputSourceService (touch only, 800x480 matching this
     // device's real framebuffer -- see docs/ARCHITECTURE.md's Display
@@ -334,7 +344,7 @@ void Session::onServiceDiscoveryRequest(
     auto promise = aasdk::channel::SendPromise::defer(strand_);
     promise->then(
         [this, self = shared_from_this()]() {
-            std::printf("androidauto: service discovery response sent\n");
+            std::printf("[+%ldms] androidauto: service discovery response sent\n", elapsedMs());
 
             // 2026-08-12: only now -- confirmed sent, not just enqueued
             // -- do the other channels arm receive() for the phone's
@@ -343,12 +353,22 @@ void Session::onServiceDiscoveryRequest(
             // comment in Session::start()). Previously these started
             // immediately in Session::start(), before the phone had
             // even sent VersionRequest.
+            //
+            // 2026-08-12: explicit per-channel confirmation logs added
+            // -- this whole block used to run silently, so a hardware
+            // log could never confirm these actually executed (as
+            // opposed to, say, an exception unwinding through this
+            // lambda before reaching later lines).
             videoChannel_->start();
+            std::printf("[+%ldms] androidauto: video channel armed\n", elapsedMs());
             audioChannelMedia_->start();
             audioChannelGuidance_->start();
             audioChannelSystem_->start();
+            std::printf("[+%ldms] androidauto: audio channels armed\n", elapsedMs());
             inputChannel_->start();
+            std::printf("[+%ldms] androidauto: input channel armed\n", elapsedMs());
             sensorChannel_->start();
+            std::printf("[+%ldms] androidauto: sensor channel armed\n", elapsedMs());
 
             // Same reference: sends the first ping immediately (not
             // after waiting a full interval_ms) then falls into the
@@ -357,7 +377,8 @@ void Session::onServiceDiscoveryRequest(
             schedulePing();
         },
         [](const aasdk::error::Error &e) {
-            std::printf("androidauto: service discovery response send failed: %s\n", e.what());
+            std::printf("[+%ldms] androidauto: service discovery response send failed: %s\n", elapsedMs(),
+                        e.what());
         });
     controlChannel_->sendServiceDiscoveryResponse(response, promise);
 
@@ -373,9 +394,14 @@ void Session::sendPing() {
 
     auto promise = aasdk::channel::SendPromise::defer(strand_);
     promise->then(
-        []() {},
+        // 2026-08-12: was silent on success -- per explicit request for
+        // more logging instead of a live-debugger capture, this now
+        // confirms each ping actually went out, so a hardware log can
+        // show whether the connection died before or after a given
+        // ping's send completed.
+        []() { std::printf("[+%ldms] androidauto: ping request sent\n", elapsedMs()); },
         [](const aasdk::error::Error &e) {
-            std::printf("androidauto: ping request send failed: %s\n", e.what());
+            std::printf("[+%ldms] androidauto: ping request send failed: %s\n", elapsedMs(), e.what());
         });
     controlChannel_->sendPingRequest(request, promise);
 }
@@ -397,7 +423,7 @@ void Session::schedulePing() {
 
 void Session::onAudioFocusRequest(
     const aap_protobuf::service::control::message::AudioFocusRequest &request) {
-    std::printf("androidauto: audio focus request, type=%d\n",
+    std::printf("[+%ldms] androidauto: audio focus request, type=%d\n", elapsedMs(),
                 static_cast<int>(request.audio_focus_type()));
 
     // 2026-08-12: this used to just log and re-arm receive(), never
@@ -435,9 +461,9 @@ void Session::onAudioFocusRequest(
 
     auto promise = aasdk::channel::SendPromise::defer(strand_);
     promise->then(
-        []() {},
+        []() { std::printf("[+%ldms] androidauto: audio focus response sent\n", elapsedMs()); },
         [](const aasdk::error::Error &e) {
-            std::printf("androidauto: audio focus response send failed: %s\n", e.what());
+            std::printf("[+%ldms] androidauto: audio focus response send failed: %s\n", elapsedMs(), e.what());
         });
     controlChannel_->sendAudioFocusResponse(response, promise);
 
@@ -445,7 +471,7 @@ void Session::onAudioFocusRequest(
 }
 
 void Session::onByeByeRequest(const aap_protobuf::service::control::message::ByeByeRequest &) {
-    std::printf("androidauto: bye-bye request\n");
+    std::printf("[+%ldms] androidauto: bye-bye request\n", elapsedMs());
 
     // 2026-08-12: this used to just log and re-arm receive(), never
     // replying -- same missing-response class of bug as
@@ -459,9 +485,9 @@ void Session::onByeByeRequest(const aap_protobuf::service::control::message::Bye
     aap_protobuf::service::control::message::ByeByeResponse response;
     auto promise = aasdk::channel::SendPromise::defer(strand_);
     promise->then(
-        []() { std::printf("androidauto: bye-bye response sent\n"); },
+        []() { std::printf("[+%ldms] androidauto: bye-bye response sent\n", elapsedMs()); },
         [](const aasdk::error::Error &e) {
-            std::printf("androidauto: bye-bye response send failed: %s\n", e.what());
+            std::printf("[+%ldms] androidauto: bye-bye response send failed: %s\n", elapsedMs(), e.what());
         });
     controlChannel_->sendShutdownResponse(response, promise);
 
@@ -470,7 +496,7 @@ void Session::onByeByeRequest(const aap_protobuf::service::control::message::Bye
 }
 
 void Session::onByeByeResponse(const aap_protobuf::service::control::message::ByeByeResponse &) {
-    std::printf("androidauto: bye-bye response\n");
+    std::printf("[+%ldms] androidauto: bye-bye response\n", elapsedMs());
     controlChannel_->receive(this->shared_from_this());
 }
 
@@ -492,9 +518,10 @@ void Session::onNavigationFocusRequest(
 
     auto promise = aasdk::channel::SendPromise::defer(strand_);
     promise->then(
-        []() {},
+        []() { std::printf("[+%ldms] androidauto: navigation focus response sent\n", elapsedMs()); },
         [](const aasdk::error::Error &e) {
-            std::printf("androidauto: navigation focus response send failed: %s\n", e.what());
+            std::printf("[+%ldms] androidauto: navigation focus response send failed: %s\n", elapsedMs(),
+                        e.what());
         });
     controlChannel_->sendNavigationFocusResponse(response, promise);
 
@@ -511,14 +538,26 @@ void Session::onPingRequest(const aap_protobuf::service::control::message::PingR
     // sendPingResponse), not speculative -- the phone uses ping/pong
     // as a keep-alive; echoing the timestamp back is the whole
     // contract, per PingResponse's own single required field.
+    //
+    // 2026-08-12: this whole handler used to be silent (no request-
+    // received log, silent send-success) -- added per explicit request
+    // for more logging instead of a live-debugger capture. The phone
+    // sending us a PingRequest at all would be a real, useful data
+    // point (this project's own Pinger already proactively pings the
+    // phone -- see schedulePing() -- so this handler firing means the
+    // phone ALSO pings the head unit, or is answering in a way this
+    // project hadn't observed before).
+    std::printf("[+%ldms] androidauto: ping request received from phone (timestamp=%lld)\n", elapsedMs(),
+                static_cast<long long>(request.timestamp()));
+
     aap_protobuf::service::control::message::PingResponse response;
     response.set_timestamp(request.timestamp());
 
     auto promise = aasdk::channel::SendPromise::defer(strand_);
     promise->then(
-        []() {},
+        []() { std::printf("[+%ldms] androidauto: ping response sent\n", elapsedMs()); },
         [](const aasdk::error::Error &e) {
-            std::printf("androidauto: ping response send failed: %s\n", e.what());
+            std::printf("[+%ldms] androidauto: ping response send failed: %s\n", elapsedMs(), e.what());
         });
     controlChannel_->sendPingResponse(response, promise);
 
@@ -526,6 +565,12 @@ void Session::onPingRequest(const aap_protobuf::service::control::message::PingR
 }
 
 void Session::onPingResponse(const aap_protobuf::service::control::message::PingResponse &) {
+    // 2026-08-12: previously silent -- this is the phone acknowledging
+    // one of OUR proactive pings (see sendPing()/schedulePing()); a
+    // real hardware log showing these arriving regularly would rule
+    // out the head-unit-ping-timeout theory even more concretely than
+    // the reasoning already in schedulePing()'s own comment.
+    std::printf("[+%ldms] androidauto: ping response received from phone\n", elapsedMs());
     controlChannel_->receive(this->shared_from_this());
 }
 
@@ -541,13 +586,13 @@ void Session::onChannelError(const aasdk::error::Error &e) {
     // isn't actually one, rather than inventing broader lifecycle
     // machinery this project doesn't need yet.
     if (e.getCode() == aasdk::error::ErrorCode::OPERATION_ABORTED) {
-        std::printf("androidauto: control channel: operation aborted (expected during "
-                    "shutdown): %s\n", e.what());
+        std::printf("[+%ldms] androidauto: control channel: operation aborted (expected during "
+                    "shutdown): %s\n", elapsedMs(), e.what());
         stopping_ = true;
         pingTimer_.cancel();
         return;
     }
-    std::printf("androidauto: control channel error: %s\n", e.what());
+    std::printf("[+%ldms] androidauto: control channel error: %s\n", elapsedMs(), e.what());
     stopping_ = true;
     pingTimer_.cancel();
 }

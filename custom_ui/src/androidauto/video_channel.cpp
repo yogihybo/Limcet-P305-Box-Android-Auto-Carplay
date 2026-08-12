@@ -2,6 +2,7 @@
 
 #include <cstdio>
 
+#include "androidauto/log_timing.h"
 #include "androidauto/video_visibility.h"
 
 namespace androidauto {
@@ -18,16 +19,18 @@ void VideoChannel::start() {
 
 void VideoChannel::onChannelOpenRequest(
     const aap_protobuf::service::control::message::ChannelOpenRequest & request) {
-    std::printf("androidauto: video channel open request (priority=%d)\n", request.priority());
+    std::printf("[+%ldms] androidauto: video channel open request (priority=%d)\n", elapsedMs(),
+                request.priority());
 
     aap_protobuf::service::control::message::ChannelOpenResponse response;
     response.set_status(aap_protobuf::shared::MessageStatus::STATUS_SUCCESS);
 
     auto promise = aasdk::channel::SendPromise::defer(strand_);
     promise->then(
-        []() {},
+        []() { std::printf("[+%ldms] androidauto: video channel open response sent\n", elapsedMs()); },
         [](const aasdk::error::Error & e) {
-            std::printf("androidauto: video channel open response send failed: %s\n", e.what());
+            std::printf("[+%ldms] androidauto: video channel open response send failed: %s\n", elapsedMs(),
+                        e.what());
         });
     channel_->sendChannelOpenResponse(response, promise);
 
@@ -201,7 +204,7 @@ void VideoChannel::onVideoFocusRequest(
 }
 
 void VideoChannel::onChannelError(const aasdk::error::Error & e) {
-    std::printf("androidauto: video channel error: %s\n", e.what());
+    std::printf("[+%ldms] androidauto: video channel error: %s\n", elapsedMs(), e.what());
 }
 
 }  // namespace androidauto

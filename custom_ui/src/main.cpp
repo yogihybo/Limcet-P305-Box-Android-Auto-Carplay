@@ -4,9 +4,16 @@
 // owns the screen stack, ui:: provides screen factories. main() itself
 // is now just wiring + the LVGL tick loop. See docs/IMPLEMENTATION_PLAN.md.
 
+#include <atomic>
+#include <chrono>
 #include <cstdio>
+#include <cstring>
+#include <mutex>
+#include <string>
+#include <thread>
 #include <unistd.h>
 #include "lvgl.h"
+#include "hal/androidauto_client.h"
 #include "hal/bluetooth.h"
 #include "hal/display.h"
 #include "hal/knob.h"
@@ -17,6 +24,96 @@
 #include "core/screen_manager.h"
 #include "ui/home_screen.h"
 #include "ui/theme.h"
+
+namespace {
+
+// 2026-08-12: auto-starts the wireless Android Auto session the moment
+// blueware reports a nearby phone as Android-Auto-capable, instead of
+// requiring the user to manually open the Android Auto screen first.
+//
+// Trigger: a real "+AAPDEV=<mac><sep><name>" broadcast on /dev/bw_serial
+// (see hal/bluetooth.h's top comment -- confirmed live, only ever seen
+// when a real AA-capable phone was nearby). This is blueware's own
+// AAP_ENABLE=1 feature (see etc/blueware-bw121.properties) running the
+// same Bluetooth SDP query against bonded devices Google's own AA app
+// ("gearhead") does -- checking for the well-known Android Auto
+// Wireless service UUID 4de17a00-52cb-11e6-bdf4-0800200c9a66, which
+// every phone with the AA app installed publishes in its own SDP
+// records. This device has no BlueZ stack to run that query itself
+// (see hal/bluetooth.h's architecture comment), so +AAPDEV= is the
+// only window into that result -- not a guess, blueware is reporting a
+// real SDP-UUID match on our behalf.
+//
+// The broadcast callback (on_broadcast()) runs on hal::bluetooth's
+// background reader thread and must stay fast/non-blocking (see
+// hal::watch_bluetooth_broadcasts()'s own contract) -- it just records
+// "a trigger is pending" and returns. The actual work (a blocking
+// socket call to androidauto-sidecar) happens on this class's own
+// dedicated thread instead.
+class AaAutoStartWatcher {
+public:
+    // Debounced per-device: the same phone re-broadcasting +AAPDEV=
+    // repeatedly (observed live -- AAPSTAT/AAPDEV can cycle several
+    // times around one real detection) only triggers once, not once
+    // per broadcast. A DIFFERENT device appearing (or this device
+    // reappearing after another device took over the "last triggered"
+    // slot) triggers again -- androidauto::WirelessSessionManager::start()
+    // is itself safe to call repeatedly (restarts a fresh attempt,
+    // same as a manual "Retry"), so re-triggering isn't unsafe, just
+    // wasteful, which this debounce avoids for the common case.
+    void on_broadcast(const std::string & line) {
+        constexpr const char * kPrefix = "+AAPDEV=";
+        if (line.rfind(kPrefix, 0) != 0) return;
+        std::string entry = line.substr(std::strlen(kPrefix));
+        std::string mac, name;
+        std::string device_id = hal::split_mac_and_name(entry, mac, name) ? mac : entry;
+
+        std::lock_guard<std::mutex> lock(mtx_);
+        if (device_id == last_triggered_id_) return;
+        last_triggered_id_ = device_id;
+        pending_name_ = name;
+        pending_.store(true, std::memory_order_release);
+    }
+
+    // Runs for the process's whole lifetime, same "no shutdown path"
+    // convention as every other background loop in this codebase.
+    void run() {
+        for (;;) {
+            if (pending_.exchange(false, std::memory_order_acq_rel)) {
+                std::string name;
+                {
+                    std::lock_guard<std::mutex> lock(mtx_);
+                    name = pending_name_;
+                }
+                std::printf("custom_ui: +AAPDEV= detected ('%s') -- auto-starting wireless "
+                            "Android Auto\n", name.c_str());
+                // requestConnect() spawns androidauto-sidecar itself if
+                // it isn't already running (see AndroidAutoClient's own
+                // header comment) -- no need to open the Android Auto
+                // screen first anymore for this to work.
+                hal::AndroidAutoClient client;
+                if (!client.requestConnect()) {
+                    std::fprintf(stderr, "custom_ui: auto-start requestConnect() failed (sidecar "
+                                 "unreachable)\n");
+                }
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        }
+    }
+
+private:
+    std::mutex mtx_;
+    std::atomic<bool> pending_{false};
+    std::string last_triggered_id_;
+    std::string pending_name_;
+};
+
+AaAutoStartWatcher & aa_auto_start_watcher() {
+    static AaAutoStartWatcher watcher;
+    return watcher;
+}
+
+}  // namespace
 
 int main() {
     std::printf("custom_ui: starting, lv_init()...\n");
@@ -82,6 +179,17 @@ int main() {
                          btName.c_str());
         }
         hal::auto_reconnect_paired_device(bt);
+
+        // Wires up the +AAPDEV= -> auto-start-wireless-AA trigger --
+        // see AaAutoStartWatcher's own comment above for the full
+        // mechanism/evidence. Registering the observer only makes
+        // sense once bt.fd is actually open (hal::watch_bluetooth_
+        // broadcasts() has nothing to observe otherwise); the reader
+        // thread it depends on was already started by shared_handle()
+        // itself just above.
+        hal::watch_bluetooth_broadcasts(
+            [](const std::string & line) { aa_auto_start_watcher().on_broadcast(line); });
+        std::thread(&AaAutoStartWatcher::run, &aa_auto_start_watcher()).detach();
     }
 
     // Process-lifetime, intentionally never freed -- same convention as

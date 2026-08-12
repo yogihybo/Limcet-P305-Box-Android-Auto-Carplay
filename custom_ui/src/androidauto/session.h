@@ -11,6 +11,7 @@
 
 #include "androidauto/audio_channel.h"
 #include "androidauto/input_channel.h"
+#include "androidauto/microphone_channel.h"
 #include "androidauto/sensor_channel.h"
 #include "androidauto/touch_forwarder.h"
 #include "androidauto/video_channel.h"
@@ -151,6 +152,12 @@ private:
     // DRIVING_STATUS_DATA to stay connected) and why it only ever
     // advertises/answers that one sensor.
     SensorChannel::Pointer sensorChannel_;
+    // Constructed and armed the same deferred way as the channels
+    // above -- see microphone_channel.h's header comment for why this
+    // exists (this project never advertised any MediaSourceService
+    // channel at all until a fresh-eyes review found the gap) and why
+    // it's structural-only (no real mic capture wired in yet).
+    MicrophoneChannel::Pointer microphoneChannel_;
 };
 
 }  // namespace androidauto

@@ -92,6 +92,8 @@ void Session::start(aasdk::transport::ITransport::Pointer transport) {
 
     sensorChannel_ = std::make_shared<SensorChannel>(strand_, messenger);
 
+    microphoneChannel_ = std::make_shared<MicrophoneChannel>(strand_, messenger);
+
     auto promise = aasdk::channel::SendPromise::defer(strand_);
     promise->then(
         []() { std::printf("[+%ldms] androidauto: version request sent\n", elapsedMs()); },
@@ -341,6 +343,28 @@ void Session::onServiceDiscoveryRequest(
     sensorService->mutable_sensor_source_service()->add_sensors()->set_sensor_type(
         aap_protobuf::service::sensorsource::message::SENSOR_DRIVING_STATUS_DATA);
 
+    // 2026-08-12: found missing by a fresh-eyes subagent review chasing
+    // the real hardware bug where the phone engages cleanly (handshake,
+    // ServiceDiscovery, ping, an early AudioFocusRequest) then silently
+    // closes the TCP connection ~800ms later without ever opening a
+    // channel or sending ByeByeRequest. This project never advertised
+    // ANY MediaSourceService channel at all -- openautolink's
+    // live_session.cpp advertises MEDIA_SOURCE_MICROPHONE as a
+    // first-class channel, and the real stock libAndroidAuto.so on
+    // this exact hardware has a full AudioSource endpoint class (see
+    // project_stock_libandroidauto_reference.md). See
+    // microphone_channel.h for why this is structural-only (no real
+    // mic capture wired in yet). 16kHz/16-bit/mono matches the
+    // reference's own config.
+    auto *micService = response.add_channels();
+    micService->set_id(static_cast<std::int32_t>(aasdk::messenger::ChannelId::MEDIA_SOURCE_MICROPHONE));
+    auto *micSource = micService->mutable_media_source_service();
+    micSource->set_available_type(aap_protobuf::service::media::shared::message::MEDIA_CODEC_AUDIO_PCM);
+    auto *micConfig = micSource->mutable_audio_config();
+    micConfig->set_sampling_rate(16000);
+    micConfig->set_number_of_bits(16);
+    micConfig->set_number_of_channels(1);
+
     auto promise = aasdk::channel::SendPromise::defer(strand_);
     promise->then(
         [this, self = shared_from_this()]() {
@@ -369,6 +393,8 @@ void Session::onServiceDiscoveryRequest(
             std::printf("[+%ldms] androidauto: input channel armed\n", elapsedMs());
             sensorChannel_->start();
             std::printf("[+%ldms] androidauto: sensor channel armed\n", elapsedMs());
+            microphoneChannel_->start();
+            std::printf("[+%ldms] androidauto: microphone channel armed\n", elapsedMs());
 
             // Same reference: sends the first ping immediately (not
             // after waiting a full interval_ms) then falls into the

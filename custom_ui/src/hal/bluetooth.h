@@ -105,6 +105,32 @@ void ensure_bluetooth_daemon_running();
 // test/diagnostic screen probing a different node).
 bool init_bluetooth(BluetoothHandle & out, const char * path = nullptr);
 
+// Process-lifetime singleton, lazily init_bluetooth()'d on first call.
+// 2026-08-12: replaces what used to be THREE separate per-translation-
+// unit static handles (main.cpp had none at all -- BT was never opened
+// until a screen needed it; status_bar.cpp's own bt_handle() and
+// bluetooth_screen.cpp's own bt_handle() each independently opened
+// their OWN fd to /dev/bw_serial the first time either was touched).
+// That meant /dev/bw_serial could be opened twice concurrently, with
+// two independent readers racing over the same AT-command stream --
+// a real contributing factor to messy interleaved unsolicited-
+// broadcast captures this project has seen. All three call sites now
+// share this one handle instead.
+BluetoothHandle & shared_handle();
+
+// PLIST, then HFPCONN to the first entry if any paired device exists --
+// matches this device's real factory default (FactoryConfig.ini
+// [BlueTooth] AutoConnect=1, see docs/SETTINGS_REFERENCE.md section
+// 2.7) which custom_ui never actually implemented: nothing previously
+// called this automatically, so a device that was paired and connected
+// last session stayed unconnected until a user manually opened
+// Settings -> Bluetooth and tapped it. main.cpp now calls this once at
+// startup, right after opening shared_handle(). Non-fatal/best-effort,
+// same as every other optional-hardware path in this codebase --
+// returns false if there's no handle, no paired devices, or the
+// connect attempt itself fails; logs why either way.
+bool auto_reconnect_paired_device(BluetoothHandle & h);
+
 // Sends AT+<command>\r\n (this function adds the "AT+" prefix and
 // "\r\n" terminator -- pass just the token, e.g. "SCAN=1", not the
 // full line) and collects response line(s) arriving within timeout_ms.

@@ -14,18 +14,6 @@ namespace ui {
 
 namespace {
 
-// Opened once, process-lifetime -- same rationale as
-// settings_screen.cpp's display_handle().
-hal::BluetoothHandle & bt_handle() {
-    static hal::BluetoothHandle handle;
-    static bool tried = false;
-    if (!tried) {
-        hal::init_bluetooth(handle);  // non-fatal if /dev/bw_serial is absent
-        tried = true;
-    }
-    return handle;
-}
-
 void back_btn_cb(lv_event_t *) {
     core::navigation::pop();
 }
@@ -66,7 +54,7 @@ void device_row_clicked_cb(lv_event_t * e) {
     std::string mac, name;
     std::string connect_id = hal::split_mac_and_name(entry, mac, name) ? mac : entry;
 
-    hal::BluetoothHandle & h = bt_handle();
+    hal::BluetoothHandle & h = hal::shared_handle();
     bool ok = hal::connect_device(h, connect_id);
     status_label_set(status_label, ok ? "HFPCONN sent" : "HFPCONN failed / no response");
 }
@@ -76,7 +64,7 @@ void refresh_device_list(lv_obj_t ** widgets) {
     lv_obj_t * status_label = widgets[1];
 
     lv_obj_clean(list);
-    hal::BluetoothHandle & h = bt_handle();
+    hal::BluetoothHandle & h = hal::shared_handle();
     if (h.fd < 0) {
         lv_list_add_text(list, "/dev/bw_serial unavailable");
         status_label_set(status_label, "Bluetooth hardware not detected");
@@ -107,14 +95,14 @@ void refresh_btn_cb(lv_event_t * e) {
 void discoverable_switch_cb(lv_event_t * e) {
     lv_obj_t * sw = static_cast<lv_obj_t *>(lv_event_get_target(e));
     bool checked = lv_obj_has_state(sw, LV_STATE_CHECKED);
-    hal::set_discoverable(bt_handle(), checked);
+    hal::set_discoverable(hal::shared_handle(), checked);
 }
 
 void name_save_btn_cb(lv_event_t * e) {
     lv_obj_t * textarea = static_cast<lv_obj_t *>(lv_event_get_user_data(e));
     const char * name = lv_textarea_get_text(textarea);
     if (!name || name[0] == '\0') return;
-    hal::set_device_name(bt_handle(), name);
+    hal::set_device_name(hal::shared_handle(), name);
     core::default_store().set_string("DeviceName", name, "BlueTooth");
     core::default_store().save();
 }
@@ -151,7 +139,7 @@ lv_obj_t * create_bluetooth_screen() {
     // Adapter address, informational (ADDR command).
     lv_obj_t * addr_label = lv_label_create(content);
     std::string address;
-    if (bt_handle().fd >= 0 && hal::get_adapter_address(bt_handle(), address)) {
+    if (hal::shared_handle().fd >= 0 && hal::get_adapter_address(hal::shared_handle(), address)) {
         lv_label_set_text(addr_label, ("This device: " + address).c_str());
     } else {
         lv_label_set_text(addr_label, "This device: (address unavailable)");

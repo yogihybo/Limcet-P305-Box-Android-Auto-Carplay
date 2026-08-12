@@ -101,6 +101,12 @@ private:
     // established), stopped on a clean ByeBye or a real channel error
     // so it doesn't keep firing sendPingRequest() into a dead channel.
     void schedulePing();
+    // Sends one PingRequest{timestamp=now_ms} immediately -- called
+    // both by onServiceDiscoveryRequest() (the first ping, sent right
+    // away rather than waiting a full interval_ms, matching
+    // openautolink's live_session.cpp) and by schedulePing()'s own
+    // timer callback (every subsequent one).
+    void sendPing();
 
     boost::asio::io_service &ioService_;
     boost::asio::io_service::strand strand_;
@@ -108,11 +114,16 @@ private:
     bool stopping_ = false;
     aasdk::messenger::ICryptor::Pointer cryptor_;
     aasdk::channel::control::IControlServiceChannel::Pointer controlChannel_;
-    // Constructed and armed (start()'d) alongside the control channel
-    // in Session::start(), on the same Messenger -- so it's ready to
-    // catch the phone's ChannelOpenRequest whenever it decides to send
-    // one, independent of when/whether ServiceDiscoveryResponse
-    // actually gets answered.
+    // Constructed in Session::start(), but NOT armed (->start(), i.e.
+    // channel_->receive()) until Session::onServiceDiscoveryRequest()'s
+    // send-success callback -- see that function's own comment. Matches
+    // github.com/mossyhub/openautolink's live_session.cpp, whose
+    // equivalent comment reads "NOW start all service handlers -- after
+    // TLS + auth + discovery are complete". Previously armed
+    // immediately in Session::start(), before the phone had even sent
+    // VersionRequest -- a real, concrete divergence from the working
+    // reference, found while chasing a "Communication error 2 -
+    // incompatible software" screen on real hardware.
     InputChannel::Pointer inputChannel_;
     // Constructed alongside inputChannel_ in Session::start(), but its
     // own start() (opening the second evdev fd) is deferred until
@@ -122,12 +133,13 @@ private:
     // phone has actually opened the channel to receive events on.
     TouchForwarder::Pointer touchForwarder_;
 
-    // Constructed and armed alongside the other channels in
-    // Session::start(). videoChannel_ decodes via HantroH264Decoder
-    // (real hardware decode works; actually displaying a frame doesn't
-    // yet, see that class's header comment for the specific gap).
-    // audioChannel*_ play via AlsaOutput against the real, confirmed
-    // PCM device routes for each audio type -- see alsa_output.h.
+    // Constructed in Session::start(), armed the same deferred way as
+    // inputChannel_ above (see its comment). videoChannel_ decodes via
+    // HantroH264Decoder (real hardware decode works; actually
+    // displaying a frame doesn't yet, see that class's header comment
+    // for the specific gap). audioChannel*_ play via AlsaOutput against
+    // the real, confirmed PCM device routes for each audio type -- see
+    // alsa_output.h.
     VideoChannel::Pointer videoChannel_;
     AudioChannel::Pointer audioChannelMedia_;
     AudioChannel::Pointer audioChannelGuidance_;

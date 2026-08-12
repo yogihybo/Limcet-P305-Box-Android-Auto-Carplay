@@ -2,6 +2,8 @@
 
 #include <cstdio>
 
+#include "androidauto/log_timing.h"
+
 #include <aasdk/Channel/InputSource/InputSourceService.hpp>
 
 namespace androidauto {
@@ -43,16 +45,18 @@ void InputChannel::sendTouch(std::uint32_t x, std::uint32_t y, std::uint32_t poi
 
 void InputChannel::onChannelOpenRequest(
     const aap_protobuf::service::control::message::ChannelOpenRequest &request) {
-    std::printf("androidauto: input channel open request (priority=%d)\n", request.priority());
+    std::printf("[+%ldms] androidauto: input channel open request (priority=%d)\n", elapsedMs(),
+                request.priority());
 
     aap_protobuf::service::control::message::ChannelOpenResponse response;
     response.set_status(aap_protobuf::shared::MessageStatus::STATUS_SUCCESS);
 
     auto promise = aasdk::channel::SendPromise::defer(strand_);
     promise->then(
-        []() { std::printf("androidauto: input channel open response sent\n"); },
+        []() { std::printf("[+%ldms] androidauto: input channel open response sent\n", elapsedMs()); },
         [](const aasdk::error::Error &e) {
-            std::printf("androidauto: input channel open response send failed: %s\n", e.what());
+            std::printf("[+%ldms] androidauto: input channel open response send failed: %s\n", elapsedMs(),
+                        e.what());
         });
     channel_->sendChannelOpenResponse(response, promise);
 
@@ -68,12 +72,13 @@ void InputChannel::onChannelOpenRequest(
 
 void InputChannel::onKeyBindingRequest(
     const aap_protobuf::service::media::sink::message::KeyBindingRequest &) {
-    std::printf("androidauto: key binding request (not handled -- touch-only UI, no wheel)\n");
+    std::printf("[+%ldms] androidauto: key binding request (not handled -- touch-only UI, no wheel)\n",
+                elapsedMs());
     channel_->receive(this->shared_from_this());
 }
 
 void InputChannel::onChannelError(const aasdk::error::Error &e) {
-    std::printf("androidauto: input channel error: %s\n", e.what());
+    std::printf("[+%ldms] androidauto: input channel error: %s\n", elapsedMs(), e.what());
 }
 
 }  // namespace androidauto

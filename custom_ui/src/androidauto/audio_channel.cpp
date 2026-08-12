@@ -2,6 +2,8 @@
 
 #include <cstdio>
 
+#include "androidauto/log_timing.h"
+
 namespace androidauto {
 
 AudioChannel::AudioChannel(boost::asio::io_service::strand & strand,
@@ -22,17 +24,21 @@ void AudioChannel::start() {
 
 void AudioChannel::onChannelOpenRequest(
     const aap_protobuf::service::control::message::ChannelOpenRequest & request) {
-    std::printf("androidauto: audio channel (%s) open request (priority=%d)\n", pcmDevice_.c_str(),
-               request.priority());
+    std::printf("[+%ldms] androidauto: audio channel (%s) open request (priority=%d)\n", elapsedMs(),
+               pcmDevice_.c_str(), request.priority());
 
     aap_protobuf::service::control::message::ChannelOpenResponse response;
     response.set_status(aap_protobuf::shared::MessageStatus::STATUS_SUCCESS);
 
     auto promise = aasdk::channel::SendPromise::defer(strand_);
     promise->then(
-        []() {},
+        [this]() {
+            std::printf("[+%ldms] androidauto: audio channel (%s) open response sent\n", elapsedMs(),
+                        pcmDevice_.c_str());
+        },
         [](const aasdk::error::Error & e) {
-            std::printf("androidauto: audio channel open response send failed: %s\n", e.what());
+            std::printf("[+%ldms] androidauto: audio channel open response send failed: %s\n", elapsedMs(),
+                        e.what());
         });
     channel_->sendChannelOpenResponse(response, promise);
 
@@ -123,7 +129,8 @@ void AudioChannel::sendAck() {
 }
 
 void AudioChannel::onChannelError(const aasdk::error::Error & e) {
-    std::printf("androidauto: audio channel (%s) error: %s\n", pcmDevice_.c_str(), e.what());
+    std::printf("[+%ldms] androidauto: audio channel (%s) error: %s\n", elapsedMs(), pcmDevice_.c_str(),
+               e.what());
 }
 
 }  // namespace androidauto

@@ -90,6 +90,33 @@ bool init_bluetooth(BluetoothHandle & out, const char * path) {
     for (int attempt = 0; attempt < kMaxAttempts; ++attempt) {
         out.fd = open(resolved_path.c_str(), O_RDWR | O_NOCTTY);
         if (out.fd >= 0) {
+            // 2026-08-12 FIX: this never touched the fd's termios
+            // settings at all -- <termios.h> was included but unused.
+            // Left at whatever default the tty/line-discipline gives
+            // it (typically canonical mode + local echo), which meant
+            // every "AT+<command>\r\n" we wrote could get echoed
+            // straight back on the next read. get_adapter_address()
+            // has no expected_prefix filter (unlike list_paired_
+            // devices()'s "+PLIST=" filter), so that echoed line won
+            // as resp.front() -- real symptom: the Bluetooth screen's
+            // address field showing the literal command ("AT...")
+            // instead of the real address. cfmakeraw() + disabling
+            // ECHO explicitly (belt-and-braces, cfmakeraw already
+            // clears it) puts this fd in the same raw, non-canonical,
+            // no-echo mode every other AT-command-over-serial HAL in
+            // this codebase's real-world equivalents assumes.
+            struct termios tio {};
+            if (tcgetattr(out.fd, &tio) == 0) {
+                cfmakeraw(&tio);
+                tio.c_lflag &= ~static_cast<tcflag_t>(ECHO | ECHOE | ECHOK | ECHONL);
+                if (tcsetattr(out.fd, TCSANOW, &tio) != 0) {
+                    std::fprintf(stderr, "hal::init_bluetooth: tcsetattr(%s) failed: %s\n",
+                                 resolved_path.c_str(), std::strerror(errno));
+                }
+            } else {
+                std::fprintf(stderr, "hal::init_bluetooth: tcgetattr(%s) failed: %s\n",
+                             resolved_path.c_str(), std::strerror(errno));
+            }
             std::printf("hal::init_bluetooth: %s opened (attempt %d/%d)\n",
                         resolved_path.c_str(), attempt + 1, kMaxAttempts);
             return true;
@@ -311,7 +338,13 @@ bool set_pairing_pin(BluetoothHandle & h, const std::string & pin) {
 
 bool get_adapter_address(BluetoothHandle & h, std::string & address) {
     std::vector<std::string> resp;
-    if (!send_command(h, "ADDR", resp) || resp.empty()) {
+    // expected_prefix="+ADDR=" (confirmed vocabulary, see this file's
+    // header comment) -- defense in depth alongside the termios fix in
+    // init_bluetooth(): even if an echo or unrelated broadcast line
+    // still lands in this window for some other reason, only a real
+    // "+ADDR=..." line can end up in resp now, same as
+    // list_paired_devices()'s existing "+PLIST=" filter.
+    if (!send_command(h, "ADDR", resp, 2000, "+ADDR=") || resp.empty()) {
         return false;
     }
     // Same fix as connect_device()/set_device_name()/etc -- without

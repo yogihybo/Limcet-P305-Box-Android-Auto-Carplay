@@ -141,8 +141,12 @@ lv_obj_t * create_bluetooth_screen() {
     // symptom this caused: paired-device list partially hidden with
     // scrolling not doing anything useful.
     lv_obj_clear_flag(content, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_style_pad_all(content, 14, 0);
-    lv_obj_set_style_pad_row(content, 8, 0);
+    // Tightened from 14/8 -- see the device list's own comment below:
+    // this card has 5 fixed-height rows stacked above a flex_grow list
+    // that needs real room to be usably scrollable, not just
+    // technically scrollable.
+    lv_obj_set_style_pad_all(content, 10, 0);
+    lv_obj_set_style_pad_row(content, 6, 0);
 
     // Adapter address, informational (ADDR command).
     lv_obj_t * addr_label = lv_label_create(content);
@@ -177,6 +181,19 @@ lv_obj_t * create_bluetooth_screen() {
 
     lv_obj_t * name_save_btn = lv_button_create(name_row);
     theme::style_primary_button(name_save_btn);
+    // style_primary_button()'s pad_ver=16 + HARD min_height=64 (a
+    // style, padding alone can't shrink it below that floor) is sized
+    // for a standalone CTA -- with several such rows stacked above the
+    // paired-device list in this screen's fixed-height `content` card,
+    // they were consuming almost all of it, squeezing the list (the
+    // one actually meant to scroll) down to a ~14px sliver. Overriding
+    // min_height too (not just padding/font, unlike
+    // settings_screen.cpp's Bluetooth row button, which only had a
+    // width problem, not a shared vertical budget to protect).
+    lv_obj_set_style_pad_hor(name_save_btn, 14, 0);
+    lv_obj_set_style_pad_ver(name_save_btn, 8, 0);
+    lv_obj_set_style_text_font(name_save_btn, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_min_height(name_save_btn, 40, 0);
     lv_obj_add_event_cb(name_save_btn, name_save_btn_cb, LV_EVENT_CLICKED, name_ta);
     lv_group_add_obj(core::navigation::focus_group(), name_ta);
     lv_group_add_obj(core::navigation::focus_group(), name_save_btn);
@@ -222,6 +239,11 @@ lv_obj_t * create_bluetooth_screen() {
     theme::style_section_label(list_title);
     lv_obj_t * refresh_btn = lv_button_create(list_header_row);
     theme::style_primary_button(refresh_btn);
+    // Same shrink as name_save_btn above -- see its comment.
+    lv_obj_set_style_pad_hor(refresh_btn, 14, 0);
+    lv_obj_set_style_pad_ver(refresh_btn, 8, 0);
+    lv_obj_set_style_text_font(refresh_btn, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_min_height(refresh_btn, 40, 0);
     lv_obj_t * refresh_label = lv_label_create(refresh_btn);
     lv_label_set_text(refresh_label, "Refresh");
 

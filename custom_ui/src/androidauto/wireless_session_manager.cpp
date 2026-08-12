@@ -36,33 +36,49 @@ std::string readWlan0Mac() {
     std::ifstream f("/sys/class/net/wlan0/address");
     std::string mac;
     std::getline(f, mac);
+    if (mac.empty()) {
+        std::fprintf(stderr, "androidauto: wireless session: /sys/class/net/wlan0/address unreadable "
+                     "or empty\n");
+    }
     return mac;
 }
 
 bool isApRunning() {
-    return std::system("pidof hostapd >/dev/null 2>&1") == 0;
+    bool running = std::system("pidof hostapd >/dev/null 2>&1") == 0;
+    std::printf("androidauto: wireless session: hostapd running=%s\n", running ? "yes" : "no");
+    return running;
 }
 
 }  // namespace
 
 bool WirelessSessionManager::discoverPhoneIp(std::string & outIp, int timeoutSeconds) {
+    std::printf("androidauto: wireless session: polling /proc/net/arp for wlan0 up to %ds...\n",
+                timeoutSeconds);
     for (int elapsed = 0; elapsed < timeoutSeconds; ++elapsed) {
         std::ifstream arp("/proc/net/arp");
         std::string line;
         std::getline(arp, line);  // header
+        int wlan0Entries = 0;
         while (std::getline(arp, line)) {
             std::istringstream iss(line);
             std::string ip, hwType, flags, hwAddr, mask, device;
             iss >> ip >> hwType >> flags >> hwAddr >> mask >> device;
             if (device != "wlan0") continue;
+            ++wlan0Entries;
             if (ip == core::hal_config().wifi_ap_address()) continue;
             if (ip.rfind("192.168.43.", 0) != 0) continue;
             if (flags == "0x0") continue;  // incomplete entry
             outIp = ip;
             return true;
         }
+        if (elapsed % 5 == 0) {
+            std::printf("androidauto: wireless session: ARP poll %ds: %d wlan0 entries so far, "
+                        "none usable yet\n", elapsed, wlan0Entries);
+        }
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
+    std::fprintf(stderr, "androidauto: wireless session: ARP poll gave up after %ds, no usable "
+                 "wlan0 entry found\n", timeoutSeconds);
     return false;
 }
 
@@ -107,13 +123,17 @@ void WirelessSessionManager::setStatus(WirelessSessionState s, std::string msg) 
 
 bool WirelessSessionManager::ensureAccessPointUp() {
     if (isApRunning()) {
+        std::printf("androidauto: wireless session: AP already up, skipping wifi_ap.sh\n");
         return true;
     }
     // Synchronous: wifi_ap.sh's own long-running daemons (hostapd -B,
     // udhcpd &) already background themselves internally -- this call
     // returns once the script's own setup (module load, wlan0-exists
     // poll loop, up to ~30s per its own comment) finishes.
-    int rc = std::system(core::hal_config().wifi_ap_script().c_str());
+    std::string script = core::hal_config().wifi_ap_script();
+    std::printf("androidauto: wireless session: AP not running, launching %s...\n", script.c_str());
+    int rc = std::system(script.c_str());
+    std::printf("androidauto: wireless session: %s exited with rc=%d\n", script.c_str(), rc);
     if (rc != 0) {
         return false;
     }

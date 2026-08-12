@@ -189,12 +189,15 @@ void bt_load_poll_cb(lv_timer_t * timer) {
         lv_label_set_text(w->addr_label, "This device: (address unavailable)");
     }
 
+    // populate_device_list() starts with lv_obj_clean(w->list), which
+    // already deletes every child of `list` -- including `spinner`
+    // (created as a child of `list` in start_bt_load()). Just drop the
+    // now-dangling pointer here; calling lv_obj_delete() on it again
+    // was a use-after-free (lv_obj_invalidate() on already-freed
+    // memory) -- this is what crashed on real hardware right after
+    // opening this screen.
     populate_device_list(w, hw_present, devices_ok, devices);
-
-    if (w->spinner) {
-        lv_obj_delete(w->spinner);
-        w->spinner = nullptr;
-    }
+    w->spinner = nullptr;
     lv_obj_clear_state(w->refresh_btn, LV_STATE_DISABLED);
 
     lv_timer_pause(timer);

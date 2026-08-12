@@ -12,6 +12,7 @@
 #include "hal/knob.h"
 #include "hal/mcu_input.h"
 #include "hal/touch.h"
+#include "core/config_store.h"
 #include "core/navigation.h"
 #include "core/screen_manager.h"
 #include "ui/home_screen.h"
@@ -55,6 +56,26 @@ int main() {
     // call just above.
     hal::BluetoothHandle & bt = hal::shared_handle();
     if (bt.fd >= 0) {
+        // 2026-08-12: apply the configured Bluetooth name every boot,
+        // per request -- previously hal::set_device_name() (AT+NAME=)
+        // was only ever called from bluetooth_screen.cpp's Save button,
+        // so the name a phone actually saw was whatever was already
+        // persisted in the Feasycom module's own NVRAM from some
+        // earlier session (stock MsnCoreApp, or blueware's own
+        // compiled-in "FSC-CARKIT" default if never set at all) --
+        // config_store.h's DeviceName was pure UI decoration until now,
+        // never actually reaching the adapter on its own. core::
+        // default_store() is the same live ConfigStore the Settings ->
+        // Bluetooth screen reads/writes, so a name changed there and
+        // saved takes effect on the NEXT boot too, not just
+        // immediately via that screen's own Save handler.
+        std::string btName = core::default_store().get_string("DeviceName", "Limcet Box", "BlueTooth");
+        if (hal::set_device_name(bt, btName)) {
+            std::printf("custom_ui: bluetooth device name set to '%s'\n", btName.c_str());
+        } else {
+            std::fprintf(stderr, "custom_ui: failed to set bluetooth device name to '%s'\n",
+                         btName.c_str());
+        }
         hal::auto_reconnect_paired_device(bt);
     }
 

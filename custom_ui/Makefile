@@ -24,8 +24,19 @@ LVGL_DIR      := third_party/lvgl
 # "assume lv_conf.h is next to the lvgl folder" convention) -- "-I."
 # from custom_ui/ is what makes `__has_include("lv_conf.h")` find it.
 INCLUDES      := -I. -Isrc -Iinclude -I$(LVGL_DIR)
-CXXFLAGS      := -std=c++17 -Wall -Wextra -O2 $(INCLUDES)
-CFLAGS        := -Wall -Wextra -O2 $(INCLUDES)
+# -MMD -MP: emit a per-object .d file listing every header it actually
+# includes, so a header-only edit (no matching .cpp/.c change) correctly
+# triggers a rebuild of everything that includes it -- without this,
+# every rule below only depends on its single source file via the
+# pattern rule's $<, so Make has NO way to know e.g. hal_config.o needs
+# rebuilding after hal_config.h changes, and silently keeps linking a
+# stale object into the final binary. Confirmed as a real bug this
+# project hit: hal_config.h's wifi_session_port_ default was edited but
+# `make androidauto-sidecar` reported "Nothing to be done" and the
+# binary's mtime didn't move. See the `-include` of these .d files near
+# the bottom of this file.
+CXXFLAGS      := -std=c++17 -Wall -Wextra -O2 -MMD -MP $(INCLUDES)
+CFLAGS        := -Wall -Wextra -O2 -MMD -MP $(INCLUDES)
 # Static linking is required, not optional: this repo's cross toolchain
 # (Debian's system arm-linux-gnueabihf-g++, gcc 12) produces dynamic
 # binaries that reference GLIBC_2.28/2.33/2.34 symbol versions -- the
@@ -288,3 +299,11 @@ $(BUILD_DIR)/sidecar-obj/%.o: sidecars/carplay/%.cpp
 
 clean:
 	rm -rf $(BUILD_DIR)
+
+# Pulls in every .d file any compile rule above has generated (see
+# CXXFLAGS/CFLAGS's -MMD -MP) so header changes are tracked across all
+# the different object-output directories (ui-obj, androidauto-sidecar-obj,
+# sidecar-obj, the various tools/ test-obj dirs, lvgl-obj...) without
+# listing each one by hand. `-include` (not `include`) so a clean
+# checkout with no .d files yet doesn't fail the very first build.
+-include $(shell find $(BUILD_DIR) -name '*.d' 2>/dev/null)

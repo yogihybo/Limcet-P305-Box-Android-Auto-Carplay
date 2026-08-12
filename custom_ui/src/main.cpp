@@ -69,7 +69,12 @@ int main() {
         // Bluetooth screen reads/writes, so a name changed there and
         // saved takes effect on the NEXT boot too, not just
         // immediately via that screen's own Save handler.
-        std::string btName = core::default_store().get_string("DeviceName", "Limcet Box", "BlueTooth");
+        // Fallback "Prado CustomUI" (not stock's "Limcet Box") matches
+        // etc/default_settings.conf's own DeviceName -- see that file's
+        // comment: kept distinct so a phone doesn't confuse this build
+        // with stock firmware on the same physical BT chip/MAC when
+        // dual-booting between them.
+        std::string btName = core::default_store().get_string("DeviceName", "Prado CustomUI", "BlueTooth");
         if (hal::set_device_name(bt, btName)) {
             std::printf("custom_ui: bluetooth device name set to '%s'\n", btName.c_str());
         } else {

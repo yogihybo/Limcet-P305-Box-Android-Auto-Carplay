@@ -10,6 +10,7 @@
 #include <aasdk/Channel/Control/IControlServiceChannelEventHandler.hpp>
 
 #include "androidauto/audio_channel.h"
+#include "androidauto/bluetooth_channel.h"
 #include "androidauto/input_channel.h"
 #include "androidauto/microphone_channel.h"
 #include "androidauto/sensor_channel.h"
@@ -158,6 +159,13 @@ private:
     // channel at all until a fresh-eyes review found the gap) and why
     // it's structural-only (no real mic capture wired in yet).
     MicrophoneChannel::Pointer microphoneChannel_;
+    // Constructed and armed the same deferred way as the channels
+    // above -- see bluetooth_channel.h's header comment for why this
+    // exists (a real reference implementation constructs this
+    // unconditionally for wireless sessions specifically) and why it
+    // doesn't attempt real pairing (already handled entirely outside
+    // this session, before it ever exists).
+    BluetoothChannel::Pointer bluetoothChannel_;
 };
 
 }  // namespace androidauto

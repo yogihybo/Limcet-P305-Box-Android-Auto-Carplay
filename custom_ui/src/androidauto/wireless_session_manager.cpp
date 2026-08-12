@@ -4,7 +4,6 @@
 #include <cstdlib>
 #include <fstream>
 #include <memory>
-#include <sstream>
 #include <thread>
 
 #include <sys/select.h>
@@ -50,37 +49,6 @@ bool isApRunning() {
 }
 
 }  // namespace
-
-bool WirelessSessionManager::discoverPhoneIp(std::string & outIp, int timeoutSeconds) {
-    std::printf("androidauto: wireless session: polling /proc/net/arp for wlan0 up to %ds...\n",
-                timeoutSeconds);
-    for (int elapsed = 0; elapsed < timeoutSeconds; ++elapsed) {
-        std::ifstream arp("/proc/net/arp");
-        std::string line;
-        std::getline(arp, line);  // header
-        int wlan0Entries = 0;
-        while (std::getline(arp, line)) {
-            std::istringstream iss(line);
-            std::string ip, hwType, flags, hwAddr, mask, device;
-            iss >> ip >> hwType >> flags >> hwAddr >> mask >> device;
-            if (device != "wlan0") continue;
-            ++wlan0Entries;
-            if (ip == core::hal_config().wifi_ap_address()) continue;
-            if (ip.rfind("192.168.43.", 0) != 0) continue;
-            if (flags == "0x0") continue;  // incomplete entry
-            outIp = ip;
-            return true;
-        }
-        if (elapsed % 5 == 0) {
-            std::printf("androidauto: wireless session: ARP poll %ds: %d wlan0 entries so far, "
-                        "none usable yet\n", elapsed, wlan0Entries);
-        }
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-    }
-    std::fprintf(stderr, "androidauto: wireless session: ARP poll gave up after %ds, no usable "
-                 "wlan0 entry found\n", timeoutSeconds);
-    return false;
-}
 
 WirelessSessionManager::WirelessSessionManager() = default;
 
@@ -157,6 +125,41 @@ void WirelessSessionManager::run() {
 
     const core::HalConfig & cfg = core::hal_config();
 
+    // 2026-08-12, THIRD revision, now backed by a real confirmed-working
+    // reference implementation (github.com/mossyhub/openautolink,
+    // WppTcpServer.kt) rather than guessing: the head unit IS the TCP
+    // server for Google's real WPP (WiFi Projection Protocol) -- the
+    // phone dials in after the Bluetooth handshake. Their own code
+    // comment describes hitting this project's EXACT symptom and its
+    // cause: "gearhead accepted our SDP advert, dialled our RFCOMM
+    // socket, accepted WifiStartRequest with STATUS_SUCCESS... then
+    // went quiet, because we had advertised a port with nothing bound
+    // to it." Two corrections vs this project's own earlier (reverted)
+    // listen/accept attempt: (1) bind 0.0.0.0 (all interfaces), not the
+    // specific AP address -- their own comment: "we do not know which
+    // local address [the phone] will use until it arrives"; (2) the
+    // listener must already be bound and ready well before
+    // WIFI_INFO_RESPONSE goes out ("AA reaches the proxy within ~2s of
+    // the Bluetooth handshake"), so this binds before the BW_AAP
+    // handshake starts at all, same as this project's earlier attempt
+    // already did structurally -- only the bind address was wrong.
+    boost::asio::io_service ioService;
+    boost::system::error_code openEc;
+    boost::asio::ip::tcp::acceptor acceptor(ioService);
+    boost::asio::ip::tcp::endpoint endpoint(boost::asio::ip::tcp::v4(), cfg.wifi_session_port());
+    acceptor.open(endpoint.protocol(), openEc);
+    if (!openEc) acceptor.set_option(boost::asio::ip::tcp::acceptor::reuse_address(true), openEc);
+    if (!openEc) acceptor.bind(endpoint, openEc);
+    if (!openEc) acceptor.listen(boost::asio::socket_base::max_connections, openEc);
+    if (openEc) {
+        setStatus(WirelessSessionState::Failed,
+                  "Could not listen on 0.0.0.0:" + std::to_string(cfg.wifi_session_port()) + ": " +
+                      openEc.message());
+        return;
+    }
+    std::printf("androidauto: wireless session: WPP TCP server listening on 0.0.0.0:%u\n",
+                cfg.wifi_session_port());
+
     setStatus(WirelessSessionState::BluetoothHandshake, "Connecting to blueware (/dev/bw_aap)...");
     BwAapClient bwAap;
     if (!bwAap.connect()) {
@@ -164,23 +167,16 @@ void WirelessSessionManager::run() {
         return;
     }
 
-    // outIp/outPort start as "no override" (empty / the configured
-    // default) -- startHandshake() only overwrites them if a real
-    // WIFI_START_RESPONSE with those fields set actually arrives. See
-    // its header comment (2026-08-12) for why this project went
-    // connect-out -> listen/accept -> back to connect-out: a real test
-    // of the listen/accept approach showed the phone's own AA app
-    // reporting "connected" while this device's listener never saw an
-    // incoming connection at all, proving the phone expects US to
-    // connect to IT (matching the ORIGINAL "connection refused" result,
-    // which specifically means the phone WAS reachable, just not
-    // listening on the exact port we guessed) -- so the real fix is
-    // reading WIFI_START_RESPONSE for the phone's actual port, not
-    // flipping direction.
+    // outIp/outPort are unused now (no ARP-based connect-out target
+    // needed) but startHandshake() still reads back an optional
+    // WIFI_START_RESPONSE for logging visibility -- see its own header
+    // comment. cfg.wifi_ap_address() (not 0.0.0.0) is what we tell the
+    // PHONE to dial, since 0.0.0.0 isn't a routable address from the
+    // phone's side -- only our own bind stays on all interfaces.
     std::string startRespIp;
     std::uint16_t startRespPort = cfg.wifi_session_port();
     std::printf("androidauto: wireless session: bw_aap connected, starting handshake "
-                "(proposing %s:%u as our AP connect target)\n", cfg.wifi_ap_address().c_str(),
+                "(advertising %s:%u for the phone to dial in on)\n", cfg.wifi_ap_address().c_str(),
                 cfg.wifi_session_port());
     if (!bwAap.startHandshake(cfg.wifi_ap_address(), cfg.wifi_session_port(), startRespIp,
                                startRespPort)) {
@@ -188,8 +184,7 @@ void WirelessSessionManager::run() {
         return;
     }
     std::printf("androidauto: wireless session: BW_AAP handshake (steps 1-3, + optional "
-                "WIFI_START_RESPONSE) done -- resolved override ip='%s' port=%u\n",
-                startRespIp.c_str(), startRespPort);
+                "WIFI_START_RESPONSE) done\n");
 
     setStatus(WirelessSessionState::WaitingForWifiJoin,
               "Waiting for phone to request WiFi credentials...");
@@ -203,36 +198,43 @@ void WirelessSessionManager::run() {
                 cfg.wifi_ap_ssid().c_str());
     bwAap.close();
 
-    std::string phoneIp = startRespIp;
-    if (phoneIp.empty()) {
-        setStatus(WirelessSessionState::WaitingForWifiJoin,
-                  "Credentials sent, waiting for phone to join AP...");
-        if (!discoverPhoneIp(phoneIp, 30)) {
-            setStatus(WirelessSessionState::Failed, "Phone never appeared on the AP (ARP timeout)");
-            return;
-        }
-        std::printf("androidauto: wireless session: discovered phone at %s via ARP\n",
-                    phoneIp.c_str());
-    } else {
-        std::printf("androidauto: wireless session: using phone ip %s from WIFI_START_RESPONSE "
-                    "(skipping ARP discovery)\n", phoneIp.c_str());
-    }
-
     setStatus(WirelessSessionState::Connecting,
-              "Connecting to " + phoneIp + ":" + std::to_string(startRespPort) + "...");
+              "Waiting for phone to dial in on 0.0.0.0:" + std::to_string(cfg.wifi_session_port()) +
+                  "...");
 
-    boost::asio::io_service ioService;
-    aasdk::tcp::TCPWrapper tcpWrapper;
-    auto socket = std::make_shared<boost::asio::ip::tcp::socket>(ioService);
-    auto connectEc = tcpWrapper.connect(*socket, phoneIp, startRespPort);
-    if (connectEc) {
-        setStatus(WirelessSessionState::Failed, "TCP connect to " + phoneIp + ":" +
-                      std::to_string(startRespPort) + " failed: " + connectEc.message());
+    // select()-based accept timeout -- accept() itself has no timeout
+    // parameter, same pattern as hal/bluetooth.cpp send_command() /
+    // BwAapClient::receiveFrame().
+    fd_set readSet;
+    FD_ZERO(&readSet);
+    int listenFd = acceptor.native_handle();
+    FD_SET(listenFd, &readSet);
+    struct timeval tv {};
+    tv.tv_sec = 30;
+    int ready = ::select(listenFd + 1, &readSet, nullptr, nullptr, &tv);
+    if (ready <= 0) {
+        setStatus(WirelessSessionState::Failed, "No incoming AA TCP connection within 30s");
         return;
     }
-    std::printf("androidauto: wireless session: TCP connected to %s:%u\n", phoneIp.c_str(),
-                startRespPort);
 
+    auto socket = std::make_shared<boost::asio::ip::tcp::socket>(ioService);
+    boost::system::error_code acceptEc;
+    acceptor.accept(*socket, acceptEc);
+    if (acceptEc) {
+        setStatus(WirelessSessionState::Failed, "accept() failed: " + acceptEc.message());
+        return;
+    }
+    boost::system::error_code peerEc;
+    auto remote = socket->remote_endpoint(peerEc);
+    if (!peerEc) {
+        std::printf("androidauto: wireless session: phone connected from %s:%u\n",
+                    remote.address().to_string().c_str(), remote.port());
+    } else {
+        std::printf("androidauto: wireless session: phone connected (remote_endpoint() "
+                    "unavailable: %s)\n", peerEc.message().c_str());
+    }
+
+    aasdk::tcp::TCPWrapper tcpWrapper;
     auto tcpEndpoint = std::make_shared<aasdk::tcp::TCPEndpoint>(tcpWrapper, socket);
     auto transport = std::make_shared<aasdk::transport::TCPTransport>(ioService, std::move(tcpEndpoint));
     auto session = std::make_shared<Session>(ioService);

@@ -88,17 +88,15 @@ private:
     std::string wifi_ap_ssid_ = "carplay_wifi";
     std::string wifi_ap_password_ = "88888888";
     int wifi_ap_security_mode_ = 8;
-    // 2026-08-12: 5277 (the port every generic aasdk-reference-doc
-    // example uses) was tried on real hardware and got ECONNREFUSED --
-    // this project's own captured WIFI_START_RESPONSE traffic never
-    // carries a port override either (always "18 00", just status=
-    // SUCCESS, no ip_address/port fields at all -- see
-    // wireless_session_manager.h). 5288 is a real, commonly-cited
-    // Android Auto Wireless session port distinct from 5277 -- not yet
-    // hardware-confirmed for THIS device, but a stronger lead than the
-    // old guess. Still overridable via hal.conf's SessionPort without
-    // a rebuild.
-    std::uint16_t wifi_session_port_ = 5288;
+    // 2026-08-12: briefly changed to 5288 (an unconfirmed guess) after
+    // 5277 got ECONNREFUSED with this device connecting OUT to the
+    // phone -- reverted back to 5277 once a real confirmed-working
+    // reference implementation (github.com/mossyhub/openautolink)
+    // showed the actual bug was direction, not port: Google's real WPP
+    // has the HEAD UNIT as the TCP server on 5277, phone dials in. See
+    // wireless_session_manager.h for the full story. Still overridable
+    // via hal.conf's SessionPort without a rebuild.
+    std::uint16_t wifi_session_port_ = 5277;
 };
 
 // Process-lifetime singleton, lazily loaded on first call -- same

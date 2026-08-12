@@ -46,26 +46,6 @@ lv_obj_t * add_row(lv_obj_t * parent, const char * label_text) {
     return row;
 }
 
-// A row that's purely informational -- shows the confirmed-live (or
-// confirmed-dead) value with a short note, no control to change it.
-// Used for hardware-profile fields this device shouldn't have edited
-// live (CanType) or fields confirmed to have no effect at runtime
-// (MirroringLinkType, ResolutionType) -- see
-// docs/SETTINGS_REFERENCE.md/project_msnproductinfo_config_exploration.
-void add_readonly_row(lv_obj_t * parent, const char * label_text, const std::string & value,
-                       const char * note) {
-    lv_obj_t * row = add_row(parent, label_text);
-    lv_obj_t * value_label = lv_label_create(row);
-    std::string text = value;
-    if (note && note[0] != '\0') {
-        text += "  (";
-        text += note;
-        text += ")";
-    }
-    lv_label_set_text(value_label, text.c_str());
-    theme::style_secondary_text(value_label);
-}
-
 // ---- value-changed contexts, shared by steppers/switches/dropdowns ---
 
 enum class VdeField { None, Hue, Saturation, Brightness, Contrast };
@@ -364,36 +344,29 @@ void build_hardware_profile_and_behaviour(lv_obj_t * tab) {
 
     lv_obj_t * warn = lv_label_create(tab);
     lv_label_set_text(warn,
-                       "Factory fields. Read-only entries reflect confirmed "
-                       "hardware-profile values this project's disassembly work has traced --");
+                       "Factory fields, now editable per request. CAUTION: CAN Type != 0 is "
+                       "documented to break touch/knob input on this device (see CANBUS.md) -- "
+                       "change it only if you know what you're doing.");
     lv_label_set_long_mode(warn, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(warn, LV_PCT(100));
     theme::style_secondary_text(warn);
 
-    core::ConfigStore & store = core::default_store();
-
-    // Hardware profile (MsnProductInfo.ini) -- read-only. Changing
-    // these live has no defined behavior on a provisioned device (they
-    // gate boot-time hardware detection, not something this app
-    // should let a user edit post-boot) -- see
-    // docs/SETTINGS_REFERENCE.md section 1.
-    add_readonly_row(tab, "MCU Type", std::to_string(store.get_int("McuType", 6, "General")),
-                      "BoxP300 adapter -- see MCU_ADAPTERS.md");
-    add_readonly_row(tab, "CAN Type", std::to_string(store.get_int("CanType", 0, "General")),
-                      "locked -- CanType=1 breaks touch/knob input, do not change");
-    add_readonly_row(tab, "Screen Type", std::to_string(store.get_int("ScreenType", 1, "General")),
-                      "may be overwritten live by the connected MCU board");
-    add_readonly_row(tab, "Resolution Type",
-                      std::to_string(store.get_int("ResolutionType", 1, "General")),
-                      "confirmed dead: no code path reads this key");
-    add_readonly_row(tab, "BlueTooth Type",
-                      std::to_string(store.get_int("BlueToothType", 6, "General")),
-                      "module/stack selector, not app-layer BT config");
-    add_readonly_row(tab, "Radio Type", std::to_string(store.get_int("RadioType", 0, "General")),
-                      "0 = no tuner fitted");
-    add_readonly_row(tab, "Mirroring Link Type",
-                      std::to_string(store.get_int("MirroringLinkType", 1, "General")),
-                      "confirmed no effect on this device (ProductId gate never matches)");
+    // Hardware profile (MsnProductInfo.ini) -- editable per request.
+    // Changing these live has no defined behavior on a provisioned
+    // device (they gate boot-time hardware detection, not something
+    // this app previously let a user edit post-boot) -- see
+    // docs/SETTINGS_REFERENCE.md section 1. Ranges below come from the
+    // full disassembly-confirmed value tables in MCU_ADAPTERS.md
+    // (McuType) / CANBUS.md (CanType); the rest are small enums with
+    // only 1-2 real observed values, given generous headroom rather
+    // than an exact confirmed range.
+    add_stepper_row(tab, "MCU Type", 1, 30, 1, "McuType", "General");
+    add_stepper_row(tab, "CAN Type", 0, 16, 1, "CanType", "General");
+    add_stepper_row(tab, "Screen Type", 0, 255, 1, "ScreenType", "General");
+    add_stepper_row(tab, "Resolution Type", 0, 10, 1, "ResolutionType", "General");
+    add_stepper_row(tab, "BlueTooth Type", 0, 10, 1, "BlueToothType", "General");
+    add_stepper_row(tab, "Radio Type", 0, 10, 1, "RadioType", "General");
+    add_stepper_row(tab, "Mirroring Link Type", 0, 5, 1, "MirroringLinkType", "General");
 
     lv_obj_t * behaviour_header = lv_label_create(tab);
     lv_label_set_text(behaviour_header, "Behaviour");

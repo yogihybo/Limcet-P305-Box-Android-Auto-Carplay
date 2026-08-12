@@ -22,12 +22,20 @@
 //      present in the live layer (first-boot / not-yet-provisioned
 //      case).
 //
-// This store therefore loads all three files, live layer first so its
-// keys win, ini files filling gaps -- then save() writes ONLY the live
-// layer back out (per Phase 3's checklist: "read/write the LIVE
-// settings layer ... not just the static .ini factory defaults").
-// Never writes the ini files -- those are the factory-owned seed, not
-// something this app should mutate.
+// 2026-08-12 REVISED: after the ini-seeded fallback resolves a key,
+// load() now promotes it straight into the live layer in memory (see
+// load()'s own comment) instead of leaving it as a read-through ini
+// value -- and default_store() saves once right after loading. The
+// effect: `/data/msncfg/Setting.config` becomes the sole, self-
+// contained source of truth for this app from the moment it first
+// runs, not just for keys the user happens to touch. The two ini
+// files are still read (this device's real factory image ships them,
+// and a fresh/wiped device needs SOME seed), but only ever on this one
+// bootstrap pass -- everything this app does afterwards, including
+// every settings screen, reads and writes ONLY the live layer, never
+// falls back to or re-reads the ini files again. Never writes the ini
+// files themselves -- those stay the factory-owned seed, not something
+// this app mutates.
 //
 // Sections: `Setting.config` observed so far only has [General], but
 // FactoryConfig.ini has [General]/[BlueTooth]/[Sound]/[Radio], and per
@@ -51,11 +59,15 @@ public:
                 std::string factory_config_ini_path,
                 std::string product_info_ini_path);
 
-    // Loads all three files (see class comment for precedence). Safe
-    // to call if any/all paths are missing (e.g. running this UI on a
-    // dev host, or a not-yet-provisioned device) -- missing files are
-    // silently skipped, get_*() falls back to caller-supplied
-    // defaults in that case.
+    // Loads all three files (see class comment for precedence), then
+    // promotes every resolved key -- whether it came from the live
+    // layer or an ini fallback -- into the live layer in memory, so a
+    // subsequent save() makes the live file fully self-contained (see
+    // class comment's 2026-08-12 note). Safe to call if any/all paths
+    // are missing (e.g. running this UI on a dev host, or a fresh
+    // device with no ini seed either) -- missing files are silently
+    // skipped, get_*() falls back to caller-supplied defaults in that
+    // case.
     void load();
 
     // Writes the live layer only (never the ini seeds) back to
@@ -103,9 +115,12 @@ private:
 // (docs/SETTINGS_REFERENCE.md):
 //   live:    /data/msncfg/Setting.config
 //   factory: /msnprofile/FactoryConfig.ini, /msnprofile/MsnProductInfo.ini
-// Lazily load()ed on first call. Settings/Bluetooth screens should use
-// this rather than constructing their own ConfigStore, so every screen
-// sees (and edits) the same in-memory state.
+// Lazily load()ed on first call, and saved once immediately after --
+// see load()'s comment: this makes the live file self-contained from
+// this app's very first run, decoupled from the ini seed files from
+// then on. Settings/Bluetooth screens should use this rather than
+// constructing their own ConfigStore, so every screen sees (and edits)
+// the same in-memory state.
 ConfigStore & default_store();
 
 }  // namespace core

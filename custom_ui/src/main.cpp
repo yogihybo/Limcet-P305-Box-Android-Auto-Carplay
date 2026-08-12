@@ -22,6 +22,7 @@
 #include "core/config_store.h"
 #include "core/navigation.h"
 #include "core/screen_manager.h"
+#include "ui/android_auto_screen.h"
 #include "ui/home_screen.h"
 #include "ui/theme.h"
 
@@ -95,15 +96,51 @@ public:
                 if (!client.requestConnect()) {
                     std::fprintf(stderr, "custom_ui: auto-start requestConnect() failed (sidecar "
                                  "unreachable)\n");
+                } else {
+                    // 2026-08-12: per explicit request, the EXISTING
+                    // "Auto-start phone projection" setting
+                    // (AutoStartCarLink -- settings_screen.cpp,
+                    // previously stored but never actually read
+                    // anywhere) now controls foreground vs. background:
+                    // true = jump straight to the Android Auto screen
+                    // (matching real car head units auto-switching to
+                    // CarPlay/AA on connect), false = start the
+                    // connection silently and leave navigation to the
+                    // user manually selecting the AA icon later. Either
+                    // way the VIDEO layer itself stays hidden until
+                    // that screen is actually the one on display -- see
+                    // video_visibility.h -- this flag only controls
+                    // whether getting there happens automatically.
+                    //
+                    // Not done directly here: this runs on its own
+                    // background thread, and LVGL/core::navigation must
+                    // only ever be touched from the main thread (same
+                    // rule core::ReverseGearWatcher documents) -- so
+                    // this just records the request; main()'s own loop
+                    // polls consume_navigate_request() and does the
+                    // actual push() there.
+                    bool auto_open = core::default_store().get_bool("AutoStartCarLink", true,
+                                                                      "General");
+                    if (auto_open) {
+                        navigate_pending_.store(true, std::memory_order_release);
+                    }
                 }
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(500));
         }
     }
 
+    // Polled from the LVGL main thread (main()'s own loop) once per
+    // iteration -- cheap atomic exchange. Returns true at most once per
+    // trigger, consuming the request.
+    bool consume_navigate_request() {
+        return navigate_pending_.exchange(false, std::memory_order_acq_rel);
+    }
+
 private:
     std::mutex mtx_;
     std::atomic<bool> pending_{false};
+    std::atomic<bool> navigate_pending_{false};
     std::string last_triggered_id_;
     std::string pending_name_;
 };
@@ -228,6 +265,16 @@ int main() {
     // error output on every boot.
     while (true) {
         lv_timer_handler();
+        // Cheap atomic exchange every iteration -- see
+        // AaAutoStartWatcher::run()'s own comment for why this can't
+        // just call core::navigation::push() directly from its own
+        // background thread. screens.push() (via core::navigation) is
+        // itself fine to call repeatedly/from an already-elsewhere
+        // navigation state -- same push-based stack every other screen
+        // transition in this app already uses.
+        if (aa_auto_start_watcher().consume_navigate_request()) {
+            core::navigation::push(ui::create_android_auto_screen);
+        }
         usleep(5000);
     }
 

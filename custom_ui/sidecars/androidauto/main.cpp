@@ -13,6 +13,13 @@
 //                (androidauto::WirelessSessionManager::start()),
 //                replies "OK"
 //   "STATUS"  -> replies "STATE <state_name> <message...>"
+//   "SHOW"    -> sets androidauto::video_visible() true (see
+//                video_visibility.h), replies "OK". Sent by
+//                ui/android_auto_screen.cpp when it becomes the active
+//                screen -- decode/the session itself are NOT gated by
+//                this, only whether VideoChannel actually shows the
+//                hardware video layer once frames are ready.
+//   "HIDE"    -> sets androidauto::video_visible() false, replies "OK"
 //   (anything else) -> replies "ERR unknown command"
 // One thread per accepted connection (expected connection count: 2 as
 // of the status-bar work in src/ui/status_bar.cpp -- android_auto_screen.cpp's
@@ -35,6 +42,7 @@
 #include <sys/un.h>
 #include <unistd.h>
 
+#include "androidauto/video_visibility.h"
 #include "androidauto/wireless_session_manager.h"
 
 namespace {
@@ -81,6 +89,12 @@ void handle_connection(int clientFd, androidauto::WirelessSessionManager * manag
         } else if (line == "STATUS") {
             reply = std::string("STATE ") + state_name(manager->state()) + " " +
                     manager->statusMessage() + "\n";
+        } else if (line == "SHOW") {
+            androidauto::video_visible().store(true, std::memory_order_release);
+            reply = "OK\n";
+        } else if (line == "HIDE") {
+            androidauto::video_visible().store(false, std::memory_order_release);
+            reply = "OK\n";
         } else {
             reply = "ERR unknown command\n";
         }

@@ -9,9 +9,10 @@
 // binary -- see Makefile's UI_TARGET comment.
 //
 // Protocol (newline-delimited text, one request/response pair per
-// call): client sends "CONNECT\n" or "STATUS\n", server replies with
-// exactly one line, "OK\n" or "STATE <state_name> <message...>\n" or
-// "ERR <reason>\n". Connection is opened lazily on first use and kept
+// call): client sends "CONNECT\n", "STATUS\n", "SHOW\n", or "HIDE\n",
+// server replies with exactly one line, "OK\n" or "STATE <state_name>
+// <message...>\n" or "ERR <reason>\n". Connection is opened lazily on
+// first use and kept
 // open; reconnects automatically if the sidecar isn't running yet or
 // the connection drops (e.g. sidecar restarted) -- every call is
 // independently retried once against a fresh connection before giving
@@ -73,6 +74,22 @@ public:
     // service, which the header comment above explicitly says this is
     // not.
     std::string statusLine(bool allow_spawn = true);
+
+    // Sends "SHOW" or "HIDE" -- controls whether the sidecar's
+    // VideoChannel actually shows the decoded-frame hardware layer
+    // once frames are available (see androidauto/video_visibility.h).
+    // Session/decode continue regardless of this -- it only gates the
+    // hardware layer's visibility, so video is ready to display
+    // instantly once shown rather than needing decode to catch up.
+    // ui/android_auto_screen.cpp calls this with true when it becomes
+    // the active screen and false when the user navigates away, so
+    // AA video only appears while that screen is actually on display
+    // -- see main.cpp's AaAutoStartWatcher for why this matters now
+    // that a session can auto-start in the background before the user
+    // has ever opened this screen. Never spawns the sidecar (unlike
+    // requestConnect()/statusLine()) -- returns false if it isn't
+    // already running, since there's nothing to show/hide in that case.
+    bool setVisible(bool visible);
 
 private:
     bool ensureConnected(bool allow_spawn = true);

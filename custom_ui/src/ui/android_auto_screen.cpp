@@ -83,6 +83,12 @@ void poll_timer_cb(lv_timer_t * timer) {
 void screen_delete_cb(lv_event_t * e) {
     auto * timer = static_cast<lv_timer_t *>(lv_event_get_user_data(e));
     lv_timer_delete(timer);
+    // 2026-08-12: hide the AA video hardware layer the moment this
+    // screen goes away -- see hal::AndroidAutoClient::setVisible()'s
+    // own comment. Session/decode keep running in the background
+    // regardless (auto-start, see main.cpp's AaAutoStartWatcher); only
+    // the hardware layer's visibility is tied to this screen.
+    client().setVisible(false);
 }
 
 }  // namespace
@@ -90,6 +96,17 @@ void screen_delete_cb(lv_event_t * e) {
 lv_obj_t * create_android_auto_screen() {
     lv_obj_t * scr = nullptr;
     theme::create_screen_with_header(&scr, "Android Auto", back_btn_cb);
+
+    // 2026-08-12: reveals the AA video hardware layer (if a session is
+    // already running -- e.g. auto-started in the background, see
+    // main.cpp's AaAutoStartWatcher) the moment this screen is
+    // selected, per explicit request: selecting the AA icon should
+    // load the video feed directly, not just show a status screen
+    // while video stays hidden. No-op (returns false, logged nowhere
+    // since it's not an error) if no sidecar/session exists yet --
+    // this doesn't start one, connect_btn_cb()/AutoStartCarLink do
+    // that; this only ever affects visibility.
+    client().setVisible(true);
 
     lv_obj_t * content = lv_obj_create(scr);
     theme::style_card(content);

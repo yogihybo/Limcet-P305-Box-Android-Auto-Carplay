@@ -138,4 +138,24 @@ std::string AndroidAutoClient::statusLine(bool allow_spawn) {
     return "ERR sidecar unreachable";
 }
 
+bool AndroidAutoClient::setVisible(bool visible) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    std::string reply;
+    // allow_spawn=false -- SHOW/HIDE only matters once a session
+    // already exists to have video from; if the sidecar isn't even
+    // running, there's nothing to show, and spawning it just to tell
+    // it to stay hidden would be pointless (worse, HIDE is sent from
+    // android_auto_screen.cpp's own teardown path -- spawning a fresh
+    // sidecar there on the way OUT of the screen would be actively
+    // wrong).
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        if (ensureConnected(/*allow_spawn=*/false) &&
+            sendCommand(visible ? "SHOW" : "HIDE", reply)) {
+            return true;
+        }
+        disconnect();
+    }
+    return false;
+}
+
 }  // namespace hal

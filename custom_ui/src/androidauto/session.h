@@ -11,6 +11,7 @@
 
 #include "androidauto/audio_channel.h"
 #include "androidauto/input_channel.h"
+#include "androidauto/sensor_channel.h"
 #include "androidauto/touch_forwarder.h"
 #include "androidauto/video_channel.h"
 
@@ -144,6 +145,12 @@ private:
     AudioChannel::Pointer audioChannelMedia_;
     AudioChannel::Pointer audioChannelGuidance_;
     AudioChannel::Pointer audioChannelSystem_;
+    // Constructed and armed the same deferred way as the channels
+    // above -- see sensor_channel.h's header comment for why this
+    // exists at all (real phones are widely known to require at least
+    // DRIVING_STATUS_DATA to stay connected) and why it only ever
+    // advertises/answers that one sensor.
+    SensorChannel::Pointer sensorChannel_;
 };
 
 }  // namespace androidauto

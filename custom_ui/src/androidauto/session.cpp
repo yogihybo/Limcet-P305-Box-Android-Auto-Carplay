@@ -81,6 +81,8 @@ void Session::start(aasdk::transport::ITransport::Pointer transport) {
     audioChannelSystem_ = std::make_shared<AudioChannel>(
         strand_, messenger, aasdk::messenger::ChannelId::MEDIA_SINK_SYSTEM_AUDIO, "plug:softvol4", 16000, 1);
 
+    sensorChannel_ = std::make_shared<SensorChannel>(strand_, messenger);
+
     auto promise = aasdk::channel::SendPromise::defer(strand_);
     promise->then(
         []() { std::printf("androidauto: version request sent\n"); },
@@ -266,6 +268,12 @@ void Session::onServiceDiscoveryRequest(
     auto *videoSink = videoService->mutable_media_sink_service();
     videoSink->set_available_type(
         aap_protobuf::service::media::shared::message::MEDIA_CODEC_VIDEO_H264_BP);
+    // available_while_in_call and its audio siblings below: found
+    // missing by diffing against openautolink's live_session.cpp,
+    // which sets this on every media sink service (optional field, so
+    // structurally harmless either way, but matches the reference
+    // exactly rather than leaving it unset/absent from the wire).
+    videoSink->set_available_while_in_call(true);
     auto *videoConfig = videoSink->add_video_configs();
     videoConfig->set_codec_resolution(
         aap_protobuf::service::media::sink::message::VIDEO_800x480);
@@ -279,6 +287,7 @@ void Session::onServiceDiscoveryRequest(
     auto *mediaAudioSink = mediaAudioService->mutable_media_sink_service();
     mediaAudioSink->set_available_type(aap_protobuf::service::media::shared::message::MEDIA_CODEC_AUDIO_PCM);
     mediaAudioSink->set_audio_type(aap_protobuf::service::media::sink::message::AUDIO_STREAM_MEDIA);
+    mediaAudioSink->set_available_while_in_call(true);
     auto *mediaAudioConfig = mediaAudioSink->add_audio_configs();
     mediaAudioConfig->set_sampling_rate(48000);
     mediaAudioConfig->set_number_of_bits(16);
@@ -290,6 +299,7 @@ void Session::onServiceDiscoveryRequest(
     auto *guidanceAudioSink = guidanceAudioService->mutable_media_sink_service();
     guidanceAudioSink->set_available_type(aap_protobuf::service::media::shared::message::MEDIA_CODEC_AUDIO_PCM);
     guidanceAudioSink->set_audio_type(aap_protobuf::service::media::sink::message::AUDIO_STREAM_GUIDANCE);
+    guidanceAudioSink->set_available_while_in_call(true);
     auto *guidanceAudioConfig = guidanceAudioSink->add_audio_configs();
     guidanceAudioConfig->set_sampling_rate(16000);
     guidanceAudioConfig->set_number_of_bits(16);
@@ -301,10 +311,25 @@ void Session::onServiceDiscoveryRequest(
     auto *systemAudioSink = systemAudioService->mutable_media_sink_service();
     systemAudioSink->set_available_type(aap_protobuf::service::media::shared::message::MEDIA_CODEC_AUDIO_PCM);
     systemAudioSink->set_audio_type(aap_protobuf::service::media::sink::message::AUDIO_STREAM_SYSTEM_AUDIO);
+    systemAudioSink->set_available_while_in_call(true);
     auto *systemAudioConfig = systemAudioSink->add_audio_configs();
     systemAudioConfig->set_sampling_rate(16000);
     systemAudioConfig->set_number_of_bits(16);
     systemAudioConfig->set_number_of_channels(1);
+
+    // 2026-08-12: found by diffing against openautolink's
+    // live_session.cpp -- this project advertised NO sensor channel at
+    // all. Real Android Auto phone-app versions are widely known to
+    // require at least SENSOR_DRIVING_STATUS_DATA before staying
+    // connected, not just as a nice-to-have -- its total absence fits
+    // this project's exact real-hardware symptom (structurally valid
+    // ServiceDiscoveryResponse accepted, then every channel drops
+    // together a few seconds later). See sensor_channel.h for why only
+    // this one sensor is advertised (no real source for any others).
+    auto *sensorService = response.add_channels();
+    sensorService->set_id(static_cast<std::int32_t>(aasdk::messenger::ChannelId::SENSOR));
+    sensorService->mutable_sensor_source_service()->add_sensors()->set_sensor_type(
+        aap_protobuf::service::sensorsource::message::SENSOR_DRIVING_STATUS_DATA);
 
     auto promise = aasdk::channel::SendPromise::defer(strand_);
     promise->then(
@@ -323,6 +348,7 @@ void Session::onServiceDiscoveryRequest(
             audioChannelGuidance_->start();
             audioChannelSystem_->start();
             inputChannel_->start();
+            sensorChannel_->start();
 
             // Same reference: sends the first ping immediately (not
             // after waiting a full interval_ms) then falls into the

@@ -1,5 +1,6 @@
 #include "androidauto/session.h"
 
+#include <chrono>
 #include <cstdio>
 
 #include <aasdk/Transport/SSLWrapper.hpp>
@@ -14,7 +15,7 @@
 namespace androidauto {
 
 Session::Session(boost::asio::io_service &ioService)
-    : ioService_(ioService), strand_(ioService) {
+    : ioService_(ioService), strand_(ioService), pingTimer_(ioService) {
 }
 
 void Session::start(aasdk::transport::ITransport::Pointer transport) {
@@ -280,6 +281,39 @@ void Session::onServiceDiscoveryRequest(
     controlChannel_->sendServiceDiscoveryResponse(response, promise);
 
     controlChannel_->receive(this->shared_from_this());
+
+    // Session is now established -- start honoring the ping_configuration
+    // contract advertised above. See session.h's schedulePing() comment.
+    schedulePing();
+}
+
+void Session::schedulePing() {
+    if (stopping_) {
+        return;
+    }
+    pingTimer_.expires_from_now(std::chrono::milliseconds(1000));
+    auto self = shared_from_this();
+    pingTimer_.async_wait(strand_.wrap([this, self](const boost::system::error_code &ec) {
+        if (ec || stopping_) {
+            return;  // cancelled (session stopping) -- not an error to report
+        }
+
+        auto timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
+                              std::chrono::system_clock::now().time_since_epoch())
+                              .count();
+        aap_protobuf::service::control::message::PingRequest request;
+        request.set_timestamp(timestamp);
+
+        auto promise = aasdk::channel::SendPromise::defer(strand_);
+        promise->then(
+            []() {},
+            [](const aasdk::error::Error &e) {
+                std::printf("androidauto: ping request send failed: %s\n", e.what());
+            });
+        controlChannel_->sendPingRequest(request, promise);
+
+        schedulePing();
+    }));
 }
 
 void Session::onAudioFocusRequest(
@@ -333,6 +367,9 @@ void Session::onByeByeRequest(const aap_protobuf::service::control::message::Bye
             std::printf("androidauto: bye-bye response send failed: %s\n", e.what());
         });
     controlChannel_->sendShutdownResponse(response, promise);
+
+    stopping_ = true;
+    pingTimer_.cancel();
 }
 
 void Session::onByeByeResponse(const aap_protobuf::service::control::message::ByeByeResponse &) {
@@ -409,9 +446,13 @@ void Session::onChannelError(const aasdk::error::Error &e) {
     if (e.getCode() == aasdk::error::ErrorCode::OPERATION_ABORTED) {
         std::printf("androidauto: control channel: operation aborted (expected during "
                     "shutdown): %s\n", e.what());
+        stopping_ = true;
+        pingTimer_.cancel();
         return;
     }
     std::printf("androidauto: control channel error: %s\n", e.what());
+    stopping_ = true;
+    pingTimer_.cancel();
 }
 
 }  // namespace androidauto

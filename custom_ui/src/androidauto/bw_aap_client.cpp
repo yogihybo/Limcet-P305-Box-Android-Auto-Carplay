@@ -11,6 +11,7 @@
 #include <unistd.h>
 
 #include <aap_protobuf/aaw/WifiStartRequest.pb.h>
+#include <aap_protobuf/aaw/WifiStartResponse.pb.h>
 #include <aap_protobuf/aaw/WifiInfoResponse.pb.h>
 
 namespace androidauto {
@@ -127,7 +128,8 @@ bool BwAapClient::receiveFrame(std::uint16_t &type, std::string &payload, int ti
     return true;
 }
 
-bool BwAapClient::startHandshake(const std::string &apIpAddress, std::uint16_t apPort) {
+bool BwAapClient::startHandshake(const std::string &apIpAddress, std::uint16_t apPort,
+                                  std::string &outIp, std::uint16_t &outPort) {
     std::string versionRequestPayload(reinterpret_cast<const char *>(kWifiVersionRequestPayload),
                                        sizeof(kWifiVersionRequestPayload));
     std::printf("androidauto: sending WIFI_VERSION_REQUEST\n");
@@ -161,7 +163,43 @@ bool BwAapClient::startHandshake(const std::string &apIpAddress, std::uint16_t a
     }
     std::printf("androidauto: sending WIFI_START_REQUEST (ip=%s port=%u)\n", apIpAddress.c_str(),
                 apPort);
-    return this->sendFrame(1, startRequestPayload);
+    if (!this->sendFrame(1, startRequestPayload)) {
+        return false;
+    }
+
+    // See this function's header comment (2026-08-12) -- wait briefly
+    // for an optional WIFI_START_RESPONSE (type 7). Not receiving one
+    // is NOT a handshake failure, just nothing to override outIp/
+    // outPort with.
+    std::uint16_t startRespType = 0;
+    std::string startRespPayload;
+    if (!this->receiveFrame(startRespType, startRespPayload, 5)) {
+        std::printf("androidauto: no WIFI_START_RESPONSE within 5s (may be normal -- not all "
+                    "captures have shown one)\n");
+        return true;
+    }
+    if (startRespType != 7) {
+        std::printf("androidauto: expected WIFI_START_RESPONSE (type 7) but got type=%u instead, "
+                    "ignoring\n", startRespType);
+        return true;
+    }
+
+    aap_protobuf::aaw::WifiStartResponse startResponse;
+    if (!startResponse.ParseFromString(startRespPayload)) {
+        std::fprintf(stderr, "androidauto: failed to parse WifiStartResponse\n");
+        return true;
+    }
+    std::printf("androidauto: got WIFI_START_RESPONSE (status=%d, ip_address=%s, port=%u)\n",
+                static_cast<int>(startResponse.status()),
+                startResponse.has_ip_address() ? startResponse.ip_address().c_str() : "(unset)",
+                startResponse.has_port() ? startResponse.port() : 0);
+    if (startResponse.has_ip_address() && !startResponse.ip_address().empty()) {
+        outIp = startResponse.ip_address();
+    }
+    if (startResponse.has_port() && startResponse.port() != 0) {
+        outPort = static_cast<std::uint16_t>(startResponse.port());
+    }
+    return true;
 }
 
 bool BwAapClient::respondToInfoRequest(const std::string &ssid, const std::string &password,

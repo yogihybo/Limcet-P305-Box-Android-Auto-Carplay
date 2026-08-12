@@ -77,7 +77,27 @@ public:
     // Drives steps 1-3: sends WIFI_VERSION_REQUEST, waits for
     // WIFI_VERSION_RESPONSE (logged raw, not parsed), then sends
     // WIFI_START_REQUEST with the given AP connect target.
-    bool startHandshake(const std::string &apIpAddress, std::uint16_t apPort);
+    //
+    // 2026-08-12: also now waits (bounded, a few seconds) for the
+    // WIFI_START_RESPONSE (type 7) that can follow -- its proto
+    // (optional ip_address, optional port, required status) can carry
+    // the PHONE's own authoritative connect-back address/port,
+    // overriding what we proposed. Real hardware evidence this
+    // matters: a session where the phone's own AA app showed
+    // "connected" while this device's TCP *listener* (a same-day, now-
+    // reverted attempt at making the head unit the server) never saw
+    // an incoming connection at all -- strong evidence the phone
+    // expects US to connect to IT, on a port we can't just assume is
+    // apPort. If the response arrives and carries a nonempty
+    // ip_address/nonzero port, `outIp`/`outPort` are set to those;
+    // otherwise they're left untouched (caller should keep its own
+    // fallback in that case). Returns true even if no
+    // WIFI_START_RESPONSE arrives at all within the timeout -- this
+    // project's own real packet capture (docs/logs) only confirmed
+    // steps 1-5, not a type-7 reply, so its absence isn't treated as a
+    // handshake failure, just "nothing to override with."
+    bool startHandshake(const std::string &apIpAddress, std::uint16_t apPort, std::string &outIp,
+                         std::uint16_t &outPort);
 
     // Waits (bounded by timeoutSeconds) for the phone's
     // WIFI_INFO_REQUEST (type 2, step 4), then sends WIFI_INFO_RESPONSE

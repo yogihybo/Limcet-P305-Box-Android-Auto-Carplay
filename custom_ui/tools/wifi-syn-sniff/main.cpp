@@ -110,15 +110,25 @@ int main(int argc, char **argv) {
         if (n <= 0) {
             break;  // timeout or error -- either way, done watching
         }
-        // Raw AF_PACKET frames bound with ETH_P_IP start straight at
-        // the IP header (no ethernet header prefix) on Linux for this
-        // socket type.
-        if (static_cast<size_t>(n) < sizeof(struct iphdr)) continue;
-        auto *ip = reinterpret_cast<struct iphdr *>(buf);
+        // 2026-08-12 FIX: this originally read straight from buf,
+        // wrongly assuming AF_PACKET strips the link-layer header when
+        // filtered to ETH_P_IP. It does NOT for a real Ethernet-type
+        // interface (wlan0 presents as ARPHRD_ETHER, standard for
+        // managed/AP-mode WiFi) -- the protocol filter only controls
+        // which frames get delivered, not whether the 14-byte Ethernet
+        // header (dest MAC, src MAC, ethertype) is stripped. Every
+        // packet was silently being misparsed starting mid-header,
+        // which is why a first real hardware run captured ZERO SYNs at
+        // all -- including this device's OWN two outbound connect()
+        // attempts, which definitely sent real SYN packets (each one
+        // got a real ECONNREFUSED/RST back). That's proof the bug was
+        // in this tool, not evidence about the phone's behavior.
+        if (static_cast<size_t>(n) < ETH_HLEN + static_cast<ssize_t>(sizeof(struct iphdr))) continue;
+        auto *ip = reinterpret_cast<struct iphdr *>(buf + ETH_HLEN);
         if (ip->protocol != IPPROTO_TCP) continue;
         size_t ipHeaderLen = ip->ihl * 4u;
-        if (static_cast<size_t>(n) < ipHeaderLen + sizeof(struct tcphdr)) continue;
-        auto *tcp = reinterpret_cast<struct tcphdr *>(buf + ipHeaderLen);
+        if (static_cast<size_t>(n) < ETH_HLEN + ipHeaderLen + sizeof(struct tcphdr)) continue;
+        auto *tcp = reinterpret_cast<struct tcphdr *>(buf + ETH_HLEN + ipHeaderLen);
         if (!tcp->syn) continue;  // only SYN (connection attempts), not every packet
 
         // inet_ntoa() reuses one static buffer -- copy each result out

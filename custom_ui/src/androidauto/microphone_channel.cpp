@@ -49,6 +49,12 @@ void MicrophoneChannel::onMediaChannelSetupRequest(
     // Session::onServiceDiscoveryRequest) -- always select index 0.
     aap_protobuf::service::media::shared::message::Config response;
     response.set_status(aap_protobuf::service::media::shared::message::Config::STATUS_READY);
+    // max_unacked=1: matches the real upstream f1x/openauto reference's
+    // MediaSourceService::onMediaChannelSetupRequest() exactly (see
+    // github.com/vteckz/MicStream's vendored copy) -- optional field,
+    // not confirmed required, but no reason to diverge from a real
+    // working implementation for this exact channel type.
+    response.set_max_unacked(1);
     response.add_configuration_indices(0);
 
     auto promise = aasdk::channel::SendPromise::defer(strand_);

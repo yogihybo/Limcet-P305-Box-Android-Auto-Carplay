@@ -94,6 +94,8 @@ void Session::start(aasdk::transport::ITransport::Pointer transport) {
 
     microphoneChannel_ = std::make_shared<MicrophoneChannel>(strand_, messenger);
 
+    bluetoothChannel_ = std::make_shared<BluetoothChannel>(strand_, messenger);
+
     auto promise = aasdk::channel::SendPromise::defer(strand_);
     promise->then(
         []() { std::printf("[+%ldms] androidauto: version request sent\n", elapsedMs()); },
@@ -365,6 +367,22 @@ void Session::onServiceDiscoveryRequest(
     micConfig->set_number_of_bits(16);
     micConfig->set_number_of_channels(1);
 
+    // 2026-08-12: found by reviewing github.com/vteckz/MicStream's
+    // vendored copy of the ORIGINAL upstream f1x/openauto -- its
+    // ServiceFactory constructs a BluetoothService unconditionally for
+    // wireless sessions specifically (this project's session is
+    // wireless-only). See bluetooth_channel.h for why car_address is
+    // deliberately left empty / pairing method UNAVAILABLE rather than
+    // trying to source this project's real BT MAC here -- that's a
+    // real, supported fallback path in the reference itself, not a
+    // guess.
+    auto *bluetoothService = response.add_channels();
+    bluetoothService->set_id(static_cast<std::int32_t>(aasdk::messenger::ChannelId::BLUETOOTH));
+    auto *bluetooth = bluetoothService->mutable_bluetooth_service();
+    bluetooth->set_car_address("");
+    bluetooth->add_supported_pairing_methods(
+        aap_protobuf::service::bluetooth::message::BLUETOOTH_PAIRING_UNAVAILABLE);
+
     auto promise = aasdk::channel::SendPromise::defer(strand_);
     promise->then(
         [this, self = shared_from_this()]() {
@@ -395,6 +413,8 @@ void Session::onServiceDiscoveryRequest(
             std::printf("[+%ldms] androidauto: sensor channel armed\n", elapsedMs());
             microphoneChannel_->start();
             std::printf("[+%ldms] androidauto: microphone channel armed\n", elapsedMs());
+            bluetoothChannel_->start();
+            std::printf("[+%ldms] androidauto: bluetooth channel armed\n", elapsedMs());
 
             // Same reference: sends the first ping immediately (not
             // after waiting a full interval_ms) then falls into the

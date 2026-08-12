@@ -175,6 +175,20 @@ void Session::onServiceDiscoveryRequest(
     response.set_display_name("custom_ui");
     response.set_driver_position(aap_protobuf::service::control::message::DRIVER_POSITION_LEFT);
 
+    // 2026-08-12: added per opencardev/openauto's own
+    // onServiceDiscoveryRequest() -- unlike AuthComplete/AudioFocus
+    // Response/ByeByeResponse/NavFocusResponse (all required, found
+    // missing by the same reference diff), every field here is
+    // `optional` in ServiceDiscoveryResponse.proto, so this is a
+    // best-practice match rather than a confirmed-required fix. Values
+    // copied from that reference as reasonable defaults, not
+    // independently tuned for this hardware.
+    auto *pingConfig = response.mutable_connection_configuration()->mutable_ping_configuration();
+    pingConfig->set_tracked_ping_count(5);
+    pingConfig->set_timeout_ms(3000);
+    pingConfig->set_interval_ms(1000);
+    pingConfig->set_high_latency_threshold_ms(200);
+
     auto *inputService = response.add_channels();
     // See input_channel.h's header comment for the service_id-numbering
     // caveat -- this uses aasdk's own ChannelId ordinal as a best-
@@ -240,14 +254,57 @@ void Session::onServiceDiscoveryRequest(
     controlChannel_->receive(this->shared_from_this());
 }
 
-void Session::onAudioFocusRequest(const aap_protobuf::service::control::message::AudioFocusRequest &) {
-    std::printf("androidauto: audio focus request (not yet handled)\n");
+void Session::onAudioFocusRequest(
+    const aap_protobuf::service::control::message::AudioFocusRequest &request) {
+    std::printf("androidauto: audio focus request, type=%d\n",
+                static_cast<int>(request.audio_focus_type()));
+
+    // 2026-08-12: this used to just log and re-arm receive(), never
+    // replying at all -- found missing by the same reference diff that
+    // caught the missing AuthComplete send (opencardev/openauto's
+    // AndroidAutoEntity::onAudioFocusRequest()). GAIN vs LOSS mirrors
+    // that reference exactly: AUDIO_FOCUS_RELEASE -> LOSS (the phone is
+    // giving focus back), anything else -> GAIN (the phone wants to
+    // play).
+    auto state = request.audio_focus_type() ==
+                         aap_protobuf::service::control::message::AUDIO_FOCUS_RELEASE
+                     ? aap_protobuf::service::control::message::AUDIO_FOCUS_STATE_LOSS
+                     : aap_protobuf::service::control::message::AUDIO_FOCUS_STATE_GAIN;
+
+    aap_protobuf::service::control::message::AudioFocusNotification response;
+    response.set_focus_state(state);
+
+    auto promise = aasdk::channel::SendPromise::defer(strand_);
+    promise->then(
+        []() {},
+        [](const aasdk::error::Error &e) {
+            std::printf("androidauto: audio focus response send failed: %s\n", e.what());
+        });
+    controlChannel_->sendAudioFocusResponse(response, promise);
+
     controlChannel_->receive(this->shared_from_this());
 }
 
 void Session::onByeByeRequest(const aap_protobuf::service::control::message::ByeByeRequest &) {
     std::printf("androidauto: bye-bye request\n");
-    controlChannel_->receive(this->shared_from_this());
+
+    // 2026-08-12: this used to just log and re-arm receive(), never
+    // replying -- same missing-response class of bug as
+    // onAudioFocusRequest above. The phone (or head unit) initiated a
+    // clean shutdown; sendShutdownResponse() is the required
+    // acknowledgement (opencardev/openauto's onByeByeRequest()).
+    // Deliberately NOT re-arming controlChannel_->receive() afterwards
+    // -- the session is ending, there's nothing further to wait for on
+    // this channel, matching the reference's own behavior of not
+    // calling receive() again here either.
+    aap_protobuf::service::control::message::ByeByeResponse response;
+    auto promise = aasdk::channel::SendPromise::defer(strand_);
+    promise->then(
+        []() { std::printf("androidauto: bye-bye response sent\n"); },
+        [](const aasdk::error::Error &e) {
+            std::printf("androidauto: bye-bye response send failed: %s\n", e.what());
+        });
+    controlChannel_->sendShutdownResponse(response, promise);
 }
 
 void Session::onByeByeResponse(const aap_protobuf::service::control::message::ByeByeResponse &) {
@@ -262,6 +319,23 @@ void Session::onBatteryStatusNotification(
 
 void Session::onNavigationFocusRequest(
     const aap_protobuf::service::control::message::NavFocusRequestNotification &) {
+    // 2026-08-12: this used to just re-arm receive() without replying --
+    // same missing-response class of bug as onAudioFocusRequest/
+    // onByeByeRequest above. NAV_FOCUS_PROJECTED unconditionally matches
+    // opencardev/openauto's onNavigationFocusRequest() -- this app has
+    // no native navigation of its own to arbitrate against, same
+    // reasoning as that reference's own comment.
+    aap_protobuf::service::control::message::NavFocusNotification response;
+    response.set_focus_type(aap_protobuf::service::control::message::NAV_FOCUS_PROJECTED);
+
+    auto promise = aasdk::channel::SendPromise::defer(strand_);
+    promise->then(
+        []() {},
+        [](const aasdk::error::Error &e) {
+            std::printf("androidauto: navigation focus response send failed: %s\n", e.what());
+        });
+    controlChannel_->sendNavigationFocusResponse(response, promise);
+
     controlChannel_->receive(this->shared_from_this());
 }
 

@@ -105,6 +105,20 @@ void Session::continueSSLHandshake() {
     // empty when the phone's own OpenSSL state machine may have still
     // been expecting one more message from us.
     std::printf("androidauto: continueSSLHandshake: outBuffer size=%zu\n", outBuffer.size());
+    // NOTE: opencardev/openauto's onHandshake() sends readHandshakeBuffer()
+    // unconditionally whenever doHandshake() isn't yet active (no empty
+    // check), only branching to AuthComplete once active -- this
+    // function instead gates the send on !outBuffer.empty() and checks
+    // `active` separately below, which could in theory send both a
+    // (non-empty) handshake buffer AND AuthComplete on the same call if
+    // OpenSSL's BIO produces final output bytes in the same step it
+    // flips active. Left as-is rather than "fixed" on speculation: this
+    // exact logic already completed a real handshake on real hardware
+    // (2348 + 51 byte exchange, "SSL handshake complete" printed) before
+    // the AuthComplete fix landed, so it's empirically validated for
+    // this device's actual flight count -- only the missing AuthComplete
+    // after was broken. Flagged here in case a future device/Android
+    // version's handshake produces a different flight pattern.
     if (!outBuffer.empty()) {
         auto promise = aasdk::channel::SendPromise::defer(strand_);
         promise->then(
@@ -145,6 +159,20 @@ void Session::onVersionResponse(uint16_t majorCode, uint16_t minorCode,
                                  aap_protobuf::shared::MessageStatus status) {
     std::printf("androidauto: version response %u.%u, status=%d\n", majorCode, minorCode,
                 static_cast<int>(status));
+
+    // 2026-08-12: this used to unconditionally proceed to the SSL
+    // handshake regardless of status -- found missing by the same
+    // reference diff (opencardev/openauto's onVersionResponse()) that
+    // caught the missing AuthComplete/AudioFocus/ByeBye/NavFocus
+    // responses. Every real hardware run so far reported status=0
+    // (STATUS_SUCCESS), so this hasn't caused an observed failure, but
+    // attempting a handshake after a real version mismatch would be a
+    // confusing, nonsensical failure mode instead of a clear one.
+    if (status == aap_protobuf::shared::MessageStatus::STATUS_NO_COMPATIBLE_VERSION) {
+        std::printf("androidauto: version mismatch, not proceeding to handshake\n");
+        return;
+    }
+
     this->continueSSLHandshake();
     controlChannel_->receive(this->shared_from_this());
 }
@@ -368,6 +396,21 @@ void Session::onPingResponse(const aap_protobuf::service::control::message::Ping
 }
 
 void Session::onChannelError(const aasdk::error::Error &e) {
+    // OPERATION_ABORTED is aasdk's normal signal that a pending
+    // read/write was cancelled (e.g. the transport/io_service is
+    // shutting down) -- opencardev/openauto's own onChannelError()
+    // treats it as expected-during-stop, not a real failure. This
+    // class has no session-quit/lifecycle handling to hook a
+    // "stopping_" flag into yet (see session.h -- a known, deliberate
+    // gap, same reasoning as not porting openauto's Pinger), so this
+    // just avoids the misleading "error" wording for a condition that
+    // isn't actually one, rather than inventing broader lifecycle
+    // machinery this project doesn't need yet.
+    if (e.getCode() == aasdk::error::ErrorCode::OPERATION_ABORTED) {
+        std::printf("androidauto: control channel: operation aborted (expected during "
+                    "shutdown): %s\n", e.what());
+        return;
+    }
     std::printf("androidauto: control channel error: %s\n", e.what());
 }
 

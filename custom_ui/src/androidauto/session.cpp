@@ -9,6 +9,7 @@
 #include <aasdk/Messenger/MessageOutStream.hpp>
 #include <aasdk/Messenger/Messenger.hpp>
 #include <aasdk/Channel/Control/ControlServiceChannel.hpp>
+#include <aap_protobuf/service/control/message/AuthResponse.pb.h>
 
 namespace androidauto {
 
@@ -116,6 +117,27 @@ void Session::continueSSLHandshake() {
 
     if (active) {
         std::printf("androidauto: SSL handshake complete\n");
+
+        // 2026-08-12 FIX: this was the actual bug behind a real
+        // hardware TCP EOF right after "SSL handshake complete" --
+        // every channel erroring at once, ServiceDiscoveryRequest never
+        // received. Reviewed the reference implementation this whole
+        // aasdk lineage descends from (opencardev/openauto,
+        // AndroidAutoEntity::onHandshake()) and found it sends a
+        // required AuthResponse{status=STATUS_SUCCESS} via
+        // sendAuthComplete() the moment the handshake finishes -- a
+        // message this class never sent at all. The phone was waiting
+        // for that confirmation and closing the connection when it
+        // never came.
+        aap_protobuf::service::control::message::AuthResponse authComplete;
+        authComplete.set_status(aap_protobuf::shared::MessageStatus::STATUS_SUCCESS);
+        auto authPromise = aasdk::channel::SendPromise::defer(strand_);
+        authPromise->then(
+            []() { std::printf("androidauto: auth complete sent\n"); },
+            [](const aasdk::error::Error &e) {
+                std::printf("androidauto: auth complete send failed: %s\n", e.what());
+            });
+        controlChannel_->sendAuthComplete(authComplete, authPromise);
     }
 }
 

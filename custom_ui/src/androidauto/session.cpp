@@ -91,12 +91,23 @@ void Session::continueSSLHandshake() {
         std::printf("androidauto: SSL handshake failed: %s\n", e.what());
         return;
     }
+    std::printf("androidauto: continueSSLHandshake: doHandshake() active=%d\n", active);
 
     auto outBuffer = cryptor_->readHandshakeBuffer();
+    // 2026-08-12: logging every call unconditionally (even an empty
+    // outBuffer) -- previously this branch was silent on the success
+    // path, so a real hardware run where the connection died right
+    // after "SSL handshake complete" (TCP EOF, every channel erroring
+    // at once, ServiceDiscoveryRequest never received) left no way to
+    // tell whether a final handshake flight was actually sent in
+    // response to the phone's last payload, or whether outBuffer was
+    // empty when the phone's own OpenSSL state machine may have still
+    // been expecting one more message from us.
+    std::printf("androidauto: continueSSLHandshake: outBuffer size=%zu\n", outBuffer.size());
     if (!outBuffer.empty()) {
         auto promise = aasdk::channel::SendPromise::defer(strand_);
         promise->then(
-            []() {},
+            []() { std::printf("androidauto: handshake buffer sent\n"); },
             [](const aasdk::error::Error &e) {
                 std::printf("androidauto: handshake send failed: %s\n", e.what());
             });

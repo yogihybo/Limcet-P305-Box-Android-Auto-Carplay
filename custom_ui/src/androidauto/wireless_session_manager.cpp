@@ -297,8 +297,26 @@ void WirelessSessionManager::run() {
                   "Phone never requested WiFi credentials (WIFI_INFO_REQUEST timeout)");
         return;
     }
-    std::printf("androidauto: wireless session: WIFI_INFO_RESPONSE sent (ssid=%s), closing bw_aap\n",
+    std::printf("androidauto: wireless session: WIFI_INFO_RESPONSE sent (ssid=%s)\n",
                 cfg.wifi_ap_ssid().c_str());
+
+    // 2026-08-13: waits briefly for an optional WIFI_CONNECT_STATUS
+    // before closing -- see BwAapClient::waitForOptionalConnectStatus()'s
+    // own header comment for the full reasoning. Real, decisive finding
+    // from decompiling libAndroidAuto.so's RfcommConnectionPrivate: this
+    // code used to close /dev/bw_aap immediately after sending
+    // WIFI_INFO_RESPONSE, but stock's own run() loop never closes this
+    // channel at all -- it keeps reading from it for the whole
+    // connection's lifetime. If the phone expects to report WiFi
+    // connection status back over this same still-open Bluetooth link
+    // (a message this project had never once looked for before), the
+    // premature close() here could plausibly be part of why sessions
+    // that otherwise look healthy eventually go quiet. This is a
+    // smaller, safer step than fully replicating "never close" (see
+    // that function's own comment on why) -- a bounded wait, not an
+    // indefinite one.
+    bwAap.waitForOptionalConnectStatus(5);
+    std::printf("androidauto: wireless session: closing bw_aap\n");
     bwAap.close();
 
     setStatus(WirelessSessionState::Connecting,

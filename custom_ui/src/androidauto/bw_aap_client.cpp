@@ -16,6 +16,7 @@
 #include <aap_protobuf/aaw/WifiStartRequest.pb.h>
 #include <aap_protobuf/aaw/WifiStartResponse.pb.h>
 #include <aap_protobuf/aaw/WifiInfoResponse.pb.h>
+#include <aap_protobuf/aaw/WifiConnectionStatus.pb.h>
 
 namespace androidauto {
 
@@ -282,6 +283,34 @@ bool BwAapClient::respondToInfoRequest(const std::string &ssid, const std::strin
         return false;
     }
     return this->sendFrame(3, infoResponsePayload);
+}
+
+void BwAapClient::waitForOptionalConnectStatus(int timeoutSeconds) {
+    std::uint16_t type = 0;
+    std::string payload;
+    std::printf("androidauto: waiting up to %ds for an optional WIFI_CONNECT_STATUS...\n",
+                timeoutSeconds);
+    if (!this->receiveFrame(type, payload, timeoutSeconds)) {
+        std::printf("androidauto: no WIFI_CONNECT_STATUS within %ds (may be normal -- not "
+                    "confirmed the phone always sends one)\n", timeoutSeconds);
+        return;
+    }
+    if (type != 6) {
+        std::printf("androidauto: expected WIFI_CONNECT_STATUS (type 6) but got type=%u instead "
+                    "-- pushing it back for whoever reads next\n", type);
+        this->pushBackFrame(type, std::move(payload));
+        return;
+    }
+
+    aap_protobuf::aaw::WifiConnectionStatus status;
+    if (!status.ParseFromString(payload)) {
+        std::fprintf(stderr, "androidauto: failed to parse WifiConnectionStatus\n");
+        return;
+    }
+    std::printf("androidauto: got WIFI_CONNECT_STATUS: status=%d%s%s\n",
+                static_cast<int>(status.status()),
+                status.has_error_message() ? " error_message=" : "",
+                status.has_error_message() ? status.error_message().c_str() : "");
 }
 
 }  // namespace androidauto

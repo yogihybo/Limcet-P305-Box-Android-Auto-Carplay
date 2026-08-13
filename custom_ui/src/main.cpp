@@ -70,7 +70,25 @@ public:
         std::string device_id = hal::split_mac_and_name(entry, mac, name) ? mac : entry;
 
         std::lock_guard<std::mutex> lock(mtx_);
-        if (device_id == last_triggered_id_) return;
+        // 2026-08-13: logs every +AAPDEV= this observer actually sees,
+        // including debounced-duplicate ones -- per explicit report
+        // that auto-start still wasn't happening for a freshly-paired
+        // phone even after fixing the boot-order registration race.
+        // This makes the next hardware log answer definitively whether
+        // the broadcast is even reaching this observer at all (a
+        // registration/timing gap, same class as the one already
+        // fixed) versus reaching it and being debounced away (a
+        // device_id-parsing bug) versus reaching it, triggering
+        // requestConnect() correctly, and stalling later inside
+        // WirelessSessionManager::run() itself (see BwAapClient::
+        // connect()'s new retry loop for the leading real-fix
+        // candidate for that last case).
+        std::printf("custom_ui: +AAPDEV= observed: device_id='%s' name='%s' (last_triggered='%s')\n",
+                    device_id.c_str(), name.c_str(), last_triggered_id_.c_str());
+        if (device_id == last_triggered_id_) {
+            std::printf("custom_ui: +AAPDEV= debounced (same device already triggered)\n");
+            return;
+        }
         last_triggered_id_ = device_id;
         pending_name_ = name;
         pending_.store(true, std::memory_order_release);

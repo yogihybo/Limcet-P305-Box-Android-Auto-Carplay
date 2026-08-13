@@ -4,7 +4,7 @@ Review of the CarSyncTech CarPlay-box MCU firmware update packages for Toyota
 models, and the reverse-engineering of their update-container format. These are a
 different vendor/product from the Prado's Limcet box but sit on the **same
 Arkmicro ARK1680 SoC platform**, which is why they share the USB
-`auto_upgrade.txt` update trigger. See [../MCU/MCU_FIRMWARE_REVIEW.md](../MCU/MCU_FIRMWARE_REVIEW.md)
+`auto_upgrade.txt` update trigger. See [../../hardware/MCU/MCU_FIRMWARE_REVIEW.md](../../hardware/MCU/MCU_FIRMWARE_REVIEW.md)
 for the Prado MCU / trigger mechanism this builds on.
 
 ---
@@ -157,7 +157,7 @@ Decrypted, container-stripped STM32 images (open directly as firmware) in
 - **`XOR 0x37` is obfuscation, not encryption** — trivially reversible, no key,
   no authentication of the payload.
 - Combined with the unauthenticated `auto_upgrade.txt` USB-root auto-flash trigger
-  (proven in [../MCU/MCU_FIRMWARE_REVIEW.md](../MCU/MCU_FIRMWARE_REVIEW.md) §5),
+  (proven in [../../hardware/MCU/MCU_FIRMWARE_REVIEW.md](../../hardware/MCU/MCU_FIRMWARE_REVIEW.md) §5),
   anyone can craft or modify one of these update packages. Same exposure class as
   the Prado MCU update path.
 

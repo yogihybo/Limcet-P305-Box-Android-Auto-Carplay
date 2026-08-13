@@ -6,7 +6,7 @@ neutral grayscale row, wrong hues in the yellow/olive row) on our
 build, while stock hardware shows the same test correctly (only a
 subtle panel-characteristic tint). Framebuffer content and the LCDC's
 own 242 named registers were both checked and ruled out (see
-`docs/DEVICE_TEST_CHECKLIST_2026-07-18.md`) -- the current leading
+`docs/historical/DEVICE_TEST_CHECKLIST_2026-07-18.md`) -- the current leading
 theory is a **real, physical pin-sharing conflict**: LCD RGB888 data
 pins `r0`/`r1` (pins 2/3) are the same physical pads as `i2c-gpio-0`'s
 SCL/SDA (RN6752 camera decoder bus), and `r7` (pin 9) is the same pad
@@ -141,7 +141,7 @@ matter visually.
 
 - `docs/DISPLAY_SUBSYSTEM.md` -- `I2C_GPIO0_LCD_PIN_CONFLICT` section
   (the original pin-sharing discovery, pins 2/3 only).
-- `docs/DEVICE_TEST_CHECKLIST_2026-07-18.md` -- full history of what's
+- `docs/historical/DEVICE_TEST_CHECKLIST_2026-07-18.md` -- full history of what's
   already been ruled out for the LCDTest color-grid bug (framebuffer
   content, LCDC register config, `rgb_order`/`ycbcr_bypass`/colorkey/
   blend-mode/gamma/dithering).

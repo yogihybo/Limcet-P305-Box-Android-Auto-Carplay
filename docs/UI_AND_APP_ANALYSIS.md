@@ -341,7 +341,7 @@ Complete structural reverse-engineering of the SoC-side MCU driver
 `rootfs/usr/lib/libMcuCenter.so` (ARK1680 / Limcet-P306). This is the companion
 reference to [MCU_ADAPTERS.md](MCU_ADAPTERS.md) (adapter catalogue, McuType factory
 map, BoxP300 command dispatch, live-capture guide) and
-[../MCU/MCU_FIRMWARE_REVIEW.md](../MCU/MCU_FIRMWARE_REVIEW.md) (the STM32 side).
+[../hardware/MCU/MCU_FIRMWARE_REVIEW.md](../hardware/MCU/MCU_FIRMWARE_REVIEW.md) (the STM32 side).
 
 > **Scope / honesty.** "Full unpack" here = the complete **structure**: every class
 > and its methods, the class hierarchy, the wire protocol (frame format + checksum,
@@ -479,7 +479,7 @@ logging (`recvProtocolData`, `send msn mcu code!`, `recv track:`, …). See the
 capture guide in MCU_ADAPTERS.md.
 
 **MCU BT module AT strings** (outbound to the Feasycom chip, handled MCU-side):
-covered in [../MCU/MCU_FIRMWARE_REVIEW.md](../MCU/MCU_FIRMWARE_REVIEW.md).
+covered in [../hardware/MCU/MCU_FIRMWARE_REVIEW.md](../hardware/MCU/MCU_FIRMWARE_REVIEW.md).
 
 ---
 

@@ -1,0 +1,11 @@
+prefix=/workspace/ark0618system/build/..//out/rootfs-msn5g.optbuild/usr
+exec_prefix=${prefix}
+libdir=/workspace/ark0618system/build/..//out/rootfs-msn5g.build/usr/lib
+includedir=/workspace/ark0618system/build/..//out/rootfs-msn5g.build/usr/include
+
+Name: Fusion IPC
+Description: High Level IPC Mechanisms
+Version: 1.7.4
+Requires: direct
+Libs: -L${libdir} -lfusion
+Cflags: -I/workspace/ark0618system/build/..//out/rootfs-msn5g.build/usr/include/directfb

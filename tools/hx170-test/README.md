@@ -10,7 +10,7 @@ Built to answer a question the rest of the AA investigation couldn't:
 is the decoder hardware/driver/`libmfc.so` stack itself broken, or is
 the real problem upstream of it (no video frame data ever reaching
 `sink` in the first place)? See
-`docs/DEVICE_TEST_CHECKLIST_2026-07-18.md`'s Android Auto black-screen
+`docs/historical/DEVICE_TEST_CHECKLIST_2026-07-18.md`'s Android Auto black-screen
 sections and `strace` findings (`docs/logs/sink_strace.log`) —
 `sink`'s video thread was confirmed to open `hx170dec`, run
 `H264DecInit`-adjacent setup, then just sit idle for ~2m23s before
@@ -92,6 +92,6 @@ directly and replicates `DWLMallocLinear`'s own ioctl sequence by hand
 `ioctl(fd, 0xc0046b01, &busAddr)` to allocate, then `mmap()` using that
 bus address as the file offset). `/tmp/dev/memalloc` itself is a real,
 already hardware-confirmed-working device node (see
-`docs/DEVICE_TEST_CHECKLIST_2026-07-18.md`, 2026-07-20 fix) — this
+`docs/historical/DEVICE_TEST_CHECKLIST_2026-07-18.md`, 2026-07-20 fix) — this
 tool only needs it for staging the input bitstream, not for the
 decoder's own internal hardware context.

@@ -178,6 +178,6 @@ GPU/`galcore` crash class). Qt's LinuxFB path may write genuinely
 semi-transparent pixel data expecting hardware blending to finish the
 job — hardware that this investigation showed doesn't reliably work
 correctly on this silicon regardless of register configuration. See
-`docs/DEVICE_TEST_CHECKLIST_2026-07-18.md` §1b for the full writeup
+`docs/historical/DEVICE_TEST_CHECKLIST_2026-07-18.md` §1b for the full writeup
 and redirected next steps (now a Qt/userspace investigation, not a
 kernel-driver one).

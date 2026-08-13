@@ -5,6 +5,10 @@
 
 ## Overview
 
+See also [`REAR_DVD_CANBUS_INVESTIGATION.md`](REAR_DVD_CANBUS_INVESTIGATION.md) — an open
+investigation into controlling the factory rear DVD/RSE unit from the Limcet box via CAN,
+built on the SWC/MCU findings below.
+
 ---
 
 ## Hardware
@@ -327,7 +331,7 @@ presence-detect line for one of these *external* CAN adapter boxes, not the onbo
 TJA1042 (see point 1 above; that transceiver is enabled/controlled by the STM32, not
 by a Linux GPIO). This is inference — no string ties `gpio34` to a specific purpose,
 and it is presumably unused/floating on this device since `CanType=0`. See
-[`BOARD_ANALYSIS.md`](../Limcet%20Hardware/BOARD_ANALYSIS.md) for the full GPIO table.
+[`hardware/BOARD_ANALYSIS.md`](../hardware/BOARD_ANALYSIS.md) for the full GPIO table.
 
 **Live hardware test, 2026-08-03: `CanType=1` breaks all touch/knob input.** User changed `MsnProductInfo.ini`'s `CanType` from `0` to `1` (exploring undocumented settings) and touch/knob input stopped responding entirely. Not yet disassembled to find the exact enum mapping, but this is consistent with, and indirectly confirms, point 2 above: `CanType=1` most likely instantiates a real `CanBus_Raise_*` adapter class expecting an *external* UART-connected CAN decoder box on `/dev/ttyHS0` -- the same port the Limcet MCU uses for its own touch/knob/key relay. This hardware has no such external box (onboard TJA1042 is STM32-side only, not Linux-visible -- see point 1 above), so a `libCanBus.so` adapter either steals the port from the MCU or simply never receives real frames -- either way, the generic `CanBusKeyManager` key-mapping layer both touch and knob input feed through never gets fed. **Do not set `CanType` to anything other than `0` on this hardware.**
 

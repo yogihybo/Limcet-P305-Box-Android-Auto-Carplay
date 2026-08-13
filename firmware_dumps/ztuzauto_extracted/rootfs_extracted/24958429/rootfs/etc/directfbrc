@@ -1,0 +1,17 @@
+# directfbrc begin
+system=fbdev
+#mode=800x480 # display size (change to fit your needs)
+#mode=1024x600
+depth=32
+pixelformat=ARGB
+no-vt
+vsync-after
+no-cursor
+no-layers-clear
+no-surface-clear
+no-sighandler 
+#bg-color=00000000
+quiet
+smooth-upscale
+smooth-downscale
+# directfbrc end

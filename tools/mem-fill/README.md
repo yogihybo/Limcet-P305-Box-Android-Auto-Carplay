@@ -44,7 +44,7 @@ that never fire when the AA session drops early are `ARKFB_SHOW_WINDOW`
    ```
 3. Force `VIDEO2_CTL` to plain RGB888 (in case `INIT_VIDEO_DISPLAY`'s
    own format state is stale/unset — see
-   `docs/DEVICE_TEST_CHECKLIST_2026-07-18.md`'s AA black-screen entries
+   `docs/historical/DEVICE_TEST_CHECKLIST_2026-07-18.md`'s AA black-screen entries
    for the full field derivation):
    ```sh
    devmem 0xe0500320 32 0x400127
@@ -64,7 +64,7 @@ should appear exactly where `CarAutoWindow`'s black "video hole" is,
 with the rest of OSD1's UI (if any) still visible around it. If
 nothing changes, or the whole screen goes red (OSD1 not correctly
 punching a hole), that's real diagnostic signal — see
-`docs/DEVICE_TEST_CHECKLIST_2026-07-18.md` §70 and
+`docs/historical/DEVICE_TEST_CHECKLIST_2026-07-18.md` §70 and
 `project_aa_video_black_screen` (memory) for where to go next either
 way.
 

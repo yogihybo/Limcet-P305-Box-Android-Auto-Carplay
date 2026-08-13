@@ -20,11 +20,11 @@ and (§7) userspace RE of `MsnCoreApp`/`libMcuCenter.so` from the rootfs.
 
 **§7 answers the "where does the backup-camera GPIO come from" open item** left in §5: it doesn't — on this product (`McuType=6`, `MCUAdapter_BoxP300`) the signal comes from the companion MCU over the `arktool` UART protocol, not any SoC-side GPIO.
 
-**§8: a synthetic device tree combining every finding here with the physical board inspection in `Limcet Hardware/BOARD_ANALYSIS.md`** now exists at [`Limcet Hardware/ark1668-limcet-prado.dts`](../Limcet%20Hardware/ark1668-limcet-prado.dts) — not a real boot artifact (this board has no device tree, see §2), but a structured, confidence-tagged writeup of the confirmed hardware layout.
+**§8: a synthetic device tree combining every finding here with the physical board inspection in `hardware/BOARD_ANALYSIS.md`** now exists at [`hardware/ark1668-limcet-prado.dts`](../hardware/ark1668-limcet-prado.dts) — not a real boot artifact (this board has no device tree, see §2), but a structured, confidence-tagged writeup of the confirmed hardware layout.
 
 **§9 cross-checks §§2–5 against real ASTRI vendor source** (`ArkPro Reference/`, a public leak, not the public `linux-arkmicro` tree used elsewhere in this doc) — confirms the `config.c` board-init device roster and the `CLCD_TIMING`/`CLKDIV1` register field names, and surfaces a third (unused-on-Prado) candidate mechanism for backcar detection.
 
-**§10 works out the full pin-mux table** from the real, now-vendored `linux-arkmicro` devicetree source, filling in and correcting `Limcet Hardware/ark1668-limcet-prado.dts`'s `pinctrl0` node — and finds that an earlier draft's `can0`/`can1` pin-mux entry was wrong: that capability only exists on the newer ARK1668E generation, not this chip.
+**§10 works out the full pin-mux table** from the real, now-vendored `linux-arkmicro` devicetree source, filling in and correcting `hardware/ark1668-limcet-prado.dts`'s `pinctrl0` node — and finds that an earlier draft's `can0`/`can1` pin-mux entry was wrong: that capability only exists on the newer ARK1668E generation, not this chip.
 
 ---
 
@@ -349,7 +349,7 @@ int FUN_80018834(void)
 
 Both facts point to the same conclusion: on this product, reverse-gear/backup-camera detection happens on the **companion MCU** (which has its own firmware, wired directly to the vehicle's reverse-light circuit or a physical switch — not analyzed here, would require dumping/RE'ing the MCU's own firmware image separately), and the MCU simply *tells* the ARK1680 SoC "enter backcar mode" over the HS-UART `arktool` link. There's no GPIO pin on the SoC side to find for this signal on the Prado — it was never a compiled-kernel-literal, a userspace `/proc/ark_gpio` write, *or* an `McuType`-specific board GPIO, because the whole detection path lives outside the SoC entirely. The GPIO literals found in `MCUAdapter_Bagoo`/`ZhongHang`/`BoxP400`/`BoxP700`/`BoxC270`/`CarA300` above are real and board-specific, just **for different, non-Prado products** built from the same shared `libMcuCenter.so` — a good illustration of how much shared-codebase archaeology this firmware requires: the code path that's actually load-bearing for one product is dead weight (or vice versa) for another, and only the `McuType` factory switch tells you which is which.
 
-**Independently confirmed after the fact:** `Limcet Hardware/BOARD_ANALYSIS.md` (physical board inspection, done separately from this software RE) identifies the companion MCU as an **STM32F105RBT6** running **Limcet-V1.0-1302** firmware, and explicitly lists "ACC/IGN detection, reverse trigger input, panel button inputs" among its GPIO responsibilities, plus an onboard NXP TJA1042 CAN transceiver wired to the STM32's own bxCAN peripheral for reading Toyota-specific steering-wheel CAN messages. Two completely independent methods (kernel/userspace binary RE vs. physically inspecting the board) converged on the same architecture: MCU owns the vehicle-signal GPIOs and CAN bus, SoC just listens over UART.
+**Independently confirmed after the fact:** `hardware/BOARD_ANALYSIS.md` (physical board inspection, done separately from this software RE) identifies the companion MCU as an **STM32F105RBT6** running **Limcet-V1.0-1302** firmware, and explicitly lists "ACC/IGN detection, reverse trigger input, panel button inputs" among its GPIO responsibilities, plus an onboard NXP TJA1042 CAN transceiver wired to the STM32's own bxCAN peripheral for reading Toyota-specific steering-wheel CAN messages. Two completely independent methods (kernel/userspace binary RE vs. physically inspecting the board) converged on the same architecture: MCU owns the vehicle-signal GPIOs and CAN bus, SoC just listens over UART.
 
 This also means the earlier open items about `rn6752_reset`/`rn6752_irq`/`spi_cs_gpio` (the actual camera decoder chip's own reset/IRQ lines, as opposed to the reverse-signal trigger) remain genuinely open — those are a separate, still-unresolved question from the "how does the system know to enter backcar mode" question this section answers. They'd need the same `platform_data` static-struct tracing approach in the kernel binary that was inconclusive in §5 (all-zero struct), so likely also resolve to an MCU-reported or otherwise non-kernel-literal source, but that hasn't been directly confirmed.
 
@@ -357,7 +357,7 @@ This also means the earlier open items about `rn6752_reset`/`rn6752_irq`/`spi_cs
 
 ## 8. Synthetic device tree
 
-Wrote [`Limcet Hardware/ark1668-limcet-prado.dts`](../Limcet%20Hardware/ark1668-limcet-prado.dts) — a structured, `.dts`-syntax reconstruction of this board's hardware, combining every finding in this document with the physical inspection in `BOARD_ANALYSIS.md` (chip markings, the STM32 MCU, RN6752 camera decoder, Bluetooth module, confirmed LCD timings from `docs/DISPLAY_SUBSYSTEM.md`).
+Wrote [`hardware/ark1668-limcet-prado.dts`](../hardware/ark1668-limcet-prado.dts) — a structured, `.dts`-syntax reconstruction of this board's hardware, combining every finding in this document with the physical inspection in `BOARD_ANALYSIS.md` (chip markings, the STM32 MCU, RN6752 camera decoder, Bluetooth module, confirmed LCD timings from `docs/DISPLAY_SUBSYSTEM.md`).
 
 **This is explicitly not a real boot artifact** — §2 already established this board's actual firmware has no device tree at all (legacy ATAG boot, confirmed via absent FDT magic in both kernel builds and U-Boot's `bootz`/`bootnand` calls never passing an fdt address). It exists purely as documentation, with every node/property tagged by evidence source:
 
@@ -397,7 +397,7 @@ this is the same public BSP `docs/UBOOT_BUILD_GUIDE.md` uses for the U-Boot side
 `arch/arm/boot/dts/ark1668-pinctrl.dtsi` is ArkMicro's own pin-mux table for this exact SoC — every
 GPIO pad, which peripheral function(s) it can be muxed to, and the alt-function value to select each.
 Used it to fill in and correct the `pinctrl0` node in
-[`Limcet Hardware/ark1668-limcet-prado.dts`](../Limcet%20Hardware/ark1668-limcet-prado.dts).
+[`hardware/ark1668-limcet-prado.dts`](../hardware/ark1668-limcet-prado.dts).
 
 **What this resolves:** a full silicon-level pin-mux table (LCD RGB888/hi-Z/LVDS on PBANK_0 pins
 2–29, NAND on PBANK_1 pins 7–20, UART0–5 spread across PBANK_1/2/3, PWM1–3 and I2C0 and part of the
@@ -495,7 +495,7 @@ as "unknown, leaning slightly more hopeful than NOT CONFIRMED" — not as
 | Peripheral | DTS `compatible` | Driver source | Confirmed by operation | Notes |
 |---|---|---|---|---|
 | LCD framebuffer | `arkmicro,ark1668-lcdc` | `drivers/video/fbdev/arkmicro/ark1668_lcdfb.c` | **CONFIRMED** | video physically observed on screen across many sessions; boot log: `ark1668_lcdfb e0500000.lcd: fb0: Atmel LCDC at 0xe0500000... irq 25` |
-| `/dev/ark_display` misc ioctl shim | `ark_display` (misc device, not a DT node) | `Limcet Hardware/ark_display.c` | PROBES OK | boot log: `ark_display: registered /dev/ark_display` — confirms the shim loads and fixes the specific ioctl it targets; whether it also fully unblocks `MsnCoreApp` end-to-end wasn't separately re-verified this session |
+| `/dev/ark_display` misc ioctl shim | `ark_display` (misc device, not a DT node) | `hardware/ark_display.c` | PROBES OK | boot log: `ark_display: registered /dev/ark_display` — confirms the shim loads and fixes the specific ioctl it targets; whether it also fully unblocks `MsnCoreApp` end-to-end wasn't separately re-verified this session |
 | NAND | (`ark1668,nand`-style, see `ark1668.dtsi`) | `drivers/mtd/nand/raw/ark_nand.c` | **CONFIRMED** (boot chain) | full stock UI boots from NAND via the `bootstock` U-Boot path (project memory, 2026-07-13); this specific boot log predates/differs from that ECC fix and still shows `ark_nand_correct_data: uncorrectable ECC error` spam — don't take *this log* as proof the ECC fix is deployed everywhere, only that NAND boot itself is a proven-working path |
 | UART0-3 | `arkmicro,ark-uart` | `drivers/tty/serial/ark_uart.c` | uart0: **CONFIRMED** (console); uart1-3: NOT CONFIRMED | uart0 is the serial console this entire investigation has been conducted over; uart1-3 have no evidence of any attached function being tested |
 | hsuart uart4 (MCU link, `/dev/ttyHS0`) | `arkmicro,ark-hsuart` | `drivers/tty/serial/ark_hsuart.c` | PROBES OK | boot log: `e4f00000.serial: ttyHS0 at MMIO 0xe4f00000 (irq = 38...) is a ARK HS UART` — tty node exists and driver loads; no evidence in this session of actual MCU protocol traffic (key events, `recv track:`, etc.) confirmed flowing over it on this kernel build |
@@ -695,7 +695,7 @@ the binary alone:
 
 - **Structural finding — touch (`ark1680_ts`, the resistive-ADC driver)
   bypasses GPIO/pinctrl entirely**, per the reconstructed source
-  (`Limcet Hardware/ark1680_ts.c:56-67,246,263`): it maps the shared
+  (`hardware/ark1680_ts.c:56-67,246,263`): it maps the shared
   syscon/pinmux block directly at fixed physical address `0xe4900000` and
   clears specific bits — `ARK_SYS_PINMUX0` (offset `0x140`) bit 22, and
   `ARK_SYS_PINMUX1` (offset `0x144`) bit 14 — to route its ADC pads, with no
@@ -931,7 +931,7 @@ ARK1668 SoC
 |     LVDS alt-mode (defined, NOT selected) ---------- pins 72-75,77-78,128-129
 |     driver: vendor, in-tree -- drivers/video/fbdev/arkmicro/ark1668_lcdfb.c
 |     also: /dev/ark_display misc ioctl shim (separate from the fb driver,
-|     this project's own reimplementation) -- Limcet Hardware/ark_display.c
+|     this project's own reimplementation) -- hardware/ark_display.c
 |
 |-- NAND controller ------------------------------------ pins 39-52
 |     data/cle/ale/ren/wen/rb0/cen0

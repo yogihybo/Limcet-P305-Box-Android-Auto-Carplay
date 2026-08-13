@@ -1,0 +1,11 @@
+prefix=/workspace/ark0618system/build/..//out/rootfs-msn5g.optbuild/usr
+exec_prefix=${prefix}
+moduledir=/workspace/ark0618system/build/..//out/rootfs-msn5g.build/usr/lib/directfb-1.7-4
+moduledirname=directfb-1.7-4
+includedir=/workspace/ark0618system/build/..//out/rootfs-msn5g.build/usr/include/directfb-internal
+
+Name: DirectFB-Internal
+Description: Third party module support package for DirectFB.
+Version: 1.7.4
+Requires: directfb = 1.7.4
+Cflags: -D_GNU_SOURCE  -I/workspace/ark0618system/build/..//out/rootfs-msn5g.build/usr/include/directfb-internal

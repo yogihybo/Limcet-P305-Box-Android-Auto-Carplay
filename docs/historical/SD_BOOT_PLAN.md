@@ -6,7 +6,7 @@
 > The current, accurate description of how SD boot actually works — partition
 > layout, `/nanddata/` symlinks, rcS userdata fallback, RSTK format, and
 > `build_bootable_sdcard.sh` usage — lives in the README's
-> [Booting from SD Card or USB](../README.md#booting-from-sd-card-or-usb-non-destructive)
+> [Booting from SD Card or USB](../../README.md#booting-from-sd-card-or-usb-non-destructive)
 > section. Some details below (partition sizes, script name, env-patch
 > mechanics) no longer match the shipped implementation.
 
@@ -127,7 +127,7 @@ and a relevant slice copied into [`linux-arkmicro Reference/`](../linux-arkmicro
 **It is not an exact source match** — it's U-Boot 2018.07 with SPL+FDT, while the Prado's actual stock
 U-Boot is 2012.10, legacy ATAG, no devicetree. Same SoC family, later BSP generation. The details below
 (largely still accurate) are superseded by the full build plan and risk list in
-[`docs/UBOOT_BUILD_GUIDE.md`](UBOOT_BUILD_GUIDE.md) — read that before acting on this section.
+[`docs/UBOOT_BUILD_GUIDE.md`](../UBOOT_BUILD_GUIDE.md) — read that before acting on this section.
 
 The chip is confirmed as **ARK1668** (marked on the physical package).
 This BSP contains a real U-Boot board target for this SoC family. Building it is still the cleanest
@@ -165,7 +165,7 @@ SD slot is `mmc 1` — confirmed by `board_mmc_init()` in
 
 #### Build
 
-See [`docs/UBOOT_BUILD_GUIDE.md`](UBOOT_BUILD_GUIDE.md) for the actual clone URL, full config-delta
+See [`docs/UBOOT_BUILD_GUIDE.md`](../UBOOT_BUILD_GUIDE.md) for the actual clone URL, full config-delta
 table (this section only had 2 of the several deltas that doc identifies), toolchain, and — critically
 — the SD-only test plan before any NAND flashing is considered.
 

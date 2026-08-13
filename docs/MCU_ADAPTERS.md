@@ -806,6 +806,58 @@ All events arrive at the ARK1668 via `/dev/ttyHS0` using the Limcet protocol (`M
 
 ---
 
+## Rotary knob + push-button events -- CMD 0x02 (2026-08-11)
+
+`custom_ui`'s "MCU role" section above (`BoxP300`'s confirmed command
+list: `0x00`–`0x06`, `0x0A`, `0x12`, `0x20`–`0x22`, `0x30`, `0x7F`,
+`0xE2`, `0xE4`) already lists `CMD 0x02` as a real command, and other
+sibling MCU adapters in this doc's Adapter Catalogue (`Bagoo`, `NV17`)
+are confirmed to receive key events as `onKeyEvent(keyCode, isPress,
+isAutoRepeat)`. `BoxP300`'s own entry doesn't list `onKeyEvent`
+explicitly, but a live capture (`tools/mcu-handshake` against
+`/dev/ttyHS0`) while operating the physical knob confirms the same
+shape applies here too:
+
+```
+[+] CMD 0x02 (handshake request) from MCU: b3=65 b4=1 -- no wire reply sent
+[+] CMD 0x02 (handshake request) from MCU: b3=65 b4=1 -- no wire reply sent
+[+] CMD 0x02 (handshake request) from MCU: b3=65 b4=1 -- no wire reply sent
+[+] CMD 0x02 (handshake request) from MCU: b3=65 b4=1 -- no wire reply sent
+[+] CMD 0x02 (handshake request) from MCU: b3=13 b4=1 -- no wire reply sent
+[+] CMD 0x02 (handshake request) from MCU: b3=13 b4=0 -- no wire reply sent
+[+] CMD 0x02 (handshake request) from MCU: b3=13 b4=1 -- no wire reply sent
+[+] CMD 0x02 (handshake request) from MCU: b3=13 b4=0 -- no wire reply sent
+```
+
+(`mcu-handshake`'s own log line label "handshake request" is a stale
+guess from when this command's payload semantics weren't understood --
+CMD 0x02 is really a key/rotation event, not (or not only) a
+handshake. Worth fixing that tool's `log_frame()` label once this is
+fully confirmed.)
+
+**Reading**: `b3` = key/rotation code, `b4` = 1 (press/active) or 0
+(release). `b3=65` repeating with `b4=1` and no `b4=0` in between is
+consistent with continuous rotation ticks in one direction (or an
+auto-repeating held key -- not yet distinguished). `b3=13` shows a
+clean `1`/`0`/`1`/`0` alternation -- a real press/release pair,
+captured twice -- consistent with a discrete button (the knob's own
+push-button, or a separate bezel button; not yet confirmed which).
+
+**Still open**:
+- The opposite rotation direction's code hasn't been captured yet --
+  only one direction (`b3=65`) is confirmed. Needed for bidirectional
+  knob support.
+- Whether `b3=65`'s repeated `b4=1` frames are discrete per-detent
+  ticks or a continuous "still rotating" signal (would need to compare
+  frame timing against how far/fast the knob was actually turned).
+- Which physical control `b3=13` actually is (knob push vs. a
+  separate bezel button) -- not confirmed from this capture alone.
+- Codes for any other panel buttons (docs/MCU_ADAPTERS.md's own "MCU
+  role" section confirms panel buttons exist on this hardware, codes
+  not yet captured).
+
+---
+
 ## McuType dropdown values (from libSetting.so factory menu)
 
 The factory settings menu McuType dropdown label list (0-indexed):
@@ -931,7 +983,7 @@ the binary as the debug flag path).
 
 ## `/dev/ttyS2` — a second real serial channel, found via `strace` (2026-07-22)
 
-While tracing an unrelated DirectFB display bug (`docs/DEVICE_TEST_CHECKLIST_2026-07-18.md`
+While tracing an unrelated DirectFB display bug (`docs/historical/DEVICE_TEST_CHECKLIST_2026-07-18.md`
 §15, `docs/logs/directfb_strace.txt`), `MsnCoreApp` (pid 124) was observed
 opening **`/dev/ttyS2`** — a separate port from the documented `/dev/ttyHS0`
 MCU link — configuring it `B4800|CS8|CREAD|HUPCL|CLOCAL` (**4800 baud**, 8N1,

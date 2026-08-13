@@ -499,7 +499,6 @@ The individual scripts are retained for use without the interactive menu:
 |--------|---------|
 | `build_rootfs.sh` | Build rootfs UBI image only |
 | `build_userdata.sh` | Build userdata UBI image only |
-| `legacy/generate_update.sh` | Legacy — generate SD package for selected partitions without the build steps |
 
 ### Requirements
 
@@ -530,13 +529,7 @@ On power-on, U-Boot checks for a FAT32 SD card. If a file named `UpConfig` is pr
 
 **Step 2 — Generate the update script**
 
-```bash
-bash legacy/generate_update.sh
-```
-
-Toggle partitions with number keys, press `g` to generate. Output lands in `firmware_source/sd_update_template/output/`.
-
-> Steps 1–2 can be replaced entirely by running `bash build_update.sh`, which does the build and package generation in one interactive session — see [Build & Flash Tool](#80-build--flash-tool) above.
+Use `bash build_update.sh` (see [Build & Flash Tool](#80-build--flash-tool) above) to select partitions and generate the SD package — it does the build and package generation for Steps 1–2 in one interactive session.
 
 **Step 3 — Prepare SD card**
 
@@ -627,10 +620,6 @@ full deployment steps, the debugging history (why the first attempt silently fai
 `/dev/pts` wasn't mounted), and the diagnostic-log-to-USB fallback for retrieving logs without a
 working shell.
 
-An earlier attempt, [`payloads/payloads/deprecated/msn_autocopy_payload_do not use/`](payloads/msn_autocopy_payload_do%20not%20use/),
-tried transplanting `sshd` + `rcS` from the *reconstructed* rootfs instead of stock's own files and
-never worked — kept only for reference on what not to do (cross-rootfs binary/dependency mismatch).
-
 ## 10.0 Device Access
 
 ### WiFi Access Point
@@ -705,20 +694,41 @@ The ARK1680 USB gadget stack is configured to use CDC-NCM (`g_ncm.ko`), which cr
 
 `tools/` holds static ARM binaries (and a few POSIX shell wrappers), each with its own `README.md`. Synced into `firmware_overlay/prado/usr/bin/`, so they're unconditionally part of every build's rootfs (see that directory's `README.md`) — no separate install step or toggle. All statically linked, no dependency on anything else in the rootfs — they work even while chasing a boot/crash problem elsewhere in the system.
 
-**Hardware diagnostics:**
+**I2C / GPIO / pinmux:**
 
 | Tool | Purpose |
 |------|---------|
 | `i2c-scan` | Scan I2C buses for ACKing devices |
 | `i2c-dump` | Dump registers off a specific I2C address |
 | `i2c-write` | Raw single-register I2C write, bypassing any kernel driver bound to that address |
-| `touch-test` | ARK1680 touchscreen ADC/syscon register dump + evdev event watcher |
-| `lcd-test` | Raw `/dev/fb0` framebuffer test — info dump, then cycles fills/bars/gradient |
-| `pin-dump` | Live SoC pinmux register dump, cross-checked against the pinctrl driver's table |
+| `i2c-read-raw` | Plain multi-byte I2C read — no register-address write phase, no repeated start |
+| `i2c-gpio-bruteforce` | Bit-bangs every candidate pin pair as SCL/SDA to find a chip's real wiring when the DTS assignment is wrong |
 | `gpio-i2c-probe` | Bit-bang GPIO/I2C probing, independent of the kernel's own i2c-gpio driver |
+| `pin-dump` | Live SoC pinmux register dump, cross-checked against the pinctrl driver's table |
+| `pin-force` | Forces an ARK1668 LCD RGB888 data pin into GPIO mode at a specific level (or restores it), via raw register writes |
+| `pinmux-watch` | Tight-loop poller for the LCD RGB888 pad-mux registers, to catch a live function-select change in the act |
+
+**Display / video:**
+
+| Tool | Purpose |
+|------|---------|
+| `lcd-test` | Raw `/dev/fb0` framebuffer test — info dump, then cycles fills/bars/gradient |
+| `fb-scan` | Locates solid-color rectangles in the live framebuffer and predicts the correct color for near-black cells |
+| `fb-alpha-test` | Paints labeled bands into `/dev/fb0` to determine the LCDC OSD1 layer's real alpha-blend/channel-order behavior |
+| `lcdc-regdump` | Dumps every named ARK1668 LCDC register by name, for stock-vs-build diffing |
+| `hx170-test` | Standalone test of the Hantro `hx170dec` H.264 decoder via `libmfc.so`, bypassing `sink`/Android Auto/network |
+| `mem-dump` | Hex-dumps physical memory via `mmap()`'d `/dev/mem` — reaches DMA carve-out regions `dd`/`/dev/mem` reads can't |
+| `mem-fill` | Write-side companion to `mem-dump` — fills a physical memory range with a repeating pattern |
+
+**Touch / MCU / misc hardware:**
+
+| Tool | Purpose |
+|------|---------|
+| `ark1680-ts-test` | ARK1680 resistive-ADC touchscreen driver diagnostic — register dump + evdev event watcher |
 | `mcu-handshake` | Native C reimplementation of the MCU UART handshake protocol |
+| `dmesg` | Static util-linux `dmesg` — timestamps/facility-decoding/color that BusyBox's built-in applet lacks |
 | `strace` | Upstream syscall tracer (static build) |
-| `audio-test.sh` / `touch-selftest.sh` / `uart-test.sh` / `bt-test.sh` / `usb-test.sh` / `mmc-test.sh` | Automated pass/fail wrapper scripts, one per subsystem |
+| `audio-test` / `touch-selftest` / `uart-test` / `bt-test` / `usb-test` / `mmc-test` | Automated pass/fail wrapper scripts, one per subsystem |
 
 **General shell utilities** (not diagnostic-specific, but this rootfs's busybox lacks them):
 
@@ -729,6 +739,14 @@ The ARK1680 USB gadget stack is configured to use CDC-NCM (`g_ncm.ko`), which cr
 | `htop` | Interactive process/CPU/memory viewer |
 | `tmux` | Terminal multiplexer — sessions survive a dropped serial/telnet connection |
 | `gdbserver` | Live remote debugging — attach a host `gdb`/`gdb-multiarch` over TCP for real register/stack/memory state, instead of reconstructing it from a post-mortem minidump and disassembly (see `docs/AUDIO_SUBSYSTEM_INVESTIGATION.md` for exactly the kind of investigation this replaces) |
+| `nss-stub` | Static-linkage NSS stub object linked into `nano`/`htop`/`tmux`/`gdbserver` and busybox itself — see [Static ARM+glibc NSS crash workaround](tools/nss-stub/README.md) |
+
+**Host-side scripts** (run on a dev machine, not on the device):
+
+| Tool | Purpose |
+|------|---------|
+| `msncore_analyze.py` | Deconstructs the `MsnCoreApp` Qt UI binary using its unstripped sibling build's symbol table, for targeted patching |
+| `rcc_extract.py` | Extracts a Qt binary resource bundle (`.rcc`) to a directory |
 
 `nano`/`less`/`htop`/`tmux` are linked against a static `ncurses` build with `vt100`/`linux`/`xterm`/`ansi` terminal descriptions compiled directly in, since this rootfs has no terminfo database — the serial console's `TERM=vt100` (`/etc/inittab`) is covered. `tmux` additionally links a static `libevent`. Both persisted in the separate `linux-arkmicro` repo (`buildroot-external/arm-static-libs/`) so future tool builds don't need to rebuild them from source.
 
@@ -803,19 +821,14 @@ firmware_source/sd_update_template/
 docs/
   SOURCES.md                 Where each file came from and why
   PARTITION_LAYOUT.md        NAND offsets, sizes, flash commands
-  SD_BOOT_PLAN.md            Historical SD-boot planning doc — superseded, see below
-  UBOOT_SDBOOT_INVESTIGATION.md  U-Boot SD-boot corruption investigation and the self-contained-script fix
+  UBOOT_REVERSE_ENGINEERING.md  U-Boot SD-boot corruption investigation, env relocation fix, bootlogo/RE ports
+  historical/SD_BOOT_PLAN.md Historical SD-boot planning doc — superseded, see below
 build_update.sh              Combined interactive build and flash tool
 build_rootfs.sh              Standalone rootfs UBI image builder
 build_userdata.sh            Standalone userdata UBI image builder
 build_tools/patch_uboot.py               Patches compiled-in env and NAND offset in a U-Boot binary
 build_bootable_sdcard.sh     Interactive bootable SD card image builder (same arrow-key menu as build_update.sh)
 sd_bootable/                 Generated bootable SD image output (gitignored — sd_boot.img + patched uboot_sdboot.bin)
-corrupted/                   Known-corrupted uboot_sdboot.bin/uboot_final.bin — do not use, see corrupted/README.md
-payloads/experimental_sdboot/         Self-contained SD auto-boot patch (env relocation) — statically verified, untested on hardware
-legacy/
-  generate_update.sh         Superseded by build_update.sh — standalone partition-selection + SD-package
-                              generator only, no build steps; kept for standalone use
 ```
 
 ## 12.0 Holden Firmware Compatibility
@@ -854,34 +867,61 @@ See [`docs/SOURCES.md`](docs/SOURCES.md) for full provenance of each file.
 
 **`docs/`**
 
+*Provenance & hardware reference*
+
 - [`SOURCES.md`](docs/SOURCES.md) — provenance of every firmware source used
 - [`PARTITION_LAYOUT.md`](docs/PARTITION_LAYOUT.md) — NAND offsets, sizes, flash commands
-- [`SOC_ARK1668_CROSSREF.md`](docs/HARDWARE_AND_SOC_REFERENCE.md) — SoC identity, Ghidra RE of the firmware_source/kernel/userspace binaries, full pin-mux table, cross-checked against real ASTRI/ArkMicro vendor source
+- [`HARDWARE_AND_SOC_REFERENCE.md`](docs/HARDWARE_AND_SOC_REFERENCE.md) — SoC identity, Ghidra RE of the firmware_source/kernel/userspace binaries, full pin-mux table, cross-checked against real ASTRI/ArkMicro vendor source
+  - [`DRIVER_TEST_PLAN.md`](docs/DRIVER_TEST_PLAN.md) — companion driver-by-driver test plan for the findings above
+- [`VENDOR_BSP_RESEARCH.md`](docs/VENDOR_BSP_RESEARCH.md) — research pass over sibling ArkMicro vendor/BSP source trees (`ark1668ed-bsp`, `cstech-ip17-rootfs`); WiFi/audio driver branches, wired-AA lead
 - [`SECURITY_REVIEW.md`](docs/SECURITY_REVIEW.md) — credential/access-path review: stock root password, an unresolved second UID-0 account, update-integrity check
-- [`MSNCOREAPP_REVIEW.md`](docs/UI_AND_APP_ANALYSIS.md) — binary-level review of `MsnCoreApp`: an unauthenticated `system()` call reachable by inserting a USB drive with a magic folder name
-- [`MSNCOREAPP_DECONSTRUCTION.md`](docs/UI_AND_APP_ANALYSIS.md) — deconstructing the UI binary for editing: what's recoverable, the two layout flavours, and the geometry-patch workflow (see also `tools/msncore_analyze.py`)
-- [`KERNEL.md`](docs/KERNEL_REFERENCE.md) — kernel image analysis (`mtd5_firmware_source/kernel/zImage`)
-- [`UBOOT_BUILD_PLAN.md`](docs/UBOOT_BUILD_GUIDE.md) — plan for compiling a fresh U-Boot from `linux-arkmicro` source, with config deltas and an SD-only test sequence
-- [`uboot_build.md`](docs/UBOOT_BUILD_GUIDE.md) — U-Boot build guide, boot chain constraints, and ARK header injection details
-- [`UBOOT_SDBOOT_INVESTIGATION.md`](docs/UBOOT_REVERSE_ENGINEERING.md) — U-Boot SD-boot patch corruption investigation and the env relocation fix
-- [`UBOOT_BOOTLOGO_AND_RE_PORTS.md`](docs/UBOOT_REVERSE_ENGINEERING.md) — boot logo, reverse-engineered command ports (`regr`/`regw`/`gpiotest`/`jpeghw`/`itu656`), LCD timing fix, USB dual-port bring-up, and the Stepldr chainload findings for the custom `ark1668_limcet_p305` U-Boot port (see [§7.0](#70-custom-u-boot-boot-chain-ark1668_limcet_p305))
-- [`HANDOFF_nand_ecc_uboot_vs_kernel.md`](docs/historical/HANDOFF_nand_ecc_uboot_vs_kernel.md) — the NAND ECC root cause (U-Boot fixed and confirmed, kernel fixed in source but untested), why the `U-boot` NAND partition is unreadable by any U-Boot-level tool, and every patch behind [§7.0](#70-custom-u-boot-boot-chain-ark1668_limcet_p305)
-- [`HANDOFF_touch_and_bootargs_fix.md`](docs/historical/HANDOFF_touch_and_bootargs_fix.md) — touchscreen I2C bus fix, SD bootargs fix, and the NAND "417 false bad blocks" ECC/BBT investigation
-- [`KERNEL_BUILD_REFERENCE.md`](docs/KERNEL_REFERENCE.md) — kernel build tree reference: DTS, I2C bus assignments, camera decoder chip
-- [`SD_BOOT_PLAN.md`](docs/historical/SD_BOOT_PLAN.md) — historical SD-boot planning doc (superseded, still useful background)
-- [`ARKDATA_VARIANTS.md`](docs/DISPLAY_SUBSYSTEM.md) — panel display configuration presets and their register-level meaning
+
+*UI & application*
+
+- [`UI_AND_APP_ANALYSIS.md`](docs/UI_AND_APP_ANALYSIS.md) — binary-level review of `MsnCoreApp`: the unauthenticated `system()` USB auto-copy call, layout deconstruction/geometry-patch workflow (see also `tools/msncore_analyze.py`), and UI skinning (`DefaultStyleSheet.xml`, `.rcc` sprite bundles — see also `tools/rcc_extract.py`)
 - [`SETTINGS_REFERENCE.md`](docs/SETTINGS_REFERENCE.md) — full key-by-key reference for `MsnProductInfo.ini` and `FactoryConfig.ini`: load sequence, every setting grouped by function, and cross-product value tables
-- [`UI_RESOURCES.md`](docs/UI_AND_APP_ANALYSIS.md) — how the interface is skinned: `DefaultStyleSheet.xml` (colours/fonts/accent, editable QSS) and the `.rcc` sprite bundles (what loads per product, inventory, unpack/reskin/repack workflow; see also `tools/rcc_extract.py`)
-- [`SCREEN.md`](docs/DISPLAY_SUBSYSTEM.md) — screen configuration and hue investigation
+
+*Kernel*
+
+- [`KERNEL_REFERENCE.md`](docs/KERNEL_REFERENCE.md) — kernel image analysis (`mtd5_firmware_source/kernel/zImage`) and build tree reference: DTS, I2C bus assignments, camera decoder chip
+
+*U-Boot*
+
+- [`UBOOT_BUILD_GUIDE.md`](docs/UBOOT_BUILD_GUIDE.md) — plan and guide for compiling a fresh U-Boot from `linux-arkmicro` source: config deltas, SD-only test sequence, boot chain constraints, ARK header injection
+- [`UBOOT_REVERSE_ENGINEERING.md`](docs/UBOOT_REVERSE_ENGINEERING.md) — U-Boot SD-boot patch corruption investigation and the env relocation fix; boot logo, reverse-engineered command ports (`regr`/`regw`/`gpiotest`/`jpeghw`/`itu656`), LCD timing fix, USB dual-port bring-up, and the Stepldr chainload findings for the custom `ark1668_limcet_p305` U-Boot port (see [§7.0](#70-custom-u-boot-boot-chain-ark1668_limcet_p305))
+
+*Display*
+
+- [`DISPLAY_SUBSYSTEM.md`](docs/DISPLAY_SUBSYSTEM.md) — panel display configuration presets and register-level meaning; screen configuration and hue investigation
+  - [`ARK_DISP_STOCK_DECOMPILATION.md`](docs/ARK_DISP_STOCK_DECOMPILATION.md) — raw decompiled `ark_disp` driver function listings
+  - [`LCD_PIN_CONFLICT_TEST_PROCEDURE.md`](docs/LCD_PIN_CONFLICT_TEST_PROCEDURE.md) — test procedure for the LCD RGB/I2C pin-conflict color-corruption bug
+- [`ARK1680_TS_REVERSE_ENGINEERING.md`](docs/ARK1680_TS_REVERSE_ENGINEERING.md) — touchscreen driver (`ark1680_ts.ko`) RE; the finding that supersedes the older MCU/I2C touch-activation theory (see [`docs/historical/HANDOFF_touch_and_bootargs_fix.md`](docs/historical/HANDOFF_touch_and_bootargs_fix.md) below)
+
+*Audio*
+
+- [`AUDIO_SUBSYSTEM_INVESTIGATION.md`](docs/AUDIO_SUBSYSTEM_INVESTIGATION.md) — audio subsystem investigation
+  - [`BD37033.md`](docs/BD37033.md) — `Sound_BD37033` audio-codec driver class RE, inside `libMsnSound.so`
+
+*Wireless / MCU / CAN / storage*
+
+- [`WIRELESS_AND_INIT.md`](docs/WIRELESS_AND_INIT.md) — WiFi/BT pin mapping, module init, and command sequence
 - [`MCU_ADAPTERS.md`](docs/MCU_ADAPTERS.md) — MCU adapter types reverse-engineered from `libMcuCenter.so`
 - [`CANBUS.md`](docs/CANBUS.md) — CAN bus investigation for this board
+  - [`REAR_DVD_CANBUS_INVESTIGATION.md`](docs/REAR_DVD_CANBUS_INVESTIGATION.md) — open investigation: controlling the factory rear DVD/RSE unit from the Limcet box via CAN bus
 - [`USERDATA_REVIEW.md`](docs/USERDATA_REVIEW.md) — userdata partition review
+
+*Historical (superseded, kept for background)*
+
+- [`historical/HANDOFF_nand_ecc_uboot_vs_kernel.md`](docs/historical/HANDOFF_nand_ecc_uboot_vs_kernel.md) — the NAND ECC root cause (U-Boot fixed and confirmed, kernel fixed in source but untested), why the `U-boot` NAND partition is unreadable by any U-Boot-level tool, and every patch behind [§7.0](#70-custom-u-boot-boot-chain-ark1668_limcet_p305)
+- [`historical/HANDOFF_touch_and_bootargs_fix.md`](docs/historical/HANDOFF_touch_and_bootargs_fix.md) — touchscreen I2C bus fix, SD bootargs fix, and the NAND "417 false bad blocks" ECC/BBT investigation (touch-activation theory later superseded, see `ARK1680_TS_REVERSE_ENGINEERING.md` above)
+- [`historical/SD_BOOT_PLAN.md`](docs/historical/SD_BOOT_PLAN.md) — historical SD-boot planning doc (superseded, still useful background)
+- [`historical/DEVICE_TEST_CHECKLIST_2026-07-18.md`](docs/historical/DEVICE_TEST_CHECKLIST_2026-07-18.md) — dated session working log (DirectFB/black-screen/audio investigations); many individual findings self-marked superseded inline, kept for the debugging history
 
 **Elsewhere in the repo**
 
 - [`hardware/BOARD_ANALYSIS.md`](hardware/BOARD_ANALYSIS.md) — physical board/component teardown notes (SoC, NAND, BT, MCU, CAN bus)
+- [`hardware/MCU/MCU_FIRMWARE_REVIEW.md`](hardware/MCU/MCU_FIRMWARE_REVIEW.md) — STM32F105 MCU firmware review
 - [`ui/UI.md`](ui/UI.md) — Qt UI analysis and resource extraction
+- [`custom_ui/README.md`](custom_ui/README.md) / [`custom_ui/docs/ARCHITECTURE.md`](custom_ui/docs/ARCHITECTURE.md) / [`custom_ui/docs/IMPLEMENTATION_PLAN.md`](custom_ui/docs/IMPLEMENTATION_PLAN.md) — the LVGL-based replacement UI: architecture and implementation status
 - [`vendor_source/README.md`](vendor_source/README.md) — the ASTRI ARK1680 vendor source and ArkMicro U-Boot/kernel BSP that used to be vendored directly into this repo now live in the separate [`linux-arkmicro`](https://github.com/yogihybo/linux-arkmicro) repo (the actual buildable U-Boot/kernel source tree — see [§7.0](#70-custom-u-boot-boot-chain-ark1668_limcet_p305)); this file is a pointer, not a copy
-- [`payloads/experimental_sdboot/README.md`](payloads/experimental_sdboot/README.md) — self-contained SD auto-boot patch status
-- [`corrupted/README.md`](corrupted/README.md) — why the quarantined U-Boot binaries there are unsafe to use
-- [`payloads/msn_autocopy_payload/README.md`](payloads/msn_autocopy_payload/README.md) — USB payload that exploits the `payloads/msn_autocopy` auto-copy mechanism to install and autostart `sshd` on a stock device
+- [`payloads/msn_autocopy/README.md`](payloads/msn_autocopy/README.md) — USB payload that exploits the `payloads/msn_autocopy` auto-copy mechanism to install and autostart `sshd` on a stock device

@@ -106,6 +106,20 @@ public:
     // state()/statusMessage(). Safe to call repeatedly (e.g. a "Retry"
     // button); a previous failed/finished attempt's thread is joined
     // and a fresh one started.
+    //
+    // 2026-08-13: now a no-op (logs and returns) if a session is
+    // already actively progressing or Connected -- start() used to
+    // unconditionally detach whatever thread_ held and launch a brand
+    // new run(), even over an already-successful session. That was a
+    // real, previously theoretical concern -- with the +AAPDEV=
+    // auto-trigger now reliable (see main.cpp's AaAutoStartWatcher and
+    // this project's own memory notes on the boot-order/debounce
+    // fixes), a second CONNECT can genuinely arrive while a first
+    // attempt is already Connected (a stray re-detection outside the
+    // debounce window, a manual Connect tap out of habit, etc.) --
+    // restarting from scratch in that case would tear down/orphan a
+    // live working session for no reason. Still safe/expected to call
+    // while Idle/Failed (the actual documented "Retry" use case).
     void start();
 
     WirelessSessionState state() const;

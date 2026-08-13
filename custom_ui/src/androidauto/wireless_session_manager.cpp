@@ -127,6 +127,7 @@ bool isApRunning() {
 WirelessSessionManager::WirelessSessionManager() = default;
 
 WirelessSessionManager::~WirelessSessionManager() {
+    std::lock_guard<std::mutex> lock(threadMutex_);
     if (thread_.joinable()) {
         // No clean cancellation path today (io_service.run() blocks
         // for the session's lifetime, matching every other blocking-
@@ -140,6 +141,14 @@ WirelessSessionManager::~WirelessSessionManager() {
 }
 
 void WirelessSessionManager::start() {
+    // See threadMutex_'s own comment (header) -- start() can race
+    // against itself across two independent sidecar client connections
+    // (the +AAPDEV= auto-trigger and a manual Connect tap in
+    // particular), and std::thread's assignment operator calls
+    // std::terminate() on a still-joinable target, so this whole
+    // check-detach-reassign sequence must be atomic, not just the
+    // individual std::thread calls.
+    std::lock_guard<std::mutex> lock(threadMutex_);
     if (thread_.joinable()) {
         thread_.detach();
     }

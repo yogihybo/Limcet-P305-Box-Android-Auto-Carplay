@@ -47,8 +47,8 @@ void AudioChannel::onChannelOpenRequest(
 
 void AudioChannel::onMediaChannelSetupRequest(
     const aap_protobuf::service::media::shared::message::Setup & request) {
-    std::printf("androidauto: audio channel (%s) setup request, codec type=%d\n", pcmDevice_.c_str(),
-               static_cast<int>(request.type()));
+    std::printf("[+%ldms] androidauto: audio channel (%s) setup request, codec type=%d\n", elapsedMs(),
+               pcmDevice_.c_str(), static_cast<int>(request.type()));
 
     // Only one configuration is ever advertised for this channel (see
     // Session::onServiceDiscoveryRequest) -- always select index 0.
@@ -58,9 +58,13 @@ void AudioChannel::onMediaChannelSetupRequest(
 
     auto promise = aasdk::channel::SendPromise::defer(strand_);
     promise->then(
-        []() {},
+        [this]() {
+            std::printf("[+%ldms] androidauto: audio channel (%s) setup response sent\n", elapsedMs(),
+                        pcmDevice_.c_str());
+        },
         [](const aasdk::error::Error & e) {
-            std::printf("androidauto: audio channel setup response send failed: %s\n", e.what());
+            std::printf("[+%ldms] androidauto: audio channel setup response send failed: %s\n", elapsedMs(),
+                        e.what());
         });
     channel_->sendChannelSetupResponse(response, promise);
 
@@ -70,14 +74,14 @@ void AudioChannel::onMediaChannelSetupRequest(
 void AudioChannel::onMediaChannelStartIndication(
     const aap_protobuf::service::media::shared::message::Start & indication) {
     sessionId_ = indication.session_id();
-    std::printf("androidauto: audio channel (%s) start, session_id=%d config_index=%u\n",
+    std::printf("[+%ldms] androidauto: audio channel (%s) start, session_id=%d config_index=%u\n", elapsedMs(),
                pcmDevice_.c_str(), sessionId_, indication.configuration_index());
 
     if (!alsaOpen_) {
         alsaOpen_ = alsaOutput_.open();
         if (!alsaOpen_) {
-            std::printf("androidauto: audio channel (%s) ALSA open failed -- audio for this "
-                       "channel won't play\n", pcmDevice_.c_str());
+            std::printf("[+%ldms] androidauto: audio channel (%s) ALSA open failed -- audio for this "
+                       "channel won't play\n", elapsedMs(), pcmDevice_.c_str());
         }
     }
 
@@ -86,7 +90,7 @@ void AudioChannel::onMediaChannelStartIndication(
 
 void AudioChannel::onMediaChannelStopIndication(
     const aap_protobuf::service::media::shared::message::Stop &) {
-    std::printf("androidauto: audio channel (%s) stop\n", pcmDevice_.c_str());
+    std::printf("[+%ldms] androidauto: audio channel (%s) stop\n", elapsedMs(), pcmDevice_.c_str());
     channel_->receive(this->shared_from_this());
 }
 

@@ -210,7 +210,30 @@ int main() {
     // call just above.
     hal::BluetoothHandle & bt = hal::shared_handle();
     if (bt.fd >= 0) {
-        // 2026-08-12: apply the configured Bluetooth name every boot,
+        // 2026-08-13: registered BEFORE set_device_name()/
+        // auto_reconnect_paired_device() below, not after -- see
+        // AaAutoStartWatcher's own comment above for the full +AAPDEV=
+        // mechanism. watch_bluetooth_broadcasts() only observes
+        // broadcasts live going forward, it never replays anything the
+        // reader thread already saw -- and a previously-paired phone's
+        // +AAPDEV= (blueware's SDP-capability check) is exactly the
+        // kind of broadcast that can fire as a side effect of
+        // auto_reconnect_paired_device()'s own connection handshake
+        // just below. Registering the observer after that call meant
+        // this exact common case -- the phone that was already paired
+        // before boot -- could have its +AAPDEV= broadcast come and go
+        // before anything was listening, silently falling back to
+        // requiring the user to open the Android Auto screen and tap
+        // Connect manually. The reader thread itself was already
+        // running (started by shared_handle() above), so moving only
+        // the registration earlier is enough -- no dependency on
+        // set_device_name()/auto_reconnect_paired_device() having run
+        // first.
+        hal::watch_bluetooth_broadcasts(
+            [](const std::string & line) { aa_auto_start_watcher().on_broadcast(line); });
+        std::thread(&AaAutoStartWatcher::run, &aa_auto_start_watcher()).detach();
+
+        // apply the configured Bluetooth name every boot,
         // per request -- previously hal::set_device_name() (AT+NAME=)
         // was only ever called from bluetooth_screen.cpp's Save button,
         // so the name a phone actually saw was whatever was already
@@ -236,17 +259,6 @@ int main() {
                          btName.c_str());
         }
         hal::auto_reconnect_paired_device(bt);
-
-        // Wires up the +AAPDEV= -> auto-start-wireless-AA trigger --
-        // see AaAutoStartWatcher's own comment above for the full
-        // mechanism/evidence. Registering the observer only makes
-        // sense once bt.fd is actually open (hal::watch_bluetooth_
-        // broadcasts() has nothing to observe otherwise); the reader
-        // thread it depends on was already started by shared_handle()
-        // itself just above.
-        hal::watch_bluetooth_broadcasts(
-            [](const std::string & line) { aa_auto_start_watcher().on_broadcast(line); });
-        std::thread(&AaAutoStartWatcher::run, &aa_auto_start_watcher()).detach();
     }
 
     // Process-lifetime, intentionally never freed -- same convention as

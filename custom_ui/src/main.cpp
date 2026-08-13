@@ -53,21 +53,39 @@ namespace {
 // dedicated thread instead.
 class AaAutoStartWatcher {
 public:
-    // Debounced per-device: the same phone re-broadcasting +AAPDEV=
-    // repeatedly (observed live -- AAPSTAT/AAPDEV can cycle several
-    // times around one real detection) only triggers once, not once
-    // per broadcast. A DIFFERENT device appearing (or this device
-    // reappearing after another device took over the "last triggered"
-    // slot) triggers again -- androidauto::WirelessSessionManager::start()
-    // is itself safe to call repeatedly (restarts a fresh attempt,
-    // same as a manual "Retry"), so re-triggering isn't unsafe, just
-    // wasteful, which this debounce avoids for the common case.
+    // Debounced per-device, time-windowed: the same phone re-
+    // broadcasting +AAPDEV= repeatedly (observed live -- AAPSTAT/AAPDEV
+    // can cycle several times over a few seconds around one real
+    // detection) only triggers once, not once per broadcast. A
+    // DIFFERENT device appearing always triggers -- androidauto::
+    // WirelessSessionManager::start() is itself safe to call repeatedly
+    // (restarts a fresh attempt, same as a manual "Retry"), so
+    // re-triggering isn't unsafe, just wasteful, which this debounce
+    // avoids for the common case.
+    //
+    // 2026-08-13 FIX: this used to be a permanent, whole-process-
+    // lifetime debounce (device_id alone, no expiry) -- meaning once a
+    // given phone auto-started wireless AA once, it could NEVER
+    // auto-start again for the rest of that boot session, even after
+    // disconnecting and reconnecting later (drove out of range, BT
+    // toggled off, phone rebooted, etc.), since blueware re-broadcasts
+    // the identical +AAPDEV= on every fresh detection and device_id
+    // never changes for the same phone. No confirmed "+AAPDIS="
+    // disconnect broadcast exists to key an explicit reset off of (not
+    // observed in any real capture this project has), so this switches
+    // to a time-windowed debounce instead: only suppress a repeat for
+    // the same device_id within kDebounceWindow of the last trigger,
+    // matching the original intent (collapse one detection's own
+    // AAPSTAT/AAPDEV cycling) without permanently blocking a real,
+    // later reconnection of the same phone.
     void on_broadcast(const std::string & line) {
         constexpr const char * kPrefix = "+AAPDEV=";
         if (line.rfind(kPrefix, 0) != 0) return;
         std::string entry = line.substr(std::strlen(kPrefix));
         std::string mac, name;
         std::string device_id = hal::split_mac_and_name(entry, mac, name) ? mac : entry;
+
+        auto now = std::chrono::steady_clock::now();
 
         std::lock_guard<std::mutex> lock(mtx_);
         // 2026-08-13: logs every +AAPDEV= this observer actually sees,
@@ -85,11 +103,13 @@ public:
         // candidate for that last case).
         std::printf("custom_ui: +AAPDEV= observed: device_id='%s' name='%s' (last_triggered='%s')\n",
                     device_id.c_str(), name.c_str(), last_triggered_id_.c_str());
-        if (device_id == last_triggered_id_) {
-            std::printf("custom_ui: +AAPDEV= debounced (same device already triggered)\n");
+        constexpr auto kDebounceWindow = std::chrono::seconds(30);
+        if (device_id == last_triggered_id_ && (now - last_triggered_at_) < kDebounceWindow) {
+            std::printf("custom_ui: +AAPDEV= debounced (same device triggered <30s ago)\n");
             return;
         }
         last_triggered_id_ = device_id;
+        last_triggered_at_ = now;
         pending_name_ = name;
         pending_.store(true, std::memory_order_release);
     }
@@ -180,6 +200,7 @@ private:
     std::atomic<bool> pending_{false};
     std::atomic<bool> navigate_pending_{false};
     std::string last_triggered_id_;
+    std::chrono::steady_clock::time_point last_triggered_at_{};
     std::string pending_name_;
 };
 

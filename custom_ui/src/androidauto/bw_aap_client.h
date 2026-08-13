@@ -135,6 +135,42 @@ public:
     bool respondToInfoRequest(const std::string &ssid, const std::string &password,
                                const std::string &bssid, int securityMode, int timeoutSeconds);
 
+    // 2026-08-13: waits (bounded) for an optional WIFI_CONNECT_STATUS
+    // (type 6) frame -- NOT part of this class's originally-documented
+    // 5-step sequence above, found via decompiling the real
+    // RfcommConnectionPrivate::msgProc()/run() in libAndroidAuto.so
+    // (the actual implementation behind stock `sink`'s
+    // BtRfcommController). Real, decisive finding: stock's own run()
+    // loop keeps reading frames from this same channel in an
+    // unconditional while-loop for the whole connection's lifetime --
+    // it NEVER closes the channel right after sending
+    // WIFI_INFO_RESPONSE the way this project's own
+    // wireless_session_manager.cpp used to. msgProc() dispatches type 6
+    // to handleConnectStatus(), which parses
+    // aap_protobuf::aaw::WifiConnectionStatus{status, error_message} --
+    // a message this project had never once looked at before. That
+    // Status enum (see Status.proto) carries genuinely diagnostic
+    // values (STATUS_WIFI_INCORRECT_CREDENTIALS,
+    // STATUS_WIFI_INACCESSIBLE_CHANNEL, STATUS_WIFI_NETWORK_UNAVAILABLE,
+    // etc.) -- if the phone ever sends this, it may be telling us
+    // EXACTLY why the WiFi/TCP connection didn't work, something no
+    // hardware log this whole investigation has ever captured because
+    // nothing was listening for it.
+    //
+    // Does NOT replicate stock's "never close" loop exactly -- that
+    // would mean keeping /dev/bw_aap open and readable for the whole
+    // session's lifetime from a background thread, which risks a real
+    // lifetime/data-race hazard against this class's own fd_ if that
+    // thread is still blocked in receiveFrame() when the owning
+    // WirelessSessionManager::run() destructs this object at the end of
+    // its scope. This is a smaller, safer middle ground: one bounded
+    // extra wait, same pattern already used for the optional
+    // WIFI_START_RESPONSE in startHandshake(). Logs and returns
+    // regardless of whether anything arrived -- absence isn't treated
+    // as a failure, since this project's own real packet capture never
+    // confirmed this message is always sent either.
+    void waitForOptionalConnectStatus(int timeoutSeconds);
+
     // Returns false on read error/timeout. On success, fills type and
     // payload with what was received. Public so a test driver can keep
     // observing frames past what startHandshake() itself handles (e.g.

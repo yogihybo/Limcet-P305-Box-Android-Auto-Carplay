@@ -1,6 +1,7 @@
 #include "androidauto/session.h"
 
 #include <chrono>
+#include <cstdint>
 #include <cstdio>
 
 #include "androidauto/log_timing.h"
@@ -15,6 +16,47 @@
 #include <aap_protobuf/service/control/message/AuthResponse.pb.h>
 
 namespace androidauto {
+
+namespace {
+
+// PingRequest.timestamp is meant to be a real wall-clock epoch
+// timestamp -- but this device has no RTC and no NTP client anywhere
+// in its rootfs (no hwclock binary, nothing sets the clock at boot),
+// so system_clock::now() reads as whatever the kernel's boot-time
+// default is: effectively still near the Unix epoch. Confirmed by
+// every hardware log this session showing AASDK's own internal log
+// lines stamped "1970-01-01". Found while chasing a long-running
+// silent-disconnect bug: the session completes every protocol
+// exchange correctly (handshake, ServiceDiscovery, every channel
+// opening and completing setup) and then the phone simply stops
+// acknowledging pings a few cycles in, followed by a delayed clean
+// TCP close -- exactly the kind of symptom a phone-side sanity/
+// freshness check on an implausible "January 1970" timestamp would
+// produce, with no protocol-content bug to find. Falls back to a
+// fixed, roughly-current baseline (updated 2026-08-13 -- doesn't need
+// to be exact, just plausible rather than garbage) plus monotonic
+// elapsed time, whenever the real clock reads before a sane threshold
+// (year 2020). If this device's clock is ever actually set correctly
+// (RTC/NTP added later), the real value is used unmodified -- this
+// only kicks in for the "clearly never been set" case.
+constexpr std::int64_t kSaneEpochMillisThreshold = 1577836800000LL;    // 2020-01-01 UTC
+constexpr std::int64_t kFallbackBaselineEpochMillis = 1755043200000LL;  // ~2026-08-13 UTC
+
+std::int64_t plausibleEpochMillis() {
+    auto real = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::system_clock::now().time_since_epoch())
+                    .count();
+    if (real >= kSaneEpochMillisThreshold) {
+        return real;
+    }
+    static const auto steadyStart = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                       std::chrono::steady_clock::now() - steadyStart)
+                       .count();
+    return kFallbackBaselineEpochMillis + elapsed;
+}
+
+}  // namespace
 
 Session::Session(boost::asio::io_service &ioService)
     : ioService_(ioService), strand_(ioService), pingTimer_(ioService) {
@@ -432,9 +474,7 @@ void Session::onServiceDiscoveryRequest(
 }
 
 void Session::sendPing() {
-    auto timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
-                          std::chrono::system_clock::now().time_since_epoch())
-                          .count();
+    auto timestamp = plausibleEpochMillis();
     aap_protobuf::service::control::message::PingRequest request;
     request.set_timestamp(timestamp);
 

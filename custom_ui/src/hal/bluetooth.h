@@ -258,6 +258,44 @@ bool set_pairing_pin(BluetoothHandle & h, const std::string & pin);
 // ADDR -- this adapter's own BT address, first response line.
 bool get_adapter_address(BluetoothHandle & h, std::string & address);
 
+// AT+CCLK? -- queries the connected phone's own current date/time over
+// this same AT-command channel (standard 3GPP TS 27.007 / Hayes clock
+// command, part of the HFP AG-role vocabulary; confirmed compiled
+// into this device's real blueware binary via `strings
+// usr/bin/blueware`, unlike everything else in this file it's a
+// standard Hayes command rather than a Feasycom-specific one, so its
+// reply uses the conventional `+CCLK: "yy/MM/dd,hh:mm:ss+-zz"` framing
+// -- not the `+PREFIX=value` convention documented at this file's top
+// -- parsing here searches for the quoted value directly rather than
+// relying on send_command()'s expected_prefix exact-match/strip
+// mechanism, to stay robust to `:` vs `=` and spacing variations that
+// haven't been observed on real hardware yet).
+//
+// 2026-08-13: this device has no RTC and no NTP client anywhere in
+// its rootfs (checked -- no hwclock binary, nothing sets the clock at
+// boot) -- system_clock reads near the Unix epoch on every single
+// boot. Found to matter for real: androidauto/session.cpp's
+// PingRequest.timestamp was leaking that "January 1970" value straight
+// to the phone during a wireless AA session, a real suspect for a
+// long-running silent-disconnect bug (see
+// project_aa_missing_auth_complete.md memory) -- that call site now
+// has its own plausibleEpochMillis() fallback regardless, but getting
+// the REAL time here (once, from the actual connected phone) is the
+// correct fix, not just a safety net.
+//
+// Best-effort, same as every other optional-hardware path in this
+// codebase -- returns false (system clock left untouched) if the
+// command times out, the response doesn't parse, or the connected
+// device doesn't answer AT+CCLK over HFP at all (not universally
+// supported -- notably some iOS versions don't reply to it; not yet
+// confirmed either way for this project's real test phone). Calls
+// settimeofday() directly on success -- requires the calling process
+// to have permission to set the system clock (this project's
+// processes already run with direct hardware access -- /dev/fb0 etc
+// -- so this is consistent with everything else this codebase already
+// assumes about its own privilege level).
+bool sync_clock_from_phone(BluetoothHandle & h);
+
 void close_bluetooth(BluetoothHandle & h);
 
 }  // namespace hal

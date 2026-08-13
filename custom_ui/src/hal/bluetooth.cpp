@@ -8,10 +8,12 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <ctime>
 #include <mutex>
 #include <thread>
 
 #include <fcntl.h>
+#include <sys/time.h>
 #include <termios.h>
 #include <unistd.h>
 
@@ -474,6 +476,83 @@ bool get_adapter_address(BluetoothHandle & h, std::string & address) {
     }
     address = resp.front();
     return true;
+}
+
+bool sync_clock_from_phone(BluetoothHandle & h) {
+    std::vector<std::string> resp;
+    // No expected_prefix -- unlike blueware's own vocabulary, AT+CCLK
+    // is a standard Hayes command replying "+CCLK: \"...\"" (colon, not
+    // equals), so this parses for the quoted value directly instead of
+    // relying on send_command()'s exact-prefix-match/strip mechanism.
+    // See this function's header comment for why.
+    if (!send_command(h, "CCLK?", resp, 2000)) {
+        std::fprintf(stderr, "hal::sync_clock_from_phone: AT+CCLK? got no response\n");
+        return false;
+    }
+
+    for (const auto & line : resp) {
+        if (line.find("CCLK") == std::string::npos) {
+            continue;
+        }
+        auto q1 = line.find('"');
+        auto q2 = q1 == std::string::npos ? std::string::npos : line.find('"', q1 + 1);
+        if (q1 == std::string::npos || q2 == std::string::npos) {
+            continue;
+        }
+        std::string ts = line.substr(q1 + 1, q2 - q1 - 1);
+
+        // Expected: yy/MM/dd,hh:mm:ss+-zz -- timezone quarter-hour
+        // offset is optional (not every phone/module includes it).
+        int yy = 0, mo = 0, dd = 0, hh = 0, mi = 0, ss = 0, tz = 0;
+        char sign = 0;
+        int n = std::sscanf(ts.c_str(), "%d/%d/%d,%d:%d:%d%c%d", &yy, &mo, &dd, &hh, &mi, &ss,
+                             &sign, &tz);
+        if (n < 6) {
+            std::fprintf(stderr, "hal::sync_clock_from_phone: couldn't parse CCLK value '%s'\n",
+                         ts.c_str());
+            continue;
+        }
+
+        struct tm tmv {};
+        tmv.tm_year = yy + 100;  // 2-digit year, always 2000s+ for a real phone
+        tmv.tm_mon = mo - 1;
+        tmv.tm_mday = dd;
+        tmv.tm_hour = hh;
+        tmv.tm_min = mi;
+        tmv.tm_sec = ss;
+
+        time_t epoch = timegm(&tmv);
+        if (epoch == static_cast<time_t>(-1)) {
+            std::fprintf(stderr, "hal::sync_clock_from_phone: timegm() failed for '%s'\n",
+                         ts.c_str());
+            continue;
+        }
+
+        if (n >= 8) {
+            // tz is in quarter-hours; convert phone-local wall time to UTC.
+            int offsetSeconds = tz * 15 * 60;
+            if (sign == '-') {
+                offsetSeconds = -offsetSeconds;
+            }
+            epoch -= offsetSeconds;
+        }
+
+        struct timeval tv {};
+        tv.tv_sec = epoch;
+        tv.tv_usec = 0;
+        if (settimeofday(&tv, nullptr) != 0) {
+            std::fprintf(stderr, "hal::sync_clock_from_phone: settimeofday() failed: %s\n",
+                         std::strerror(errno));
+            return false;
+        }
+
+        std::printf("hal::sync_clock_from_phone: system clock set from phone (AT+CCLK? -> '%s', "
+                    "epoch=%lld)\n", ts.c_str(), static_cast<long long>(epoch));
+        return true;
+    }
+
+    std::fprintf(stderr, "hal::sync_clock_from_phone: no +CCLK line in response\n");
+    return false;
 }
 
 void close_bluetooth(BluetoothHandle & h) {

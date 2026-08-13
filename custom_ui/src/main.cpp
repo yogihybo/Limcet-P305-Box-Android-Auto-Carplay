@@ -88,6 +88,26 @@ public:
                 }
                 std::printf("custom_ui: +AAPDEV= detected ('%s') -- auto-starting wireless "
                             "Android Auto\n", name.c_str());
+
+                // 2026-08-13: this device has no RTC and no NTP client
+                // anywhere in its rootfs -- the system clock starts at
+                // the Unix epoch on every boot and stays there. A
+                // detected +AAPDEV= means a real phone is nearby and
+                // (per blueware's own AAP_ENABLE feature, see
+                // hal/bluetooth.h's top comment) already SDP-confirmed
+                // AA-capable, the best available moment to have a real
+                // Bluetooth link up to query it -- best-effort, doesn't
+                // block anything if it fails (a phone that doesn't
+                // answer AT+CCLK over HFP, or isn't actually
+                // HFP-connected yet at this exact instant). See
+                // hal::sync_clock_from_phone()'s own header comment for
+                // why this matters: androidauto/session.cpp's
+                // PingRequest.timestamp was leaking "January 1970"
+                // straight to the phone during wireless AA sessions, a
+                // real suspect for a long-running silent-disconnect
+                // bug.
+                hal::sync_clock_from_phone(hal::shared_handle());
+
                 // requestConnect() spawns androidauto-sidecar itself if
                 // it isn't already running (see AndroidAutoClient's own
                 // header comment) -- no need to open the Android Auto

@@ -570,10 +570,25 @@ void Session::onByeByeRequest(const aap_protobuf::service::control::message::Bye
     // calling receive() again here either.
     aap_protobuf::service::control::message::ByeByeResponse response;
     auto promise = aasdk::channel::SendPromise::defer(strand_);
+    // 2026-08-14 FIX: same root cause as onChannelError()'s own comment --
+    // WirelessSessionManager::run() blocks inside ioService.run() for the
+    // whole session and only reaches its post-run() Failed transition
+    // once that call actually returns, which never happened on a clean
+    // bye-bye either (this handler set stopping_ but never stopped the
+    // io_service). Stopped from INSIDE the send promise's own callbacks,
+    // not immediately after enqueueing the send, so the ByeByeResponse
+    // actually goes out over the wire first -- stopping the io_service
+    // any earlier risks cutting off the in-flight write before its
+    // completion handler ever runs.
+    auto self = shared_from_this();
     promise->then(
-        []() { std::printf("[+%ldms] androidauto: bye-bye response sent\n", elapsedMs()); },
-        [](const aasdk::error::Error &e) {
+        [this, self]() {
+            std::printf("[+%ldms] androidauto: bye-bye response sent\n", elapsedMs());
+            ioService_.stop();
+        },
+        [this, self](const aasdk::error::Error &e) {
             std::printf("[+%ldms] androidauto: bye-bye response send failed: %s\n", elapsedMs(), e.what());
+            ioService_.stop();
         });
     controlChannel_->sendShutdownResponse(response, promise);
 
@@ -661,26 +676,46 @@ void Session::onPingResponse(const aap_protobuf::service::control::message::Ping
 }
 
 void Session::onChannelError(const aasdk::error::Error &e) {
+    // 2026-08-14 FIX: this used to only set stopping_ and cancel the ping
+    // timer -- it never called ioService_.stop(). WirelessSessionManager::
+    // run() (wireless_session_manager.cpp) blocks inside ioService.run()
+    // for the whole session's lifetime and only reaches its own
+    // setStatus(Failed, "Session ended (io_service stopped)") line AFTER
+    // that call returns -- but boost::asio's io_service only returns once
+    // there's no outstanding async work at all, and this session's other
+    // channels each independently re-arm their own receive() after every
+    // message, so plenty of "work" was always still outstanding even
+    // after the transport itself had already died. Real hardware
+    // consequence, caught live: after any real session drop, the
+    // WirelessSessionManager thread hung forever inside ioService.run(),
+    // state_ stayed stuck at Connected permanently, and -- combined with
+    // start()'s own (correct, separately-added) guard against tearing
+    // down an already-active session -- EVERY subsequent +AAPDEV=
+    // auto-trigger was silently ignored ("a session is already active")
+    // against a session that was actually long dead. The user's own
+    // words: "says wireless session already active but the phone isn't
+    // reconnecting the wifi" -- this is why.
+    //
     // OPERATION_ABORTED is aasdk's normal signal that a pending
     // read/write was cancelled (e.g. the transport/io_service is
     // shutting down) -- opencardev/openauto's own onChannelError()
-    // treats it as expected-during-stop, not a real failure. This
-    // class has no session-quit/lifecycle handling to hook a
-    // "stopping_" flag into yet (see session.h -- a known, deliberate
-    // gap, same reasoning as not porting openauto's Pinger), so this
-    // just avoids the misleading "error" wording for a condition that
-    // isn't actually one, rather than inventing broader lifecycle
-    // machinery this project doesn't need yet.
+    // treats it as expected-during-stop, not a real failure. Still stops
+    // the io_service either way -- an aborted operation on the control
+    // channel means this session is ending one way or another, and
+    // WirelessSessionManager needs to know that regardless of which
+    // branch got there.
     if (e.getCode() == aasdk::error::ErrorCode::OPERATION_ABORTED) {
         std::printf("[+%ldms] androidauto: control channel: operation aborted (expected during "
                     "shutdown): %s\n", elapsedMs(), e.what());
         stopping_ = true;
         pingTimer_.cancel();
+        ioService_.stop();
         return;
     }
     std::printf("[+%ldms] androidauto: control channel error: %s\n", elapsedMs(), e.what());
     stopping_ = true;
     pingTimer_.cancel();
+    ioService_.stop();
 }
 
 }  // namespace androidauto

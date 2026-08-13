@@ -630,7 +630,36 @@ void Session::onNavigationFocusRequest(
 }
 
 void Session::onVoiceSessionRequest(
-    const aap_protobuf::service::control::message::VoiceSessionNotification &) {
+    const aap_protobuf::service::control::message::VoiceSessionNotification &request) {
+    // 2026-08-14: this used to just log-free-and-rearm without ever
+    // replying -- found via a systematic audit of every
+    // IControlServiceChannel send method against what this class
+    // actually calls, prompted by real hardware catching the identical
+    // missing-response bug class on KeyBindingRequest (see that
+    // handler's own comment -- every channel dying together, 44ms after
+    // an unanswered required message). IControlServiceChannel::
+    // sendVoiceSessionFocusResponse() exists and was never called.
+    // VoiceSessionNotification is used as both the phone's own
+    // request AND the required response, carrying a single
+    // start/end status -- echoing the same status back is the
+    // simplest, least-speculative acknowledgement (no confirmed
+    // reference/capture for this specific message to match against,
+    // unlike AudioFocus/NavFocus which had real diffs to work from).
+    std::printf("[+%ldms] androidauto: voice session request, status=%d\n", elapsedMs(),
+                static_cast<int>(request.status()));
+
+    aap_protobuf::service::control::message::VoiceSessionNotification response;
+    response.set_status(request.status());
+
+    auto promise = aasdk::channel::SendPromise::defer(strand_);
+    promise->then(
+        []() { std::printf("[+%ldms] androidauto: voice session response sent\n", elapsedMs()); },
+        [](const aasdk::error::Error &e) {
+            std::printf("[+%ldms] androidauto: voice session response send failed: %s\n", elapsedMs(),
+                        e.what());
+        });
+    controlChannel_->sendVoiceSessionFocusResponse(response, promise);
+
     controlChannel_->receive(this->shared_from_this());
 }
 

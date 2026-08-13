@@ -39,7 +39,7 @@ void VideoChannel::onChannelOpenRequest(
 
 void VideoChannel::onMediaChannelSetupRequest(
     const aap_protobuf::service::media::shared::message::Setup & request) {
-    std::printf("androidauto: video channel setup request, codec type=%d\n",
+    std::printf("[+%ldms] androidauto: video channel setup request, codec type=%d\n", elapsedMs(),
                static_cast<int>(request.type()));
 
     // Only one configuration is ever advertised (VIDEO_800x480 H264_BP,
@@ -50,9 +50,10 @@ void VideoChannel::onMediaChannelSetupRequest(
 
     auto promise = aasdk::channel::SendPromise::defer(strand_);
     promise->then(
-        []() {},
+        []() { std::printf("[+%ldms] androidauto: video channel setup response sent\n", elapsedMs()); },
         [](const aasdk::error::Error & e) {
-            std::printf("androidauto: video channel setup response send failed: %s\n", e.what());
+            std::printf("[+%ldms] androidauto: video channel setup response send failed: %s\n", elapsedMs(),
+                        e.what());
         });
     channel_->sendChannelSetupResponse(response, promise);
 
@@ -62,13 +63,14 @@ void VideoChannel::onMediaChannelSetupRequest(
 void VideoChannel::onMediaChannelStartIndication(
     const aap_protobuf::service::media::shared::message::Start & indication) {
     sessionId_ = indication.session_id();
-    std::printf("androidauto: video channel start, session_id=%d config_index=%u\n", sessionId_,
-               indication.configuration_index());
+    std::printf("[+%ldms] androidauto: video channel start, session_id=%d config_index=%u\n", elapsedMs(),
+               sessionId_, indication.configuration_index());
 
     if (!decoderOpen_) {
         decoderOpen_ = decoder_.open();
         if (!decoderOpen_) {
-            std::printf("androidauto: video decoder open failed -- no video for this session\n");
+            std::printf("[+%ldms] androidauto: video decoder open failed -- no video for this session\n",
+                        elapsedMs());
         }
     }
 
@@ -77,7 +79,7 @@ void VideoChannel::onMediaChannelStartIndication(
 
 void VideoChannel::onMediaChannelStopIndication(
     const aap_protobuf::service::media::shared::message::Stop &) {
-    std::printf("androidauto: video channel stop\n");
+    std::printf("[+%ldms] androidauto: video channel stop\n", elapsedMs());
     channel_->receive(this->shared_from_this());
 }
 
@@ -183,7 +185,7 @@ void VideoChannel::sendAck() {
 
 void VideoChannel::onVideoFocusRequest(
     const aap_protobuf::service::media::video::message::VideoFocusRequestNotification & request) {
-    std::printf("androidauto: video focus request, mode=%d reason=%d\n",
+    std::printf("[+%ldms] androidauto: video focus request, mode=%d reason=%d\n", elapsedMs(),
                static_cast<int>(request.mode()), static_cast<int>(request.reason()));
 
     // Always grant projected focus -- this app has no native content

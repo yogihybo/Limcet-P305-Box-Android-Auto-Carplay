@@ -315,7 +315,12 @@ void WirelessSessionManager::run() {
     // smaller, safer step than fully replicating "never close" (see
     // that function's own comment on why) -- a bounded wait, not an
     // indefinite one.
-    bwAap.waitForOptionalConnectStatus(5);
+    // 15s, not 5 -- real captured hardware log (docs/logs/
+    // start_msn_stock_260721.txt) shows a genuine DHCP offer/ack
+    // exchange happens between WIFI_START_RESPONSE and
+    // WIFI_CONNECT_STATUS, so 5s was too tight a window for what this
+    // call now actually waits through (see its own updated comment).
+    bwAap.waitForOptionalConnectStatus(15);
     std::printf("androidauto: wireless session: closing bw_aap\n");
     bwAap.close();
 

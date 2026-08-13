@@ -10,6 +10,9 @@
 #include <sys/select.h>
 #include <unistd.h>
 
+#include <thread>
+#include <chrono>
+
 #include <aap_protobuf/aaw/WifiStartRequest.pb.h>
 #include <aap_protobuf/aaw/WifiStartResponse.pb.h>
 #include <aap_protobuf/aaw/WifiInfoResponse.pb.h>
@@ -37,26 +40,48 @@ BwAapClient::~BwAapClient() {
 }
 
 bool BwAapClient::connect() {
-    fd_ = ::socket(AF_UNIX, SOCK_STREAM, 0);
-    if (fd_ < 0) {
-        std::fprintf(stderr, "androidauto: bw_aap socket() failed: %s\n", std::strerror(errno));
-        return false;
-    }
+    // 2026-08-13: retries for a few seconds instead of one immediate
+    // attempt -- same reasoning as hal::init_bluetooth()'s own
+    // /dev/bw_serial open ("blueware needs a moment after spawning to
+    // create" the node). /dev/bw_aap is a distinct sub-channel from
+    // /dev/bw_serial (the AT-command link +AAPDEV= arrives on) -- real
+    // hardware symptom this fixes: auto-starting the wireless session
+    // the instant +AAPDEV= fires (main.cpp's AaAutoStartWatcher) landed
+    // here with a single failed connect() and silently gave up
+    // (WirelessSessionState::Failed, no user-visible retry prompt),
+    // while a manual "Connect" tap moments later -- by which point
+    // /dev/bw_aap had come up -- succeeded every time. Not confirmed via
+    // a live strace of exactly when the node appears, but the timing
+    // (fails right after a BT event, succeeds again seconds later with
+    // no other change) matches this exact class of race precisely.
+    constexpr int kMaxAttempts = 20;
+    constexpr int kRetryDelayMs = 250;  // up to ~5s total
+    for (int attempt = 0; attempt < kMaxAttempts; ++attempt) {
+        fd_ = ::socket(AF_UNIX, SOCK_STREAM, 0);
+        if (fd_ < 0) {
+            std::fprintf(stderr, "androidauto: bw_aap socket() failed: %s\n", std::strerror(errno));
+            return false;
+        }
 
-    struct sockaddr_un addr {};
-    addr.sun_family = AF_UNIX;
-    std::strncpy(addr.sun_path, kBwAapSocketPath, sizeof(addr.sun_path) - 1);
+        struct sockaddr_un addr {};
+        addr.sun_family = AF_UNIX;
+        std::strncpy(addr.sun_path, kBwAapSocketPath, sizeof(addr.sun_path) - 1);
 
-    if (::connect(fd_, reinterpret_cast<struct sockaddr *>(&addr), sizeof(addr)) < 0) {
-        std::fprintf(stderr, "androidauto: connect(%s) failed: %s\n", kBwAapSocketPath,
-                     std::strerror(errno));
+        if (::connect(fd_, reinterpret_cast<struct sockaddr *>(&addr), sizeof(addr)) == 0) {
+            std::printf("androidauto: connected to %s (attempt %d/%d)\n", kBwAapSocketPath,
+                        attempt + 1, kMaxAttempts);
+            return true;
+        }
+
+        std::fprintf(stderr, "androidauto: connect(%s) failed (attempt %d/%d): %s\n",
+                     kBwAapSocketPath, attempt + 1, kMaxAttempts, std::strerror(errno));
         ::close(fd_);
         fd_ = -1;
-        return false;
+        if (attempt + 1 < kMaxAttempts) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(kRetryDelayMs));
+        }
     }
-
-    std::printf("androidauto: connected to %s\n", kBwAapSocketPath);
-    return true;
+    return false;
 }
 
 void BwAapClient::close() {

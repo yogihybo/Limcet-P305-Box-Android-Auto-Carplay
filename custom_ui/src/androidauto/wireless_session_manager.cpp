@@ -1,9 +1,11 @@
 #include "androidauto/wireless_session_manager.h"
 
+#include <array>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
 #include <memory>
+#include <string>
 #include <thread>
 
 #include <sys/select.h>
@@ -31,7 +33,79 @@ namespace {
 // UNCONFIRMED status are both still exactly as documented there, just
 // moved to the shared config file's defaults.
 
+// 2026-08-12: real, live-tested candidate for a long-running mystery --
+// this project's wireless AA session repeatedly gets through the full
+// handshake/ServiceDiscovery/channel-open sequence, then the phone
+// drops the connection with no clear protocol-content cause (see
+// project_aa_missing_auth_complete.md memory for the full chase).
+// Raised the idea that /sys/class/net/wlan0/address -- read once,
+// right after wifi_ap.sh/hostapd starts -- might not be the BSSID
+// hostapd is actually broadcasting: some WiFi drivers (this device
+// uses Realtek SDIO/USB combo chips, see wifi_ap.sh's modprobe list)
+// report a different MAC via sysfs than what the driver/hostapd
+// actually operates with once fully live in AP mode. Google's own
+// WIFI_INFO_RESPONSE to the phone declares this BSSID explicitly --
+// if the phone binds to that exact BSSID during its own connection
+// attempt (rather than just the SSID) and it doesn't match what's
+// really broadcasting, the phone could plausibly fail silently at
+// some point during or after its own WiFi association, independent of
+// anything in the aasdk protocol exchange itself -- consistent with
+// this project's actual observed symptom (protocol activity looks
+// healthy, then an unexplained drop with no protocol-level cause
+// found after extensive cross-referencing against three real
+// implementations and the stock binary on this hardware).
+//
+// Not confirmed as THE cause (would need a live comparison on real
+// hardware between sysfs and hostapd's own reported BSSID, not done
+// here) -- fixed defensively instead: hostapd_cli queries hostapd's
+// own live control socket directly (real, present on this device --
+// see /etc/hostapd/hostapd.conf's ctrl_interface), the actual
+// authoritative source for what BSSID it's really using, rather than
+// a driver-level sysfs snapshot that could in principle be stale or
+// reflect a different address. Falls back to the old sysfs read if
+// hostapd_cli's output doesn't parse (control socket not ready yet,
+// binary missing, etc.) -- same "optional path, graceful degradation"
+// convention as every other HAL access in this codebase, not a hard
+// dependency swap.
+std::string readHostapdBssid() {
+    // Popen'd rather than a raw socket client for hostapd_cli's own
+    // control protocol -- this call is on WirelessSessionManager's own
+    // background thread (see run()), not the LVGL/asio hot path, and
+    // hostapd_cli already exists on this rootfs (usr/bin/hostapd_cli)
+    // specifically to talk to that socket correctly, including
+    // whatever framing/retry behavior the real protocol needs -- not
+    // worth reimplementing.
+    FILE * pipe = popen("hostapd_cli -i wlan0 status 2>/dev/null", "r");
+    if (pipe == nullptr) {
+        return "";
+    }
+    std::string output;
+    std::array<char, 256> buf{};
+    while (std::fgets(buf.data(), static_cast<int>(buf.size()), pipe) != nullptr) {
+        output += buf.data();
+    }
+    pclose(pipe);
+
+    const std::string key = "bssid[0]=";
+    auto pos = output.find(key);
+    if (pos == std::string::npos) {
+        return "";
+    }
+    pos += key.size();
+    auto end = output.find_first_of("\r\n", pos);
+    return output.substr(pos, end == std::string::npos ? std::string::npos : end - pos);
+}
+
 std::string readWlan0Mac() {
+    std::string bssid = readHostapdBssid();
+    if (!bssid.empty()) {
+        std::printf("androidauto: wireless session: BSSID from hostapd_cli (live control socket): %s\n",
+                     bssid.c_str());
+        return bssid;
+    }
+
+    std::fprintf(stderr, "androidauto: wireless session: hostapd_cli status didn't yield a bssid -- "
+                 "falling back to /sys/class/net/wlan0/address\n");
     std::ifstream f("/sys/class/net/wlan0/address");
     std::string mac;
     std::getline(f, mac);

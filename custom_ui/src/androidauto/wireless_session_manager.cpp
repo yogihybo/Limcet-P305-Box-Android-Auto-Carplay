@@ -145,14 +145,34 @@ void WirelessSessionManager::start() {
     // against itself across two independent sidecar client connections
     // (the +AAPDEV= auto-trigger and a manual Connect tap in
     // particular), and std::thread's assignment operator calls
-    // std::terminate() on a still-joinable target, so this whole
+    // std::terminate() on a still-joinable target, so the whole
     // check-detach-reassign sequence must be atomic, not just the
     // individual std::thread calls.
     std::lock_guard<std::mutex> lock(threadMutex_);
+
+    // See start()'s own header comment -- a session already actively
+    // progressing or Connected must not be torn down by a redundant
+    // second CONNECT. Deliberately checked/transitioned INSIDE the
+    // same lock as the thread_ manipulation below, not before it --
+    // checking state_ before acquiring threadMutex_ would leave a
+    // narrow window where two concurrent start() calls both observe
+    // Idle and both proceed (the run() thread doesn't transition state_
+    // away from Idle until it actually starts executing, which happens
+    // asynchronously after thread creation). Doing the check and the
+    // setStatus() transition under the same lock that also owns
+    // thread_ closes that window: by the time either caller's lock is
+    // released, state_ already reflects whichever one actually won.
+    WirelessSessionState current = state_.load(std::memory_order_acquire);
+    if (current != WirelessSessionState::Idle && current != WirelessSessionState::Failed) {
+        std::printf("androidauto: wireless session: start() ignored -- a session is already "
+                    "active (state=%d)\n", static_cast<int>(current));
+        return;
+    }
+
     if (thread_.joinable()) {
         thread_.detach();
     }
-    setStatus(WirelessSessionState::Idle, "Starting...");
+    setStatus(WirelessSessionState::StartingAccessPoint, "Starting...");
     thread_ = std::thread(&WirelessSessionManager::run, this);
 }
 

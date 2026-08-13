@@ -286,31 +286,64 @@ bool BwAapClient::respondToInfoRequest(const std::string &ssid, const std::strin
 }
 
 void BwAapClient::waitForOptionalConnectStatus(int timeoutSeconds) {
-    std::uint16_t type = 0;
-    std::string payload;
-    std::printf("androidauto: waiting up to %ds for an optional WIFI_CONNECT_STATUS...\n",
+    // 2026-08-13 REVISED: real captured hardware log
+    // (docs/logs/start_msn_stock_260721.txt, a genuine successful stock
+    // connection to the same phone this whole project tests against)
+    // showed the real message order is WIFI_INFO_RESPONSE(3) ->
+    // WIFI_START_RESPONSE(7) [not caught by startHandshake()'s own
+    // wait, which -- also per that log -- gets the phone's
+    // WIFI_INFO_REQUEST(2) instead at that point in the sequence, a
+    // known/already-handled quirk] -> [real DHCP offer/ack, taking a
+    // few real seconds] -> WIFI_CONNECT_STATUS(6), payload `08 00` =
+    // status field = 0 = STATUS_SUCCESS, arriving only once the phone
+    // has actually joined the AP and gotten a DHCP lease -- confirmed
+    // from that log's own udhcpd OFFER/ACK lines sitting directly
+    // between the type-7 and type-6 reads. A single receiveFrame() call
+    // would either consume the leftover, never-otherwise-read type-7
+    // frame (this class currently has no path that drains it after
+    // startHandshake() moves on) or time out well before DHCP finishes
+    // -- so this loops, logging and discarding anything that isn't type
+    // 6, until it arrives or the overall deadline passes.
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(timeoutSeconds);
+    std::printf("androidauto: waiting up to %ds for WIFI_CONNECT_STATUS (draining any "
+                "interleaved frames, e.g. a late WIFI_START_RESPONSE, along the way)...\n",
                 timeoutSeconds);
-    if (!this->receiveFrame(type, payload, timeoutSeconds)) {
-        std::printf("androidauto: no WIFI_CONNECT_STATUS within %ds (may be normal -- not "
-                    "confirmed the phone always sends one)\n", timeoutSeconds);
-        return;
-    }
-    if (type != 6) {
-        std::printf("androidauto: expected WIFI_CONNECT_STATUS (type 6) but got type=%u instead "
-                    "-- pushing it back for whoever reads next\n", type);
-        this->pushBackFrame(type, std::move(payload));
-        return;
-    }
 
-    aap_protobuf::aaw::WifiConnectionStatus status;
-    if (!status.ParseFromString(payload)) {
-        std::fprintf(stderr, "androidauto: failed to parse WifiConnectionStatus\n");
+    for (;;) {
+        auto remaining = std::chrono::duration_cast<std::chrono::seconds>(
+                              deadline - std::chrono::steady_clock::now())
+                              .count();
+        if (remaining <= 0) {
+            std::printf("androidauto: no WIFI_CONNECT_STATUS within %ds (may be normal -- not "
+                        "confirmed the phone always sends one)\n", timeoutSeconds);
+            return;
+        }
+
+        std::uint16_t type = 0;
+        std::string payload;
+        if (!this->receiveFrame(type, payload, static_cast<int>(remaining))) {
+            std::printf("androidauto: no WIFI_CONNECT_STATUS within %ds (may be normal -- not "
+                        "confirmed the phone always sends one)\n", timeoutSeconds);
+            return;
+        }
+
+        if (type != 6) {
+            std::printf("androidauto: got type=%u while waiting for WIFI_CONNECT_STATUS -- "
+                        "discarding, continuing to wait\n", type);
+            continue;
+        }
+
+        aap_protobuf::aaw::WifiConnectionStatus status;
+        if (!status.ParseFromString(payload)) {
+            std::fprintf(stderr, "androidauto: failed to parse WifiConnectionStatus\n");
+            return;
+        }
+        std::printf("androidauto: got WIFI_CONNECT_STATUS: status=%d%s%s\n",
+                    static_cast<int>(status.status()),
+                    status.has_error_message() ? " error_message=" : "",
+                    status.has_error_message() ? status.error_message().c_str() : "");
         return;
     }
-    std::printf("androidauto: got WIFI_CONNECT_STATUS: status=%d%s%s\n",
-                static_cast<int>(status.status()),
-                status.has_error_message() ? " error_message=" : "",
-                status.has_error_message() ? status.error_message().c_str() : "");
 }
 
 }  // namespace androidauto

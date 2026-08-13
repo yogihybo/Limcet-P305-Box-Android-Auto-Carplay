@@ -121,6 +121,20 @@ private:
     void setStatus(WirelessSessionState s, std::string msg);
     bool ensureAccessPointUp();
 
+    // 2026-08-13: guards thread_ itself (joinable()-check/detach/
+    // reassign in start(), detach() in the destructor) -- start() is
+    // called from sidecars/androidauto/main.cpp's handle_connection(),
+    // one thread per accepted socket connection, and both
+    // main.cpp's AaAutoStartWatcher (the +AAPDEV= auto-trigger) and
+    // ui/android_auto_screen.cpp's manual Connect button each open
+    // their own independent connection to the sidecar -- so two
+    // concurrent CONNECT commands (auto-trigger firing right as a user
+    // taps Connect, or a double-tap) previously raced unsynchronized on
+    // this member. std::thread's assignment operator calls
+    // std::terminate() if the target is still joinable, so the visible
+    // symptom of that race would be the whole sidecar process abruptly
+    // dying at the exact moment two start() calls overlapped.
+    std::mutex threadMutex_;
     std::thread thread_;
     std::atomic<WirelessSessionState> state_{WirelessSessionState::Idle};
 

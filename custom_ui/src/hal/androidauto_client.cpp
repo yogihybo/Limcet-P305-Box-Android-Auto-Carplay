@@ -3,6 +3,7 @@
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>
+#include <mutex>
 
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -13,6 +14,22 @@ namespace hal {
 namespace {
 // Must match sidecars/androidauto/main.cpp's kSocketPath exactly.
 constexpr const char * kSocketPath = "/tmp/androidauto-sidecar.sock";
+
+// 2026-08-13: serializes trySpawnSidecar()'s check-then-spawn below
+// across every AndroidAutoClient instance in this process -- each
+// instance has its own mutex_ (AndroidAutoClient::mutex_), which does
+// NOT protect this free function at all. Two real, unrelated callers
+// exist: ui/android_auto_screen.cpp's static client() (polled every
+// 500ms from the LVGL main thread) and main.cpp's AaAutoStartWatcher
+// (a fresh, separate AndroidAutoClient constructed on its own
+// background thread every +AAPDEV= trigger). If the auto-trigger fires
+// while the user happens to have the Android Auto screen open (a
+// realistic overlap -- users have been manually opening it out of
+// habit while auto-start wasn't working), both could see "pidof
+// androidauto-sidecar" report nothing running and each spawn their own
+// copy: two processes racing to unlink/bind the same socket path,
+// bring up the WiFi AP, and open /dev/bw_aap independently.
+std::mutex g_spawnMutex;
 
 // Launches androidauto-sidecar if it isn't already running, so "Android
 // Auto mode active" (the user opening this screen, which polls
@@ -34,6 +51,7 @@ constexpr const char * kSocketPath = "/tmp/androidauto-sidecar.sock";
 // together, see scripts/run_on_device.sh); revisit once Phase 6's real
 // firmware integration lands with a fixed install path.
 void trySpawnSidecar() {
+    std::lock_guard<std::mutex> lock(g_spawnMutex);
     if (std::system("pidof androidauto-sidecar >/dev/null 2>&1") == 0) {
         return;  // already running
     }

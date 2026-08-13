@@ -589,7 +589,7 @@ the actual implementation in this project's own
 carries two generations of ioctl definitions side by side: an older "reconstructed"
 guess set (commented as not what stock actually calls) and a `_REAL`/disassembly- or
 decompile-confirmed set (each with its own dated comment citing
-`docs/DEVICE_TEST_CHECKLIST_2026-07-18.md`). Only the confirmed set is meaningful to
+`docs/historical/DEVICE_TEST_CHECKLIST_2026-07-18.md`). Only the confirmed set is meaningful to
 compare.
 
 **Every one of our disassembly-confirmed ioctl numbers matches ArkPro's vendor-source

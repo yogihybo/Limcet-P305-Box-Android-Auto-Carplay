@@ -1002,7 +1002,7 @@ shows video end-to-end. The one AA session actually captured with a
 log that same day auto-connected over *wireless* instead (BT+WiFi,
 `MsnCoreApp`'s normal auto-connect, no wired gadget negotiation lines
 in that log at all) — see the "Android Auto video launches but shows
-black screen" thread (`docs/DEVICE_TEST_CHECKLIST_2026-07-18.md`
+black screen" thread (`docs/historical/DEVICE_TEST_CHECKLIST_2026-07-18.md`
 §61-67) for what that wireless session did surface (video decode
 completes but the screen never visibly switches — an existing,
 separately-tracked bug, not related to wired vs. wireless). Worth a

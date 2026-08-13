@@ -8,7 +8,7 @@ acceleration) with one patch: force the primary layer's surface onto
 DirectFB's priority-based allocation (which is GAL's GPU pool on this
 board).
 
-See `docs/DEVICE_TEST_CHECKLIST_2026-07-18.md` (DirectFB black-screen
+See `docs/historical/DEVICE_TEST_CHECKLIST_2026-07-18.md` (DirectFB black-screen
 investigation, "root cause" section) for the full trace of why this is
 needed — short version: `dfb_layer_context_allocate_surface()` defaults
 an unset `surface_caps` to `DSCAPS_VIDEOONLY`, which only requires

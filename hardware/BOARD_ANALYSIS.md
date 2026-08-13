@@ -5,7 +5,7 @@
 
 See [`ark1668-limcet-prado.dts`](ark1668-limcet-prado.dts) for a structured
 device-tree-style writeup combining this physical inspection with the kernel/
-userspace RE findings in [`docs/SOC_ARK1668_CROSSREF.md`](../docs/SOC_ARK1668_CROSSREF.md)
+userspace RE findings in [`docs/HARDWARE_AND_SOC_REFERENCE.md`](../docs/HARDWARE_AND_SOC_REFERENCE.md)
 — note the real firmware has no device tree at all (ATAG boot), so that file
 is a documentation reconstruction, not a real boot artifact.
 
@@ -233,4 +233,4 @@ The USB-A port on the board is a **host-mode** port for flash drives, CarPlay US
 
 The Holden base rootfs (`/etc/all.sh`) loads `g_zero.ko` — a USB gadget test driver that puts a USB controller into **device mode** at boot. This is the likely cause of the USB-A port not working as a host for flash drives or phone connections. Removing that `insmod` line from `all.sh` is the recommended fix.
 
-See [`../Prado firmware reconstructed/mtd6_rootfs/rootfs/etc/all.sh`](../Prado%20firmware%20reconstructed/mtd6_rootfs/rootfs/etc/all.sh) for the relevant line.
+See [`firmware_source/mtd6_rootfs/etc/all.sh`](../firmware_source/mtd6_rootfs/etc/all.sh) for the relevant line.

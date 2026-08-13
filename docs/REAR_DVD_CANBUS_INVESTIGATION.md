@@ -1,0 +1,152 @@
+# Handoff: investigate controlling the factory rear DVD/RSE unit from the Limcet box via CAN bus
+
+## Goal
+
+Trace the CAN bus commands the factory Toyota head unit sends to control the
+rear DVD/RSE (Rear Seat Entertainment) unit, and figure out whether/how the
+Limcet aftermarket box can replicate them — i.e. control the rear DVD unit
+from the Limcet box instead of the factory unit.
+
+**This is a genuinely new investigation area** — nothing in this project's
+docs currently mentions a rear DVD/RSE unit at all (confirmed via grep across
+`docs/*.md`, no hits). Everything below is either directly relevant prior
+work (the CAN/MCU findings) or open unknowns to establish from scratch.
+
+## What's already known (relevant prior work)
+
+### Hardware — real CAN bus, but not exposed to the Linux/ARK1668 side
+
+- `docs/CANBUS.md` — the Limcet box has a genuine, populated CAN circuit: an
+  STM32F105RBT6 (2× bxCAN controllers) + NXP TJA1042 transceiver
+  (ISO 11898-2, up to 5 Mbit/s, CAN FD capable), on the `DC_LIMCET_MB_REV_003`
+  board. This transceiver connects to the vehicle harness's CANH/CANL pair.
+- **Critically: this CAN interface is wired to the STM32 MCU, not to the
+  ARK1668 SoC.** The Linux side has no CAN peripheral and never sees raw CAN
+  frames — everything is mediated through the STM32's own closed firmware
+  (`Limcet-V1.0-1302`), which talks to the SoC only via a proprietary UART
+  protocol (`/dev/ttyHS0`, 38400 baud, `McuType=6` → `MCUAdapter_BoxP300` on
+  the Linux/`libMcuCenter.so` side).
+- The STM32 firmware, as currently understood, **only decodes Toyota SWC
+  (steering wheel control) CAN frames** and relays decoded key events up to
+  Linux — see the SWC section of `docs/CANBUS.md`. Whether it does (or could)
+  decode/relay *other* CAN traffic (e.g. rear-DVD-related frames) is
+  **unknown and is one of the first things to establish**.
+- A separate software path exists — `libCanBus.so`, a generic multi-vendor
+  aftermarket CAN-decoder-box SDK with a `CanBus_Raise_Toyota` class
+  (`CanType=9`) — but this device runs `CanType=0` (**confirmed correct,
+  live-tested**: setting `CanType=1` broke all touch/knob input by
+  instantiating the wrong vendor's adapter and stealing `/dev/ttyHS0` from
+  the MCU — see `docs/CANBUS.md`'s "Known CAN-capable MCU adapters" and
+  "Root cause" sections). `CanBus_Raise_Toyota` is written to drive an
+  *external* UART-connected CAN decoder box, not to talk to a CAN peripheral
+  directly — this hardware doesn't have one wired to Linux, so this path is
+  a dead end unless a separate physical CAN adapter is added.
+
+### Software protocol — Limcet MCU ↔ Linux (BoxP300), inbound side well understood, outbound side not
+
+- `docs/MCU_ADAPTERS.md` §"BoxP300 (McuType=6) — full command dispatch" —
+  disassembly-verified table of every command the STM32 sends *to* Linux
+  (frame header `0x2E`, command byte at offset 1: `0x00`–`0x06`, `0x0A`,
+  `0x12`, `0x20`–`0x22`, `0x30`, `0x7F`, `0xE2`, `0xE4`). None of these are
+  rear-DVD-related as currently understood (radar level, steering angle,
+  status bitfields, arkdata file I/O, firmware update, MCU version).
+- **The outbound direction (Linux → STM32) is an explicitly open item**:
+  `makeMCUProtocol` (`0x31e60` in `libMcuCenter.so`) builds outbound frames,
+  called by `syncSettingDataToMcu`/`translateApp`/etc., but "the command byte
+  is not passed as a nearby inline constant, so the outbound command set is
+  not yet enumerated" (`docs/MCU_ADAPTERS.md`, verbatim). This matters
+  directly: if there's *already* a rear-DVD-relevant outbound command in
+  this protocol (e.g. video-source-switch, or a generic "relay this CAN
+  frame" passthrough), it's sitting un-enumerated in that dispatch logic
+  right now — worth checking BEFORE assuming new STM32 firmware work is
+  needed.
+- Confirmed bidirectional link (background context from the parent
+  conversation): real `write()` calls captured via strace show Linux
+  actively sending framed packets to the MCU (`FA 00 13 59 02 02 00 B0 AF`
+  style, same `0xFA...0xAF` framing already documented for CAN key data
+  building — `writeCanBusData`/`makeCanBusProtocol`/`ProtocolUtils::writeDatas`
+  in the *Honda BoxP230* adapter specifically, not BoxP300 — worth checking
+  whether BoxP300 has an equivalent CAN-write path or whether that's
+  genuinely Honda-only).
+
+### Practical device access already established
+
+- Root SSH access works. BusyBox toolset present: `cat`, `dd`, `hexdump`,
+  `microcom`. **Absent**: `strace`, `stty`, `od`, `xxd`, `socat` — noted in
+  `docs/MCU_ADAPTERS.md` as a real constraint on live capture technique.
+- `docs/MCU_ADAPTERS.md`'s "Capturing the codes live on the device" section
+  has a working recipe for watching `/dev/ttyHS0` traffic live while
+  physically toggling inputs — directly reusable for this investigation
+  (toggle rear-DVD-relevant actions from the factory unit instead of
+  Reverse/ILL/ACC/SWC).
+
+## What's genuinely unknown — establish these first, in order
+
+1. **How does the factory Toyota system talk to the rear DVD/RSE unit at
+   all?** Not confirmed to be CAN. Toyota Prado 150 rear entertainment
+   systems have historically used a mix of mechanisms depending on trim/
+   market — could be real CAN bus messages, could be a dedicated video/IR
+   link with only simple power/mode signaling on CAN (or a separate bus
+   entirely, e.g. LIN). This needs to be established from real vehicle
+   documentation/wiring diagrams or a real capture — don't assume CAN
+   without confirming.
+2. **If it is CAN**: get a real capture of the factory head unit actually
+   controlling the rear DVD unit (power on/off, source select, whatever the
+   real controllable functions are). This needs a CAN sniffer
+   (USB-CAN adapter + `candump`/similar, or a logic analyzer on the CANH/
+   CANL pair) connected to the vehicle bus during a real session with the
+   *factory* head unit installed and the rear unit responding — this is a
+   physical, in-vehicle capture task, not something derivable from the
+   Limcet box or its firmware alone.
+3. **Does the Limcet STM32 already see/relay the relevant CAN IDs?** Once
+   the real CAN IDs are known from step 2, check whether the STM32's own CAN
+   filter (currently only known to accept Toyota SWC IDs) would even let
+   those frames through as-is, or whether the STM32 firmware itself would
+   need modification (a much bigger task — needs real STM32 firmware source
+   or a full reflash-capable reverse-engineering effort, out of scope for a
+   quick win).
+4. **Is there already an outbound Linux→MCU command for this?** — **DONE,
+   2026-08-06.** All `MCUAdapter_BoxP300::makeMCUProtocol` call sites
+   disassembled and enumerated in both binary generations (see
+   `docs/MCU_ADAPTERS.md`'s "Outbound (Linux → STM32)" table for the full
+   writeup). 8 distinct outbound commands found: `0x81` (handshake/ack),
+   `0x82` (app-shown notify, only for app `0xCC`), `0x84` (app
+   foreground/state-change), `0x85` (app-protocol ack), `0x87` (list-item
+   click echo), `0xA0` (generic UI-setting sync, `[settingId, value]`),
+   `0xE1`/`0xE3` (firmware-update flow). **None of these name or obviously
+   relate to a rear DVD/RSE unit or CAN passthrough.** `0xA0` (the generic
+   settings-sync channel) is the one open door — if the factory system
+   models rear-DVD control as just another `MsnIniConfig` settingId, it
+   would already ride this channel with no new firmware work, but no
+   DVD-shaped settingId has been identified. This is a real (if soft)
+   negative result: the "no new firmware work needed" hope from this item
+   is not supported by what's actually in `libMcuCenter.so` — the STM32
+   firmware-relay path (item 3) is now the more likely route if the answer
+   turns out to be CAN-based at all (item 1/2 still fully open).
+
+## Suggested first steps
+
+1. Confirm whether the rear DVD/RSE unit is CAN-controlled at all (vehicle
+   wiring diagram / service manual / physical inspection of its harness
+   connector for CANH/CANL pins) before investing in a bus capture.
+2. If CAN-controlled: get a real capture (see point 2 above) — this is the
+   actual unlock for the whole investigation, everything else is
+   contingent on knowing the real CAN IDs/payloads in play.
+3. In parallel (doesn't need the vehicle): finish enumerating BoxP300's
+   outbound command set from `libMcuCenter.so`'s disassembly — pick up
+   directly from `docs/MCU_ADAPTERS.md`'s existing open item, same
+   methodology already used for the inbound table.
+4. Once both are known, compare: STM32-relay path (needs firmware capable
+   of forwarding/decoding the right CAN ID) vs. a from-scratch
+   Linux-side-only approach (e.g. an added external CAN transceiver wired
+   directly to the ARK1668, bypassing the STM32 entirely for this feature)
+   — pick based on what's actually feasible once the real protocol is known.
+
+## Key files to read first in the new conversation
+
+- `docs/CANBUS.md` — hardware, SWC protocol, `CanType` findings, root-cause
+  history (worth reading in full, not just the excerpts above).
+- `docs/MCU_ADAPTERS.md` — full BoxP300 command dispatch table, the "not yet
+  enumerated" outbound-command open item, and the live-capture recipe.
+- `hardware/BOARD_ANALYSIS.md` — referenced from `CANBUS.md` for the
+  full GPIO table, may have other physically-relevant pin info.

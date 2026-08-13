@@ -19,8 +19,8 @@ The MCU is an **STM32F105RBT6** (ARM Cortex-M3, connectivity line, 128 KB flash 
 ACC-IGN signals, and drives the Feasycom BT module. It talks to the ARK1668 SoC
 over `/dev/ttyHS0`.
 
-Cross-references: [../docs/MCU_ADAPTERS.md](../docs/MCU_ADAPTERS.md),
-[../docs/CANBUS.md](../docs/CANBUS.md), [../docs/SECURITY_REVIEW.md](../docs/SECURITY_REVIEW.md),
+Cross-references: [../docs/MCU_ADAPTERS.md](../../docs/MCU_ADAPTERS.md),
+[../docs/CANBUS.md](../../docs/CANBUS.md), [../docs/SECURITY_REVIEW.md](../../docs/SECURITY_REVIEW.md),
 `../Prado firmware dump/mtd6_rootfs/usr/lib/libMcuCenter.so` (SoC-side driver).
 
 ---
@@ -101,6 +101,201 @@ UART is the SoC link (`/dev/ttyHS0`); another drives the Feasycom BT module.
 `/dev/ttyHS0` on the SoC side is a raw PL011 UART (see
 `../linux-arkmicro Reference/.../mcu_serial.c`); all framing is in software above it.
 
+**2026-08-13 — cross-confirmed from this side, not just `libMcuCenter.so`.**
+Everything `tools/mcu-handshake` and this doc previously knew about the wire
+framing came from the SoC-side driver (`libMcuCenter.so`'s
+`MCUAdapter_BoxP300`) — never from the MCU's own firmware. Imported
+`can_app.bin` into Ghidra as a raw ARM binary (`ARM:LE:32:Cortex`, base
+`0x08004000`, Thumb context forced across the app region since Cortex-M3 is
+Thumb-only and Ghidra's raw-binary loader defaults to ARM mode with no vector
+table to signal otherwise) and decompiled the real USART2 ISR at `0x08007298`.
+It is a clean, complete match to the framing already documented:
+
+```
+if (TXE pending) {                       // ring-buffer TX drain (already documented)
+    ...
+}
+if (RXNE pending) {
+    byte = read data register
+    switch (state @ 0x2000005a) {
+    case 0:  if (byte == 0x2E) state = 1;                          // header
+    case 1:  msg[msgIdx].cmd = byte; state = 2;                    // cmd byte
+    case 2:  if (byte < 0x1c && byte != 0) {                       // length byte
+                 msg[msgIdx].len = byte;
+                 remaining = byte + 3;   // len + cmd + checksum framing overhead
+                 writeIdx = 2; state = 3;
+             } else state = 0;           // invalid length -> resync
+    case 3:  msg[msgIdx].payload[writeIdx++] = byte;
+             if (writeIdx == remaining) {
+                 msgIdx = (msgIdx + 1) % 8;   // 8-slot ring, 0x1e (30) bytes/slot
+                 state = 0;
+             }
+    }
+}
+```
+
+This independently confirms, from the opposite end of the wire, that
+`[0x2E][cmd][len][payload...][checksum]` (already `tools/mcu-handshake`'s
+assumption) is exactly right — not inferred from the SoC side alone. The
+8-slot × 30-byte ring buffer this fills (`msg[msgIdx].cmd` at slot+4,
+`.len` at slot+5, payload/checksum following) is a real, previously-unknown
+structural detail: completed frames queue up to 8 deep before whatever
+processes them (see below) has to catch up.
+
+### 3.1c Command dispatch table — found, complete, 9 real commands
+
+**Found via a different route than Ghidra's CFG.** Tracing `main()` forward
+through Ghidra's headless decompiler hit diminishing returns behind several
+layers of generic Cortex-M/newlib startup boilerplate. Switched tools instead:
+used `capstone` (Python) to linearly disassemble the raw binary directly (it
+handles Thumb/Thumb-2 mixed-length instructions and PC-relative literal pools
+correctly without Ghidra's function-boundary/context-register friction), then
+searched the whole binary for every `BL`-encoded call targeting the ring-buffer
+"pop next message" function (`0x0800720c`, found in §3.1's ISR trace via a
+`ChannelManager`-parallel structure: `is_empty()`/`reset()`/`pop_message()`
+helpers at `0x080086a0`/`0x080086e0`/`0x0800720c`). Exactly **one call site**
+exists, at `0x080045e6`, inside a real dispatcher function (prologue at
+`0x080045d8`):
+
+```c
+// (reconstructed from raw disassembly, not decompiler output)
+status = pop_message(&msg, 0);
+if (status != 0) return;               // ring buffer empty
+if (!some_check())  return;            // FUN_08007dc4 -- gating condition, not decoded
+for (i = 0; i < 9; i++) {
+    if (cmd_table[i].cmd == msg.cmd) { // 8-byte stride: {u8 cmd; u8[3] pad; u32 handler}
+        cmd_table[i].handler(...);
+        break;
+    }
+}
+```
+
+The table lives at `0x0800b9e4`, 9 entries × 8 bytes (`cmd` byte at `+0`,
+handler function pointer at `+4`). All 9 extracted directly from the binary:
+
+| cmd | handler | what it does |
+|---|---|---|
+| `0x81` | `0x080088b4` | Calls a generic "reset state slot" helper (`FUN_08006228(val=0, idx)`) four times with idx = 12, 1, 8, 10. Resets four internal state-table entries to 0. **Confirmed by `tools/mcu-handshake`'s own `onInited()` frame.** No GPIO/hardware register touched. |
+| `0x82` | `0x08008bd4` | Reads `msg.payload[2]`; if `==1`, sets internal `{mode=4, type=1}` and calls the same reset-helper on idx 1; else sets `{mode=1, type=2}`. **The exact payload byte at offset 2 decides which branch fires** — worth double-checking `tools/mcu-handshake`'s 9-byte `onModeAppChanged` payload actually has `1` at that position if mode=4 is the intent. |
+| `0x84` | `0x08008808` | Reads `msg.payload[3] & 0xf` as a "type" value (bails if ≥6); dedups against the previous type; on a real change, only types `0` and `3` trigger real action (`FUN_080058a4(0)` / `FUN_080058a4(1)` respectively, most likely an audio-route select given the doc's own `AT+AUDROUTE=1/2` finding) — types 1/2/4/5 are silent no-ops. |
+| `0x85` | `0x08008ba8` | Copies `payload[3..5]` into internal state, calls a second generic setter `FUN_080062fc(idx=5, val=3)`. |
+| `0x87` | `0x080087a0` | Copies `payload[2..5]` into a stack buffer, calls `FUN_08004278` (undecoded), stores the same 4 bytes into internal state at offsets 7-10, then calls `FUN_08007600(idx=0xd, ...)` — same helper `0x84`/`0xa0` use with different index constants, likely a generic "notify/apply subsystem N" dispatcher (candidate: triggers one of the documented `AT+*` commands to the Feasycom BT module). |
+| `0x88` | `0x0800893c` | Copies 8 bytes between two buffers, then packs two separate big-endian-ish 32-bit words out of `payload[2..5]` and `payload[6..9]` — receiving some 8-byte value from the SoC (candidate: a timestamp or counter, not yet identified further). |
+| `0xa0` | `0x080089d8` | A rich `switch` (`tbb` jump table) on `payload[2]` with up to 18 cases — sets a state byte at offset `0x3b` to the case value and, for several cases, calls the same `FUN_08007600` "apply" helper with different index constants (`0xc` seen). By far the largest/most complex handler of the 9 — a genuine multi-mode command, not yet fully enumerated case-by-case. |
+| `0xe1` | `0x080088e0` | **Just calls `FUN_080045c4`**, which writes the literal `0x5555aaaa` to SRAM address `0x20004004`, then spins forever (`b $`). Not a hardware reset-register write (`0x20004004` is plain SRAM, not `NVIC_AIRCR`/IWDG territory) — this is the classic "leave a magic value in a fixed RAM location for the bootloader to check after reset" pattern. Since the loop never feeds the independent watchdog (already confirmed enabled, §3), IWDG will force an actual hardware reset shortly after. **Strong candidate for a software-triggerable "enter bootloader / reboot" command** — if the resident bootloader (§4, not in this repo) checks this exact magic value at this exact address on boot, this could be an alternative to the `auto_upgrade.txt` USB-trigger flow (§5) for entering update mode. Not confirmed without either the bootloader binary or a live hardware test (send `cmd=0xe1` and see if the unit reboots / enters update mode). |
+| `0xff` | `0x080088e8` | Another `payload[2]`-keyed switch (values 6,7,8,9,0x7f recognized); only value `6` (and the shared fallthrough for several cases) calls the reset-helper (`FUN_080062fc(idx=0xc, val=0)`) — most other values are no-ops in this build. |
+
+**How this was found — technique note for future MCU/CAN-app reverse-engineering
+in this repo:** Ghidra's raw-binary loader + headless CFG-chasing is fine for
+finding a KNOWN address's function (as §3's ISR trace shows), but tracing
+`main()`'s call graph forward through generic startup code via headless
+round-trips has poor time-to-value. `capstone`'s linear/recursive disassembly
+plus a targeted "find every BL to address X" scan (given at least one known
+callee address, found here via data-xrefs to the ring buffer) got to the real
+answer far faster. Worth reaching for first next time, rather than more Ghidra
+script iterations.
+
+### 3.1d Which incoming CAN frames generate which commands — found, complete
+
+**2026-08-14, at explicit request ("is it possible to work out what the input
+CAN frames are that generate the commands").** Same `capstone` technique as
+§3.1c, applied in the opposite direction: instead of searching for callers of
+a known UART function, searched for every literal-pool load of the **CAN RX
+ring's base address** (`0x200002bc`, derived from the CAN1_RX0 ISR at
+`0x08007064` — see §3.1b below for the ISR itself). 250+ hits, spanning
+`0x08007f1c`-`0x0800b7ee` — a genuinely large amount of code, much bigger than
+the 9-command UART dispatcher.
+
+**The real consumer function** (`0x08007f04`, called from the main loop) pops
+one frame off the 15-slot CAN RX ring (read/write index bytes at `+0x12c`/
+`+0x12d`, same struct the ISR fills), extracts either `StdId` or `ExtId`
+(picked via an IDE flag byte in the ring slot), then dispatches by CAN ID
+through **one of three separate lookup tables**, selected by a `mode` byte
+(`ring_struct+0x36`, same base as the write/read indices):
+
+```c
+uint32_t id = frame.ide ? frame.ExtId : frame.StdId;
+switch (mode) {                    // mode read from ring_struct+0x36
+case 3: table = mode3_table; count = 9;  break;
+case 2: table = mode2_table; count = 10; break;
+case 1: table = mode1_table; count = 9;  break;
+// mode 0 (or >3): no CAN dispatch happens at all
+}
+for (i = 0; i < count; i++)
+    if (table[i].can_id == id) { table[i].handler(); break; }
+// unconditionally, regardless of match: re-copy + CAN_Transmit() the frame,
+// then advance the ring's read index (wrap at 15)
+```
+
+Each table is an 8-byte-stride array (`u32 can_id; u32 handler_ptr`) —
+structurally the same layout as the UART command table in §3.1c, just keyed
+on CAN ID instead of a protocol byte. All 28 entries across the three tables,
+extracted directly from the binary (`mode3_table@0x0800bae8`,
+`mode2_table@0x0800bb30`, `mode1_table@0x0800bb80`):
+
+| mode | CAN ID | handler | | mode | CAN ID | handler |
+|---|---|---|---|---|---|---|
+| 3 | `0x03a` | `0x08009898` | | 2 | `0x020` | `0x0800ad80` |
+| 3 | `0x04d` | `0x08009efc` | | 2 | `0x060` | `0x0800b7d8` |
+| 3 | `0x135` | `0x0800975c` | | 2 | `0x110` | `0x0800b548` |
+| 3 | `0x168` | `0x08009dd0` | | 2 | `0x220` | `0x0800af60` |
+| 3 | `0x214` | `0x08009960` | | 2 | `0x170` | `0x0800adf0` |
+| 3 | `0x110` | `0x0800990c` | | 2 | `0x240` | `0x0800aca8` |
+| 3 | `0x2c3` | `0x08009690` | | 2 | `0x1a0` | `0x0800b0c4` |
+| 3 | `0x160` | `0x080094a8` | | 2 | `0x080` | `0x0800b4f0` |
+| 3 | `0x000` | *(none — unused slot)* | | 2 | `0x090` | `0x0800ae44` |
+| | | | | 2 | `0x3a0` | `0x0800aca4` |
+| 1 | `0x0f5` | `0x0800a7bc` | | | | |
+| 1 | `0x2d5` | `0x0800a5a8` | | | | |
+| 1 | `0x28a` | `0x0800a680` | | | | |
+| 1 | `0x215` | `0x0800aa4c` | | | | |
+| 1 | `0x185` | `0x0800a8e4` | | | | |
+| 1 | `0x245` | `0x08009fc4` | | | | |
+| 1 | `0x195` | `0x0800a2f0` | | | | |
+| 1 | `0x105` | `0x0800a938` | | | | |
+| 1 | `0x035` | `0x0800abc8` | | | | |
+
+**One handler fully decoded, closing the loop end-to-end.** `mode=1, CAN ID
+0x105`'s handler (`0x0800a938`) reads bits `0x80` and `0x4` out of the CAN
+frame's data byte at slot offset `+0xc`, and — gated on those bits plus an
+internal flag byte — calls the exact same generic state-setter
+(`FUN_08006228`, offset `0x08006228`) that `cmd=0x81`'s **UART** handler
+(§3.1c) also uses, writing `state[7] = 0x4101` or `state[7] = 0x4001`
+depending on which bit pattern matched. Those two values differ by a single
+bit (`0x100`) — exactly the shape of a key-down/key-up toggle on an otherwise
+fixed key code. This is the real, concrete link the whole codebase was built
+around: **a specific CAN frame -> bit-pattern match -> generic state-slot
+write -> (the same slot mechanism `cmd=0x81`/`0xff`'s UART handlers reset)
+-> eventually marshaled into an outgoing UART frame to the SoC.** The other
+27 handlers weren't individually decoded this pass (see below), but all share
+the same table structure and very plausibly the same state-slot-write pattern
+for the ones that map to steering-wheel/panel key events.
+
+**Caveat that matters: these 28 CAN IDs are Volvo-profile IDs, not Toyota
+ones.** This whole file is confirmed (top of this document) to be the
+`DCn32-VOLVO` build, not the real firmware flashed on the Prado. None of these
+28 IDs match the Prado's own documented CAN IDs (`docs/CANBUS.md`'s SWC at
+`0x3C4`, for instance, appears nowhere in any of the three tables) — so this
+specific table content tells you nothing about decoding the *real* Toyota
+bus. What **does** transfer directly: the *mechanism* — a mode-selected,
+CAN-ID-keyed dispatch table feeding a shared generic state-setter that's also
+what the SoC-facing UART command handlers use — since (per this document's
+own opening warning) the real Toyota firmware is the same `DCn32` codebase
+with only the vehicle profile/tables swapped, not a different architecture.
+If the real Toyota `can_app.bin` is ever obtained, this exact
+`capstone`-based technique (find the CAN RX ring's literal-pool xrefs, locate
+the `mode`-selected table trio, dump the 8-byte-stride entries) will find its
+real Toyota-specific CAN-ID-to-key mapping just as fast.
+
+**Not done this pass** (real, bounded follow-up work if ever needed): decode
+the remaining 27 handlers individually (mechanical repeat of the one worked
+example above); confirm what selects `mode` at runtime (likely a
+config/product-variant setting, not investigated); confirm the "unconditional
+CAN_Transmit() of the just-received frame" behavior noted in the dispatcher's
+tail — worth understanding whether that's a genuine bus relay/echo or
+something narrower, since it happens for every dispatched (and undispatched)
+frame regardless of table match.
+
 ### 3.1b CAN — the MCU both receives AND transmits (bidirectional node)
 The MCU is a full bidirectional CAN node on **CAN1**, not a receive-only decoder.
 
@@ -143,7 +338,7 @@ DCn32-VOLVO-V2.10-20240909
 is **VOLVO**, dated 2024-09-09. For a Toyota Prado this is the standout concern —
 SWC key codes, reverse/ACC-IGN triggers and illumination decoding are
 vehicle-specific. A Volvo profile will not correctly decode the Toyota bus
-(Prado SWC is CAN ID `0x3C4` at 500 kbit/s per [../docs/CANBUS.md](../docs/CANBUS.md)),
+(Prado SWC is CAN ID `0x3C4` at 500 kbit/s per [../docs/CANBUS.md](../../docs/CANBUS.md)),
 and — since the MCU also **transmits** on CAN1 (§3.1b) — it may put Volvo-profile
 frames onto the Toyota bus. **Verify this is the intended image before flashing it
 to a Prado.**
@@ -251,7 +446,7 @@ Config keys (from `MsnProductInfo.ini` / `FactoryConfig.ini`):
   documented way to read/dump MCU flash back over `/dev/ttyHS0`.
 - **Integrity only, no authenticity.** Transfer is protected by CRC16-YMODEM
   (corruption detection) — there is **no signature / authentication** of the
-  image (matches [../docs/SECURITY_REVIEW.md](../docs/SECURITY_REVIEW.md): "no firmware
+  image (matches [../docs/SECURITY_REVIEW.md](../../docs/SECURITY_REVIEW.md): "no firmware
   update signature/checksum verification"). Anyone with root on the SoC can drop
   a `McuAppUpdate.img` and trigger a flash of arbitrary MCU firmware.
 - The resident bootloader is required for this to work and is **not recoverable

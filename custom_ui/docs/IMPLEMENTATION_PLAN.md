@@ -519,7 +519,8 @@ stock's flat/scattered menu structure:
       Basic tier (Brightness/Contrast/Saturation sliders on the OSD1/
       GUI layer). Ioctl numbers and the `ark_disp_vde_cfg_arg` struct
       layout confirmed against the real vendor header
-      (`arkpro_custom/vendor/AVService/display.h`), not guessed. Slider
+      (`AVService/display.h`, ASTRI ArkPro reference source — see
+      `docs/SOURCES.md`), not guessed. Slider
       range (0-255) matches the real captured `Setting.config` values
       but the ioctl's own valid range isn't independently confirmed —
       flagged as an assumption in the source comment. **Not yet

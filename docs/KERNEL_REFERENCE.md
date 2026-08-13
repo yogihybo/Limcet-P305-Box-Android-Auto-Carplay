@@ -292,7 +292,7 @@ These drivers are compiled in to support TV-tuner accessory variants:
 
 11. **Size discrepancy** — `uboot-env` records `kernel_size=0x305130` (3,166,512 bytes) but the repo file is 3,255,536 bytes (~89 KB larger). The env variable was not updated after a kernel rebuild, or the repo carries a newer build than what was originally flashed.
 
-12. **No kernel suspend/resume path — by design, confirmed 2026-07-30.** Neither stock's `vmlinux.elf` nor our 4.19.192 port has `CONFIG_SUSPEND`/`pm_suspend`/suspend-ops symbols, and there's no ACC/power-key GPIO node in either device tree. This is not a gap: ACC/ignition power handling is done entirely by the companion MCU cutting the supply rail (see the MCU/ACC findings in `HARDWARE_AND_SOC_REFERENCE.md`), not kernel-level suspend/resume. Watchdog/RTC/PWM drivers (`ark_wdt`/`rtc-ark`/`pwm-ark`) are all present and correctly DTS-wired in our port, matching stock's own driver family — the watchdog device exists but is dormant (no feed daemon) in both stock's real rootfs and ours, also not a regression. Documented here so future audits don't re-flag this cluster as an open question (see `docs/DEVICE_TEST_CHECKLIST_2026-07-18.md` §77 for the full review this came from).
+12. **No kernel suspend/resume path — by design, confirmed 2026-07-30.** Neither stock's `vmlinux.elf` nor our 4.19.192 port has `CONFIG_SUSPEND`/`pm_suspend`/suspend-ops symbols, and there's no ACC/power-key GPIO node in either device tree. This is not a gap: ACC/ignition power handling is done entirely by the companion MCU cutting the supply rail (see the MCU/ACC findings in `HARDWARE_AND_SOC_REFERENCE.md`), not kernel-level suspend/resume. Watchdog/RTC/PWM drivers (`ark_wdt`/`rtc-ark`/`pwm-ark`) are all present and correctly DTS-wired in our port, matching stock's own driver family — the watchdog device exists but is dormant (no feed daemon) in both stock's real rootfs and ours, also not a regression. Documented here so future audits don't re-flag this cluster as an open question (see `docs/historical/DEVICE_TEST_CHECKLIST_2026-07-18.md` §77 for the full review this came from).
 
 
 ## KERNEL_BUILD_REFERENCE.md
@@ -754,8 +754,8 @@ pins, so the panel never answered. **Fix:** enable
 `CONFIG_I2C_DESIGNWARE_PLATFORM` (§5) and move the `gt911` node onto `&i2c0`,
 leaving the ARK7116 alone on `i2c-gpio-0`. Full before/after DTS diff, build
 commands, and boot-log PASS/FAIL criteria are in
-[`HANDOFF_touch_and_bootargs_fix.md`](HANDOFF_touch_and_bootargs_fix.md) (Fix A);
-cross-log analysis is in [`boot_experiment_log.md`](boot_experiment_log.md).
+[`historical/HANDOFF_touch_and_bootargs_fix.md`](historical/HANDOFF_touch_and_bootargs_fix.md) (Fix A);
+cross-log analysis is in [`historical/boot_experiment_log.md`](historical/boot_experiment_log.md).
 
 ---
 

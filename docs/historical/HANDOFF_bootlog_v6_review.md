@@ -1,7 +1,7 @@
 # Handoff — Boot-Log Review: `new kernel bootlog new uboot v6.txt`
 
 **Reviewed:** 2026-07-11
-**Log:** `docs/new kernel bootlog new uboot v6.txt` (649 lines)
+**Log:** `docs/logs/archived/new kernel bootlog new uboot v6_260715.txt` (649 lines)
 **Build:** Linux **4.19.192** `#18` (gcc 12.2.0), machine `Limcet P305/P306`, built `Sat Jul 11 2026`
 **cmdline:** `console=ttyS0,115200n8 mem=180M earlyprintk=serial root=/dev/mmcblk0p2 rootfstype=ext4 rootwait rw screen=0`
 
@@ -125,7 +125,7 @@ Segmentation fault
 3. **Confirm RN6752 camera** streams (`/dev/video0`, reverse-gear test).
 
 ## References
-- Log: `docs/new kernel bootlog new uboot v6.txt`
+- Log: `docs/logs/archived/new kernel bootlog new uboot v6_260715.txt`
 - Kernel-build fixes: `docs/historical/HANDOFF_kernel_build_camera_and_touch.md`
 - Touch root cause + stock-bus proof + pending live verification: `docs/historical/boot_experiment_log.md`
 - Live I²C bus scan tool: `tools/i2c-scan/`

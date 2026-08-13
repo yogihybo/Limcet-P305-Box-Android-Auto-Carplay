@@ -21,7 +21,7 @@ Source of: MsnProductInfo.ini (ProductId=Limcet-P306), msncfg settings, pointerc
 **Prado Msnconfig** — Prado-specific factory config variations  
 **`ArkPro Reference/`** — ASTRI's reference ARK1680 kernel/U-Boot/userspace source (public leak,
 `cphatt/ArkPro` commit `e743744`), used to confirm SoC-identity and register-field findings in
-`docs/HARDWARE_AND_SOC_REFERENCE.md` §9 and `docs/DISPLAY_SUBSYSTEM.md`; see `ArkPro Reference/README.md`  
+`docs/HARDWARE_AND_SOC_REFERENCE.md` §9 and `docs/DISPLAY_SUBSYSTEM.md`; see `ArkPro Reference/README.md`.  
 **`linux-arkmicro Reference/`** — ArkMicro's own public U-Boot BSP (`RD_Software/linux-arkmicro`,
 a later generation than the Prado's actual stock U-Boot — see that folder's README), the starting
 point for `docs/UBOOT_BUILD_GUIDE.md`'s from-source build plan  
@@ -33,7 +33,18 @@ Auto/audio-pipeline/USB-hotplug findings in `docs/VENDOR_BSP_RESEARCH.md`
 **`cstech-ip17-rootfs`** (personal Downloads, not tracked in any repo) — a rootfs-only dump from a
 different, older ArkMicro product (ARK1680, Linux 3.4.0); wrong SoC generation for direct reuse,
 used only to corroborate the `com.arkmicro.*` D-Bus naming convention — see
-`docs/VENDOR_BSP_RESEARCH.md` §1
+`docs/VENDOR_BSP_RESEARCH.md` §1  
+**`firmware_dumps/ztuzauto_extracted/`** — full stock update package from a rebranded piggyback box
+(`ProductId=ZTUZAUTO-P306`, `VehicleName="ZTUZAUTO Box"`), same `ResourceName=Box-P301`/`McuType=6`/
+`BlueToothType=6` hardware family as this project's Limcet-P306 unit and a byte-identical-size
+`rootfs.img` to `AA-NEW-P306_extracted/` below — evidently the same OEM firmware, differently
+rebadged. Not yet diffed against the Holden/Prado base; a candidate source if it turns out to carry
+newer Android Auto handling than the Holden base this project builds from.  
+**`firmware_dumps/AA-NEW-P306.zip`** / **`AA-NEW-P306_extracted/`** — same firmware family
+(`ProductId=Smart-P306`, `VehicleName="Smart Box"`, identical `ResourceName`/`McuType`/`BlueToothType`
+and rootfs size to `ztuzauto_extracted/` above), downloaded 2026-08-13 specifically to check for a
+newer Android Auto fix relevant to this project's ongoing AA wireless-session work. Not yet diffed
+against the current build.
 
 ## Key differences applied vs base Holden firmware
 

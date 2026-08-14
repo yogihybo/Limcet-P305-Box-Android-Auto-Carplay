@@ -5,16 +5,13 @@
 // is now just wiring + the LVGL tick loop. See docs/IMPLEMENTATION_PLAN.md.
 
 #include <atomic>
-#include <cerrno>
 #include <chrono>
-#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <mutex>
 #include <string>
 #include <thread>
 #include <unistd.h>
-#include <sys/time.h>
 #include "lvgl.h"
 #include "hal/androidauto_client.h"
 #include "hal/bluetooth.h"
@@ -212,74 +209,9 @@ AaAutoStartWatcher & aa_auto_start_watcher() {
     return watcher;
 }
 
-// 2026-08-15: this device has no RTC and no NTP client anywhere in its
-// rootfs, so the system clock reads near the Unix epoch on every single
-// boot unless something sets it. `hal::sync_clock_from_phone()`
-// (AT+CCLK over HFP) was meant to be that something, but has failed on
-// every real hardware test this whole project's run (blueware reports
-// ERR004 -- most likely because AT+CCLK is an optional HFP AG feature
-// this test phone's own HFP stack doesn't implement, not something a
-// head-unit-side fix can work around).
-//
-// `androidauto/session.cpp`'s own plausibleEpochMillis() already
-// patches the ONE confirmed wall-clock-derived value ever sent on the
-// wire (PingRequest.timestamp) with a fallback baseline -- but that's a
-// single call-site patch, not a fix for the underlying problem. Traced
-// through aasdk's own message-framing layer (MessageOutStream/
-// Messenger/Timestamp) to rule out it silently stamping every frame
-// with the real clock too -- confirmed it doesn't -- but couldn't rule
-// out other wall-clock-dependent behavior this project hasn't audited
-// (TLS's own internals being the most plausible candidate: older
-// OpenSSL versions embed the real Unix time in ClientHello.random by
-// convention, and a security-conscious TLS peer noticing an obviously
-// wrong embedded timestamp -- e.g. 1970 -- is exactly the kind of thing
-// that could contribute to a phone quietly losing trust in the
-// connection, matching this project's own long-chased symptom and
-// widely-reported real-world "Android Auto clock mismatch" issues
-// external research corroborates).
-//
-// Rather than keep auditing narrow call sites one at a time, this sets
-// the actual SYSTEM clock (not just one in-process value) to the same
-// plausible fallback baseline `plausibleEpochMillis()` already uses,
-// as early as physically possible in this process's own lifetime --
-// before LVGL, before any HAL/Bluetooth/network init, before this
-// process's own androidauto-sidecar child ever gets spawned and does
-// its own TLS handshake. Fixes every wall-clock-dependent path at
-// once, not just the one this project happened to find. If
-// sync_clock_from_phone() later succeeds with a real value, it already
-// overwrites this via its own settimeofday() call -- this is purely a
-// boot-time floor, not a permanent override.
-void set_plausible_system_clock_if_needed() {
-    constexpr std::int64_t kSaneEpochSecondsThreshold = 1577836800LL;  // 2020-01-01 UTC
-    constexpr std::int64_t kFallbackBaselineEpochSeconds = 1755043200LL;  // ~2026-08-13 UTC
-
-    struct timeval tv {};
-    if (gettimeofday(&tv, nullptr) != 0) {
-        std::fprintf(stderr, "custom_ui: gettimeofday() failed: %s\n", std::strerror(errno));
-        return;
-    }
-    if (tv.tv_sec >= kSaneEpochSecondsThreshold) {
-        std::printf("custom_ui: system clock already plausible (%lld), leaving it alone\n",
-                    static_cast<long long>(tv.tv_sec));
-        return;
-    }
-
-    struct timeval newTv {};
-    newTv.tv_sec = kFallbackBaselineEpochSeconds;
-    newTv.tv_usec = 0;
-    if (settimeofday(&newTv, nullptr) != 0) {
-        std::fprintf(stderr, "custom_ui: settimeofday() failed: %s\n", std::strerror(errno));
-        return;
-    }
-    std::printf("custom_ui: system clock was implausible (%lld) -- set to fallback baseline "
-                "(%lld) until AT+CCLK (if it ever succeeds) provides a real value\n",
-                static_cast<long long>(tv.tv_sec), static_cast<long long>(kFallbackBaselineEpochSeconds));
-}
-
 }  // namespace
 
 int main() {
-    set_plausible_system_clock_if_needed();
     std::printf("custom_ui: starting, lv_init()...\n");
     lv_init();
     std::printf("custom_ui: lv_init() done\n");

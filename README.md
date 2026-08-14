@@ -257,20 +257,26 @@ The built-in update function (§10.0) uses this same manual-flash mechanism to d
 
 ## 6.0 Booting Stock Kernel from SD Card or USB (non-destructive)
 
-Boots the stock kernel/rootfs from removable media instead of NAND — no NAND writes, so a bad
-image just fails to boot rather than bricking the device (reflashing NAND for every change is
-also slow, see [§10.0](#100-update-mechanisms)).
+U-Boot can always load a kernel image from an SD card or USB stick — it has its own MMC and USB
+drivers, independent of what's compiled into the Linux kernel it then boots. **The rootfs is a
+different story**: once Linux takes over, the stock 3.4 kernel has no MMC driver compiled in at
+all (SD card block devices are invisible to it), while USB mass storage (MUSB HCD) *is* compiled
+in. That split is what actually determines which method below can reach a fully running system,
+not just load a kernel image — and none of them write to NAND, so a bad image just fails to boot
+rather than bricking the device (reflashing NAND for every change is also slow, see
+[§10.0](#100-update-mechanisms)).
 
-| Method | Auto or manual | Status |
-|--------|----------------|--------|
-| Manual SD card boot | Manual — retyped every boot | **Confirmed working** for the kernel; rootfs can't load from MMC (drivers not compiled in) |
-| Self-contained SD auto-boot (env relocation & hybrid boot) | Automatic | **Confirmed working end-to-end on real hardware** |
-| Manual USB boot | Manual — retyped every boot | **Confirmed working** for the kernel; rootfs can't load from MMC (drivers not compiled in) |
+| Method | Auto or manual | Kernel load | Rootfs |
+|--------|----------------|--------------|--------|
+| Manual SD card boot | Manual — retyped every boot | **Confirmed working** | **Can't work** — the stock kernel has no MMC driver, so it can never mount a filesystem off the SD card, regardless of image or format |
+| Self-contained SD auto-boot (env relocation & hybrid boot) | Automatic | **Confirmed working** | **Confirmed working** — sidesteps the MMC problem entirely by mounting the existing **stock NAND rootfs** (UBI), not a filesystem on the SD card |
+| Manual USB boot | Manual — retyped every boot | **Confirmed working** | USB mass storage *is* compiled into the stock kernel, so a rootfs mount from USB is architecturally possible — not yet independently confirmed on this hardware |
 
-**SD card layout:** p1 (FAT32) — `zImage`, plus `UBOOT.BIN` for auto-boot; p2 (ext4) — rootfs;
-p3 (ext4) — userdata. The target's 3.4-kernel/2012.10-U-Boot ext4 drivers predate `64bit`/
-`metadata_csum` (modern `mkfs.ext4` defaults) and won't mount a partition formatted with either
-on — `build_bootable_sdcard.sh` strips both automatically.
+**SD card layout:** p1 (FAT32) — `zImage`, plus `UBOOT.BIN` for auto-boot; p2 (ext4) — rootfs
+(populated by `build_bootable_sdcard.sh`, but not actually mounted by the confirmed auto-boot
+method above — see table); p3 (ext4) — userdata. The target's 3.4-kernel/2012.10-U-Boot ext4
+drivers predate `64bit`/`metadata_csum` (modern `mkfs.ext4` defaults) and won't mount a partition
+formatted with either on — `build_bootable_sdcard.sh` strips both automatically.
 
 To build a self-contained auto-boot SD image (recommended path — zero NAND writes, falls back to
 stock if the card is removed):

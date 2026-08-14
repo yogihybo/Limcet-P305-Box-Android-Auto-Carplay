@@ -608,6 +608,38 @@ bool diagnose_battery_reporting(BluetoothHandle & h) {
     return anyResponse;
 }
 
+// 2026-08-15: pure diagnostic, changes nothing -- `AT+SYSCLKCFG` is a
+// real AT command in blueware's own vocabulary (confirmed via `strings
+// usr/bin/blueware`) that this project had never noticed or queried
+// before. Found while following up on a real Bluetooth mechanism the
+// user pointed out: the standard BLE "Current Time Service" (CTS, GATT
+// service UUID 0x1805) lets a peripheral pull wall-clock time directly
+// from a paired phone -- a completely different, more standard path
+// than the AT+CCLK/HFP approach this project already tried and found
+// this test phone's own HFP stack doesn't answer (see
+// sync_clock_from_phone()'s own header comment and
+// set_plausible_system_clock_if_needed() in main.cpp for that whole
+// chase). No CTS-specific strings (service/characteristic UUIDs, "CTS",
+// "Current Time") were found anywhere in blueware's binary, so this
+// project has no confirmed evidence the module actually implements CTS
+// client behavior -- but "SYSCLKCFG" (System Clock Config) is exactly
+// on-topic and worth real evidence rather than another guess. Queried
+// read-only (`?`, no `=<value>` attempted -- the set-form's real syntax
+// and semantics aren't documented anywhere in the binary, and guessing
+// wrong risks putting the module in an unintended state for no
+// confirmed benefit).
+bool diagnose_system_clock_config(BluetoothHandle & h) {
+    std::vector<std::string> resp;
+    if (send_command(h, "SYSCLKCFG?", resp, 2000)) {
+        for (const auto & line : resp) {
+            std::printf("hal::diagnose_system_clock_config: AT+SYSCLKCFG? -> '%s'\n", line.c_str());
+        }
+        return true;
+    }
+    std::printf("hal::diagnose_system_clock_config: AT+SYSCLKCFG? got no response\n");
+    return false;
+}
+
 void close_bluetooth(BluetoothHandle & h) {
     if (h.fd >= 0) {
         close(h.fd);

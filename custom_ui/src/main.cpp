@@ -375,6 +375,13 @@ int main() {
         // is up -- doesn't need a connected phone, just the module
         // itself to answer.
         hal::diagnose_battery_reporting(bt);
+
+        // 2026-08-15: pure diagnostic, see
+        // hal::diagnose_system_clock_config()'s own comment -- following
+        // up on the BLE Current Time Service (CTS) lead as an
+        // alternative to AT+CCLK, which has failed on every real
+        // hardware test this project has run.
+        hal::diagnose_system_clock_config(bt);
     }
 
     // Process-lifetime, intentionally never freed -- same convention as

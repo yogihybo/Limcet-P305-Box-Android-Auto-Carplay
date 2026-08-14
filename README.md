@@ -15,7 +15,7 @@ flowchart TD
     Q1 -->|"Recovery / monitoring,<br/>interrupt boot"| Serial["Serial Console -- §2.0<br/>solder UART, read-only once Linux boots"]
     Q1 -->|"Root shell, no soldering,<br/>keep stock firmware"| Telnet["USB Telnet Payload -- §3.0<br/>payloads/msn_autocopy"]
     Q1 -->|"Run stock OR the full custom firmware,<br/>zero NAND writes"| SDBoot["Boot from SD/USB -- §6.0 / §7.0<br/>reverts to stock if card removed"]
-    Q1 -->|"Commit to new firmware<br/>permanently"| Flash["Flash via SD Update Package -- §9.0 / §10.0<br/>permanently alters NAND"]
+    Q1 -->|"Commit to new firmware<br/>permanently"| Flash["Flash via SD Update Package -- §10.0 / §9.0<br/>permanently alters NAND"]
 
     Serial --> Diagnose(["Diagnose / recover a bricked unit"])
     Telnet --> Poke(["Poke around on stock firmware<br/>tools/* diagnostics over carplay_wifi"])
@@ -50,10 +50,10 @@ flowchart TD
 - [4.0 Boot Sequence (stock NAND)](#40-boot-sequence-stock-nand)
 - [5.0 U-Boot Prompt](#50-u-boot-prompt)
 - [6.0 Booting Stock Kernel from SD Card or USB (non-destructive)](#60-booting-stock-kernel-from-sd-card-or-usb-non-destructive)
-- [7.0 Custom U-Boot Boot Chain (`ark1668_limcet_p305`)](#70-custom-u-boot-boot-chain-ark1668_limcet_p305)
+- [7.0 Custom U-Boot and Kernel (`ark1668_limcet_p305`)](#70-custom-u-boot-and-kernel-ark1668_limcet_p305)
 - [8.0 NAND Partition Layout](#80-nand-partition-layout)
-- [9.0 Build & Flash Tool](#90-build--flash-tool)
-- [10.0 Update Mechanisms](#100-update-mechanisms)
+- [9.0 Build & Flash Tool](#100-build--flash-tool)
+- [10.0 Update Mechanisms](#90-update-mechanisms)
 - [11.0 Device Access](#110-device-access)
   - [WiFi Access Point](#wifi-access-point)
   - [SSH Access](#ssh-access)
@@ -251,7 +251,7 @@ nand scrub 0x1a0000 0x400000 0x1a0000 0x400000
 nand write 0x4000000 0x1a0000 ${filesize}
 ```
 
-The built-in update function (§10.0) uses this same manual-flash mechanism to deploy SD update packages to each NAND partition.
+The built-in update function (§9.0) uses this same manual-flash mechanism to deploy SD update packages to each NAND partition.
 
 **Background:** for the full stock boot-loop disassembly, see [`docs/4.1_UBOOT_REVERSE_ENGINEERING.md`](docs/4.1_UBOOT_REVERSE_ENGINEERING.md).
 
@@ -268,7 +268,7 @@ kernel to see an SD card or a USB stick at the point it needs to mount root — 
 can never come from removable media on this kernel, only from NAND (or, as below, from being
 avoided entirely). None of the methods below write to NAND, so a bad image just fails to boot
 rather than bricking the device (reflashing NAND for every change is also slow, see
-[§10.0](#100-update-mechanisms)).
+[§9.0](#90-update-mechanisms)).
 
 | Method | Auto or manual | Kernel load | Rootfs |
 |--------|----------------|--------------|--------|
@@ -297,7 +297,7 @@ the env-relocation technique's own RE writeup, ext4 constraint rationale, and `/
 MTD-ioctl audit, see [`docs/4.1_UBOOT_REVERSE_ENGINEERING.md`](docs/4.1_UBOOT_REVERSE_ENGINEERING.md);
 for the `reversingtrack` RSTK binary format, see [`docs/8.1_PARTITION_LAYOUT.md`](docs/8.1_PARTITION_LAYOUT.md).
 
-## 7.0 Custom U-Boot Boot Chain (`ark1668_limcet_p305`)
+## 7.0 Custom U-Boot and Kernel (`ark1668_limcet_p305`)
 
 Everything in §4.0–§6.0 above describes the stock U-Boot binary, patched or not. Since then, a full custom board port (`ark1668_limcet_p305`, U-Boot 2018.07, compiled from `linux-arkmicro` source rather than patched from the stock binary) has been built up and is now the actively developed path. This section documents its current, confirmed-working state. Full technical/RE detail: [`docs/historical/HANDOFF_nand_ecc_uboot_vs_kernel.md`](docs/historical/HANDOFF_nand_ecc_uboot_vs_kernel.md), [`docs/4.1_UBOOT_REVERSE_ENGINEERING.md`](docs/4.1_UBOOT_REVERSE_ENGINEERING.md), and [`docs/7.1_UBOOT_BUILD_GUIDE.md`](docs/7.1_UBOOT_BUILD_GUIDE.md).
 
@@ -373,7 +373,17 @@ All of `kernelfile`, `dtbfile`, `mmcroot`, `bootargs_common`, `stockubootfile`, 
 
 **Background:** [`docs/8.1_PARTITION_LAYOUT.md`](docs/8.1_PARTITION_LAYOUT.md) — same data plus flash commands and the `reversingtrack` RSTK format.
 
-## 9.0 Build & Flash Tool
+## 9.0 Update Mechanisms
+
+On power-on, U-Boot checks for a FAT32 SD card. If a file named `UpConfig` is present in the SD root, U-Boot runs `arkupdate`, which reads the `update` script and flashes each listed NAND partition in sequence, then reboots — remove the SD card afterward so it doesn't re-flash. See [§8.0 NAND Partition Layout](#80-nand-partition-layout) for offsets/sizes.
+
+**Quick start:** build `rootfs.img`/`userdata.img` (`build_rootfs.sh`/`build_userdata.sh`), use `build_update.sh` (§10.0) to select partitions and generate the SD package, copy `firmware_source/sd_update_template/output/` to a FAT32 SD card (max 32 GB), then power-cycle the head unit with the card inserted and wait for the automatic reboot before removing it.
+
+**Safety:** never flash S-Loader (Nboot) via SD — corruption bricks the board and needs JTAG to recover. userdata flash erases all paired BT devices/call history/settings (recreated on first boot); rootfs flash replaces the entire filesystem (a known bad block is handled automatically).
+
+**Background:** the `update` script's keyword list, why `uboot-env`/`unicode` aren't independently flashable, and full safety notes: [`docs/9.1_UPDATE_MECHANISMS.md`](docs/9.1_UPDATE_MECHANISMS.md).
+
+## 10.0 Build & Flash Tool
 
 CAUTION: this update process will permanently alter the NAND contents. Use with caution!
 `build_update.sh` is an interactive terminal tool that combines building firmware images and generating a NAND flash update package staged on an SD card into a single workflow. This flashes internal NAND — it is **not** the non-destructive SD-boot image described in [§6.0](#60-booting-stock-kernel-from-sd-card-or-usb-non-destructive) (that's `build_bootable_sdcard.sh`). Run it under Linux or WSL:
@@ -384,17 +394,7 @@ bash build_update.sh
 
 An arrow-key menu selects which images to build (rootfs, userdata, U-Boot env) and which NAND partitions to include in the generated SD update package; rootfs and userdata are selected by default, early-boot partitions (kernel, U-Boot, arkdata) default to off to avoid accidental reflash. Output lands in `firmware_source/sd_update_template/output/` — copy to a FAT32 SD card to flash. Requires `mtd-utils` and `u-boot-tools` (`sudo apt install mtd-utils u-boot-tools`).
 
-**Background:** full menu layout, the standalone `build_rootfs.sh`/`build_userdata.sh` scripts, and dependency/`$PATH` detail: [`docs/9.1_BUILD_FLASH_TOOL.md`](docs/9.1_BUILD_FLASH_TOOL.md).
-
-## 10.0 Update Mechanisms
-
-On power-on, U-Boot checks for a FAT32 SD card. If a file named `UpConfig` is present in the SD root, U-Boot runs `arkupdate`, which reads the `update` script and flashes each listed NAND partition in sequence, then reboots — remove the SD card afterward so it doesn't re-flash. See [§8.0 NAND Partition Layout](#80-nand-partition-layout) for offsets/sizes.
-
-**Quick start:** build `rootfs.img`/`userdata.img` (`build_rootfs.sh`/`build_userdata.sh`), use `build_update.sh` (§9.0) to select partitions and generate the SD package, copy `firmware_source/sd_update_template/output/` to a FAT32 SD card (max 32 GB), then power-cycle the head unit with the card inserted and wait for the automatic reboot before removing it.
-
-**Safety:** never flash S-Loader (Nboot) via SD — corruption bricks the board and needs JTAG to recover. userdata flash erases all paired BT devices/call history/settings (recreated on first boot); rootfs flash replaces the entire filesystem (a known bad block is handled automatically).
-
-**Background:** the `update` script's keyword list, why `uboot-env`/`unicode` aren't independently flashable, and full safety notes: [`docs/10.1_UPDATE_MECHANISMS.md`](docs/10.1_UPDATE_MECHANISMS.md).
+**Background:** full menu layout, the standalone `build_rootfs.sh`/`build_userdata.sh` scripts, and dependency/`$PATH` detail: [`docs/10.1_BUILD_FLASH_TOOL.md`](docs/10.1_BUILD_FLASH_TOOL.md).
 
 ## 11.0 Device Access
 
@@ -635,7 +635,7 @@ See [`docs/13.1_SOURCES.md`](docs/13.1_SOURCES.md) for full provenance of each f
 *U-Boot*
 
 - [`7.1_UBOOT_BUILD_GUIDE.md`](docs/7.1_UBOOT_BUILD_GUIDE.md) — plan and guide for compiling a fresh U-Boot from `linux-arkmicro` source: config deltas, SD-only test sequence, boot chain constraints, ARK header injection
-- [`4.1_UBOOT_REVERSE_ENGINEERING.md`](docs/4.1_UBOOT_REVERSE_ENGINEERING.md) — U-Boot SD-boot patch corruption investigation and the env relocation fix; boot logo, reverse-engineered command ports (`regr`/`regw`/`gpiotest`/`jpeghw`/`itu656`), LCD timing fix, USB dual-port bring-up, and the Stepldr chainload findings for the custom `ark1668_limcet_p305` U-Boot port (see [§7.0](#70-custom-u-boot-boot-chain-ark1668_limcet_p305))
+- [`4.1_UBOOT_REVERSE_ENGINEERING.md`](docs/4.1_UBOOT_REVERSE_ENGINEERING.md) — U-Boot SD-boot patch corruption investigation and the env relocation fix; boot logo, reverse-engineered command ports (`regr`/`regw`/`gpiotest`/`jpeghw`/`itu656`), LCD timing fix, USB dual-port bring-up, and the Stepldr chainload findings for the custom `ark1668_limcet_p305` U-Boot port (see [§7.0](#70-custom-u-boot-and-kernel-ark1668_limcet_p305))
 - [`6.1_SD_USB_BOOT_REFERENCE.md`](docs/6.1_SD_USB_BOOT_REFERENCE.md) — full command sequences and build-tool flag reference for SD/USB booting the stock kernel (see [§6.0](#60-booting-stock-kernel-from-sd-card-or-usb-non-destructive))
 
 *Display*
@@ -660,12 +660,12 @@ See [`docs/13.1_SOURCES.md`](docs/13.1_SOURCES.md) for full provenance of each f
 
 *Build & update tooling*
 
-- [`9.1_BUILD_FLASH_TOOL.md`](docs/9.1_BUILD_FLASH_TOOL.md) — `build_update.sh` menu layout, standalone scripts, dependency detail (see [§9.0](#90-build--flash-tool))
-- [`10.1_UPDATE_MECHANISMS.md`](docs/10.1_UPDATE_MECHANISMS.md) — SD update quick-start steps, the `update` script keyword list, safety notes (see [§10.0](#100-update-mechanisms))
+- [`10.1_BUILD_FLASH_TOOL.md`](docs/10.1_BUILD_FLASH_TOOL.md) — `build_update.sh` menu layout, standalone scripts, dependency detail (see [§10.0](#100-build--flash-tool))
+- [`9.1_UPDATE_MECHANISMS.md`](docs/9.1_UPDATE_MECHANISMS.md) — SD update quick-start steps, the `update` script keyword list, safety notes (see [§9.0](#90-update-mechanisms))
 
 *Historical (superseded, kept for background)*
 
-- [`historical/HANDOFF_nand_ecc_uboot_vs_kernel.md`](docs/historical/HANDOFF_nand_ecc_uboot_vs_kernel.md) — the NAND ECC root cause (U-Boot fixed and confirmed, kernel fixed in source but untested), why the `U-boot` NAND partition is unreadable by any U-Boot-level tool, and every patch behind [§7.0](#70-custom-u-boot-boot-chain-ark1668_limcet_p305)
+- [`historical/HANDOFF_nand_ecc_uboot_vs_kernel.md`](docs/historical/HANDOFF_nand_ecc_uboot_vs_kernel.md) — the NAND ECC root cause (U-Boot fixed and confirmed, kernel fixed in source but untested), why the `U-boot` NAND partition is unreadable by any U-Boot-level tool, and every patch behind [§7.0](#70-custom-u-boot-and-kernel-ark1668_limcet_p305)
 - [`historical/HANDOFF_touch_and_bootargs_fix.md`](docs/historical/HANDOFF_touch_and_bootargs_fix.md) — touchscreen I2C bus fix, SD bootargs fix, and the NAND "417 false bad blocks" ECC/BBT investigation (touch-activation theory later superseded, see `1.8_ARK1680_TS_REVERSE_ENGINEERING.md` above)
 - [`historical/SD_BOOT_PLAN.md`](docs/historical/SD_BOOT_PLAN.md) — historical SD-boot planning doc (superseded, still useful background)
 - [`historical/DEVICE_TEST_CHECKLIST_2026-07-18.md`](docs/historical/DEVICE_TEST_CHECKLIST_2026-07-18.md) — dated session working log (DirectFB/black-screen/audio investigations); many individual findings self-marked superseded inline, kept for the debugging history
@@ -676,5 +676,5 @@ See [`docs/13.1_SOURCES.md`](docs/13.1_SOURCES.md) for full provenance of each f
 - [`hardware/MCU/MCU_FIRMWARE_REVIEW.md`](hardware/MCU/MCU_FIRMWARE_REVIEW.md) — STM32F105 MCU firmware review
 - [`ui/UI.md`](ui/UI.md) — Qt UI analysis and resource extraction
 - [`custom_ui/README.md`](custom_ui/README.md) / [`custom_ui/docs/ARCHITECTURE.md`](custom_ui/docs/ARCHITECTURE.md) / [`custom_ui/docs/IMPLEMENTATION_PLAN.md`](custom_ui/docs/IMPLEMENTATION_PLAN.md) — the LVGL-based replacement UI: architecture and implementation status
-- [`vendor_source/README.md`](vendor_source/README.md) — the ASTRI ARK1680 vendor source and ArkMicro U-Boot/kernel BSP that used to be vendored directly into this repo now live in the separate [`linux-arkmicro`](https://github.com/yogihybo/linux-arkmicro) repo (the actual buildable U-Boot/kernel source tree — see [§7.0](#70-custom-u-boot-boot-chain-ark1668_limcet_p305)); this file is a pointer, not a copy
+- [`vendor_source/README.md`](vendor_source/README.md) — the ASTRI ARK1680 vendor source and ArkMicro U-Boot/kernel BSP that used to be vendored directly into this repo now live in the separate [`linux-arkmicro`](https://github.com/yogihybo/linux-arkmicro) repo (the actual buildable U-Boot/kernel source tree — see [§7.0](#70-custom-u-boot-and-kernel-ark1668_limcet_p305)); this file is a pointer, not a copy
 - [`payloads/msn_autocopy/README.md`](payloads/msn_autocopy/README.md) — USB payload that exploits the `payloads/msn_autocopy` auto-copy mechanism to install and autostart `sshd` on a stock device

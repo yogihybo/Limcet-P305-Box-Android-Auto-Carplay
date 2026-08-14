@@ -19,8 +19,8 @@ The MCU is an **STM32F105RBT6** (ARM Cortex-M3, connectivity line, 128 KB flash 
 ACC-IGN signals, and drives the Feasycom BT module. It talks to the ARK1668 SoC
 over `/dev/ttyHS0`.
 
-Cross-references: [../docs/MCU_ADAPTERS.md](../../docs/MCU_ADAPTERS.md),
-[../docs/CANBUS.md](../../docs/CANBUS.md), [../docs/SECURITY_REVIEW.md](../../docs/SECURITY_REVIEW.md),
+Cross-references: [../docs/1.3_MCU_ADAPTERS.md](../../docs/1.3_MCU_ADAPTERS.md),
+[../docs/1.2_CANBUS.md](../../docs/1.2_CANBUS.md), [../docs/SECURITY_REVIEW.md](../../docs/SECURITY_REVIEW.md),
 `../Prado firmware dump/mtd6_rootfs/usr/lib/libMcuCenter.so` (SoC-side driver).
 
 ---
@@ -274,7 +274,7 @@ for the ones that map to steering-wheel/panel key events.
 **Caveat that matters: these 28 CAN IDs are Volvo-profile IDs, not Toyota
 ones.** This whole file is confirmed (top of this document) to be the
 `DCn32-VOLVO` build, not the real firmware flashed on the Prado. None of these
-28 IDs match the Prado's own documented CAN IDs (`docs/CANBUS.md`'s SWC at
+28 IDs match the Prado's own documented CAN IDs (`docs/1.2_CANBUS.md`'s SWC at
 `0x3C4`, for instance, appears nowhere in any of the three tables) — so this
 specific table content tells you nothing about decoding the *real* Toyota
 bus. What **does** transfer directly: the *mechanism* — a mode-selected,
@@ -338,7 +338,7 @@ DCn32-VOLVO-V2.10-20240909
 is **VOLVO**, dated 2024-09-09. For a Toyota Prado this is the standout concern —
 SWC key codes, reverse/ACC-IGN triggers and illumination decoding are
 vehicle-specific. A Volvo profile will not correctly decode the Toyota bus
-(Prado SWC is CAN ID `0x3C4` at 500 kbit/s per [../docs/CANBUS.md](../../docs/CANBUS.md)),
+(Prado SWC is CAN ID `0x3C4` at 500 kbit/s per [../docs/1.2_CANBUS.md](../../docs/1.2_CANBUS.md)),
 and — since the MCU also **transmits** on CAN1 (§3.1b) — it may put Volvo-profile
 frames onto the Toyota bus. **Verify this is the intended image before flashing it
 to a Prado.**

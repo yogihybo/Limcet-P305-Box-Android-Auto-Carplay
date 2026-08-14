@@ -17,7 +17,7 @@ look at `MsnCoreApp` and its linked libraries (`libMcuCenter.so`, `libBlueTooth.
 network-exposed listeners or command-injection-style bugs, as opposed to just the SSH credential path.
 
 **Method:** `MsnCoreApp` is a non-stripped ELF with full DWARF/symtab (confirmed in
-`docs/HARDWARE_AND_SOC_REFERENCE.md` §7 already) — 5040 `.symtab` entries. No `objdump`/`nm`/`readelf`
+`docs/1.1_HARDWARE_AND_SOC_REFERENCE.md` §7 already) — 5040 `.symtab` entries. No `objdump`/`nm`/`readelf`
 available in this environment, so used `pyelftools` (symbol table, relocations, PLT resolution) and
 `capstone` (ARM disassembly) directly via Python instead. Both pulled from PyPI for this session.
 
@@ -231,7 +231,7 @@ cannot move or resize controls.
 
 See [`SETTINGS_REFERENCE.md`](SETTINGS_REFERENCE.md) for how `ResourceName` /
 `LauncherName` / `ScreenType` select which resources load, and
-[`SCREEN.md`](DISPLAY_SUBSYSTEM.md) for the panel resolution.
+[`SCREEN.md`](1.7_DISPLAY_SUBSYSTEM.md) for the panel resolution.
 
 ## Colours & fonts: `DefaultStyleSheet.xml`
 
@@ -271,7 +271,7 @@ these bundles — only images.
 
 See [`SETTINGS_REFERENCE.md`](SETTINGS_REFERENCE.md) for how `ResourceName` /
 `LauncherName` / `ScreenType` select *which* bundle loads, and
-[`SCREEN.md`](DISPLAY_SUBSYSTEM.md) for the panel resolution.
+[`SCREEN.md`](1.7_DISPLAY_SUBSYSTEM.md) for the panel resolution.
 
 ## What `.rcc` is
 
@@ -339,7 +339,7 @@ path — ready to feed back to `rcc`.
 
 Complete structural reverse-engineering of the SoC-side MCU driver
 `rootfs/usr/lib/libMcuCenter.so` (ARK1680 / Limcet-P306). This is the companion
-reference to [MCU_ADAPTERS.md](MCU_ADAPTERS.md) (adapter catalogue, McuType factory
+reference to [1.3_MCU_ADAPTERS.md](1.3_MCU_ADAPTERS.md) (adapter catalogue, McuType factory
 map, BoxP300 command dispatch, live-capture guide) and
 [../hardware/MCU/MCU_FIRMWARE_REVIEW.md](../hardware/MCU/MCU_FIRMWARE_REVIEW.md) (the STM32 side).
 
@@ -375,7 +375,7 @@ Decoded from `findPackageStartSig` / `getPackageSize` / `getPackageCheckSum`:
 
 ```
 byte[0]        = 0x2E              start signature ('.')  (findPackageStartSig searches for this)
-byte[1]        = command code      dispatch key (see BoxP300 table in MCU_ADAPTERS.md)
+byte[1]        = command code      dispatch key (see BoxP300 table in 1.3_MCU_ADAPTERS.md)
 byte[2]        = payload length N   (getPackageSize returns N + 4)
 byte[3 .. 3+N-1] = payload
 byte[3+N]      = checksum
@@ -392,7 +392,7 @@ checksum = (~sum) & 0xFF;          // one's-complement 8-bit sum
 Notes:
 - The framing is **per-adapter (virtual)**. The above is the P300/BoxP200 family.
   `MsnDecoder` (McuType 16, Holden) uses a **different** layout — min 6 bytes, a
-  group byte at offset 2 and command at offset 3 (see MCU_ADAPTERS.md).
+  group byte at offset 2 and command at offset 3 (see 1.3_MCU_ADAPTERS.md).
 - Dual-framing adapters (`BoxP100`, `BoxP500`, `D107`) implement a **second** parser
   (`*2`-suffixed: `findPackageStartSig2`, `getPackageSize2`, …) for two frame types.
 - Outbound frames are built by `makeMCUProtocol` / `makeMcuProtocol(Package)` and the
@@ -460,7 +460,7 @@ QObject
 - Direct keypress path: `MsnApplication::simulateKey(keyCode, isPress, isAutoRepeat)`.
 
 The concrete `MsnEventType` codes traced for BoxP300 (`0x01→0x1013`, `0x05→0x5018`,
-`0x06→0x501A`, `0x12→0x5026`) are listed in MCU_ADAPTERS.md; their human meanings
+`0x06→0x501A`, `0x12→0x5026`) are listed in 1.3_MCU_ADAPTERS.md; their human meanings
 require the on-device capture in that doc's capture-guide section.
 
 ---
@@ -476,7 +476,7 @@ require the on-device capture in that doc's capture-guide section.
 
 **Debug flags:** `/data/mcudebug_flag`, `/data/mcudebug_flag_msn` — gate frame
 logging (`recvProtocolData`, `send msn mcu code!`, `recv track:`, …). See the
-capture guide in MCU_ADAPTERS.md.
+capture guide in 1.3_MCU_ADAPTERS.md.
 
 **MCU BT module AT strings** (outbound to the Feasycom chip, handled MCU-side):
 covered in [../hardware/MCU/MCU_FIRMWARE_REVIEW.md](../hardware/MCU/MCU_FIRMWARE_REVIEW.md).
@@ -514,7 +514,7 @@ _UI / support classes:_
 
 ---
 
-## 7. Open items (need on-device capture — see MCU_ADAPTERS.md capture guide)
+## 7. Open items (need on-device capture — see 1.3_MCU_ADAPTERS.md capture guide)
 
 - Human meaning of the `MsnEventType` codes (`0x5018`/`0x501A`/`0x5026`).
 - The **outbound** command byte set (`makeMCUProtocol` callers).

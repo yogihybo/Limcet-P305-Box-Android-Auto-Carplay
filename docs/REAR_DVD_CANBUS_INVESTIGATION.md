@@ -16,7 +16,7 @@ work (the CAN/MCU findings) or open unknowns to establish from scratch.
 
 ### Hardware — real CAN bus, but not exposed to the Linux/ARK1668 side
 
-- `docs/CANBUS.md` — the Limcet box has a genuine, populated CAN circuit: an
+- `docs/1.2_CANBUS.md` — the Limcet box has a genuine, populated CAN circuit: an
   STM32F105RBT6 (2× bxCAN controllers) + NXP TJA1042 transceiver
   (ISO 11898-2, up to 5 Mbit/s, CAN FD capable), on the `DC_LIMCET_MB_REV_003`
   board. This transceiver connects to the vehicle harness's CANH/CANL pair.
@@ -28,7 +28,7 @@ work (the CAN/MCU findings) or open unknowns to establish from scratch.
   the Linux/`libMcuCenter.so` side).
 - The STM32 firmware, as currently understood, **only decodes Toyota SWC
   (steering wheel control) CAN frames** and relays decoded key events up to
-  Linux — see the SWC section of `docs/CANBUS.md`. Whether it does (or could)
+  Linux — see the SWC section of `docs/1.2_CANBUS.md`. Whether it does (or could)
   decode/relay *other* CAN traffic (e.g. rear-DVD-related frames) is
   **unknown and is one of the first things to establish**.
 - A separate software path exists — `libCanBus.so`, a generic multi-vendor
@@ -36,7 +36,7 @@ work (the CAN/MCU findings) or open unknowns to establish from scratch.
   (`CanType=9`) — but this device runs `CanType=0` (**confirmed correct,
   live-tested**: setting `CanType=1` broke all touch/knob input by
   instantiating the wrong vendor's adapter and stealing `/dev/ttyHS0` from
-  the MCU — see `docs/CANBUS.md`'s "Known CAN-capable MCU adapters" and
+  the MCU — see `docs/1.2_CANBUS.md`'s "Known CAN-capable MCU adapters" and
   "Root cause" sections). `CanBus_Raise_Toyota` is written to drive an
   *external* UART-connected CAN decoder box, not to talk to a CAN peripheral
   directly — this hardware doesn't have one wired to Linux, so this path is
@@ -44,7 +44,7 @@ work (the CAN/MCU findings) or open unknowns to establish from scratch.
 
 ### Software protocol — Limcet MCU ↔ Linux (BoxP300), inbound side well understood, outbound side not
 
-- `docs/MCU_ADAPTERS.md` §"BoxP300 (McuType=6) — full command dispatch" —
+- `docs/1.3_MCU_ADAPTERS.md` §"BoxP300 (McuType=6) — full command dispatch" —
   disassembly-verified table of every command the STM32 sends *to* Linux
   (frame header `0x2E`, command byte at offset 1: `0x00`–`0x06`, `0x0A`,
   `0x12`, `0x20`–`0x22`, `0x30`, `0x7F`, `0xE2`, `0xE4`). None of these are
@@ -54,7 +54,7 @@ work (the CAN/MCU findings) or open unknowns to establish from scratch.
   `makeMCUProtocol` (`0x31e60` in `libMcuCenter.so`) builds outbound frames,
   called by `syncSettingDataToMcu`/`translateApp`/etc., but "the command byte
   is not passed as a nearby inline constant, so the outbound command set is
-  not yet enumerated" (`docs/MCU_ADAPTERS.md`, verbatim). This matters
+  not yet enumerated" (`docs/1.3_MCU_ADAPTERS.md`, verbatim). This matters
   directly: if there's *already* a rear-DVD-relevant outbound command in
   this protocol (e.g. video-source-switch, or a generic "relay this CAN
   frame" passthrough), it's sitting un-enumerated in that dispatch logic
@@ -73,8 +73,8 @@ work (the CAN/MCU findings) or open unknowns to establish from scratch.
 
 - Root SSH access works. BusyBox toolset present: `cat`, `dd`, `hexdump`,
   `microcom`. **Absent**: `strace`, `stty`, `od`, `xxd`, `socat` — noted in
-  `docs/MCU_ADAPTERS.md` as a real constraint on live capture technique.
-- `docs/MCU_ADAPTERS.md`'s "Capturing the codes live on the device" section
+  `docs/1.3_MCU_ADAPTERS.md` as a real constraint on live capture technique.
+- `docs/1.3_MCU_ADAPTERS.md`'s "Capturing the codes live on the device" section
   has a working recipe for watching `/dev/ttyHS0` traffic live while
   physically toggling inputs — directly reusable for this investigation
   (toggle rear-DVD-relevant actions from the factory unit instead of
@@ -108,7 +108,7 @@ work (the CAN/MCU findings) or open unknowns to establish from scratch.
 4. **Is there already an outbound Linux→MCU command for this?** — **DONE,
    2026-08-06.** All `MCUAdapter_BoxP300::makeMCUProtocol` call sites
    disassembled and enumerated in both binary generations (see
-   `docs/MCU_ADAPTERS.md`'s "Outbound (Linux → STM32)" table for the full
+   `docs/1.3_MCU_ADAPTERS.md`'s "Outbound (Linux → STM32)" table for the full
    writeup). 8 distinct outbound commands found: `0x81` (handshake/ack),
    `0x82` (app-shown notify, only for app `0xCC`), `0x84` (app
    foreground/state-change), `0x85` (app-protocol ack), `0x87` (list-item
@@ -134,7 +134,7 @@ work (the CAN/MCU findings) or open unknowns to establish from scratch.
    contingent on knowing the real CAN IDs/payloads in play.
 3. In parallel (doesn't need the vehicle): finish enumerating BoxP300's
    outbound command set from `libMcuCenter.so`'s disassembly — pick up
-   directly from `docs/MCU_ADAPTERS.md`'s existing open item, same
+   directly from `docs/1.3_MCU_ADAPTERS.md`'s existing open item, same
    methodology already used for the inbound table.
 4. Once both are known, compare: STM32-relay path (needs firmware capable
    of forwarding/decoding the right CAN ID) vs. a from-scratch
@@ -144,9 +144,9 @@ work (the CAN/MCU findings) or open unknowns to establish from scratch.
 
 ## Key files to read first in the new conversation
 
-- `docs/CANBUS.md` — hardware, SWC protocol, `CanType` findings, root-cause
+- `docs/1.2_CANBUS.md` — hardware, SWC protocol, `CanType` findings, root-cause
   history (worth reading in full, not just the excerpts above).
-- `docs/MCU_ADAPTERS.md` — full BoxP300 command dispatch table, the "not yet
+- `docs/1.3_MCU_ADAPTERS.md` — full BoxP300 command dispatch table, the "not yet
   enumerated" outbound-command open item, and the live-capture recipe.
-- `hardware/BOARD_ANALYSIS.md` — referenced from `CANBUS.md` for the
+- `hardware/BOARD_ANALYSIS.md` — referenced from `1.2_CANBUS.md` for the
   full GPIO table, may have other physically-relevant pin info.

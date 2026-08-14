@@ -198,7 +198,7 @@ Fixed: `CONFIG_RTC_CLASS=y`, `CONFIG_RTC_DRV_ARK=y` in
 
 ## 5. WiFi + boot-stick simultaneous operation -- root cause found, fully confirmed
 
-Full detail: `docs/WIRELESS_AND_INIT.md` section 1a.
+Full detail: `docs/1.4_WIRELESS_AND_INIT.md` section 1a.
 
 Started as "wlan0 doesn't show up when booting via `bootusb`". Initial
 theory (this board's single USB hub has one downstream port, shared
@@ -263,7 +263,7 @@ to 30s), since this hardware's USB enumeration can genuinely take
 
 - `docs/historical/HANDOFF_nand_ecc_uboot_vs_kernel.md` -- bootnand hang,
   display investigation, all NAND ECC/BBT work (despite the filename).
-- `docs/WIRELESS_AND_INIT.md` -- WiFi/Bluetooth hardware reference,
+- `docs/1.4_WIRELESS_AND_INIT.md` -- WiFi/Bluetooth hardware reference,
   the dual-USB-controller fix.
 - `msnapp/README.md` -- every known `MsnCoreApp` binary variant, how to
   extract more from a UBI `rootfs.img`, version-string comparison

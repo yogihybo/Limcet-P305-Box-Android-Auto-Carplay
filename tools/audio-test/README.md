@@ -5,11 +5,11 @@ purpose/style as `tools/i2c-scan/`, `tools/lcd-test/`, etc., but a POSIX
 shell script rather than a compiled binary, since this one only needs
 tools already present in the rootfs (`aplay`, `amixer`, `/proc/asound`).
 
-Distinguishes what `docs/HARDWARE_AND_SOC_REFERENCE.md`'s driver source table already
+Distinguishes what `docs/1.1_HARDWARE_AND_SOC_REFERENCE.md`'s driver source table already
 distinguishes: the I2S **data path** (already independently confirmed
 working) from the BD37033 **I2C control path** (volume/mute — root-caused to a genuine
 hardware/firmware limitation, the chip doesn't respond even at the correct I2C address;
-see `docs/BD37033.md` and `docs/AUDIO_SUBSYSTEM_INVESTIGATION.md`).
+see `docs/1.6_BD37033.md` and `docs/1.5_AUDIO_SUBSYSTEM_INVESTIGATION.md`).
 
 ## Usage
 
@@ -38,7 +38,7 @@ a WAV file of its own. Copy it alongside the script:
    round-trips, but **does not** prove the I2C write reached the chip.
 5. Static noise, cycled across every real playback device found. Before each
    device's playback, pulses GPIO34 (the BD37033 enable/reset line, see
-   `docs/BD37033.md` section 2) high-then-low rather than trusting whatever
+   `docs/1.6_BD37033.md` section 2) high-then-low rather than trusting whatever
    state `MsnCoreApp` already left it in — a flat re-write of the same value
    is a no-op if the app already drove it there once, so this forces a real
    edge on every run regardless of prior state. Each device gets an explicit

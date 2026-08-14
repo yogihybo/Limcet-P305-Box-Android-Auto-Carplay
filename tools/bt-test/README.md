@@ -10,7 +10,7 @@ also ships in this rootfs (`etc/bluetooth/rtkbt.conf`). That file looks
 like Android-SDK-template leftover (references `ro.product.model`,
 bluedroid-style paths) — the same "shared template, not necessarily used
 on this unit" pattern already found for other vestigial config
-(`TOUCHSERIAL`/`COMMANDSERIAL`, see `ARK1680_TS_REVERSE_ENGINEERING.md`).
+(`TOUCHSERIAL`/`COMMANDSERIAL`, see `1.8_ARK1680_TS_REVERSE_ENGINEERING.md`).
 Don't assume `rtkbt` is in play without separately checking.
 
 ## Usage
@@ -25,7 +25,7 @@ Nothing in `rcS`/`/etc/profile` starts `blueware` automatically — confirmed
 runs `system("blueware /etc/blueware-bwNNN.properties > /dev/null 2>&1
 &")`. This script always kills any already-running `blueware` and
 relaunches it itself, captured to `/tmp/blueware.log` instead of that
-`/dev/null` redirect — see `docs/WIRELESS_AND_INIT.md` section 5 ("Who
+`/dev/null` redirect — see `docs/1.4_WIRELESS_AND_INIT.md` section 5 ("Who
 actually launches `/usr/bin/blueware`") for the full trace of why this
 matters: `blueware` has well-instrumented, `errno`-annotated error
 messages for every step of the `BTEN` (GPIO 91) export/direction/value

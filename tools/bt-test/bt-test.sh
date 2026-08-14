@@ -10,8 +10,8 @@
 # (references ro.product.model, bluedroid-style btsnoop paths) -- same
 # "shared SDK template, not necessarily used on this unit" pattern already
 # found for other vestigial config (TOUCHSERIAL/COMMANDSERIAL, see
-# ARK1680_TS_REVERSE_ENGINEERING.md). This script targets blueware/ttyHS1,
-# the one docs/WIRELESS_AND_INIT.md documents as actually working, and
+# 1.8_ARK1680_TS_REVERSE_ENGINEERING.md). This script targets blueware/ttyHS1,
+# the one docs/1.4_WIRELESS_AND_INIT.md documents as actually working, and
 # does NOT assume rtkbt is in play.
 #
 # Nothing in rcS/profile launches `blueware` automatically -- confirmed
@@ -25,7 +25,7 @@
 # away. This script always (re)starts blueware itself WITHOUT that
 # redirect (captured to a log file instead) specifically so those
 # messages are visible, and greps for them explicitly -- see
-# docs/WIRELESS_AND_INIT.md section 5 ("Who actually launches
+# docs/1.4_WIRELESS_AND_INIT.md section 5 ("Who actually launches
 # /usr/bin/blueware") for the full trace.
 #
 # Also confirmed from libBlueTooth.so: the app-level transport isn't a

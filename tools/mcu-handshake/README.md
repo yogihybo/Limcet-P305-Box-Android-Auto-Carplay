@@ -3,7 +3,7 @@
 This utility (`mcu-handshake`) is a compiled C daemon that runs natively on the target device to emulate the SoC-to-MCU connection handshake and periodic status ping-pong.
 
 ### Why is this needed?
-**Status update (2026-07-26): this CBT16211A/MCU theory is unconfirmed and probably not the real touch-activation gate — see `docs/ARK1680_TS_REVERSE_ENGINEERING.md`'s "Touch activation is gated by `MsnFirstInit`/`/etc/profile`, not the MCU" section for the real, disassembly-confirmed mechanism (a Qt/QWS env var, `QWS_MOUSE_PROTO`/`QWS_ARK_MT_DEVICE`, set by `MsnFirstInit` before `MsnCoreApp` launches).** This theory below was always static-disassembly-only, never hardware-confirmed, and is inconsistent with the directly-observed fact that the AUX+long-press-home mode switch works with `MsnCoreApp` not running at all (`project_limcet_activation_gate` memory) — if a live symptom brought you here expecting this tool to fix touch, try the real mechanism in that doc first.
+**Status update (2026-07-26): this CBT16211A/MCU theory is unconfirmed and probably not the real touch-activation gate — see `docs/1.8_ARK1680_TS_REVERSE_ENGINEERING.md`'s "Touch activation is gated by `MsnFirstInit`/`/etc/profile`, not the MCU" section for the real, disassembly-confirmed mechanism (a Qt/QWS env var, `QWS_MOUSE_PROTO`/`QWS_ARK_MT_DEVICE`, set by `MsnFirstInit` before `MsnCoreApp` launches).** This theory below was always static-disassembly-only, never hardware-confirmed, and is inconsistent with the directly-observed fact that the AUX+long-press-home mode switch works with `MsnCoreApp` not running at all (`project_limcet_activation_gate` memory) — if a live symptom brought you here expecting this tool to fix touch, try the real mechanism in that doc first.
 
 The touch panel signals on the Limcet P305/P306 head unit are *believed* to be physically gated by a `CBT16211A` touch-bus switch controlled by the companion STM32 MCU. The theory was that the MCU only closes this switch once it performs a successful connection handshake with the userspace application `MsnCoreApp` over the High-Speed UART port (`/dev/ttyHS0`).
 
@@ -38,7 +38,7 @@ If you are debugging or testing drivers without running the full `MsnCoreApp` st
 4. `--no-hello` skips step 2 entirely if you want purely passive listening.
 
 ### Baud rate: confirmed 38400, not a guess
-Earlier versions of this tool (and `docs/MCU_ADAPTERS.md`) defaulted to
+Earlier versions of this tool (and `docs/1.3_MCU_ADAPTERS.md`) defaulted to
 `115200` as a guess ("try 115200, then 38400"). This is now settled from
 the binary itself: `MCUAdapter_BoxP300::getPortSettings()` in
 `libMcuCenter.so` (Prado's real, active MCU adapter class, `McuType=6`)
@@ -91,7 +91,7 @@ frames alone may be sufficient and reply frames were never the point.
 ### `/dev/ttyS2` — a second, separate serial channel (2026-07-22)
 
 Found via `strace` while debugging an unrelated display bug (see
-`docs/MCU_ADAPTERS.md`'s "`/dev/ttyS2`" section) — `MsnCoreApp` also opens
+`docs/1.3_MCU_ADAPTERS.md`'s "`/dev/ttyS2`" section) — `MsnCoreApp` also opens
 `/dev/ttyS2` at **4800 baud** and writes real frames using the
 `0xFA...0xAF` format this tool used to build before being corrected to
 the `[0x2E]`-framed protocol above. That correction still holds for
@@ -106,7 +106,7 @@ device.
 `MCUAdapter_BoxP300` itself (confirmed 38400 baud on `ttyHS0`), so this
 is likely either a separate physical peripheral reusing the same
 packaging function (a steering-wheel-control CAN/serial bridge is one
-candidate, see `docs/MCU_ADAPTERS.md`'s Catalogue), or a secondary port
+candidate, see `docs/1.3_MCU_ADAPTERS.md`'s Catalogue), or a secondary port
 on the same MCU.
 
 ```sh
@@ -145,5 +145,5 @@ correlate frame content with the action to start decoding `arg1`/`arg2`/
   still unresolved — `libMcuCenter.so` alone doesn't reveal who calls
   it or why; would need either `MsnCoreApp`'s central event dispatcher
   traced by vtable offset, or a live `/dev/ttyHS0` capture per
-  `docs/MCU_ADAPTERS.md`'s existing Method A/B procedures while
+  `docs/1.3_MCU_ADAPTERS.md`'s existing Method A/B procedures while
   triggering each real-world event separately.

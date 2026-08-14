@@ -4,7 +4,7 @@
 #
 # Distinguishes what this project has learned to distinguish carefully:
 #   - the I2S DATA PATH (already independently confirmed working, see
-#     docs/AUDIO_SUBSYSTEM_INVESTIGATION.md and PIN_MASTER_LIST.md)
+#     docs/1.5_AUDIO_SUBSYSTEM_INVESTIGATION.md and PIN_MASTER_LIST.md)
 #   - the BD37033 CODEC CONTROL PATH over i2c-gpio2 (NOT confirmed as of
 #     2026-07-14 -- see docs/DRIVER_TEST_PLAN.md section 6)
 # A clean exit code here is NOT proof of correct operation by itself --
@@ -27,7 +27,7 @@ unk()  { echo "[UNKNOWN] $1"; UNKNOWN=$((UNKNOWN+1)); }
 # Sound_BD37033 construction with zero error checking anywhere in the call
 # chain (gpio_export()/gpio_set_dir()/gpio_set_value() in libMsnCommons.so
 # all discard write()'s return value; Sound_BD37033's ctor never checks
-# setDir()/setValue()'s return either) -- see docs/BD37033.md section 2.
+# setDir()/setValue()'s return either) -- see docs/1.6_BD37033.md section 2.
 # Re-asserted here as a HIGH-then-LOW pulse (not just a flat low write)
 # before every sound test below, since if the app already left it sitting
 # at 0 from a previous run, re-writing 0 is a no-op with no edge -- this
@@ -42,7 +42,7 @@ gpio34_toggle() {
 		echo 1 > "$GPIO34_PATH/value" 2>/dev/null
 		sleep 1
 		echo 0 > "$GPIO34_PATH/value" 2>/dev/null
-		echo "  gpio34: pulsed high->low (BD37033 enable/reset, see docs/BD37033.md sec 2)"
+		echo "  gpio34: pulsed high->low (BD37033 enable/reset, see docs/1.6_BD37033.md sec 2)"
 	else
 		echo "  gpio34: could not export -- skipping pulse (check /sys/class/gpio/export permissions)"
 	fi
@@ -64,7 +64,7 @@ if command -v aplay >/dev/null 2>&1; then
 	# devices, and doesn't reflect dai-link ordering the way aplay -l does).
 	# A "Dummy" entry alone means no real card ever registered -- this
 	# project hit exactly that state early on (see
-	# docs/AUDIO_SUBSYSTEM_INVESTIGATION.md, "aplay -l before any fixes").
+	# docs/1.5_AUDIO_SUBSYSTEM_INVESTIGATION.md, "aplay -l before any fixes").
 	DEVICES=$(echo "$AP_L" | sed -n 's/^card \([0-9]\+\): \([^[]*\).*device \([0-9]\+\):.*/\1 \2 \3/p' | \
 		while read -r c name d; do
 			case "$name" in

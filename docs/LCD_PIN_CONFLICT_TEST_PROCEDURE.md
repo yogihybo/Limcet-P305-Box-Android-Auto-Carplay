@@ -11,7 +11,7 @@ theory is a **real, physical pin-sharing conflict**: LCD RGB888 data
 pins `r0`/`r1` (pins 2/3) are the same physical pads as `i2c-gpio-0`'s
 SCL/SDA (RN6752 camera decoder bus), and `r7` (pin 9) is the same pad
 as `i2c-gpio-1`'s SDA (BD37033 audio chip bus). This is already
-partially documented in `docs/DISPLAY_SUBSYSTEM.md`'s
+partially documented in `docs/1.7_DISPLAY_SUBSYSTEM.md`'s
 `I2C_GPIO0_LCD_PIN_CONFLICT` section, which found via a single static
 debugfs snapshot that the pins stay muxed to LCD function even after
 `i2c-gpio` claims them -- concluding it only breaks I2C, not the LCD.
@@ -139,7 +139,7 @@ matter visually.
 
 ## Related reference
 
-- `docs/DISPLAY_SUBSYSTEM.md` -- `I2C_GPIO0_LCD_PIN_CONFLICT` section
+- `docs/1.7_DISPLAY_SUBSYSTEM.md` -- `I2C_GPIO0_LCD_PIN_CONFLICT` section
   (the original pin-sharing discovery, pins 2/3 only).
 - `docs/historical/DEVICE_TEST_CHECKLIST_2026-07-18.md` -- full history of what's
   already been ruled out for the LCDTest color-grid bug (framebuffer

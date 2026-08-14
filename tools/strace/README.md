@@ -5,7 +5,7 @@ this board's target (`arm-linux-gnueabihf`, glibc, kernel 4.19). Not a
 custom tool like the others in `tools/` — this is vanilla strace, built
 because the target rootfs has none and this project needed exact
 syscall-level tracing to pin down the `MsnCoreApp` segfault (see
-`docs/ARK1680_TS_REVERSE_ENGINEERING.md` → "`MsnCoreApp` segfault").
+`docs/1.8_ARK1680_TS_REVERSE_ENGINEERING.md` → "`MsnCoreApp` segfault").
 
 ## Build
 
@@ -42,7 +42,7 @@ matters since Qt/QWS spawns additional threads early — trace the exact
 sequence of syscalls up to the `SIGSEGV`, then cross-reference the last
 successful call/address against the symbol table in the unstripped
 `Prado firmware dump/mtd6_rootfs/usr/bin/MsnCoreApp` the same way the
-rest of the crash analysis in `docs/ARK1680_TS_REVERSE_ENGINEERING.md`
+rest of the crash analysis in `docs/1.8_ARK1680_TS_REVERSE_ENGINEERING.md`
 was done (`arm-linux-gnueabihf-objdump -d -C`).
 
 This is a much more direct route to the exact crash point than the

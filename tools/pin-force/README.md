@@ -9,7 +9,7 @@ entirely.
 
 A deliberate, active test to settle the tension found while
 investigating the LCDTest color-grid corruption: a prior static
-debugfs snapshot (`docs/DISPLAY_SUBSYSTEM.md`'s
+debugfs snapshot (`docs/1.7_DISPLAY_SUBSYSTEM.md`'s
 `I2C_GPIO0_LCD_PIN_CONFLICT` section) found pins 2/3 permanently muxed
 to LCD function even after `i2c-gpio-0` claims them as GPIO, concluding
 the shared-pin conflict only breaks I2C, not the LCD. But real hardware

@@ -6,7 +6,7 @@ to that address.
 
 Built specifically to test the BD37033 sound-processor's persistent
 `bd37033_write_byte timeout` failures documented in
-`docs/AUDIO_SUBSYSTEM_INVESTIGATION.md`. The kernel's `BD37033.c` driver has never
+`docs/1.5_AUDIO_SUBSYSTEM_INVESTIGATION.md`. The kernel's `BD37033.c` driver has never
 successfully written to this chip in this project's testing (nor, per the same
 doc, on stock's own kernel) -- but stock's real, working userspace audio-control
 code (`libMsnSound.so`/`libMsnCommons.so`) bypasses the kernel driver entirely and

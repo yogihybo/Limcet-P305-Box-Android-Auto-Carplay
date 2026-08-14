@@ -7,7 +7,7 @@ with it.
 
 ## Why
 
-`docs/DISPLAY_SUBSYSTEM.md`'s `I2C_GPIO0_LCD_PIN_CONFLICT` section
+`docs/1.7_DISPLAY_SUBSYSTEM.md`'s `I2C_GPIO0_LCD_PIN_CONFLICT` section
 found -- via a single debugfs snapshot of
 `/sys/kernel/debug/pinctrl/e4900000.pinctrl/pinmux-pins` -- that pins
 2/3 (LCD `r0`/`r1`, shared with `i2c-gpio-0`'s SCL/SDA for the RN6752

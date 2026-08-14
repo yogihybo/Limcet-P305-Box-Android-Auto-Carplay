@@ -9,7 +9,7 @@ claims via `FBIOGET_VSCREENINFO`.
 
 `MsnCoreApp` shows a red tint on UI elements (icons, anti-aliased/
 alpha-blended widgets) but **not** on the flat opaque background — see
-`docs/DISPLAY_SUBSYSTEM.md`. A live register test (clearing bit 17 of
+`docs/1.7_DISPLAY_SUBSYSTEM.md`. A live register test (clearing bit 17 of
 `ARK1668_LCDC_OSD1_CTL`) turned the *entire* screen green instead of only
 affecting blended elements — ruling out a simple hardware-register fix,
 since any register change is necessarily global to the whole layer, but

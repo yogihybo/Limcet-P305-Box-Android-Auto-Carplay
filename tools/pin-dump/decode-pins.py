@@ -7,7 +7,7 @@ references those numbers against every named ark,pins group in
 ark1668-pinctrl.dtsi (the same "function X group Y" info the live debugfs
 pinmux-pins route gives on our own board, reconstructed here for stock
 firmware, which has no such interface -- see
-docs/AUDIO_SUBSYSTEM_INVESTIGATION.md and docs/I2C_GPIO0_LCD_PIN_CONFLICT.md).
+docs/1.5_AUDIO_SUBSYSTEM_INVESTIGATION.md and docs/I2C_GPIO0_LCD_PIN_CONFLICT.md).
 
 Usage:
     decode-pins.py <path-to-ark1668-pinctrl.dtsi> <path-to-pin-dump-capture>

@@ -6,7 +6,7 @@
 #
 # PASSIVE ONLY -- this script never writes to either port, it only reads.
 # The MCU is documented to send periodic/idle status frames on its own
-# (MCU_ADAPTERS.md), so a clean listen is the right first step before any
+# (1.3_MCU_ADAPTERS.md), so a clean listen is the right first step before any
 # physical-input toggling.
 #
 # This busybox build has no 'stty' applet, so baud is set via microcom's
@@ -71,7 +71,7 @@ if [ ! -c /dev/ttyHS0 ]; then
 	fail "/dev/ttyHS0 doesn't exist -- hsuart driver/DTS problem, see PIN_MASTER_LIST.md"
 else
 	pass "/dev/ttyHS0 exists"
-	echo "Listening at 115200 for 5s (per MCU_ADAPTERS.md's documented default)..."
+	echo "Listening at 115200 for 5s (per 1.3_MCU_ADAPTERS.md's documented default)..."
 	RESULT=$(listen_port /dev/ttyHS0 115200 5 /tmp/uart_hs0_115200.log)
 	case "$RESULT" in
 	error\ *)
@@ -85,13 +85,13 @@ else
 		FIRSTLINE=$(busybox hexdump -C /tmp/uart_hs0_115200.log 2>/dev/null | head -1)
 		if echo "$FIRSTLINE" | grep -qi "^[0-9a-f]* *2e"; then
 			pass "frame appears to start with 0x2E (BoxP300 header sig) -- looks like a real protocol frame, not noise"
-			echo "    cross-reference the command byte (offset 1) against MCU_ADAPTERS.md's BoxP300 table"
+			echo "    cross-reference the command byte (offset 1) against 1.3_MCU_ADAPTERS.md's BoxP300 table"
 		else
 			unk "captured data doesn't obviously start with 0x2E -- could be a frame boundary mid-capture, or noise. Inspect the hex dump above by hand."
 		fi
 		;;
 	*)
-		unk "no bytes at 115200 -- trying 38400 for 5s (per MCU_ADAPTERS.md's fallback baud)..."
+		unk "no bytes at 115200 -- trying 38400 for 5s (per 1.3_MCU_ADAPTERS.md's fallback baud)..."
 		RESULT2=$(listen_port /dev/ttyHS0 38400 5 /tmp/uart_hs0_38400.log)
 		case "$RESULT2" in
 		error\ *)

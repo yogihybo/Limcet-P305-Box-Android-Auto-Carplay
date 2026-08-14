@@ -21,7 +21,7 @@ Source of: MsnProductInfo.ini (ProductId=Limcet-P306), msncfg settings, pointerc
 **Limcet P306 Msnconfig** — Limcet P306-specific factory config variations  
 **`ArkPro Reference/`** — ASTRI's reference ARK1680 kernel/U-Boot/userspace source (public leak,
 `cphatt/ArkPro` commit `e743744`), used to confirm SoC-identity and register-field findings in
-`docs/HARDWARE_AND_SOC_REFERENCE.md` §9 and `docs/DISPLAY_SUBSYSTEM.md`; see `ArkPro Reference/README.md`.  
+`docs/1.1_HARDWARE_AND_SOC_REFERENCE.md` §9 and `docs/1.7_DISPLAY_SUBSYSTEM.md`; see `ArkPro Reference/README.md`.  
 **`linux-arkmicro Reference/`** — ArkMicro's own public U-Boot BSP (`RD_Software/linux-arkmicro`,
 a later generation than the Limcet P306's actual stock U-Boot — see that folder's README), the starting
 point for `docs/UBOOT_BUILD_GUIDE.md`'s from-source build plan  

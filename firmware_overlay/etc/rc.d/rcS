@@ -137,7 +137,7 @@ done
 
 # Set each MUSB controller's operating mode (usb1's CarPlay wired/WiFi
 # role, and a fast-path for USB-stick test boots) -- see
-# docs/WIRELESS_AND_INIT.md sec 7 and the comments in this script for
+# docs/1.4_WIRELESS_AND_INIT.md sec 7 and the comments in this script for
 # why. Needs /proc and /sys mounted (above), nothing else -- run this
 # as early as possible so it can override the kernel's own in-progress
 # OTG negotiation (which starts automatically at driver init, well

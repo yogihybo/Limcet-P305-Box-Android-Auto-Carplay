@@ -75,22 +75,22 @@ Hardware on the device has been identified by opening the device and reviewing t
 | Component | Part | Role |
 |-----------|------|------|
 | SoC | ARK1668 (die marking; ARK1680 in firmware/software — same device) ARK1680 (ARM Cortex-A5) | Main applications processor |
-| Video decoder | Hantro `hx170dec` (on-SoC IP block, VDEC0 @ `0xe0900000`) | Hardware H.264 decode for Android Auto/CarPlay video — `/dev/hx170dec`, driven via `libmfc.so` (see `tools/hx170-test/`). Background: [§1.1](docs/HARDWARE_AND_SOC_REFERENCE.md) |
-| GPU | Vivante GC-series (on-SoC IP block @ `0xe0f00000`, IRQ 32; exact GC model not yet identified) | 2D/3D acceleration — used on stock's 3.4 kernel too, as a loadable `galcore.ko` module (`insmod`'d from stock's own `/etc/profile`, not compiled into the kernel image); confirmed working on this project's 4.19.192 kernel via its own `galcore.ko` 6.2.4.p1.8 + a matched `libGAL.so`. Background: [§1.1](docs/HARDWARE_AND_SOC_REFERENCE.md), [§1.5](docs/AUDIO_SUBSYSTEM_INVESTIGATION.md), [§1.7](docs/DISPLAY_SUBSYSTEM.md) |
-| USB controller | MUSB (on-SoC, dual-port: `usb0`/`usb1`) | Host/gadget — `usb0` is the board's only externally-facing port (CDC-NCM to host PC at `192.168.7.1`, USB-stick boot, wired Android Auto); `usb1` has no external connector and is host mode purely for the onboard RTL8811CU WiFi chip; port role is boot-command-dependent (see §8.0). Background: [§1.1](docs/HARDWARE_AND_SOC_REFERENCE.md) |
-| MMC/SD controller | Synopsys DesignWare `dw-mshc` (MMC0 @ `0xec400000`, MMC1 @ `0xec800000`) | MMC0 = SD card slot, confirmed working (`mmc0: new SD card`); MMC1's DTS comment calls it "SDIO WiFi Controller" but this is confirmed wrong — the real WiFi chip enumerates on USB (`usb1`), not SDIO — MMC1's actual role is unconfirmed. Background: [§1.1](docs/HARDWARE_AND_SOC_REFERENCE.md) |
-| UARTs | 6× on-SoC UART (`UART0`–`UART5`) + hsuart pair | UART0 = serial console `/dev/ttyS0` (§2.0); hsuart0 (UART4, `0xe4f00000`) = MCU link `/dev/ttyHS0`; hsuart1 (UART5, `0xe4800000`) = Bluetooth `/dev/ttyHS1`; a second, unexplained port `/dev/ttyS2` (4800 baud) carries real framed traffic to an unidentified peripheral. Background: [§1.3](docs/MCU_ADAPTERS.md) |
+| Video decoder | Hantro `hx170dec` (on-SoC IP block, VDEC0 @ `0xe0900000`) | Hardware H.264 decode for Android Auto/CarPlay video — `/dev/hx170dec`, driven via `libmfc.so` (see `tools/hx170-test/`). Background: [§1.1](docs/1.1_HARDWARE_AND_SOC_REFERENCE.md) |
+| GPU | Vivante GC-series (on-SoC IP block @ `0xe0f00000`, IRQ 32; exact GC model not yet identified) | 2D/3D acceleration — used on stock's 3.4 kernel too, as a loadable `galcore.ko` module (`insmod`'d from stock's own `/etc/profile`, not compiled into the kernel image); confirmed working on this project's 4.19.192 kernel via its own `galcore.ko` 6.2.4.p1.8 + a matched `libGAL.so`. Background: [§1.1](docs/1.1_HARDWARE_AND_SOC_REFERENCE.md), [§1.5](docs/1.5_AUDIO_SUBSYSTEM_INVESTIGATION.md), [§1.7](docs/1.7_DISPLAY_SUBSYSTEM.md) |
+| USB controller | MUSB (on-SoC, dual-port: `usb0`/`usb1`) | Host/gadget — `usb0` is the board's only externally-facing port (CDC-NCM to host PC at `192.168.7.1`, USB-stick boot, wired Android Auto); `usb1` has no external connector and is host mode purely for the onboard RTL8811CU WiFi chip; port role is boot-command-dependent (see §8.0). Background: [§1.1](docs/1.1_HARDWARE_AND_SOC_REFERENCE.md) |
+| MMC/SD controller | Synopsys DesignWare `dw-mshc` (MMC0 @ `0xec400000`, MMC1 @ `0xec800000`) | MMC0 = SD card slot, confirmed working (`mmc0: new SD card`); MMC1's DTS comment calls it "SDIO WiFi Controller" but this is confirmed wrong — the real WiFi chip enumerates on USB (`usb1`), not SDIO — MMC1's actual role is unconfirmed. Background: [§1.1](docs/1.1_HARDWARE_AND_SOC_REFERENCE.md) |
+| UARTs | 6× on-SoC UART (`UART0`–`UART5`) + hsuart pair | UART0 = serial console `/dev/ttyS0` (§2.0); hsuart0 (UART4, `0xe4f00000`) = MCU link `/dev/ttyHS0`; hsuart1 (UART5, `0xe4800000`) = Bluetooth `/dev/ttyHS1`; a second, unexplained port `/dev/ttyS2` (4800 baud) carries real framed traffic to an unidentified peripheral. Background: [§1.3](docs/1.3_MCU_ADAPTERS.md) |
 | NAND | Toshiba TC58BVG0S3HTA00, 128 MB SLC | Firmware/rootfs storage, on a soldered daughter module (the "Limcet Box" compute module). Background: [§4.0](#40-nand-partition-layout) |
-| MCU | STM32F105RBT6 (ARM Cortex-M3) | Vehicle-side I/O — CAN bus, touch/button/reverse/ACC-IGN signals — talks to the ARK1668 over `/dev/ttyHS0`. Background: [§1.3](docs/MCU_ADAPTERS.md) |
-| CAN transceiver | NXP TJA1042 | Bridges the MCU's CAN controller to the vehicle CANH/CANL lines. Background: [§1.2](docs/CANBUS.md) |
-| Bluetooth module | Feasycom FSC-BT8251 V1.1 (Realtek RTL-series BT SoC) | HFP/A2DP/AVRCP/iAP2, over `/dev/ttyHS1` at 1.5Mbps; enable pin `gpio91`. Background: [§1.4](docs/WIRELESS_AND_INIT.md) |
-| WiFi chip | Realtek RTL8811CU | Onboard, over USB (`usb1`). Background: [§1.4](docs/WIRELESS_AND_INIT.md) |
-| Rear camera decoder | RN6752 | CVBS composite → ITU-656 digital video for the reversing camera feed. Background: [§1.1](docs/HARDWARE_AND_SOC_REFERENCE.md) |
-| Audio DAC/ADC | ARK1668 on-SoC sigma-delta DAC (`ark_sddac`) + ADC (`ark_sdadc`), I2S1 @ `0xe4000000` (DAC) / `0xe8200000` (ADC) | The real, confirmed-only playback/capture path (stock's own `aplay -l`: `card 0: ARKSDDAC [ARK-SDDAC]`). A 2026-07-16 theory that playback instead routed through an external Cirrus Logic CS4334 chip was investigated and reverted — `cs4334_*` disassembles to no-op stubs in stock's own kernel, i.e. a vestigial board-file dai-link with no real chip behind it, not a second physical DAC. Background: [§1.5](docs/AUDIO_SUBSYSTEM_INVESTIGATION.md) |
-| Audio IC | Rohm BD37033FV | 5.1-ch digital sound processor (volume/mixing/EQ, downstream of the DAC above), I2C bus 2 @ `0x40` — chip does not appear to respond: `bd37033_write_byte timeout` confirmed via `dmesg` on both stock and this project's firmware, root cause not fully resolved. Background: [§1.6](docs/BD37033.md) |
-| Display adapter | DC_FUJITSU_CON96P_REV_002 (interposer) | Adapts the main board's edge connector to the LCD panel's 96-pin Fujitsu FPC. Background: [§1.7](docs/DISPLAY_SUBSYSTEM.md) |
-| LCD Display | 800×480 RGB888 | Part of the factory head unit. Background: [§1.7](docs/DISPLAY_SUBSYSTEM.md) |
-| Touchscreen | ARK1668 on-SoC resistive ADC/TSC block (`ark_adc_mmio_base`, phys `0xe4500000`) | Not a discrete GT911 or similar controller — stock selects `ark1680_ts.ko` at boot, driving the panel's resistive touch layer directly off the SoC's own ADC hardware. Background: [§1.8](docs/ARK1680_TS_REVERSE_ENGINEERING.md) |
+| MCU | STM32F105RBT6 (ARM Cortex-M3) | Vehicle-side I/O — CAN bus, touch/button/reverse/ACC-IGN signals — talks to the ARK1668 over `/dev/ttyHS0`. Background: [§1.3](docs/1.3_MCU_ADAPTERS.md) |
+| CAN transceiver | NXP TJA1042 | Bridges the MCU's CAN controller to the vehicle CANH/CANL lines. Background: [§1.2](docs/1.2_CANBUS.md) |
+| Bluetooth module | Feasycom FSC-BT8251 V1.1 (Realtek RTL-series BT SoC) | HFP/A2DP/AVRCP/iAP2, over `/dev/ttyHS1` at 1.5Mbps; enable pin `gpio91`. Background: [§1.4](docs/1.4_WIRELESS_AND_INIT.md) |
+| WiFi chip | Realtek RTL8811CU | Onboard, over USB (`usb1`). Background: [§1.4](docs/1.4_WIRELESS_AND_INIT.md) |
+| Rear camera decoder | RN6752 | CVBS composite → ITU-656 digital video for the reversing camera feed. Background: [§1.1](docs/1.1_HARDWARE_AND_SOC_REFERENCE.md) |
+| Audio DAC/ADC | ARK1668 on-SoC sigma-delta DAC (`ark_sddac`) + ADC (`ark_sdadc`), I2S1 @ `0xe4000000` (DAC) / `0xe8200000` (ADC) | The real, confirmed-only playback/capture path (stock's own `aplay -l`: `card 0: ARKSDDAC [ARK-SDDAC]`). A 2026-07-16 theory that playback instead routed through an external Cirrus Logic CS4334 chip was investigated and reverted — `cs4334_*` disassembles to no-op stubs in stock's own kernel, i.e. a vestigial board-file dai-link with no real chip behind it, not a second physical DAC. Background: [§1.5](docs/1.5_AUDIO_SUBSYSTEM_INVESTIGATION.md) |
+| Audio IC | Rohm BD37033FV | 5.1-ch digital sound processor (volume/mixing/EQ, downstream of the DAC above), I2C bus 2 @ `0x40` — chip does not appear to respond: `bd37033_write_byte timeout` confirmed via `dmesg` on both stock and this project's firmware, root cause not fully resolved. Background: [§1.6](docs/1.6_BD37033.md) |
+| Display adapter | DC_FUJITSU_CON96P_REV_002 (interposer) | Adapts the main board's edge connector to the LCD panel's 96-pin Fujitsu FPC. Background: [§1.7](docs/1.7_DISPLAY_SUBSYSTEM.md) |
+| LCD Display | 800×480 RGB888 | Part of the factory head unit. Background: [§1.7](docs/1.7_DISPLAY_SUBSYSTEM.md) |
+| Touchscreen | ARK1668 on-SoC resistive ADC/TSC block (`ark_adc_mmio_base`, phys `0xe4500000`) | Not a discrete GT911 or similar controller — stock selects `ark1680_ts.ko` at boot, driving the panel's resistive touch layer directly off the SoC's own ADC hardware. Background: [§1.8](docs/1.8_ARK1680_TS_REVERSE_ENGINEERING.md) |
 
 **Connecting to the existing car wiring:**
 
@@ -115,13 +115,13 @@ The device runs two distinct software stacks depending on which boot path is act
 | Root filesystem | BusyBox 1.25.0-based | BusyBox 1.30.1, rebuilt from source (~390 applets, incl. `/sbin/init`) |
 | UI framework | Qt 4.7.4 (QWS + DirectFB/fbdev), closed-source `MsnCoreApp` | stock UI runs unmodified on the new kernel; optional replacement: [`custom_ui/`](custom_ui/README.md) (LVGL-based, open source) |
 | Main application | `MsnCoreApp` — head-unit UI, settings, USB auto-copy mechanism | unchanged (stock binary reused) |
-| GPU driver/lib | `galcore.ko` + `libGAL.so` (Vivante, vendor-shipped) | `galcore.ko` 6.2.4.p1.8 + matched `libGAL.so`, rebuilt for 4.19.192 — background: [§1.1](docs/HARDWARE_AND_SOC_REFERENCE.md), [§1.5](docs/AUDIO_SUBSYSTEM_INVESTIGATION.md) |
-| Video decode | `libmfc.so` (Hantro `hx170dec` userspace API) | unchanged — background: [§1.1](docs/HARDWARE_AND_SOC_REFERENCE.md) |
-| Audio control | `libMsnSound.so` (`Sound_BD37033`/`Sound_PT2312`/`Sound_MCU` backends, selected via `SoundType`) | unchanged — background: [§1.5](docs/AUDIO_SUBSYSTEM_INVESTIGATION.md), [§1.6](docs/BD37033.md) |
-| MCU protocol | `libMcuCenter.so` (`McuType=6`, `MCUAdapter_BoxP300`, over `/dev/ttyHS0`) | unchanged — background: [§1.3](docs/MCU_ADAPTERS.md) |
-| CAN adapter SDK | `libCanBus.so` — multi-vendor CAN decoder-box SDK; unused on this device (`CanType=0`, decoding done by the MCU instead) | unchanged — background: [§1.2](docs/CANBUS.md) |
-| Bluetooth stack | `rtkbt` userspace stack (Realtek), over `/dev/ttyHS1` | unchanged — background: [§1.4](docs/WIRELESS_AND_INIT.md) |
-| WiFi AP | `hostapd` + `udhcpd`, SSID `carplay_wifi` | unchanged — background: [§1.4](docs/WIRELESS_AND_INIT.md) |
+| GPU driver/lib | `galcore.ko` + `libGAL.so` (Vivante, vendor-shipped) | `galcore.ko` 6.2.4.p1.8 + matched `libGAL.so`, rebuilt for 4.19.192 — background: [§1.1](docs/1.1_HARDWARE_AND_SOC_REFERENCE.md), [§1.5](docs/1.5_AUDIO_SUBSYSTEM_INVESTIGATION.md) |
+| Video decode | `libmfc.so` (Hantro `hx170dec` userspace API) | unchanged — background: [§1.1](docs/1.1_HARDWARE_AND_SOC_REFERENCE.md) |
+| Audio control | `libMsnSound.so` (`Sound_BD37033`/`Sound_PT2312`/`Sound_MCU` backends, selected via `SoundType`) | unchanged — background: [§1.5](docs/1.5_AUDIO_SUBSYSTEM_INVESTIGATION.md), [§1.6](docs/1.6_BD37033.md) |
+| MCU protocol | `libMcuCenter.so` (`McuType=6`, `MCUAdapter_BoxP300`, over `/dev/ttyHS0`) | unchanged — background: [§1.3](docs/1.3_MCU_ADAPTERS.md) |
+| CAN adapter SDK | `libCanBus.so` — multi-vendor CAN decoder-box SDK; unused on this device (`CanType=0`, decoding done by the MCU instead) | unchanged — background: [§1.2](docs/1.2_CANBUS.md) |
+| Bluetooth stack | `rtkbt` userspace stack (Realtek), over `/dev/ttyHS1` | unchanged — background: [§1.4](docs/1.4_WIRELESS_AND_INIT.md) |
+| WiFi AP | `hostapd` + `udhcpd`, SSID `carplay_wifi` | unchanged — background: [§1.4](docs/1.4_WIRELESS_AND_INIT.md) |
 | Remote access | none — serial console is receive-only once Linux boots | SSH (`/usr/bin/sshd`, OpenSSH 4.6p1) + USB CDC-NCM networking baked in; telnet available on stock too via the USB auto-copy payload (§3.0) |
 
 **Documentation:**
@@ -750,7 +750,7 @@ The ARK1680 USB gadget stack is configured to use CDC-NCM (`g_ncm.ko`), which cr
 | `less` | Proper pager (busybox only has a bare `more`) |
 | `htop` | Interactive process/CPU/memory viewer |
 | `tmux` | Terminal multiplexer — sessions survive a dropped serial/telnet connection |
-| `gdbserver` | Live remote debugging — attach a host `gdb`/`gdb-multiarch` over TCP for real register/stack/memory state, instead of reconstructing it from a post-mortem minidump and disassembly (see `docs/AUDIO_SUBSYSTEM_INVESTIGATION.md` for exactly the kind of investigation this replaces) |
+| `gdbserver` | Live remote debugging — attach a host `gdb`/`gdb-multiarch` over TCP for real register/stack/memory state, instead of reconstructing it from a post-mortem minidump and disassembly (see `docs/1.5_AUDIO_SUBSYSTEM_INVESTIGATION.md` for exactly the kind of investigation this replaces) |
 | `nss-stub` | Static-linkage NSS stub object linked into `nano`/`htop`/`tmux`/`gdbserver` and busybox itself — see [Static ARM+glibc NSS crash workaround](tools/nss-stub/README.md) |
 
 **Host-side scripts** (run on a dev machine, not on the device):
@@ -855,7 +855,7 @@ See [`docs/SOURCES.md`](docs/SOURCES.md) for full provenance of each file.
 
 - [`SOURCES.md`](docs/SOURCES.md) — provenance of every firmware source used
 - [`PARTITION_LAYOUT.md`](docs/PARTITION_LAYOUT.md) — NAND offsets, sizes, flash commands
-- [`HARDWARE_AND_SOC_REFERENCE.md`](docs/HARDWARE_AND_SOC_REFERENCE.md) — SoC identity, Ghidra RE of the firmware_source/kernel/userspace binaries, full pin-mux table, cross-checked against real ASTRI/ArkMicro vendor source; per-driver confirmation status and open test procedures live in its own "Open items" section
+- [`1.1_HARDWARE_AND_SOC_REFERENCE.md`](docs/1.1_HARDWARE_AND_SOC_REFERENCE.md) — SoC identity, Ghidra RE of the firmware_source/kernel/userspace binaries, full pin-mux table, cross-checked against real ASTRI/ArkMicro vendor source; per-driver confirmation status and open test procedures live in its own "Open items" section
 - [`VENDOR_BSP_RESEARCH.md`](docs/VENDOR_BSP_RESEARCH.md) — research pass over sibling ArkMicro vendor/BSP source trees (`ark1668ed-bsp`, `cstech-ip17-rootfs`); WiFi/audio driver branches, wired-AA lead
 - [`SECURITY_REVIEW.md`](docs/SECURITY_REVIEW.md) — credential/access-path review: stock root password, an unresolved second UID-0 account, update-integrity check
 
@@ -875,28 +875,28 @@ See [`docs/SOURCES.md`](docs/SOURCES.md) for full provenance of each file.
 
 *Display*
 
-- [`DISPLAY_SUBSYSTEM.md`](docs/DISPLAY_SUBSYSTEM.md) — panel display configuration presets and register-level meaning; screen configuration and hue investigation
+- [`1.7_DISPLAY_SUBSYSTEM.md`](docs/1.7_DISPLAY_SUBSYSTEM.md) — panel display configuration presets and register-level meaning; screen configuration and hue investigation
   - [`ARK_DISP_STOCK_DECOMPILATION.md`](docs/ARK_DISP_STOCK_DECOMPILATION.md) — raw decompiled `ark_disp` driver function listings
   - [`LCD_PIN_CONFLICT_TEST_PROCEDURE.md`](docs/LCD_PIN_CONFLICT_TEST_PROCEDURE.md) — test procedure for the LCD RGB/I2C pin-conflict color-corruption bug
-- [`ARK1680_TS_REVERSE_ENGINEERING.md`](docs/ARK1680_TS_REVERSE_ENGINEERING.md) — touchscreen driver (`ark1680_ts.ko`) RE; the finding that supersedes the older MCU/I2C touch-activation theory (see [`docs/historical/HANDOFF_touch_and_bootargs_fix.md`](docs/historical/HANDOFF_touch_and_bootargs_fix.md) below)
+- [`1.8_ARK1680_TS_REVERSE_ENGINEERING.md`](docs/1.8_ARK1680_TS_REVERSE_ENGINEERING.md) — touchscreen driver (`ark1680_ts.ko`) RE; the finding that supersedes the older MCU/I2C touch-activation theory (see [`docs/historical/HANDOFF_touch_and_bootargs_fix.md`](docs/historical/HANDOFF_touch_and_bootargs_fix.md) below)
 
 *Audio*
 
-- [`AUDIO_SUBSYSTEM_INVESTIGATION.md`](docs/AUDIO_SUBSYSTEM_INVESTIGATION.md) — audio subsystem investigation
-  - [`BD37033.md`](docs/BD37033.md) — `Sound_BD37033` audio-codec driver class RE, inside `libMsnSound.so`
+- [`1.5_AUDIO_SUBSYSTEM_INVESTIGATION.md`](docs/1.5_AUDIO_SUBSYSTEM_INVESTIGATION.md) — audio subsystem investigation
+  - [`1.6_BD37033.md`](docs/1.6_BD37033.md) — `Sound_BD37033` audio-codec driver class RE, inside `libMsnSound.so`
 
 *Wireless / MCU / CAN / storage*
 
-- [`WIRELESS_AND_INIT.md`](docs/WIRELESS_AND_INIT.md) — WiFi/BT pin mapping, module init, and command sequence
-- [`MCU_ADAPTERS.md`](docs/MCU_ADAPTERS.md) — MCU adapter types reverse-engineered from `libMcuCenter.so`
-- [`CANBUS.md`](docs/CANBUS.md) — CAN bus investigation for this board
+- [`1.4_WIRELESS_AND_INIT.md`](docs/1.4_WIRELESS_AND_INIT.md) — WiFi/BT pin mapping, module init, and command sequence
+- [`1.3_MCU_ADAPTERS.md`](docs/1.3_MCU_ADAPTERS.md) — MCU adapter types reverse-engineered from `libMcuCenter.so`
+- [`1.2_CANBUS.md`](docs/1.2_CANBUS.md) — CAN bus investigation for this board
   - [`REAR_DVD_CANBUS_INVESTIGATION.md`](docs/REAR_DVD_CANBUS_INVESTIGATION.md) — open investigation: controlling the factory rear DVD/RSE unit from the Limcet box via CAN bus
 - [`USERDATA_REVIEW.md`](docs/USERDATA_REVIEW.md) — userdata partition review
 
 *Historical (superseded, kept for background)*
 
 - [`historical/HANDOFF_nand_ecc_uboot_vs_kernel.md`](docs/historical/HANDOFF_nand_ecc_uboot_vs_kernel.md) — the NAND ECC root cause (U-Boot fixed and confirmed, kernel fixed in source but untested), why the `U-boot` NAND partition is unreadable by any U-Boot-level tool, and every patch behind [§8.0](#80-custom-u-boot-boot-chain-ark1668_limcet_p305)
-- [`historical/HANDOFF_touch_and_bootargs_fix.md`](docs/historical/HANDOFF_touch_and_bootargs_fix.md) — touchscreen I2C bus fix, SD bootargs fix, and the NAND "417 false bad blocks" ECC/BBT investigation (touch-activation theory later superseded, see `ARK1680_TS_REVERSE_ENGINEERING.md` above)
+- [`historical/HANDOFF_touch_and_bootargs_fix.md`](docs/historical/HANDOFF_touch_and_bootargs_fix.md) — touchscreen I2C bus fix, SD bootargs fix, and the NAND "417 false bad blocks" ECC/BBT investigation (touch-activation theory later superseded, see `1.8_ARK1680_TS_REVERSE_ENGINEERING.md` above)
 - [`historical/SD_BOOT_PLAN.md`](docs/historical/SD_BOOT_PLAN.md) — historical SD-boot planning doc (superseded, still useful background)
 - [`historical/DEVICE_TEST_CHECKLIST_2026-07-18.md`](docs/historical/DEVICE_TEST_CHECKLIST_2026-07-18.md) — dated session working log (DirectFB/black-screen/audio investigations); many individual findings self-marked superseded inline, kept for the debugging history
 

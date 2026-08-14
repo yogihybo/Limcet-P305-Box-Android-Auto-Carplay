@@ -607,7 +607,7 @@ and `ark1680_ts.ko`'s source isn't in this repo, only the compiled stock
 1. Reverse-engineer `ark1680_ts.ko` (disassembly, same approach as the
    GT911 pin/timing recovery above) to find the SoC's ADC/TSC MMIO base,
    IRQ, and register layout, then write a new 4.19 driver + DTS node —
-   **done, see `docs/ARK1680_TS_REVERSE_ENGINEERING.md`**: MMIO base
+   **done, see `docs/1.8_ARK1680_TS_REVERSE_ENGINEERING.md`**: MMIO base
    `0xe4500000` (+0x40), IRQ 4, full init-sequence, register-offset map,
    the `TSP_GetXY` median-of-4 coordinate filter, and the input event
    protocol all recovered from the stock `.ko` and `vmlinux.elf`
@@ -634,7 +634,7 @@ and `ark1680_ts.ko`'s source isn't in this repo, only the compiled stock
    One cheap check left before concluding that: confirm with `debug=1` +
    `dmesg -w` whether the IRQ ever fires at all (rules out the polling
    snapshots missing a narrow window). See
-   `docs/ARK1680_TS_REVERSE_ENGINEERING.md` for full analysis.
+   `docs/1.8_ARK1680_TS_REVERSE_ENGINEERING.md` for full analysis.
 2. Physically confirm whether a GT911 (or any I²C touch chip) is actually
    populated on the board despite the firmware flag — if not populated,
    option 1 is the only path; if it is populated, the marker file could
@@ -659,7 +659,7 @@ out to be a bug in the fix itself (wrong `_IOWR()` macro argument
 silently produced the wrong ioctl command number, so it never matched
 userspace's call). Fixed and kernel rebuilt again — **re-flash and
 re-test needed**. Full trail in
-`docs/ARK1680_TS_REVERSE_ENGINEERING.md` → "`MsnCoreApp` segfault —
+`docs/1.8_ARK1680_TS_REVERSE_ENGINEERING.md` → "`MsnCoreApp` segfault —
 likely root cause found and fixed".
 
 ---

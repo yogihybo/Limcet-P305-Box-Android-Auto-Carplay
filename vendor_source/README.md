@@ -50,7 +50,7 @@ Two clone gotchas found while verifying:
 | | Prado's actual U-Boot (live banner string) | This repo |
 |---|---|---|
 | U-Boot version | `2012.10` | `2018.07-linux4ark_1.0` |
-| Boot method | Legacy ATAG (Prado kernel has no devicetree support at all — `docs/HARDWARE_AND_SOC_REFERENCE.md` §2) | SPL + FDT (`CONFIG_DEFAULT_FDT_FILE="ark169.dtb"`) |
+| Boot method | Legacy ATAG (Prado kernel has no devicetree support at all — `docs/1.1_HARDWARE_AND_SOC_REFERENCE.md` §2) | SPL + FDT (`CONFIG_DEFAULT_FDT_FILE="ark169.dtb"`) |
 | Build toolchain | gcc 4.9.4 / Buildroot 2018.08 (from the kernel's own banner) | Linaro gcc 7.3.1/7.4.1, Buildroot 2021.02.2 |
 | NAND partition layout | `128k(S-Loader),512k(U-boot),512k(U-boot_back),256K(U-boot-Env),256K(arkdata),...` (`docs/PARTITION_LAYOUT.md`) | `128k(bootstrap),640k(bootloader),640k(bootloader_back),128k(bootloaderenv),128k(fdt),...` (`configs/ark1668_defconfig`) |
 
@@ -90,7 +90,7 @@ u-boot/
   drivers/usb/musb/, musb-new/    ark_musb.c — USB MUSB OTG driver (2 variants, old/new musb stack)
 
 linux/                            Kernel-side devicetree source (the "public linux-arkmicro tree"
-                                   already cited throughout docs/HARDWARE_AND_SOC_REFERENCE.md — this is
+                                   already cited throughout docs/1.1_HARDWARE_AND_SOC_REFERENCE.md — this is
                                    the first time it's actually vendored into the repo rather than
                                    referenced from memory)
   arch/arm/boot/dts/
@@ -108,7 +108,7 @@ env.source                        Toolchain setup script (Linaro gcc path + CROS
 ```
 
 Not copied: ark1668**e** (the newer, architecturally-different generation — already established in
-`docs/HARDWARE_AND_SOC_REFERENCE.md` §2 as NOT matching this SoC), the rest of upstream U-Boot's generic
+`docs/1.1_HARDWARE_AND_SOC_REFERENCE.md` §2 as NOT matching this SoC), the rest of upstream U-Boot's generic
 kbuild/common/lib/fs infrastructure (needed to actually build — clone the full repo for that, per
 `docs/UBOOT_BUILD_GUIDE.md`), and `buildroot`/`buildroot-external` (a separate, much larger companion
 tree in the same repo, unrelated to U-Boot itself).

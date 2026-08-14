@@ -498,61 +498,7 @@ The ARK1680 USB gadget stack is configured to use CDC-NCM (`g_ncm.ko`), which cr
 
 `tools/` holds static ARM binaries (and a few POSIX shell wrappers), each with its own `README.md`. Synced into `firmware_overlay/prado/usr/bin/`, so they're unconditionally part of every build's rootfs (see that directory's `README.md`) — no separate install step or toggle. All statically linked, no dependency on anything else in the rootfs — they work even while chasing a boot/crash problem elsewhere in the system.
 
-**I2C / GPIO / pinmux:**
-
-| Tool | Purpose |
-|------|---------|
-| `i2c-scan` | Scan I2C buses for ACKing devices |
-| `i2c-dump` | Dump registers off a specific I2C address |
-| `i2c-write` | Raw single-register I2C write, bypassing any kernel driver bound to that address |
-| `i2c-read-raw` | Plain multi-byte I2C read — no register-address write phase, no repeated start |
-| `i2c-gpio-bruteforce` | Bit-bangs every candidate pin pair as SCL/SDA to find a chip's real wiring when the DTS assignment is wrong |
-| `gpio-i2c-probe` | Bit-bang GPIO/I2C probing, independent of the kernel's own i2c-gpio driver |
-| `pin-dump` | Live SoC pinmux register dump, cross-checked against the pinctrl driver's table |
-| `pin-force` | Forces an ARK1668 LCD RGB888 data pin into GPIO mode at a specific level (or restores it), via raw register writes |
-| `pinmux-watch` | Tight-loop poller for the LCD RGB888 pad-mux registers, to catch a live function-select change in the act |
-
-**Display / video:**
-
-| Tool | Purpose |
-|------|---------|
-| `lcd-test` | Raw `/dev/fb0` framebuffer test — info dump, then cycles fills/bars/gradient |
-| `fb-scan` | Locates solid-color rectangles in the live framebuffer and predicts the correct color for near-black cells |
-| `fb-alpha-test` | Paints labeled bands into `/dev/fb0` to determine the LCDC OSD1 layer's real alpha-blend/channel-order behavior |
-| `lcdc-regdump` | Dumps every named ARK1668 LCDC register by name, for stock-vs-build diffing |
-| `hx170-test` | Standalone test of the Hantro `hx170dec` H.264 decoder via `libmfc.so`, bypassing `sink`/Android Auto/network |
-| `mem-dump` | Hex-dumps physical memory via `mmap()`'d `/dev/mem` — reaches DMA carve-out regions `dd`/`/dev/mem` reads can't |
-| `mem-fill` | Write-side companion to `mem-dump` — fills a physical memory range with a repeating pattern |
-
-**Touch / MCU / misc hardware:**
-
-| Tool | Purpose |
-|------|---------|
-| `ark1680-ts-test` | ARK1680 resistive-ADC touchscreen driver diagnostic — register dump + evdev event watcher |
-| `mcu-handshake` | Native C reimplementation of the MCU UART handshake protocol |
-| `dmesg` | Static util-linux `dmesg` — timestamps/facility-decoding/color that BusyBox's built-in applet lacks |
-| `strace` | Upstream syscall tracer (static build) |
-| `audio-test` / `touch-selftest` / `uart-test` / `bt-test` / `usb-test` / `mmc-test` | Automated pass/fail wrapper scripts, one per subsystem |
-
-**General shell utilities** (not diagnostic-specific, but this rootfs's busybox lacks them):
-
-| Tool | Purpose |
-|------|---------|
-| `nano` | Text editor, for editing config/log files directly on the device |
-| `less` | Proper pager (busybox only has a bare `more`) |
-| `htop` | Interactive process/CPU/memory viewer |
-| `tmux` | Terminal multiplexer — sessions survive a dropped serial/telnet connection |
-| `gdbserver` | Live remote debugging — attach a host `gdb`/`gdb-multiarch` over TCP for real register/stack/memory state, instead of reconstructing it from a post-mortem minidump and disassembly (see `docs/1.5_AUDIO_SUBSYSTEM_INVESTIGATION.md` for exactly the kind of investigation this replaces) |
-| `nss-stub` | Static-linkage NSS stub object linked into `nano`/`htop`/`tmux`/`gdbserver` and busybox itself — see [Static ARM+glibc NSS crash workaround](tools/nss-stub/README.md) |
-
-**Host-side scripts** (run on a dev machine, not on the device):
-
-| Tool | Purpose |
-|------|---------|
-| `msncore_analyze.py` | Deconstructs the `MsnCoreApp` Qt UI binary using its unstripped sibling build's symbol table, for targeted patching |
-| `rcc_extract.py` | Extracts a Qt binary resource bundle (`.rcc`) to a directory |
-
-`nano`/`less`/`htop`/`tmux` are linked against a static `ncurses` build with `vt100`/`linux`/`xterm`/`ansi` terminal descriptions compiled directly in, since this rootfs has no terminfo database — the serial console's `TERM=vt100` (`/etc/inittab`) is covered. `tmux` additionally links a static `libevent`. Both persisted in the separate `linux-arkmicro` repo (`buildroot-external/arm-static-libs/`) so future tool builds don't need to rebuild them from source.
+Full tool-by-tool breakdown (I2C/GPIO/pinmux, display/video, touch/MCU, general shell utilities, host-side scripts): [`tools/README.md`](tools/README.md).
 
 ## 13.0 Repository Structure
 
@@ -595,7 +541,7 @@ vendor_source/README.md    Pointer only — the ASTRI ARK1680 vendor source and 
 
 tools/              On-device diagnostic/utility binaries — static ARM builds, one subdirectory
                     per tool with its own README.md, synced into firmware_overlay/prado/usr/bin/
-                    so every build's rootfs has them unconditionally. See §11.1 above for the
+                    so every build's rootfs has them unconditionally. See tools/README.md for the
                     full list.
 
 firmware_source/kernel/            zImage (from Holden base — identical kernel_size to firmware_dumps/Prado firmware dump; gitignored, not present in every checkout — firmware_source/prado_reconstructed/mtd5_firmware_source/kernel/zImage is the copy actually used for builds)
@@ -697,6 +643,7 @@ See [`docs/14.1_SOURCES.md`](docs/14.1_SOURCES.md) for full provenance of each f
 - [`hardware/BOARD_ANALYSIS.md`](hardware/BOARD_ANALYSIS.md) — physical board/component teardown notes (SoC, NAND, BT, MCU, CAN bus)
 - [`hardware/MCU/MCU_FIRMWARE_REVIEW.md`](hardware/MCU/MCU_FIRMWARE_REVIEW.md) — STM32F105 MCU firmware review
 - [`build_tools/README.md`](build_tools/README.md) — what each U-Boot patching/bootlogo-generation/rootfs-repair script and vendor tool is for
+- [`tools/README.md`](tools/README.md) — full breakdown of the on-device diagnostic/utility binaries (see [§12.1](#121-diagnostic--on-device-utility-tools))
 - [`custom_ui/README.md`](custom_ui/README.md) / [`custom_ui/docs/ARCHITECTURE.md`](custom_ui/docs/ARCHITECTURE.md) / [`custom_ui/docs/IMPLEMENTATION_PLAN.md`](custom_ui/docs/IMPLEMENTATION_PLAN.md) — the LVGL-based replacement UI: architecture and implementation status
 - [`vendor_source/README.md`](vendor_source/README.md) — the ASTRI ARK1680 vendor source and ArkMicro U-Boot/kernel BSP that used to be vendored directly into this repo now live in the separate [`linux-arkmicro`](https://github.com/yogihybo/linux-arkmicro) repo (the actual buildable U-Boot/kernel source tree — see [§7.0](#70-custom-u-boot-and-kernel)); this file is a pointer, not a copy
 - [`payloads/msn_autocopy/README.md`](payloads/msn_autocopy/README.md) — USB payload that exploits the `payloads/msn_autocopy` auto-copy mechanism to install and autostart `sshd` on a stock device

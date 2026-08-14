@@ -44,4 +44,3 @@ Kept for reference/citation — not invoked by any script in this repo.
 | Path | Purpose |
 |------|---------|
 | `directfb-fbdev-fix/` | Two source patches (+ its own detailed `README.md`) rebuilding DirectFB's `fbdev` system module to fix a black-screen bug — see that folder's README and [`docs/historical/DEVICE_TEST_CHECKLIST_2026-07-18.md`](../docs/historical/DEVICE_TEST_CHECKLIST_2026-07-18.md) for the full root-cause trace. |
-| `archive/` | Superseded earlier version of `patch_uboot_env.py`, kept for diff/reference only — use the top-level `patch_uboot_env.py`, not this one. |

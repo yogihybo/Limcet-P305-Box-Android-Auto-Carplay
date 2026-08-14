@@ -44,9 +44,9 @@ then again on every power‑up:
    (`ScreenType`, `ResolutionType`, `McuType`, `BlueToothType`, port names…).
 4. Use `ScreenType` + `ResolutionType` to select and apply the matching
    **`arkdata` display preset** → panel comes up (see
-   [`ARKDATA_VARIANTS.md`](DISPLAY_SUBSYSTEM.md)).
+   [`ARKDATA_VARIANTS.md`](1.7_DISPLAY_SUBSYSTEM.md)).
 5. Use `McuType` to load the matching **MCU adapter** and its `KeyMaps-NN` /
-   `Knob-NN` blocks (see [`MCU_ADAPTERS.md`](MCU_ADAPTERS.md)); use
+   `Knob-NN` blocks (see [`1.3_MCU_ADAPTERS.md`](1.3_MCU_ADAPTERS.md)); use
    `BlueToothType` to bring up the BT stack per `/usr/config.ini`.
 6. **Read `FactoryConfig.ini` next** — applies *behaviour and branding* on top of
    the now‑known hardware (projection, media/audio, UI, factory menu, Bluetooth).
@@ -159,11 +159,11 @@ getting it wrong (e.g. `ScreenType`) produces a blank or garbled display before
 
 | Key | Observed values | Meaning |
 |-----|-----------------|---------|
-| `McuType` | `6` (P306), `16` (C235/Holden) | Which MCU/steering‑wheel adapter protocol the box speaks over `MCUPortName`. Also selects the matching `KeyMaps-NN`/`Knob-NN` block. **Full 1–30 value table disassembly-confirmed** (`MCUAdapter::getAdapterInstance(McuType)`, `libMcuCenter.so` `0x25e40`, same jump-table idiom as `CanType` below) — see [`MCU_ADAPTERS.md`](MCU_ADAPTERS.md) for the complete list. `6`=`BoxP300` (this device's real adapter). |
+| `McuType` | `6` (P306), `16` (C235/Holden) | Which MCU/steering‑wheel adapter protocol the box speaks over `MCUPortName`. Also selects the matching `KeyMaps-NN`/`Knob-NN` block. **Full 1–30 value table disassembly-confirmed** (`MCUAdapter::getAdapterInstance(McuType)`, `libMcuCenter.so` `0x25e40`, same jump-table idiom as `CanType` below) — see [`1.3_MCU_ADAPTERS.md`](1.3_MCU_ADAPTERS.md) for the complete list. `6`=`BoxP300` (this device's real adapter). |
 | `BlueToothType` | `5`, `6` | Bluetooth module/stack. `5` = older module; `6` = newer RTL BLE‑capable module (matches the 2025 BC6/BLE additions in `usr/config.ini`). *(inferred — see note below, the disassembly trail doesn't close cleanly)* |
 | `RadioType` | `0` | FM/AM tuner type. `0` = none. |
-| `CanType` | `0` | Built‑in CAN decoder type selecting a `libCanBus.so` adapter class. **Full 0–16 value table disassembly-confirmed** 2026-08-03 — see [`CANBUS.md`](CANBUS.md) for the complete class table and the live-tested finding that `CanType=1` breaks touch/knob input (constructs a wrong-vendor HVAC-capable adapter that fights the MCU for its own UART port). `0`=none/MCU handles it (current, correct value here); `9`=`CanBus_Raise_Toyota` (unused on this device). **Do not set to anything other than `0`.** |
-| `SoundType` | `0`, `2`, `3`, `4`, `5`, `128` | Audio routing/codec profile selector. **Full value table disassembly-confirmed** (`SoundAdapter::getInstance(SoundICType)`, `libMsnSound.so`): `2`/`4`=`Sound_PT2312` (Princeton PT2312), `3`=`Sound_BD37033` (Rohm BD37033), `5`=`Sound_MCU`, `128`(`0x80`)=`Sound_MCU_OnlyEQ`, anything else incl. `0`=no adapter constructed. `SoundType=0` is what this device currently ships with — no adapter, and as a side effect the only value confirmed to also let the mic work; `3`/`5` both construct a real adapter and both break the mic (mechanism not fully understood — see `AUDIO_SUBSYSTEM_INVESTIGATION.md`/project memory). |
+| `CanType` | `0` | Built‑in CAN decoder type selecting a `libCanBus.so` adapter class. **Full 0–16 value table disassembly-confirmed** 2026-08-03 — see [`1.2_CANBUS.md`](1.2_CANBUS.md) for the complete class table and the live-tested finding that `CanType=1` breaks touch/knob input (constructs a wrong-vendor HVAC-capable adapter that fights the MCU for its own UART port). `0`=none/MCU handles it (current, correct value here); `9`=`CanBus_Raise_Toyota` (unused on this device). **Do not set to anything other than `0`.** |
+| `SoundType` | `0`, `2`, `3`, `4`, `5`, `128` | Audio routing/codec profile selector. **Full value table disassembly-confirmed** (`SoundAdapter::getInstance(SoundICType)`, `libMsnSound.so`): `2`/`4`=`Sound_PT2312` (Princeton PT2312), `3`=`Sound_BD37033` (Rohm BD37033), `5`=`Sound_MCU`, `128`(`0x80`)=`Sound_MCU_OnlyEQ`, anything else incl. `0`=no adapter constructed. `SoundType=0` is what this device currently ships with — no adapter, and as a side effect the only value confirmed to also let the mic work; `3`/`5` both construct a real adapter and both break the mic (mechanism not fully understood — see `1.5_AUDIO_SUBSYSTEM_INVESTIGATION.md`/project memory). |
 | `TouchScreen` | `0` | Touch controller class. `0` = none / handled by panel driver. |
 | `WLANType` | `3` | Wi‑Fi module type. *(inferred)* |
 
@@ -277,7 +277,7 @@ These blocks are indexed by `McuType`: `KeyMaps-16` / `Knob-22` apply when
 
 | Key | Observed values | Meaning |
 |-----|-----------------|---------|
-| `EnableSWCSwitchHardware` | `1` | Enable the **ADC voltage‑divider** hardware path for reading steering‑wheel keys (a dedicated SWC wire sampled by the SoC). On this board the STM32 MCU actually decodes SWC off the CAN bus and forwards key events over UART instead — so this flag's ADC path is unused here. See [`MCU_ADAPTERS.md`](MCU_ADAPTERS.md) and the README hardware notes. |
+| `EnableSWCSwitchHardware` | `1` | Enable the **ADC voltage‑divider** hardware path for reading steering‑wheel keys (a dedicated SWC wire sampled by the SoC). On this board the STM32 MCU actually decodes SWC off the CAN bus and forwards key events over UART instead — so this flag's ADC path is unused here. See [`1.3_MCU_ADAPTERS.md`](1.3_MCU_ADAPTERS.md) and the README hardware notes. |
 | `EnableFKLearn` | `1` | Enable steering‑wheel key "learn" mode (Box‑C235). |
 | `KeyMaps-16` | `"0"` … `"0x02000013=0xFF0384", …` | ADC key‑code → function map for MCU type 16. Each pair maps a raw steering‑wheel key code to a firmware key action. |
 | `KeyMaps-17` | `"0"` | Same, for MCU type 17. |
@@ -314,7 +314,7 @@ These blocks are indexed by `McuType`: `KeyMaps-16` / `Knob-22` apply when
 
 | File | Purpose | Reference |
 |------|---------|-----------|
-| `/msnprofile/arkdata.ini` + `arkdata/arkdataNN_X.ini` | LCD panel timing, clock dividers, touch‑key ranges. Selected via `ScreenType`/`ResolutionType`. The file carries its own inline enum legend. | [`ARKDATA_VARIANTS.md`](DISPLAY_SUBSYSTEM.md) |
+| `/msnprofile/arkdata.ini` + `arkdata/arkdataNN_X.ini` | LCD panel timing, clock dividers, touch‑key ranges. Selected via `ScreenType`/`ResolutionType`. The file carries its own inline enum legend. | [`ARKDATA_VARIANTS.md`](1.7_DISPLAY_SUBSYSTEM.md) |
 | `/usr/config.ini` | Bluetooth "BC6" module AT‑command / indicator protocol map. **Identical across all 2025 products**; the 2025 build adds BLE (`SPP_BLE_ADV`, `IND_DEVICE_VENDOR_NAME`). Header marks it read‑only (此文件禁止更改). | — |
 | `msn_factory_configs/MsnProductInfo.ini` etc. | Provisioning overrides applied at flash time (see top of this doc). | — |
 

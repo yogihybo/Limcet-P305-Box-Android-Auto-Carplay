@@ -89,6 +89,6 @@ hardware (copied over via the existing `msn_autocopy` root-shell method,
 no transplant needed since stock's own busybox already has `devmem`) —
 both show pin 9 (`reg=0x1c0 offset=28 mask=0xf`) as `PVAL=1`
 (LCD-muxed), byte-for-byte identical. See
-`docs/AUDIO_SUBSYSTEM_INVESTIGATION.md`'s "Live hardware re-test" section
+`docs/1.5_AUDIO_SUBSYSTEM_INVESTIGATION.md`'s "Live hardware re-test" section
 and `docs/pindump stock.txt` for the full comparison and what it does/
 doesn't prove about the BD37033 I2C write-timeout investigation.

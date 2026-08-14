@@ -533,7 +533,7 @@ stock's flat/scattered menu structure:
       has **no BlueZ/AF_BLUETOOTH stack at all** — Bluetooth goes
       through Feasycom's closed `blueware` daemon via a plain-text
       AT-command channel at `/dev/bw_serial` (decompiled from the real
-      `libBlueTooth.so`, `docs/WIRELESS_AND_INIT.md`, cross-checked
+      `libBlueTooth.so`, `docs/1.4_WIRELESS_AND_INIT.md`, cross-checked
       against `docs/VENDOR_BSP_RESEARCH.md` section 4c — two
       independent real-source confirmations of the same vocabulary).
       This is a **different** channel from

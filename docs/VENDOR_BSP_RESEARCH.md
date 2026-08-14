@@ -94,7 +94,7 @@ Two commits, on branch **`wifi-rtl8821cs-driver-port`** in the `linux-arkmicro` 
    (`hal8821c_fw.c` array), not loaded from `/lib/firmware`, so no rootfs changes needed.
 
 2. **`rtl8811cu` (USB, WiFi-only) — the module actually loaded at boot** (per
-   `docs/WIRELESS_AND_INIT.md`, `wifi_ap.sh`/`rcS` load `rtl8811cu`, not `rtl8821cs`).
+   `docs/1.4_WIRELESS_AND_INIT.md`, `wifi_ap.sh`/`rcS` load `rtl8811cu`, not `rtl8821cs`).
    **Key discovery**: RTL8811CU and RTL8821C(U/S) are the *same silicon die* — confirmed
    directly by the vendor tree itself, which names the 8811CU driver's chip HAL directory
    `hal/rtl8821c/` and its internal module string `RTL871X_MODULE_NAME "8821CU"` — "8811"
@@ -252,7 +252,7 @@ Two genuine finds:
   1-byte `read()` of the fd (not polled) → on `CBS_On`: `arkapi_enter_carback()` →
   `ioctl(APP_ENTER_DONE)` ack → `ioctl(video0Fd, VIN_UPDATE_WINDOW, &vin_para)` to set the
   capture window. This corroborates and extends what this project had only from kernel
-  disassembly (`docs/HARDWARE_AND_SOC_REFERENCE.md`, GPIO 5, `request_threaded_irq`) and
+  disassembly (`docs/1.1_HARDWARE_AND_SOC_REFERENCE.md`, GPIO 5, `request_threaded_irq`) and
   strace (`arkapi_enter_carback()`/`arkapi_exit_carback()` sharing a `shmget(0x4449,...)`
   struct). Worth diffing against the actual driver/glue code for exact ioctl-number
   confirmation.
@@ -264,7 +264,7 @@ Two genuine finds:
   `SCAN=1/0`, `PLIST`, `PBDOWN=1..5`, `AVRCPCFG=<n>`, `MICMUTE=<0/1>`, `HFPADTS=1/2`
   (voice route: phone vs. car BT), `PIN=<code>`, `NAME=<devname>`, `ADDR`,
   `A2DPCONN`/`A2DPDISC`, `PLAY`/`PAUSE`/`STOP`/`FORWARD`/`BACKWARD`. Corroborates and
-  extends `docs/WIRELESS_AND_INIT.md` §5's `libBlueTooth.so` findings — likely fills gaps
+  extends `docs/1.4_WIRELESS_AND_INIT.md` §5's `libBlueTooth.so` findings — likely fills gaps
   in commands not yet observed live (`HFPCFG` bits, `AVRCPCFG`, `HFPADTS`).
 
 `demo-display`'s README (`ark1668显示接口相关说明.txt`) is a genuine ArkMicro design
@@ -277,7 +277,7 @@ independently-reconstructed display API documentation.
 ### 4d. Bluetooth — three vendor stack options behind one shared daemon name
 
 - `libbt_feasycom` — Feasycom stack (already known — this is what our board uses, per
-  `docs/WIRELESS_AND_INIT.md` §5). Its `gocsdk` binary in `ark1668ed-bsp` is a *different*
+  `docs/1.4_WIRELESS_AND_INIT.md` §5). Its `gocsdk` binary in `ark1668ed-bsp` is a *different*
   build than ours, but its own git history literally says "first debug version" — too
   weak to act on as an upgrade candidate.
 - `libbt_gukai` — a **previously-unknown second BT stack option**: CSR/Qualcomm BlueCore
@@ -363,7 +363,7 @@ mpCallDecoder(new AudioDecoder("plug:softvol3")),    // phone call
 ```
 
 **This is an exact, independent corroboration of a finding already in
-`docs/AUDIO_SUBSYSTEM_INVESTIGATION.md`.** That investigation traced `sink`'s own
+`docs/1.5_AUDIO_SUBSYSTEM_INVESTIGATION.md`.** That investigation traced `sink`'s own
 `ArkMediaPlayer::setup()` via disassembly and found `mode==3 → "plug:softvol2"`,
 `mode==1 → "plug:softvol1"`, `mode==2 → "plug:softvol4"` — the *exact same*
 softvol-channel-to-stream-type mapping (1=TTS, 2=music, 4=VR), reverse-engineered
@@ -373,7 +373,7 @@ coincidence.
 
 Mixing happens entirely at the ALSA `softvol`/`dmix` layer (all three/four softvol
 instances share one underlying `dmix`), not in application code — matches
-`AUDIO_SUBSYSTEM_INVESTIGATION.md`'s own finding that `softvol1`/`2`/`4` differ **only**
+`1.5_AUDIO_SUBSYSTEM_INVESTIGATION.md`'s own finding that `softvol1`/`2`/`4` differ **only**
 in `max_dB` gain ceiling and control name, with identical `period_size 1024`/
 `buffer_size 16384`/`slave.pcm "hw:0,0"`.
 
@@ -392,7 +392,7 @@ err == -ESTRPIPE (86) → loop: snd_pcm_resume(handle), sleep(1000ms) while -EAG
 This is the **textbook alsa-lib reference `xrun_recovery()`** — no custom tuning, no
 vendor-specific tricks. Useful negative result for the audio-stutter investigation: if
 recovery mechanics were the gap, you'd expect this vendor reference to differ; it
-doesn't. Consistent with `AUDIO_SUBSYSTEM_INVESTIGATION.md`'s own conclusion that the real
+doesn't. Consistent with `1.5_AUDIO_SUBSYSTEM_INVESTIGATION.md`'s own conclusion that the real
 mechanism is scheduling-starvation-driven XRUNs inside `AlsaHandle::play()`, not a
 recovery-logic or buffer-sizing bug.
 
@@ -450,7 +450,7 @@ mangled symbol text `_ZN9Accessory18startAccessoryModeEv` — i.e. **our board's
 `libAndroidAuto.so` has the same `Accessory::startAccessoryMode()` method**, just with the
 rest of the symbol table stripped.
 
-**This directly reframes the open question in `docs/WIRELESS_AND_INIT.md`'s "Wired
+**This directly reframes the open question in `docs/1.4_WIRELESS_AND_INIT.md`'s "Wired
 Android Auto never completes" thread.** That investigation's live testing found AOA
 *detection* works (`"Device is support acessory mode, AOA version:2"` fires correctly),
 but the connection then falls straight through to `wirelessConnectionProc` with "no AOA
@@ -480,7 +480,7 @@ with symbols to trace this directly instead of working from stripped addresses.
 
 In rough priority order:
 
-1. **Wired Android Auto (`docs/WIRELESS_AND_INIT.md`'s open thread)** — see the
+1. **Wired Android Auto (`docs/1.4_WIRELESS_AND_INIT.md`'s open thread)** — see the
    `Accessory::startAccessoryMode()` finding in §5 above. This is the strongest new lead
    from this research pass. Next step: confirm (via strace or disassembly) whether
    `AndroidAuto::startSession(false)` / `Accessory::startAccessoryMode()` is ever reached
@@ -496,7 +496,7 @@ In rough priority order:
 3. **AA audio-stutter investigation** — the softvol1/2/4 corroboration and the
    textbook-`xrun_recovery()` finding in §5 don't point to a new fix, but they do further
    rule out "buffer/recovery misconfiguration" as the mechanism, reinforcing
-   `AUDIO_SUBSYSTEM_INVESTIGATION.md`'s existing conclusion that the real bottleneck is
+   `1.5_AUDIO_SUBSYSTEM_INVESTIGATION.md`'s existing conclusion that the real bottleneck is
    scheduling-starvation inside `AlsaHandle::play()`'s `WorkQueue` thread. The two staged
    mitigations there (`chrt -f 50`, `busy_poll` sysctls) are still the next thing to
    hardware-test, unrelated to anything new found here.
@@ -507,7 +507,7 @@ In rough priority order:
 
 5. **Feasycom AT-command vocabulary** (§4c) — worth exercising the previously-unobserved
    commands (`HFPCFG` bits, `AVRCPCFG`, `HFPADTS`) live to fill gaps in
-   `docs/WIRELESS_AND_INIT.md` §5's BT protocol documentation.
+   `docs/1.4_WIRELESS_AND_INIT.md` §5's BT protocol documentation.
 
 6. Lower priority / no action needed: `libgal`/`libvglite` (reference only, wrong kernel
    ABI), `libbt_gukai`/`libsd818` (confirmed alternate vendor options, not applicable
@@ -698,7 +698,7 @@ declarations in `ark_api.h` (spot-checked earlier — no implementation body, se
 why), no CAN bus code, no MCU-handshake/UART protocol code searchable anywhere in the
 tree. The PWM/backlight driver (`kernel/drivers/ark/pwm/ark_pwm.c`) is `/proc`-driven,
 not ioctl-driven, and this project's backlight handling is already documented elsewhere
-(`docs/HARDWARE_AND_SOC_REFERENCE.md`) — no new finding there. `ark_display_v4l2.c`
+(`docs/1.1_HARDWARE_AND_SOC_REFERENCE.md`) — no new finding there. `ark_display_v4l2.c`
 implements the ARK1680 camera-capture path via **standard V4L2** (`video_ioctl2`, no
 custom ioctls) rather than a private ioctl device — confirms the two generations took
 different architectural approaches to camera capture, so it's not useful as a structural

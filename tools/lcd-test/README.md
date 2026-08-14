@@ -5,7 +5,7 @@ Live LCD/framebuffer diagnostic tool — same purpose/style as
 run at the live `/ #` root shell. Tests the raw kernel framebuffer
 (`/dev/fb0`) directly, with no Qt/QWS server involved — so it works even
 while `MsnCoreApp`/`LCDTest -qws` are segfaulting (see
-`docs/ARK1680_TS_REVERSE_ENGINEERING.md` → "`MsnCoreApp` segfault").
+`docs/1.8_ARK1680_TS_REVERSE_ENGINEERING.md` → "`MsnCoreApp` segfault").
 
 ## Build
 
@@ -76,7 +76,7 @@ so the console log and the panel can be watched side by side:
   after the panning fix above, this tool's writes were still never
   confirmed visible on real hardware — while the factory `LCDTest -qws`
   binary (Qt + DirectFB) *did* render correctly, see
-  `docs/DISPLAY_SUBSYSTEM.md`'s 2026-07-16 milestone entry. Traced the
+  `docs/1.7_DISPLAY_SUBSYSTEM.md`'s 2026-07-16 milestone entry. Traced the
   difference: DirectFB's `fbdev` system module applies its mode via
   `FBIOPUT_VSCREENINFO`, which is what actually invokes the kernel
   driver's `.fb_set_par` hook (`ark1668_lcdfb_set_par()` in
@@ -89,4 +89,4 @@ so the console log and the panel can be watched side by side:
   read back (not changing the mode, just re-applying it) before writing,
   matching the one userspace path already confirmed to work. Not yet
   independently re-confirmed against real hardware with this exact
-  change — see the open item in `docs/DISPLAY_SUBSYSTEM.md`.
+  change — see the open item in `docs/1.7_DISPLAY_SUBSYSTEM.md`.

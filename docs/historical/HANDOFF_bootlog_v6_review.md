@@ -93,8 +93,8 @@ Segmentation fault
 1. Get a backtrace: run `MsnCoreApp -qws` under `gdb` (`gdb --args MsnCoreApp -qws`, then
    `bt`) or `strace -f MsnCoreApp -qws 2>&1 | tail -40` to see the last syscall before SIGSEGV.
 2. Check the SD rootfs's `msnprofile/MsnProductInfo.ini` — `ScreenType` / `ResolutionType` /
-   `ResourceName` — against what this unit expects (see `docs/DISPLAY_SUBSYSTEM.md` and
-   `docs/DISPLAY_SUBSYSTEM.md`). The 6.94″ figure suggests a wrong `ResolutionType`.
+   `ResourceName` — against what this unit expects (see `docs/1.7_DISPLAY_SUBSYSTEM.md` and
+   `docs/1.7_DISPLAY_SUBSYSTEM.md`). The 6.94″ figure suggests a wrong `ResolutionType`.
 3. Verify the SD ext4 rootfs libraries/resources match build #18 (mismatched `libLauncher-*`
    / missing `.rcc` for the active resolution can crash the launcher).
 4. Confirm `QWS_ARK_TOUCH_DEVICE` / framebuffer env is set (touch being down shouldn't crash
@@ -129,5 +129,5 @@ Segmentation fault
 - Kernel-build fixes: `docs/historical/HANDOFF_kernel_build_camera_and_touch.md`
 - Touch root cause + stock-bus proof + pending live verification: `docs/historical/boot_experiment_log.md`
 - Live I²C bus scan tool: `tools/i2c-scan/`
-- Screen/model selection: `docs/DISPLAY_SUBSYSTEM.md`, `docs/DISPLAY_SUBSYSTEM.md`
+- Screen/model selection: `docs/1.7_DISPLAY_SUBSYSTEM.md`, `docs/1.7_DISPLAY_SUBSYSTEM.md`
 - Camera chip resolution: `docs/KERNEL_REFERENCE.md` ("Camera decoder chip" callout)

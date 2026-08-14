@@ -5,7 +5,7 @@ GDB 13.2's `gdbserver`, cross-compiled fully static for the target
 live process on the device (or launch one directly) over TCP and get
 **real** register/stack/memory state -- directly replacing the
 disassemble-the-binary-and-infer-what-the-stack-must-contain approach
-this project has relied on throughout `AUDIO_SUBSYSTEM_INVESTIGATION.md`
+this project has relied on throughout `1.5_AUDIO_SUBSYSTEM_INVESTIGATION.md`
 (e.g. the `sendSoundData()` uninitialized-stack crash, root-caused via
 static analysis + a minidump register dump, when a live `gdbserver`
 session would have shown the actual stack contents directly).

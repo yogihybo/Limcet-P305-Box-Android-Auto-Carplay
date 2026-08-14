@@ -2,14 +2,14 @@
 
 Automated passive listen + basic frame check for the live `/ #` root
 shell — POSIX shell script, same style as `tools/audio-test/` etc. Covers
-`docs/MCU_ADAPTERS.md`'s MCU link (`/dev/ttyHS0`, confirmed working) and
+`docs/1.3_MCU_ADAPTERS.md`'s MCU link (`/dev/ttyHS0`, confirmed working) and
 MSNEry link (`/dev/ttyS2`, real traffic confirmed but the peripheral on
 the other end is still unidentified).
 
 **Passive only** — this script never writes to either port, it only
 reads, following the "prefer software-only observation before any live
 electrical/pin-level test" ground rule used throughout this project's
-driver testing (see `docs/HARDWARE_AND_SOC_REFERENCE.md`'s "Open items").
+driver testing (see `docs/1.1_HARDWARE_AND_SOC_REFERENCE.md`'s "Open items").
 
 ## Usage
 
@@ -21,12 +21,12 @@ driver testing (see `docs/HARDWARE_AND_SOC_REFERENCE.md`'s "Open items").
 
 1. Kills `MsnCoreApp` (confirmed via `grep -a` on `libMcuCenter.so` to
    hold both `MCUPortName` and `MSNEryPortName` open at runtime — see
-   `MCU_ADAPTERS.md`'s 2026-07-14 correction). On this project's own
+   `1.3_MCU_ADAPTERS.md`'s 2026-07-14 correction). On this project's own
    reconstructed rootfs, `/etc/profile` no longer auto-respawns it
    (fixed 2026-07-14), so this should stay down for the whole run.
 2. `/dev/ttyHS0` — listens at 115200 for 5s, falls back to 38400 if
    silent. If bytes arrive, checks whether the first byte is `0x2E`
-   (the `BoxP300` protocol header sig from `MCU_ADAPTERS.md`) to
+   (the `BoxP300` protocol header sig from `1.3_MCU_ADAPTERS.md`) to
    distinguish a real frame from noise.
 3. `/dev/ttyS2` — tries 115200/9600/19200/38400 in turn (baud
    unconfirmed for this link) until something responds or all four are

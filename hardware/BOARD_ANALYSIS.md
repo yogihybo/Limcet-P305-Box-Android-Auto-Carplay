@@ -5,7 +5,7 @@
 
 See [`ark1668-limcet-prado.dts`](ark1668-limcet-prado.dts) for a structured
 device-tree-style writeup combining this physical inspection with the kernel/
-userspace RE findings in [`docs/HARDWARE_AND_SOC_REFERENCE.md`](../docs/HARDWARE_AND_SOC_REFERENCE.md)
+userspace RE findings in [`docs/1.1_HARDWARE_AND_SOC_REFERENCE.md`](../docs/1.1_HARDWARE_AND_SOC_REFERENCE.md)
 — note the real firmware has no device tree at all (ATAG boot), so that file
 is a documentation reconstruction, not a real boot artifact.
 
@@ -63,7 +63,7 @@ Photo: `board_photo_04.jpg`
 
 ### WiFi
 
-Realtek **RTL8811CU** — a separate chip from the BT module, internally wired to the SoC's `usb1` port (no external connector on that port). Confirmed via boot log across every available capture, no exceptions (`rtl8811cu` driver messages immediately after `usb 2-1: new high-speed USB device` — see `docs/WIRELESS_AND_INIT.md`). Not SDIO, despite MMC1's DTS comment calling it a "SDIO WiFi Controller" — that comment is confirmed wrong.
+Realtek **RTL8811CU** — a separate chip from the BT module, internally wired to the SoC's `usb1` port (no external connector on that port). Confirmed via boot log across every available capture, no exceptions (`rtl8811cu` driver messages immediately after `usb 2-1: new high-speed USB device` — see `docs/1.4_WIRELESS_AND_INIT.md`). Not SDIO, despite MMC1's DTS comment calling it a "SDIO WiFi Controller" — that comment is confirmed wrong.
 
 The rootfs carries five WiFi drivers total, for other board variants:
 
@@ -121,7 +121,7 @@ Photo: `board_photo_02.jpg`
 
 The MCU runs the `Limcet-V1.0-1302` custom firmware which handles:
 - ~~Touch events (forwarded to ARK1668 — confirmed via MCU Monitor in advanced
-  factory menu)~~ — **retracted (2026-07-11), see `docs/ARK1680_TS_REVERSE_ENGINEERING.md`.**
+  factory menu)~~ — **retracted (2026-07-11), see `docs/1.8_ARK1680_TS_REVERSE_ENGINEERING.md`.**
   Contradicted by: (1) direct on-screen observation that the MCU Monitor only
   shows CAN-bus activity; (2) a live `/dev/ttyHS0` byte capture showing zero
   traffic at all, not even the idle status frames expected regardless of
@@ -180,7 +180,7 @@ ARK1668 package pins/pads without a datasheet.
 MCU side (see above) and is controlled by the STM32, not by Linux. `libCanBus.so`
 turns out to be a generic multi-vendor SDK for driving *external* aftermarket CAN
 decoder boxes over UART (unused on this device — see
-[`docs/CANBUS.md`](../docs/CANBUS.md#libcanbusso--a-separate-generic-multi-vendor-can-adapter-sdk)
+[`docs/1.2_CANBUS.md`](../docs/1.2_CANBUS.md#libcanbusso--a-separate-generic-multi-vendor-can-adapter-sdk)
 for the full writeup), so `gpio34` is more plausibly a power/enable or presence-detect
 line for that kind of external box than anything related to this unit's actual
 onboard CAN circuit. Inference only — no string ties it to a specific purpose.

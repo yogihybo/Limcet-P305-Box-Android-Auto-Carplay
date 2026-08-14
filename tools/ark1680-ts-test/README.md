@@ -4,7 +4,7 @@ Live diagnostic tool for the ARK1680 resistive ADC touchscreen driver
 (`Limcet Hardware/ark1680_ts.c`) — same purpose as `tools/i2c-scan/` was
 for the GT911 bus investigation: a static ARM binary to run at the live
 `/ #` root shell, since the rootfs has no `devmem2`/`evtest` equivalent.
-See `docs/ARK1680_TS_REVERSE_ENGINEERING.md` for the register map this
+See `docs/1.8_ARK1680_TS_REVERSE_ENGINEERING.md` for the register map this
 tool reads.
 
 ## Build

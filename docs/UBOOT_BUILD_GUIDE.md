@@ -34,7 +34,7 @@ a normal, readable command line, no script indirection needed.
 [`linux-arkmicro Reference/README.md`](../linux-arkmicro%20Reference/README.md) for the live URL,
 commit, and toolchain) really does contain an `ark1668` U-Boot board target — `configs/ark1668_defconfig`,
 `board/arkmicro/ark1668/`, `arch/arm/mach-arkmicro/` — for the same SoC family this project already
-established the Limcet P306's ARK1680 tracks (`docs/HARDWARE_AND_SOC_REFERENCE.md` §2).
+established the Limcet P306's ARK1680 tracks (`docs/1.1_HARDWARE_AND_SOC_REFERENCE.md` §2).
 
 **Not confirmed / real risk:** this is U-Boot **2018.07** with SPL+FDT boot, ~6 years newer than the
 Limcet P306's actual **2012.10** stock bootloader, built with a materially different toolchain (Linaro
@@ -74,7 +74,7 @@ make ark1668_defconfig
 ```
 
 This targets `board/arkmicro/ark1668/` — the same board directory referenced throughout, not
-`ark1668e_*` (already ruled out as the wrong generation in `docs/HARDWARE_AND_SOC_REFERENCE.md` §2) and not
+`ark1668e_*` (already ruled out as the wrong generation in `docs/1.1_HARDWARE_AND_SOC_REFERENCE.md` §2) and not
 one of the other customer variants (`ark1668_aofan`, `ark1668_ft`, `ark1668_tyw_zksw`,
 `ark1668_dongle_sim` — kept in `linux-arkmicro Reference/` for comparison only).
 
@@ -89,7 +89,7 @@ actual, captured environment) — not guesses.
 | `CONFIG_ENV_SIZE` | `4096` | ≤ `0x40000` (256K partition) | Defconfig's 4096 bytes already gives ~80× the ~52 bytes the raw-dump patching has been squeezed into — no need to enlarge unless you want extra headroom; must not exceed the real 256K partition. |
 | `CONFIG_MTDIDS_DEFAULT` | `nand0=ark-nand` | `nand0=ark1680-nand` | Cosmetic (env var default, overridable post-boot) but should match the Limcet P306's real env (`env/uboot-env.txt`) for consistency with existing tooling/scripts. |
 | `CONFIG_MTDPARTS_DEFAULT` | reference board's own layout (`bootstrap`/`bootloader`/`fdt`/... — see `linux-arkmicro Reference/README.md`) | `docs/PARTITION_LAYOUT.md`'s full 12-partition table | Needed if anything reads the compiled-in default rather than the env-stored `mtdparts` (the live device already carries its own `mtdparts` string in its env either way, so this is a fallback/rescue-mode safety net, not a hard boot blocker). |
-| `CONFIG_DEFAULT_FDT_FILE` | `"ark169.dtb"` | *(none — remove)* | The Limcet P306 kernel has **no devicetree support at all** — legacy ATAG boot, confirmed in `docs/HARDWARE_AND_SOC_REFERENCE.md` §2. Leaving `CONFIG_OF_LIBFDT=y` compiled in is harmless; the boot command must not actually pass an fdt argument to `bootz`/`bootm`. |
+| `CONFIG_DEFAULT_FDT_FILE` | `"ark169.dtb"` | *(none — remove)* | The Limcet P306 kernel has **no devicetree support at all** — legacy ATAG boot, confirmed in `docs/1.1_HARDWARE_AND_SOC_REFERENCE.md` §2. Leaving `CONFIG_OF_LIBFDT=y` compiled in is harmless; the boot command must not actually pass an fdt argument to `bootz`/`bootm`. |
 | `CONFIG_BOOTCOMMAND` | loads and passes `ark169.dtb` | Custom — see below | See §4. |
 | Kernel bootargs (via `CONFIG_EXTRA_ENV_SETTINGS` or just set at runtime) | reference board's own | `console=ttyS0,115200n8 mem=180M earlyprintk=serial ubi.mtd=6 root=ubi0:rootfs rootfstype=ubifs rootwait ro` (NAND boot) or the SD-specific variant (`root=/dev/mmcblk0pN rootfstype=ext4 rootwait rw`) — both already in `env/uboot-env.txt` / `env/sdboot_script.txt` | Baking in the *correct* bootargs (not the reference board's) is what actually gets a kernel to boot cleanly — wrong `root=`/`rootfstype`/`ubi.mtd` here is a guaranteed kernel panic even with perfect DRAM/NAND init. |
 

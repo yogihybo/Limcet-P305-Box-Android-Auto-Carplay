@@ -2,7 +2,7 @@
 # Switch each MUSB controller's operating mode -- overridden here
 # (2026-07-19) to fix a wrong sysfs path and a real root-filesystem
 # safety hazard in the stock version of this script; updated
-# (2026-07-22, 2026-07-27) as boot-log analysis (docs/WIRELESS_AND_INIT.md
+# (2026-07-22, 2026-07-27) as boot-log analysis (docs/1.4_WIRELESS_AND_INIT.md
 # sec 7) progressively corrected which physical port does what.
 #
 # usb0 (e0100000.usb) is this board's single external-facing USB port

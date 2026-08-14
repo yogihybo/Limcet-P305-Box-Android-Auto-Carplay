@@ -109,7 +109,7 @@ if [ -n "$EVENTNODE" ]; then
 		else
 			fail "no ABS_X/ABS_Y/BTN_TOUCH/SYN_REPORT events seen in 5s -- driver probes"
 			echo "    but isn't delivering real input events. See"
-			echo "    ARK1680_TS_REVERSE_ENGINEERING.md for prior findings (mostly"
+			echo "    1.8_ARK1680_TS_REVERSE_ENGINEERING.md for prior findings (mostly"
 			echo "    gathered on stock firmware, not necessarily this kernel build)."
 		fi
 	else

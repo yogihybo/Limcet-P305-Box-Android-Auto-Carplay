@@ -1,4 +1,6 @@
-# Ark1680 Ts Reverse Engineering
+# 1.8 Touchscreen
+
+Background doc for [README §1.0 Hardware](../README.md#10-hardware) — Touchscreen row.
 
 **Status:** Reference
 **Last Updated:** 2026-07-16
@@ -318,6 +320,17 @@ The remaining open question is purely why the real hardware behind
 keeps "panel not physically connected/populated on this bench unit" as
 the leading hypothesis.
 
+## Remaining functional test — physical touch on a properly-seated panel
+
+Open condition per the "panel not physically connected/populated on this bench unit" hypothesis above. Lowest-risk-first procedure, using `tools/ark1680-ts-test/`:
+
+1. `ark-ts-test regs` — dumps the ADC/TSC block directly via `/dev/mem`, independent of the driver. Touch the panel while re-running it a few times; `raw_x`/`raw_y` should visibly change. **If they never move, the fault is upstream of software** (pinmux/clock bits, or the panel isn't actually wired/seated) — stop here, this isn't a driver bug.
+2. `dmesg | grep ark1680_ts` — confirm probe succeeded, review the driver's own probe-time register dump.
+3. `echo 1 > /sys/module/ark1680_ts/parameters/debug` then `dmesg -w` — turn on per-IRQ tracing (raw samples, filtered coordinates, stable/unstable verdict) while touching the panel.
+4. `ark-ts-test events /dev/input/eventN` (find N via `cat /proc/bus/input/devices | grep -A5 ark1680-ts`) — confirms userspace actually receives real evdev events.
+
+**Pass condition:** step 4 prints `ABS_X`/`ABS_Y`/`BTN_TOUCH`/`SYN_REPORT` events that track real finger position during a physical touch. Record findings in `docs/historical/boot_experiment_log.md`.
+
 ## Next steps for a 4.19 port
 
 1. Add a DTS node:
@@ -576,6 +589,8 @@ boot log) confirms the fix's target values are right:** stock shows
 `ark_display.c`'s `mm_width`/`mm_height` exactly. Good independent
 confirmation the geometry constants chosen are correct, even before the
 ioctl-match bug was found.
+
+**Regression check, if this ever needs re-verifying after a kernel/rootfs change:** `lcd-test info` (`tools/lcd-test/`) confirms `/dev/ark_display` replies to `ARKDISP_GET_SCREEN_INFO` with sane values, independent of `MsnCoreApp`. Then run `MsnCoreApp` directly from a shell (not via `rcS`) so stdout/stderr is visible — `killall MsnCoreApp; cd <app dir>; ./MsnCoreApp 2>&1 | tee /data/msn.log` — and confirm it reaches a stable running UI state rather than segfaulting at this specific point (use `tools/strace/` to confirm `arkapi_get_screen_info()` completes and the app proceeds past `onFirstInit()` if you need to be sure it's not just crashing somewhere else instead).
 
 ## A second, separate subsystem: `arktool_reg_init` — PORTED 2026-07-18
 

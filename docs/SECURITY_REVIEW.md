@@ -36,7 +36,7 @@ root:$1$m.jegaqA$vA.rBTVryyUAcRvyZ2gOL1:15695:5:99999:7:5:20000:
 
 Cracked: `openssl passwd -1 -salt "m.jegaqA" "123456"` reproduces this hash exactly.
 
-**Impact:** the `ssh root@192.168.7.1` command already in [README §10.0](../README.md#100-device-access)
+**Impact:** the `ssh root@192.168.7.1` command already in [README §11.0](../README.md#110-device-access)
 works out of the box with password `123456` — no serial console, no U-Boot interrupt, no physical
 teardown required, once there's network reach to the device.
 

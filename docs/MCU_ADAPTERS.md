@@ -1,4 +1,6 @@
-# Mcu Adapters
+# 1.3 MCU & UART Protocols
+
+Background doc for [README §1.0 Hardware](../README.md#10-hardware) — MCU and UARTs rows.
 
 **Status:** Reference
 **Last Updated:** 2026-07-15
@@ -234,8 +236,8 @@ So `killall` alone is durable within your current shell session, but opening
 a *new* login session will relaunch it — and this project's own reconstructed
 rootfs (`Prado firmware reconstructed/mtd6_rootfs/rootfs/etc/profile`) has
 had that line (and `MsnFirstInit`, same file) commented out as of 2026-07-14
-specifically so driver testing (`docs/DRIVER_TEST_PLAN.md`) isn't fighting
-this. Run `MsnCoreApp -qws&` by hand when you actually want it running.
+specifically so driver testing isn't fighting this. Run `MsnCoreApp -qws&`
+by hand when you actually want it running.
 
 Then watch its debug output. Qt `qDebug` goes to stderr — on this unit that is the
 **serial debug console** (`/dev/ttyS0`, 115200 8N1 — the console in README §2),
@@ -1015,6 +1017,14 @@ could plausibly be the real source — worth checking against schematics/board
 silkscreen, or capturing a longer `ttyS2` trace correlated with a specific
 physical action (steering wheel button, etc.) the way Method A/B above do
 for `ttyHS0`.
+
+**Test procedure (passive-first, lowest risk):**
+1. `killall MsnCoreApp` first — the app holds `MSNEryPortName` open at runtime (confirmed via `grep -a` finding the literal string in `libMcuCenter.so`), so it must be stopped to free the port for a passive listener. On this project's own reconstructed rootfs the app no longer auto-respawns (the `MsnCoreApp -qws&` in `/etc/profile` is commented out); on stock/unmodified firmware a fresh login session would relaunch it.
+2. `ls -l /dev/ttyS2`.
+3. Passive listen, baud unconfirmed — try 115200 first, then 9600/19200/38400: `busybox microcom -s 115200 /dev/ttyS2`, or `busybox cat /dev/ttyS2 | busybox hexdump -C | tee /data/ttyS2.log`.
+4. If silent at every baud, toggle physical inputs one at a time (reverse gear, a steering-wheel button, ACC on/off) while watching **both** `ttyHS0` and `ttyS2` simultaneously — disambiguates which physical events route to which link, in case "MSN Ery" turns out to be a second, distinct signal source.
+
+**Pass condition:** any real traffic identified and attributed to a specific source — "confirmed silent/unused" is also a useful, valid outcome, since the goal here is identification, not proving a feature works.
 
 **Also confirmed from the same trace:** `/tmp/mcu_version` is not a live MCU
 query — it's `sh -c "echo 'Limcet-V1.0-1302' > /tmp/mcu_version"`, a hardcoded

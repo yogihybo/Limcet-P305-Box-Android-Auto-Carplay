@@ -6,7 +6,7 @@
 > The current, accurate description of how SD boot actually works — partition
 > layout, `/nanddata/` symlinks, rcS userdata fallback, RSTK format, and
 > `build_bootable_sdcard.sh` usage — lives in the README's
-> [Booting from SD Card or USB](../../README.md#booting-from-sd-card-or-usb-non-destructive)
+> [Booting from SD Card or USB](../../README.md#70-booting-stock-kernel-from-sd-card-or-usb-non-destructive)
 > section. Some details below (partition sizes, script name, env-patch
 > mechanics) no longer match the shipped implementation.
 

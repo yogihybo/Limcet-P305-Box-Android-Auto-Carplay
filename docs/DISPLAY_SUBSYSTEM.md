@@ -1,4 +1,6 @@
-# Display Subsystem
+# 1.7 Display Subsystem
+
+Background doc for [README §1.0 Hardware](../README.md#10-hardware) — Display adapter and LCD Display rows.
 
 **Status:** Reference
 **Last Updated:** 2026-07-16

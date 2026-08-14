@@ -1,4 +1,6 @@
-# Uboot Reverse Engineering
+# U-Boot Reverse Engineering
+
+Background doc for [README §5.0 Boot Sequence](../README.md#50-boot-sequence-stock-nand), [§6.0 U-Boot Prompt](../README.md#60-u-boot-prompt), and [§7.0 Booting Stock Kernel from SD Card or USB](../README.md#70-booting-stock-kernel-from-sd-card-or-usb-non-destructive).
 
 **Status:** Investigation
 **Last Updated:** 2026-07-15
@@ -6,7 +8,40 @@
 ## Overview
 Consolidated document containing: UBOOT_SDBOOT_INVESTIGATION.md, UBOOT_BOOTLOGO_AND_RE_PORTS.md
 
+## Stock boot loop — disassembly findings
 
+The stock U-Boot has a custom boot loop, not a standard `bootdelay` countdown. Disassembly of the binary (`TEXT_BASE=0x00030000`, function at `0x0003cf3c`) confirms the mechanism:
+
+```
+env_get("bootdelay")   → r4 = 9   (from NAND env — value is real but doesn't work)
+env_get("bootcmd")     → r5 = "run nandboot"
+printf("Press space key to stop autoboot: %2d", r4)  ← 9 is cosmetic only
+tstc()                 → ONE keypress poll, no sleep
+  space held → readline("> ") loop  (ark# interactive shell)
+  no key     → run_command("run nandboot")  ← immediate boot
+```
+
+The `%2d`-formatted "9" printed alongside the prompt is cosmetic only — there is no countdown or sleep. After the `printf`, there is exactly one `tstc()` poll, then Linux boots immediately if no key was already held. This is why interrupting boot requires holding the spacebar continuously from power-on, rather than waiting for a countdown to react to.
+
+## Why ext4 needs `^64bit,^metadata_csum` on this target
+
+The target runs Linux 3.4.0 and U-Boot 2012.10, whose ext4 drivers predate two features that modern `mkfs.ext4` (e2fsprogs ≥ 1.43, ~2016) enables by default:
+
+| Feature | Enabled by default by modern mkfs | Supported by Linux 3.4 / U-Boot 2012.10 |
+|---------|-----------------------------------|-----------------------------------------|
+| `64bit` | yes | **no** (kernel support added in 3.6) |
+| `metadata_csum` | yes | **no** (kernel support added ~3.18) |
+
+If either is left on, the results are:
+
+- **Kernel:** refuses to mount root — `EXT4-fs (mmcblk0p2): couldn't mount because of unsupported optional features` — and the boot dies right after the rootfs device appears (well after `Starting kernel …`).
+- **U-Boot:** `ext4ls` / `ext4load` fail with `Failed to mount ext2 filesystem… ** Bad ext2 partition or disk **` (it may misreport the partition as `0:1`).
+
+All the remaining ext4 features 3.4 *does* support (`extents`, `flex_bg`, `huge_file`, `dir_nlink`, `extra_isize`, `sparse_super`, …) stay enabled with the `^64bit,^metadata_csum` fix, so the partitions keep ext4 proper — only the incompatible checksums/64-bit addressing are removed.
+
+## `/nanddata/` — why a plain file works as a character-device replacement
+
+Four MTD partitions (bootlogo, bootanimation, reversingtrack, Unicode) are read by the running app via `/dev/mtdN` character devices but are not part of the rootfs or userdata images. A search of all rootfs binaries for MTD ioctls (`MEMGETINFO`, `MEMERASE`) found none of them are called on these partitions — access is plain `open()`/`read()` — so a regular file works as a transparent replacement for the character device, which is what makes the SD-boot `/nanddata/` symlink trick possible.
 
 ## UBOOT_SDBOOT_INVESTIGATION.md
 
@@ -28,7 +63,7 @@ raw/Holden-derived `uboot.bin`'s tiny safe capacity and needs zero NAND writes.
 Generated at `experimental_sdboot/uboot_selfcontained.bin`; do not treat as
 verified until tested on real hardware. `uboot_sdboot.bin` and `uboot_final.bin` (the
 earlier, corrupted attempt) remain quarantined under `corrupted/`. The manual
-U-Boot-prompt command (README §4.0 "Manual SD Card Boot", §5.0 "USB boot")
+U-Boot-prompt command (README §7.0, "Manual SD Card Boot" / "USB boot")
 remains the confirmed-working fallback. This document records how the
 corruption was found, why the obvious workarounds (§2, §6) don't fix the
 underlying env-space problem, and what it took to get a real (if untested)
@@ -296,8 +331,8 @@ depends on a source we don't have (real BSP compile). Instead:
 - **SD/USB boot now documented as a manual U-Boot-prompt command**, typed by
   hand each time after interrupting boot at `ark#` — no patched U-Boot
   needed at all, works today on the stock, unpatched U-Boot already on the
-  device. See README §4.0, "Manual SD Card Boot", and the existing manual
-  USB-boot command in §5.0 "USB boot" (which already worked this way and
+  device. See README §7.0, "Manual SD Card Boot", and the existing manual
+  USB-boot command in the same section's "USB boot" (which already worked this way and
   didn't need updating).
 - **`uboot_sdboot.bin` and `uboot_final.bin` moved to `corrupted/`** (out of
   the default build/auto-detect path), with `corrupted/README.md` explaining
@@ -485,7 +520,7 @@ Two things this doesn't even get to test:
   question.
 
 **Not implemented.** A working manual USB boot command already exists
-(README §5.0 "USB boot"). Revisit only after real hardware confirms (a)
+(README §7.0 "USB boot"). Revisit only after real hardware confirms (a)
 USB boot works at all via the manual command, and (b) whether `usb start`
 can actually be dropped from a compiled-in `bootcmd`.
 

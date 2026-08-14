@@ -1,4 +1,6 @@
-# Wireless And Init
+# 1.4 Wireless (Bluetooth & WiFi)
+
+Background doc for [README §1.0 Hardware](../README.md#10-hardware) — Bluetooth module and WiFi chip rows.
 
 **Status:** Reference
 **Last Updated:** 2026-08-04

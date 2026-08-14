@@ -1,4 +1,6 @@
-# Partition Layout
+# 4.0 NAND Partition Layout
+
+Background doc for [README §4.0 NAND Partition Layout](../README.md#40-nand-partition-layout).
 
 **Status:** Reference
 **Last Updated:** 2026-07-15
@@ -47,3 +49,18 @@ nand erase 0x6FA0000 0x600000 # userdata wipe
 nand erase 0x6FA0000 0x600000
 ```
 Device reinitialises /data from defaults on next boot.
+
+## RSTK format (reversingtrack partition)
+
+The reversing-camera guide-line overlay file (MTD 10, `reversingtrack`) is a custom container:
+
+- 4-byte magic `"RSTK"`
+- file size
+- entry count (41)
+- steering-position count (100)
+- image dimensions (800×480)
+- guide-line zone parameters
+- a 41 × 20-byte index table (`index, index, file_offset, compressed_size, flag`)
+- followed by 41 zlib-compressed overlay images
+
+The 41 frames span full-left to full-right steering angles; frame sizes form a bell curve (31 KB at the extremes, 17 KB at centre) consistent with symmetric guide-line geometry compressing better near centre. The app decompresses the frame matching the current steering angle and composites it over the camera feed.

@@ -1,4 +1,6 @@
-# Audio Subsystem Investigation
+# 1.5 Audio Subsystem
+
+Background doc for [README §1.0 Hardware](../README.md#10-hardware) — Audio DAC/ADC and GPU rows.
 
 **Status:** Reference
 **Last Updated:** 2026-08-04

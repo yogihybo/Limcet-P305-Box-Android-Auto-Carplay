@@ -5,23 +5,23 @@
 
 ## Overview
 
-**Source file:** `Prado Msnconfig/filesystem dumps/userdata.img`
+**Source file:** `Limcet P306 Msnconfig/filesystem dumps/userdata.img`
 **File size:** 12,582,912 bytes (12 MB)
 **Image magic:** `55 42 49 23` = `UBI#` — raw UBI volume image
 **Fill level:** 73.96% (9,306,658 / 12,582,912 bytes are non-0xFF)
 
 ## Size Anomaly
 
-The live Prado device reports `userdata_size=0x1e0000` = ~2MB. This dump is 12MB. The
+The live Limcet P306 device reports `userdata_size=0x1e0000` = ~2MB. This dump is 12MB. The
 explanation is partition layout history:
 
 | Layout     | rootfs | userdata | Devices using it              |
 |------------|--------|----------|-------------------------------|
 | Alfa pkg   | 100m   | 12m      | Alfa package (uboot-env.bin)  |
-| Holden/Prado | 106m | 6m       | Live Prado, Holden package    |
+| Holden/Limcet P306 | 106m | 6m       | Live Limcet P306, Holden package    |
 | Alfa live  | 112m   | 6m       | Live Alfa device              |
 
-**Conclusion:** This dump was taken when the Prado had a 12m userdata partition —
+**Conclusion:** This dump was taken when the Limcet P306 had a 12m userdata partition —
 before the Holden firmware was flashed. UBI PEB size is 128KB, giving 96 PEBs in 12MB.
 
 ---
@@ -211,7 +211,7 @@ Based on the userdata content, a partial timeline can be inferred:
 To write a clean userdata partition (erases all paired devices, call history, settings):
 
 ```
-# Prado live device — 6m userdata at 0x6FA0000
+# Limcet P306 live device — 6m userdata at 0x6FA0000
 nand erase 0x6FA0000 0x600000
 # Leave blank — the rootfs init scripts will recreate defaults on first boot
 ```

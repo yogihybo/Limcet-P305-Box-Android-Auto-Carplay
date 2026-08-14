@@ -471,7 +471,7 @@ this research** is: get the unstripped `ark1668ed-bsp` copy of `libAndroidAuto.s
 the stripped deployed one, and either (1) trace `AndroidAuto::startSession()` call sites
 in `sink`/`MsnCoreApp` via `strace`/disassembly to see if `Accessory::startAccessoryMode()`
 is ever reached at all during a wired attempt, or (2) if a debug/symboled build of the
-exact same `libAndroidAuto.so` version deployed on the Prado can be obtained, load it
+exact same `libAndroidAuto.so` version deployed on the Limcet P306 can be obtained, load it
 with symbols to trace this directly instead of working from stripped addresses.
 
 ---

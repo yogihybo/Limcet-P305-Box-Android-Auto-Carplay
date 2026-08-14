@@ -121,7 +121,7 @@ Every value below was observed in a real config in this repo. Product columns:
 | Column | Firmware source |
 |--------|-----------------|
 | **Holden** | `Holden firmware update/` (Ksmart_DSP / Box‑C211, MCU 16) |
-| **Prado (orig)** | `Prado firmware dump/` — the physical device dump (Limcet‑P306) |
+| **Limcet P306 (orig)** | `Prado firmware dump/` — the physical device dump (Limcet‑P306) |
 | **P306‑2025** | `P306 2025 Firmware Update/` (Limcet‑P306, 2025‑11‑22 build) |
 | **C235‑2025** | `CarSyncTech Toyota/CSTech‑202511‑IP17.zip` (Box‑C235 Toyota, 2025‑11‑22 build) |
 
@@ -184,7 +184,7 @@ getting it wrong (e.g. `ScreenType`) produces a blank or garbled display before
 
 ## 1.6 Product profile at a glance
 
-| Key | Holden | Prado (orig) | P306‑2025 | C235‑2025 |
+| Key | Holden | Limcet P306 (orig) | P306‑2025 | C235‑2025 |
 |-----|:------:|:------------:|:---------:|:---------:|
 | `ProductId` | Ksmart_DSP | Limcet‑P306 | Limcet‑P306 | Box‑C235 |
 | `ResourceName` | Box‑C211 | Box‑P301 | Box‑P301 | *(→ Launcher‑Box)* |
@@ -219,7 +219,7 @@ section the key lives under. Some SKUs comment keys out with `#` (shown as
 | `AutoStartCarLink` | `1` | Auto‑launch phone projection (CarPlay/Android Auto) when a phone connects. |
 | `IphoneLinkType` | `2`, `3` | iPhone connection mode. **Disassembly-confirmed** (`MsnCoreApp::onUSBPhoneStatusChange`, `0x2a4c4`: `bic r3,r3,#2; cmp r3,#1; bne <exit>`) — only **bit 0** of the value matters, bit 1 is explicitly masked off. Any odd value (`1` or `3`) triggers the phone-link UI event; any even value (`0`, `2`) is a no-op for this path. So `2`=inert, `3`=active — matches this file's own observed values exactly. |
 | `AndroidLinkType` | `2`, `3`, `6` | Android connection mode. **Disassembly-confirmed**, two independent consumption sites in `MsnCoreApp`, both reading the same cached value: `onUSBPhoneStatusChange` (`0x2a3d0`) dispatches `1`/`4`→one UI event, `2`/`6`→a second event (`bic r2,r3,#4; cmp r2,#2` catches both), `7`→a third event, anything else (incl. `0`, `3`, `5`) falls through to a default/fallback path; `onFirstInit` (`0x2f6fc`) dispatches the *same* raw value slightly differently: `1`/`3`/`4`→one app-state, `2`/`5`/`6`→a separate large handler, `7`→another state — note the two sites do **not** treat `3` identically (fallback in one, active in the other), a real inconsistency worth being aware of if testing this value. Exact semantic meaning of the internal event/state numbers (5/13/19/29) wasn't recoverable — no `MsnEventType` enum ships as symbols anywhere in this firmware. |
-| `MirroringLinkType` | `1`, `2` | Screen‑mirroring protocol variant. **Disassembly-confirmed 2026-08-03** (`MsnCoreApp::onFirstInit`, default `1`; `libMsnMirrLink.so`'s own copy of the string turned out to be pure UI-label material, confirmed via its `.dynsym` only exporting generic Qt widget classes). Real logic: `0` = no-op; any nonzero value only takes effect if `MsnApplication::getMsnProductValue("ProductId", "")` equals `"Car-A311"` or `"Car-A318"` — two specific factory SKUs, neither of which is this Prado/Holden-derived unit's `ProductId`. Only on those two SKUs does it enable a MirrorLink home-screen app tile. **Practical implication: this setting has no effect at all on this device regardless of its value**, since our `ProductId` never matches the hardcoded gate. |
+| `MirroringLinkType` | `1`, `2` | Screen‑mirroring protocol variant. **Disassembly-confirmed 2026-08-03** (`MsnCoreApp::onFirstInit`, default `1`; `libMsnMirrLink.so`'s own copy of the string turned out to be pure UI-label material, confirmed via its `.dynsym` only exporting generic Qt widget classes). Real logic: `0` = no-op; any nonzero value only takes effect if `MsnApplication::getMsnProductValue("ProductId", "")` equals `"Car-A311"` or `"Car-A318"` — two specific factory SKUs, neither of which is this Limcet P306/Holden-derived unit's `ProductId`. Only on those two SKUs does it enable a MirrorLink home-screen app tile. **Practical implication: this setting has no effect at all on this device regardless of its value**, since our `ProductId` never matches the hardcoded gate. |
 | `MirrorLinkType` | `2` | Box‑C235 spelling of the same setting (note: no second `i`). Treat as an alias. |
 | `EnableMirroring` | `1` | Enable the phone‑mirroring feature (Holden). |
 | `EnableBackgroundMode` | `1` | Keep the projection session alive in the background when another source is shown. |

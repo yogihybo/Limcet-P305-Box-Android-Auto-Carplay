@@ -12,7 +12,7 @@ Consolidated document containing: KERNEL.md, KERNEL_BUILD_REFERENCE.md
 
 # Kernel Analysis — `mtd5_kernel/zImage`
 
-Source: `Prado firmware reconstructed/mtd5_kernel/zImage`  
+Source: `Limcet P306 firmware reconstructed/mtd5_kernel/zImage`  
 Analysed by: binwalk + manual LZO decompression of vmlinux payload.
 
 ---
@@ -21,7 +21,7 @@ Analysed by: binwalk + manual LZO decompression of vmlinux payload.
 
 | Field | Value |
 |---|---|
-| Path | `Prado firmware reconstructed/mtd5_kernel/zImage` |
+| Path | `Limcet P306 firmware reconstructed/mtd5_kernel/zImage` |
 | Type | Linux kernel ARM boot executable zImage (little-endian) |
 | Size (on disk) | 3,255,536 bytes (3.10 MB) |
 | MD5 | `78782daea22d5e22ad90c6e660da75e1` |
@@ -438,7 +438,7 @@ cat arch/arm/boot/zImage arch/arm/boot/dts/ark1668_limcet_p305.dtb > ../zImage.w
 
 **DTS Source:** `linux/arch/arm/boot/dts/ark1668_limcet_p305.dts`
 
-This file was authored based on reverse engineering of the stock Prado firmware
+This file was authored based on reverse engineering of the stock Limcet P306 firmware
 binaries. The reference config used was `ark1668_tyw_zksw.dts`, with all pin
 assignments verified against the dumped kernel and drivers.
 
@@ -839,7 +839,7 @@ the config and verified to build successfully.
 
 ## 10. U-Boot Compilation Reference
 
-U-Boot can be built directly from the `u-boot/` subdirectory inside `linux-arkmicro`. The build targets the `ark1668_tyw_zksw` board, matching the Prado's SoC family and LCD screen timings.
+U-Boot can be built directly from the `u-boot/` subdirectory inside `linux-arkmicro`. The build targets the `ark1668_tyw_zksw` board, matching the Limcet P306's SoC family and LCD screen timings.
 
 ### Quick Build Commands
 ```bash
@@ -849,7 +849,7 @@ cd u-boot
 # Clean previous build
 make mrproper
 
-# Apply Prado defconfig
+# Apply Limcet P306 defconfig
 make ark1668_tyw_zksw_defconfig
 
 # Compile
@@ -880,13 +880,13 @@ make -j$(nproc)
 +# CONFIG_CMD_FLASH_UPDATE is not set
 ```
 
-### Key Configuration Settings (Prado NAND-Aligned)
+### Key Configuration Settings (Limcet P306 NAND-Aligned)
 
 These parameters are configured in the board definition files to match the stock Holden firmware environment:
 
 #### 1. NAND Environment Offsets (`u-boot/include/configs/ark1668_tyw_zksw.h`)
 - **CONFIG_ENV_OFFSET:** `0x120000` (1152 KB) — Points directly to the start of the `U-boot-Env` partition (aligned to the end of `bootstrap` + `U-boot` + `U-boot_back`).
-- **CONFIG_ENV_SIZE:** `0x40000` (256 KB) — Matches the size of the Prado environment partition (2 erase blocks).
+- **CONFIG_ENV_SIZE:** `0x40000` (256 KB) — Matches the size of the Limcet P306 environment partition (2 erase blocks).
 
 #### 2. Default MTD Partitions (`u-boot/configs/ark1668_tyw_zksw_defconfig`)
 - **CONFIG_MTDIDS_DEFAULT:** `"nand0=ark1680-nand"`
@@ -898,7 +898,7 @@ These parameters are configured in the board definition files to match the stock
 - **CONFIG_BOOTDELAY=9** — Sets a 9-second delay for console interruption during boot.
 
 #### 4. ATAG Boot Command (`u-boot/include/configs/ark1668_tyw_zksw.h`)
-The Prado kernel uses legacy ATAGs (no device tree). The bootcommand is configured to read the kernel and boot without an FDT parameter:
+The Limcet P306 kernel uses legacy ATAGs (no device tree). The bootcommand is configured to read the kernel and boot without an FDT parameter:
 ```c
 "nandargs=setenv bootargs console=ttyS0,115200n8 mem=180M earlyprintk=serial ubi.mtd=6 root=ubi0:rootfs rootfstype=ubifs rootwait ro ${mtdparts} screen=${screen}\0"
 "nandboot=echo Booting from nand ...; run nandargs; nand read ${kerneladdr} kernel; bootz ${kerneladdr}\0"

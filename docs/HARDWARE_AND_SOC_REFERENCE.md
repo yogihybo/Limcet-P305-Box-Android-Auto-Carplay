@@ -22,7 +22,7 @@ and (§7) userspace RE of `MsnCoreApp`/`libMcuCenter.so` from the rootfs.
 
 **§8: a synthetic device tree combining every finding here with the physical board inspection in `hardware/BOARD_ANALYSIS.md`** now exists at [`hardware/ark1668-limcet-prado.dts`](../hardware/ark1668-limcet-prado.dts) — not a real boot artifact (this board has no device tree, see §2), but a structured, confidence-tagged writeup of the confirmed hardware layout.
 
-**§9 cross-checks §§2–5 against real ASTRI vendor source** (`ArkPro Reference/`, a public leak, not the public `linux-arkmicro` tree used elsewhere in this doc) — confirms the `config.c` board-init device roster and the `CLCD_TIMING`/`CLKDIV1` register field names, and surfaces a third (unused-on-Prado) candidate mechanism for backcar detection.
+**§9 cross-checks §§2–5 against real ASTRI vendor source** (`ArkPro Reference/`, a public leak, not the public `linux-arkmicro` tree used elsewhere in this doc) — confirms the `config.c` board-init device roster and the `CLCD_TIMING`/`CLKDIV1` register field names, and surfaces a third (unused-on-Limcet-P306) candidate mechanism for backcar detection.
 
 **§10 works out the full pin-mux table** from the real, now-vendored `linux-arkmicro` devicetree source, filling in and correcting `hardware/ark1668-limcet-prado.dts`'s `pinctrl0` node — and finds that an earlier draft's `can0`/`can1` pin-mux entry was wrong: that capability only exists on the newer ARK1668E generation, not this chip.
 
@@ -85,7 +85,7 @@ This is consistent across the whole software stack — not a typo. The public `l
 
 ### Machine descriptor (via Ghidra decompilation)
 
-`FUN_8059c13c` in the Prado kernel is a byte-for-byte match for `setup_machine_tags()` in `arch/arm/kernel/setup.c` — it walks the `__arch_info_begin..__arch_info_end` `struct machine_desc` array comparing the ATAG-supplied machine ID (register r1) against `.nr`, then prints `"Machine: %s"` with `.name`. `FUN_8059c0e4` is the companion "unrecognized machine ID" panic path (`"Available machine support: ID (hex) NAME..."`).
+`FUN_8059c13c` in the Limcet P306 kernel is a byte-for-byte match for `setup_machine_tags()` in `arch/arm/kernel/setup.c` — it walks the `__arch_info_begin..__arch_info_end` `struct machine_desc` array comparing the ATAG-supplied machine ID (register r1) against `.nr`, then prints `"Machine: %s"` with `.name`. `FUN_8059c0e4` is the companion "unrecognized machine ID" panic path (`"Available machine support: ID (hex) NAME..."`).
 
 The array has **exactly one entry** (kernel built for a single board, legacy `MACHINE_START(ARK1680,...)`/`MACHINE_END`, no device tree):
 
@@ -100,14 +100,14 @@ Machine ID `0x1068` does **not** appear in `linux-arkmicro/linux/arch/arm/tools/
 
 ### Architectural alignment: ARK1680 tracks ARK1668, not ARK1668E
 
-The Prado kernel boots via legacy ATAG/machine-ID (no device tree) and uses a **VIC** interrupt controller:
+The Limcet P306 kernel boots via legacy ATAG/machine-ID (no device tree) and uses a **VIC** interrupt controller:
 ```
 "ARK interrupt controller virtual address VICL %x VICH %x"
 ```
 confirmed live in `FUN_8059f188` (see §4), which does `ioremap(0xe0b00000, 0x200)` / `ioremap(0xe0c00000, 0x200)` for VICL/VICH.
 
 In `linux-arkmicro/linux/arch/arm/mach-arkmicro/Kconfig`:
-- `SOC_ARK1668` → `select ARM_VIC` (matches Prado exactly)
+- `SOC_ARK1668` → `select ARM_VIC` (matches Limcet P306 exactly)
 - `SOC_ARK1668E` → `select ARM_GIC`, `HAVE_ARM_ARCH_TIMER` (newer generation, does **not** match)
 
 **Conclusion:** ARK1680 aligns architecturally with **ARK1668** (not the newer ARK1668E), and — per §3 — shares its exact peripheral register map. Most likely explanation: ARK1680 is ArkMicro's internal/pre-devicetree engineering name for the same silicon later formalized and upstreamed as "ARK1668"; this OEM's OS integrator (`flyound`, building for Toyota) never migrated off the old internal name or the legacy ATAG boot path onto the newer `mach-arkmicro/ark1668.c` device-tree support present in the public tree. A remarked/rebadged-die explanation can't be fully ruled out without a datasheet or decap, but is less likely given how deep the software-level match goes (see below).
@@ -116,7 +116,7 @@ In `linux-arkmicro/linux/arch/arm/mach-arkmicro/Kconfig`:
 
 ## 3. Peripheral Memory Map — Diff vs `linux-arkmicro/linux/arch/arm/boot/dts/ark1668.dtsi`
 
-Every peripheral base address in `ark1668.dtsi` was checked against the Prado ARK1680 binary two ways: (a) raw literal-pointer occurrence count, (b) direct `struct resource {start, end, name, flags=IORESOURCE_MEM}` pattern scan (Linux platform-device resource declarations).
+Every peripheral base address in `ark1668.dtsi` was checked against the Limcet P306 ARK1680 binary two ways: (a) raw literal-pointer occurrence count, (b) direct `struct resource {start, end, name, flags=IORESOURCE_MEM}` pattern scan (Linux platform-device resource declarations).
 
 | Peripheral | `ark1668.dtsi` address | Found in ARK1680 binary? |
 |---|---|---|
@@ -213,7 +213,7 @@ gpio_direction_output(95, 1);   // driven high = held out of reset
 
 **GPIO 95 = `PBANK_2`, pin 31.** Label `"apple_encpy_ic_rst"` = reset line for an Apple MFi/CarPlay authentication IC — consistent with this being a Toyota OEM head unit (`ProductId=Limcet-P306`, `HomeIconLabel=TOYOTA`, per `docs/SOURCES.md`) needing wired CarPlay support.
 
-**Cross-check against `linux-arkmicro/linux/arch/arm/boot/dts/ark1668-pinctrl.dtsi`:** `ARK_PBANK_2` pin 31 has **no** alternate-function mux entry anywhere in that file (pins 0–20 and 31 of PBANK_2 are claimed by uart1/2/3, i2c0, LVDS, pwm1-3, i2s1 — pin 31 specifically is absent). On the generic ArkMicro reference dev-board, this pin is left spare; on the Prado production PCB, the same physical pin is wired to the CarPlay auth-chip reset. This is the expected kind of difference between a reference dev-board and a customer production board — not a conflict, just board-specific wiring on top of identical silicon.
+**Cross-check against `linux-arkmicro/linux/arch/arm/boot/dts/ark1668-pinctrl.dtsi`:** `ARK_PBANK_2` pin 31 has **no** alternate-function mux entry anywhere in that file (pins 0–20 and 31 of PBANK_2 are claimed by uart1/2/3, i2c0, LVDS, pwm1-3, i2s1 — pin 31 specifically is absent). On the generic ArkMicro reference dev-board, this pin is left spare; on the Limcet P306 production PCB, the same physical pin is wired to the CarPlay auth-chip reset. This is the expected kind of difference between a reference dev-board and a customer production board — not a conflict, just board-specific wiring on top of identical silicon.
 
 ### GPIOs referenced but not resolved to literals — and why
 
@@ -336,18 +336,18 @@ int FUN_80018834(void)
 | `MCUAdapter_Bagoo` | `0x66` = 102 | PBANK_3 pin 6 |
 | `MCUAdapter_BoxC270` | `0x7d` = 125 | PBANK_3 pin 29 |
 
-**Found the factory/dispatcher:** `MCUAdapter::getAdapterInstance(MCUAdapter::McuType)` (exact demangled symbol name — no guessing needed) is a 30-case `switch` on the numeric `McuType` value, `case 1` through `case 0x1e`, each `operator_new`-ing and constructing the matching adapter class. This is the mechanism `docs/SOURCES.md`'s `McuType` field (16 for Holden, **6 for Prado**) actually drives.
+**Found the factory/dispatcher:** `MCUAdapter::getAdapterInstance(MCUAdapter::McuType)` (exact demangled symbol name — no guessing needed) is a 30-case `switch` on the numeric `McuType` value, `case 1` through `case 0x1e`, each `operator_new`-ing and constructing the matching adapter class. This is the mechanism `docs/SOURCES.md`'s `McuType` field (16 for Holden, **6 for Limcet P306**) actually drives.
 
-**`case 6` → `MCUAdapter_BoxP300`.** This is the Prado's real, active MCU adapter class. Decompiled its full constructor (and confirmed — by scanning literally every method with `BoxP300` in the name, only 4 exist total: ctor/dtor pairs — **`GPIOOperater` does not appear anywhere in this class**. Instead, its constructor calls `MsnApplication::getFactorySetting(...)` twice — once to read a list of radar-sensor IDs (parsed via `QString::split` into a `uint` list — matches `KERNEL.md`'s documented multi-radar/PDC support) and once for another numeric setting. Both are **software config reads**, not GPIO hardware access.
+**`case 6` → `MCUAdapter_BoxP300`.** This is the Limcet P306's real, active MCU adapter class. Decompiled its full constructor (and confirmed — by scanning literally every method with `BoxP300` in the name, only 4 exist total: ctor/dtor pairs — **`GPIOOperater` does not appear anywhere in this class**. Instead, its constructor calls `MsnApplication::getFactorySetting(...)` twice — once to read a list of radar-sensor IDs (parsed via `QString::split` into a `uint` list — matches `KERNEL.md`'s documented multi-radar/PDC support) and once for another numeric setting. Both are **software config reads**, not GPIO hardware access.
 
 ### Conclusion
 
-**The Prado unit does not read the reverse-camera/backup signal via a raw SoC GPIO pin in userspace at all.** The `MCUAdapter_BoxP300` class handling this product's MCU communication never touches `GPIOOperater`. This closes the loop with two things already documented independently:
+**The Limcet P306 unit does not read the reverse-camera/backup signal via a raw SoC GPIO pin in userspace at all.** The `MCUAdapter_BoxP300` class handling this product's MCU communication never touches `GPIOOperater`. This closes the loop with two things already documented independently:
 
 1. `docs/KERNEL_REFERENCE.md` already recorded that the `arktool` MCU-UART binary protocol carries a **`backcar enable/disable`** command.
 2. §5 of this document found the kernel's `carback` platform_device has an **entirely zero `platform_data` struct** — no GPIO configured for it at the kernel level either.
 
-Both facts point to the same conclusion: on this product, reverse-gear/backup-camera detection happens on the **companion MCU** (which has its own firmware, wired directly to the vehicle's reverse-light circuit or a physical switch — not analyzed here, would require dumping/RE'ing the MCU's own firmware image separately), and the MCU simply *tells* the ARK1680 SoC "enter backcar mode" over the HS-UART `arktool` link. There's no GPIO pin on the SoC side to find for this signal on the Prado — it was never a compiled-kernel-literal, a userspace `/proc/ark_gpio` write, *or* an `McuType`-specific board GPIO, because the whole detection path lives outside the SoC entirely. The GPIO literals found in `MCUAdapter_Bagoo`/`ZhongHang`/`BoxP400`/`BoxP700`/`BoxC270`/`CarA300` above are real and board-specific, just **for different, non-Prado products** built from the same shared `libMcuCenter.so` — a good illustration of how much shared-codebase archaeology this firmware requires: the code path that's actually load-bearing for one product is dead weight (or vice versa) for another, and only the `McuType` factory switch tells you which is which.
+Both facts point to the same conclusion: on this product, reverse-gear/backup-camera detection happens on the **companion MCU** (which has its own firmware, wired directly to the vehicle's reverse-light circuit or a physical switch — not analyzed here, would require dumping/RE'ing the MCU's own firmware image separately), and the MCU simply *tells* the ARK1680 SoC "enter backcar mode" over the HS-UART `arktool` link. There's no GPIO pin on the SoC side to find for this signal on the Limcet P306 — it was never a compiled-kernel-literal, a userspace `/proc/ark_gpio` write, *or* an `McuType`-specific board GPIO, because the whole detection path lives outside the SoC entirely. The GPIO literals found in `MCUAdapter_Bagoo`/`ZhongHang`/`BoxP400`/`BoxP700`/`BoxC270`/`CarA300` above are real and board-specific, just **for different, non-Limcet-P306 products** built from the same shared `libMcuCenter.so` — a good illustration of how much shared-codebase archaeology this firmware requires: the code path that's actually load-bearing for one product is dead weight (or vice versa) for another, and only the `McuType` factory switch tells you which is which.
 
 **Independently confirmed after the fact:** `hardware/BOARD_ANALYSIS.md` (physical board inspection, done separately from this software RE) identifies the companion MCU as an **STM32F105RBT6** running **Limcet-V1.0-1302** firmware, and explicitly lists "ACC/IGN detection, reverse trigger input, panel button inputs" among its GPIO responsibilities, plus an onboard NXP TJA1042 CAN transceiver wired to the STM32's own bxCAN peripheral for reading Toyota-specific steering-wheel CAN messages. Two completely independent methods (kernel/userspace binary RE vs. physically inspecting the board) converged on the same architecture: MCU owns the vehicle-signal GPIOs and CAN bus, SoC just listens over UART.
 
@@ -376,14 +376,14 @@ Found and cloned a public leak of ASTRI's (Hong Kong Applied Science and Technol
 reference BSP for this exact SoC (`cphatt/ArkPro`, commit `e743744`, a Qt AVService SDK that bundles a
 `mach-ark1680` kernel slice for its backlight/display kernel modules). Copied the relevant files into
 [`ArkPro Reference/`](../ArkPro%20Reference/README.md) — see that folder's README for full provenance
-and scope notes. This is a **generic reference BSP, not the Prado's actual OEM board file** — it has
+and scope notes. This is a **generic reference BSP, not the Limcet P306's actual OEM board file** — it has
 none of this OEM's customer-specific additions (`apple_encpy_ic_rst`, `carback`, `rn6752_*`, etc.) —
 but it confirms several things §§2–5 could only infer from disassembly:
 
-- **`ark1680_add_device_*()` roster in [`config.c`](../ArkPro%20Reference/kernel/arch/arm/mach-ark1680/config.c)** registers platform devices under the same names found in the Prado binary's `FUN_8059f188` (§5's table): `gpio-ark`, `ark1680-uart`, `ark1680-nand`, `ark_i2s_dev`, `ark-display`, `ark-prescaler`, `ark-jpeg`, `ark-deinterlace`, `ark-itu656`, `ark-pwm`, `ark-wdt`, `pwm-backlight`. Real source confirming what was previously just a decompiled device-name string list.
-- Same file's USB bring-up does `ioremap(VICH_BASE, ...)` + sets `BIT(7)|BIT(8)` to gate MUSB IRQs into the VIC — confirms the VICL/VICH ioremap pattern §4 found in the Prado binary's board-init routine is a real, intentional step (not a decompiler artifact), just for USB IRQ routing specifically.
+- **`ark1680_add_device_*()` roster in [`config.c`](../ArkPro%20Reference/kernel/arch/arm/mach-ark1680/config.c)** registers platform devices under the same names found in the Limcet P306 binary's `FUN_8059f188` (§5's table): `gpio-ark`, `ark1680-uart`, `ark1680-nand`, `ark_i2s_dev`, `ark-display`, `ark-prescaler`, `ark-jpeg`, `ark-deinterlace`, `ark-itu656`, `ark-pwm`, `ark-wdt`, `pwm-backlight`. Real source confirming what was previously just a decompiled device-name string list.
+- Same file's USB bring-up does `ioremap(VICH_BASE, ...)` + sets `BIT(7)|BIT(8)` to gate MUSB IRQs into the VIC — confirms the VICL/VICH ioremap pattern §4 found in the Limcet P306 binary's board-init routine is a real, intentional step (not a decompiler artifact), just for USB IRQ routing specifically.
 - **LCD timing register fields** — see the new section added to `docs/DISPLAY_SUBSYSTEM.md`: `ark_display_lcd.c` and `uboot/ark_lcd.c` confirm `CLKDIV1`/`VBP`/`HBP`/`VSW`/`HSW`/`IVS` are ArkMicro's real register field names (`CLCD_TIMING0/1/2`), not RE-guessed labels, and explain `CLKDIV1` as a system-PLL clock divider.
-- **A third candidate mechanism for backcar detection**, not previously considered: [`userspace/display.h`](../ArkPro%20Reference/userspace/display.h) defines `ARKDISP_GET_BACKCAR_STATUS` (ioctl `0xa0`/`25`) on the `ark-display`/framebuffer device itself. This doesn't change §7's conclusion — the Prado-specific trace of `MCUAdapter_BoxP300` independently and directly confirmed the MCU-UART `arktool` path is what's actually used on this product — but it's worth recording that ArkMicro's own reference stack has a kernel-ioctl-based backcar path as a generic option, in case a future variant or product on this platform turns out to use it instead.
+- **A third candidate mechanism for backcar detection**, not previously considered: [`userspace/display.h`](../ArkPro%20Reference/userspace/display.h) defines `ARKDISP_GET_BACKCAR_STATUS` (ioctl `0xa0`/`25`) on the `ark-display`/framebuffer device itself. This doesn't change §7's conclusion — the Limcet-P306-specific trace of `MCUAdapter_BoxP300` independently and directly confirmed the MCU-UART `arktool` path is what's actually used on this product — but it's worth recording that ArkMicro's own reference stack has a kernel-ioctl-based backcar path as a generic option, in case a future variant or product on this platform turns out to use it instead.
 
 No `clock.c`, GPIO driver, NAND/touchscreen driver, or `MsnCoreApp`/`libMcuCenter`-equivalent userspace source was found anywhere in the upstream `ArkPro` repo (checked `Launcher/`, `MultimediaService/`, `AutoConnect/`, and the other Qt-service directories) — so the open items in §5 (platform_data-sourced GPIO pins for `backcar`/`rn6752_reset`/`rn6752_irq`) remain open; this vendor source doesn't resolve them.
 
@@ -1114,7 +1114,7 @@ SOURCES
 A genuine ArkMicro reference-design block diagram (not this specific
 board's actual schematic -- several blocks below are confirmed, via
 this project's own hardware work, to be populated differently on the
-real Prado unit). Read 2026-07-27. Kept here as a cross-reference index
+real Limcet P306 unit). Read 2026-07-27. Kept here as a cross-reference index
 against everything else in this doc, not a replacement for it.
 
 ### Power / vehicle interface (left edge connector)

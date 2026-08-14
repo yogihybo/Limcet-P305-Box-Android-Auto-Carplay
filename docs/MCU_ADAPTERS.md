@@ -14,7 +14,7 @@ which manages the serial protocol to the external MCU on `MCUPortName`
 
 > **Evidence level — read before trusting a claim here.**
 > - **Disassembly-verified** (high confidence): the `McuType → adapter` factory
->   map (`getAdapterInstance` jump table), `McuType=6 → BoxP300`, the Prado-vs-Holden
+>   map (`getAdapterInstance` jump table), `McuType=6 → BoxP300`, the Limcet P306-vs-Holden
 >   config diff, and the `BoxP300`/`MsnDecoder` **frame layout + command dispatch**
 >   traced from `onRecvMcuProtocol`.
 > - **Symbol-table inference** (medium confidence): the per-adapter **Catalogue**
@@ -29,7 +29,7 @@ which manages the serial protocol to the external MCU on `MCUPortName`
 
 ---
 
-## Current Prado configuration
+## Current Limcet P306 configuration
 
 ```ini
 McuType=6
@@ -51,7 +51,7 @@ is a jump table `sub r3, McuType, #1; cmp r3, #0x1d; addls pc, pc, r3, lsl #2`, 
 | 3 | CarA300 | 18 | BoxP210 |
 | 4 | BoxP200 | 19 | BoxC250 |
 | 5 | CarA301 | 20 | HUD |
-| **6** | **BoxP300** ← Prado | 21 | BoxP220 |
+| **6** | **BoxP300** ← Limcet P306 | 21 | BoxP220 |
 | 7 | BoxP400 | 22 | BoxP230 |
 | 8 | BoxP500 | 23 | CarA301 |
 | 9 | BoxP700 | 24 | BoxC270 |
@@ -64,14 +64,14 @@ is a jump table `sub r3, McuType, #1; cmp r3, #0x1d; addls pc, pc, r3, lsl #2`, 
 
 ---
 
-## Prado vs Holden — same library, different adapter
+## Limcet P306 vs Holden — same library, different adapter
 
-The `libMcuCenter.so` binary is **byte-identical** between the Prado dump and the
+The `libMcuCenter.so` binary is **byte-identical** between the Limcet P306 dump and the
 Holden-derived reconstruction (MD5 `065d2cc4a3fb9ef1740e755e041db4a0`) — it ships
 all 30 adapters. The MCU behaviour difference is **entirely config-driven** via
 `McuType` in `MsnProductInfo.ini`:
 
-| Setting | Prado dump | Holden base |
+| Setting | Limcet P306 dump | Holden base |
 |---|---|---|
 | `ProductId` | `Limcet-P306` | `Ksmart_DSP` |
 | `ResourceName` | `Box-P301` | `Box-C211` |
@@ -80,9 +80,9 @@ all 30 adapters. The MCU behaviour difference is **entirely config-driven** via
 | `SoundType` | 0 (none) | 4 (DSP) |
 | `CanType` | 0 | 0 |
 
-So Prado and Holden drive the MCU with **two different adapter classes speaking
+So Limcet P306 and Holden drive the MCU with **two different adapter classes speaking
 two different serial protocols**. The reconstruction correctly keeps `McuType=6`
-(`BoxP300`), matching the Prado's stock MCU. Running raw Holden (`McuType=16`,
+(`BoxP300`), matching the Limcet P306's stock MCU. Running raw Holden (`McuType=16`,
 `MsnDecoder`) points the wrong adapter at a `BoxP300`-speaking MCU.
 
 ### Protocol command-code diff (why some functions carry over and some don't)
@@ -91,7 +91,7 @@ two different serial protocols**. The reconstruction correctly keeps `McuType=6`
 counting `cmp` immediates — an earlier draft did that and mis-reported the codes).
 The two adapters parse **different frame layouts** and switch on **different bytes**:
 
-| | `BoxP300` (Prado) | `MsnDecoder` (Holden) |
+| | `BoxP300` (Limcet P306) | `MsnDecoder` (Holden) |
 |---|---|---|
 | Min frame size | 4 (`getPackageMinSize`), header sig `0x2E` (`findPackageStartSig`) | 6 (checks `size ≤ 6` → reject) |
 | **Command byte position** | **offset 1** (`ldrb r3,[data,#1]`) | **offset 3** (`ldrb r6,[data,#3]`), with a group byte at **offset 2** (`0x13`/`0x16`) |
@@ -103,7 +103,7 @@ MsnDecoder uses a group byte at byte 2 plus a sub-command at byte 3, and require
 a longer minimum frame. Even where individual code values coincide (e.g. `0x22`),
 they sit at different offsets and mean different things. This is why a mismatched
 adapter only partially works: overlapping low-level framing lets simple messages
-through, but the command interpretation diverges. **For the Prado, `McuType` must
+through, but the command interpretation diverges. **For the Limcet P306, `McuType` must
 be `6`.**
 
 ---
@@ -151,7 +151,7 @@ illumination would be a guess and is deliberately left open. (An earlier draft's
 **Outbound (Linux → STM32) — enumerated 2026-08-06.** `makeMCUProtocol(QByteArray&,
 unsigned char cmd, const char* data, unsigned char len)` builds the same frame
 shape as inbound: `[0x2E][cmd][len][payload...][checksum]` (traced from its own
-body, `0x31e60` in the original Prado dump / `0x35ec0` in the current
+body, `0x31e60` in the original Limcet P306 dump / `0x35ec0` in the current
 holden-binaries build — see note below on why there are two addresses).
 `translateApp` does **not** call it — that's UI title-string lookup only; the
 doc's earlier "etc." was vague, the real callers are below.
@@ -159,7 +159,7 @@ doc's earlier "etc." was vague, the real callers are below.
 Two binary generations exist in this repo and give different call-site
 counts — **use the current one, not the older dump, when reasoning about what
 the real car sends**: `firmware_dumps/Prado firmware dump/.../libMcuCenter.so`
-is the original Prado capture (`V3.10.3.0212`); `firmware_source/mtd6_rootfs/.../libMcuCenter.so`
+is the original Limcet P306 capture (`V3.10.3.0212`); `firmware_source/mtd6_rootfs/.../libMcuCenter.so`
 is the Holden-sourced binary confirmed to be what's *actually running* on the
 real unit today (`V3.21.09.0219` — see [[project_holden_prado_binary_provenance]]
 / the `2a0d1bc` commit). The older dump has 6 outbound call sites; the current
@@ -207,7 +207,7 @@ fires for each.
 `sshd`). Present: BusyBox `cat`, `dd`, `hexdump`, `microcom`. **Absent:** `strace`,
 `stty`, `od`, `xxd`, `socat`. MCU link = `/dev/ttyHS0`; baud **confirmed 38400**
 (2026-07-18, not a guess — `MCUAdapter_BoxP300::getPortSettings()` in
-`libMcuCenter.so`, Prado's real active adapter class for `McuType=6`, copies a
+`libMcuCenter.so`, Limcet P306's real active adapter class for `McuType=6`, copies a
 static `PortSettings` struct straight out of `.rodata` with no computation:
 bytes `00 96 00 00` = `0x00009600` = 38400, 8N1. Previously this section said
 "try 115200, then 38400" as an unconfirmed guess list — 38400 is the real
@@ -353,7 +353,7 @@ that would need to be active (or a Toyota equivalent added). Note the lowercase 
 **CAN:** None  
 **Update:** Yes — `onStartUpdateMCU`, `onSendUpdateReadyTimer`, `onDiskStatusChange`  
 **Notes:** The P300-series adapter. **Used by Limcet-P306 — `McuType=6`, confirmed
-from the factory jump table (see "Prado vs Holden" above).** No steering wheel ADC
+from the factory jump table (see "Limcet P306 vs Holden" above).** No steering wheel ADC
 or CAN support. MCU sends pre-decoded key events via the serial protocol. Frame
 header sig `0x2E`, command byte at frame offset 1 (codes `0x00`–`0x06`, `0x0A`,
 `0x12`, `0x20`–`0x22`, `0x30`, `0x7F`, `0xE2`, `0xE4`; `0xE4` = version query).
@@ -534,7 +534,7 @@ Has a settings panel (SetItems). `msnAppNotify` handles events from the main app
 command byte at offset 3 (codes `0x01`–`0x04`, `0x10`, `0x11`, `0x13`, `0x14`,
 `0x22`, `0x32`, `0x33`) — a **different frame layout and command set from
 `BoxP300`** (command at offset 1), so the two are not protocol-compatible (see
-"Prado vs Holden" at the top).  
+"Limcet P306 vs Holden" at the top).  
 **Notes:** Has `getDVRViewChannle` — handles a multi-channel DVR or camera matrix.
 `syncAllSettingDatasToMcu` bulk-syncs all settings at once.
 
@@ -549,7 +549,7 @@ command byte at offset 3 (codes `0x01`–`0x04`, `0x10`, `0x11`, `0x13`, `0x14`,
 | BoxP210 | — | — | — | SetItems | — | Physical knob panel |
 | BoxP220 | — | — | — | — | — | Minimal |
 | **BoxP230** | **YES** | **YES** | — | SetItems | onKeyEvent | Honda XBS, only CAN SWC |
-| BoxP300 | — | — | Yes | SetItems | — | P3xx family (current Prado) |
+| BoxP300 | — | — | Yes | SetItems | — | P3xx family (current Limcet P306) |
 | BoxP400 | — | — | — | — | — | Compact |
 | BoxP500 | — | — | Yes | — | — | Dual-frame + OTA |
 | BoxP700 | — | — | — | — | — | LED + long-press |
@@ -887,7 +887,7 @@ The factory settings menu McuType dropdown label list (0-indexed):
 | 20 | msn_nordic | Nordic MCU |
 
 `McuType=6` in MsnProductInfo.ini is the integer index. Based on the device
-reporting "MCU: Limcet-V1.0-1302" when working, and the label list, the Prado
+reporting "MCU: Limcet-V1.0-1302" when working, and the label list, the Limcet P306
 device uses the **Limcet** adapter (index 4) or a nearby variant. The exact index
 mapping to `MCUAdapter_BoxPxxx` classes in `libMcuCenter.so` requires disassembly
 of the `getAdapterInstance()` switch statement to confirm.

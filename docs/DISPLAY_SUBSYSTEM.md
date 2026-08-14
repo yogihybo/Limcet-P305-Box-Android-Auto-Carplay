@@ -28,7 +28,7 @@ flowchart TD
 
 **First confirmed end-to-end working LCD test-pattern output on this
 reconstructed kernel.** Running the stock firmware's own `LCDTest`
-binary (`/usr/bin/LCDTest`, from the original Prado dump) with `-qws`
+binary (`/usr/bin/LCDTest`, from the original Limcet P306 dump) with `-qws`
 on this project's reconstructed kernel/rootfs produced a visible test
 pattern on the real panel.
 
@@ -189,7 +189,7 @@ kernel side can finally act on it more than once.
 
 ## Hardware
 
-The Prado head unit uses a direct **RGB888 parallel panel**, 800×480.
+The Limcet P306 head unit uses a direct **RGB888 parallel panel**, 800×480.
 
 | Parameter | Value |
 |-----------|-------|
@@ -336,7 +336,7 @@ application-level colour output pipeline:
 
 | Value | Pipeline | Description |
 |-------|----------|-------------|
-| 1 | Direct RGB | App renders straight BGR888 to framebuffer — correct for Prado |
+| 1 | Direct RGB | App renders straight BGR888 to framebuffer — correct for Limcet P306 |
 | 3 | CVBS / ITU656 | App encodes output through YUV/CVBS colour matrix — for composite-fed displays |
 
 The Holden unit (`Box-C211`) uses `ScreenType=3`, suggesting its
@@ -351,7 +351,7 @@ OEM fitments.
 ### Background
 
 The Holden firmware update (`HOLDEN_KS_Auto_DSP(BT)_0219`) was
-flashed to the Prado device and booted successfully. A visible screen
+flashed to the Limcet P306 device and booted successfully. A visible screen
 hue was observed. Initial suspicion was the Holden `arkdata.ini` LCD
 timings, but the boot log disproved this.
 
@@ -364,7 +364,7 @@ The SD update script included `arkdata.ini` but the boot log shows:
 ```
 
 U-Boot could not read it from the SD card and fell back to the
-existing NAND content — the **Prado's own arkdata** (6,671 bytes,
+existing NAND content — the **Limcet P306's own arkdata** (6,671 bytes,
 CLKDIV1=11, VBP=29, HBP=32). The hardware display timing was never
 changed. The original assumption (timing mismatch = hue) was incorrect.
 
@@ -373,9 +373,9 @@ changed. The original assumption (timing mismatch = hue) was incorrect.
 #### Issue 1: MsnProductInfo.ScreenType=3 (primary cause)
 
 The Holden `userdata.img` was successfully flashed, overwriting the
-Prado's `msncfg/MsnProductInfo.ini` with the Holden version:
+Limcet P306's `msncfg/MsnProductInfo.ini` with the Holden version:
 
-| | Prado | Holden |
+| | Limcet P306 | Holden |
 |--|-------|--------|
 | `ScreenType` | **1** (direct RGB) | **3** (CVBS/ITU656) |
 | `ProductId` | Limcet-P306 | Ksmart_DSP |
@@ -383,7 +383,7 @@ Prado's `msncfg/MsnProductInfo.ini` with the Holden version:
 | `SoundType` | 0 | 4 (DSP) |
 
 With `ScreenType=3`, `MsnCoreApp` routes all rendered frames through a
-YUV/CVBS colour encoder pipeline. The Prado panel expects straight
+YUV/CVBS colour encoder pipeline. The Limcet P306 panel expects straight
 BGR888. Receiving YUV-encoded data remaps the colour channels,
 producing the observed hue shift.
 
@@ -402,14 +402,14 @@ msnprofile arkdata's `TvoutType=12` and switch the VP colour matrix to
 NTSC encoding. A CVBS_NTSC colour matrix applied to a direct RGB panel
 produces a pronounced hue shift.
 
-The Prado's own `msnprofile/arkdata.ini` also has `TvoutType=12`, but
+The Limcet P306's own `msnprofile/arkdata.ini` also has `TvoutType=12`, but
 with `ScreenType=1` the app ignores the msnprofile arkdata's colour
-settings and uses the direct RGB path — so on original Prado firmware
+settings and uses the direct RGB path — so on original Limcet P306 firmware
 this causes no problem.
 
-### Why the original Prado firmware has correct colours
+### Why the original Limcet P306 firmware has correct colours
 
-| Config source | Prado firmware | Holden firmware (on Prado) |
+| Config source | Limcet P306 firmware | Holden firmware (on Limcet P306) |
 |---------------|---------------|---------------------------|
 | mtd4 arkdata | CLKDIV1=11, VBP=29, TvoutType=1 | Same (not updated) |
 | MsnProductInfo.ScreenType | **1** → direct RGB | **3** → CVBS/YUV path |
@@ -419,7 +419,7 @@ this causes no problem.
 
 ### Fix
 
-Flash the **Prado userdata** to restore `MsnProductInfo.ScreenType=1`.
+Flash the **Limcet P306 userdata** to restore `MsnProductInfo.ScreenType=1`.
 No change to rootfs, kernel, or mtd4 arkdata is required. The
 reconstructed `userdata.img` already contains the correct
 `MsnProductInfo.ini`.
@@ -436,9 +436,9 @@ Copy `sd_update/output/` to a FAT32 SD card and power on.
 
 ---
 
-## msnprofile/arkdata.ini on the Prado dump — unexpected content
+## msnprofile/arkdata.ini on the Limcet P306 dump — unexpected content
 
-The `msnprofile/arkdata.ini` in the live Prado dump (inside the rootfs,
+The `msnprofile/arkdata.ini` in the live Limcet P306 dump (inside the rootfs,
 not the mtd4 partition) contains:
 
 | Field | Value |
@@ -449,10 +449,10 @@ not the mtd4 partition) contains:
 | LVDSCfg | 0x160FD |
 | TvoutType | 12 |
 
-This is a profile for a **1024×600 LVDS panel** — not the Prado
+This is a profile for a **1024×600 LVDS panel** — not the Limcet P306
 screen. It was present in the Box-P301 base firmware, which is shared
 with other vehicles that use an LVDS display (likely Buick Enclave or
-similar). The Prado application ignores it because
+similar). The Limcet P306 application ignores it because
 `MsnProductInfo.ScreenType=1` directs the app to the direct RGB
 rendering path.
 
@@ -516,7 +516,7 @@ U-Boot (arkdata `ScreenId`) and the kernel (`screens[]` index).
   and `Launcher-*-1024x600.rcc`.
 - The rootfs `msnprofile/arkdata.ini` (distinct from mtd4) is a **1024×600 LVDS**
   profile (`ScreenId=6`, `ScreenType=4`, `LVDSCfg=0x160FD`) — a sibling-vehicle
-  panel the Prado app ignores (see section above).
+  panel the Limcet P306 app ignores (see section above).
 - `ARKDATA_VARIANTS.md` catalogues 30+ presets (800×480, 400×240, 960×540,
   1280×480, 1024×480, LVDS/RGB888) selectable by this same id scheme.
 
@@ -544,7 +544,7 @@ baseline actually is, then that section for how it's now overridden.
    kernel even boots.** This is the real, authoritative source of truth
    for *this specific physical unit's* actual panel — it's what a
    factory/service tool would write when a unit ships with a particular
-   panel installed. Prado's own dump of this partition is at
+   panel installed. Limcet P306's own dump of this partition is at
    `firmware_source/prado_reconstructed/mtd4_arkdata/arkdata.ini`
    (single `ScreenId=0`, 800×480 RGB888 — see the "Register-level meaning"
    section above for the full field dump).
@@ -577,7 +577,7 @@ simply frozen into the kernel at build time.
 
 - **This is not a bug for the current unit** — the DTS values were
   hand-corrected (2026-07-18, `linux-arkmicro` `47ba523ca`) to exactly
-  match Prado's own real `mtd4` dump (`ScreenId=0`): `clock-frequency
+  match Limcet P306's own real `mtd4` dump (`ScreenId=0`): `clock-frequency
   =330000000/CLKDIV1(11)=30000000`, `hback-porch=32` (`HBP`),
   `hfront-porch=25` (`HFP`), `vback-porch=29` (`VBP`), `vfront-porch=25`
   (`VFP`), `hsync-len=54` (`HSW`), `vsync-len=16` (`VSW`), sync
@@ -695,7 +695,7 @@ platform family letter (corresponding broadly to the `ResourceName` in
 **Source:** [`../ArkPro Reference/`](../ArkPro%20Reference/README.md) — ASTRI's (Hong Kong Applied
 Science and Technology Research Institute) reference ARK1680 kernel/U-Boot/userspace source, copied
 into this repo from a public leak of `cphatt/ArkPro` (commit `e7437446cacc79e242d9b7a90e3724af52c33bba`).
-It's a generic reference BSP, not the Prado's actual OEM board file — see that folder's README for full
+It's a generic reference BSP, not the Limcet P306's actual OEM board file — see that folder's README for full
 provenance, licensing notes, and what was and wasn't pulled in. Also cross-checked against
 `docs/HARDWARE_AND_SOC_REFERENCE.md` §9.
 
@@ -909,17 +909,17 @@ bandwidth per refresh, hence the lower (faster) divider.
 |------|-----------|---------|-----|-----|-----|-----|-------|
 | arkdata97_U | 800×480 | 11 | 29 | 166 | 12 | 49 | LVDS, high HBP |
 
-## Group V — arkdata105–109 ⭐ Prado panel family
+## Group V — arkdata105–109 ⭐ Limcet P306 panel family
 
 | File | Resolution | CLKDIV1 | VBP | HBP | VSW | HSW | Notes |
 |------|-----------|---------|-----|-----|-----|-----|-------|
 | arkdata105_V | 800×480 | 10 | 33 | 215 | 21 | 30 | High HBP, CLKDIV1=10 |
-| arkdata106_V | 800×480 | 11 | 29 | 32 | 16 | 54 | **Prado / Limcet-P306 panel** |
+| arkdata106_V | 800×480 | 11 | 29 | 32 | 16 | 54 | **Limcet P306 panel** |
 | arkdata107_V | 800×480 | 11 | 29 | 32 | 16 | 54 | Identical to arkdata106_V (alternate supplier) |
 | arkdata108_V | 800×480 | 10 | 35 | 235 | 21 | 30 | Very high HBP, CLKDIV1=10 |
 | arkdata109_V | 800×480 | 9 | 33 | 100 | 1 | 127 | LVDS cfg=0xE0EC — likely LVDS variant |
 
-> **arkdata106_V / arkdata107_V** exactly match the `mtd4_arkdata` on the live Prado device
+> **arkdata106_V / arkdata107_V** exactly match the `mtd4_arkdata` on the live Limcet P306 device
 > (`CLKDIV1=11`, `VBP=29`, `HBP=32`, `VFP=25`, `HSW=54`). These two entries are the same
 > timing for two different panel suppliers.
 
@@ -964,28 +964,28 @@ bandwidth per refresh, hence the lower (faster) divider.
 ## Holden firmware update package variants
 
 These files ship with `HOLDEN_KS_Auto_DSP(BT)_0219` and are not in the
-Prado panel library above.
+Limcet P306 panel library above.
 
 | File | Resolution | CLKDIV1 | VBP | HBP | TouchKeys | Notes |
 |------|-----------|---------|-----|-----|-----------|-------|
-| arkdata.ini | 800×480 | 10 | 3 | 20 | 5 | Holden Commodore/Cruze panel — **causes screen hue on Prado** |
+| arkdata.ini | 800×480 | 10 | 3 | 20 | 5 | Holden Commodore/Cruze panel — **causes screen hue on Limcet P306** |
 | arkdata0324.ini | 800×480 | 10 | 3 | 20 | 5 | March 2024 update — minor VP tweak (video2Brightness/Hue) |
 | arkdata君威.ini | 480×240 | 6 | 6 | 32 | 0 | Buick LaCrosse (君威) — Chinese market, small portrait screen |
 
 ---
 
-## Special: msnprofile/arkdata.ini (live Prado dump)
+## Special: msnprofile/arkdata.ini (live Limcet P306 dump)
 
 This file sits at `msnprofile/arkdata.ini` (not in the `arkdata/` subfolder)
 and is loaded directly rather than selected by ID.
 
 | Resolution | ScreenType | CLKDIV1 | VBP | HBP | LVDSCfg | Notes |
 |-----------|-----------|---------|-----|-----|---------|-------|
-| 1024×600 | 4 (LVDS) | 7 | 8 | 50 | 0x160FD | LVDS premium screen — not the Prado panel |
+| 1024×600 | 4 (LVDS) | 7 | 8 | 50 | 0x160FD | LVDS premium screen — not the Limcet P306 panel |
 
 This preset is for a different vehicle (likely Buick Enclave or similar with
 an LVDS 1024×600 display). It was present in the Box-P301 base firmware.
-The Prado application ignores it because `MsnProductInfo.ini` declares
+The Limcet P306 application ignores it because `MsnProductInfo.ini` declares
 `ScreenType=1` (RGB), directing the app to the RGB rendering path using the
 mtd4 hardware timings instead.
 

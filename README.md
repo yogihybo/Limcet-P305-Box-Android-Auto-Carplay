@@ -4,8 +4,49 @@ Limcet modules are available fairly cheaply through AliExpress and add support f
 
 Following a falled updated,this repo was developed to test device and identify how it operates. Serial access allow for dumping of the original partitions then the Holden firmware was flashed to the device via SD card and found to the work. The reconstructed firmware for typically uses the Holden base as that is a more recent build with hardware-specific overrides for the display panel, product identity. 
 
+## Choose Your Path
+
+Four independent ways to reach the device, from lowest to highest risk/commitment. Pick the branch that matches what you're trying to do — you don't need to follow the whole chart, and the first three don't touch NAND at all.
+
+```mermaid
+flowchart TD
+    Start(["Stock Limcet P306 device"]) --> Q1{"What do you need?"}
+
+    Q1 -->|"Recovery / monitoring,<br/>interrupt boot"| Serial["Serial Console -- §2.0<br/>solder UART, read-only once Linux boots"]
+    Q1 -->|"Root shell, no soldering,<br/>keep stock firmware"| Telnet["USB Telnet Payload -- §9.0<br/>payloads/msn_autocopy"]
+    Q1 -->|"Test changes,<br/>no NAND writes"| SDBoot["Boot from SD/USB -- §6.0 / §7.0<br/>reverts to stock if card removed"]
+    Q1 -->|"Commit to new firmware"| Flash["Flash via SD Update Package -- §8.0 / §9.0<br/>permanently alters NAND"]
+
+    Serial --> Diagnose(["Diagnose / recover a bricked unit"])
+    Telnet --> Poke(["Poke around on stock firmware<br/>tools/* diagnostics over carplay_wifi"])
+
+    SDBoot --> Q2{"Which U-Boot on the card?"}
+    Q2 -->|"Stock 2012.10, patched for SD"| StockPath["Stock kernel + stock Qt UI"]
+    Q2 -->|"Custom 2018.07 board port,<br/>ark1668_limcet_p305 -- §7.0"| Q3
+
+    Flash --> Recon["Reconstructed Limcet P306 firmware<br/>SSH + WiFi AP built in -- §10.0"]
+    Recon --> Q3{"Custom U-Boot boot command"}
+
+    Q3 -->|"bootstock / boothybrid,<br/>chainloads to stock"| StockPath
+    Q3 -->|"bootmmc / bootusb,<br/>this fork's own kernel"| NewKernel["New 4.19.192 kernel<br/>+ reconstructed rootfs"]
+
+    NewKernel --> Q4{"Which UI?"}
+    Q4 -->|"Keep it"| StockUI["Stock Qt 4.7.4 UI"]
+    Q4 -->|"Replace it"| CustomUI["custom_ui/ -- LVGL replacement UI<br/>see custom_ui/README.md"]
+
+    classDef lowrisk fill:#d4edda,stroke:#28a745,color:#155724
+    classDef medrisk fill:#fff3cd,stroke:#e0a800,color:#856404
+    classDef highrisk fill:#f8d7da,stroke:#dc3545,color:#721c24
+    class Serial,SDBoot,Diagnose,StockPath,StockUI,NewKernel,CustomUI lowrisk
+    class Telnet,Poke medrisk
+    class Flash,Recon highrisk
+```
+
+**Legend:** 🟢 no NAND writes, reversible · 🟡 stock firmware modified in RAM/via USB, NAND untouched · 🔴 permanently alters NAND.
+
 ## Table of Contents
 
+- [Choose Your Path](#choose-your-path)
 - [1.0 Hardware](#10-hardware)
 - [2.0 Serial Console (recovery / monitoring)](#20-serial-console-recovery--monitoring)
 - [3.0 NAND Partition Layout](#30-nand-partition-layout)
@@ -23,10 +64,8 @@ Following a falled updated,this repo was developed to test device and identify h
   - [USB Networking](#usb-networking)
   - [10.1 Diagnostic & On-Device Utility Tools](#101-diagnostic--on-device-utility-tools)
 - [11.0 Repository Structure](#110-repository-structure)
-- [12.0 Holden Firmware Compatibility](#120-holden-firmware-compatibility)
-- [13.0 Key Differences vs Holden Base Firmware](#130-key-differences-vs-holden-base-firmware)
-- [14.0 Sources](#140-sources)
-- [15.0 Further Documentation](#150-further-documentation)
+- [12.0 Sources](#120-sources)
+- [13.0 Further Documentation](#130-further-documentation)
 
 ## 1.0 Hardware
 
@@ -307,7 +346,7 @@ sudo bash build_bootable_sdcard.sh
 ```
 
 ```
-  ARK1680 Prado — Bootable SD Card Builder
+  ARK1680 Limcet P306 — Bootable SD Card Builder
   ────────────────────────────────────────────────────────
   BUILD OPTIONS
   ▶ [X]  Patch U-Boot for SD boot
@@ -369,7 +408,7 @@ To replace a placeholder once a real dump is obtained (via serial console: `dd i
 
 ### USB boot
 
-USB mass storage is compiled in (MUSB HCD). **Unverified on Prado hardware** — run `usb start` at the U-Boot prompt to confirm the host controller and GPIO assignments work on your unit before relying on this.
+USB mass storage is compiled in (MUSB HCD). **Unverified on Limcet P306 hardware** — run `usb start` at the U-Boot prompt to confirm the host controller and GPIO assignments work on your unit before relying on this.
 
 At the U-Boot prompt:
 
@@ -457,7 +496,7 @@ bash build_update.sh
 The whole menu is one line per item — no per-item description text — so it fits a standard ~24-line terminal without scrolling. Full detail for whichever row is highlighted is shown once, on the detail line just above the command bar, instead of repeated for every row:
 
 ```
-  ARK1680 Prado — Build & Flash Tool
+  ARK1680 Limcet P306 — Build & Flash Tool
   ────────────────────────────────────────────────────────
   BUILD
     [ ]  Build rootfs image         no image yet
@@ -765,19 +804,19 @@ firmware_source/prado_reconstructed/         Reconstructed firmware for flashing
   mtd0_sloader/              Nboot.bin, Stepldr.bin
   mtd1-mtd2_uboot/           uboot.bin
   mtd3_firmware_source/env/                  (placeholder — reconstructed env lives in firmware_source/env/uboot-env.txt instead)
-  mtd4_arkdata/              arkdata.ini (Prado panel config — copy of firmware_source/display/arkdata.ini)
+  mtd4_arkdata/              arkdata.ini (Limcet P306 panel config — copy of firmware_source/display/arkdata.ini)
   mtd5_firmware_source/kernel/               zImage (reconstructed kernel — see note on top-level firmware_source/kernel/ below)
   mtd6_rootfs/
-    rootfs/                  Modified rootfs tree (Prado libs + SSH + WiFi AP)
+    rootfs/                  Modified rootfs tree (Limcet P306 libs + SSH + WiFi AP)
   mtd7_userdata/
-    userdata/                Userdata tree (Prado settings overlay)
+    userdata/                Userdata tree (Limcet P306 settings overlay)
   mtd8_bootlogo/             bootlogo
   mtd9_bootanimation/        (placeholder — no content yet)
   mtd10_reversingtrack/      reversingtrack
   mtd11_unicode/             unicode (placeholder — no content yet)
 
-firmware_dumps/Holden firmware update/               Stock Holden update package (reference — validated it boots on Prado hw)
-firmware_dumps/Prado firmware recovery holden based/ Stock Holden package repackaged with Prado msn_factory_configs, for recovery
+firmware_dumps/Holden firmware update/               Stock Holden update package (reference — validated it boots on Limcet P306 hw)
+firmware_dumps/Prado firmware recovery holden based/ Stock Holden package repackaged with Limcet P306 msn_factory_configs, for recovery
 
 hardware/
   BOARD_ANALYSIS.md         Board/component teardown notes (SoC, NAND, BT, MCU, CAN bus)
@@ -803,12 +842,12 @@ tools/              On-device diagnostic/utility binaries — static ARM builds,
 
 firmware_source/kernel/            zImage (from Holden base — identical kernel_size to firmware_dumps/Prado firmware dump; gitignored, not present in every checkout — firmware_source/prado_reconstructed/mtd5_firmware_source/kernel/zImage is the copy actually used for builds)
 firmware_source/display/
-  arkdata.ini                Prado panel config (from MTD4 live dump) — build source for mtd4
+  arkdata.ini                Limcet P306 panel config (from MTD4 live dump) — build source for mtd4
   mtd4_arkdata_prado_dump.bin  Raw MTD4 dump the .ini was derived from
   arkdata_holden.ini         Holden standard reference
   arkdata_holden_0324.ini    Holden March 2024 update reference
 firmware_source/msn_factory_configs/
-  FactoryConfig.ini          Prado identity + Holden firmware settings
+  FactoryConfig.ini          Limcet P306 identity + Holden firmware settings
   MsnProductInfo.ini         Hardware identity (Limcet-P306)
 firmware_source/env/
   uboot-env.txt              Reconstructed env (bootdelay=9, 106m/6m layout)
@@ -831,39 +870,11 @@ build_bootable_sdcard.sh     Interactive bootable SD card image builder (same ar
 sd_bootable/                 Generated bootable SD image output (gitignored — sd_boot.img + patched uboot_sdboot.bin)
 ```
 
-## 12.0 Holden Firmware Compatibility
-
-The Holden update package (`HOLDEN_KS_Auto_DSP(BT)_0219`) has been confirmed to boot successfully on the Prado device. This validates that the Holden firmware is a compatible base — the SoC, bootloader, and kernel are interoperable.
-
-Known glitches when running stock Holden firmware on the Prado hardware:
-
-- **Screen hue** — caused by mismatched LCD timings in `arkdata.ini` (`CLKDIV1=10`, `VBP=3`, `HBP=20` vs Prado values). Fixed by flashing the Prado `arkdata.ini` to mtd4.
-- **Touch keys** — Holden `arkdata.ini` defines 5 side touch keys that do not exist on the Prado hardware.
-- **Product identity** — `FactoryConfig.ini` and `MsnProductInfo.ini` reference Holden-specific IDs (`Ksmart_DSP`, `Box-C211`, `McuType=16`).
-
-These are all corrected in the reconstructed firmware. See [Key Differences vs Holden Base Firmware](#130-key-differences-vs-holden-base-firmware) below.
-
-## 13.0 Key Differences vs Holden Base Firmware
-
-| Item | Holden | Prado |
-|------|--------|-------|
-| ProductId | Ksmart_DSP | **Limcet-P306** |
-| ResourceName | Box-C211 | **Box-P301** |
-| McuType | 16 | **6** |
-| SoundType | 4 (DSP) | **0** |
-| Panel timing (CLKDIV1) | 10 | **11** |
-| Panel VBP/HBP | 3/20 | **29/32** |
-| Touch keys | 5 | **none** |
-| bootdelay | 0 | **9** |
-| BT device name | Ksmart | **Limcet Box** |
-| BT pair code | 0000 | **8362** |
-| Vehicle branding | HOLDEN | **TOYOTA** |
-
-## 14.0 Sources
+## 12.0 Sources
 
 See [`docs/SOURCES.md`](docs/SOURCES.md) for full provenance of each file.
 
-## 15.0 Further Documentation
+## 13.0 Further Documentation
 
 **`docs/`**
 

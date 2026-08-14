@@ -18,7 +18,8 @@ flowchart TD
     Q1 -->|"Commit to new firmware<br/>permanently"| Flash["Flash via SD Update Package -- §11.0 / §10.0<br/>permanently alters NAND"]
 
     Serial --> Diagnose(["Diagnose / recover a bricked unit"])
-    Telnet --> Poke(["Poke around on stock firmware<br/>tools/* diagnostics over carplay_wifi"])
+    Telnet --> Connect["Join carplay_wifi AP,<br/>telnet device-ip 23"]
+    Connect --> Poke(["Root shell -- poke around on stock firmware<br/>tools/* diagnostics over carplay_wifi"])
 
     SDBoot --> Q2{"Which firmware on the card?"}
     Q2 -->|"Stock U-Boot 2012.10, patched for SD"| StockPath["Stock kernel + stock Qt UI"]
@@ -35,7 +36,7 @@ flowchart TD
     classDef medrisk fill:#fff3cd,stroke:#e0a800,color:#856404
     classDef highrisk fill:#f8d7da,stroke:#dc3545,color:#721c24
     class Serial,SDBoot,Diagnose,StockPath,StockUI,NewKernel,CustomUI lowrisk
-    class Telnet,Poke medrisk
+    class Telnet,Connect,Poke medrisk
     class Flash,Recon highrisk
 ```
 

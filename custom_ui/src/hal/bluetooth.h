@@ -296,6 +296,21 @@ bool get_adapter_address(BluetoothHandle & h, std::string & address);
 // assumes about its own privilege level).
 bool sync_clock_from_phone(BluetoothHandle & h);
 
+// 2026-08-14: pure diagnostic (logs only, changes nothing) -- queries
+// AT+HFPBATT? / AT+GATTSTAT? and logs the raw responses. Added after
+// finding a real, well-documented Android Auto 17.4+ client-side gate
+// (github.com/andreknieriem/open-headunit issue #698): the phone's own
+// app aborts wireless setup outright if the paired Bluetooth device
+// reports ANY battery-level value (HFP battery indicator or a BLE GATT
+// Battery Service, 0x180F) -- a decision made entirely inside the
+// phone's own app, never touching the AA TCP session. Matches this
+// project's own long-standing "session completes, then dies anyway"
+// symptom closely enough to be worth real evidence on the next test,
+// see bluetooth.cpp's own comment for the full reasoning. Returns true
+// if either query got any response at all (regardless of content --
+// caller/log output is what actually matters here).
+bool diagnose_battery_reporting(BluetoothHandle & h);
+
 void close_bluetooth(BluetoothHandle & h);
 
 }  // namespace hal

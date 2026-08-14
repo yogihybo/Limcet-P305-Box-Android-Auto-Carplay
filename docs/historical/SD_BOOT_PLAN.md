@@ -127,7 +127,7 @@ and a relevant slice copied into [`linux-arkmicro Reference/`](../linux-arkmicro
 **It is not an exact source match** — it's U-Boot 2018.07 with SPL+FDT, while the Limcet P306's actual stock
 U-Boot is 2012.10, legacy ATAG, no devicetree. Same SoC family, later BSP generation. The details below
 (largely still accurate) are superseded by the full build plan and risk list in
-[`docs/UBOOT_BUILD_GUIDE.md`](../UBOOT_BUILD_GUIDE.md) — read that before acting on this section.
+[`docs/8.1_UBOOT_BUILD_GUIDE.md`](../8.1_UBOOT_BUILD_GUIDE.md) — read that before acting on this section.
 
 The chip is confirmed as **ARK1668** (marked on the physical package).
 This BSP contains a real U-Boot board target for this SoC family. Building it is still the cleanest
@@ -165,7 +165,7 @@ SD slot is `mmc 1` — confirmed by `board_mmc_init()` in
 
 #### Build
 
-See [`docs/UBOOT_BUILD_GUIDE.md`](../UBOOT_BUILD_GUIDE.md) for the actual clone URL, full config-delta
+See [`docs/8.1_UBOOT_BUILD_GUIDE.md`](../8.1_UBOOT_BUILD_GUIDE.md) for the actual clone URL, full config-delta
 table (this section only had 2 of the several deltas that doc identifies), toolchain, and — critically
 — the SD-only test plan before any NAND flashing is considered.
 

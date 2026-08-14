@@ -130,4 +130,4 @@ Segmentation fault
 - Touch root cause + stock-bus proof + pending live verification: `docs/historical/boot_experiment_log.md`
 - Live I²C bus scan tool: `tools/i2c-scan/`
 - Screen/model selection: `docs/1.7_DISPLAY_SUBSYSTEM.md`, `docs/1.7_DISPLAY_SUBSYSTEM.md`
-- Camera chip resolution: `docs/KERNEL_REFERENCE.md` ("Camera decoder chip" callout)
+- Camera chip resolution: `docs/1.9_KERNEL_REFERENCE.md` ("Camera decoder chip" callout)

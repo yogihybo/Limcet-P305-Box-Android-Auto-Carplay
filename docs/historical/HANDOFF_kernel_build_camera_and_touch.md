@@ -47,8 +47,8 @@ the camera chip *and* the touch bus wrong.
 ### Why
 The reconstruction assumes an **ARK7116** decoder; the board actually has a
 **Richwave RN6752**. Full evidence + origin analysis:
-`docs/KERNEL_REFERENCE.md` → "⚠️ Camera decoder chip" callout. Also note
-`docs/KERNEL_REFERENCE.md` already identified RN6752 correctly.
+`docs/1.9_KERNEL_REFERENCE.md` → "⚠️ Camera decoder chip" callout. Also note
+`docs/1.9_KERNEL_REFERENCE.md` already identified RN6752 correctly.
 
 The current 4.19 config (`Limcet Hardware/kernel_dot_config`) has it backwards:
 ```
@@ -162,9 +162,9 @@ leave it sharing `gpio0 2/3` with the camera.
 - `Prado firmware dump/mtd5_kernel/extracted/System.map` — 34,116-symbol map (recovered)
 - `Prado firmware dump/mtd5_kernel/extracted/vmlinux.elf` — loadable ELF for re-disassembly
 - `Limcet Hardware/kernel_dot_config` — the 4.19.192 build config (shows the wrong camera symbol)
-- `docs/KERNEL_REFERENCE.md` — camera callout + full build recipe
+- `docs/1.9_KERNEL_REFERENCE.md` — camera callout + full build recipe
 - `docs/historical/boot_experiment_log.md` — touch bus proof, initramfs/driver inventory
-- `docs/KERNEL_REFERENCE.md` — already-correct RN6752 identification
+- `docs/1.9_KERNEL_REFERENCE.md` — already-correct RN6752 identification
 
 ## Open / unverified
 - Exact RN6752 **reset** and **reverse-detect** GPIO pin numbers (see caveat).

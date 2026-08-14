@@ -20,7 +20,7 @@ ACC-IGN signals, and drives the Feasycom BT module. It talks to the ARK1668 SoC
 over `/dev/ttyHS0`.
 
 Cross-references: [../docs/1.3_MCU_ADAPTERS.md](../../docs/1.3_MCU_ADAPTERS.md),
-[../docs/1.2_CANBUS.md](../../docs/1.2_CANBUS.md), [../docs/SECURITY_REVIEW.md](../../docs/SECURITY_REVIEW.md),
+[../docs/1.2_CANBUS.md](../../docs/1.2_CANBUS.md), [../docs/3.2_SECURITY_REVIEW.md](../../docs/3.2_SECURITY_REVIEW.md),
 `../Prado firmware dump/mtd6_rootfs/usr/lib/libMcuCenter.so` (SoC-side driver).
 
 ---
@@ -446,7 +446,7 @@ Config keys (from `MsnProductInfo.ini` / `FactoryConfig.ini`):
   documented way to read/dump MCU flash back over `/dev/ttyHS0`.
 - **Integrity only, no authenticity.** Transfer is protected by CRC16-YMODEM
   (corruption detection) — there is **no signature / authentication** of the
-  image (matches [../docs/SECURITY_REVIEW.md](../../docs/SECURITY_REVIEW.md): "no firmware
+  image (matches [../docs/3.2_SECURITY_REVIEW.md](../../docs/3.2_SECURITY_REVIEW.md): "no firmware
   update signature/checksum verification"). Anyone with root on the SoC can drop
   a `McuAppUpdate.img` and trigger a flash of arbitrary MCU firmware.
 - The resident bootloader is required for this to work and is **not recoverable

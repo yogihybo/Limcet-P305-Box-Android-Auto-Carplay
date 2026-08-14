@@ -1,8 +1,0 @@
-120   ioctl(4</dev/fb0<char 29:0>>, FBIOGET_VSCREENINFO, 0x2b28c) = 0
-120   ioctl(4</dev/fb0<char 29:0>>, FBIOGET_FSCREENINFO, 0x38400) = 0
-120   ioctl(4</dev/fb0<char 29:0>>, FBIOGET_VSCREENINFO, 0x38538) = 0
-120   ioctl(4</dev/fb0<char 29:0>>, FBIOPUT_VSCREENINFO, 0x38498) = 0
-120   ioctl(4</dev/fb0<char 29:0>>, FBIOGETCMAP, 0x385e4) = 0
-120   --- SIGSEGV {si_signo=SIGSEGV, si_code=SEGV_MAPERR, si_addr=0xe0} ---
-121   +++ killed by SIGSEGV +++
-120   +++ killed by SIGSEGV +++

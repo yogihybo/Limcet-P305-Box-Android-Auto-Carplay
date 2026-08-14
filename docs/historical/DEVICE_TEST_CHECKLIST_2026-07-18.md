@@ -5124,8 +5124,8 @@ actually gets wired up in our deployment.
 ## 48. Hardware test results for all four watch-script modes — GPU/GAL rendering conclusively identified as the cause, `--no-hardware` fully works
 
 Ran all four modes on real hardware (`lcd-osd1ctl-directfb-watch.sh`
-`normal` / `--no-systemonly` / `--stock-config` / `--no-hardware`,
-logs in `docs/logs/lcd/`). Visual result, reported directly:
+`normal` / `--no-systemonly` / `--stock-config` / `--no-hardware`).
+Visual result, reported directly:
 
 - **`--no-hardware` (pure software DirectFB, no GPU/GAL surfaces at
   all): the interface displayed correctly.**

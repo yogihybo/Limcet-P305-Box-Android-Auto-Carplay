@@ -1,4 +1,0 @@
-[09:11:38] OSD1_CTL=0x001660FF (format=6 rgb_order=5(stock-encoding) yuv_order=0)
-[09:11:39] CONTROL=0x03740081 (OSD1_enabled=1)
-[09:11:39] OSD1_ADDR=0x0F177000
-[09:11:42] OSD1_ADDR=0x0F000000

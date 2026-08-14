@@ -350,10 +350,17 @@ custom U-Boot/kernel path ([§7.0](#70-custom-u-boot-and-kernel)) — despite th
 image it produces works the same way whether written to an SD card or a USB drive; only the
 target device differs.
 
-**Image layout:** p1 (FAT32) — `zImage` (+ DTB for the custom kernel path) and `UBOOT.BIN`; p2
-(ext4) — rootfs; p3 (ext4) — userdata. ext4 partitions are formatted without `64bit`/
-`metadata_csum` automatically (see [§6.0](#60-booting-stock-kernel-from-sd-card-or-usb-non-destructive)
-for why that matters on this target).
+**Image layout:**
+
+| Partition | Filesystem | Contents |
+|-----------|-----------|---------|
+| p1 | FAT32 | `zImage` (+ DTB for the custom kernel path) and `UBOOT.BIN` |
+| p2 | ext4 | rootfs |
+| p3 | ext4 | userdata |
+
+ext4 partitions are formatted without `64bit`/`metadata_csum` automatically (see
+[§6.0](#60-booting-stock-kernel-from-sd-card-or-usb-non-destructive) for why that matters on this
+target).
 
 Build (recommended path — zero NAND writes, falls back to stock if the card/drive is removed):
 

@@ -298,6 +298,15 @@ int main() {
                          btName.c_str());
         }
         hal::auto_reconnect_paired_device(bt);
+
+        // 2026-08-14: pure diagnostic, see hal::diagnose_battery_reporting()'s
+        // own comment for the full reasoning (a real, well-documented
+        // Android Auto 17.4+ client-side gate this project's own
+        // long-standing "session completes, then dies anyway" symptom
+        // closely matches). Run once at boot, right after the BT link
+        // is up -- doesn't need a connected phone, just the module
+        // itself to answer.
+        hal::diagnose_battery_reporting(bt);
     }
 
     // Process-lifetime, intentionally never freed -- same convention as

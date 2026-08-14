@@ -555,6 +555,59 @@ bool sync_clock_from_phone(BluetoothHandle & h) {
     return false;
 }
 
+// 2026-08-14: pure diagnostic, changes nothing -- added after finding a
+// real, well-documented Android Auto 17.4+ client-side gate (community
+// issue thread, github.com/andreknieriem/open-headunit #698): the phone's
+// own Gearhead app aborts wireless setup outright if the paired
+// Bluetooth device reports ANY battery-level value, via either an HFP
+// battery indicator or a BLE GATT Battery Service (0x180F) -- logged on
+// the PHONE side as "Bluetooth device ... has a battery level, exiting"
+// / WIRELESS_STOPPED_SETUP_WITH_HU_WITH_BT_BATTERY_LEVEL. This exactly
+// matches this project's own long-standing symptom (full aasdk-level
+// session completes, then the connection dies anyway) -- and critically,
+// the decision happens entirely inside the phone's own app based on a
+// Bluetooth/GATT query, never touching the AA TCP wire session at all,
+// which is also consistent with the TCP trace logging (see
+// third_party/aasdk's TCPWrapper) showing genuine silence before the
+// eventual FIN on at least one real run.
+//
+// This device's own config/code never calls blueware's AT+HFPBATT (the
+// HFP battery-report command) -- grepped, confirmed absent from both
+// etc/blueware-bw121.properties and this whole codebase -- but that
+// doesn't rule out the module having its own always-on default (no
+// physical battery to report a real value from, but some BT SoC
+// reference firmwares expose a Battery Service by default regardless)
+// or a BLE-only Battery Service unrelated to the HFP-specific command
+// entirely. AT+HFPBATT? and AT+GATTSTAT? are real, read-only diagnostic
+// queries in blueware's own vocabulary (confirmed via `strings
+// usr/bin/blueware`) -- this logs their raw responses so the next real
+// hardware test has actual evidence instead of another guess. Not
+// wired into any decision -- purely observational for now.
+bool diagnose_battery_reporting(BluetoothHandle & h) {
+    std::vector<std::string> resp;
+    bool anyResponse = false;
+
+    if (send_command(h, "HFPBATT?", resp, 2000)) {
+        anyResponse = true;
+        for (const auto & line : resp) {
+            std::printf("hal::diagnose_battery_reporting: AT+HFPBATT? -> '%s'\n", line.c_str());
+        }
+    } else {
+        std::printf("hal::diagnose_battery_reporting: AT+HFPBATT? got no response\n");
+    }
+
+    if (send_command(h, "GATTSTAT?", resp, 2000)) {
+        anyResponse = true;
+        for (const auto & line : resp) {
+            std::printf("hal::diagnose_battery_reporting: AT+GATTSTAT? -> '%s'\n", line.c_str());
+        }
+    } else {
+        std::printf("hal::diagnose_battery_reporting: AT+GATTSTAT? got no response\n");
+    }
+
+    return anyResponse;
+}
+
 void close_bluetooth(BluetoothHandle & h) {
     if (h.fd >= 0) {
         close(h.fd);

@@ -5,10 +5,11 @@ purpose/style as `tools/i2c-scan/`, `tools/lcd-test/`, etc., but a POSIX
 shell script rather than a compiled binary, since this one only needs
 tools already present in the rootfs (`aplay`, `amixer`, `/proc/asound`).
 
-Distinguishes what `docs/PIN_MASTER_LIST.md`'s driver source table already
+Distinguishes what `docs/HARDWARE_AND_SOC_REFERENCE.md`'s driver source table already
 distinguishes: the I2S **data path** (already independently confirmed
-working) from the BD37033 **I2C control path** (volume/mute — not confirmed
-as of 2026-07-14, see `docs/DRIVER_TEST_PLAN.md` section 6).
+working) from the BD37033 **I2C control path** (volume/mute — root-caused to a genuine
+hardware/firmware limitation, the chip doesn't respond even at the correct I2C address;
+see `docs/BD37033.md` and `docs/AUDIO_SUBSYSTEM_INVESTIGATION.md`).
 
 ## Usage
 

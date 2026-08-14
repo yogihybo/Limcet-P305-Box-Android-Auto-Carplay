@@ -2,12 +2,14 @@
 
 Automated passive listen + basic frame check for the live `/ #` root
 shell — POSIX shell script, same style as `tools/audio-test/` etc. Covers
-`DRIVER_TEST_PLAN.md` sections 2 (MCU link, `/dev/ttyHS0`) and 3 (MSNEry
-link, `/dev/ttyS2`).
+`docs/MCU_ADAPTERS.md`'s MCU link (`/dev/ttyHS0`, confirmed working) and
+MSNEry link (`/dev/ttyS2`, real traffic confirmed but the peripheral on
+the other end is still unidentified).
 
 **Passive only** — this script never writes to either port, it only
-reads, following the same "prefer software-only observation" ground rule
-as the rest of `DRIVER_TEST_PLAN.md`.
+reads, following the "prefer software-only observation before any live
+electrical/pin-level test" ground rule used throughout this project's
+driver testing (see `docs/HARDWARE_AND_SOC_REFERENCE.md`'s "Open items").
 
 ## Usage
 

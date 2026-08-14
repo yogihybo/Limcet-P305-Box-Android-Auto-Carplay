@@ -1,4 +1,6 @@
-# Uboot Build Guide
+# 8.0 Custom U-Boot Build Guide
+
+Background doc for [README §8.0 Custom U-Boot Boot Chain](../README.md#80-custom-u-boot-boot-chain-ark1668_limcet_p305).
 
 **Status:** Reference
 **Last Updated:** 2026-07-15
@@ -6,16 +8,15 @@
 ## Overview
 Consolidated document containing: UBOOT_BUILD_PLAN.md, uboot_build.md
 
-
+**The plan below was executed.** The custom `ark1668_limcet_p305` U-Boot board port it describes was built, boots on real hardware, and is now the confirmed-working path documented in README §8.0. Some details changed between the plan and the final build as real hardware testing corrected assumptions (e.g. `CONFIG_ENV_IS_NOWHERE` instead of `CONFIG_ENV_IS_IN_NAND`, no SPL) — see the "uboot_build.md" section below for the as-built record, including the actual source diffs and the first confirmed-boot serial log (2026-07-09). The section immediately below is kept for its original reasoning and config-delta table, which is still accurate background for anyone extending the build further.
 
 ## UBOOT_BUILD_PLAN.md
 
 # U-Boot Build Plan — Compiling a Fresh U-Boot from `linux-arkmicro` Source
 
-**Status: planned, not started.** This documents what it would take to build a real,
-source-compiled U-Boot for this board, using the vendor source now available in
-[`linux-arkmicro Reference/`](../linux-arkmicro%20Reference/README.md). No build has been attempted
-yet — this is the plan to follow when one is.
+**Status: executed — see "uboot_build.md" below for the as-built record.** This section documents
+the original plan and reasoning for building a real, source-compiled U-Boot for this board, using
+the vendor source in [`linux-arkmicro Reference/`](../linux-arkmicro%20Reference/README.md).
 
 ## Why bother
 
@@ -172,7 +173,7 @@ mistakes are JTAG-only to recover from, SD mistakes are "pull the card out"):
 
 1. **Serial console first.** Flash nothing — boot with the new binary as `UBOOT.BIN` on an SD card's
    p1 partition (same mechanism already proven for the existing raw-dump SD-boot path,
-   README §5.0), monitor via the existing serial console setup (README §2.0). **Go/no-go:** does a
+   README §7.0), monitor via the existing serial console setup (README §2.0). **Go/no-go:** does a
    U-Boot banner appear at all, with the expected version string? If it hangs or resets before any
    banner, DDR3 init (§4.1) is the prime suspect.
 2. **Peripheral sanity checks at the U-Boot prompt** (interrupt autoboot): `nand info` (does it detect

@@ -16,7 +16,7 @@ likely killed the SSH approach.
 ## What it does
 
 Same trigger mechanism as documented in the main README's
-[§10.0 USB Auto-Update](../../README.md#usb-auto-update-msn_autocopy): `DiskDeviceWatcher` auto-mounts
+[§3.0 USB Auto-Update](../../README.md#30-usb-auto-update-payloadsmsn_autocopy): `DiskDeviceWatcher` auto-mounts
 inserted media, and if a folder named `msn_autocopy` exists at its root, runs
 `mount -o remount,rw / && cp -rf <mountpath>/msn_autocopy/* /` — no auth, no confirmation.
 
@@ -116,7 +116,7 @@ no other changes crept in before redeploying an updated version of this payload.
 - [`docs/UI_AND_APP_ANALYSIS.md`](../../docs/UI_AND_APP_ANALYSIS.md) — disassembly trace of the
   `msn_autocopy` mechanism itself.
 - [`docs/SECURITY_REVIEW.md`](../../docs/SECURITY_REVIEW.md) — broader credential/access-path review.
-- [`README.md` §10.0](../../README.md#usb-auto-update-msn_autocopy) — main project documentation for
+- [`README.md` §3.0](../../README.md#30-usb-auto-update-payloadsmsn_autocopy) — main project documentation for
   device access methods generally.
 - `msn_autocopy_payload_do not use/` — the earlier, non-working SSH-transplant attempt, kept for
   reference on what not to do (source rootfs mismatch).

@@ -1,4 +1,6 @@
-# Hardware And Soc Reference
+# 1.1 SoC, Peripheral Register Map & Pinmux
+
+Background doc for [README §1.0 Hardware](../README.md#10-hardware) — SoC, Video decoder, GPU, USB controller, MMC/SD controller, and Rear camera decoder rows.
 
 **Status:** Reference
 **Last Updated:** 2026-07-15
@@ -514,7 +516,7 @@ as "unknown, leaning slightly more hopeful than NOT CONFIRMED" — not as
 | GPIO 95 `apple_encpy_ic_rst` | none (no DT node) | none | **N/A** | stock-3.4-only board-init GPIO poke; not modeled in the 4.9 DTS at all, chip presence on this unit unconfirmed |
 | GPIO 91 `BTEN` (Bluetooth enable) | none (plain sysfs) | none | **CONFIRMED** | `wireless_and_init_documentation.md` documents this as part of an already-working, tested Bluetooth setup |
 | Bluetooth stack (RTL8762BTV/BT825 over `/dev/ttyHS1`) | n/a (userspace) | Feasycom/`rtkbt` userspace BT stack (rootfs, not kernel) | **CONFIRMED** | see uart5 row above |
-| WiFi (RTL8811CU, USB) | n/a (USB autoload) | `drivers/net/wireless/realtek/rtl8811cu/` | **CONFIRMED** | user-confirmed working; boot log: `wlan0: interface state UNINITIALIZED->ENABLED`, `wlan0: AP-ENABLED`, SSID `carplay_wifi`. **Default boot behavior changed 2026-07-14**: `rc.d/rcS` now calls `etc/wifi_client.sh` (join a local network, for easier SSH/testing access) instead of `etc/wifi_ap.sh` (the `carplay_wifi` AP) — a deliberate choice, since one radio can't do both at once. The AP script is untouched and still works if run manually; see its own header comment and `docs/DRIVER_TEST_PLAN.md`. |
+| WiFi (RTL8811CU, USB) | n/a (USB autoload) | `drivers/net/wireless/realtek/rtl8811cu/` | **CONFIRMED** | user-confirmed working; boot log: `wlan0: interface state UNINITIALIZED->ENABLED`, `wlan0: AP-ENABLED`, SSID `carplay_wifi`. **Default boot behavior changed 2026-07-14**: `rc.d/rcS` now calls `etc/wifi_client.sh` (join a local network, for easier SSH/testing access) instead of `etc/wifi_ap.sh` (the `carplay_wifi` AP) — a deliberate choice, since one radio can't do both at once. The AP script is untouched and still works if run manually; see its own header comment. |
 | MMC0 (SD card slot) | `snps,dw-mshc` | `drivers/mmc/host/dw_mmc.c` | **CONFIRMED** | user-confirmed working; boot log: `mmc0: new SD card at address e126`, `mmcblk0: mmc0:e126 SU01G 969 MiB` |
 | MMC1 | `snps,dw-mshc` | `drivers/mmc/host/dw_mmc.c` | NOT CONFIRMED / purpose unclear | boot log shows bus-speed negotiation only (`mmc_host mmc1: card is non-removable`), no explicit device bind message captured this session — DTS comments it as "SDIO WiFi Controller," but the WiFi that's actually confirmed working is the USB RTL8811CU, so `mmc1`'s real role on this unit needs re-checking, not assumed from the DTS comment |
 | USB (MUSB) | `arkmicro,ark-musb` | `drivers/usb/musb/musb_ark.c` | **CONFIRMED** | user-confirmed working; boot log shows hub enumeration on both controllers and the WiFi dongle attached via USB |
@@ -867,14 +869,20 @@ any further reverse-engineering time.
       corrected understanding once a safer verification method
       (schematic, or single-pin tests with the SD card backed up) is
       available.
+- [ ] `mmc1` — DTS comment calls it "SDIO WiFi Controller," confirmed wrong (real WiFi is the RTL8811CU over USB `usb1` — see README §1.0). What, if anything, is actually attached to `mmc1` is still unknown.
+- [ ] GPIO 95 (`apple_encpy_ic_rst`, Apple MFi/CarPlay auth-chip reset) — chip identity/presence is thoroughly confirmed via kernel RE (see above), but cross-checking it against the other `PBANK_2` groups (pwm1-3, i2s1) for a pinmux conflict, the way the LCD/i2c-gpio-0 conflict was found, hasn't been done.
+
+### Open items — functional test not yet done (wiring/identity already confirmed)
+
+- **`ark_carback` (reverse-gear trigger, GPIO 5):** GPIO 5's `detect` role is confirmed via decompile (above), but no boot log has shown a `carback` probe line, and toggling reverse gear on real hardware hasn't been evidenced. Test: `dmesg | grep -i carback` (does the driver bind at all this boot?); if silent, check whether `CONFIG_ARK_CARBACK` is enabled in the running `.config` and whether the DTS `carback@0` node is actually reaching the kernel; then `dmesg -w` while physically engaging reverse gear and watch for `ark_carback_intr_handler` firing. Don't drive GPIO 5 as an output to "simulate" the signal — it's a real vehicle input line.
+- **`rn6752` camera decoder:** only the recurring `rn6752_eq_work reset` boot-log line has been seen, no clear probe-success message and no confirmation the video path itself works. Test: `dmesg | grep -i rn6752` for full context; `tools/i2c-scan/` against `i2c-gpio1` (addr `0x2c`) to confirm the chip ACKs independent of the driver; with a real AHD camera attached, trigger reverse gear and check `/dev/fb0` (via `tools/lcd-test/lcd-test info`) for real video, not just a bus ACK. The decoder's own `reset`/`irq` GPIO pins (distinct from the `carback` trigger pin above) are still unidentified — see the `platform_data`-tracing note above.
+- **`mmc1`:** `dmesg | grep -i mmc1` (full context, not just bus-speed negotiation) for any card-detect/enumeration message; `ls /sys/class/mmc_host/mmc1/` for a child device node revealing SDIO vs SD vs nothing attached; cross-reference against a schematic/board photo if one becomes available. A definitive "nothing's attached" answer is a valid, useful outcome here — this is about closing the question, not proving a feature works.
 
 ## Cross-references
 
 - `docs/HARDWARE_AND_SOC_REFERENCE.md` — plain-text block diagram of every
   peripheral/pin/GPIO in this doc, for a quick at-a-glance view. Keep both
   files in sync when either changes.
-- `docs/DRIVER_TEST_PLAN.md` — concrete, per-peripheral test plan for every
-  `PROBES OK`/`NOT CONFIRMED` row in the table above.
 - `docs/DISPLAY_SUBSYSTEM.md` — the LCD/i2c-gpio-0 conflict.
 - `docs/AUDIO_SUBSYSTEM_INVESTIGATION.md` — BD37033 investigation that
   led to all of this.

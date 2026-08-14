@@ -39,7 +39,7 @@
 # Options:
 #   --image PATH       Output image file path (default: sd_bootable/sd_boot.img)
 #   --device PATH      Write directly to block device (e.g. /dev/sdb) instead
-#   --size MB          Total image size in MB (default: 512)
+#   --size MB          Total image size in MB (default: 1024)
 #   --uboot PATH       Prebuilt UBOOT.BIN to place on p1 as-is (skips patching)
 #   --uboot-src PATH   Raw uboot.bin source — patched via build_tools/patch_uboot.py, never modified
 #   --no-patch-uboot   Use the source uboot.bin as-is without patching
@@ -171,9 +171,15 @@ OUTPUT_DIR="$SCRIPT_DIR/sd_bootable"
 
 IMAGE=""
 DEVICE=""
-IMAGE_SIZE_MB=512
+# 2026-08-12: rootfs (p2) bumped 300 -> 512 MB (ran out of room -- see
+# git history/session notes around this date for what specifically
+# triggered it). IMAGE_SIZE_MB grown 512 -> 1024 to match, so p3
+# (userdata, sized as "whatever's left" -- see build_image()'s
+# P3_START/`mkpart ... 100%`) keeps roughly the same ~150-450 MB
+# headroom it had before instead of shrinking to near-zero.
+IMAGE_SIZE_MB=1024
 P1_SIZE_MB=64
-P2_SIZE_MB=300
+P2_SIZE_MB=512
 
 UBOOT_BIN=""                                  # prebuilt binary (--uboot); used as-is
 UBOOT_SRC=""                                  # raw source uboot.bin; patched, never modified
@@ -919,7 +925,7 @@ install_diag_tools() {
 # Busybox applet symlinks — firmware_overlay/busybox-applets.manifest lists
 # every applet path + symlink target for the rebuilt busybox
 # (firmware_overlay/bin/busybox, 2026-07-27, defconfig-based build with
-# ipcs/ipcrm added — see docs/USERDATA_REVIEW.md or the commit message for
+# ipcs/ipcrm added — see docs/4.2_USERDATA_REVIEW.md or the commit message for
 # why). Stored as plain-text data, not real symlinks in the overlay tree,
 # because this repo's working copy sits on a VirtualBox shared folder
 # (vboxsf), which cannot create symlinks at all (`ln -s` fails with
@@ -1329,7 +1335,7 @@ build() {
         bootlogo_label=" + bootlogo.raw"
     fi
     # Boot-stage status variants (bootlogofile command in CONFIG_BOOTCOMMAND
-    # swaps to these mid-boot -- see docs/UBOOT_REVERSE_ENGINEERING.md §46 /
+    # swaps to these mid-boot -- see docs/5.1_UBOOT_REVERSE_ENGINEERING.md §46 /
     # build_tools/generate_boot_status_logos.py). Not exposed via a CLI flag
     # like --bootlogo since they're a fixed pair tied to this specific
     # feature, not an arbitrary user-supplied splash -- always sourced from

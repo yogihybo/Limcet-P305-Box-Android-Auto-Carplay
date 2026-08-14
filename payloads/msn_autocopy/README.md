@@ -1,7 +1,7 @@
 # msn_autocopy telnetd payload
 
 A USB/SD payload that uses the `msn_autocopy` auto-update mechanism found in `MsnCoreApp`
-(disassembly trace: [`docs/UI_AND_APP_ANALYSIS.md`](../../docs/UI_AND_APP_ANALYSIS.md)) to get a root
+(disassembly trace: [`docs/3.1_UI_AND_APP_ANALYSIS.md`](../../docs/3.1_UI_AND_APP_ANALYSIS.md)) to get a root
 shell on a **stock, unmodified** Prado head unit — no serial console, no U-Boot interrupt, no
 firmware reflash, and no binary transplant.
 
@@ -113,9 +113,9 @@ no other changes crept in before redeploying an updated version of this payload.
 
 ## Cross-references
 
-- [`docs/UI_AND_APP_ANALYSIS.md`](../../docs/UI_AND_APP_ANALYSIS.md) — disassembly trace of the
+- [`docs/3.1_UI_AND_APP_ANALYSIS.md`](../../docs/3.1_UI_AND_APP_ANALYSIS.md) — disassembly trace of the
   `msn_autocopy` mechanism itself.
-- [`docs/SECURITY_REVIEW.md`](../../docs/SECURITY_REVIEW.md) — broader credential/access-path review.
+- [`docs/3.2_SECURITY_REVIEW.md`](../../docs/3.2_SECURITY_REVIEW.md) — broader credential/access-path review.
 - [`README.md` §3.0](../../README.md#30-usb-auto-update-payloadsmsn_autocopy) — main project documentation for
   device access methods generally.
 - `msn_autocopy_payload_do not use/` — the earlier, non-working SSH-transplant attempt, kept for

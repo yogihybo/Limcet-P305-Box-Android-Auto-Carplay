@@ -229,7 +229,7 @@ signal, steering-wheel controls).
 ## Settings / config files
 
 Real vendor config surface, all plain `.ini`, already reverse-engineered
-in `docs/SETTINGS_REFERENCE.md` (main repo) — full field reference for
+in `docs/1.10_SETTINGS_REFERENCE.md` (main repo) — full field reference for
 `MsnProductInfo.ini` and `FactoryConfig.ini`. Live/provisioned settings
 (vs factory defaults) load from `/msnprofile/`; the actual per-boot
 overridable state additionally lives in `/data/msncfg/Setting.config`

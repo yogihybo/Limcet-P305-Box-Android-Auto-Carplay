@@ -127,8 +127,8 @@ The device runs two distinct software stacks depending on which boot path is act
 **Documentation:**
 
 - [`hardware/BOARD_ANALYSIS.md`](hardware/BOARD_ANALYSIS.md) — board/component teardown (SoC, NAND, BT, MCU, CAN bus), with photos in the same folder.
-- [`docs/SOURCES.md`](docs/SOURCES.md) — provenance of every file in this repo.
-- [`docs/PARTITION_LAYOUT.md`](docs/PARTITION_LAYOUT.md) — NAND offsets, sizes, flash commands (see also [NAND Partition Layout](#40-nand-partition-layout) below).
+- [`docs/13.1_SOURCES.md`](docs/13.1_SOURCES.md) — provenance of every file in this repo.
+- [`docs/4.1_PARTITION_LAYOUT.md`](docs/4.1_PARTITION_LAYOUT.md) — NAND offsets, sizes, flash commands (see also [NAND Partition Layout](#40-nand-partition-layout) below).
 - [`docs/historical/SD_BOOT_PLAN.md`](docs/historical/SD_BOOT_PLAN.md) — historical SD-boot planning doc, superseded by [Booting from SD Card or USB](#70-booting-stock-kernel-from-sd-card-or-usb-non-destructive) below.
 
 ### Ways to access the device
@@ -211,7 +211,7 @@ full deployment steps, the debugging history (why the first attempt silently fai
 `/dev/pts` wasn't mounted), and the diagnostic-log-to-USB fallback for retrieving logs without a
 working shell.
 
-**Background:** for the full disassembly trace of `DiskDeviceWatcher::mountDiskPartition()` and how it was found, see [`docs/UI_AND_APP_ANALYSIS.md`](docs/UI_AND_APP_ANALYSIS.md); for this project's broader credential/access-path review, see [`docs/SECURITY_REVIEW.md`](docs/SECURITY_REVIEW.md).
+**Background:** for the full disassembly trace of `DiskDeviceWatcher::mountDiskPartition()` and how it was found, see [`docs/3.1_UI_AND_APP_ANALYSIS.md`](docs/3.1_UI_AND_APP_ANALYSIS.md); for this project's broader credential/access-path review, see [`docs/3.2_SECURITY_REVIEW.md`](docs/3.2_SECURITY_REVIEW.md).
 
 ## 4.0 NAND Partition Layout
 
@@ -232,7 +232,7 @@ working shell.
 
 **Known bad block at 0x5FA0000** — inside the rootfs partition. `nand scrub` handles this automatically.
 
-**Background:** [`docs/PARTITION_LAYOUT.md`](docs/PARTITION_LAYOUT.md) — same data plus flash commands and the `reversingtrack` RSTK format.
+**Background:** [`docs/4.1_PARTITION_LAYOUT.md`](docs/4.1_PARTITION_LAYOUT.md) — same data plus flash commands and the `reversingtrack` RSTK format.
 
 ## 5.0 Boot Sequence (stock NAND)
 
@@ -246,7 +246,7 @@ This is the default factory boot sequence:
    - `bootnand` → custom compiled-in command: `nand read 0x1000000 <kernel_offset> <kernel_size>; bootz 0x1000000`
 6. **Linux 3.4.0** hands off to kernel and starts Linux loading process.
 
-**Background:** [`docs/UBOOT_REVERSE_ENGINEERING.md`](docs/UBOOT_REVERSE_ENGINEERING.md) — the stock boot loop's actual disassembly.
+**Background:** [`docs/5.1_UBOOT_REVERSE_ENGINEERING.md`](docs/5.1_UBOOT_REVERSE_ENGINEERING.md) — the stock boot loop's actual disassembly.
 
 ## 6.0 U-Boot Prompt
 
@@ -275,7 +275,7 @@ nand write 0x4000000 0x1a0000 ${filesize}
 
 The built-in update function (§10.0) uses this same manual-flash mechanism to deploy SD update packages to each NAND partition.
 
-**Background:** for the full stock boot-loop disassembly, see [`docs/UBOOT_REVERSE_ENGINEERING.md`](docs/UBOOT_REVERSE_ENGINEERING.md).
+**Background:** for the full stock boot-loop disassembly, see [`docs/5.1_UBOOT_REVERSE_ENGINEERING.md`](docs/5.1_UBOOT_REVERSE_ENGINEERING.md).
 
 ## 7.0 Booting Stock Kernel from SD Card or USB (non-destructive)
 
@@ -327,7 +327,7 @@ bootz ${loadaddr}
 
 ### Self-contained SD auto-boot (env relocation & hybrid boot)
 
-**Confirmed working end-to-end on real hardware.** See [`docs/UBOOT_REVERSE_ENGINEERING.md`](docs/UBOOT_REVERSE_ENGINEERING.md) §10 for the full writeup.
+**Confirmed working end-to-end on real hardware.** See [`docs/5.1_UBOOT_REVERSE_ENGINEERING.md`](docs/5.1_UBOOT_REVERSE_ENGINEERING.md) §10 for the full writeup.
 
 Auto-boots from SD with **zero NAND writes of any kind**, preserving stock NAND fallback if the SD card is removed. The technique relocates the stock `uboot.bin`'s tiny (~52-byte) compiled-in env into free image space, so custom boot commands fit without any NAND writes — all bootloader modifications live safely on the SD card (see background link below for the full technique).
 
@@ -422,7 +422,7 @@ for mtdmap in "8:bootlogo" "9:bootanimation" "10:reversingtrack" "11:unicode"; d
 done
 ```
 
-To replace a placeholder once a real dump is obtained (via serial console: `dd if=/dev/mtd9 of=/tmp/bootanimation`), drop the file into the matching `mtd*_*/` folder under `firmware_source/prado_reconstructed/` and rebuild the image. The `reversingtrack` partition's own binary format (RSTK) is documented in [`docs/PARTITION_LAYOUT.md`](docs/PARTITION_LAYOUT.md).
+To replace a placeholder once a real dump is obtained (via serial console: `dd if=/dev/mtd9 of=/tmp/bootanimation`), drop the file into the matching `mtd*_*/` folder under `firmware_source/prado_reconstructed/` and rebuild the image. The `reversingtrack` partition's own binary format (RSTK) is documented in [`docs/4.1_PARTITION_LAYOUT.md`](docs/4.1_PARTITION_LAYOUT.md).
 
 ### USB boot
 
@@ -446,11 +446,11 @@ bootz 0x1000000
 
 The kernel sees the USB drive as `/dev/sda`. The ARK1668 uses MUSB (not EHCI) — USB 2.0 drives work; USB 3.0 drives that require USB 3.0 speeds will not enumerate.
 
-**Background:** for the full env-relocation technique, ext4 constraint rationale, and `/nanddata/` MTD-ioctl audit, see [`docs/UBOOT_REVERSE_ENGINEERING.md`](docs/UBOOT_REVERSE_ENGINEERING.md); for the `reversingtrack` RSTK binary format, see [`docs/PARTITION_LAYOUT.md`](docs/PARTITION_LAYOUT.md).
+**Background:** for the full env-relocation technique, ext4 constraint rationale, and `/nanddata/` MTD-ioctl audit, see [`docs/5.1_UBOOT_REVERSE_ENGINEERING.md`](docs/5.1_UBOOT_REVERSE_ENGINEERING.md); for the `reversingtrack` RSTK binary format, see [`docs/4.1_PARTITION_LAYOUT.md`](docs/4.1_PARTITION_LAYOUT.md).
 
 ## 8.0 Custom U-Boot Boot Chain (`ark1668_limcet_p305`)
 
-Everything in §5.0–§7.0 above describes the stock U-Boot binary, patched or not. Since then, a full custom board port (`ark1668_limcet_p305`, U-Boot 2018.07, compiled from `linux-arkmicro` source rather than patched from the stock binary) has been built up and is now the actively developed path. This section documents its current, confirmed-working state. Full technical/RE detail: [`docs/historical/HANDOFF_nand_ecc_uboot_vs_kernel.md`](docs/historical/HANDOFF_nand_ecc_uboot_vs_kernel.md), [`docs/UBOOT_REVERSE_ENGINEERING.md`](docs/UBOOT_REVERSE_ENGINEERING.md), and [`docs/UBOOT_BUILD_GUIDE.md`](docs/UBOOT_BUILD_GUIDE.md).
+Everything in §5.0–§7.0 above describes the stock U-Boot binary, patched or not. Since then, a full custom board port (`ark1668_limcet_p305`, U-Boot 2018.07, compiled from `linux-arkmicro` source rather than patched from the stock binary) has been built up and is now the actively developed path. This section documents its current, confirmed-working state. Full technical/RE detail: [`docs/historical/HANDOFF_nand_ecc_uboot_vs_kernel.md`](docs/historical/HANDOFF_nand_ecc_uboot_vs_kernel.md), [`docs/5.1_UBOOT_REVERSE_ENGINEERING.md`](docs/5.1_UBOOT_REVERSE_ENGINEERING.md), and [`docs/8.1_UBOOT_BUILD_GUIDE.md`](docs/8.1_UBOOT_BUILD_GUIDE.md).
 
 **Building U-Boot from source:** the custom build replicates the stock binary's functionality and adds extra commands/boot options. Its one real limitation: it can't boot the stock kernel directly (reason unknown) — instead it chainloads the stock U-Boot binary, which then boots the stock kernel normally.
 
@@ -499,7 +499,7 @@ delete it from `firmware_overlay/prado/usr/bin/` directly.
 
 All of `kernelfile`, `dtbfile`, `mmcroot`, `bootargs_common`, `stockubootfile`, `machid` are U-Boot env vars with compiled-in defaults (see [Boot commands](#boot-commands) above) — editable via `setenv` at the prompt or by dropping a `uEnv.txt` on the SD card's p1, without recompiling U-Boot or rerunning the build script.
 
-**Background:** [`docs/historical/HANDOFF_nand_ecc_uboot_vs_kernel.md`](docs/historical/HANDOFF_nand_ecc_uboot_vs_kernel.md) (NAND ECC root cause), [`docs/UBOOT_REVERSE_ENGINEERING.md`](docs/UBOOT_REVERSE_ENGINEERING.md), and [`docs/UBOOT_BUILD_GUIDE.md`](docs/UBOOT_BUILD_GUIDE.md) (build from source).
+**Background:** [`docs/historical/HANDOFF_nand_ecc_uboot_vs_kernel.md`](docs/historical/HANDOFF_nand_ecc_uboot_vs_kernel.md) (NAND ECC root cause), [`docs/5.1_UBOOT_REVERSE_ENGINEERING.md`](docs/5.1_UBOOT_REVERSE_ENGINEERING.md), and [`docs/8.1_UBOOT_BUILD_GUIDE.md`](docs/8.1_UBOOT_BUILD_GUIDE.md) (build from source).
 
 ## 9.0 Build & Flash Tool
 
@@ -831,9 +831,9 @@ firmware_source/sd_update_template/
   update.example             Static reference script (generated version goes to output/)
   output/                    Generated SD card package (gitignored)
 docs/
-  SOURCES.md                 Where each file came from and why
-  PARTITION_LAYOUT.md        NAND offsets, sizes, flash commands
-  UBOOT_REVERSE_ENGINEERING.md  U-Boot SD-boot corruption investigation, env relocation fix, bootlogo/RE ports
+  13.1_SOURCES.md                 Where each file came from and why
+  4.1_PARTITION_LAYOUT.md        NAND offsets, sizes, flash commands
+  5.1_UBOOT_REVERSE_ENGINEERING.md  U-Boot SD-boot corruption investigation, env relocation fix, bootlogo/RE ports
   historical/SD_BOOT_PLAN.md Historical SD-boot planning doc — superseded, see below
 build_update.sh              Combined interactive build and flash tool
 build_rootfs.sh              Standalone rootfs UBI image builder
@@ -845,7 +845,7 @@ sd_bootable/                 Generated bootable SD image output (gitignored — 
 
 ## 13.0 Sources
 
-See [`docs/SOURCES.md`](docs/SOURCES.md) for full provenance of each file.
+See [`docs/13.1_SOURCES.md`](docs/13.1_SOURCES.md) for full provenance of each file.
 
 ## 14.0 Further Documentation
 
@@ -853,31 +853,31 @@ See [`docs/SOURCES.md`](docs/SOURCES.md) for full provenance of each file.
 
 *Provenance & hardware reference*
 
-- [`SOURCES.md`](docs/SOURCES.md) — provenance of every firmware source used
-- [`PARTITION_LAYOUT.md`](docs/PARTITION_LAYOUT.md) — NAND offsets, sizes, flash commands
+- [`13.1_SOURCES.md`](docs/13.1_SOURCES.md) — provenance of every firmware source used
+- [`4.1_PARTITION_LAYOUT.md`](docs/4.1_PARTITION_LAYOUT.md) — NAND offsets, sizes, flash commands
 - [`1.1_HARDWARE_AND_SOC_REFERENCE.md`](docs/1.1_HARDWARE_AND_SOC_REFERENCE.md) — SoC identity, Ghidra RE of the firmware_source/kernel/userspace binaries, full pin-mux table, cross-checked against real ASTRI/ArkMicro vendor source; per-driver confirmation status and open test procedures live in its own "Open items" section
-- [`VENDOR_BSP_RESEARCH.md`](docs/VENDOR_BSP_RESEARCH.md) — research pass over sibling ArkMicro vendor/BSP source trees (`ark1668ed-bsp`, `cstech-ip17-rootfs`); WiFi/audio driver branches, wired-AA lead
-- [`SECURITY_REVIEW.md`](docs/SECURITY_REVIEW.md) — credential/access-path review: stock root password, an unresolved second UID-0 account, update-integrity check
+- [`1.11_VENDOR_BSP_RESEARCH.md`](docs/1.11_VENDOR_BSP_RESEARCH.md) — research pass over sibling ArkMicro vendor/BSP source trees (`ark1668ed-bsp`, `cstech-ip17-rootfs`); WiFi/audio driver branches, wired-AA lead
+- [`3.2_SECURITY_REVIEW.md`](docs/3.2_SECURITY_REVIEW.md) — credential/access-path review: stock root password, an unresolved second UID-0 account, update-integrity check
 
 *UI & application*
 
-- [`UI_AND_APP_ANALYSIS.md`](docs/UI_AND_APP_ANALYSIS.md) — binary-level review of `MsnCoreApp`: the unauthenticated `system()` USB auto-copy call, layout deconstruction/geometry-patch workflow (see also `tools/msncore_analyze.py`), and UI skinning (`DefaultStyleSheet.xml`, `.rcc` sprite bundles — see also `tools/rcc_extract.py`)
-- [`SETTINGS_REFERENCE.md`](docs/SETTINGS_REFERENCE.md) — full key-by-key reference for `MsnProductInfo.ini` and `FactoryConfig.ini`: load sequence, every setting grouped by function, and cross-product value tables
+- [`3.1_UI_AND_APP_ANALYSIS.md`](docs/3.1_UI_AND_APP_ANALYSIS.md) — binary-level review of `MsnCoreApp`: the unauthenticated `system()` USB auto-copy call, layout deconstruction/geometry-patch workflow (see also `tools/msncore_analyze.py`), and UI skinning (`DefaultStyleSheet.xml`, `.rcc` sprite bundles — see also `tools/rcc_extract.py`)
+- [`1.10_SETTINGS_REFERENCE.md`](docs/1.10_SETTINGS_REFERENCE.md) — full key-by-key reference for `MsnProductInfo.ini` and `FactoryConfig.ini`: load sequence, every setting grouped by function, and cross-product value tables
 
 *Kernel*
 
-- [`KERNEL_REFERENCE.md`](docs/KERNEL_REFERENCE.md) — kernel image analysis (`mtd5_firmware_source/kernel/zImage`) and build tree reference: DTS, I2C bus assignments, camera decoder chip
+- [`1.9_KERNEL_REFERENCE.md`](docs/1.9_KERNEL_REFERENCE.md) — kernel image analysis (`mtd5_firmware_source/kernel/zImage`) and build tree reference: DTS, I2C bus assignments, camera decoder chip
 
 *U-Boot*
 
-- [`UBOOT_BUILD_GUIDE.md`](docs/UBOOT_BUILD_GUIDE.md) — plan and guide for compiling a fresh U-Boot from `linux-arkmicro` source: config deltas, SD-only test sequence, boot chain constraints, ARK header injection
-- [`UBOOT_REVERSE_ENGINEERING.md`](docs/UBOOT_REVERSE_ENGINEERING.md) — U-Boot SD-boot patch corruption investigation and the env relocation fix; boot logo, reverse-engineered command ports (`regr`/`regw`/`gpiotest`/`jpeghw`/`itu656`), LCD timing fix, USB dual-port bring-up, and the Stepldr chainload findings for the custom `ark1668_limcet_p305` U-Boot port (see [§8.0](#80-custom-u-boot-boot-chain-ark1668_limcet_p305))
+- [`8.1_UBOOT_BUILD_GUIDE.md`](docs/8.1_UBOOT_BUILD_GUIDE.md) — plan and guide for compiling a fresh U-Boot from `linux-arkmicro` source: config deltas, SD-only test sequence, boot chain constraints, ARK header injection
+- [`5.1_UBOOT_REVERSE_ENGINEERING.md`](docs/5.1_UBOOT_REVERSE_ENGINEERING.md) — U-Boot SD-boot patch corruption investigation and the env relocation fix; boot logo, reverse-engineered command ports (`regr`/`regw`/`gpiotest`/`jpeghw`/`itu656`), LCD timing fix, USB dual-port bring-up, and the Stepldr chainload findings for the custom `ark1668_limcet_p305` U-Boot port (see [§8.0](#80-custom-u-boot-boot-chain-ark1668_limcet_p305))
 
 *Display*
 
 - [`1.7_DISPLAY_SUBSYSTEM.md`](docs/1.7_DISPLAY_SUBSYSTEM.md) — panel display configuration presets and register-level meaning; screen configuration and hue investigation
-  - [`ARK_DISP_STOCK_DECOMPILATION.md`](docs/ARK_DISP_STOCK_DECOMPILATION.md) — raw decompiled `ark_disp` driver function listings
-  - [`LCD_PIN_CONFLICT_TEST_PROCEDURE.md`](docs/LCD_PIN_CONFLICT_TEST_PROCEDURE.md) — test procedure for the LCD RGB/I2C pin-conflict color-corruption bug
+  - [`1.7.1_ARK_DISP_STOCK_DECOMPILATION.md`](docs/1.7.1_ARK_DISP_STOCK_DECOMPILATION.md) — raw decompiled `ark_disp` driver function listings
+  - [`1.7.2_LCD_PIN_CONFLICT_TEST_PROCEDURE.md`](docs/1.7.2_LCD_PIN_CONFLICT_TEST_PROCEDURE.md) — test procedure for the LCD RGB/I2C pin-conflict color-corruption bug
 - [`1.8_ARK1680_TS_REVERSE_ENGINEERING.md`](docs/1.8_ARK1680_TS_REVERSE_ENGINEERING.md) — touchscreen driver (`ark1680_ts.ko`) RE; the finding that supersedes the older MCU/I2C touch-activation theory (see [`docs/historical/HANDOFF_touch_and_bootargs_fix.md`](docs/historical/HANDOFF_touch_and_bootargs_fix.md) below)
 
 *Audio*
@@ -890,8 +890,8 @@ See [`docs/SOURCES.md`](docs/SOURCES.md) for full provenance of each file.
 - [`1.4_WIRELESS_AND_INIT.md`](docs/1.4_WIRELESS_AND_INIT.md) — WiFi/BT pin mapping, module init, and command sequence
 - [`1.3_MCU_ADAPTERS.md`](docs/1.3_MCU_ADAPTERS.md) — MCU adapter types reverse-engineered from `libMcuCenter.so`
 - [`1.2_CANBUS.md`](docs/1.2_CANBUS.md) — CAN bus investigation for this board
-  - [`REAR_DVD_CANBUS_INVESTIGATION.md`](docs/REAR_DVD_CANBUS_INVESTIGATION.md) — open investigation: controlling the factory rear DVD/RSE unit from the Limcet box via CAN bus
-- [`USERDATA_REVIEW.md`](docs/USERDATA_REVIEW.md) — userdata partition review
+  - [`1.2.1_REAR_DVD_CANBUS_INVESTIGATION.md`](docs/1.2.1_REAR_DVD_CANBUS_INVESTIGATION.md) — open investigation: controlling the factory rear DVD/RSE unit from the Limcet box via CAN bus
+- [`4.2_USERDATA_REVIEW.md`](docs/4.2_USERDATA_REVIEW.md) — userdata partition review
 
 *Historical (superseded, kept for background)*
 

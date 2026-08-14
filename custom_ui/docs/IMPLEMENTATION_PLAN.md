@@ -471,7 +471,7 @@ stock's flat/scattered menu structure:
   touches — language, volume/audio balance, display brightness/
   contrast, Bluetooth pairing, WiFi. Front and center, no digging.
 - **Advanced tier**: everything else confirmed live in
-  `docs/SETTINGS_REFERENCE.md`/`project_msnproductinfo_config_exploration`
+  `docs/1.10_SETTINGS_REFERENCE.md`/`project_msnproductinfo_config_exploration`
   (CAN type, screen type, mirroring-link type, factory/diagnostic-ish
   fields) — one tap away behind an "Advanced" entry point, not deleted,
   not hidden entirely, just out of the way of the common path.
@@ -479,7 +479,7 @@ stock's flat/scattered menu structure:
   `project_msnproductinfo_config_exploration` memory — e.g.
   `MirroringLinkType` has no effect on this device, `ScreenType` gets
   overwritten by the MCU) are explicitly **not** reimplemented as if
-  they were real; note them in `docs/SETTINGS_REFERENCE.md` instead if
+  they were real; note them in `docs/1.10_SETTINGS_REFERENCE.md` instead if
   not already there.
 
 - [x] Replicate the settings module itself: `src/core/config_store.{h,cpp}`
@@ -520,7 +520,7 @@ stock's flat/scattered menu structure:
       GUI layer). Ioctl numbers and the `ark_disp_vde_cfg_arg` struct
       layout confirmed against the real vendor header
       (`AVService/display.h`, ASTRI ArkPro reference source — see
-      `docs/SOURCES.md`), not guessed. Slider
+      `docs/13.1_SOURCES.md`), not guessed. Slider
       range (0-255) matches the real captured `Setting.config` values
       but the ioctl's own valid range isn't independently confirmed —
       flagged as an assumption in the source comment. **Not yet
@@ -534,7 +534,7 @@ stock's flat/scattered menu structure:
       through Feasycom's closed `blueware` daemon via a plain-text
       AT-command channel at `/dev/bw_serial` (decompiled from the real
       `libBlueTooth.so`, `docs/1.4_WIRELESS_AND_INIT.md`, cross-checked
-      against `docs/VENDOR_BSP_RESEARCH.md` section 4c — two
+      against `docs/1.11_VENDOR_BSP_RESEARCH.md` section 4c — two
       independent real-source confirmations of the same vocabulary).
       This is a **different** channel from
       `src/androidauto/bw_aap_client.h`'s `/dev/bw_aap` (that one is
@@ -565,7 +565,7 @@ stock's flat/scattered menu structure:
       `project_wireless_carplay_aa_channel_plan` memory and
       `docs/ARCHITECTURE.md`'s "Wireless AA discovery" section) — there
       is no user-facing network-selection concept to build here.
-- [x] Remaining `SETTINGS_REFERENCE.md` fields — Advanced tier, in
+- [x] Remaining `1.10_SETTINGS_REFERENCE.md` fields — Advanced tier, in
       `ui/settings_screen.cpp`'s `build_advanced_tab()`: read-only rows
       for the hardware-profile fields (`McuType`, `CanType`,
       `ScreenType`, `ResolutionType`, `BlueToothType`, `RadioType`,

@@ -65,6 +65,6 @@ This skill defines the technical standards, design patterns, kernel/firmware cod
 - Keep function scope tight and avoid global variables unless necessary; encapsulate instance state in device context structs (`struct ark_disp_dev`).
 
 ### 3.2 Verification & Build Discipline
-- **Build Verification**: Recompile kernel/firmware components after modifications using project build scripts (`build_initramfs.sh`, `build_bootable_sdcard.sh`, `build_update.sh`).
+- **Build Verification**: Recompile kernel/firmware components after modifications using project build scripts (`build_bootable_sdcard.sh`, `build_update.sh`).
 - **Runtime Log Audit**: Validate kernel messages via `dmesg` / console logs to ensure no unhandled ioctls, kernel panics, or memory access warnings occur.
 - **No Mock Swallowing**: Ensure mock drivers provide actual state management (e.g. tracking layer configurations in memory) rather than returning dummy 0 values silently.

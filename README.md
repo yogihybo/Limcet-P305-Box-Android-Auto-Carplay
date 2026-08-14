@@ -276,6 +276,20 @@ rather than bricking the device (reflashing NAND for every change is also slow, 
 | Self-contained SD auto-boot (env relocation & hybrid boot) | Automatic | **Confirmed working** | **Confirmed working** — sidesteps the problem entirely by mounting the existing **stock NAND rootfs** (UBI), not a filesystem on the SD card |
 | Manual USB boot | Manual — retyped every boot | **Confirmed working** | **Can't work** — same reason as SD: the USB host controller driver isn't available until after a rootfs is already mounted |
 
+**What "env relocation" actually does:** the stock `uboot.bin`'s factory-compiled-in default
+environment is only ~73 bytes — too small to fit a full SD auto-boot command (bootargs + fatload +
+bootz) in place. `patch_uboot_env.py` (**confirmed working on real hardware**) doesn't grow that
+buffer; it writes a longer environment into unused, verified-zero space elsewhere in the same
+image, repoints the binary's internal pointer literals that reference the environment, and widens
+two hardcoded size constants that would otherwise truncate the import back to 73 bytes on load —
+no code injection, just a handful of data patches to an existing binary. Because this only touches
+the stock `uboot.bin`'s data, its factory 96-byte ARK header (magic `0x12345678`, checked by
+`Stepldr` before accepting *any* U-Boot binary — see [§1.0](#10-hardware)) is never touched and
+stays valid automatically. This is different from the ground-up custom build in
+[§7.0](#70-custom-u-boot-and-kernel-ark1668_limcet_p305), which compiles a fresh, header-less
+binary from source and needs an explicit post-build step (`build_tools/inject_ark_header.py`) to
+add a valid header before `Stepldr` will accept it.
+
 **SD card layout:** p1 (FAT32) — `zImage`, plus `UBOOT.BIN` for auto-boot; p2 (ext4) — rootfs
 (populated by `build_bootable_sdcard.sh`, but not actually mounted by the confirmed auto-boot
 method above — see table); p3 (ext4) — userdata. The target's 3.4-kernel/2012.10-U-Boot ext4

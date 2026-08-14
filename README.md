@@ -15,7 +15,7 @@ flowchart TD
     Q1 -->|"Recovery / monitoring,<br/>interrupt boot"| Serial["Serial Console -- §2.0<br/>solder UART, read-only once Linux boots"]
     Q1 -->|"Root shell, no soldering,<br/>keep stock firmware"| Telnet["USB Telnet Payload -- §3.0<br/>payloads/msn_autocopy"]
     Q1 -->|"Run stock OR the full custom firmware,<br/>zero NAND writes"| SDBoot["Boot from SD/USB -- §6.0 / §7.0<br/>reverts to stock if card removed"]
-    Q1 -->|"Commit to new firmware<br/>permanently"| Flash["Flash via SD Update Package -- §10.0 / §9.0<br/>permanently alters NAND"]
+    Q1 -->|"Commit to new firmware<br/>permanently"| Flash["Flash via SD Update Package -- §11.0 / §10.0<br/>permanently alters NAND"]
 
     Serial --> Diagnose(["Diagnose / recover a bricked unit"])
     Telnet --> Poke(["Poke around on stock firmware<br/>tools/* diagnostics over carplay_wifi"])
@@ -25,7 +25,7 @@ flowchart TD
     Q2 -->|"Custom U-Boot 2018.07,<br/>chainloads to stock (bootstock/boothybrid)"| StockPath
     Q2 -->|"Custom U-Boot 2018.07 + new kernel,<br/>booted from a USB stick (bootusb) -- §7.0"| NewKernel["New 4.19.192 kernel<br/>+ reconstructed rootfs"]
 
-    Flash --> Recon["Reconstructed Limcet P306 firmware on NAND<br/>stock-generation kernel, SSH + WiFi AP built in -- §11.0"]
+    Flash --> Recon["Reconstructed Limcet P306 firmware on NAND<br/>stock-generation kernel, SSH + WiFi AP built in -- §12.0"]
 
     NewKernel --> Q3{"Which UI?"}
     Q3 -->|"Keep it"| StockUI["Stock Qt 4.7.4 UI"]
@@ -51,17 +51,18 @@ flowchart TD
 - [5.0 U-Boot Prompt](#50-u-boot-prompt)
 - [6.0 Booting Stock Kernel from SD Card or USB (non-destructive)](#60-booting-stock-kernel-from-sd-card-or-usb-non-destructive)
 - [7.0 Custom U-Boot and Kernel](#70-custom-u-boot-and-kernel)
-- [8.0 NAND Partition Layout](#80-nand-partition-layout)
-- [9.0 Build & Flash Tool](#100-build--flash-tool)
-- [10.0 Update Mechanisms](#90-update-mechanisms)
-- [11.0 Device Access](#110-device-access)
+- [8.0 Building a Bootable SD Card or USB Drive](#80-building-a-bootable-sd-card-or-usb-drive)
+- [9.0 NAND Partition Layout](#90-nand-partition-layout)
+- [10.0 Update Mechanisms](#100-update-mechanisms)
+- [11.0 Build & Flash Tool](#110-build--flash-tool)
+- [12.0 Device Access](#120-device-access)
   - [WiFi Access Point](#wifi-access-point)
   - [SSH Access](#ssh-access)
   - [USB Networking](#usb-networking)
-  - [11.1 Diagnostic & On-Device Utility Tools](#111-diagnostic--on-device-utility-tools)
-- [12.0 Repository Structure](#120-repository-structure)
-- [13.0 Sources](#130-sources)
-- [14.0 Further Documentation](#140-further-documentation)
+  - [12.1 Diagnostic & On-Device Utility Tools](#121-diagnostic--on-device-utility-tools)
+- [13.0 Repository Structure](#130-repository-structure)
+- [14.0 Sources](#140-sources)
+- [15.0 Further Documentation](#150-further-documentation)
 
 ## 1.0 Hardware
 
@@ -79,7 +80,7 @@ Hardware on the device has been identified by opening the device and reviewing t
 | USB controller | MUSB (on-SoC, dual-port: `usb0`/`usb1`) | Host/gadget — `usb0` is the board's only externally-facing port (CDC-NCM to host PC at `192.168.7.1`, USB-stick boot, wired Android Auto); `usb1` has no external connector and is host mode purely for the onboard RTL8811CU WiFi chip; port role is boot-command-dependent (see §7.0). Background: [§1.1](docs/1.1_HARDWARE_AND_SOC_REFERENCE.md) |
 | MMC/SD controller | Synopsys DesignWare `dw-mshc` (MMC0 @ `0xec400000`, MMC1 @ `0xec800000`) | MMC0 = SD card slot, confirmed working (`mmc0: new SD card`); MMC1's DTS comment calls it "SDIO WiFi Controller" but this is confirmed wrong — the real WiFi chip enumerates on USB (`usb1`), not SDIO — MMC1's actual role is unconfirmed. Background: [§1.1](docs/1.1_HARDWARE_AND_SOC_REFERENCE.md) |
 | UARTs | 6× on-SoC UART (`UART0`–`UART5`) + hsuart pair | UART0 = serial console `/dev/ttyS0` (§2.0); hsuart0 (UART4, `0xe4f00000`) = MCU link `/dev/ttyHS0`; hsuart1 (UART5, `0xe4800000`) = Bluetooth `/dev/ttyHS1`; a second, unexplained port `/dev/ttyS2` (4800 baud) carries real framed traffic to an unidentified peripheral. Background: [§1.3](docs/1.3_MCU_ADAPTERS.md) |
-| NAND | Toshiba TC58BVG0S3HTA00, 128 MB SLC | Firmware/rootfs storage, on a soldered daughter module (the "Limcet Box" compute module). Background: [§8.0](#80-nand-partition-layout) |
+| NAND | Toshiba TC58BVG0S3HTA00, 128 MB SLC | Firmware/rootfs storage, on a soldered daughter module (the "Limcet Box" compute module). Background: [§9.0](#90-nand-partition-layout) |
 | MCU | STM32F105RBT6 (ARM Cortex-M3) | Vehicle-side I/O — CAN bus, touch/button/reverse/ACC-IGN signals — talks to the ARK1668 over `/dev/ttyHS0`. Background: [§1.3](docs/1.3_MCU_ADAPTERS.md) |
 | CAN transceiver | NXP TJA1042 | Bridges the MCU's CAN controller to the vehicle CANH/CANL lines. Background: [§1.2](docs/1.2_CANBUS.md) |
 | Bluetooth module | Feasycom FSC-BT8251 V1.1 (Realtek RTL-series BT SoC) | HFP/A2DP/AVRCP/iAP2, over `/dev/ttyHS1` at 1.5Mbps; enable pin `gpio91`. Background: [§1.4](docs/1.4_WIRELESS_AND_INIT.md) |
@@ -126,8 +127,8 @@ The device runs two distinct software stacks depending on which boot path is act
 **Documentation:**
 
 - [`hardware/BOARD_ANALYSIS.md`](hardware/BOARD_ANALYSIS.md) — board/component teardown (SoC, NAND, BT, MCU, CAN bus), with photos in the same folder.
-- [`docs/13.1_SOURCES.md`](docs/13.1_SOURCES.md) — provenance of every file in this repo.
-- [`docs/8.1_PARTITION_LAYOUT.md`](docs/8.1_PARTITION_LAYOUT.md) — NAND offsets, sizes, flash commands (see also [NAND Partition Layout](#80-nand-partition-layout) below).
+- [`docs/14.1_SOURCES.md`](docs/14.1_SOURCES.md) — provenance of every file in this repo.
+- [`docs/9.1_PARTITION_LAYOUT.md`](docs/9.1_PARTITION_LAYOUT.md) — NAND offsets, sizes, flash commands (see also [NAND Partition Layout](#90-nand-partition-layout) below).
 - [`docs/historical/SD_BOOT_PLAN.md`](docs/historical/SD_BOOT_PLAN.md) — historical SD-boot planning doc, superseded by [Booting from SD Card or USB](#60-booting-stock-kernel-from-sd-card-or-usb-non-destructive) below.
 
 ### Ways to access the device
@@ -191,7 +192,7 @@ No password, PIN, or confirmation dialog gates it — just physically inserting 
 | | |
 |---|---|
 | **Copies from** | `payloads/msn_autocopy/` at the root of the inserted USB drive or SD card |
-| **Copies to** | `/` — the live root filesystem (the `rootfs` UBIFS partition, see [§8.0 NAND Partition Layout](#80-nand-partition-layout)), remounted read-write for the operation |
+| **Copies to** | `/` — the live root filesystem (the `rootfs` UBIFS partition, see [§9.0 NAND Partition Layout](#90-nand-partition-layout)), remounted read-write for the operation |
 | **Trigger** | Automatic, on normal disk auto-mount — no button press, no menu, no confirmation prompt |
 | **Runs as** | root (the whole userspace already runs as root on this device) |
 
@@ -243,7 +244,7 @@ The stock U-Boot has a custom boot loop, not a standard countdown — this is wh
 
 ### Manual partition flash - DANGER HIGH RISK
 
-At the `ark#` prompt you can manually flash any partition — this example loads a kernel image from the SD card and writes it to the kernel partition (see [NAND Partition Layout](#80-nand-partition-layout) for the offsets of other partitions):
+At the `ark#` prompt you can manually flash any partition — this example loads a kernel image from the SD card and writes it to the kernel partition (see [NAND Partition Layout](#90-nand-partition-layout) for the offsets of other partitions):
 
 ```
 fatload mmc 0 4000000 zImage
@@ -251,7 +252,7 @@ nand scrub 0x1a0000 0x400000 0x1a0000 0x400000
 nand write 0x4000000 0x1a0000 ${filesize}
 ```
 
-The built-in update function (§9.0) uses this same manual-flash mechanism to deploy SD update packages to each NAND partition.
+The built-in update function (§10.0) uses this same manual-flash mechanism to deploy SD update packages to each NAND partition.
 
 **Background:** for the full stock boot-loop disassembly, see [`docs/4.1_UBOOT_REVERSE_ENGINEERING.md`](docs/4.1_UBOOT_REVERSE_ENGINEERING.md).
 
@@ -268,7 +269,7 @@ kernel to see an SD card or a USB stick at the point it needs to mount root — 
 can never come from removable media on this kernel, only from NAND (or, as below, from being
 avoided entirely). None of the methods below write to NAND, so a bad image just fails to boot
 rather than bricking the device (reflashing NAND for every change is also slow, see
-[§9.0](#90-update-mechanisms)).
+[§10.0](#100-update-mechanisms)).
 
 | Method | Auto or manual | Kernel load | Rootfs |
 |--------|----------------|--------------|--------|
@@ -290,26 +291,15 @@ stays valid automatically. This is different from the ground-up custom build in
 binary from source and needs an explicit post-build step (`build_tools/inject_ark_header.py`) to
 add a valid header before `Stepldr` will accept it.
 
-**SD card layout:** p1 (FAT32) — `zImage`, plus `UBOOT.BIN` for auto-boot; p2 (ext4) — rootfs
-(populated by `build_bootable_sdcard.sh`, but not actually mounted by the confirmed auto-boot
-method above — see table); p3 (ext4) — userdata. The target's 3.4-kernel/2012.10-U-Boot ext4
-drivers predate `64bit`/`metadata_csum` (modern `mkfs.ext4` defaults) and won't mount a partition
-formatted with either on — `build_bootable_sdcard.sh` strips both automatically.
-
-To build a self-contained auto-boot SD image (recommended path — zero NAND writes, falls back to
-stock if the card is removed):
-
-```bash
-sudo bash build_bootable_sdcard.sh
-```
+The target's 3.4-kernel/2012.10-U-Boot ext4 drivers predate `64bit`/`metadata_csum` (modern
+`mkfs.ext4` defaults) and won't mount a partition formatted with either on — building the image
+via [§8.0](#80-building-a-bootable-sd-card-or-usb-drive) strips both automatically.
 
 **Background:** full command sequences for all three methods (manual SD/USB `bootz` commands,
-the `build_tools/patch_uboot_env.py` env-relocation technique, `build_bootable_sdcard.sh`'s
-build-option/CLI-flag reference, `/data` mount fallback order, and the `/nanddata/` MTD-redirect
-mechanism) live in [`docs/6.1_SD_USB_BOOT_REFERENCE.md`](docs/6.1_SD_USB_BOOT_REFERENCE.md); for
-the env-relocation technique's own RE writeup, ext4 constraint rationale, and `/nanddata/`
-MTD-ioctl audit, see [`docs/4.1_UBOOT_REVERSE_ENGINEERING.md`](docs/4.1_UBOOT_REVERSE_ENGINEERING.md);
-for the `reversingtrack` RSTK binary format, see [`docs/8.1_PARTITION_LAYOUT.md`](docs/8.1_PARTITION_LAYOUT.md).
+the `build_tools/patch_uboot_env.py` env-relocation technique, `/data` mount fallback order, and
+the `/nanddata/` MTD-redirect mechanism) live in [`docs/6.1_SD_USB_BOOT_REFERENCE.md`](docs/6.1_SD_USB_BOOT_REFERENCE.md);
+for the env-relocation technique's own RE writeup, ext4 constraint rationale, and `/nanddata/`
+MTD-ioctl audit, see [`docs/4.1_UBOOT_REVERSE_ENGINEERING.md`](docs/4.1_UBOOT_REVERSE_ENGINEERING.md).
 
 ## 7.0 Custom U-Boot and Kernel
 
@@ -326,7 +316,7 @@ Everything in §4.0–§6.0 above describes the stock U-Boot binary, patched or 
 | Command | Effect | Status |
 |---------|--------|--------|
 | `bootmmc` | Kernel+DTB from SD (`kernelfile`/`dtbfile` env vars), rootfs on SD (`mmcroot`, default `/dev/mmcblk0p2`) | **Confirmed working** |
-| `bootusb` | Kernel+DTB+rootfs all from USB (`usbroot`, default `/dev/sda2`) — needs a two-partition USB stick, FAT (p1, `zImage`+DTB) + ext4 (p2, rootfs), same layout as the SD card. `rcS`'s userdata mount also follows the actual root device (see [`build_bootable_sdcard.sh`](#build_bootable_sdcardsh--current-capabilities) below), so `/data` lands on `/dev/sda3` too | Kernel-load-from-USB confirmed working; the `root=`/userdata device-following fix is newly built, not yet hardware-tested |
+| `bootusb` | Kernel+DTB+rootfs all from USB (`usbroot`, default `/dev/sda2`) — needs a two-partition USB stick, FAT (p1, `zImage`+DTB) + ext4 (p2, rootfs), same layout as the SD card. `rcS`'s userdata mount also follows the actual root device (see [§8.0](#80-building-a-bootable-sd-card-or-usb-drive)), so `/data` lands on `/dev/sda3` too | Kernel-load-from-USB confirmed working; the `root=`/userdata device-following fix is newly built, not yet hardware-tested |
 | `boothybrid` | Chainloads `uboot_hybrid.bin` from SD card (`hybridubootfile` env var, default `uboot_hybrid.bin`), which loads custom kernel `zImage_stock` from SD FAT partition 1 and mounts stock NAND rootfs (`ubi0:rootfs`) | **Confirmed working end-to-end** — manual command only, not part of automatic boot (see below) |
 | `bootstock` | Chainloads the real stock U-Boot 2012.10 binary from an SD file (`stockubootfile`, default `uboot_stock.bin`), which then boots the stock kernel+rootfs+**full UI** from NAND with its own driver | **Confirmed working end-to-end** — manual command only, not part of automatic boot (see below) |
 | `bootstockusb` | Same as `bootstock`, stock U-Boot binary sourced from USB instead of SD — NAND is still where the firmware_source/kernel/rootfs come from either way, USB/SD only supplies the stock U-Boot binary itself for that one handoff | Same code path as `bootstock`, not independently hardware-tested; manual command only |
@@ -346,27 +336,42 @@ U-Boot binary externally (SD/USB file) to work around the unreadable U-Boot part
 that binary is running, it loads the kernel from NAND normally, same as stock always did. Full
 NAND ECC root-cause writeup: [`docs/historical/HANDOFF_nand_ecc_uboot_vs_kernel.md`](docs/historical/HANDOFF_nand_ecc_uboot_vs_kernel.md).
 
-### `build_bootable_sdcard.sh` — current capabilities
-
-Beyond what's described in [§6.0](#60-booting-stock-kernel-from-sd-card-or-usb-non-destructive) / [`docs/6.1_SD_USB_BOOT_REFERENCE.md`](docs/6.1_SD_USB_BOOT_REFERENCE.md) (which predates this board port), the script now also:
-
-| Flag | Effect |
-|------|--------|
-| `--new-uboot` (default on) / `--no-new-uboot` | Use the freshly compiled `ark1668_limcet_p305` U-Boot instead of stock |
-| `--new-kernel` (default on) / `--no-new-kernel` | Use the freshly compiled Limcet P305 kernel instead of the stock 3.4 kernel |
-| `--stock-uboot PATH` / `--no-stock-uboot` | Copy a stock U-Boot binary to `p1/stock_uboot.bin` for `bootstock`. Defaults to the dump already in this repo (`firmware_dumps/Prado firmware dump/mtd1-mtd2_uboot/extracted/uboot.bin`) |
-| `--bootlogo PATH` | Raw 800×480×32bpp framebuffer (see `build_tools/convert_bootlogo.py`) copied to `p1/bootlogo.raw` for the compiled U-Boot's boot logo |
-
-Diagnostic tools are no longer a build-time install step — they ship as
-part of `firmware_overlay/prado/usr/bin/` (see that directory's
-`README.md`), unconditionally present on every build. To skip one,
-delete it from `firmware_overlay/prado/usr/bin/` directly.
-
-All of `kernelfile`, `dtbfile`, `mmcroot`, `bootargs_common`, `stockubootfile`, `machid` are U-Boot env vars with compiled-in defaults (see [Boot commands](#boot-commands) above) — editable via `setenv` at the prompt or by dropping a `uEnv.txt` on the SD card's p1, without recompiling U-Boot or rerunning the build script.
+Building a bootable SD card or USB drive image for this custom U-Boot/kernel path (including the
+`--new-uboot`/`--new-kernel`/`--stock-uboot`/`--bootlogo` flags specific to it) is covered in
+[§8.0](#80-building-a-bootable-sd-card-or-usb-drive).
 
 **Background:** [`docs/historical/HANDOFF_nand_ecc_uboot_vs_kernel.md`](docs/historical/HANDOFF_nand_ecc_uboot_vs_kernel.md) (NAND ECC root cause), [`docs/4.1_UBOOT_REVERSE_ENGINEERING.md`](docs/4.1_UBOOT_REVERSE_ENGINEERING.md), and [`docs/7.1_UBOOT_BUILD_GUIDE.md`](docs/7.1_UBOOT_BUILD_GUIDE.md) (build from source).
 
-## 8.0 NAND Partition Layout
+## 8.0 Building a Bootable SD Card or USB Drive
+
+One tool, `build_bootable_sdcard.sh`, builds the image used by both the stock env-relocated
+auto-boot path ([§6.0](#60-booting-stock-kernel-from-sd-card-or-usb-non-destructive)) and the
+custom U-Boot/kernel path ([§7.0](#70-custom-u-boot-and-kernel)) — despite the script's name, the
+image it produces works the same way whether written to an SD card or a USB drive; only the
+target device differs.
+
+**Image layout:** p1 (FAT32) — `zImage` (+ DTB for the custom kernel path) and `UBOOT.BIN`; p2
+(ext4) — rootfs; p3 (ext4) — userdata. ext4 partitions are formatted without `64bit`/
+`metadata_csum` automatically (see [§6.0](#60-booting-stock-kernel-from-sd-card-or-usb-non-destructive)
+for why that matters on this target).
+
+Build (recommended path — zero NAND writes, falls back to stock if the card/drive is removed):
+
+```bash
+sudo bash build_bootable_sdcard.sh
+```
+
+Then write the resulting image to either an SD card or a USB drive:
+
+```sh
+sudo dd if=sd_bootable/sd_boot.img of=/dev/sdX bs=4M status=progress && sync
+```
+
+**Background:** full interactive menu, CLI-flag reference (including the custom-board-port flags
+`--new-uboot`/`--new-kernel`/`--stock-uboot`/`--bootlogo`), and build requirements:
+[`docs/8.1_BUILD_BOOTABLE_IMAGE.md`](docs/8.1_BUILD_BOOTABLE_IMAGE.md).
+
+## 9.0 NAND Partition Layout
 
 | Partition | Start | Size | Contents |
 |-----------|-------|------|----------|
@@ -385,19 +390,19 @@ All of `kernelfile`, `dtbfile`, `mmcroot`, `bootargs_common`, `stockubootfile`, 
 
 **Known bad block at 0x5FA0000** — inside the rootfs partition. `nand scrub` handles this automatically.
 
-**Background:** [`docs/8.1_PARTITION_LAYOUT.md`](docs/8.1_PARTITION_LAYOUT.md) — same data plus flash commands and the `reversingtrack` RSTK format.
+**Background:** [`docs/9.1_PARTITION_LAYOUT.md`](docs/9.1_PARTITION_LAYOUT.md) — same data plus flash commands and the `reversingtrack` RSTK format.
 
-## 9.0 Update Mechanisms
+## 10.0 Update Mechanisms
 
-On power-on, U-Boot checks for a FAT32 SD card. If a file named `UpConfig` is present in the SD root, U-Boot runs `arkupdate`, which reads the `update` script and flashes each listed NAND partition in sequence, then reboots — remove the SD card afterward so it doesn't re-flash. See [§8.0 NAND Partition Layout](#80-nand-partition-layout) for offsets/sizes.
+On power-on, U-Boot checks for a FAT32 SD card. If a file named `UpConfig` is present in the SD root, U-Boot runs `arkupdate`, which reads the `update` script and flashes each listed NAND partition in sequence, then reboots — remove the SD card afterward so it doesn't re-flash. See [§9.0 NAND Partition Layout](#90-nand-partition-layout) for offsets/sizes.
 
-**Quick start:** build `rootfs.img`/`userdata.img` (`build_rootfs.sh`/`build_userdata.sh`), use `build_update.sh` (§10.0) to select partitions and generate the SD package, copy `firmware_source/sd_update_template/output/` to a FAT32 SD card (max 32 GB), then power-cycle the head unit with the card inserted and wait for the automatic reboot before removing it.
+**Quick start:** build `rootfs.img`/`userdata.img` (`build_rootfs.sh`/`build_userdata.sh`), use `build_update.sh` (§11.0) to select partitions and generate the SD package, copy `firmware_source/sd_update_template/output/` to a FAT32 SD card (max 32 GB), then power-cycle the head unit with the card inserted and wait for the automatic reboot before removing it.
 
 **Safety:** never flash S-Loader (Nboot) via SD — corruption bricks the board and needs JTAG to recover. userdata flash erases all paired BT devices/call history/settings (recreated on first boot); rootfs flash replaces the entire filesystem (a known bad block is handled automatically).
 
-**Background:** the `update` script's keyword list, why `uboot-env`/`unicode` aren't independently flashable, and full safety notes: [`docs/9.1_UPDATE_MECHANISMS.md`](docs/9.1_UPDATE_MECHANISMS.md).
+**Background:** the `update` script's keyword list, why `uboot-env`/`unicode` aren't independently flashable, and full safety notes: [`docs/10.1_UPDATE_MECHANISMS.md`](docs/10.1_UPDATE_MECHANISMS.md).
 
-## 10.0 Build & Flash Tool
+## 11.0 Build & Flash Tool
 
 CAUTION: this update process will permanently alter the NAND contents. Use with caution!
 `build_update.sh` is an interactive terminal tool that combines building firmware images and generating a NAND flash update package staged on an SD card into a single workflow. This flashes internal NAND — it is **not** the non-destructive SD-boot image described in [§6.0](#60-booting-stock-kernel-from-sd-card-or-usb-non-destructive) (that's `build_bootable_sdcard.sh`). Run it under Linux or WSL:
@@ -408,9 +413,9 @@ bash build_update.sh
 
 An arrow-key menu selects which images to build (rootfs, userdata, U-Boot env) and which NAND partitions to include in the generated SD update package; rootfs and userdata are selected by default, early-boot partitions (kernel, U-Boot, arkdata) default to off to avoid accidental reflash. Output lands in `firmware_source/sd_update_template/output/` — copy to a FAT32 SD card to flash. Requires `mtd-utils` and `u-boot-tools` (`sudo apt install mtd-utils u-boot-tools`).
 
-**Background:** full menu layout, the standalone `build_rootfs.sh`/`build_userdata.sh` scripts, and dependency/`$PATH` detail: [`docs/10.1_BUILD_FLASH_TOOL.md`](docs/10.1_BUILD_FLASH_TOOL.md).
+**Background:** full menu layout, the standalone `build_rootfs.sh`/`build_userdata.sh` scripts, and dependency/`$PATH` detail: [`docs/11.1_BUILD_FLASH_TOOL.md`](docs/11.1_BUILD_FLASH_TOOL.md).
 
-## 11.0 Device Access
+## 12.0 Device Access
 
 ### WiFi Access Point
 
@@ -480,7 +485,7 @@ The ARK1680 USB gadget stack is configured to use CDC-NCM (`g_ncm.ko`), which cr
 
 `g_zero.ko` has been removed from `firmware_source/prado_reconstructed/mtd6_rootfs/rootfs/etc/all.sh` — it was overriding the NCM gadget registration and breaking both USB host mode and the network interface.
 
-### 11.1 Diagnostic & On-Device Utility Tools
+### 12.1 Diagnostic & On-Device Utility Tools
 
 `tools/` holds static ARM binaries (and a few POSIX shell wrappers), each with its own `README.md`. Synced into `firmware_overlay/prado/usr/bin/`, so they're unconditionally part of every build's rootfs (see that directory's `README.md`) — no separate install step or toggle. All statically linked, no dependency on anything else in the rootfs — they work even while chasing a boot/crash problem elsewhere in the system.
 
@@ -540,7 +545,7 @@ The ARK1680 USB gadget stack is configured to use CDC-NCM (`g_ncm.ko`), which cr
 
 `nano`/`less`/`htop`/`tmux` are linked against a static `ncurses` build with `vt100`/`linux`/`xterm`/`ansi` terminal descriptions compiled directly in, since this rootfs has no terminfo database — the serial console's `TERM=vt100` (`/etc/inittab`) is covered. `tmux` additionally links a static `libevent`. Both persisted in the separate `linux-arkmicro` repo (`buildroot-external/arm-static-libs/`) so future tool builds don't need to rebuild them from source.
 
-## 12.0 Repository Structure
+## 13.0 Repository Structure
 
 ```
 firmware_dumps/Prado firmware dump/                  Raw MTD partition dumps from the live device
@@ -609,8 +614,8 @@ firmware_source/sd_update_template/
   update.example             Static reference script (generated version goes to output/)
   output/                    Generated SD card package (gitignored)
 docs/
-  13.1_SOURCES.md                 Where each file came from and why
-  8.1_PARTITION_LAYOUT.md        NAND offsets, sizes, flash commands
+  14.1_SOURCES.md                 Where each file came from and why
+  9.1_PARTITION_LAYOUT.md        NAND offsets, sizes, flash commands
   4.1_UBOOT_REVERSE_ENGINEERING.md  U-Boot SD-boot corruption investigation, env relocation fix, bootlogo/RE ports
   historical/SD_BOOT_PLAN.md Historical SD-boot planning doc — superseded, see below
 build_update.sh              Combined interactive build and flash tool
@@ -621,18 +626,18 @@ build_bootable_sdcard.sh     Interactive bootable SD card image builder (same ar
 sd_bootable/                 Generated bootable SD image output (gitignored — sd_boot.img + patched uboot_sdboot.bin)
 ```
 
-## 13.0 Sources
+## 14.0 Sources
 
-See [`docs/13.1_SOURCES.md`](docs/13.1_SOURCES.md) for full provenance of each file.
+See [`docs/14.1_SOURCES.md`](docs/14.1_SOURCES.md) for full provenance of each file.
 
-## 14.0 Further Documentation
+## 15.0 Further Documentation
 
 **`docs/`**
 
 *Provenance & hardware reference*
 
-- [`13.1_SOURCES.md`](docs/13.1_SOURCES.md) — provenance of every firmware source used
-- [`8.1_PARTITION_LAYOUT.md`](docs/8.1_PARTITION_LAYOUT.md) — NAND offsets, sizes, flash commands
+- [`14.1_SOURCES.md`](docs/14.1_SOURCES.md) — provenance of every firmware source used
+- [`9.1_PARTITION_LAYOUT.md`](docs/9.1_PARTITION_LAYOUT.md) — NAND offsets, sizes, flash commands
 - [`1.1_HARDWARE_AND_SOC_REFERENCE.md`](docs/1.1_HARDWARE_AND_SOC_REFERENCE.md) — SoC identity, Ghidra RE of the firmware_source/kernel/userspace binaries, full pin-mux table, cross-checked against real ASTRI/ArkMicro vendor source; per-driver confirmation status and open test procedures live in its own "Open items" section
 - [`1.11_VENDOR_BSP_RESEARCH.md`](docs/1.11_VENDOR_BSP_RESEARCH.md) — research pass over sibling ArkMicro vendor/BSP source trees (`ark1668ed-bsp`, `cstech-ip17-rootfs`); WiFi/audio driver branches, wired-AA lead
 - [`3.2_SECURITY_REVIEW.md`](docs/3.2_SECURITY_REVIEW.md) — credential/access-path review: stock root password, an unresolved second UID-0 account, update-integrity check
@@ -650,7 +655,8 @@ See [`docs/13.1_SOURCES.md`](docs/13.1_SOURCES.md) for full provenance of each f
 
 - [`7.1_UBOOT_BUILD_GUIDE.md`](docs/7.1_UBOOT_BUILD_GUIDE.md) — plan and guide for compiling a fresh U-Boot from `linux-arkmicro` source: config deltas, SD-only test sequence, boot chain constraints, ARK header injection
 - [`4.1_UBOOT_REVERSE_ENGINEERING.md`](docs/4.1_UBOOT_REVERSE_ENGINEERING.md) — U-Boot SD-boot patch corruption investigation and the env relocation fix; boot logo, reverse-engineered command ports (`regr`/`regw`/`gpiotest`/`jpeghw`/`itu656`), LCD timing fix, USB dual-port bring-up, and the Stepldr chainload findings for the custom `ark1668_limcet_p305` U-Boot port (see [§7.0](#70-custom-u-boot-and-kernel))
-- [`6.1_SD_USB_BOOT_REFERENCE.md`](docs/6.1_SD_USB_BOOT_REFERENCE.md) — full command sequences and build-tool flag reference for SD/USB booting the stock kernel (see [§6.0](#60-booting-stock-kernel-from-sd-card-or-usb-non-destructive))
+- [`6.1_SD_USB_BOOT_REFERENCE.md`](docs/6.1_SD_USB_BOOT_REFERENCE.md) — full command sequences for SD/USB booting the stock kernel (see [§6.0](#60-booting-stock-kernel-from-sd-card-or-usb-non-destructive))
+- [`8.1_BUILD_BOOTABLE_IMAGE.md`](docs/8.1_BUILD_BOOTABLE_IMAGE.md) — `build_bootable_sdcard.sh` menu, CLI-flag reference, and image contents for building a bootable SD card or USB drive (see [§8.0](#80-building-a-bootable-sd-card-or-usb-drive))
 
 *Display*
 
@@ -670,12 +676,12 @@ See [`docs/13.1_SOURCES.md`](docs/13.1_SOURCES.md) for full provenance of each f
 - [`1.3_MCU_ADAPTERS.md`](docs/1.3_MCU_ADAPTERS.md) — MCU adapter types reverse-engineered from `libMcuCenter.so`
 - [`1.2_CANBUS.md`](docs/1.2_CANBUS.md) — CAN bus investigation for this board
   - [`1.2.1_REAR_DVD_CANBUS_INVESTIGATION.md`](docs/1.2.1_REAR_DVD_CANBUS_INVESTIGATION.md) — open investigation: controlling the factory rear DVD/RSE unit from the Limcet box via CAN bus
-- [`8.2_USERDATA_REVIEW.md`](docs/8.2_USERDATA_REVIEW.md) — userdata partition review
+- [`9.2_USERDATA_REVIEW.md`](docs/9.2_USERDATA_REVIEW.md) — userdata partition review
 
 *Build & update tooling*
 
-- [`10.1_BUILD_FLASH_TOOL.md`](docs/10.1_BUILD_FLASH_TOOL.md) — `build_update.sh` menu layout, standalone scripts, dependency detail (see [§10.0](#100-build--flash-tool))
-- [`9.1_UPDATE_MECHANISMS.md`](docs/9.1_UPDATE_MECHANISMS.md) — SD update quick-start steps, the `update` script keyword list, safety notes (see [§9.0](#90-update-mechanisms))
+- [`11.1_BUILD_FLASH_TOOL.md`](docs/11.1_BUILD_FLASH_TOOL.md) — `build_update.sh` menu layout, standalone scripts, dependency detail (see [§11.0](#110-build--flash-tool))
+- [`10.1_UPDATE_MECHANISMS.md`](docs/10.1_UPDATE_MECHANISMS.md) — SD update quick-start steps, the `update` script keyword list, safety notes (see [§10.0](#100-update-mechanisms))
 
 *Historical (superseded, kept for background)*
 

@@ -520,7 +520,7 @@ stock's flat/scattered menu structure:
       GUI layer). Ioctl numbers and the `ark_disp_vde_cfg_arg` struct
       layout confirmed against the real vendor header
       (`AVService/display.h`, ASTRI ArkPro reference source — see
-      `docs/13.1_SOURCES.md`), not guessed. Slider
+      `docs/14.1_SOURCES.md`), not guessed. Slider
       range (0-255) matches the real captured `Setting.config` values
       but the ioctl's own valid range isn't independently confirmed —
       flagged as an assumption in the source comment. **Not yet

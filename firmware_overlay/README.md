@@ -41,7 +41,7 @@ surface immediately.
 
 | File | What changed vs. `firmware_source` | Why |
 |---|---|---|
-| `etc/rc.d/rcS` | Touchscreen `insmod`→`modprobe` (fixed path), userdata mount rewritten to try ext4 p3 first (SD/USB boot) with NAND UBI/yaffs2 fallback | 4.19.192 kernel compat; SD/USB boot support — see `docs/1.5_AUDIO_SUBSYSTEM_INVESTIGATION.md`/`docs/5.1_UBOOT_REVERSE_ENGINEERING.md` |
+| `etc/rc.d/rcS` | Touchscreen `insmod`→`modprobe` (fixed path), userdata mount rewritten to try ext4 p3 first (SD/USB boot) with NAND UBI/yaffs2 fallback | 4.19.192 kernel compat; SD/USB boot support — see `docs/1.5_AUDIO_SUBSYSTEM_INVESTIGATION.md`/`docs/4.1_UBOOT_REVERSE_ENGINEERING.md` |
 | `etc/profile` | `QWS_DISPLAY` switched from `directfb` to `LinuxFB`; old `insmod .../galcore.ko` (3.4.0 path) commented out — `galcore` is now `modprobe`d from `rcS` instead | Avoids the GPU-driver-version-mismatch crash class documented in `docs/1.8_ARK1680_TS_REVERSE_ENGINEERING.md`; avoids loading galcore twice via two different paths |
 | `etc/inittab` | `getty` on `ttyS0` replaced with a direct login shell | This busybox build has no `login` applet — `getty` alone can't provide a shell |
 | `etc/wifi_ap.sh` | 3.4.0 `wlan_rtl*.ko` hardcoded paths replaced with `modprobe` + a real-kernel-version fallback path | 4.19.192 kernel compat |

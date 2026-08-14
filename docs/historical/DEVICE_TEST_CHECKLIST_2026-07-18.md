@@ -4,9 +4,9 @@
 mismatched files, the entire base rootfs
 (`firmware_source/prado_reconstructed/mtd6_rootfs/rootfs`) has been
 replaced with Holden's confirmed-working 2024-02-21 build (`1925b6a`).
-Prado's own device identity (`config.ini`, `MsnProductInfo.ini` —
+Limcet P306's own device identity (`config.ini`, `MsnProductInfo.ini` —
 `Limcet-P306`/`McuType=6`, `FactoryConfig.ini`, boot branding) was kept
-as-is, and everything Holden's build doesn't ship at all but Prado's
+as-is, and everything Holden's build doesn't ship at all but Limcet P306's
 stock dump did (`sshd`+SSH host keys, `usbmuxd`/`adb`/`carlife`,
 `libMsnAirPlay.so`, `wifi_ap.sh`, the `Launcher-Box-P301-*.rcc`
 resource pack our own `ResourceName=Box-P301` actually loads) was
@@ -1907,7 +1907,7 @@ whole investigation treated as ground truth (`realtek selected` /
 `openning librtkvnd.so` / `TAG:...` / `set:fwdir=...`) — those two
 key strings **do not exist anywhere** in `blueware` or in our
 currently-loaded `/lib/libbt-vendor.so` (confirmed byte-identical to
-the pristine Prado dump). That log could not have come from a run of
+the pristine Limcet P306 dump). That log could not have come from a run of
 this exact library. The literal name "librtkvnd.so" in that log's own
 text is a strong hint the real working device loaded a Realtek-named
 library under this same `dlopen()` target — which we already have
@@ -1930,7 +1930,7 @@ Ran a systematic MD5 comparison of every file present in *both* our
 rootfs and Holden's rootfs (926 common files, 528 content mismatches —
 most are cosmetic: bootlogos, language `.qm` files, launcher variant
 `.so`s, openssl man pages). Cross-referencing `etc/version` explains
-the pattern: our reconstructed rootfs is built from **Prado's own
+the pattern: our reconstructed rootfs is built from **Limcet P306's own
 2020-12-03 firmware dump**, while Holden's confirmed-working rootfs is
 a **2024-02-21 build** — a materially newer firmware release, not just
 a different device's rootfs.
@@ -2191,7 +2191,7 @@ device, 2269 lines) — just switched off in the kernel config
 and active on stock hardware via three independent signals: a real
 `itu656_load.sh` script in the stock rootfs (creates `/tmp/dev/dvr`),
 U-Boot's own boot-time `itu656bypinfo check ok` validation of
-`arkdata.ini` on Prado's own real dumped log, and a dedicated U-Boot
+`arkdata.ini` on Limcet P306's own real dumped log, and a dedicated U-Boot
 `itu656` command + `ITU656` register block.
 
 Enabling this surfaced a much bigger, unrelated problem: the
@@ -3987,7 +3987,7 @@ tests. The variable is U-Boot.
 
 Confirmed present, byte-identical function pattern, in **every**
 vendor U-Boot dump we have (Holden, CarSyncTech Toyota, P306 2025, all
-3 copies of the Prado's own mtd1/mtd2 U-Boot) — a standard vendor BSP
+3 copies of the Limcet P306's own mtd1/mtd2 U-Boot) — a standard vendor BSP
 feature, not a one-off. Our custom U-Boot has **none of it**. Traced
 via raw ARM disassembly (`objdump -b binary -m arm --adjust-vma=0x30000`)
 plus a proper Ghidra import (`-processor ARM:LE:32:v7 -loader
@@ -5797,7 +5797,7 @@ Two further negative results reported in the same check-in, both new/separate fr
 
 **Reverse gear: screen flashes black then returns to the main menu instead of showing the backup camera.** Checked two things before concluding anything: (1) the already-known, already-fixed `dvr_ioctl`/RN6752 dangling-stack-pointer Oops ([[project_stock_kernel_boot_backcar_investigation]]'s §31 reference, actual fix commit `3adf23908` "rn6752 dangling stack pointer causes ARK_DVR_GET_BRIGHTNESS Oops") -- confirmed via `git merge-base --is-ancestor` that this fix **is** included in the kernel currently under test, so it's not the (full) explanation on its own; (2) current `ark1668_defconfig` has `CONFIG_RN6752=y`/`CONFIG_ARK_CARBACK=y` (both enabled, contradicting an earlier, now-stale memory note that called this cluster "disabled pending investigation" -- it was re-enabled and partially fixed since that note was written). A black flash immediately recovering to the main menu (not a hang/reboot) doesn't read like a kernel panic signature -- more consistent with an app-level failure recovering gracefully. **Leading hypothesis, not yet confirmed**: the backup-camera view likely routes camera content through the same LCDC video-layer/OSD path that Android Auto video uses -- and AA video needed an explicit pixel-format + scaler-bypass fix on that exact path (§74/75 above) that hadn't existed before. The backcar path could be hitting an analogous, still-unfixed gap in how it configures that video layer, fed by the ITU656 capture pipeline instead of `hx170dec`. **No log was captured from this test either** -- a `dmesg` capture spanning the shift-into-reverse/black-flash/recovery window is the needed next step (would immediately show whether this is a kernel-level Oops, in which case it'll have a visible trace despite the graceful-looking recovery, or a clean-dmesg app-level issue, which would point at MsnCoreApp/the backcar display-init call sequence instead). Do not guess a fix without one -- this project's history (the whole AA audio-stutter thread, especially) shows confident-but-unverified fixes reliably cost a full test cycle each when they're wrong.
 
-**Follow-up test, same day: "factory" camera mode confirmed working via a hardware-level bypass, independent of all SoC software.** User set the reverse-camera type to "factory" (not aftermarket), booted via `bootusb` to a bare shell prompt with `MsnCoreApp` never launched at all, and engaging reverse gear still showed the factory camera on screen. Checked for a kernel-level explanation: no factory/aftermarket camera-type handling anywhere in the reconstructed kernel's `drivers/soc/arkmicro/itu656/`, and no autonomous carback->display-overlay logic in that driver either. Also checked `FactoryConfig.ini` (real Prado dump and our own copy) for any camera/backcar key -- zero matches, meaning this setting most likely isn't even stored SoC-side.
+**Follow-up test, same day: "factory" camera mode confirmed working via a hardware-level bypass, independent of all SoC software.** User set the reverse-camera type to "factory" (not aftermarket), booted via `bootusb` to a bare shell prompt with `MsnCoreApp` never launched at all, and engaging reverse gear still showed the factory camera on screen. Checked for a kernel-level explanation: no factory/aftermarket camera-type handling anywhere in the reconstructed kernel's `drivers/soc/arkmicro/itu656/`, and no autonomous carback->display-overlay logic in that driver either. Also checked `FactoryConfig.ini` (real Limcet P306 dump and our own copy) for any camera/backcar key -- zero matches, meaning this setting most likely isn't even stored SoC-side.
 
 **Conclusion**: "factory" camera mode is almost certainly a genuine hardware video bypass -- most plausibly the companion MCU (which already independently reads the reverse-gear trigger directly, confirmed via schematic + binary RE in `HARDWARE_AND_SOC_REFERENCE.md` §7) driving a physical relay/video-mux at the panel, entirely outside the SoC/kernel/MsnCoreApp stack. A deliberate, common automotive-head-unit safety feature (factory camera keeps working even if the aftermarket unit crashes or is powered off) -- not a bug, nothing to fix. This **narrows the still-open black-flash issue specifically to "aftermarket" camera mode**, which does route through MsnCoreApp/the kernel's own ITU656/RN6752 video-layer path -- reinforcing the video-layer-config-gap hypothesis above. A `dmesg` capture from an aftermarket-mode test is still the needed next step.
 

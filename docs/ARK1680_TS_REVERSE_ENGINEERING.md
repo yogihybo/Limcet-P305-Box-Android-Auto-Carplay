@@ -12,7 +12,7 @@ exists anywhere in this repo or the vendor kernel trees under
 its board-registration code in the stock `vmlinux`. Recovered by static
 disassembly (`arm-linux-gnueabihf-objdump`/`readelf`) of:
 
-- `Prado firmware reconstructed/mtd6_rootfs/rootfs/lib/modules/3.4.0/kernel/drivers/input/touchscreen/ark1680_ts.ko` (not stripped — full symbol table)
+- `Limcet P306 firmware reconstructed/mtd6_rootfs/rootfs/lib/modules/3.4.0/kernel/drivers/input/touchscreen/ark1680_ts.ko` (not stripped — full symbol table)
 - `Prado firmware dump/mtd5_kernel/extracted/vmlinux.elf` (board-file device/resource registration)
 
 ## Hardware resources (from `ark1680_add_device_ts` @ `0x8059f0c4` in `vmlinux.elf`)

@@ -151,17 +151,17 @@ version (`V3.21.09.0219`, confirmed via a photo of the real unit's About
 screen) -- but `holden`'s does, exactly. `prado_dump` in this repo is
 believed to be an older capture of this same unit, predating a firmware
 update; the real device's branding (`ProductId=Limcet-P306`, confirmed
-via the same photo) is genuinely Prado-specific, but its *core app
+via the same photo) is genuinely Limcet P306-specific, but its *core app
 binary* matches what's preserved in the `holden` dump instead -- most
 likely both product lines received the same core-app update around Feb
 2024, with per-unit branding layered on top via
 `msnprofile/MsnProductInfo.ini`.
 
 **User confirmed directly** that this exact combination (holden's core
-binaries + Prado's own config) is what's currently running on the real
+binaries + Limcet P306's own config) is what's currently running on the real
 car unit. Replaced `MsnCoreApp`, `MsnFirstInit`, `msncarlife`, and 14
 matched plugin libraries with `holden`'s versions;
-`msnprofile/MsnProductInfo.ini` and all other Prado-specific
+`msnprofile/MsnProductInfo.ini` and all other Limcet P306-specific
 branding/profile files left untouched.
 
 **Not yet re-tested on hardware** after this second, corrected swap

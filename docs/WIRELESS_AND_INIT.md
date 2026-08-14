@@ -5,7 +5,7 @@
 
 ## Overview
 
-This document explains the physical pin mapping, modules, and commands required to initialize WiFi and Bluetooth on the Prado Limcet P305 board running the 4.19.192 kernel.
+This document explains the physical pin mapping, modules, and commands required to initialize WiFi and Bluetooth on the Limcet P305 board running the 4.19.192 kernel.
 
 ---
 
@@ -180,7 +180,7 @@ mkdir /dev/socket/ && ln -s /dev/bw_iap /dev/socket/goc_rfcom
 
 ### Who actually launches `/usr/bin/blueware`, and a diagnostic dead-end this creates (2026-07-17)
 
-Neither `rcS`, `/etc/profile`, nor `inittab` in either rootfs (Prado
+Neither `rcS`, `/etc/profile`, nor `inittab` in either rootfs (Limcet P306
 reconstructed or CSTech) ever invokes `blueware` — grepped both trees
 for the literal string, zero hits outside `libBlueTooth.so` itself and
 its two `.properties` config files. It's launched entirely from app
@@ -1056,23 +1056,23 @@ and no USB bulk-endpoint read/write ever attempted.
 - `FactoryConfig.ini`'s `AndroidLinkType=6` (found via disassembling
   `MsnCoreApp::onUSBPhoneStatusChange(int,int,int)`, which has this
   exact value as a function-local static, read from this ini key) was
-  originally compared against the real **Prado** dump and found
+  originally compared against the real **Limcet P306** dump and found
   identical (both 6), so it was ruled out. **This was the wrong
   reference.** A full binary-provenance sweep (2026-07-30) found that
   67 of 205 core userspace binaries in `firmware_source`'s `usr/bin`+
   `usr/lib` -- including `MsnCoreApp` itself -- are genuinely
-  **Holden**-sourced, not Prado, and confirmed by the user to be
+  **Holden**-sourced, not Limcet P306, and confirmed by the user to be
   exactly what's flashed on the physical device. Holden's own
   `FactoryConfig.ini` uses `AndroidLinkType=3`, not 6.
   `IphoneLinkType`/`MirroringLinkType` already matched Holden's values
-  correctly; only `AndroidLinkType` had been left at Prado's value.
+  correctly; only `AndroidLinkType` had been left at Limcet P306's value.
   **Fixed**: `firmware_source/mtd6_rootfs/msnprofile/FactoryConfig.ini`
   changed `AndroidLinkType=6` -> `3` (main repo commit `99e1074`).
   **Not yet hardware-tested.**
 
 **Kernel-side MUSB OTG driver logic checked and ruled out, matches
 stock exactly:** disassembled and compared three functions in the
-real stock `ark1680_musb.ko` (confirmed genuine Prado-sourced via
+real stock `ark1680_musb.ko` (confirmed genuine Limcet P306-sourced via
 md5sum match) against our `musb_ark.c` -- interrupt-enable register
 setup (`ark1680_musb_enable`, byte-identical `0x1E`/`0xF7` mask
 values), the DMA-warning logic, and the full OTG state-machine timer
@@ -1080,7 +1080,7 @@ values), the DMA-warning logic, and the full OTG state-machine timer
 `MUSB_DEVCTL_SESSION`/`BDEVICE`/`VBUS` bit tests, same state
 transitions, same VBUSERROR interrupt-set write). All three are
 faithful, essentially identical ports. No kernel-level divergence
-found. (Note: Prado's `.ko` is the right reference here since this is
+found. (Note: Limcet P306's `.ko` is the right reference here since this is
 kernel code, not a Holden-sourced userspace binary.)
 
 **Net conclusion**: the `AndroidLinkType` config fix is now in place

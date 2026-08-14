@@ -101,7 +101,7 @@ address that is invalid or empty, the NAND env read will fail CRC and
 U-Boot will fall back to our patched compiled-in defaults.
 
 **Approach:**
-1. The Prado NAND layout from the live `mtdparts` env variable:
+1. The Limcet P306 NAND layout from the live `mtdparts` env variable:
    `128k(S-Loader),512k(U-boot),512k(U-boot_back),256K(U-boot-Env),...`
    → U-boot-Env (mtd3) starts at NAND offset `0x120000`.
 2. Search UBOOT.BIN for the 4-byte little-endian constant
@@ -124,7 +124,7 @@ restore is possible before committing. Keep the original UBOOT.BIN.
 never actually in this repo — that made the "✓ SOURCE AVAILABLE" claim below unverified for a long
 time. It's since been tracked down for real (`RD_Software/linux-arkmicro`, a live public Gogs repo)
 and a relevant slice copied into [`linux-arkmicro Reference/`](../linux-arkmicro%20Reference/README.md).
-**It is not an exact source match** — it's U-Boot 2018.07 with SPL+FDT, while the Prado's actual stock
+**It is not an exact source match** — it's U-Boot 2018.07 with SPL+FDT, while the Limcet P306's actual stock
 U-Boot is 2012.10, legacy ATAG, no devicetree. Same SoC family, later BSP generation. The details below
 (largely still accurate) are superseded by the full build plan and risk list in
 [`docs/UBOOT_BUILD_GUIDE.md`](../UBOOT_BUILD_GUIDE.md) — read that before acting on this section.
@@ -137,7 +137,7 @@ approach in principle — the resulting UBOOT.BIN never consults the NAND env at
 #### Changes needed from the BSP defaults
 
 The BSP `ark1668_defconfig` targets a reference board with 640K
-bootloader partitions (env at 0x160000). The Prado uses 512K
+bootloader partitions (env at 0x160000). The Limcet P306 uses 512K
 bootloader partitions (env at 0x120000). Only two things differ:
 
 1. **`CONFIG_ENV_OFFSET`** — set to `0x120000` (not `0x160000`)
@@ -148,7 +148,7 @@ In `linux-arkmicro/u-boot/include/configs/ark1668.h`, change:
 // Before:
 #define CONFIG_ENV_OFFSET  0x160000
 
-// After (Prado partition layout):
+// After (Limcet P306 partition layout):
 #define CONFIG_ENV_OFFSET  0x120000
 ```
 

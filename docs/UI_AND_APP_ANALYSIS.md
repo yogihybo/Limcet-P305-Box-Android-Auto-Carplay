@@ -61,7 +61,7 @@ automatically for any inserted media, no user interaction — the device will:
 
 No PIN, no password, no confirmation dialog (the confirmation string `"Find the factory configuration
 file, do you upgrade it?"` seen nearby in `.rodata` belongs to a *different*, separate code path —
-the `msn_factory_configs/` upgrade flow this project's own Holden→Prado conversion process already
+the `msn_factory_configs/` upgrade flow this project's own Holden→Limcet P306 conversion process already
 relies on — not this one). `gAutoCopyDlg`/`gAutoCopyTimerCount` globals exist but nothing in the traced
 call path shows a user-confirmation gate before the `system()` call fires.
 
@@ -241,7 +241,7 @@ See [`SETTINGS_REFERENCE.md`](SETTINGS_REFERENCE.md) for how `ResourceName` /
 Style Sheets (QSS, CSS-like) wrapped in XML.
 
 - **Per-resolution blocks** with a `fontsize`: `Screen_400x240`, `Screen_800x480`,
-  `Screen_1280x480`, `Screen_1024x600`, `Screen_1280x720`. **The Prado (800×480)
+  `Screen_1280x480`, `Screen_1024x600`, `Screen_1280x720`. **The Limcet P306 (800×480)
   uses `Screen_800x480`, `fontsize="22"`.**
 - **Fragments per block:**
 
@@ -289,7 +289,7 @@ header, a resource *tree*, a *name* pool, and a *data* pool. Qt ships the packer
 | Bundle | Role |
 |--------|------|
 | `Launcher-Box-*` | Full home screen (source tiles, clock, nav bar) — used when `LauncherName=Launcher-Box` (e.g. Box-C235) |
-| `Launcher-Box-P301-*` | Slim home screen (22 sprites) — used when `ResourceName=Box-P301` (**the Prado/P306**) |
+| `Launcher-Box-P301-*` | Slim home screen (22 sprites) — used when `ResourceName=Box-P301` (**the Limcet P306**) |
 | `Launcher-Car-*` | Alternate "car" home layout |
 | `StatusBar` | Global top bar / chrome (single resolution) |
 | `Setting` | Settings screen (steering-wheel key icons, region tiles, toggles) |
@@ -297,7 +297,7 @@ header, a resource *tree*, a *name* pool, and a *data* pool. Qt ships the packer
 | `FMRadio-*` | Radio UI |
 | `MusicPlayer-* / VideoPlayer-* / Photo-*` | Media app skins |
 
-**The Prado (P306)** is `ResourceName=Box-P301` on an **800×480** panel, so its
+**The Limcet P306** is `ResourceName=Box-P301` on an **800×480** panel, so its
 active skin is `Launcher-Box-P301-800x480.rcc` + `StatusBar.rcc` +
 `Setting.rcc` + the `-800x480` media/BT bundles.
 
@@ -411,7 +411,7 @@ QObject
      ├─ MCUAdapter_BoxP200         "fat" base: full framing + update + settings
      │   (most Box* adapters inherit this machinery)
      │
-     ├─ MCUAdapter_BoxP300         ← Prado (McuType 6): overrides framing (sig 0x2E),
+     ├─ MCUAdapter_BoxP300         ← Limcet P306 (McuType 6): overrides framing (sig 0x2E),
      │                               onRecvMcuProtocol dispatch, makeMCUProtocol
      ├─ MCUAdapter_MsnDecoder      ← Holden (McuType 16): different framing, DVR/camera
      ├─ McuAdapter_BoxP230         only CAN/SWC adapter (Honda XBS)
@@ -492,7 +492,7 @@ _MCU adapters:_
 
 - **MCUAdapter_BoxP200 (41)** — the fat base: `checkMCUUpdateFile, findPackageStartSig, getMcuProtocolCheckSum, getPackageCheckSum, getPackageMinSize, getPackageSize, getPortSettings, getSetItemDefValueIndex, getSetItemText, getSetItemValueIndex, getSetItemValueTexts, isAvaliablePackage, makeMcuProtocolPackage, msnAppStateChange, onAcceptUpdate, onDiskStatusChange, onInited, onItemListViewClicked, onModeAppChange, onReadDeviceDatas, onRecvAppProtocol, onRecvMcuProtocol, onRejectUpdate, readyToUpdateMCU, resetListTexts, sendMcuProtocolData, sendPhoneConnectState, sendReadyPackage, sendUpdateFileData, sendUpdateFileInfo, sendYModemDatas, showApp, showSelectDialog, statrtUpdateMCUFile, syncSettingDataToMcu, translateApp, tryOpenUpdateFile`
 - **McuAdapter_BoxP230 (40)** — CAN/SWC (Honda): `findPackageStartSig, getPackageCheckSum, getPackageMinSize, getPackageSize, getPortSettings, getSetItem*, isAvaliablePackage, makeCanBusProtocol, msnAppNotify, onKeyEvent, onModeAppChanged, onModeSelectChange, onRecvAppProtocol, onRecvMcuProtocol, onSendReadyTimer, onSwitchReversingView, processSWCKey, recvCanDatas, sendCanBusKeyData, showModeSelectDialg, switchSpeeker, syncData, syncSettingData, writeCanBusData, writeSettingData`
-- **MCUAdapter_BoxP300 (29)** — Prado: `findPackageStartSig, getPackageCheckSum, getPackageMinSize, getPackageSize, getPortSettings, getSetItem*, isAvaliablePackage, makeMCUProtocol, msnAppStateChange, onDiskStatusChange, onInited, onItemListViewClicked, onModeAppChanged, onRecvAppProtocol, onRecvMcuProtocol, onSendUpdateReadyTimer, onStartUpdateMCU, resetListTexts, showApp, showSelectDialog, syncSettingDataToMcu, translateApp`
+- **MCUAdapter_BoxP300 (29)** — Limcet P306: `findPackageStartSig, getPackageCheckSum, getPackageMinSize, getPackageSize, getPortSettings, getSetItem*, isAvaliablePackage, makeMCUProtocol, msnAppStateChange, onDiskStatusChange, onInited, onItemListViewClicked, onModeAppChanged, onRecvAppProtocol, onRecvMcuProtocol, onSendUpdateReadyTimer, onStartUpdateMCU, resetListTexts, showApp, showSelectDialog, syncSettingDataToMcu, translateApp`
 - **MCUAdapter_MsnDecoder (24)** — Holden: `getDVRViewChannle, getPortSettings, getSetItem*, msnAppNotify, onDiskStatusChange, onModeAppChange, onRecvAppProtocol, onRecvMcuProtocol, showApp, showSelectDialog, syncAllSettingDatasToMcu, syncSettingDataToMcu, translateApp`
 - **MCUAdapter_BoxC270 (31)**, **BoxP900 (31)** (`getUpdateFilePath, retryOpenUpdateFile, updateFileEnd`), **BoxC280 (29)**, **BoxP210 (25)**, **BoxP701 (25)** (`onSendUpdateDatasToMCU, writeReplayPackage`), **BoxC290 (21)**, **BoxP800 (21)** (`onSettingChange, retrySendStartupStatus`), **BoxP400 (20)**, **BoxP700 (20)** (`onLEDTimer, onLongPressTimeout`), **BoxC250 (19)** (`onHeartbeatTimer`), **BoxC230 (18)**, **BoxP220 (12)**.
 - **Dual-framing:** **D107 (29)**, **BoxP500 (27)**, **BoxP100 (18)** — each with `*2` parser methods + `sendData`/`sendData2`/`showUpdateDialog`.

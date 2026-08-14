@@ -1,6 +1,6 @@
 # Boot Experiment Log — SD-Boot Progress
 
-This document tracks the verified boot configurations, test results, and status of running the Prado head unit firmware reconstruction from the SD card.
+This document tracks the verified boot configurations, test results, and status of running the Limcet P306 head unit firmware reconstruction from the SD card.
 
 ---
 
@@ -577,7 +577,7 @@ fi
 **The marker file `/msnprofile/ark1680_ts` exists** in the live NAND dump
 (`Prado firmware dump/mtd6_rootfs/msnprofile/ark1680_ts`, 0 bytes — a pure
 existence flag) and in the reconstructed rootfs. This is a direct dump
-from the physical Prado unit (`docs/SOURCES.md`), not a generic vendor
+from the physical Limcet P306 unit (`docs/SOURCES.md`), not a generic vendor
 image — so this reflects **this exact unit's factory configuration**.
 
 That means stock firmware on this unit loads `ark1680_ts.ko` — the

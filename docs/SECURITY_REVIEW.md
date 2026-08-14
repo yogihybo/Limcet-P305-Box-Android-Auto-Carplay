@@ -27,7 +27,7 @@ by, and about factory-original weaknesses independent of anything this project a
 ## 1. Stock root password: `123456`
 
 `/etc/shadow` on the real device (`Prado firmware dump/mtd6_rootfs/etc/shadow`) is byte-identical to
-the one shipped in `Prado firmware reconstructed/mtd6_rootfs/rootfs/etc/shadow` (confirmed via `diff`)
+the one shipped in `Limcet P306 firmware reconstructed/mtd6_rootfs/rootfs/etc/shadow` (confirmed via `diff`)
 — this is the actual factory-original hash, not something this project set:
 
 ```
@@ -45,10 +45,10 @@ teardown required, once there's network reach to the device.
 - **Stock firmware does not auto-start sshd.** `Prado firmware dump/mtd6_rootfs/etc/rc.d/rcS` has it
   commented out: `#/usr/local/sbin/sshd &`. So this password is a *latent* factory weakness on an
   unmodified unit, not something remotely reachable by default.
-- **This project's own reconstructed `rcS`** (`Prado firmware reconstructed/mtd6_rootfs/rootfs/etc/rc.d/rcS`)
+- **This project's own reconstructed `rcS`** (`Limcet P306 firmware reconstructed/mtd6_rootfs/rootfs/etc/rc.d/rcS`)
   is what enables `sshd &` and `/etc/wifi_ap.sh &` (the `carplay_wifi` AP, password `88888888`, already
   documented) at boot, for research convenience.
-- **Combined effect:** anyone within WiFi range of a Prado unit running *this project's build*
+- **Combined effect:** anyone within WiFi range of a Limcet P306 unit running *this project's build*
   gets root via `88888888` (join the AP) → `123456` (SSH) with essentially no effort. The same applies
   over the USB-NCM interface (`192.168.7.1`) if a cable is connected, no WiFi needed at all.
 

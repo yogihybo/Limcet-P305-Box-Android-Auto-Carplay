@@ -1813,14 +1813,14 @@ the one at the immediate crash site.
 ## Superseded by CSTech-202511-IP17 rootfs (2026-07-16)
 
 The binary-patching approach above chased individual uninitialized-stack
-crashes one at a time in the Prado dump's `libSetting.so`. A newer
+crashes one at a time in the Limcet P306 dump's `libSetting.so`. A newer
 MsnCoreApp build extracted from a CarSyncTech Toyota unit
 (`firmware_dumps/CarSyncTech Toyota/CSTech-202511-IP17/`, Nov 2025) was
 found to boot the UI cleanly on real hardware with none of the
 `sendSoundData()`/`initSoundParams()` crashes seen above — it appears to
 be a later vendor build where these defects were already fixed upstream.
 `build_bootable_sdcard.sh` now supports this rootfs (and its matching
-userdata) as an alternative to the Prado reconstructed one, via the
+userdata) as an alternative to the Limcet P306 reconstructed one, via the
 `[p2] Use CarSyncTech CSTech-202511-IP17 rootfs` / `[p3] Use matching
 CarSyncTech CSTech-202511-IP17 userdata` toggles (`--cstech-rootfs`,
 `--cstech-userdata`). Both auto-extract from the checked-in
@@ -3185,7 +3185,7 @@ Asked to check this finding against stock before trusting it --
 this surfaced a much larger, independent problem.
 
 **The architecture itself is confirmed identical in stock.**
-Disassembled the genuine Prado dump's `sink`
+Disassembled the genuine Limcet P306 dump's `sink`
 (`firmware_dumps/Prado firmware dump/mtd6_rootfs/usr/bin/sink`):
 same `Transport` class layout, `PipeTransport::read()` caps at 4096
 bytes identically, `Accessory::readBytes()` has the identical
@@ -3203,14 +3203,14 @@ pipeline more failure-prone than it would otherwise be).
 **But comparing byte-for-byte turned up a real, independent bug**: the
 deployed `firmware_source/mtd6_rootfs/usr/bin/sink`,
 `usr/lib/libAndroidAuto.so`, and `usr/lib/libAutoDongle.so` **did not
-match the genuine Prado dump's copies at all** (different md5sums).
+match the genuine Limcet P306 dump's copies at all** (different md5sums).
 `git log` shows `sink` was introduced as a fresh 0->532304-byte
 addition in commit `d2b2dbc` ("fix: correct corrupted paths in build
 scripts from directory restructure", 2026-07-21) rather than ever
-being copied from a verified-against-Prado source -- stock's real
+being copied from a verified-against-Limcet P306 source -- stock's real
 `sink` is 527448 bytes, and the deployed one has at least one extra
 exported symbol (`RfcommConnection::reSendVersionRequestMessage`) not
-present in the Prado dump's copy.
+present in the Limcet P306 dump's copy.
 
 **Provenance confirmed, not a mystery**: user identified the source --
 these are genuinely from the **Holden** firmware. Verified directly:
@@ -3221,14 +3221,14 @@ once before in this project for the same dump) and both `sink` and
 what `firmware_source` had. So this wasn't corruption or an unknown
 build -- at some point (most likely during the July 21 directory
 restructure) the wrong sibling dump's copy got pulled in for this
-Prado-specific rootfs, probably because Holden and Prado share close
+Limcet P306-specific rootfs, probably because Holden and Limcet P306 share close
 enough lineage that a Holden binary runs fine here without any
 obvious error, masking the mismatch. `firmware_overlay` has no copies
 of these three files to override this, so `firmware_source`'s
 Holden-sourced copies are exactly what has been getting deployed and
-tested this whole time on a Prado unit.
+tested this whole time on a Limcet P306 unit.
 
-**Fixed**: restored all three files from the real Prado dump,
+**Fixed**: restored all three files from the real Limcet P306 dump,
 verified byte-identical via md5 afterward. `firmware_source/
 mtd6_rootfs` is the base directly used by `build_bootable_sdcard.sh`
 (confirmed in the script), and nothing in `firmware_overlay` shadows
@@ -3260,8 +3260,8 @@ rootfs.img` via `ubireader_extract_files`, `sink`/`libAndroidAuto.so`
 came back md5-identical to what was deployed) -- not corruption or an
 unknown build, the wrong sibling dump's copy got pulled in during the
 2026-07-21 directory restructure, most likely unnoticed because
-Holden and Prado share close enough lineage that the Holden binary
-runs without any obvious error on a Prado image. **Explicitly told not
+Holden and Limcet P306 share close enough lineage that the Holden binary
+runs without any obvious error on a Limcet P306 image. **Explicitly told not
 to change the deployed file** -- reverted commit `74ec4c9` (revert
 commit `289c750`), `firmware_source`'s copies are back to the
 Holden-sourced binaries. Leave as-is; this is not currently being
@@ -4140,12 +4140,12 @@ logs. Static log analysis of this specific angle is exhausted; further
 progress needs the pending `aplay` local-file test or a live `ipcs`/
 `strace` capture during a reproduced stutter.
 
-### Major provenance discovery: 67/205 core userspace binaries are Holden-sourced, not Prado (2026-07-30)
+### Major provenance discovery: 67/205 core userspace binaries are Holden-sourced, not Limcet P306 (2026-07-30)
 
 A systematic `md5sum` sweep of every file in `firmware_source/
 mtd6_rootfs/usr/bin` + `usr/lib` (205 files) against both the real
-Prado dump and a freshly re-extracted Holden UBI image found that
-**67 files (33%) genuinely match Holden's build, not Prado's** --
+Limcet P306 dump and a freshly re-extracted Holden UBI image found that
+**67 files (33%) genuinely match Holden's build, not Limcet P306's** --
 including `MsnCoreApp` itself, `libMsnCommons.so` (where
 `SoftVolCtrl` lives), `libMsnSound.so`, `libMsnCarAuto.so`,
 `libSetting.so`, `libBlueTooth.so`, `blueware`, `mplayer`,
@@ -4157,21 +4157,21 @@ it's the actual deployed reality.
 
 This is now foundational context for the whole project: any static
 comparison against "stock" for one of these 67 files must use
-**Holden's** binary as the reference, not Prado's -- comparing against
-Prado for these specific files is comparing against the wrong vendor
+**Holden's** binary as the reference, not Limcet P306's -- comparing against
+Limcet P306 for these specific files is comparing against the wrong vendor
 build entirely (see the `AndroidLinkType` case below, and in
 `docs/WIRELESS_AND_INIT.md`, for a concrete instance where this
-mattered). Kernel-level code, DTS, and U-Boot remain Prado-sourced
+mattered). Kernel-level code, DTS, and U-Boot remain Limcet P306-sourced
 throughout -- this provenance split only applies to this specific set
 of `usr/bin`/`usr/lib` userspace binaries.
 
 **`AndroidLinkType` config fix**: `firmware_source/mtd6_rootfs/
-msnprofile/FactoryConfig.ini` had `AndroidLinkType=6` (Prado's value).
+msnprofile/FactoryConfig.ini` had `AndroidLinkType=6` (Limcet P306's value).
 Since `MsnCoreApp` is genuinely Holden's binary, the correct reference
 is Holden's own `FactoryConfig.ini`, which uses `AndroidLinkType=3`.
 Changed to match (main repo commit `99e1074`). This was previously
 checked and wrongly ruled out as a wired-AA divergence because the
-comparison used Prado's ini as the reference (see
+comparison used Limcet P306's ini as the reference (see
 `docs/WIRELESS_AND_INIT.md` for the full wired-AA context). Not yet
 hardware-tested.
 

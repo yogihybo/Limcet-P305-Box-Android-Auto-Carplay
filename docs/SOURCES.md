@@ -9,21 +9,21 @@
 **Holden firmware package** — complete firmware for Ksmart DSP / Box-C211  
 Used as structural base: bootloaders, kernel, rootfs image, userdata image, UpConfig trigger, update script.
 
-## Prado-specific overrides
-**Prado live NAND dump** — raw MTD partition dumps from a physical Toyota Prado running Holden firmware  
+## Limcet P306-specific overrides
+**Limcet P306 live NAND dump** — raw MTD partition dumps from a physical Toyota Prado running Holden firmware  
 Source of: arkdata display config (MTD4), U-Boot environment (MTD3), partition layout confirmation.
 
-**Prado live userdata dump** — UBIFS `/data` partition extracted from the live device  
+**Limcet P306 live userdata dump** — UBIFS `/data` partition extracted from the live device  
 Source of: MsnProductInfo.ini (ProductId=Limcet-P306), msncfg settings, pointercal calibration.
 
 ## Reference only (not in build)
 **Alfa 5G Italian 8.8 -06 P305** — Alfa Romeo firmware package for comparison  
-**Prado Msnconfig** — Prado-specific factory config variations  
+**Limcet P306 Msnconfig** — Limcet P306-specific factory config variations  
 **`ArkPro Reference/`** — ASTRI's reference ARK1680 kernel/U-Boot/userspace source (public leak,
 `cphatt/ArkPro` commit `e743744`), used to confirm SoC-identity and register-field findings in
 `docs/HARDWARE_AND_SOC_REFERENCE.md` §9 and `docs/DISPLAY_SUBSYSTEM.md`; see `ArkPro Reference/README.md`.  
 **`linux-arkmicro Reference/`** — ArkMicro's own public U-Boot BSP (`RD_Software/linux-arkmicro`,
-a later generation than the Prado's actual stock U-Boot — see that folder's README), the starting
+a later generation than the Limcet P306's actual stock U-Boot — see that folder's README), the starting
 point for `docs/UBOOT_BUILD_GUIDE.md`'s from-source build plan  
 **`ark1668ed-bsp`** (personal Downloads, not tracked in any repo) — ArkMicro's own internal BSP
 for a newer SoC variant (ARK1668ED, Linux 6.12.56, ArkMicro's internal Gogs server), different
@@ -38,7 +38,7 @@ used only to corroborate the `com.arkmicro.*` D-Bus naming convention — see
 (`ProductId=ZTUZAUTO-P306`, `VehicleName="ZTUZAUTO Box"`), same `ResourceName=Box-P301`/`McuType=6`/
 `BlueToothType=6` hardware family as this project's Limcet-P306 unit and a byte-identical-size
 `rootfs.img` to `AA-NEW-P306_extracted/` below — evidently the same OEM firmware, differently
-rebadged. Not yet diffed against the Holden/Prado base; a candidate source if it turns out to carry
+rebadged. Not yet diffed against the Holden/Limcet P306 base; a candidate source if it turns out to carry
 newer Android Auto handling than the Holden base this project builds from.  
 **`firmware_dumps/AA-NEW-P306.zip`** / **`AA-NEW-P306_extracted/`** — same firmware family
 (`ProductId=Smart-P306`, `VehicleName="Smart Box"`, identical `ResourceName`/`McuType`/`BlueToothType`
@@ -48,7 +48,7 @@ against the current build.
 
 ## Key differences applied vs base Holden firmware
 
-| Item | Holden base | Prado override | Source |
+| Item | Holden base | Limcet P306 override | Source |
 |------|------------|----------------|--------|
 | arkdata display | 800×480, CLKDIV1=10, IVS=1, no touch keys | 800×480, CLKDIV1=11, IVS=1, VBP=29, HBP=32 | MTD4 dump |
 | bootdelay | 0 | 9 | MTD3 env dump |
@@ -57,8 +57,8 @@ against the current build.
 | McuType | 16 | 6 | userdata MsnProductInfo |
 | SoundType | 4 (DSP) | 0 | userdata MsnProductInfo |
 | BlueToothType | 6 | 6 | matches |
-| DeviceName (BT) | Ksmart | Limcet Box | Prado identity |
-| PairCode | 0000 | 8362 | Prado identity |
-| HomeIconLabel | HOLDEN | TOYOTA | Prado vehicle branding |
+| DeviceName (BT) | Ksmart | Limcet Box | Limcet P306 identity |
+| PairCode | 0000 | 8362 | Limcet P306 identity |
+| HomeIconLabel | HOLDEN | TOYOTA | Limcet P306 vehicle branding |
 | ReversingVolumeCut | 0 | 0 | matches Holden |
 | Partition layout | 106m/6m | 106m/6m | confirmed identical |

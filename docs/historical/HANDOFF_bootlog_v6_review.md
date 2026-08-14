@@ -85,7 +85,7 @@ Segmentation fault
 - This is a **rootfs/userspace** problem, not kernel: the kernel, `fb0`, GPU, and WiFi all
   initialised fine before this.
 - **Likely lead — wrong screen profile.** The app computed a **6.94″ / 154×86 mm** panel:
-  `set display inch: QSize(154, 86) 6.94433` (640), whereas the real Prado is ~**5.5″**
+  `set display inch: QSize(154, 86) 6.94433` (640), whereas the real Limcet P306 is ~**5.5″**
   (stock logged `QSize(120, 72) 5.5″`). A mismatched screen/resolution profile feeding QWS
   could null-deref on init.
 

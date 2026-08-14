@@ -20,7 +20,7 @@ yet — this is the plan to follow when one is.
 ## Why bother
 
 Every U-Boot workaround so far (`patch_uboot.py`, the `sdscript` self-contained SD-boot patch in
-`docs/UBOOT_REVERSE_ENGINEERING.md` §8) exists solely because the Prado's actual, deployed `uboot.bin`
+`docs/UBOOT_REVERSE_ENGINEERING.md` §8) exists solely because the Limcet P306's actual, deployed `uboot.bin`
 is a raw NAND dump with no reserved `CONFIG_ENV_SIZE` buffer — only ~52 bytes of genuinely safe space
 for the compiled-in env, which is why the `sdscript` patch had to get so clever (load a boot *script*
 instead of trying to fit a full `bootcmd` in 52 bytes). A real source build sidesteps that class of
@@ -33,12 +33,12 @@ a normal, readable command line, no script indirection needed.
 [`linux-arkmicro Reference/README.md`](../linux-arkmicro%20Reference/README.md) for the live URL,
 commit, and toolchain) really does contain an `ark1668` U-Boot board target — `configs/ark1668_defconfig`,
 `board/arkmicro/ark1668/`, `arch/arm/mach-arkmicro/` — for the same SoC family this project already
-established the Prado's ARK1680 tracks (`docs/HARDWARE_AND_SOC_REFERENCE.md` §2).
+established the Limcet P306's ARK1680 tracks (`docs/HARDWARE_AND_SOC_REFERENCE.md` §2).
 
 **Not confirmed / real risk:** this is U-Boot **2018.07** with SPL+FDT boot, ~6 years newer than the
-Prado's actual **2012.10** stock bootloader, built with a materially different toolchain (Linaro
-gcc 7.x / Buildroot 2021.02.2 vs. the Prado kernel's gcc 4.9.4 / Buildroot 2018.08). Building the
-`ark1668_defconfig` as-is targets ArkMicro's own reference eval board, not the Prado — every value in
+Limcet P306's actual **2012.10** stock bootloader, built with a materially different toolchain (Linaro
+gcc 7.x / Buildroot 2021.02.2 vs. the Limcet P306 kernel's gcc 4.9.4 / Buildroot 2018.08). Building the
+`ark1668_defconfig` as-is targets ArkMicro's own reference eval board, not the Limcet P306 — every value in
 the deltas table below needs to be checked, and several things (DDR3 timing, NAND ECC layout, whether
 the SPL this produces is even compatible with the Stepldr already burned into this board) are
 **genuinely unverified**, not just unconfigured. Treat this as "buildable and worth testing via SD
@@ -77,24 +77,24 @@ This targets `board/arkmicro/ark1668/` — the same board directory referenced t
 one of the other customer variants (`ark1668_aofan`, `ark1668_ft`, `ark1668_tyw_zksw`,
 `ark1668_dongle_sim` — kept in `linux-arkmicro Reference/` for comparison only).
 
-## 3. Config deltas needed — defconfig default vs. Prado's real values
+## 3. Config deltas needed — defconfig default vs. Limcet P306's real values
 
 All real values below are from `docs/PARTITION_LAYOUT.md` and `env/uboot-env.txt` (the live device's
 actual, captured environment) — not guesses.
 
-| Setting | `ark1668_defconfig` default | Prado's real value | Why it matters |
+| Setting | `ark1668_defconfig` default | Limcet P306's real value | Why it matters |
 |---|---|---|---|
-| `CONFIG_ENV_OFFSET` | `0x160000` | `0x120000` | Must point at the Prado's actual `U-boot-Env` partition start (`docs/PARTITION_LAYOUT.md`), not the reference board's offset. Same fix `docs/historical/SD_BOOT_PLAN.md` already identified before this source was actually located. |
+| `CONFIG_ENV_OFFSET` | `0x160000` | `0x120000` | Must point at the Limcet P306's actual `U-boot-Env` partition start (`docs/PARTITION_LAYOUT.md`), not the reference board's offset. Same fix `docs/historical/SD_BOOT_PLAN.md` already identified before this source was actually located. |
 | `CONFIG_ENV_SIZE` | `4096` | ≤ `0x40000` (256K partition) | Defconfig's 4096 bytes already gives ~80× the ~52 bytes the raw-dump patching has been squeezed into — no need to enlarge unless you want extra headroom; must not exceed the real 256K partition. |
-| `CONFIG_MTDIDS_DEFAULT` | `nand0=ark-nand` | `nand0=ark1680-nand` | Cosmetic (env var default, overridable post-boot) but should match the Prado's real env (`env/uboot-env.txt`) for consistency with existing tooling/scripts. |
+| `CONFIG_MTDIDS_DEFAULT` | `nand0=ark-nand` | `nand0=ark1680-nand` | Cosmetic (env var default, overridable post-boot) but should match the Limcet P306's real env (`env/uboot-env.txt`) for consistency with existing tooling/scripts. |
 | `CONFIG_MTDPARTS_DEFAULT` | reference board's own layout (`bootstrap`/`bootloader`/`fdt`/... — see `linux-arkmicro Reference/README.md`) | `docs/PARTITION_LAYOUT.md`'s full 12-partition table | Needed if anything reads the compiled-in default rather than the env-stored `mtdparts` (the live device already carries its own `mtdparts` string in its env either way, so this is a fallback/rescue-mode safety net, not a hard boot blocker). |
-| `CONFIG_DEFAULT_FDT_FILE` | `"ark169.dtb"` | *(none — remove)* | The Prado kernel has **no devicetree support at all** — legacy ATAG boot, confirmed in `docs/HARDWARE_AND_SOC_REFERENCE.md` §2. Leaving `CONFIG_OF_LIBFDT=y` compiled in is harmless; the boot command must not actually pass an fdt argument to `bootz`/`bootm`. |
+| `CONFIG_DEFAULT_FDT_FILE` | `"ark169.dtb"` | *(none — remove)* | The Limcet P306 kernel has **no devicetree support at all** — legacy ATAG boot, confirmed in `docs/HARDWARE_AND_SOC_REFERENCE.md` §2. Leaving `CONFIG_OF_LIBFDT=y` compiled in is harmless; the boot command must not actually pass an fdt argument to `bootz`/`bootm`. |
 | `CONFIG_BOOTCOMMAND` | loads and passes `ark169.dtb` | Custom — see below | See §4. |
 | Kernel bootargs (via `CONFIG_EXTRA_ENV_SETTINGS` or just set at runtime) | reference board's own | `console=ttyS0,115200n8 mem=180M earlyprintk=serial ubi.mtd=6 root=ubi0:rootfs rootfstype=ubifs rootwait ro` (NAND boot) or the SD-specific variant (`root=/dev/mmcblk0pN rootfstype=ext4 rootwait rw`) — both already in `env/uboot-env.txt` / `env/sdboot_script.txt` | Baking in the *correct* bootargs (not the reference board's) is what actually gets a kernel to boot cleanly — wrong `root=`/`rootfstype`/`ubi.mtd` here is a guaranteed kernel panic even with perfect DRAM/NAND init. |
 
 ### `CONFIG_BOOTCOMMAND` — no-FDT, UBI-aware boot
 
-The defconfig's default boot flow assumes FDT. Replace it with something matching the Prado's actual
+The defconfig's default boot flow assumes FDT. Replace it with something matching the Limcet P306's actual
 `nandboot`/`mmcboot` env logic (`env/uboot-env.txt`), 2-arg `bootz` (no fdt address):
 
 ```bash
@@ -129,10 +129,10 @@ build on real hardware:
    auto-probes *size* via `get_ram_size()` (reassuring — it's not hardcoded to the reference board's
    RAM size), but the DDR3 *timing/training* values are a separate, unverified concern: they're tuned
    for whatever RAM chip ArkMicro's reference eval board actually has, which may or may not match the
-   Prado's board. No way to confirm this without either a datasheet/chip-marking cross-check
+   Limcet P306's board. No way to confirm this without either a datasheet/chip-marking cross-check
    (`Limcet Hardware/BOARD_ANALYSIS.md` territory) or testing on hardware.
 2. **NAND ECC/BBT layout** — `CONFIG_SYS_NAND_ONFI_DETECTION` is set (auto-detects geometry from the
-   chip's ONFI parameter page rather than hardcoding it), which is a good sign given the Prado's real
+   chip's ONFI parameter page rather than hardcoding it), which is a good sign given the Limcet P306's real
    NAND geometry (`nand_erasesize=0x20000`, `nand_oobsize=0x40`, `nand_writesize=0x800` — all in
    `env/uboot-env.txt`) isn't hardcoded anywhere in this defconfig to conflict with. Still worth a sanity
    check (`nand info`) at the first serial-console checkpoint below before trusting any NAND read/write.
@@ -140,7 +140,7 @@ build on real hardware:
    `S-Loader` partition budget (`docs/PARTITION_LAYOUT.md`) if it's ever flashed there. Not a concern
    for the SD-only test phase (SPL fit only matters for actual NAND placement), but worth measuring
    before this project ever considers a NAND-side promotion.
-4. **Stepldr/SPL compatibility** — the Prado's existing first-stage loader (`Nboot.bin`/Stepldr,
+4. **Stepldr/SPL compatibility** — the Limcet P306's existing first-stage loader (`Nboot.bin`/Stepldr,
    `Limcet Hardware/BOARD_ANALYSIS.md`) already knows how to hand off to a raw U-Boot binary from SD
    (that's the entire existing SD-boot mechanism this project relies on). Whether it can also hand off
    correctly to *this* build's SPL entry point/header format is unverified — but doesn't need to be
@@ -189,7 +189,7 @@ mistakes are JTAG-only to recover from, SD mistakes are "pull the card out"):
    and rootfs stay on SD; only the *bootcmd logic* being tested changes to the NAND-read form), never
    flashed to the live device's NAND directly.
 
-**Explicitly out of scope for this plan:** flashing this build to the Prado's actual `S-Loader`/
+**Explicitly out of scope for this plan:** flashing this build to the Limcet P306's actual `S-Loader`/
 `U-Boot`/`U-Boot_back` NAND partitions. That's a separate, later decision to make only after every step
 above is confirmed working on real hardware over SD — consistent with this project's existing stance
 (`docs/UBOOT_REVERSE_ENGINEERING.md` §7) that NAND-side U-Boot changes need real testing headroom
@@ -198,7 +198,7 @@ before being trusted at all.
 
 ## uboot_build.md
 
-# U-Boot Build Guide — ARK1668 Prado (Limcet P305)
+# U-Boot Build Guide — ARK1668 Limcet P306 (Limcet P305)
 
 ## Boot Chain Overview
 

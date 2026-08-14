@@ -101,7 +101,7 @@ lights, wheel speeds, SWC, etc.) is comma.ai's opendbc database:
 
 Caveats: it's a **2017 US** reference on the **powertrain/ADAS** bus — IDs vary by
 model year/market, and body/AVN signals (SWC, illumination) may sit on a different
-bus than the one the Prado's MCU is wired to. Treat its IDs as candidates to
+bus than the one the Limcet P306's MCU is wired to. Treat its IDs as candidates to
 confirm via live capture. (Note: `0x25` in that DBC is the **steering-angle
 sensor**, not SWC.)
 
@@ -217,7 +217,7 @@ Within `libMcuCenter.so` specifically, only one software adapter has CAN bus met
 |---------|-------------|---------|
 | `McuAdapter_BoxP230` | `makeCanBusProtocol`, `sendCanBusKeyData`, `writeCanBusData`, `recvCanDatas`, `processSWCKey` | Honda XBS |
 
-This adapter is Honda-specific. For the Prado (McuType=6 / Limcet), CAN decoding is
+This adapter is Honda-specific. For this device (McuType=6 / Limcet P306), CAN decoding is
 handled entirely within the STM32 MCU firmware — the ARK1668 software receives only
 the decoded key codes. (`libCanBus.so` is a separate library with its own,
 much larger set of CAN adapters — see next section.)
@@ -228,7 +228,7 @@ much larger set of CAN adapters — see next section.)
 
 `libCanBus.so` is a **different library from `libMcuCenter.so`**, and turns out to be
 a generic aftermarket CAN-decoder-box SDK shared across this OEM's product line, not
-code written specifically for the Prado/Limcet unit. It selects an implementation at
+code written specifically for this Limcet P306 unit. It selects an implementation at
 runtime through a factory function:
 
 ```
@@ -237,7 +237,7 @@ CanBusAdapter::getCanBusType()
 ```
 
 The concrete adapter classes found by string search (one `.so`, ~787 KB in the
-restored Prado build):
+restored Limcet P306 build):
 
 | Class | Likely vehicle / adapter box |
 |-------|-------------------------------|
@@ -318,7 +318,7 @@ This reframes (rather than contradicts) the "Root cause" findings below: the
 `CanBusKeyManager` / `CanBusKey.config` machinery that Holden's firmware stripped
 appears to be a **generic key-code mapping layer** that both paths (MCU-relayed keys
 *and* a `libCanBus.so` adapter's decoded keys) can feed into — its presence doesn't
-imply a `libCanBus.so` adapter is actively running for this Prado configuration.
+imply a `libCanBus.so` adapter is actively running for this Limcet P306 configuration.
 
 One adapter, `CanBus_XinHang`, has its own `onStartUpdateMCU` method and references
 a `can_xinhang.bin` file — some of these adapter boxes are themselves updatable from
@@ -339,17 +339,17 @@ and it is presumably unused/floating on this device since `CanType=0`. See
 
 ## Root cause — Holden firmware stripped CAN SWC support
 
-SWC was confirmed working with the original Prado firmware (Limcet-P306 V3.10.3.0212).
+SWC was confirmed working with the original Limcet P306 firmware (Limcet-P306 V3.10.3.0212).
 After installing the Holden base firmware the SWC stopped working.
 
 ### What the library comparison revealed
 
-Binary diff of the two `libMcuCenter.so` files (Prado: 721,912 bytes vs Holden: 586,384 bytes)
-and `libCanBus.so` (Prado: 787,256 bytes vs Holden: 704,868 bytes) and `libSetting.so`
-(Prado: 735,336 bytes vs Holden: 656,932 bytes) revealed the Holden firmware **deliberately
+Binary diff of the two `libMcuCenter.so` files (Limcet P306: 721,912 bytes vs Holden: 586,384 bytes)
+and `libCanBus.so` (Limcet P306: 787,256 bytes vs Holden: 704,868 bytes) and `libSetting.so`
+(Limcet P306: 735,336 bytes vs Holden: 656,932 bytes) revealed the Holden firmware **deliberately
 stripped the CAN SWC subsystem** and replaced it with IR remote learning:
 
-| Feature | Prado original | Holden firmware |
+| Feature | Limcet P306 original | Holden firmware |
 |---------|---------------|-----------------|
 | `MCUAdapter_RuiYuanSWC` class | ✅ Present | ❌ Removed |
 | CAN key code tables (`0x7`,`0x8`,`0x9`…) | ✅ Present | ❌ Removed |
@@ -365,12 +365,12 @@ stripped the CAN SWC subsystem** and replaced it with IR remote learning:
 The Holden firmware variant was built for a vehicle that uses an IR blaster SWC (not CAN bus).
 The Prado uses CAN bus SWC, so the Holden firmware was entirely incompatible.
 
-### Fix applied — Prado libraries restored
+### Fix applied — Limcet P306 libraries restored
 
-Three libraries from the Prado original rootfs (`mtd6_rootfs.bin`) have been copied into
+Three libraries from the Limcet P306 original rootfs (`mtd6_rootfs.bin`) have been copied into
 the reconstruction rootfs:
 
-| Library | Prado size | Holden size | Key restoration |
+| Library | Limcet P306 size | Holden size | Key restoration |
 |---------|-----------|-------------|-----------------|
 | `libMcuCenter.so` | 721,912 B | 586,384 B | `MCUAdapter_RuiYuanSWC`, CAN key tables |
 | `libCanBus.so` | 787,256 B | 704,868 B | `CanBusKeyManager`, `CanBusKey.config` loader |
@@ -414,12 +414,12 @@ cat /dev/ttyHS0 | hexdump -C &
 
 | Cause | Priority | How to verify | Fix |
 |-------|----------|---------------|-----|
-| **MCU protocol / init mismatch** — Holden libMcuCenter.so may not initialise Limcet-V1.0-1302 correctly | **1st** | MCU Monitor shows no change on button press; raw /dev/ttyHS0 capture shows no key events | Restore original Prado libMcuCenter.so or capture UART to diagnose init sequence |
+| **MCU protocol / init mismatch** — Holden libMcuCenter.so may not initialise Limcet-V1.0-1302 correctly | **1st** | MCU Monitor shows no change on button press; raw /dev/ttyHS0 capture shows no key events | Restore original Limcet P306 libMcuCenter.so or capture UART to diagnose init sequence |
 | CANH/CANL harness wires not connected | 2nd | MCU Monitor shows no change; CAN capture shows no SWC frames | Connect the twisted-pair CAN wires from harness |
 | MCU firmware wrong Toyota CAN IDs | 3rd | CAN capture shows SWC frames at expected IDs; MCU Monitor still shows nothing | Reflash STM32 with correct Limcet firmware |
 | Key code mapping broken in ARK1668 app | 4th | MCU Monitor shows bytes changing on button press; no UI action results | Run FK Learn or investigate libMcuCenter.so key handler |
 | CAN bus speed mismatch | check alongside 3rd | Capture shows garbled/no frames | Verify MCU firmware baud rate = 500 kbit/s |
 
-**Note on FK Learn:** The original Prado userdata had no FK Learn entries in `carsetting.ini`
+**Note on FK Learn:** The original Limcet P306 userdata had no FK Learn entries in `carsetting.ini`
 yet SWC worked — confirming the key mapping is hard-coded in libMcuCenter.so, not learned.
 FK Learn is NOT the primary fix path.

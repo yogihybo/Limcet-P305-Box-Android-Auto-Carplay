@@ -133,7 +133,7 @@ earlier pass in this same investigation wrongly concluded the opposite.
 
 **File size** — `uboot_sdboot.bin` is 376,364 bytes: identical to
 `Holden firmware update/uboot.bin` and `Prado firmware reconstructed/mtd1-mtd2_uboot/uboot.bin`,
-**not** the actual live Prado NAND dump (`Prado firmware dump/mtd1-mtd2_uboot/extracted/uboot.bin`,
+**not** the actual live Limcet P306 NAND dump (`Prado firmware dump/mtd1-mtd2_uboot/extracted/uboot.bin`,
 375,944 bytes — 420 bytes smaller).
 
 **Byte diff against Holden's `uboot.bin`** — exactly 2,298 bytes differ. That's
@@ -171,7 +171,7 @@ table and keymap data in the process. `uboot_final.bin` — built from this
 file via `--patch-nand-offset` — inherits the same corruption.
 
 **Earlier wrong conclusion, for the record:** partway through this
-investigation, a byte-diff against the *live Prado NAND dump* (not Holden's
+investigation, a byte-diff against the *live Limcet P306 NAND dump* (not Holden's
 binary) showed 582 scattered differing regions, which was misread as "these
 are just two different compiled builds" and used to conclude `uboot_sdboot.bin`
 was fine. That was diffing against the wrong baseline. Diffing against the
@@ -234,7 +234,7 @@ attempt via ad-hoc byte-pattern scripting given the brick risk.
    **Update: located and pulled in.** The real repo is `RD_Software/linux-arkmicro`
    (public Gogs instance, see [`linux-arkmicro Reference/README.md`](../linux-arkmicro%20Reference/README.md)
    for the URL/commit); a relevant slice is copied into `linux-arkmicro Reference/`.
-   It's a later BSP generation than the Prado's actual 2012.10/ATAG/no-FDT stock
+   It's a later BSP generation than the Limcet P306's actual 2012.10/ATAG/no-FDT stock
    U-Boot (this repo's `ark1668` target is 2018.07, SPL+FDT) — not a byte-source
    match, but the same SoC family. Full build plan, config-delta table, and an
    SD-only test sequence (no NAND writes until proven on hardware) now live in
@@ -479,7 +479,7 @@ Two things this doesn't even get to test:
   bare `fatload usb 0:1 1000000 s;source 1000000` (no prefix) is exactly
   50 bytes — same as the SD version — and would fit. Unverified without
   real hardware.
-- USB itself is already flagged **"Unverified on Prado hardware"** in the
+- USB itself is already flagged **"Unverified on Limcet P306 hardware"** in the
   README's USB boot section — the host controller and GPIO assignments
   aren't confirmed working *at all* yet, independent of this env-space
   question.
@@ -1294,8 +1294,8 @@ to be the ONLY copy on the machine of a real, hand-placed Toyota logo
 -- not reproducible from anything else in the repo. `firmware_source/
 mtd8_bootlogo/bootlogo`, which looked like the obvious source to build
 variants from, turned out to be a **Holden logo** (same class of
-Holden-vs-Prado contamination found earlier this session with `sink`/
-`libAndroidAuto.so`) -- the real Prado dump never captured its
+Holden-vs-Limcet-P306 contamination found earlier this session with `sink`/
+`libAndroidAuto.so`) -- the real Limcet P306 dump never captured its
 `mtd8_bootlogo` partition at all. Generating variants from that Holden
 source and pushing the result over `sd_bootable/bootlogo.raw`
 overwrote the real Toyota file with no way to recover it through git,
@@ -1318,7 +1318,7 @@ via `make_touch2_bootlogo.py` + `convert_bootlogo.py` and diffing
 byte-for-byte identical against the real file. It composites: a
 linear vertical gradient (`BG_TOP=(14,16,20)` to `BG_BOTTOM=(30,33,40)`),
 a cropped+alpha-blended Toyota emblem (sourced from one of the real
-Prado boot-animation frames, `firmware_dumps/Prado firmware dump/
+Limcet P306 boot-animation frames, `firmware_dumps/Prado firmware dump/
 mtd6_rootfs/msnprofile/bootlogo/logo17.jpg`), a bold "TOYOTA" wordmark,
 and a status line in DejaVu Sans **regular** (not mono, not bold) at
 28px, color `(235,236,238)` (off-white, not pure white).

@@ -16,6 +16,13 @@
 // (`ArkIVI/BusinessLogic/Bluetooth.cpp`, a second real vendor source)
 // -- both agree on the vocabulary below.
 //
+// Full command reference: docs/BLUEWARE_AT_COMMANDS.md catalogues all
+// 209 AT-command tokens found in blueware's own binary (via `strings`),
+// organized by BT profile (HFP/A2DP/AVRCP/SPP/MAP/PBAP/GATT/AAP-IAP/
+// etc.), each marked confirmed-tested / confirmed-broadcast-seen /
+// string-only-inferred. This file's own comments below only cover the
+// handful this project actually uses.
+//
 // Confirmed wire framing (`BlueToothAdapter_Blueware::writeCommand()`,
 // decompiled): every outgoing line is the literal template
 // `"AT+%1\r\n"` with the token substituted in -- e.g. sending `SCAN=1`

@@ -623,7 +623,7 @@ docs/
 build_update.sh              Combined interactive build and flash tool
 build_rootfs.sh              Standalone rootfs UBI image builder
 build_userdata.sh            Standalone userdata UBI image builder
-build_tools/patch_uboot.py               Patches compiled-in env and NAND offset in a U-Boot binary
+build_tools/                  U-Boot patching, bootlogo generation, rootfs repair scripts — see build_tools/README.md
 build_bootable_sdcard.sh     Interactive bootable SD card image builder (same arrow-key menu as build_update.sh)
 sd_bootable/                 Generated bootable SD image output (gitignored — sd_boot.img + patched uboot_sdboot.bin)
 ```
@@ -696,6 +696,7 @@ See [`docs/14.1_SOURCES.md`](docs/14.1_SOURCES.md) for full provenance of each f
 
 - [`hardware/BOARD_ANALYSIS.md`](hardware/BOARD_ANALYSIS.md) — physical board/component teardown notes (SoC, NAND, BT, MCU, CAN bus)
 - [`hardware/MCU/MCU_FIRMWARE_REVIEW.md`](hardware/MCU/MCU_FIRMWARE_REVIEW.md) — STM32F105 MCU firmware review
+- [`build_tools/README.md`](build_tools/README.md) — what each U-Boot patching/bootlogo-generation/rootfs-repair script and vendor tool is for
 - [`custom_ui/README.md`](custom_ui/README.md) / [`custom_ui/docs/ARCHITECTURE.md`](custom_ui/docs/ARCHITECTURE.md) / [`custom_ui/docs/IMPLEMENTATION_PLAN.md`](custom_ui/docs/IMPLEMENTATION_PLAN.md) — the LVGL-based replacement UI: architecture and implementation status
 - [`vendor_source/README.md`](vendor_source/README.md) — the ASTRI ARK1680 vendor source and ArkMicro U-Boot/kernel BSP that used to be vendored directly into this repo now live in the separate [`linux-arkmicro`](https://github.com/yogihybo/linux-arkmicro) repo (the actual buildable U-Boot/kernel source tree — see [§7.0](#70-custom-u-boot-and-kernel)); this file is a pointer, not a copy
 - [`payloads/msn_autocopy/README.md`](payloads/msn_autocopy/README.md) — USB payload that exploits the `payloads/msn_autocopy` auto-copy mechanism to install and autostart `sshd` on a stock device

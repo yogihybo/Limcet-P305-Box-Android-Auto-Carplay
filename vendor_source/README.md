@@ -3,7 +3,7 @@ Refer to : https://github.com/yogihybo/linux-arkmicro
 # linux-arkmicro Reference
 
 Third-party ArkMicro vendor U-Boot source, copied here for citation and as a starting point for
-building a fresh U-Boot for this board — see [`docs/8.1_UBOOT_BUILD_GUIDE.md`](../docs/8.1_UBOOT_BUILD_GUIDE.md)
+building a fresh U-Boot for this board — see [`docs/7.1_UBOOT_BUILD_GUIDE.md`](../docs/7.1_UBOOT_BUILD_GUIDE.md)
 for the actual compile plan. Not built by anything in this repo as-is.
 
 ## Source
@@ -15,7 +15,7 @@ for the actual compile plan. Not built by anything in this repo as-is.
 - Branch: `master` @ commit `676deb203cfcd197b099232a54fd250d56aa1454`. Checked all 5 branches
   (`master`, `luyuan`, `tianyouwei`, `weilai`, `zhonghong`) and all are the same U-Boot generation
   (see below); no tags exist.
-- This is the real repo `docs/historical/SD_BOOT_PLAN.md` and `docs/5.1_UBOOT_REVERSE_ENGINEERING.md` referenced as
+- This is the real repo `docs/historical/SD_BOOT_PLAN.md` and `docs/4.1_UBOOT_REVERSE_ENGINEERING.md` referenced as
   `~/Downloads/linux-arkmicro` — that path was on a previous session's machine and was never actually
   in this repo. This copy replaces that unverified reference with the real, verified thing.
 
@@ -52,12 +52,12 @@ Two clone gotchas found while verifying:
 | U-Boot version | `2012.10` | `2018.07-linux4ark_1.0` |
 | Boot method | Legacy ATAG (Prado kernel has no devicetree support at all — `docs/1.1_HARDWARE_AND_SOC_REFERENCE.md` §2) | SPL + FDT (`CONFIG_DEFAULT_FDT_FILE="ark169.dtb"`) |
 | Build toolchain | gcc 4.9.4 / Buildroot 2018.08 (from the kernel's own banner) | Linaro gcc 7.3.1/7.4.1, Buildroot 2021.02.2 |
-| NAND partition layout | `128k(S-Loader),512k(U-boot),512k(U-boot_back),256K(U-boot-Env),256K(arkdata),...` (`docs/4.1_PARTITION_LAYOUT.md`) | `128k(bootstrap),640k(bootloader),640k(bootloader_back),128k(bootloaderenv),128k(fdt),...` (`configs/ark1668_defconfig`) |
+| NAND partition layout | `128k(S-Loader),512k(U-boot),512k(U-boot_back),256K(U-boot-Env),256K(arkdata),...` (`docs/9.1_PARTITION_LAYOUT.md`) | `128k(bootstrap),640k(bootloader),640k(bootloader_back),128k(bootloaderenv),128k(fdt),...` (`configs/ark1668_defconfig`) |
 
 No branch or tag in this repo is closer to 2012.10 — this is simply how far ArkMicro's own BSP moved
 in the ~6 years between the Prado's board design and now. Building this source produces a **new,
 compatible-family U-Boot**, not a recompile of the Prado's exact stock bootloader. See
-`docs/8.1_UBOOT_BUILD_GUIDE.md` for what has to change to target the Prado specifically, and what remains
+`docs/7.1_UBOOT_BUILD_GUIDE.md` for what has to change to target the Prado specifically, and what remains
 unverified (DDR3 timing, NAND ECC/BBT layout, SPL-vs-Stepldr compatibility).
 
 ## What's copied here vs. the full upstream repo
@@ -82,7 +82,7 @@ u-boot/
                                    pattern as this project's own Prado-vs-Holden-vs-Alfa comparisons)
   configs/ark1668*_defconfig      Kconfig defconfigs for the above board targets
   include/configs/ark1668*.h      Board header configs (CONFIG_ENV_OFFSET, CONFIG_BOOTCOMMAND,
-                                   CONFIG_MTDPARTS_DEFAULT, etc. — see 8.1_UBOOT_BUILD_GUIDE.md for the
+                                   CONFIG_MTDPARTS_DEFAULT, etc. — see 7.1_UBOOT_BUILD_GUIDE.md for the
                                    deltas needed against the Prado's real values)
   drivers/mtd/nand/ark_nand*.c    ArkMicro NAND controller driver (+ SPL variant)
   drivers/pwm/ark_pwm.c           Backlight PWM
@@ -110,5 +110,5 @@ env.source                        Toolchain setup script (Linaro gcc path + CROS
 Not copied: ark1668**e** (the newer, architecturally-different generation — already established in
 `docs/1.1_HARDWARE_AND_SOC_REFERENCE.md` §2 as NOT matching this SoC), the rest of upstream U-Boot's generic
 kbuild/common/lib/fs infrastructure (needed to actually build — clone the full repo for that, per
-`docs/8.1_UBOOT_BUILD_GUIDE.md`), and `buildroot`/`buildroot-external` (a separate, much larger companion
+`docs/7.1_UBOOT_BUILD_GUIDE.md`), and `buildroot`/`buildroot-external` (a separate, much larger companion
 tree in the same repo, unrelated to U-Boot itself).

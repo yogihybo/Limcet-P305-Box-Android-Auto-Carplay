@@ -24,7 +24,7 @@ flowchart TD
 
     SDBoot --> Q2{"Which firmware on the card?"}
     Q2 -->|"Stock U-Boot 2012.10, patched for SD"| StockPath["Stock kernel + stock Qt UI"]
-    Q2 -->|"Custom U-Boot 2018.07,<br/>chainloads to stock (bootstock/boothybrid)"| StockPath
+    Q2 -->|"Custom U-Boot 2018.07,<br/>boots stock kernel directly from NAND (bootnand)"| StockPath
     Q2 -->|"Custom U-Boot 2018.07 + new kernel,<br/>booted from a USB stick (bootusb) -- §7.0"| NewKernel["New 4.19.192 kernel<br/>+ reconstructed rootfs"]
 
     Flash --> Recon["Reconstructed Limcet P306 firmware on NAND<br/>stock-generation kernel, SSH + WiFi AP built in -- §12.0"]

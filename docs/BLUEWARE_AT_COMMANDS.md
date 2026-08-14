@@ -154,7 +154,7 @@ from naming convention alone.
 | `GATTDATA=` | broadcast | STRING-ONLY | Incoming GATT data broadcast. |
 | `ADVDATA` / `ADVEN` / `ADVSTR` | query/set | STRING-ONLY | BLE advertising data/enable/string config. |
 | `LEADDR` / `LENAME` | query | STRING-ONLY | BLE-specific address/name (may differ from classic BT `ADDR`/`NAME` on a dual-mode module). |
-| `SYSCLKCFG` / `SYSCLKCFG?` | query/set | TESTED (query) | **Clock-sync lead** — see `project_aa_missing_auth_complete` follow-up #24. No response content confirmed yet as of this doc. |
+| `SYSCLKCFG` / `SYSCLKCFG?` | query/set | TESTED (query) | Clock-sync lead, now closed — see `project_aa_missing_auth_complete` follow-up #24/#25. No response content confirmed yet from real hardware, but the BLE Current Time Service (CTS) theory that motivated this query was ruled out by direct binary byte-search (CTS/Current-Time/Battery UUID hit counts all sit at or below random-noise baseline for this binary's size, and every hit disassembles as ordinary code, not a GATT table) — this command remains a harmless standing diagnostic, not an active lead. |
 
 ## AAP / IAP (Android Auto Projection / Apple iAP — wireless AA/CarPlay detection)
 

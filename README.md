@@ -12,12 +12,13 @@ Four independent ways to reach the device, from lowest to highest risk/commitmen
 flowchart TD
     Start(["Stock Limcet P306 device"]) --> Q1{"What do you need?"}
 
-    Q1 -->|"Recovery / monitoring,<br/>interrupt boot"| Serial["Serial Console -- §2.0<br/>solder UART, read-only once Linux boots"]
+    Q1 -->|"Recovery / monitoring,<br/>interrupt boot"| Serial["Solder to serial header -- §2.0"]
     Q1 -->|"Root shell, no soldering,<br/>keep stock firmware"| Telnet["USB Telnet Payload -- §3.0<br/>payloads/msn_autocopy"]
     Q1 -->|"Run stock OR the full custom firmware,<br/>zero NAND writes"| SDBoot["Boot from SD/USB -- §6.0 / §7.0<br/>reverts to stock if card removed"]
     Q1 -->|"Commit to new firmware<br/>permanently"| Flash["Flash via SD Update Package -- §11.0 / §10.0<br/>permanently alters NAND"]
 
-    Serial --> Diagnose(["Diagnose / recover a bricked unit"])
+    Serial --> USBAdapter["Connect serial to USB adapter<br/>(read-only once Linux boots)"]
+    USBAdapter --> Diagnose(["Diagnose / recover a bricked unit,<br/>or drop to U-Boot prompt"])
     Telnet --> Connect["Join carplay_wifi AP,<br/>telnet device-ip 23"]
     Connect --> Poke(["Root shell -- poke around on stock firmware<br/>tools/* diagnostics over carplay_wifi"])
 
@@ -35,7 +36,7 @@ flowchart TD
     classDef lowrisk fill:#d4edda,stroke:#28a745,color:#155724
     classDef medrisk fill:#fff3cd,stroke:#e0a800,color:#856404
     classDef highrisk fill:#f8d7da,stroke:#dc3545,color:#721c24
-    class Serial,SDBoot,Diagnose,StockPath,StockUI,NewKernel,CustomUI lowrisk
+    class Serial,USBAdapter,SDBoot,Diagnose,StockPath,StockUI,NewKernel,CustomUI lowrisk
     class Telnet,Connect,Poke medrisk
     class Flash,Recon highrisk
 ```

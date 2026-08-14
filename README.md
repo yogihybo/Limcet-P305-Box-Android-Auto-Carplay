@@ -312,7 +312,15 @@ Everything in §4.0–§6.0 above describes the stock U-Boot binary, patched or 
 
 **Default (non-interrupted) autoboot order:** `bootusb` → `run nandboot` (fallback), gated by a `bootcheck` bootcount limit (default 3 unconfirmed attempts) that skips straight to `nandboot` if exceeded. `boothybrid`/`bootstock`/`bootstockusb` are **not** part of the automatic chain — they remain available as manual commands at the prompt. Import of `uEnv.txt` from the SD card happens first and can override any of this (including `bootcmd` itself) without recompiling. `bootmmc`/`bootusb`/`bootnand` are all hardware-confirmed working; watchdog-arm-before-jump + the bootcount fallback (see [`docs/4.1_UBOOT_REVERSE_ENGINEERING.md`](docs/4.1_UBOOT_REVERSE_ENGINEERING.md)) protect the automatic chain against a hung/failed jump.
 
-The `U-Boot` NAND partition itself remains unreadable by *any* U-Boot-level tool (this driver, any ECC mode, or stock's own native `switchecc`) — not a bug, just this partition's format, which is why `bootstock`/`bootstockusb` source the stock U-Boot binary from a file on the MMC or USB drive instead, then load the kernel from NAND as normal. Full NAND ECC root-cause writeup: [`docs/historical/HANDOFF_nand_ecc_uboot_vs_kernel.md`](docs/historical/HANDOFF_nand_ecc_uboot_vs_kernel.md).
+**Why `bootstock`/`bootstockusb` load the U-Boot *binary* from SD/USB instead of NAND:** the NAND
+partition that stores the stock U-Boot binary itself uses a different, undocumented raw read path
+(only `Stepldr`, the earlier-stage loader, can read it — confirmed by disassembly) — not even
+stock's own U-Boot tooling can read that partition from NAND. This is unrelated to the *kernel*
+NAND partition, which is a separate partition with normal ECC and reads fine (that's what
+`bootnand` and stock's own kernel boot both rely on). So `bootstock`/`bootstockusb` supply the
+U-Boot binary externally (SD/USB file) to work around the unreadable U-Boot partition, and once
+that binary is running, it loads the kernel from NAND normally, same as stock always did. Full
+NAND ECC root-cause writeup: [`docs/historical/HANDOFF_nand_ecc_uboot_vs_kernel.md`](docs/historical/HANDOFF_nand_ecc_uboot_vs_kernel.md).
 
 ### `build_bootable_sdcard.sh` — current capabilities
 

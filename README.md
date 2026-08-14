@@ -592,13 +592,6 @@ vendor_source/README.md    Pointer only — the ASTRI ARK1680 vendor source and 
                             linux-arkmicro repo (https://github.com/yogihybo/linux-arkmicro) — the
                             actual buildable U-Boot/kernel source tree, see §7.0
 
-ui/                Qt 4.7.4 UI analysis and resource extraction — see ui/UI.md
-  UI.md                      Qt module layout, key binaries, /msnprofile/ filesystem layout
-  qm_extracted/              Decompiled translation strings (lang_en.txt, lang_arabic.txt, ...)
-  rcc_extracted/             Decompiled Qt resource bundles, one dir per screen/resolution
-  tools/
-    extract_qm.py            Decompiles .qm translation files to text
-    extract_rcc.py           Decompiles .rcc resource bundles
 
 tools/              On-device diagnostic/utility binaries — static ARM builds, one subdirectory
                     per tool with its own README.md, synced into firmware_overlay/prado/usr/bin/
@@ -703,7 +696,6 @@ See [`docs/14.1_SOURCES.md`](docs/14.1_SOURCES.md) for full provenance of each f
 
 - [`hardware/BOARD_ANALYSIS.md`](hardware/BOARD_ANALYSIS.md) — physical board/component teardown notes (SoC, NAND, BT, MCU, CAN bus)
 - [`hardware/MCU/MCU_FIRMWARE_REVIEW.md`](hardware/MCU/MCU_FIRMWARE_REVIEW.md) — STM32F105 MCU firmware review
-- [`ui/UI.md`](ui/UI.md) — Qt UI analysis and resource extraction
 - [`custom_ui/README.md`](custom_ui/README.md) / [`custom_ui/docs/ARCHITECTURE.md`](custom_ui/docs/ARCHITECTURE.md) / [`custom_ui/docs/IMPLEMENTATION_PLAN.md`](custom_ui/docs/IMPLEMENTATION_PLAN.md) — the LVGL-based replacement UI: architecture and implementation status
 - [`vendor_source/README.md`](vendor_source/README.md) — the ASTRI ARK1680 vendor source and ArkMicro U-Boot/kernel BSP that used to be vendored directly into this repo now live in the separate [`linux-arkmicro`](https://github.com/yogihybo/linux-arkmicro) repo (the actual buildable U-Boot/kernel source tree — see [§7.0](#70-custom-u-boot-and-kernel)); this file is a pointer, not a copy
 - [`payloads/msn_autocopy/README.md`](payloads/msn_autocopy/README.md) — USB payload that exploits the `payloads/msn_autocopy` auto-copy mechanism to install and autostart `sshd` on a stock device

@@ -140,14 +140,14 @@ Every peripheral base address in `ark1668.dtsi` was checked against the Limcet P
 | RTC | `0xe4c00000` | ✅ — including exact size (`0x100`) |
 | MMC0 | `0xec400000` | ✅ (1 ref) |
 | MMC1 | `0xec800000` | ✅ (33 refs) |
-| GPU | `0xe0f00000` | ❌ not referenced at all — likely no GPU driver built for this board (not needed for a basic dash/camera compositor), or the IP block is fused off on this SKU |
+| GPU | `0xe0f00000` | ❌ not referenced in the scanned kernel image — but this is a scan-method blind spot, not evidence of an absent/unused GPU: stock's own `/etc/profile` had an `insmod .../galcore.ko` line (see `firmware_overlay/README.md`), i.e. the Vivante GPU driver is a loadable module, not compiled into the kernel image this scan covers |
 | VDEC0 | `0xe0900000` | ✅ (14 refs) |
 | I2S DAC / ADC | `0xe4000000` / `0xe8200000` | ✅ both |
 | I2C0 | `0xe4300000` | ✅ |
 
 **24 of 26 addresses match exactly** — 8 of them (all 6 UARTs + RTC + DMA) matched as complete `struct resource` entries with identical base **and size**. A 26-address match to this degree across a 32-bit address space is not plausible by coincidence. Combined with §2, this is strong evidence ARK1680/ARK1668 share the literal register layout, not just family lineage.
 
-The 2 misses (GPIO banks 1-3, VIC-high) are explained by runtime offset computation from a base register rather than separate compiled-in literals — not a contradiction, just a scan-method blind spot. GPU is the one genuine absence and is architecturally plausible (unused peripheral on this board variant).
+The 2 misses (GPIO banks 1-3, VIC-high) are explained by runtime offset computation from a base register rather than separate compiled-in literals — not a contradiction, just a scan-method blind spot. GPU is a third miss of the same kind, not a genuine absence: it's loaded as `galcore.ko`, a separate kernel module, so it was never going to show up in a scan of the static kernel image.
 
 ---
 

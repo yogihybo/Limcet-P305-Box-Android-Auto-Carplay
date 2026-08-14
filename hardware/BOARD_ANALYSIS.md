@@ -63,15 +63,17 @@ Photo: `board_photo_04.jpg`
 
 ### WiFi
 
-Realtek WiFi chip is co-located on or near the BT module. The rootfs carries five WiFi drivers:
+Realtek **RTL8811CU** — a separate chip from the BT module, internally wired to the SoC's `usb1` port (no external connector on that port). Confirmed via boot log across every available capture, no exceptions (`rtl8811cu` driver messages immediately after `usb 2-1: new high-speed USB device` — see `docs/WIRELESS_AND_INIT.md`). Not SDIO, despite MMC1's DTS comment calling it a "SDIO WiFi Controller" — that comment is confirmed wrong.
+
+The rootfs carries five WiFi drivers total, for other board variants:
 
 - `wlan_rtl8821cu.ko` (3.2MB)
 - `wlan_rtl8821cs.ko` (2.5MB)
 - `wlan_rtl8822cs.ko` (2.4MB)
-- `wlan_rtl8811cu.ko` (2.3MB)
+- `wlan_rtl8811cu.ko` (2.3MB) — the confirmed chip on this hardware
 - `wlan_rtl8189fs.ko` (1.2MB)
 
-Only one will be loaded at runtime depending on which chip is present. The WiFi is used exclusively as a software access point (`hostapd`) for Android Auto wireless and CarPlay wireless — it does not connect to external networks.
+Only one loads at runtime depending on which chip is present; on this project's own unit that's `wlan_rtl8811cu.ko`. The WiFi is used exclusively as a software access point (`hostapd`) for Android Auto wireless and CarPlay wireless — it does not connect to external networks.
 
 ---
 

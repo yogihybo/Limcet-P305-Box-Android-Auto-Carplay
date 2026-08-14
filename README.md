@@ -77,17 +77,22 @@ Hardware on the device has been identified by opening the device and reviewing t
 
 | Component | Part | Role |
 |-----------|------|------|
-| Product ID | Limcet-P306 | |
 | SoC | ARK1668 (die marking; ARK1680 in firmware/software — same device) ARK1680 (ARM Cortex-A5) | Main applications processor |
+| Video decoder | Hantro `hx170dec` (on-SoC IP block, VDEC0 @ `0xe0900000`) | Hardware H.264 decode for Android Auto/CarPlay video — `/dev/hx170dec`, driven via `libmfc.so` (see `tools/hx170-test/`) |
+| GPU | Vivante GC-series (on-SoC IP block @ `0xe0f00000`, IRQ 32; exact GC model not yet identified) | 2D/3D acceleration — used on stock's 3.4 kernel too, as a loadable `galcore.ko` module (`insmod`'d from stock's own `/etc/profile`, not compiled into the kernel image); confirmed working on this project's 4.19.192 kernel via its own `galcore.ko` 6.2.4.p1.8 + a matched `libGAL.so` (see `docs/AUDIO_SUBSYSTEM_INVESTIGATION.md`, `docs/DISPLAY_SUBSYSTEM.md`) |
+| USB controller | MUSB (on-SoC, dual-port: `usb0`/`usb1`) | Host/gadget — `usb0` is the board's only externally-facing port (CDC-NCM to host PC at `192.168.7.1`, USB-stick boot, wired Android Auto); `usb1` has no external connector and is host mode purely for the onboard RTL8811CU WiFi chip; port role is boot-command-dependent (see §7.0) |
+| MMC/SD controller | Synopsys DesignWare `dw-mshc` (MMC0 @ `0xec400000`, MMC1 @ `0xec800000`) | MMC0 = SD card slot, confirmed working (`mmc0: new SD card`); MMC1's DTS comment calls it "SDIO WiFi Controller" but this is confirmed wrong — the real WiFi chip enumerates on USB (`usb1`), not SDIO — MMC1's actual role is unconfirmed |
+| UARTs | 6× on-SoC UART (`UART0`–`UART5`) + hsuart pair | UART0 = serial console `/dev/ttyS0` (§2.0); hsuart0 (UART4, `0xe4f00000`) = MCU link `/dev/ttyHS0`; hsuart1 (UART5, `0xe4800000`) = Bluetooth `/dev/ttyHS1`; a second, unexplained port `/dev/ttyS2` (4800 baud) carries real framed traffic to an unidentified peripheral (see `docs/MCU_ADAPTERS.md`) |
 | NAND | Toshiba TC58BVG0S3HTA00, 128 MB SLC | Firmware/rootfs storage, on a soldered daughter module (the "Limcet Box" compute module) |
 | MCU | STM32F105RBT6 (ARM Cortex-M3) | Vehicle-side I/O — CAN bus, touch/button/reverse/ACC-IGN signals — talks to the ARK1668 over `/dev/ttyHS0` |
 | CAN transceiver | NXP TJA1042 | Bridges the MCU's CAN controller to the vehicle CANH/CANL lines |
-| BT/WiFi module | Feasycom FSC-BT8251 V1.1 (Realtek RF) | Bluetooth + WiFi AP, over `/dev/ttyHS1` |
+| Bluetooth module | Feasycom FSC-BT8251 V1.1 (Realtek RTL-series BT SoC) | HFP/A2DP/AVRCP/iAP2, over `/dev/ttyHS1` at 1.5Mbps; enable pin `gpio91` |
+| WiFi chip | Realtek RTL8811CU — confirmed via boot log across every available capture, no exceptions (`rtl8811cu` driver messages immediately after `usb 2-1: new high-speed USB device`) | Onboard, internally wired to `usb1` (no external connector on that port) — software AP only (`hostapd`), for Android Auto/CarPlay wireless, does not connect to external networks |
 | Rear camera decoder | RN6752 | CVBS composite → ITU-656 digital video for the reversing camera feed |
+| Audio DAC/ADC | ARK1668 on-SoC sigma-delta DAC (`ark_sddac`) + ADC (`ark_sdadc`), I2S1 @ `0xe4000000` (DAC) / `0xe8200000` (ADC) | The real, confirmed-only playback/capture path (stock's own `aplay -l`: `card 0: ARKSDDAC [ARK-SDDAC]`). A 2026-07-16 theory that playback instead routed through an external Cirrus Logic CS4334 chip was investigated and reverted — `cs4334_*` disassembles to no-op stubs in stock's own kernel, i.e. a vestigial board-file dai-link with no real chip behind it, not a second physical DAC (see `docs/AUDIO_SUBSYSTEM_INVESTIGATION.md`) |
+| Audio IC | Rohm BD37033FV | 5.1-ch digital sound processor (volume/mixing/EQ, downstream of the DAC above), I2C bus 2 @ `0x40` — chip does not appear to respond: `bd37033_write_byte timeout` confirmed via `dmesg` on both stock and this project's firmware, root cause not fully resolved (see `docs/BD37033.md`, `docs/AUDIO_SUBSYSTEM_INVESTIGATION.md`) |
 | Display adapter | DC_FUJITSU_CON96P_REV_002 (interposer) | Adapts the main board's edge connector to the LCD panel's 96-pin Fujitsu FPC |
 | LCD Display | 800×480 RGB888 | Part of the factory head unit |
-| Bootloader | U-Boot 2012.10 | Stock Bootloader |
-| OS | Linux 3.4.0 / BusyBox | Stock Linux Build |
 
 **Connecting to the existing car wiring:**
 
@@ -96,6 +101,30 @@ Hardware on the device has been identified by opening the device and reviewing t
 - The reversing camera connects as a standard CVBS composite feed, decoded by the RN6752 into digital video for the SoC. It's believed that this route is used for early camera loading (with 2s of boot) while the rest of the system is still initialising.
 
 Full teardown details and board photos are in `hardware/BOARD_ANALYSIS.md` (linked below).
+
+### Software
+
+The device runs two distinct software stacks depending on which boot path is active (see [Choose Your Path](#choose-your-path) above): the stock 3.4-kernel firmware as shipped, and this project's own 4.19.192 port. Most of the userspace binaries/libraries are reused unmodified between the two — only the kernel, bootloader, and a handful of matched driver/library pairs actually differ.
+
+| Component | Stock | This Project |
+|-----------|-------|---------------|
+| Product identity | `ProductId=Limcet-P306` (`MsnProductInfo.ini`) | unchanged |
+| Boot ROM | SoC mask ROM, fixed-function, not user-modifiable — loads `Nboot` from NAND `0x000000` | unchanged |
+| S-Loader — Nboot | `Nboot.bin`, 128 KB, NAND `0x000000` (MTD0) — proprietary, closed source | unchanged — **never flash via SD**, corruption bricks the board and requires JTAG to recover |
+| S-Loader — Stepldr | `Stepldr.bin` — proprietary, closed source; initializes DDR3, checks the SD card FAT32 partition (p1) for `UBOOT.BIN` before falling back to NAND `0x020000`, and validates a 96-byte ARK header (magic `0x12345678`) before accepting any U-Boot binary | unchanged — the same binary chainloads both stock and this project's custom U-Boot; the header is injected into the custom build via `build_tools/inject_ark_header.py` so Stepldr accepts it |
+| Bootloader | U-Boot 2012.10 — proprietary board port, closed source | U-Boot 2018.07 — `ark1668_limcet_p305` board port, built from `linux-arkmicro` source (§7.0) |
+| Kernel | Linux 3.4.0 | Linux 4.19.192, built from `linux-arkmicro` source |
+| Root filesystem | BusyBox 1.25.0-based | BusyBox 1.30.1, rebuilt from source (~390 applets, incl. `/sbin/init`) |
+| UI framework | Qt 4.7.4 (QWS + DirectFB/fbdev), closed-source `MsnCoreApp` | stock UI runs unmodified on the new kernel; optional replacement: [`custom_ui/`](custom_ui/README.md) (LVGL-based, open source) |
+| Main application | `MsnCoreApp` — head-unit UI, settings, USB auto-copy mechanism | unchanged (stock binary reused) |
+| GPU driver/lib | `galcore.ko` + `libGAL.so` (Vivante, vendor-shipped) | `galcore.ko` 6.2.4.p1.8 + matched `libGAL.so`, rebuilt for 4.19.192 |
+| Video decode | `libmfc.so` (Hantro `hx170dec` userspace API) | unchanged |
+| Audio control | `libMsnSound.so` (`Sound_BD37033`/`Sound_PT2312`/`Sound_MCU` backends, selected via `SoundType`) | unchanged |
+| MCU protocol | `libMcuCenter.so` (`McuType=6`, `MCUAdapter_BoxP300`, over `/dev/ttyHS0`) | unchanged |
+| CAN adapter SDK | `libCanBus.so` — multi-vendor CAN decoder-box SDK; unused on this device (`CanType=0`, decoding done by the MCU instead) | unchanged |
+| Bluetooth stack | `rtkbt` userspace stack (Realtek), over `/dev/ttyHS1` | unchanged |
+| WiFi AP | `hostapd` + `udhcpd`, SSID `carplay_wifi` | unchanged |
+| Remote access | none — serial console is receive-only once Linux boots | SSH (`/usr/bin/sshd`, OpenSSH 4.6p1) + USB CDC-NCM networking baked in; telnet available on stock too via the USB auto-copy payload (§9.0/§10.0) |
 
 **Documentation:**
 
@@ -688,13 +717,13 @@ Five Realtek drivers are bundled in `/lib/modules/3.4.0/`. At early boot, `wifi_
 
 | Priority | Module | Chip | Interface |
 |----------|--------|------|-----------|
-| 1 | `wlan_rtl8821cs.ko` | RTL8821CS | SDIO (most likely — Feasycom BT+WiFi combo) |
+| 1 | `wlan_rtl8821cs.ko` | RTL8821CS | SDIO |
 | 2 | `wlan_rtl8822cs.ko` | RTL8822CS | SDIO |
 | 3 | `wlan_rtl8189fs.ko` | RTL8189FS | SDIO |
 | 4 | `wlan_rtl8821cu.ko` | RTL8821CU | USB |
-| 5 | `wlan_rtl8811cu.ko` | RTL8811CU | USB |
+| 5 | `wlan_rtl8811cu.ko` | RTL8811CU | USB — **the confirmed chip on this hardware**, see [§1.0 Hardware](#10-hardware) |
 
-If the main app (`MsnCoreApp`) has already placed the correct driver at `/tmp/wlan.ko`, that is used instead. If `wlan0` does not come up, check `dmesg` on the serial console to identify which chip is present and adjust the probe order in `wifi_ap.sh`.
+The other four modules are kept for other board variants — this project's own unit has the RTL8811CU confirmed (onboard, internally wired to `usb1`), so `wlan_rtl8811cu.ko` is what actually loads. If the main app (`MsnCoreApp`) has already placed the correct driver at `/tmp/wlan.ko`, that is used instead. On a different unit where `wlan0` doesn't come up, check `dmesg` on the serial console to identify which chip is present and adjust the probe order in `wifi_ap.sh`.
 
 ### SSH Access
 

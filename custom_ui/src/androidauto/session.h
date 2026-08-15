@@ -166,8 +166,8 @@ private:
     // Constructed and armed the same deferred way as the channels
     // above -- see microphone_channel.h's header comment for why this
     // exists (this project never advertised any MediaSourceService
-    // channel at all until a fresh-eyes review found the gap) and why
-    // it's structural-only (no real mic capture wired in yet).
+    // channel at all until a fresh-eyes review found the gap) -- now
+    // backed by real capture, see microphone_channel.h's own comment.
     MicrophoneChannel::Pointer microphoneChannel_;
     // Constructed and armed the same deferred way as the channels
     // above -- see bluetooth_channel.h's header comment for why this

@@ -30,8 +30,41 @@ namespace {
 // it's harmless and may matter for geometry/colorkey reapplication,
 // but this explicit call is the one with hardware precedent).
 constexpr unsigned long kArkfbShowWindowReal = 0x4f2b;
+constexpr unsigned long kArkfbHideWindowReal = 0x4f2c;
+
+// Shared body for hide_display()/show_display() -- same independent-
+// fd-open pattern as init_display()'s own show-ioctl call above,
+// deliberately not reusing any fd LVGL itself holds.
+bool set_layer_visible(const char * fb_path, bool visible) {
+    int fd = open(fb_path, O_RDWR);
+    if (fd < 0) {
+        std::fprintf(stderr, "%s hal::display::%s: open(%s) failed\n", core::log_timestamp().c_str(),
+                     visible ? "show_display" : "hide_display", fb_path);
+        return false;
+    }
+    unsigned long cmd = visible ? kArkfbShowWindowReal : kArkfbHideWindowReal;
+    bool ok = ioctl(fd, cmd, 0) == 0;
+    if (!ok) {
+        perror(visible ? "hal::display::show_display: ioctl(ARKFB_SHOW_WINDOW_REAL)"
+                        : "hal::display::hide_display: ioctl(ARKFB_HIDE_WINDOW_REAL)");
+    } else {
+        std::printf("%s hal::display::%s: ioctl(%s) on %s: ok\n", core::log_timestamp().c_str(),
+                    visible ? "show_display" : "hide_display",
+                    visible ? "ARKFB_SHOW_WINDOW_REAL" : "ARKFB_HIDE_WINDOW_REAL", fb_path);
+    }
+    close(fd);
+    return ok;
+}
 
 }  // namespace
+
+bool hide_display(const char * fb_path) {
+    return set_layer_visible(fb_path, false);
+}
+
+bool show_display(const char * fb_path) {
+    return set_layer_visible(fb_path, true);
+}
 
 lv_display_t * init_display(const char * fb_path) {
     // Pre-flight diagnostic, entirely separate from lv_linux_fbdev's own

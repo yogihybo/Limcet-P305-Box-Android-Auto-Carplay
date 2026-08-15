@@ -1,21 +1,20 @@
-// Minimal ALSA PCM playback wrapper, dlopen'd at runtime against the
-// target rootfs's own libasound.so.2.0.0 -- NOT statically linked, and
-// deliberately not built against alsa-lib's own headers (not
-// cross-compiled/vendored anywhere in this project). Matches the same
-// pattern already proven working for libmfc.so (see tools/hx170-test/
-// hx170-test.c and androidauto/video_channel.h): dlopen a real,
-// already-present target .so at runtime rather than requiring it at
-// link time. This sidesteps the whole static-linking/glibc-mismatch
-// question entirely -- the target's own libasound.so.2.0.0 was built
-// against the target's own glibc 2.27, and once loaded via the
-// target's own runtime dynamic linker (not our cross toolchain's), it
-// resolves its own dependencies normally.
+// Minimal ALSA PCM playback wrapper, statically linked against our own
+// cross-compiled alsa-lib (see custom_ui/Makefile's ALSA_ARM_INSTALL) --
+// NOT dlopen'd against the target rootfs's libasound.so.2.0.0 anymore.
 //
-// The ALSA snd_pcm_* API used here is 100% public, standard, stable
-// ABI (unlike libmfc.so's proprietary Hantro wrapper) -- the function
-// signatures and enum values below are not reverse-engineered, they're
-// from ALSA's own long-stable public headers. Only the dlopen path and
-// exact PCM device string are project-specific/confirmed.
+// 2026-08-15 REVISED: this used to dlopen the target's own
+// libasound.so.2.0.0 at runtime (same pattern as libmfc.so) specifically
+// to avoid a static-linking/glibc-mismatch concern -- but that dlopen
+// call itself was one of the last remaining triggers for this binary's
+// glibc static-NSS-init startup crash (see hantro_dlopen.c's own header
+// comment for the full story). Cross-compiled alsa-lib 1.2.12 statically
+// with `--with-libdl=no` instead, which builds every PCM/control plugin
+// this device's real /etc/asound.conf needs (dmix, dsnoop, softvol,
+// plug, rate, hw) directly into libasound.a rather than as separate
+// dlopen'd modules -- confirmed via `nm` that the resulting libasound.a
+// references no dlopen/dlsym/dlclose symbols at all. This closes the
+// last dlopen gap outside of the one intentional, already-handled case
+// (libmfc.so, via hantro_dlopen.c's own minimal loader).
 //
 // PCM device strings are real, confirmed values -- NOT guessed --
 // cross-referenced from docs/AUDIO_SUBSYSTEM_INVESTIGATION.md's fully
@@ -35,6 +34,8 @@
 #include <cstdint>
 #include <string>
 
+#include <alsa/asoundlib.h>
+
 namespace androidauto {
 
 class AlsaOutput {
@@ -48,10 +49,10 @@ public:
     AlsaOutput(const AlsaOutput &) = delete;
     AlsaOutput & operator=(const AlsaOutput &) = delete;
 
-    // dlopen's libasound, opens the PCM device, and configures it per
-    // the constructor's sample-format parameters. Returns false (logs
-    // the reason) on any failure -- non-fatal, matches this codebase's
-    // general "missing/failed optional hardware isn't fatal" pattern.
+    // Opens the PCM device and configures it per the constructor's
+    // sample-format parameters. Returns false (logs the reason) on any
+    // failure -- non-fatal, matches this codebase's general "missing/
+    // failed optional hardware isn't fatal" pattern.
     bool open();
 
     // Writes interleaved PCM samples. Returns false on an
@@ -68,18 +69,7 @@ private:
     uint32_t bitsPerSample_;
     uint32_t channels_;
 
-    void * lib_ = nullptr;
-    void * pcmHandle_ = nullptr;
-
-    // Resolved via dlsym in open() -- see alsa_output.cpp for the
-    // exact public ALSA signatures.
-    int (*snd_pcm_open_)(void **, const char *, int, int) = nullptr;
-    int (*snd_pcm_set_params_)(void *, int, int, unsigned int, unsigned int, int,
-                                unsigned int) = nullptr;
-    long (*snd_pcm_writei_)(void *, const void *, unsigned long) = nullptr;
-    int (*snd_pcm_recover_)(void *, int, int) = nullptr;
-    int (*snd_pcm_close_)(void *) = nullptr;
-    const char * (*snd_strerror_)(int) = nullptr;
+    snd_pcm_t * pcmHandle_ = nullptr;
 };
 
 }  // namespace androidauto

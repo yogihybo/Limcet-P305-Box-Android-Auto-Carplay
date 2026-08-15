@@ -17,10 +17,27 @@
  * linked applications requires..." linker warnings -- and dlopen
  * (defensive, in case any applet path pulls it in). Both go through the
  * same broken static-dlopen-NSS init machinery, so both need wrapping.
+ *
+ * 2026-08-15: this file is ALSO reused (via custom_ui/Makefile's
+ * NSS_STUB_OBJ) for 4 aasdk-based test-tool binaries that are NOT
+ * busybox and have none of its own non-NSS pwd/grp implementations --
+ * the reasoning above for leaving getpwnam/getgrnam etc. unwrapped is
+ * busybox-specific and doesn't extend to them. Once those binaries
+ * started statically linking alsa-lib (custom_ui's own cross-compiled
+ * libasound.a, `--with-libdl=no` -- see androidauto/alsa_output.h),
+ * its dmix/userfile plugins pulled in two REENTRANT variants busybox's
+ * own pwd_grp.c doesn't provide either way (confirmed via this exact
+ * build's own linker warnings): getpwuid_r (already wrapped by
+ * nss_stub.c, added here too) and getgrnam_r (new -- nss_stub.c itself
+ * only had getgrgid_r, not the by-name lookup). Adding these two is
+ * safe for busybox's own build as well -- it doesn't define the `_r`
+ * suffixed names itself, so there's no collision risk.
  */
+#include <grp.h>
 #include <netdb.h>
-#include <sys/socket.h>
+#include <pwd.h>
 #include <stddef.h>
+#include <sys/socket.h>
 
 int __wrap_getaddrinfo(const char *node, const char *service,
 			const void *hints, void *res) {
@@ -60,3 +77,16 @@ void *__wrap_dlsym(void *handle, const char *symbol) {
 	return NULL;
 }
 int __wrap_dlclose(void *handle) { (void)handle; return 0; }
+
+int __wrap_getpwuid_r(uid_t uid, struct passwd *pwd, char *buf,
+		       size_t buflen, struct passwd **result) {
+	(void)uid; (void)pwd; (void)buf; (void)buflen;
+	*result = NULL;
+	return 0;
+}
+int __wrap_getgrnam_r(const char *name, struct group *grp, char *buf,
+		       size_t buflen, struct group **result) {
+	(void)name; (void)grp; (void)buf; (void)buflen;
+	*result = NULL;
+	return 0;
+}

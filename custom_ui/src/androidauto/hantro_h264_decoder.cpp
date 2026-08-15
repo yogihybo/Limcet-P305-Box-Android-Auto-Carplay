@@ -61,6 +61,21 @@ constexpr unsigned long kMemallocIocxFreebuffer = 0x40046b02;
 constexpr const char * kLibPath = "/usr/lib/libmfc.so";
 constexpr const char * kMemallocPath = "/tmp/dev/memalloc";
 
+// 2026-08-15: found on real hardware -- H264DecDecode() was returning
+// 1, 3, and 4 on every single call, logged as "failed" every time,
+// meaning every decoded frame was being silently discarded even
+// though the decoder was genuinely working. Root cause: this is the
+// real Hantro H264DecRet enum (confirmed against the vendor SDK header,
+// buildroot-external/package/hx170dec/software/include/h264decapi.h in
+// the ark1668ed-bsp tree) -- 0 through 6 are ALL non-error/informational
+// return values (H264DEC_STRM_PROCESSED=1, H264DEC_PIC_RDY=2,
+// H264DEC_PIC_DECODED=3 -- what real hardware was returning almost
+// every call, meaning a picture WAS ready -- H264DEC_HDRS_RDY=4,
+// H264DEC_ADVANCED_TOOLS=5, H264DEC_PENDING_FLUSH=6); only NEGATIVE
+// values are real errors. Treating "!= 0" as failure rejected the
+// overwhelming majority of genuinely successful decode calls.
+constexpr int kH264DecPicRdy = 2;
+
 }  // namespace
 
 HantroH264Decoder::HantroH264Decoder() = default;
@@ -169,18 +184,26 @@ bool HantroH264Decoder::decodeFrame(const uint8_t * data, size_t len) {
 
     H264DecOutput output{};
     int decodeRet = h264DecDecode_(decoderInst_, &input, &output);
-    if (decodeRet != 0) {
+    if (decodeRet < 0) {
         std::fprintf(stderr, "%s androidauto::HantroH264Decoder: H264DecDecode failed, ret=%d\n", androidauto::logTimestamp().c_str(),
                      decodeRet);
         return false;
     }
 
+    // Always worth checking for a ready picture regardless of the
+    // specific non-negative decodeRet above (H264DEC_PIC_DECODED=3 is
+    // the common case once headers are parsed, but there's no harm in
+    // checking after H264DEC_HDRS_RDY=4/H264DEC_STRM_PROCESSED=1/etc.
+    // too -- H264DecNextPicture() itself reports H264DEC_OK=0 when
+    // nothing is ready yet, which is the normal/expected outcome most
+    // calls, not an error).
     H264DecPicture picture{};
     int pictureRet = h264DecNextPicture_(decoderInst_, &picture, 0);
-    if (pictureRet != 0) {
-        // Not necessarily an error -- H264DecNextPicture legitimately
-        // returns non-zero when no picture is ready yet (e.g. still
-        // buffering reference frames).
+    if (pictureRet != kH264DecPicRdy) {
+        if (pictureRet < 0) {
+            std::fprintf(stderr, "%s androidauto::HantroH264Decoder: H264DecNextPicture failed, ret=%d\n",
+                         androidauto::logTimestamp().c_str(), pictureRet);
+        }
         return false;
     }
 

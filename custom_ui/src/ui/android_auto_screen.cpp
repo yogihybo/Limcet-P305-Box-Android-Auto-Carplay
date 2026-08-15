@@ -10,6 +10,7 @@
 #include <utility>
 
 #include "hal/androidauto_client.h"
+#include "hal/display.h"
 #include "hal/knob.h"
 #include "core/navigation.h"
 #include "ui/bluetooth_screen.h"
@@ -79,6 +80,10 @@ struct Widgets {
     lv_obj_t * content;
     lv_obj_t * state_label;
     lv_obj_t * detail_label;
+    // Tracks whether hal::hide_display() has already been called, so
+    // poll_timer_cb() only issues the ioctl on an actual Connected/
+    // not-Connected transition rather than every 500ms tick.
+    bool display_hidden = false;
 };
 
 // Polls the sidecar and refreshes the status widgets -- created
@@ -105,14 +110,44 @@ void poll_timer_cb(lv_timer_t * timer) {
 
     if (status.name == "Connected") {
         lv_obj_add_flag(w->content, LV_OBJ_FLAG_HIDDEN);
+        // 2026-08-15: per explicit request, AA should take over the
+        // FULL screen once connected, not just the area underneath
+        // this screen's own (now-transparent, see create_android_auto_
+        // screen()'s bg_opa comment) body -- AA's own in-app UI has its
+        // own exit affordance, so this screen's header/back button
+        // don't need to stay visible on top of the video. Hardware-
+        // level layer disable (hal::hide_display(), same ARKFB_HIDE_
+        // WINDOW_REAL ioctl already proven for the video layer itself)
+        // rather than relying solely on LVGL-side transparency, since
+        // it sidesteps the LCDC compositor's alpha-blend behavior
+        // entirely -- see reverse_camera_screen.cpp's own header
+        // comment for the still-open uncertainty that motivates this.
+        if (!w->display_hidden) {
+            hal::hide_display();
+            w->display_hidden = true;
+        }
     } else {
         lv_obj_clear_flag(w->content, LV_OBJ_FLAG_HIDDEN);
+        if (w->display_hidden) {
+            hal::show_display();
+            w->display_hidden = false;
+        }
     }
 }
 
 void screen_delete_cb(lv_event_t * e) {
     auto * pair = static_cast<std::pair<lv_timer_t *, Widgets *> *>(lv_event_get_user_data(e));
     lv_timer_delete(pair->first);
+    // 2026-08-15: defensive restore -- poll_timer_cb() above only calls
+    // hal::show_display() on a Connected->not-Connected transition
+    // observed via its own 500ms poll, which never fires again once
+    // this screen is torn down. Without this, navigating away (or the
+    // app itself exiting) while still Connected would leave the OSD2/
+    // LVGL hardware layer permanently disabled -- this whole UI would
+    // go dark with no way back short of a reboot.
+    if (pair->second->display_hidden) {
+        hal::show_display();
+    }
     delete pair->second;
     delete pair;
     // 2026-08-12: hide the AA video hardware layer the moment this

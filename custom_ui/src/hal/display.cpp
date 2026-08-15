@@ -32,10 +32,41 @@ namespace {
 constexpr unsigned long kArkfbShowWindowReal = 0x4f2b;
 constexpr unsigned long kArkfbHideWindowReal = 0x4f2c;
 
+// 2026-08-15: found on real hardware -- hide_display() alone never
+// worked, and this comment's own old "kept below too, since it's
+// harmless" claim about lv_linux_fbdev_set_force_refresh() was wrong.
+// LVGL's fbdev flush callback (lv_linux_fbdev.c) issues
+// ioctl(FBIOPUT_VSCREENINFO) on EVERY single flush whenever
+// force_refresh is on, which init_display() below turns on
+// unconditionally and never off -- and per THIS ioctl's own real
+// kernel effect (the "OSD1-unconditional-enable path" this file's
+// init_display() comment already documented), FBIOPUT_VSCREENINFO
+// re-enables the OSD1/fb0 hardware layer as a side effect regardless
+// of its current SHOW/HIDE state. So every LVGL redraw after
+// hide_display() -- and this screen keeps redrawing even when mostly
+// idle (status bar glyphs, etc) -- silently re-showed fb0 again,
+// completely undoing the hide. Matches exactly what was observed: no
+// video ever visible, but a brief flash of the video layer during
+// rapid screen switching (the narrow window between hide_display() and
+// the next forced flush winning again). Fixed by tracking the one
+// lv_display_t init_display() creates and toggling its own
+// force_refresh flag in lockstep with hide/show, so LVGL stops
+// fighting the hide.
+lv_display_t * g_display = nullptr;
+
 // Shared body for hide_display()/show_display() -- same independent-
 // fd-open pattern as init_display()'s own show-ioctl call above,
 // deliberately not reusing any fd LVGL itself holds.
 bool set_layer_visible(const char * fb_path, bool visible) {
+    // See g_display's own comment -- must happen before the ioctl below
+    // when hiding (so no forced flush can win the race and re-show the
+    // layer right after), and after when showing (so the immediate
+    // next flush re-asserts the layer being on, matching this
+    // function's original show behavior).
+    if (!visible && g_display) {
+        lv_linux_fbdev_set_force_refresh(g_display, false);
+    }
+
     int fd = open(fb_path, O_RDWR);
     if (fd < 0) {
         std::fprintf(stderr, "%s hal::display::%s: open(%s) failed\n", core::log_timestamp().c_str(),
@@ -53,6 +84,11 @@ bool set_layer_visible(const char * fb_path, bool visible) {
                     visible ? "ARKFB_SHOW_WINDOW_REAL" : "ARKFB_HIDE_WINDOW_REAL", fb_path);
     }
     close(fd);
+
+    if (visible && g_display) {
+        lv_linux_fbdev_set_force_refresh(g_display, true);
+    }
+
     return ok;
 }
 
@@ -167,10 +203,14 @@ lv_display_t * init_display(const char * fb_path) {
     // Belt-and-suspenders: also force every flush to go through
     // FBIOPUT_VSCREENINFO (fb_set_par()'s own OSD1-unconditional-
     // enable path, per linux-arkmicro's ark1668_lcdfb.c) in case
-    // something later disables the layer again.
+    // something later disables the layer again. See g_display's own
+    // comment -- hide_display()/show_display() toggle this back off/on
+    // around their own ioctls, so this "always on" state only holds
+    // while the layer isn't deliberately hidden.
     lv_linux_fbdev_set_force_refresh(disp, true);
     std::printf("%s hal::display::init_display: done, force_refresh enabled\n", core::log_timestamp().c_str());
 
+    g_display = disp;
     return disp;
 }
 

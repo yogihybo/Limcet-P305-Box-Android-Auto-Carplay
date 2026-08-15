@@ -3,8 +3,6 @@
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
-#include <ctime>
-#include <string>
 
 #include "androidauto/log_timing.h"
 
@@ -43,26 +41,6 @@ namespace {
 // only kicks in for the "clearly never been set" case.
 constexpr std::int64_t kSaneEpochMillisThreshold = 1577836800000LL;    // 2020-01-01 UTC
 constexpr std::int64_t kFallbackBaselineEpochMillis = 1755043200000LL;  // ~2026-08-13 UTC
-
-// 2026-08-15: purely diagnostic -- formats an epoch-millis value (e.g.
-// an inbound PingRequest.timestamp from the phone) as a human-readable
-// UTC date, so a hardware log makes it obvious at a glance whether a
-// given timestamp is plausible real wall-clock time or clearly
-// implausible (near-epoch/garbage), without needing to hand-convert
-// the raw integer. See onPingRequest()'s own comment for why this
-// value is worth watching: if the phone ever proactively sends us a
-// PingRequest (unconfirmed so far -- this project's own Pinger only
-// ever observed the reverse direction), its timestamp would be a real,
-// Bluetooth-independent source of wall-clock time, sidestepping the
-// whole AT+CCLK/HFPTIME/CTS dead end documented elsewhere.
-std::string formatEpochMillisUtc(std::int64_t epochMillis) {
-    std::time_t seconds = static_cast<std::time_t>(epochMillis / 1000);
-    std::tm tmUtc{};
-    gmtime_r(&seconds, &tmUtc);
-    char buf[32];
-    std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &tmUtc);
-    return std::string(buf) + " UTC";
-}
 
 std::int64_t plausibleEpochMillis() {
     auto real = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -337,9 +315,25 @@ void Session::onServiceDiscoveryRequest(
     // caveat -- this uses aasdk's own ChannelId ordinal as a best-
     // available proxy, not an independently confirmed wire value.
     inputService->set_id(static_cast<std::int32_t>(aasdk::messenger::ChannelId::INPUT_SOURCE));
-    auto *touchscreen = inputService->mutable_input_source_service()->add_touchscreen();
+    auto *inputSourceService = inputService->mutable_input_source_service();
+    auto *touchscreen = inputSourceService->add_touchscreen();
     touchscreen->set_width(800);
     touchscreen->set_height(480);
+
+    // 2026-08-15: the physical control knob (hal/knob.h) is real
+    // hardware this device has -- KeyBindingRequest's own reply
+    // ("no wheel/hardware keys to bind") only ever meant this project
+    // hadn't wired it into the AA session yet, not that the hardware
+    // doesn't exist. These are the real AAOS RotaryController keycodes
+    // (confirmed against AOSP's own KeyEvent.java, not guessed):
+    // KEYCODE_SYSTEM_NAVIGATION_UP/DOWN for rotation ticks,
+    // KEYCODE_DPAD_CENTER for the push button. Declaring them here is
+    // required -- a keycode InputChannel::sendKey() sends but that
+    // isn't listed here may be silently ignored by the phone. See
+    // hal/knob.cpp for where these get sent from.
+    inputSourceService->add_keycodes_supported(280);  // KEYCODE_SYSTEM_NAVIGATION_UP
+    inputSourceService->add_keycodes_supported(281);  // KEYCODE_SYSTEM_NAVIGATION_DOWN
+    inputSourceService->add_keycodes_supported(23);   // KEYCODE_DPAD_CENTER
 
     auto *videoService = response.add_channels();
     videoService->set_id(static_cast<std::int32_t>(aasdk::messenger::ChannelId::MEDIA_SINK_VIDEO));
@@ -513,12 +507,14 @@ void Session::sendPing() {
 
     auto promise = aasdk::channel::SendPromise::defer(strand_);
     promise->then(
-        // 2026-08-12: was silent on success -- per explicit request for
-        // more logging instead of a live-debugger capture, this now
-        // confirms each ping actually went out, so a hardware log can
-        // show whether the connection died before or after a given
-        // ping's send completed.
-        []() { std::printf("[+%ldms] androidauto: ping request sent\n", elapsedMs()); },
+        // 2026-08-15: the routine "ping request sent" success log
+        // (added 2026-08-12 for a since-resolved investigation into
+        // whether the connection survived past pings at all) removed
+        // per explicit request -- ping/pong is confirmed stable and
+        // fires every ~1s, flooding the console for no remaining
+        // diagnostic value. Failure still logged; that's the case that
+        // actually matters now.
+        []() {},
         [](const aasdk::error::Error &e) {
             std::printf("[+%ldms] androidauto: ping request send failed: %s\n", elapsedMs(), e.what());
         });
@@ -702,24 +698,21 @@ void Session::onPingRequest(const aap_protobuf::service::control::message::PingR
     // as a keep-alive; echoing the timestamp back is the whole
     // contract, per PingResponse's own single required field.
     //
-    // 2026-08-12: this whole handler used to be silent (no request-
-    // received log, silent send-success) -- added per explicit request
-    // for more logging instead of a live-debugger capture. The phone
-    // sending us a PingRequest at all would be a real, useful data
-    // point (this project's own Pinger already proactively pings the
-    // phone -- see schedulePing() -- so this handler firing means the
-    // phone ALSO pings the head unit, or is answering in a way this
-    // project hadn't observed before).
-    std::printf("[+%ldms] androidauto: ping request received from phone (timestamp=%lld, %s)\n", elapsedMs(),
-                static_cast<long long>(request.timestamp()),
-                formatEpochMillisUtc(request.timestamp()).c_str());
+    // 2026-08-15: the routine "request received"/"response sent"
+    // success logs (added 2026-08-12 to confirm ping/pong was actually
+    // happening bidirectionally, and later used to determine this
+    // field isn't usable for wall-clock time -- both questions long
+    // since settled) removed per explicit request -- this fires every
+    // ~1s in a stable session and was flooding the console for no
+    // remaining diagnostic value. Failure still logged.
+    (void)request;
 
     aap_protobuf::service::control::message::PingResponse response;
     response.set_timestamp(request.timestamp());
 
     auto promise = aasdk::channel::SendPromise::defer(strand_);
     promise->then(
-        []() { std::printf("[+%ldms] androidauto: ping response sent\n", elapsedMs()); },
+        []() {},
         [](const aasdk::error::Error &e) {
             std::printf("[+%ldms] androidauto: ping response send failed: %s\n", elapsedMs(), e.what());
         });
@@ -729,13 +722,28 @@ void Session::onPingRequest(const aap_protobuf::service::control::message::PingR
 }
 
 void Session::onPingResponse(const aap_protobuf::service::control::message::PingResponse &) {
-    // 2026-08-12: previously silent -- this is the phone acknowledging
-    // one of OUR proactive pings (see sendPing()/schedulePing()); a
-    // real hardware log showing these arriving regularly would rule
-    // out the head-unit-ping-timeout theory even more concretely than
-    // the reasoning already in schedulePing()'s own comment.
-    std::printf("[+%ldms] androidauto: ping response received from phone\n", elapsedMs());
+    // 2026-08-15: routine "response received" success log (added
+    // 2026-08-12 to rule out a head-unit-ping-timeout theory, long
+    // since settled) removed per explicit request -- same console-
+    // flood reasoning as onPingRequest()'s own comment.
     controlChannel_->receive(this->shared_from_this());
+}
+
+void Session::sendInputKey(std::uint32_t keycode) {
+    // Called from WirelessSessionManager::sendInputKey(), itself
+    // called from the sidecar's own socket-connection thread handling
+    // a "KEY <code>" command -- a completely different thread from
+    // this session's own strand_. Every other channel/send operation
+    // in this class only ever runs from within strand_ (posted there
+    // by aasdk's own async machinery); posting through it here too,
+    // rather than calling inputChannel_->sendKey() directly from the
+    // caller's thread, keeps that invariant instead of introducing the
+    // one exception.
+    auto self = shared_from_this();
+    boost::asio::post(strand_, [this, self, keycode]() {
+        if (!inputChannel_) return;
+        inputChannel_->sendKey(keycode);
+    });
 }
 
 void Session::onChannelError(const aasdk::error::Error &e) {

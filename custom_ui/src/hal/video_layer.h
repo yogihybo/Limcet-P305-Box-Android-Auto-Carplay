@@ -6,49 +6,54 @@
 // preview, see reverse_camera_screen.cpp's top comment -- except this
 // layer takes a real address we write, not a raw sensor bypass).
 //
-// Real, ground-truth source for everything below: this device's own
-// kernel driver source
-// (linux-arkmicro/linux/drivers/video/fbdev/arkmicro/ark1668e_lcdc_funcs.c
-// and ark_lcdc_common.h), NOT a decompile/guess:
+// 2026-08-16 REVISED: this file's ioctl protocol used to be
+// reconstructed from this device's own (separately-maintained)
+// "reconstructed" kernel tree source
+// (linux-arkmicro/.../ark1668e_lcdc_funcs.c and ark_lcdc_common.h) --
+// two real-hardware attempts built on that reconstruction (a yuv_order
+// bit guess, then direct /dev/mem register writes) both left the video
+// image unchanged (still wrong-tinted, still tiled). Replaced with the
+// REAL protocol instead, Ghidra-decompiled directly from this exact
+// device's own deployed vendor library,
+// firmware_source/mtd6_rootfs/usr/lib/libarkcmn.so's
+// arkapi_init_fb_video_display()/arkapi_set_fb_video_addr() -- the
+// same functions stock's own ArkMediaPlayer/MsnCoreApp calls for this
+// exact layer. See video_layer.cpp's own top comment for the full
+// field-by-field derivation.
 //
-//   - Device node: ark1668e_lcdc_convert_layer() (ark1668e_lcdc_funcs.c)
-//     maps fb device minor numbers to hardware layers, with the
-//     driver's OWN comments:
-//         fb0 -> OSD2   "for UI"
-//         fb1 -> VIDEO2 "for video/carback/phonelink"   <- this one
-//         fb2 -> OSD1   "overlay for UI (carback track/radar)"
-//         fb3 -> VIDEO1 "tvout"
-//         fb4 -> OSD3   "aux for(itu601/itu656)"
-//     "phonelink" in the fb1/VIDEO2 comment is this exact feature --
-//     Android Auto/CarPlay video. /dev/fb0 is confirmed separately
-//     (hal/display.cpp) as this project's own LVGL UI layer (OSD2),
-//     consistent with this table.
-//   - struct ark_disp_addr { yaddr; cbaddr; craddr; wait_vsync; } and
-//     ARKFB_SET_WINDOW_ADDR = _IOW('O', 44, struct ark_disp_addr) --
-//     ark_lcdc_common.h, exact field layout the ioctl handler
-//     copy_from_user()s into (ark1668e_lcdc_funcs.c).
-//   - ARKFB_SET_WINDOW_FORMAT = _IOW('O', 43, unsigned int), packed as
-//     format(bits 0-7) | yuv_order(bits 16-19)<<16 | rgb_order(bits
-//     24-27)<<24, passed via a pointer to that packed value (the
-//     handler copy_from_user()s sizeof(unsigned int), it is NOT passed
-//     by ioctl's raw arg value).
-//   - ARKFB_SET_WINDOW_SIZE = _IOW('O', 42, unsigned int), packed as
-//     width(bits 0-15) | height(bits 16-31), also via a pointer.
+//   - Device node: fb1 -> VIDEO2 "for video/carback/phonelink" (still
+//     from the reconstructed kernel tree's own
+//     ark1668e_lcdc_convert_layer() comments -- the fb-minor-number ->
+//     hardware-layer mapping itself was never in question, only the
+//     ioctl protocol used against it).
+//   - struct ark_disp_addr { yaddr; cbaddr; craddr; wait_vsync; } is
+//     unchanged (16 bytes, confirmed correct by the decompile too) --
+//     but the real command number is 0x40104f38, NOT
+//     _IOW('O', 44, struct ark_disp_addr) (0x40104f2c), which is what
+//     this file used until now.
+//   - struct ark_disp_update_window (60 bytes, win_x/win_y/win_width/
+//     win_height/width/height/format/rgb_order/yuyv_order/out_x/out_y/
+//     out_width/out_height/interlace_out/show_tv) sent via ONE ioctl,
+//     0x403c4f37 -- replaces the old, unconfirmed two-ioctl
+//     SET_WINDOW_FORMAT(43)/SET_WINDOW_SIZE(42) pair (absent from the
+//     real ioctl dispatch table this project separately decompiled in
+//     docs/1.7.1_ARK_DISP_STOCK_DECOMPILATION.md -- they may never
+//     have reached the real config path at all).
 //   - ARK_LCDC_FORMAT_Y_UV420 = 0x11 -- semi-planar Y + interleaved UV,
 //     matching HantroH264Decoder's confirmed H264DEC_SEMIPLANAR_YUV420
-//     output format exactly (see hantro_h264_decoder.h).
+//     output format exactly (see hantro_h264_decoder.h). Unchanged.
 //   - Show/hide: uses the SAME real vendor ioctl numbers already
 //     confirmed and used for the OSD1/UI layer in hal/display.cpp
-//     (0x4f2b show / 0x4f2c hide) rather than this kernel tree's own
-//     ARKFB_SHOW_WINDOW/HIDE_WINDOW enum values (ARK_IO(39)/(40)) --
-//     see hal/display.cpp's kArkfbShowWindowReal comment and this
-//     project's project_hide_window_ioctl_fix memory: the real
-//     deployed vendor userspace headers use different numbers than
-//     this "reconstructed" kernel tree's own enum, already confirmed
-//     once for OSD1; assumed (not yet independently re-confirmed) to
-//     be the same fixed numbers regardless of which layer/fd, since
-//     the vendor's own ark_disp_fb_ioctl dispatch is one function
-//     shared across all layers.
+//     (0x4f2b show / 0x4f2c hide) rather than the reconstructed kernel
+//     tree's own ARKFB_SHOW_WINDOW/HIDE_WINDOW enum values (ARK_IO(39)/
+//     (40)) -- see hal/display.cpp's kArkfbShowWindowReal comment and
+//     this project's project_hide_window_ioctl_fix memory: the real
+//     deployed vendor userspace uses different numbers than the
+//     reconstructed kernel tree's own enum, already confirmed once for
+//     OSD1; assumed (not yet independently re-confirmed) to be the
+//     same fixed numbers regardless of which layer/fd, since the
+//     vendor's own ark_disp_fb_ioctl dispatch is one function shared
+//     across all layers.
 //
 // NOT yet hardware-tested. In particular: the chroma-plane offset
 // computed in set_frame_addr() (picWidth*picHeight bytes after the Y
@@ -59,7 +64,11 @@
 // VIDEO_800x480 AA video config (both dimensions already 16-pixel-
 // aligned, so no macroblock padding difference between picWidth and
 // the real display width), but not independently verified against a
-// real decoded frame yet.
+// real decoded frame yet. Also: configure_video_layer()'s crop
+// arguments are always zero (full-frame, no cropping) -- no real
+// caller of arkapi_init_fb_video_display exists anywhere else on this
+// device's rootfs to confirm crop-parameter semantics against, but
+// zero sidesteps the ambiguity regardless of what they mean.
 #pragma once
 
 #include <cstdint>
@@ -74,18 +83,18 @@ struct VideoLayerHandle {
 // pattern, same as every other optional-hardware HAL in this codebase.
 bool init_video_layer(VideoLayerHandle & out, const char * path = "/dev/fb1");
 
-// Sets ARK_LCDC_FORMAT_Y_UV420 (semi-planar) and the given frame size
-// via ARKFB_SET_WINDOW_FORMAT/ARKFB_SET_WINDOW_SIZE, THEN directly
-// writes VIDEO2_SOURCE_SIZE/WIN_SIZE/WIN_POINT/SIZE/POSITION over
-// /dev/mem (see video_layer.cpp's own comment) -- real stock sets all
-// five of those per frame config, and the two ioctls above only ever
-// reach one of them. Call once before the first set_frame_addr() (or
-// again if the decoded picture's own dimensions ever change
-// mid-session -- not expected in practice for a single AA session, but
-// cheap to call again if unsure).
+// Sets ARK_LCDC_FORMAT_Y_UV420 (semi-planar) and the given frame's
+// size/position via a single real ark_disp_update_window ioctl,
+// ported directly from libarkcmn.so's own arkapi_init_fb_video_display
+// (see this file's top comment and video_layer.cpp's own comment for
+// the full field derivation). Call once before the first
+// set_frame_addr() (or again if the decoded picture's own dimensions
+// ever change mid-session -- not expected in practice for a single AA
+// session, but cheap to call again if unsure).
 bool configure_video_layer(VideoLayerHandle & h, uint32_t width, uint32_t height);
 
-// Pushes one decoded frame's plane addresses via ARKFB_SET_WINDOW_ADDR.
+// Pushes one decoded frame's plane addresses via the real
+// ark_disp_addr ioctl (0x40104f38, see this file's top comment).
 // `yBusAddress` is HantroH264Decoder's last_picture().outputPictureBusAddress
 // directly; this function computes the interleaved-UV chroma address
 // as yBusAddress + width*height (see top comment's caveat) and sets

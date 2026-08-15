@@ -24,11 +24,31 @@ std::string trim(const std::string & s) {
 // Recursively creates the parent directory chain for `path` (e.g.
 // /data/custom_ui/settings.conf -> mkdir /data, mkdir /data/custom_ui).
 // A not-yet-provisioned device may not have /data/custom_ui/ yet.
+//
+// 2026-08-15: self-heals the case where a path component already
+// exists but is a plain FILE, not a directory -- observed on real
+// hardware as save() failing with ENOTDIR ("Not a directory") on
+// every single boot, permanently, with no recovery (mkdir()'s error
+// was ignored outright, on the assumption the only failure mode was
+// EEXIST-as-directory). Every component this function ever creates is
+// exclusively this app's own path space (/data/custom_ui/...), never
+// shared with stock or another process, so removing a stray file here
+// and replacing it with the directory it was always supposed to be is
+// safe.
 void mkdir_parents(const std::string & path) {
     size_t pos = path.find('/', 1);
     while (pos != std::string::npos) {
         std::string dir = path.substr(0, pos);
-        mkdir(dir.c_str(), 0755);  // ignore errors -- may already exist
+        if (mkdir(dir.c_str(), 0755) != 0 && errno == EEXIST) {
+            struct stat st{};
+            if (stat(dir.c_str(), &st) == 0 && !S_ISDIR(st.st_mode)) {
+                std::fprintf(stderr,
+                             "core::ConfigStore: %s exists but isn't a directory -- removing and recreating\n",
+                             dir.c_str());
+                unlink(dir.c_str());
+                mkdir(dir.c_str(), 0755);  // best-effort; save()'s own open() will report if this still failed
+            }
+        }
         pos = path.find('/', pos + 1);
     }
 }

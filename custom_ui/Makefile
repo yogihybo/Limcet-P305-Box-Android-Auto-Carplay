@@ -266,7 +266,7 @@ all: ui carplay-sidecar androidauto-sidecar
 
 ui: $(UI_TARGET) $(BUILD_DIR)/hal.conf $(BUILD_DIR)/default_settings.conf
 carplay-sidecar: $(SIDECAR_TARGET)
-androidauto-sidecar: $(ANDROIDAUTO_SIDECAR_TARGET) $(BUILD_DIR)/hal.conf
+androidauto-sidecar: $(ANDROIDAUTO_SIDECAR_TARGET) $(BUILD_DIR)/hal.conf $(BUILD_DIR)/alsa/alsa.conf
 
 # Staged copy of the tracked config (see src/core/hal_config.h) right
 # next to the compiled binaries -- both `ui` and `androidauto-sidecar`
@@ -283,6 +283,22 @@ $(BUILD_DIR)/hal.conf: etc/hal.conf
 $(BUILD_DIR)/default_settings.conf: etc/default_settings.conf
 	@mkdir -p $(dir $@)
 	cp $< $@
+
+# Staged copy of alsa-lib's own config tree (alsa.conf + cards/ctl/pcm)
+# right next to the compiled binaries -- see sidecars/androidauto/main.cpp's
+# own comment: this process resolves ALSA_CONFIG_PATH relative to its
+# OWN executable directory (/proc/self/exe), same "no fixed install
+# path yet" convention hal.conf/default_settings.conf above already
+# use, rather than a real rootfs path like /usr/share/alsa (which this
+# project has no fixed, real install location for yet either -- see
+# hal/androidauto_client.cpp's trySpawnSidecar() comment). Real source
+# tree is etc/alsa/ (a copy of $(ALSA_ARM_INSTALL)/share/alsa/ from the
+# ALSA cross-build, not regenerated automatically -- see that
+# directory's own provenance if it ever needs refreshing after an
+# alsa-lib version bump).
+$(BUILD_DIR)/alsa/alsa.conf: $(shell find etc/alsa -type f)
+	@mkdir -p $(dir $@)
+	cp -a etc/alsa/. $(BUILD_DIR)/alsa/
 androidauto-usb-probe-test: $(AASDK_TEST_TARGET)
 androidauto-wireless-probe-test: $(WIRELESS_TEST_TARGET)
 androidauto-bluetooth-rfcomm-test: $(BT_TEST_TARGET)

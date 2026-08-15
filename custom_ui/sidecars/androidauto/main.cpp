@@ -32,6 +32,21 @@
 //                androidauto_client.h whenever the physical control
 //                knob is turned/pressed while the Android Auto screen
 //                is the active one.
+//   "TOUCH <x> <y> <DOWN|MOVE|UP>" -> forwards one real touch sample
+//                (already in the 800x480 screen-pixel space this
+//                project advertises for INPUT_SOURCE) into the current
+//                session's InputChannel
+//                (WirelessSessionManager::sendInputTouch()), same
+//                no-session-is-fine / "ERR bad TOUCH command" contract
+//                as KEY above. Sent by hal/touch.cpp via hal/
+//                androidauto_client.h whenever the physical touch panel
+//                (relayed by the Limcet MCU, see hal/mcu_input.h) is
+//                touched while the Android Auto screen is active --
+//                replaces the old TouchForwarder/evdev design, which
+//                read a device node this hardware never delivers real
+//                touch through at all (and which couldn't have worked
+//                from THIS process anyway -- the MCU serial port is
+//                read exclusively by custom_ui's own process).
 //   (anything else) -> replies "ERR unknown command"
 // One thread per accepted connection (expected connection count: 2 as
 // of the status-bar work in src/ui/status_bar.cpp -- android_auto_screen.cpp's
@@ -119,6 +134,29 @@ void handle_connection(int clientFd, androidauto::WirelessSessionManager * manag
                 reply = "ERR bad KEY command\n";
             } else {
                 manager->sendInputKey(static_cast<std::uint32_t>(code));
+                reply = "OK\n";
+            }
+        } else if (line.rfind("TOUCH ", 0) == 0) {
+            unsigned int x = 0, y = 0;
+            char actionBuf[8] = {};
+            int parsed = std::sscanf(line.c_str() + 6, "%u %u %7s", &x, &y, actionBuf);
+            std::string actionStr(actionBuf);
+            aap_protobuf::service::inputsource::message::PointerAction action;
+            bool actionOk = true;
+            if (actionStr == "DOWN") {
+                action = aap_protobuf::service::inputsource::message::ACTION_DOWN;
+            } else if (actionStr == "MOVE") {
+                action = aap_protobuf::service::inputsource::message::ACTION_MOVED;
+            } else if (actionStr == "UP") {
+                action = aap_protobuf::service::inputsource::message::ACTION_UP;
+            } else {
+                actionOk = false;
+                action = aap_protobuf::service::inputsource::message::ACTION_DOWN;  // unused, silences -Wmaybe-uninitialized
+            }
+            if (parsed != 3 || !actionOk) {
+                reply = "ERR bad TOUCH command\n";
+            } else {
+                manager->sendInputTouch(x, y, action);
                 reply = "OK\n";
             }
         } else {

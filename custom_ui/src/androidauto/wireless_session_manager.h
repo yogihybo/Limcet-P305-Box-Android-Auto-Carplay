@@ -144,6 +144,16 @@ public:
     // itself is read by custom_ui's own process, not this one).
     void sendInputKey(std::uint32_t keycode);
 
+    // Forwards one real touch sample into the current session's
+    // InputChannel, if a session exists (same no-op-if-none contract as
+    // sendInputKey()). Called from sidecars/androidauto/main.cpp's own
+    // "TOUCH <x> <y> <action>" command handler, forwarded in turn from
+    // hal/touch.cpp via hal/androidauto_client.h -- see that header's
+    // own comment for the full cross-process path (the touch panel
+    // itself is read by custom_ui's own process, not this one).
+    void sendInputTouch(std::uint32_t x, std::uint32_t y,
+                         aap_protobuf::service::inputsource::message::PointerAction action);
+
 private:
     void run();
     void setStatus(WirelessSessionState s, std::string msg);

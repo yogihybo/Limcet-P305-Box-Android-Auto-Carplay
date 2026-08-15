@@ -36,7 +36,26 @@ struct MemallocParams {
     uint32_t size;
 };
 
-constexpr unsigned long kMemallocIocxGetbuffer = 0xc0086b01;
+// 2026-08-15: found on real hardware -- ioctl(GETBUFFER) failed with
+// ENOTTY ("Inappropriate ioctl for device") on every call, both here
+// and in tools/hx170-test.c (byte-for-byte the same sequence). Root
+// cause, found by checking the real kernel driver source
+// (drivers/soc/arkmicro/memalloc.c/.h in the ark1668ed-bsp tree):
+// MEMALLOC_IOCXGETBUFFER is defined as `_IOWR(MEMALLOC_IOC_MAGIC, 1,
+// MemallocParams*)` -- note the THIRD macro argument is a POINTER
+// type, not the struct itself, so the macro encodes
+// sizeof(MemallocParams*)=4 into the command number, not
+// sizeof(MemallocParams)=8. The driver's own copy_from_user still
+// reads a fixed 8 bytes regardless (hardcoded sizeof(mem_params) in
+// the C code, not derived from the command's encoded size field), so
+// this was never a data-transfer-size bug -- only the kernel's
+// switch(cmd) dispatch match, which needs the EXACT encoded value
+// including this "wrong" pointer-sized field, since the driver falls
+// through to `default: -ENOIOCTLCMD` (surfaced to userspace as
+// ENOTTY) otherwise. 0xc0086b01 (size=8) was the "semantically
+// correct" but never-actually-matching value; 0xc0046b01 (size=4) is
+// what the real header's macro expansion actually produces.
+constexpr unsigned long kMemallocIocxGetbuffer = 0xc0046b01;
 constexpr unsigned long kMemallocIocxFreebuffer = 0x40046b02;
 constexpr const char * kLibPath = "/usr/lib/libmfc.so";
 constexpr const char * kMemallocPath = "/tmp/dev/memalloc";

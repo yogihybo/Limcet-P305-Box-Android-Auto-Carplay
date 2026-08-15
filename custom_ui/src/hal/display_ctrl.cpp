@@ -32,7 +32,7 @@ struct ark_disp_vde_cfg_arg {
 bool init_display_ctrl(DisplayCtrlHandle & out, const char * path) {
     out.fd = open(path, O_RDWR);
     if (out.fd < 0) {
-        std::fprintf(stderr, "hal::init_display_ctrl: warning: %s unavailable (%s)\n", path,
+        std::fprintf(stderr, "hal::display_ctrl::init_display_ctrl: warning: %s unavailable (%s)\n", path,
                      std::strerror(errno));
         return false;
     }
@@ -44,7 +44,7 @@ bool get_vde_config(DisplayCtrlHandle & h, DisplayLayer layer, VdeConfig & out) 
     ark_disp_vde_cfg_arg arg{};
     arg.layer_id = static_cast<unsigned int>(layer);
     if (ioctl(h.fd, ARKDISP_GET_VDE_CFG, &arg) < 0) {
-        std::fprintf(stderr, "hal::get_vde_config: ARKDISP_GET_VDE_CFG failed (%s)\n",
+        std::fprintf(stderr, "hal::display_ctrl::get_vde_config: ARKDISP_GET_VDE_CFG failed (%s)\n",
                      std::strerror(errno));
         return false;
     }
@@ -64,7 +64,7 @@ bool set_vde_config(DisplayCtrlHandle & h, DisplayLayer layer, const VdeConfig &
     arg.brightness = cfg.brightness;
     arg.contrast = cfg.contrast;
     if (ioctl(h.fd, ARKDISP_SET_VDE_CFG, &arg) < 0) {
-        std::fprintf(stderr, "hal::set_vde_config: ARKDISP_SET_VDE_CFG failed (%s)\n",
+        std::fprintf(stderr, "hal::display_ctrl::set_vde_config: ARKDISP_SET_VDE_CFG failed (%s)\n",
                      std::strerror(errno));
         return false;
     }

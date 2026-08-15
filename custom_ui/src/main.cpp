@@ -150,8 +150,34 @@ public:
                 // it isn't already running (see AndroidAutoClient's own
                 // header comment) -- no need to open the Android Auto
                 // screen first anymore for this to work.
+                //
+                // 2026-08-15: on a device's first-ever auto-trigger the
+                // sidecar isn't running yet, so this spawns it fresh --
+                // but requestConnect()'s own two attempts happen back
+                // to back with no delay between them, both racing the
+                // freshly-forked sidecar's own startup (fork+exec+bind)
+                // with zero margin. Seen on real hardware: "auto-start
+                // requestConnect() failed (sidecar unreachable)" on the
+                // very first trigger, permanently dropping that +AAPDEV=
+                // (the 30s debounce means no retry until the phone
+                // re-broadcasts). ui/android_auto_screen.cpp's own
+                // manual "Connect" button calls requestConnect() too,
+                // but from the LVGL main thread -- adding a blocking
+                // wait inside AndroidAutoClient itself would freeze the
+                // UI on every press, not just this cold-start case. This
+                // background thread has no such constraint, so the
+                // bounded retry lives here instead: one short wait (the
+                // sidecar binds its socket "well under one poll
+                // interval" per AndroidAutoClient's own header comment,
+                // so 300ms is generous) then one more attempt before
+                // giving up and logging failure.
                 hal::AndroidAutoClient client;
-                if (!client.requestConnect()) {
+                bool connected = client.requestConnect();
+                if (!connected) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+                    connected = client.requestConnect();
+                }
+                if (!connected) {
                     std::fprintf(stderr, "custom_ui: auto-start requestConnect() failed (sidecar "
                                  "unreachable)\n");
                 } else {

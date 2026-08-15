@@ -159,14 +159,46 @@ int main() {
     // /etc/asound.conf, already present in the rootfs, to define
     // "softvol2" specifically) couldn't be found at
     // /home/osboxes/build-deps/alsa-arm-install/share/alsa/alsa.conf,
-    // a path that only ever existed on the build machine. Fixed by
-    // shipping that same alsa.conf (plus its own confdir includes --
-    // cards/ctl/pcm subdirs) in the rootfs overlay
-    // (firmware_overlay/usr/share/alsa/) and pointing
-    // ALSA_CONFIG_PATH at the real on-device copy -- alsa-lib checks
-    // this env var before its compiled-in default. Must be set before
-    // any ALSA call the AlsaOutput class ever makes.
-    setenv("ALSA_CONFIG_PATH", "/usr/share/alsa/alsa.conf", 1);
+    // a path that only ever existed on the build machine.
+    //
+    // 2026-08-15 REVISED: originally shipped that same alsa.conf tree
+    // in the rootfs overlay (firmware_overlay/usr/share/alsa/) and
+    // pointed ALSA_CONFIG_PATH at a fixed /usr/share/alsa/alsa.conf --
+    // but this project has no fixed, real rootfs install path for its
+    // OWN binaries yet either (see hal/androidauto_client.cpp's
+    // trySpawnSidecar() comment: "revisit once Phase 6's real firmware
+    // integration lands"), so a fixed /usr/share path was one more
+    // thing that could drift out of sync with wherever this binary
+    // actually got copied to. Simpler and consistent with how this
+    // process ALREADY gets found (custom_ui's own trySpawnSidecar()
+    // resolves androidauto-sidecar's path via /proc/self/exe, assuming
+    // it lives right next to custom_ui): resolve THIS process's own
+    // executable directory the same way and point ALSA_CONFIG_PATH at
+    // an "alsa/" subdirectory there -- Makefile's
+    // $(BUILD_DIR)/alsa/alsa.conf rule stages the real config tree
+    // (etc/alsa/, copied from the ALSA cross-build's own share/alsa/)
+    // right alongside the compiled binaries, so scp'ing build/ to the
+    // device (this project's real test workflow) carries it along
+    // automatically, same as hal.conf/default_settings.conf already do.
+    // alsa-lib checks this env var before its compiled-in default; must
+    // be set before any ALSA call the AlsaOutput/AlsaInput classes ever
+    // make. If /proc/self/exe can't be resolved (shouldn't happen on
+    // Linux), ALSA_CONFIG_PATH is simply left unset and alsa-lib falls
+    // back to its own compiled-in (build-host-only) default -- same
+    // failure this whole fix addresses, just not expected to trigger.
+    {
+        char exePath[512];
+        ssize_t len = readlink("/proc/self/exe", exePath, sizeof(exePath) - 1);
+        if (len > 0) {
+            exePath[len] = '\0';
+            std::string dir(exePath);
+            auto slash = dir.find_last_of('/');
+            if (slash != std::string::npos) {
+                dir.resize(slash);
+                setenv("ALSA_CONFIG_PATH", (dir + "/alsa/alsa.conf").c_str(), 1);
+            }
+        }
+    }
 
     std::printf("%s androidauto-sidecar: starting\n", androidauto::logTimestamp().c_str());
 

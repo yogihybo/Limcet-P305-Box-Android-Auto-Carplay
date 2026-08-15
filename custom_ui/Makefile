@@ -210,6 +210,14 @@ HAL_CONFIG_OBJ := $(BUILD_DIR)/ui-obj/core/hal_config.o
 # decoded frames to the hardware video-overlay layer.
 VIDEO_LAYER_OBJ := $(BUILD_DIR)/ui-obj/hal/video_layer.o
 
+# Same cross-binary situation again: core/log_timing.cpp (custom_ui's
+# own process-wide kernel-dmesg-style timestamp, see its own header
+# comment) is called from hal_config.cpp/video_layer.cpp above, both
+# shared with androidauto-sidecar -- so this needs pulling into that
+# link too, even though androidauto-sidecar has its own SEPARATE
+# androidauto::log_timing (different namespace/process, not this one).
+LOG_TIMING_CORE_OBJ := $(BUILD_DIR)/ui-obj/core/log_timing.o
+
 # --- androidauto-usb-probe-test: standalone aasdk link-graph proof ---
 # See tools/androidauto-usb-probe-test/main.cpp -- not part of `all`,
 # build explicitly with `make androidauto-usb-probe-test`.
@@ -292,7 +300,7 @@ $(BUILD_DIR)/ui-obj/androidauto/%.o: src/androidauto/%.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) $(AASDK_INCLUDES) -c -o $@ $<
 
-$(ANDROIDAUTO_SIDECAR_TARGET): $(ANDROIDAUTO_SIDECAR_OBJS) $(AASDK_OBJS) $(HAL_CONFIG_OBJ) $(VIDEO_LAYER_OBJ) $(HANTRO_DLOPEN_OBJ)
+$(ANDROIDAUTO_SIDECAR_TARGET): $(ANDROIDAUTO_SIDECAR_OBJS) $(AASDK_OBJS) $(HAL_CONFIG_OBJ) $(VIDEO_LAYER_OBJ) $(LOG_TIMING_CORE_OBJ) $(HANTRO_DLOPEN_OBJ)
 	@mkdir -p $(dir $@)
 	$(CXX) $(LDFLAGS) $(AASDK_WRAP_FLAGS) -o $@ $^ $(AASDK_LIBS)
 

@@ -10,6 +10,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "core/log_timing.h"
+
 namespace core {
 
 namespace {
@@ -47,7 +49,7 @@ void mkdir_parents(const std::string & path) {
             struct stat st{};
             if (stat(dir.c_str(), &st) == 0 && !S_ISDIR(st.st_mode)) {
                 std::fprintf(stderr,
-                             "core::ConfigStore: %s exists but isn't a directory -- removing and recreating\n",
+                             "%s core::ConfigStore: %s exists but isn't a directory -- removing and recreating\n", core::log_timestamp().c_str(),
                              dir.c_str());
                 unlink(dir.c_str());
                 mkdir(dir.c_str(), 0755);  // best-effort; save()'s own open() will report if this still failed
@@ -163,7 +165,7 @@ bool ConfigStore::save() {
     mkdir_parents(live_path_);
     std::ofstream f(live_path_, std::ios::trunc);
     if (!f.is_open()) {
-        std::fprintf(stderr, "core::ConfigStore::save: failed to open %s (%s)\n",
+        std::fprintf(stderr, "%s core::ConfigStore::save: failed to open %s (%s)\n", core::log_timestamp().c_str(),
                      live_path_.c_str(), std::strerror(errno));
         return false;
     }

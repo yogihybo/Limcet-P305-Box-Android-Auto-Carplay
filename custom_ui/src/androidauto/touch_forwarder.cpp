@@ -1,4 +1,5 @@
 #include "androidauto/touch_forwarder.h"
+#include "androidauto/log_timing.h"
 
 #include <cerrno>
 #include <cstdio>
@@ -31,7 +32,7 @@ bool TouchForwarder::start() {
     // blocking mode on open(), so this needs to be explicit here).
     int fd = ::open(eventPath_.c_str(), O_RDONLY | O_NONBLOCK);
     if (fd < 0) {
-        std::printf("androidauto: touch forwarder: open(%s) failed: %s\n", eventPath_.c_str(), strerror(errno));
+        std::printf("%s androidauto: touch forwarder: open(%s) failed: %s\n", androidauto::logTimestamp().c_str(), eventPath_.c_str(), strerror(errno));
         return false;
     }
 
@@ -42,26 +43,26 @@ bool TouchForwarder::start() {
         rawMinX_ = absInfo.minimum;
         rawMaxX_ = absInfo.maximum;
     } else {
-        std::printf("androidauto: touch forwarder: EVIOCGABS(ABS_X) unavailable, "
-                     "falling back to driver default range [%d,%d]\n", rawMinX_, rawMaxX_);
+        std::printf("%s androidauto: touch forwarder: EVIOCGABS(ABS_X) unavailable, "
+                     "falling back to driver default range [%d,%d]\n", androidauto::logTimestamp().c_str(), rawMinX_, rawMaxX_);
     }
     if (::ioctl(fd, EVIOCGABS(ABS_Y), &absInfo) == 0 && absInfo.maximum > absInfo.minimum) {
         rawMinY_ = absInfo.minimum;
         rawMaxY_ = absInfo.maximum;
     } else {
-        std::printf("androidauto: touch forwarder: EVIOCGABS(ABS_Y) unavailable, "
-                     "falling back to driver default range [%d,%d]\n", rawMinY_, rawMaxY_);
+        std::printf("%s androidauto: touch forwarder: EVIOCGABS(ABS_Y) unavailable, "
+                     "falling back to driver default range [%d,%d]\n", androidauto::logTimestamp().c_str(), rawMinY_, rawMaxY_);
     }
 
     boost::system::error_code ec;
     device_.assign(fd, ec);
     if (ec) {
-        std::printf("androidauto: touch forwarder: stream_descriptor::assign failed: %s\n", ec.message().c_str());
+        std::printf("%s androidauto: touch forwarder: stream_descriptor::assign failed: %s\n", androidauto::logTimestamp().c_str(), ec.message().c_str());
         ::close(fd);
         return false;
     }
 
-    std::printf("androidauto: touch forwarder: forwarding %s (raw range x=[%d,%d] y=[%d,%d]) -> %ux%u\n",
+    std::printf("%s androidauto: touch forwarder: forwarding %s (raw range x=[%d,%d] y=[%d,%d]) -> %ux%u\n", androidauto::logTimestamp().c_str(),
                 eventPath_.c_str(), rawMinX_, rawMaxX_, rawMinY_, rawMaxY_, kScreenWidth, kScreenHeight);
 
     this->queueRead();
@@ -85,7 +86,7 @@ void TouchForwarder::queueRead() {
                 // real I/O error) means we just stop forwarding; not
                 // fatal to the rest of the app.
                 if (ec != boost::asio::error::operation_aborted) {
-                    std::printf("androidauto: touch forwarder: read error: %s\n", ec.message().c_str());
+                    std::printf("%s androidauto: touch forwarder: read error: %s\n", androidauto::logTimestamp().c_str(), ec.message().c_str());
                 }
                 return;
             }

@@ -1,4 +1,5 @@
 #include "androidauto/bw_aap_client.h"
+#include "androidauto/log_timing.h"
 
 #include <cerrno>
 #include <cstdio>
@@ -60,7 +61,7 @@ bool BwAapClient::connect() {
     for (int attempt = 0; attempt < kMaxAttempts; ++attempt) {
         fd_ = ::socket(AF_UNIX, SOCK_STREAM, 0);
         if (fd_ < 0) {
-            std::fprintf(stderr, "androidauto: bw_aap socket() failed: %s\n", std::strerror(errno));
+            std::fprintf(stderr, "%s androidauto: bw_aap socket() failed: %s\n", androidauto::logTimestamp().c_str(), std::strerror(errno));
             return false;
         }
 
@@ -69,12 +70,12 @@ bool BwAapClient::connect() {
         std::strncpy(addr.sun_path, kBwAapSocketPath, sizeof(addr.sun_path) - 1);
 
         if (::connect(fd_, reinterpret_cast<struct sockaddr *>(&addr), sizeof(addr)) == 0) {
-            std::printf("androidauto: connected to %s (attempt %d/%d)\n", kBwAapSocketPath,
+            std::printf("%s androidauto: connected to %s (attempt %d/%d)\n", androidauto::logTimestamp().c_str(), kBwAapSocketPath,
                         attempt + 1, kMaxAttempts);
             return true;
         }
 
-        std::fprintf(stderr, "androidauto: connect(%s) failed (attempt %d/%d): %s\n",
+        std::fprintf(stderr, "%s androidauto: connect(%s) failed (attempt %d/%d): %s\n", androidauto::logTimestamp().c_str(),
                      kBwAapSocketPath, attempt + 1, kMaxAttempts, std::strerror(errno));
         ::close(fd_);
         fd_ = -1;
@@ -101,15 +102,15 @@ bool BwAapClient::sendFrame(std::uint16_t type, const std::string &payload) {
     frame.push_back(static_cast<unsigned char>(type & 0xff));
     frame.insert(frame.end(), payload.begin(), payload.end());
 
-    std::printf("androidauto: bw_aap: sendFrame type=%u length=%u:", type, length);
+    std::printf("%s androidauto: bw_aap: sendFrame type=%u length=%u:", androidauto::logTimestamp().c_str(), type, length);
     for (unsigned char byte : frame) {
-        std::printf(" %02x", byte);
+        std::printf("%s  %02x", androidauto::logTimestamp().c_str(), byte);
     }
-    std::printf("\n");
+    std::printf("%s \n", androidauto::logTimestamp().c_str());
 
     ssize_t written = ::write(fd_, frame.data(), frame.size());
     if (written != static_cast<ssize_t>(frame.size())) {
-        std::fprintf(stderr, "androidauto: bw_aap write failed (wrote %zd/%zu bytes): %s\n", written,
+        std::fprintf(stderr, "%s androidauto: bw_aap write failed (wrote %zd/%zu bytes): %s\n", androidauto::logTimestamp().c_str(), written,
                      frame.size(), std::strerror(errno));
         return false;
     }
@@ -120,8 +121,8 @@ void BwAapClient::pushBackFrame(std::uint16_t type, std::string payload) {
     hasPendingFrame_ = true;
     pendingType_ = type;
     pendingPayload_ = std::move(payload);
-    std::printf("androidauto: bw_aap: pushing back unconsumed type=%u frame for the next "
-                "receiveFrame() call\n", type);
+    std::printf("%s androidauto: bw_aap: pushing back unconsumed type=%u frame for the next "
+                "receiveFrame() call\n", androidauto::logTimestamp().c_str(), type);
 }
 
 bool BwAapClient::receiveFrame(std::uint16_t &type, std::string &payload, int timeoutSeconds) {
@@ -129,8 +130,8 @@ bool BwAapClient::receiveFrame(std::uint16_t &type, std::string &payload, int ti
         type = pendingType_;
         payload = std::move(pendingPayload_);
         hasPendingFrame_ = false;
-        std::printf("androidauto: bw_aap: receiveFrame returning pending type=%u frame (no socket "
-                    "read)\n", type);
+        std::printf("%s androidauto: bw_aap: receiveFrame returning pending type=%u frame (no socket "
+                    "read)\n", androidauto::logTimestamp().c_str(), type);
         return true;
     }
 
@@ -142,15 +143,15 @@ bool BwAapClient::receiveFrame(std::uint16_t &type, std::string &payload, int ti
 
     int ready = ::select(fd_ + 1, &readSet, nullptr, nullptr, &tv);
     if (ready <= 0) {
-        std::fprintf(stderr, "androidauto: bw_aap receiveFrame: timeout/error after %ds (select "
-                     "returned %d)\n", timeoutSeconds, ready);
+        std::fprintf(stderr, "%s androidauto: bw_aap receiveFrame: timeout/error after %ds (select "
+                     "returned %d)\n", androidauto::logTimestamp().c_str(), timeoutSeconds, ready);
         return false;
     }
 
     unsigned char header[4];
     ssize_t headerRead = ::read(fd_, header, sizeof(header));
     if (headerRead != static_cast<ssize_t>(sizeof(header))) {
-        std::fprintf(stderr, "androidauto: bw_aap header read failed (got %zd/%zu bytes): %s\n",
+        std::fprintf(stderr, "%s androidauto: bw_aap header read failed (got %zd/%zu bytes): %s\n", androidauto::logTimestamp().c_str(),
                      headerRead, sizeof(header), std::strerror(errno));
         return false;
     }
@@ -162,12 +163,12 @@ bool BwAapClient::receiveFrame(std::uint16_t &type, std::string &payload, int ti
     if (length > 0) {
         ssize_t payloadRead = ::read(fd_, &payload[0], length);
         if (payloadRead != static_cast<ssize_t>(length)) {
-            std::fprintf(stderr, "androidauto: bw_aap payload read failed (got %zd/%u bytes): %s\n",
+            std::fprintf(stderr, "%s androidauto: bw_aap payload read failed (got %zd/%u bytes): %s\n", androidauto::logTimestamp().c_str(),
                          payloadRead, length, std::strerror(errno));
             return false;
         }
     }
-    std::printf("androidauto: bw_aap: receiveFrame type=%u length=%u\n", type, length);
+    std::printf("%s androidauto: bw_aap: receiveFrame type=%u length=%u\n", androidauto::logTimestamp().c_str(), type, length);
     return true;
 }
 
@@ -175,7 +176,7 @@ bool BwAapClient::startHandshake(const std::string &apIpAddress, std::uint16_t a
                                   std::string &outIp, std::uint16_t &outPort) {
     std::string versionRequestPayload(reinterpret_cast<const char *>(kWifiVersionRequestPayload),
                                        sizeof(kWifiVersionRequestPayload));
-    std::printf("androidauto: sending WIFI_VERSION_REQUEST\n");
+    std::printf("%s androidauto: sending WIFI_VERSION_REQUEST\n", androidauto::logTimestamp().c_str());
     if (!this->sendFrame(4, versionRequestPayload)) {
         return false;
     }
@@ -185,13 +186,13 @@ bool BwAapClient::startHandshake(const std::string &apIpAddress, std::uint16_t a
     if (!this->receiveFrame(responseType, responsePayload, 10)) {
         return false;
     }
-    std::printf("androidauto: received type=%u, %zu bytes:", responseType, responsePayload.size());
+    std::printf("%s androidauto: received type=%u, %zu bytes:", androidauto::logTimestamp().c_str(), responseType, responsePayload.size());
     for (unsigned char byte : responsePayload) {
-        std::printf(" %02x", byte);
+        std::printf("%s  %02x", androidauto::logTimestamp().c_str(), byte);
     }
-    std::printf("\n");
+    std::printf("%s \n", androidauto::logTimestamp().c_str());
     if (responseType != 5) {
-        std::fprintf(stderr, "androidauto: expected WIFI_VERSION_RESPONSE (type 5), got %u\n",
+        std::fprintf(stderr, "%s androidauto: expected WIFI_VERSION_RESPONSE (type 5), got %u\n", androidauto::logTimestamp().c_str(),
                      responseType);
         return false;
     }
@@ -201,10 +202,10 @@ bool BwAapClient::startHandshake(const std::string &apIpAddress, std::uint16_t a
     startRequest.set_port(apPort);
     std::string startRequestPayload;
     if (!startRequest.SerializeToString(&startRequestPayload)) {
-        std::fprintf(stderr, "androidauto: failed to serialize WifiStartRequest\n");
+        std::fprintf(stderr, "%s androidauto: failed to serialize WifiStartRequest\n", androidauto::logTimestamp().c_str());
         return false;
     }
-    std::printf("androidauto: sending WIFI_START_REQUEST (ip=%s port=%u)\n", apIpAddress.c_str(),
+    std::printf("%s androidauto: sending WIFI_START_REQUEST (ip=%s port=%u)\n", androidauto::logTimestamp().c_str(), apIpAddress.c_str(),
                 apPort);
     if (!this->sendFrame(1, startRequestPayload)) {
         return false;
@@ -224,23 +225,23 @@ bool BwAapClient::startHandshake(const std::string &apIpAddress, std::uint16_t a
     std::uint16_t startRespType = 0;
     std::string startRespPayload;
     if (!this->receiveFrame(startRespType, startRespPayload, 5)) {
-        std::printf("androidauto: no WIFI_START_RESPONSE within 5s (may be normal -- not all "
-                    "captures have shown one)\n");
+        std::printf("%s androidauto: no WIFI_START_RESPONSE within 5s (may be normal -- not all "
+                    "captures have shown one)\n", androidauto::logTimestamp().c_str());
         return true;
     }
     if (startRespType != 7) {
-        std::printf("androidauto: expected WIFI_START_RESPONSE (type 7) but got type=%u instead "
-                    "-- pushing it back for whoever reads next\n", startRespType);
+        std::printf("%s androidauto: expected WIFI_START_RESPONSE (type 7) but got type=%u instead "
+                    "-- pushing it back for whoever reads next\n", androidauto::logTimestamp().c_str(), startRespType);
         this->pushBackFrame(startRespType, std::move(startRespPayload));
         return true;
     }
 
     aap_protobuf::aaw::WifiStartResponse startResponse;
     if (!startResponse.ParseFromString(startRespPayload)) {
-        std::fprintf(stderr, "androidauto: failed to parse WifiStartResponse\n");
+        std::fprintf(stderr, "%s androidauto: failed to parse WifiStartResponse\n", androidauto::logTimestamp().c_str());
         return true;
     }
-    std::printf("androidauto: got WIFI_START_RESPONSE (status=%d, ip_address=%s, port=%u)\n",
+    std::printf("%s androidauto: got WIFI_START_RESPONSE (status=%d, ip_address=%s, port=%u)\n", androidauto::logTimestamp().c_str(),
                 static_cast<int>(startResponse.status()),
                 startResponse.has_ip_address() ? startResponse.ip_address().c_str() : "(unset)",
                 startResponse.has_port() ? startResponse.port() : 0);
@@ -258,16 +259,16 @@ bool BwAapClient::respondToInfoRequest(const std::string &ssid, const std::strin
                                         int timeoutSeconds) {
     std::uint16_t requestType = 0;
     std::string requestPayload;
-    std::printf("androidauto: waiting for WIFI_INFO_REQUEST...\n");
+    std::printf("%s androidauto: waiting for WIFI_INFO_REQUEST...\n", androidauto::logTimestamp().c_str());
     if (!this->receiveFrame(requestType, requestPayload, timeoutSeconds)) {
         return false;
     }
     if (requestType != 2) {
-        std::fprintf(stderr, "androidauto: expected WIFI_INFO_REQUEST (type 2), got %u\n", requestType);
+        std::fprintf(stderr, "%s androidauto: expected WIFI_INFO_REQUEST (type 2), got %u\n", androidauto::logTimestamp().c_str(), requestType);
         return false;
     }
-    std::printf("androidauto: got WIFI_INFO_REQUEST, sending WIFI_INFO_RESPONSE "
-                "(ssid=%s bssid=%s security_mode=%d)\n",
+    std::printf("%s androidauto: got WIFI_INFO_REQUEST, sending WIFI_INFO_RESPONSE "
+                "(ssid=%s bssid=%s security_mode=%d)\n", androidauto::logTimestamp().c_str(),
                 ssid.c_str(), bssid.c_str(), securityMode);
 
     aap_protobuf::aaw::WifiInfoResponse infoResponse;
@@ -279,7 +280,7 @@ bool BwAapClient::respondToInfoRequest(const std::string &ssid, const std::strin
 
     std::string infoResponsePayload;
     if (!infoResponse.SerializeToString(&infoResponsePayload)) {
-        std::fprintf(stderr, "androidauto: failed to serialize WifiInfoResponse\n");
+        std::fprintf(stderr, "%s androidauto: failed to serialize WifiInfoResponse\n", androidauto::logTimestamp().c_str());
         return false;
     }
     return this->sendFrame(3, infoResponsePayload);
@@ -305,8 +306,8 @@ void BwAapClient::waitForOptionalConnectStatus(int timeoutSeconds) {
     // -- so this loops, logging and discarding anything that isn't type
     // 6, until it arrives or the overall deadline passes.
     auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(timeoutSeconds);
-    std::printf("androidauto: waiting up to %ds for WIFI_CONNECT_STATUS (draining any "
-                "interleaved frames, e.g. a late WIFI_START_RESPONSE, along the way)...\n",
+    std::printf("%s androidauto: waiting up to %ds for WIFI_CONNECT_STATUS (draining any "
+                "interleaved frames, e.g. a late WIFI_START_RESPONSE, along the way)...\n", androidauto::logTimestamp().c_str(),
                 timeoutSeconds);
 
     for (;;) {
@@ -314,31 +315,31 @@ void BwAapClient::waitForOptionalConnectStatus(int timeoutSeconds) {
                               deadline - std::chrono::steady_clock::now())
                               .count();
         if (remaining <= 0) {
-            std::printf("androidauto: no WIFI_CONNECT_STATUS within %ds (may be normal -- not "
-                        "confirmed the phone always sends one)\n", timeoutSeconds);
+            std::printf("%s androidauto: no WIFI_CONNECT_STATUS within %ds (may be normal -- not "
+                        "confirmed the phone always sends one)\n", androidauto::logTimestamp().c_str(), timeoutSeconds);
             return;
         }
 
         std::uint16_t type = 0;
         std::string payload;
         if (!this->receiveFrame(type, payload, static_cast<int>(remaining))) {
-            std::printf("androidauto: no WIFI_CONNECT_STATUS within %ds (may be normal -- not "
-                        "confirmed the phone always sends one)\n", timeoutSeconds);
+            std::printf("%s androidauto: no WIFI_CONNECT_STATUS within %ds (may be normal -- not "
+                        "confirmed the phone always sends one)\n", androidauto::logTimestamp().c_str(), timeoutSeconds);
             return;
         }
 
         if (type != 6) {
-            std::printf("androidauto: got type=%u while waiting for WIFI_CONNECT_STATUS -- "
-                        "discarding, continuing to wait\n", type);
+            std::printf("%s androidauto: got type=%u while waiting for WIFI_CONNECT_STATUS -- "
+                        "discarding, continuing to wait\n", androidauto::logTimestamp().c_str(), type);
             continue;
         }
 
         aap_protobuf::aaw::WifiConnectionStatus status;
         if (!status.ParseFromString(payload)) {
-            std::fprintf(stderr, "androidauto: failed to parse WifiConnectionStatus\n");
+            std::fprintf(stderr, "%s androidauto: failed to parse WifiConnectionStatus\n", androidauto::logTimestamp().c_str());
             return;
         }
-        std::printf("androidauto: got WIFI_CONNECT_STATUS: status=%d%s%s\n",
+        std::printf("%s androidauto: got WIFI_CONNECT_STATUS: status=%d%s%s\n", androidauto::logTimestamp().c_str(),
                     static_cast<int>(status.status()),
                     status.has_error_message() ? " error_message=" : "",
                     status.has_error_message() ? status.error_message().c_str() : "");

@@ -20,6 +20,7 @@
 #include "hal/mcu_input.h"
 #include "hal/touch.h"
 #include "core/config_store.h"
+#include "core/log_timing.h"
 #include "core/navigation.h"
 #include "core/screen_manager.h"
 #include "ui/android_auto_screen.h"
@@ -101,11 +102,11 @@ public:
         // WirelessSessionManager::run() itself (see BwAapClient::
         // connect()'s new retry loop for the leading real-fix
         // candidate for that last case).
-        std::printf("custom_ui: +AAPDEV= observed: device_id='%s' name='%s' (last_triggered='%s')\n",
+        std::printf("%s custom_ui: +AAPDEV= observed: device_id='%s' name='%s' (last_triggered='%s')\n", core::log_timestamp().c_str(),
                     device_id.c_str(), name.c_str(), last_triggered_id_.c_str());
         constexpr auto kDebounceWindow = std::chrono::seconds(30);
         if (device_id == last_triggered_id_ && (now - last_triggered_at_) < kDebounceWindow) {
-            std::printf("custom_ui: +AAPDEV= debounced (same device triggered <30s ago)\n");
+            std::printf("%s custom_ui: +AAPDEV= debounced (same device triggered <30s ago)\n", core::log_timestamp().c_str());
             return;
         }
         last_triggered_id_ = device_id;
@@ -124,8 +125,8 @@ public:
                     std::lock_guard<std::mutex> lock(mtx_);
                     name = pending_name_;
                 }
-                std::printf("custom_ui: +AAPDEV= detected ('%s') -- auto-starting wireless "
-                            "Android Auto\n", name.c_str());
+                std::printf("%s custom_ui: +AAPDEV= detected ('%s') -- auto-starting wireless "
+                            "Android Auto\n", core::log_timestamp().c_str(), name.c_str());
 
                 // 2026-08-13: this device has no RTC and no NTP client
                 // anywhere in its rootfs -- the system clock starts at
@@ -178,8 +179,8 @@ public:
                     connected = client.requestConnect();
                 }
                 if (!connected) {
-                    std::fprintf(stderr, "custom_ui: auto-start requestConnect() failed (sidecar "
-                                 "unreachable)\n");
+                    std::fprintf(stderr, "%s custom_ui: auto-start requestConnect() failed (sidecar "
+                                 "unreachable)\n", core::log_timestamp().c_str());
                 } else {
                     // 2026-08-12: per explicit request, the EXISTING
                     // "Auto-start phone projection" setting
@@ -238,29 +239,33 @@ AaAutoStartWatcher & aa_auto_start_watcher() {
 }  // namespace
 
 int main() {
-    std::printf("custom_ui: starting, lv_init()...\n");
+    // Literal first line -- see core/log_timing.h's own comment. Every
+    // log line in this whole process is now on one continuous kernel-
+    // dmesg-style timeline.
+    core::mark_process_start();
+    std::printf("%s custom_ui: starting, lv_init()...\n", core::log_timestamp().c_str());
     lv_init();
-    std::printf("custom_ui: lv_init() done\n");
+    std::printf("%s custom_ui: lv_init() done\n", core::log_timestamp().c_str());
 
     lv_display_t * disp = hal::init_display("/dev/fb0");
     if (!disp) {
-        std::fprintf(stderr, "custom_ui: hal::init_display() failed, exiting\n");
+        std::fprintf(stderr, "%s custom_ui: hal::init_display() failed, exiting\n", core::log_timestamp().c_str());
         return 1;
     }
-    std::printf("custom_ui: display initialized\n");
+    std::printf("%s custom_ui: display initialized\n", core::log_timestamp().c_str());
 
     // Dark/accent theme for every default-styled widget (buttons,
     // switches, sliders, dropdowns, tabview) -- must run before any
     // screen is created, see ui/theme.h.
     ui::theme::init(disp);
-    std::printf("custom_ui: theme applied\n");
+    std::printf("%s custom_ui: theme applied\n", core::log_timestamp().c_str());
 
     // Starts /usr/bin/blueware (see hal/bluetooth.h) as early as
     // possible -- nothing else on this device auto-starts it (stock
     // firmware's MsnCoreApp did, at runtime; custom_ui replaces that
     // app and nothing filled the gap until now).
     hal::ensure_bluetooth_daemon_running();
-    std::printf("custom_ui: bluetooth daemon launch requested\n");
+    std::printf("%s custom_ui: bluetooth daemon launch requested\n", core::log_timestamp().c_str());
 
     // 2026-08-12: opens hal::shared_handle() (the one process-wide BT
     // handle -- status_bar.cpp and bluetooth_screen.cpp now use this
@@ -318,9 +323,9 @@ int main() {
         // dual-booting between them.
         std::string btName = core::default_store().get_string("DeviceName", "Prado CustomUI", "BlueTooth");
         if (hal::set_device_name(bt, btName)) {
-            std::printf("custom_ui: bluetooth device name set to '%s'\n", btName.c_str());
+            std::printf("%s custom_ui: bluetooth device name set to '%s'\n", core::log_timestamp().c_str(), btName.c_str());
         } else {
-            std::fprintf(stderr, "custom_ui: failed to set bluetooth device name to '%s'\n",
+            std::fprintf(stderr, "%s custom_ui: failed to set bluetooth device name to '%s'\n", core::log_timestamp().c_str(),
                          btName.c_str());
         }
         hal::auto_reconnect_paired_device(bt);
@@ -349,25 +354,25 @@ int main() {
     // thread per fd).
     static hal::McuInputHal mcu_input("/dev/ttyHS0");
     bool mcu_ok = mcu_input.start();
-    std::printf("custom_ui: MCU input (touch/knob) %s\n", mcu_ok ? "started" : "unavailable");
+    std::printf("%s custom_ui: MCU input (touch/knob) %s\n", core::log_timestamp().c_str(), mcu_ok ? "started" : "unavailable");
 
     lv_indev_t * touch = mcu_ok ? hal::init_touch(mcu_input) : nullptr;
-    std::printf("custom_ui: touch %s\n", touch ? "initialized" : "unavailable (continuing without it)");
+    std::printf("%s custom_ui: touch %s\n", core::log_timestamp().c_str(), touch ? "initialized" : "unavailable (continuing without it)");
 
     lv_indev_t * knob = mcu_ok ? hal::init_knob(mcu_input) : nullptr;
     if (knob) {
         lv_indev_set_group(knob, core::navigation::focus_group());
     }
-    std::printf("custom_ui: knob %s\n", knob ? "initialized" : "unavailable (continuing without it)");
+    std::printf("%s custom_ui: knob %s\n", core::log_timestamp().c_str(), knob ? "initialized" : "unavailable (continuing without it)");
 
     core::ScreenManager screens;
     core::navigation::init(screens);  // lets Settings/Bluetooth screens
                                        // push/pop without a captured
                                        // ScreenManager* -- see core/navigation.h
     screens.push(ui::create_home_screen);
-    std::printf("custom_ui: home screen pushed\n");
+    std::printf("%s custom_ui: home screen pushed\n", core::log_timestamp().c_str());
 
-    std::printf("custom_ui: LVGL initialized, running main loop\n");
+    std::printf("%s custom_ui: LVGL initialized, running main loop\n", core::log_timestamp().c_str());
 
     // Per-iteration heartbeat logging (iterations/sec once a second)
     // was removed here -- it was a one-time diagnostic for a real bug

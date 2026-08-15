@@ -1,4 +1,5 @@
 #include "androidauto/wireless_session_manager.h"
+#include "androidauto/log_timing.h"
 
 #include <array>
 #include <cstdio>
@@ -99,26 +100,26 @@ std::string readHostapdBssid() {
 std::string readWlan0Mac() {
     std::string bssid = readHostapdBssid();
     if (!bssid.empty()) {
-        std::printf("androidauto: wireless session: BSSID from hostapd_cli (live control socket): %s\n",
+        std::printf("%s androidauto: wireless session: BSSID from hostapd_cli (live control socket): %s\n", androidauto::logTimestamp().c_str(),
                      bssid.c_str());
         return bssid;
     }
 
-    std::fprintf(stderr, "androidauto: wireless session: hostapd_cli status didn't yield a bssid -- "
-                 "falling back to /sys/class/net/wlan0/address\n");
+    std::fprintf(stderr, "%s androidauto: wireless session: hostapd_cli status didn't yield a bssid -- "
+                 "falling back to /sys/class/net/wlan0/address\n", androidauto::logTimestamp().c_str());
     std::ifstream f("/sys/class/net/wlan0/address");
     std::string mac;
     std::getline(f, mac);
     if (mac.empty()) {
-        std::fprintf(stderr, "androidauto: wireless session: /sys/class/net/wlan0/address unreadable "
-                     "or empty\n");
+        std::fprintf(stderr, "%s androidauto: wireless session: /sys/class/net/wlan0/address unreadable "
+                     "or empty\n", androidauto::logTimestamp().c_str());
     }
     return mac;
 }
 
 bool isApRunning() {
     bool running = std::system("pidof hostapd >/dev/null 2>&1") == 0;
-    std::printf("androidauto: wireless session: hostapd running=%s\n", running ? "yes" : "no");
+    std::printf("%s androidauto: wireless session: hostapd running=%s\n", androidauto::logTimestamp().c_str(), running ? "yes" : "no");
     return running;
 }
 
@@ -164,8 +165,8 @@ void WirelessSessionManager::start() {
     // released, state_ already reflects whichever one actually won.
     WirelessSessionState current = state_.load(std::memory_order_acquire);
     if (current != WirelessSessionState::Idle && current != WirelessSessionState::Failed) {
-        std::printf("androidauto: wireless session: start() ignored -- a session is already "
-                    "active (state=%d)\n", static_cast<int>(current));
+        std::printf("%s androidauto: wireless session: start() ignored -- a session is already "
+                    "active (state=%d)\n", androidauto::logTimestamp().c_str(), static_cast<int>(current));
         return;
     }
 
@@ -189,12 +190,12 @@ void WirelessSessionManager::setStatus(WirelessSessionState s, std::string msg) 
     state_.store(s, std::memory_order_release);
     std::lock_guard<std::mutex> lock(statusMutex_);
     statusMessage_ = std::move(msg);
-    std::printf("androidauto: wireless session: %s\n", statusMessage_.c_str());
+    std::printf("%s androidauto: wireless session: %s\n", androidauto::logTimestamp().c_str(), statusMessage_.c_str());
 }
 
 bool WirelessSessionManager::ensureAccessPointUp() {
     if (isApRunning()) {
-        std::printf("androidauto: wireless session: AP already up, skipping wifi_ap.sh\n");
+        std::printf("%s androidauto: wireless session: AP already up, skipping wifi_ap.sh\n", androidauto::logTimestamp().c_str());
         return true;
     }
     // Synchronous: wifi_ap.sh's own long-running daemons (hostapd -B,
@@ -202,9 +203,9 @@ bool WirelessSessionManager::ensureAccessPointUp() {
     // returns once the script's own setup (module load, wlan0-exists
     // poll loop, up to ~30s per its own comment) finishes.
     std::string script = core::hal_config().wifi_ap_script();
-    std::printf("androidauto: wireless session: AP not running, launching %s...\n", script.c_str());
+    std::printf("%s androidauto: wireless session: AP not running, launching %s...\n", androidauto::logTimestamp().c_str(), script.c_str());
     int rc = std::system(script.c_str());
-    std::printf("androidauto: wireless session: %s exited with rc=%d\n", script.c_str(), rc);
+    std::printf("%s androidauto: wireless session: %s exited with rc=%d\n", androidauto::logTimestamp().c_str(), script.c_str(), rc);
     if (rc != 0) {
         return false;
     }
@@ -217,14 +218,14 @@ void WirelessSessionManager::run() {
         setStatus(WirelessSessionState::Failed, "Could not start the WiFi access point (wifi_ap.sh)");
         return;
     }
-    std::printf("androidauto: wireless session: AP is up\n");
+    std::printf("%s androidauto: wireless session: AP is up\n", androidauto::logTimestamp().c_str());
 
     std::string bssid = readWlan0Mac();
     if (bssid.empty()) {
         setStatus(WirelessSessionState::Failed, "Could not read wlan0's MAC address");
         return;
     }
-    std::printf("androidauto: wireless session: wlan0 bssid=%s\n", bssid.c_str());
+    std::printf("%s androidauto: wireless session: wlan0 bssid=%s\n", androidauto::logTimestamp().c_str(), bssid.c_str());
 
     const core::HalConfig & cfg = core::hal_config();
 
@@ -260,7 +261,7 @@ void WirelessSessionManager::run() {
                       openEc.message());
         return;
     }
-    std::printf("androidauto: wireless session: WPP TCP server listening on 0.0.0.0:%u\n",
+    std::printf("%s androidauto: wireless session: WPP TCP server listening on 0.0.0.0:%u\n", androidauto::logTimestamp().c_str(),
                 cfg.wifi_session_port());
 
     setStatus(WirelessSessionState::BluetoothHandshake, "Connecting to blueware (/dev/bw_aap)...");
@@ -278,16 +279,16 @@ void WirelessSessionManager::run() {
     // phone's side -- only our own bind stays on all interfaces.
     std::string startRespIp;
     std::uint16_t startRespPort = cfg.wifi_session_port();
-    std::printf("androidauto: wireless session: bw_aap connected, starting handshake "
-                "(advertising %s:%u for the phone to dial in on)\n", cfg.wifi_ap_address().c_str(),
+    std::printf("%s androidauto: wireless session: bw_aap connected, starting handshake "
+                "(advertising %s:%u for the phone to dial in on)\n", androidauto::logTimestamp().c_str(), cfg.wifi_ap_address().c_str(),
                 cfg.wifi_session_port());
     if (!bwAap.startHandshake(cfg.wifi_ap_address(), cfg.wifi_session_port(), startRespIp,
                                startRespPort)) {
         setStatus(WirelessSessionState::Failed, "BW_AAP handshake (version request/response) failed");
         return;
     }
-    std::printf("androidauto: wireless session: BW_AAP handshake (steps 1-3, + optional "
-                "WIFI_START_RESPONSE) done\n");
+    std::printf("%s androidauto: wireless session: BW_AAP handshake (steps 1-3, + optional "
+                "WIFI_START_RESPONSE) done\n", androidauto::logTimestamp().c_str());
 
     setStatus(WirelessSessionState::WaitingForWifiJoin,
               "Waiting for phone to request WiFi credentials...");
@@ -297,7 +298,7 @@ void WirelessSessionManager::run() {
                   "Phone never requested WiFi credentials (WIFI_INFO_REQUEST timeout)");
         return;
     }
-    std::printf("androidauto: wireless session: WIFI_INFO_RESPONSE sent (ssid=%s)\n",
+    std::printf("%s androidauto: wireless session: WIFI_INFO_RESPONSE sent (ssid=%s)\n", androidauto::logTimestamp().c_str(),
                 cfg.wifi_ap_ssid().c_str());
 
     // 2026-08-13: waits briefly for an optional WIFI_CONNECT_STATUS
@@ -321,7 +322,7 @@ void WirelessSessionManager::run() {
     // WIFI_CONNECT_STATUS, so 5s was too tight a window for what this
     // call now actually waits through (see its own updated comment).
     bwAap.waitForOptionalConnectStatus(15);
-    std::printf("androidauto: wireless session: closing bw_aap\n");
+    std::printf("%s androidauto: wireless session: closing bw_aap\n", androidauto::logTimestamp().c_str());
     bwAap.close();
 
     setStatus(WirelessSessionState::Connecting,
@@ -353,11 +354,11 @@ void WirelessSessionManager::run() {
     boost::system::error_code peerEc;
     auto remote = socket->remote_endpoint(peerEc);
     if (!peerEc) {
-        std::printf("androidauto: wireless session: phone connected from %s:%u\n",
+        std::printf("%s androidauto: wireless session: phone connected from %s:%u\n", androidauto::logTimestamp().c_str(),
                     remote.address().to_string().c_str(), remote.port());
     } else {
-        std::printf("androidauto: wireless session: phone connected (remote_endpoint() "
-                    "unavailable: %s)\n", peerEc.message().c_str());
+        std::printf("%s androidauto: wireless session: phone connected (remote_endpoint() "
+                    "unavailable: %s)\n", androidauto::logTimestamp().c_str(), peerEc.message().c_str());
     }
 
     aasdk::tcp::TCPWrapper tcpWrapper;
@@ -372,7 +373,7 @@ void WirelessSessionManager::run() {
     }
 
     setStatus(WirelessSessionState::Connected, "Connected -- Android Auto session running");
-    std::printf("androidauto: wireless session: handing off to Session, entering io_service.run()\n");
+    std::printf("%s androidauto: wireless session: handing off to Session, entering io_service.run()\n", androidauto::logTimestamp().c_str());
 
     // Blocks this thread for the session's lifetime -- deliberately not
     // pumped from the LVGL main loop, see header comment.

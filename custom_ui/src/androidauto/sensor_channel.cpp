@@ -25,7 +25,7 @@ void SensorChannel::start() {
 
 void SensorChannel::onChannelOpenRequest(
     const aap_protobuf::service::control::message::ChannelOpenRequest &request) {
-    std::printf("[+%ldms] androidauto: sensor channel open request (priority=%d)\n", elapsedMs(),
+    std::printf("%s androidauto: sensor channel open request (priority=%d)\n", logTimestamp().c_str(),
                 request.priority());
 
     aap_protobuf::service::control::message::ChannelOpenResponse response;
@@ -33,9 +33,9 @@ void SensorChannel::onChannelOpenRequest(
 
     auto promise = aasdk::channel::SendPromise::defer(strand_);
     promise->then(
-        []() { std::printf("[+%ldms] androidauto: sensor channel open response sent\n", elapsedMs()); },
+        []() { std::printf("%s androidauto: sensor channel open response sent\n", logTimestamp().c_str()); },
         [](const aasdk::error::Error &e) {
-            std::printf("[+%ldms] androidauto: sensor channel open response send failed: %s\n", elapsedMs(),
+            std::printf("%s androidauto: sensor channel open response send failed: %s\n", logTimestamp().c_str(),
                         e.what());
         });
     channel_->sendChannelOpenResponse(response, promise);
@@ -45,7 +45,7 @@ void SensorChannel::onChannelOpenRequest(
 
 void SensorChannel::onSensorStartRequest(
     const aap_protobuf::service::sensorsource::message::SensorRequest &request) {
-    std::printf("[+%ldms] androidauto: sensor start request, type=%d, min_update_period=%lld\n", elapsedMs(),
+    std::printf("%s androidauto: sensor start request, type=%d, min_update_period=%lld\n", logTimestamp().c_str(),
                 static_cast<int>(request.type()),
                 static_cast<long long>(request.min_update_period()));
 
@@ -55,7 +55,7 @@ void SensorChannel::onSensorStartRequest(
     auto promise = aasdk::channel::SendPromise::defer(strand_);
     promise->then(
         [this, self = shared_from_this(), request]() {
-            std::printf("[+%ldms] androidauto: sensor start response sent\n", elapsedMs());
+            std::printf("%s androidauto: sensor start response sent\n", logTimestamp().c_str());
 
             // DRIVING_STATUS_DATA is the one sensor this channel
             // actually advertises (see this class's header comment) --
@@ -76,16 +76,16 @@ void SensorChannel::onSensorStartRequest(
 
                 auto eventPromise = aasdk::channel::SendPromise::defer(strand_);
                 eventPromise->then(
-                    []() { std::printf("[+%ldms] androidauto: driving status sensor event sent\n", elapsedMs()); },
+                    []() { std::printf("%s androidauto: driving status sensor event sent\n", logTimestamp().c_str()); },
                     [](const aasdk::error::Error &e) {
-                        std::printf("[+%ldms] androidauto: driving status sensor event send failed: %s\n",
-                                    elapsedMs(), e.what());
+                        std::printf("%s androidauto: driving status sensor event send failed: %s\n",
+                                    logTimestamp().c_str(), e.what());
                     });
                 channel_->sendSensorEventIndication(batch, eventPromise);
             }
         },
         [](const aasdk::error::Error &e) {
-            std::printf("[+%ldms] androidauto: sensor start response send failed: %s\n", elapsedMs(), e.what());
+            std::printf("%s androidauto: sensor start response send failed: %s\n", logTimestamp().c_str(), e.what());
         });
     channel_->sendSensorStartResponse(response, promise);
 
@@ -93,7 +93,7 @@ void SensorChannel::onSensorStartRequest(
 }
 
 void SensorChannel::onChannelError(const aasdk::error::Error &e) {
-    std::printf("[+%ldms] androidauto: sensor channel error: %s\n", elapsedMs(), e.what());
+    std::printf("%s androidauto: sensor channel error: %s\n", logTimestamp().c_str(), e.what());
 }
 
 }  // namespace androidauto

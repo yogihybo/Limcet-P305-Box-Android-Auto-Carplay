@@ -22,7 +22,7 @@ void MicrophoneChannel::start() {
 
 void MicrophoneChannel::onChannelOpenRequest(
     const aap_protobuf::service::control::message::ChannelOpenRequest &request) {
-    std::printf("[+%ldms] androidauto: microphone channel open request (priority=%d)\n", elapsedMs(),
+    std::printf("%s androidauto: microphone channel open request (priority=%d)\n", logTimestamp().c_str(),
                 request.priority());
 
     aap_protobuf::service::control::message::ChannelOpenResponse response;
@@ -30,9 +30,9 @@ void MicrophoneChannel::onChannelOpenRequest(
 
     auto promise = aasdk::channel::SendPromise::defer(strand_);
     promise->then(
-        []() { std::printf("[+%ldms] androidauto: microphone channel open response sent\n", elapsedMs()); },
+        []() { std::printf("%s androidauto: microphone channel open response sent\n", logTimestamp().c_str()); },
         [](const aasdk::error::Error &e) {
-            std::printf("[+%ldms] androidauto: microphone channel open response send failed: %s\n", elapsedMs(),
+            std::printf("%s androidauto: microphone channel open response send failed: %s\n", logTimestamp().c_str(),
                         e.what());
         });
     channel_->sendChannelOpenResponse(response, promise);
@@ -42,7 +42,7 @@ void MicrophoneChannel::onChannelOpenRequest(
 
 void MicrophoneChannel::onMediaChannelSetupRequest(
     const aap_protobuf::service::media::shared::message::Setup &request) {
-    std::printf("[+%ldms] androidauto: microphone channel setup request, codec type=%d\n", elapsedMs(),
+    std::printf("%s androidauto: microphone channel setup request, codec type=%d\n", logTimestamp().c_str(),
                 static_cast<int>(request.type()));
 
     // Only one configuration is ever advertised for this channel (see
@@ -59,9 +59,9 @@ void MicrophoneChannel::onMediaChannelSetupRequest(
 
     auto promise = aasdk::channel::SendPromise::defer(strand_);
     promise->then(
-        []() { std::printf("[+%ldms] androidauto: microphone channel setup response sent\n", elapsedMs()); },
+        []() { std::printf("%s androidauto: microphone channel setup response sent\n", logTimestamp().c_str()); },
         [](const aasdk::error::Error &e) {
-            std::printf("[+%ldms] androidauto: microphone channel setup response send failed: %s\n", elapsedMs(),
+            std::printf("%s androidauto: microphone channel setup response send failed: %s\n", logTimestamp().c_str(),
                         e.what());
         });
     channel_->sendChannelSetupResponse(response, promise);
@@ -75,7 +75,7 @@ void MicrophoneChannel::onMediaSourceOpenRequest(
     // needs a real MicrophoneResponse to consider this channel usable
     // at all) but doesn't actually capture or stream microphone audio
     // -- see this class's header comment for why that's fine for now.
-    std::printf("[+%ldms] androidauto: microphone %s request\n", elapsedMs(),
+    std::printf("%s androidauto: microphone %s request\n", logTimestamp().c_str(),
                 request.open() ? "open" : "close");
 
     aap_protobuf::service::media::source::message::MicrophoneResponse response;
@@ -84,9 +84,9 @@ void MicrophoneChannel::onMediaSourceOpenRequest(
 
     auto promise = aasdk::channel::SendPromise::defer(strand_);
     promise->then(
-        []() { std::printf("[+%ldms] androidauto: microphone open response sent\n", elapsedMs()); },
+        []() { std::printf("%s androidauto: microphone open response sent\n", logTimestamp().c_str()); },
         [](const aasdk::error::Error &e) {
-            std::printf("[+%ldms] androidauto: microphone open response send failed: %s\n", elapsedMs(),
+            std::printf("%s androidauto: microphone open response send failed: %s\n", logTimestamp().c_str(),
                         e.what());
         });
     channel_->sendMicrophoneOpenResponse(response, promise);
@@ -100,7 +100,7 @@ void MicrophoneChannel::onMediaChannelAckIndication(
 }
 
 void MicrophoneChannel::onChannelError(const aasdk::error::Error &e) {
-    std::printf("[+%ldms] androidauto: microphone channel error: %s\n", elapsedMs(), e.what());
+    std::printf("%s androidauto: microphone channel error: %s\n", logTimestamp().c_str(), e.what());
 }
 
 }  // namespace androidauto

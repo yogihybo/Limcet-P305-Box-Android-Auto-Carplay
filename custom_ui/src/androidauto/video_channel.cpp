@@ -19,7 +19,7 @@ void VideoChannel::start() {
 
 void VideoChannel::onChannelOpenRequest(
     const aap_protobuf::service::control::message::ChannelOpenRequest & request) {
-    std::printf("[+%ldms] androidauto: video channel open request (priority=%d)\n", elapsedMs(),
+    std::printf("%s androidauto: video channel open request (priority=%d)\n", logTimestamp().c_str(),
                 request.priority());
 
     aap_protobuf::service::control::message::ChannelOpenResponse response;
@@ -27,9 +27,9 @@ void VideoChannel::onChannelOpenRequest(
 
     auto promise = aasdk::channel::SendPromise::defer(strand_);
     promise->then(
-        []() { std::printf("[+%ldms] androidauto: video channel open response sent\n", elapsedMs()); },
+        []() { std::printf("%s androidauto: video channel open response sent\n", logTimestamp().c_str()); },
         [](const aasdk::error::Error & e) {
-            std::printf("[+%ldms] androidauto: video channel open response send failed: %s\n", elapsedMs(),
+            std::printf("%s androidauto: video channel open response send failed: %s\n", logTimestamp().c_str(),
                         e.what());
         });
     channel_->sendChannelOpenResponse(response, promise);
@@ -39,7 +39,7 @@ void VideoChannel::onChannelOpenRequest(
 
 void VideoChannel::onMediaChannelSetupRequest(
     const aap_protobuf::service::media::shared::message::Setup & request) {
-    std::printf("[+%ldms] androidauto: video channel setup request, codec type=%d\n", elapsedMs(),
+    std::printf("%s androidauto: video channel setup request, codec type=%d\n", logTimestamp().c_str(),
                static_cast<int>(request.type()));
 
     // Only one configuration is ever advertised (VIDEO_800x480 H264_BP,
@@ -56,7 +56,7 @@ void VideoChannel::onMediaChannelSetupRequest(
     auto promise = aasdk::channel::SendPromise::defer(strand_);
     promise->then(
         [this, self = shared_from_this()]() {
-            std::printf("[+%ldms] androidauto: video channel setup response sent\n", elapsedMs());
+            std::printf("%s androidauto: video channel setup response sent\n", logTimestamp().c_str());
             // 2026-08-15: found via the real opencardev/openauto
             // reference (VideoService::onAVChannelSetupRequest()) --
             // the head unit is expected to proactively grant video
@@ -70,7 +70,7 @@ void VideoChannel::onMediaChannelSetupRequest(
             sendVideoFocusIndication(/*unsolicited=*/true);
         },
         [](const aasdk::error::Error & e) {
-            std::printf("[+%ldms] androidauto: video channel setup response send failed: %s\n", elapsedMs(),
+            std::printf("%s androidauto: video channel setup response send failed: %s\n", logTimestamp().c_str(),
                         e.what());
         });
     channel_->sendChannelSetupResponse(response, promise);
@@ -81,14 +81,14 @@ void VideoChannel::onMediaChannelSetupRequest(
 void VideoChannel::onMediaChannelStartIndication(
     const aap_protobuf::service::media::shared::message::Start & indication) {
     sessionId_ = indication.session_id();
-    std::printf("[+%ldms] androidauto: video channel start, session_id=%d config_index=%u\n", elapsedMs(),
+    std::printf("%s androidauto: video channel start, session_id=%d config_index=%u\n", logTimestamp().c_str(),
                sessionId_, indication.configuration_index());
 
     if (!decoderOpen_) {
         decoderOpen_ = decoder_.open();
         if (!decoderOpen_) {
-            std::printf("[+%ldms] androidauto: video decoder open failed -- no video for this session\n",
-                        elapsedMs());
+            std::printf("%s androidauto: video decoder open failed -- no video for this session\n",
+                        logTimestamp().c_str());
         }
     }
 
@@ -97,7 +97,7 @@ void VideoChannel::onMediaChannelStartIndication(
 
 void VideoChannel::onMediaChannelStopIndication(
     const aap_protobuf::service::media::shared::message::Stop &) {
-    std::printf("[+%ldms] androidauto: video channel stop\n", elapsedMs());
+    std::printf("%s androidauto: video channel stop\n", logTimestamp().c_str());
     channel_->receive(this->shared_from_this());
 }
 
@@ -203,7 +203,7 @@ void VideoChannel::sendAck() {
 
 void VideoChannel::onVideoFocusRequest(
     const aap_protobuf::service::media::video::message::VideoFocusRequestNotification & request) {
-    std::printf("[+%ldms] androidauto: video focus request, mode=%d reason=%d\n", elapsedMs(),
+    std::printf("%s androidauto: video focus request, mode=%d reason=%d\n", logTimestamp().c_str(),
                static_cast<int>(request.mode()), static_cast<int>(request.reason()));
 
     // Always grant projected focus -- this app has no native content
@@ -221,8 +221,8 @@ void VideoChannel::sendVideoFocusIndication(bool unsolicited) {
     auto promise = aasdk::channel::SendPromise::defer(strand_);
     promise->then(
         [unsolicited]() {
-            std::printf("[+%ldms] androidauto: video focus indication sent (unsolicited=%d)\n",
-                       elapsedMs(), unsolicited);
+            std::printf("%s androidauto: video focus indication sent (unsolicited=%d)\n",
+                       logTimestamp().c_str(), unsolicited);
         },
         [](const aasdk::error::Error & e) {
             std::printf("androidauto: video focus indication send failed: %s\n", e.what());
@@ -231,7 +231,7 @@ void VideoChannel::sendVideoFocusIndication(bool unsolicited) {
 }
 
 void VideoChannel::onChannelError(const aasdk::error::Error & e) {
-    std::printf("[+%ldms] androidauto: video channel error: %s\n", elapsedMs(), e.what());
+    std::printf("%s androidauto: video channel error: %s\n", logTimestamp().c_str(), e.what());
 }
 
 }  // namespace androidauto

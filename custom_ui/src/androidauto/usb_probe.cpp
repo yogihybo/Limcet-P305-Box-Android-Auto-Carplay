@@ -1,4 +1,5 @@
 #include "androidauto/usb_probe.h"
+#include "androidauto/log_timing.h"
 
 #include <cstdio>
 #include <memory>
@@ -20,7 +21,7 @@ namespace androidauto {
 bool run_usb_probe(int seconds) {
     libusb_context *usbContext = nullptr;
     if (libusb_init(&usbContext) != 0) {
-        std::fprintf(stderr, "androidauto: libusb_init failed\n");
+        std::fprintf(stderr, "%s androidauto: libusb_init failed\n", androidauto::logTimestamp().c_str());
         return false;
     }
 
@@ -33,15 +34,15 @@ bool run_usb_probe(int seconds) {
     auto promise = aasdk::usb::IUSBHub::Promise::defer(ioService);
     promise->then(
         [&usbWrapper, &ioService](aasdk::usb::DeviceHandle deviceHandle) {
-            std::printf("androidauto: USB device passed AOAP accessory-mode query chain, "
-                        "starting session\n");
+            std::printf("%s androidauto: USB device passed AOAP accessory-mode query chain, "
+                        "starting session\n", androidauto::logTimestamp().c_str());
             auto aoapDevice = aasdk::usb::AOAPDevice::create(usbWrapper, ioService, std::move(deviceHandle));
             auto transport = std::make_shared<aasdk::transport::USBTransport>(ioService, std::move(aoapDevice));
             auto session = std::make_shared<Session>(ioService);
             session->start(std::move(transport));
         },
         [](const aasdk::error::Error &error) {
-            std::printf("androidauto: USB hub stopped: %s\n", error.what());
+            std::printf("%s androidauto: USB hub stopped: %s\n", androidauto::logTimestamp().c_str(), error.what());
         });
     hub->start(promise);
 
@@ -55,7 +56,7 @@ bool run_usb_probe(int seconds) {
         ioService.stop();
     });
 
-    std::printf("androidauto: watching for AOAP-capable USB devices for %ds...\n", seconds);
+    std::printf("%s androidauto: watching for AOAP-capable USB devices for %ds...\n", androidauto::logTimestamp().c_str(), seconds);
     ioService.run();
 
     libusb_exit(usbContext);

@@ -1,4 +1,5 @@
 #include "hal/display.h"
+#include "core/log_timing.h"
 
 #include <cstdio>
 #include <fcntl.h>
@@ -47,7 +48,7 @@ lv_display_t * init_display(const char * fb_path) {
     {
         int probe_fd = open(fb_path, O_RDWR);
         if (probe_fd >= 0) {
-            std::printf("hal::display::init_display: pre-flight open(%s) ok, probing ioctls...\n", fb_path);
+            std::printf("%s hal::display::init_display: pre-flight open(%s) ok, probing ioctls...\n", core::log_timestamp().c_str(), fb_path);
             if (ioctl(probe_fd, FBIOBLANK, FB_BLANK_UNBLANK) != 0) {
                 perror("hal::display::init_display: pre-flight ioctl(FBIOBLANK)");
             }
@@ -56,22 +57,22 @@ lv_display_t * init_display(const char * fb_path) {
             bool got_var = ioctl(probe_fd, FBIOGET_VSCREENINFO, &probe_var) == 0;
             bool got_fix = ioctl(probe_fd, FBIOGET_FSCREENINFO, &probe_fix) == 0;
             if (got_var) {
-                std::printf("hal::display::init_display: pre-flight FBIOGET_VSCREENINFO: "
-                            "xres=%u yres=%u xres_virtual=%u yres_virtual=%u bits_per_pixel=%u\n",
+                std::printf("%s hal::display::init_display: pre-flight FBIOGET_VSCREENINFO: "
+                            "xres=%u yres=%u xres_virtual=%u yres_virtual=%u bits_per_pixel=%u\n", core::log_timestamp().c_str(),
                             probe_var.xres, probe_var.yres, probe_var.xres_virtual,
                             probe_var.yres_virtual, probe_var.bits_per_pixel);
                 unsigned long long est_buf_size =
                     static_cast<unsigned long long>(probe_var.xres) *
                     (probe_var.bits_per_pixel / 8) * probe_var.yres;
-                std::printf("hal::display::init_display: pre-flight estimated single draw buffer size: "
-                            "%llu bytes (%.1f MB)\n",
+                std::printf("%s hal::display::init_display: pre-flight estimated single draw buffer size: "
+                            "%llu bytes (%.1f MB)\n", core::log_timestamp().c_str(),
                             est_buf_size, static_cast<double>(est_buf_size) / (1024.0 * 1024.0));
             } else {
                 perror("hal::display::init_display: pre-flight ioctl(FBIOGET_VSCREENINFO)");
             }
             if (got_fix) {
-                std::printf("hal::display::init_display: pre-flight FBIOGET_FSCREENINFO: "
-                            "line_length=%u smem_start=0x%lx smem_len=%u type=%u visual=%u\n",
+                std::printf("%s hal::display::init_display: pre-flight FBIOGET_FSCREENINFO: "
+                            "line_length=%u smem_start=0x%lx smem_len=%u type=%u visual=%u\n", core::log_timestamp().c_str(),
                             probe_fix.line_length, probe_fix.smem_start, probe_fix.smem_len,
                             probe_fix.type, probe_fix.visual);
             } else {
@@ -83,18 +84,18 @@ lv_display_t * init_display(const char * fb_path) {
         }
     }
 
-    std::printf("hal::display::init_display: calling lv_linux_fbdev_create()...\n");
+    std::printf("%s hal::display::init_display: calling lv_linux_fbdev_create()...\n", core::log_timestamp().c_str());
     lv_display_t * disp = lv_linux_fbdev_create();
     if (!disp) {
-        std::fprintf(stderr, "hal::display::init_display: lv_linux_fbdev_create() failed\n");
+        std::fprintf(stderr, "%s hal::display::init_display: lv_linux_fbdev_create() failed\n", core::log_timestamp().c_str());
         return nullptr;
     }
-    std::printf("hal::display::init_display: calling lv_linux_fbdev_set_file(%s)...\n", fb_path);
+    std::printf("%s hal::display::init_display: calling lv_linux_fbdev_set_file(%s)...\n", core::log_timestamp().c_str(), fb_path);
     if (lv_linux_fbdev_set_file(disp, fb_path) != LV_RESULT_OK) {
-        std::fprintf(stderr, "hal::display::init_display: failed to open %s\n", fb_path);
+        std::fprintf(stderr, "%s hal::display::init_display: failed to open %s\n", core::log_timestamp().c_str(), fb_path);
         return nullptr;
     }
-    std::printf("hal::display::init_display: %s opened and mapped by lv_linux_fbdev\n", fb_path);
+    std::printf("%s hal::display::init_display: %s opened and mapped by lv_linux_fbdev\n", core::log_timestamp().c_str(), fb_path);
 
     // See kArkfbShowWindowReal's comment: without this, this device's
     // kernel driver never turns on the OSD1 hardware layer, so writes
@@ -106,7 +107,7 @@ lv_display_t * init_display(const char * fb_path) {
         if (ioctl(show_fd, kArkfbShowWindowReal, 0) != 0) {
             perror("hal::display::init_display: ioctl(ARKFB_SHOW_WINDOW_REAL)");
         } else {
-            std::printf("hal::display::init_display: ioctl(ARKFB_SHOW_WINDOW_REAL) on %s: ok\n", fb_path);
+            std::printf("%s hal::display::init_display: ioctl(ARKFB_SHOW_WINDOW_REAL) on %s: ok\n", core::log_timestamp().c_str(), fb_path);
         }
 
         // Diagnostic only -- read back what the kernel actually reports
@@ -117,8 +118,8 @@ lv_display_t * init_display(const char * fb_path) {
         struct fb_fix_screeninfo fix {};
         if (ioctl(show_fd, FBIOGET_VSCREENINFO, &var) == 0 &&
             ioctl(show_fd, FBIOGET_FSCREENINFO, &fix) == 0) {
-            std::printf("hal::display::init_display: %s reports %ux%u, %ubpp, line_length=%u, "
-                        "smem_start=0x%lx, smem_len=%u\n",
+            std::printf("%s hal::display::init_display: %s reports %ux%u, %ubpp, line_length=%u, "
+                        "smem_start=0x%lx, smem_len=%u\n", core::log_timestamp().c_str(),
                         fb_path, var.xres, var.yres, var.bits_per_pixel,
                         fix.line_length, fix.smem_start, fix.smem_len);
         } else {
@@ -127,7 +128,7 @@ lv_display_t * init_display(const char * fb_path) {
 
         close(show_fd);
     } else {
-        std::fprintf(stderr, "hal::display::init_display: couldn't reopen %s for SHOW_WINDOW\n", fb_path);
+        std::fprintf(stderr, "%s hal::display::init_display: couldn't reopen %s for SHOW_WINDOW\n", core::log_timestamp().c_str(), fb_path);
     }
 
     // Belt-and-suspenders: also force every flush to go through
@@ -135,7 +136,7 @@ lv_display_t * init_display(const char * fb_path) {
     // enable path, per linux-arkmicro's ark1668_lcdfb.c) in case
     // something later disables the layer again.
     lv_linux_fbdev_set_force_refresh(disp, true);
-    std::printf("hal::display::init_display: done, force_refresh enabled\n");
+    std::printf("%s hal::display::init_display: done, force_refresh enabled\n", core::log_timestamp().c_str());
 
     return disp;
 }

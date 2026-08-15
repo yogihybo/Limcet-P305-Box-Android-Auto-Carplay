@@ -24,7 +24,7 @@ void AudioChannel::start() {
 
 void AudioChannel::onChannelOpenRequest(
     const aap_protobuf::service::control::message::ChannelOpenRequest & request) {
-    std::printf("[+%ldms] androidauto: audio channel (%s) open request (priority=%d)\n", elapsedMs(),
+    std::printf("%s androidauto: audio channel (%s) open request (priority=%d)\n", logTimestamp().c_str(),
                pcmDevice_.c_str(), request.priority());
 
     aap_protobuf::service::control::message::ChannelOpenResponse response;
@@ -33,11 +33,11 @@ void AudioChannel::onChannelOpenRequest(
     auto promise = aasdk::channel::SendPromise::defer(strand_);
     promise->then(
         [this]() {
-            std::printf("[+%ldms] androidauto: audio channel (%s) open response sent\n", elapsedMs(),
+            std::printf("%s androidauto: audio channel (%s) open response sent\n", logTimestamp().c_str(),
                         pcmDevice_.c_str());
         },
         [](const aasdk::error::Error & e) {
-            std::printf("[+%ldms] androidauto: audio channel open response send failed: %s\n", elapsedMs(),
+            std::printf("%s androidauto: audio channel open response send failed: %s\n", logTimestamp().c_str(),
                         e.what());
         });
     channel_->sendChannelOpenResponse(response, promise);
@@ -47,7 +47,7 @@ void AudioChannel::onChannelOpenRequest(
 
 void AudioChannel::onMediaChannelSetupRequest(
     const aap_protobuf::service::media::shared::message::Setup & request) {
-    std::printf("[+%ldms] androidauto: audio channel (%s) setup request, codec type=%d\n", elapsedMs(),
+    std::printf("%s androidauto: audio channel (%s) setup request, codec type=%d\n", logTimestamp().c_str(),
                pcmDevice_.c_str(), static_cast<int>(request.type()));
 
     // Only one configuration is ever advertised for this channel (see
@@ -69,11 +69,11 @@ void AudioChannel::onMediaChannelSetupRequest(
     auto promise = aasdk::channel::SendPromise::defer(strand_);
     promise->then(
         [this]() {
-            std::printf("[+%ldms] androidauto: audio channel (%s) setup response sent\n", elapsedMs(),
+            std::printf("%s androidauto: audio channel (%s) setup response sent\n", logTimestamp().c_str(),
                         pcmDevice_.c_str());
         },
         [](const aasdk::error::Error & e) {
-            std::printf("[+%ldms] androidauto: audio channel setup response send failed: %s\n", elapsedMs(),
+            std::printf("%s androidauto: audio channel setup response send failed: %s\n", logTimestamp().c_str(),
                         e.what());
         });
     channel_->sendChannelSetupResponse(response, promise);
@@ -84,14 +84,14 @@ void AudioChannel::onMediaChannelSetupRequest(
 void AudioChannel::onMediaChannelStartIndication(
     const aap_protobuf::service::media::shared::message::Start & indication) {
     sessionId_ = indication.session_id();
-    std::printf("[+%ldms] androidauto: audio channel (%s) start, session_id=%d config_index=%u\n", elapsedMs(),
+    std::printf("%s androidauto: audio channel (%s) start, session_id=%d config_index=%u\n", logTimestamp().c_str(),
                pcmDevice_.c_str(), sessionId_, indication.configuration_index());
 
     if (!alsaOpen_) {
         alsaOpen_ = alsaOutput_.open();
         if (!alsaOpen_) {
-            std::printf("[+%ldms] androidauto: audio channel (%s) ALSA open failed -- audio for this "
-                       "channel won't play\n", elapsedMs(), pcmDevice_.c_str());
+            std::printf("%s androidauto: audio channel (%s) ALSA open failed -- audio for this "
+                       "channel won't play\n", logTimestamp().c_str(), pcmDevice_.c_str());
         }
     }
 
@@ -100,7 +100,7 @@ void AudioChannel::onMediaChannelStartIndication(
 
 void AudioChannel::onMediaChannelStopIndication(
     const aap_protobuf::service::media::shared::message::Stop &) {
-    std::printf("[+%ldms] androidauto: audio channel (%s) stop\n", elapsedMs(), pcmDevice_.c_str());
+    std::printf("%s androidauto: audio channel (%s) stop\n", logTimestamp().c_str(), pcmDevice_.c_str());
     channel_->receive(this->shared_from_this());
 }
 
@@ -143,7 +143,7 @@ void AudioChannel::sendAck() {
 }
 
 void AudioChannel::onChannelError(const aasdk::error::Error & e) {
-    std::printf("[+%ldms] androidauto: audio channel (%s) error: %s\n", elapsedMs(), pcmDevice_.c_str(),
+    std::printf("%s androidauto: audio channel (%s) error: %s\n", logTimestamp().c_str(), pcmDevice_.c_str(),
                e.what());
 }
 

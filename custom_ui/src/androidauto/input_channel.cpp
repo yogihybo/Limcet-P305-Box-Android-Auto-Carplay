@@ -78,7 +78,7 @@ void InputChannel::sendKey(std::uint32_t keycode) {
 
 void InputChannel::onChannelOpenRequest(
     const aap_protobuf::service::control::message::ChannelOpenRequest &request) {
-    std::printf("[+%ldms] androidauto: input channel open request (priority=%d)\n", elapsedMs(),
+    std::printf("%s androidauto: input channel open request (priority=%d)\n", logTimestamp().c_str(),
                 request.priority());
 
     aap_protobuf::service::control::message::ChannelOpenResponse response;
@@ -86,9 +86,9 @@ void InputChannel::onChannelOpenRequest(
 
     auto promise = aasdk::channel::SendPromise::defer(strand_);
     promise->then(
-        []() { std::printf("[+%ldms] androidauto: input channel open response sent\n", elapsedMs()); },
+        []() { std::printf("%s androidauto: input channel open response sent\n", logTimestamp().c_str()); },
         [](const aasdk::error::Error &e) {
-            std::printf("[+%ldms] androidauto: input channel open response send failed: %s\n", elapsedMs(),
+            std::printf("%s androidauto: input channel open response send failed: %s\n", logTimestamp().c_str(),
                         e.what());
         });
     channel_->sendChannelOpenResponse(response, promise);
@@ -121,17 +121,17 @@ void InputChannel::onKeyBindingRequest(
     // pattern already proven correct for every other required response
     // in this codebase) rather than leaving the phone waiting on a reply
     // that was never coming.
-    std::printf("[+%ldms] androidauto: key binding request (no wheel/hardware keys to bind -- "
-                "replying success)\n", elapsedMs());
+    std::printf("%s androidauto: key binding request (no wheel/hardware keys to bind -- "
+                "replying success)\n", logTimestamp().c_str());
 
     aap_protobuf::service::media::sink::message::KeyBindingResponse response;
     response.set_status(aap_protobuf::shared::MessageStatus::STATUS_SUCCESS);
 
     auto promise = aasdk::channel::SendPromise::defer(strand_);
     promise->then(
-        []() { std::printf("[+%ldms] androidauto: key binding response sent\n", elapsedMs()); },
+        []() { std::printf("%s androidauto: key binding response sent\n", logTimestamp().c_str()); },
         [](const aasdk::error::Error &e) {
-            std::printf("[+%ldms] androidauto: key binding response send failed: %s\n", elapsedMs(),
+            std::printf("%s androidauto: key binding response send failed: %s\n", logTimestamp().c_str(),
                         e.what());
         });
     channel_->sendKeyBindingResponse(response, promise);
@@ -140,7 +140,7 @@ void InputChannel::onKeyBindingRequest(
 }
 
 void InputChannel::onChannelError(const aasdk::error::Error &e) {
-    std::printf("[+%ldms] androidauto: input channel error: %s\n", elapsedMs(), e.what());
+    std::printf("%s androidauto: input channel error: %s\n", logTimestamp().c_str(), e.what());
 }
 
 }  // namespace androidauto

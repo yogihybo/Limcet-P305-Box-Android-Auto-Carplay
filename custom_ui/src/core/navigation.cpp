@@ -2,6 +2,8 @@
 
 #include <cstdio>
 
+#include "core/log_timing.h"
+
 namespace core::navigation {
 
 namespace {
@@ -15,7 +17,7 @@ void init(ScreenManager & manager) {
 
 void push(ScreenManager::ScreenFactory factory) {
     if (!g_manager) {
-        std::fprintf(stderr, "core::navigation::push: called before init()\n");
+        std::fprintf(stderr, "%s core::navigation::push: called before init()\n", core::log_timestamp().c_str());
         return;
     }
     g_manager->push(factory);
@@ -23,7 +25,7 @@ void push(ScreenManager::ScreenFactory factory) {
 
 void pop() {
     if (!g_manager) {
-        std::fprintf(stderr, "core::navigation::pop: called before init()\n");
+        std::fprintf(stderr, "%s core::navigation::pop: called before init()\n", core::log_timestamp().c_str());
         return;
     }
     g_manager->pop();

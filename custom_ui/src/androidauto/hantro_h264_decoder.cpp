@@ -1,4 +1,5 @@
 #include "androidauto/hantro_h264_decoder.h"
+#include "androidauto/log_timing.h"
 
 #include <cerrno>
 #include <cstdio>
@@ -71,7 +72,7 @@ HantroH264Decoder::~HantroH264Decoder() {
 bool HantroH264Decoder::open() {
     lib_ = dlopen(kLibPath, RTLD_NOW);
     if (!lib_) {
-        std::fprintf(stderr, "androidauto::HantroH264Decoder: dlopen(%s) failed: %s\n", kLibPath,
+        std::fprintf(stderr, "%s androidauto::HantroH264Decoder: dlopen(%s) failed: %s\n", androidauto::logTimestamp().c_str(), kLibPath,
                      dlerror());
         return false;
     }
@@ -83,8 +84,8 @@ bool HantroH264Decoder::open() {
     h264DecRelease_ = reinterpret_cast<decltype(h264DecRelease_)>(dlsym(lib_, "H264DecRelease"));
 
     if (!h264DecInit_ || !h264DecDecode_ || !h264DecNextPicture_ || !h264DecRelease_) {
-        std::fprintf(stderr, "androidauto::HantroH264Decoder: dlsym failed to resolve one or "
-                     "more H264Dec* symbols: %s\n", dlerror());
+        std::fprintf(stderr, "%s androidauto::HantroH264Decoder: dlsym failed to resolve one or "
+                     "more H264Dec* symbols: %s\n", androidauto::logTimestamp().c_str(), dlerror());
         dlclose(lib_);
         lib_ = nullptr;
         return false;
@@ -92,13 +93,13 @@ bool HantroH264Decoder::open() {
 
     int initRet = h264DecInit_(&decoderInst_, 0, 0, 0);
     if (initRet != 0 || decoderInst_ == nullptr) {
-        std::fprintf(stderr, "androidauto::HantroH264Decoder: H264DecInit failed (ret=%d) -- "
-                     "decoder hardware/driver itself did not initialize\n", initRet);
+        std::fprintf(stderr, "%s androidauto::HantroH264Decoder: H264DecInit failed (ret=%d) -- "
+                     "decoder hardware/driver itself did not initialize\n", androidauto::logTimestamp().c_str(), initRet);
         decoderInst_ = nullptr;
         return false;
     }
 
-    std::printf("androidauto::HantroH264Decoder: initialized (real hardware, ASIC confirmed)\n");
+    std::printf("%s androidauto::HantroH264Decoder: initialized (real hardware, ASIC confirmed)\n", androidauto::logTimestamp().c_str());
     return true;
 }
 
@@ -118,21 +119,21 @@ bool HantroH264Decoder::ensureDmaCapacity(size_t size) {
 
     dmaFd_ = ::open(kMemallocPath, O_RDWR);
     if (dmaFd_ < 0) {
-        std::fprintf(stderr, "androidauto::HantroH264Decoder: open(%s) failed: %s\n",
+        std::fprintf(stderr, "%s androidauto::HantroH264Decoder: open(%s) failed: %s\n", androidauto::logTimestamp().c_str(),
                      kMemallocPath, std::strerror(errno));
         return false;
     }
 
     MemallocParams params{0, aligned};
     if (ioctl(dmaFd_, kMemallocIocxGetbuffer, &params) < 0) {
-        std::fprintf(stderr, "androidauto::HantroH264Decoder: ioctl(GETBUFFER) failed: %s\n",
+        std::fprintf(stderr, "%s androidauto::HantroH264Decoder: ioctl(GETBUFFER) failed: %s\n", androidauto::logTimestamp().c_str(),
                      std::strerror(errno));
         ::close(dmaFd_);
         dmaFd_ = -1;
         return false;
     }
     if (params.busAddress == 0) {
-        std::fprintf(stderr, "androidauto::HantroH264Decoder: GETBUFFER returned bus address 0\n");
+        std::fprintf(stderr, "%s androidauto::HantroH264Decoder: GETBUFFER returned bus address 0\n", androidauto::logTimestamp().c_str());
         ::close(dmaFd_);
         dmaFd_ = -1;
         return false;
@@ -141,7 +142,7 @@ bool HantroH264Decoder::ensureDmaCapacity(size_t size) {
     void * virt = mmap(nullptr, aligned, PROT_READ | PROT_WRITE, MAP_SHARED, dmaFd_,
                        static_cast<off_t>(params.busAddress));
     if (virt == MAP_FAILED) {
-        std::fprintf(stderr, "androidauto::HantroH264Decoder: mmap failed: %s\n",
+        std::fprintf(stderr, "%s androidauto::HantroH264Decoder: mmap failed: %s\n", androidauto::logTimestamp().c_str(),
                      std::strerror(errno));
         ::close(dmaFd_);
         dmaFd_ = -1;
@@ -169,7 +170,7 @@ bool HantroH264Decoder::decodeFrame(const uint8_t * data, size_t len) {
     H264DecOutput output{};
     int decodeRet = h264DecDecode_(decoderInst_, &input, &output);
     if (decodeRet != 0) {
-        std::fprintf(stderr, "androidauto::HantroH264Decoder: H264DecDecode failed, ret=%d\n",
+        std::fprintf(stderr, "%s androidauto::HantroH264Decoder: H264DecDecode failed, ret=%d\n", androidauto::logTimestamp().c_str(),
                      decodeRet);
         return false;
     }
@@ -191,8 +192,8 @@ bool HantroH264Decoder::decodeFrame(const uint8_t * data, size_t len) {
     // ARKFB_SET_WINDOW_ADDR ioctls (see hal/video_layer.cpp). Left
     // uncorrected, a hardware log showing this line would wrongly
     // suggest video display is still unimplemented.
-    std::printf("androidauto::HantroH264Decoder: picture ready picId=%u %ux%u "
-               "busAddr=0x%08x format=%u errMBs=%u\n",
+    std::printf("%s androidauto::HantroH264Decoder: picture ready picId=%u %ux%u "
+               "busAddr=0x%08x format=%u errMBs=%u\n", androidauto::logTimestamp().c_str(),
                picture.picId, picture.picWidth, picture.picHeight,
                picture.outputPictureBusAddress, picture.outputFormat,
                picture.nbrOfErrMBs);

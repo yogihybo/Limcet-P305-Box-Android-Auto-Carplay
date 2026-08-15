@@ -71,6 +71,21 @@ public:
                    aap_protobuf::service::inputsource::message::PointerAction action,
                    std::uint64_t timestampMicros);
 
+    // Sends a momentary key tap -- a down=true InputReport immediately
+    // followed by a down=false one, matching the physical control
+    // knob's own MCU-relayed event shape (hal/mcu_input.h: rotation
+    // ticks and the push-button's press edge are both momentary
+    // events, never a sustained "held" state this class needs to
+    // track). keycode is a real Android KeyEvent constant -- see
+    // hal/knob.cpp's own comment for which ones and why
+    // (KEYCODE_SYSTEM_NAVIGATION_UP/DOWN=280/281 for rotation,
+    // KEYCODE_DPAD_CENTER=23 for the push button -- the real AAOS
+    // RotaryController convention, confirmed against AOSP's own
+    // KeyEvent.java, not guessed). Must also be listed in this
+    // channel's own keycodes_supported (session.cpp's
+    // ServiceDiscoveryResponse) or the phone may silently ignore it.
+    void sendKey(std::uint32_t keycode);
+
     void onChannelOpenRequest(const aap_protobuf::service::control::message::ChannelOpenRequest &request) override;
     void onKeyBindingRequest(const aap_protobuf::service::media::sink::message::KeyBindingRequest &request) override;
     void onChannelError(const aasdk::error::Error &e) override;

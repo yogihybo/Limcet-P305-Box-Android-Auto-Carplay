@@ -10,6 +10,7 @@
 #include <utility>
 
 #include "hal/androidauto_client.h"
+#include "hal/knob.h"
 #include "core/navigation.h"
 #include "ui/bluetooth_screen.h"
 #include "ui/status_bar.h"
@@ -120,6 +121,11 @@ void screen_delete_cb(lv_event_t * e) {
     // regardless (auto-start, see main.cpp's AaAutoStartWatcher); only
     // the hardware layer's visibility is tied to this screen.
     client().setVisible(false);
+    // 2026-08-15: pairs with the setVisible(true)/androidauto_screen_
+    // active().store(true) below -- the physical knob goes back to
+    // driving local LVGL group navigation on whatever screen the user
+    // navigates to next.
+    hal::androidauto_screen_active().store(false, std::memory_order_release);
 }
 
 }  // namespace
@@ -142,6 +148,12 @@ lv_obj_t * create_android_auto_screen() {
     // that would otherwise sit on top of the video layer regardless of
     // this call.
     client().setVisible(true);
+    // 2026-08-15: the physical control knob should drive the AA
+    // session (rotation/push forwarded as real Android KeyEvent taps,
+    // see hal/knob.cpp) while this screen is the active one, instead
+    // of local LVGL group navigation -- this screen has no meaningful
+    // focusable widgets of its own to navigate anyway.
+    hal::androidauto_screen_active().store(true, std::memory_order_release);
 
     lv_obj_t * content = lv_obj_create(scr);
     theme::style_card(content);

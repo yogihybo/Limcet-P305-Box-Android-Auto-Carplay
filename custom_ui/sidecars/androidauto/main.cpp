@@ -20,6 +20,18 @@
 //                this, only whether VideoChannel actually shows the
 //                hardware video layer once frames are ready.
 //   "HIDE"    -> sets androidauto::video_visible() false, replies "OK"
+//   "KEY <code>" -> forwards a real Android KeyEvent keycode into the
+//                current session's InputChannel as a momentary tap
+//                (WirelessSessionManager::sendInputKey(), see its own
+//                comment), replies "OK" whether or not a session
+//                currently exists to receive it (not treated as an
+//                error -- matches the physical knob's own "may be
+//                turned before any AA connection exists" case). "ERR
+//                bad KEY command" if <code> doesn't parse as an
+//                integer. Sent by hal/knob.cpp via hal/
+//                androidauto_client.h whenever the physical control
+//                knob is turned/pressed while the Android Auto screen
+//                is the active one.
 //   (anything else) -> replies "ERR unknown command"
 // One thread per accepted connection (expected connection count: 2 as
 // of the status-bar work in src/ui/status_bar.cpp -- android_auto_screen.cpp's
@@ -33,7 +45,9 @@
 // NOT YET hardware-tested.
 
 #include <cerrno>
+#include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 #include <thread>
@@ -95,6 +109,16 @@ void handle_connection(int clientFd, androidauto::WirelessSessionManager * manag
         } else if (line == "HIDE") {
             androidauto::video_visible().store(false, std::memory_order_release);
             reply = "OK\n";
+        } else if (line.rfind("KEY ", 0) == 0) {
+            std::string arg = line.substr(4);
+            char *end = nullptr;
+            long code = std::strtol(arg.c_str(), &end, 10);
+            if (end == arg.c_str() || *end != '\0' || code < 0) {
+                reply = "ERR bad KEY command\n";
+            } else {
+                manager->sendInputKey(static_cast<std::uint32_t>(code));
+                reply = "OK\n";
+            }
         } else {
             reply = "ERR unknown command\n";
         }

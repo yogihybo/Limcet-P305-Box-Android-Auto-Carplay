@@ -366,6 +366,11 @@ void WirelessSessionManager::run() {
     auto session = std::make_shared<Session>(ioService);
     session->start(std::move(transport));
 
+    {
+        std::lock_guard<std::mutex> lock(sessionMutex_);
+        currentSession_ = session;
+    }
+
     setStatus(WirelessSessionState::Connected, "Connected -- Android Auto session running");
     std::printf("androidauto: wireless session: handing off to Session, entering io_service.run()\n");
 
@@ -373,7 +378,19 @@ void WirelessSessionManager::run() {
     // pumped from the LVGL main loop, see header comment.
     ioService.run();
 
+    {
+        std::lock_guard<std::mutex> lock(sessionMutex_);
+        currentSession_.reset();
+    }
+
     setStatus(WirelessSessionState::Failed, "Session ended (io_service stopped)");
+}
+
+void WirelessSessionManager::sendInputKey(std::uint32_t keycode) {
+    std::lock_guard<std::mutex> lock(sessionMutex_);
+    if (currentSession_) {
+        currentSession_->sendInputKey(keycode);
+    }
 }
 
 }  // namespace androidauto

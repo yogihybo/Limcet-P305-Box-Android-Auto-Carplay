@@ -176,4 +176,17 @@ bool AndroidAutoClient::setVisible(bool visible) {
     return false;
 }
 
+bool AndroidAutoClient::sendKey(std::uint32_t keycode) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    std::string reply;
+    std::string cmd = "KEY " + std::to_string(keycode);
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        if (ensureConnected(/*allow_spawn=*/false) && sendCommand(cmd, reply)) {
+            return true;
+        }
+        disconnect();
+    }
+    return false;
+}
+
 }  // namespace hal

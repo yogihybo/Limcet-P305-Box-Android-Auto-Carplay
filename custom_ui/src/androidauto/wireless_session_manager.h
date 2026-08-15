@@ -81,6 +81,8 @@
 #include <string>
 #include <thread>
 
+#include "androidauto/session.h"
+
 namespace androidauto {
 
 enum class WirelessSessionState {
@@ -130,6 +132,18 @@ public:
     // polling a few times/sec), not on any hot path.
     std::string statusMessage() const;
 
+    // Forwards a real Android KeyEvent keycode into the current
+    // session's InputChannel, if a session actually exists right now
+    // (see Session::sendInputKey()'s own comment for the exact
+    // keycodes and why) -- no-op, not an error, if there's no live
+    // session (e.g. the physical knob was turned before any AA
+    // connection exists at all). Called from sidecars/androidauto/
+    // main.cpp's own "KEY <code>" command handler, forwarded in turn
+    // from hal/knob.cpp via hal/androidauto_client.h -- see that
+    // header's own comment for the full cross-process path (the knob
+    // itself is read by custom_ui's own process, not this one).
+    void sendInputKey(std::uint32_t keycode);
+
 private:
     void run();
     void setStatus(WirelessSessionState s, std::string msg);
@@ -154,6 +168,21 @@ private:
 
     mutable std::mutex statusMutex_;
     std::string statusMessage_;
+
+    // Set once in run() right after the Session is constructed,
+    // cleared when run() returns (session ended, one way or another)
+    // -- lets sendInputKey() (called from a completely different
+    // thread, the socket connection handling the "KEY <code>" command)
+    // safely reach the live session without touching its own
+    // io_service/strand from outside; Session::sendInputKey() ->
+    // InputChannel::sendKey() both do their own real work (protobuf
+    // send) synchronously off this call, same as every other
+    // fire-and-forget send in this codebase -- not routed through the
+    // session's own strand, since InputChannel's sendInputReport() is
+    // itself thread-safe-enough for this (aasdk's SendPromise/channel
+    // machinery handles its own internal sequencing).
+    mutable std::mutex sessionMutex_;
+    Session::Pointer currentSession_;
 };
 
 }  // namespace androidauto

@@ -40,13 +40,13 @@ namespace {
 bool init_camera(CameraHandle & out, const char * dvr_path, const char * carback_path) {
     out.dvr_fd = open(dvr_path, O_RDWR);
     if (out.dvr_fd < 0) {
-        std::fprintf(stderr, "hal::init_camera: warning: %s unavailable (%s)\n",
+        std::fprintf(stderr, "hal::camera::init_camera: warning: %s unavailable (%s)\n",
                      dvr_path, std::strerror(errno));
     }
 
     out.carback_fd = open(carback_path, O_RDWR);
     if (out.carback_fd < 0) {
-        std::fprintf(stderr, "hal::init_camera: warning: %s unavailable (%s)\n",
+        std::fprintf(stderr, "hal::camera::init_camera: warning: %s unavailable (%s)\n",
                      carback_path, std::strerror(errno));
     }
 
@@ -59,7 +59,7 @@ bool init_camera(CameraHandle & out, const char * dvr_path, const char * carback
 void start_camera_stream(CameraHandle & h) {
     if (h.dvr_fd < 0) return;
     if (ioctl(h.dvr_fd, ARK_DVR_START) < 0) {
-        std::fprintf(stderr, "hal::start_camera_stream: ARK_DVR_START failed (%s)\n",
+        std::fprintf(stderr, "hal::camera::start_camera_stream: ARK_DVR_START failed (%s)\n",
                      std::strerror(errno));
     }
 }
@@ -67,7 +67,7 @@ void start_camera_stream(CameraHandle & h) {
 void stop_camera_stream(CameraHandle & h) {
     if (h.dvr_fd < 0) return;
     if (ioctl(h.dvr_fd, ARK_DVR_STOP) < 0) {
-        std::fprintf(stderr, "hal::stop_camera_stream: ARK_DVR_STOP failed (%s)\n",
+        std::fprintf(stderr, "hal::camera::stop_camera_stream: ARK_DVR_STOP failed (%s)\n",
                      std::strerror(errno));
     }
 }

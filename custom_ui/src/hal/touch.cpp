@@ -1,13 +1,64 @@
 #include "hal/touch.h"
 
+#include "hal/androidauto_client.h"
+#include "hal/knob.h"
+
 namespace hal {
 
 namespace {
+
+// Own client instance, separate from android_auto_screen.cpp's/
+// status_bar.cpp's/knob.cpp's -- allow_spawn is always false for
+// sendTouch() (see AndroidAutoClient::sendTouch()'s own comment), so
+// this never races anyone else's spawn logic; a dedicated instance
+// just keeps this file self-contained rather than reaching into UI
+// code from hal/. Same convention as hal/knob.cpp's own instance.
+AndroidAutoClient & androidauto_client() {
+    static AndroidAutoClient client;
+    return client;
+}
+
+// Edge-detects DOWN/MOVE/UP from get_touch_state()'s level/state
+// pressed flag -- same reasoning as knob.cpp's knob_was_pressed(),
+// just three states instead of a single press edge (a touch panel
+// needs MOVE reported every sample while held, not just once).
+bool & touch_was_pressed() {
+    static bool was_pressed = false;
+    return was_pressed;
+}
 
 void mcu_touch_read_cb(lv_indev_t * indev, lv_indev_data_t * data) {
     auto * mcu = static_cast<McuInputHal *>(lv_indev_get_driver_data(indev));
     McuTouchState state = mcu->get_touch_state();
 
+    // 2026-08-15: same "one consumer, route within this single read
+    // callback" reasoning as knob.cpp's mcu_knob_read_cb() -- while the
+    // Android Auto screen is active, real touch samples forward into
+    // the live AA session as InputChannel TouchReports (via
+    // androidauto-sidecar, see hal::AndroidAutoClient::sendTouch()'s
+    // own comment for why this replaced the old, dead-on-this-hardware
+    // TouchForwarder/evdev design) instead of driving local LVGL
+    // widgets -- that screen has no interactive widgets of its own once
+    // connected anyway (see android_auto_screen.cpp's own comment on
+    // hiding `content`/the OSD2 layer once Connected).
+    if (androidauto_screen_active().load(std::memory_order_acquire)) {
+        bool was_pressed = touch_was_pressed();
+        if (state.pressed && !was_pressed) {
+            androidauto_client().sendTouch(state.x, state.y, TouchAction::Down);
+        } else if (state.pressed && was_pressed) {
+            androidauto_client().sendTouch(state.x, state.y, TouchAction::Move);
+        } else if (!state.pressed && was_pressed) {
+            androidauto_client().sendTouch(state.x, state.y, TouchAction::Up);
+        }
+        touch_was_pressed() = state.pressed;
+
+        data->point.x = 0;
+        data->point.y = 0;
+        data->state = LV_INDEV_STATE_RELEASED;
+        return;
+    }
+
+    touch_was_pressed() = state.pressed;
     data->point.x = state.x;
     data->point.y = state.y;
     data->state = state.pressed ? LV_INDEV_STATE_PRESSED : LV_INDEV_STATE_RELEASED;

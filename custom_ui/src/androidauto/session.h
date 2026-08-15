@@ -14,7 +14,6 @@
 #include "androidauto/input_channel.h"
 #include "androidauto/microphone_channel.h"
 #include "androidauto/sensor_channel.h"
-#include "androidauto/touch_forwarder.h"
 #include "androidauto/video_channel.h"
 
 namespace androidauto {
@@ -92,6 +91,22 @@ public:
     // start() has run, but this stays defensive rather than assuming.
     void sendInputKey(std::uint32_t keycode);
 
+    // Forwards one real touch sample into the live session's
+    // InputChannel -- see InputChannel::sendTouch()'s own comment.
+    // x/y are already in the 800x480 screen-pixel space this class
+    // advertises for INPUT_SOURCE (onServiceDiscoveryRequest). Called
+    // from WirelessSessionManager::sendInputTouch(), itself called from
+    // the sidecar's own socket-connection thread handling a
+    // "TOUCH <x> <y> <action>" command -- see hal::AndroidAutoClient::
+    // sendTouch()'s own comment for the full cross-process path (the
+    // touch panel is read by custom_ui's own process via its MCU serial
+    // connection, not this one -- replaces the old TouchForwarder/evdev
+    // design, which read a device node this hardware never delivers
+    // real touch through at all). Same no-op-if-not-started defensive
+    // pattern as sendInputKey().
+    void sendInputTouch(std::uint32_t x, std::uint32_t y,
+                         aap_protobuf::service::inputsource::message::PointerAction action);
+
 private:
     // Advances cryptor_'s SSL BIO state machine one step and, if it
     // produced outbound handshake bytes, sends them over the control
@@ -138,13 +153,6 @@ private:
     // reference, found while chasing a "Communication error 2 -
     // incompatible software" screen on real hardware.
     InputChannel::Pointer inputChannel_;
-    // Constructed alongside inputChannel_ in Session::start(), but its
-    // own start() (opening the second evdev fd) is deferred until
-    // inputChannel_'s channel-open callback fires -- see
-    // touch_forwarder.h and input_channel.h's setChannelOpenCallback()
-    // for why: no reason to hold a second touch fd open before the
-    // phone has actually opened the channel to receive events on.
-    TouchForwarder::Pointer touchForwarder_;
 
     // Constructed in Session::start(), armed the same deferred way as
     // inputChannel_ above (see its comment). videoChannel_ decodes via

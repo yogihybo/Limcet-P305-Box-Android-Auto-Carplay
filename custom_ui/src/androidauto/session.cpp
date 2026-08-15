@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
+#include <ctime>
 
 #include "androidauto/log_timing.h"
 
@@ -75,26 +76,6 @@ void Session::start(aasdk::transport::ITransport::Pointer transport) {
     controlChannel_->receive(this->shared_from_this());
 
     inputChannel_ = std::make_shared<InputChannel>(strand_, messenger);
-
-    // touchForwarder_ opens its own second evdev fd against the same
-    // device node LVGL already reads (see touch_forwarder.h) -- deferred
-    // until the phone actually opens the input channel, not started
-    // eagerly here alongside construction. weak_ptr in the callback:
-    // Session doesn't want to keep a TouchForwarder alive past its own
-    // lifetime, and the callback is stored on inputChannel_, which
-    // outlives this particular capture concern anyway, but weak_ptr
-    // costs nothing and avoids a subtle lifetime assumption either way.
-    touchForwarder_ = std::make_shared<TouchForwarder>(ioService_, inputChannel_);
-    std::weak_ptr<TouchForwarder> weakTouchForwarder = touchForwarder_;
-    inputChannel_->setChannelOpenCallback([weakTouchForwarder]() {
-        if (auto forwarder = weakTouchForwarder.lock()) {
-            if (!forwarder->start()) {
-                std::printf("%s androidauto: touch forwarder failed to start -- "
-                             "Android Auto session continues without touch input\n",
-                             logTimestamp().c_str());
-            }
-        }
-    });
 
     // 2026-08-12: inputChannel_->start() (i.e. channel_->receive(),
     // arming it for the phone's ChannelOpenRequest) used to happen
@@ -737,6 +718,23 @@ void Session::sendInputKey(std::uint32_t keycode) {
     boost::asio::post(strand_, [this, self, keycode]() {
         if (!inputChannel_) return;
         inputChannel_->sendKey(keycode);
+    });
+}
+
+void Session::sendInputTouch(std::uint32_t x, std::uint32_t y,
+                              aap_protobuf::service::inputsource::message::PointerAction action) {
+    // Called from a completely different thread than this session's own
+    // strand_ (see sendInputKey()'s own comment for the identical
+    // reasoning) -- posting through it rather than calling
+    // inputChannel_->sendTouch() directly from the caller's thread.
+    auto self = shared_from_this();
+    boost::asio::post(strand_, [this, self, x, y, action]() {
+        if (!inputChannel_) return;
+        struct timespec ts {};
+        ::clock_gettime(CLOCK_MONOTONIC, &ts);
+        std::uint64_t timestampMicros =
+            static_cast<std::uint64_t>(ts.tv_sec) * 1000000ULL + static_cast<std::uint64_t>(ts.tv_nsec) / 1000ULL;
+        inputChannel_->sendTouch(x, y, /*pointerId=*/0, action, timestampMicros);
     });
 }
 

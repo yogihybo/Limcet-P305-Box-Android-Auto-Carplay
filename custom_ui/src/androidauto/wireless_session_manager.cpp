@@ -394,4 +394,12 @@ void WirelessSessionManager::sendInputKey(std::uint32_t keycode) {
     }
 }
 
+void WirelessSessionManager::sendInputTouch(std::uint32_t x, std::uint32_t y,
+                                             aap_protobuf::service::inputsource::message::PointerAction action) {
+    std::lock_guard<std::mutex> lock(sessionMutex_);
+    if (currentSession_) {
+        currentSession_->sendInputTouch(x, y, action);
+    }
+}
+
 }  // namespace androidauto

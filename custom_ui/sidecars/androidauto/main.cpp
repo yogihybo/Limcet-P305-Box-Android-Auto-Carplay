@@ -57,6 +57,7 @@
 #include <unistd.h>
 
 #include "androidauto/log_timing.h"
+#include "core/log_timing.h"
 #include "androidauto/video_visibility.h"
 #include "androidauto/wireless_session_manager.h"
 
@@ -137,8 +138,15 @@ int main() {
     // Literal first line -- see log_timing.h's own comment. Every log
     // line in this whole process, from here through the entire aasdk
     // session lifetime, is now on one continuous kernel-dmesg-style
-    // timeline.
+    // timeline. Both clocks: androidauto::log_timing for this process's
+    // own androidauto/*.cpp code, AND core::log_timing (custom_ui's own
+    // instance, normally started by custom_ui's main()) -- hal_config.cpp/
+    // video_layer.cpp are shared files linked into this binary too (see
+    // Makefile's LOG_TIMING_CORE_OBJ) and call core::log_timestamp()
+    // directly; without this, their log lines print "[    ?.??????]"
+    // forever in this process (real hardware caught exactly that).
     androidauto::markProcessStart();
+    core::mark_process_start();
     std::printf("%s androidauto-sidecar: starting\n", androidauto::logTimestamp().c_str());
 
     androidauto::WirelessSessionManager manager;

@@ -56,6 +56,7 @@
 #include <sys/un.h>
 #include <unistd.h>
 
+#include "androidauto/log_timing.h"
 #include "androidauto/video_visibility.h"
 #include "androidauto/wireless_session_manager.h"
 
@@ -133,7 +134,12 @@ void handle_connection(int clientFd, androidauto::WirelessSessionManager * manag
 }  // namespace
 
 int main() {
-    std::printf("androidauto-sidecar: starting\n");
+    // Literal first line -- see log_timing.h's own comment. Every log
+    // line in this whole process, from here through the entire aasdk
+    // session lifetime, is now on one continuous kernel-dmesg-style
+    // timeline.
+    androidauto::markProcessStart();
+    std::printf("%s androidauto-sidecar: starting\n", androidauto::logTimestamp().c_str());
 
     androidauto::WirelessSessionManager manager;
 
@@ -141,7 +147,8 @@ int main() {
 
     int listenFd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (listenFd < 0) {
-        std::fprintf(stderr, "androidauto-sidecar: socket() failed: %s\n", std::strerror(errno));
+        std::fprintf(stderr, "%s androidauto-sidecar: socket() failed: %s\n",
+                     androidauto::logTimestamp().c_str(), std::strerror(errno));
         return 1;
     }
 
@@ -150,23 +157,26 @@ int main() {
     std::strncpy(addr.sun_path, kSocketPath, sizeof(addr.sun_path) - 1);
 
     if (bind(listenFd, reinterpret_cast<struct sockaddr *>(&addr), sizeof(addr)) != 0) {
-        std::fprintf(stderr, "androidauto-sidecar: bind(%s) failed: %s\n", kSocketPath,
-                     std::strerror(errno));
+        std::fprintf(stderr, "%s androidauto-sidecar: bind(%s) failed: %s\n",
+                     androidauto::logTimestamp().c_str(), kSocketPath, std::strerror(errno));
         return 1;
     }
 
     if (listen(listenFd, 4) != 0) {
-        std::fprintf(stderr, "androidauto-sidecar: listen() failed: %s\n", std::strerror(errno));
+        std::fprintf(stderr, "%s androidauto-sidecar: listen() failed: %s\n",
+                     androidauto::logTimestamp().c_str(), std::strerror(errno));
         return 1;
     }
 
-    std::printf("androidauto-sidecar: listening on %s\n", kSocketPath);
+    std::printf("%s androidauto-sidecar: listening on %s\n", androidauto::logTimestamp().c_str(),
+                kSocketPath);
 
     while (true) {
         int clientFd = accept(listenFd, nullptr, nullptr);
         if (clientFd < 0) {
             if (errno == EINTR) continue;
-            std::fprintf(stderr, "androidauto-sidecar: accept() failed: %s\n", std::strerror(errno));
+            std::fprintf(stderr, "%s androidauto-sidecar: accept() failed: %s\n",
+                         androidauto::logTimestamp().c_str(), std::strerror(errno));
             break;
         }
         std::thread(handle_connection, clientFd, &manager).detach();

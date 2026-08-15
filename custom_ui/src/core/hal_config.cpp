@@ -6,6 +6,8 @@
 
 #include <unistd.h>
 
+#include "core/log_timing.h"
+
 namespace core {
 
 namespace {
@@ -42,18 +44,18 @@ HalConfig::HalConfig() {
     // across paths (unlike ConfigStore's live+factory layering).
     std::string exe_dir = executable_dir();
     if (!exe_dir.empty() && load_file(exe_dir + "/hal.conf")) {
-        std::printf("core::HalConfig: loaded %s/hal.conf\n", exe_dir.c_str());
+        std::printf("%s core::HalConfig: loaded %s/hal.conf\n", core::log_timestamp().c_str(), exe_dir.c_str());
         return;
     }
     if (load_file("/data/hal.conf")) {
-        std::printf("core::HalConfig: loaded /data/hal.conf\n");
+        std::printf("%s core::HalConfig: loaded /data/hal.conf\n", core::log_timestamp().c_str());
         return;
     }
     if (load_file("/etc/custom_ui/hal.conf")) {
-        std::printf("core::HalConfig: loaded /etc/custom_ui/hal.conf\n");
+        std::printf("%s core::HalConfig: loaded /etc/custom_ui/hal.conf\n", core::log_timestamp().c_str());
         return;
     }
-    std::printf("core::HalConfig: no config file found, using built-in defaults\n");
+    std::printf("%s core::HalConfig: no config file found, using built-in defaults\n", core::log_timestamp().c_str());
 }
 
 void HalConfig::apply_line(const std::string & section, const std::string & key,

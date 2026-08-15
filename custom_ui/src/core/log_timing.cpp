@@ -1,21 +1,21 @@
-#include "androidauto/log_timing.h"
+#include "core/log_timing.h"
 
 #include <chrono>
 #include <cstdio>
 
-namespace androidauto {
+namespace core {
 
 namespace {
 std::chrono::steady_clock::time_point g_processStart;
 bool g_started = false;
 }  // namespace
 
-void markProcessStart() {
+void mark_process_start() {
     g_processStart = std::chrono::steady_clock::now();
     g_started = true;
 }
 
-std::string logTimestamp() {
+std::string log_timestamp() {
     if (!g_started) return "[    ?.??????]";
 
     auto elapsed = std::chrono::steady_clock::now() - g_processStart;
@@ -28,4 +28,4 @@ std::string logTimestamp() {
     return std::string(buf);
 }
 
-}  // namespace androidauto
+}  // namespace core

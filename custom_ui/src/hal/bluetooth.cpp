@@ -18,6 +18,7 @@
 #include <unistd.h>
 
 #include "core/hal_config.h"
+#include "core/log_timing.h"
 
 namespace hal {
 
@@ -100,7 +101,7 @@ void reader_loop(int fd) {
     for (;;) {
         ssize_t n = ::read(fd, chunk, sizeof(chunk));
         if (n <= 0) {
-            std::fprintf(stderr, "hal::bluetooth::bluetooth reader: read() returned %zd, stopping (%s)\n", n,
+            std::fprintf(stderr, "%s hal::bluetooth::bluetooth reader: read() returned %zd, stopping (%s)\n", core::log_timestamp().c_str(), n,
                          std::strerror(errno));
             return;
         }
@@ -133,8 +134,8 @@ void reader_loop(int fd) {
                         rs.matched_lines.push_back(std::move(entry));
                         rs.line_cv.notify_one();
                     } else {
-                        std::printf("hal::bluetooth::send_command: dropping unrelated line '%s' (expected "
-                                    "prefix '%s')\n", entry.c_str(), rs.expected_prefix.c_str());
+                        std::printf("%s hal::bluetooth::send_command: dropping unrelated line '%s' (expected "
+                                    "prefix '%s')\n", core::log_timestamp().c_str(), entry.c_str(), rs.expected_prefix.c_str());
                     }
                 }
             }
@@ -147,10 +148,10 @@ void reader_loop(int fd) {
 
 void ensure_bluetooth_daemon_running() {
     if (std::system("pidof blueware >/dev/null 2>&1") == 0) {
-        std::printf("hal::bluetooth::ensure_bluetooth_daemon_running: blueware already running\n");
+        std::printf("%s hal::bluetooth::ensure_bluetooth_daemon_running: blueware already running\n", core::log_timestamp().c_str());
         return;  // already running
     }
-    std::printf("hal::bluetooth::ensure_bluetooth_daemon_running: blueware not running, starting it\n");
+    std::printf("%s hal::bluetooth::ensure_bluetooth_daemon_running: blueware not running, starting it\n", core::log_timestamp().c_str());
     // Daemon path/properties-file argument/log redirect are all
     // configurable now -- see core/hal_config.h -- rather than
     // hardcoded here. The properties-file argument matters and was
@@ -175,10 +176,10 @@ void ensure_bluetooth_daemon_running() {
     const core::HalConfig & cfg = core::hal_config();
     std::string cmd = cfg.bluetooth_daemon_path() + " " + cfg.bluetooth_properties_path() +
                        " >" + cfg.bluetooth_log_path() + " 2>&1 &";
-    std::printf("hal::bluetooth::ensure_bluetooth_daemon_running: launching '%s' (log: %s)\n", cmd.c_str(),
+    std::printf("%s hal::bluetooth::ensure_bluetooth_daemon_running: launching '%s' (log: %s)\n", core::log_timestamp().c_str(), cmd.c_str(),
                 cfg.bluetooth_log_path().c_str());
     if (std::system(cmd.c_str()) != 0) {
-        std::fprintf(stderr, "hal::bluetooth::ensure_bluetooth_daemon_running: failed to launch '%s'\n",
+        std::fprintf(stderr, "%s hal::bluetooth::ensure_bluetooth_daemon_running: failed to launch '%s'\n", core::log_timestamp().c_str(),
                      cmd.c_str());
     }
 }
@@ -217,14 +218,14 @@ bool init_bluetooth(BluetoothHandle & out, const char * path) {
                 cfmakeraw(&tio);
                 tio.c_lflag &= ~static_cast<tcflag_t>(ECHO | ECHOE | ECHOK | ECHONL);
                 if (tcsetattr(out.fd, TCSANOW, &tio) != 0) {
-                    std::fprintf(stderr, "hal::bluetooth::init_bluetooth: tcsetattr(%s) failed: %s\n",
+                    std::fprintf(stderr, "%s hal::bluetooth::init_bluetooth: tcsetattr(%s) failed: %s\n", core::log_timestamp().c_str(),
                                  resolved_path.c_str(), std::strerror(errno));
                 }
             } else {
-                std::fprintf(stderr, "hal::bluetooth::init_bluetooth: tcgetattr(%s) failed: %s\n",
+                std::fprintf(stderr, "%s hal::bluetooth::init_bluetooth: tcgetattr(%s) failed: %s\n", core::log_timestamp().c_str(),
                              resolved_path.c_str(), std::strerror(errno));
             }
-            std::printf("hal::bluetooth::init_bluetooth: %s opened (attempt %d/%d)\n",
+            std::printf("%s hal::bluetooth::init_bluetooth: %s opened (attempt %d/%d)\n", core::log_timestamp().c_str(),
                         resolved_path.c_str(), attempt + 1, kMaxAttempts);
             return true;
         }
@@ -232,7 +233,7 @@ bool init_bluetooth(BluetoothHandle & out, const char * path) {
             usleep(kRetryDelayUs);
         }
     }
-    std::fprintf(stderr, "hal::bluetooth::init_bluetooth: warning: %s unavailable after %d attempts (%s)\n",
+    std::fprintf(stderr, "%s hal::bluetooth::init_bluetooth: warning: %s unavailable after %d attempts (%s)\n", core::log_timestamp().c_str(),
                  resolved_path.c_str(), kMaxAttempts, std::strerror(errno));
     return false;
 }
@@ -262,7 +263,7 @@ bool send_command(BluetoothHandle & h, const std::string & command,
     std::string line = "AT+" + command + "\r\n";
     ssize_t written = ::write(h.fd, line.data(), line.size());
     if (written != static_cast<ssize_t>(line.size())) {
-        std::fprintf(stderr, "hal::bluetooth::send_command: write failed for '%s' (%s)\n", command.c_str(),
+        std::fprintf(stderr, "%s hal::bluetooth::send_command: write failed for '%s' (%s)\n", core::log_timestamp().c_str(), command.c_str(),
                      std::strerror(errno));
         std::lock_guard<std::mutex> lock(rs.line_mtx);
         rs.request_active = false;
@@ -320,7 +321,7 @@ bool send_command(BluetoothHandle & h, const std::string & command,
     // themselves and act on it.
     std::string err;
     if (find_error_response(response_lines, err)) {
-        std::fprintf(stderr, "hal::bluetooth::send_command: adapter reported '%s' for command '%s'\n",
+        std::fprintf(stderr, "%s hal::bluetooth::send_command: adapter reported '%s' for command '%s'\n", core::log_timestamp().c_str(),
                      err.c_str(), command.c_str());
     }
 
@@ -364,7 +365,7 @@ bool set_adapter_enabled(BluetoothHandle & h, bool enabled) {
     }
     std::string err;
     if (find_error_response(resp, err)) {
-        std::fprintf(stderr, "hal::bluetooth::set_adapter_enabled(%d): adapter reported '%s'\n", enabled,
+        std::fprintf(stderr, "%s hal::bluetooth::set_adapter_enabled(%d): adapter reported '%s'\n", core::log_timestamp().c_str(), enabled,
                      err.c_str());
         return false;
     }
@@ -379,15 +380,15 @@ bool set_discoverable(BluetoothHandle & h, bool discoverable) {
     // stderr -- this is a known documentation caveat about the AT
     // command itself, not a failure of this specific call.
     if (!discoverable) {
-        std::printf("hal::bluetooth::set_discoverable: no confirmed SCAN=0 command exists, sending it "
-                    "anyway (unconfirmed)\n");
+        std::printf("%s hal::bluetooth::set_discoverable: no confirmed SCAN=0 command exists, sending it "
+                    "anyway (unconfirmed)\n", core::log_timestamp().c_str());
     }
     if (!send_command(h, discoverable ? "SCAN=1" : "SCAN=0", resp)) {
         return false;
     }
     std::string err;
     if (find_error_response(resp, err)) {
-        std::fprintf(stderr, "hal::bluetooth::set_discoverable(%d): adapter reported '%s'\n", discoverable,
+        std::fprintf(stderr, "%s hal::bluetooth::set_discoverable(%d): adapter reported '%s'\n", core::log_timestamp().c_str(), discoverable,
                      err.c_str());
         return false;
     }
@@ -399,19 +400,19 @@ bool list_paired_devices(BluetoothHandle & h, std::vector<std::string> & devices
 }
 
 bool connect_device(BluetoothHandle & h, const std::string & mac) {
-    std::printf("hal::bluetooth::connect_device: sending HFPCONN=%s\n", mac.c_str());
+    std::printf("%s hal::bluetooth::connect_device: sending HFPCONN=%s\n", core::log_timestamp().c_str(), mac.c_str());
     std::vector<std::string> resp;
     if (!send_command(h, "HFPCONN=" + mac, resp)) {
         // send_command() itself already logged the specific reason
         // (write failure with errno, or nothing further if it was
         // simply a timeout) -- no need to guess at which one here.
-        std::fprintf(stderr, "hal::bluetooth::connect_device: HFPCONN=%s got no response\n", mac.c_str());
+        std::fprintf(stderr, "%s hal::bluetooth::connect_device: HFPCONN=%s got no response\n", core::log_timestamp().c_str(), mac.c_str());
         return false;
     }
-    std::printf("hal::bluetooth::connect_device: HFPCONN=%s -> %zu response line(s):\n", mac.c_str(),
+    std::printf("%s hal::bluetooth::connect_device: HFPCONN=%s -> %zu response line(s):\n", core::log_timestamp().c_str(), mac.c_str(),
                 resp.size());
     for (const auto & line : resp) {
-        std::printf("hal::bluetooth::connect_device:   %s\n", line.c_str());
+        std::printf("%s hal::bluetooth::connect_device:   %s\n", core::log_timestamp().c_str(), line.c_str());
     }
     // 2026-08-12 FIX: this used to return `ok` from send_command()
     // directly, i.e. "did we get ANY response" -- a real hardware
@@ -421,7 +422,7 @@ bool connect_device(BluetoothHandle & h, const std::string & mac) {
     // find_error_response()'s own comment.
     std::string err;
     if (find_error_response(resp, err)) {
-        std::fprintf(stderr, "hal::bluetooth::connect_device: HFPCONN=%s failed: adapter reported '%s'\n",
+        std::fprintf(stderr, "%s hal::bluetooth::connect_device: HFPCONN=%s failed: adapter reported '%s'\n", core::log_timestamp().c_str(),
                      mac.c_str(), err.c_str());
         return false;
     }
@@ -435,7 +436,7 @@ bool set_device_name(BluetoothHandle & h, const std::string & name) {
     }
     std::string err;
     if (find_error_response(resp, err)) {
-        std::fprintf(stderr, "hal::bluetooth::set_device_name('%s'): adapter reported '%s'\n", name.c_str(),
+        std::fprintf(stderr, "%s hal::bluetooth::set_device_name('%s'): adapter reported '%s'\n", core::log_timestamp().c_str(), name.c_str(),
                      err.c_str());
         return false;
     }
@@ -449,7 +450,7 @@ bool set_pairing_pin(BluetoothHandle & h, const std::string & pin) {
     }
     std::string err;
     if (find_error_response(resp, err)) {
-        std::fprintf(stderr, "hal::bluetooth::set_pairing_pin: adapter reported '%s'\n", err.c_str());
+        std::fprintf(stderr, "%s hal::bluetooth::set_pairing_pin: adapter reported '%s'\n", core::log_timestamp().c_str(), err.c_str());
         return false;
     }
     return true;
@@ -471,7 +472,7 @@ bool get_adapter_address(BluetoothHandle & h, std::string & address) {
     // were the adapter's own address string.
     std::string err;
     if (find_error_response(resp, err)) {
-        std::fprintf(stderr, "hal::bluetooth::get_adapter_address: adapter reported '%s'\n", err.c_str());
+        std::fprintf(stderr, "%s hal::bluetooth::get_adapter_address: adapter reported '%s'\n", core::log_timestamp().c_str(), err.c_str());
         return false;
     }
     address = resp.front();
@@ -486,7 +487,7 @@ bool sync_clock_from_phone(BluetoothHandle & h) {
     // relying on send_command()'s exact-prefix-match/strip mechanism.
     // See this function's header comment for why.
     if (!send_command(h, "CCLK?", resp, 2000)) {
-        std::fprintf(stderr, "hal::bluetooth::sync_clock_from_phone: AT+CCLK? got no response\n");
+        std::fprintf(stderr, "%s hal::bluetooth::sync_clock_from_phone: AT+CCLK? got no response\n", core::log_timestamp().c_str());
         return false;
     }
 
@@ -508,7 +509,7 @@ bool sync_clock_from_phone(BluetoothHandle & h) {
         int n = std::sscanf(ts.c_str(), "%d/%d/%d,%d:%d:%d%c%d", &yy, &mo, &dd, &hh, &mi, &ss,
                              &sign, &tz);
         if (n < 6) {
-            std::fprintf(stderr, "hal::bluetooth::sync_clock_from_phone: couldn't parse CCLK value '%s'\n",
+            std::fprintf(stderr, "%s hal::bluetooth::sync_clock_from_phone: couldn't parse CCLK value '%s'\n", core::log_timestamp().c_str(),
                          ts.c_str());
             continue;
         }
@@ -523,7 +524,7 @@ bool sync_clock_from_phone(BluetoothHandle & h) {
 
         time_t epoch = timegm(&tmv);
         if (epoch == static_cast<time_t>(-1)) {
-            std::fprintf(stderr, "hal::bluetooth::sync_clock_from_phone: timegm() failed for '%s'\n",
+            std::fprintf(stderr, "%s hal::bluetooth::sync_clock_from_phone: timegm() failed for '%s'\n", core::log_timestamp().c_str(),
                          ts.c_str());
             continue;
         }
@@ -541,17 +542,17 @@ bool sync_clock_from_phone(BluetoothHandle & h) {
         tv.tv_sec = epoch;
         tv.tv_usec = 0;
         if (settimeofday(&tv, nullptr) != 0) {
-            std::fprintf(stderr, "hal::bluetooth::sync_clock_from_phone: settimeofday() failed: %s\n",
+            std::fprintf(stderr, "%s hal::bluetooth::sync_clock_from_phone: settimeofday() failed: %s\n", core::log_timestamp().c_str(),
                          std::strerror(errno));
             return false;
         }
 
-        std::printf("hal::bluetooth::sync_clock_from_phone: system clock set from phone (AT+CCLK? -> '%s', "
-                    "epoch=%lld)\n", ts.c_str(), static_cast<long long>(epoch));
+        std::printf("%s hal::bluetooth::sync_clock_from_phone: system clock set from phone (AT+CCLK? -> '%s', "
+                    "epoch=%lld)\n", core::log_timestamp().c_str(), ts.c_str(), static_cast<long long>(epoch));
         return true;
     }
 
-    std::fprintf(stderr, "hal::bluetooth::sync_clock_from_phone: no +CCLK line in response\n");
+    std::fprintf(stderr, "%s hal::bluetooth::sync_clock_from_phone: no +CCLK line in response\n", core::log_timestamp().c_str());
     return false;
 }
 
@@ -590,19 +591,19 @@ bool diagnose_battery_reporting(BluetoothHandle & h) {
     if (send_command(h, "HFPBATT?", resp, 2000)) {
         anyResponse = true;
         for (const auto & line : resp) {
-            std::printf("hal::bluetooth::diagnose_battery_reporting: AT+HFPBATT? -> '%s'\n", line.c_str());
+            std::printf("%s hal::bluetooth::diagnose_battery_reporting: AT+HFPBATT? -> '%s'\n", core::log_timestamp().c_str(), line.c_str());
         }
     } else {
-        std::printf("hal::bluetooth::diagnose_battery_reporting: AT+HFPBATT? got no response\n");
+        std::printf("%s hal::bluetooth::diagnose_battery_reporting: AT+HFPBATT? got no response\n", core::log_timestamp().c_str());
     }
 
     if (send_command(h, "GATTSTAT?", resp, 2000)) {
         anyResponse = true;
         for (const auto & line : resp) {
-            std::printf("hal::bluetooth::diagnose_battery_reporting: AT+GATTSTAT? -> '%s'\n", line.c_str());
+            std::printf("%s hal::bluetooth::diagnose_battery_reporting: AT+GATTSTAT? -> '%s'\n", core::log_timestamp().c_str(), line.c_str());
         }
     } else {
-        std::printf("hal::bluetooth::diagnose_battery_reporting: AT+GATTSTAT? got no response\n");
+        std::printf("%s hal::bluetooth::diagnose_battery_reporting: AT+GATTSTAT? got no response\n", core::log_timestamp().c_str());
     }
 
     return anyResponse;
@@ -632,11 +633,11 @@ bool diagnose_system_clock_config(BluetoothHandle & h) {
     std::vector<std::string> resp;
     if (send_command(h, "SYSCLKCFG?", resp, 2000)) {
         for (const auto & line : resp) {
-            std::printf("hal::bluetooth::diagnose_system_clock_config: AT+SYSCLKCFG? -> '%s'\n", line.c_str());
+            std::printf("%s hal::bluetooth::diagnose_system_clock_config: AT+SYSCLKCFG? -> '%s'\n", core::log_timestamp().c_str(), line.c_str());
         }
         return true;
     }
-    std::printf("hal::bluetooth::diagnose_system_clock_config: AT+SYSCLKCFG? got no response\n");
+    std::printf("%s hal::bluetooth::diagnose_system_clock_config: AT+SYSCLKCFG? got no response\n", core::log_timestamp().c_str());
     return false;
 }
 
@@ -665,17 +666,17 @@ BluetoothHandle & shared_handle() {
 
 bool auto_reconnect_paired_device(BluetoothHandle & h) {
     if (h.fd < 0) {
-        std::printf("hal::bluetooth::auto_reconnect_paired_device: no bluetooth handle, skipping\n");
+        std::printf("%s hal::bluetooth::auto_reconnect_paired_device: no bluetooth handle, skipping\n", core::log_timestamp().c_str());
         return false;
     }
     std::vector<std::string> devices;
     if (!list_paired_devices(h, devices) || devices.empty()) {
-        std::printf("hal::bluetooth::auto_reconnect_paired_device: no paired devices to reconnect to\n");
+        std::printf("%s hal::bluetooth::auto_reconnect_paired_device: no paired devices to reconnect to\n", core::log_timestamp().c_str());
         return false;
     }
     std::string mac, name;
     std::string connect_id = split_mac_and_name(devices.front(), mac, name) ? mac : devices.front();
-    std::printf("hal::bluetooth::auto_reconnect_paired_device: reconnecting to '%s'\n", connect_id.c_str());
+    std::printf("%s hal::bluetooth::auto_reconnect_paired_device: reconnecting to '%s'\n", core::log_timestamp().c_str(), connect_id.c_str());
     return connect_device(h, connect_id);
 }
 

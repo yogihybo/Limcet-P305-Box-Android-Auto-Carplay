@@ -1,35 +1,48 @@
 #pragma once
 
-// Shared "time since session start" stamp for all androidauto/*.cpp
-// diagnostic logging. Added 2026-08-12 while chasing a real hardware
-// bug where the phone drops the connection a few seconds after
-// ServiceDiscoveryResponse (SensorChannel added, still not resolved as
-// of that fix) -- the existing log had no way to tell how much real
-// wall-clock time elapsed between "service discovery response sent"
-// and the eventual channel-error lines, nor whether specific silent
-// steps (audio focus response send, ping sends) actually happened
-// before the drop. Every androidauto log line should now be prefixed
-// with elapsedMs() so a single hardware log gives a precise timeline
-// without needing a live debugger.
+// Shared "time since process start" stamp for all androidauto-sidecar
+// diagnostic logging -- every log line in this process, from the
+// moment main() starts (WiFi AP bring-up, Bluetooth handshake, TCP
+// accept) through the whole aasdk session lifetime (channels, decode),
+// on one continuous timeline. Originally added 2026-08-12 scoped to
+// "since session start" and only used by androidauto/*.cpp's Session/
+// Channel classes; broadened 2026-08-15 per explicit request to cover
+// the whole process and every source file in it, after review found a
+// real gap -- wireless_session_manager.cpp/bw_aap_client.cpp/
+// usb_probe.cpp/wireless_probe.cpp/bluetooth_rfcomm_server.cpp (the
+// whole pre-session connection setup) and hantro_h264_decoder.cpp/
+// alsa_output.cpp/touch_forwarder.cpp (session-phase code that
+// happened to never get the treatment) had no timing at all, and the
+// old per-session reset meant even the covered files went dark before
+// a session existed. A single process-wide clock, started once, covers
+// every phase with no blind spots -- the only real cost is that "how
+// long did this retry take" needs subtracting two printed values
+// instead of reading a reset-to-zero one, a small price for never
+// having an untimed log line.
 //
-// Process-wide, not per-Session: this project only ever runs one AA
-// session at a time (androidauto-sidecar's own single-session design,
-// see main.cpp) so a shared stamp is simpler than threading a
-// reference through every channel class's constructor.
+// Format matches the Linux kernel's own dmesg timestamps
+// ([%5ld.%06ld], seconds.microseconds since boot) per explicit
+// request -- familiar to anyone who's ever read a kernel log, and
+// already the convention every OTHER timestamp in a full boot-to-
+// session hardware capture (kernel dmesg lines interleaved with this
+// process's own stdout) uses, so the two now visually line up instead
+// of looking like two different logging systems.
 
-#include <chrono>
+#include <string>
 
 namespace androidauto {
 
-// Call once, right at the start of Session::start() -- resets the
-// zero point for elapsedMs() below. Safe to call again on a retried
-// session (wireless_session_manager.cpp restarts the whole Session
-// object per attempt); each retry gets its own zero point.
-void markSessionStart();
+// Call once, as the literal first line of main() -- see
+// sidecars/androidauto/main.cpp. Resets the zero point for
+// logTimestamp() below.
+void markProcessStart();
 
-// Milliseconds since the last markSessionStart() call, or 0 if never
-// called (e.g. a log line firing before any session has started --
-// shouldn't happen in practice, but no reason to crash over it).
-long elapsedMs();
+// "[%5ld.%06ld]" -- seconds.microseconds since the markProcessStart()
+// call, matching dmesg's own format exactly (right-aligned seconds
+// field, 6-digit zero-padded microseconds). Returns "[    ?.??????]"
+// if called before markProcessStart() -- shouldn't happen in practice
+// (main() calls it before anything else can log), but no reason to
+// crash over it.
+std::string logTimestamp();
 
 }  // namespace androidauto

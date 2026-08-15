@@ -1,4 +1,5 @@
 #include "androidauto/wireless_probe.h"
+#include "androidauto/log_timing.h"
 
 #include <cstdio>
 #include <memory>
@@ -18,13 +19,13 @@ bool run_wireless_probe(const std::string &host, std::uint16_t port, int seconds
     aasdk::tcp::TCPWrapper tcpWrapper;
 
     auto socket = std::make_shared<boost::asio::ip::tcp::socket>(ioService);
-    std::printf("androidauto: connecting to %s:%u...\n", host.c_str(), port);
+    std::printf("%s androidauto: connecting to %s:%u...\n", androidauto::logTimestamp().c_str(), host.c_str(), port);
     auto ec = tcpWrapper.connect(*socket, host, port);
     if (ec) {
-        std::fprintf(stderr, "androidauto: TCP connect failed: %s\n", ec.message().c_str());
+        std::fprintf(stderr, "%s androidauto: TCP connect failed: %s\n", androidauto::logTimestamp().c_str(), ec.message().c_str());
         return false;
     }
-    std::printf("androidauto: TCP connected, starting session\n");
+    std::printf("%s androidauto: TCP connected, starting session\n", androidauto::logTimestamp().c_str());
 
     auto tcpEndpoint = std::make_shared<aasdk::tcp::TCPEndpoint>(tcpWrapper, socket);
     auto transport = std::make_shared<aasdk::transport::TCPTransport>(ioService, std::move(tcpEndpoint));

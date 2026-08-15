@@ -1,4 +1,5 @@
 #include "hal/mcu_input.h"
+#include "core/log_timing.h"
 
 #include <cerrno>
 #include <cstdio>
@@ -183,7 +184,7 @@ McuInputHal::~McuInputHal() {
 bool McuInputHal::start() {
     fd_ = open(port_.c_str(), O_RDWR | O_NOCTTY);
     if (fd_ < 0) {
-        std::fprintf(stderr, "hal::McuInputHal: couldn't open %s: %s\n", port_.c_str(),
+        std::fprintf(stderr, "%s hal::McuInputHal: couldn't open %s: %s\n", core::log_timestamp().c_str(), port_.c_str(),
                      std::strerror(errno));
         return false;
     }

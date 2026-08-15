@@ -21,7 +21,7 @@ void BluetoothChannel::start() {
 
 void BluetoothChannel::onChannelOpenRequest(
     const aap_protobuf::service::control::message::ChannelOpenRequest &request) {
-    std::printf("[+%ldms] androidauto: bluetooth channel open request (priority=%d)\n", elapsedMs(),
+    std::printf("%s androidauto: bluetooth channel open request (priority=%d)\n", logTimestamp().c_str(),
                 request.priority());
 
     aap_protobuf::service::control::message::ChannelOpenResponse response;
@@ -29,9 +29,9 @@ void BluetoothChannel::onChannelOpenRequest(
 
     auto promise = aasdk::channel::SendPromise::defer(strand_);
     promise->then(
-        []() { std::printf("[+%ldms] androidauto: bluetooth channel open response sent\n", elapsedMs()); },
+        []() { std::printf("%s androidauto: bluetooth channel open response sent\n", logTimestamp().c_str()); },
         [](const aasdk::error::Error &e) {
-            std::printf("[+%ldms] androidauto: bluetooth channel open response send failed: %s\n", elapsedMs(),
+            std::printf("%s androidauto: bluetooth channel open response send failed: %s\n", logTimestamp().c_str(),
                         e.what());
         });
     channel_->sendChannelOpenResponse(response, promise);
@@ -46,7 +46,7 @@ void BluetoothChannel::onBluetoothPairingRequest(
     // this class's header comment) -- always report success/already
     // paired rather than attempting a real pairing handshake through
     // this channel.
-    std::printf("[+%ldms] androidauto: bluetooth pairing request from %s\n", elapsedMs(),
+    std::printf("%s androidauto: bluetooth pairing request from %s\n", logTimestamp().c_str(),
                 request.phone_address().c_str());
 
     aap_protobuf::service::bluetooth::message::BluetoothPairingResponse response;
@@ -55,9 +55,9 @@ void BluetoothChannel::onBluetoothPairingRequest(
 
     auto promise = aasdk::channel::SendPromise::defer(strand_);
     promise->then(
-        []() { std::printf("[+%ldms] androidauto: bluetooth pairing response sent\n", elapsedMs()); },
+        []() { std::printf("%s androidauto: bluetooth pairing response sent\n", logTimestamp().c_str()); },
         [](const aasdk::error::Error &e) {
-            std::printf("[+%ldms] androidauto: bluetooth pairing response send failed: %s\n", elapsedMs(),
+            std::printf("%s androidauto: bluetooth pairing response send failed: %s\n", logTimestamp().c_str(),
                         e.what());
         });
     channel_->sendBluetoothPairingResponse(response, promise);
@@ -67,13 +67,13 @@ void BluetoothChannel::onBluetoothPairingRequest(
 
 void BluetoothChannel::onBluetoothAuthenticationResult(
     const aap_protobuf::service::bluetooth::message::BluetoothAuthenticationResult &request) {
-    std::printf("[+%ldms] androidauto: bluetooth authentication result, status=%d\n", elapsedMs(),
+    std::printf("%s androidauto: bluetooth authentication result, status=%d\n", logTimestamp().c_str(),
                 static_cast<int>(request.status()));
     channel_->receive(this->shared_from_this());
 }
 
 void BluetoothChannel::onChannelError(const aasdk::error::Error &e) {
-    std::printf("[+%ldms] androidauto: bluetooth channel error: %s\n", elapsedMs(), e.what());
+    std::printf("%s androidauto: bluetooth channel error: %s\n", logTimestamp().c_str(), e.what());
 }
 
 }  // namespace androidauto

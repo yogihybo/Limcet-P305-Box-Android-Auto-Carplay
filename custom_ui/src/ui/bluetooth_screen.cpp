@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "core/config_store.h"
+#include "core/log_timing.h"
 #include "core/navigation.h"
 #include "hal/bluetooth.h"
 #include "ui/status_bar.h"
@@ -112,7 +113,7 @@ void device_row_clicked_cb(lv_event_t * e) {
 
     const char * text = lv_list_get_button_text(w->list, btn);
     std::string entry = text ? text : "";
-    std::printf("ui::bluetooth_screen: device row tapped: '%s'\n", entry.c_str());
+    std::printf("%s ui::bluetooth_screen: device row tapped: '%s'\n", core::log_timestamp().c_str(), entry.c_str());
 
     // hal::list_paired_devices() now strips the "+PLIST=" prefix (see
     // hal/bluetooth.h) but PLIST's own per-entry field grammar past

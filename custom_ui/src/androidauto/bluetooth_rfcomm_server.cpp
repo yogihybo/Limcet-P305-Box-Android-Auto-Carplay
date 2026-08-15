@@ -1,4 +1,5 @@
 #include "androidauto/bluetooth_rfcomm_server.h"
+#include "androidauto/log_timing.h"
 
 #include <cerrno>
 #include <cstdio>
@@ -15,7 +16,7 @@ namespace androidauto {
 int accept_rfcomm_connection(std::uint8_t channel) {
     int listenFd = ::socket(AF_BLUETOOTH, SOCK_STREAM, BTPROTO_RFCOMM);
     if (listenFd < 0) {
-        std::fprintf(stderr, "androidauto: RFCOMM socket() failed: %s\n", std::strerror(errno));
+        std::fprintf(stderr, "%s androidauto: RFCOMM socket() failed: %s\n", androidauto::logTimestamp().c_str(), std::strerror(errno));
         return -1;
     }
 
@@ -25,19 +26,19 @@ int accept_rfcomm_connection(std::uint8_t channel) {
     localAddr.rc_channel = channel;
 
     if (::bind(listenFd, reinterpret_cast<struct sockaddr *>(&localAddr), sizeof(localAddr)) < 0) {
-        std::fprintf(stderr, "androidauto: RFCOMM bind() to channel %u failed: %s\n", channel,
+        std::fprintf(stderr, "%s androidauto: RFCOMM bind() to channel %u failed: %s\n", androidauto::logTimestamp().c_str(), channel,
                      std::strerror(errno));
         ::close(listenFd);
         return -1;
     }
 
     if (::listen(listenFd, 1) < 0) {
-        std::fprintf(stderr, "androidauto: RFCOMM listen() failed: %s\n", std::strerror(errno));
+        std::fprintf(stderr, "%s androidauto: RFCOMM listen() failed: %s\n", androidauto::logTimestamp().c_str(), std::strerror(errno));
         ::close(listenFd);
         return -1;
     }
 
-    std::printf("androidauto: RFCOMM listening on channel %u, waiting for a phone to connect...\n", channel);
+    std::printf("%s androidauto: RFCOMM listening on channel %u, waiting for a phone to connect...\n", androidauto::logTimestamp().c_str(), channel);
 
     struct sockaddr_rc remoteAddr {};
     socklen_t remoteLen = sizeof(remoteAddr);
@@ -45,11 +46,11 @@ int accept_rfcomm_connection(std::uint8_t channel) {
     ::close(listenFd);
 
     if (connFd < 0) {
-        std::fprintf(stderr, "androidauto: RFCOMM accept() failed: %s\n", std::strerror(errno));
+        std::fprintf(stderr, "%s androidauto: RFCOMM accept() failed: %s\n", androidauto::logTimestamp().c_str(), std::strerror(errno));
         return -1;
     }
 
-    std::printf("androidauto: RFCOMM connection accepted\n");
+    std::printf("%s androidauto: RFCOMM connection accepted\n", androidauto::logTimestamp().c_str());
     return connFd;
 }
 

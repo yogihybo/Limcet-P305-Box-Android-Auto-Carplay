@@ -412,14 +412,30 @@ void *__wrap_dlopen(const char *filename, int flags) {
                     sym_value = bias + sym->st_value;
                 } else {
                     void *resolved = resolve_import(name);
-                    if (!resolved) {
+                    if (resolved) {
+                        sym_value = (unsigned long)resolved;
+                    } else if (ELF32_ST_BIND(sym->st_info) == STB_WEAK) {
+                        /* Real hardware caught this: __gmon_start__,
+                         * _ITM_(de)registerTMCloneTable, and
+                         * _Jv_RegisterClasses are all WEAK undefined
+                         * symbols GCC's crtbegin.o unconditionally
+                         * references (gprof hook, transactional-memory
+                         * clone tables, old GCJ Java class registration
+                         * -- none of which this build actually uses).
+                         * A real dynamic linker leaves an unresolved
+                         * WEAK symbol as NULL rather than failing; the
+                         * generated code already null-checks before
+                         * calling through these. Only a non-weak
+                         * (STB_GLOBAL) unresolved import is a real
+                         * problem. */
+                        sym_value = 0;
+                    } else {
                         set_error("dlopen: %s: unresolved import '%s' (relocation type %u) -- "
                                   "this build of libmfc.so needs a symbol this loader's import "
                                   "table doesn't know about", filename, name, type);
                         failed = 1;
                         break;
                     }
-                    sym_value = (unsigned long)resolved;
                 }
             }
 

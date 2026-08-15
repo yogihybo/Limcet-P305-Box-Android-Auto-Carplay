@@ -44,7 +44,9 @@
 #include <elf.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <grp.h>
 #include <netdb.h>
+#include <pwd.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -97,6 +99,26 @@ struct servent *__wrap_getservbyname(const char *name, const char *proto) {
 struct servent *__wrap_getservbyport(int port, const char *proto) {
     (void)port; (void)proto;
     return NULL;
+}
+
+/* 2026-08-15: alsa-lib's dmix/userfile plugins (statically linked here
+ * too, see alsa_output.h's own comment) reference these two reentrant
+ * pwd/grp lookups -- same broken static-NSS-init trigger family as
+ * dlopen/getaddrinfo, confirmed via this exact build's own "requires
+ * at runtime" linker warnings. Matches tools/nss-stub/nss_stub.c's own
+ * getpwuid_r stub; getgrnam_r is new (nss_stub.c only had the by-gid
+ * lookup, getgrgid_r). */
+int __wrap_getpwuid_r(uid_t uid, struct passwd *pwd, char *buf,
+                       size_t buflen, struct passwd **result) {
+    (void)uid; (void)pwd; (void)buf; (void)buflen;
+    *result = NULL;
+    return 0;
+}
+int __wrap_getgrnam_r(const char *name, struct group *grp, char *buf,
+                       size_t buflen, struct group **result) {
+    (void)name; (void)grp; (void)buf; (void)buflen;
+    *result = NULL;
+    return 0;
 }
 
 /* ---- the real loader ---------------------------------------------- */

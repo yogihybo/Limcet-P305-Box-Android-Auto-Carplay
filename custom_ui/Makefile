@@ -81,14 +81,39 @@ AASDK_OBJS    := $(patsubst src/%.cpp,$(BUILD_DIR)/ui-obj/%.o,$(AASDK_SRCS))
 # vendor, same reasoning as every other build_*.sh here). Override
 # AASDK_DEPS_DIR if yours live somewhere other than the scripts' default.
 AASDK_DEPS_DIR  ?= $(HOME)/build-deps
+
+# 2026-08-15: separate override from AASDK_DEPS_DIR/boost/libusb/protobuf
+# above -- points at a REBUILT OpenSSL (same 1.1.1w source, reconfigured
+# with no-engine/no-dso/no-afalgeng/no-sock) instead of the original
+# $(AASDK_DEPS_DIR)/openssl-arm-install. Reason: libcrypto.a's own
+# internal dlopen/getaddrinfo/gethostbyname references were one of two
+# sources of this binary's confirmed glibc static-NSS-init startup
+# crash (see hantro_dlopen.c's own header comment for the full
+# mechanism) -- `nm` confirms this rebuilt libcrypto.a/libssl.a
+# reference neither symbol family at all anymore. Reversible: override
+# this variable back to $(AASDK_DEPS_DIR)/openssl-arm-install (the
+# original, untouched build) if the no-engine variant ever needs
+# rolling back -- nothing about the original build was modified or
+# removed.
+OPENSSL_ARM_INSTALL ?= $(AASDK_DEPS_DIR)/openssl-arm-install-noengine
+
+# 2026-08-15: cross-compiled alsa-lib 1.2.12 statically with
+# --with-libdl=no (see alsa_output.h's own header comment) -- the other
+# source of a real (non-libcrypto) dlopen reference in this binary
+# (AlsaOutput used to dlopen the target's own libasound.so.2.0.0 at
+# runtime). `nm` confirms zero dlopen/dlsym/dlclose/dlerror references
+# in the resulting libasound.a.
+ALSA_ARM_INSTALL ?= $(AASDK_DEPS_DIR)/alsa-arm-install
+
 AASDK_DIR       := third_party/aasdk
 AASDK_INCLUDES  := -I$(AASDK_DIR)/include \
                     -I$(AASDK_DIR)/build-arm/protobuf \
                     -I$(AASDK_DEPS_DIR)/boost-arm-install/include \
-                    -I$(AASDK_DEPS_DIR)/openssl-arm-install/include \
+                    -I$(OPENSSL_ARM_INSTALL)/include \
                     -I$(AASDK_DEPS_DIR)/libusb-arm-install/include \
                     -I$(AASDK_DEPS_DIR)/libusb-arm-install/include/libusb-1.0 \
                     -I$(AASDK_DEPS_DIR)/protobuf-arm-install/include \
+                    -I$(ALSA_ARM_INSTALL)/include \
                     -Ithird_party/bluez_uapi
 # --start-group/--end-group: aasdk, aap_protobuf, protobuf, and Abseil
 # static-link against each other in ways plain left-to-right link order
@@ -99,8 +124,9 @@ AASDK_LIBS      := -Wl,--start-group \
                     $(AASDK_DIR)/build-arm/lib/libaap_protobuf.a \
                     $(wildcard $(AASDK_DEPS_DIR)/boost-arm-install/lib/*.a) \
                     $(AASDK_DEPS_DIR)/libusb-arm-install/lib/libusb-1.0.a \
-                    $(AASDK_DEPS_DIR)/openssl-arm-install/lib/libssl.a \
-                    $(AASDK_DEPS_DIR)/openssl-arm-install/lib/libcrypto.a \
+                    $(OPENSSL_ARM_INSTALL)/lib/libssl.a \
+                    $(OPENSSL_ARM_INSTALL)/lib/libcrypto.a \
+                    $(ALSA_ARM_INSTALL)/lib/libasound.a \
                     $(wildcard $(AASDK_DEPS_DIR)/protobuf-arm-install/lib/*.a) \
                     -Wl,--end-group -lpthread -ldl -lrt
 
@@ -120,7 +146,16 @@ AASDK_LIBS      := -Wl,--start-group \
 # getpwnam/getgrgid family instead (this binary never references those).
 NSS_STUB_SRC   := ../tools/nss-stub/nss_stub_busybox.c
 NSS_STUB_OBJ   := $(BUILD_DIR)/aasdk-test-obj/nss_stub_busybox.o
-AASDK_WRAP_FLAGS := -Wl,--wrap=dlopen,--wrap=dlerror,--wrap=dlsym,--wrap=dlclose,--wrap=getaddrinfo,--wrap=freeaddrinfo,--wrap=gai_strerror,--wrap=gethostbyname,--wrap=gethostbyname2,--wrap=gethostbyaddr,--wrap=getservbyname,--wrap=getservbyport
+# getpwuid_r/getgrnam_r added 2026-08-15: alsa-lib's dmix/userfile
+# plugins (now statically linked -- see ALSA_ARM_INSTALL above)
+# reference these two reentrant pwd/grp lookups, same broken
+# static-NSS-init trigger family as dlopen/getaddrinfo -- confirmed via
+# this project's own build output ("requires at runtime the shared
+# libraries..." linker warnings). Stubbed in both
+# tools/nss-stub/nss_stub_busybox.c (the other 4 targets below) and
+# hantro_dlopen.c (androidauto-sidecar's own replacement, see its own
+# header comment).
+AASDK_WRAP_FLAGS := -Wl,--wrap=dlopen,--wrap=dlerror,--wrap=dlsym,--wrap=dlclose,--wrap=getaddrinfo,--wrap=freeaddrinfo,--wrap=gai_strerror,--wrap=gethostbyname,--wrap=gethostbyname2,--wrap=gethostbyaddr,--wrap=getservbyname,--wrap=getservbyport,--wrap=getpwuid_r,--wrap=getgrnam_r
 
 # 2026-08-15: androidauto-sidecar specifically (not the other 4 targets
 # below that also use AASDK_WRAP_FLAGS/NSS_STUB_OBJ) needs a REAL,

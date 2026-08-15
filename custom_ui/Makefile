@@ -122,6 +122,22 @@ NSS_STUB_SRC   := ../tools/nss-stub/nss_stub_busybox.c
 NSS_STUB_OBJ   := $(BUILD_DIR)/aasdk-test-obj/nss_stub_busybox.o
 AASDK_WRAP_FLAGS := -Wl,--wrap=dlopen,--wrap=dlerror,--wrap=dlsym,--wrap=dlclose,--wrap=getaddrinfo,--wrap=freeaddrinfo,--wrap=gai_strerror,--wrap=gethostbyname,--wrap=gethostbyname2,--wrap=gethostbyaddr,--wrap=getservbyname,--wrap=getservbyport
 
+# 2026-08-15: androidauto-sidecar specifically (not the other 4 targets
+# below that also use AASDK_WRAP_FLAGS/NSS_STUB_OBJ) needs a REAL,
+# working dlopen -- HantroH264Decoder dlopen()s /usr/lib/libmfc.so for
+# real hardware video decode. See hantro_dlopen.c's own top comment for
+# why NSS_STUB_OBJ's plain no-op stub can't just be swapped for a
+# passthrough to the real glibc dlopen() (the same static-NSS-init
+# startup crash NSS_STUB_OBJ exists to avoid comes right back the
+# moment anything in the binary references the real symbol, whether or
+# not that path is ever taken at runtime). HANTRO_DLOPEN_OBJ provides
+# the same __wrap_* symbol set as NSS_STUB_OBJ (so it's a drop-in
+# linker substitute) but with a real, working ELF loader for dlopen/
+# dlsym/dlclose instead of stubs -- androidauto-sidecar's own link rule
+# below uses this instead of NSS_STUB_OBJ; the other 4 AASDK_WRAP_FLAGS
+# targets are unaffected.
+HANTRO_DLOPEN_OBJ := $(BUILD_DIR)/ui-obj/androidauto/hantro_dlopen.o
+
 # --- carplay sidecar binary ---
 # -ldbus-1 goes back in once this actually links libdbus -- needs its
 # headers/lib sourced from the target rootfs or cross-built, neither of
@@ -241,13 +257,17 @@ $(BUILD_DIR)/ui-obj/androidauto/%.o: src/androidauto/%.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) $(AASDK_INCLUDES) -c -o $@ $<
 
-$(ANDROIDAUTO_SIDECAR_TARGET): $(ANDROIDAUTO_SIDECAR_OBJS) $(AASDK_OBJS) $(HAL_CONFIG_OBJ) $(VIDEO_LAYER_OBJ) $(NSS_STUB_OBJ)
+$(ANDROIDAUTO_SIDECAR_TARGET): $(ANDROIDAUTO_SIDECAR_OBJS) $(AASDK_OBJS) $(HAL_CONFIG_OBJ) $(VIDEO_LAYER_OBJ) $(HANTRO_DLOPEN_OBJ)
 	@mkdir -p $(dir $@)
 	$(CXX) $(LDFLAGS) $(AASDK_WRAP_FLAGS) -o $@ $^ $(AASDK_LIBS)
 
 $(BUILD_DIR)/androidauto-sidecar-obj/%.o: sidecars/androidauto/%.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) $(AASDK_INCLUDES) -Isrc -c -o $@ $<
+
+$(HANTRO_DLOPEN_OBJ): src/androidauto/hantro_dlopen.c
+	@mkdir -p $(dir $@)
+	$(CC) -O2 -c -o $@ $<
 
 $(AASDK_TEST_TARGET): $(AASDK_TEST_OBJS) $(AASDK_OBJS) $(NSS_STUB_OBJ)
 	@mkdir -p $(dir $@)

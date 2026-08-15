@@ -19,15 +19,21 @@
 // (`/data/msncfg/Setting.config`), reading/writing the SAME file the
 // original MsnCoreApp binary owns. Per explicit request, this app now
 // has NO link to msncfg at all, in either direction: its live layer
-// lives at its own path under /data/custom_ui/ (see default_store()
-// below), entirely separate from anything stock. custom_ui ships its
-// OWN bundled default-seed file (tracked source:
-// custom_ui/etc/default_settings.conf, same simple flat
-// [Section]/key=value format -- see hal_config.h's hal.conf for the
-// established sibling pattern this follows: staged into build/ by the
-// Makefile, resolved at runtime via resolve_default_seed_path()'s
-// exe-dir -> /data/custom_ui -> /etc/custom_ui search order, first
-// match wins).
+// lives at its own path (see default_store() below), entirely separate
+// from anything stock. custom_ui ships its OWN bundled default-seed
+// file (tracked source: custom_ui/etc/default_settings.conf, same
+// simple flat [Section]/key=value format -- see hal_config.h's
+// hal.conf for the established sibling pattern this follows: staged
+// into build/ by the Makefile, resolved at runtime via
+// resolve_default_seed_path()'s exe-dir -> /data -> /etc/custom_ui
+// search order, first match wins).
+//
+// 2026-08-15: dropped the /data/custom_ui/ subfolder -- per explicit
+// request, a flat file directly under /data (the app's own writable
+// userdata mount) is enough, no dedicated subdirectory needed. Also
+// removes the whole class of "a path component exists but isn't a
+// directory" failure mkdir_parents() had to defend against for the
+// subfolder case (see that function's own comment).
 //
 // Load order:
 //   1. This app's own live layer (default_store()'s live_path) --
@@ -108,7 +114,7 @@ private:
     static std::string make_map_key(const std::string & section, const std::string & key);
     void parse_file(const std::string & path, bool is_live_layer);
 
-    // exe-dir/default_settings.conf -> /data/custom_ui/default_settings.conf
+    // exe-dir/default_settings.conf -> /data/default_settings.conf
     // -> /etc/custom_ui/default_settings.conf, first match wins -- same
     // search order and reasoning as hal_config.cpp's HalConfig::HalConfig().
     static std::string resolve_default_seed_path();
@@ -118,7 +124,7 @@ private:
 };
 
 // Process-wide store against this app's OWN live path,
-// /data/custom_ui/settings.conf -- deliberately separate from stock's
+// /data/settings.conf -- deliberately separate from stock's
 // /data/msncfg/Setting.config, see this file's top comment. Lazily
 // load()ed on first call, and saved once immediately after -- see
 // load()'s comment: this makes the live file self-contained from this

@@ -75,10 +75,14 @@ struct VideoLayerHandle {
 bool init_video_layer(VideoLayerHandle & out, const char * path = "/dev/fb1");
 
 // Sets ARK_LCDC_FORMAT_Y_UV420 (semi-planar) and the given frame size
-// via ARKFB_SET_WINDOW_FORMAT/ARKFB_SET_WINDOW_SIZE. Call once before
-// the first set_frame_addr() (or again if the decoded picture's own
-// dimensions ever change mid-session -- not expected in practice for
-// a single AA session, but cheap to call again if unsure).
+// via ARKFB_SET_WINDOW_FORMAT/ARKFB_SET_WINDOW_SIZE, THEN directly
+// writes VIDEO2_SOURCE_SIZE/WIN_SIZE/WIN_POINT/SIZE/POSITION over
+// /dev/mem (see video_layer.cpp's own comment) -- real stock sets all
+// five of those per frame config, and the two ioctls above only ever
+// reach one of them. Call once before the first set_frame_addr() (or
+// again if the decoded picture's own dimensions ever change
+// mid-session -- not expected in practice for a single AA session, but
+// cheap to call again if unsure).
 bool configure_video_layer(VideoLayerHandle & h, uint32_t width, uint32_t height);
 
 // Pushes one decoded frame's plane addresses via ARKFB_SET_WINDOW_ADDR.

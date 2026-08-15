@@ -55,7 +55,20 @@ void VideoChannel::onMediaChannelSetupRequest(
 
     auto promise = aasdk::channel::SendPromise::defer(strand_);
     promise->then(
-        []() { std::printf("[+%ldms] androidauto: video channel setup response sent\n", elapsedMs()); },
+        [this, self = shared_from_this()]() {
+            std::printf("[+%ldms] androidauto: video channel setup response sent\n", elapsedMs());
+            // 2026-08-15: found via the real opencardev/openauto
+            // reference (VideoService::onAVChannelSetupRequest()) --
+            // the head unit is expected to proactively grant video
+            // focus right after setup, not just wait to react if/when
+            // the phone happens to ask. Real hardware showed exactly
+            // the symptom this predicts: clean channel open/setup for
+            // every channel, ping keep-alive running fine both
+            // directions, but the phone never sent a
+            // VideoFocusRequest or MediaChannelStartIndication at all
+            // -- it was waiting for a grant this code never sent.
+            sendVideoFocusIndication(/*unsolicited=*/true);
+        },
         [](const aasdk::error::Error & e) {
             std::printf("[+%ldms] androidauto: video channel setup response send failed: %s\n", elapsedMs(),
                         e.what());
@@ -195,19 +208,26 @@ void VideoChannel::onVideoFocusRequest(
 
     // Always grant projected focus -- this app has no native content
     // competing for the video surface.
+    sendVideoFocusIndication(/*unsolicited=*/false);
+
+    channel_->receive(this->shared_from_this());
+}
+
+void VideoChannel::sendVideoFocusIndication(bool unsolicited) {
     aap_protobuf::service::media::video::message::VideoFocusNotification indication;
     indication.set_focus(aap_protobuf::service::media::video::message::VIDEO_FOCUS_PROJECTED);
-    indication.set_unsolicited(false);
+    indication.set_unsolicited(unsolicited);
 
     auto promise = aasdk::channel::SendPromise::defer(strand_);
     promise->then(
-        []() {},
+        [unsolicited]() {
+            std::printf("[+%ldms] androidauto: video focus indication sent (unsolicited=%d)\n",
+                       elapsedMs(), unsolicited);
+        },
         [](const aasdk::error::Error & e) {
             std::printf("androidauto: video focus indication send failed: %s\n", e.what());
         });
     channel_->sendVideoFocusIndication(indication, promise);
-
-    channel_->receive(this->shared_from_this());
 }
 
 void VideoChannel::onChannelError(const aasdk::error::Error & e) {

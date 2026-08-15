@@ -118,11 +118,12 @@ public:
 
     // Copies `data`/`len` into the DMA input buffer (growing it if
     // needed) and calls H264DecDecode, then H264DecNextPicture. Returns
-    // true if a picture became ready (H264DecNextPicture returned 0),
-    // in which case last_picture() reflects the ready frame's real
-    // fields (width/height/crop/output buffer address/format) -- see
-    // class header comment: pushing that buffer to the display is
-    // still a separate, not-yet-done step.
+    // true if a picture became ready (H264DecNextPicture returned
+    // H264DEC_PIC_RDY=2 -- see hantro_h264_decoder.cpp's own comment
+    // for why this isn't simply "returned 0": 0-6 are all real,
+    // non-error H264DecRet values, only negative ones are actual
+    // errors), in which case last_picture() reflects the ready frame's
+    // real fields (width/height/crop/output buffer address/format).
     bool decodeFrame(const uint8_t * data, size_t len);
 
     // Valid only after decodeFrame() returns true.

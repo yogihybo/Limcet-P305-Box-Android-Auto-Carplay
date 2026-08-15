@@ -133,6 +133,23 @@ void screen_delete_cb(lv_event_t * e) {
 lv_obj_t * create_android_auto_screen() {
     lv_obj_t * scr = nullptr;
     theme::create_screen_with_header(&scr, "Android Auto", back_btn_cb);
+    // 2026-08-15: found on real hardware -- video decoded correctly,
+    // hal::video_layer reported the frame pushed and the layer shown,
+    // but nothing ever appeared on screen, still showing this screen's
+    // own LVGL content. Root cause: theme::create_screen_with_header()
+    // paints an OPAQUE solid background on `scr` itself
+    // (lv_obj_set_style_bg_color(scr, bg(), 0), bg_opa defaults to
+    // LV_OPA_COVER) -- this screen was covering the ENTIRE 800x480
+    // area, including wherever `content` is hidden once Connected, so
+    // the video hardware layer underneath (fb1/VIDEO2) had no way to
+    // ever show through regardless of it actually being shown at the
+    // hardware level. Matches the exact pattern already established
+    // and hw-tested for the reverse-camera preview
+    // (reverse_camera_screen.cpp's own bg_opa=LV_OPA_TRANSP) -- header/
+    // status-bar/back-button are separate child widgets with their own
+    // opaque styling, so this only affects the screen's own root fill,
+    // not their visibility.
+    lv_obj_set_style_bg_opa(scr, LV_OPA_TRANSP, 0);
 
     // 2026-08-12: reveals the AA video hardware layer (if a session is
     // already running -- e.g. auto-started in the background, see

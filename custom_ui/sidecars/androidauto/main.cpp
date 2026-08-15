@@ -147,6 +147,27 @@ int main() {
     // forever in this process (real hardware caught exactly that).
     androidauto::markProcessStart();
     core::mark_process_start();
+
+    // 2026-08-15: found on real hardware -- alsa-lib bakes the build
+    // HOST's own --with-configdir path into libasound.a at compile time
+    // (statically linking it, per the earlier reversible-ALSA-rebuild
+    // work, doesn't change this), so on the actual device
+    // snd_pcm_open("plug:softvol2") failed with "Unknown PCM
+    // plug:softvol2" -- not because that PCM/plugin doesn't exist, but
+    // because alsa.conf itself (which defines what "plug"/"softvol" TYPE
+    // even mean, and which in turn @hooks-loads this device's real
+    // /etc/asound.conf, already present in the rootfs, to define
+    // "softvol2" specifically) couldn't be found at
+    // /home/osboxes/build-deps/alsa-arm-install/share/alsa/alsa.conf,
+    // a path that only ever existed on the build machine. Fixed by
+    // shipping that same alsa.conf (plus its own confdir includes --
+    // cards/ctl/pcm subdirs) in the rootfs overlay
+    // (firmware_overlay/usr/share/alsa/) and pointing
+    // ALSA_CONFIG_PATH at the real on-device copy -- alsa-lib checks
+    // this env var before its compiled-in default. Must be set before
+    // any ALSA call the AlsaOutput class ever makes.
+    setenv("ALSA_CONFIG_PATH", "/usr/share/alsa/alsa.conf", 1);
+
     std::printf("%s androidauto-sidecar: starting\n", androidauto::logTimestamp().c_str());
 
     androidauto::WirelessSessionManager manager;

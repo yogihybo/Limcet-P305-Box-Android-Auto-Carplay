@@ -3,6 +3,8 @@
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
+#include <ctime>
+#include <string>
 
 #include "androidauto/log_timing.h"
 
@@ -41,6 +43,26 @@ namespace {
 // only kicks in for the "clearly never been set" case.
 constexpr std::int64_t kSaneEpochMillisThreshold = 1577836800000LL;    // 2020-01-01 UTC
 constexpr std::int64_t kFallbackBaselineEpochMillis = 1755043200000LL;  // ~2026-08-13 UTC
+
+// 2026-08-15: purely diagnostic -- formats an epoch-millis value (e.g.
+// an inbound PingRequest.timestamp from the phone) as a human-readable
+// UTC date, so a hardware log makes it obvious at a glance whether a
+// given timestamp is plausible real wall-clock time or clearly
+// implausible (near-epoch/garbage), without needing to hand-convert
+// the raw integer. See onPingRequest()'s own comment for why this
+// value is worth watching: if the phone ever proactively sends us a
+// PingRequest (unconfirmed so far -- this project's own Pinger only
+// ever observed the reverse direction), its timestamp would be a real,
+// Bluetooth-independent source of wall-clock time, sidestepping the
+// whole AT+CCLK/HFPTIME/CTS dead end documented elsewhere.
+std::string formatEpochMillisUtc(std::int64_t epochMillis) {
+    std::time_t seconds = static_cast<std::time_t>(epochMillis / 1000);
+    std::tm tmUtc{};
+    gmtime_r(&seconds, &tmUtc);
+    char buf[32];
+    std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &tmUtc);
+    return std::string(buf) + " UTC";
+}
 
 std::int64_t plausibleEpochMillis() {
     auto real = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -677,8 +699,9 @@ void Session::onPingRequest(const aap_protobuf::service::control::message::PingR
     // phone -- see schedulePing() -- so this handler firing means the
     // phone ALSO pings the head unit, or is answering in a way this
     // project hadn't observed before).
-    std::printf("[+%ldms] androidauto: ping request received from phone (timestamp=%lld)\n", elapsedMs(),
-                static_cast<long long>(request.timestamp()));
+    std::printf("[+%ldms] androidauto: ping request received from phone (timestamp=%lld, %s)\n", elapsedMs(),
+                static_cast<long long>(request.timestamp()),
+                formatEpochMillisUtc(request.timestamp()).c_str());
 
     aap_protobuf::service::control::message::PingResponse response;
     response.set_timestamp(request.timestamp());

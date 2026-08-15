@@ -420,7 +420,7 @@ lv_obj_t * create_bluetooth_screen() {
     // replaces, this one is properly cleaned up rather than
     // intentionally leaked, since it's referenced by every load's poll
     // timer for the screen's whole lifetime, not just at creation.
-    auto * widgets = new BtScreenWidgets{addr_label, list, status_label, refresh_btn, nullptr};
+    auto * widgets = new BtScreenWidgets{addr_label, list, status_label, refresh_btn, nullptr, {}};
     lv_obj_add_event_cb(scr, widgets_delete_cb, LV_EVENT_DELETE, widgets);
     lv_obj_add_event_cb(refresh_btn, refresh_btn_cb, LV_EVENT_CLICKED, widgets);
     lv_group_add_obj(core::navigation::focus_group(), refresh_btn);

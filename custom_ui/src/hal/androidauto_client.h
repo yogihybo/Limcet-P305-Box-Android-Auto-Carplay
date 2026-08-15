@@ -35,6 +35,7 @@
 // does.
 #pragma once
 
+#include <cstdint>
 #include <mutex>
 #include <string>
 
@@ -90,6 +91,20 @@ public:
     // requestConnect()/statusLine()) -- returns false if it isn't
     // already running, since there's nothing to show/hide in that case.
     bool setVisible(bool visible);
+
+    // Sends "KEY <code>" -- forwards a real Android KeyEvent keycode
+    // into the sidecar's current AA session as a momentary tap (see
+    // sidecars/androidauto/main.cpp's own protocol comment and
+    // androidauto::Session::sendInputKey()). Used by hal/knob.cpp to
+    // forward the physical control knob's rotation/push into an active
+    // session. Like setVisible(), never spawns the sidecar (allow_spawn
+    // = false) -- a knob turn before any AA connection exists has
+    // nothing to forward to, so there's no reason to start the aasdk-
+    // backed process just to immediately no-op. Returns false if the
+    // sidecar isn't reachable at all; true whether or not a session
+    // currently exists to receive the key (the sidecar itself treats
+    // "no session" as a normal no-op, not an error).
+    bool sendKey(std::uint32_t keycode);
 
 private:
     bool ensureConnected(bool allow_spawn = true);

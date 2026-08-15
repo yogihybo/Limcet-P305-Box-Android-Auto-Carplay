@@ -1,12 +1,26 @@
 #include "androidauto/input_channel.h"
 
 #include <cstdio>
+#include <ctime>
 
 #include "androidauto/log_timing.h"
 
 #include <aasdk/Channel/InputSource/InputSourceService.hpp>
 
 namespace androidauto {
+
+namespace {
+// Same CLOCK_MONOTONIC-microseconds convention as
+// TouchForwarder::nowMicros() -- InputReport.timestamp doesn't need to
+// be wall-clock (see this project's own PingRequest.timestamp
+// investigation for why that field specifically was never usable for
+// real time), just monotonically increasing.
+std::uint64_t nowMicros() {
+    struct timespec ts {};
+    ::clock_gettime(CLOCK_MONOTONIC, &ts);
+    return static_cast<std::uint64_t>(ts.tv_sec) * 1000000ULL + static_cast<std::uint64_t>(ts.tv_nsec) / 1000ULL;
+}
+}  // namespace
 
 InputChannel::InputChannel(boost::asio::io_service::strand &strand,
                             aasdk::messenger::IMessenger::Pointer messenger)
@@ -41,6 +55,25 @@ void InputChannel::sendTouch(std::uint32_t x, std::uint32_t y, std::uint32_t poi
             std::printf("androidauto: input report send failed: %s\n", e.what());
         });
     channel_->sendInputReport(report, promise);
+}
+
+void InputChannel::sendKey(std::uint32_t keycode) {
+    for (bool down : {true, false}) {
+        aap_protobuf::service::inputsource::message::InputReport report;
+        report.set_timestamp(nowMicros());
+        auto *key = report.mutable_key_event()->add_keys();
+        key->set_keycode(keycode);
+        key->set_down(down);
+        key->set_metastate(0);
+
+        auto promise = aasdk::channel::SendPromise::defer(strand_);
+        promise->then(
+            []() {},
+            [keycode](const aasdk::error::Error &e) {
+                std::printf("androidauto: key event send failed (keycode=%u): %s\n", keycode, e.what());
+            });
+        channel_->sendInputReport(report, promise);
+    }
 }
 
 void InputChannel::onChannelOpenRequest(

@@ -82,6 +82,16 @@ public:
     void onPingResponse(const aap_protobuf::service::control::message::PingResponse &response) override;
     void onChannelError(const aasdk::error::Error &e) override;
 
+    // Forwards a real Android KeyEvent keycode into the live session's
+    // InputChannel as a momentary tap (down then up) -- see
+    // InputChannel::sendKey()'s own comment for the exact keycodes
+    // this project uses (physical control-knob rotation/push) and why.
+    // No-op if inputChannel_ hasn't been constructed yet (Session::
+    // start() hasn't run) -- callers (WirelessSessionManager) already
+    // only reach a live Session via a pointer that only exists once
+    // start() has run, but this stays defensive rather than assuming.
+    void sendInputKey(std::uint32_t keycode);
+
 private:
     // Advances cryptor_'s SSL BIO state machine one step and, if it
     // produced outbound handshake bytes, sends them over the control

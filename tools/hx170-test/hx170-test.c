@@ -84,17 +84,25 @@ typedef struct {
 } H264DecPicture;
 
 /* DWLMallocLinear's own confirmed ioctl protocol against /dev/memalloc,
- * replicated by hand against our own fd (see file header). GETBUFFER's
- * ioctl number encodes sizeof(MemallocParams)=8, not 4 -- the kernel
- * driver's copy_from_user always reads a fixed 8 bytes regardless of
- * what a smaller request buffer provides, so passing anything short
- * silently pulls in adjacent stack garbage as the "size" field. */
+ * replicated by hand against our own fd (see file header). */
 typedef struct {
     uint32_t busAddress;
     uint32_t size;
 } MemallocParams;
 
-#define MEMALLOC_IOCX_GETBUFFER 0xc0086b01
+/* 2026-08-15 CORRECTED on real hardware -- this used to be 0xc0086b01
+ * (assuming the ioctl number encodes sizeof(MemallocParams)=8), which
+ * failed with ENOTTY on every call. The real kernel driver
+ * (drivers/soc/arkmicro/memalloc.h in the ark1668ed-bsp tree) defines
+ * MEMALLOC_IOCXGETBUFFER as `_IOWR(MEMALLOC_IOC_MAGIC, 1,
+ * MemallocParams*)` -- a POINTER type, so the macro actually encodes
+ * sizeof(MemallocParams*)=4, giving 0xc0046b01. The driver's own
+ * copy_from_user still reads a fixed 8 bytes regardless (hardcoded in
+ * its C code, not derived from the command's encoded size field) --
+ * this was purely a dispatch-match bug (wrong cmd -> the driver's
+ * `default: -ENOIOCTLCMD` -> ENOTTY at the syscall boundary), never a
+ * data-transfer-size one. */
+#define MEMALLOC_IOCX_GETBUFFER 0xc0046b01
 #define MEMALLOC_IOCX_FREEBUFFER 0x40046b02
 
 static void *g_mem_virt;

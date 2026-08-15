@@ -306,8 +306,7 @@ void BwAapClient::waitForOptionalConnectStatus(int timeoutSeconds) {
     // -- so this loops, logging and discarding anything that isn't type
     // 6, until it arrives or the overall deadline passes.
     auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(timeoutSeconds);
-    std::printf("%s androidauto: waiting up to %ds for WIFI_CONNECT_STATUS (draining any "
-                "interleaved frames, e.g. a late WIFI_START_RESPONSE, along the way)...\n", androidauto::logTimestamp().c_str(),
+    std::printf("%s androidauto: waiting up to %ds for WIFI_CONNECT_STATUS...\n", androidauto::logTimestamp().c_str(),
                 timeoutSeconds);
 
     for (;;) {

@@ -1,6 +1,7 @@
 #include "ui/bluetooth_screen.h"
 
 #include <atomic>
+#include <cstdint>
 #include <cstdio>
 #include <memory>
 #include <mutex>
@@ -49,6 +50,15 @@ struct BtScreenWidgets {
     // reused, simplest way to avoid tracking a "currently visible"
     // flag across repeated Refresh taps.
     lv_obj_t * spinner;
+    // 2026-08-15: raw +PLIST= entries backing the currently-shown list,
+    // in the same order the row buttons were created -- device_row_
+    // clicked_cb() looks up its row's entry by index (via the button's
+    // own lv_obj_set_user_data()) rather than re-parsing the button's
+    // DISPLAY text, since that now shows the parsed device name, not
+    // the raw line. Outlives the buttons (repopulated, never cleared,
+    // on every load) so a stale index from a just-deleted list can't
+    // dangle -- populate_device_list() always rebuilds both together.
+    std::vector<std::string> last_devices;
 };
 
 void status_label_set(lv_obj_t * label, const char * text) {
@@ -96,34 +106,25 @@ void bt_load_worker(BtLoadState * state) {
 }
 
 // Re-issues PLIST and repopulates the device list widget with one
-// button row per raw response line. See hal/bluetooth.h's top comment
-// -- PLIST's exact field grammar (name/MAC/RSSI sub-fields) was never
-// confirmed against real captured traffic, so each row shows the
-// whole raw line, not parsed fields. Tapping a row sends
-// HFPCONN=<raw line text> -- if that's not literally a bare MAC
-// address once real device output is seen, this will need a real
-// parser; documented as a known gap, not a guess dressed up as fact.
-// LVGL button-click events don't bubble to a parent lv_list by
-// default (would need LV_OBJ_FLAG_EVENT_BUBBLE on every row) -- simpler
-// to register the click handler directly on each row button as it's
-// created, below.
+// button row per parsed device entry. 2026-08-15: real hardware showed
+// +PLIST= entries are 4 separator-delimited fields (index, a numeric
+// code, MAC, name), not the 2-field "<mac><sep><name>" shape this used
+// to assume (same as +AAPDEV=) -- see hal::split_plist_entry()'s own
+// comment. Each row's connect_id is looked up by index into
+// w->last_devices (set by populate_device_list() below) rather than
+// re-parsing the button's own display text, since that text now shows
+// the parsed name, not the raw line.
 void device_row_clicked_cb(lv_event_t * e) {
     lv_obj_t * btn = static_cast<lv_obj_t *>(lv_event_get_target(e));
     auto * w = static_cast<BtScreenWidgets *>(lv_event_get_user_data(e));
 
-    const char * text = lv_list_get_button_text(w->list, btn);
-    std::string entry = text ? text : "";
+    auto index = reinterpret_cast<uintptr_t>(lv_obj_get_user_data(btn));
+    if (index >= w->last_devices.size()) return;
+    const std::string & entry = w->last_devices[index];
     std::printf("%s ui::bluetooth_screen: device row tapped: '%s'\n", core::log_timestamp().c_str(), entry.c_str());
 
-    // hal::list_paired_devices() now strips the "+PLIST=" prefix (see
-    // hal/bluetooth.h) but PLIST's own per-entry field grammar past
-    // that is still unconfirmed -- split_mac_and_name() applies the
-    // same "12 hex chars + 1 separator + name" shape confirmed for a
-    // real +AAPDEV= line (same vendor stack) and falls back to treating
-    // the whole entry as the identifier if it doesn't match, so this
-    // stays correct either way.
     std::string mac, name;
-    std::string connect_id = hal::split_mac_and_name(entry, mac, name) ? mac : entry;
+    std::string connect_id = hal::split_plist_entry(entry, mac, name) ? mac : entry;
 
     hal::BluetoothHandle & h = hal::shared_handle();
     bool ok = hal::connect_device(h, connect_id);
@@ -136,6 +137,7 @@ void device_row_clicked_cb(lv_event_t * e) {
 void populate_device_list(BtScreenWidgets * w, bool hw_present, bool devices_ok,
                            const std::vector<std::string> & devices) {
     lv_obj_clean(w->list);
+    w->last_devices = devices;
     if (!hw_present) {
         lv_list_add_text(w->list, "/dev/bw_serial unavailable");
         status_label_set(w->status_label, "Bluetooth hardware not detected");
@@ -146,9 +148,18 @@ void populate_device_list(BtScreenWidgets * w, bool hw_present, bool devices_ok,
         status_label_set(w->status_label, "PLIST returned nothing");
         return;
     }
-    for (const auto & line : devices) {
-        lv_obj_t * btn = lv_list_add_button(w->list, LV_SYMBOL_BLUETOOTH, line.c_str());
+    for (size_t i = 0; i < devices.size(); ++i) {
+        // Show the parsed device name where available -- falls back to
+        // the raw line (garbled separator bytes and all) only if
+        // split_plist_entry() can't find a MAC in it, so a real parse
+        // failure stays visible rather than silently hidden.
+        std::string mac, name;
+        std::string label = hal::split_plist_entry(devices[i], mac, name) && !name.empty()
+                                 ? name
+                                 : devices[i];
+        lv_obj_t * btn = lv_list_add_button(w->list, LV_SYMBOL_BLUETOOTH, label.c_str());
         theme::style_list_button(btn);
+        lv_obj_set_user_data(btn, reinterpret_cast<void *>(static_cast<uintptr_t>(i)));
         lv_obj_add_event_cb(btn, device_row_clicked_cb, LV_EVENT_CLICKED, w);
         lv_group_add_obj(core::navigation::focus_group(), btn);
     }

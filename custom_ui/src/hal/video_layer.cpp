@@ -32,6 +32,25 @@ constexpr unsigned long kArkfbSetWindowAddr = _IOW('O', 44, ArkDispAddr);
 // video_layer.h's top comment.
 constexpr unsigned int kFormatYUv420 = 0x11;
 
+// 2026-08-15: found on real hardware -- video appeared with a
+// psychedelic pink/green tint, the textbook signature of a swapped
+// U/V chroma pair feeding a YUV->RGB conversion. Root cause: this
+// format_val used to leave yuv_order at 0, which this device's real
+// ark_lcdc_common.h (ark1668ed-bsp) defines as
+// `enum ark_lcdc_yuv_order { ARK_LCDC_ORDER_VYUY, ARK_LCDC_ORDER_UYVY,
+// ARK_LCDC_ORDER_YVYU, ARK_LCDC_ORDER_YUYV };` -- i.e. 0 means V comes
+// first in the interleaved chroma pair. HantroH264Decoder's semi-planar
+// YUV420 output is confirmed (hantro_h264_decoder.h's own header
+// comment, cross-referenced against three independent vendor SDKs) to
+// be standard NV12 -- U before V -- so leaving yuv_order at its default
+// fed the LCDC's Y2R conversion the chroma bytes in the wrong order.
+// ARK_LCDC_ORDER_UYVY (1) is the matching value. Packed per
+// video_layer.h's own documented bit layout: format(0-7) |
+// yuv_order(16-19)<<16 | rgb_order(24-27)<<24 -- rgb_order isn't
+// applicable to this YUV-native layer, left 0.
+constexpr unsigned int kYuvOrderUyvy = 1;
+constexpr unsigned int kYuvOrderShift = 16;
+
 // Same real vendor SHOW/HIDE numbers already confirmed and used for
 // the OSD1/UI layer in hal/display.cpp -- see video_layer.h's top
 // comment for why these, not this kernel tree's own ARKFB_SHOW_WINDOW/
@@ -55,7 +74,7 @@ bool init_video_layer(VideoLayerHandle & out, const char * path) {
 bool configure_video_layer(VideoLayerHandle & h, uint32_t width, uint32_t height) {
     if (h.fd < 0) return false;
 
-    unsigned int format_val = kFormatYUv420;  // yuv_order/rgb_order left 0, not applicable here
+    unsigned int format_val = kFormatYUv420 | (kYuvOrderUyvy << kYuvOrderShift);
     if (ioctl(h.fd, kArkfbSetWindowFormat, &format_val) != 0) {
         std::fprintf(stderr, "%s hal::video_layer::configure_video_layer: ARKFB_SET_WINDOW_FORMAT failed (%s)\n", core::log_timestamp().c_str(),
                      std::strerror(errno));

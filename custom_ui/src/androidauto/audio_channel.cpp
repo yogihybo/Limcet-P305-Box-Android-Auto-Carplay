@@ -54,6 +54,16 @@ void AudioChannel::onMediaChannelSetupRequest(
     // Session::onServiceDiscoveryRequest) -- always select index 0.
     aap_protobuf::service::media::shared::message::Config response;
     response.set_status(aap_protobuf::service::media::shared::message::Config::STATUS_READY);
+    // 2026-08-15: found via a real phone-side adb logcat capture --
+    // Gearhead rejected the session with "Critical error 2 detail: 39
+    // msg: MaxUnacked must be >= 0, was 0" (fired once per AudioChannel
+    // instance -- media/system/speech, matching this class being
+    // constructed 3 times), immediately followed by "Failed to read
+    // message" and teardown. max_unacked (Config.proto field 2) is
+    // optional but apparently required in practice. 1 matches
+    // microphone_channel.cpp's own already-correct value, which itself
+    // matches the real upstream f1x/openauto reference.
+    response.set_max_unacked(1);
     response.add_configuration_indices(0);
 
     auto promise = aasdk::channel::SendPromise::defer(strand_);

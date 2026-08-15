@@ -46,6 +46,11 @@ void VideoChannel::onMediaChannelSetupRequest(
     // see Session::onServiceDiscoveryRequest) -- always select index 0.
     aap_protobuf::service::media::shared::message::Config response;
     response.set_status(aap_protobuf::service::media::shared::message::Config::STATUS_READY);
+    // 2026-08-15: same fix as audio_channel.cpp's own comment -- real
+    // phone-side adb logcat caught "MaxUnacked must be >= 0, was 0"
+    // right before teardown. 1 matches microphone_channel.cpp's
+    // already-correct value / the real reference.
+    response.set_max_unacked(1);
     response.add_configuration_indices(0);
 
     auto promise = aasdk::channel::SendPromise::defer(strand_);

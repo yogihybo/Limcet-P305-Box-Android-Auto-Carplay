@@ -104,9 +104,9 @@ bool BwAapClient::sendFrame(std::uint16_t type, const std::string &payload) {
 
     std::printf("%s androidauto: bw_aap: sendFrame type=%u length=%u:", androidauto::logTimestamp().c_str(), type, length);
     for (unsigned char byte : frame) {
-        std::printf("%s  %02x", androidauto::logTimestamp().c_str(), byte);
+        std::printf(" %02x", byte);
     }
-    std::printf("%s \n", androidauto::logTimestamp().c_str());
+    std::printf("\n");
 
     ssize_t written = ::write(fd_, frame.data(), frame.size());
     if (written != static_cast<ssize_t>(frame.size())) {
@@ -188,9 +188,9 @@ bool BwAapClient::startHandshake(const std::string &apIpAddress, std::uint16_t a
     }
     std::printf("%s androidauto: received type=%u, %zu bytes:", androidauto::logTimestamp().c_str(), responseType, responsePayload.size());
     for (unsigned char byte : responsePayload) {
-        std::printf("%s  %02x", androidauto::logTimestamp().c_str(), byte);
+        std::printf(" %02x", byte);
     }
-    std::printf("%s \n", androidauto::logTimestamp().c_str());
+    std::printf("\n");
     if (responseType != 5) {
         std::fprintf(stderr, "%s androidauto: expected WIFI_VERSION_RESPONSE (type 5), got %u\n", androidauto::logTimestamp().c_str(),
                      responseType);

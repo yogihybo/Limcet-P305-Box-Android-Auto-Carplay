@@ -358,6 +358,17 @@ void Session::onServiceDiscoveryRequest(
     videoConfig->set_frame_rate(aap_protobuf::service::media::sink::message::VIDEO_FPS_30);
     videoConfig->set_video_codec_type(
         aap_protobuf::service::media::shared::message::MEDIA_CODEC_VIDEO_H264_BP);
+    // 2026-08-15: found via a real phone-side adb logcat capture --
+    // Gearhead rejected the session with "Critical error 2 detail: 21
+    // msg: density missing" right before tearing down, immediately
+    // after this VideoConfiguration went out with density/real_density
+    // left unset (VideoConfiguration.proto fields 5/9, both optional
+    // but apparently required in practice by this Gearhead version).
+    // 140 matches the real reference's own default (f1xpl/openauto's
+    // Configuration.cpp: screenDPI_ = 140), a well-established value
+    // for this class of 800x480 automotive display, not a guess.
+    videoConfig->set_density(140);
+    videoConfig->set_real_density(140);
 
     auto *mediaAudioService = response.add_channels();
     mediaAudioService->set_id(

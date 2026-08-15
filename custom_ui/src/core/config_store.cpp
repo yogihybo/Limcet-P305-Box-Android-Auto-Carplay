@@ -22,19 +22,23 @@ std::string trim(const std::string & s) {
 }
 
 // Recursively creates the parent directory chain for `path` (e.g.
-// /data/custom_ui/settings.conf -> mkdir /data, mkdir /data/custom_ui).
-// A not-yet-provisioned device may not have /data/custom_ui/ yet.
+// /data/settings.conf -> mkdir /data). Since 2026-08-15's move to a
+// flat file directly under /data (no more dedicated /data/custom_ui/
+// subfolder -- see this file's header comment), this only ever walks
+// a single component in practice, but stays general in case live_path_
+// ever moves somewhere deeper again.
 //
-// 2026-08-15: self-heals the case where a path component already
+// 2026-08-15: also self-heals the case where a path component already
 // exists but is a plain FILE, not a directory -- observed on real
 // hardware as save() failing with ENOTDIR ("Not a directory") on
 // every single boot, permanently, with no recovery (mkdir()'s error
 // was ignored outright, on the assumption the only failure mode was
-// EEXIST-as-directory). Every component this function ever creates is
-// exclusively this app's own path space (/data/custom_ui/...), never
-// shared with stock or another process, so removing a stray file here
-// and replacing it with the directory it was always supposed to be is
-// safe.
+// EEXIST-as-directory). /data itself is a shared mount point (not
+// exclusively this app's own space the way the old subfolder was), so
+// this is a defensive fallback for a pathological case, not the
+// expected path -- but still safe: if /data isn't a real directory,
+// nothing on this device works anyway, so recovering it here can only
+// help.
 void mkdir_parents(const std::string & path) {
     size_t pos = path.find('/', 1);
     while (pos != std::string::npos) {
@@ -128,7 +132,7 @@ std::string ConfigStore::resolve_default_seed_path() {
     if (!exe_dir.empty() && file_exists(exe_dir + "/" + kFilename)) {
         return exe_dir + "/" + kFilename;
     }
-    std::string data_path = std::string("/data/custom_ui/") + kFilename;
+    std::string data_path = std::string("/data/") + kFilename;
     if (file_exists(data_path)) {
         return data_path;
     }
@@ -226,7 +230,7 @@ void ConfigStore::set_string(const std::string & key, const std::string & value,
 }
 
 ConfigStore & default_store() {
-    static ConfigStore store("/data/custom_ui/settings.conf");
+    static ConfigStore store("/data/settings.conf");
     static bool loaded = false;
     if (!loaded) {
         store.load();

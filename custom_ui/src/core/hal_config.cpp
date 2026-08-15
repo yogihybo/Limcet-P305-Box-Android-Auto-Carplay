@@ -45,8 +45,8 @@ HalConfig::HalConfig() {
         std::printf("core::HalConfig: loaded %s/hal.conf\n", exe_dir.c_str());
         return;
     }
-    if (load_file("/data/custom_ui/hal.conf")) {
-        std::printf("core::HalConfig: loaded /data/custom_ui/hal.conf\n");
+    if (load_file("/data/hal.conf")) {
+        std::printf("core::HalConfig: loaded /data/hal.conf\n");
         return;
     }
     if (load_file("/etc/custom_ui/hal.conf")) {

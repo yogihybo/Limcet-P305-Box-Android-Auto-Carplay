@@ -34,9 +34,11 @@
 //      via /proc/self/exe, same technique as
 //      androidauto_client.cpp's trySpawnSidecar(). The build/hal.conf
 //      staging above lands here once scp'd alongside the binary.
-//   2. /data/custom_ui/hal.conf -- writable userdata partition, the
-//      real edit target on a properly deployed device; survives a
-//      firmware-image reflash the way /etc wouldn't.
+//   2. /data/hal.conf -- writable userdata partition, the real edit
+//      target on a properly deployed device; survives a firmware-image
+//      reflash the way /etc wouldn't. (2026-08-15: dropped the
+//      /data/custom_ui/ subfolder -- a flat file directly under /data
+//      is enough, no dedicated subdirectory needed.)
 //   3. /etc/custom_ui/hal.conf -- would be a real firmware image's
 //      shipped default. Nothing deploys a file there today (see
 //      above), kept as a search path for when custom_ui does get

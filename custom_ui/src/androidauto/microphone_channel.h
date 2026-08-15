@@ -15,25 +15,43 @@
 // sitting unused, same shape sensor_channel.h's fix exploited for
 // SENSOR.
 //
-// Deliberately minimal, same "advertise what you structurally
-// support, stub the data path" reasoning as InputChannel (touch-only)
-// and SensorChannel (DRIVING_STATUS_DATA-only): answers
-// ChannelOpenRequest, MediaChannelSetupRequest, and the mic-specific
-// open/close handshake (MicrophoneRequest/MicrophoneResponse)
-// correctly, but doesn't actually capture or stream any real
-// microphone audio yet -- there's no voice-input feature in this app
-// to wire it to. The point is structural completeness (so a phone that
-// gates connection viability on this channel existing doesn't have a
-// reason to bail), not a working voice assistant.
+// 2026-08-15: real microphone capture wired in, replacing the old
+// structural-only stub -- see project_mic_capture_investigation memory
+// for the hardware-confirmed prerequisites this builds on directly
+// rather than re-deriving: the kernel-side SARADC settle-delay fix
+// (linux-arkmicro 4a1d8a213) and the confirmation that MsnCoreApp's own
+// `sink` binary successfully captures real audio via ALSA at "hw:0,0"
+// once that fix is in place. This class opens the exact same
+// underlying ALSA capture path (via AlsaInput, see its own header
+// comment) rather than anything MsnCoreApp/libMsnSound.so-specific
+// (that whole layer -- MsnProductInfo.ini's SoundType, /data/msncfg/
+// userdata caching -- only gates MsnCoreApp's OWN init path, not raw
+// ALSA, so none of it is relevant to this process).
+//
+// Same "advertise what you structurally support" shape as InputChannel/
+// SensorChannel otherwise: answers ChannelOpenRequest and
+// MediaChannelSetupRequest the same as before; the mic-specific open/
+// close handshake (MicrophoneRequest/MicrophoneResponse) now ALSO
+// starts/stops a dedicated capture thread (blocking snd_pcm_readi()
+// can't run on the shared strand thread) that forwards real captured
+// PCM frames upstream via sendMediaSourceWithTimestampIndication(),
+// posted through strand_ same as every other cross-thread channel
+// operation in this codebase (see Session::sendInputKey's own
+// comment).
 #pragma once
 
+#include <atomic>
+#include <cstdint>
 #include <memory>
+#include <thread>
 
 #include <boost/asio.hpp>
 
 #include <aasdk/Messenger/IMessenger.hpp>
 #include <aasdk/Channel/MediaSource/IMediaSourceService.hpp>
 #include <aasdk/Channel/MediaSource/IMediaSourceServiceEventHandler.hpp>
+
+#include "androidauto/alsa_input.h"
 
 namespace androidauto {
 
@@ -43,6 +61,7 @@ public:
     using Pointer = std::shared_ptr<MicrophoneChannel>;
 
     MicrophoneChannel(boost::asio::io_service::strand &strand, aasdk::messenger::IMessenger::Pointer messenger);
+    ~MicrophoneChannel();
 
     // Arms the channel's receive loop -- call once, right after
     // construction (deferred until after ServiceDiscoveryResponse is
@@ -58,9 +77,26 @@ public:
     void onChannelError(const aasdk::error::Error &e) override;
 
 private:
+    // Runs on its own dedicated thread (captureThread_) -- loops
+    // blocking snd_pcm_readi() calls via alsaInput_ and posts each
+    // frame's worth of PCM data through strand_ to actually send it.
+    // Exits when capturing_ is cleared.
+    void captureLoop();
+
+    // Joins captureThread_ (if running) and closes alsaInput_ -- shared
+    // by the close-request path and the destructor, same "one place,
+    // called from both a normal-shutdown path and a defensive
+    // destructor path" convention as android_auto_screen.cpp's
+    // screen_delete_cb().
+    void stopCapture();
+
     boost::asio::io_service::strand &strand_;
     aasdk::channel::mediasource::IMediaSourceService::Pointer channel_;
     std::int32_t sessionId_ = 0;
+
+    std::unique_ptr<AlsaInput> alsaInput_;
+    std::thread captureThread_;
+    std::atomic<bool> capturing_{false};
 };
 
 }  // namespace androidauto

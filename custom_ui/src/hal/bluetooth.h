@@ -233,6 +233,17 @@ bool send_command(BluetoothHandle & h, const std::string & command,
 // from this same vendor stack's AAPDEV shape).
 bool split_mac_and_name(const std::string & entry, std::string & mac, std::string & name);
 
+// Splits a real +PLIST= device-list entry, which (confirmed on real
+// hardware 2026-08-15) is NOT the same 2-field "<mac><sep><name>" shape
+// as +AAPDEV= -- it's 4 separator-delimited fields (index, a numeric
+// code, MAC, name), e.g. "1<sep>16424<sep>04006EAF29C4<sep>Pixel 9
+// Pro". Scans for the MAC wherever it falls (a 12-hex-digit run bounded
+// by non-hex characters) rather than assuming a fixed field count/
+// order. Returns false (leaving both empty) if no such run is found --
+// callers should fall back to treating the whole entry as an opaque
+// identifier in that case. See list_paired_devices()/connect_device().
+bool split_plist_entry(const std::string & entry, std::string & mac, std::string & name);
+
 // BTEN=1 / BTEN=0
 bool set_adapter_enabled(BluetoothHandle & h, bool enabled);
 

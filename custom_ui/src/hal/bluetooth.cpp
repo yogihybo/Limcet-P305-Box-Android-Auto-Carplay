@@ -358,6 +358,55 @@ bool split_mac_and_name(const std::string & entry, std::string & mac, std::strin
     return true;
 }
 
+bool split_plist_entry(const std::string & entry, std::string & mac, std::string & name) {
+    mac.clear();
+    name.clear();
+    // 2026-08-15: found on real hardware -- unlike +AAPDEV= (which really
+    // is "<mac><sep><name>", see split_mac_and_name()), a real +PLIST=
+    // entry is FOUR separator-delimited fields, e.g.
+    // "1<sep>16424<sep>04006EAF29C4<sep>Pixel 9 Pro" (index, some
+    // numeric code, MAC, name) -- the previously-documented uncertainty
+    // in this function's own header comment ("PLIST's own per-entry
+    // format hasn't actually been observed yet") turned out to matter:
+    // split_mac_and_name() only ever matches entries that START with 12
+    // hex digits, so every real PLIST entry failed to parse and callers
+    // fell back to treating the WHOLE raw 4-field line (separator bytes
+    // included) as the MAC -- sent verbatim to HFPCONN, which the
+    // adapter correctly rejected (ERR002) since it isn't a real address.
+    // Rather than assume a fixed field count/order, this scans for the
+    // first run of exactly 12 hex digits bounded by non-hex-digit
+    // characters (or the string's own edges) -- that run IS the MAC
+    // wherever it falls -- and takes whatever follows the next
+    // separator byte as the name.
+    size_t run_start = std::string::npos;
+    for (size_t i = 0; i < entry.size(); ++i) {
+        bool is_hex = std::isxdigit(static_cast<unsigned char>(entry[i])) != 0;
+        if (is_hex) {
+            if (run_start == std::string::npos) run_start = i;
+            size_t run_len = i - run_start + 1;
+            if (run_len == 12) {
+                bool bounded_after = (i + 1 == entry.size()) ||
+                                      !std::isxdigit(static_cast<unsigned char>(entry[i + 1]));
+                if (bounded_after) {
+                    mac = entry.substr(run_start, 12);
+                    size_t after = i + 1;
+                    // Skip exactly one separator byte, same convention
+                    // as split_mac_and_name().
+                    if (after < entry.size()) ++after;
+                    name = after < entry.size() ? entry.substr(after) : "";
+                    return true;
+                }
+                // Longer-than-12 hex run (e.g. part of a longer numeric
+                // field) -- not a MAC, keep scanning past it.
+                run_start = std::string::npos;
+            }
+        } else {
+            run_start = std::string::npos;
+        }
+    }
+    return false;
+}
+
 bool set_adapter_enabled(BluetoothHandle & h, bool enabled) {
     std::vector<std::string> resp;
     if (!send_command(h, enabled ? "BTEN=1" : "BTEN=0", resp)) {
@@ -409,22 +458,32 @@ bool connect_device(BluetoothHandle & h, const std::string & mac) {
         std::fprintf(stderr, "%s hal::bluetooth::connect_device: HFPCONN=%s got no response\n", core::log_timestamp().c_str(), mac.c_str());
         return false;
     }
-    std::printf("%s hal::bluetooth::connect_device: HFPCONN=%s -> %zu response line(s):\n", core::log_timestamp().c_str(), mac.c_str(),
-                resp.size());
-    for (const auto & line : resp) {
-        std::printf("%s hal::bluetooth::connect_device:   %s\n", core::log_timestamp().c_str(), line.c_str());
-    }
     // 2026-08-12 FIX: this used to return `ok` from send_command()
     // directly, i.e. "did we get ANY response" -- a real hardware
     // capture showed HFPCONN reply with "ERR002" and this function
     // still reported success (the UI showed "HFPCONN sent") because a
     // non-empty response was all it ever checked for. See
     // find_error_response()'s own comment.
+    //
+    // 2026-08-15: check the error case FIRST and return early instead
+    // of always dumping every response line -- send_command() already
+    // logs the adapter's error line once on its own (see its own
+    // comment on why that generic log stays uniform across every
+    // caller), so unconditionally also printing "-> N response line(s)"
+    // plus each line plus this function's own "failed: ..." summary
+    // meant a single ERR002 showed up three times in a row. The
+    // response-line dump is still useful for genuinely multi-line
+    // SUCCESS replies, so it's kept, just skipped on the error path.
     std::string err;
     if (find_error_response(resp, err)) {
         std::fprintf(stderr, "%s hal::bluetooth::connect_device: HFPCONN=%s failed: adapter reported '%s'\n", core::log_timestamp().c_str(),
                      mac.c_str(), err.c_str());
         return false;
+    }
+    std::printf("%s hal::bluetooth::connect_device: HFPCONN=%s -> %zu response line(s):\n", core::log_timestamp().c_str(), mac.c_str(),
+                resp.size());
+    for (const auto & line : resp) {
+        std::printf("%s hal::bluetooth::connect_device:   %s\n", core::log_timestamp().c_str(), line.c_str());
     }
     return true;
 }
@@ -675,7 +734,7 @@ bool auto_reconnect_paired_device(BluetoothHandle & h) {
         return false;
     }
     std::string mac, name;
-    std::string connect_id = split_mac_and_name(devices.front(), mac, name) ? mac : devices.front();
+    std::string connect_id = split_plist_entry(devices.front(), mac, name) ? mac : devices.front();
     std::printf("%s hal::bluetooth::auto_reconnect_paired_device: reconnecting to '%s'\n", core::log_timestamp().c_str(), connect_id.c_str());
     return connect_device(h, connect_id);
 }

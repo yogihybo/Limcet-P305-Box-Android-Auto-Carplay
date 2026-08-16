@@ -1,5 +1,6 @@
 #include "androidauto/microphone_channel.h"
 
+#include <chrono>
 #include <cstdio>
 #include <ctime>
 #include <memory>
@@ -143,14 +144,55 @@ void MicrophoneChannel::onMediaSourceOpenRequest(
 void MicrophoneChannel::captureLoop() {
     std::vector<std::int16_t> samples(kFramesPerChunk * kChannels);
 
+    // 2026-08-16: found on real hardware -- androidauto-sidecar pegged
+    // the CPU hard enough to make the console itself nearly
+    // unresponsive. This loop is the only one this project added to
+    // that process; snd_pcm_readi() is supposed to block for close to
+    // kFramesPerChunk/kSampleRate (~10ms) worth of real audio each
+    // call, but ALSA capture on this exact device/path has a real,
+    // previously-documented history of misbehaving (see
+    // project_mic_capture_investigation memory: silent XRUN recovery,
+    // an unconfirmed-until-tested SARADC settle-delay dependency) --
+    // if a call ever returns a small positive frame count almost
+    // instantly instead of genuinely blocking, this loop had no
+    // pacing/backoff at all: read, post to strand_, read again,
+    // immediately, forever. That's a real, plausible way to both peg
+    // this thread's CPU AND flood strand_ with tiny posted lambdas
+    // that starve every other channel (video/audio/session) sharing
+    // it -- matching a near-total freeze better than high CPU alone
+    // would. Guards against it without needing to know the exact ALSA-
+    // level root cause: if a read ever comes back much faster than a
+    // real blocking capture of this chunk size could (well under half
+    // the expected ~10ms) too many times in a row, treat it as a
+    // malfunction and stop capturing rather than spin indefinitely.
+    constexpr int kMaxFastReadsInARow = 20;
+    constexpr auto kExpectedChunkDuration =
+        std::chrono::microseconds(1000000ULL * kFramesPerChunk / kSampleRate);
+    int consecutiveFastReads = 0;
+
     while (capturing_.load(std::memory_order_acquire)) {
+        auto readStart = std::chrono::steady_clock::now();
         int got = alsaInput_->read(samples.data(), kFramesPerChunk);
+        auto elapsed = std::chrono::steady_clock::now() - readStart;
+
         if (got <= 0) {
             // AlsaInput::read() already logged the specific reason on a
             // real error; a genuine unrecoverable failure shouldn't
             // spin -- stop this capture session the same as a close
             // request would.
             break;
+        }
+
+        if (elapsed < kExpectedChunkDuration / 2) {
+            if (++consecutiveFastReads >= kMaxFastReadsInARow) {
+                std::fprintf(stderr, "%s androidauto: microphone capture: %d consecutive reads "
+                             "returned far faster than real blocking capture should -- ALSA isn't "
+                             "genuinely blocking on this device/path, stopping capture to avoid "
+                             "spinning\n", logTimestamp().c_str(), consecutiveFastReads);
+                break;
+            }
+        } else {
+            consecutiveFastReads = 0;
         }
 
         auto data = std::make_shared<aasdk::common::Data>(

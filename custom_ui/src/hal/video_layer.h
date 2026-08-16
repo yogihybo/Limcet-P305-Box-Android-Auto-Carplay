@@ -124,6 +124,23 @@ bool configure_video_layer(VideoLayerHandle & h, uint32_t width, uint32_t height
 // plane, not two separate ones -- see ARK_LCDC_FORMAT_Y_UV420).
 bool set_frame_addr(VideoLayerHandle & h, uint32_t yBusAddress, uint32_t width, uint32_t height);
 
+// 2026-08-16: real hardware still showed blocky, grid-aligned
+// corruption after the blend/protocol fixes (colors now fully
+// correct) even with pushDecodedFrame()'s software 16ms throttle in
+// place -- expected, since that throttle only rate-LIMITS pushes, it
+// doesn't actually know where the panel's scanout beam is, so a push
+// can still land mid-refresh and the drift between our timer and the
+// panel's real refresh period isn't bounded. Checked this device's
+// own kernel driver source (ark1668_lcdc_funcs.c) rather than guess
+// again: it genuinely implements the standard Linux FBIO_WAITFORVSYNC
+// ioctl with a real IRQ-backed wait_event_interruptible_timeout() on
+// a vsync flag set by the actual vsync IRQ handler (see
+// ark1668_lcdc_wait_for_vsync(), not a stub/no-op) -- this is the real
+// synchronization primitive the "wait_vsync" field in
+// set_frame_addr()'s own ioctl was documented as NOT actually
+// providing. Blocks the caller until the next real vsync fires.
+bool wait_for_vsync(VideoLayerHandle & h);
+
 // ARKFB_SHOW_WINDOW_REAL / ARKFB_HIDE_WINDOW_REAL (0x4f2b/0x4f2c) --
 // same real ioctl already used for the OSD1/UI layer in
 // hal/display.cpp, see top comment.

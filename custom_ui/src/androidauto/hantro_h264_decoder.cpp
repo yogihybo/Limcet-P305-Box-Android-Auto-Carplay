@@ -208,18 +208,12 @@ bool HantroH264Decoder::decodeFrame(const uint8_t * data, size_t len) {
     }
 
     lastPicture_ = picture;
-    // 2026-08-13: this log used to say "TODO: not yet pushed to the
-    // display hardware layer" -- stale since 2026-08-11, when
-    // video_channel.cpp's pushDecodedFrame() was wired up to actually
-    // push every picture returned here to /dev/fb4 (see hal/video_layer.h's
-    // own top comment for the real fb-to-layer mapping). Left
-    // uncorrected, a hardware log showing this line would wrongly
-    // suggest video display is still unimplemented.
-    std::printf("%s androidauto::HantroH264Decoder: picture ready picId=%u %ux%u "
-               "busAddr=0x%08x format=%u errMBs=%u\n", androidauto::logTimestamp().c_str(),
-               picture.picId, picture.picWidth, picture.picHeight,
-               picture.outputPictureBusAddress, picture.outputFormat,
-               picture.nbrOfErrMBs);
+    // 2026-08-16: removed the old per-picture "picture ready" success
+    // log per explicit request -- fires ~30x/sec once video is
+    // playing (once per decoded frame), same console-flood reasoning
+    // as session.cpp's own ping-log removal. Video display push
+    // itself (video_channel.cpp's pushDecodedFrame(), /dev/fb4) is
+    // unaffected -- this only removed the routine success print.
     return true;
 }
 

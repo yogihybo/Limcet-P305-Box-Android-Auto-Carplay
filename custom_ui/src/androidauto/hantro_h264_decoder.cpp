@@ -1,6 +1,7 @@
 #include "androidauto/hantro_h264_decoder.h"
 #include "androidauto/log_timing.h"
 
+#include <algorithm>
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
@@ -231,14 +232,32 @@ bool HantroH264Decoder::ensureOutputBuffers(size_t size) {
 uint32_t HantroH264Decoder::stabilize_output() {
     if (!lastPicture_.pOutputPicture) return 0;
 
-    // Real per-frame footprint: 16-aligned width * 16-aligned height *
-    // 1.5 bytes/pixel (semi-planar Y + interleaved UV), same formula
-    // hal::set_frame_addr()'s own chroma-offset math already assumes.
-    // picWidth/picHeight are already the 16-aligned buffer dimensions
-    // (see H264DecPicture's own field comment), so no extra rounding
-    // needed here.
-    const size_t frameSize = static_cast<size_t>(lastPicture_.picWidth) *
-                              static_cast<size_t>(lastPicture_.picHeight) * 3 / 2;
+    // 2026-08-17: this used to compute frameSize as 16-aligned width *
+    // 16-aligned height * 1.5 bytes/pixel (576000 bytes for this
+    // stream's 800x480) -- the same formula hal::set_frame_addr()'s
+    // own chroma-offset math assumes for where the DISPLAY hardware
+    // reads chroma from. That's still correct for the display side.
+    // But it undershoots the decoder's own REAL per-frame buffer size
+    // by ~15% (99840 bytes) -- confirmed directly from this device's
+    // own dmesg, which shows the Hantro decoder allocating exactly
+    // 675840 bytes per internal reference buffer for this stream, not
+    // 576000. That gap is very likely internal padding (e.g. border
+    // padding around each reference frame for motion-compensation
+    // search range, a normal feature of hardware H.264 decoders) --
+    // but rather than assume that and risk silently truncating a
+    // frame whose real internal layout isn't simply "clean 800x480
+    // NV12 plus unused trailing padding", copy the full real,
+    // device-confirmed size. Reading this many bytes from
+    // pOutputPicture is safe/in-bounds regardless of which
+    // explanation is right, since it's exactly what the decoder's own
+    // allocation guarantees is there. The display side is unaffected
+    // by copying more than it reads -- hal::set_frame_addr() still
+    // gets pic.picWidth/picHeight separately and only ever reads
+    // 576000 bytes' worth via its own stride math.
+    constexpr size_t kRealDecoderBufferSize = 675840;
+    const size_t computedSize = static_cast<size_t>(lastPicture_.picWidth) *
+                                 static_cast<size_t>(lastPicture_.picHeight) * 3 / 2;
+    const size_t frameSize = std::max(computedSize, kRealDecoderBufferSize);
     if (!ensureOutputBuffers(frameSize)) return 0;
 
     const int target = activeOutBuf_ ^ 1;  // the buffer NOT currently pushed to the display

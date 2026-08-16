@@ -78,14 +78,23 @@ namespace {
 //                    project doesn't have (libarkcmn.so's own global
 //                    device-state array, offsets +0x1b0/+0x1a0) --
 //                    left 0, matching a fresh/never-configured device.
-//   No other binary on this device's rootfs references either
-//   function (grepped) -- there's no real "known-good caller" to
-//   cross-check crop-argument semantics against, so this always
-//   passes zero crop on all four (full-frame, no cropping), which
-//   makes win_x/win_y/win_width/win_height collapse to (0, 0, width,
-//   height) regardless of which of crop_left/crop_right the real
-//   semantics actually are -- sidesteps the ambiguity entirely rather
-//   than guess it.
+//   2026-08-16 CORRECTION: this file previously claimed no other
+//   binary references either function. Wrong -- usr/bin/mplayer
+//   (found while cross-checking the vsync fix against real stock
+//   code, see wait_for_vsync()'s own comment) genuinely calls both,
+//   confirming the field mapping above byte-for-byte against a real
+//   call site (fd, width, height, out_x, out_y, out_width,
+//   out_height, crop_left=0, crop_right=0, crop_top, crop_bottom,
+//   format), AND showing crop_top/crop_bottom are NOT always zero in
+//   real stock use -- mplayer's caller (FUN_000437b0) passes
+//   crop_top=2, crop_bottom=2 in its general-purpose video-scaling
+//   path, paired with code that forces the output height even
+//   (`if (uVar8 & 1) uVar8 -= 1`) -- i.e. real stock uses nonzero
+//   crop to trim an odd row off an odd-height source, not something
+//   relevant to AA's own stream (800x480, already even/16-aligned on
+//   both axes). This file still passes zero crop on all four for AA
+//   specifically -- correct for AA's actual resolution, just no
+//   longer justified by "there's no real caller to check against".
 //
 // Deliberately does NOT dlopen libarkcmn.so itself: this device's
 // static-NSS-crash workaround (hantro_dlopen.c) only supports loading

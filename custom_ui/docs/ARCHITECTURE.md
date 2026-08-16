@@ -109,6 +109,59 @@ Plan: vendor `aasdk` under `third_party/`, implement this app's own
 video/audio/input sink classes against its interfaces directly — no
 dependency on the vendor's `libAndroidAuto.so` at all for this half.
 
+### Video display — real stock decode/display API (decompiled from `sink`, 2026-08-16)
+
+Real hardware repeatedly showed blocky, grid-aligned pixel corruption
+on AA video across several fix attempts, each individually grounded in
+real decompiled code but ultimately built against the wrong API. The
+issue was only resolved by decompiling `usr/bin/sink` itself (this
+device's actual stock GAL/aasdk host process — not stripped, full C++
+debug symbols) rather than continuing to fix the ioctl protocol this
+project had reverse-engineered from `libarkcmn.so` in isolation.
+
+**Decode**: `sink`'s `VideoDecoder` class dlopens `/usr/lib/libmfc.so`
+and calls `MFCDecode(inputBuf, outputStruct, isFirstFrame, 0x68)` — a
+codec-dispatch wrapper. Decompiling `MFCH264Decode` (the function it
+routes H.264 to) shows it's a thin shell around the exact same
+`H264DecInit`/`H264DecDecode`/`H264DecNextPicture` sequence this
+project's own `src/androidauto/hantro_h264_decoder.cpp` already
+implements (same `PIC_RDY=2` check on `H264DecNextPicture`'s return
+value). **Decode was never the mismatch** — left unchanged.
+
+**Display — this was the real mismatch.** `sink`'s
+`VideoDecoder::video_init()`/`flush_video()` (Ghidra-decompiled) use
+the **generic** framebuffer API — `arkapi_init_fb_display`/
+`arkapi_set_fb_addr` — not the dedicated hardware video-overlay API
+(`arkapi_init_fb_video_display`/`arkapi_set_fb_video_addr`) this
+project had built `src/hal/video_layer.{h,cpp}` around. Same struct
+shapes, same `/dev/fb4` device node, same `format=0x11`
+(`ARK_LCDC_FORMAT_Y_UV420`), **different ioctl command numbers**:
+
+| Function | ioctl (real, confirmed) | ioctl (wrong, previously used) |
+|---|---|---|
+| `arkapi_init_fb_display` | `0x403c4f27` (`ARK_IO(39)`) | `0x403c4f37` (`ARK_IO(55)`, `_video_` variant) |
+| `arkapi_set_fb_addr` | `0x40104f2a` (`ARK_IO(42)`) | `0x40104f38` (`ARK_IO(56)`, `_video_` variant) |
+
+Critically, `flush_video()` pushes the frame address **unconditionally,
+every single frame, with the struct's trailing two fields always
+literal 0** — no `wait_vsync` request, no confirm-loop. Two earlier
+fix attempts (`hal::wait_for_vsync()`, then a
+`hal::get_frame_addr()`-based confirm-loop) added exactly that kind of
+per-frame vsync handling to chase the corruption — both grounded in
+real decompiled code, but from the wrong app (`msncarlife`, which
+turned out to be Baidu's **CarLife**, a different phone-mirroring
+protocol entirely, not Google AA). Both were removed once `sink`'s own
+real behavior was known; `src/hal/video_layer.cpp` now matches it
+exactly. See that file's own top comment and
+`src/androidauto/video_channel.cpp`'s `pushDecodedFrame()` for the
+current, stock-matching implementation.
+
+**Not yet hardware-tested** — build-verified (static/stripped ARM
+binary) only, as of this writing. `usr/bin/mplayer` was investigated
+as a candidate reference for the `_video_` API pair and does call
+both — but for its own general local-video-file playback, an unrelated
+code path, not AA.
+
 ## Wireless AA discovery — via `blueware`'s `/dev/bw_aap` socket (confirmed from real traffic)
 
 This device has **no standard Linux BlueZ stack** — no `bluetoothd`, no

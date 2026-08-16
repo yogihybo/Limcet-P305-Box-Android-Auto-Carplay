@@ -27,6 +27,7 @@
 // and a real decoded frame yet.
 #pragma once
 
+#include <chrono>
 #include <cstdint>
 #include <memory>
 
@@ -95,6 +96,12 @@ private:
     bool videoLayerShown_ = false;
     uint32_t configuredWidth_ = 0;
     uint32_t configuredHeight_ = 0;
+    // 2026-08-16: userspace-side frame-address throttle -- see
+    // pushDecodedFrame()'s own comment for why (this device's own
+    // kernel driver applies ARKFB_SET_VIDEO_ADDR_RAW synchronously,
+    // with no real double-buffering/vsync gating, so pushing addresses
+    // faster than the panel can actually consume them risks tearing).
+    std::chrono::steady_clock::time_point lastAddrPush_{};
 
     int32_t sessionId_ = 0;
     uint64_t ackCount_ = 0;

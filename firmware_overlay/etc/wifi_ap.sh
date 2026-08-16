@@ -1,5 +1,13 @@
 #!/bin/sh
-# Start WiFi access point for SSH management access.
+# Start the WiFi access point for wireless Android Auto/CarPlay
+# projection (WirelessSessionManager's own AP, see
+# custom_ui/src/androidauto/wireless_session_manager.cpp) -- also
+# reachable for SSH management, but that's a side effect, not what
+# this SSID/config is actually for. Confirmed 2026-08-16: this file's
+# own SSID/password ("carplay_wifi"/"88888888") already matched what
+# MsnCoreApp uses for real AA/CarPlay -- this genuinely is the same AP
+# stock uses, not a separate debug-only one, an earlier assumption in
+# this comment that turned out wrong.
 # SSID: carplay_wifi  Password: 88888888  IP: 192.168.43.1
 
 # hostapd needs /dev/urandom for WPA key generation
@@ -16,8 +24,19 @@ echo 1048576 > /proc/sys/net/core/wmem_max
 # MsnCoreApp copies the detected chip's driver to /tmp/wlan.ko at runtime.
 # At early boot we probe /lib/modules directly — SDIO combo chips first
 # (RTL8821CS / RTL8822CS are most likely for Feasycom BT+WiFi modules).
+# rtw_country_code=US, same fix as hostapd.sh/rcS (2026-08-04, see
+# firmware_overlay/README.md): without a valid HW/SW channel plan, the
+# rtl8811cu driver's own regulatory fallback (RTW_CHPLAN_WORLDWIDE)
+# excludes 5GHz UNII-1 channels entirely, including channel 36 -- which
+# this file's own hostapd.conf now uses (2026-08-16, switched from
+# 2.4GHz to match real stock/MsnCoreApp behavior). rcS's own module
+# load already applies this fix at boot, but if this script ends up
+# reloading the module fresh (e.g. /tmp/wlan.ko populated by
+# MsnCoreApp after boot) without repeating it here too, that reload
+# would silently lose the regulatory fix and break channel 36 again --
+# same failure class already root-caused once for the hostapd.sh path.
 if [ -f /tmp/wlan.ko ]; then
-    insmod /tmp/wlan.ko
+    insmod /tmp/wlan.ko rtw_country_code=US
 else
     # Try modprobe first -- uses modules.dep for 4.19.192
     # rtw_drv_log_level=2 (_DRV_ERR_, lowered from 3/_DRV_WARNING_
@@ -26,11 +45,11 @@ else
     # three variants that support the param; rtl8822cs/rtl8821cu have
     # no source in this tree (always fail to "module not found"
     # regardless) so there's nothing to quiet there.
-    modprobe rtl8821cs rtw_drv_log_level=2 2>/dev/null || \
-    modprobe rtl8822cs 2>/dev/null || \
-    modprobe rtl8189fs rtw_drv_log_level=2 2>/dev/null || \
-    modprobe rtl8821cu 2>/dev/null || \
-    modprobe rtl8811cu rtw_drv_log_level=2 2>/dev/null || {
+    modprobe rtl8821cs rtw_drv_log_level=2 rtw_country_code=US 2>/dev/null || \
+    modprobe rtl8822cs rtw_country_code=US 2>/dev/null || \
+    modprobe rtl8189fs rtw_drv_log_level=2 rtw_country_code=US 2>/dev/null || \
+    modprobe rtl8821cu rtw_country_code=US 2>/dev/null || \
+    modprobe rtl8811cu rtw_drv_log_level=2 rtw_country_code=US 2>/dev/null || {
         # Fallback: direct .ko path using running kernel version
         KVER=$(uname -r)
         for ko in \

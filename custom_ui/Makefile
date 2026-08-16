@@ -49,7 +49,23 @@ CFLAGS        := -Wall -Wextra -O2 -MMD -MP $(INCLUDES)
 # it by not depending on the target's libc.so.6 at runtime at all.
 # Confirmed clean for this binary: no NSS/dlopen warnings at static-link
 # time, so the nss-stub treatment busybox needed isn't required here.
-LDFLAGS       := -static
+# 2026-08-16: -s (strip debug symbols at link time) added after real
+# hardware showed androidauto-sidecar at 71MB on disk (vs custom_ui's
+# 2.5MB) -- this device only has ~53MB free RAM, so a single binary
+# bigger than all of it was thrashing hard (kswapd0/usb-storage/kworker
+# all busy in a real `top` capture, 32% io-wait, 64% sys -- a memory/IO
+# pressure signature, not a userspace busy-loop, which earlier looked
+# like the more likely cause of a reported near-freeze). None of this
+# project's own CXXFLAGS ever added -g -- the debug info comes from the
+# statically-linked deps themselves (Boost/OpenSSL/Protobuf/aasdk,
+# built by their own separate scripts), so stripping the final linked
+# binary is the practical fix rather than rebuilding every dependency
+# without -g. Applies to every target uniformly. On-device debugging
+# stays available via gdbserver (see rcS's own diagnostic-tools list)
+# against a live process; symbol resolution on the DEV machine's own
+# gdb still works from the matching unstripped object files this
+# Makefile keeps in build/*-obj/, matched by build-id if ever needed.
+LDFLAGS       := -static -s
 LIBS          := -lpthread
 
 # --- LVGL (C sources, shared by anything that links the UI) ---

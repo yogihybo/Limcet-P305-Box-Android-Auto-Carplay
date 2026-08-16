@@ -107,7 +107,16 @@ bool HantroH264Decoder::open() {
         return false;
     }
 
-    int initRet = h264DecInit_(&decoderInst_, 0, 0, 0);
+    // 2026-08-17: real stock (usr/bin/sink's MFCH264Decode, Ghidra-
+    // decompiled) calls H264DecInit(&inst, 0, 0, 1) -- the third
+    // positional argument here was 0, not stock's 1. This device's own
+    // H264DecInit forwards param_2/param_4 (the 2nd/4th args) straight
+    // into its internal h264bsdInit(ctx, param_2, param_4) bitstream-
+    // layer init flags (confirmed via direct decompile of THIS
+    // device's H264DecInit earlier this session, not the official SDK
+    // docs) -- meaning this one bit genuinely changes what flags the
+    // bitstream layer initializes with, not a cosmetic difference.
+    int initRet = h264DecInit_(&decoderInst_, 0, 0, 1);
     if (initRet != 0 || decoderInst_ == nullptr) {
         std::fprintf(stderr, "%s androidauto::HantroH264Decoder: H264DecInit failed (ret=%d) -- "
                      "decoder hardware/driver itself did not initialize\n", androidauto::logTimestamp().c_str(), initRet);

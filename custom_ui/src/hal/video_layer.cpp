@@ -174,9 +174,15 @@ constexpr unsigned long kArkfbHideWindowReal = 0x4f2c;
 // FBIO_WAITFORVSYNC = _IOW('F', 0x20, __u32) -- standard Linux uapi
 // (include/uapi/linux/fb.h), NOT one of this device's own ARK_IO()
 // vendor numbers. Confirmed genuinely implemented (real IRQ wait, not
-// a stub) by this device's own ark1668_lcdc_funcs.c -- see
-// wait_for_vsync()'s own doc comment in video_layer.h.
+// a stub) by this device's own ark1668_lcdc_funcs.c, AND confirmed as
+// the exact number libarkcmn.so's own arkapi_wait_for_vsync() calls --
+// see wait_for_vsync()'s own doc comment in video_layer.h.
 constexpr unsigned long kFbioWaitForVsync = 0x40044620;
+
+// ARK_IO(54), read direction -- real vendor GET ioctl, ported from
+// libarkcmn.so's own arkapi_get_fb_addr(). See get_frame_addr()'s own
+// doc comment in video_layer.h.
+constexpr unsigned long kArkGetFbAddr = 0x80104f36;
 
 }  // namespace
 
@@ -268,6 +274,18 @@ bool wait_for_vsync(VideoLayerHandle & h) {
                      core::log_timestamp().c_str(), std::strerror(errno));
         return false;
     }
+    return true;
+}
+
+bool get_frame_addr(VideoLayerHandle & h, uint32_t & outYAddr) {
+    if (h.fd < 0) return false;
+    ArkDispAddr addr{};
+    if (ioctl(h.fd, kArkGetFbAddr, &addr) != 0) {
+        std::fprintf(stderr, "%s hal::video_layer::get_frame_addr: ioctl(ARK_GET_FB_ADDR) failed (%s)\n",
+                     core::log_timestamp().c_str(), std::strerror(errno));
+        return false;
+    }
+    outYAddr = addr.yaddr;
     return true;
 }
 

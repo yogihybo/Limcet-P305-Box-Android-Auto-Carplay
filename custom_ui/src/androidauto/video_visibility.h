@@ -4,8 +4,8 @@
 
 // 2026-08-12: process-wide flag controlling whether VideoChannel should
 // actually show the decoded-frame hardware layer (hal::show_video_layer(),
-// /dev/fb1/VIDEO2, see video_layer.h) once frames are available, or keep
-// it hidden even though decoding/pushing frames continues.
+// /dev/fb4/VIDEO_LAYER2, see video_layer.h) once frames are available, or
+// keep it hidden even though decoding/pushing frames continues.
 //
 // Why this exists: with wireless_session_manager.cpp's connection now
 // able to auto-start the moment a phone is detected as Android-Auto-

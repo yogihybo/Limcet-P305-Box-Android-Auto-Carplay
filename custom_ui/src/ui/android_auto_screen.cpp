@@ -176,7 +176,8 @@ lv_obj_t * create_android_auto_screen() {
     // (lv_obj_set_style_bg_color(scr, bg(), 0), bg_opa defaults to
     // LV_OPA_COVER) -- this screen was covering the ENTIRE 800x480
     // area, including wherever `content` is hidden once Connected, so
-    // the video hardware layer underneath (fb1/VIDEO2) had no way to
+    // the video hardware layer underneath (fb4/VIDEO_LAYER2, see
+    // hal/video_layer.h's own top comment) had no way to
     // ever show through regardless of it actually being shown at the
     // hardware level. Matches the exact pattern already established
     // and hw-tested for the reverse-camera preview

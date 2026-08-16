@@ -21,11 +21,28 @@
 // exact layer. See video_layer.cpp's own top comment for the full
 // field-by-field derivation.
 //
-//   - Device node: fb1 -> VIDEO2 "for video/carback/phonelink" (still
-//     from the reconstructed kernel tree's own
-//     ark1668e_lcdc_convert_layer() comments -- the fb-minor-number ->
-//     hardware-layer mapping itself was never in question, only the
-//     ioctl protocol used against it).
+//   - Device node: 2026-08-16 FOUND WRONG -- real hardware rejected
+//     every ARKFB_SET_VIDEO_ADDR_RAW call against /dev/fb1 with EINVAL,
+//     kernel dmesg logging "ARKFB_SET_VIDEO_ADDR_RAW on non-video
+//     layer" (ark1668_lcdc_funcs.c). That message's own driver
+//     function name confirmed THIS device runs "ark1668_lcdc" (no
+//     trailing E), not the "ark1668e_lcdc" variant this file's fb-to-
+//     layer table (fb1 -> VIDEO2) was previously sourced from -- a
+//     different driver file with a different mapping. The real,
+//     confirmed-from-THIS-driver's-own-source mapping
+//     (ark1668_lcdc_funcs.c: `int layer = info->node;` -- literally the
+//     fb minor number -- checked against
+//     `enum ark1668_lcdc_osdlayer { OSD_LAYER1, OSD_LAYER2, OSD_LAYER3,
+//     OSD_LAYER_MAX }` from ark1668_lcdc.h, i.e. OSD_LAYER3=2,
+//     OSD_LAYER_MAX=3): fb0/fb1/fb2 are ALL OSD (non-video) layers;
+//     only layer > OSD_LAYER3 counts as video, via
+//     `vlayer = layer - OSD_LAYER_MAX` -- fb3 -> VIDEO_LAYER1 (vlayer=0),
+//     fb4 -> VIDEO_LAYER2 (vlayer=1). This file now opens /dev/fb4
+//     (VIDEO_LAYER2) -- matches the "VIDEO2_*" LCDC register block
+//     (offset 0x320+, distinct from an earlier, separate "VIDEO_*"
+//     block near 0x38 for VIDEO_LAYER1) this project's own earlier
+//     register-level investigation already targeted, before that
+//     approach was superseded by this file's current ioctl-based one.
 //   - struct ark_disp_addr { yaddr; cbaddr; craddr; wait_vsync; } is
 //     unchanged (16 bytes, confirmed correct by the decompile too) --
 //     but the real command number is 0x40104f38, NOT
@@ -79,9 +96,11 @@ struct VideoLayerHandle {
     int fd = -1;
 };
 
-// Opens /dev/fb1 (VIDEO2/"phonelink", see top comment). Non-fatal
-// pattern, same as every other optional-hardware HAL in this codebase.
-bool init_video_layer(VideoLayerHandle & out, const char * path = "/dev/fb1");
+// Opens /dev/fb4 (VIDEO_LAYER2, see top comment -- NOT /dev/fb1, which
+// real hardware confirmed is an OSD/non-video layer on this device's
+// real kernel driver). Non-fatal pattern, same as every other
+// optional-hardware HAL in this codebase.
+bool init_video_layer(VideoLayerHandle & out, const char * path = "/dev/fb4");
 
 // Sets ARK_LCDC_FORMAT_Y_UV420 (semi-planar) and the given frame's
 // size/position via a single real ark_disp_update_window ioctl,

@@ -82,10 +82,12 @@
 // aligned, so no macroblock padding difference between picWidth and
 // the real display width), but not independently verified against a
 // real decoded frame yet. Also: configure_video_layer()'s crop
-// arguments are always zero (full-frame, no cropping) -- no real
-// caller of arkapi_init_fb_video_display exists anywhere else on this
-// device's rootfs to confirm crop-parameter semantics against, but
-// zero sidesteps the ambiguity regardless of what they mean.
+// arguments are always zero (full-frame, no cropping) -- CONFIRMED
+// correct for AA's own 800x480 stream specifically (real caller
+// usr/bin/mplayer only passes nonzero crop_top/crop_bottom to trim an
+// odd-height source to even, see video_layer.cpp's own top comment;
+// AA's resolution is already even/16-aligned on both axes, so zero is
+// the genuinely correct value here, not just a sidestepped guess).
 #pragma once
 
 #include <cstdint>

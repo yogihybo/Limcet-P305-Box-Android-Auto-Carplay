@@ -1,8 +1,8 @@
-# Limcet P306 Toyota CarPlay & Android Auto Piggyback Module
+# Limcet P306 CarPlay & Android Auto Piggyback Module
 
-Limcet modules are cheap aftermarket boxes (available on AliExpress) that add Android Auto and CarPlay to an existing factory head unit. They work reasonably well, but the vendor provides almost no information on how they operate or how to update them.
+Limcet modules (and various other branded versions) are inexpensive aftermarket boxes (available on AliExpress) that add Android Auto and CarPlay to an existing factory head unit. They work reasonably well, but the vendor provides almost no information on how they operate or how to update them.
 
-This repo exists because a Limcet update failed and left the device unresponsive. Serial access made it possible to dump the original partitions; a same-family Holden firmware package was then flashed via SD card and found to boot successfully. The reconstructed firmware here is built on that Holden base — it's the more recent build — with hardware-specific overrides applied on top (display panel timing, product identity, etc.).
+This repo exists because a Limcet update failed and left the device unresponsive. Serial access made it possible to dump the original partitions; a same-family firmware package was then flashed via SD card and found to boot successfully. Further development since has focused on building a full tool chain from source including UBoot, a more modern kernel and a custom UI.
 
 ## Choose Your Path
 

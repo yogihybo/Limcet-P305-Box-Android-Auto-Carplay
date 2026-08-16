@@ -1,5 +1,7 @@
 #include "hal/knob.h"
 
+#include <cstdio>
+
 #include "hal/androidauto_client.h"
 
 namespace hal {
@@ -41,6 +43,27 @@ void mcu_knob_read_cb(lv_indev_t * indev, lv_indev_data_t * data) {
     knob_was_pressed() = pressed;
 
     if (androidauto_screen_active().load(std::memory_order_acquire)) {
+        // 2026-08-17: real hardware test showed the push button
+        // reaching AA (DPAD_CENTER) but rotation apparently having no
+        // effect. Every code path from here through
+        // AndroidAutoClient::sendKey() -> the sidecar's "KEY <code>"
+        // handler -> InputChannel::sendKey() is identical for all
+        // three keycodes (checked -- no keycode-specific branching
+        // anywhere), and 280/281 are both advertised in
+        // session.cpp's ServiceDiscoveryResponse keycodes_supported
+        // list, same as 23. This is also the first real hardware
+        // exercise of rotation forwarding specifically (unlike the
+        // push button, which piggybacks the same sendKey() plumbing
+        // but was the only one previously confirmed). Logging here,
+        // unconditionally on every nonzero tick, to settle on the
+        // next test whether the MCU is genuinely producing tick
+        // events while the AA screen is active at all (this file's
+        // own read callback fires at LVGL's input-poll rate, so this
+        // is not a hot path the way per-frame video/decode logs are
+        // -- safe to leave verbose).
+        if (ticks != 0) {
+            std::printf("hal::knob: AA active, ticks=%d\n", ticks);
+        }
         for (int32_t i = 0; i < ticks; ++i) {
             androidauto_client().sendKey(kKeycodeSystemNavigationDown);
         }

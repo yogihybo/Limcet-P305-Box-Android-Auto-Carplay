@@ -20,7 +20,7 @@ namespace {
 // provenance. 16000/16/1 matches session.cpp's ServiceDiscoveryResponse
 // exactly -- must, since that's the format the phone was told to
 // expect.
-constexpr const char * kMicDevice = "plug:hw:0,0";
+constexpr const char * kMicDevice = "plughw:0,0";
 constexpr uint32_t kSampleRate = 16000;
 constexpr uint32_t kBitsPerSample = 16;
 constexpr uint32_t kChannels = 1;

@@ -87,7 +87,7 @@ private:
 
     std::string wifi_ap_script_ = "/etc/wifi_ap.sh";
     std::string wifi_ap_address_ = "192.168.43.1";
-    std::string wifi_ap_ssid_ = "carplay_wifi";
+    std::string wifi_ap_ssid_ = "custom_ui_wifi";
     std::string wifi_ap_password_ = "88888888";
     int wifi_ap_security_mode_ = 8;
     // 2026-08-12: briefly changed to 5288 (an unconfirmed guess) after

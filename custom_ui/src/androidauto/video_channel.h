@@ -27,7 +27,6 @@
 // and a real decoded frame yet.
 #pragma once
 
-#include <chrono>
 #include <cstdint>
 #include <memory>
 
@@ -96,23 +95,6 @@ private:
     bool videoLayerShown_ = false;
     uint32_t configuredWidth_ = 0;
     uint32_t configuredHeight_ = 0;
-    // 2026-08-16: fallback-only software throttle, used solely if
-    // hal::wait_for_vsync()'s real ioctl isn't supported on this
-    // device -- see pushDecodedFrame()'s own comment.
-    std::chrono::steady_clock::time_point lastAddrPush_{};
-    // Set false the first time hal::wait_for_vsync() fails, so an
-    // unsupported ioctl is only attempted (and only logged) once per
-    // session rather than every single decoded frame.
-    bool vsyncSupported_ = true;
-    // Y-plane bus address of the last frame pushDecodedFrame() pushed
-    // via hal::set_frame_addr() -- compared against
-    // hal::get_frame_addr()'s live readback to confirm the PREVIOUS
-    // flip actually took effect in hardware before queuing the next
-    // one (real stock's own confirm-loop idiom, ported from
-    // msncarlife's FUN_000645e8 -- see pushDecodedFrame()'s own
-    // comment). 0 means "no frame pushed yet this session", not a
-    // valid bus address to wait for.
-    uint32_t lastPushedYAddr_ = 0;
 
     int32_t sessionId_ = 0;
     uint64_t ackCount_ = 0;

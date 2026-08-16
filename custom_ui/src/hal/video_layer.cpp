@@ -171,6 +171,13 @@ constexpr unsigned int kFormatYUv420 = 0x11;
 constexpr unsigned long kArkfbShowWindowReal = 0x4f2b;
 constexpr unsigned long kArkfbHideWindowReal = 0x4f2c;
 
+// FBIO_WAITFORVSYNC = _IOW('F', 0x20, __u32) -- standard Linux uapi
+// (include/uapi/linux/fb.h), NOT one of this device's own ARK_IO()
+// vendor numbers. Confirmed genuinely implemented (real IRQ wait, not
+// a stub) by this device's own ark1668_lcdc_funcs.c -- see
+// wait_for_vsync()'s own doc comment in video_layer.h.
+constexpr unsigned long kFbioWaitForVsync = 0x40044620;
+
 }  // namespace
 
 bool init_video_layer(VideoLayerHandle & out, const char * path) {
@@ -247,6 +254,17 @@ bool set_frame_addr(VideoLayerHandle & h, uint32_t yBusAddress, uint32_t width, 
 
     if (ioctl(h.fd, kArkfbSetWindowAddrReal, &addr) != 0) {
         std::fprintf(stderr, "%s hal::video_layer::set_frame_addr: ioctl(ARK_FB_SET_VIDEO_WINDOW_ADDR) failed (%s)\n",
+                     core::log_timestamp().c_str(), std::strerror(errno));
+        return false;
+    }
+    return true;
+}
+
+bool wait_for_vsync(VideoLayerHandle & h) {
+    if (h.fd < 0) return false;
+    uint32_t arg = 0;
+    if (ioctl(h.fd, kFbioWaitForVsync, &arg) != 0) {
+        std::fprintf(stderr, "%s hal::video_layer::wait_for_vsync: ioctl(FBIO_WAITFORVSYNC) failed (%s)\n",
                      core::log_timestamp().c_str(), std::strerror(errno));
         return false;
     }

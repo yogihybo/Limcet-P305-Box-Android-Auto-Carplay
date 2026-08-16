@@ -96,12 +96,14 @@ private:
     bool videoLayerShown_ = false;
     uint32_t configuredWidth_ = 0;
     uint32_t configuredHeight_ = 0;
-    // 2026-08-16: userspace-side frame-address throttle -- see
-    // pushDecodedFrame()'s own comment for why (this device's own
-    // kernel driver applies ARKFB_SET_VIDEO_ADDR_RAW synchronously,
-    // with no real double-buffering/vsync gating, so pushing addresses
-    // faster than the panel can actually consume them risks tearing).
+    // 2026-08-16: fallback-only software throttle, used solely if
+    // hal::wait_for_vsync()'s real ioctl isn't supported on this
+    // device -- see pushDecodedFrame()'s own comment.
     std::chrono::steady_clock::time_point lastAddrPush_{};
+    // Set false the first time hal::wait_for_vsync() fails, so an
+    // unsupported ioctl is only attempted (and only logged) once per
+    // session rather than every single decoded frame.
+    bool vsyncSupported_ = true;
 
     int32_t sessionId_ = 0;
     uint64_t ackCount_ = 0;

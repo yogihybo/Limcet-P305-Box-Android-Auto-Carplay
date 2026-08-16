@@ -139,7 +139,38 @@ bool set_frame_addr(VideoLayerHandle & h, uint32_t yBusAddress, uint32_t width, 
 // synchronization primitive the "wait_vsync" field in
 // set_frame_addr()'s own ioctl was documented as NOT actually
 // providing. Blocks the caller until the next real vsync fires.
+//
+// CONFIRMED against real stock code, not just the kernel side: this
+// exact ioctl number (0x40044620) is what libarkcmn.so's own exported
+// arkapi_wait_for_vsync(fd) calls (Ghidra decompile: `ioctl(fd,
+// 0x40044620, 0)`), and `msncarlife` (the real vendor CarPlay/Android
+// Auto app binary on this rootfs) genuinely calls it around its own
+// frame-address pushes -- see get_frame_addr()'s own comment for the
+// full confirm-loop pattern that call site uses, which
+// pushDecodedFrame() now replicates rather than the single-blind-wait
+// this function's own comment originally described.
 bool wait_for_vsync(VideoLayerHandle & h);
+
+// Reads back the Y-plane address the LCDC hardware is CURRENTLY
+// displaying (not what was last requested) via the real vendor
+// ARK_IO(54) GET ioctl, 0x80104f36 -- ported from libarkcmn.so's own
+// arkapi_get_fb_addr() (Ghidra decompile: `ioctl(fd, 0x80104f36,
+// &{y,cb,cr,pad})`, only the Y address is needed/returned here since
+// that's all real stock's own confirm-loop caller checks, see below).
+//
+// 2026-08-16: found while cross-checking pushDecodedFrame()'s own
+// vsync fix against real stock behavior -- `msncarlife`'s
+// FUN_000645e8 (a real caller reachable from arkapi_wait_for_vsync's
+// own PLT reference) does NOT just blindly call wait_for_vsync() once
+// before every push, the way this file's own set_frame_addr()/
+// pushDecodedFrame() previously did. It reads back the currently-
+// displayed address first, and only waits (bounded to a few retries,
+// not indefinitely) if the PREVIOUSLY pushed address hasn't actually
+// taken effect in hardware yet -- i.e. it confirms the last flip
+// actually completed before queuing the next one, rather than
+// assuming one vsync period is always enough. pushDecodedFrame() now
+// replicates this exact idiom.
+bool get_frame_addr(VideoLayerHandle & h, uint32_t & outYAddr);
 
 // ARKFB_SHOW_WINDOW_REAL / ARKFB_HIDE_WINDOW_REAL (0x4f2b/0x4f2c) --
 // same real ioctl already used for the OSD1/UI layer in

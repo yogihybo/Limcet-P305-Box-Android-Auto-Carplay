@@ -208,6 +208,21 @@ bool HantroH264Decoder::decodeFrame(const uint8_t * data, size_t len) {
     }
 
     lastPicture_ = picture;
+    // 2026-08-16: real hardware showed blocky, grid-aligned color
+    // corruption on decoded frames -- a different signature than the
+    // (now-fixed) grey wash/tearing chased elsewhere, consistent with
+    // either genuine H.264 macroblock decode errors or a display-side
+    // partial-buffer-update issue. The old per-picture "picture ready"
+    // success log (removed per explicit request -- fires ~30x/sec,
+    // console-flood) would have answered this immediately, so it's
+    // back in a much quieter form: only logs when nbrOfErrMBs is
+    // actually nonzero, silent on every normal frame. If this line
+    // never fires while the blocky artifact is visible, that rules out
+    // decode-level corruption and points squarely at the display side.
+    if (picture.nbrOfErrMBs != 0) {
+        std::fprintf(stderr, "%s androidauto::HantroH264Decoder: picture picId=%u has %u error "
+                     "macroblock(s)\n", androidauto::logTimestamp().c_str(), picture.picId, picture.nbrOfErrMBs);
+    }
     // 2026-08-16: removed the old per-picture "picture ready" success
     // log per explicit request -- fires ~30x/sec once video is
     // playing (once per decoded frame), same console-flood reasoning

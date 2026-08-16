@@ -106,10 +106,13 @@ bool init_video_layer(VideoLayerHandle & out, const char * path = "/dev/fb4");
 // size/position via a single real ark_disp_update_window ioctl,
 // ported directly from libarkcmn.so's own arkapi_init_fb_video_display
 // (see this file's top comment and video_layer.cpp's own comment for
-// the full field derivation). Call once before the first
-// set_frame_addr() (or again if the decoded picture's own dimensions
-// ever change mid-session -- not expected in practice for a single AA
-// session, but cheap to call again if unsure).
+// the full field derivation), THEN explicitly forces this layer to
+// fully-opaque/no-blend via the real ARKFB_SET_BLEND ioctl (see
+// video_layer.cpp's own ArkFbBlend comment for why this isn't just
+// assumed as a side effect of the ioctl above). Call once before the
+// first set_frame_addr() (or again if the decoded picture's own
+// dimensions ever change mid-session -- not expected in practice for
+// a single AA session, but cheap to call again if unsure).
 bool configure_video_layer(VideoLayerHandle & h, uint32_t width, uint32_t height);
 
 // Pushes one decoded frame's plane addresses via the real

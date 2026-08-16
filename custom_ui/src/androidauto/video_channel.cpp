@@ -158,10 +158,39 @@ void VideoChannel::pushDecodedFrame() {
         videoLayerConfigured_ = true;
     }
 
+    // 2026-08-16: found on real hardware -- once video was actually
+    // reaching the right layer with the right colors, real footage
+    // still showed tearing-like artifacts. Root cause, found by
+    // reviewing this project's own kernel source
+    // (linux-arkmicro/.../ark1668_lcdc_funcs.c, ARKFB_SET_VIDEO_ADDR_RAW's
+    // own comment): this device's driver applies each address update
+    // synchronously and immediately, with no real double-buffering or
+    // vsync gating (a deliberate simplification vs stock's real
+    // IRQ-driven queue, documented in that file's own comment) --
+    // pushing a new address while the panel is mid-scanout of the
+    // previous one tears. Rather than touch the kernel driver (per
+    // explicit request -- stock's own real double-buffered pipeline
+    // proves this same hardware/config CAN work correctly, so the fix
+    // belongs in how often userspace pushes, not in reimplementing
+    // stock's private kernel-side machinery), this throttles from
+    // here: skip the address update (not the frame -- decode/ack still
+    // proceed normally) if less than ~16ms (one panel refresh at a
+    // plausible 60Hz) has passed since the last one. A well-behaved
+    // ~30fps H.264 stream (a new picture roughly every 33ms) rarely
+    // even hits this; it mainly caps bursts (several pictures becoming
+    // ready in quick succession after a stall) from slamming multiple
+    // address updates within the same refresh window.
+    constexpr std::chrono::milliseconds kMinAddrPushInterval{16};
+    auto now = std::chrono::steady_clock::now();
+    if (lastAddrPush_.time_since_epoch().count() != 0 && (now - lastAddrPush_) < kMinAddrPushInterval) {
+        return;
+    }
+
     if (!hal::set_frame_addr(videoLayer_, pic.outputPictureBusAddress, pic.picWidth,
                               pic.picHeight)) {
         return;
     }
+    lastAddrPush_ = now;
 
     // 2026-08-12: reconciles the hardware layer's actual shown/hidden
     // state against video_visible() on every frame, instead of a

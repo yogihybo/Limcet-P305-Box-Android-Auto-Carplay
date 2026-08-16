@@ -129,10 +129,43 @@ public:
     // Valid only after decodeFrame() returns true.
     const H264DecPicture & last_picture() const { return lastPicture_; }
 
+    // 2026-08-17: real hardware confirmed (dmesg from a live session)
+    // the Hantro decoder allocates exactly TWO internal reference-
+    // picture buffers via /tmp/dev/memalloc at startup and never a
+    // third -- the bare minimum for baseline-profile decode (one being
+    // decoded into, one held as reference). There is no buffering
+    // margin between "what the decoder is currently writing" and
+    // "what's on screen": pushing last_picture().outputPictureBusAddress
+    // directly to the display (as this project's own video_channel.cpp
+    // used to) means the decoder can start overwriting that exact
+    // physical buffer for the NEXT frame while the LCDC hardware is
+    // still scanning it out for the CURRENT one -- confirmed on real
+    // hardware as randomly-located block corruption with the UI/frame
+    // content otherwise fully intact, independent of any display-side
+    // push timing (a decode-vs-display read/write race, not a
+    // display-timing one -- this is why throttling/vsync-gating the
+    // display push never helped). No H264DecPictureConsumed()-
+    // equivalent API exists in this device's libmfc.so (confirmed
+    // absent from its exported symbol table) to tell the decoder "not
+    // yet", so the only real fix is to stop pointing the display at
+    // the decoder's own memory at all.
+    //
+    // Copies the last decoded picture into one of two small buffers
+    // THIS class owns (real device-confirmed size, 675840 bytes for
+    // this stream's 800x480 resolution -- see the .cpp for the dmesg
+    // this was derived from), ping-ponged so a copy is never written
+    // into the buffer currently pushed to the display. Call once per
+    // successful decodeFrame(), and push the returned bus address
+    // instead of last_picture().outputPictureBusAddress. Returns 0 on
+    // failure (buffer alloc failed) -- caller should skip the display
+    // push for that frame rather than use a stale/zero address.
+    uint32_t stabilize_output();
+
     void close();
 
 private:
     bool ensureDmaCapacity(size_t size);
+    bool ensureOutputBuffers(size_t size);
 
     void * lib_ = nullptr;
     void * decoderInst_ = nullptr;
@@ -149,6 +182,20 @@ private:
     uint32_t dmaBus_ = 0;
     uint32_t dmaSize_ = 0;
     int dmaFd_ = -1;
+
+    // Ping-ponged output "shadow" buffers -- see stabilize_output()'s
+    // own doc comment. Same /tmp/dev/memalloc mechanism as the input
+    // DMA buffer above, but a completely separate pair of allocations
+    // (each memalloc buffer needs its own open() fd, confirmed by this
+    // device's own kernel driver logging a "file open"/"file release"
+    // pair per buffer lifecycle) -- these are never freed/regrown
+    // mid-session the way the input buffer can be, since AA's stream
+    // resolution doesn't change once negotiated.
+    void * outVirt_[2] = {nullptr, nullptr};
+    uint32_t outBus_[2] = {0, 0};
+    uint32_t outSize_[2] = {0, 0};
+    int outFd_[2] = {-1, -1};
+    int activeOutBuf_ = 0;
 
     uint32_t frameCounter_ = 0;
     H264DecPicture lastPicture_{};

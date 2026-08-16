@@ -170,8 +170,23 @@ void VideoChannel::pushDecodedFrame() {
     // no wait and no confirm-loop around it. hal::set_frame_addr()
     // now matches that exactly: called directly, every ready frame,
     // no gating.
-    if (!hal::set_frame_addr(videoLayer_, pic.outputPictureBusAddress, pic.picWidth,
-                              pic.picHeight)) {
+    //
+    // 2026-08-17: the corruption persisted even after matching stock's
+    // display API and push cadence exactly -- root cause turned out to
+    // be upstream of the display push entirely. Real hardware dmesg
+    // showed the Hantro decoder itself only ever allocates TWO
+    // internal reference-picture buffers, no third for safety margin,
+    // so pushing pic.outputPictureBusAddress directly raced the
+    // decoder overwriting that same physical buffer for the next frame
+    // while the LCDC was still scanning it out for this one -- see
+    // HantroH264Decoder::stabilize_output()'s own doc comment for the
+    // full story. Copy into a buffer this side owns before pushing,
+    // rather than pointing the display at the decoder's own memory.
+    uint32_t stableAddr = decoder_.stabilize_output();
+    if (stableAddr == 0) {
+        return;
+    }
+    if (!hal::set_frame_addr(videoLayer_, stableAddr, pic.picWidth, pic.picHeight)) {
         return;
     }
 

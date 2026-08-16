@@ -170,6 +170,83 @@ bool HantroH264Decoder::ensureDmaCapacity(size_t size) {
     return true;
 }
 
+bool HantroH264Decoder::ensureOutputBuffers(size_t size) {
+    if (outVirt_[0] && outSize_[0] >= size) return true;
+
+    // Free any previous (undersized) pair first -- same pattern as
+    // ensureDmaCapacity(), just doing it for both slots. Not expected
+    // to actually happen in practice (AA's stream resolution is fixed
+    // for the session), but handled for correctness if it ever does.
+    for (int i = 0; i < 2; ++i) {
+        if (outVirt_[i]) {
+            munmap(outVirt_[i], outSize_[i]);
+            ioctl(outFd_[i], kMemallocIocxFreebuffer, &outBus_[i]);
+            ::close(outFd_[i]);
+            outFd_[i] = -1;
+            outVirt_[i] = nullptr;
+        }
+    }
+
+    long pagesize = sysconf(_SC_PAGESIZE);
+    uint32_t aligned = static_cast<uint32_t>((size + pagesize - 1) & ~(pagesize - 1));
+
+    for (int i = 0; i < 2; ++i) {
+        outFd_[i] = ::open(kMemallocPath, O_RDWR);
+        if (outFd_[i] < 0) {
+            std::fprintf(stderr, "%s androidauto::HantroH264Decoder: output buffer %d open(%s) failed: %s\n",
+                         androidauto::logTimestamp().c_str(), i, kMemallocPath, std::strerror(errno));
+            return false;
+        }
+
+        MemallocParams params{0, aligned};
+        if (ioctl(outFd_[i], kMemallocIocxGetbuffer, &params) < 0 || params.busAddress == 0) {
+            std::fprintf(stderr, "%s androidauto::HantroH264Decoder: output buffer %d GETBUFFER failed: %s\n",
+                         androidauto::logTimestamp().c_str(), i, std::strerror(errno));
+            ::close(outFd_[i]);
+            outFd_[i] = -1;
+            return false;
+        }
+
+        void * virt = mmap(nullptr, aligned, PROT_READ | PROT_WRITE, MAP_SHARED, outFd_[i],
+                           static_cast<off_t>(params.busAddress));
+        if (virt == MAP_FAILED) {
+            std::fprintf(stderr, "%s androidauto::HantroH264Decoder: output buffer %d mmap failed: %s\n",
+                         androidauto::logTimestamp().c_str(), i, std::strerror(errno));
+            ioctl(outFd_[i], kMemallocIocxFreebuffer, &params.busAddress);
+            ::close(outFd_[i]);
+            outFd_[i] = -1;
+            return false;
+        }
+
+        outVirt_[i] = virt;
+        outBus_[i] = params.busAddress;
+        outSize_[i] = aligned;
+    }
+
+    std::printf("%s androidauto::HantroH264Decoder: allocated output shadow buffers (%u bytes each)\n",
+                androidauto::logTimestamp().c_str(), aligned);
+    return true;
+}
+
+uint32_t HantroH264Decoder::stabilize_output() {
+    if (!lastPicture_.pOutputPicture) return 0;
+
+    // Real per-frame footprint: 16-aligned width * 16-aligned height *
+    // 1.5 bytes/pixel (semi-planar Y + interleaved UV), same formula
+    // hal::set_frame_addr()'s own chroma-offset math already assumes.
+    // picWidth/picHeight are already the 16-aligned buffer dimensions
+    // (see H264DecPicture's own field comment), so no extra rounding
+    // needed here.
+    const size_t frameSize = static_cast<size_t>(lastPicture_.picWidth) *
+                              static_cast<size_t>(lastPicture_.picHeight) * 3 / 2;
+    if (!ensureOutputBuffers(frameSize)) return 0;
+
+    const int target = activeOutBuf_ ^ 1;  // the buffer NOT currently pushed to the display
+    std::memcpy(outVirt_[target], lastPicture_.pOutputPicture, frameSize);
+    activeOutBuf_ = target;
+    return outBus_[target];
+}
+
 bool HantroH264Decoder::decodeFrame(const uint8_t * data, size_t len) {
     if (!decoderInst_) return false;
     if (!ensureDmaCapacity(len)) return false;
@@ -245,6 +322,17 @@ void HantroH264Decoder::close() {
     if (dmaFd_ >= 0) {
         ::close(dmaFd_);
         dmaFd_ = -1;
+    }
+    for (int i = 0; i < 2; ++i) {
+        if (outVirt_[i]) {
+            munmap(outVirt_[i], outSize_[i]);
+            ioctl(outFd_[i], kMemallocIocxFreebuffer, &outBus_[i]);
+            outVirt_[i] = nullptr;
+        }
+        if (outFd_[i] >= 0) {
+            ::close(outFd_[i]);
+            outFd_[i] = -1;
+        }
     }
     if (lib_) {
         dlclose(lib_);

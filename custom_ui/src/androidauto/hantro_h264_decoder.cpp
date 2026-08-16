@@ -211,8 +211,8 @@ bool HantroH264Decoder::decodeFrame(const uint8_t * data, size_t len) {
     // 2026-08-13: this log used to say "TODO: not yet pushed to the
     // display hardware layer" -- stale since 2026-08-11, when
     // video_channel.cpp's pushDecodedFrame() was wired up to actually
-    // push every picture returned here to /dev/fb1 via real
-    // ARKFB_SET_WINDOW_ADDR ioctls (see hal/video_layer.cpp). Left
+    // push every picture returned here to /dev/fb4 (see hal/video_layer.h's
+    // own top comment for the real fb-to-layer mapping). Left
     // uncorrected, a hardware log showing this line would wrongly
     // suggest video display is still unimplemented.
     std::printf("%s androidauto::HantroH264Decoder: picture ready picId=%u %ux%u "

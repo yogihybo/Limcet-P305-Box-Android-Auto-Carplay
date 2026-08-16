@@ -12,9 +12,9 @@
 // AudioChannel.
 //
 // Decoded frames now get pushed to the real hardware video-overlay
-// layer (hal/video_layer.h -- /dev/fb1, ground-truth confirmed from
-// this device's own kernel driver source as the VIDEO2/"phonelink"
-// layer) via pushDecodedFrame(), called from decodeBuffer() once
+// layer (hal/video_layer.h -- /dev/fb4/VIDEO_LAYER2, see that file's
+// own top comment for the real, kernel-source-confirmed fb-to-layer
+// mapping) via pushDecodedFrame(), called from decodeBuffer() once
 // HantroH264Decoder reports a picture ready. See video_layer.h's own
 // top comment for exactly what's ground-truth-confirmed (the ioctl
 // numbers/struct/device node) vs. still an assumption (the semi-planar

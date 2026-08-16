@@ -20,7 +20,25 @@ namespace {
 // provenance. 16000/16/1 matches session.cpp's ServiceDiscoveryResponse
 // exactly -- must, since that's the format the phone was told to
 // expect.
-constexpr const char * kMicDevice = "plughw:0,0";
+//
+// 2026-08-16: "plughw:0,0" parsed fine but failed with ENOENT
+// (snd_pcm_open: No such file or directory) on real hardware --
+// device 0 on card 0 doesn't exist for capture. Per
+// docs/1.5_AUDIO_SUBSYSTEM_INVESTIGATION.md's own confirmed real DTS
+// state (the "CS4334 pivot reverted" section, the LAST reordering in
+// that doc's history, matching stock's own `aplay -l` output "card 0:
+// ARKSDDAC, device 0: SDDAC sddac-hifi-0"): dai-link@0 is playback
+// (SDDAC, confirmed card 0 device 0), dai-link@1 is capture
+// (i2s_adc+sdadc) -- simple-audio-card's DT binding enumerates
+// multiple dai-links as separate PCM devices on the SAME card, in
+// dai-link order, so capture should be card 0 device 1, not a
+// separate card. `aplay -l` only ever lists playback devices, so
+// this doc never had a direct capture-side listing to confirm
+// against -- best evidence available, not independently confirmed on
+// real hardware yet. If this still fails, try "plughw:1,0" next
+// (matches an OLDER, superseded "card 1: ark1668audio" state seen
+// earlier in the same doc's history) before guessing further.
+constexpr const char * kMicDevice = "plughw:0,1";
 constexpr uint32_t kSampleRate = 16000;
 constexpr uint32_t kBitsPerSample = 16;
 constexpr uint32_t kChannels = 1;

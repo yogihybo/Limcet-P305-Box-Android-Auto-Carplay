@@ -3,12 +3,17 @@
 # projection (WirelessSessionManager's own AP, see
 # custom_ui/src/androidauto/wireless_session_manager.cpp) -- also
 # reachable for SSH management, but that's a side effect, not what
-# this SSID/config is actually for. Confirmed 2026-08-16: this file's
-# own SSID/password ("carplay_wifi"/"88888888") already matched what
-# MsnCoreApp uses for real AA/CarPlay -- this genuinely is the same AP
-# stock uses, not a separate debug-only one, an earlier assumption in
-# this comment that turned out wrong.
-# SSID: carplay_wifi  Password: 88888888  IP: 192.168.43.1
+# this SSID/config is actually for.
+#
+# 2026-08-16: this used to share /etc/hostapd/hostapd.conf and the
+# SSID "carplay_wifi" with MsnCoreApp's own real AA/CarPlay AP -- per
+# explicit request, deliberately separated so the two never share
+# state or risk phone-side cached-credential mixups between two
+# different real APs advertising identical SSID/password: own config
+# file (hostapd-custom_ui.conf) and own SSID (custom_ui_wifi) now.
+# MsnCoreApp's own AP keeps working entirely on its own, untouched by
+# anything in this file.
+# SSID: custom_ui_wifi  Password: 88888888  IP: 192.168.43.1
 
 # hostapd needs /dev/urandom for WPA key generation
 [ -e /dev/random.orig ] || mv /dev/random /dev/random.orig
@@ -28,8 +33,8 @@ echo 1048576 > /proc/sys/net/core/wmem_max
 # firmware_overlay/README.md): without a valid HW/SW channel plan, the
 # rtl8811cu driver's own regulatory fallback (RTW_CHPLAN_WORLDWIDE)
 # excludes 5GHz UNII-1 channels entirely, including channel 36 -- which
-# this file's own hostapd.conf now uses (2026-08-16, switched from
-# 2.4GHz to match real stock/MsnCoreApp behavior). rcS's own module
+# this file's own hostapd-custom_ui.conf now uses (2026-08-16, switched
+# from 2.4GHz to match real stock/MsnCoreApp band). rcS's own module
 # load already applies this fix at boot, but if this script ends up
 # reloading the module fresh (e.g. /tmp/wlan.ko populated by
 # MsnCoreApp after boot) without repeating it here too, that reload
@@ -81,4 +86,4 @@ mkdir -p /var/lib/misc
 touch /data/udhcpd.leases
 udhcpd /etc/udhcpd.conf &
 
-hostapd -B /etc/hostapd/hostapd.conf
+hostapd -B /etc/hostapd/hostapd-custom_ui.conf

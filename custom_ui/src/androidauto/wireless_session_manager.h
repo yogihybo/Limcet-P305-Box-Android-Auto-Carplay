@@ -16,8 +16,10 @@
 //
 // Real, confirmed pieces this stitches together:
 //  - firmware_overlay/etc/wifi_ap.sh -- a real, already-working AP
-//    bring-up script (SSID "carplay_wifi", password "88888888", AP
-//    address 192.168.43.1/24, hostapd+udhcpd). Disabled in this
+//    bring-up script (SSID "custom_ui_wifi" -- deliberately distinct
+//    from MsnCoreApp's own real "carplay_wifi", see that script's own
+//    2026-08-16 comment for why -- password "88888888", AP address
+//    192.168.43.1/24, hostapd+udhcpd). Disabled in this
 //    project's own rcS only because it would conflict with stock
 //    sink's OWN dynamic per-connection AP -- that conflict doesn't
 //    apply here since sink/MsnCoreApp and custom_ui are never run

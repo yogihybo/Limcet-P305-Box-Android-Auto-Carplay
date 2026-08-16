@@ -158,65 +158,22 @@ void VideoChannel::pushDecodedFrame() {
         videoLayerConfigured_ = true;
     }
 
-    // 2026-08-16: found on real hardware -- once video was actually
-    // reaching the right layer with the right colors, real footage
-    // still showed tearing-like artifacts. First fix attempt: a fixed
-    // ~16ms software throttle (skip the address update, not the whole
-    // frame, if less than one panel refresh has passed since the last
-    // push) -- this reduced but didn't eliminate the artifact, because
-    // a timer only rate-LIMITS pushes, it has no idea where the
-    // panel's scanout beam actually is, so a push can still land
-    // mid-refresh (and the drift between our timer period and the
-    // panel's real refresh period is unbounded over time).
-    //
-    // Second fix attempt: block on the panel's real vsync IRQ
-    // (hal::wait_for_vsync()) unconditionally before every push --
-    // better than a timer, but still not what real stock does. Cross-
-    // checked against the actual vendor CarPlay/Android Auto app
-    // binary on this rootfs (`msncarlife`, Ghidra decompile of
-    // FUN_000645e8, reachable from arkapi_wait_for_vsync's own PLT
-    // entry): stock doesn't blindly wait once and push -- it reads
-    // back which address the LCDC is CURRENTLY displaying
-    // (hal::get_frame_addr(), ported from arkapi_get_fb_addr()) and
-    // only waits if the PREVIOUSLY pushed address hasn't taken effect
-    // in hardware yet, retrying a bounded few times, then pushes
-    // regardless of the outcome (never blocks indefinitely). One
-    // blind wait per frame doesn't confirm the prior flip actually
-    // landed; this does. Replicated here rather than guessed a third
-    // time.
-    if (lastPushedYAddr_ != 0 && vsyncSupported_) {
-        uint32_t current = 0;
-        for (int attempt = 0; attempt < 3; ++attempt) {
-            if (!hal::get_frame_addr(videoLayer_, current) || current == lastPushedYAddr_) {
-                break;
-            }
-            if (!hal::wait_for_vsync(videoLayer_)) {
-                vsyncSupported_ = false;
-                break;
-            }
-        }
-    }
-
-    if (!vsyncSupported_) {
-        // Fallback only -- this device's own kernel driver confirmed
-        // to implement FBIO_WAITFORVSYNC for real (see
-        // hal::wait_for_vsync()'s doc comment), so this path is not
-        // expected to be taken; kept in case a future device/build
-        // genuinely lacks it (ioctl returns ENOTTY), rather than
-        // blocking forever on a device where vsync sync can't work.
-        constexpr std::chrono::milliseconds kMinAddrPushInterval{16};
-        auto now = std::chrono::steady_clock::now();
-        if (lastAddrPush_.time_since_epoch().count() != 0 && (now - lastAddrPush_) < kMinAddrPushInterval) {
-            return;
-        }
-        lastAddrPush_ = now;
-    }
-
+    // 2026-08-16: three earlier fix attempts chased a blocky-
+    // corruption artifact by adding per-frame vsync handling here --
+    // a fixed ~16ms software throttle, then a blocking
+    // hal::wait_for_vsync(), then a hal::get_frame_addr()-confirm
+    // loop modeled on real decompiled code. All three removed:
+    // decompiling the ACTUAL real stock Android Auto video path
+    // (usr/bin/sink's own VideoDecoder::flush_video(), not a guess or
+    // a different app) shows it does none of this -- it calls
+    // arkapi_set_fb_addr() unconditionally, every single frame, with
+    // no wait and no confirm-loop around it. hal::set_frame_addr()
+    // now matches that exactly: called directly, every ready frame,
+    // no gating.
     if (!hal::set_frame_addr(videoLayer_, pic.outputPictureBusAddress, pic.picWidth,
                               pic.picHeight)) {
         return;
     }
-    lastPushedYAddr_ = pic.outputPictureBusAddress;
 
     // 2026-08-12: reconciles the hardware layer's actual shown/hidden
     // state against video_visible() on every frame, instead of a

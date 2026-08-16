@@ -14,87 +14,78 @@ namespace hal {
 
 namespace {
 
-// 2026-08-16: both of this file's two previous fix attempts (a
-// yuv_order bit-guess, then five direct /dev/mem register writes)
-// left real hardware unchanged -- same pink/green tint, same tiled/
-// doubled image, both times. Rather than guess a third time, this
-// file now ports the REAL vendor logic directly: Ghidra-decompiled
-// `arkapi_init_fb_video_display`/`arkapi_set_fb_video_addr` from the
-// actual deployed firmware_source/mtd6_rootfs/usr/lib/libarkcmn.so
-// (the same library stock's own ArkMediaPlayer/MsnCoreApp calls for
-// this exact video layer) instead of continuing to hand-guess the
-// ioctl protocol from register offsets. Ground truth, not a
-// reconstruction:
+// 2026-08-16 MAJOR REVISION: everything in this file used to be built
+// around `arkapi_init_fb_video_display`/`arkapi_set_fb_video_addr` --
+// the dedicated hardware video-overlay ioctl pair (confirmed correct
+// against libarkcmn.so's own decompile, see git history). That
+// protocol-level work wasn't wrong, but it turned out to be the WRONG
+// API: real Google Android Auto video (Ghidra-decompiled directly
+// from usr/bin/sink's own VideoDecoder class -- `sink` is the actual
+// stock GAL/aasdk host process, not a guess) never calls either of
+// those functions at all. Its real per-frame path
+// (VideoDecoder::draw_slice -> flush_video) uses the GENERIC,
+// non-video framebuffer API instead -- the same family used for the
+// regular OSD/UI layers elsewhere in this codebase:
 //
-//   arkapi_set_fb_video_addr(fd, y, cb, cr, wait_vsync) ->
-//       ioctl(fd, 0x40104f38, &{y, cb, cr, wait_vsync})
-//   -- SAME 16-byte {yaddr,cbaddr,craddr,wait_vsync} struct this file
-//   already had (ArkDispAddr below, unchanged), but the REAL command
-//   number is 0x40104f38, not 0x40104f2c (_IOW('O',44,...), what this
-//   file used until now -- ARK_IO(44) was this project's own
-//   RECONSTRUCTED kernel tree's guess, not confirmed against the real
-//   deployed vendor userspace, same class of gap already documented
-//   for the SHOW/HIDE ioctl numbers in hal/display.cpp). A wrong
-//   command number here means every frame address update has been
-//   landing on the kernel driver's default/unhandled case this whole
-//   time, not the real per-frame address handler.
-//
-//   arkapi_init_fb_video_display(fd, width, height, out_x, out_y,
+//   arkapi_init_fb_display(fd, width, height, out_x, out_y,
 //       out_width, out_height, crop_left, crop_right, crop_top,
-//       crop_bottom, format) builds a SINGLE real struct
-//       ark_disp_update_window (60 bytes, matches
-//       ark_lcdc_common.h exactly) and sends it via ONE ioctl,
-//       0x403c4f37 -- not the two separate legacy
-//       SET_WINDOW_FORMAT(43)/SET_WINDOW_SIZE(42) ioctls this file
-//       used until now (whose real kernel-side handling was never
-//       actually confirmed -- they're absent from the real ioctl
-//       dispatch table this project decompiled in
-//       docs/1.7.1_ARK_DISP_STOCK_DECOMPILATION.md, meaning they may
-//       never have reached the real video-window config path at all).
-//   Field-by-field byte-offset math, confirmed against the decompiled
-//   assignment sequence (each local_XX's own stack-offset naming IS
-//   its byte offset into the struct, verified arithmetically, not
-//   assumed):
+//       crop_bottom, format) -> ioctl(fd, 0x403c4f27, &window)
+//   -- SAME 60-byte ark_disp_update_window struct/field layout as the
+//   video variant (confirmed structurally identical via decompile of
+//   arkapi_init_fb_display_internal, the real function both the
+//   video and non-video wrappers funnel into with the same
+//   win_x/win_y/win_width/win_height/width/height/format/rgb_order/
+//   yuyv_order/out_x/out_y/out_width/out_height/interlace_out/show_tv
+//   layout) -- but a DIFFERENT ioctl command number, ARK_IO(39)
+//   (0x403c4f27) instead of ARK_IO(55) (0x403c4f37). Real stock's
+//   own caller (sink's VideoDecoder::video_init(), via the dlsym'd
+//   "arkapi_init_fb_display" function pointer against /dev/fb4 --
+//   same device node this file already used) passes format=0x11
+//   (matches kFormatYUv420 below) and 0 for interlace_out/show_tv,
+//   confirming those fields too.
+//
+//   arkapi_set_fb_addr(fd, y, cb_cr, 0, 0) ->
+//       ioctl(fd, 0x40104f2a, &{y, cb_cr, 0, 0})
+//   -- SAME 16-byte 4-field struct shape as before (ArkDispAddr
+//   below, unchanged), but ARK_IO(42) (0x40104f2a) instead of
+//   ARK_IO(56) (0x40104f38), and critically: real stock's own caller
+//   (sink's VideoDecoder::flush_video(), Ghidra-decompiled) passes
+//   the LAST TWO struct fields as literal 0 on every single call --
+//   not a wait_vsync=1 request, and no vsync-confirm-loop around it
+//   either (see push_frame_addr()'s own history in git log for the
+//   two vsync-based fix attempts this revision replaces -- both were
+//   grounded in real decompiled code, just the wrong app: CarLife's
+//   msncarlife, not real Android Auto's sink). Real stock just writes
+//   the address, every frame, unconditionally, and lets the panel
+//   pick it up on its own schedule.
+//
+// Chroma offset math (yBusAddress + width*height for the combined
+// Cb/Cr plane) is unchanged and was independently re-confirmed
+// against flush_video()'s own real address computation
+// (`yAddr + alignedWidth*alignedHeight`).
+//
+// Field-by-field derivation for the update-window struct otherwise
+// carries over unchanged from the video-overlay variant (both
+// wrappers funnel into structurally identical internal calls):
 //     win_x        = crop_left
 //     win_y        = crop_top
 //     win_width    = width  - crop_left - crop_right
 //     win_height   = height - crop_top  - crop_bottom
 //     width        = 16-aligned buffer width
 //     height       = 16-aligned buffer height
-//     format       = format arg
-//     rgb_order    = 0 (NEVER set by this real function -- always the
-//                    memset()'d 0, for every call, not conditional on
-//                    anything. This directly contradicts this file's
-//                    own earlier "yuv_order should be UYVY(1)" fix --
-//                    that was an unconfirmed guess against a different,
-//                    only-partially-traced code path; this is the real
-//                    one, straight from the decompile, and it says 0.)
+//     format       = format arg (0x11 confirmed via sink's own call)
+//     rgb_order    = 0 (never set by the real function)
 //     yuyv_order   = 0 (same -- never set)
 //     out_x        = out_x arg
 //     out_y        = out_y arg
 //     out_width    = out_width arg
 //     out_height   = out_height arg
-//     interlace_out/show_tv = persisted per-device state fields this
-//                    project doesn't have (libarkcmn.so's own global
-//                    device-state array, offsets +0x1b0/+0x1a0) --
-//                    left 0, matching a fresh/never-configured device.
-//   2026-08-16 CORRECTION: this file previously claimed no other
-//   binary references either function. Wrong -- usr/bin/mplayer
-//   (found while cross-checking the vsync fix against real stock
-//   code, see wait_for_vsync()'s own comment) genuinely calls both,
-//   confirming the field mapping above byte-for-byte against a real
-//   call site (fd, width, height, out_x, out_y, out_width,
-//   out_height, crop_left=0, crop_right=0, crop_top, crop_bottom,
-//   format), AND showing crop_top/crop_bottom are NOT always zero in
-//   real stock use -- mplayer's caller (FUN_000437b0) passes
-//   crop_top=2, crop_bottom=2 in its general-purpose video-scaling
-//   path, paired with code that forces the output height even
-//   (`if (uVar8 & 1) uVar8 -= 1`) -- i.e. real stock uses nonzero
-//   crop to trim an odd row off an odd-height source, not something
-//   relevant to AA's own stream (800x480, already even/16-aligned on
-//   both axes). This file still passes zero crop on all four for AA
-//   specifically -- correct for AA's actual resolution, just no
-//   longer justified by "there's no real caller to check against".
+//     interlace_out/show_tv = 0 (confirmed via sink's own call, which
+//                    passes these as its own trailing 0, 0 args)
+//   Zero crop on all four remains correct for AA's own 800x480
+//   stream (already even/16-aligned) -- see git history for the
+//   mplayer cross-check that found nonzero crop elsewhere, unrelated
+//   to AA's own resolution.
 //
 // Deliberately does NOT dlopen libarkcmn.so itself: this device's
 // static-NSS-crash workaround (hantro_dlopen.c) only supports loading
@@ -121,7 +112,11 @@ struct ArkDispUpdateWindow {
     uint32_t show_tv;
 };
 
-constexpr unsigned long kArkVideoUpdateWindow = 0x403c4f37;
+// ARK_IO(39) -- real command for arkapi_init_fb_display (the generic
+// framebuffer variant real stock AA actually uses). NOT 0x403c4f37
+// (ARK_IO(55), arkapi_init_fb_video_display's command), which this
+// file used until this revision -- see top comment.
+constexpr unsigned long kArkInitFbDisplay = 0x403c4f27;
 
 // 2026-08-16: found on real hardware -- a scaled, correctly-colored,
 // non-tiled AA frame finally appeared (previous fixes all confirmed
@@ -160,14 +155,21 @@ constexpr unsigned long kArkfbSetBlend = 0x40104f29;
 struct ArkDispAddr {
     uint32_t yaddr;
     uint32_t cbaddr;
-    uint32_t craddr;
-    uint32_t wait_vsync;
+    // Real stock (sink's VideoDecoder::flush_video()) always passes 0
+    // for these last two fields on the AA video path -- not a second
+    // chroma plane address and not wait_vsync. Named generically
+    // since their real semantics were never exercised as anything
+    // other than 0 in the one confirmed real call site.
+    uint32_t field3;
+    uint32_t field4;
 };
 
-// Real command number, confirmed via decompile -- see this file's own
-// top comment. NOT _IOW('O', 44, ArkDispAddr) (0x40104f2c), which is
-// what this file used until now.
-constexpr unsigned long kArkfbSetWindowAddrReal = 0x40104f38;
+// ARK_IO(42) -- real command for arkapi_set_fb_addr (the generic
+// variant real stock AA actually uses, confirmed via decompile of
+// sink's VideoDecoder::flush_video()). NOT 0x40104f38 (ARK_IO(56),
+// arkapi_set_fb_video_addr's command), which this file used until
+// this revision -- see top comment.
+constexpr unsigned long kArkSetFbAddr = 0x40104f2a;
 
 // ARK_LCDC_FORMAT_Y_UV420 -- semi-planar Y + interleaved UV, see
 // video_layer.h's top comment.
@@ -226,8 +228,8 @@ bool configure_video_layer(VideoLayerHandle & h, uint32_t width, uint32_t height
     win.interlace_out = 0;
     win.show_tv = 0;
 
-    if (ioctl(h.fd, kArkVideoUpdateWindow, &win) != 0) {
-        std::fprintf(stderr, "%s hal::video_layer::configure_video_layer: ioctl(ARK_VIDEO_UPDATE_WINDOW) failed (%s)\n",
+    if (ioctl(h.fd, kArkInitFbDisplay, &win) != 0) {
+        std::fprintf(stderr, "%s hal::video_layer::configure_video_layer: ioctl(ARK_INIT_FB_DISPLAY) failed (%s)\n",
                      core::log_timestamp().c_str(), std::strerror(errno));
         return false;
     }
@@ -247,7 +249,7 @@ bool configure_video_layer(VideoLayerHandle & h, uint32_t width, uint32_t height
     }
 
     std::printf("%s hal::video_layer::configure_video_layer: %ux%u, format=Y_UV420 (real vendor ioctl "
-                "protocol, ported from libarkcmn.so's arkapi_init_fb_video_display)\n",
+                "protocol, ported from libarkcmn.so's arkapi_init_fb_display)\n",
                 core::log_timestamp().c_str(), width, height);
     return true;
 }
@@ -255,20 +257,20 @@ bool configure_video_layer(VideoLayerHandle & h, uint32_t width, uint32_t height
 bool set_frame_addr(VideoLayerHandle & h, uint32_t yBusAddress, uint32_t width, uint32_t height) {
     if (h.fd < 0) return false;
 
-    // Semi-planar NV12-style: one interleaved UV plane, not two
-    // separate ones -- cbaddr == craddr, both pointing at the same
-    // chroma region. See video_layer.h's top comment for the real
-    // caveat on this offset math.
+    // Semi-planar NV12-style: one interleaved UV plane immediately
+    // after the Y plane. See this file's top comment for the real
+    // caveat on this offset math (independently re-confirmed against
+    // sink's own flush_video() address computation).
     uint32_t chromaAddr = yBusAddress + (width * height);
 
     ArkDispAddr addr{};
     addr.yaddr = yBusAddress;
     addr.cbaddr = chromaAddr;
-    addr.craddr = chromaAddr;
-    addr.wait_vsync = 1;  // wait for vsync before the address takes effect -- avoids tearing
+    addr.field3 = 0;  // real stock always passes 0 here -- see struct comment
+    addr.field4 = 0;
 
-    if (ioctl(h.fd, kArkfbSetWindowAddrReal, &addr) != 0) {
-        std::fprintf(stderr, "%s hal::video_layer::set_frame_addr: ioctl(ARK_FB_SET_VIDEO_WINDOW_ADDR) failed (%s)\n",
+    if (ioctl(h.fd, kArkSetFbAddr, &addr) != 0) {
+        std::fprintf(stderr, "%s hal::video_layer::set_frame_addr: ioctl(ARK_SET_FB_ADDR) failed (%s)\n",
                      core::log_timestamp().c_str(), std::strerror(errno));
         return false;
     }

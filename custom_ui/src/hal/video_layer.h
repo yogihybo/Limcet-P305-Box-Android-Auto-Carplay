@@ -6,71 +6,52 @@
 // preview, see reverse_camera_screen.cpp's top comment -- except this
 // layer takes a real address we write, not a raw sensor bypass).
 //
-// 2026-08-16 REVISED: this file's ioctl protocol used to be
-// reconstructed from this device's own (separately-maintained)
-// "reconstructed" kernel tree source
-// (linux-arkmicro/.../ark1668e_lcdc_funcs.c and ark_lcdc_common.h) --
-// two real-hardware attempts built on that reconstruction (a yuv_order
-// bit guess, then direct /dev/mem register writes) both left the video
-// image unchanged (still wrong-tinted, still tiled). Replaced with the
-// REAL protocol instead, Ghidra-decompiled directly from this exact
-// device's own deployed vendor library,
-// firmware_source/mtd6_rootfs/usr/lib/libarkcmn.so's
-// arkapi_init_fb_video_display()/arkapi_set_fb_video_addr() -- the
-// same functions stock's own ArkMediaPlayer/MsnCoreApp calls for this
-// exact layer. See video_layer.cpp's own top comment for the full
-// field-by-field derivation.
+// 2026-08-16 MAJOR REVISION: this file used to be built around
+// `arkapi_init_fb_video_display`/`arkapi_set_fb_video_addr` -- the
+// dedicated hardware video-overlay ioctl pair, confirmed correct
+// against libarkcmn.so's own decompile at the time. That protocol
+// work wasn't wrong, but the API itself turned out to be wrong: real
+// Google Android Auto video (Ghidra-decompiled directly from
+// usr/bin/sink's own VideoDecoder class -- `sink` is the actual
+// stock GAL/aasdk host process on this device, not a guess or a
+// different app like CarLife's msncarlife) never calls either
+// function. Its real per-frame path
+// (VideoDecoder::draw_slice -> flush_video) uses the GENERIC
+// framebuffer API instead -- `arkapi_init_fb_display`/
+// `arkapi_set_fb_addr`, the same family used for the regular OSD/UI
+// layers. See video_layer.cpp's own top comment for the full
+// field-by-field derivation and the real decompiled call sites.
 //
-//   - Device node: 2026-08-16 FOUND WRONG -- real hardware rejected
-//     every ARKFB_SET_VIDEO_ADDR_RAW call against /dev/fb1 with EINVAL,
-//     kernel dmesg logging "ARKFB_SET_VIDEO_ADDR_RAW on non-video
-//     layer" (ark1668_lcdc_funcs.c). That message's own driver
-//     function name confirmed THIS device runs "ark1668_lcdc" (no
-//     trailing E), not the "ark1668e_lcdc" variant this file's fb-to-
-//     layer table (fb1 -> VIDEO2) was previously sourced from -- a
-//     different driver file with a different mapping. The real,
-//     confirmed-from-THIS-driver's-own-source mapping
-//     (ark1668_lcdc_funcs.c: `int layer = info->node;` -- literally the
-//     fb minor number -- checked against
-//     `enum ark1668_lcdc_osdlayer { OSD_LAYER1, OSD_LAYER2, OSD_LAYER3,
-//     OSD_LAYER_MAX }` from ark1668_lcdc.h, i.e. OSD_LAYER3=2,
-//     OSD_LAYER_MAX=3): fb0/fb1/fb2 are ALL OSD (non-video) layers;
-//     only layer > OSD_LAYER3 counts as video, via
-//     `vlayer = layer - OSD_LAYER_MAX` -- fb3 -> VIDEO_LAYER1 (vlayer=0),
-//     fb4 -> VIDEO_LAYER2 (vlayer=1). This file now opens /dev/fb4
-//     (VIDEO_LAYER2) -- matches the "VIDEO2_*" LCDC register block
-//     (offset 0x320+, distinct from an earlier, separate "VIDEO_*"
-//     block near 0x38 for VIDEO_LAYER1) this project's own earlier
-//     register-level investigation already targeted, before that
-//     approach was superseded by this file's current ioctl-based one.
-//   - struct ark_disp_addr { yaddr; cbaddr; craddr; wait_vsync; } is
-//     unchanged (16 bytes, confirmed correct by the decompile too) --
-//     but the real command number is 0x40104f38, NOT
-//     _IOW('O', 44, struct ark_disp_addr) (0x40104f2c), which is what
-//     this file used until now.
-//   - struct ark_disp_update_window (60 bytes, win_x/win_y/win_width/
-//     win_height/width/height/format/rgb_order/yuyv_order/out_x/out_y/
-//     out_width/out_height/interlace_out/show_tv) sent via ONE ioctl,
-//     0x403c4f37 -- replaces the old, unconfirmed two-ioctl
-//     SET_WINDOW_FORMAT(43)/SET_WINDOW_SIZE(42) pair (absent from the
-//     real ioctl dispatch table this project separately decompiled in
-//     docs/1.7.1_ARK_DISP_STOCK_DECOMPILATION.md -- they may never
-//     have reached the real config path at all).
+//   - Device node: /dev/fb4 (VIDEO_LAYER2) -- CONFIRMED still correct
+//     under the new API too: sink's own VideoDecoder::video_init()
+//     opens this exact path. (Originally found via a real EINVAL/
+//     dmesg trail against /dev/fb1 -- see ark1668_lcdc_funcs.c's
+//     `int layer = info->node` / `enum ark1668_lcdc_osdlayer` mapping
+//     in git history for that derivation; unchanged by this revision.)
+//   - struct ark_disp_addr { yaddr; cbaddr; field3; field4; } (16
+//     bytes) sent via ioctl 0x40104f2a (ARK_IO(42)) -- real stock's
+//     own caller always passes 0 for field3/field4, not a second
+//     chroma address and not a wait_vsync request.
+//   - struct ark_disp_update_window (60 bytes, same 15-field layout
+//     as before) sent via ioctl 0x403c4f27 (ARK_IO(39)).
 //   - ARK_LCDC_FORMAT_Y_UV420 = 0x11 -- semi-planar Y + interleaved UV,
 //     matching HantroH264Decoder's confirmed H264DEC_SEMIPLANAR_YUV420
-//     output format exactly (see hantro_h264_decoder.h). Unchanged.
+//     output format exactly (see hantro_h264_decoder.h), AND
+//     confirmed via sink's own real call (passes format=0x11).
+//     Unchanged.
 //   - Show/hide: uses the SAME real vendor ioctl numbers already
 //     confirmed and used for the OSD1/UI layer in hal/display.cpp
-//     (0x4f2b show / 0x4f2c hide) rather than the reconstructed kernel
-//     tree's own ARKFB_SHOW_WINDOW/HIDE_WINDOW enum values (ARK_IO(39)/
-//     (40)) -- see hal/display.cpp's kArkfbShowWindowReal comment and
-//     this project's project_hide_window_ioctl_fix memory: the real
-//     deployed vendor userspace uses different numbers than the
-//     reconstructed kernel tree's own enum, already confirmed once for
-//     OSD1; assumed (not yet independently re-confirmed) to be the
-//     same fixed numbers regardless of which layer/fd, since the
-//     vendor's own ark_disp_fb_ioctl dispatch is one function shared
-//     across all layers.
+//     (0x4f2b show / 0x4f2c hide). Unchanged by this revision --
+//     sink's own arkapi_show_fb() eventually calls the same numbers
+//     internally (via arkapi_show_fb_internal(), Ghidra-confirmed).
+//
+// Per-frame vsync handling: real stock's flush_video() does NOT wait
+// for vsync or confirm the previous flip before pushing a new
+// address -- it just writes it, every frame, unconditionally
+// (wait_for_vsync()/get_frame_addr() below are no longer called from
+// the per-frame path for this reason; kept as real, correctly-
+// implemented utilities in case tearing reappears and a fallback is
+// needed, but real stock's own behavior is the current baseline).
 //
 // NOT yet hardware-tested. In particular: the chroma-plane offset
 // computed in set_frame_addr() (picWidth*picHeight bytes after the Y
@@ -79,15 +60,13 @@
 // a contiguous Y-then-UV buffer with no extra per-plane stride padding
 // beyond picWidth itself -- true for this device's confirmed
 // VIDEO_800x480 AA video config (both dimensions already 16-pixel-
-// aligned, so no macroblock padding difference between picWidth and
-// the real display width), but not independently verified against a
-// real decoded frame yet. Also: configure_video_layer()'s crop
-// arguments are always zero (full-frame, no cropping) -- CONFIRMED
-// correct for AA's own 800x480 stream specifically (real caller
-// usr/bin/mplayer only passes nonzero crop_top/crop_bottom to trim an
-// odd-height source to even, see video_layer.cpp's own top comment;
-// AA's resolution is already even/16-aligned on both axes, so zero is
-// the genuinely correct value here, not just a sidestepped guess).
+// aligned), and independently re-confirmed against sink's own
+// flush_video() address computation (same formula). Also:
+// configure_video_layer()'s crop arguments are always zero (full-
+// frame, no cropping) -- CONFIRMED correct for AA's own 800x480
+// stream specifically (a real caller, usr/bin/mplayer, only passes
+// nonzero crop_top/crop_bottom to trim an odd-height source to even;
+// AA's resolution is already even/16-aligned on both axes).
 #pragma once
 
 #include <cstdint>
@@ -106,72 +85,59 @@ bool init_video_layer(VideoLayerHandle & out, const char * path = "/dev/fb4");
 
 // Sets ARK_LCDC_FORMAT_Y_UV420 (semi-planar) and the given frame's
 // size/position via a single real ark_disp_update_window ioctl,
-// ported directly from libarkcmn.so's own arkapi_init_fb_video_display
+// ported directly from libarkcmn.so's own arkapi_init_fb_display
 // (see this file's top comment and video_layer.cpp's own comment for
 // the full field derivation), THEN explicitly forces this layer to
 // fully-opaque/no-blend via the real ARKFB_SET_BLEND ioctl (see
 // video_layer.cpp's own ArkFbBlend comment for why this isn't just
-// assumed as a side effect of the ioctl above). Call once before the
-// first set_frame_addr() (or again if the decoded picture's own
-// dimensions ever change mid-session -- not expected in practice for
-// a single AA session, but cheap to call again if unsure).
+// assumed as a side effect of the ioctl above -- real stock's own
+// generic-framebuffer init call doesn't show an equivalent explicit
+// blend call, but this stays in place since it's confirmed to have
+// fixed a real, visible grey-wash defect and is harmless if already
+// redundant). Call once before the first set_frame_addr() (or again
+// if the decoded picture's own dimensions ever change mid-session --
+// not expected in practice for a single AA session, but cheap to
+// call again if unsure).
 bool configure_video_layer(VideoLayerHandle & h, uint32_t width, uint32_t height);
 
 // Pushes one decoded frame's plane addresses via the real
-// ark_disp_addr ioctl (0x40104f38, see this file's top comment).
+// ark_disp_addr ioctl (0x40104f2a, see this file's top comment).
 // `yBusAddress` is HantroH264Decoder's last_picture().outputPictureBusAddress
 // directly; this function computes the interleaved-UV chroma address
-// as yBusAddress + width*height (see top comment's caveat) and sets
-// cbaddr == craddr to it (semi-planar NV12-style: one combined chroma
-// plane, not two separate ones -- see ARK_LCDC_FORMAT_Y_UV420).
+// as yBusAddress + width*height (see top comment's caveat, and
+// video_layer.cpp's comment for the independent re-confirmation
+// against sink's own flush_video()). Real stock calls this
+// unconditionally, every frame, with no vsync wait/confirm around it
+// -- see wait_for_vsync()'s own comment for why this file no longer
+// does either on the per-frame path.
 bool set_frame_addr(VideoLayerHandle & h, uint32_t yBusAddress, uint32_t width, uint32_t height);
 
-// 2026-08-16: real hardware still showed blocky, grid-aligned
-// corruption after the blend/protocol fixes (colors now fully
-// correct) even with pushDecodedFrame()'s software 16ms throttle in
-// place -- expected, since that throttle only rate-LIMITS pushes, it
-// doesn't actually know where the panel's scanout beam is, so a push
-// can still land mid-refresh and the drift between our timer and the
-// panel's real refresh period isn't bounded. Checked this device's
-// own kernel driver source (ark1668_lcdc_funcs.c) rather than guess
-// again: it genuinely implements the standard Linux FBIO_WAITFORVSYNC
-// ioctl with a real IRQ-backed wait_event_interruptible_timeout() on
-// a vsync flag set by the actual vsync IRQ handler (see
-// ark1668_lcdc_wait_for_vsync(), not a stub/no-op) -- this is the real
-// synchronization primitive the "wait_vsync" field in
-// set_frame_addr()'s own ioctl was documented as NOT actually
-// providing. Blocks the caller until the next real vsync fires.
+// Blocks until the next real vsync IRQ fires on this layer's LCDC
+// controller (standard Linux FBIO_WAITFORVSYNC, confirmed genuinely
+// IRQ-backed on this device's own kernel driver -- see
+// ark1668_lcdc_funcs.c's ark1668_lcdc_wait_for_vsync()) -- also
+// confirmed to be the exact ioctl libarkcmn.so's own exported
+// arkapi_wait_for_vsync(fd) calls.
 //
-// CONFIRMED against real stock code, not just the kernel side: this
-// exact ioctl number (0x40044620) is what libarkcmn.so's own exported
-// arkapi_wait_for_vsync(fd) calls (Ghidra decompile: `ioctl(fd,
-// 0x40044620, 0)`), and `msncarlife` (the real vendor CarPlay/Android
-// Auto app binary on this rootfs) genuinely calls it around its own
-// frame-address pushes -- see get_frame_addr()'s own comment for the
-// full confirm-loop pattern that call site uses, which
-// pushDecodedFrame() now replicates rather than the single-blind-wait
-// this function's own comment originally described.
+// 2026-08-16: NOT called from pushDecodedFrame()'s per-frame path.
+// Two earlier fix attempts built real, per-frame vsync handling
+// around this function (first a blind wait-then-push, then a
+// get_frame_addr()-confirm loop) to chase a blocky-corruption
+// artifact -- both were grounded in genuinely real decompiled code,
+// but from the wrong app (CarLife's msncarlife, not real Android
+// Auto). Decompiling usr/bin/sink's own VideoDecoder::flush_video()
+// (the actual stock AA video-push function) shows it does neither:
+// it writes the address unconditionally, every frame, no wait, no
+// confirm. Kept here as a real, correctly-implemented utility in
+// case tearing reappears and a fallback is genuinely needed, but is
+// not part of the current per-frame call path.
 bool wait_for_vsync(VideoLayerHandle & h);
 
 // Reads back the Y-plane address the LCDC hardware is CURRENTLY
 // displaying (not what was last requested) via the real vendor
 // ARK_IO(54) GET ioctl, 0x80104f36 -- ported from libarkcmn.so's own
-// arkapi_get_fb_addr() (Ghidra decompile: `ioctl(fd, 0x80104f36,
-// &{y,cb,cr,pad})`, only the Y address is needed/returned here since
-// that's all real stock's own confirm-loop caller checks, see below).
-//
-// 2026-08-16: found while cross-checking pushDecodedFrame()'s own
-// vsync fix against real stock behavior -- `msncarlife`'s
-// FUN_000645e8 (a real caller reachable from arkapi_wait_for_vsync's
-// own PLT reference) does NOT just blindly call wait_for_vsync() once
-// before every push, the way this file's own set_frame_addr()/
-// pushDecodedFrame() previously did. It reads back the currently-
-// displayed address first, and only waits (bounded to a few retries,
-// not indefinitely) if the PREVIOUSLY pushed address hasn't actually
-// taken effect in hardware yet -- i.e. it confirms the last flip
-// actually completed before queuing the next one, rather than
-// assuming one vsync period is always enough. pushDecodedFrame() now
-// replicates this exact idiom.
+// arkapi_get_fb_addr(). See wait_for_vsync()'s own comment -- not
+// called from the per-frame path for the same reason.
 bool get_frame_addr(VideoLayerHandle & h, uint32_t & outYAddr);
 
 // ARKFB_SHOW_WINDOW_REAL / ARKFB_HIDE_WINDOW_REAL (0x4f2b/0x4f2c) --

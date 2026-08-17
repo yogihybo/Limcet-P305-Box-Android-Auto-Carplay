@@ -87,6 +87,16 @@ UI_TARGET     := $(BUILD_DIR)/custom_ui
 UI_SRCS       := $(filter-out src/androidauto/%,$(shell find src -name '*.cpp'))
 UI_OBJS       := $(patsubst src/%.cpp,$(BUILD_DIR)/ui-obj/%.o,$(UI_SRCS))
 
+# staging_ui/ -- Material 3 home dashboard/settings-screen redesign,
+# not wired into src/ so it sits outside UI_SRCS' `find src` above.
+# Includes 3 auto-generated LVGL font C files (lv_font_conv output,
+# same shape as third_party/lvgl's own font sources) alongside the
+# C++ screens, hence the separate STAGING_UI_C_SRCS/pattern rule below.
+STAGING_UI_SRCS   := $(shell find staging_ui -name '*.cpp')
+STAGING_UI_C_SRCS := $(shell find staging_ui -name '*.c')
+STAGING_UI_OBJS   := $(patsubst staging_ui/%.cpp,$(BUILD_DIR)/ui-obj/staging_ui/%.o,$(STAGING_UI_SRCS)) \
+                     $(patsubst staging_ui/%.c,$(BUILD_DIR)/ui-obj/staging_ui/%.o,$(STAGING_UI_C_SRCS))
+
 # --- Android Auto (aasdk-backed) sources, shared by the future real
 #     integration and the standalone probe test below ---
 AASDK_SRCS    := $(shell find src/androidauto -name '*.cpp')
@@ -341,13 +351,21 @@ androidauto-wireless-probe-test: $(WIRELESS_TEST_TARGET)
 androidauto-bluetooth-rfcomm-test: $(BT_TEST_TARGET)
 androidauto-bw-aap-test: $(BW_AAP_TEST_TARGET)
 
-$(UI_TARGET): $(UI_OBJS) $(LVGL_OBJS)
+$(UI_TARGET): $(UI_OBJS) $(STAGING_UI_OBJS) $(LVGL_OBJS)
 	@mkdir -p $(dir $@)
 	$(CXX) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 $(BUILD_DIR)/ui-obj/%.o: src/%.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+$(BUILD_DIR)/ui-obj/staging_ui/%.o: staging_ui/%.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+$(BUILD_DIR)/ui-obj/staging_ui/%.o: staging_ui/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c -o $@ $<
 
 $(BUILD_DIR)/ui-obj/androidauto/%.o: src/androidauto/%.cpp
 	@mkdir -p $(dir $@)

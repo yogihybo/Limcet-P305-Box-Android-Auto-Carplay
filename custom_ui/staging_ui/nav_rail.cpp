@@ -1,5 +1,6 @@
 #include "staging_ui/nav_rail.h"
 #include "staging_ui/theme.h"
+#include "staging_ui/fonts.h"
 #include "core/navigation.h"
 
 namespace staging_ui {
@@ -12,7 +13,7 @@ struct RailCtx {
 
 void nav_btn_cb(lv_event_t * e) {
     auto dest = static_cast<NavDestination>(reinterpret_cast<uintptr_t>(lv_event_get_user_data(e)));
-    auto * rail = lv_obj_get_parent(lv_event_get_target(e));
+    auto * rail = lv_obj_get_parent(static_cast<lv_obj_t *>(lv_event_get_target(e)));
     auto * ctx = static_cast<RailCtx *>(lv_obj_get_user_data(rail));
     if (ctx && ctx->callback) {
         ctx->callback(dest);
@@ -30,7 +31,7 @@ lv_obj_t * add_rail_button(lv_obj_t * rail, const char * symbol, NavDestination 
 
     lv_obj_t * icon = lv_label_create(btn);
     lv_label_set_text(icon, symbol);
-    lv_obj_set_style_text_font(icon, &lv_font_montserrat_24, 0);
+    lv_obj_set_style_text_font(icon, &lv_font_roboto_24, 0);
     lv_obj_set_style_text_color(icon, active ? theme::text_on_accent() : theme::text_primary(), 0);
     lv_obj_center(icon);
 

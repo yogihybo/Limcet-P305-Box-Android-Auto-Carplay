@@ -217,48 +217,11 @@ bool HantroH264Decoder::ensureDmaCapacity(size_t size) {
 }
 
 namespace {
-// 2026-08-18: the grey-wash diagnostic (video_channel.cpp) showed
-// frame#1's isIdrPicture reading as 1500 -- not a valid 0/1 boolean,
-// meaning that field can't be trusted to answer "was the first
-// displayed picture really an IDR" (see hantro_h264_decoder.h's own
-// struct comment -- the layout itself is cross-checked against three
-// independent real SDK headers, so this isn't an obvious offset bug,
-// just an unexplained anomaly on that one field for that one frame).
-// Rather than trust a possibly-buggy decoder-output field, scan the
-// RAW Annex-B bitstream bytes actually fed to the decoder for their
-// real NAL unit types (lower 5 bits of the byte after each 00 00 01 /
-// 00 00 00 01 start code) -- ground truth about what data the
-// decoder was actually given, independent of what it reports back.
-// NAL type 5 = IDR slice, 7 = SPS, 8 = PPS, 1 = non-IDR slice (per
-// the H.264 spec's own nal_unit_type table).
-constexpr uint32_t kInputNalDiagFrameCount = 10;
-
-void logInputNalTypes(const uint8_t * data, size_t len, uint32_t picId) {
-    size_t i = 0;
-    while (i + 3 < len) {
-        if (data[i] == 0 && data[i + 1] == 0 && data[i + 2] == 1) {
-            size_t nalStart = i + 3;
-            if (nalStart < len) {
-                uint8_t nalType = data[nalStart] & 0x1F;
-                std::printf("%s androidauto::HantroH264Decoder: input nal diag picId=%u: NAL type=%u at "
-                            "offset %zu (len=%zu)\n", androidauto::logTimestamp().c_str(), picId, nalType,
-                            nalStart, len);
-            }
-            i = nalStart;
-        } else {
-            ++i;
-        }
-    }
-}
 }  // namespace
 
 bool HantroH264Decoder::decodeFrame(const uint8_t * data, size_t len) {
     if (!decoderInst_) return false;
     if (!ensureDmaCapacity(len)) return false;
-
-    if (frameCounter_ < kInputNalDiagFrameCount) {
-        logInputNalTypes(data, len, frameCounter_ + 1);
-    }
 
     std::memcpy(dmaVirt_, data, len);
     // Same write-combine drain reasoning as stabilize_output()'s own

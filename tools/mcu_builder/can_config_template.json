@@ -1,0 +1,67 @@
+{
+  "description": "CAN Bus Protocol & Key Decoding Configuration for Limcet STM32F105 MCU",
+  "target_version": "DCn32-VOLVO-V2.10-20240909",
+  "base_address": "0x08004000",
+  "active_mode": 1,
+  "tables": {
+    "mode1": {
+      "name": "Mode 1 Dispatch Table (0x0800BB80)",
+      "entries": [
+        { "index": 0, "can_id": "0x0f5", "description": "Engine / Vehicle speed" },
+        { "index": 1, "can_id": "0x2d5", "description": "Status frame" },
+        { "index": 2, "can_id": "0x28a", "description": "Steering wheel angle / trajectory" },
+        { "index": 3, "can_id": "0x215", "description": "Door / ACC status" },
+        { "index": 4, "can_id": "0x185", "description": "Reverse gear / radar trigger" },
+        { "index": 5, "can_id": "0x245", "description": "Climate / HVAC status" },
+        { "index": 6, "can_id": "0x195", "description": "Multi-function key / panel" },
+        { "index": 7, "can_id": "0x105", "description": "Steering Wheel Controls (SWC)" },
+        { "index": 8, "can_id": "0x035", "description": "Illumination / Headlights" }
+      ]
+    },
+    "mode2": {
+      "name": "Mode 2 Dispatch Table (0x0800BB30)",
+      "entries": [
+        { "index": 0, "can_id": "0x020", "description": "Status" },
+        { "index": 1, "can_id": "0x060", "description": "Speed" },
+        { "index": 2, "can_id": "0x110", "description": "SWC" },
+        { "index": 3, "can_id": "0x220", "description": "Trajectory" },
+        { "index": 4, "can_id": "0x170", "description": "Reverse" },
+        { "index": 5, "can_id": "0x240", "description": "HVAC" },
+        { "index": 6, "can_id": "0x1a0", "description": "Panel buttons" },
+        { "index": 7, "can_id": "0x080", "description": "Door" },
+        { "index": 8, "can_id": "0x090", "description": "Radar" },
+        { "index": 9, "can_id": "0x3a0", "description": "Auxiliary" }
+      ]
+    },
+    "mode3": {
+      "name": "Mode 3 Dispatch Table (0x0800BAE8)",
+      "entries": [
+        { "index": 0, "can_id": "0x03a", "description": "Speed" },
+        { "index": 1, "can_id": "0x04d", "description": "Status" },
+        { "index": 2, "can_id": "0x135", "description": "Trajectory" },
+        { "index": 3, "can_id": "0x168", "description": "SWC Keys" },
+        { "index": 4, "can_id": "0x214", "description": "Reverse" },
+        { "index": 5, "can_id": "0x110", "description": "Radar" },
+        { "index": 6, "can_id": "0x2c3", "description": "HVAC" },
+        { "index": 7, "can_id": "0x160", "description": "Door" },
+        { "index": 8, "can_id": "0x000", "description": "Unused" }
+      ]
+    }
+  },
+  "custom_swc_presets": {
+    "toyota_prado_150": {
+      "swc_can_id": "0x3c4",
+      "swc_table_mode": 1,
+      "swc_table_index": 7,
+      "buttons": {
+        "volume_up":   { "byte_idx": 0, "bitmask": "0x80" },
+        "volume_down": { "byte_idx": 0, "bitmask": "0x40" },
+        "mode_source": { "byte_idx": 0, "bitmask": "0x04" },
+        "next_track":  { "byte_idx": 0, "bitmask": "0x10" },
+        "prev_track":  { "byte_idx": 0, "bitmask": "0x08" },
+        "phone_pickup":{ "byte_idx": 1, "bitmask": "0x80" },
+        "enter_ok":    { "byte_idx": 1, "bitmask": "0x04" }
+      }
+    }
+  }
+}

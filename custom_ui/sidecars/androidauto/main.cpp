@@ -67,6 +67,8 @@
 #include <string>
 #include <thread>
 
+#include <fcntl.h>
+#include <sys/file.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
@@ -92,6 +94,40 @@ const char * state_name(androidauto::WirelessSessionState s) {
         case androidauto::WirelessSessionState::Failed: return "Failed";
     }
     return "Unknown";
+}
+
+// 2026-08-18: real hardware showed multiple concurrent instances of
+// this binary (and custom_ui, its usual launcher) accumulating during
+// iterative manual testing, all fighting over the same hardware --
+// /dev/fb4, the ALSA devices, and any live AA TCP session. This file's
+// own socket setup made it worse than a simple duplicate: it
+// unconditionally unlink()s any pre-existing socket file before
+// bind()ing (a few lines below, kept -- that part is correct, it's
+// what recovers from a genuinely-crashed previous run's stale socket
+// file), which means a NEW instance silently steals the socket away
+// from a previous one that's still very much alive, rather than being
+// blocked by it -- the old instance just keeps running headless, with
+// nothing able to reach it anymore, still holding onto whatever
+// hardware it already opened. flock() on a separate lock file (not a
+// PID file, which can go stale after a SIGKILL and then falsely block
+// every future launch forever) checked before any of that: the kernel
+// releases the lock automatically the instant a process exits for any
+// reason, no stale-lock cleanup logic needed.
+bool acquireSingleInstanceLock() {
+    constexpr const char * kLockPath = "/tmp/androidauto-sidecar.lock";
+    int fd = ::open(kLockPath, O_CREAT | O_RDWR, 0644);
+    if (fd < 0) {
+        std::fprintf(stderr, "%s androidauto-sidecar: open(%s) failed: %s -- continuing without a "
+                     "single-instance guard\n", androidauto::logTimestamp().c_str(), kLockPath, std::strerror(errno));
+        return true;
+    }
+    if (::flock(fd, LOCK_EX | LOCK_NB) != 0) {
+        std::fprintf(stderr, "%s androidauto-sidecar: another instance already holds %s -- refusing to "
+                     "start a second one\n", androidauto::logTimestamp().c_str(), kLockPath);
+        ::close(fd);
+        return false;
+    }
+    return true;  // fd deliberately leaked -- held open for the life of the process
 }
 
 void handle_connection(int clientFd, androidauto::WirelessSessionManager * manager) {
@@ -185,6 +221,10 @@ int main() {
     // forever in this process (real hardware caught exactly that).
     androidauto::markProcessStart();
     core::mark_process_start();
+
+    if (!acquireSingleInstanceLock()) {
+        return 1;
+    }
 
     // 2026-08-15: found on real hardware -- alsa-lib bakes the build
     // HOST's own --with-configdir path into libasound.a at compile time

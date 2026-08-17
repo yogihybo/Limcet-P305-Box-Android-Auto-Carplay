@@ -48,12 +48,56 @@ bool AlsaOutput::open() {
 
     std::printf("%s androidauto::AlsaOutput: opened %s (%u Hz, 16-bit, %u ch)\n", androidauto::logTimestamp().c_str(), deviceName_.c_str(),
                sampleRate_, channels_);
+
+    stop_ = false;
+    writerThread_ = std::thread(&AlsaOutput::writerLoop, this);
     return true;
 }
 
 bool AlsaOutput::write(const void * interleavedSamples, uint32_t frameCount) {
     if (!pcmHandle_) return false;
 
+    uint32_t bytesPerFrame = 2 * channels_;  // 16-bit samples, see header comment
+    const uint8_t * bytes = static_cast<const uint8_t *>(interleavedSamples);
+    std::vector<uint8_t> copy(bytes, bytes + static_cast<size_t>(frameCount) * bytesPerFrame);
+
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (queue_.size() >= kMaxQueuedBuffers) {
+        ++droppedBuffers_;
+        if (droppedBuffers_ == 1 || droppedBuffers_ % 100 == 0) {
+            std::fprintf(stderr, "%s androidauto::AlsaOutput: writer thread for %s falling behind, "
+                         "dropped %u buffer(s) so far\n", androidauto::logTimestamp().c_str(),
+                         deviceName_.c_str(), droppedBuffers_);
+        }
+        return true;
+    }
+    queue_.push_back(std::move(copy));
+    cv_.notify_one();
+    return true;
+}
+
+void AlsaOutput::writerLoop() {
+    for (;;) {
+        std::vector<uint8_t> buf;
+        {
+            std::unique_lock<std::mutex> lock(mutex_);
+            cv_.wait(lock, [this]() { return stop_ || !queue_.empty(); });
+            if (queue_.empty()) {
+                if (stop_) return;
+                continue;
+            }
+            buf = std::move(queue_.front());
+            queue_.pop_front();
+        }
+        uint32_t bytesPerFrame = 2 * channels_;
+        uint32_t frameCount = static_cast<uint32_t>(buf.size() / bytesPerFrame);
+        if (frameCount > 0) {
+            writeBlocking(buf.data(), frameCount);
+        }
+    }
+}
+
+bool AlsaOutput::writeBlocking(const void * interleavedSamples, uint32_t frameCount) {
     snd_pcm_sframes_t written = snd_pcm_writei(pcmHandle_, interleavedSamples, frameCount);
     if (written < 0) {
         // ALSA's own documented XRUN-recovery pattern: retry once via
@@ -75,6 +119,14 @@ bool AlsaOutput::write(const void * interleavedSamples, uint32_t frameCount) {
 }
 
 void AlsaOutput::close() {
+    if (writerThread_.joinable()) {
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            stop_ = true;
+        }
+        cv_.notify_one();
+        writerThread_.join();
+    }
     if (pcmHandle_) {
         snd_pcm_close(pcmHandle_);
         pcmHandle_ = nullptr;

@@ -255,6 +255,28 @@ void VideoChannel::pushDecodedFrame() {
     } else if (!wantVisible && videoLayerShown_) {
         hal::hide_video_layer(videoLayer_);
         videoLayerShown_ = false;
+        // 2026-08-17: real hardware shows a white/washed-out overlay
+        // over AA video that clears once the user switches the head
+        // unit to its own factory source and back -- decode keeps
+        // running the whole time (video_visible() only gates this
+        // hardware layer's show/hide, not decode itself, see
+        // video_visibility.h), so the AA session/stream itself was
+        // never interrupted; whatever cleared up was local to this
+        // layer's own hardware state, not the decoded content. The
+        // only thing this class does ONCE and never repeats is
+        // configure_video_layer() (window geometry/format registers)
+        // -- set_frame_addr() alone re-asserts the two plane
+        // addresses every frame, but never re-touches those registers.
+        // If anything external to this process (the factory source
+        // switch's own display init, or any other layer/compositor
+        // user) ever reconfigures the shared LCDC hardware while this
+        // layer is hidden, our stale registers would be wrong the
+        // next time we show -- forcing a full reconfigure on the next
+        // show (below, via videoLayerConfigured_) is a cheap,
+        // always-safe reassertion regardless of whether that's
+        // actually what's happening; it costs one extra ioctl on the
+        // next transition back to visible and nothing else.
+        videoLayerConfigured_ = false;
     }
 }
 

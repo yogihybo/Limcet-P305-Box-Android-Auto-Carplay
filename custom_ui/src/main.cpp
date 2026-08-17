@@ -29,7 +29,7 @@
 #include "ui/android_auto_screen.h"
 #include "ui/home_screen.h"
 #include "ui/theme.h"
-#include "staging_ui/home_dashboard.h"
+#include "ui/staging/home_dashboard.h"
 
 namespace {
 

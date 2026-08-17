@@ -1,6 +1,6 @@
-#include "staging_ui/nav_rail.h"
-#include "staging_ui/theme.h"
-#include "staging_ui/fonts.h"
+#include "ui/staging/nav_rail.h"
+#include "ui/staging/theme.h"
+#include "ui/staging/fonts.h"
 #include "core/navigation.h"
 
 namespace staging_ui {

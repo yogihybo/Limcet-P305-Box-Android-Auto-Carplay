@@ -16,17 +16,15 @@ namespace {
 constexpr std::uint32_t kKeycodeSystemNavigationUp = 280;
 constexpr std::uint32_t kKeycodeSystemNavigationDown = 281;
 constexpr std::uint32_t kKeycodeDpadCenter = 23;
-// 2026-08-19: real hardware test showed SYSTEM_NAVIGATION_UP/DOWN only
-// moves focus within the currently-focused rotary container ("card") --
-// there was no way to reach fields in a different card. AAOS treats
-// moving BETWEEN containers as a DPAD-directional "nudge", not a
-// SYSTEM_NAVIGATION rotation. The physical knob only has rotate + press
-// (confirmed -- no other gesture available), so a hold-and-rotate chord
-// is used below: holding the press button down while rotating sends
-// these instead of 280/281. See session.cpp's ServiceDiscoveryResponse
-// for the matching keycodes_supported addition.
-constexpr std::uint32_t kKeycodeDpadUp = 19;
-constexpr std::uint32_t kKeycodeDpadDown = 20;
+// 2026-08-19: a hold-and-rotate chord (kKeycodeDpadUp/Down, sent
+// instead of 280/281 while the button was held) was tried here to
+// nudge focus BETWEEN rotary containers -- reverted after real
+// hardware testing showed it broke plain rotation entirely, not just
+// the new chord. See session.cpp's ServiceDiscoveryResponse comment
+// for the full story (declaring DPAD_UP/DOWN alongside
+// SYSTEM_NAVIGATION_UP/DOWN in keycodes_supported is the suspected
+// cause). Back to the simple, hardware-confirmed-working model:
+// rotation always sends 280/281, press always sends 23.
 
 // Own client instance, separate from android_auto_screen.cpp's/
 // status_bar.cpp's -- allow_spawn is always false for sendKey() (see
@@ -46,53 +44,25 @@ bool & knob_was_pressed() {
     return was_pressed;
 }
 
-// Tracks whether any rotation happened during the current press-hold,
-// so a hold-and-rotate chord (nudge between cards) doesn't ALSO fire a
-// DPAD_CENTER click when the button is released -- only a hold with no
-// rotation counts as a real click.
-bool & rotated_while_held() {
-    static bool rotated = false;
-    return rotated;
-}
-
 void mcu_knob_read_cb(lv_indev_t * indev, lv_indev_data_t * data) {
     auto * mcu = static_cast<McuInputHal *>(lv_indev_get_driver_data(indev));
 
     int32_t ticks = mcu->consume_knob_ticks();
     bool pressed = mcu->get_knob_pressed();
     bool press_edge = pressed && !knob_was_pressed();
-    bool release_edge = !pressed && knob_was_pressed();
     knob_was_pressed() = pressed;
-    if (press_edge) {
-        rotated_while_held() = false;
-    }
 
     if (androidauto_screen_active().load(std::memory_order_acquire)) {
-        // 2026-08-19: hold-and-rotate chord -- see this file's header
-        // comment on kKeycodeDpadUp/Down above. While the button is
-        // held, rotation nudges BETWEEN containers (DPAD_UP/DOWN);
-        // otherwise it moves focus WITHIN the current container
-        // (SYSTEM_NAVIGATION_UP/DOWN, hardware-confirmed working
-        // 2026-08-17). DPAD_CENTER is now sent on release rather than
-        // press, and only if no rotation occurred during the hold --
-        // otherwise every chord gesture would also fire a spurious
-        // click at its start.
         if (ticks != 0) {
-            std::printf("%s hal::knob: AA active, ticks=%d, held=%d\n", core::log_timestamp().c_str(), ticks,
-                        pressed ? 1 : 0);
+            std::printf("%s hal::knob: AA active, ticks=%d\n", core::log_timestamp().c_str(), ticks);
         }
-        if (pressed && ticks != 0) {
-            rotated_while_held() = true;
-        }
-        std::uint32_t downKey = pressed ? kKeycodeDpadDown : kKeycodeSystemNavigationDown;
-        std::uint32_t upKey = pressed ? kKeycodeDpadUp : kKeycodeSystemNavigationUp;
         for (int32_t i = 0; i < ticks; ++i) {
-            androidauto_client().sendKey(downKey);
+            androidauto_client().sendKey(kKeycodeSystemNavigationDown);
         }
         for (int32_t i = 0; i < -ticks; ++i) {
-            androidauto_client().sendKey(upKey);
+            androidauto_client().sendKey(kKeycodeSystemNavigationUp);
         }
-        if (release_edge && !rotated_while_held()) {
+        if (press_edge) {
             androidauto_client().sendKey(kKeycodeDpadCenter);
         }
         // Report "nothing happened" to LVGL -- this screen has no

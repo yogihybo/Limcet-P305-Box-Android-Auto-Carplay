@@ -17,6 +17,9 @@ AudioChannel::AudioChannel(boost::asio::io_service::strand & strand,
       sampleRate_(sampleRate),
       channels_(channels),
       alsaOutput_(pcmDevice_, sampleRate_, 16, channels_) {
+}
+
+void AudioChannel::start() {
     // 2026-08-18: see alsa_output.h's own class comment for the full
     // story -- this channel's ack is max_unacked=1's actual flow
     // control (the phone won't send the next buffer until it gets
@@ -24,13 +27,20 @@ AudioChannel::AudioChannel(boost::asio::io_service::strand & strand,
     // buffer is handed to AlsaOutput::write() (which now just enqueues
     // it). AlsaOutput invokes this from ITS OWN writer thread (or
     // synchronously from write() on the drop path) -- never assume
-    // it's already on strand_, always post.
-    alsaOutput_.setConsumedCallback([this]() {
-        strand_.post([this]() { sendAck(); });
+    // it's already on strand_, always post. Wired here rather than the
+    // constructor -- shared_from_this() isn't legal until a shared_ptr
+    // already owns this object, and a subagent review flagged that a
+    // bare `this` capture here (unlike Session::sendPing()'s own
+    // self-capturing fix for the identical async-lifetime concern)
+    // relies on a fragile invariant rather than a real guarantee: it
+    // only happens to be safe today because channels can currently
+    // only be destroyed on the same thread that owns io_service, after
+    // run() returns. A self-capturing shared_ptr removes that
+    // dependency entirely.
+    auto self = shared_from_this();
+    alsaOutput_.setConsumedCallback([this, self]() {
+        strand_.post([this, self]() { sendAck(); });
     });
-}
-
-void AudioChannel::start() {
     channel_->receive(this->shared_from_this());
 }
 

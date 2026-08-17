@@ -95,14 +95,42 @@ ReaderState & reader_state() {
 // line matches its expected_prefix (or no filter was set) -- if so,
 // appends it (prefix-stripped, same as before) to matched_lines and
 // wakes the waiter.
-void reader_loop(int fd) {
+//
+// 2026-08-19: real gap found via code audit -- this used to just log
+// and return on any read() <= 0 (EINTR, or blueware itself restarting
+// and closing the fd out from under this), leaving
+// ReaderState::started permanently true with no reader ever coming
+// back. Every send_command() call from then on (including the write()
+// succeeding fine, since that's a DIFFERENT fd-using code path) would
+// wait on line_cv for a response that no thread can ever deliver
+// again, silently timing out on every single call for the rest of
+// the process's life -- Bluetooth functionality effectively dead
+// with no error surfaced anywhere obvious. A full live-reconnect
+// would also need to keep h's fd (used by send_command()'s own
+// ::write() calls, a completely separate code path from this reader)
+// in sync with whatever new fd this thread opens, which is real
+// added complexity/risk for a background HAL reader -- instead, this
+// now takes the actual BluetoothHandle (not just a copied fd) so it
+// can mark BOTH `h->fd = -1` and the reader `started` flag false on
+// exit, matching close_bluetooth()'s own convention. That makes
+// send_command() fail FAST and visibly (h.fd < 0 check, already
+// there) instead of hanging on a dead condition variable -- a clear,
+// diagnosable "Bluetooth is down" state rather than a silent,
+// indefinite hang.
+void reader_loop(BluetoothHandle * h) {
     std::string buffer;
     char chunk[256];
+    int fd = h->fd;
     for (;;) {
         ssize_t n = ::read(fd, chunk, sizeof(chunk));
         if (n <= 0) {
-            std::fprintf(stderr, "%s hal::bluetooth::bluetooth reader: read() returned %zd, stopping (%s)\n", core::log_timestamp().c_str(), n,
-                         std::strerror(errno));
+            std::fprintf(stderr, "%s hal::bluetooth::bluetooth reader: read() returned %zd, stopping (%s) -- "
+                         "marking Bluetooth handle dead so future commands fail fast instead of hanging\n",
+                         core::log_timestamp().c_str(), n, std::strerror(errno));
+            h->fd = -1;
+            ReaderState & rs = reader_state();
+            std::lock_guard<std::mutex> lock(rs.line_mtx);
+            rs.started = false;
             return;
         }
         buffer.append(chunk, static_cast<size_t>(n));
@@ -333,7 +361,7 @@ void start_bluetooth_reader(BluetoothHandle & h) {
     ReaderState & rs = reader_state();
     if (rs.started) return;
     rs.started = true;
-    std::thread(reader_loop, h.fd).detach();
+    std::thread(reader_loop, &h).detach();
 }
 
 void watch_bluetooth_broadcasts(std::function<void(const std::string &)> callback) {

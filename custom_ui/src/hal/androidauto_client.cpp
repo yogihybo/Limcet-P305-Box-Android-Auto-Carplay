@@ -7,6 +7,7 @@
 
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <sys/time.h>
 #include <unistd.h>
 
 namespace hal {
@@ -109,6 +110,24 @@ bool AndroidAutoClient::ensureConnected(bool allow_spawn) {
         return false;
     }
 
+    // 2026-08-19: real gap found via code audit -- this socket had no
+    // receive timeout at all, unlike every other IPC path in this
+    // codebase (hal/bluetooth.cpp, bw_aap_client.cpp, etc. all use
+    // select()-based timeouts). sendCommand()'s read() below is called
+    // from statusLine() (polled every 500ms by ui/android_auto_screen.cpp
+    // from the LVGL main thread) and from hal/touch.cpp's sendTouch()
+    // (called at the touch panel's own poll rate) -- both run on the
+    // single LVGL main thread, so an unbounded block here if the
+    // sidecar ever stalls (a hang anywhere in its own blocking
+    // operations -- wifi_ap.sh, the bw_aap handshake waits, etc. --
+    // several of which this same audit pass found real gaps in) would
+    // freeze the ENTIRE UI, not just Android Auto's own screen. 1s is
+    // generous for a normally-fast local IPC round trip while still
+    // bounding the worst case tightly for a real-time UI thread.
+    struct timeval tv {};
+    tv.tv_sec = 1;
+    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+
     fd_ = fd;
     return true;
 }
@@ -180,6 +199,20 @@ bool AndroidAutoClient::sendKey(std::uint32_t keycode) {
     std::lock_guard<std::mutex> lock(mutex_);
     std::string reply;
     std::string cmd = "KEY " + std::to_string(keycode);
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        if (ensureConnected(/*allow_spawn=*/false) && sendCommand(cmd, reply)) {
+            return true;
+        }
+        disconnect();
+    }
+    return false;
+}
+
+bool AndroidAutoClient::sendTouch(std::uint32_t x, std::uint32_t y, TouchAction action) {
+    const char * actionStr = action == TouchAction::Down ? "DOWN" : action == TouchAction::Move ? "MOVE" : "UP";
+    std::lock_guard<std::mutex> lock(mutex_);
+    std::string reply;
+    std::string cmd = "TOUCH " + std::to_string(x) + " " + std::to_string(y) + " " + actionStr;
     for (int attempt = 0; attempt < 2; ++attempt) {
         if (ensureConnected(/*allow_spawn=*/false) && sendCommand(cmd, reply)) {
             return true;

@@ -151,22 +151,47 @@ void AlsaOutput::writerLoop() {
 }
 
 bool AlsaOutput::writeBlocking(const void * interleavedSamples, uint32_t frameCount) {
-    snd_pcm_sframes_t written = snd_pcm_writei(pcmHandle_, interleavedSamples, frameCount);
-    if (written < 0) {
-        // ALSA's own documented XRUN-recovery pattern: retry once via
-        // snd_pcm_recover(), then re-attempt the write.
-        int recovered = snd_pcm_recover(pcmHandle_, static_cast<int>(written), 1);
-        if (recovered < 0) {
-            std::fprintf(stderr, "%s androidauto::AlsaOutput: unrecoverable write error on %s: %s\n", androidauto::logTimestamp().c_str(),
-                         deviceName_.c_str(), snd_strerror(recovered));
-            return false;
-        }
-        written = snd_pcm_writei(pcmHandle_, interleavedSamples, frameCount);
+    // 2026-08-19: real gap found via code audit -- snd_pcm_writei() is
+    // documented to be able to return 0 < written < frameCount even in
+    // blocking mode (a genuine short write, not an error -- ALSA's own
+    // API contract, e.g. on a signal interrupting the underlying
+    // syscall). This function used to check only `written < 0`
+    // (hard error) and otherwise return success unconditionally,
+    // silently dropping whatever fraction of the buffer wasn't
+    // actually written -- a real, if intermittent, source of audio
+    // clicks/pops. Loops until every frame is written (or a genuinely
+    // unrecoverable error occurs), advancing the buffer pointer by
+    // however many frames each call actually consumed.
+    const uint8_t * cursor = static_cast<const uint8_t *>(interleavedSamples);
+    uint32_t bytesPerFrame = 2 * channels_;  // 16-bit samples, see header comment
+    uint32_t remaining = frameCount;
+    while (remaining > 0) {
+        snd_pcm_sframes_t written = snd_pcm_writei(pcmHandle_, cursor, remaining);
         if (written < 0) {
-            std::fprintf(stderr, "%s androidauto::AlsaOutput: write failed even after recovery on "
-                         "%s: %s\n", androidauto::logTimestamp().c_str(), deviceName_.c_str(), snd_strerror(static_cast<int>(written)));
+            // ALSA's own documented XRUN-recovery pattern: retry once
+            // via snd_pcm_recover(), then re-attempt the same
+            // remaining frames (not the original full buffer -- some
+            // of it may have already been written in an earlier loop
+            // iteration).
+            int recovered = snd_pcm_recover(pcmHandle_, static_cast<int>(written), 1);
+            if (recovered < 0) {
+                std::fprintf(stderr, "%s androidauto::AlsaOutput: unrecoverable write error on %s: %s\n", androidauto::logTimestamp().c_str(),
+                             deviceName_.c_str(), snd_strerror(recovered));
+                return false;
+            }
+            continue;
+        }
+        if (written == 0) {
+            // Shouldn't happen for a successful (non-negative) return,
+            // but guard against ever looping forever if it somehow
+            // does.
+            std::fprintf(stderr, "%s androidauto::AlsaOutput: snd_pcm_writei() on %s returned 0 with %u "
+                         "frames remaining -- giving up rather than spinning\n", androidauto::logTimestamp().c_str(),
+                         deviceName_.c_str(), remaining);
             return false;
         }
+        cursor += static_cast<size_t>(written) * bytesPerFrame;
+        remaining -= static_cast<uint32_t>(written);
     }
     return true;
 }

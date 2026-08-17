@@ -108,6 +108,23 @@ void poll_timer_cb(lv_timer_t * timer) {
     lv_obj_set_style_text_color(w->state_label, color_for_state_name(status.name), 0);
     lv_label_set_text(w->detail_label, status.detail.c_str());
 
+    // 2026-08-19: real hardware showed the knob stuck routing to AA
+    // (SYSTEM_NAVIGATION/DPAD_CENTER via sendKey()) after the PHONE
+    // ended the session (bye-bye) while the user was still sitting on
+    // this screen -- androidauto_screen_active() used to only flip on
+    // screen create/destroy (see create_android_auto_screen()'s own
+    // comment and screen_delete_cb() below), which tracks whether this
+    // screen INSTANCE is alive, not whether there's actually a live
+    // session to receive those keys. Ticks/presses kept registering in
+    // hal/knob.cpp's own log but had no visible effect (nothing on the
+    // phone left to receive them), and the knob couldn't drive local
+    // LVGL focus (e.g. onto this screen's own back button, now visible
+    // again below) to get back out either. Tying this to the same
+    // Connected/not-Connected check that already gates content/display
+    // visibility fixes both: only route the knob to AA while a session
+    // is genuinely showing video.
+    hal::androidauto_screen_active().store(status.name == "Connected", std::memory_order_release);
+
     if (status.name == "Connected") {
         lv_obj_add_flag(w->content, LV_OBJ_FLAG_HIDDEN);
         // 2026-08-15: per explicit request, AA should take over the
@@ -201,12 +218,14 @@ lv_obj_t * create_android_auto_screen() {
     // that would otherwise sit on top of the video layer regardless of
     // this call.
     client().setVisible(true);
-    // 2026-08-15: the physical control knob should drive the AA
-    // session (rotation/push forwarded as real Android KeyEvent taps,
-    // see hal/knob.cpp) while this screen is the active one, instead
-    // of local LVGL group navigation -- this screen has no meaningful
-    // focusable widgets of its own to navigate anyway.
-    hal::androidauto_screen_active().store(true, std::memory_order_release);
+    // 2026-08-19: starts false, not true -- poll_timer_cb() below is
+    // now the real, ongoing source of truth for this flag (see its own
+    // comment), flipping it true only once status is actually
+    // "Connected" and back to false the moment it isn't. Before that
+    // first poll (or whenever not connected), this screen's own back
+    // button/instructions card ARE meaningful focusable widgets, so the
+    // knob needs local LVGL navigation here, not AA routing.
+    hal::androidauto_screen_active().store(false, std::memory_order_release);
 
     lv_obj_t * content = lv_obj_create(scr);
     theme::style_card(content);

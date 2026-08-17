@@ -2,6 +2,17 @@
 
 This toolkit provides tools for analyzing, decompiling, patching, and rebuilding the companion STM32F105 MCU firmware (`can_app.bin`) for Limcet CarPlay / Android Auto head units (e.g. Limcet Box-P305 / Box-P306).
 
+> **⚠️ Read before flashing anything built here to a real vehicle:**
+> - `--preset toyota_prado_150` patches **two** CAN IDs. Only one (the SWC ID,
+>   `0x105 -> 0x3C4`) has real basis in this project's research; the other
+>   (`0x185 -> 0x025`, the reverse/parking-sensor handler) is **unverified** and
+>   may conflict with SWC traffic per `docs/1.2_CANBUS.md`. See
+>   `docs/1.3.1_MCU_FIRMWARE_DECOMPILATION.md`'s warning banner for the full
+>   explanation before using this preset.
+> - No image-level checksum/CRC verification is confirmed to exist for
+>   `can_app.bin` — only the runtime UART protocol has one. Keep a copy of the
+>   stock binary before flashing a patched image.
+
 ---
 
 ## 1. Overview & Directory Structure
@@ -29,6 +40,11 @@ The output files are generated in `tools/mcu_builder/output/`:
 ---
 
 ## 3. Flash Deployment via USB
+
+**⚠️ This flashes the companion STM32 MCU that drives CAN bus / steering-wheel
+controls. A bad image can leave that subsystem non-functional or misbehaving
+until re-flashed with a known-good binary — keep a copy of the original
+`hardware/MCU/can_app.bin` before deploying a patched one.**
 
 1. Copy both `auto_upgrade.txt` and `can_app.bin` from `tools/mcu_builder/output/usb_root/` directly to the **ROOT directory** of a FAT32-formatted USB flash drive.
 2. Turn on the vehicle and wait for the CarPlay head unit to boot.

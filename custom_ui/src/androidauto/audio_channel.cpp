@@ -20,27 +20,6 @@ AudioChannel::AudioChannel(boost::asio::io_service::strand & strand,
 }
 
 void AudioChannel::start() {
-    // 2026-08-18: see alsa_output.h's own class comment for the full
-    // story -- this channel's ack is max_unacked=1's actual flow
-    // control (the phone won't send the next buffer until it gets
-    // this), so it must fire at real playback pace, not the instant a
-    // buffer is handed to AlsaOutput::write() (which now just enqueues
-    // it). AlsaOutput invokes this from ITS OWN writer thread (or
-    // synchronously from write() on the drop path) -- never assume
-    // it's already on strand_, always post. Wired here rather than the
-    // constructor -- shared_from_this() isn't legal until a shared_ptr
-    // already owns this object, and a subagent review flagged that a
-    // bare `this` capture here (unlike Session::sendPing()'s own
-    // self-capturing fix for the identical async-lifetime concern)
-    // relies on a fragile invariant rather than a real guarantee: it
-    // only happens to be safe today because channels can currently
-    // only be destroyed on the same thread that owns io_service, after
-    // run() returns. A self-capturing shared_ptr removes that
-    // dependency entirely.
-    auto self = shared_from_this();
-    alsaOutput_.setConsumedCallback([this, self]() {
-        strand_.post([this, self]() { sendAck(); });
-    });
     channel_->receive(this->shared_from_this());
 }
 
@@ -82,10 +61,22 @@ void AudioChannel::onMediaChannelSetupRequest(
     // instance -- media/system/speech, matching this class being
     // constructed 3 times), immediately followed by "Failed to read
     // message" and teardown. max_unacked (Config.proto field 2) is
-    // optional but apparently required in practice. 1 matches
-    // microphone_channel.cpp's own already-correct value, which itself
-    // matches the real upstream f1x/openauto reference.
-    response.set_max_unacked(1);
+    // optional but apparently required in practice.
+    //
+    // 2026-08-19: raised from 1 to 8 per docs/AUDIO_SUBSYSTEM_HANDOFF.md
+    // -- with max_unacked=1 the ack IS the flow control (phone can't
+    // send buffer N+1 until N is acked), so acking at real playback
+    // pace (the previous fix, see git history) turns the network
+    // round-trip into an unavoidable per-buffer silence gap. Stock's
+    // own libAndroidAuto.so (decompile-confirmed,
+    // docs/1.5_AUDIO_SUBSYSTEM_INVESTIGATION.md's "RESOLVED: audio
+    // dispatch is genuinely asynchronous" section) acks immediately on
+    // receipt and relies on a wider window plus a decoupled playback
+    // queue to smooth network jitter instead. 8 is not itself a
+    // decompile-confirmed value (the decompile confirmed immediate
+    // delta-ack, not this specific window size) -- treat as a tunable
+    // if stutter persists.
+    response.set_max_unacked(8);
     response.add_configuration_indices(0);
 
     auto promise = aasdk::channel::SendPromise::defer(strand_);
@@ -143,26 +134,25 @@ void AudioChannel::playBuffer(const aasdk::common::DataConstBuffer & buffer) {
         uint32_t bytesPerFrame = 2 * channels_;
         uint32_t frameCount = static_cast<uint32_t>(buffer.size / bytesPerFrame);
         if (frameCount > 0) {
-            // Ack fires later, via the consumed-callback set in the
-            // constructor -- once this buffer's real write actually
-            // happens (or immediately if dropped) -- not here. See
-            // alsa_output.h's class comment: acking immediately after
-            // just enqueueing broke max_unacked=1's flow control and
-            // crashed the session on real hardware.
             alsaOutput_.write(buffer.cdata, frameCount);
-            return;
         }
     }
-    // ALSA never opened, or a zero-length buffer -- nothing will ever
-    // invoke the consumed callback for this one, so ack directly.
+    // 2026-08-19: acked immediately on receipt now, matching stock's
+    // confirmed real behavior (MediaSinkBase::ackFrames(1), see
+    // set_max_unacked's own comment above) -- not gated on real
+    // playback completion anymore. AlsaOutput::write() just enqueues;
+    // the writer thread and a bounded, drop-oldest queue (see its own
+    // class comment) absorb pacing/backlog instead of ack timing doing
+    // it.
     sendAck();
 }
 
 void AudioChannel::sendAck() {
-    ++ackCount_;
     aap_protobuf::service::media::source::message::Ack ack;
     ack.set_session_id(sessionId_);
-    ack.set_ack(static_cast<uint32_t>(ackCount_));
+    // Delta token (frames acknowledged since the last ack), not a
+    // cumulative sequence counter -- see set_max_unacked's own comment.
+    ack.set_ack(1);
 
     auto promise = aasdk::channel::SendPromise::defer(strand_);
     promise->then(

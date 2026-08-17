@@ -70,7 +70,6 @@ private:
     bool alsaOpen_ = false;
 
     int32_t sessionId_ = 0;
-    uint64_t ackCount_ = 0;
 };
 
 }  // namespace androidauto

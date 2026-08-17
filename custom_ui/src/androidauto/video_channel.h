@@ -120,6 +120,27 @@ private:
     std::chrono::steady_clock::time_point reportWindowStart_{};
     uint32_t framesSinceReport_ = 0;
     void maybeReportTiming();
+
+    // 2026-08-18: real hardware shows a grey/white translucent wash
+    // over the ENTIRE AA video area for the first several seconds of
+    // every session, clearing progressively -- specific UI regions
+    // clear as soon as anything redraws them, not all at once -- which
+    // is exactly what you'd see if the very first displayed picture's
+    // content never properly reached the buffer address the hardware
+    // is actually scanning out (H.264 P-frames only re-encode changed
+    // macroblocks, so untouched regions would keep showing whatever
+    // was there from the start indefinitely). Bounded, first-N-frames
+    // -only diagnostic: hal::get_frame_addr() (existing, previously
+    // unused utility -- see video_layer.h's own comment) reads back
+    // what the LCDC hardware is CURRENTLY scanning out, independent of
+    // what we just told it to show via set_frame_addr(). If these
+    // disagree on the first frames specifically, that directly proves
+    // the hardware isn't updating to our pushed address in time --
+    // if they always agree, the wrong content is genuinely what's at
+    // that (correctly-applied) address, pointing at the decoder's own
+    // buffer instead.
+    uint32_t framesSincePushStart_ = 0;
+    static constexpr uint32_t kAddrDiagFrameCount = 15;
 };
 
 }  // namespace androidauto

@@ -231,6 +231,21 @@ void VideoChannel::pushDecodedFrame() {
     bool pushed = hal::set_frame_addr(videoLayer_, pic.outputPictureBusAddress, pic.picWidth,
                                        pic.picHeight);
     pushTimeTotal_ += std::chrono::steady_clock::now() - pushStart;
+
+    // 2026-08-18: see this class's own header comment on
+    // framesSincePushStart_ -- bounded diagnostic for the grey-wash
+    // investigation, first kAddrDiagFrameCount frames of the session
+    // only.
+    if (pushed && framesSincePushStart_ < kAddrDiagFrameCount) {
+        ++framesSincePushStart_;
+        uint32_t actualAddr = 0;
+        if (hal::get_frame_addr(videoLayer_, actualAddr)) {
+            std::printf("%s androidauto: video addr diag frame#%u: set=0x%x actual=0x%x %s\n",
+                        logTimestamp().c_str(), framesSincePushStart_, pic.outputPictureBusAddress, actualAddr,
+                        actualAddr == pic.outputPictureBusAddress ? "MATCH" : "MISMATCH");
+        }
+    }
+
     if (!pushed) {
         return;
     }

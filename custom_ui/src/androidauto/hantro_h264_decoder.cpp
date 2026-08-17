@@ -141,6 +141,22 @@ bool HantroH264Decoder::ensureDmaCapacity(size_t size) {
     long pagesize = sysconf(_SC_PAGESIZE);
     uint32_t aligned = static_cast<uint32_t>((size + pagesize - 1) & ~(pagesize - 1));
 
+    // 2026-08-18: real hardware dmesg showed this buffer being freed
+    // and reallocated from scratch 8 times in the first ~70s of a
+    // session (SZ=8192 -> 20480 -> 24576 -> 28672 -> 32768 -> 36864 ->
+    // 40960 -> 65536 -> 73728) -- since this function only ever grew
+    // to fit the CURRENT frame exactly, almost every slightly-larger
+    // frame during stream startup (I-frames vs P-frames vary a lot in
+    // size) re-triggered the full munmap/FREEBUFFER/close/open/
+    // GETBUFFER/mmap cycle above, real DMA-allocator kernel round
+    // trips, not free. Growing with 50% headroom (still page-aligned)
+    // means the buffer stabilizes after one or two real growth events
+    // instead of nearly every frame, at the cost of a bit of unused
+    // DMA memory once it settles -- a fixed cap on a single input
+    // buffer, not a per-frame cost.
+    uint32_t grown = aligned + aligned / 2;
+    if (grown > aligned) aligned = grown;  // overflow guard, size_t input is already bounded by aasdk's own frame size
+
     // 2026-08-17: real hardware showed video corruption persisting
     // completely unchanged even after pointing the display at a
     // buffer only this process writes to (stabilize_output()) --

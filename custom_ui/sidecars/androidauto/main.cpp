@@ -73,8 +73,6 @@
 #include <sys/un.h>
 #include <unistd.h>
 
-#include <aasdk/Common/ModernLogger.hpp>
-
 #include "androidauto/log_timing.h"
 #include "core/log_timing.h"
 #include "androidauto/video_visibility.h"
@@ -280,19 +278,20 @@ int main() {
         }
     }
 
-    // 2026-08-18: aasdk's own internal logger (ModernLogger, separate
-    // from this process's androidauto::logTimestamp()-based prints --
-    // see aasdk/Common/ModernLogger.hpp) defaults to LogLevel::INFO,
-    // which silently drops every AASDK_LOG_DEBUG/TRACE call site
-    // inside aasdk itself (transport/SSL handshake detail, per-message
-    // parsing, channel state transitions) before it ever reaches its
-    // console sink -- this project never touched that default. Bumped
-    // to DEBUG here so the next real-hardware pass has a chance of
-    // showing what's actually happening in aasdk's own transport code
-    // right before a session-ending error (e.g. the ECONNRESET seen
-    // investigating the audio-ack flow-control bug this same commit
-    // fixes) instead of just the error line itself.
-    aasdk::common::ModernLogger::getInstance().setLevel(aasdk::common::LogLevel::DEBUG);
+    // 2026-08-18: briefly bumped aasdk's own internal logger
+    // (ModernLogger, see aasdk/Common/ModernLogger.hpp) from its
+    // default LogLevel::INFO to DEBUG to help diagnose an ECONNRESET
+    // -- reverted the same day. Real hardware showed DEBUG logs almost
+    // every single I/O event (a receive()/distributeReceivedData()
+    // pair for every few bytes off the wire), and on this device's
+    // slow serial console the synchronous stdout writes became their
+    // own head-of-line-blocking problem -- the exact same class of bug
+    // the audio-ack fix above addresses, just moved into the logger.
+    // Left at the default; if aasdk-internal detail is ever needed
+    // again, prefer ConsoleSink -> a FileSink (see ModernLogger.hpp)
+    // so it doesn't contend with the console, and/or setCategoryLevel()
+    // for just the category under investigation instead of a global
+    // DEBUG bump.
 
     std::printf("%s androidauto-sidecar: starting\n", androidauto::logTimestamp().c_str());
 

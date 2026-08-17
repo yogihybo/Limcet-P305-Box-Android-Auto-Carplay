@@ -235,13 +235,28 @@ void VideoChannel::pushDecodedFrame() {
     // 2026-08-18: see this class's own header comment on
     // framesSincePushStart_ -- bounded diagnostic for the grey-wash
     // investigation, first kAddrDiagFrameCount frames of the session
-    // only.
+    // only. Now also logs isIdrPicture/picCodingType -- real,
+    // hardware-reported fields from the Hantro decoder itself
+    // (H264DecPicture, see hantro_h264_decoder.h) that were already
+    // being populated but never inspected. This directly answers
+    // whether the very first DISPLAYED picture is genuinely the IDR
+    // the decoder itself believes it decoded -- if isIdrPicture=1 and
+    // nbrOfErrMBs=0 (already logged separately, see decodeFrame()'s
+    // own check) but the display still shows grey, that pins the bug
+    // downstream of decode entirely (buffer addressing/timing, see
+    // the set/actual comparison above). If isIdrPicture=0 on the
+    // first displayed picture, that would instead point at picture
+    // reordering/buffering inside the decoder itself causing the
+    // real IDR to never actually reach the display, or to be shown
+    // out of order.
     if (pushed && framesSincePushStart_ < kAddrDiagFrameCount) {
         ++framesSincePushStart_;
         uint32_t actualAddr = 0;
         if (hal::get_frame_addr(videoLayer_, actualAddr)) {
-            std::printf("%s androidauto: video addr diag frame#%u: set=0x%x actual=0x%x %s\n",
-                        logTimestamp().c_str(), framesSincePushStart_, pic.outputPictureBusAddress, actualAddr,
+            std::printf("%s androidauto: video addr diag frame#%u: picId=%u isIdr=%u codingType=%u "
+                        "set=0x%x actual=0x%x %s\n",
+                        logTimestamp().c_str(), framesSincePushStart_, pic.picId, pic.isIdrPicture,
+                        pic.picCodingType, pic.outputPictureBusAddress, actualAddr,
                         actualAddr == pic.outputPictureBusAddress ? "MATCH" : "MISMATCH");
         }
     }

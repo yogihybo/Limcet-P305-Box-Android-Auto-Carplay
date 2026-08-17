@@ -1,4 +1,5 @@
 #include "staging_ui/theme.h"
+#include "staging_ui/fonts.h"
 
 namespace staging_ui::theme {
 
@@ -9,7 +10,7 @@ void init(lv_display_t * disp) {
         accent_primary(),
         surface(),
         true, // dark mode
-        &lv_font_montserrat_14
+        &lv_font_roboto_14
     );
     lv_display_set_theme(disp, th);
 }

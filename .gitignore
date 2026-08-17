@@ -49,3 +49,7 @@ Holden firmware update/rootfs.img
 firmware_dumps/CarSyncTech Toyota/CSTech-202511-IP17/rootfs.img
 firmware_dumps/CarSyncTech Toyota/CSTech-202511-IP17/userdata.img
 Holden firmware update/rootfs.img
+
+# MCU firmware build outputs
+hardware/MCU/source/build/
+tools/mcu_builder/output/

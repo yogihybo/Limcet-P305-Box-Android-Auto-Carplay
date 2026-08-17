@@ -106,18 +106,21 @@ bool AlsaOutput::write(const void * interleavedSamples, uint32_t frameCount) {
     {
         std::lock_guard<std::mutex> lock(mutex_);
         if (queue_.size() >= kMaxQueuedBuffers) {
+            // 2026-08-19: drop the OLDEST queued buffer, not the new
+            // one -- acks are no longer gated on real playback (see
+            // audio_channel.cpp's sendAck(), now fired immediately on
+            // receipt matching stock's confirmed behavior), so this
+            // queue's only job is to track real-time stream state.
+            // Keeping stale audio and dropping the newest would just
+            // grow playback latency under sustained backlog instead of
+            // catching back up.
+            queue_.pop_front();
             ++droppedBuffers_;
             if (droppedBuffers_ == 1 || droppedBuffers_ % 100 == 0) {
                 std::fprintf(stderr, "%s androidauto::AlsaOutput: writer thread for %s falling behind, "
                              "dropped %u buffer(s) so far\n", androidauto::logTimestamp().c_str(),
                              deviceName_.c_str(), droppedBuffers_);
             }
-            // Still counts as "consumed" -- see class comment: acking a
-            // dropped buffer immediately is correct, since there's
-            // nothing left to wait for and NOT acking would stall the
-            // phone forever expecting a buffer we've already discarded.
-            if (onConsumed_) onConsumed_();
-            return true;
         }
         queue_.push_back(std::move(copy));
     }
@@ -141,12 +144,8 @@ void AlsaOutput::writerLoop() {
         uint32_t bytesPerFrame = 2 * channels_;
         uint32_t frameCount = static_cast<uint32_t>(buf.size() / bytesPerFrame);
         if (frameCount > 0) {
-            // Blocking, real-time-paced -- see class comment: this is
-            // exactly what restores max_unacked=1's intended flow
-            // control once onConsumed_ is wired to the ack below.
             writeBlocking(buf.data(), frameCount);
         }
-        if (onConsumed_) onConsumed_();
     }
 }
 

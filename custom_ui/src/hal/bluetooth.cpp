@@ -675,6 +675,23 @@ BluetoothHandle & shared_handle() {
     return handle;
 }
 
+namespace {
+// State for the readiness-wait + retry loop below -- heap-allocated
+// via shared_ptr and captured by the broadcast observer registered in
+// auto_reconnect_paired_device(), since watch_bluetooth_broadcasts()
+// has no unregister API (observers live for the process's lifetime,
+// see its own header comment) and this function's stack frame is long
+// gone by the time later broadcasts arrive. Safe either way: once this
+// function returns, the still-alive lambda just harmlessly sets flags
+// nobody reads anymore.
+struct ReconnectSync {
+    std::mutex mtx;
+    std::condition_variable cv;
+    bool devstat_ready = false;
+    bool link_confirmed = false;
+};
+}  // namespace
+
 bool auto_reconnect_paired_device(BluetoothHandle & h) {
     if (h.fd < 0) {
         std::printf("%s hal::bluetooth::auto_reconnect_paired_device: no bluetooth handle, skipping\n", core::log_timestamp().c_str());
@@ -687,8 +704,67 @@ bool auto_reconnect_paired_device(BluetoothHandle & h) {
     }
     std::string mac, name;
     std::string connect_id = split_plist_entry(devices.front(), mac, name) ? mac : devices.front();
-    std::printf("%s hal::bluetooth::auto_reconnect_paired_device: reconnecting to '%s'\n", core::log_timestamp().c_str(), connect_id.c_str());
-    return connect_device(h, connect_id);
+
+    // 2026-08-19: see docs/BLUETOOTH_RECONNECT_HANDOFF.md -- a real
+    // captured boot log (docs/logs/bluetooth log stock_260718.txt)
+    // shows blueware's own local radio/profile init (SRAM firmware
+    // upload, then a AT+xSTAT=1 enable per profile) spans dozens of
+    // lines before it emits `+DEVSTAT=3`, which fires exactly once,
+    // deterministically, right as that local init sequence completes
+    // -- NOT, despite that doc's original framing, an ongoing "unit is
+    // in page-scan mode" state. Calling connect_device() before this
+    // point risked a syntax-level "OK" from blueware's AT parser while
+    // the underlying baseband link was never actually paged. Bounded
+    // (kDevStatTimeout) so a run where blueware already finished before
+    // this function was even called -- or, on some future build,
+    // doesn't emit this line at all -- doesn't hang forever.
+    auto sync = std::make_shared<ReconnectSync>();
+    watch_bluetooth_broadcasts([sync](const std::string & line) {
+        std::lock_guard<std::mutex> lock(sync->mtx);
+        if (line == "+DEVSTAT=3") {
+            sync->devstat_ready = true;
+            sync->cv.notify_all();
+        } else if (line.rfind("+HFPDEV=", 0) == 0 || line.rfind("+AAPDEV=", 0) == 0) {
+            // AAPDEV= is a confirmed-real broadcast (see
+            // docs/BLUEWARE_AT_COMMANDS.md); HFPDEV= is inferred by
+            // name/shape only, never directly observed -- harmless to
+            // also watch for, since if it never fires this just falls
+            // through to the retry loop's own bounded attempt count.
+            sync->link_confirmed = true;
+            sync->cv.notify_all();
+        }
+    });
+
+    constexpr auto kDevStatTimeout = std::chrono::seconds(3);
+    {
+        std::unique_lock<std::mutex> lock(sync->mtx);
+        if (!sync->cv.wait_for(lock, kDevStatTimeout, [&] { return sync->devstat_ready; })) {
+            std::printf("%s hal::bluetooth::auto_reconnect_paired_device: timed out waiting for "
+                        "+DEVSTAT=3, proceeding anyway\n", core::log_timestamp().c_str());
+        }
+    }
+
+    // 3-attempt bounded retry with a fixed 2s backoff, terminating
+    // early if a connection broadcast is observed -- see this
+    // function's own header comment (matches
+    // BLUETOOTH_RECONNECT_HANDOFF.md's proposed action plan).
+    constexpr int kMaxAttempts = 3;
+    constexpr auto kRetryBackoff = std::chrono::seconds(2);
+    for (int attempt = 1; attempt <= kMaxAttempts; ++attempt) {
+        std::printf("%s hal::bluetooth::auto_reconnect_paired_device: attempt %d/%d, reconnecting to '%s'\n",
+                    core::log_timestamp().c_str(), attempt, kMaxAttempts, connect_id.c_str());
+        connect_device(h, connect_id);
+
+        std::unique_lock<std::mutex> lock(sync->mtx);
+        if (sync->cv.wait_for(lock, kRetryBackoff, [&] { return sync->link_confirmed; })) {
+            std::printf("%s hal::bluetooth::auto_reconnect_paired_device: link confirmed after attempt %d\n",
+                        core::log_timestamp().c_str(), attempt);
+            return true;
+        }
+    }
+    std::printf("%s hal::bluetooth::auto_reconnect_paired_device: giving up after %d attempts\n",
+                core::log_timestamp().c_str(), kMaxAttempts);
+    return false;
 }
 
 }  // namespace hal

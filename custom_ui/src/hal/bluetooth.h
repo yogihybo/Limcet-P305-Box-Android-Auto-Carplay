@@ -173,6 +173,13 @@ void watch_bluetooth_broadcasts(std::function<void(const std::string & line)> ca
 // same as every other optional-hardware path in this codebase --
 // returns false if there's no handle, no paired devices, or the
 // connect attempt itself fails; logs why either way.
+//
+// 2026-08-19: see docs/BLUETOOTH_RECONNECT_HANDOFF.md and this
+// function's own .cpp comment -- now waits (bounded) for blueware's
+// own +DEVSTAT=3 local-init-complete signal before the first attempt,
+// and retries up to 3 times with a 2s backoff, returning true only if
+// a +HFPDEV=/+AAPDEV= broadcast actually confirms the link came up
+// (not just that the HFPCONN command was accepted syntactically).
 bool auto_reconnect_paired_device(BluetoothHandle & h);
 
 // Sends AT+<command>\r\n (this function adds the "AT+" prefix and

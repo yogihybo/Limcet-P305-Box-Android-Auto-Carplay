@@ -1,7 +1,6 @@
 #include "androidauto/hantro_h264_decoder.h"
 #include "androidauto/log_timing.h"
 
-#include <algorithm>
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
@@ -201,127 +200,6 @@ bool HantroH264Decoder::ensureDmaCapacity(size_t size) {
     return true;
 }
 
-bool HantroH264Decoder::ensureOutputBuffers(size_t size) {
-    if (outVirt_[0] && outSize_[0] >= size) return true;
-
-    // Free any previous (undersized) pair first -- same pattern as
-    // ensureDmaCapacity(), just doing it for both slots. Not expected
-    // to actually happen in practice (AA's stream resolution is fixed
-    // for the session), but handled for correctness if it ever does.
-    for (int i = 0; i < 2; ++i) {
-        if (outVirt_[i]) {
-            munmap(outVirt_[i], outSize_[i]);
-            ioctl(outFd_[i], kMemallocIocxFreebuffer, &outBus_[i]);
-            ::close(outFd_[i]);
-            outFd_[i] = -1;
-            outVirt_[i] = nullptr;
-        }
-    }
-
-    long pagesize = sysconf(_SC_PAGESIZE);
-    uint32_t aligned = static_cast<uint32_t>((size + pagesize - 1) & ~(pagesize - 1));
-
-    for (int i = 0; i < 2; ++i) {
-        // O_SYNC -- see ensureDmaCapacity()'s own comment for why this
-        // matters (uncached/write-combine vs. stale-cache-prone
-        // mapping, confirmed against stock's own real flags value).
-        // Matters here too: the CPU writes this buffer via memcpy, and
-        // the LCDC hardware reads it back via its own DMA -- a cached
-        // CPU-side mapping risks the write sitting in cache instead of
-        // reaching DRAM before the display scans it out, the same
-        // class of coherency gap, just the opposite direction (CPU
-        // write -> hardware read, instead of hardware write -> CPU
-        // read).
-        outFd_[i] = ::open(kMemallocPath, O_RDWR | O_SYNC);
-        if (outFd_[i] < 0) {
-            std::fprintf(stderr, "%s androidauto::HantroH264Decoder: output buffer %d open(%s) failed: %s\n",
-                         androidauto::logTimestamp().c_str(), i, kMemallocPath, std::strerror(errno));
-            return false;
-        }
-
-        MemallocParams params{0, aligned};
-        if (ioctl(outFd_[i], kMemallocIocxGetbuffer, &params) < 0 || params.busAddress == 0) {
-            std::fprintf(stderr, "%s androidauto::HantroH264Decoder: output buffer %d GETBUFFER failed: %s\n",
-                         androidauto::logTimestamp().c_str(), i, std::strerror(errno));
-            ::close(outFd_[i]);
-            outFd_[i] = -1;
-            return false;
-        }
-
-        void * virt = mmap(nullptr, aligned, PROT_READ | PROT_WRITE, MAP_SHARED, outFd_[i],
-                           static_cast<off_t>(params.busAddress));
-        if (virt == MAP_FAILED) {
-            std::fprintf(stderr, "%s androidauto::HantroH264Decoder: output buffer %d mmap failed: %s\n",
-                         androidauto::logTimestamp().c_str(), i, std::strerror(errno));
-            ioctl(outFd_[i], kMemallocIocxFreebuffer, &params.busAddress);
-            ::close(outFd_[i]);
-            outFd_[i] = -1;
-            return false;
-        }
-
-        outVirt_[i] = virt;
-        outBus_[i] = params.busAddress;
-        outSize_[i] = aligned;
-    }
-
-    std::printf("%s androidauto::HantroH264Decoder: allocated output shadow buffers (%u bytes each)\n",
-                androidauto::logTimestamp().c_str(), aligned);
-    return true;
-}
-
-uint32_t HantroH264Decoder::stabilize_output() {
-    if (!lastPicture_.pOutputPicture) return 0;
-
-    // 2026-08-17: this used to compute frameSize as 16-aligned width *
-    // 16-aligned height * 1.5 bytes/pixel (576000 bytes for this
-    // stream's 800x480) -- the same formula hal::set_frame_addr()'s
-    // own chroma-offset math assumes for where the DISPLAY hardware
-    // reads chroma from. That's still correct for the display side.
-    // But it undershoots the decoder's own REAL per-frame buffer size
-    // by ~15% (99840 bytes) -- confirmed directly from this device's
-    // own dmesg, which shows the Hantro decoder allocating exactly
-    // 675840 bytes per internal reference buffer for this stream, not
-    // 576000. That gap is very likely internal padding (e.g. border
-    // padding around each reference frame for motion-compensation
-    // search range, a normal feature of hardware H.264 decoders) --
-    // but rather than assume that and risk silently truncating a
-    // frame whose real internal layout isn't simply "clean 800x480
-    // NV12 plus unused trailing padding", copy the full real,
-    // device-confirmed size. Reading this many bytes from
-    // pOutputPicture is safe/in-bounds regardless of which
-    // explanation is right, since it's exactly what the decoder's own
-    // allocation guarantees is there. The display side is unaffected
-    // by copying more than it reads -- hal::set_frame_addr() still
-    // gets pic.picWidth/picHeight separately and only ever reads
-    // 576000 bytes' worth via its own stride math.
-    constexpr size_t kRealDecoderBufferSize = 675840;
-    const size_t computedSize = static_cast<size_t>(lastPicture_.picWidth) *
-                                 static_cast<size_t>(lastPicture_.picHeight) * 3 / 2;
-    const size_t frameSize = std::max(computedSize, kRealDecoderBufferSize);
-    if (!ensureOutputBuffers(frameSize)) return 0;
-
-    const int target = activeOutBuf_ ^ 1;  // the buffer NOT currently pushed to the display
-    std::memcpy(outVirt_[target], lastPicture_.pOutputPicture, frameSize);
-
-    // 2026-08-17: real hardware showed a residual blocky-corruption
-    // artifact specifically after bursts of interaction (rapid
-    // successive frame updates), even with the O_SYNC fix in place --
-    // O_SYNC gets us a write-combine mapping (see ensureDmaCapacity()'s
-    // own comment), which still lets the CPU buffer/coalesce writes
-    // before they actually reach DRAM; it guarantees eventual
-    // coherency, not immediate. Under steady playback there's usually
-    // enough natural delay before the next hardware access for that
-    // buffer to drain on its own, but a burst can outrun it, so the
-    // display can still occasionally scan a buffer this memcpy hasn't
-    // fully landed in memory yet. msync(MS_SYNC) explicitly forces the
-    // just-written range out before the bus address is handed to
-    // hardware, rather than relying on timing to make it likely enough.
-    msync(outVirt_[target], frameSize, MS_SYNC);
-
-    activeOutBuf_ = target;
-    return outBus_[target];
-}
-
 bool HantroH264Decoder::decodeFrame(const uint8_t * data, size_t len) {
     if (!decoderInst_) return false;
     if (!ensureDmaCapacity(len)) return false;
@@ -402,17 +280,6 @@ void HantroH264Decoder::close() {
     if (dmaFd_ >= 0) {
         ::close(dmaFd_);
         dmaFd_ = -1;
-    }
-    for (int i = 0; i < 2; ++i) {
-        if (outVirt_[i]) {
-            munmap(outVirt_[i], outSize_[i]);
-            ioctl(outFd_[i], kMemallocIocxFreebuffer, &outBus_[i]);
-            outVirt_[i] = nullptr;
-        }
-        if (outFd_[i] >= 0) {
-            ::close(outFd_[i]);
-            outFd_[i] = -1;
-        }
     }
     if (lib_) {
         dlclose(lib_);

@@ -171,22 +171,27 @@ void VideoChannel::pushDecodedFrame() {
     // now matches that exactly: called directly, every ready frame,
     // no gating.
     //
-    // 2026-08-17: the corruption persisted even after matching stock's
-    // display API and push cadence exactly -- root cause turned out to
-    // be upstream of the display push entirely. Real hardware dmesg
-    // showed the Hantro decoder itself only ever allocates TWO
-    // internal reference-picture buffers, no third for safety margin,
-    // so pushing pic.outputPictureBusAddress directly raced the
-    // decoder overwriting that same physical buffer for the next frame
-    // while the LCDC was still scanning it out for this one -- see
-    // HantroH264Decoder::stabilize_output()'s own doc comment for the
-    // full story. Copy into a buffer this side owns before pushing,
-    // rather than pointing the display at the decoder's own memory.
-    uint32_t stableAddr = decoder_.stabilize_output();
-    if (stableAddr == 0) {
-        return;
-    }
-    if (!hal::set_frame_addr(videoLayer_, stableAddr, pic.picWidth, pic.picHeight)) {
+    // 2026-08-17 REVISED: briefly tried copying each decoded frame into
+    // a buffer this class owns (HantroH264Decoder::stabilize_output(),
+    // now removed) rather than pushing pic.outputPictureBusAddress
+    // directly, on a theory that the decoder's own tiny internal
+    // reference-buffer pool (confirmed via dmesg: exactly two buffers,
+    // no third for safety margin) could race the display against the
+    // decoder's own next write. That theory is now directly falsified:
+    // real stock's own sink binary pushes this exact same
+    // outputPictureBusAddress-equivalent straight to the display, zero
+    // copy, on this identical kernel/hardware, with no corruption --
+    // so the race, even if theoretically real, isn't what's actually
+    // happening here. The copy was also a real, measurable latency
+    // cost stock's own zero-copy path doesn't pay (a ~660KB memcpy
+    // plus a blocking msync() syscall, every single frame) -- plausibly
+    // making this side fall further behind stock during exactly the
+    // interaction-driven frame bursts where residual corruption showed
+    // up, i.e. the fix may have been contributing to the very symptom
+    // it was meant to solve. Reverted to matching stock exactly:
+    // pic.outputPictureBusAddress pushed directly, no copy.
+    if (!hal::set_frame_addr(videoLayer_, pic.outputPictureBusAddress, pic.picWidth,
+                              pic.picHeight)) {
         return;
     }
 

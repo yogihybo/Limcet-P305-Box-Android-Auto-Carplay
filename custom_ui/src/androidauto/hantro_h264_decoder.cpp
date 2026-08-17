@@ -142,7 +142,28 @@ bool HantroH264Decoder::ensureDmaCapacity(size_t size) {
     long pagesize = sysconf(_SC_PAGESIZE);
     uint32_t aligned = static_cast<uint32_t>((size + pagesize - 1) & ~(pagesize - 1));
 
-    dmaFd_ = ::open(kMemallocPath, O_RDWR);
+    // 2026-08-17: real hardware showed video corruption persisting
+    // completely unchanged even after pointing the display at a
+    // buffer only this process writes to (stabilize_output()) --
+    // ruling out any decoder-vs-display buffer race and pointing at
+    // something upstream of that entirely: the CPU's own view of
+    // this memory being stale. Checked the real memalloc.c kernel
+    // driver: buffers come from dma_zalloc_coherent(), and its own
+    // mmap handler (memalloc_mmap -> phys_mem_access_prot()) only
+    // returns an uncached/write-combine mapping if the fd was opened
+    // with O_SYNC -- otherwise a valid PFN falls through to a normal
+    // CACHED mapping. This process's open() call had no O_SYNC. The
+    // Hantro ASIC writes decoded pixels straight to physical DRAM via
+    // its own DMA engine, bypassing CPU cache entirely -- a cached
+    // CPU-side mapping of that same memory can read stale cache
+    // lines instead of what the hardware actually wrote, independent
+    // of any buffer-ownership fix, which is exactly why
+    // stabilize_output() alone didn't help (it faithfully copies
+    // whatever the CPU reads, stale or not). CONFIRMED against real
+    // stock, not just kernel-source reasoning: usr/bin/sink's own
+    // VideoDecoder::alloc_input_buffer() opens this same device with
+    // flags 0x101002 -- bit 0x1000 is exactly O_SYNC.
+    dmaFd_ = ::open(kMemallocPath, O_RDWR | O_SYNC);
     if (dmaFd_ < 0) {
         std::fprintf(stderr, "%s androidauto::HantroH264Decoder: open(%s) failed: %s\n", androidauto::logTimestamp().c_str(),
                      kMemallocPath, std::strerror(errno));
@@ -201,7 +222,17 @@ bool HantroH264Decoder::ensureOutputBuffers(size_t size) {
     uint32_t aligned = static_cast<uint32_t>((size + pagesize - 1) & ~(pagesize - 1));
 
     for (int i = 0; i < 2; ++i) {
-        outFd_[i] = ::open(kMemallocPath, O_RDWR);
+        // O_SYNC -- see ensureDmaCapacity()'s own comment for why this
+        // matters (uncached/write-combine vs. stale-cache-prone
+        // mapping, confirmed against stock's own real flags value).
+        // Matters here too: the CPU writes this buffer via memcpy, and
+        // the LCDC hardware reads it back via its own DMA -- a cached
+        // CPU-side mapping risks the write sitting in cache instead of
+        // reaching DRAM before the display scans it out, the same
+        // class of coherency gap, just the opposite direction (CPU
+        // write -> hardware read, instead of hardware write -> CPU
+        // read).
+        outFd_[i] = ::open(kMemallocPath, O_RDWR | O_SYNC);
         if (outFd_[i] < 0) {
             std::fprintf(stderr, "%s androidauto::HantroH264Decoder: output buffer %d open(%s) failed: %s\n",
                          androidauto::logTimestamp().c_str(), i, kMemallocPath, std::strerror(errno));

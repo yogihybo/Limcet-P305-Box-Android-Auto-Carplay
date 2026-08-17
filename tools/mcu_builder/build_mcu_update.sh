@@ -73,6 +73,36 @@ if [[ ! -f "${STOCK_BIN}" ]]; then
     exit 1
 fi
 
+if [[ "${PRESET}" == "toyota_prado_150" ]]; then
+    cat << 'EOF' >&2
+======================================================================
+ !! WARNING: toyota_prado_150 preset patches TWO CAN IDs, not one !!
+======================================================================
+This preset changes:
+  - Mode 1 Entry 7 (SWC handler):            0x105 -> 0x3C4
+  - Mode 1 Entry 4 (Reverse/parking handler): 0x185 -> 0x025
+
+The second change is UNVERIFIED. docs/1.2_CANBUS.md (written before
+this MCU tooling existed) lists 0x025/0x026 as *typical Prado SWC*
+candidate IDs, not reverse-gear/parking-sensor IDs -- and explicitly
+warns to verify CAN IDs against a live capture on your specific
+vehicle before programming any MCU firmware. If 0x025 is actually SWC
+traffic on this vehicle, steering-wheel button presses could
+spuriously trigger the reverse-camera/parking-sensor handler while
+driving.
+
+There is also no known checksum/CRC covering the flash image itself
+(only the runtime UART wire-protocol has one) -- this tooling has not
+confirmed whether the resident bootloader validates the image any
+further than YMODEM's own per-block transport CRC.
+
+Do not flash this to a real vehicle without independently confirming
+both CAN IDs via a live capture on your specific Prado first. See
+docs/1.3.1_MCU_FIRMWARE_DECOMPILATION.md and docs/1.2_CANBUS.md.
+======================================================================
+EOF
+fi
+
 echo "======================================================================"
 echo " Limcet STM32F105 MCU Firmware Update Builder"
 echo "======================================================================"
@@ -127,6 +157,11 @@ echo "    Files:"
 echo "      - ${PACKAGE_DIR}/auto_upgrade.txt ($(stat -c%s "${TRIGGER_FILE}") bytes)"
 echo "      - ${PACKAGE_DIR}/can_app.bin ($(stat -c%s "${REBUILT_BIN}") bytes, MD5: $(md5sum "${REBUILT_BIN}" | awk '{print $1}'))"
 echo "    Deployable ZIP:    ${ZIP_OUTPUT}"
+echo ""
+echo "!! WARNING: This flashes the companion STM32 MCU over YMODEM. A bad image"
+echo "!! can leave the CAN/steering-wheel-control subsystem non-functional or"
+echo "!! misbehaving until re-flashed with a known-good binary. Keep a copy of"
+echo "!! the original ${STOCK_BIN} before deploying a patched image."
 echo ""
 echo "Deployment Instructions:"
 echo "  1. Copy 'auto_upgrade.txt' and 'can_app.bin' to the ROOT of a FAT32 USB flash drive."

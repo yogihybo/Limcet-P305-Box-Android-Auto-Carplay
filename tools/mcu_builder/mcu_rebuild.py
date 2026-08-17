@@ -3,6 +3,21 @@
 MCU Firmware Rebuilder & CAN Code Patcher
 Target: STM32F105RBT6 companion MCU firmware (can_app.bin)
 Link Address: 0x08004000
+
+WARNING: this produces an image meant to be flashed to a real vehicle's
+companion MCU over YMODEM (see tools/mcu_builder/README.md). Two real
+risks this tool does NOT protect against:
+  1. No known checksum/CRC covers the flash image itself (only the
+     runtime UART wire-protocol has one, see
+     docs/1.3.1_MCU_FIRMWARE_DECOMPILATION.md section 5) -- whether the
+     resident bootloader validates the image beyond YMODEM's own
+     per-block transport CRC has not been confirmed.
+  2. The `toyota_prado_150` preset patches a CAN ID (Mode 1 Entry 4,
+     reverse/parking handler) that is NOT confirmed against this
+     project's own CAN bus research -- see apply_preset()'s own
+     warning and docs/1.2_CANBUS.md.
+Keep a known-good copy of the stock binary before flashing anything
+built with this tool to real hardware.
 """
 
 import sys
@@ -109,10 +124,23 @@ class MCURebuilder:
     def apply_preset(self, preset_name):
         print(f"[*] Applying Preset: {preset_name}")
         if preset_name == "toyota_prado_150":
+            print("[!] WARNING: this preset patches TWO CAN IDs, only one of which is", file=sys.stderr)
+            print("[!] confirmed against this project's own CAN bus research:", file=sys.stderr)
+            print("[!]   - Mode 1 Entry 7 (SWC handler):            0x105 -> 0x3c4", file=sys.stderr)
+            print("[!]   - Mode 1 Entry 4 (Reverse/parking handler): 0x185 -> 0x025  <- UNVERIFIED", file=sys.stderr)
+            print("[!] docs/1.2_CANBUS.md lists 0x025/0x026 as *typical Prado SWC*", file=sys.stderr)
+            print("[!] candidate IDs, not reverse-gear/parking-sensor IDs, and explicitly", file=sys.stderr)
+            print("[!] warns to verify CAN IDs via a live capture on your specific vehicle", file=sys.stderr)
+            print("[!] before programming any MCU firmware. If 0x025 is actually SWC", file=sys.stderr)
+            print("[!] traffic here, steering-wheel presses could spuriously trigger the", file=sys.stderr)
+            print("[!] reverse-camera/parking-sensor handler while driving. Do not flash", file=sys.stderr)
+            print("[!] to a real vehicle without confirming both IDs first -- see", file=sys.stderr)
+            print("[!] docs/1.3.1_MCU_FIRMWARE_DECOMPILATION.md and docs/1.2_CANBUS.md.", file=sys.stderr)
             # Prado SWC is CAN ID 0x3C4 (964 dec)
             # Patch Mode 1 Entry 7 (Stock 0x105 -> 0x3C4)
             self.patch_can_table_entry(1, 7, 0x3c4)
-            # Mode 1 Entry 4 Reverse / Status (Stock 0x185 -> 0x025)
+            # Mode 1 Entry 4 Reverse / Status (Stock 0x185 -> 0x025) -- UNVERIFIED,
+            # see the warning printed above and this file's own header comment.
             self.patch_can_table_entry(1, 4, 0x025)
         else:
             raise ValueError(f"Unknown preset: {preset_name}")

@@ -100,6 +100,101 @@ Hardware on the device has been identified by opening the device and reviewing t
 - Steering wheel controls are not believed to be read via an ADC voltage divider on a dedicated SWC wire, despite the `EnableSWCSwitchHardware` option in the ARK1668 config. The STM32F105 MCU instead decodes Toyota-specific messages directly off the vehicle's **CAN bus** (through the TJA1042 transceiver) and forwards translated key events to the ARK1668 over UART.
 - The reversing camera connects as a standard CVBS composite feed, decoded by the RN6752 into digital video for the SoC. It's believed that this route is used for early camera loading (with 2s of boot) while the rest of the system is still initialising.
 
+#### Hardware Block Architecture
+
+```mermaid
+flowchart TD
+    subgraph Band1["01 Vehicle & External I/O"]
+        DCDC["B+ / GND → DC-DC Converter<br/>+5V / +3V3 / +9V rails"]
+        CANWire["CAN H / CAN L<br/>Vehicle CAN Bus Wiring"]
+        VehicleSignals["ACC / ILL / SWC<br/>Ignition, Dimming, Steering Controls"]
+        ISOAntenna["ISO Antenna Socket<br/>AM/FM Radio Input"]
+        SpeakerWires["Speaker Wires<br/>FR± / FL± / RR± / RL±"]
+        CamPower["CAM PWR<br/>Reversing Camera Power Feed"]
+    end
+
+    subgraph Band2["02 On-Board Support ICs"]
+        MCU["MCU — STM32F105<br/>Vehicle I/O Hub (/dev/ttyHS0)"]
+        CANTrx["CAN Transceiver<br/>NXP TJA1042"]
+        Tuner["AM/FM Tuner<br/>I2C Control"]
+        DSP["DSP / Tone Processor<br/>Audio EQ / Channel Mix"]
+        VoiceProc["Voice Processor (Schematic Only)<br/>*Not populated on this board*"]
+    end
+
+    subgraph Band3["03 Application Processor"]
+        ARKBrain["ARK1668 / ARK1680 SoC<br/>ARM Cortex-A5 · LCDC · Vivante GPU · Hantro hx170dec<br/>NAND/SDRAM Ctrl · Internal Audio ADC/DAC"]
+    end
+
+    subgraph Band4["04 Attached Peripheral ICs"]
+        NAND["NAND Flash<br/>128 MiB SLC (TC58BVG0S3HTA00)"]
+        SDRAM["SDRAM<br/>Nanya NT5CC128M16IP (DDR3)"]
+        RN6752["RN6752 Video Decoder<br/>AHD/CVBS Camera @ I2C 0x2c"]
+        ARK7116["ARK7116 Video Decoder<br/>*Reference design only — not populated*"]
+        USBHost["USB Host / OTG<br/>USB0 (Ext/Gadget) / USB1 (WiFi)"]
+        WiFi["RTL8811CU / RTL8821CU<br/>WiFi Module (via USB1 Host)"]
+        BT["BT Module (FSC-BT8251)<br/>ttyHS1 @ 1.5M, GPIO91 Power"]
+    end
+
+    subgraph Band5["05 Output & Analog Endpoints"]
+        TFT["TFT LCD Panel<br/>800×480 RGB888 / LVDS + Resistive Touch"]
+        PowerAmp["Power Amp / Sound IC<br/>Rohm BD37033FV (I2C2 @ 0x40)"]
+        Mic["Microphone Input<br/>SoC Internal sdadc / I2S-ADC"]
+        Camera["Reversing Camera<br/>CVBS Analog Video Feed"]
+    end
+
+    %% Power Distribution
+    DCDC ==>|Power Rails| ARKBrain
+    DCDC ==>|Power Rails| MCU
+    CamPower -.->|Power Feed| DCDC
+
+    %% Vehicle & Radio to Support ICs
+    CANWire <===>|CAN Bus| CANTrx
+    CANTrx <===>|Rx/Tx Serial| MCU
+    VehicleSignals ===>|Digital/Analog In| MCU
+    ISOAntenna --->|RF Analog| Tuner
+    Tuner -.->|I2C Control| MCU
+
+    %% MCU to SoC
+    MCU <===>|UART /dev/ttyHS0 115200 8N1| ARKBrain
+    MCU -.->|I2C Control| DSP
+    DSP --->|Analog Audio| PowerAmp
+    PowerAmp ===>|Amplified Audio| SpeakerWires
+
+    %% Voice Processor vs Real Mic Path
+    VoiceProc -.->|Ref Schematic Only| Mic
+    ARKBrain <--->|Real Path: SoC sdadc| Mic
+
+    %% Memory & Storage
+    ARKBrain <===>|Parallel NAND Bus| NAND
+    ARKBrain <===>|DDR3 Bus| SDRAM
+
+    %% Camera Video Decoder
+    Camera --->|CVBS Analog Video| RN6752
+    RN6752 ===>|ITU-656 Video Bus| ARKBrain
+    ARKBrain <--->|I2C Control 0x2c| RN6752
+    ARKBrain -.->|Ref Design Only| ARK7116
+
+    %% Wireless & USB
+    ARKBrain <===>|USB Bus (usb1)| WiFi
+    ARKBrain <===>|UART /dev/ttyHS1 (1.5M)| BT
+    ARKBrain <===>|USB Bus (usb0)| USBHost
+    BT --->|Analog Mic / AEC| Mic
+
+    %% Display & Audio Outputs
+    ARKBrain ===>|RGB888 / LVDS Video| TFT
+    TFT ===>|Resistive Touch (ADC 0xe4500000)| ARKBrain
+    ARKBrain --->|I2S1 / Internal DAC| DSP
+
+    %% Styling
+    classDef core fill:#d4edda,stroke:#28a745,color:#155724
+    classDef storage fill:#d1ecf1,stroke:#17a2b8,color:#0c5460
+    classDef dormant fill:#f8f9fa,stroke:#6c757d,color:#6c757d,stroke-dasharray: 4 4
+
+    class ARKBrain,MCU core
+    class NAND,SDRAM storage
+    class VoiceProc,ARK7116 dormant
+```
+
 Full teardown details and board photos are in `hardware/BOARD_ANALYSIS.md` (linked below).
 
 ### Software
@@ -125,6 +220,127 @@ The device runs two distinct software stacks depending on which boot path is act
 | Bluetooth stack | `rtkbt` userspace stack (Realtek), over `/dev/ttyHS1` | unchanged — background: [§1.4](docs/1.4_WIRELESS_AND_INIT.md) |
 | WiFi AP | `hostapd` + `udhcpd`, SSID `carplay_wifi` | unchanged — background: [§1.4](docs/1.4_WIRELESS_AND_INIT.md) |
 | Remote access | none — serial console is receive-only once Linux boots | SSH (`/usr/bin/sshd`, OpenSSH 4.6p1) + USB CDC-NCM networking baked in; telnet available on stock too via the USB auto-copy payload (§3.0) |
+
+#### MsnCoreApp & Userspace Architecture
+
+```mermaid
+flowchart TD
+    subgraph Band1["01 MsnCoreApp Main Process (Qt 4.7.4 QWS — Single PID)"]
+        MainApp["MsnCoreApp<br/>/usr/bin/MsnCoreApp"]
+        Commons["libMsnCommons.so<br/>MsnIniConfig · ArkUtils · ArkDbus"]
+        pLauncher["libLauncher-Box.so<br/>(Plugin 10 — Main UI / Launcher)"]
+        pSetting["libSetting.so<br/>(Plugin 8 — Settings / Factory Menu)"]
+        pCarAuto["libMsnCarAuto.so<br/>(Plugin 13 — Android Auto UI)"]
+        pCarPlay["libMsnCarPlay.so<br/>(Plugin 4 — Apple CarPlay UI)"]
+        pReversing["libCarReversing.so<br/>(Plugin 12 — Reversing Camera Overlay)"]
+        pBT["libBlueTooth.so<br/>(Plugin 3 — Bluetooth Pairing/HFP UI)"]
+        pCanBus["libCanBus.so<br/>(Plugin 400 — CAN Signal Bridge)"]
+        pMcu["libMcuCenter.so<br/>(Plugin 401 — MCU Adapter BoxP300)"]
+        pSound["libMsnSound.so<br/>(Plugin 403 — Sound / ALSA Mixer)"]
+    end
+
+    subgraph Band2["02 IPC & Transport"]
+        DBusDaemon["dbus-daemon<br/>Session Bus & Service Activation"]
+        UNIXSock["AF_UNIX Domain Sockets<br/>ArkUtils::open_local_socket"]
+        UARTLinks["UART Serial Links<br/>ttyHS0 (MCU) · ttyHS1 (BT)"]
+    end
+
+    subgraph Band3["03 Protocol Daemons (External Processes)"]
+        SinkDaemon["sink<br/>com.arkmicro.auto (Android Auto Engine)"]
+        CarPlayDaemon["carplay<br/>com.arkmicro.carplay (CarPlay Engine)"]
+        BluewareDaemon["blueware<br/>HFP / A2DP Stack & AT Interface"]
+        HostapdDaemon["hostapd + udhcpd<br/>carplay_wifi AP Provider"]
+    end
+
+    subgraph Band4["04 Shared HAL & Middleware"]
+        libArkCmn["libarkcmn.so<br/>arkapi_* ioctl wrapper"]
+        libGAL["libGAL.so<br/>Vivante GC GPU DirectFB Backend"]
+        libMFC["libmfc.so<br/>Hantro DWL H.264 Video Decode"]
+        libQExt["libqextserialport.so<br/>Serial Port Abstraction"]
+    end
+
+    subgraph Band5["05 Kernel Drivers & Device Nodes"]
+        DevFB["/dev/fb0 - /dev/fb4<br/>ark1668_lcdfb (OSD & Video Layers)"]
+        DevHX170["/dev/hx170dec<br/>Hantro G1 Video Decoder"]
+        DevDVR["/dev/dvr<br/>ITU-656 Camera Capture"]
+        DevTTYHS0["/dev/ttyHS0<br/>ark-hsuart (MCU Link)"]
+        DevTTYHS1["/dev/ttyHS1<br/>ark-hsuart (Bluetooth Module)"]
+        DevALSA["ALSA / I2S<br/>i2s-dac / i2s-adc ↔ BD37033"]
+        DevTouch["/dev/input/event0<br/>ark1680_ts Resistive Touch"]
+        DevWlan["wlan0<br/>RTL8811CU / RTL8821CU USB WiFi"]
+    end
+
+    %% In-process dynamic loading
+    MainApp --- Commons
+    MainApp --- pLauncher
+    MainApp --- pSetting
+    MainApp --- pCarAuto
+    MainApp --- pCarPlay
+    MainApp --- pReversing
+    MainApp --- pBT
+    MainApp --- pCanBus
+    MainApp --- pMcu
+    MainApp --- pSound
+
+    %% D-Bus Service Activation
+    pCarAuto -->|D-Bus StartService| DBusDaemon
+    pCarPlay -->|D-Bus StartService| DBusDaemon
+    DBusDaemon -->|Spawns| SinkDaemon
+    DBusDaemon -->|Spawns| CarPlayDaemon
+
+    %% Local Domain Sockets
+    pCarAuto <===>|AF_UNIX Socket (Control)| UNIXSock
+    UNIXSock <===> SinkDaemon
+    pCarPlay <===>|AF_UNIX Socket (Control)| UNIXSock
+    UNIXSock <===> CarPlayDaemon
+
+    %% Video Decode Pipeline
+    SinkDaemon ===>|Decode H.264| libMFC
+    libMFC ===>|ioctl| DevHX170
+    SinkDaemon ===>|Render Video Plane| DevFB
+    CarPlayDaemon ===>|Render Video Plane| DevFB
+
+    %% GUI & Display Rendering
+    MainApp -.->|DirectFB / fbdev| libGAL
+    libGAL -.->|2D/3D GPU Compose| DevFB
+    pSetting --->|arkapi_* ioctl| libArkCmn
+    libArkCmn ---> DevFB
+
+    %% Camera Overlay
+    pReversing --->|Video Switch & Capture| libArkCmn
+    libArkCmn ---> DevDVR
+
+    %% MCU & Vehicle I/O
+    pMcu ===>|Serial Packets| libQExt
+    libQExt ===> UARTLinks
+    UARTLinks ===> DevTTYHS0
+
+    %% Bluetooth & WiFi Orchestration
+    pBT ===>|AT Commands| BluewareDaemon
+    pCarAuto ===>|Trigger BT Pairing| BluewareDaemon
+    BluewareDaemon ===> DevTTYHS1
+    pCarAuto ===>|Start AP| HostapdDaemon
+    HostapdDaemon ===> DevWlan
+
+    %% Audio Subsystem
+    pSound --->|ALSA Mixer / EQ| DevALSA
+    SinkDaemon --->|Media Audio PCM| DevALSA
+    BluewareDaemon --->|Call / HFP Audio| DevALSA
+
+    %% Input Events
+    DevTouch ===>|Touch Coordinates| pLauncher
+
+    %% Styling
+    classDef core fill:#d4edda,stroke:#28a745,color:#155724
+    classDef daemon fill:#fff3cd,stroke:#e0a800,color:#856404
+    classDef hal fill:#d1ecf1,stroke:#17a2b8,color:#0c5460
+    classDef driver fill:#f8d7da,stroke:#dc3545,color:#721c24
+
+    class MainApp,Commons core
+    class SinkDaemon,CarPlayDaemon,BluewareDaemon,HostapdDaemon daemon
+    class libArkCmn,libGAL,libMFC,libQExt hal
+    class DevFB,DevHX170,DevDVR,DevTTYHS0,DevTTYHS1,DevALSA,DevTouch,DevWlan driver
+```
 
 **Documentation:**
 
@@ -492,7 +708,7 @@ The ARK1680 USB gadget stack is configured to use CDC-NCM (`g_ncm.ko`), which cr
 - **macOS / Linux** — CDC-NCM supported natively; interface appears automatically
 - **Windows** — may require the CDC-NCM host driver from Windows Update
 
-`g_zero.ko` has been removed from `firmware_source/prado_reconstructed/mtd6_rootfs/rootfs/etc/all.sh` — it was overriding the NCM gadget registration and breaking both USB host mode and the network interface.
+`g_zero.ko` has been removed from `firmware_source/mtd6_rootfs/rootfs/etc/all.sh` — it was overriding the NCM gadget registration and breaking both USB host mode and the network interface.
 
 ### 12.1 Diagnostic & On-Device Utility Tools
 
@@ -505,18 +721,18 @@ Full tool-by-tool breakdown (I2C/GPIO/pinmux, display/video, touch/MCU, general 
 ```
 firmware_dumps/Prado firmware dump/                  Raw MTD partition dumps from the live device
   mtd1-mtd2_uboot/           U-Boot binaries (raw + extracted)
-  mtd3_firmware_source/env/                  U-Boot environment (raw + extracted)
+  mtd3_env/                  U-Boot environment (raw + extracted)
   mtd4_arkdata/              Panel/hardware config (raw + extracted)
-  mtd5_firmware_source/kernel/               Kernel zImage (raw + extracted)
+  mtd5_kernel/               Kernel zImage (raw + extracted)
   mtd6_rootfs/               Root filesystem UBIFS dump (raw)
   mtd6_rootfs_raw/           Raw MTD6 bin (Git LFS)
 
-firmware_source/prado_reconstructed/         Reconstructed firmware for flashing
+firmware_source/                                     Reconstructed firmware for flashing
   mtd0_sloader/              Nboot.bin, Stepldr.bin
   mtd1-mtd2_uboot/           uboot.bin
-  mtd3_firmware_source/env/                  (placeholder — reconstructed env lives in firmware_source/env/uboot-env.txt instead)
-  mtd4_arkdata/              arkdata.ini (Limcet P306 panel config — copy of firmware_source/display/arkdata.ini)
-  mtd5_firmware_source/kernel/               zImage (reconstructed kernel — see note on top-level firmware_source/kernel/ below)
+  mtd3_env/                  uboot-env.txt (reconstructed env: bootdelay=9, 106m/6m layout)
+  mtd4_arkdata/              arkdata.ini (Limcet P306 panel config)
+  mtd5_kernel/               zImage (reconstructed kernel)
   mtd6_rootfs/
     rootfs/                  Modified rootfs tree (Limcet P306 libs + SSH + WiFi AP)
   mtd7_userdata/
@@ -544,19 +760,11 @@ tools/              On-device diagnostic/utility binaries — static ARM builds,
                     so every build's rootfs has them unconditionally. See tools/README.md for the
                     full list.
 
-firmware_source/kernel/            zImage (from Holden base — identical kernel_size to firmware_dumps/Prado firmware dump; gitignored, not present in every checkout — firmware_source/prado_reconstructed/mtd5_firmware_source/kernel/zImage is the copy actually used for builds)
-firmware_source/display/
+firmware_source/mtd5_kernel/       zImage (from Holden base — identical kernel_size to firmware_dumps/Prado firmware dump; gitignored, not present in every checkout)
+firmware_source/mtd4_arkdata/
   arkdata.ini                Limcet P306 panel config (from MTD4 live dump) — build source for mtd4
-  mtd4_arkdata_prado_dump.bin  Raw MTD4 dump the .ini was derived from
-  arkdata_holden.ini         Holden standard reference
-  arkdata_holden_0324.ini    Holden March 2024 update reference
-firmware_source/msn_factory_configs/
-  FactoryConfig.ini          Limcet P306 identity + Holden firmware settings
-  MsnProductInfo.ini         Hardware identity (Limcet-P306)
-firmware_source/env/
+firmware_source/mtd3_env/
   uboot-env.txt              Reconstructed env (bootdelay=9, 106m/6m layout)
-  mtd3_env_prado_firmware_dump.bin    Raw env from live device (gitignored)
-  sdboot_script.txt          Legacy boot script source — superseded by env relocation
 firmware_source/sd_update_template/
   UpConfig                   SD update trigger file
   update.example             Static reference script (generated version goes to output/)
@@ -586,9 +794,14 @@ See [`docs/14.1_SOURCES.md`](docs/14.1_SOURCES.md) for full provenance of each f
 
 - [`14.1_SOURCES.md`](docs/14.1_SOURCES.md) — provenance of every firmware source used
 - [`9.1_PARTITION_LAYOUT.md`](docs/9.1_PARTITION_LAYOUT.md) — NAND offsets, sizes, flash commands
-- [`1.1_HARDWARE_AND_SOC_REFERENCE.md`](docs/1.1_HARDWARE_AND_SOC_REFERENCE.md) — SoC identity, Ghidra RE of the firmware_source/kernel/userspace binaries, full pin-mux table, cross-checked against real ASTRI/ArkMicro vendor source; per-driver confirmation status and open test procedures live in its own "Open items" section
+- [`1.1_HARDWARE_AND_SOC_REFERENCE.md`](docs/1.1_HARDWARE_AND_SOC_REFERENCE.md) — SoC identity, Ghidra RE of the kernel/userspace binaries, full pin-mux table, cross-checked against real ASTRI/ArkMicro vendor source; per-driver confirmation status and open test procedures live in its own "Open items" section
 - [`1.11_VENDOR_BSP_RESEARCH.md`](docs/1.11_VENDOR_BSP_RESEARCH.md) — research pass over sibling ArkMicro vendor/BSP source trees (`ark1668ed-bsp`, `cstech-ip17-rootfs`); WiFi/audio driver branches, wired-AA lead
 - [`3.2_SECURITY_REVIEW.md`](docs/3.2_SECURITY_REVIEW.md) — credential/access-path review: stock root password, an unresolved second UID-0 account, update-integrity check
+
+*Architecture & interactive diagrams*
+
+- [`HARDWARE_ARCHITECTURE.md`](docs/HARDWARE_ARCHITECTURE.md) — visual hardware interconnect, pinmux, and bus layout diagram
+- [`MSN_APP_ARCHITECTURE.md`](docs/MSN_APP_ARCHITECTURE.md) — visual userspace architecture, IPC, and daemon dependency diagram
 
 *UI & application*
 
@@ -597,7 +810,7 @@ See [`docs/14.1_SOURCES.md`](docs/14.1_SOURCES.md) for full provenance of each f
 
 *Kernel*
 
-- [`1.9_KERNEL_REFERENCE.md`](docs/1.9_KERNEL_REFERENCE.md) — kernel image analysis (`mtd5_firmware_source/kernel/zImage`) and build tree reference: DTS, I2C bus assignments, camera decoder chip
+- [`1.9_KERNEL_REFERENCE.md`](docs/1.9_KERNEL_REFERENCE.md) — kernel image analysis (`mtd5_kernel/zImage`) and build tree reference: DTS, I2C bus assignments, camera decoder chip
 
 *U-Boot*
 
@@ -621,6 +834,7 @@ See [`docs/14.1_SOURCES.md`](docs/14.1_SOURCES.md) for full provenance of each f
 *Wireless / MCU / CAN / storage*
 
 - [`1.4_WIRELESS_AND_INIT.md`](docs/1.4_WIRELESS_AND_INIT.md) — WiFi/BT pin mapping, module init, and command sequence
+  - [`BLUEWARE_AT_COMMANDS.md`](docs/BLUEWARE_AT_COMMANDS.md) — Realtek/Blueware Bluetooth stack AT command reference and protocol
 - [`1.3_MCU_ADAPTERS.md`](docs/1.3_MCU_ADAPTERS.md) — MCU adapter types reverse-engineered from `libMcuCenter.so`
 - [`1.2_CANBUS.md`](docs/1.2_CANBUS.md) — CAN bus investigation for this board
   - [`1.2.1_REAR_DVD_CANBUS_INVESTIGATION.md`](docs/1.2.1_REAR_DVD_CANBUS_INVESTIGATION.md) — open investigation: controlling the factory rear DVD/RSE unit from the Limcet box via CAN bus
@@ -635,6 +849,10 @@ See [`docs/14.1_SOURCES.md`](docs/14.1_SOURCES.md) for full provenance of each f
 
 - [`historical/HANDOFF_nand_ecc_uboot_vs_kernel.md`](docs/historical/HANDOFF_nand_ecc_uboot_vs_kernel.md) — the NAND ECC root cause (U-Boot fixed and confirmed, kernel fixed in source but untested), why the `U-boot` NAND partition is unreadable by any U-Boot-level tool, and every patch behind [§7.0](#70-custom-u-boot-and-kernel)
 - [`historical/HANDOFF_touch_and_bootargs_fix.md`](docs/historical/HANDOFF_touch_and_bootargs_fix.md) — touchscreen I2C bus fix, SD bootargs fix, and the NAND "417 false bad blocks" ECC/BBT investigation (touch-activation theory later superseded, see `1.8_ARK1680_TS_REVERSE_ENGINEERING.md` above)
+- [`historical/HANDOFF_2026-07-17_boot_display_nand_wifi.md`](docs/historical/HANDOFF_2026-07-17_boot_display_nand_wifi.md) — boot, display, NAND, and WiFi bringup handoff notes
+- [`historical/HANDOFF_bootlog_v6_review.md`](docs/historical/HANDOFF_bootlog_v6_review.md) — early v6 bootlog review and UART/NAND analysis
+- [`historical/HANDOFF_kernel_build_camera_and_touch.md`](docs/historical/HANDOFF_kernel_build_camera_and_touch.md) — kernel build, camera decoder, and resistive touch bringup handoff
+- [`historical/boot_experiment_log.md`](docs/historical/boot_experiment_log.md) — historical boot and memory map experiments
 - [`historical/SD_BOOT_PLAN.md`](docs/historical/SD_BOOT_PLAN.md) — historical SD-boot planning doc (superseded, still useful background)
 - [`historical/DEVICE_TEST_CHECKLIST_2026-07-18.md`](docs/historical/DEVICE_TEST_CHECKLIST_2026-07-18.md) — dated session working log (DirectFB/black-screen/audio investigations); many individual findings self-marked superseded inline, kept for the debugging history
 

@@ -41,6 +41,8 @@
 
 namespace hal {
 
+enum class TouchAction { Down, Move, Up };
+
 class AndroidAutoClient {
 public:
     AndroidAutoClient();
@@ -105,6 +107,20 @@ public:
     // currently exists to receive the key (the sidecar itself treats
     // "no session" as a normal no-op, not an error).
     bool sendKey(std::uint32_t keycode);
+
+    // Sends "TOUCH <x> <y> <DOWN|MOVE|UP>" -- forwards a real touch
+    // sample (already in the 800x480 screen-pixel space
+    // Session::onServiceDiscoveryRequest advertises for this channel,
+    // see hal/touch.h) into the sidecar's current AA session. Used by
+    // hal/touch.cpp to forward the physical touch panel's samples (via
+    // the Limcet MCU, see hal/mcu_input.h -- NOT evdev, see that file's
+    // header comment) into an active session, replacing the old
+    // TouchForwarder design (which read a second evdev fd that this
+    // hardware never delivers real touch through at all, and which
+    // couldn't have worked from the sidecar process anyway -- the MCU
+    // serial port is read exclusively by custom_ui's own McuInputHal).
+    // Same allow_spawn=false/best-effort semantics as sendKey().
+    bool sendTouch(std::uint32_t x, std::uint32_t y, TouchAction action);
 
 private:
     bool ensureConnected(bool allow_spawn = true);

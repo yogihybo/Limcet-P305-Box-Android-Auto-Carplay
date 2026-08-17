@@ -41,7 +41,7 @@ flowchart TD
     class Flash,Recon highrisk
 ```
 
-**Legend:** 🟢 no NAND writes, reversible · 🟡 stock firmware modified in RAM/via USB, NAND untouched · 🔴 permanently alters NAND.
+**Legend:** 🟢 no NAND writes, reversible · 🟡 stock firmware modified in via USB payload · 🔴 permanently alters NAND.
 
 ## Table of Contents
 

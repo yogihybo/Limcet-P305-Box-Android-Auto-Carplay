@@ -240,7 +240,7 @@ bool init_bluetooth(BluetoothHandle & out, const char * path) {
 
 bool send_command(BluetoothHandle & h, const std::string & command,
                    std::vector<std::string> & response_lines, int timeout_ms,
-                   const std::string & expected_prefix) {
+                   const std::string & expected_prefix, bool silent_on_error) {
     response_lines.clear();
     if (h.fd < 0) return false;
 
@@ -320,7 +320,7 @@ bool send_command(BluetoothHandle & h, const std::string & command,
     // contract (connect_device(), set_device_name(), etc.) check for it
     // themselves and act on it.
     std::string err;
-    if (find_error_response(response_lines, err)) {
+    if (!silent_on_error && find_error_response(response_lines, err)) {
         std::fprintf(stderr, "%s hal::bluetooth::send_command: adapter reported '%s' for command '%s'\n", core::log_timestamp().c_str(),
                      err.c_str(), command.c_str());
     }
@@ -545,8 +545,17 @@ bool sync_clock_from_phone(BluetoothHandle & h) {
     // equals), so this parses for the quoted value directly instead of
     // relying on send_command()'s exact-prefix-match/strip mechanism.
     // See this function's header comment for why.
-    if (!send_command(h, "CCLK?", resp, 2000)) {
-        std::fprintf(stderr, "%s hal::bluetooth::sync_clock_from_phone: AT+CCLK? got no response\n", core::log_timestamp().c_str());
+    // 2026-08-18: silent_on_error=true -- AT+CCLK? routinely gets ERR004
+    // this early in boot (no phone connected yet to have a clock to
+    // report), which used to log both send_command()'s own generic
+    // "adapter reported 'ERR004' for command 'CCLK?'" and this
+    // function's own "no +CCLK line in response" right after it for
+    // the exact same routine, expected event -- pure boot-log noise,
+    // not something worth surfacing. A real, ongoing failure to sync
+    // once a phone IS connected would still show up via the absence of
+    // the success log below, just without two lines of noise on every
+    // boot before that.
+    if (!send_command(h, "CCLK?", resp, 2000, "", /*silent_on_error=*/true)) {
         return false;
     }
 

@@ -218,9 +218,17 @@ bool auto_reconnect_paired_device(BluetoothHandle & h);
 // observers AND against whichever send_command() call (if any) is
 // currently outstanding, so broadcasts are visible continuously, not
 // just within a command's own response window.
+// silent_on_error: skips this function's own generic "adapter reported
+// '<ERR>' for command '<command>'" diagnostic (still returned/left for
+// the caller to inspect via response_lines as normal) -- for call
+// sites where an adapter-reported error is a routine, expected outcome
+// rather than something worth surfacing on every boot (e.g.
+// sync_clock_from_phone()'s AT+CCLK? before any phone has connected).
+// Defaults to false, preserving this diagnostic for every other
+// existing caller.
 bool send_command(BluetoothHandle & h, const std::string & command,
                    std::vector<std::string> & response_lines, int timeout_ms = 2000,
-                   const std::string & expected_prefix = "");
+                   const std::string & expected_prefix = "", bool silent_on_error = false);
 
 // Splits a device-list entry of the form "<12-hex-char MAC><1 separator
 // byte><name...>" into `mac` (uppercase hex, no colons -- matches the

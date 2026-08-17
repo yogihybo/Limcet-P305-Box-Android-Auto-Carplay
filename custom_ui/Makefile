@@ -113,13 +113,34 @@ AASDK_DEPS_DIR  ?= $(HOME)/build-deps
 # removed.
 OPENSSL_ARM_INSTALL ?= $(AASDK_DEPS_DIR)/openssl-arm-install-noengine
 
-# 2026-08-15: cross-compiled alsa-lib 1.2.12 statically with
-# --with-libdl=no (see alsa_output.h's own header comment) -- the other
-# source of a real (non-libcrypto) dlopen reference in this binary
-# (AlsaOutput used to dlopen the target's own libasound.so.2.0.0 at
-# runtime). `nm` confirms zero dlopen/dlsym/dlclose/dlerror references
-# in the resulting libasound.a.
-ALSA_ARM_INSTALL ?= $(AASDK_DEPS_DIR)/alsa-arm-install
+# 2026-08-15: cross-compiled alsa-lib statically with --with-libdl=no
+# (see alsa_output.h's own header comment) -- the other source of a
+# real (non-libcrypto) dlopen reference in this binary (AlsaOutput used
+# to dlopen the target's own libasound.so.2.0.0 at runtime). `nm`
+# confirms zero dlopen/dlsym/dlclose/dlerror references in the
+# resulting libasound.a.
+#
+# 2026-08-18: downgraded from 1.2.12 to 1.2.4 -- checked stock's own
+# real deployed libasound.so.2.0.0
+# (linux-arkmicro/buildroot-external/.../ArkSdk/AudioService/Alsa/
+# Library/) and it's genuinely 1.2.4, an 8-minor-version gap from what
+# this project had been building. Investigating irregular AA audio
+# stutter (no queue drops, no repeated XRUNs -- ruling out this
+# project's own buffering code and the already-hardware-confirmed
+# kernel/DMA-level stutter fix, both checked first) with nothing else
+# left to explain it, alsa-lib's own dmix/softvol/period-timing
+# internals differing across 8 minor versions became the next most
+# concrete, checkable candidate -- /etc/asound.conf topology itself is
+# identical either way (this project's own alsa.conf @hooks-loads the
+# device's real /etc/asound.conf, confirmed via that file's own
+# content). Built from the real upstream 1.2.4 tarball with one local
+# patch (see build-deps/alsa-lib-1.2.4/src/dlmisc.c's own comment --
+# a genuine upstream bug in this version: two globals only declared
+# under DL_ORIGIN_AVAILABLE, but unconditionally referenced by
+# snd_dlpath() regardless, breaking the --with-libdl=no build; fixed
+# in later versions including the 1.2.12 this project had been using,
+# backported the same fix here rather than deviate from upstream).
+ALSA_ARM_INSTALL ?= $(AASDK_DEPS_DIR)/alsa-arm-install-1.2.4
 
 AASDK_DIR       := third_party/aasdk
 AASDK_INCLUDES  := -I$(AASDK_DIR)/include \

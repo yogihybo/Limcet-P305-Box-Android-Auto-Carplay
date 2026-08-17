@@ -1,5 +1,5 @@
-#include "staging_ui/theme.h"
-#include "staging_ui/fonts.h"
+#include "ui/staging/theme.h"
+#include "ui/staging/fonts.h"
 
 namespace staging_ui::theme {
 

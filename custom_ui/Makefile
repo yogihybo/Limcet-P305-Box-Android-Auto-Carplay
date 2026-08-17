@@ -87,15 +87,16 @@ UI_TARGET     := $(BUILD_DIR)/custom_ui
 UI_SRCS       := $(filter-out src/androidauto/%,$(shell find src -name '*.cpp'))
 UI_OBJS       := $(patsubst src/%.cpp,$(BUILD_DIR)/ui-obj/%.o,$(UI_SRCS))
 
-# staging_ui/ -- Material 3 home dashboard/settings-screen redesign,
-# not wired into src/ so it sits outside UI_SRCS' `find src` above.
-# Includes 3 auto-generated LVGL font C files (lv_font_conv output,
-# same shape as third_party/lvgl's own font sources) alongside the
-# C++ screens, hence the separate STAGING_UI_C_SRCS/pattern rule below.
-STAGING_UI_SRCS   := $(shell find staging_ui -name '*.cpp')
-STAGING_UI_C_SRCS := $(shell find staging_ui -name '*.c')
-STAGING_UI_OBJS   := $(patsubst staging_ui/%.cpp,$(BUILD_DIR)/ui-obj/staging_ui/%.o,$(STAGING_UI_SRCS)) \
-                     $(patsubst staging_ui/%.c,$(BUILD_DIR)/ui-obj/staging_ui/%.o,$(STAGING_UI_C_SRCS))
+# src/ui/staging/'s 3 auto-generated LVGL font C files (lv_font_conv
+# output, same shape as third_party/lvgl's own font sources) -- the
+# only .c sources under src/ that belong to the UI binary, hence this
+# being separate from UI_SRCS/UI_OBJS above (which only look for
+# .cpp). Same src/androidauto/ exclusion as UI_SRCS -- that directory's
+# one .c file (hantro_dlopen.c) is its own special case, already built
+# via HANTRO_DLOPEN_OBJ below with different flags (no full INCLUDES),
+# shared between the UI binary and androidauto-sidecar.
+UI_C_SRCS     := $(filter-out src/androidauto/%,$(shell find src -name '*.c'))
+UI_C_OBJS     := $(patsubst src/%.c,$(BUILD_DIR)/ui-obj/%.o,$(UI_C_SRCS))
 
 # --- Android Auto (aasdk-backed) sources, shared by the future real
 #     integration and the standalone probe test below ---
@@ -351,7 +352,7 @@ androidauto-wireless-probe-test: $(WIRELESS_TEST_TARGET)
 androidauto-bluetooth-rfcomm-test: $(BT_TEST_TARGET)
 androidauto-bw-aap-test: $(BW_AAP_TEST_TARGET)
 
-$(UI_TARGET): $(UI_OBJS) $(STAGING_UI_OBJS) $(LVGL_OBJS)
+$(UI_TARGET): $(UI_OBJS) $(UI_C_OBJS) $(LVGL_OBJS)
 	@mkdir -p $(dir $@)
 	$(CXX) $(LDFLAGS) -o $@ $^ $(LIBS)
 
@@ -359,11 +360,7 @@ $(BUILD_DIR)/ui-obj/%.o: src/%.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
-$(BUILD_DIR)/ui-obj/staging_ui/%.o: staging_ui/%.cpp
-	@mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) -c -o $@ $<
-
-$(BUILD_DIR)/ui-obj/staging_ui/%.o: staging_ui/%.c
+$(BUILD_DIR)/ui-obj/%.o: src/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c -o $@ $<
 

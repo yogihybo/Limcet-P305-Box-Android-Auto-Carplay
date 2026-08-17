@@ -2,8 +2,49 @@
 #include "androidauto/log_timing.h"
 
 #include <cstdio>
+#include <cstring>
+
+#include <pthread.h>
 
 namespace androidauto {
+
+namespace {
+
+// 2026-08-18: real hardware showed irregular audio stutter -- no
+// queue drops (kMaxQueuedBuffers never hit) and only a single genuine
+// ALSA XRUN in dmesg across long sessions, yet audible glitches with
+// no clear trigger, sometimes 10+s of clean playback in between. That
+// pattern doesn't match a supply/protocol issue (which would show up
+// as queue drops or repeated XRUNs) -- it matches a writer thread
+// with no real-time scheduling guarantee competing for CPU on equal
+// footing with everything else (video decode, LVGL rendering in
+// custom_ui, aasdk message processing) under plain SCHED_OTHER. A few
+// milliseconds of scheduling delay right when ALSA's ring buffer
+// needs feeding is enough to produce an audible glitch without ever
+// triggering a hard, log-worthy XRUN. Standard fix: SCHED_FIFO with a
+// modest real-time priority, so the kernel guarantees this thread CPU
+// time ahead of normal-priority work whenever it actually needs to
+// run, rather than waiting its turn. Requires CAP_SYS_NICE or root --
+// this device runs everything as root, but failure is still handled
+// as non-fatal (falls back to whatever the default policy already
+// was) matching this codebase's general optional-hardware pattern.
+void raiseToRealtimePriority(std::thread & thread, const char * deviceName) {
+    sched_param param{};
+    // Modest, not maximal -- well below anything kernel-critical,
+    // just enough to preempt normal SCHED_OTHER work (everything else
+    // in this process and custom_ui) when this thread has real work
+    // to do. Real-time priority range on Linux is typically 1-99;
+    // this deliberately stays low in that range.
+    param.sched_priority = 10;
+    int rc = pthread_setschedparam(thread.native_handle(), SCHED_FIFO, &param);
+    if (rc != 0) {
+        std::fprintf(stderr, "%s androidauto::AlsaOutput: couldn't raise writer thread for %s to "
+                     "SCHED_FIFO (%s) -- continuing at default scheduling priority\n",
+                     androidauto::logTimestamp().c_str(), deviceName, std::strerror(rc));
+    }
+}
+
+}  // namespace
 
 AlsaOutput::AlsaOutput(std::string deviceName, uint32_t sampleRate, uint32_t bitsPerSample,
                        uint32_t channels)
@@ -51,6 +92,7 @@ bool AlsaOutput::open() {
 
     stop_ = false;
     writerThread_ = std::thread(&AlsaOutput::writerLoop, this);
+    raiseToRealtimePriority(writerThread_, deviceName_.c_str());
     return true;
 }
 

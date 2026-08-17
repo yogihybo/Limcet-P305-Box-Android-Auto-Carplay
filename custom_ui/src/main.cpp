@@ -5,6 +5,7 @@
 // is now just wiring + the LVGL tick loop. See docs/IMPLEMENTATION_PLAN.md.
 
 #include <atomic>
+#include <cerrno>
 #include <chrono>
 #include <cstdio>
 #include <cstring>
@@ -12,6 +13,8 @@
 #include <string>
 #include <thread>
 #include <unistd.h>
+#include <fcntl.h>
+#include <sys/file.h>
 #include "lvgl.h"
 #include "hal/androidauto_client.h"
 #include "hal/bluetooth.h"
@@ -236,6 +239,49 @@ AaAutoStartWatcher & aa_auto_start_watcher() {
     return watcher;
 }
 
+// 2026-08-18: real hardware showed FOUR concurrent custom_ui instances
+// (and, since this process spawns its own blueware child --
+// hal::ensure_bluetooth_daemon_running() -- four blueware instances
+// too) running simultaneously, ~70s after boot, all fighting over the
+// same hardware: /dev/fb0, the MCU/knob serial port, blueware's own
+// serial port, and (via each spawning its own androidauto-sidecar)
+// /dev/fb4 and the ALSA devices. Root cause: this binary was being
+// launched manually, repeatedly, during iterative testing with no
+// kill-previous-instance step anywhere -- neither in this binary nor
+// in the tester's own workflow -- so every fresh test run left the
+// prior one still alive. Concurrent, uncoordinated access to shared
+// devices from stale instances is a real, plausible confound for
+// some of what's been chased elsewhere this session as hardware/
+// timing bugs.
+//
+// flock() on a lock file, not a PID file: a PID file can go stale
+// (process died without cleaning it up, e.g. SIGKILL) and then
+// falsely block every future launch forever; flock()'s lock is held
+// by the kernel against the open file descriptor itself and is
+// automatically released the instant this process exits for ANY
+// reason, crash included -- no stale-lock cleanup logic needed.
+// Non-fatal if the lock file itself can't be created/opened (e.g. a
+// read-only /tmp in some future context) -- this is a safety net,
+// not something that should block a real, otherwise-working boot.
+int acquireSingleInstanceLock() {
+    constexpr const char * kLockPath = "/tmp/custom_ui.lock";
+    int fd = ::open(kLockPath, O_CREAT | O_RDWR, 0644);
+    if (fd < 0) {
+        std::fprintf(stderr, "%s ui: open(%s) failed: %s -- continuing without a single-instance guard\n",
+                     core::log_timestamp().c_str(), kLockPath, std::strerror(errno));
+        return -1;
+    }
+    if (::flock(fd, LOCK_EX | LOCK_NB) != 0) {
+        std::fprintf(stderr, "%s ui: another custom_ui instance already holds %s -- refusing to start a "
+                     "second one (see this function's own comment for why this matters)\n",
+                     core::log_timestamp().c_str(), kLockPath);
+        ::close(fd);
+        return -2;
+    }
+    return fd;  // kept open (never closed) for the life of the process -- releasing it early would
+                // defeat the whole point.
+}
+
 }  // namespace
 
 int main() {
@@ -243,6 +289,11 @@ int main() {
     // log line in this whole process is now on one continuous kernel-
     // dmesg-style timeline.
     core::mark_process_start();
+
+    if (acquireSingleInstanceLock() == -2) {
+        return 1;
+    }
+
     std::printf("%s ui: starting, lv_init()...\n", core::log_timestamp().c_str());
     lv_init();
     std::printf("%s ui: lv_init() done\n", core::log_timestamp().c_str());
@@ -267,69 +318,77 @@ int main() {
     hal::ensure_bluetooth_daemon_running();
     std::printf("%s ui: bluetooth daemon launch requested\n", core::log_timestamp().c_str());
 
-    // 2026-08-12: opens hal::shared_handle() (the one process-wide BT
-    // handle -- status_bar.cpp and bluetooth_screen.cpp now use this
-    // same one instead of each independently opening their own fd) and
-    // attempts to reconnect the last paired device immediately, matching
-    // this device's real factory default (FactoryConfig.ini's
-    // AutoConnect=1) that custom_ui never actually implemented before --
-    // a previously-connected phone stayed unconnected until a user
-    // manually opened Settings -> Bluetooth. init_bluetooth() itself
-    // retries opening /dev/bw_serial for a couple of seconds, covering
-    // blueware's own startup time from the ensure_bluetooth_daemon_running()
-    // call just above.
-    hal::BluetoothHandle & bt = hal::shared_handle();
-    if (bt.fd >= 0) {
-        // 2026-08-13: registered BEFORE set_device_name()/
-        // auto_reconnect_paired_device() below, not after -- see
-        // AaAutoStartWatcher's own comment above for the full +AAPDEV=
-        // mechanism. watch_bluetooth_broadcasts() only observes
-        // broadcasts live going forward, it never replays anything the
-        // reader thread already saw -- and a previously-paired phone's
-        // +AAPDEV= (blueware's SDP-capability check) is exactly the
-        // kind of broadcast that can fire as a side effect of
-        // auto_reconnect_paired_device()'s own connection handshake
-        // just below. Registering the observer after that call meant
-        // this exact common case -- the phone that was already paired
-        // before boot -- could have its +AAPDEV= broadcast come and go
-        // before anything was listening, silently falling back to
-        // requiring the user to open the Android Auto screen and tap
-        // Connect manually. The reader thread itself was already
-        // running (started by shared_handle() above), so moving only
-        // the registration earlier is enough -- no dependency on
-        // set_device_name()/auto_reconnect_paired_device() having run
-        // first.
-        hal::watch_bluetooth_broadcasts(
-            [](const std::string & line) { aa_auto_start_watcher().on_broadcast(line); });
-        std::thread(&AaAutoStartWatcher::run, &aa_auto_start_watcher()).detach();
+    // 2026-08-18: this whole block -- shared_handle() (retries opening
+    // /dev/bw_serial for a couple of seconds, per its own comment),
+    // set_device_name() (AT+NAME=, waits for a response), and
+    // auto_reconnect_paired_device() (HFPCONN, waits for a response) --
+    // used to run synchronously right here, blocking the main thread's
+    // path to touch/knob init and the home screen for well over a
+    // second on real hardware (confirmed via a real boot-log capture:
+    // ~1.5s from "bluetooth daemon launch requested" to "MCU input
+    // started"). The UI has no dependency on any of this completing
+    // first -- moved onto its own background thread so touch/knob/the
+    // home screen/the LVGL main loop start immediately, and Bluetooth
+    // connects in parallel instead of gating startup. Still launched
+    // from here (not deferred further) so blueware gets the earliest
+    // possible head start, matching the original ordering's own intent
+    // for ensure_bluetooth_daemon_running() just above -- only the
+    // BLOCKING is removed, not the early start.
+    std::thread([]() {
+        hal::BluetoothHandle & bt = hal::shared_handle();
+        if (bt.fd >= 0) {
+            // 2026-08-13: registered BEFORE set_device_name()/
+            // auto_reconnect_paired_device() below, not after -- see
+            // AaAutoStartWatcher's own comment above for the full
+            // +AAPDEV= mechanism. watch_bluetooth_broadcasts() only
+            // observes broadcasts live going forward, it never replays
+            // anything the reader thread already saw -- and a
+            // previously-paired phone's +AAPDEV= (blueware's SDP-
+            // capability check) is exactly the kind of broadcast that
+            // can fire as a side effect of auto_reconnect_paired_device()'s
+            // own connection handshake just below. Registering the
+            // observer after that call meant this exact common case --
+            // the phone that was already paired before boot -- could
+            // have its +AAPDEV= broadcast come and go before anything
+            // was listening, silently falling back to requiring the
+            // user to open the Android Auto screen and tap Connect
+            // manually. The reader thread itself was already running
+            // (started by shared_handle() above), so moving only the
+            // registration earlier is enough -- no dependency on
+            // set_device_name()/auto_reconnect_paired_device() having
+            // run first.
+            hal::watch_bluetooth_broadcasts(
+                [](const std::string & line) { aa_auto_start_watcher().on_broadcast(line); });
+            std::thread(&AaAutoStartWatcher::run, &aa_auto_start_watcher()).detach();
 
-        // apply the configured Bluetooth name every boot,
-        // per request -- previously hal::set_device_name() (AT+NAME=)
-        // was only ever called from bluetooth_screen.cpp's Save button,
-        // so the name a phone actually saw was whatever was already
-        // persisted in the Feasycom module's own NVRAM from some
-        // earlier session (stock MsnCoreApp, or blueware's own
-        // compiled-in "FSC-CARKIT" default if never set at all) --
-        // config_store.h's DeviceName was pure UI decoration until now,
-        // never actually reaching the adapter on its own. core::
-        // default_store() is the same live ConfigStore the Settings ->
-        // Bluetooth screen reads/writes, so a name changed there and
-        // saved takes effect on the NEXT boot too, not just
-        // immediately via that screen's own Save handler.
-        // Fallback "Prado CustomUI" (not stock's "Limcet Box") matches
-        // etc/default_settings.conf's own DeviceName -- see that file's
-        // comment: kept distinct so a phone doesn't confuse this build
-        // with stock firmware on the same physical BT chip/MAC when
-        // dual-booting between them.
-        std::string btName = core::default_store().get_string("DeviceName", "Prado CustomUI", "BlueTooth");
-        if (hal::set_device_name(bt, btName)) {
-            std::printf("%s ui: bluetooth device name set to '%s'\n", core::log_timestamp().c_str(), btName.c_str());
-        } else {
-            std::fprintf(stderr, "%s ui: failed to set bluetooth device name to '%s'\n", core::log_timestamp().c_str(),
-                         btName.c_str());
+            // apply the configured Bluetooth name every boot,
+            // per request -- previously hal::set_device_name() (AT+NAME=)
+            // was only ever called from bluetooth_screen.cpp's Save button,
+            // so the name a phone actually saw was whatever was already
+            // persisted in the Feasycom module's own NVRAM from some
+            // earlier session (stock MsnCoreApp, or blueware's own
+            // compiled-in "FSC-CARKIT" default if never set at all) --
+            // config_store.h's DeviceName was pure UI decoration until now,
+            // never actually reaching the adapter on its own. core::
+            // default_store() is the same live ConfigStore the Settings ->
+            // Bluetooth screen reads/writes, so a name changed there and
+            // saved takes effect on the NEXT boot too, not just
+            // immediately via that screen's own Save handler.
+            // Fallback "Prado CustomUI" (not stock's "Limcet Box") matches
+            // etc/default_settings.conf's own DeviceName -- see that file's
+            // comment: kept distinct so a phone doesn't confuse this build
+            // with stock firmware on the same physical BT chip/MAC when
+            // dual-booting between them.
+            std::string btName = core::default_store().get_string("DeviceName", "Prado CustomUI", "BlueTooth");
+            if (hal::set_device_name(bt, btName)) {
+                std::printf("%s ui: bluetooth device name set to '%s'\n", core::log_timestamp().c_str(), btName.c_str());
+            } else {
+                std::fprintf(stderr, "%s ui: failed to set bluetooth device name to '%s'\n", core::log_timestamp().c_str(),
+                             btName.c_str());
+            }
+            hal::auto_reconnect_paired_device(bt);
         }
-        hal::auto_reconnect_paired_device(bt);
-    }
+    }).detach();
 
     // Process-lifetime, intentionally never freed -- same convention as
     // every other process-lifetime singleton in this codebase. Touch,

@@ -302,6 +302,22 @@ uint32_t HantroH264Decoder::stabilize_output() {
 
     const int target = activeOutBuf_ ^ 1;  // the buffer NOT currently pushed to the display
     std::memcpy(outVirt_[target], lastPicture_.pOutputPicture, frameSize);
+
+    // 2026-08-17: real hardware showed a residual blocky-corruption
+    // artifact specifically after bursts of interaction (rapid
+    // successive frame updates), even with the O_SYNC fix in place --
+    // O_SYNC gets us a write-combine mapping (see ensureDmaCapacity()'s
+    // own comment), which still lets the CPU buffer/coalesce writes
+    // before they actually reach DRAM; it guarantees eventual
+    // coherency, not immediate. Under steady playback there's usually
+    // enough natural delay before the next hardware access for that
+    // buffer to drain on its own, but a burst can outrun it, so the
+    // display can still occasionally scan a buffer this memcpy hasn't
+    // fully landed in memory yet. msync(MS_SYNC) explicitly forces the
+    // just-written range out before the bus address is handed to
+    // hardware, rather than relying on timing to make it likely enough.
+    msync(outVirt_[target], frameSize, MS_SYNC);
+
     activeOutBuf_ = target;
     return outBus_[target];
 }
@@ -311,6 +327,11 @@ bool HantroH264Decoder::decodeFrame(const uint8_t * data, size_t len) {
     if (!ensureDmaCapacity(len)) return false;
 
     std::memcpy(dmaVirt_, data, len);
+    // Same write-combine drain reasoning as stabilize_output()'s own
+    // comment -- force this write out before H264DecDecode() below
+    // triggers the ASIC to DMA-read it, rather than relying on
+    // whatever incidental delay happens to exist before that read.
+    msync(dmaVirt_, len, MS_SYNC);
 
     H264DecInput input{};
     input.pStream = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(dmaVirt_));

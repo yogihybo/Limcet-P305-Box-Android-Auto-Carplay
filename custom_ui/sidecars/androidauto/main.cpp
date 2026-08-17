@@ -60,6 +60,7 @@
 // NOT YET hardware-tested.
 
 #include <cerrno>
+#include <csignal>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -221,6 +222,21 @@ int main() {
     // forever in this process (real hardware caught exactly that).
     androidauto::markProcessStart();
     core::mark_process_start();
+
+    // 2026-08-19: real gap found via code audit -- handle_connection()
+    // (per-connection thread, spawned per client in the accept loop
+    // below) writes replies to clientFd unconditionally. If custom_ui
+    // ever disconnects or times out between sending a command and this
+    // process replying, that write() hits a broken pipe -- and
+    // SIGPIPE's default disposition is to terminate the WHOLE PROCESS,
+    // not just fail the one write() call. That would kill this
+    // sidecar entirely, including any live AA session, over what
+    // should just be a failed reply to one client. Ignoring SIGPIPE
+    // lets write() fail with EPIPE instead (already handled just below
+    // -- close(clientFd); return;), the correct, contained behavior.
+    // Must be set before any thread that could write to a socket
+    // starts, so this is the first thing after process-start marking.
+    std::signal(SIGPIPE, SIG_IGN);
 
     if (!acquireSingleInstanceLock()) {
         return 1;

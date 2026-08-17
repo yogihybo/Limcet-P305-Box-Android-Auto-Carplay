@@ -275,6 +275,36 @@ bool HantroH264Decoder::decodeFrame(const uint8_t * data, size_t len) {
 
     H264DecOutput output{};
     int decodeRet = h264DecDecode_(decoderInst_, &input, &output);
+    // 2026-08-18: real hardware showed the grey-wash symptom, and a
+    // Ghidra decompile of this device's own libmfc.so confirmed the
+    // library has a genuine error-concealment path (h264bsdConceal())
+    // that stamps a canned fill pattern into macroblock data --
+    // silently, without necessarily incrementing nbrOfErrMBs -- when
+    // asked to decode before a valid reference/IDR state exists. This
+    // function used to call H264DecDecode() exactly once per call and
+    // never checked output.dataLeft/pStrmCurrPos/strmCurrBusAddress
+    // (declared in our own H264DecOutput struct but, confirmed via
+    // grep, read nowhere in this codebase before this change). If a
+    // single AA message's buffer holds more than one call consumes
+    // (e.g. SPS+PPS+IDR bundled together, with H264DecDecode()
+    // returning H264DEC_HDRS_RDY after only consuming the SPS/PPS
+    // bytes) the unconsumed remainder -- potentially the IDR slice
+    // itself -- was silently discarded: the next decodeFrame() call
+    // overwrites dmaVirt_ with the next message's data entirely,
+    // permanently losing whatever never got fed to the decoder. Loop
+    // until dataLeft reaches 0 (or a call fails) so the whole buffer
+    // actually reaches the decoder, matching every real
+    // H264DecDecode()-based reference implementation's own documented
+    // calling convention. Not yet hardware-confirmed as the grey-wash
+    // root cause -- dataLeft being read nowhere before this was a
+    // real, independently-verifiable gap regardless, worth fixing and
+    // testing on its own merits.
+    while (decodeRet >= 0 && output.dataLeft > 0) {
+        input.pStream = output.pStrmCurrPos;
+        input.streamBusAddress = output.strmCurrBusAddress;
+        input.dataLen = output.dataLeft;
+        decodeRet = h264DecDecode_(decoderInst_, &input, &output);
+    }
     if (decodeRet < 0) {
         std::fprintf(stderr, "%s androidauto::HantroH264Decoder: H264DecDecode failed, ret=%d\n", androidauto::logTimestamp().c_str(),
                      decodeRet);

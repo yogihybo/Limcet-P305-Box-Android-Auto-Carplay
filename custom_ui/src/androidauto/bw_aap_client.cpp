@@ -33,6 +33,37 @@ constexpr const char *kBwAapSocketPath = "/dev/bw_aap";
 // good bytes are safer than a guess at what those 9 bytes mean.
 const unsigned char kWifiVersionRequestPayload[] = {0x08, 0x01, 0x10, 0x00,
                                                      0x18, 0x00, 0x20, 0xbc, 0x28};
+
+// 2026-08-19: real gap found via code audit -- receiveFrame() used to
+// call ::read() exactly once for the header and once for the payload
+// and treat anything short of the full requested length as a fatal
+// error. /dev/bw_aap is a SOCK_STREAM socket, where a short read
+// (returning fewer bytes than requested, with more still on the way)
+// is normal, expected behavior, not an error -- especially likely for
+// the payload read on any frame with a non-trivial length, since
+// there's no guarantee the whole frame lands in one underlying
+// transport segment. Loops until the full length is read, a genuine
+// error occurs, or the peer closes (0 return -- real EOF, not a short
+// read to retry).
+bool readFully(int fd, void *buf, size_t len) {
+    auto *cursor = static_cast<unsigned char *>(buf);
+    size_t got = 0;
+    while (got < len) {
+        ssize_t n = ::read(fd, cursor + got, len - got);
+        if (n > 0) {
+            got += static_cast<size_t>(n);
+            continue;
+        }
+        if (n == 0) {
+            return false;  // real EOF -- peer closed mid-frame
+        }
+        if (errno == EINTR) {
+            continue;
+        }
+        return false;  // genuine error, errno set for the caller to log
+    }
+    return true;
+}
 }  // namespace
 
 BwAapClient::BwAapClient() = default;
@@ -149,10 +180,9 @@ bool BwAapClient::receiveFrame(std::uint16_t &type, std::string &payload, int ti
     }
 
     unsigned char header[4];
-    ssize_t headerRead = ::read(fd_, header, sizeof(header));
-    if (headerRead != static_cast<ssize_t>(sizeof(header))) {
-        std::fprintf(stderr, "%s androidauto: bw_aap: header read failed (got %zd/%zu bytes): %s\n", androidauto::logTimestamp().c_str(),
-                     headerRead, sizeof(header), std::strerror(errno));
+    if (!readFully(fd_, header, sizeof(header))) {
+        std::fprintf(stderr, "%s androidauto: bw_aap: header read failed: %s\n", androidauto::logTimestamp().c_str(),
+                     std::strerror(errno));
         return false;
     }
 
@@ -160,13 +190,10 @@ bool BwAapClient::receiveFrame(std::uint16_t &type, std::string &payload, int ti
     type = (static_cast<std::uint16_t>(header[2]) << 8) | header[3];
 
     payload.resize(length);
-    if (length > 0) {
-        ssize_t payloadRead = ::read(fd_, &payload[0], length);
-        if (payloadRead != static_cast<ssize_t>(length)) {
-            std::fprintf(stderr, "%s androidauto: bw_aap: payload read failed (got %zd/%u bytes): %s\n", androidauto::logTimestamp().c_str(),
-                         payloadRead, length, std::strerror(errno));
-            return false;
-        }
+    if (length > 0 && !readFully(fd_, &payload[0], length)) {
+        std::fprintf(stderr, "%s androidauto: bw_aap: payload read failed: %s\n", androidauto::logTimestamp().c_str(),
+                     std::strerror(errno));
+        return false;
     }
     std::printf("%s androidauto: bw_aap: receiveFrame type=%u length=%u\n", androidauto::logTimestamp().c_str(), type, length);
     return true;

@@ -1,8 +1,12 @@
 #include "staging_ui/home_dashboard.h"
 #include "staging_ui/theme.h"
+#include "staging_ui/fonts.h"
 #include "staging_ui/nav_rail.h"
 #include "staging_ui/settings_screen.h"
 #include "core/navigation.h"
+#include "ui/android_auto_screen.h"
+#include "ui/bluetooth_screen.h"
+#include "ui/reverse_camera_screen.h"
 #include <ctime>
 #include <cstdio>
 
@@ -10,8 +14,8 @@ namespace staging_ui {
 
 namespace {
 
-void quick_connect_clicked_cb(lv_event_t * e) {
-    // Navigates or triggers AA quick connect
+void quick_connect_clicked_cb(lv_event_t *) {
+    core::navigation::push(ui::create_android_auto_screen);
 }
 
 } // namespace
@@ -23,8 +27,21 @@ lv_obj_t * create_home_dashboard() {
 
     // 1. Persistent 5-Icon Navigation Rail (Home is active)
     create_nav_rail(scr, NavDestination::Home, [](NavDestination dest) {
-        if (dest == NavDestination::Settings) {
-            core::navigation::push(create_settings_screen);
+        switch (dest) {
+            case NavDestination::AndroidAuto:
+                core::navigation::push(ui::create_android_auto_screen);
+                break;
+            case NavDestination::Bluetooth:
+                core::navigation::push(ui::create_bluetooth_screen);
+                break;
+            case NavDestination::Camera:
+                core::navigation::push(ui::create_reverse_camera_screen);
+                break;
+            case NavDestination::Settings:
+                core::navigation::push(create_settings_screen);
+                break;
+            case NavDestination::Home:
+                break;
         }
     });
 
@@ -52,7 +69,7 @@ lv_obj_t * create_home_dashboard() {
     char buf[16];
     std::snprintf(buf, sizeof(buf), "%02d:%02d", local.tm_hour, local.tm_min);
     lv_label_set_text(clock_lbl, buf);
-    lv_obj_set_style_text_font(clock_lbl, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_font(clock_lbl, &lv_font_roboto_20, 0);
     lv_obj_set_style_text_color(clock_lbl, theme::text_primary(), 0);
 
     // Dual-Card Container
@@ -76,12 +93,12 @@ lv_obj_t * create_home_dashboard() {
 
     lv_obj_t * aa_title = lv_label_create(card_aa);
     lv_label_set_text(aa_title, "Android Auto");
-    lv_obj_set_style_text_font(aa_title, &lv_font_montserrat_24, 0);
+    lv_obj_set_style_text_font(aa_title, &lv_font_roboto_24, 0);
     lv_obj_set_style_text_color(aa_title, theme::text_primary(), 0);
 
     lv_obj_t * aa_status = lv_label_create(card_aa);
     lv_label_set_text(aa_status, "Connection: Ready to pair");
-    lv_obj_set_style_text_font(aa_status, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_font(aa_status, &lv_font_roboto_14, 0);
     lv_obj_set_style_text_color(aa_status, theme::text_secondary(), 0);
 
     lv_obj_t * connect_btn = lv_button_create(card_aa);
@@ -96,7 +113,7 @@ lv_obj_t * create_home_dashboard() {
 
     lv_obj_t * connect_lbl = lv_label_create(connect_btn);
     lv_label_set_text(connect_lbl, "Quick Connect");
-    lv_obj_set_style_text_font(connect_lbl, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_font(connect_lbl, &lv_font_roboto_20, 0);
     lv_obj_set_style_text_color(connect_lbl, theme::text_on_accent(), 0);
     lv_obj_center(connect_lbl);
 
@@ -115,7 +132,7 @@ lv_obj_t * create_home_dashboard() {
 
     lv_obj_t * audio_title = lv_label_create(card_audio);
     lv_label_set_text(audio_title, "Audio Volume");
-    lv_obj_set_style_text_font(audio_title, &lv_font_montserrat_24, 0);
+    lv_obj_set_style_text_font(audio_title, &lv_font_roboto_24, 0);
     lv_obj_set_style_text_color(audio_title, theme::text_primary(), 0);
 
     // Arc Volume Gauge
@@ -151,7 +168,7 @@ lv_obj_t * create_home_dashboard() {
 
         lv_obj_t * l = lv_label_create(b);
         lv_label_set_text(l, sym);
-        lv_obj_set_style_text_font(l, &lv_font_montserrat_20, 0);
+        lv_obj_set_style_text_font(l, &lv_font_roboto_20, 0);
         lv_obj_set_style_text_color(l, theme::text_primary(), 0);
         lv_obj_center(l);
 

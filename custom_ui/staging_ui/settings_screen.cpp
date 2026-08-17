@@ -1,9 +1,13 @@
 #include "staging_ui/settings_screen.h"
 #include "staging_ui/theme.h"
+#include "staging_ui/fonts.h"
 #include "staging_ui/nav_rail.h"
 #include "core/config_store.h"
 #include "core/navigation.h"
 #include "hal/display_ctrl.h"
+#include "ui/android_auto_screen.h"
+#include "ui/bluetooth_screen.h"
+#include "ui/reverse_camera_screen.h"
 
 namespace staging_ui {
 
@@ -78,7 +82,7 @@ void stepper_click_cb(lv_event_t * e) {
 
     ctx->value = new_val;
     if (ctx->value_label) {
-        lv_label_set_text_fmt(ctx->value_label, "%d%%", ctx->value);
+        lv_label_set_text_fmt(ctx->value_label, "%d", ctx->value);
     }
     if (ctx->level_bar) {
         lv_bar_set_value(ctx->level_bar, ctx->value, LV_ANIM_ON);
@@ -111,19 +115,20 @@ lv_obj_t * create_stepper_row(lv_obj_t * parent, const char * symbol, const char
     if (symbol && symbol[0] != '\0') {
         lv_obj_t * icon = lv_label_create(left_box);
         lv_label_set_text(icon, symbol);
-        lv_obj_set_style_text_font(icon, &lv_font_montserrat_20, 0);
+        lv_obj_set_style_text_font(icon, &lv_font_roboto_20, 0);
         lv_obj_set_style_text_color(icon, theme::text_secondary(), 0);
     }
 
     lv_obj_t * label = lv_label_create(left_box);
     lv_label_set_text(label, label_text);
-    lv_obj_set_style_text_font(label, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_font(label, &lv_font_roboto_20, 0);
     lv_obj_set_style_text_color(label, theme::text_primary(), 0);
 
     // Initial Value
     int initial = core::default_store().get_int(key, (min + max) / 2, section);
     if (initial < min) initial = min;
     if (initial > max) initial = max;
+    initial = min + ((initial - min) / step) * step;  // snap to the step grid
 
     auto * ctx = new StepperCtx{section, key, vde_field, min, max, step, initial, nullptr, nullptr};
     lv_obj_add_event_cb(row, destroy_stepper_ctx, LV_EVENT_DELETE, ctx);
@@ -136,10 +141,9 @@ lv_obj_t * create_stepper_row(lv_obj_t * parent, const char * symbol, const char
     lv_obj_set_flex_align(right_box, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_column(right_box, 16, 0);
 
-    // Percentage Label
     lv_obj_t * val_lbl = lv_label_create(right_box);
-    lv_label_set_text_fmt(val_lbl, "%d%%", initial);
-    lv_obj_set_style_text_font(val_lbl, &lv_font_montserrat_20, 0);
+    lv_label_set_text_fmt(val_lbl, "%d", initial);
+    lv_obj_set_style_text_font(val_lbl, &lv_font_roboto_20, 0);
     lv_obj_set_style_text_color(val_lbl, theme::text_primary(), 0);
     lv_obj_set_width(val_lbl, 56);
     lv_obj_set_style_text_align(val_lbl, LV_TEXT_ALIGN_RIGHT, 0);
@@ -160,7 +164,7 @@ lv_obj_t * create_stepper_row(lv_obj_t * parent, const char * symbol, const char
     lv_obj_add_event_cb(minus_btn, stepper_click_cb, LV_EVENT_CLICKED, minus_ctx);
     lv_obj_t * minus_lbl = lv_label_create(minus_btn);
     lv_label_set_text(minus_lbl, LV_SYMBOL_MINUS);
-    lv_obj_set_style_text_font(minus_lbl, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_font(minus_lbl, &lv_font_roboto_20, 0);
     lv_obj_set_style_text_color(minus_lbl, theme::text_on_accent(), 0);
     lv_obj_center(minus_lbl);
 
@@ -172,13 +176,22 @@ lv_obj_t * create_stepper_row(lv_obj_t * parent, const char * symbol, const char
     lv_obj_add_event_cb(plus_btn, stepper_click_cb, LV_EVENT_CLICKED, plus_ctx);
     lv_obj_t * plus_lbl = lv_label_create(plus_btn);
     lv_label_set_text(plus_lbl, LV_SYMBOL_PLUS);
-    lv_obj_set_style_text_font(plus_lbl, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_font(plus_lbl, &lv_font_roboto_20, 0);
     lv_obj_set_style_text_color(plus_lbl, theme::text_on_accent(), 0);
     lv_obj_center(plus_lbl);
 
     if (core::navigation::focus_group()) {
         lv_group_add_obj(core::navigation::focus_group(), minus_btn);
         lv_group_add_obj(core::navigation::focus_group(), plus_btn);
+    }
+
+    // Push the seeded/persisted value to hardware once at build time --
+    // matches src/ui/settings_screen.cpp's own add_stepper_row(), which
+    // does this specifically so the display stays in sync with
+    // whatever was last saved every time this screen is (re)built, not
+    // just from the next +/- tap.
+    if (vde_field != VdeField::None) {
+        apply_vde(vde_field, initial);
     }
 
     return row;
@@ -211,13 +224,19 @@ void render_tab_content(ScreenState * state) {
     if (lbl_s) lv_obj_set_style_text_color(lbl_s, state->current_tab == SettingsTab::System ? theme::text_on_accent() : theme::text_primary(), 0);
 
     if (state->current_tab == SettingsTab::Display) {
-        // Display Tab: Exact 3 Steppers Matching Mockup
-        create_stepper_row(state->card_container, LV_SYMBOL_EYE_OPEN, "Brightness", 0, 100, 5,
-                           "Brightness", "Display", VdeField::Brightness);
-        create_stepper_row(state->card_container, LV_SYMBOL_IMAGE, "Contrast", 0, 100, 5,
-                           "Contrast", "Display", VdeField::Contrast);
-        create_stepper_row(state->card_container, LV_SYMBOL_SETTINGS, "Saturation", 0, 100, 5,
-                           "Saturation", "Display", VdeField::Saturation);
+        // 0-255 (not 0-100) and section "General" (not "Display") --
+        // matches the real hal::VdeConfig register range and the
+        // config_store section src/ui/settings_screen.cpp's own
+        // Brightness/Contrast/Saturation rows already use. The old
+        // 0-100 range capped real hardware brightness/contrast at
+        // ~39% of its actual maximum, and "Display" was a section no
+        // other code in this app reads from.
+        create_stepper_row(state->card_container, LV_SYMBOL_EYE_OPEN, "Brightness", 0, 255, 5,
+                           "Brightness", "General", VdeField::Brightness);
+        create_stepper_row(state->card_container, LV_SYMBOL_IMAGE, "Contrast", 0, 255, 5,
+                           "Contrast", "General", VdeField::Contrast);
+        create_stepper_row(state->card_container, LV_SYMBOL_SETTINGS, "Saturation", 0, 255, 5,
+                           "Saturation", "General", VdeField::Saturation);
     } else if (state->current_tab == SettingsTab::Audio) {
         // Audio Tab: Media & Guidance Volume
         create_stepper_row(state->card_container, LV_SYMBOL_AUDIO, "Media Volume", 0, 100, 5,
@@ -238,14 +257,14 @@ void render_tab_content(ScreenState * state) {
 
         lv_obj_t * label = lv_label_create(row);
         lv_label_set_text(label, "Auto-Start CarLink");
-        lv_obj_set_style_text_font(label, &lv_font_montserrat_20, 0);
+        lv_obj_set_style_text_font(label, &lv_font_roboto_20, 0);
         lv_obj_set_style_text_color(label, theme::text_primary(), 0);
 
         lv_obj_t * sw = lv_switch_create(row);
         bool auto_start = core::default_store().get_bool("AutoStartCarLink", true, "General");
         if (auto_start) lv_obj_add_state(sw, LV_STATE_CHECKED);
         lv_obj_add_event_cb(sw, [](lv_event_t * e) {
-            lv_obj_t * target = lv_event_get_target(e);
+            lv_obj_t * target = static_cast<lv_obj_t *>(lv_event_get_target(e));
             bool val = lv_obj_has_state(target, LV_STATE_CHECKED);
             core::default_store().set_bool("AutoStartCarLink", val, "General");
             core::default_store().save();
@@ -259,7 +278,7 @@ void render_tab_content(ScreenState * state) {
 
 void chip_clicked_cb(lv_event_t * e) {
     auto tab = static_cast<SettingsTab>(reinterpret_cast<uintptr_t>(lv_event_get_user_data(e)));
-    auto * state = static_cast<ScreenState *>(lv_obj_get_user_data(lv_event_get_target(e)));
+    auto * state = static_cast<ScreenState *>(lv_obj_get_user_data(static_cast<lv_obj_t *>(lv_event_get_target(e))));
     if (state && state->current_tab != tab) {
         state->current_tab = tab;
         render_tab_content(state);
@@ -283,8 +302,21 @@ lv_obj_t * create_settings_screen() {
 
     // 1. Persistent 5-Icon Navigation Rail on the Left (Settings is active)
     create_nav_rail(scr, NavDestination::Settings, [](NavDestination dest) {
-        if (dest == NavDestination::Home) {
-            core::navigation::pop();
+        switch (dest) {
+            case NavDestination::Home:
+                core::navigation::pop();
+                break;
+            case NavDestination::AndroidAuto:
+                core::navigation::push(ui::create_android_auto_screen);
+                break;
+            case NavDestination::Bluetooth:
+                core::navigation::push(ui::create_bluetooth_screen);
+                break;
+            case NavDestination::Camera:
+                core::navigation::push(ui::create_reverse_camera_screen);
+                break;
+            case NavDestination::Settings:
+                break;
         }
     });
 
@@ -315,7 +347,7 @@ lv_obj_t * create_settings_screen() {
 
         lv_obj_t * lbl = lv_label_create(chip);
         lv_label_set_text(lbl, text);
-        lv_obj_set_style_text_font(lbl, &lv_font_montserrat_20, 0);
+        lv_obj_set_style_text_font(lbl, &lv_font_roboto_20, 0);
         lv_obj_center(lbl);
 
         if (core::navigation::focus_group()) {

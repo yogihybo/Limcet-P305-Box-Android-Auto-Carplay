@@ -29,6 +29,7 @@
 #include "ui/android_auto_screen.h"
 #include "ui/home_screen.h"
 #include "ui/theme.h"
+#include "staging_ui/home_dashboard.h"
 
 namespace {
 
@@ -412,8 +413,24 @@ int main() {
     core::navigation::init(screens);  // lets Settings/Bluetooth screens
                                        // push/pop without a captured
                                        // ScreenManager* -- see core/navigation.h
-    screens.push(ui::create_home_screen);
-    std::printf("%s ui: home screen pushed\n", core::log_timestamp().c_str());
+    // 2026-08-19: swapped in the new Material-3 staging_ui home
+    // dashboard (previously ui::create_home_screen, still compiled and
+    // available -- android_auto_screen.cpp/bluetooth_screen.cpp/
+    // reverse_camera_screen.cpp/status_bar.cpp are all unaffected,
+    // every other screen still navigates back via
+    // core::navigation::pop(), not by calling this directly).
+    // Deliberately did NOT swap ui::theme::init() above for
+    // staging_ui::theme::init() -- both call lv_theme_default_init()
+    // globally for the whole display, and those four other screens
+    // rely on ui::theme's palette/font for their own default-widget
+    // styling. staging_ui's own screens set colors/fonts explicitly on
+    // every element they create (see staging_ui/theme.cpp's style_*()
+    // helpers), so they don't depend on the global default theme
+    // either way -- the only visible difference from not switching is
+    // the one unstyled lv_switch on the Settings System tab picking up
+    // ui::theme's blue accent instead of staging_ui's own (both blue).
+    screens.push(staging_ui::create_home_dashboard);
+    std::printf("%s ui: home dashboard (staging_ui) pushed\n", core::log_timestamp().c_str());
 
     std::printf("%s ui: LVGL initialized, running main loop\n", core::log_timestamp().c_str());
 

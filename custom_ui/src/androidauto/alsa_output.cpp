@@ -61,17 +61,24 @@ bool AlsaOutput::write(const void * interleavedSamples, uint32_t frameCount) {
     const uint8_t * bytes = static_cast<const uint8_t *>(interleavedSamples);
     std::vector<uint8_t> copy(bytes, bytes + static_cast<size_t>(frameCount) * bytesPerFrame);
 
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (queue_.size() >= kMaxQueuedBuffers) {
-        ++droppedBuffers_;
-        if (droppedBuffers_ == 1 || droppedBuffers_ % 100 == 0) {
-            std::fprintf(stderr, "%s androidauto::AlsaOutput: writer thread for %s falling behind, "
-                         "dropped %u buffer(s) so far\n", androidauto::logTimestamp().c_str(),
-                         deviceName_.c_str(), droppedBuffers_);
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (queue_.size() >= kMaxQueuedBuffers) {
+            ++droppedBuffers_;
+            if (droppedBuffers_ == 1 || droppedBuffers_ % 100 == 0) {
+                std::fprintf(stderr, "%s androidauto::AlsaOutput: writer thread for %s falling behind, "
+                             "dropped %u buffer(s) so far\n", androidauto::logTimestamp().c_str(),
+                             deviceName_.c_str(), droppedBuffers_);
+            }
+            // Still counts as "consumed" -- see class comment: acking a
+            // dropped buffer immediately is correct, since there's
+            // nothing left to wait for and NOT acking would stall the
+            // phone forever expecting a buffer we've already discarded.
+            if (onConsumed_) onConsumed_();
+            return true;
         }
-        return true;
+        queue_.push_back(std::move(copy));
     }
-    queue_.push_back(std::move(copy));
     cv_.notify_one();
     return true;
 }
@@ -92,8 +99,12 @@ void AlsaOutput::writerLoop() {
         uint32_t bytesPerFrame = 2 * channels_;
         uint32_t frameCount = static_cast<uint32_t>(buf.size() / bytesPerFrame);
         if (frameCount > 0) {
+            // Blocking, real-time-paced -- see class comment: this is
+            // exactly what restores max_unacked=1's intended flow
+            // control once onConsumed_ is wired to the ack below.
             writeBlocking(buf.data(), frameCount);
         }
+        if (onConsumed_) onConsumed_();
     }
 }
 

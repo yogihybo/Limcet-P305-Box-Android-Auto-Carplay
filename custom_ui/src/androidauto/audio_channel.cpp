@@ -16,7 +16,19 @@ AudioChannel::AudioChannel(boost::asio::io_service::strand & strand,
       pcmDevice_(std::move(pcmDevice)),
       sampleRate_(sampleRate),
       channels_(channels),
-      alsaOutput_(pcmDevice_, sampleRate_, 16, channels_) {}
+      alsaOutput_(pcmDevice_, sampleRate_, 16, channels_) {
+    // 2026-08-18: see alsa_output.h's own class comment for the full
+    // story -- this channel's ack is max_unacked=1's actual flow
+    // control (the phone won't send the next buffer until it gets
+    // this), so it must fire at real playback pace, not the instant a
+    // buffer is handed to AlsaOutput::write() (which now just enqueues
+    // it). AlsaOutput invokes this from ITS OWN writer thread (or
+    // synchronously from write() on the drop path) -- never assume
+    // it's already on strand_, always post.
+    alsaOutput_.setConsumedCallback([this]() {
+        strand_.post([this]() { sendAck(); });
+    });
+}
 
 void AudioChannel::start() {
     channel_->receive(this->shared_from_this());
@@ -121,9 +133,18 @@ void AudioChannel::playBuffer(const aasdk::common::DataConstBuffer & buffer) {
         uint32_t bytesPerFrame = 2 * channels_;
         uint32_t frameCount = static_cast<uint32_t>(buffer.size / bytesPerFrame);
         if (frameCount > 0) {
+            // Ack fires later, via the consumed-callback set in the
+            // constructor -- once this buffer's real write actually
+            // happens (or immediately if dropped) -- not here. See
+            // alsa_output.h's class comment: acking immediately after
+            // just enqueueing broke max_unacked=1's flow control and
+            // crashed the session on real hardware.
             alsaOutput_.write(buffer.cdata, frameCount);
+            return;
         }
     }
+    // ALSA never opened, or a zero-length buffer -- nothing will ever
+    // invoke the consumed callback for this one, so ack directly.
     sendAck();
 }
 

@@ -433,7 +433,22 @@ int main() {
         // itself fine to call repeatedly/from an already-elsewhere
         // navigation state -- same push-based stack every other screen
         // transition in this app already uses.
-        if (aa_auto_start_watcher().consume_navigate_request()) {
+        // 2026-08-19: real gap found via code audit -- consume_navigate_
+        // request() is edge-triggered (exchange(false), so it can't fire
+        // on every tick), but nothing stopped the underlying trigger
+        // (+AAPDEV= detection, see AaAutoStartWatcher's own comment)
+        // from firing a SECOND time later in the same session (e.g. a
+        // mid-drive Bluetooth reconnect) while the user is already on
+        // the AA screen -- push() has no dedup of its own, so that would
+        // stack a duplicate AA screen (and a duplicate poll_timer_cb()
+        // timer, see android_auto_screen.cpp) on top of the current one.
+        // hal::androidauto_screen_active() is already the exact "is the
+        // AA screen the active one right now" flag that screen itself
+        // maintains (set true in create_android_auto_screen(), false in
+        // its own screen_delete_cb()) -- reusing it here instead of
+        // adding a new ScreenManager API.
+        if (aa_auto_start_watcher().consume_navigate_request() &&
+            !hal::androidauto_screen_active().load(std::memory_order_acquire)) {
             core::navigation::push(ui::create_android_auto_screen);
         }
         usleep(5000);

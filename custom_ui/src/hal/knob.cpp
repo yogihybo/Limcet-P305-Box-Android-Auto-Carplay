@@ -2,6 +2,7 @@
 
 #include <cstdio>
 
+#include "core/log_timing.h"
 #include "hal/androidauto_client.h"
 
 namespace hal {
@@ -62,7 +63,7 @@ void mcu_knob_read_cb(lv_indev_t * indev, lv_indev_data_t * data) {
         // is not a hot path the way per-frame video/decode logs are
         // -- safe to leave verbose).
         if (ticks != 0) {
-            std::printf("hal::knob: AA active, ticks=%d\n", ticks);
+            std::printf("%s hal::knob: AA active, ticks=%d\n", core::log_timestamp().c_str(), ticks);
         }
         for (int32_t i = 0; i < ticks; ++i) {
             androidauto_client().sendKey(kKeycodeSystemNavigationDown);

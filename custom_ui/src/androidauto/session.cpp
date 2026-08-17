@@ -309,17 +309,19 @@ void Session::onServiceDiscoveryRequest(
     inputSourceService->add_keycodes_supported(280);  // KEYCODE_SYSTEM_NAVIGATION_UP
     inputSourceService->add_keycodes_supported(281);  // KEYCODE_SYSTEM_NAVIGATION_DOWN
     inputSourceService->add_keycodes_supported(23);   // KEYCODE_DPAD_CENTER
-    // 2026-08-19: real hardware confirmed SYSTEM_NAVIGATION_UP/DOWN
-    // genuinely works, but only moves focus WITHIN the currently-
-    // focused rotary container ("card") -- there was no way to reach
-    // fields in a different card. AAOS's real distinction: moving
-    // BETWEEN containers is a DPAD-directional "nudge", not a
-    // SYSTEM_NAVIGATION rotation. The physical knob only has rotate +
-    // press (no other gesture), so hal/knob.cpp now uses a hold-and-
-    // rotate chord (press held down while rotating) to send these
-    // instead of 280/281 for that case -- see its own comment.
-    inputSourceService->add_keycodes_supported(19);   // KEYCODE_DPAD_UP
-    inputSourceService->add_keycodes_supported(20);   // KEYCODE_DPAD_DOWN
+    // 2026-08-19: briefly also declared KEYCODE_DPAD_UP/DOWN (19/20)
+    // here to support a hold-and-rotate "nudge between cards" chord in
+    // hal/knob.cpp -- reverted after real hardware testing showed
+    // rotation stopped working AT ALL once DPAD_UP/DOWN were declared
+    // alongside SYSTEM_NAVIGATION_UP/DOWN in the same keycodes_supported
+    // list (previously-working within-card rotation broke too, not
+    // just the new cross-card nudge). Leading theory: AAOS's rotary
+    // controller and raw-DPAD input models are mutually exclusive
+    // capability declarations, and mixing them made Gearhead reject/
+    // ignore the whole rotary keycode set rather than just add the new
+    // ones. Back to the known-good 280/281/23-only set; the
+    // cross-container nudge idea needs a different mechanism if
+    // revisited (not simply adding DPAD keycodes here).
 
     auto *videoService = response.add_channels();
     videoService->set_id(static_cast<std::int32_t>(aasdk::messenger::ChannelId::MEDIA_SINK_VIDEO));

@@ -27,7 +27,6 @@
 // and a real decoded frame yet.
 #pragma once
 
-#include <chrono>
 #include <cstdint>
 #include <memory>
 
@@ -99,27 +98,6 @@ private:
 
     int32_t sessionId_ = 0;
     uint64_t ackCount_ = 0;
-
-    // 2026-08-18: real hardware shows this process using more CPU than
-    // stock's own sink ever did, and the leading theory (aasdk's
-    // boost::asio-based reactor doing more per-message work than
-    // stock's own leaner implementation) is architectural reasoning,
-    // not a measurement -- perf isn't available on this device
-    // (CONFIG_PERF_EVENTS isn't even enabled in this project's own
-    // kernel, and no perf binary exists in the rootfs either), so this
-    // is a lightweight, no-new-tooling substitute: time the two
-    // hardware-bound steps this class directly controls (decode itself,
-    // and the display-layer address push) and periodically log their
-    // combined share of wall-clock time. Whatever's left unaccounted
-    // for is spent elsewhere -- aasdk's own message receive/decrypt/
-    // dispatch machinery, most likely, but this at least turns "we
-    // think it's aasdk overhead" into "decode+display account for N%,
-    // so the rest is at least bounded" instead of pure guesswork.
-    std::chrono::steady_clock::duration decodeTimeTotal_{};
-    std::chrono::steady_clock::duration pushTimeTotal_{};
-    std::chrono::steady_clock::time_point reportWindowStart_{};
-    uint32_t framesSinceReport_ = 0;
-    void maybeReportTiming();
 
     // 2026-08-18: real hardware shows a grey/white translucent wash
     // over the ENTIRE AA video area for the first several seconds of

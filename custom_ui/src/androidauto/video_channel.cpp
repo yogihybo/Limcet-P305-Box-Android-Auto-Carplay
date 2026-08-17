@@ -114,11 +114,48 @@ void VideoChannel::onMediaIndication(const aasdk::common::DataConstBuffer & buff
 
 void VideoChannel::decodeBuffer(const aasdk::common::DataConstBuffer & buffer) {
     if (decoderOpen_) {
-        if (decoder_.decodeFrame(buffer.cdata, buffer.size)) {
+        const auto decodeStart = std::chrono::steady_clock::now();
+        bool pictureReady = decoder_.decodeFrame(buffer.cdata, buffer.size);
+        decodeTimeTotal_ += std::chrono::steady_clock::now() - decodeStart;
+
+        if (pictureReady) {
             pushDecodedFrame();
         }
+        ++framesSinceReport_;
+        maybeReportTiming();
     }
     sendAck();
+}
+
+void VideoChannel::maybeReportTiming() {
+    if (reportWindowStart_.time_since_epoch().count() == 0) {
+        reportWindowStart_ = std::chrono::steady_clock::now();
+        return;
+    }
+    constexpr std::chrono::seconds kReportInterval{5};
+    auto now = std::chrono::steady_clock::now();
+    auto elapsed = now - reportWindowStart_;
+    if (elapsed < kReportInterval) return;
+
+    auto toMs = [](std::chrono::steady_clock::duration d) {
+        return std::chrono::duration_cast<std::chrono::milliseconds>(d).count();
+    };
+    auto elapsedMs = toMs(elapsed);
+    auto decodeMs = toMs(decodeTimeTotal_);
+    auto pushMs = toMs(pushTimeTotal_);
+    double decodePct = elapsedMs > 0 ? 100.0 * static_cast<double>(decodeMs) / static_cast<double>(elapsedMs) : 0.0;
+    double pushPct = elapsedMs > 0 ? 100.0 * static_cast<double>(pushMs) / static_cast<double>(elapsedMs) : 0.0;
+
+    std::printf("%s androidauto: video timing (%us window, %u frames): decode=%lldms (%.1f%%) "
+                "display_push=%lldms (%.1f%%) accounted=%.1f%% of wall time\n",
+                logTimestamp().c_str(), static_cast<unsigned>(kReportInterval.count()), framesSinceReport_,
+                static_cast<long long>(decodeMs), decodePct, static_cast<long long>(pushMs), pushPct,
+                decodePct + pushPct);
+
+    decodeTimeTotal_ = {};
+    pushTimeTotal_ = {};
+    framesSinceReport_ = 0;
+    reportWindowStart_ = now;
 }
 
 void VideoChannel::pushDecodedFrame() {
@@ -190,8 +227,11 @@ void VideoChannel::pushDecodedFrame() {
     // up, i.e. the fix may have been contributing to the very symptom
     // it was meant to solve. Reverted to matching stock exactly:
     // pic.outputPictureBusAddress pushed directly, no copy.
-    if (!hal::set_frame_addr(videoLayer_, pic.outputPictureBusAddress, pic.picWidth,
-                              pic.picHeight)) {
+    const auto pushStart = std::chrono::steady_clock::now();
+    bool pushed = hal::set_frame_addr(videoLayer_, pic.outputPictureBusAddress, pic.picWidth,
+                                       pic.picHeight);
+    pushTimeTotal_ += std::chrono::steady_clock::now() - pushStart;
+    if (!pushed) {
         return;
     }
 

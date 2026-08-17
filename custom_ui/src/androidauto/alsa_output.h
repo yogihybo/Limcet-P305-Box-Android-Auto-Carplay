@@ -34,6 +34,7 @@
 #include <condition_variable>
 #include <cstdint>
 #include <deque>
+#include <functional>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -67,6 +68,37 @@ namespace androidauto {
 // thread ever genuinely falls behind (real system overload), new
 // audio is dropped rather than growing an unbounded backlog that
 // would just turn into ever-increasing playback latency.
+//
+// 2026-08-18: real hardware showed CPU drop dramatically (as
+// expected) but the AA session itself now crashes with ECONNRESET a
+// few seconds in, after audibly stuttery playback. Root cause: the
+// FIRST version of this fix left AudioChannel::playBuffer() calling
+// sendAck() immediately after handing a buffer to write() -- but
+// write() now only enqueues; it doesn't wait for the buffer to
+// actually be played. With max_unacked=1 (see
+// AudioChannel::onMediaChannelSetupRequest's own comment), the ack is
+// literally the phone's permission to send the next buffer -- acking
+// the instant a buffer is queued, rather than once it's actually
+// drained at real playback speed, let the phone burst audio at
+// network speed instead of real-time, across all three audio channels
+// simultaneously, overrunning this queue (hence the audible stutter)
+// and very plausibly overrunning something in the transport itself
+// (ECONNRESET/Native Code 104 shortly after). The blocking write this
+// class replaced was, unintentionally, also the thing pacing acks to
+// real playback speed.
+//
+// Fixed by adding an optional "consumed" callback, invoked once per
+// buffer -- from the writer thread, right after that buffer's real
+// (blocking, real-time-paced) write attempt, OR synchronously from
+// write() itself on the rare drop path (queue full -- acking
+// immediately there is correct: we're discarding it, so there's
+// nothing to wait for, and NOT acking would stall the phone
+// indefinitely waiting for a buffer that's never coming). The
+// callback fires on whichever thread the event happened on -- the
+// caller (AudioChannel) is responsible for marshaling back onto its
+// own strand (strand_.post(...)) before touching any aasdk state, the
+// same pattern microphone_channel.cpp's own capture thread already
+// uses for the equivalent capture-side problem.
 class AlsaOutput {
 public:
     // deviceName: a real confirmed PCM device string, see header
@@ -92,6 +124,14 @@ public:
     // buffer (logged, rate-limited) rather than blocking or growing
     // without bound -- see class comment.
     bool write(const void * interleavedSamples, uint32_t frameCount);
+
+    // Invoked once per buffer passed to write() -- after its real
+    // write attempt completes on the writer thread, or synchronously
+    // within write() itself if the buffer was dropped (queue full).
+    // See class comment. Not thread-safe to change after open(); set
+    // once, before the first write().
+    using ConsumedCallback = std::function<void()>;
+    void setConsumedCallback(ConsumedCallback cb) { onConsumed_ = std::move(cb); }
 
     // Stops the writer thread (letting it drain whatever's already
     // queued) and closes the PCM device.
@@ -123,6 +163,7 @@ private:
     std::deque<std::vector<uint8_t>> queue_;
     bool stop_ = false;
     uint32_t droppedBuffers_ = 0;
+    ConsumedCallback onConsumed_;
 };
 
 }  // namespace androidauto

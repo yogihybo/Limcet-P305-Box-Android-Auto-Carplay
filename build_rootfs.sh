@@ -21,10 +21,10 @@ set -e
 export PATH="$PATH:/usr/sbin:/sbin"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ROOTFS_DIR="$SCRIPT_DIR/firmware_source/prado_reconstructed/mtd6_rootfs/rootfs"
-UBIFS_IMAGE="$SCRIPT_DIR/firmware_source/prado_reconstructed/mtd6_rootfs/rootfs.ubifs"
-UBI_IMAGE="$SCRIPT_DIR/firmware_source/prado_reconstructed/mtd6_rootfs/rootfs.img"
-UBI_CFG="$SCRIPT_DIR/firmware_source/prado_reconstructed/mtd6_rootfs/ubi.cfg"
+ROOTFS_DIR="$SCRIPT_DIR/firmware_source/mtd6_rootfs/rootfs"
+UBIFS_IMAGE="$SCRIPT_DIR/firmware_source/mtd6_rootfs/rootfs.ubifs"
+UBI_IMAGE="$SCRIPT_DIR/firmware_source/mtd6_rootfs/rootfs.img"
+UBI_CFG="$SCRIPT_DIR/firmware_source/mtd6_rootfs/ubi.cfg"
 
 MIN_IO=2048
 LEB_SIZE=126976
@@ -50,7 +50,7 @@ echo "=== Writing ubinize config ==="
 cat > "$UBI_CFG" << 'EOF'
 [rootfs]
 mode=ubi
-image=firmware_source/prado_reconstructed/mtd6_rootfs/rootfs.ubifs
+image=firmware_source/mtd6_rootfs/rootfs.ubifs
 vol_id=0
 vol_type=dynamic
 vol_name=rootfs

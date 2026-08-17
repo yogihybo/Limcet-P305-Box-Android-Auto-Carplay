@@ -123,7 +123,7 @@ restore is possible before committing. Keep the original UBOOT.BIN.
 **Update:** the `~/Downloads/linux-arkmicro` path below was on a previous session's machine and was
 never actually in this repo — that made the "✓ SOURCE AVAILABLE" claim below unverified for a long
 time. It's since been tracked down for real (`RD_Software/linux-arkmicro`, a live public Gogs repo)
-and a relevant slice copied into [`linux-arkmicro Reference/`](../linux-arkmicro%20Reference/README.md).
+and documented in [`vendor_source/README.md`](../../vendor_source/README.md).
 **It is not an exact source match** — it's U-Boot 2018.07 with SPL+FDT, while the Limcet P306's actual stock
 U-Boot is 2012.10, legacy ATAG, no devicetree. Same SoC family, later BSP generation. The details below
 (largely still accurate) are superseded by the full build plan and risk list in

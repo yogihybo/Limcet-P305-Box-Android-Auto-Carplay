@@ -25,7 +25,7 @@ from naming convention alone.
   is this project's own generic listener for these.
 - A parallel, unrelated framing (`[0xFA][arg1][arg2][arg3][len][payload...][chk][0xAF]`)
   exists on a **second, separate serial port** (`/dev/ttyS2`, 4800 baud) —
-  not part of this AT-command vocabulary at all, see `docs/MCU_ADAPTERS.md`.
+  not part of this AT-command vocabulary at all, see [`docs/1.3_MCU_ADAPTERS.md`](1.3_MCU_ADAPTERS.md).
 
 ## Status legend
 

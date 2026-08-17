@@ -36,7 +36,7 @@ ROOTFS_DIR="$SCRIPT_DIR/firmware_source/mtd6_rootfs/rootfs"
 ROOTFS_UBIFS="$SCRIPT_DIR/firmware_source/mtd6_rootfs/rootfs.ubifs"
 ROOTFS_IMG="$SCRIPT_DIR/firmware_source/mtd6_rootfs/rootfs.img"
 
-USERDATA_SRC="$SCRIPT_DIR/firmware_source/mtd7_userdata/userdata"
+USERDATA_SRC="$SCRIPT_DIR/firmware_source/mtd7_userdata"
 USERDATA_UBIFS="$SCRIPT_DIR/firmware_source/mtd7_userdata/userdata.ubifs"
 USERDATA_IMG="$SCRIPT_DIR/firmware_source/mtd7_userdata/userdata.img"
 
@@ -120,8 +120,8 @@ build_userdata() {
 
     cp -r "$USERDATA_SRC/." "$build_dir/fs/"
     mkdir -p "$build_dir/fs/msncfg"
-    cp "$SCRIPT_DIR/firmware_source/msn_factory_configs/MsnProductInfo.ini" "$build_dir/fs/msncfg/"
-    cp "$SCRIPT_DIR/firmware_source/msn_factory_configs/FactoryConfig.ini"  "$build_dir/fs/msncfg/"
+    cp "$SCRIPT_DIR/firmware_overlay/msnprofile/MsnProductInfo.ini" "$build_dir/fs/msncfg/" 2>/dev/null || cp "$SCRIPT_DIR/firmware_source/mtd6_rootfs/msnprofile/MsnProductInfo.ini" "$build_dir/fs/msncfg/"
+    cp "$SCRIPT_DIR/firmware_overlay/msnprofile/FactoryConfig.ini"  "$build_dir/fs/msncfg/" 2>/dev/null || cp "$SCRIPT_DIR/firmware_source/mtd6_rootfs/msnprofile/FactoryConfig.ini"  "$build_dir/fs/msncfg/"
 
     echo "  Userdata tree:"
     find "$build_dir/fs" -type f | sed "s|$build_dir/fs/||" | sort | sed 's/^/    /'

@@ -1,7 +1,7 @@
 # firmware_overlay/prado/
 
 Ready-to-copy, already-patched files for the Prado reconstructed rootfs
-(`firmware_source/prado_reconstructed/mtd6_rootfs/rootfs/`). Every file
+(`firmware_source/mtd6_rootfs/rootfs/`). Every file
 here mirrors its path in the rootfs (e.g. `etc/rc.d/rcS` here →
 `/etc/rc.d/rcS` on the device). `build_bootable_sdcard.sh` rsyncs the
 main rootfs onto p2, then rsyncs this directory on top — whatever's here

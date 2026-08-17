@@ -37,8 +37,8 @@ not a hardware one. LVGL reads evdev directly (`lv_indev` + a plain
 
 ## Audio
 
-ALSA, single card: `card0` (`ARK-SDDAC`). No mixer/routing surprises
-documented elsewhere in this repo as of this writing.
+ALSA, single card: `card0` (`ARK-SDDAC`).
+See [`AUDIO_SUBSYSTEM_HANDOFF.md`](AUDIO_SUBSYSTEM_HANDOFF.md) for the Android Auto audio flow control, ACK timing, buffer sliding window, and ALSA writer thread architecture.
 
 ## CarPlay — via `sink` (kept as a black box)
 

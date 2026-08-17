@@ -12,223 +12,68 @@ mkdir -p /var/log
 sync
 /sbin/mdev -s
 
-# 2026-08-04: mdev -s above is a one-shot coldplug scan only -- it creates
-# device nodes for what's already present at boot, then exits. Reacting to
-# anything plugged in afterward needs a persistent listener. This kernel's
-# legacy CONFIG_UEVENT_HELPER mechanism (auto-invoking a helper program on
-# every hotplug uevent) is unset/compiled out, but that's not the only
-# path: `mdev -df` listens directly on a netlink socket for kobject uevents
-# (CONFIG_NET=y, confirmed on), a separate, more modern kernel mechanism
-# that doesn't depend on CONFIG_UEVENT_HELPER at all.
+# Persistent hotplug listener: `mdev -s` above is coldplug-only (one-shot).
+# `-df` daemonizes and listens on a netlink socket for kobject uevents.
+# Needs busybox 1.33.0 (CONFIG_FEATURE_MDEV_DAEMON, static-linked -- see
+# tools/nss-stub/README.md and project_usb_udisk_automount memory for why
+# static+nss-stub, not the old 1.30.1 dynamic build).
 #
-# The busybox 1.30.1 build previously shipped here didn't have this
-# option: CONFIG_FEATURE_MDEV_DAEMON doesn't exist as a Kconfig symbol
-# until busybox 1.31+ (confirmed by grepping that version's own
-# util-linux/mdev.c -- no daemon code path present at all, not just
-# disabled). Rebuilt busybox from 1.33.0 -- same version this project's
-# buildroot tree already uses elsewhere, defconfig enables the daemon
-# feature by default.
-#
-# First rebuild attempt (dynamically linked against the host toolchain's
-# glibc 2.36) booted straight into a kernel panic ("Attempted to kill
-# init!", GLIBC_2.29/2.34 not found) -- the device's own libc is 2.27,
-# far older than the host toolchain's. Swapping in the device's own
-# libc-2.27.so at link time (the tools/hx170-test recipe) doesn't work
-# for a whole program like busybox either: that old glibc's stat/fcntl
-# family isn't ABI-compatible with code compiled against modern glibc
-# headers (undefined stat64/lstat64/fcntl64 -- old glibc only exports
-# the __xstat-style wrapper interface for those). Real fix: static
-# linking (CONFIG_STATIC=y, no runtime libc dependency at all) plus the
-# project's existing nss-stub treatment (see tools/nss-stub/README.md)
-# for the small set of real glibc NSS/dlopen symbols busybox still
-# references (getaddrinfo/gethostbyname/gethostbyaddr/getservbyname/
-# getservbyport for ipcalc/netstat/inetd, plus dlopen defensively) --
-# busybox's OWN getpwnam/getpwuid/getgrnam/getgrgid/etc are NOT wrapped,
-# since CONFIG_USE_BB_PWD_GRP=y already makes busybox provide those
-# itself without ever touching glibc's NSS machinery. See
-# tools/nss-stub/nss_stub_busybox.c for the stub implementations, and
-# project_usb_udisk_automount memory for the full build recipe
-# (CONFIG_EXTRA_LDFLAGS must fold the wrap flags and stub .o into a
-# single "-Wl,..." token, or busybox's own build system double-links it
-# into an intermediate built-in.o and the final binary both).
-#
-# Verified via qemu-arm-static running the actual new binary: `mdev
-# --help` lists real `-d`/`-f` daemon flags, applet list unchanged from
-# the previous 1.30.1 build (396 vs 392 entries, normal version churn).
+# Note: busybox's daemon mode also does its own internal coldplug scan
+# before it starts listening (so it doesn't miss devices that appeared
+# before its netlink socket bound) -- this means mdev.conf rules (e.g.
+# usb_domount.sh) legitimately fire twice at boot, once from `-s` above
+# and once from this daemon's own startup. Harmless/idempotent, kept
+# rather than dropping the explicit `-s` because this daemon is
+# backgrounded and not guaranteed to finish its scan before later
+# synchronous steps in this script need device nodes to already exist.
 /sbin/mdev -df &
 
-# 2026-08-02: low-latency socket polling, system-wide -- practical
-# mitigation attempt for the long-running AA media audio stutter
-# investigation (docs/AUDIO_SUBSYSTEM_INVESTIGATION.md), tried after
-# live tracing (strace) proved too invasive on this hardware to safely
-# gather more diagnostic data. Makes the kernel busy-poll for incoming
-# socket data instead of relying purely on interrupt-driven wakeup,
-# for every socket system-wide -- sink itself never opts in via
-# setsockopt(SO_BUSY_POLL) (confirmed absent from its binary), so this
-# is the only way to get this behavior without patching sink, which is
-# a genuine, unmodified vendor binary. NOT a restoration of stock
-# behavior -- CONFIG_NET_RX_BUSY_POLL (and these sysctls) didn't exist
-# until Linux 3.11; stock runs Linux 3.4 and cannot have this
-# mechanism, full stop. A deliberate deviation, not a stock match.
-# Values are microseconds to busy-poll before falling back to normal
-# interrupt-driven waiting; 50us is a commonly-used starting point for
-# this class of low-latency tuning, not derived from anything specific
-# to this hardware -- revisit if it doesn't help or if CPU usage rises
-# noticeably (busy-polling trades CPU time for latency, real cost on a
-# single-core system already suspected of contention).
+# Low-latency socket busy-polling, system-wide -- AA audio-stutter
+# mitigation, since sink (vendor binary) never opts in via
+# SO_BUSY_POLL itself. Deliberate deviation from stock (this sysctl
+# didn't exist until Linux 3.11; stock is 3.4). 50us is a generic
+# starting point, not hardware-derived; revisit if CPU usage rises.
 sysctl -w net.core.busy_poll=50 >/dev/null 2>&1
 sysctl -w net.core.busy_read=50 >/dev/null 2>&1
 
-# REMOVED 2026-08-05 (see git history for the full removed block): RT
-# throttling disable (kernel.sched_rt_runtime_us=-1), ksoftirqd/0
-# real-time priority elevation, and TCP congestion control override
-# (reno) -- three mitigations from the 2026-08-04 AA audio-stutter
-# investigation, tested together and confirmed NOT sufficient on their
-# own (see project_aa_audio_stutter_investigation memory). The actual
-# fix landed 2026-08-05 at the kernel/driver level instead (DMA channel
-# priority over eMMC, cyclic-DMA tasklet on HI softirq, a genuine
-# vendor MUSB regression revert, and bypassing the generic
-# dmaengine_pcm framework -- see linux-arkmicro commits 7e6d93657/
-# 886e8b56c/c195cb9de/3ec51480d), which was hardware-confirmed and
-# isolation-tested to be both necessary and sufficient without any of
-# these userspace-side mitigations. Reverted to stock's actual
-# defaults (no chrt, no RT-priority juggling, no congestion-control
-# override) now that the real fix doesn't need them propping it up.
-#
-# 2026-08-04: actually activate ALSA's XRUN debug logging -- AA audio-
-# stutter investigation. CONFIG_SND_PCM_XRUN_DEBUG=y (already enabled
-# in this kernel's defconfig) only compiles IN the capability; it does
-# NOT turn logging on by itself. The real switch is a per-substream
-# runtime bitmask (sound/core/pcm_lib.c's `pstr->xrun_debug`) that has
-# no default-value assignment anywhere in the kernel source -- it's
-# zero-initialized memory, and the only way it ever becomes non-zero is
-# by writing to a proc control file
-# (sound/core/pcm.c:snd_pcm_xrun_debug_write(), registered as
-# "xrun_debug" under each substream's own /proc/asound/cardN/pcmN[cp]/
-# dir). An earlier test that relied on CONFIG_SND_PCM_XRUN_DEBUG alone
-# found zero XRUN lines in dmesg despite audible stutter and sink's own
-# `play:225` line (a disassembly-confirmed genuine ALSA EPIPE/XRUN
-# recovery event) firing repeatedly -- that "clean negative" was almost
-# certainly just this switch never having been flipped on, not real
-# evidence against XRUN happening. `__snd_pcm_xrun()` (sound/core/
-# pcm_lib.c) is confirmed the SOLE function anywhere in sound/core that
-# transitions PCM state to SNDRV_PCM_STATE_XRUN, and its logging is
-# unconditionally tied to that same transition once this bit is set --
-# no other path can produce an XRUN without also logging it here.
-#
-# 1 = XRUN_DEBUG_BASIC (one line per XRUN, timestamped, matches
-# CONFIG_SND_VERBOSE_PRINTK's format). card0/pcm0 is this board's only
-# sound card/PCM device (ark1668-sdadc/sddac, confirmed single ALSA
-# device throughout this project) -- p=playback, c=capture, both
-# covered since either could underrun independently.
+# Turn on ALSA's XRUN debug logging (compiled in via
+# CONFIG_SND_PCM_XRUN_DEBUG, but off by default -- needs this proc
+# write per substream). 1 = one log line per XRUN. See
+# project_aa_audio_stutter_investigation memory.
 for f in /proc/asound/card0/pcm0p/xrun_debug /proc/asound/card0/pcm0c/xrun_debug; do
 	[ -e "$f" ] && echo 1 > "$f" 2>/dev/null
 done
 
-# REMOVED 2026-08-05: the /proc/sched_debug RT-throttling poller this
-# same file used to have here. Its only purpose was watching for
-# recurrence of `kernel.sched_rt_runtime_us=-1` (RT throttle disable)
-# not actually taking effect -- that sysctl and the RT-priority
-# mitigations it was compensating for are both gone now (see the
-# removed-mitigations comment near the top of this file), so there's
-# nothing left for this poller to watch for. Also stops an unbounded,
-# uncapped background file (/data/sched_debug_rt.log) from growing
-# forever.
-
-# Set each MUSB controller's operating mode (usb1's CarPlay wired/WiFi
-# role, and a fast-path for USB-stick test boots) -- see
-# docs/1.4_WIRELESS_AND_INIT.md sec 7 and the comments in this script for
-# why. Needs /proc and /sys mounted (above), nothing else -- run this
-# as early as possible so it can override the kernel's own in-progress
-# OTG negotiation (which starts automatically at driver init, well
-# before rcS runs) sooner rather than later.
+# Set each MUSB controller's operating mode (usb1 CarPlay wired/WiFi
+# role, USB-stick test-boot fast path). Run early so it can override
+# the kernel's own in-progress OTG negotiation. See
+# docs/WIRELESS_AND_INIT.md sec 7.
 /etc/switchotg.sh
 
-# Feed the hardware watchdog (ark_wdt, /dev/watchdog) so a full kernel
-# hang/lockup triggers a real reset instead of the unit sitting dead
-# until someone power-cycles the vehicle. Previously present but
-# dormant (no feed daemon existed in either stock's real rootfs or
-# ours) -- also needed a kernel-side fix (linux-arkmicro's ark_wdt.c
-# soft_noboot default 1 -> 0) since the driver's interrupt/soft mode
-# silently never resets anything regardless of feeding, see that
-# file's comment. busybox's own watchdog applet is already compiled in
-# (firmware_overlay/busybox-applets.manifest); -t is the feed interval,
-# -T must match the kernel driver's configured timeout
-# (ARK_WATCHDOG_DEFAULT_TIME, drivers/watchdog/ark_wdt.c) -- 5s feed /
-# 15s hardware timeout gives a 3x margin. /dev/watchdog is created
-# automatically by devtmpfs (CONFIG_DEVTMPFS=y), no mdev rule needed.
+# Feed the hardware watchdog so a kernel hang triggers a real reset
+# instead of the unit sitting dead. -T must match the kernel driver's
+# configured timeout (ARK_WATCHDOG_DEFAULT_TIME, drivers/watchdog/
+# ark_wdt.c); 5s feed / 15s timeout gives a 3x margin.
 watchdog -t 5 -T 15 /dev/watchdog
 
-# Clear U-Boot's boot-attempt counter (see linux-arkmicro's
-# ark1668_boot_cmds.c do_bootcheck(), invoked from CONFIG_BOOTCOMMAND's
-# `bootcheck` gate) once this boot has stayed up for a short stable
-# period -- confirms this boot succeeded so the counter doesn't creep
-# toward bootlimit (default 3) during ordinary use, which would
-# otherwise eventually skip bootusb and fall back straight to nandboot.
-# Backgrounded + delayed (not cleared immediately) so a crash-loop
-# shortly after this point in rcS still gets caught by bootcheck on the
-# next boot instead of being masked. fw_setenv is a symlink to
-# fw_printenv (firmware_overlay/busybox-applets.manifest); both read
-# /etc/fw_env.config for the environment location.
+# Clear U-Boot's boot-attempt counter once this boot has stayed up a
+# short stable period, so it doesn't creep toward bootlimit and fall
+# back to nandboot. Backgrounded+delayed so a crash-loop still gets
+# caught by bootcheck on the next boot.
 #
-# 2026-07-31: QUIETED -- U-Boot's CONFIG_ENV_IS_IN_MMC attempt was
-# reverted (hung the board, see docs/DEVICE_TEST_CHECKLIST_2026-07-18.md
-# §83) and it's back on CONFIG_ENV_IS_NOWHERE, meaning there is
-# currently no valid environment location for fw_env.config to point
-# at at all -- this line would print "Cannot parse config file:
-# Invalid argument" / "Error: environment not initialized" on every
-# single boot, harmlessly but noisily. Re-enable once env persistence
-# gets a proper re-attempt (see that same doc section) and
-# fw_env.config has a real, working entry again.
+# QUIETED: U-Boot currently has no valid env location
+# (CONFIG_ENV_IS_NOWHERE, see docs/DEVICE_TEST_CHECKLIST_2026-07-18.md
+# §83) so this would just print harmless errors every boot. Re-enable
+# once env persistence works again.
 # (sleep 15 && fw_setenv bootcount 0) &
 
-# libarkcmn.so/libarkadapt.so (vendor 2D-blit compositor + CarPlay adapter)
-# hardcode /tmp/dev/memalloc as their physically-contiguous buffer-allocator
-# device -- stock creates it via etc/memalloc_load.sh's `insmod .../3.4.0/
-# .../memalloc.ko` + mknod. That module path doesn't exist on this kernel,
-# but it doesn't need to: CONFIG_ARK_MEMALLOC=y means memalloc is built
-# directly into this kernel, and mdev -s above already created the real
-# device at /dev/memalloc. Just point the path the vendor libs expect at
-# the real one, so full-window/submenu GPU-composited rendering (which
-# depends on this device) gets a valid buffer instead of silently failing
-# open() -- see docs/DEVICE_TEST_CHECKLIST_2026-07-18.md section 1b (the
-# "submenus go black" investigation).
+# Vendor libs hardcode buffer-allocator/decoder/DVR device paths under
+# /tmp/dev/ that don't match where our kernel actually creates them
+# (mdev creates the real nodes under /dev/). Symlink compat shims so
+# open() succeeds instead of silently failing -- see
+# docs/DEVICE_TEST_CHECKLIST_2026-07-18.md sections 1b/56/57/7.
 mkdir -p /tmp/dev
 ln -sf /dev/memalloc /tmp/dev/memalloc
-
-# Same story for libmfc.so's H.264/MPEG2 hardware decoder (the Hantro
-# hx170dec DWL backend usr/bin/sink's VideoDecoder actually calls into for
-# Android Auto video, confirmed via decompile 2026-07-24 -- contradicts an
-# earlier session's wrong assumption that AA video decode never touches
-# hx170dec) -- it hardcodes /tmp/dev/hx170. Real stock's own driver (a
-# closed proprietary .ko, confirmed via
-# "docs/logs/archived/dmesg live device kernel 3.4 dmeg_260715.txt":
-# "hx170dec: module license 'Proprietary' taints kernel.") identifies as
-# "hx170dec" -- our kernel's driver (drivers/soc/arkmicro/hx170dec/hx170dec.c)
-# has been renamed to match (misc device name + platform driver name both
-# now "hx170dec", was "vdec"/"ark-vdec" -- an unrelated open-source vendor
-# SDK snapshot's own naming, confirmed NOT to match real stock, an earlier
-# same-day mistake caught by comparing against the genuine stock log
-# instead of another one of our own reconstructed-kernel's boot logs).
-# Cross-checked independent of naming too: libmfc.so's ioctl() calls use
-# magic 'k' (0x6b) with the exact HX170DEC_IOC_* command numbers this
-# driver implements (drivers/soc/arkmicro/hx170dec/hx170dec.h) -- this is
-# genuinely the same device/protocol. mdev creates /dev/hx170dec, never
-# anything at /tmp/dev/hx170, so every H264DecInit() call failed
-# immediately on open(). See docs/DEVICE_TEST_CHECKLIST_2026-07-18.md
-# section 56/57.
-# Same story again for libarkcmn.so's ARK_DVR_* ioctl interface (camera
-# input / reverse-gear carback, drivers/soc/arkmicro/itu656/ark1668_itu656.c)
-# -- it hardcodes /tmp/dev/dvr (confirmed via the "open dvr device %s
-# failure." + "/tmp/dev/dvr" strings in libarkcmn.so), but the kernel
-# driver's own device_create() call creates the real node at /dev/dvr, not
-# /tmp/dev/dvr. Missing here the whole time -- meant arkapi_open_dvr()
-# always failed at open() with ENOENT, so dvr_ioctl() was never actually
-# reachable from a plain boot regardless of the CONFIG_ARK1668_ITU656/
-# RN6752/ARK_CARBACK crash investigation (see docs/DEVICE_TEST_CHECKLIST_
-# 2026-07-18.md item 7) -- needed for the DIAG_ITU656_* printk tags added
-# there to actually fire on the next boot. Harmless dangling symlink when
-# ITU656 is built disabled (the normal, non-diagnostic config).
 echo "device-node compat symlinks: /dev/hx170dec (Hantro hx170dec H.264/MPEG2 hardware decoder, used by Android Auto video) -> /tmp/dev/hx170"
 ln -sf /dev/hx170dec /tmp/dev/hx170
 echo "device-node compat symlinks: /dev/dvr (ITU656 camera/carback ioctl interface) -> /tmp/dev/dvr"
@@ -236,15 +81,8 @@ ln -sf /dev/dvr /tmp/dev/dvr
 
 touchdriver="/msnprofile/ark1680_ts"
 
-# 2026-08-05: dropped the modprobe ark1680_ts/gt9xx calls that used to be
-# here. ark1680_ts is built into the 4.19.192 kernel (confirmed all
-# session -- it probes automatically at boot, no modprobe needed); gt9xx
-# doesn't exist anywhere in this kernel tree at all, built-in or module.
-# Both calls always silently no-op'd (`|| true`) regardless of which
-# branch ran -- the stale "3.4.0 driver not built for 4.19.192 yet"
-# comment was misleading, both had actually been resolved one way or the
-# other. The symlink selection below is the only part of this block that
-# still does anything real.
+# Select the right touch-export symlink for whichever touch driver is
+# present. ark1680_ts is built into the kernel (no modprobe needed).
 if [ -e $touchdriver ]; then
         ln -s   /msnprofile/touch_ark1680_ts_export /tmp/touch_export
 else
@@ -254,11 +92,9 @@ fi
 #insmod  /lib/modules/3.4.0/kernel/drivers/input/misc/pwm-beeper.ko
 #insmod  /lib/modules/3.4.0/galcore.ko registerMemBase=0xE0F00000 irqLine=32 contiguousSize=0x400000 physSize=0x80000000 powerManagement=0
 
-# Mount userdata: ext4 p3 (SD or USB, whichever root actually came from)
-# first, NAND UBI fallback, then yaffs2. ROOTDEV is derived from the
-# kernel's own root= bootarg rather than hardcoded to /dev/mmcblk0p3, so
-# the same rcS works for both bootmmc (root=/dev/mmcblk0pN) and bootusb
-# (root=/dev/sdaN) without needing separate rootfs builds.
+# Mount userdata: ext4 p3 (SD or USB, whichever root came from) first,
+# NAND UBI fallback, then yaffs2. ROOTDEV comes from the kernel's own
+# root= bootarg so the same rcS works for bootmmc and bootusb alike.
 ROOTDEV=$(cat /proc/cmdline | sed -n 's/.*root=\([^ ]*\).*/\1/p')
 USERDATADEV="${ROOTDEV%?}3"
 if mount -o sync -t ext4 "$USERDATADEV" /data 2>/dev/null; then
@@ -336,119 +172,40 @@ mkdir -p /var/empty
 chmod 755 /var/empty
 /usr/bin/sshd -f /etc/ssh/sshd_config &
 
-# Load GPU driver
-# registerMemBase/irqLine are required: the gpu@e0f00000 DT node is
-# status="disabled" and gpu_driver has no of_match_table, so galcore only
-# ever binds through the legacy drv_init() module-param path -- without
-# these, it silently defaults to registerMemBase=0x80000000 (wrong physical
-# address for this SoC's GPU registers, real one is 0xe0f00000) and
-# irqLine=-1.
-#
-# contiguousSize=0x800000 (2026-07-22, corrected from an earlier 0x400000
-# "fix"): that earlier value came from a commented-out reference line in
-# stock's etc/all.sh/etc/rc.d/rcS, never actually executed on real
-# hardware. Stock's REAL, active, unconditionally-executed insmod line
-# (etc/profile, sourced on every login -- the same mechanism this project
-# already established launches MsnCoreApp itself, not rcS) uses
-# contiguousSize=0x800000. Restored to match. This is galcore's own GPU
-# memory pool size -- see docs/DEVICE_TEST_CHECKLIST_2026-07-18.md
-# section 21/22 for why this pool is directly implicated in the ongoing
-# red/black-screen investigation (surfaces allocated from it may never
-# reach the actual displayed framebuffer) -- a too-small pool is a real,
-# independent discrepancy from stock worth fixing regardless of whether
-# it's also part of that root cause.
+# Load GPU driver. registerMemBase/irqLine are required -- the DT node
+# is disabled/unmatched, so galcore only binds via the legacy
+# drv_init() module-param path; without these it defaults to the
+# wrong register base and irqLine=-1. contiguousSize=0x800000 matches
+# stock's real (etc/profile) insmod line -- see
+# docs/DEVICE_TEST_CHECKLIST_2026-07-18.md section 21/22.
 modprobe galcore registerMemBase=0xE0F00000 irqLine=32 contiguousSize=0x800000 physSize=0x80000000 powerManagement=0
 
-# Load USB WiFi driver
-# rtw_drv_log_level=2 (_DRV_ERR_, lowered from 3/_DRV_WARNING_ 2026-07-31 --
-# WARNING level in this vendor driver is still routinely noisy, not
-# reserved for genuinely exceptional conditions) keeps real errors visible
-# while dropping routine driver-internal chatter. Default is _DRV_INFO_=4.
-# See include/rtw_debug.h in the driver source.
-# rtw_country_code=US added 2026-08-04: without a valid HW (EFUSE) or SW
-# channel plan, this driver's rtw_rfctl_decide_init_chplan() (new in the
-# 2025-03-27 SDK update -- the old driver had no channel-plan/regulatory
-# validation at all) falls back to RTW_CHPLAN_WORLDWIDE (chplan 0x7F),
-# which excludes 5GHz UNII-1 channels (36/40/44/48). This is the module's
-# very first load at boot -- well before wifi_ap.sh or MsnCoreApp ever
-# run -- so without this, every later reload inherits/re-derives the same
-# restrictive default unless something else supplies a country code.
-# Hardware-confirmed: this fix (paired with the matching insmod in
-# etc/hostapd.sh, MsnCoreApp's own reload path) resolves the "wireless
-# CarPlay/Android Auto never connects" symptom -- hostapd was rejecting
-# the dynamic hw_mode=a channel=36 AP config with "Configured channel
-# (36) not found from the channel list of current mode... Could not
-# select hw_mode and channel. (-3)" until a real channel plan (0x1B, US)
-# was available. See docs/VENDOR_BSP_RESEARCH.md and
-# project_wireless_carplay_aa_channel_plan memory for the full trace.
+# Load USB WiFi driver. rtw_drv_log_level=2 keeps real errors visible
+# while dropping routine chatter. rtw_country_code=US avoids the
+# driver's WORLDWIDE regulatory fallback (no 5GHz), which broke
+# wireless CarPlay/AA hostapd setup -- see
+# project_wireless_carplay_aa_channel_plan memory. cfg80211 is loaded
+# explicitly first since relying on rtl8811cu's own dependency chase
+# raced it (observed failing twice on real boots before succeeding).
+modprobe cfg80211
 modprobe rtl8811cu rtw_drv_log_level=2 rtw_country_code=US
 
 # Set up DHCP lease directory and file
 mkdir -p /data
 touch /data/udhcpd.leases
 
-# Disabled 2026-07-24: this static-SSID AP (etc/wifi_ap.sh, added by this
-# reconstruction project -- confirmed absent from the real stock rootfs
-# dump) was previously believed to match stock's real boot behavior, but
-# that was never actually verified against a live wireless Android
-# Auto/CarPlay connection. It does the opposite: `sink` (usr/bin/sink)
-# dynamically generates a per-connection SSID (e.g. "carplay_fc9f") and
-# tells the phone to join THAT network over Bluetooth (confirmed via
-# decompile + a live connection log, docs/DEVICE_TEST_CHECKLIST_2026-07-18.md).
-# With this static "carplay_wifi" AP already bound to wlan0 from boot,
-# sink's own attempt to (re)configure hostapd to match never takes
-# effect, the phone can't find/join the SSID it was told, and it reports
-# connect_status=0 (failure) back over Bluetooth -- exactly the "connects
-# via Bluetooth, video never loads" symptom. Leaving wlan0 free for
-# sink's own dynamic AP setup instead. STA mode is still available by
-# hand if needed for SSH/testing: uncomment/run etc/wifi_client.sh (see
-# docs/DRIVER_TEST_PLAN.md and the comment at the top of each script).
+# Static-SSID AP (etc/wifi_ap.sh) disabled: sink generates its own
+# per-connection dynamic AP, and a static one already bound to wlan0
+# blocks that -- see project_static_wifi_ap_vs_dynamic memory. STA
+# mode still available by hand via etc/wifi_client.sh.
 #/etc/wifi_ap.sh &
 #/etc/wifi_client.sh &
 
-# 2026-08-03: auto-start MsnCoreApp (the main UI) at boot -- now that
-# U-Boot's own reliability work (cold-boot hangs, noise-triggered
-# autoboot aborts) has settled down, moving from fully-manual startup
-# toward normal unattended operation. Deliberately NOT resurrecting
-# stock's own mechanism for this: stock's /etc/profile unconditionally
-# ran MsnFirstInit + `MsnCoreApp -qws&` on every login shell, which
-# this project intentionally disabled 2026-07-14 (see that file's own
-# comment) because /etc/profile is sourced on *every* SSH/serial/telnet
-# session, not just once at boot -- it was silently respawning a second
-# compositor instance and fighting live framebuffer/driver tests
-# (tools/lcd-test, tools/ark1680-ts-test, etc.) that expect the real
-# one to stay down while testing. rcS runs exactly once, at real boot,
-# so it doesn't have that problem -- this is the right place for an
-# actual "start on boot" behavior, distinct from stock's login-shell
-# hack. start_msn_directfb (not start_msn_linuxfb) is the
-# GPU-accelerated DirectFB backend -- matched-pair galcore.ko/libGAL.so
-# and the galcore modprobe above are both already in place by this
-# point in the script. Backgrounded (&) so rcS itself still returns and
-# the console/diagnostic banner below remain usable.
-#
-# 2026-08-03: real hardware testing found launching it immediately
-# here raced with something not fully ready yet -- a kernel-level
-# page fault landed mid-init, right in the galcore/Vivante GPU driver
-# path. A 5s delay alone (below) did NOT fix it, same crash -- ruling
-# out pure settle-time and pointing at a real environment difference
-# instead: rcS never sources /etc/profile, but every SSH/serial login
-# shell does (it's a login shell), so a manual run always has
-# /etc/profile's exports in place first, then start_msn_directfb's own
-# on top -- CARPLAY_*/PROTOCOL_ID/TOUCHSERIAL and, notably,
-# /tmp/touch_export (QWS_MOUSE_PROTO/QWS_ARK_MT_DEVICE -- see
-# project_touch_qws_env_gate -- created by the touchdriver block
-# earlier in this same script, but only ever sourced by /etc/profile,
-# never by start_msn_directfb itself) are all silently missing when
-# launched straight from rcS. Sourcing /etc/profile first in the same
-# subshell closes that gap; start_msn_directfb's own exports on top
-# still take effect exactly as they do interactively.
-#
-# HARDWARE-CONFIRMED WORKING 2026-08-03: sourcing /etc/profile was the
-# real fix -- the missing environment, not settle time. Delay dropped
-# from 5s to 1s and retested clean, confirming the 5s value was never
-# doing the real work; 1s is kept only as a trivial safety margin for
-# /etc/profile's own dependencies (e.g. /tmp/touch_export) rather than
-# anything galcore/GPU-related.
+# Auto-start MsnCoreApp (main UI) at boot. Sources /etc/profile first
+# in the same subshell -- launching without it races a real GPU-driver
+# page fault (missing CARPLAY_*/touch env vars that only /etc/profile
+# sets), hardware-confirmed fixed 2026-08-03. 1s delay is a margin for
+# /etc/profile's own dependencies, not GPU-related.
 (sleep 1 && . /etc/profile && /usr/bin/start_msn_directfb) &
 
 # --- diagnostic tools banner (firmware_overlay/prado) ---

@@ -125,6 +125,36 @@ prime suspect here) while listening to see if it produces traffic, and
 correlate frame content with the action to start decoding `arg1`/`arg2`/
 `arg3`'s real meaning.
 
+### 2026-08-13 — the MCU's own command dispatch table, found and decoded
+Everything above was inferred from the SoC-side driver (`libMcuCenter.so`)
+only. Imported `hardware/MCU/can_app.bin` (the MCU's own firmware) into
+Ghidra/capstone and found its real 9-entry command dispatch table (full
+per-command breakdown in `hardware/MCU/MCU_FIRMWARE_REVIEW.md` §3.1c). Key
+results relevant to this tool:
+
+- **`cmd=0x81`, `0x82`, `0x84` are all confirmed real, registered commands**
+  on the MCU side — this tool's three-frame startup sequence isn't guessing.
+  None of their handlers touch anything resembling a GPIO/touch-switch write
+  (they're internal state-table resets and an audio-route select) — this is
+  now a real, code-level confirmation (not just the `MsnFirstInit`/env-var
+  finding cited at the top of this file) that these three frames were never
+  going to close the touch switch even if the CBT16211A theory had been right.
+- **`cmd=0x82`'s branch depends on `payload[2] == 1`** — worth double-checking
+  this tool's 9-byte `onModeAppChanged` payload (`01 08 00...`) actually has
+  `1` at that exact offset if triggering the `mode=4` branch specifically
+  matters for whatever's being tested.
+- **Six more real commands this tool never sends**: `0x85`, `0x87`, `0x88`,
+  `0xa0` (an 18-case mode-select, the largest handler of the 9), `0xe1`, and
+  `0xff`. See the doc for what's known about each.
+- **`cmd=0xe1` is a strong candidate for a software-triggerable reboot/enter-
+  bootloader command** — its handler writes a magic value (`0x5555aaaa`) to a
+  fixed SRAM address then hangs, letting the independent watchdog force a
+  hardware reset. Not confirmed without either the resident bootloader binary
+  (not in this repo) or a live test. If ever tested on real hardware, do it
+  deliberately and be ready for the unit to reboot or enter an update-waiting
+  state — this is exactly the kind of command worth trying cautiously, not
+  as a first move.
+
 ### Still open
 - `showApp(mode=0xCC)` sends a fourth real frame (`cmd=0x82`, a
   *different* 4-byte payload `02 0B 00 00` than the `onModeAppChanged`
@@ -147,3 +177,5 @@ correlate frame content with the action to start decoding `arg1`/`arg2`/
   traced by vtable offset, or a live `/dev/ttyHS0` capture per
   `docs/1.3_MCU_ADAPTERS.md`'s existing Method A/B procedures while
   triggering each real-world event separately.
+- `cmd=0xa0`'s 18-case mode table and `cmd=0x88`'s two packed 32-bit
+  values aren't fully decoded — see `MCU_FIRMWARE_REVIEW.md` §3.1c.

@@ -481,6 +481,7 @@ void Session::sendPing() {
     request.set_timestamp(timestamp);
 
     auto promise = aasdk::channel::SendPromise::defer(strand_);
+    auto self = shared_from_this();
     promise->then(
         // 2026-08-15: the routine "ping request sent" success log
         // (added 2026-08-12 for a since-resolved investigation into
@@ -490,8 +491,30 @@ void Session::sendPing() {
         // diagnostic value. Failure still logged; that's the case that
         // actually matters now.
         []() {},
-        [](const aasdk::error::Error &e) {
+        [this, self](const aasdk::error::Error &e) {
             std::printf("%s androidauto: ping request send failed: %s\n", logTimestamp().c_str(), e.what());
+            // 2026-08-18: real hardware showed a dead transport (phone
+            // disconnected, socket broken -- EPIPE) leaving this
+            // session running forever: this lambda used to only log,
+            // and schedulePing() re-arms itself every 1000ms
+            // unconditionally unless stopping_ is already true, which
+            // nothing here ever set. Exact same bug class already
+            // fixed once for onChannelError() itself (see that
+            // function's own 2026-08-14 comment -- WirelessSessionManager
+            // hangs forever inside ioService_.run(), every channel's
+            // buffers/threads/decoder state stay alive indefinitely,
+            // and a later reconnect stacks a second live session on
+            // top of the zombie instead of replacing it), just missed
+            // here since a failed SendPromise never routes through
+            // onChannelError() on its own. The ping is this session's
+            // own once-a-second liveness check regardless of what
+            // other channels are doing, so routing its failure through
+            // the exact same teardown is the most reliable single
+            // place to guarantee a dead connection actually ends the
+            // session within about a second, not indefinitely.
+            if (!stopping_) {
+                onChannelError(e);
+            }
         });
     controlChannel_->sendPingRequest(request, promise);
 }

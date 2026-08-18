@@ -213,7 +213,7 @@ lv_obj_t * create_android_auto_screen() {
     // Title & Instructions
     lv_obj_t * title = lv_label_create(content);
     lv_label_set_text(title, "Ready to connect");
-    lv_obj_set_style_text_font(title, &lv_font_roboto_24, 0);
+    lv_obj_set_style_text_font(title, &lv_font_roboto_28, 0);
     lv_obj_set_style_text_color(title, staging_ui::theme::text_primary(), 0);
 
     lv_obj_t * subtitle = lv_label_create(content);

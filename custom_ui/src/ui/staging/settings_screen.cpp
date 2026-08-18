@@ -262,13 +262,13 @@ lv_obj_t * create_settings_screen() {
     lv_obj_t * header = lv_obj_create(content);
     lv_obj_remove_style_all(header);
     lv_obj_set_width(header, LV_PCT(100));
-    lv_obj_set_height(header, 32);
+    lv_obj_set_height(header, 34);
     lv_obj_set_flex_flow(header, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(header, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
     lv_obj_t * title_lbl = lv_label_create(header);
     lv_label_set_text(title_lbl, "Settings");
-    lv_obj_set_style_text_font(title_lbl, &lv_font_roboto_24, 0);
+    lv_obj_set_style_text_font(title_lbl, &lv_font_roboto_28, 0);
     lv_obj_set_style_text_color(title_lbl, theme::text_primary(), 0);
 
     // 4. Unified Long Scrolling Settings Card

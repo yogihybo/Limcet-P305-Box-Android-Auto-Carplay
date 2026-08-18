@@ -276,14 +276,22 @@ void Session::onServiceDiscoveryRequest(
     // Response/ByeByeResponse/NavFocusResponse (all required, found
     // missing by the same reference diff), every field here is
     // `optional` in ServiceDiscoveryResponse.proto, so this is a
-    // best-practice match rather than a confirmed-required fix. Values
-    // copied from that reference as reasonable defaults, not
-    // independently tuned for this hardware.
+    // best-practice match rather than a confirmed-required fix.
+    //
+    // 2026-08-19: per docs/SESSION_KEEPALIVE_AND_TIMEOUT_HANDOFF.md --
+    // the original 3000ms timeout_ms/200ms high_latency_threshold_ms
+    // (copied from a reference implementation as reasonable defaults,
+    // not tuned for this hardware) is tight for this device's real
+    // architecture: video decode, UI rendering, and ALSA writes all
+    // share the single io_service thread pings are processed on, so a
+    // heavy H.264 I-frame burst can plausibly delay onPingRequest past
+    // the old window. Loosened to absorb that -- still a real keep-
+    // alive, just not one racing single-core scheduling jitter.
     auto *pingConfig = response.mutable_connection_configuration()->mutable_ping_configuration();
-    pingConfig->set_tracked_ping_count(5);
-    pingConfig->set_timeout_ms(3000);
-    pingConfig->set_interval_ms(1000);
-    pingConfig->set_high_latency_threshold_ms(200);
+    pingConfig->set_tracked_ping_count(10);
+    pingConfig->set_timeout_ms(10000);
+    pingConfig->set_interval_ms(2000);
+    pingConfig->set_high_latency_threshold_ms(1000);
 
     auto *inputService = response.add_channels();
     // See input_channel.h's header comment for the service_id-numbering

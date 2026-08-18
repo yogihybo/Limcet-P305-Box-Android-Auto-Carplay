@@ -208,7 +208,10 @@ void McuInputHal::run() {
         if (r != 1) {
             // r==0: resync/checksum-fail, r==-1: I/O hiccup or fd
             // closed by the destructor -- both just loop (or exit if
-            // running_ was cleared).
+            // running_ was cleared). Guard against tight 100% CPU spinning on I/O errors:
+            if (r == -1) {
+                usleep(20000);
+            }
             continue;
         }
 

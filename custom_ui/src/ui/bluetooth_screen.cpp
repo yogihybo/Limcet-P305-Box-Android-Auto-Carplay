@@ -88,6 +88,22 @@ void device_row_clicked_cb(lv_event_t * e) {
     status_label_set(w->status_label, ok ? "HFPCONN sent" : "HFPCONN failed / no response");
 }
 
+void remove_device_clicked_cb(lv_event_t * e) {
+    lv_obj_t * btn = static_cast<lv_obj_t *>(lv_event_get_target(e));
+    auto * w = static_cast<BtScreenWidgets *>(lv_event_get_user_data(e));
+
+    auto index = reinterpret_cast<uintptr_t>(lv_obj_get_user_data(btn));
+    if (index >= w->last_devices.size()) return;
+    const std::string & entry = w->last_devices[index];
+    std::printf("%s ui::bluetooth_screen: remove device tapped: '%s'\n", core::log_timestamp().c_str(), entry.c_str());
+
+    hal::BluetoothHandle & h = hal::shared_handle();
+    hal::disconnect_device(h);
+
+    status_label_set(w->status_label, "Device removed");
+    start_bt_load(w);
+}
+
 void populate_device_list(BtScreenWidgets * w, bool hw_present, bool devices_ok,
                            const std::vector<std::string> & devices) {
     lv_obj_clean(w->list);
@@ -135,9 +151,18 @@ void populate_device_list(BtScreenWidgets * w, bool hw_present, bool devices_ok,
         lv_obj_set_style_text_font(dev_name, &lv_font_roboto_20, 0);
         lv_obj_set_style_text_color(dev_name, staging_ui::theme::text_primary(), 0);
 
-        lv_obj_t * btn = lv_button_create(row);
+        // Right Controls Container (Connect + Remove)
+        lv_obj_t * right_box = lv_obj_create(row);
+        lv_obj_remove_style_all(right_box);
+        lv_obj_set_size(right_box, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+        lv_obj_set_flex_flow(right_box, LV_FLEX_FLOW_ROW);
+        lv_obj_set_flex_align(right_box, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        lv_obj_set_style_pad_column(right_box, 8, 0);
+
+        // Connect Button
+        lv_obj_t * btn = lv_button_create(right_box);
         lv_obj_remove_style_all(btn);
-        lv_obj_set_size(btn, 100, 36);
+        lv_obj_set_size(btn, 76, 34);
         lv_obj_set_style_radius(btn, staging_ui::theme::kPillRadius, 0);
         lv_obj_set_style_bg_color(btn, staging_ui::theme::accent_primary(), 0);
         lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
@@ -151,11 +176,29 @@ void populate_device_list(BtScreenWidgets * w, bool hw_present, bool devices_ok,
         lv_obj_set_style_text_color(btn_lbl, staging_ui::theme::text_on_accent(), 0);
         lv_obj_center(btn_lbl);
 
+        // Remove Button
+        lv_obj_t * rem_btn = lv_button_create(right_box);
+        lv_obj_remove_style_all(rem_btn);
+        lv_obj_set_size(rem_btn, 68, 34);
+        lv_obj_set_style_radius(rem_btn, staging_ui::theme::kPillRadius, 0);
+        lv_obj_set_style_bg_color(rem_btn, staging_ui::theme::surface_container_high(), 0);
+        lv_obj_set_style_bg_opa(rem_btn, LV_OPA_COVER, 0);
+        staging_ui::theme::style_focusable(rem_btn);
+        lv_obj_set_user_data(rem_btn, reinterpret_cast<void *>(static_cast<uintptr_t>(i)));
+        lv_obj_add_event_cb(rem_btn, remove_device_clicked_cb, LV_EVENT_CLICKED, w);
+
+        lv_obj_t * rem_lbl = lv_label_create(rem_btn);
+        lv_label_set_text(rem_lbl, "Remove");
+        lv_obj_set_style_text_font(rem_lbl, &lv_font_roboto_14, 0);
+        lv_obj_set_style_text_color(rem_lbl, lv_color_hex(0xf28b82), 0);
+        lv_obj_center(rem_lbl);
+
         if (core::navigation::focus_group()) {
             lv_group_add_obj(core::navigation::focus_group(), btn);
+            lv_group_add_obj(core::navigation::focus_group(), rem_btn);
         }
     }
-    status_label_set(w->status_label, "Tap Connect to link device");
+    status_label_set(w->status_label, "Tap Connect to link, Remove to unpair");
 }
 
 void bt_load_poll_cb(lv_timer_t * timer) {

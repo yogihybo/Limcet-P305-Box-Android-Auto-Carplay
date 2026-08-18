@@ -104,6 +104,16 @@ public:
     // the sidecar (allow_spawn=false), same as setVisible().
     bool videoFocusNative();
 
+    // Sends "RESUME" -- asks the phone to resume PROJECTED video focus
+    // after it granted itself NATIVE (its own in-app exit/back
+    // control) -- see sidecars/androidauto/main.cpp's own protocol
+    // comment for why this is an unsolicited grant, not a real focus
+    // "request". Returns false if the sidecar can't be reached at all
+    // (not whether the phone actually resumes -- poll videoFocusNative()
+    // afterwards for that). Never spawns the sidecar (allow_spawn=
+    // false), same as setVisible()/sendKey()/sendTouch().
+    bool requestResumeVideo();
+
     // Sends "KEY <code>" -- forwards a real Android KeyEvent keycode
     // into the sidecar's current AA session as a momentary tap (see
     // sidecars/androidauto/main.cpp's own protocol comment and

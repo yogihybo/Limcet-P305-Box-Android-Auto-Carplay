@@ -207,6 +207,18 @@ bool AndroidAutoClient::videoFocusNative() {
     return false;
 }
 
+bool AndroidAutoClient::requestResumeVideo() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    std::string reply;
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        if (ensureConnected(/*allow_spawn=*/false) && sendCommand("RESUME", reply)) {
+            return true;
+        }
+        disconnect();
+    }
+    return false;
+}
+
 bool AndroidAutoClient::sendKey(std::uint32_t keycode) {
     std::lock_guard<std::mutex> lock(mutex_);
     std::string reply;

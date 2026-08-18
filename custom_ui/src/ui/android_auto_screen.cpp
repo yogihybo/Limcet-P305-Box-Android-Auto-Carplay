@@ -73,6 +73,20 @@ void bluetooth_btn_cb(lv_event_t *) {
     staging_ui::navigate_to(staging_ui::NavDestination::Bluetooth);
 }
 
+// 2026-08-19: real gap found on hardware -- once a session backgrounds
+// itself (phone's own in-app exit/back control, see
+// video_channel.cpp's onVideoFocusRequest() comment), this screen's
+// content card comes back per poll_timer_cb()'s own showingVideo logic
+// below, but it always showed the NOT-YET-CONNECTED copy ("Ready to
+// connect" / "Connect (Wireless)") -- tapping Connect while already
+// Connected is at best a confusing no-op (requestConnect() just
+// restarts the whole handshake) and at worst disruptive. This sends
+// "RESUME" instead, asking the phone to grant PROJECTED focus back --
+// see AndroidAutoClient::requestResumeVideo()'s own comment.
+void resume_btn_cb(lv_event_t *) {
+    client().requestResumeVideo();
+}
+
 struct Widgets {
     // The whole instructions/status card -- see poll_timer_cb()'s
     // comment on why this gets hidden entirely (not just its
@@ -80,10 +94,18 @@ struct Widgets {
     lv_obj_t * content;
     lv_obj_t * state_label;
     lv_obj_t * detail_label;
+    lv_obj_t * title;
+    lv_obj_t * subtitle;
+    lv_obj_t * cta_btn;
+    lv_obj_t * cta_label;
     // Tracks whether hal::hide_display() has already been called, so
     // poll_timer_cb() only issues the ioctl on an actual Connected/
     // not-Connected transition rather than every 500ms tick.
     bool display_hidden = false;
+    // Tracks which copy/callback the CTA button currently shows, same
+    // once-per-transition reasoning as display_hidden above -- see
+    // poll_timer_cb()'s own comment.
+    bool showing_resume = false;
 };
 
 // Polls the sidecar and refreshes the status widgets -- created
@@ -115,7 +137,8 @@ void poll_timer_cb(lv_timer_t * timer) {
     // session is BOTH Connected AND the phone still wants PROJECTED
     // focus -- i.e. actually showing video.
     bool connected = status.name == "Connected";
-    bool showingVideo = connected && !client().videoFocusNative();
+    bool nativeFocus = connected && client().videoFocusNative();
+    bool showingVideo = connected && !nativeFocus;
     hal::androidauto_screen_active().store(showingVideo, std::memory_order_release);
 
     if (showingVideo) {
@@ -130,6 +153,26 @@ void poll_timer_cb(lv_timer_t * timer) {
             hal::show_display();
             w->display_hidden = false;
         }
+    }
+
+    // Backgrounded (Connected but NATIVE focus) needs a "Resume" CTA,
+    // not the not-yet-connected "Connect (Wireless)" one -- see
+    // resume_btn_cb()'s own comment. Only touched on an actual
+    // transition, same reasoning as display_hidden above.
+    if (nativeFocus && !w->showing_resume) {
+        lv_label_set_text(w->title, "Android Auto is running in the background");
+        lv_label_set_text(w->subtitle, "The phone switched away from the projected view. Tap Resume to bring it back to the screen.");
+        lv_label_set_text(w->cta_label, "Resume");
+        lv_obj_remove_event_cb(w->cta_btn, connect_btn_cb);
+        lv_obj_add_event_cb(w->cta_btn, resume_btn_cb, LV_EVENT_CLICKED, nullptr);
+        w->showing_resume = true;
+    } else if (!nativeFocus && w->showing_resume) {
+        lv_label_set_text(w->title, "Ready to connect");
+        lv_label_set_text(w->subtitle, "Pair phone via Bluetooth to begin wireless session.");
+        lv_label_set_text(w->cta_label, "Connect (Wireless)");
+        lv_obj_remove_event_cb(w->cta_btn, resume_btn_cb);
+        lv_obj_add_event_cb(w->cta_btn, connect_btn_cb, LV_EVENT_CLICKED, nullptr);
+        w->showing_resume = false;
     }
 }
 
@@ -245,7 +288,7 @@ lv_obj_t * create_android_auto_screen() {
         lv_obj_add_flag(content, LV_OBJ_FLAG_HIDDEN);
     }
 
-    auto * widgets = new Widgets{content, state_body, detail_body};
+    auto * widgets = new Widgets{content, state_body, detail_body, title, subtitle, connect_btn, connect_label};
     lv_timer_t * timer = lv_timer_create(poll_timer_cb, 500, widgets);
     auto * pair = new std::pair<lv_timer_t *, Widgets *>(timer, widgets);
     lv_obj_add_event_cb(scr, screen_delete_cb, LV_EVENT_DELETE, pair);

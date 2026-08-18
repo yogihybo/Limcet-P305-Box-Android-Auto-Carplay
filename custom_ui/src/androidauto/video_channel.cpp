@@ -299,6 +299,19 @@ void VideoChannel::onVideoFocusRequest(
     channel_->receive(this->shared_from_this());
 }
 
+void VideoChannel::requestResumeFocus() {
+    // Optimistic -- see this method's own header comment. Cleared here
+    // rather than waiting for a round trip so android_auto_screen.cpp's
+    // poll_timer_cb() (which reads this via the sidecar's "FOCUS"
+    // command) switches back to showing video right away; a genuine
+    // VideoFocusRequestNotification from the phone confirming (or
+    // denying) PROJECTED still updates it for real via
+    // onVideoFocusRequest() above regardless.
+    video_focus_native().store(false, std::memory_order_release);
+    sendVideoFocusIndication(/*unsolicited=*/true,
+                              aap_protobuf::service::media::video::message::VIDEO_FOCUS_PROJECTED);
+}
+
 void VideoChannel::sendVideoFocusIndication(bool unsolicited,
                                              aap_protobuf::service::media::video::message::VideoFocusMode mode) {
     aap_protobuf::service::media::video::message::VideoFocusNotification indication;

@@ -402,4 +402,11 @@ void WirelessSessionManager::sendInputTouch(std::uint32_t x, std::uint32_t y,
     }
 }
 
+void WirelessSessionManager::resumeVideoFocus() {
+    std::lock_guard<std::mutex> lock(sessionMutex_);
+    if (currentSession_) {
+        currentSession_->resumeVideoFocus();
+    }
+}
+
 }  // namespace androidauto

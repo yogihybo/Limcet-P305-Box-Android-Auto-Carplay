@@ -66,6 +66,24 @@ public:
         override;
     void onChannelError(const aasdk::error::Error & e) override;
 
+    // 2026-08-19: real gap found on hardware -- once the phone grants
+    // itself NATIVE focus (its own in-app exit/back control, see
+    // onVideoFocusRequest()'s own comment), there was no way back:
+    // aasdk's IVideoMediaSinkService has no method to SEND a
+    // VideoFocusRequestNotification (only to receive one and grant/deny
+    // via sendVideoFocusIndication -- this direction is asymmetric by
+    // the real AAP design, matching the observed real protocol traffic
+    // this project has captured: phone requests, head unit grants,
+    // never the reverse), so this can't ask the phone for focus back
+    // the "proper" way. Reuses the same mechanism that got the phone to
+    // start projecting in the first place (onMediaChannelSetupRequest's
+    // own proactive, unsolicited PROJECTED grant, per the real
+    // opencardev/openauto reference) -- sending another unsolicited
+    // PROJECTED grant here is the same nudge, just later. Called from
+    // ui/android_auto_screen.cpp's "Resume" button via Session/
+    // WirelessSessionManager/the sidecar's "RESUME" socket command.
+    void requestResumeFocus();
+
 private:
     void decodeBuffer(const aasdk::common::DataConstBuffer & buffer);
     void sendAck();

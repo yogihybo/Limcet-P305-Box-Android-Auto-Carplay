@@ -6,12 +6,12 @@
 namespace staging_ui::theme {
 
 // ---- Google Material 3 Automotive Tonal Palette --------------------------
-inline lv_color_t bg()                    { return lv_color_hex(0x111318); }
-inline lv_color_t surface()               { return lv_color_hex(0x1c2024); }
-inline lv_color_t surface_card()          { return lv_color_hex(0x1a1d22); }
-inline lv_color_t surface_container_high(){ return lv_color_hex(0x282c34); }
-inline lv_color_t surface_border()        { return lv_color_hex(0x2f3540); }
-inline lv_color_t surface_pressed()       { return lv_color_hex(0x353b47); }
+inline lv_color_t bg()                    { return lv_color_hex(0x0f1115); } // Deep Obsidian Canvas
+inline lv_color_t surface()               { return lv_color_hex(0x181b21); }
+inline lv_color_t surface_card()          { return lv_color_hex(0x21252d); } // Rich Elevated Dark Grey Card
+inline lv_color_t surface_container_high(){ return lv_color_hex(0x2d333d); } // Elevated inner controls
+inline lv_color_t surface_border()        { return lv_color_hex(0x343a46); } // Crisp subtle border
+inline lv_color_t surface_pressed()       { return lv_color_hex(0x3d4554); }
 
 inline lv_color_t accent_primary()        { return lv_color_hex(0x8ab4f8); } // Google Blue
 inline lv_color_t accent_secondary()      { return lv_color_hex(0x78d9ec); } // Cyan / Teal

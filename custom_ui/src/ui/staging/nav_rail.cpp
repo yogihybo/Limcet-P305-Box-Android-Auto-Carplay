@@ -73,7 +73,6 @@ lv_obj_t * ensure_persistent_rail() {
     for (int i = 0; i < 5; ++i) {
         auto dest = static_cast<NavDestination>(i);
         lv_obj_t * btn = lv_button_create(inst.rail);
-        lv_obj_remove_style_all(btn);
         inst.buttons[i] = btn;
         theme::style_nav_button(btn, false);
         lv_obj_add_event_cb(btn, nav_btn_cb, LV_EVENT_CLICKED, reinterpret_cast<void *>(static_cast<uintptr_t>(dest)));

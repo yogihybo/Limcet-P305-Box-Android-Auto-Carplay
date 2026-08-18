@@ -799,12 +799,22 @@ bool auto_reconnect_paired_device(BluetoothHandle & h) {
         }
     }
 
-    // 3-attempt bounded retry with a fixed 2s backoff, terminating
-    // early if a connection broadcast is observed -- see this
-    // function's own header comment (matches
-    // BLUETOOTH_RECONNECT_HANDOFF.md's proposed action plan).
+    // 3-attempt bounded retry with a fixed backoff, terminating early
+    // if a connection broadcast is observed -- see this function's own
+    // header comment (matches BLUETOOTH_RECONNECT_HANDOFF.md's proposed
+    // action plan).
+    // 2026-08-19: real hardware log showed all 3 HFPCONN attempts
+    // getting a genuine 'OK' from blueware, yet this function still
+    // logged "giving up" -- the confirming +AAPDEV= broadcast this
+    // function is actually waiting on (link_confirmed) arrived ~2.8s
+    // AFTER the old 2s*3=6s retry budget expired (real timestamps:
+    // last attempt's backoff ended at 10.13s, "giving up" logged at
+    // 10.43s, +AAPDEV= didn't fire until 13.20s). The link was fine the
+    // whole time -- the timeout was just tuned tighter than blueware's
+    // real boot-to-broadcast timing on this hardware. 4s*3=12s
+    // comfortably covers the observed ~9.7s gap with margin.
     constexpr int kMaxAttempts = 3;
-    constexpr auto kRetryBackoff = std::chrono::seconds(2);
+    constexpr auto kRetryBackoff = std::chrono::seconds(4);
     for (int attempt = 1; attempt <= kMaxAttempts; ++attempt) {
         std::printf("%s hal::bluetooth::auto_reconnect_paired_device: attempt %d/%d, reconnecting to '%s'\n",
                     core::log_timestamp().c_str(), attempt, kMaxAttempts, connect_id.c_str());

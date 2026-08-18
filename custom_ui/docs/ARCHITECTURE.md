@@ -218,11 +218,7 @@ protocol, not something that goes through aasdk's `Messenger` at all.
 
 `src/androidauto/bw_aap_client.{h,cpp}` implements all 5 steps above
 (`startHandshake()` for 1-3, `respondToInfoRequest()` for 4-5).
-**Not yet hardware-tested** — this is a faithful
-reconstruction of real captured stock traffic, not confirmed to work
-when driven by our own code. Also unconfirmed: whether `/dev/bw_aap`
-accepts more than one simultaneous client (if `sink`/`MsnCoreApp`
-already holds it open, our own connection may fail or interfere).
+See [`SESSION_KEEPALIVE_AND_TIMEOUT_HANDOFF.md`](SESSION_KEEPALIVE_AND_TIMEOUT_HANDOFF.md) for the RFCOMM watchdog lifecycle, TCP_NODELAY socket options, and ping keepalive timing.
 
 This **supersedes** an earlier, wrong-assumption approach
 (`src/androidauto/bluetooth_transport.h` /

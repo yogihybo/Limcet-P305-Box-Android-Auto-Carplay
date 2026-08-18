@@ -161,11 +161,8 @@ lv_obj_t * create_stepper_row(lv_obj_t * parent, const lv_image_dsc_t * icon_dsc
     auto * minus_ctx = new StepperBtnCtx{ctx, -1};
     lv_obj_add_event_cb(minus_btn, destroy_btn_ctx, LV_EVENT_DELETE, minus_ctx);
     lv_obj_add_event_cb(minus_btn, stepper_click_cb, LV_EVENT_CLICKED, minus_ctx);
-    lv_obj_t * minus_lbl = lv_label_create(minus_btn);
-    lv_label_set_text(minus_lbl, LV_SYMBOL_MINUS);
-    lv_obj_set_style_text_font(minus_lbl, &lv_font_roboto_20, 0);
-    lv_obj_set_style_text_color(minus_lbl, theme::text_on_accent(), 0);
-    lv_obj_center(minus_lbl);
+    lv_obj_t * minus_icon = ui::icons::create_icon(minus_btn, &ui::icons::icon_minus, theme::text_on_accent());
+    lv_obj_center(minus_icon);
 
     // Plus Button
     lv_obj_t * plus_btn = lv_button_create(right_box);
@@ -173,11 +170,8 @@ lv_obj_t * create_stepper_row(lv_obj_t * parent, const lv_image_dsc_t * icon_dsc
     auto * plus_ctx = new StepperBtnCtx{ctx, 1};
     lv_obj_add_event_cb(plus_btn, destroy_btn_ctx, LV_EVENT_DELETE, plus_ctx);
     lv_obj_add_event_cb(plus_btn, stepper_click_cb, LV_EVENT_CLICKED, plus_ctx);
-    lv_obj_t * plus_lbl = lv_label_create(plus_btn);
-    lv_label_set_text(plus_lbl, LV_SYMBOL_PLUS);
-    lv_obj_set_style_text_font(plus_lbl, &lv_font_roboto_20, 0);
-    lv_obj_set_style_text_color(plus_lbl, theme::text_on_accent(), 0);
-    lv_obj_center(plus_lbl);
+    lv_obj_t * plus_icon = ui::icons::create_icon(plus_btn, &ui::icons::icon_plus, theme::text_on_accent());
+    lv_obj_center(plus_icon);
 
     if (core::navigation::focus_group()) {
         lv_group_add_obj(core::navigation::focus_group(), minus_btn);

@@ -43,9 +43,8 @@ void style_nav_rail(lv_obj_t * obj) {
 }
 
 void style_nav_button(lv_obj_t * btn, bool active) {
-    lv_obj_remove_style_all(btn);
-    lv_obj_set_size(btn, 48, 48);
-    lv_obj_set_style_radius(btn, kPillRadius, 0);
+    lv_obj_set_size(btn, 56, 42);
+    lv_obj_set_style_radius(btn, LV_RADIUS_CIRCLE, 0);
     if (active) {
         lv_obj_set_style_bg_color(btn, accent_primary(), 0);
         lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
@@ -53,8 +52,8 @@ void style_nav_button(lv_obj_t * btn, bool active) {
         lv_obj_set_style_shadow_color(btn, accent_glow(), 0);
         lv_obj_set_style_shadow_opa(btn, LV_OPA_70, 0);
     } else {
-        lv_obj_set_style_bg_color(btn, surface_container_high(), 0);
-        lv_obj_set_style_bg_opa(btn, LV_OPA_50, 0);
+        lv_obj_set_style_bg_opa(btn, LV_OPA_TRANSP, 0);
+        lv_obj_set_style_shadow_width(btn, 0, 0);
         lv_obj_set_style_bg_color(btn, surface_pressed(), LV_STATE_PRESSED);
         lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, LV_STATE_PRESSED);
     }

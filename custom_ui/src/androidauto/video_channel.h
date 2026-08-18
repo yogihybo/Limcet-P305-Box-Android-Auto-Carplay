@@ -69,13 +69,17 @@ public:
 private:
     void decodeBuffer(const aasdk::common::DataConstBuffer & buffer);
     void sendAck();
-    // Grants VIDEO_FOCUS_PROJECTED -- called both proactively, right
-    // after channel setup completes (unsolicited=true, matching the
-    // real opencardev/openauto reference's own onAVChannelSetupRequest
-    // -- see git history for why this project's own version was
-    // missing it), and reactively in response to an actual
-    // VideoFocusRequestNotification (unsolicited=false).
-    void sendVideoFocusIndication(bool unsolicited);
+    // Sends a VideoFocusNotification granting `mode` -- called both
+    // proactively, right after channel setup completes (unsolicited=
+    // true, VIDEO_FOCUS_PROJECTED, matching the real opencardev/
+    // openauto reference's own onAVChannelSetupRequest -- see git
+    // history for why this project's own version was missing it), and
+    // reactively in response to an actual VideoFocusRequestNotification
+    // (unsolicited=false, echoing back whatever mode was actually
+    // requested -- see onVideoFocusRequest()'s own comment on why this
+    // must NOT be hardcoded to PROJECTED).
+    void sendVideoFocusIndication(bool unsolicited,
+                                   aap_protobuf::service::media::video::message::VideoFocusMode mode);
     // Pushes decoder_.last_picture() to hal::video_layer -- lazily
     // opens/configures the layer on the first ready picture (width/
     // height aren't known before then), reconfigures if the picture's

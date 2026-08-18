@@ -94,6 +94,16 @@ public:
     // already running, since there's nothing to show/hide in that case.
     bool setVisible(bool visible);
 
+    // Sends "FOCUS" -- returns true if the phone currently holds NATIVE
+    // video focus (its own in-app exit/back control, session stays
+    // Connected in the background -- see sidecars/androidauto/main.cpp's
+    // own protocol comment and androidauto/video_visibility.h). Returns
+    // false both for genuine PROJECTED focus and for "sidecar
+    // unreachable" -- same reasoning as sendKey()/sendTouch(): nothing
+    // to switch away from if there's no session to ask. Never spawns
+    // the sidecar (allow_spawn=false), same as setVisible().
+    bool videoFocusNative();
+
     // Sends "KEY <code>" -- forwards a real Android KeyEvent keycode
     // into the sidecar's current AA session as a momentary tap (see
     // sidecars/androidauto/main.cpp's own protocol comment and

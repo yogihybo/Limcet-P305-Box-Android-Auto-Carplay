@@ -67,7 +67,8 @@ void VideoChannel::onMediaChannelSetupRequest(
             // directions, but the phone never sent a
             // VideoFocusRequest or MediaChannelStartIndication at all
             // -- it was waiting for a grant this code never sent.
-            sendVideoFocusIndication(/*unsolicited=*/true);
+            sendVideoFocusIndication(/*unsolicited=*/true,
+                                      aap_protobuf::service::media::video::message::VIDEO_FOCUS_PROJECTED);
         },
         [](const aasdk::error::Error & e) {
             std::printf("%s androidauto: video channel setup response send failed: %s\n", logTimestamp().c_str(),
@@ -263,16 +264,45 @@ void VideoChannel::onVideoFocusRequest(
     std::printf("%s androidauto: video focus request, mode=%d reason=%d\n", logTimestamp().c_str(),
                static_cast<int>(request.mode()), static_cast<int>(request.reason()));
 
-    // Always grant projected focus -- this app has no native content
-    // competing for the video surface.
-    sendVideoFocusIndication(/*unsolicited=*/false);
+    // 2026-08-19: real bug -- this used to always grant PROJECTED focus
+    // regardless of what was actually requested, on the theory that
+    // "this app has no native content competing for the video surface."
+    // That's wrong: mode() is the real signal Android Auto's own in-app
+    // exit/back control sends (VIDEO_FOCUS_NATIVE=2, confirmed against
+    // aap_protobuf's real VideoFocusMode enum) -- "give focus back to
+    // your native UI," not a session teardown (the phone stays connected
+    // in the background; a full disconnect is a separate, explicit
+    // action on the phone side). Always replying PROJECTED told the
+    // phone we still wanted focus, so the head unit stayed stuck showing
+    // a now-static video frame with no way back to local LVGL -- see
+    // video_visibility.h's own comment on video_focus_native() for the
+    // other half of this fix (letting custom_ui's own UI process react).
+    //
+    // Hide the hardware layer immediately (don't wait for
+    // pushDecodedFrame()'s own per-frame reconciliation against
+    // video_visible() -- the phone may simply stop sending frames once
+    // native focus is granted, so that reconciliation might never get
+    // another chance to run) whenever native focus (transient or not)
+    // is granted; showing it again is left to the next real decoded
+    // frame once PROJECTED focus returns, same as the existing
+    // video_visible() gate already does.
+    bool native = request.mode() == aap_protobuf::service::media::video::message::VIDEO_FOCUS_NATIVE ||
+                  request.mode() == aap_protobuf::service::media::video::message::VIDEO_FOCUS_NATIVE_TRANSIENT;
+    video_focus_native().store(native, std::memory_order_release);
+    if (native) {
+        hal::hide_video_layer(videoLayer_);
+    }
+
+    aap_protobuf::service::media::video::message::VideoFocusMode grantedMode = request.mode();
+    sendVideoFocusIndication(/*unsolicited=*/false, grantedMode);
 
     channel_->receive(this->shared_from_this());
 }
 
-void VideoChannel::sendVideoFocusIndication(bool unsolicited) {
+void VideoChannel::sendVideoFocusIndication(bool unsolicited,
+                                             aap_protobuf::service::media::video::message::VideoFocusMode mode) {
     aap_protobuf::service::media::video::message::VideoFocusNotification indication;
-    indication.set_focus(aap_protobuf::service::media::video::message::VIDEO_FOCUS_PROJECTED);
+    indication.set_focus(mode);
     indication.set_unsolicited(unsolicited);
 
     auto promise = aasdk::channel::SendPromise::defer(strand_);

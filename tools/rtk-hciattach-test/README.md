@@ -18,20 +18,24 @@ at the result, decide what's next.
 ## Firmware A/B test
 
 ```sh
-bt-hci-probe.sh            # default: this project's real on-device firmware
+bt-hci-probe.sh            # default: this project's real firmware
 bt-hci-probe.sh device     # same, explicit
 bt-hci-probe.sh reference  # rtkbt's own bundled generic RTL8761B firmware instead
 ```
 
-`reference-firmware/` vendors `rtkbt`'s stock `rtl8761b_fw`/
-`rtl8761b_config` (github.com/radxa/rtkbt, GPLv2, unmodified) --
-byte-for-byte different from our real firmware (41,328 vs 43,980
-bytes; different bytes immediately after the shared `"Realtech"`
-header signature). Useful for telling apart "our specific firmware
-blob has an issue" from "this is a `rtk_hciattach`/board-level issue
-a known-community-tested generic firmware would also hit" -- chip
-identification goes through the same patched `lmp_subver=0x434d` table
-entry either way, only the staged file content differs.
+Both firmware sources are bundled directly in this directory --
+`device-firmware/` (a copy of `firmware_source/mtd6_rootfs/etc/
+rtl8761bt_fw`+`rtl8761bt_config`) and `reference-firmware/` (`rtkbt`'s
+stock `rtl8761b_fw`/`rtl8761b_config`, github.com/radxa/rtkbt, GPLv2,
+unmodified) -- so this whole tool is self-contained and doesn't depend
+on `/etc/rtl8761bt_fw` still being present/unmodified on whatever
+device it's copied to. Byte-for-byte different from each other
+(41,328 vs 43,980 bytes; different bytes immediately after the shared
+`"Realtech"` header signature). Useful for telling apart "our specific
+firmware blob has an issue" from "this is a `rtk_hciattach`/board-level
+issue a known-community-tested generic firmware would also hit" --
+chip identification goes through the same patched `lmp_subver=0x434d`
+table entry either way, only the staged file content differs.
 
 Notably, our real firmware's header bytes right after `"Realtech"` are
 literally `4d 43` -- ASCII `"MC"`, which as a little-endian 16-bit

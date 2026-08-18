@@ -33,22 +33,34 @@ if pidof blueware >/dev/null 2>&1; then
 fi
 
 echo "=== bt-hci-probe: enabling gpio$GPIO (BTEN_INTERFACE) ==="
-# 2026-08-19: real hardware evidence -- a fresh power-cycle attempt
-# using an active low-then-high "reset" pulse here got ZERO H5 SYNC
-# responses at all (totally silent chip), while a later attempt right
-# after blueware had already brought the module up once (then killed)
-# got three full stages further using this exact same script. The
-# daemon's own real, decompile-confirmed enable sequence
-# (docs/1.4_WIRELESS_AND_INIT.md:129-134, from libBlueTooth.so/
-# blueware's actual documented behavior) is just export+direction=out
-# +value=1 -- it NEVER actively pulls this line low first. Matching
-# that exactly now instead of inventing our own reset pulse, since the
-# invented low pulse is the most likely reason a truly cold chip
-# didn't have enough time/the right sequence to power up cleanly.
+# 2026-08-19 REVISED: Ghidra-decompiled the real bpio_init()/
+# bpio_reset()/bpio_set() functions from the actual /usr/bin/blueware
+# binary (firmware_source/mtd6_rootfs/usr/bin/blueware, all three
+# confirmed operating on the same gpio91 value fd). bpio_init() itself
+# ends by writing "0" (LOW) -- the daemon does NOT come up with the
+# pin high. The real captured stock log (docs/logs/bluetooth log
+# stock_260718.txt, lines 66-87) shows the meaningful transition
+# immediately before real chip communication starts is TWO full
+# low-then-high pulses back to back (bpio_reset/bpio_set/bpio_reset/
+# bpio_set), ending high, right before "realtek selected"/opening
+# librtkvnd.so. This supersedes the previous revision of this script
+# (which removed the pulse entirely based on a doc excerpt that turned
+# out to only cover bpio_init's static enable step, not the real
+# pre-communication reset dance) -- neither bpio_reset() nor bpio_set()
+# has any delay in its own body, so the exact inter-call timing is
+# still unconfirmed (blocked on resolving what looks like vtable-
+# dispatched calls to these two functions); 100ms between each
+# transition here is a conservative placeholder, not a confirmed value.
 if [ ! -d /sys/class/gpio/gpio$GPIO ]; then
     echo $GPIO > /sys/class/gpio/export 2>/dev/null || true
 fi
 echo out > /sys/class/gpio/gpio$GPIO/direction 2>/dev/null || echo "warn: couldn't set gpio$GPIO direction"
+echo 0 > /sys/class/gpio/gpio$GPIO/value 2>/dev/null
+usleep 100000 2>/dev/null || sleep 1
+echo 1 > /sys/class/gpio/gpio$GPIO/value 2>/dev/null
+usleep 100000 2>/dev/null || sleep 1
+echo 0 > /sys/class/gpio/gpio$GPIO/value 2>/dev/null
+usleep 100000 2>/dev/null || sleep 1
 echo 1 > /sys/class/gpio/gpio$GPIO/value 2>/dev/null
 sleep 1
 

@@ -6,9 +6,6 @@
 #include "core/config_store.h"
 #include "core/navigation.h"
 #include "hal/display_ctrl.h"
-#include "ui/android_auto_screen.h"
-#include "ui/bluetooth_screen.h"
-#include "ui/reverse_camera_screen.h"
 
 namespace staging_ui {
 
@@ -23,12 +20,6 @@ hal::DisplayCtrlHandle & display_handle() {
     }
     return handle;
 }
-
-enum class SettingsTab {
-    Display,
-    Audio,
-    System
-};
 
 enum class VdeField { None, Brightness, Contrast, Saturation, Hue };
 
@@ -94,13 +85,29 @@ void stepper_click_cb(lv_event_t * e) {
     core::default_store().save();
 }
 
+lv_obj_t * create_section_header(lv_obj_t * parent, const char * title) {
+    lv_obj_t * row = lv_obj_create(parent);
+    lv_obj_remove_style_all(row);
+    lv_obj_set_width(row, LV_PCT(100));
+    lv_obj_set_height(row, LV_SIZE_CONTENT);
+    lv_obj_set_style_pad_top(row, 8, 0);
+    lv_obj_set_style_pad_bottom(row, 4, 0);
+    lv_obj_set_style_pad_hor(row, 16, 0);
+
+    lv_obj_t * lbl = lv_label_create(row);
+    lv_label_set_text(lbl, title);
+    lv_obj_set_style_text_font(lbl, &lv_font_roboto_14, 0);
+    lv_obj_set_style_text_color(lbl, theme::accent_primary(), 0);
+    return row;
+}
+
 lv_obj_t * create_stepper_row(lv_obj_t * parent, const lv_image_dsc_t * icon_dsc, const char * label_text,
                              int min, int max, int step, const std::string & key,
                              const std::string & section, VdeField vde_field) {
     lv_obj_t * row = lv_obj_create(parent);
     lv_obj_remove_style_all(row);
     lv_obj_set_width(row, LV_PCT(100));
-    lv_obj_set_height(row, 72);
+    lv_obj_set_height(row, 64);
     lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_hor(row, 16, 0);
@@ -127,7 +134,7 @@ lv_obj_t * create_stepper_row(lv_obj_t * parent, const lv_image_dsc_t * icon_dsc
     int initial = core::default_store().get_int(key, (min + max) / 2, section);
     if (initial < min) initial = min;
     if (initial > max) initial = max;
-    initial = min + ((initial - min) / step) * step;  // snap to the step grid
+    initial = min + ((initial - min) / step) * step;
 
     auto * ctx = new StepperCtx{section, key, vde_field, min, max, step, initial, nullptr, nullptr};
     lv_obj_add_event_cb(row, destroy_stepper_ctx, LV_EVENT_DELETE, ctx);
@@ -178,108 +185,53 @@ lv_obj_t * create_stepper_row(lv_obj_t * parent, const lv_image_dsc_t * icon_dsc
         lv_group_add_obj(core::navigation::focus_group(), plus_btn);
     }
 
-    // Push the seeded/persisted value to hardware once at build time --
-    // matches src/ui/settings_screen.cpp's own add_stepper_row(), which
-    // does this specifically so the display stays in sync with
-    // whatever was last saved every time this screen is (re)built, not
-    // just from the next +/- tap.
-    if (vde_field != VdeField::None) {
-        apply_vde(vde_field, initial);
-    }
+    apply_vde(vde_field, initial);
 
     return row;
 }
 
-struct ScreenState {
-    SettingsTab current_tab = SettingsTab::Display;
-    lv_obj_t * card_container = nullptr;
-    lv_obj_t * chip_display = nullptr;
-    lv_obj_t * chip_audio = nullptr;
-    lv_obj_t * chip_system = nullptr;
-};
+lv_obj_t * create_toggle_row(lv_obj_t * parent, const lv_image_dsc_t * icon_dsc, const char * label_text,
+                            const std::string & key, const std::string & section, bool def_val) {
+    lv_obj_t * row = lv_obj_create(parent);
+    lv_obj_remove_style_all(row);
+    lv_obj_set_width(row, LV_PCT(100));
+    lv_obj_set_height(row, 64);
+    lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_hor(row, 16, 0);
 
-void render_tab_content(ScreenState * state) {
-    if (!state->card_container) return;
-    lv_obj_clean(state->card_container);
+    lv_obj_t * left_box = lv_obj_create(row);
+    lv_obj_remove_style_all(left_box);
+    lv_obj_set_size(left_box, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(left_box, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(left_box, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(left_box, 14, 0);
 
-    // Update Filter Chips Active Appearance
-    theme::style_filter_chip(state->chip_display, state->current_tab == SettingsTab::Display);
-    theme::style_filter_chip(state->chip_audio, state->current_tab == SettingsTab::Audio);
-    theme::style_filter_chip(state->chip_system, state->current_tab == SettingsTab::System);
-
-    lv_obj_t * lbl_d = lv_obj_get_child(state->chip_display, 0);
-    if (lbl_d) lv_obj_set_style_text_color(lbl_d, state->current_tab == SettingsTab::Display ? theme::text_on_accent() : theme::text_primary(), 0);
-
-    lv_obj_t * lbl_a = lv_obj_get_child(state->chip_audio, 0);
-    if (lbl_a) lv_obj_set_style_text_color(lbl_a, state->current_tab == SettingsTab::Audio ? theme::text_on_accent() : theme::text_primary(), 0);
-
-    lv_obj_t * lbl_s = lv_obj_get_child(state->chip_system, 0);
-    if (lbl_s) lv_obj_set_style_text_color(lbl_s, state->current_tab == SettingsTab::System ? theme::text_on_accent() : theme::text_primary(), 0);
-
-    if (state->current_tab == SettingsTab::Display) {
-        // 0-255 (not 0-100) and section "General" (not "Display") --
-        // matches the real hal::VdeConfig register range and the
-        // config_store section src/ui/settings_screen.cpp's own
-        // Brightness/Contrast/Saturation rows already use. The old
-        // 0-100 range capped real hardware brightness/contrast at
-        // ~39% of its actual maximum, and "Display" was a section no
-        // other code in this app reads from.
-        create_stepper_row(state->card_container, &ui::icons::icon_brightness, "Brightness", 0, 255, 5,
-                           "Brightness", "General", VdeField::Brightness);
-        create_stepper_row(state->card_container, &ui::icons::icon_contrast, "Contrast", 0, 255, 5,
-                           "Contrast", "General", VdeField::Contrast);
-        create_stepper_row(state->card_container, &ui::icons::icon_saturation, "Saturation", 0, 255, 5,
-                           "Saturation", "General", VdeField::Saturation);
-    } else if (state->current_tab == SettingsTab::Audio) {
-        // Audio Tab: Media & Guidance Volume
-        create_stepper_row(state->card_container, &ui::icons::icon_volume, "Media Volume", 0, 100, 5,
-                           "MediaVolume", "Audio", VdeField::None);
-        create_stepper_row(state->card_container, &ui::icons::icon_bell, "Guidance Volume", 0, 100, 5,
-                           "GuidanceVolume", "Audio", VdeField::None);
-        create_stepper_row(state->card_container, &ui::icons::icon_volume, "System Volume", 0, 100, 5,
-                           "SystemVolume", "Audio", VdeField::None);
-    } else if (state->current_tab == SettingsTab::System) {
-        // System Tab: Auto-Start Switch + Reset
-        lv_obj_t * row = lv_obj_create(state->card_container);
-        lv_obj_remove_style_all(row);
-        lv_obj_set_width(row, LV_PCT(100));
-        lv_obj_set_height(row, 72);
-        lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
-        lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-        lv_obj_set_style_pad_hor(row, 8, 0);
-
-        lv_obj_t * label = lv_label_create(row);
-        lv_label_set_text(label, "Auto-Start CarLink");
-        lv_obj_set_style_text_font(label, &lv_font_roboto_20, 0);
-        lv_obj_set_style_text_color(label, theme::text_primary(), 0);
-
-        lv_obj_t * sw = lv_switch_create(row);
-        bool auto_start = core::default_store().get_bool("AutoStartCarLink", true, "General");
-        if (auto_start) lv_obj_add_state(sw, LV_STATE_CHECKED);
-        lv_obj_add_event_cb(sw, [](lv_event_t * e) {
-            lv_obj_t * target = static_cast<lv_obj_t *>(lv_event_get_target(e));
-            bool val = lv_obj_has_state(target, LV_STATE_CHECKED);
-            core::default_store().set_bool("AutoStartCarLink", val, "General");
-            core::default_store().save();
-        }, LV_EVENT_VALUE_CHANGED, nullptr);
-
-        if (core::navigation::focus_group()) {
-            lv_group_add_obj(core::navigation::focus_group(), sw);
-        }
+    if (icon_dsc) {
+        lv_obj_t * icon = ui::icons::create_icon(left_box, icon_dsc, theme::text_secondary());
+        (void)icon;
     }
-}
 
-void chip_clicked_cb(lv_event_t * e) {
-    auto tab = static_cast<SettingsTab>(reinterpret_cast<uintptr_t>(lv_event_get_user_data(e)));
-    auto * state = static_cast<ScreenState *>(lv_obj_get_user_data(static_cast<lv_obj_t *>(lv_event_get_target(e))));
-    if (state && state->current_tab != tab) {
-        state->current_tab = tab;
-        render_tab_content(state);
+    lv_obj_t * label = lv_label_create(left_box);
+    lv_label_set_text(label, label_text);
+    lv_obj_set_style_text_font(label, &lv_font_roboto_20, 0);
+    lv_obj_set_style_text_color(label, theme::text_primary(), 0);
+
+    lv_obj_t * sw = lv_switch_create(row);
+    bool state = core::default_store().get_bool(key, def_val, section);
+    if (state) lv_obj_add_state(sw, LV_STATE_CHECKED);
+    lv_obj_add_event_cb(sw, [](lv_event_t * e) {
+        lv_obj_t * target = static_cast<lv_obj_t *>(lv_event_get_target(e));
+        bool val = lv_obj_has_state(target, LV_STATE_CHECKED);
+        core::default_store().set_bool("AutoStartCarLink", val, "General");
+        core::default_store().save();
+    }, LV_EVENT_VALUE_CHANGED, nullptr);
+
+    if (core::navigation::focus_group()) {
+        lv_group_add_obj(core::navigation::focus_group(), sw);
     }
-}
 
-void destroy_screen_state(lv_event_t * e) {
-    delete static_cast<ScreenState *>(lv_event_get_user_data(e));
+    return row;
 }
 
 } // namespace
@@ -289,65 +241,67 @@ lv_obj_t * create_settings_screen() {
     lv_obj_set_style_bg_color(scr, theme::bg(), 0);
     lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
 
-    auto * state = new ScreenState();
-    lv_obj_set_user_data(scr, state);
-    lv_obj_add_event_cb(scr, destroy_screen_state, LV_EVENT_DELETE, state);
-
     // 1. Persistent 5-Icon Navigation Rail on the Left (Settings is active)
     create_nav_rail(scr, NavDestination::Settings);
 
     // 2. Main Content Area to the right of the rail
     lv_obj_t * content = lv_obj_create(scr);
     lv_obj_remove_style_all(content);
-    lv_obj_set_pos(content, theme::kRailWidth + 24, 16);
-    lv_obj_set_size(content, 800 - (theme::kRailWidth + 48), 448);
+    lv_obj_set_pos(content, theme::kRailWidth + 16, 8);
+    lv_obj_set_size(content, 800 - (theme::kRailWidth + 32), 464);
     lv_obj_set_flex_flow(content, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(content, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
-    lv_obj_set_style_pad_row(content, 18, 0);
+    lv_obj_set_style_pad_row(content, 12, 0);
     lv_obj_clear_flag(content, LV_OBJ_FLAG_SCROLLABLE);
 
-    // 3. Top Header Bar (Title & Filter Chips)
-    lv_obj_t * header_row = lv_obj_create(content);
-    lv_obj_remove_style_all(header_row);
-    lv_obj_set_width(header_row, LV_PCT(100));
-    lv_obj_set_height(header_row, LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(header_row, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(header_row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_column(header_row, 16, 0);
+    // 3. Top Title Header
+    lv_obj_t * header = lv_obj_create(content);
+    lv_obj_remove_style_all(header);
+    lv_obj_set_width(header, LV_PCT(100));
+    lv_obj_set_height(header, 32);
+    lv_obj_set_flex_flow(header, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(header, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
-    // Segmented Filter Chips
-    auto make_chip = [scr, state, header_row](const char * text, SettingsTab tab) -> lv_obj_t * {
-        lv_obj_t * chip = lv_button_create(header_row);
-        lv_obj_set_user_data(chip, state);
-        lv_obj_add_event_cb(chip, chip_clicked_cb, LV_EVENT_CLICKED, reinterpret_cast<void *>(static_cast<uintptr_t>(tab)));
+    lv_obj_t * title_lbl = lv_label_create(header);
+    lv_label_set_text(title_lbl, "Settings");
+    lv_obj_set_style_text_font(title_lbl, &lv_font_roboto_24, 0);
+    lv_obj_set_style_text_color(title_lbl, theme::text_primary(), 0);
 
-        lv_obj_t * lbl = lv_label_create(chip);
-        lv_label_set_text(lbl, text);
-        lv_obj_set_style_text_font(lbl, &lv_font_roboto_20, 0);
-        lv_obj_center(lbl);
-
-        if (core::navigation::focus_group()) {
-            lv_group_add_obj(core::navigation::focus_group(), chip);
-        }
-        return chip;
-    };
-
-    state->chip_display = make_chip("Display", SettingsTab::Display);
-    state->chip_audio   = make_chip("Audio", SettingsTab::Audio);
-    state->chip_system  = make_chip("System", SettingsTab::System);
-
-    // 4. Central Rounded Card
+    // 4. Unified Long Scrolling Settings Card
     lv_obj_t * card = lv_obj_create(content);
     theme::style_card(card);
     lv_obj_set_width(card, LV_PCT(100));
     lv_obj_set_flex_grow(card, 1);
     lv_obj_set_flex_flow(card, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(card, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_ver(card, 10, 0);
-    state->card_container = card;
+    lv_obj_set_flex_align(card, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+    lv_obj_set_style_pad_all(card, 16, 0);
+    lv_obj_set_style_pad_row(card, 8, 0);
+    lv_obj_add_flag(card, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scroll_dir(card, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(card, LV_SCROLLBAR_MODE_AUTO);
 
-    // Render Initial Display Tab Content
-    render_tab_content(state);
+    // --- Section 1: Display ---
+    create_section_header(card, "DISPLAY");
+    create_stepper_row(card, &ui::icons::icon_brightness, "Brightness", 0, 255, 5,
+                       "Brightness", "General", VdeField::Brightness);
+    create_stepper_row(card, &ui::icons::icon_contrast, "Contrast", 0, 255, 5,
+                       "Contrast", "General", VdeField::Contrast);
+    create_stepper_row(card, &ui::icons::icon_saturation, "Saturation", 0, 255, 5,
+                       "Saturation", "General", VdeField::Saturation);
+
+    // --- Section 2: Audio ---
+    create_section_header(card, "AUDIO");
+    create_stepper_row(card, &ui::icons::icon_volume, "Media Volume", 0, 100, 5,
+                       "MediaVolume", "Audio", VdeField::None);
+    create_stepper_row(card, &ui::icons::icon_bell, "Guidance Volume", 0, 100, 5,
+                       "GuidanceVolume", "Audio", VdeField::None);
+    create_stepper_row(card, &ui::icons::icon_volume, "System Volume", 0, 100, 5,
+                       "SystemVolume", "Audio", VdeField::None);
+
+    // --- Section 3: System ---
+    create_section_header(card, "SYSTEM");
+    create_toggle_row(card, &ui::icons::icon_smartphone, "Auto-Start CarLink",
+                      "AutoStartCarLink", "General", true);
 
     return scr;
 }

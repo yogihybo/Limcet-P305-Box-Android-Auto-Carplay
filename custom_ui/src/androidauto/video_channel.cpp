@@ -286,11 +286,30 @@ void VideoChannel::onVideoFocusRequest(
     // is granted; showing it again is left to the next real decoded
     // frame once PROJECTED focus returns, same as the existing
     // video_visible() gate already does.
+    //
+    // 2026-08-19: real bug found on hardware -- this hides the layer
+    // directly via the HAL call, but pushDecodedFrame()'s own
+    // reconciliation logic (a few lines below) only acts on a real
+    // wantVisible/videoLayerShown_ TRANSITION, and video_visible()
+    // itself never changes here (that's the UI's own screen-selection
+    // flag, untouched by focus changes -- see video_visibility.h).
+    // Without also updating videoLayerShown_ here, that flag stayed
+    // stale at true (the hardware layer was hidden out from under it
+    // without it knowing), so once frames resumed after a Resume tap,
+    // pushDecodedFrame() saw wantVisible=true AND videoLayerShown_=true
+    // (stale) and concluded nothing needed to change -- the hardware
+    // layer never got shown again even though decode/set_frame_addr()
+    // were both running fine. This is exactly what "Resume does
+    // something (channel restarts) but video never comes back" looks
+    // like: everything upstream of the display layer working, the
+    // layer's own shown/hidden bookkeeping just permanently desynced
+    // from hardware reality.
     bool native = request.mode() == aap_protobuf::service::media::video::message::VIDEO_FOCUS_NATIVE ||
                   request.mode() == aap_protobuf::service::media::video::message::VIDEO_FOCUS_NATIVE_TRANSIENT;
     video_focus_native().store(native, std::memory_order_release);
     if (native) {
         hal::hide_video_layer(videoLayer_);
+        videoLayerShown_ = false;
     }
 
     aap_protobuf::service::media::video::message::VideoFocusMode grantedMode = request.mode();

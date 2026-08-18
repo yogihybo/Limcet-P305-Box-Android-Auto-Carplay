@@ -32,13 +32,23 @@ if pidof blueware >/dev/null 2>&1; then
     exit 1
 fi
 
-echo "=== bt-hci-probe: hardware reset via gpio$GPIO (BTEN_INTERFACE, matches etc/blueware-bw121.properties) ==="
+echo "=== bt-hci-probe: enabling gpio$GPIO (BTEN_INTERFACE) ==="
+# 2026-08-19: real hardware evidence -- a fresh power-cycle attempt
+# using an active low-then-high "reset" pulse here got ZERO H5 SYNC
+# responses at all (totally silent chip), while a later attempt right
+# after blueware had already brought the module up once (then killed)
+# got three full stages further using this exact same script. The
+# daemon's own real, decompile-confirmed enable sequence
+# (docs/1.4_WIRELESS_AND_INIT.md:129-134, from libBlueTooth.so/
+# blueware's actual documented behavior) is just export+direction=out
+# +value=1 -- it NEVER actively pulls this line low first. Matching
+# that exactly now instead of inventing our own reset pulse, since the
+# invented low pulse is the most likely reason a truly cold chip
+# didn't have enough time/the right sequence to power up cleanly.
 if [ ! -d /sys/class/gpio/gpio$GPIO ]; then
     echo $GPIO > /sys/class/gpio/export 2>/dev/null || true
 fi
 echo out > /sys/class/gpio/gpio$GPIO/direction 2>/dev/null || echo "warn: couldn't set gpio$GPIO direction"
-echo 0 > /sys/class/gpio/gpio$GPIO/value 2>/dev/null
-usleep 100000 2>/dev/null || sleep 1
 echo 1 > /sys/class/gpio/gpio$GPIO/value 2>/dev/null
 sleep 1
 

@@ -39,9 +39,35 @@ Patched that one comparison to also accept `lmp_subver=0x434d` as a
 valid alias for `0x8761` (see `src/rtb_fwc.c`'s own comment right at
 that check) -- every other chip's check is unaffected.
 
-**Not yet re-tested against hardware** -- next real-hardware run is
-what confirms whether this clears the last gate and `hci0` actually
-appears.
+**Run 3** (fresh power cycle, this script's old low-then-high GPIO91
+pulse): zero H5 SYNC responses at all -- totally silent chip,
+retransmission exhausted before ever getting past the very first
+stage.
+
+**Run 4** (same script, but run after `custom_ui`/`blueware` had
+already brought the module up once earlier in that boot, then
+`blueware` killed): got three full stages further than Run 3 -- H5
+sync, chip ID, firmware/config load all succeeded, then hit a
+timing-sensitive failure during the live baud-rate switch right as
+patch download started (`h5_post_hci_cc` mismatch, `fc17`/`fc20`).
+
+The Run 3 vs. Run 4 contrast is the real finding: **this script's own
+GPIO91 handling was wrong**, not a protocol issue. It actively pulled
+the line low before asserting it high, as an invented "reset pulse" --
+but `blueware`'s own real, decompile-confirmed enable sequence
+(`docs/1.4_WIRELESS_AND_INIT.md:129-134`) never does that, just
+`export`/`direction=out`/`value=1`. A truly cold chip most likely
+needs longer/different power-up handling than an invented low pulse
+gives it, while a chip `blueware` had already warmed up once tolerates
+the same pulse fine -- explaining exactly why Run 4 got further than
+Run 3 on identical code. `bt-hci-probe.sh` now matches the real
+sequence exactly (no low pulse).
+
+**Not yet re-tested against hardware** -- next run (ideally from a
+genuinely fresh power cycle, to test the GPIO fix specifically) is
+what confirms whether this reaches `hci0`, or whether Run 4's
+baud-switch timing issue is still there once sync/chip-ID/firmware-load
+succeed reliably.
 
 ## What's here
 

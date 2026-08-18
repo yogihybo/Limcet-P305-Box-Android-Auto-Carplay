@@ -1,244 +1,130 @@
-# Handoff: Android Auto Rotary Knob & Card Navigation HAL
+# Handoff: Android Auto Rotary Knob & Card Navigation Investigation
 
 ## 1. Executive Summary
 
-On the Toyota Prado / Limcet P306 hardware platform, physical control knob operation under Android Auto mode exhibited the following behavior:
-- **Center Push-Button Working**: Pressing the knob successfully executes click/select actions (`KEYCODE_DPAD_CENTER`, 23).
-- **Rotation Ineffective**: Rotating the knob (clockwise or counter-clockwise) produces no highlight movement or UI response within Android Auto.
-- **Card Switching Gap**: The physical encoder has no directional 4-way tilt/nudge switches (unlike BMW iDrive or Mazda Commander), leaving no direct mechanism to jump focus between multi-window tiles (e.g., Google Maps $\leftrightarrow$ Spotify Media Card $\leftrightarrow$ Side Navigation Rail).
+This document records the empirical hardware findings, protocol behavior, and systematic testing roadmap for physical rotary knob operation under Android Auto in `custom_ui`.
 
-This handoff document details the root cause analysis, the Android Auto Rotary navigation model, and the complete implementation of a **Hold-and-Rotate chord state machine** that enables both intra-card focus stepping and inter-card container flipping.
-
----
-
-## 2. Root Cause Analysis
-
-### 2.1 Misassigned Android Keycodes (280/281 vs 260/261)
-- **Locations**:
-  - [`custom_ui/src/hal/knob.cpp:16-17`](file:///c:/Users/Caleb%20Smith/Documents/GitHub/prado-firmware-reconstruction/custom_ui/src/hal/knob.cpp#L16-L17)
-  - [`custom_ui/src/androidauto/session.cpp:309-310`](file:///c:/Users/Caleb%20Smith/Documents/GitHub/prado-firmware-reconstruction/custom_ui/src/androidauto/session.cpp#L309-L310)
-- **Mechanism**:
-  - `knob.cpp` was dispatching `KEYCODE_SYSTEM_NAVIGATION_DOWN` (281) for clockwise rotation and `KEYCODE_SYSTEM_NAVIGATION_UP` (280) for counter-clockwise rotation.
-  - In Android OS, keycodes 280–283 were introduced in Android 8.0 specifically for fingerprint-sensor swipe gestures and system bar interactions.
-  - Google's Android Auto projection service (**Gearhead**) and the AOSP Rotary Controller service (`packages/apps/Car/RotaryController`) do **not** map `KEYCODE_SYSTEM_NAVIGATION_*` to UI focus navigation. Gearhead silently drops these events upon receipt.
-- **Standard AAOS / Gearhead Rotary Mapping**:
-  - **Clockwise Rotation**: `KEYCODE_NAVIGATE_NEXT` (261)
-  - **Counter-Clockwise Rotation**: `KEYCODE_NAVIGATE_PREVIOUS` (260)
-  - **Center Select / Push**: `KEYCODE_DPAD_CENTER` (23)
-
-### 2.2 Capability Filtering in `ServiceDiscoveryResponse`
-- **Location**: [`custom_ui/src/androidauto/session.cpp:309-311`](file:///c:/Users/Caleb%20Smith/Documents/GitHub/prado-firmware-reconstruction/custom_ui/src/androidauto/session.cpp#L309-L311)
-- In the Android Auto Protocol (AAP), the phone filters and consumes only keycodes declared in `InputSourceService.keycodes_supported` in the `ServiceDiscoveryResponse`.
-- Because `session.cpp` advertised `280` and `281` instead of `260` and `261`, the phone ignored rotation events at both the protocol discovery filter and the UI input dispatch layer.
-
-### 2.3 Premature Click Dispatch in Chord Gestures
-- In early chord experiments, click events were generated on **press-down** (`pressed && !knob_was_pressed()`).
-- Holding the knob down to initiate a rotation gesture immediately fired `KEYCODE_DPAD_CENTER`, activating whatever view was currently selected before any rotation occurred.
-- Proper chording requires a **press-on-release** state machine that tracks whether rotation occurred during the hold period to suppress the click event upon release.
+### 1.1 Live Hardware Observations & Historical Context
+1. **Push-Button Select (`KEYCODE_DPAD_CENTER`, 23)**: Hardware-confirmed functional across all builds.
+2. **Rotation within a Container (`280/281`)**: Prior hardware testing confirmed `280` (`KEYCODE_SYSTEM_NAVIGATION_UP`) and `281` (`KEYCODE_SYSTEM_NAVIGATION_DOWN`) **did produce real focus movement** across fields, but navigation was restricted strictly to the currently focused card/container with no way to jump focus to other cards.
+3. **The Mixed-Keycode Regression**: A prior hardware test that declared raw D-Pad directions (`19, 20, 21, 22`) alongside rotary keycodes in `session.cpp`'s `keycodes_supported` caused Gearhead to **completely disable/break all rotary navigation**.
+4. **Current Status in Recent Builds**: In the latest builds, rotation using `280/281` was reported as having no visible effect. This requires isolated re-verification to determine whether it is caused by active UI focus state, video corruption masking, or Gearhead version behavior.
 
 ---
 
-## 3. Android Auto Focus Hierarchy
+## 2. Key Findings & Constraints
 
-Android Auto (Coolwalk UI) organizes the screen into multiple distinct **Focus Areas** (Containers):
+### 2.1 Hardware Capability vs. Multi-Card Navigation
+- The physical encoder hardware relays clockwise (`b3=65`), counter-clockwise (`b3=64`), and push-button (`b3=13`) events over MCU UART `/dev/ttyHS0`. It lacks physical 4-way tilt/nudge switches.
+- In Android Auto (Coolwalk UI), single-encoder rotation navigates focus within the active container (e.g., media playback controls). Navigating between containers (e.g., jumping from Media to Navigation/Maps or the Side Rail) normally requires an inter-container "nudge" event.
 
-```
-┌───────────────────────────────────────────────────────────────────┐
-│ Status / Search Bar (Top)                                         │
-├─────────────────┬─────────────────────────────────────────────────┤
-│                 │ Primary Navigation Card (e.g., Google Maps)     │
-│ Navigation Rail │                                                 │
-│ / App Dock      ├─────────────────────────────────────────────────┤
-│ (Left)          │ Secondary Media Card (e.g., Spotify Player)     │
-│                 │                                                 │
-└─────────────────┴─────────────────────────────────────────────────┘
-```
+### 2.2 The Capability Advertisement Conflict in `session.cpp`
+- Gearhead parses `keycodes_supported` in the `ServiceDiscoveryResponse` to configure its internal input state machine.
+- Empirical testing showed that declaring D-Pad directional keycodes (`19-22`) alongside rotary keycodes corrupted Gearhead's rotary mode, breaking intra-card rotation entirely.
+- **Rule**: Never bundle multi-key D-Pad expansions with rotary keycode declarations in a single unverified step. Any keycode set modifications must be tested in strict isolation.
 
-1. **Intra-Card Focus (Within Active Card)**:
-   - Clockwise: `KEYCODE_NAVIGATE_NEXT` (261) steps focus forward across buttons/items.
-   - Counter-Clockwise: `KEYCODE_NAVIGATE_PREVIOUS` (260) steps focus backward across buttons/items.
-2. **Inter-Card Nudge (Between Cards / Focus Areas)**:
-   - D-Pad directional events (`KEYCODE_DPAD_RIGHT` = 22, `KEYCODE_DPAD_LEFT` = 21, `KEYCODE_DPAD_UP` = 19, `KEYCODE_DPAD_DOWN` = 20) jump the active focus box between adjacent containers.
+### 2.3 Edge Detection & Chording Dynamics
+- If a hold-and-rotate chord is used to provide container nudging:
+  - The push button must trigger on **release**, not on press-down.
+  - If triggered on press-down (`pressed && !knob_was_pressed()`), holding the knob down to initiate a rotation chord immediately executes an unwanted click/select action on the currently focused field.
 
 ---
 
-## 4. Hold-and-Rotate Chord State Machine
+## 3. Two-Stage Isolated Verification Strategy
+
+To prevent repeating regressions and isolate the exact input behavior on real hardware, changes are split into two discrete test stages:
 
 ```
-                              [Knob Event Detected]
-                                       │
-                      Is androidauto_screen_active() == true?
-                                       │
-                     ┌─────────────────┴─────────────────┐
-                    YES                                  NO
-                     │                                   │
-             Is Knob Pressed?                    Pass ticks/press
-                     │                           to LVGL encoder
-        ┌────────────┴────────────┐
-       YES                        NO
- (Button is Held)          (Button is Released)
-        │                         │
-  ticks != 0?               ticks != 0?
-   ┌────┴────┐               ┌────┴────┐
-  YES        NO             YES        NO
-   │          │              │          │
-Set chord   (Idle/Hold)  Send 261/260  Was button previously held?
-active                   (Rotary CW/    ┌───────┴───────┐
-Send 22/21                CCW Focus)   YES              NO
-(D-Pad Nudge                           │                │
-Inter-Card)                     Did chord fire?       (Idle)
-                                 ┌─────┴─────┐
-                                YES          NO
-                                 │           │
-                            Suppress    Send 23
-                            Click       (DPAD_CENTER
-                            (Reset)      Normal Tap)
+                  ┌──────────────────────────────────────────────┐
+                  │ Stage A: Isolated 3-Keycode Test             │
+                  │ keycodes_supported = [260, 261, 23]          │
+                  │ Test rotary focus within active card         │
+                  └──────────────────────┬───────────────────────┘
+                                         │
+                        Did intra-card rotation work?
+                         ┌───────────────┴───────────────┐
+                        YES                              NO
+                         │                               │
+        ┌────────────────┴──────────────┐       Revert to [280, 281, 23]
+        │ Stage B: Card Nudge Mechanism │       and investigate initial
+        │ Test isolated chord or Tab    │       focus acquisition/state
+        │ without polluting main list   │
+        └───────────────────────────────┘
 ```
 
 ---
 
-## 5. Source Code Changes & Diffs
+## 4. Stage A: Isolated Rotary Test (260/261 vs 280/281)
 
-### 5.1 Update [`custom_ui/src/hal/knob.cpp`](file:///c:/Users/Caleb%20Smith/Documents/GitHub/prado-firmware-reconstruction/custom_ui/src/hal/knob.cpp)
+**Objective**: Test whether `KEYCODE_NAVIGATE_PREVIOUS` (260) and `KEYCODE_NAVIGATE_NEXT` (261) function cleanly for intra-card focus when strictly declared as a 3-key set (`[260, 261, 23]`), without any D-Pad keycodes present.
 
+### 4.1 Implementation Changes for Stage A
+
+#### A. [`custom_ui/src/hal/knob.cpp`](file:///c:/Users/Caleb%20Smith/Documents/GitHub/prado-firmware-reconstruction/custom_ui/src/hal/knob.cpp)
 ```diff
 --- a/custom_ui/src/hal/knob.cpp
 +++ b/custom_ui/src/hal/knob.cpp
-@@ -12,17 +12,14 @@ namespace {
- 
- // Real AAOS RotaryController keycodes -- see this file's own header
+@@ -13,8 +13,8 @@ namespace {
  // comment and androidauto/input_channel.h for the full story. Must
  // match session.cpp's ServiceDiscoveryResponse keycodes_supported
  // list exactly.
 -constexpr std::uint32_t kKeycodeSystemNavigationUp = 280;
 -constexpr std::uint32_t kKeycodeSystemNavigationDown = 281;
-+constexpr std::uint32_t kKeycodeNavigatePrevious = 260; // Rotary CCW (Within card)
-+constexpr std::uint32_t kKeycodeNavigateNext = 261;     // Rotary CW (Within card)
- constexpr std::uint32_t kKeycodeDpadCenter = 23;        // Center Button Select
--
--// 2026-08-19: a hold-and-rotate chord (kKeycodeDpadUp/Down, sent
--// instead of 280/281 while the button was held) was tried here to
--// nudge focus BETWEEN rotary containers -- reverted after real
--// hardware testing showed it broke plain rotation entirely, not just
--// the new chord. See session.cpp's ServiceDiscoveryResponse comment
--// for the full story (declaring DPAD_UP/DOWN alongside
--// SYSTEM_NAVIGATION_UP/DOWN in keycodes_supported is the suspected
--// cause). Back to the known-good 280/281/23-only set; the
--// cross-container nudge idea needs a different mechanism if
--// revisited (not simply adding DPAD keycodes here).
-+constexpr std::uint32_t kKeycodeDpadLeft = 21;          // Nudge Focus Area Left
-+constexpr std::uint32_t kKeycodeDpadRight = 22;         // Nudge Focus Area Right
++constexpr std::uint32_t kKeycodeNavigatePrevious = 260; // Rotary CCW
++constexpr std::uint32_t kKeycodeNavigateNext = 261;     // Rotary CW
+ constexpr std::uint32_t kKeycodeDpadCenter = 23;
  
- // Own client instance, separate from android_auto_screen.cpp's/
- // status_bar.cpp's -- allow_spawn is always false for sendKey() (see
-@@ -39,9 +36,14 @@ AndroidAutoClient & androidauto_client() {
- // Edge-detects the push button (McuInputHal::get_knob_pressed() is a
- // level/state getter, not an event) so a held press sends exactly one
- // tap, not a flood of them for as long as the button stays down.
- bool & knob_was_pressed() {
-     static bool was_pressed = false;
-     return was_pressed;
- }
- 
-+bool & knob_rotated_while_held() {
-+    static bool rotated = false;
-+    return rotated;
-+}
-+
- void mcu_knob_read_cb(lv_indev_t * indev, lv_indev_data_t * data) {
-     auto * mcu = static_cast<McuInputHal *>(lv_indev_get_driver_data(indev));
- 
-     int32_t ticks = mcu->consume_knob_ticks();
-     bool pressed = mcu->get_knob_pressed();
--    bool press_edge = pressed && !knob_was_pressed();
-+    bool was_pressed = knob_was_pressed();
-     knob_was_pressed() = pressed;
- 
-     if (androidauto_screen_active().load(std::memory_order_acquire)) {
-         if (ticks != 0) {
-             std::printf("%s hal::knob: AA active, ticks=%d pressed=%d\n",
-                         core::log_timestamp().c_str(), ticks, pressed);
+@@ -58,9 +58,9 @@ void mcu_knob_read_cb(lv_indev_t * indev, lv_indev_data_t * data) {
          }
--        for (int32_t i = 0; i < ticks; ++i) {
+         for (int32_t i = 0; i < ticks; ++i) {
 -            androidauto_client().sendKey(kKeycodeSystemNavigationDown);
--        }
--        for (int32_t i = 0; i < -ticks; ++i) {
--            androidauto_client().sendKey(kKeycodeSystemNavigationUp);
--        }
--        if (press_edge) {
--            androidauto_client().sendKey(kKeycodeDpadCenter);
-+
-+        if (pressed) {
-+            // --- CHORD MODE: Hold down + Rotate ---
-+            if (ticks != 0) {
-+                knob_rotated_while_held() = true;
-+                for (int32_t i = 0; i < ticks; ++i) {
-+                    androidauto_client().sendKey(kKeycodeDpadRight);
-+                }
-+                for (int32_t i = 0; i < -ticks; ++i) {
-+                    androidauto_client().sendKey(kKeycodeDpadLeft);
-+                }
-+            }
-+        } else {
-+            // --- PLAIN ROTATE MODE ---
-+            for (int32_t i = 0; i < ticks; ++i) {
-+                androidauto_client().sendKey(kKeycodeNavigateNext);
-+            }
-+            for (int32_t i = 0; i < -ticks; ++i) {
-+                androidauto_client().sendKey(kKeycodeNavigatePrevious);
-+            }
-+
-+            // --- PUSH-BUTTON RELEASE HANDLING ---
-+            if (was_pressed) {
-+                if (!knob_rotated_while_held()) {
-+                    // Pure tap: button was pressed and released without rotating
-+                    androidauto_client().sendKey(kKeycodeDpadCenter);
-+                }
-+                knob_rotated_while_held() = false;
-+            }
++            androidauto_client().sendKey(kKeycodeNavigateNext);
          }
+         for (int32_t i = 0; i < -ticks; ++i) {
+-            androidauto_client().sendKey(kKeycodeSystemNavigationUp);
++            androidauto_client().sendKey(kKeycodeNavigatePrevious);
+         }
+         if (press_edge) {
+             androidauto_client().sendKey(kKeycodeDpadCenter);
 ```
 
-### 5.2 Update [`custom_ui/src/androidauto/session.cpp`](file:///c:/Users/Caleb%20Smith/Documents/GitHub/prado-firmware-reconstruction/custom_ui/src/androidauto/session.cpp)
-
+#### B. [`custom_ui/src/androidauto/session.cpp`](file:///c:/Users/Caleb%20Smith/Documents/GitHub/prado-firmware-reconstruction/custom_ui/src/androidauto/session.cpp)
 ```diff
 --- a/custom_ui/src/androidauto/session.cpp
 +++ b/custom_ui/src/androidauto/session.cpp
-@@ -306,18 +306,12 @@ void Session::onServiceDiscoveryRequest(
+@@ -306,8 +306,8 @@ void Session::onServiceDiscoveryRequest(
      // isn't listed here may be silently ignored by the phone. See
      // hal/knob.cpp for where these get sent from.
 -    inputSourceService->add_keycodes_supported(280);  // KEYCODE_SYSTEM_NAVIGATION_UP
 -    inputSourceService->add_keycodes_supported(281);  // KEYCODE_SYSTEM_NAVIGATION_DOWN
--    inputSourceService->add_keycodes_supported(23);   // KEYCODE_DPAD_CENTER
--    // 2026-08-19: briefly also declared KEYCODE_DPAD_UP/DOWN (19/20)
--    // here to support a hold-and-rotate "nudge between cards" chord in
--    // hal/knob.cpp -- reverted after real hardware testing showed
--    // rotation stopped working AT ALL once DPAD_UP/DOWN were declared
--    // alongside SYSTEM_NAVIGATION_UP/DOWN in the same keycodes_supported
--    // list (previously-working within-card rotation broke too, not
--    // just the new cross-card nudge).
-+    inputSourceService->add_keycodes_supported(260);  // KEYCODE_NAVIGATE_PREVIOUS (Rotary CCW)
-+    inputSourceService->add_keycodes_supported(261);  // KEYCODE_NAVIGATE_NEXT (Rotary CW)
-+    inputSourceService->add_keycodes_supported(23);   // KEYCODE_DPAD_CENTER (Select / Push)
-+    inputSourceService->add_keycodes_supported(21);   // KEYCODE_DPAD_LEFT (Nudge Area Left)
-+    inputSourceService->add_keycodes_supported(22);   // KEYCODE_DPAD_RIGHT (Nudge Area Right)
-+    inputSourceService->add_keycodes_supported(19);   // KEYCODE_DPAD_UP (Nudge Area Up)
-+    inputSourceService->add_keycodes_supported(20);   // KEYCODE_DPAD_DOWN (Nudge Area Down)
++    inputSourceService->add_keycodes_supported(260);  // KEYCODE_NAVIGATE_PREVIOUS (CCW)
++    inputSourceService->add_keycodes_supported(261);  // KEYCODE_NAVIGATE_NEXT (CW)
+     inputSourceService->add_keycodes_supported(23);   // KEYCODE_DPAD_CENTER
 ```
 
 ---
 
-## 6. Verification & Hardware Test Procedure
+## 5. Stage B: Inter-Card Navigation Roadmap (Pending Stage A)
 
-1. **Intra-Card Focus Navigation**:
-   - In active Android Auto mode, rotate the knob clockwise without pressing.
-   - Verify that the blue/highlighted focus box steps sequentially through media controls (e.g. Previous $\rightarrow$ Play/Pause $\rightarrow$ Next $\rightarrow$ Like).
-   - Rotate counter-clockwise; verify that focus steps in reverse.
-2. **Push Button Select**:
-   - Push and immediately release the knob while an item (e.g., Play/Pause) is highlighted.
-   - Verify that the action executes and no spurious focus shift occurs.
-3. **Card Nudge / Container Switching**:
-   - While focused on the Media card, push and **hold** the knob down while turning one tick clockwise.
-   - Verify that the focus highlight jumps out of the Media card to the Navigation area (Google Maps) or Side Rail.
-   - Turn one tick counter-clockwise while holding; verify that focus jumps back.
-   - Release the knob; verify that **no** accidental click/selection is triggered on release.
+Once Stage A validates stable intra-card rotation:
+1. **Option 1: Hold-and-Rotate Chord with Single Direction Pair**:
+   Test adding *only* horizontal nudge keycodes (`KEYCODE_DPAD_LEFT=21`, `KEYCODE_DPAD_RIGHT=22`) alongside the rotary pair, accompanied by the press-on-release state machine:
+   - Plain turn: sends `260` / `261` (Intra-card focus).
+   - Press held + turn: sends `21` / `22` (Card nudge).
+   - Release without turn: sends `23` (Select).
+2. **Option 2: Focus Traversal via Tab Keycode (`KEYCODE_TAB`, 61)**:
+   If D-Pad keycodes conflict with rotary mode under Gearhead, evaluate `KEYCODE_TAB` / `KEYCODE_FORWARD` as a single universal focus progression key.
+
+---
+
+## 6. Hardware Verification Checklist
+
+1. **Stage A Verification**:
+   - Build and deploy custom_ui with only `[260, 261, 23]` declared.
+   - Open Android Auto media card.
+   - Rotate knob clockwise and counter-clockwise.
+   - Verify whether highlight focus steps across media buttons.
+   - Press knob to confirm center select action.
+2. **Log Audit**:
+   - Check `hal::knob: AA active, ticks=%d` in runtime console.
+   - Confirm tick deltas correspond 1:1 with detents turned.

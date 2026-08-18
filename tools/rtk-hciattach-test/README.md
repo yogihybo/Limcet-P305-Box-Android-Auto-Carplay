@@ -83,40 +83,34 @@ sync, chip ID, firmware/config load all succeeded, then hit a
 timing-sensitive failure during the live baud-rate switch right as
 patch download started (`h5_post_hci_cc` mismatch, `fc17`/`fc20`).
 
-The Run 3 vs. Run 4 contrast is the real finding: **this script's own
-GPIO91 handling was wrong**, not a protocol issue. It actively pulled
-the line low before asserting it high, as an invented "reset pulse" --
-but `blueware`'s own real, decompile-confirmed enable sequence
-(`docs/1.4_WIRELESS_AND_INIT.md:129-134`) never does that, just
-`export`/`direction=out`/`value=1`. A truly cold chip most likely
-needs longer/different power-up handling than an invented low pulse
-gives it, while a chip `blueware` had already warmed up once tolerates
-the same pulse fine -- explaining exactly why Run 4 got further than
-Run 3 on identical code. `bt-hci-probe.sh` now matches the real
-sequence exactly (no low pulse).
+The Run 3 vs. Run 4 contrast pointed at GPIO91 handling as the real
+variable, but the follow-up chase down that path (documented here
+originally, now corrected) went the wrong direction twice: first
+removing the pulse entirely (matching a misread of `blueware`'s own
+static-enable doc excerpt, `docs/1.4_WIRELESS_AND_INIT.md:129-134`),
+then restoring it as a **double** low-then-high cycle at 100ms
+(matching `blueware`'s decompiled `bpio_reset`/`bpio_set`/`bpio_reset`/
+`bpio_set` sequence), then bumping that to 150ms (matching a real
+Realtek RTL8761ATT datasheet's `>100ms` EN_CHIP minimum, section
+3.3.3). All of that was reasonable *theory*, but **neither of the two
+double-pulse versions has ever once succeeded on real hardware** -- two
+separate tests (one cold, one warm/after-blueware) both went
+completely silent, zero H5 SYNC responses.
 
-**Update (real datasheet obtained)**: a genuine Realtek RTL8761ATT
-datasheet (same EN_CHIP-controlled power architecture as our
-RTL8761BTV) was located and checked directly. Section 3.3.3
-"EN_CHIP Control": the low pulse must be **strictly >100ms** ("to
-avoid unconditional reset noise from the PCB board") -- our prior
-100ms pulses sat exactly at that boundary, not safely above it, and
-have been bumped to 150ms. The datasheet's Table 14 also directly
-refutes an unverified "200ms post-reset boot delay" figure that came
-up during this investigation: the real max UART-not-ready duration
-(`T_non-rdy`) is only 10ms, `T_por` maxes at 8ms -- the chip is ready
-within ~18ms of the high transition, not 200ms (our existing 1000ms
-final wait was already far more than sufficient, left as-is). The
-double low-then-high cycle (matching the real captured stock log)
-stays -- the datasheet's own diagram only shows one cycle, but the
-second one costs nothing and matches the one real working reference
-we have.
+**Reverted to the single pulse from this tool's very first commit**
+(one low->high cycle, 100ms) -- the only sequence that has actually
+worked on this hardware, twice (Run 2 and Run 4, both warm/after-
+blueware). Evidence beats theory here: whatever `blueware`'s own
+second reset cycle is actually for, replicating it broke something
+about getting the chip to respond at all. The real `>100ms` EN_CHIP
+minimum from the datasheet is kept in mind, but 100ms is left as-is
+since it's the exact value already proven twice, not bumped further
+without hardware evidence backing a change.
 
-**Not yet re-tested against hardware** -- next run (ideally from a
-genuinely fresh power cycle) is what confirms whether the corrected,
-now-datasheet-backed pulse width reaches `hci0`, or whether Run 4's
-baud-switch timing issue is still there once sync/chip-ID/firmware-load
-succeed reliably.
+**Not yet re-tested against hardware since this revert** -- next run
+(both cold and warm/after-`blueware`) is what confirms whether this
+restores the Run 4 baud-switch-race result, or whether something else
+has also changed in the meantime.
 
 ## What's here
 

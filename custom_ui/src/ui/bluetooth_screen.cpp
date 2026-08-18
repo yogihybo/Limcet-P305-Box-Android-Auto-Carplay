@@ -247,7 +247,7 @@ void bt_load_poll_cb(lv_timer_t * timer) {
     w->spinner = nullptr;
     lv_obj_clear_state(w->refresh_btn, LV_STATE_DISABLED);
 
-    lv_timer_pause(timer);
+    lv_timer_delete(timer);
     delete state;
     delete ctx;
 }

@@ -214,3 +214,396 @@ wlan0: AP-ENABLED
 [  123.379500] androidauto: video timing (5s window, 148 frames): decode=545ms (10.9%) display_push=3ms (0.1%) accounted=11.0% of wall time
 [  128.433757] androidauto: video timing (5s window, 150 frames): decode=533ms (10.5%) display_push=2ms (0.0%) accounted=10.6% of wall time
 
+   0.076362] ui: bluetooth daemon launch requested
+[    0.226119] hal::bluetooth::ensure_bluetooth_daemon_running: blueware already running
+[    0.226404] hal::bluetooth::init_bluetooth: /dev/bw_serial opened (attempt 1/20)
+[    0.288850] ui: MCU input (touch/knob) started
+[    0.288993] ui: touch initialized
+[    0.289064] ui: knob initialized
+[    0.295426] ui: home dashboard (staging_ui) pushed
+[    0.295524] ui: LVGL initialized, running main loop
+[    1.416918] ui: bluetooth device name set to 'Prado CustomUI'
+[   22.101687] ark-hsuart e4800000.serial: no TX DMA channel available (no platform data) -- using PIO/interrupt-driven TX instead, this is expected on this board
+[   22.116089] ark-hsuart e4800000.serial: no RX DMA channel available (no platform data) -- using PIO/interrupt-driven RX instead, this is expected on this board
+[    1.618021] hal::bluetooth::send_command: dropping unrelated line '+PWRSTAT=1' (expected prefix '+PLIST=')
+[    1.618555] hal::bluetooth::send_command: dropping unrelated line 'OK' (expected prefix '+PLIST=')
+[    3.270722] hal::bluetooth::auto_reconnect_paired_device: attempt 1/3, reconnecting to '04006EAF29C4'
+[    3.270843] hal::bluetooth::connect_device: sending HFPCONN=04006EAF29C4
+[    3.572329] hal::bluetooth::connect_device: HFPCONN=04006EAF29C4 -> 1 response line(s):
+[    3.572452] hal::bluetooth::connect_device:   OK
+[    5.572665] hal::bluetooth::auto_reconnect_paired_device: attempt 2/3, reconnecting to '04006EAF29C4'
+[    5.572802] hal::bluetooth::connect_device: sending HFPCONN=04006EAF29C4
+[    5.873757] hal::bluetooth::connect_device: HFPCONN=04006EAF29C4 -> 1 response line(s):
+[    5.873877] hal::bluetooth::connect_device:   OK
+[    7.874046] hal::bluetooth::auto_reconnect_paired_device: attempt 3/3, reconnecting to '04006EAF29C4'
+[    7.874174] hal::bluetooth::connect_device: sending HFPCONN=04006EAF29C4
+[    8.175081] hal::bluetooth::connect_device: HFPCONN=04006EAF29C4 -> 1 response line(s):
+[    8.175196] hal::bluetooth::connect_device:   OK
+[   10.175368] hal::bluetooth::auto_reconnect_paired_device: giving up after 3 attempts
+[   34.927265] ui: +AAPDEV= observed: device_id='04006EAF29C4' name='Pixel 9 Pro' (last_triggered='')
+[   35.236687] ui: +AAPDEV= detected ('Pixel 9 Pro') -- auto-starting wireless Android Auto
+[   35.537489] hal::bluetooth::sync_clock_from_phone: no +CCLK line in response
+[    0.013005] androidauto-sidecar: starting
+[    0.014566] androidauto-sidecar: listening on /tmp/androidauto-sidecar.sock
+[    0.257652] androidauto: wireless session: Starting...
+[    0.258848] androidauto: wireless session: Starting WiFi access point...
+[    0.297037] androidauto: wireless session: hostapd running=no
+[    0.289890] core::HalConfig: loaded /data/hal.conf
+[    0.298148] androidauto: wireless session: AP not running, launching /etc/wifi_ap.sh...
+[   58.203422] IPv6: ADDRCONF(NETDEV_UP): wlan0: link is not ready
+Configuration file: /etc/hostapd/hostapd-custom_ui.conf
+rfkill: Cannot open RFKILL control device
+Using interface wlan0 with hwaddr 68:b9:d3:f1:5a:43 and ssid "custom_ui_wifi"
+wlan0: interface state UNINITIALIZED->ENABLED
+wlan0: AP-ENABLED
+[    2.230107] androidauto: wireless session: /etc/wifi_ap.sh exited with rc=0
+[    2.260159] androidauto: wireless session: hostapd running=yes
+[    2.260289] androidauto: wireless session: AP is up
+[    2.290412] androidauto: wireless session: BSSID from hostapd_cli (live control socket): 68:b9:d3:f1:5a:43
+[    2.290538] androidauto: wireless session: wlan0 bssid=68:b9:d3:f1:5a:43
+[    2.290847] androidauto: wireless session: WPP TCP server listening on 0.0.0.0:5277
+[    2.290934] androidauto: wireless session: Connecting to blueware (/dev/bw_aap)...
+[    2.291117] androidauto: bw_aap: connected to /dev/bw_aap (attempt 1/20)
+[    2.291185] androidauto: wireless session: bw_aap connected, starting handshake (advertising 192.168.43.1:5277 for the phone to dial in on)
+[    2.291234] androidauto: bw_aap: sending WIFI_VERSION_REQUEST
+[    2.291287] androidauto: bw_aap: sendFrame type=4 length=9: 00 09 00 04 08 01 10 00 18 00 20 bc 28
+[    2.369724] androidauto: bw_aap: receiveFrame type=5 length=22
+[    2.369839] androidauto: bw_aap: received type=5, 22 bytes: 08 01 10 00 1a 0e 35 36 31 37 31 46 44 41 50 30 30 31 54 45 20 00
+[    2.378042] androidauto: bw_aap: sending WIFI_START_REQUEST (ip=192.168.43.1 port=5277)
+[    2.378172] androidauto: bw_aap: sendFrame type=1 length=17: 00 11 00 01 0a 0c 31 39 32 2e 31 36 38 2e 34 33 2e 31 10 9d 29
+[    2.417127] androidauto: bw_aap: receiveFrame type=2 length=0
+[    2.417249] androidauto: bw_aap: expected WIFI_START_RESPONSE (type 7) but got type=2 instead -- pushing it back for whoever reads next
+[    2.417311] androidauto: bw_aap: pushing back unconsumed type=2 frame for the next receiveFrame() call
+[    2.417365] androidauto: wireless session: BW_AAP handshake (steps 1-3, + optional WIFI_START_RESPONSE) done
+[    2.417414] androidauto: wireless session: Waiting for phone to request WiFi credentials...
+[    2.417459] androidauto: bw_aap: waiting for WIFI_INFO_REQUEST...
+[    2.417498] androidauto: bw_aap: receiveFrame returning pending type=2 frame (no socket read)
+[    2.417536] androidauto: bw_aap: got WIFI_INFO_REQUEST, sending WIFI_INFO_RESPONSE (ssid=custom_ui_wifi bssid=68:b9:d3:f1:5a:43 security_mode=8)
+[    2.417732] androidauto: bw_aap: sendFrame type=3 length=47: 00 2f 00 03 0a 0e 63 75 73 74 6f 6d 5f 75 69 5f 77 69 66 69 12 08 38 38 38 38 38 38 38 38 1a 11 36 38 3a 62 39 3a 64 33 3a 66 31 3a 35 61 3a 34 33 20 08
+[    2.417962] androidauto: wireless session: WIFI_INFO_RESPONSE sent (ssid=custom_ui_wifi)
+[    2.418017] androidauto: bw_aap: waiting up to 15s for WIFI_CONNECT_STATUS...
+[    2.445209] androidauto: bw_aap: receiveFrame type=7 length=2
+[    2.445316] androidauto: bw_aap: got type=7 while waiting for WIFI_CONNECT_STATUS -- discarding, continuing to wait
+[    4.605082] androidauto: bw_aap: receiveFrame type=6 length=2
+[    4.605262] androidauto: bw_aap: got WIFI_CONNECT_STATUS: status=0
+[    4.605328] androidauto: wireless session: closing bw_aap
+[    4.605475] androidauto: wireless session: Waiting for phone to dial in on 0.0.0.0:5277...
+[    4.701087] androidauto: wireless session: phone connected from 192.168.43.20:38306
+[    4.810205] androidauto: AOAP device ready, sending version request...
+[    4.810474] androidauto: wireless session: Connected -- Android Auto session running
+[    4.810552] androidauto: wireless session: handing off to Session, entering io_service.run()
+[    4.812696] androidauto: version request sent
+1970-01-01 00:01:01.157 [INFO] [GENERAL] [AASDK:] - [AASDK] [ControlServiceChannel] Handling Version - Major: 256 Minor: 1792Status: 0
+[    4.822768] androidauto: version response 256.1792, status=0
+[    4.825312] androidauto: continueSSLHandshake: doHandshake() active=0
+[    4.825433] androidauto: continueSSLHandshake: outBuffer size=293
+[    4.827996] androidauto: handshake buffer sent
+[    4.840636] androidauto: handshake payload received (2347 bytes)
+[   40.738181] hal::display::hide_display: ioctl(ARKFB_HIDE_WINDOW_REAL) on /dev/fb0: ok
+[    4.975751] androidauto: continueSSLHandshake: doHandshake() active=0
+[    4.975908] androidauto: continueSSLHandshake: outBuffer size=1186
+[    4.980049] androidauto: handshake buffer sent
+[    4.994871] androidauto: handshake payload received (51 bytes)
+[    4.995475] androidauto: continueSSLHandshake: doHandshake() active=1
+[    4.995574] androidauto: continueSSLHandshake: outBuffer size=0
+[    4.995627] androidauto: SSL handshake complete
+[    4.997422] androidauto: auth complete sent
+[    5.015064] androidauto: service discovery request from 'Google Pixel 9 Pro'
+[    5.018124] androidauto: service discovery response sent
+[    5.018354] androidauto: video channel armed
+[    5.018663] androidauto: audio channels armed
+[    5.018814] androidauto: input channel armed
+[    5.018950] androidauto: sensor channel armed
+[    5.019169] androidauto: microphone channel armed
+[    5.019323] androidauto: bluetooth channel armed
+[    5.098526] androidauto: audio focus request, type=4
+[    5.102545] androidauto: audio focus response sent
+[    5.103021] androidauto: input channel open request (priority=0)
+[    5.104610] androidauto: input channel open response sent
+[    5.104915] androidauto: video channel open request (priority=0)
+[    5.106946] androidauto: audio channel (plug:softvol2) open request (priority=0)
+[    5.108199] androidauto: video channel open response sent
+[    5.108887] androidauto: audio channel (plug:softvol2) open response sent
+[    5.109071] androidauto: audio channel (plug:softvol1) open request (priority=0)
+[    5.110626] androidauto: audio channel (plug:softvol4) open request (priority=0)
+[    5.111802] androidauto: audio channel (plug:softvol1) open response sent
+[    5.112483] androidauto: audio channel (plug:softvol4) open response sent
+[    5.112671] androidauto: sensor channel open request (priority=0)
+[    5.114353] androidauto: microphone channel open request (priority=0)
+[    5.115445] androidauto: sensor channel open response sent
+[    5.116366] androidauto: microphone channel open response sent
+[    5.116528] androidauto: bluetooth channel open request (priority=0)
+[    5.117701] androidauto: bluetooth channel open response sent
+[    5.152929] androidauto: key binding request (no wheel/hardware keys to bind -- replying success)
+[    5.155181] androidauto: key binding response sent
+[    5.155366] androidauto: sensor start request, type=13, min_update_period=0
+[    5.157004] androidauto: audio channel (plug:softvol2) setup request, codec type=1
+[    5.158224] androidauto: sensor start response sent
+[    5.159577] androidauto: audio channel (plug:softvol2) setup response sent
+[    5.159786] androidauto: audio channel (plug:softvol1) setup request, codec type=1
+[    5.161289] androidauto: driving status sensor event sent
+[    5.161470] androidauto: audio channel (plug:softvol4) setup request, codec type=1
+[    5.162854] androidauto: audio channel (plug:softvol1) setup response sent
+[    5.163341] androidauto: video channel setup request, codec type=3
+[    5.164571] androidauto: audio channel (plug:softvol4) setup response sent
+[    5.164824] androidauto: video channel setup response sent
+[    5.165594] androidauto: video focus indication sent (unsolicited=1)
+[    5.205227] androidauto: video channel start, session_id=0 config_index=0
+[    5.247947] androidauto::HantroH264Decoder: initialized (real hardware, ASIC confirmed)
+[    5.591437] androidauto: audio focus request, type=1
+[    5.593144] androidauto: audio focus response sent
+[    5.737450] hal::video_layer::init_video_layer: /dev/fb4 opened (fd=21)
+[    5.737635] hal::video_layer::configure_video_layer: 800x480, format=Y_UV420 (real vendor ioctl protocol, ported from libarkcmn.so's arkapi_init_fb_display)
+[    5.737744] hal::video_layer::show_video_layer: shown
+[    9.702130] androidauto: audio channel (plug:softvol2) start, session_id=0 config_index=0
+[   66.062698] ark-dw-dmac e0000000.dma: of_xlate: src_id/dst_id=1 -> chan1 (nollp=0)
+[    9.746019] androidauto::AlsaOutput: opened plug:softvol2 (48000 Hz, 16-bit, 2 ch)
+[   50.634488] hal::knob: AA active, ticks=1
+[   50.816393] hal::knob: AA active, ticks=1
+[   51.069415] hal::knob: AA active, ticks=1
+[   51.215679] hal::knob: AA active, ticks=1
+[   51.389520] hal::knob: AA active, ticks=1
+[   51.494859] hal::knob: AA active, ticks=1
+[   51.641933] hal::knob: AA active, ticks=1
+[   51.860420] hal::knob: AA active, ticks=1
+[   51.962802] hal::knob: AA active, ticks=1
+[   16.287016] androidauto: audio channel (plug:softvol2) stop
+[   16.491012] androidauto: audio focus request, type=4
+[   16.526412] androidauto: audio focus response sent
+[   52.394386] hal::knob: AA active, ticks=-1
+[   52.500252] hal::knob: AA active, ticks=-1
+[   52.683265] hal::knob: AA active, ticks=-1
+[   52.791476] hal::knob: AA active, ticks=-1
+[   52.936435] hal::knob: AA active, ticks=-1
+[   53.009722] hal::knob: AA active, ticks=-1
+[   53.081247] hal::knob: AA active, ticks=-1
+[   53.151421] hal::knob: AA active, ticks=-1
+[   53.224394] hal::knob: AA active, ticks=-1
+[   53.334919] hal::knob: AA active, ticks=-1
+[   53.371402] hal::knob: AA active, ticks=-1
+[   53.444069] hal::knob: AA active, ticks=-1
+[   53.516710] hal::knob: AA active, ticks=-1
+[   56.578093] hal::knob: AA active, ticks=1
+[   56.792674] hal::knob: AA active, ticks=1
+[   56.938513] hal::knob: AA active, ticks=1
+[   57.119231] hal::knob: AA active, ticks=1
+[   57.188858] hal::knob: AA active, ticks=1
+[   57.297638] hal::knob: AA active, ticks=1
+[   57.690061] hal::knob: AA active, ticks=-1
+[   57.722715] hal::knob: AA active, ticks=-1
+[   57.831823] hal::knob: AA active, ticks=-1
+[   57.865548] hal::knob: AA active, ticks=-1
+[   57.934188] hal::knob: AA active, ticks=-1
+[   58.006439] hal::knob: AA active, ticks=-1
+[   58.042907] hal::knob: AA active, ticks=-1
+[   58.076697] hal::knob: AA active, ticks=-1
+[   58.147270] hal::knob: AA active, ticks=-1
+[   58.219636] hal::knob: AA active, ticks=-1
+[   58.291918] hal::knob: AA active, ticks=-1
+[   58.508810] hal::knob: AA active, ticks=1
+[   58.581125] hal::knob: AA active, ticks=1
+[   58.617633] hal::knob: AA active, ticks=1
+[   58.655363] hal::knob: AA active, ticks=1
+[   58.727660] hal::knob: AA active, ticks=1
+[   58.764093] hal::knob: AA active, ticks=1
+[   58.797896] hal::knob: AA active, ticks=1
+[   58.870946] hal::knob: AA active, ticks=1
+[   58.943185] hal::knob: AA active, ticks=1
+[   58.979552] hal::knob: AA active, ticks=1
+[   59.051882] hal::knob: AA active, ticks=1
+[   59.121070] hal::knob: AA active, ticks=1
+[   59.190730] hal::knob: AA active, ticks=2
+[   59.227594] hal::knob: AA active, ticks=1
+[   59.264026] hal::knob: AA active, ticks=1
+[   59.300480] hal::knob: AA active, ticks=1
+[   59.337597] hal::knob: AA active, ticks=1
+[   59.769406] hal::knob: AA active, ticks=1
+[   59.803246] hal::knob: AA active, ticks=1
+[   59.876183] hal::knob: AA active, ticks=1
+[   60.020200] hal::knob: AA active, ticks=1
+[   60.052737] hal::knob: AA active, ticks=1
+[   68.498481] hal::knob: AA active, ticks=-1
+[   68.571321] hal::knob: AA active, ticks=-1
+[   68.681014] hal::knob: AA active, ticks=-1
+[   68.788196] hal::knob: AA active, ticks=-1
+[   68.970337] hal::knob: AA active, ticks=-1
+[   69.115379] hal::knob: AA active, ticks=-1
+[   69.330768] hal::knob: AA active, ticks=-1
+[   69.368160] hal::knob: AA active, ticks=-1
+[   69.440783] hal::knob: AA active, ticks=-1
+[   69.549557] hal::knob: AA active, ticks=-1
+[   69.622121] hal::knob: AA active, ticks=-1
+[   69.694655] hal::knob: AA active, ticks=-1
+[   69.768587] hal::knob: AA active, ticks=-1
+[   69.805026] hal::knob: AA active, ticks=-1
+[   69.841707] hal::knob: AA active, ticks=-1
+[   69.914936] hal::knob: AA active, ticks=-1
+[   69.987666] hal::knob: AA active, ticks=-1
+[   70.024202] hal::knob: AA active, ticks=-1
+[   70.093626] hal::knob: AA active, ticks=-1
+[   70.130063] hal::knob: AA active, ticks=-1
+[   70.163621] hal::knob: AA active, ticks=-1
+[   70.200332] hal::knob: AA active, ticks=-1
+[   70.743576] hal::knob: AA active, ticks=1
+[   71.317254] hal::knob: AA active, ticks=1
+[   71.392109] hal::knob: AA active, ticks=1
+[   71.428499] hal::knob: AA active, ticks=1
+[   71.537337] hal::knob: AA active, ticks=1
+[   71.718802] hal::knob: AA active, ticks=-1
+[   71.791912] hal::knob: AA active, ticks=-1
+[   72.551895] hal::knob: AA active, ticks=-1
+[   72.660568] hal::knob: AA active, ticks=-1
+[   72.733137] hal::knob: AA active, ticks=-1
+[   72.805394] hal::knob: AA active, ticks=-1
+[   72.838113] hal::knob: AA active, ticks=-1
+[   72.948024] hal::knob: AA active, ticks=-1
+[   72.984673] hal::knob: AA active, ticks=-1
+[   73.021358] hal::knob: AA active, ticks=-1
+[   73.282668] hal::knob: AA active, ticks=-1
+[   73.319542] hal::knob: AA active, ticks=-1
+[   73.356037] hal::knob: AA active, ticks=-1
+[   73.465606] hal::knob: AA active, ticks=-1
+[   73.502334] hal::knob: AA active, ticks=-2
+[   83.972716] hal::knob: AA active, ticks=1
+[   84.118224] hal::knob: AA active, ticks=1
+[   84.265060] hal::knob: AA active, ticks=1
+[   84.338269] hal::knob: AA active, ticks=1
+[   84.700514] hal::knob: AA active, ticks=-1
+[   84.809296] hal::knob: AA active, ticks=-1
+[   84.882146] hal::knob: AA active, ticks=-1
+[   84.956941] hal::knob: AA active, ticks=-1
+[   85.102159] hal::knob: AA active, ticks=-1
+[   85.318347] hal::knob: AA active, ticks=1
+[   85.354809] hal::knob: AA active, ticks=1
+[   85.427555] hal::knob: AA active, ticks=1
+[   85.459753] hal::knob: AA active, ticks=1
+[   85.531935] hal::knob: AA active, ticks=1
+[   85.640634] hal::knob: AA active, ticks=1
+[   85.749491] hal::knob: AA active, ticks=-1
+[   85.782219] hal::knob: AA active, ticks=-1
+[   85.818822] hal::knob: AA active, ticks=-1
+[   85.855407] hal::knob: AA active, ticks=-1
+[   85.892042] hal::knob: AA active, ticks=-1
+[   86.037537] hal::knob: AA active, ticks=-1
+[   86.182274] hal::knob: AA active, ticks=1
+[   86.252145] hal::knob: AA active, ticks=1
+[   86.360941] hal::knob: AA active, ticks=1
+[   86.470150] hal::knob: AA active, ticks=1
+[   86.578627] hal::knob: AA active, ticks=2
+[   86.903534] hal::knob: AA active, ticks=-1
+[   86.935876] hal::knob: AA active, ticks=-1
+[   86.972797] hal::knob: AA active, ticks=-1
+[   87.009301] hal::knob: AA active, ticks=-1
+[   87.082021] hal::knob: AA active, ticks=-1
+[   87.552823] hal::knob: AA active, ticks=-1
+[   87.878938] hal::knob: AA active, ticks=-1
+[   87.915478] hal::knob: AA active, ticks=-1
+[   87.952649] hal::knob: AA active, ticks=-1
+[   87.989532] hal::knob: AA active, ticks=-1
+[   88.025922] hal::knob: AA active, ticks=-1
+[   88.242907] hal::knob: AA active, ticks=1
+[   88.279450] hal::knob: AA active, ticks=1
+[   88.315962] hal::knob: AA active, ticks=1
+[   88.352414] hal::knob: AA active, ticks=1
+[   88.498486] hal::knob: AA active, ticks=-1
+[   88.571082] hal::knob: AA active, ticks=-1
+[   88.607651] hal::knob: AA active, ticks=-1
+[   88.717154] hal::knob: AA active, ticks=1
+[   88.753698] hal::knob: AA active, ticks=1
+[   88.788276] hal::knob: AA active, ticks=1
+[   88.824819] hal::knob: AA active, ticks=1
+[   88.933668] hal::knob: AA active, ticks=-1
+[   88.970881] hal::knob: AA active, ticks=-1
+[   89.007396] hal::knob: AA active, ticks=-1
+[   89.042516] hal::knob: AA active, ticks=-1
+[   89.220536] hal::knob: AA active, ticks=1
+[   89.257141] hal::knob: AA active, ticks=1
+[   89.329533] hal::knob: AA active, ticks=1
+[   89.365843] hal::knob: AA active, ticks=1
+[   89.620659] hal::knob: AA active, ticks=-1
+[   89.657165] hal::knob: AA active, ticks=-1
+[   89.729907] hal::knob: AA active, ticks=-1
+[   89.766532] hal::knob: AA active, ticks=-1
+[  105.993647] hal::knob: AA active, ticks=1
+[  106.775534] hal::knob: AA active, ticks=1
+[  107.638464] hal::knob: AA active, ticks=1
+[  108.031423] hal::knob: AA active, ticks=1
+[  108.422307] hal::knob: AA active, ticks=-1
+[  108.527705] hal::knob: AA active, ticks=-1
+[  108.633489] hal::knob: AA active, ticks=-1
+[  108.669861] hal::knob: AA active, ticks=-1
+[  108.742226] hal::knob: AA active, ticks=-1
+[  108.814855] hal::knob: AA active, ticks=-1
+[  108.848153] hal::knob: AA active, ticks=-1
+[  108.920708] hal::knob: AA active, ticks=-1
+[  108.992965] hal::knob: AA active, ticks=-1
+[  109.066069] hal::knob: AA active, ticks=-1
+[   74.184191] androidauto: video focus request, mode=2 reason=0
+[   74.186903] androidauto: video focus indication sent (unsolicited=0)
+[  114.298029] hal::knob: AA active, ticks=-1
+[  114.332172] hal::knob: AA active, ticks=-1
+[  114.476230] hal::knob: AA active, ticks=-1
+[  114.548668] hal::knob: AA active, ticks=-1
+[  114.622244] hal::knob: AA active, ticks=-1
+[  116.164352] hal::knob: AA active, ticks=1
+[  116.375135] hal::knob: AA active, ticks=1
+[  116.871649] hal::knob: AA active, ticks=1
+[  117.017008] hal::knob: AA active, ticks=1
+[  117.230407] hal::knob: AA active, ticks=1
+[   85.668222] androidauto: voice session request, status=1
+[   85.669202] androidauto: audio focus request, type=2
+[   85.671031] androidauto: audio focus response sent
+[   85.782607] androidauto: microphone open request
+[  142.120727] ark-dw-dmac e0000000.dma: of_xlate: src_id/dst_id=23 -> chan2 (nollp=0)
+[   85.800747] androidauto::AlsaInput: opened plughw:0,1 (16000 Hz, 16-bit, 1 ch)
+[   85.801795] androidauto: microphone open response sent
+[   86.175918] androidauto: audio channel (plug:softvol1) start, session_id=0 config_index=0
+[   86.188625] androidauto::AlsaOutput: opened plug:softvol1 (16000 Hz, 16-bit, 1 ch)
+[   86.718192] androidauto: audio channel (plug:softvol1) stop
+[   91.593834] androidauto: microphone close request
+[   91.602950] androidauto: microphone open response sent
+[   91.734673] androidauto: audio channel (plug:softvol1) start, session_id=1 config_index=0
+[   92.536793] androidauto: audio channel (plug:softvol1) stop
+[   93.338145] androidauto: audio channel (plug:softvol1) start, session_id=2 config_index=0
+[   97.652406] androidauto: microphone open request
+[  153.992259] ark-dw-dmac e0000000.dma: of_xlate: src_id/dst_id=23 -> chan2 (nollp=0)
+[   97.685197] androidauto::AlsaInput: opened plughw:0,1 (16000 Hz, 16-bit, 1 ch)
+[   97.691957] androidauto: microphone open response sent
+[   97.711649] androidauto: audio channel (plug:softvol1) stop
+[   97.802382] androidauto: audio channel (plug:softvol1) start, session_id=3 config_index=0
+[   98.436409] androidauto: audio channel (plug:softvol1) stop
+[  106.248789] androidauto: microphone close request
+[  106.264407] androidauto: microphone open response sent
+[  106.457474] androidauto: audio channel (plug:softvol1) start, session_id=4 config_index=0
+[  107.192046] androidauto: audio channel (plug:softvol1) stop
+[  107.376557] androidauto: voice session request, status=2
+[  107.397297] androidauto: voice session request, status=2
+[  107.464026] androidauto: audio focus request, type=4
+[  107.466007] androidauto: audio focus response sent
+[  190.821813] androidauto: video focus request, mode=2 reason=0
+[  190.823284] androidauto: video focus indication sent (unsolicited=0)
+[  209.386630] androidauto: bye-bye request
+[  209.388315] androidauto: bye-bye response sent
+[  209.388486] androidauto: wireless session: Session ended (io_service stopped)
+[  245.630339] hal::display::show_display: ioctl(ARKFB_SHOW_WINDOW_REAL) on /dev/fb0: ok
+[  251.206556] hal::knob: AA active, ticks=-1
+[  251.242939] hal::knob: AA active, ticks=-1
+[  251.314941] hal::knob: AA active, ticks=-1
+[  251.386983] hal::knob: AA active, ticks=-1
+[  251.459072] hal::knob: AA active, ticks=-1
+[  251.564433] hal::knob: AA active, ticks=1
+[  251.600690] hal::knob: AA active, ticks=1
+[  251.636987] hal::knob: AA active, ticks=1
+[  251.705704] hal::knob: AA active, ticks=1
+[  251.777827] hal::knob: AA active, ticks=1
+[  251.814087] hal::knob: AA active, ticks=1
+[  251.886076] hal::knob: AA active, ticks=1
+[  251.922251] hal::knob: AA active, ticks=1
+[  251.958484] hal::knob: AA active, ticks=1
+[  252.066442] hal::knob: AA active, ticks=1
+                                                                                      [  260.536307] hal::knob: AA active, ticks=1
+[  260.817272] hal::knob: AA active, ticks=1
+[  261.321293] hal::knob: AA active, ticks=1
+[  261.751234] hal::knob: AA active, ticks=1
+[  262.255363] hal::knob: AA active, ticks=-1
+[  262.399139] hal::knob: AA active, ticks=-1

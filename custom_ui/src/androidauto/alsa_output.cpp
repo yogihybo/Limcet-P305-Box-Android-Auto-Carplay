@@ -129,6 +129,7 @@ bool AlsaOutput::write(const void * interleavedSamples, uint32_t frameCount) {
 }
 
 void AlsaOutput::writerLoop() {
+    uint32_t consecutiveErrors = 0;
     for (;;) {
         std::vector<uint8_t> buf;
         {
@@ -144,7 +145,23 @@ void AlsaOutput::writerLoop() {
         uint32_t bytesPerFrame = 2 * channels_;
         uint32_t frameCount = static_cast<uint32_t>(buf.size() / bytesPerFrame);
         if (frameCount > 0) {
-            writeBlocking(buf.data(), frameCount);
+            bool ok = writeBlocking(buf.data(), frameCount);
+            if (!ok) {
+                ++consecutiveErrors;
+                // Guard against tight CPU spinning when ALSA fails on this single-core SoC:
+                // writeBlocking failed unrecoverably, so yield the CPU for 20ms. This ensures
+                // the real-time writer thread never starves custom_ui and LVGL rendering.
+                std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+                if (consecutiveErrors >= 5) {
+                    // Sustained audio hardware error: clear stale backlog to prevent queue churn
+                    std::lock_guard<std::mutex> lock(mutex_);
+                    queue_.clear();
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                }
+            } else {
+                consecutiveErrors = 0;
+            }
         }
         // Fires on every real write, not just under backpressure --
         // audio_channel.cpp's own callback only acts on it when it has

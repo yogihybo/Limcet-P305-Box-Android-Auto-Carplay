@@ -119,7 +119,6 @@ private:
     uint32_t configuredHeight_ = 0;
 
     int32_t sessionId_ = 0;
-    uint64_t ackCount_ = 0;
 };
 
 }  // namespace androidauto

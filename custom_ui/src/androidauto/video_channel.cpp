@@ -245,10 +245,20 @@ void VideoChannel::pushDecodedFrame() {
 }
 
 void VideoChannel::sendAck() {
-    ++ackCount_;
+    // 2026-08-19: was sending a monotonically increasing cumulative
+    // counter here (ackCount_), not a delta credit -- matches
+    // AudioChannel::sendAck()'s existing, hardware-exercised
+    // ack.set_ack(1) convention now. A cumulative value told the phone
+    // it had hundreds/thousands of extra frames of outstanding credit,
+    // defeating flow control entirely: the phone flooded H.264 NALUs
+    // faster than this single-core decoder could drain them, and they
+    // piled up unbounded in aasdk::Messenger::channelReceiveMessageQueue_
+    // (Messenger.cpp's inStreamMessageHandler() has no cap on that queue
+    // when no receive promise is pending) until the kernel OOM-killed
+    // this process.
     aap_protobuf::service::media::source::message::Ack ack;
     ack.set_session_id(sessionId_);
-    ack.set_ack(static_cast<uint32_t>(ackCount_));
+    ack.set_ack(1);
 
     auto promise = aasdk::channel::SendPromise::defer(strand_);
     promise->then(

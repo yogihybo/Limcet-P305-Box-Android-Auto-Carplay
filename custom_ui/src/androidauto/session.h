@@ -107,6 +107,15 @@ public:
     void sendInputTouch(std::uint32_t x, std::uint32_t y,
                          aap_protobuf::service::inputsource::message::PointerAction action);
 
+    // Asks the phone to resume PROJECTED video focus after it granted
+    // itself NATIVE (its own in-app exit/back control) -- see
+    // VideoChannel::requestResumeFocus()'s own comment for why this is
+    // an unsolicited grant, not a real "request," and
+    // sendInputKey()/sendInputTouch() above for the identical
+    // cross-thread strand_-posting reasoning. No-op if videoChannel_
+    // hasn't been constructed yet.
+    void resumeVideoFocus();
+
 private:
     // Advances cryptor_'s SSL BIO state machine one step and, if it
     // produced outbound handshake bytes, sends them over the control

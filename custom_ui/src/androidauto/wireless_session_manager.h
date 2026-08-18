@@ -156,6 +156,14 @@ public:
     void sendInputTouch(std::uint32_t x, std::uint32_t y,
                          aap_protobuf::service::inputsource::message::PointerAction action);
 
+    // Asks the phone to resume PROJECTED video focus, if a session
+    // exists (same no-op-if-none contract as sendInputKey()). Called
+    // from sidecars/androidauto/main.cpp's own "RESUME" command
+    // handler, in turn from hal/androidauto_client.h's
+    // requestResumeVideo() -- see Session::resumeVideoFocus()'s own
+    // comment for why this exists at all.
+    void resumeVideoFocus();
+
 private:
     void run();
     void setStatus(WirelessSessionState s, std::string msg);

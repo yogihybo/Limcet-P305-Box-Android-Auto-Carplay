@@ -774,6 +774,14 @@ void Session::sendInputTouch(std::uint32_t x, std::uint32_t y,
     });
 }
 
+void Session::resumeVideoFocus() {
+    auto self = shared_from_this();
+    boost::asio::post(strand_, [this, self]() {
+        if (!videoChannel_) return;
+        videoChannel_->requestResumeFocus();
+    });
+}
+
 void Session::onChannelError(const aasdk::error::Error &e) {
     // 2026-08-14 FIX: this used to only set stopping_ and cancel the ping
     // timer -- it never called ioService_.stop(). WirelessSessionManager::

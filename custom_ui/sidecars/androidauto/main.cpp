@@ -58,6 +58,15 @@
 //                disconnect). ui/android_auto_screen.cpp polls this
 //                alongside STATUS to know when to switch its own fb0/
 //                LVGL layer back into view.
+//   "RESUME"  -> asks the phone to resume PROJECTED video focus (see
+//                WirelessSessionManager::resumeVideoFocus()/
+//                VideoChannel::requestResumeFocus() for why this is an
+//                unsolicited grant, not a real focus "request" --
+//                aasdk has no way to send the latter), replies "OK"
+//                whether or not a session exists (same no-session-is-
+//                fine contract as KEY/TOUCH). Sent by
+//                ui/android_auto_screen.cpp's "Resume" button, shown
+//                when Connected but focus is NATIVE.
 //   (anything else) -> replies "ERR unknown command"
 // One thread per accepted connection (expected connection count: 2 as
 // of the status-bar work in src/ui/status_bar.cpp -- android_auto_screen.cpp's
@@ -183,6 +192,15 @@ void handle_connection(int clientFd, androidauto::WirelessSessionManager * manag
             // that specifically to switch its own fb0/LVGL layer back
             // into view.
             reply = androidauto::video_focus_native().load(std::memory_order_acquire) ? "NATIVE\n" : "PROJECTED\n";
+        } else if (line == "RESUME") {
+            // See WirelessSessionManager::resumeVideoFocus()'s own
+            // comment -- asks the phone to resume PROJECTED focus after
+            // it granted itself NATIVE, since aasdk has no way to send a
+            // real focus REQUEST (only grants/indications). No-op, not
+            // an error, if there's no live session -- same contract as
+            // KEY/TOUCH above.
+            manager->resumeVideoFocus();
+            reply = "OK\n";
         } else if (line.rfind("KEY ", 0) == 0) {
             std::string arg = line.substr(4);
             char *end = nullptr;

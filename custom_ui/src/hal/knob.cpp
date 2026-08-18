@@ -13,18 +13,23 @@ namespace {
 // comment and androidauto/input_channel.h for the full story. Must
 // match session.cpp's ServiceDiscoveryResponse keycodes_supported
 // list exactly.
-constexpr std::uint32_t kKeycodeSystemNavigationUp = 280;
-constexpr std::uint32_t kKeycodeSystemNavigationDown = 281;
+constexpr std::uint32_t kKeycodeNavigatePrevious = 260;  // Rotary CCW
+constexpr std::uint32_t kKeycodeNavigateNext = 261;      // Rotary CW
 constexpr std::uint32_t kKeycodeDpadCenter = 23;
-// 2026-08-19: a hold-and-rotate chord (kKeycodeDpadUp/Down, sent
-// instead of 280/281 while the button was held) was tried here to
-// nudge focus BETWEEN rotary containers -- reverted after real
-// hardware testing showed it broke plain rotation entirely, not just
-// the new chord. See session.cpp's ServiceDiscoveryResponse comment
-// for the full story (declaring DPAD_UP/DOWN alongside
-// SYSTEM_NAVIGATION_UP/DOWN in keycodes_supported is the suspected
-// cause). Back to the simple, hardware-confirmed-working model:
-// rotation always sends 280/281, press always sends 23.
+// 2026-08-19: Stage A of docs/ROTARY_KNOB_AND_CARD_NAVIGATION_HANDOFF.md's
+// isolated two-stage plan -- 280/281 (KEYCODE_SYSTEM_NAVIGATION_UP/DOWN)
+// were real-hardware-confirmed to move focus within a card, but that's
+// not the correct AOSP RotaryController mapping regardless (280/281 are
+// meant for system-bar gesture nav, not rotary input); 260/261
+// (KEYCODE_NAVIGATE_PREVIOUS/NEXT) are. Testing this swap in strict
+// isolation -- exactly these 3 keycodes, nothing else -- since this
+// project already hardware-confirmed that bundling D-Pad keycodes
+// alongside a rotary pair in the same keycodes_supported declaration
+// breaks rotation entirely, regardless of which rotary pair is used
+// (see the 2026-08-19 revert this replaces, and session.cpp's own
+// comment). Stage B (inter-card nudge) is deliberately NOT included
+// here -- see the handoff doc for that roadmap, pending this stage's
+// own hardware verification first.
 
 // Own client instance, separate from android_auto_screen.cpp's/
 // status_bar.cpp's -- allow_spawn is always false for sendKey() (see
@@ -57,10 +62,10 @@ void mcu_knob_read_cb(lv_indev_t * indev, lv_indev_data_t * data) {
             std::printf("%s hal::knob: AA active, ticks=%d\n", core::log_timestamp().c_str(), ticks);
         }
         for (int32_t i = 0; i < ticks; ++i) {
-            androidauto_client().sendKey(kKeycodeSystemNavigationDown);
+            androidauto_client().sendKey(kKeycodeNavigateNext);
         }
         for (int32_t i = 0; i < -ticks; ++i) {
-            androidauto_client().sendKey(kKeycodeSystemNavigationUp);
+            androidauto_client().sendKey(kKeycodeNavigatePrevious);
         }
         if (press_edge) {
             androidauto_client().sendKey(kKeycodeDpadCenter);

@@ -15,12 +15,33 @@ choice)?
 automatically, doesn't modify anything permanent. Run it manually, look
 at the result, decide what's next.
 
+## Status: H5 handshake confirmed real, chip auto-detect patched (2026-08-19)
+
+Run once already against real hardware. Result: the H5 sync/config
+handshake completed cleanly (`H5 init finished`) -- the module
+genuinely speaks standard Realtek 3-wire HCI over the wire, settling
+the one question this tool exists to answer. It then failed to
+initialize because the real chip reports `LMP Subversion 0x434d`
+("CM" in ASCII) and `HCI Revision 0x6ca9`, neither of which match
+`rtkbt`'s stock `RTL8761BTV` table entry (`0x8761`/`0x000b`) -- almost
+certainly Feasycom customizing the reported ID on an otherwise-genuine
+RTL8761BTV die (see `src/rtb_fwc.c`'s own comment on the patch below
+for the full reasoning). `src/` now carries a small, documented patch
+adding a table entry that matches this exact `lmp_subver` and reuses
+the confirmed-correct `rtl8761b_fw`/`rtl8761b_config` filenames.
+**Not yet re-tested against hardware** -- next real-hardware run is
+what confirms or refutes this.
+
 ## What's here
 
-- `rtk_hciattach` — static ARM binary, cross-compiled from
-  [radxa/rtkbt](https://github.com/radxa/rtkbt) (`uart/rtk_hciattach`,
-  GPLv2). Unmodified upstream source; only the build (`CROSS_COMPILE=
-  arm-linux-gnueabihf-` plus `-static -s`) is this project's own.
+- `rtk_hciattach` — static ARM binary, built from `src/` (patched copy
+  of [radxa/rtkbt](https://github.com/radxa/rtkbt)'s
+  `uart/rtk_hciattach`, GPLv2 — see `src/rtb_fwc.c`'s own comment for
+  the one deliberate change from upstream).
+- `src/` — the patched source, so the chip-ID patch above is reviewable
+  and rebuildable, not just baked into an opaque binary. Rebuild with
+  `make CROSS_COMPILE=arm-linux-gnueabihf-` then
+  `arm-linux-gnueabihf-gcc -static -s -o rtk_hciattach *.o`.
 - `bt-hci-probe.sh` — wires it up against this device's real config:
   `/dev/ttyHS1` at 1,500,000 baud, GPIO 91 hardware reset (matches
   `etc/blueware-bw121.properties`'s own `BTEN_INTERFACE=gpio91`), and

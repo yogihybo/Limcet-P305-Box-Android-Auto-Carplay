@@ -1250,8 +1250,20 @@ uint8_t *rtb_get_final_patch(int fd, int proto, int *rlen)
 		goto err;
 	}
 #else
+	/* 2026-08-19: this module (see the patch_table entry above, same
+	 * comment) reports lmp_subver=0x434d instead of the genuine
+	 * Realtek RTL8761BTV value (0x8761) that its own firmware's
+	 * internal project-id byte correctly declares (proj_id=14 ->
+	 * project_id[14]=ROM_LMP_8761a=0x8761) -- this consistency check
+	 * would otherwise reject a firmware blob we've independently
+	 * confirmed is correct for this exact chip (RealtechMC header,
+	 * correct byte count, matches this project's real on-device file).
+	 * Treat the customized ID as an alias for the genuine one for this
+	 * one comparison only -- every other chip's check is unaffected.
+	 */
 	if (rtl->lmp_subver != ROM_LMP_8703b) {
-		if (rtl->lmp_subver != project_id[proj_id]) {
+		if (rtl->lmp_subver != project_id[proj_id] &&
+		    !(rtl->lmp_subver == 0x434d && project_id[proj_id] == ROM_LMP_8761a)) {
 			RS_ERR("lmp_subver %04x, project id %04x, mismatch\n",
 			       rtl->lmp_subver, project_id[proj_id]);
 			goto err;

@@ -146,6 +146,8 @@ lv_obj_t * create_stepper_row(lv_obj_t * parent, const lv_image_dsc_t * icon_dsc
     lv_obj_set_flex_flow(right_box, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(right_box, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_column(right_box, 16, 0);
+    lv_obj_set_style_pad_all(right_box, 6, 0);
+    lv_obj_set_style_clip_corner(right_box, false, 0);
 
     lv_obj_t * val_lbl = lv_label_create(right_box);
     lv_label_set_text_fmt(val_lbl, "%d", initial);
@@ -168,7 +170,8 @@ lv_obj_t * create_stepper_row(lv_obj_t * parent, const lv_image_dsc_t * icon_dsc
     auto * minus_ctx = new StepperBtnCtx{ctx, -1};
     lv_obj_add_event_cb(minus_btn, destroy_btn_ctx, LV_EVENT_DELETE, minus_ctx);
     lv_obj_add_event_cb(minus_btn, stepper_click_cb, LV_EVENT_CLICKED, minus_ctx);
-    lv_obj_t * minus_icon = ui::icons::create_icon(minus_btn, &ui::icons::icon_minus, theme::text_on_accent());
+    lv_obj_t * minus_icon = ui::icons::create_icon(minus_btn, &ui::icons::icon_minus, theme::text_primary());
+    lv_obj_set_style_image_recolor(minus_icon, theme::text_on_accent(), LV_STATE_FOCUSED);
     lv_obj_center(minus_icon);
 
     // Plus Button
@@ -177,7 +180,8 @@ lv_obj_t * create_stepper_row(lv_obj_t * parent, const lv_image_dsc_t * icon_dsc
     auto * plus_ctx = new StepperBtnCtx{ctx, 1};
     lv_obj_add_event_cb(plus_btn, destroy_btn_ctx, LV_EVENT_DELETE, plus_ctx);
     lv_obj_add_event_cb(plus_btn, stepper_click_cb, LV_EVENT_CLICKED, plus_ctx);
-    lv_obj_t * plus_icon = ui::icons::create_icon(plus_btn, &ui::icons::icon_plus, theme::text_on_accent());
+    lv_obj_t * plus_icon = ui::icons::create_icon(plus_btn, &ui::icons::icon_plus, theme::text_primary());
+    lv_obj_set_style_image_recolor(plus_icon, theme::text_on_accent(), LV_STATE_FOCUSED);
     lv_obj_center(plus_icon);
 
     if (core::navigation::focus_group()) {
@@ -274,8 +278,10 @@ lv_obj_t * create_settings_screen() {
     lv_obj_set_flex_grow(card, 1);
     lv_obj_set_flex_flow(card, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(card, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
-    lv_obj_set_style_pad_all(card, 16, 0);
+    lv_obj_set_style_pad_ver(card, 16, 0);
+    lv_obj_set_style_pad_hor(card, 20, 0);
     lv_obj_set_style_pad_row(card, 8, 0);
+    lv_obj_set_style_clip_corner(card, false, 0);
     lv_obj_add_flag(card, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_scroll_dir(card, LV_DIR_VER);
     lv_obj_set_scrollbar_mode(card, LV_SCROLLBAR_MODE_AUTO);

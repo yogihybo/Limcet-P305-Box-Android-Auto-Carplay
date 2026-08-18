@@ -87,9 +87,19 @@ void style_stepper_button(lv_obj_t * btn) {
     lv_obj_remove_style_all(btn);
     lv_obj_set_size(btn, kStepperBtnSize, kStepperBtnSize);
     lv_obj_set_style_radius(btn, kPillRadius, 0);
-    lv_obj_set_style_bg_color(btn, accent_primary(), 0);
+
+    // Default: Dark container when not focused
+    lv_obj_set_style_bg_color(btn, surface_container_high(), 0);
     lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
-    lv_obj_set_style_bg_color(btn, lv_color_hex(0x6b9be8), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(btn, surface_pressed(), LV_STATE_PRESSED);
+
+    // Focused: Glowing Blue Accent
+    lv_obj_set_style_bg_color(btn, accent_primary(), LV_STATE_FOCUSED);
+    lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, LV_STATE_FOCUSED);
+    lv_obj_set_style_shadow_width(btn, 14, LV_STATE_FOCUSED);
+    lv_obj_set_style_shadow_color(btn, accent_glow(), LV_STATE_FOCUSED);
+    lv_obj_set_style_shadow_opa(btn, LV_OPA_70, LV_STATE_FOCUSED);
+
     style_focusable(btn);
 }
 

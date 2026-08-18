@@ -306,22 +306,24 @@ void Session::onServiceDiscoveryRequest(
     //
     // 2026-08-19: Stage A of
     // docs/ROTARY_KNOB_AND_CARD_NAVIGATION_HANDOFF.md's isolated
-    // two-stage plan -- 280/281 (KEYCODE_SYSTEM_NAVIGATION_UP/DOWN)
-    // were real-hardware-confirmed to move focus within a card, but
-    // that's not the correct AOSP RotaryController mapping regardless
-    // (280/281 are for system-bar gesture nav); 260/261
-    // (KEYCODE_NAVIGATE_PREVIOUS/NEXT) are. Deliberately still exactly
-    // 3 keycodes, nothing else -- a prior test that also declared
-    // KEYCODE_DPAD_UP/DOWN (19/20) alongside the rotary pair in this
-    // same list broke rotation entirely, not just the intended
-    // cross-card nudge (leading theory: AAOS's rotary-controller and
-    // raw-DPAD input models are mutually exclusive capability
-    // declarations, and mixing them makes Gearhead reject/ignore the
-    // whole rotary keycode set). Any inter-card nudge mechanism (Stage
-    // B in the handoff doc) needs its own separate, isolated hardware
-    // test before being added here.
-    inputSourceService->add_keycodes_supported(260);  // KEYCODE_NAVIGATE_PREVIOUS (CCW)
-    inputSourceService->add_keycodes_supported(261);  // KEYCODE_NAVIGATE_NEXT (CW)
+    // two-stage plan (260/261, KEYCODE_NAVIGATE_PREVIOUS/NEXT) was
+    // tried and FALSIFIED on real hardware, per the doc's own decision
+    // tree: rotation moved focus, but only flip-flopped between two
+    // states (the app-drawer icon and something that never visibly
+    // rendered), not real per-widget stepping through the card.
+    // Reverted to 280/281 (KEYCODE_SYSTEM_NAVIGATION_UP/DOWN), which
+    // this project separately hardware-confirmed DOES step focus
+    // across multiple real fields within a card (just not across card
+    // boundaries) -- whatever Gearhead's Coolwalk UI actually maps
+    // 260/261 to, it isn't per-widget focus traversal. Still exactly 3
+    // keycodes, nothing else -- this project has twice now hardware-
+    // confirmed that bundling D-Pad keycodes alongside a rotary pair in
+    // the same keycodes_supported declaration breaks rotation entirely,
+    // regardless of which rotary pair is used. Any inter-card nudge
+    // mechanism (Stage B in the handoff doc) needs its own separate,
+    // isolated hardware test before being added here.
+    inputSourceService->add_keycodes_supported(280);  // KEYCODE_SYSTEM_NAVIGATION_UP
+    inputSourceService->add_keycodes_supported(281);  // KEYCODE_SYSTEM_NAVIGATION_DOWN
     inputSourceService->add_keycodes_supported(23);   // KEYCODE_DPAD_CENTER
 
     auto *videoService = response.add_channels();

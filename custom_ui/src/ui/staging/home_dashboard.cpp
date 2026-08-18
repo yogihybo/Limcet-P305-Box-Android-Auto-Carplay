@@ -35,10 +35,10 @@ lv_obj_t * create_home_dashboard() {
     lv_obj_set_pos(main_area, theme::kRailWidth + 16, 8);
     lv_obj_set_size(main_area, 800 - (theme::kRailWidth + 32), 464);
     lv_obj_set_flex_flow(main_area, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_style_pad_row(main_area, 12, 0);
+    lv_obj_set_style_pad_row(main_area, 8, 0);
     lv_obj_clear_flag(main_area, LV_OBJ_FLAG_SCROLLABLE);
 
-    // Top Status Header (Time + Status)
+    // Top Status Header (Time Centered)
     lv_obj_t * header = lv_obj_create(main_area);
     lv_obj_remove_style_all(header);
     lv_obj_set_width(header, LV_PCT(100));
@@ -66,35 +66,34 @@ lv_obj_t * create_home_dashboard() {
     lv_obj_set_style_pad_column(cards_row, 16, 0);
     lv_obj_clear_flag(cards_row, LV_OBJ_FLAG_SCROLLABLE);
 
-    // Card 1: Android Auto Hero Card
+    // Card 1: Android Auto Hero Card (336px wide x 416px high)
     lv_obj_t * card_aa = lv_obj_create(cards_row);
     theme::style_card(card_aa);
-    lv_obj_set_width(card_aa, 332);
+    lv_obj_set_width(card_aa, 336);
     lv_obj_set_height(card_aa, LV_PCT(100));
     lv_obj_set_flex_flow(card_aa, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(card_aa, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_all(card_aa, 24, 0);
 
-    lv_obj_t * aa_title_box = lv_obj_create(card_aa);
-    lv_obj_remove_style_all(aa_title_box);
-    lv_obj_set_size(aa_title_box, LV_PCT(100), LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(aa_title_box, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(aa_title_box, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_column(aa_title_box, 10, 0);
+    // Header container with Title & Status (No icon in front of title to match mockup)
+    lv_obj_t * aa_header_box = lv_obj_create(card_aa);
+    lv_obj_remove_style_all(aa_header_box);
+    lv_obj_set_size(aa_header_box, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(aa_header_box, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(aa_header_box, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+    lv_obj_set_style_pad_row(aa_header_box, 14, 0);
 
-    lv_obj_t * aa_title_icon = ui::icons::create_icon(aa_title_box, &ui::icons::icon_nav_navigation, theme::accent_primary());
-    (void)aa_title_icon;
-
-    lv_obj_t * aa_title = lv_label_create(aa_title_box);
+    lv_obj_t * aa_title = lv_label_create(aa_header_box);
     lv_label_set_text(aa_title, "Android Auto");
     lv_obj_set_style_text_font(aa_title, &lv_font_roboto_24, 0);
     lv_obj_set_style_text_color(aa_title, theme::text_primary(), 0);
 
-    lv_obj_t * aa_status = lv_label_create(card_aa);
+    lv_obj_t * aa_status = lv_label_create(aa_header_box);
     lv_label_set_text(aa_status, "Connection: Ready to pair");
     lv_obj_set_style_text_font(aa_status, &lv_font_roboto_14, 0);
     lv_obj_set_style_text_color(aa_status, theme::text_secondary(), 0);
 
+    // Bottom "Quick Connect" stadium pill button
     lv_obj_t * connect_btn = lv_button_create(card_aa);
     lv_obj_remove_style_all(connect_btn);
     lv_obj_set_size(connect_btn, LV_PCT(100), 56);
@@ -115,33 +114,24 @@ lv_obj_t * create_home_dashboard() {
         lv_group_add_obj(core::navigation::focus_group(), connect_btn);
     }
 
-    // Card 2: Audio Volume Card
+    // Card 2: Audio Volume Card (336px wide x 416px high)
     lv_obj_t * card_audio = lv_obj_create(cards_row);
     theme::style_card(card_audio);
-    lv_obj_set_width(card_audio, 332);
+    lv_obj_set_width(card_audio, 336);
     lv_obj_set_height(card_audio, LV_PCT(100));
     lv_obj_set_flex_flow(card_audio, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(card_audio, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_all(card_audio, 24, 0);
 
-    lv_obj_t * audio_title_box = lv_obj_create(card_audio);
-    lv_obj_remove_style_all(audio_title_box);
-    lv_obj_set_size(audio_title_box, LV_PCT(100), LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(audio_title_box, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(audio_title_box, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_column(audio_title_box, 10, 0);
-
-    lv_obj_t * audio_title_icon = ui::icons::create_icon(audio_title_box, &ui::icons::icon_volume, theme::accent_secondary());
-    (void)audio_title_icon;
-
-    lv_obj_t * audio_title = lv_label_create(audio_title_box);
+    // Title (No icon in front of title to match mockup)
+    lv_obj_t * audio_title = lv_label_create(card_audio);
     lv_label_set_text(audio_title, "Audio Volume");
     lv_obj_set_style_text_font(audio_title, &lv_font_roboto_24, 0);
     lv_obj_set_style_text_color(audio_title, theme::text_primary(), 0);
 
-    // Arc Volume Gauge
+    // Center Arc Volume Gauge
     lv_obj_t * arc = lv_arc_create(card_audio);
-    lv_obj_set_size(arc, 160, 160);
+    lv_obj_set_size(arc, 180, 180);
     lv_arc_set_rotation(arc, 135);
     lv_arc_set_bg_angles(arc, 0, 270);
     lv_arc_set_value(arc, 65);
@@ -153,7 +143,7 @@ lv_obj_t * create_home_dashboard() {
     lv_obj_set_style_arc_width(arc, 10, LV_PART_INDICATOR);
     lv_obj_center(arc);
 
-    // Playback Controls Row (Prev / Play / Next)
+    // Bottom Playback Controls Row (Prev / Play / Next)
     lv_obj_t * ctrl_row = lv_obj_create(card_audio);
     lv_obj_remove_style_all(ctrl_row);
     lv_obj_set_width(ctrl_row, LV_PCT(100));

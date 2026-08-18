@@ -299,29 +299,30 @@ void Session::onServiceDiscoveryRequest(
     // hardware this device has -- KeyBindingRequest's own reply
     // ("no wheel/hardware keys to bind") only ever meant this project
     // hadn't wired it into the AA session yet, not that the hardware
-    // doesn't exist. These are the real AAOS RotaryController keycodes
-    // (confirmed against AOSP's own KeyEvent.java, not guessed):
-    // KEYCODE_SYSTEM_NAVIGATION_UP/DOWN for rotation ticks,
-    // KEYCODE_DPAD_CENTER for the push button. Declaring them here is
-    // required -- a keycode InputChannel::sendKey() sends but that
-    // isn't listed here may be silently ignored by the phone. See
-    // hal/knob.cpp for where these get sent from.
-    inputSourceService->add_keycodes_supported(280);  // KEYCODE_SYSTEM_NAVIGATION_UP
-    inputSourceService->add_keycodes_supported(281);  // KEYCODE_SYSTEM_NAVIGATION_DOWN
+    // doesn't exist. Declaring keycodes here is required -- a keycode
+    // InputChannel::sendKey() sends but that isn't listed here may be
+    // silently ignored by the phone. See hal/knob.cpp for where these
+    // get sent from.
+    //
+    // 2026-08-19: Stage A of
+    // docs/ROTARY_KNOB_AND_CARD_NAVIGATION_HANDOFF.md's isolated
+    // two-stage plan -- 280/281 (KEYCODE_SYSTEM_NAVIGATION_UP/DOWN)
+    // were real-hardware-confirmed to move focus within a card, but
+    // that's not the correct AOSP RotaryController mapping regardless
+    // (280/281 are for system-bar gesture nav); 260/261
+    // (KEYCODE_NAVIGATE_PREVIOUS/NEXT) are. Deliberately still exactly
+    // 3 keycodes, nothing else -- a prior test that also declared
+    // KEYCODE_DPAD_UP/DOWN (19/20) alongside the rotary pair in this
+    // same list broke rotation entirely, not just the intended
+    // cross-card nudge (leading theory: AAOS's rotary-controller and
+    // raw-DPAD input models are mutually exclusive capability
+    // declarations, and mixing them makes Gearhead reject/ignore the
+    // whole rotary keycode set). Any inter-card nudge mechanism (Stage
+    // B in the handoff doc) needs its own separate, isolated hardware
+    // test before being added here.
+    inputSourceService->add_keycodes_supported(260);  // KEYCODE_NAVIGATE_PREVIOUS (CCW)
+    inputSourceService->add_keycodes_supported(261);  // KEYCODE_NAVIGATE_NEXT (CW)
     inputSourceService->add_keycodes_supported(23);   // KEYCODE_DPAD_CENTER
-    // 2026-08-19: briefly also declared KEYCODE_DPAD_UP/DOWN (19/20)
-    // here to support a hold-and-rotate "nudge between cards" chord in
-    // hal/knob.cpp -- reverted after real hardware testing showed
-    // rotation stopped working AT ALL once DPAD_UP/DOWN were declared
-    // alongside SYSTEM_NAVIGATION_UP/DOWN in the same keycodes_supported
-    // list (previously-working within-card rotation broke too, not
-    // just the new cross-card nudge). Leading theory: AAOS's rotary
-    // controller and raw-DPAD input models are mutually exclusive
-    // capability declarations, and mixing them made Gearhead reject/
-    // ignore the whole rotary keycode set rather than just add the new
-    // ones. Back to the known-good 280/281/23-only set; the
-    // cross-container nudge idea needs a different mechanism if
-    // revisited (not simply adding DPAD keycodes here).
 
     auto *videoService = response.add_channels();
     videoService->set_id(static_cast<std::int32_t>(aasdk::messenger::ChannelId::MEDIA_SINK_VIDEO));

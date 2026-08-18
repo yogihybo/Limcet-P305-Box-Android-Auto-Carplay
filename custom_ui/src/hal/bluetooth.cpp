@@ -516,6 +516,34 @@ bool connect_device(BluetoothHandle & h, const std::string & mac) {
     return true;
 }
 
+bool disconnect_device(BluetoothHandle & h) {
+    // See bluetooth.h's own comment -- A2DPDISC/HFPDISC disconnect
+    // whatever's currently active, not a specific MAC; both sent since
+    // either profile (or both) could be the one actually connected.
+    // Best-effort: a real hardware capture (see find_error_response()'s
+    // own comment) showed this adapter can reply "OK" to a command
+    // that doesn't actually apply (e.g. disconnecting a profile that
+    // isn't connected) -- treated the same as every other disconnect-
+    // style call in this codebase, log the outcome, don't treat "no
+    // active link to disconnect" as a hard failure.
+    std::printf("%s hal::bluetooth::disconnect_device: sending A2DPDISC, HFPDISC\n", core::log_timestamp().c_str());
+    std::vector<std::string> resp;
+    bool a2dpOk = send_command(h, "A2DPDISC", resp, 2000, "", /*silent_on_error=*/true);
+    std::string a2dpErr;
+    if (a2dpOk && find_error_response(resp, a2dpErr)) {
+        std::printf("%s hal::bluetooth::disconnect_device: A2DPDISC -> '%s' (likely just not connected)\n",
+                     core::log_timestamp().c_str(), a2dpErr.c_str());
+    }
+    resp.clear();
+    bool hfpOk = send_command(h, "HFPDISC", resp, 2000, "", /*silent_on_error=*/true);
+    std::string hfpErr;
+    if (hfpOk && find_error_response(resp, hfpErr)) {
+        std::printf("%s hal::bluetooth::disconnect_device: HFPDISC -> '%s' (likely just not connected)\n",
+                     core::log_timestamp().c_str(), hfpErr.c_str());
+    }
+    return a2dpOk || hfpOk;
+}
+
 bool set_device_name(BluetoothHandle & h, const std::string & name) {
     std::vector<std::string> resp;
     if (!send_command(h, "NAME=" + name, resp)) {

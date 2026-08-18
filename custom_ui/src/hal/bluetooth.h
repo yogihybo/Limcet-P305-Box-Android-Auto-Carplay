@@ -282,6 +282,20 @@ bool connect_device(BluetoothHandle & h, const std::string & mac);
 // has access to -- deliberately NOT implemented. See top comment.
 // bool forget_device(BluetoothHandle & h, const std::string & mac);
 
+// A2DPDISC + HFPDISC -- disconnects the CURRENTLY ACTIVE profile
+// links, not a true unpair/forget (see this file's top comment: no
+// "forget a specific device" command exists in the known vocabulary).
+// 2026-08-19: added to unblock ui/bluetooth_screen.cpp's "Remove
+// device" button, which called a hal::disconnect_device() that never
+// existed -- flagging clearly here since the button's own label
+// implies permanent removal, but this can only disconnect the active
+// link; the device stays paired and can still show up in PLIST /
+// reconnect on its own. No specific MAC parameter -- neither AT
+// command takes one in the confirmed vocabulary, so this can only
+// disconnect whatever's currently connected, not target a specific
+// non-active paired device from the list.
+bool disconnect_device(BluetoothHandle & h);
+
 // NAME=<devname>
 bool set_device_name(BluetoothHandle & h, const std::string & name);
 

@@ -46,6 +46,10 @@ struct BtScreenWidgets {
     std::vector<std::string> last_devices;
 };
 
+// Forward-declared -- defined below, but remove_device_clicked_cb()
+// (added ahead of it in this file) needs to call it.
+void start_bt_load(BtScreenWidgets * w);
+
 void status_label_set(lv_obj_t * label, const char * text) {
     lv_label_set_text(label, text);
 }
@@ -100,7 +104,12 @@ void remove_device_clicked_cb(lv_event_t * e) {
     hal::BluetoothHandle & h = hal::shared_handle();
     hal::disconnect_device(h);
 
-    status_label_set(w->status_label, "Device removed");
+    // "Disconnected", not "Removed" -- see hal::disconnect_device()'s
+    // own comment: no AT command exists to actually unpair/forget a
+    // device, only to disconnect the currently active link. The device
+    // stays paired and will still show up in start_bt_load()'s next
+    // PLIST refresh below.
+    status_label_set(w->status_label, "Disconnected");
     start_bt_load(w);
 }
 
@@ -188,7 +197,12 @@ void populate_device_list(BtScreenWidgets * w, bool hw_present, bool devices_ok,
         lv_obj_add_event_cb(rem_btn, remove_device_clicked_cb, LV_EVENT_CLICKED, w);
 
         lv_obj_t * rem_lbl = lv_label_create(rem_btn);
-        lv_label_set_text(rem_lbl, "Remove");
+        // "Disconnect", not "Remove" -- see hal::disconnect_device()'s
+        // own comment: no AT command exists to actually unpair/forget
+        // a device on this hardware, only to disconnect the active
+        // link. A button labeled "Remove" that doesn't remove anything
+        // would be a real, user-visible lie about what it does.
+        lv_label_set_text(rem_lbl, "Disconnect");
         lv_obj_set_style_text_font(rem_lbl, &lv_font_roboto_14, 0);
         lv_obj_set_style_text_color(rem_lbl, lv_color_hex(0xf28b82), 0);
         lv_obj_center(rem_lbl);

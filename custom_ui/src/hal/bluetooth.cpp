@@ -680,6 +680,33 @@ bool sync_clock_from_phone(BluetoothHandle & h) {
     return false;
 }
 
+bool diagnose_pbdown(BluetoothHandle & h) {
+    std::vector<std::string> resp;
+    // No expected_prefix -- unlike CCLK's known "+CCLK: ..." shape,
+    // PBDOWN's real response format is completely unconfirmed (could be
+    // a direct reply, could arrive as separate PBDATA=/PBCNT=/PBSTAT=
+    // broadcasts instead -- send_command() alone can't see broadcasts
+    // that arrive after this call's own timeout window, only whatever's
+    // in flight during it). silent_on_error=false: unlike CCLK, this is
+    // a one-shot manual diagnostic run deliberately, not a routine boot
+    // path -- ERR responses here are exactly the information being
+    // sought, not noise to suppress.
+    bool ok = send_command(h, "PBDOWN", resp, 5000, "", /*silent_on_error=*/false);
+    std::printf("%s hal::bluetooth::diagnose_pbdown: send_command returned %s, %zu line(s)\n",
+                core::log_timestamp().c_str(), ok ? "true" : "false", resp.size());
+    for (const auto & line : resp) {
+        std::printf("%s hal::bluetooth::diagnose_pbdown: raw line: '%s'\n", core::log_timestamp().c_str(),
+                    line.c_str());
+    }
+    if (resp.empty()) {
+        std::printf("%s hal::bluetooth::diagnose_pbdown: no response lines at all -- either PBAP isn't "
+                    "connected/authorized on the phone, or blueware answers asynchronously outside this "
+                    "call's window (watch for late PBDATA=/PBCNT=/PBSTAT= broadcasts in the console too)\n",
+                    core::log_timestamp().c_str());
+    }
+    return ok;
+}
+
 void close_bluetooth(BluetoothHandle & h) {
     if (h.fd >= 0) {
         close(h.fd);

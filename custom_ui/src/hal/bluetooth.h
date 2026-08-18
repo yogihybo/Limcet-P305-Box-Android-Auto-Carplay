@@ -343,6 +343,22 @@ bool get_adapter_address(BluetoothHandle & h, std::string & address);
 // assumes about its own privilege level).
 bool sync_clock_from_phone(BluetoothHandle & h);
 
+// 2026-08-19: one-shot diagnostic, NOT a clock-sync mechanism -- sends
+// bare AT+PBDOWN and logs whatever comes back verbatim, unfiltered and
+// unparsed. PBDOWN is STRING-ONLY in docs/BLUEWARE_AT_COMMANDS.md
+// (present in blueware's binary, never exercised) and its own entry
+// there is just "Download phonebook" -- no confirmed response format,
+// no confirmed way to select the PBAP call-history folders (mch/ich/
+// och) that would actually carry a real X-IRMC-CALL-DATETIME
+// timestamp as opposed to plain contacts (which normally don't carry
+// one at all). Deliberately does NOT call settimeofday() or touch the
+// system clock -- this exists purely to find out what real hardware
+// actually returns before deciding whether there's anything here worth
+// building on, consistent with this project's standing preference to
+// keep clock-related changes scoped to plausibleEpochMillis() rather
+// than a system-wide override (see git history around f37050f).
+bool diagnose_pbdown(BluetoothHandle & h);
+
 void close_bluetooth(BluetoothHandle & h);
 
 }  // namespace hal

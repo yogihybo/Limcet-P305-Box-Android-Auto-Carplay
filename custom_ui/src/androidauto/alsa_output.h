@@ -34,6 +34,7 @@
 #include <condition_variable>
 #include <cstdint>
 #include <deque>
+#include <functional>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -81,16 +82,34 @@ namespace androidauto {
 // phone's send permission under max_unacked=1, so playback-pace
 // gating turns network jitter directly into audible stutter).
 //
-// 2026-08-19: removed per docs/AUDIO_SUBSYSTEM_HANDOFF.md, replaced
-// with the design stock's own libAndroidAuto.so actually uses
-// (decompile-confirmed, docs/1.5_AUDIO_SUBSYSTEM_INVESTIGATION.md):
-// ack immediately on receipt (see audio_channel.cpp's sendAck()) with
-// a wider window (max_unacked=8) so the phone can pipeline several
-// buffers ahead, and let THIS queue -- now bounded with a drop-OLDEST
-// policy on overflow rather than drop-newest -- absorb real playback
-// pacing instead of ack timing doing it. No consumed-callback needed
-// anymore; write() enqueues and returns, the writer thread drains at
-// real playback speed independently.
+// 2026-08-19: replaced with the design stock's own libAndroidAuto.so
+// actually uses (decompile-confirmed,
+// docs/1.5_AUDIO_SUBSYSTEM_INVESTIGATION.md): ack immediately on
+// receipt (see audio_channel.cpp's sendAck()) with a wider window
+// (max_unacked=8) so the phone can pipeline several buffers ahead,
+// and let THIS queue -- bounded with a drop-OLDEST policy on overflow
+// rather than drop-newest -- absorb real playback pacing instead of
+// ack timing doing it.
+//
+// 2026-08-19 REVISED: real hardware showed that alone isn't enough --
+// media apps (Spotify/YouTube Music) pre-buffer 1-2s of audio on
+// playback start and dump it at network speed the instant they see
+// max_unacked headroom, which blew straight through the old 32-buffer
+// (~340ms) queue cap in milliseconds: dropped 1 buffer at 32s in,
+// dropped 100 by 43s. Losing 100+ buffers desyncs the audio
+// presentation clock over a second ahead of video, and Gearhead
+// responds by revoking projected video focus outright (see
+// android_auto_screen.cpp's videoFocusNative() handling) -- a much
+// worse failure than the starvation stutter this was meant to fix.
+// Per docs/AUDIO_SUBSYSTEM_HANDOFF.md's adaptive high-water-mark
+// design: queue capacity raised to kMaxQueuedBuffers (256, ~2.7s) to
+// absorb a real pre-buffer burst without dropping anything, and the
+// consumed-callback mechanism is back (see setConsumedCallback()) --
+// but now used for PACING under backpressure, not gating every single
+// ack the way the 2026-08-18 fix did. audio_channel.cpp's playBuffer()
+// only defers to it once queuedBuffers() crosses the high-water mark;
+// below that, acks still fire immediately to keep the network pipeline
+// saturated during normal playback.
 class AlsaOutput {
 public:
     // deviceName: a real confirmed PCM device string, see header
@@ -117,6 +136,23 @@ public:
     // without bound -- see class comment.
     bool write(const void * interleavedSamples, uint32_t frameCount);
 
+    // Invoked once per buffer, from the writer thread, right after its
+    // real (blocking, real-time-paced) write attempt completes -- see
+    // class comment. audio_channel.cpp uses this to pace acks once the
+    // queue crosses the high-water mark, not to gate every ack (that
+    // was the 2026-08-18 design, reverted -- see class comment).
+    using ConsumedCallback = std::function<void()>;
+    void setConsumedCallback(ConsumedCallback cb) { onConsumed_ = std::move(cb); }
+
+    // Current queue depth, for AudioChannel's own high-water-mark check
+    // -- see class comment. Locks the same mutex_ write()/writerLoop()
+    // use, so this is safe to call from a different thread (the aasdk
+    // strand, in practice).
+    size_t queuedBuffers() const {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return queue_.size();
+    }
+
     // Stops the writer thread (letting it drain whatever's already
     // queued) and closes the PCM device.
     void close();
@@ -134,19 +170,21 @@ private:
 
     snd_pcm_t * pcmHandle_ = nullptr;
 
-    // Caps memory/latency growth if the writer thread ever falls
-    // behind -- see class comment. ~1s of audio at a typical AA
-    // buffer size (a few dozen ms per buffer), generous enough to
-    // absorb normal scheduling jitter without masking a real,
-    // sustained problem.
-    static constexpr size_t kMaxQueuedBuffers = 32;
+    // 256 buffers @ ~10.6ms (2048B @ 48kHz/16-bit/stereo) = ~2.7s of
+    // audio -- see class comment. Sized to absorb a real media-app
+    // pre-buffer burst (1-2s is typical) without dropping anything;
+    // the high-water-mark ack pacing above is what actually prevents
+    // this from filling in steady-state playback, this cap is a last-
+    // resort backstop for a genuinely stuck writer thread.
+    static constexpr size_t kMaxQueuedBuffers = 256;
 
     std::thread writerThread_;
-    std::mutex mutex_;
+    mutable std::mutex mutex_;
     std::condition_variable cv_;
     std::deque<std::vector<uint8_t>> queue_;
     bool stop_ = false;
     uint32_t droppedBuffers_ = 0;
+    ConsumedCallback onConsumed_;
 };
 
 }  // namespace androidauto

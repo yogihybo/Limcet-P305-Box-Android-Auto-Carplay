@@ -70,6 +70,11 @@ private:
     bool alsaOpen_ = false;
 
     int32_t sessionId_ = 0;
+    // Count of buffers enqueued while AlsaOutput's queue was at/over
+    // the high-water mark, whose ack was deferred rather than sent
+    // immediately -- see playBuffer()'s own comment. Drained one at a
+    // time as AlsaOutput's consumed callback fires for real writes.
+    size_t pendingPacedAcks_ = 0;
 };
 
 }  // namespace androidauto

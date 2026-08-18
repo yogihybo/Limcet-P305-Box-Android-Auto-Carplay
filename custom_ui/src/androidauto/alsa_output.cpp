@@ -146,6 +146,12 @@ void AlsaOutput::writerLoop() {
         if (frameCount > 0) {
             writeBlocking(buf.data(), frameCount);
         }
+        // Fires on every real write, not just under backpressure --
+        // audio_channel.cpp's own callback only acts on it when it has
+        // a paced ack actually owed (see AudioChannel::playBuffer()).
+        if (onConsumed_) {
+            onConsumed_();
+        }
     }
 }
 

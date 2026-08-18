@@ -6,6 +6,20 @@
 
 namespace androidauto {
 
+namespace {
+// 2026-08-19: per docs/AUDIO_SUBSYSTEM_HANDOFF.md's adaptive high-
+// water-mark design -- below this many buffers queued in AlsaOutput,
+// acks fire immediately on receipt (keeps the network pipeline
+// saturated during normal playback); at/above it, acks defer to real
+// playback completion (AlsaOutput's consumed callback), pacing the
+// phone back down to real-time instead of letting a pre-buffer burst
+// keep piling into the queue. Same value as the old kMaxQueuedBuffers
+// cap this replaces as the thing that actually prevents overflow --
+// the queue itself is now sized much larger (256, see alsa_output.h)
+// purely as a backstop, not the primary defense.
+constexpr size_t kHighWaterMarkBuffers = 32;
+}  // namespace
+
 AudioChannel::AudioChannel(boost::asio::io_service::strand & strand,
                            aasdk::messenger::IMessenger::Pointer messenger,
                            aasdk::messenger::ChannelId channelId, std::string pcmDevice,
@@ -20,6 +34,30 @@ AudioChannel::AudioChannel(boost::asio::io_service::strand & strand,
 }
 
 void AudioChannel::start() {
+    // 2026-08-19: see alsa_output.h's own class comment for the full
+    // story -- this fires on every real ALSA write, but only actually
+    // sends an ack when playBuffer() deferred one (pendingPacedAcks_ >
+    // 0), pacing the phone back to real-time once the queue crosses
+    // the high-water mark. Self-capturing shared_ptr (not a bare
+    // `this`), same reasoning as the original 2026-08-18 version of
+    // this wiring: AlsaOutput invokes this from ITS OWN writer thread,
+    // and a bare `this` capture here would depend on this object
+    // outliving that callback purely because nothing today destroys a
+    // channel except at process-wide io_service teardown -- a real but
+    // fragile invariant, not a guarantee. Wired here rather than the
+    // constructor since shared_from_this() isn't legal until a
+    // shared_ptr already owns this object. Always marshals back onto
+    // strand_ before touching any aasdk state -- the writer thread is
+    // not strand_.
+    auto self = shared_from_this();
+    alsaOutput_.setConsumedCallback([this, self]() {
+        strand_.post([this, self]() {
+            if (pendingPacedAcks_ > 0) {
+                --pendingPacedAcks_;
+                sendAck();
+            }
+        });
+    });
     channel_->receive(this->shared_from_this());
 }
 
@@ -135,15 +173,28 @@ void AudioChannel::playBuffer(const aasdk::common::DataConstBuffer & buffer) {
         uint32_t frameCount = static_cast<uint32_t>(buffer.size / bytesPerFrame);
         if (frameCount > 0) {
             alsaOutput_.write(buffer.cdata, frameCount);
+
+            // 2026-08-19 REVISED: real hardware showed acking every
+            // buffer immediately (matching stock's confirmed
+            // MediaSinkBase::ackFrames(1) behavior, see
+            // set_max_unacked's own comment above) isn't enough on its
+            // own -- a media app's own pre-buffer burst on playback
+            // start dumps 1-2s of audio the instant it sees
+            // max_unacked headroom, faster than this queue could ever
+            // drain in real time. Adaptive high-water-mark pacing: below
+            // kHighWaterMarkBuffers queued, keep acking immediately
+            // (network pipeline stays saturated during normal
+            // playback); at/above it, defer this buffer's ack to
+            // AlsaOutput's consumed callback instead (see start()'s own
+            // comment), so the phone's own max_unacked window naturally
+            // throttles it back to real playback speed instead of
+            // continuing to race ahead into a growing backlog.
+            if (alsaOutput_.queuedBuffers() >= kHighWaterMarkBuffers) {
+                ++pendingPacedAcks_;
+                return;
+            }
         }
     }
-    // 2026-08-19: acked immediately on receipt now, matching stock's
-    // confirmed real behavior (MediaSinkBase::ackFrames(1), see
-    // set_max_unacked's own comment above) -- not gated on real
-    // playback completion anymore. AlsaOutput::write() just enqueues;
-    // the writer thread and a bounded, drop-oldest queue (see its own
-    // class comment) absorb pacing/backlog instead of ack timing doing
-    // it.
     sendAck();
 }
 

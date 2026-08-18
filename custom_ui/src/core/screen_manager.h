@@ -37,6 +37,9 @@ public:
     // will never remove it.
     void push(ScreenFactory factory);
 
+    // Replaces the current top screen with a new one.
+    void replace(ScreenFactory factory);
+
     // Deletes the current screen and loads whatever's underneath.
     // No-op if only the root screen remains.
     void pop();

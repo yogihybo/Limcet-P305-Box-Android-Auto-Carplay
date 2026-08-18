@@ -2,6 +2,7 @@
 #include "ui/staging/theme.h"
 #include "ui/staging/fonts.h"
 #include "ui/staging/nav_rail.h"
+#include "ui/staging/icons.h"
 #include "core/config_store.h"
 #include "core/navigation.h"
 #include "hal/display_ctrl.h"
@@ -93,7 +94,7 @@ void stepper_click_cb(lv_event_t * e) {
     core::default_store().save();
 }
 
-lv_obj_t * create_stepper_row(lv_obj_t * parent, const char * symbol, const char * label_text,
+lv_obj_t * create_stepper_row(lv_obj_t * parent, const lv_image_dsc_t * icon_dsc, const char * label_text,
                              int min, int max, int step, const std::string & key,
                              const std::string & section, VdeField vde_field) {
     lv_obj_t * row = lv_obj_create(parent);
@@ -112,11 +113,9 @@ lv_obj_t * create_stepper_row(lv_obj_t * parent, const char * symbol, const char
     lv_obj_set_flex_align(left_box, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_column(left_box, 14, 0);
 
-    if (symbol && symbol[0] != '\0') {
-        lv_obj_t * icon = lv_label_create(left_box);
-        lv_label_set_text(icon, symbol);
-        lv_obj_set_style_text_font(icon, &lv_font_roboto_20, 0);
-        lv_obj_set_style_text_color(icon, theme::text_secondary(), 0);
+    if (icon_dsc) {
+        lv_obj_t * icon = ui::icons::create_icon(left_box, icon_dsc, theme::text_secondary());
+        (void)icon;
     }
 
     lv_obj_t * label = lv_label_create(left_box);
@@ -231,19 +230,19 @@ void render_tab_content(ScreenState * state) {
         // 0-100 range capped real hardware brightness/contrast at
         // ~39% of its actual maximum, and "Display" was a section no
         // other code in this app reads from.
-        create_stepper_row(state->card_container, LV_SYMBOL_EYE_OPEN, "Brightness", 0, 255, 5,
+        create_stepper_row(state->card_container, &ui::icons::icon_brightness, "Brightness", 0, 255, 5,
                            "Brightness", "General", VdeField::Brightness);
-        create_stepper_row(state->card_container, LV_SYMBOL_IMAGE, "Contrast", 0, 255, 5,
+        create_stepper_row(state->card_container, &ui::icons::icon_contrast, "Contrast", 0, 255, 5,
                            "Contrast", "General", VdeField::Contrast);
-        create_stepper_row(state->card_container, LV_SYMBOL_SETTINGS, "Saturation", 0, 255, 5,
+        create_stepper_row(state->card_container, &ui::icons::icon_saturation, "Saturation", 0, 255, 5,
                            "Saturation", "General", VdeField::Saturation);
     } else if (state->current_tab == SettingsTab::Audio) {
         // Audio Tab: Media & Guidance Volume
-        create_stepper_row(state->card_container, LV_SYMBOL_AUDIO, "Media Volume", 0, 100, 5,
+        create_stepper_row(state->card_container, &ui::icons::icon_volume, "Media Volume", 0, 100, 5,
                            "MediaVolume", "Audio", VdeField::None);
-        create_stepper_row(state->card_container, LV_SYMBOL_BELL, "Guidance Volume", 0, 100, 5,
+        create_stepper_row(state->card_container, &ui::icons::icon_bell, "Guidance Volume", 0, 100, 5,
                            "GuidanceVolume", "Audio", VdeField::None);
-        create_stepper_row(state->card_container, LV_SYMBOL_VOLUME_MAX, "System Volume", 0, 100, 5,
+        create_stepper_row(state->card_container, &ui::icons::icon_volume, "System Volume", 0, 100, 5,
                            "SystemVolume", "Audio", VdeField::None);
     } else if (state->current_tab == SettingsTab::System) {
         // System Tab: Auto-Start Switch + Reset
@@ -301,24 +300,7 @@ lv_obj_t * create_settings_screen() {
     lv_obj_add_event_cb(scr, destroy_screen_state, LV_EVENT_DELETE, state);
 
     // 1. Persistent 5-Icon Navigation Rail on the Left (Settings is active)
-    create_nav_rail(scr, NavDestination::Settings, [](NavDestination dest) {
-        switch (dest) {
-            case NavDestination::Home:
-                core::navigation::pop();
-                break;
-            case NavDestination::AndroidAuto:
-                core::navigation::push(ui::create_android_auto_screen);
-                break;
-            case NavDestination::Bluetooth:
-                core::navigation::push(ui::create_bluetooth_screen);
-                break;
-            case NavDestination::Camera:
-                core::navigation::push(ui::create_reverse_camera_screen);
-                break;
-            case NavDestination::Settings:
-                break;
-        }
-    });
+    create_nav_rail(scr, NavDestination::Settings);
 
     // 2. Main Content Area to the right of the rail
     lv_obj_t * content = lv_obj_create(scr);

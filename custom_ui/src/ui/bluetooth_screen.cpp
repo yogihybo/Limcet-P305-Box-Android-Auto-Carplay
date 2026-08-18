@@ -13,16 +13,14 @@
 #include "core/log_timing.h"
 #include "core/navigation.h"
 #include "hal/bluetooth.h"
-#include "ui/status_bar.h"
-#include "ui/theme.h"
+#include "ui/staging/nav_rail.h"
+#include "ui/staging/theme.h"
+#include "ui/staging/fonts.h"
+#include "ui/staging/icons.h"
 
 namespace ui {
 
 namespace {
-
-void back_btn_cb(lv_event_t *) {
-    core::navigation::pop();
-}
 
 // Backing state for one background load (address + paired-device
 // list). Heap-allocated, one per load attempt (screen creation, or
@@ -44,20 +42,7 @@ struct BtScreenWidgets {
     lv_obj_t * list;
     lv_obj_t * status_label;
     lv_obj_t * refresh_btn;
-    // Shown over `list` while a load is in flight -- lv_obj_delete()'d
-    // (and reset to nullptr) once that load's poll timer sees
-    // BtLoadState::ready. Re-created fresh for each load rather than
-    // reused, simplest way to avoid tracking a "currently visible"
-    // flag across repeated Refresh taps.
     lv_obj_t * spinner;
-    // 2026-08-15: raw +PLIST= entries backing the currently-shown list,
-    // in the same order the row buttons were created -- device_row_
-    // clicked_cb() looks up its row's entry by index (via the button's
-    // own lv_obj_set_user_data()) rather than re-parsing the button's
-    // DISPLAY text, since that now shows the parsed device name, not
-    // the raw line. Outlives the buttons (repopulated, never cleared,
-    // on every load) so a stale index from a just-deleted list can't
-    // dangle -- populate_device_list() always rebuilds both together.
     std::vector<std::string> last_devices;
 };
 
@@ -65,22 +50,6 @@ void status_label_set(lv_obj_t * label, const char * text) {
     lv_label_set_text(label, text);
 }
 
-// 2026-08-12: runs hal::get_adapter_address() + hal::list_paired_devices()
-// off the LVGL main thread -- both go through hal::send_command(),
-// which even after fixing its always-blocks-the-full-timeout bug can
-// still take a real, nonzero round-trip. Running them synchronously
-// inside create_bluetooth_screen() (the previous design) meant the
-// screen couldn't even render its first frame until both finished --
-// this project's LVGL main loop only gets to flush/draw between
-// lv_timer_handler() calls, so any synchronous work in screen creation
-// delays the very first frame, not just the data. `state` is a raw
-// pointer, not shared_ptr -- the thread is detached and simply keeps
-// writing into its own private, heap-allocated BtLoadState even if the
-// screen (and its poll timer) has already been torn down by the time
-// it finishes; nothing else ever touches that same BtLoadState, so
-// there's no use-after-free risk, just a small bounded leak matching
-// this file's own established "widgets[] intentionally leaked, no
-// shutdown path" convention (see the old comment this replaced).
 void bt_load_worker(BtLoadState * state) {
     hal::BluetoothHandle & h = hal::shared_handle();
     bool hw_present = h.fd >= 0;
@@ -99,21 +68,9 @@ void bt_load_worker(BtLoadState * state) {
         state->devices_ok = devices_ok;
         state->devices = std::move(devices);
     }
-    // release: everything written above must be visible to whichever
-    // thread observes ready==true next (the poll timer, on the LVGL
-    // main thread, which pairs this with an acquire load).
     state->ready.store(true, std::memory_order_release);
 }
 
-// Re-issues PLIST and repopulates the device list widget with one
-// button row per parsed device entry. 2026-08-15: real hardware showed
-// +PLIST= entries are 4 separator-delimited fields (index, a numeric
-// code, MAC, name), not the 2-field "<mac><sep><name>" shape this used
-// to assume (same as +AAPDEV=) -- see hal::split_plist_entry()'s own
-// comment. Each row's connect_id is looked up by index into
-// w->last_devices (set by populate_device_list() below) rather than
-// re-parsing the button's own display text, since that text now shows
-// the parsed name, not the raw line.
 void device_row_clicked_cb(lv_event_t * e) {
     lv_obj_t * btn = static_cast<lv_obj_t *>(lv_event_get_target(e));
     auto * w = static_cast<BtScreenWidgets *>(lv_event_get_user_data(e));
@@ -131,54 +88,82 @@ void device_row_clicked_cb(lv_event_t * e) {
     status_label_set(w->status_label, ok ? "HFPCONN sent" : "HFPCONN failed / no response");
 }
 
-// Populates `list` from a finished load's results -- shared by the
-// initial-load poll callback and the Refresh button's poll callback,
-// so the two can't drift out of sync with each other.
 void populate_device_list(BtScreenWidgets * w, bool hw_present, bool devices_ok,
                            const std::vector<std::string> & devices) {
     lv_obj_clean(w->list);
     w->last_devices = devices;
     if (!hw_present) {
-        lv_list_add_text(w->list, "/dev/bw_serial unavailable");
+        lv_obj_t * lbl = lv_label_create(w->list);
+        lv_label_set_text(lbl, "/dev/bw_serial unavailable");
+        lv_obj_set_style_text_color(lbl, staging_ui::theme::text_secondary(), 0);
         status_label_set(w->status_label, "Bluetooth hardware not detected");
         return;
     }
     if (!devices_ok || devices.empty()) {
-        lv_list_add_text(w->list, "(no response / no paired devices)");
+        lv_obj_t * lbl = lv_label_create(w->list);
+        lv_label_set_text(lbl, "(no paired devices)");
+        lv_obj_set_style_text_color(lbl, staging_ui::theme::text_secondary(), 0);
         status_label_set(w->status_label, "PLIST returned nothing");
         return;
     }
     for (size_t i = 0; i < devices.size(); ++i) {
-        // Show the parsed device name where available -- falls back to
-        // the raw line (garbled separator bytes and all) only if
-        // split_plist_entry() can't find a MAC in it, so a real parse
-        // failure stays visible rather than silently hidden.
         std::string mac, name;
         std::string label = hal::split_plist_entry(devices[i], mac, name) && !name.empty()
                                  ? name
                                  : devices[i];
-        lv_obj_t * btn = lv_list_add_button(w->list, LV_SYMBOL_BLUETOOTH, label.c_str());
-        theme::style_list_button(btn);
+
+        lv_obj_t * row = lv_obj_create(w->list);
+        lv_obj_remove_style_all(row);
+        lv_obj_set_width(row, LV_PCT(100));
+        lv_obj_set_height(row, 48);
+        lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+        lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        lv_obj_set_style_pad_hor(row, 8, 0);
+
+        lv_obj_t * left_box = lv_obj_create(row);
+        lv_obj_remove_style_all(left_box);
+        lv_obj_set_size(left_box, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+        lv_obj_set_flex_flow(left_box, LV_FLEX_FLOW_ROW);
+        lv_obj_set_flex_align(left_box, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        lv_obj_set_style_pad_column(left_box, 10, 0);
+
+        lv_obj_t * icon = ui::icons::create_icon(left_box, &ui::icons::icon_smartphone, staging_ui::theme::accent_primary());
+        (void)icon;
+
+        lv_obj_t * dev_name = lv_label_create(left_box);
+        lv_label_set_text(dev_name, label.c_str());
+        lv_obj_set_style_text_font(dev_name, &lv_font_roboto_20, 0);
+        lv_obj_set_style_text_color(dev_name, staging_ui::theme::text_primary(), 0);
+
+        lv_obj_t * btn = lv_button_create(row);
+        lv_obj_remove_style_all(btn);
+        lv_obj_set_size(btn, 100, 36);
+        lv_obj_set_style_radius(btn, staging_ui::theme::kPillRadius, 0);
+        lv_obj_set_style_bg_color(btn, staging_ui::theme::accent_primary(), 0);
+        lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
+        staging_ui::theme::style_focusable(btn);
         lv_obj_set_user_data(btn, reinterpret_cast<void *>(static_cast<uintptr_t>(i)));
         lv_obj_add_event_cb(btn, device_row_clicked_cb, LV_EVENT_CLICKED, w);
-        lv_group_add_obj(core::navigation::focus_group(), btn);
+
+        lv_obj_t * btn_lbl = lv_label_create(btn);
+        lv_label_set_text(btn_lbl, "Connect");
+        lv_obj_set_style_text_font(btn_lbl, &lv_font_roboto_14, 0);
+        lv_obj_set_style_text_color(btn_lbl, staging_ui::theme::text_on_accent(), 0);
+        lv_obj_center(btn_lbl);
+
+        if (core::navigation::focus_group()) {
+            lv_group_add_obj(core::navigation::focus_group(), btn);
+        }
     }
-    status_label_set(w->status_label, "Tap a device to connect (HFP)");
+    status_label_set(w->status_label, "Tap Connect to link device");
 }
 
-// Polls one BtLoadState until ready, then applies its results to the
-// screen and stops itself (lv_timer_pause(), not lv_timer_delete() --
-// this file's screen_delete_cb is the single authority for actually
-// deleting timers, so a load that finishes normally and a screen that
-// gets closed mid-load can never race to double-free the same timer).
 void bt_load_poll_cb(lv_timer_t * timer) {
     auto * ctx = static_cast<std::pair<BtScreenWidgets *, BtLoadState *> *>(
         lv_timer_get_user_data(timer));
     BtScreenWidgets * w = ctx->first;
     BtLoadState * state = ctx->second;
 
-    // acquire: pairs with bt_load_worker()'s release store -- makes
-    // every field written under state->mtx visible here once true.
     if (!state->ready.load(std::memory_order_acquire)) {
         return;
     }
@@ -196,43 +181,29 @@ void bt_load_poll_cb(lv_timer_t * timer) {
     }
 
     if (address_ok) {
-        lv_label_set_text(w->addr_label, ("This device: " + address).c_str());
+        lv_label_set_text(w->addr_label, ("PIN: 0000  (" + address + ")").c_str());
     } else {
-        lv_label_set_text(w->addr_label, "This device: (address unavailable)");
+        lv_label_set_text(w->addr_label, "PIN: 0000");
     }
 
-    // populate_device_list() starts with lv_obj_clean(w->list), which
-    // already deletes every child of `list` -- including `spinner`
-    // (created as a child of `list` in start_bt_load()). Just drop the
-    // now-dangling pointer here; calling lv_obj_delete() on it again
-    // was a use-after-free (lv_obj_invalidate() on already-freed
-    // memory) -- this is what crashed on real hardware right after
-    // opening this screen.
     populate_device_list(w, hw_present, devices_ok, devices);
     w->spinner = nullptr;
     lv_obj_clear_state(w->refresh_btn, LV_STATE_DISABLED);
 
     lv_timer_pause(timer);
-    delete state;   // safe: nothing else reads it once ready has been consumed here
+    delete state;
     delete ctx;
 }
 
-// Spawns a fresh background load (see bt_load_worker()) and a poll
-// timer to pick up its result -- used both for the screen's initial
-// load and every Refresh tap, so they can't drift into two different
-// code paths. Shows a spinner over `list` and disables the Refresh
-// button for the duration, so a second tap can't overlap a load
-// already in flight (simpler than tracking/cancelling concurrent
-// BtLoadStates).
 void start_bt_load(BtScreenWidgets * w) {
     lv_obj_clean(w->list);
     if (w->spinner) {
         lv_obj_delete(w->spinner);
     }
     w->spinner = lv_spinner_create(w->list);
-    lv_obj_set_size(w->spinner, 48, 48);
+    lv_obj_set_size(w->spinner, 40, 40);
     lv_obj_center(w->spinner);
-    status_label_set(w->status_label, "Loading...");
+    status_label_set(w->status_label, "Loading paired devices...");
     lv_obj_add_state(w->refresh_btn, LV_STATE_DISABLED);
 
     auto * state = new BtLoadState();
@@ -241,16 +212,6 @@ void start_bt_load(BtScreenWidgets * w) {
 
     std::thread(bt_load_worker, state).detach();
 
-    // Not stored on `w` -- deleted directly via its own LV_EVENT_DELETE
-    // hook on the screen, same pattern status_bar.cpp's screen_delete_cb
-    // uses, rather than this struct owning a timer pointer that would
-    // need updating on every start_bt_load() call (Refresh can trigger
-    // this more than once per screen visit). lv_obj_get_screen(), not
-    // lv_screen_active() -- this can run from the Refresh button's
-    // click handler, at which point this screen is still the active
-    // one, but relying on "whatever's currently active" instead of
-    // walking up from a widget we KNOW belongs to this screen is
-    // fragile for no reason.
     lv_obj_add_event_cb(lv_obj_get_screen(w->list), [](lv_event_t * e) {
         lv_timer_delete(static_cast<lv_timer_t *>(lv_event_get_user_data(e)));
     }, LV_EVENT_DELETE, timer);
@@ -267,15 +228,6 @@ void discoverable_switch_cb(lv_event_t * e) {
     hal::set_discoverable(hal::shared_handle(), checked);
 }
 
-void name_save_btn_cb(lv_event_t * e) {
-    lv_obj_t * textarea = static_cast<lv_obj_t *>(lv_event_get_user_data(e));
-    const char * name = lv_textarea_get_text(textarea);
-    if (!name || name[0] == '\0') return;
-    hal::set_device_name(hal::shared_handle(), name);
-    core::default_store().set_string("DeviceName", name, "BlueTooth");
-    core::default_store().save();
-}
-
 void widgets_delete_cb(lv_event_t * e) {
     delete static_cast<BtScreenWidgets *>(lv_event_get_user_data(e));
 }
@@ -283,147 +235,168 @@ void widgets_delete_cb(lv_event_t * e) {
 }  // namespace
 
 lv_obj_t * create_bluetooth_screen() {
-    lv_obj_t * scr = nullptr;
-    theme::create_screen_with_header(&scr, "Bluetooth", back_btn_cb);
+    lv_obj_t * scr = lv_obj_create(nullptr);
+    lv_obj_set_style_bg_color(scr, staging_ui::theme::bg(), 0);
+    lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
 
+    // 1. Persistent 5-Icon Navigation Rail (Bluetooth active)
+    staging_ui::create_nav_rail(scr, staging_ui::NavDestination::Bluetooth);
+
+    // 2. Main Content Area matching mockup_3_bluetooth.jpg
     lv_obj_t * content = lv_obj_create(scr);
-    theme::style_card(content);
-    // The status bar (ui/status_bar.h) now sits at the literal bottom
-    // of the screen, so this card needs to stop short of it instead of
-    // running to the screen edge.
-    lv_obj_set_size(content, LV_PCT(94), LV_PCT(68));
-    lv_obj_align(content, LV_ALIGN_BOTTOM_MID, 0, -(status_bar::kHeight + 6));
+    lv_obj_remove_style_all(content);
+    lv_obj_set_pos(content, staging_ui::theme::kRailWidth + 24, 16);
+    lv_obj_set_size(content, 800 - (staging_ui::theme::kRailWidth + 48), 448);
     lv_obj_set_flex_flow(content, LV_FLEX_FLOW_COLUMN);
-    // lv_obj_create() is scrollable by default -- content's own children
-    // (address/name/discoverable/list-header rows + the device list)
-    // overflow its fixed LV_PCT(68) height, so without this the OUTER
-    // card itself became the scroll target instead of the inner `list`
-    // below, which is the one actually meant to scroll. Real hardware
-    // symptom this caused: paired-device list partially hidden with
-    // scrolling not doing anything useful.
+    lv_obj_set_style_pad_row(content, 12, 0);
     lv_obj_clear_flag(content, LV_OBJ_FLAG_SCROLLABLE);
-    // Tightened from 14/8 -- see the device list's own comment below:
-    // this card has 5 fixed-height rows stacked above a flex_grow list
-    // that needs real room to be usably scrollable, not just
-    // technically scrollable.
-    lv_obj_set_style_pad_all(content, 10, 0);
-    lv_obj_set_style_pad_row(content, 6, 0);
 
-    // Adapter address, informational (ADDR command). Populated
-    // asynchronously by start_bt_load() below -- see that function's
-    // comment for why this screen no longer blocks on the ADDR/PLIST
-    // round trips before rendering its first frame.
-    lv_obj_t * addr_label = lv_label_create(content);
-    lv_label_set_text(addr_label, "This device: (looking up address...)");
-    theme::style_secondary_text(addr_label);
+    // Top Header Row
+    lv_obj_t * header_row = lv_obj_create(content);
+    lv_obj_remove_style_all(header_row);
+    lv_obj_set_width(header_row, LV_PCT(100));
+    lv_obj_set_height(header_row, 28);
+    lv_obj_set_flex_flow(header_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(header_row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
-    // Device name -- editable, backed by NAME=<devname> + this app's
-    // own live settings file's [BlueTooth]/DeviceName field (see
-    // core/config_store.h and docs/SETTINGS_REFERENCE.md section 2.7).
-    lv_obj_t * name_row = lv_obj_create(content);
-    lv_obj_set_width(name_row, LV_PCT(100));
-    lv_obj_set_height(name_row, LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(name_row, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(name_row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER,
-                           LV_FLEX_ALIGN_CENTER);
-    // Room for name_save_btn's knob focus ring -- this row is
-    // LV_SIZE_CONTENT and wraps tightly around its tallest child (the
-    // button), leaving no slack for the ring otherwise. Same fix as
-    // home_screen.cpp's tile grid.
-    lv_obj_set_style_pad_ver(name_row, 6, 0);
+    lv_obj_t * title_lbl = lv_label_create(header_row);
+    lv_label_set_text(title_lbl, "Bluetooth");
+    lv_obj_set_style_text_font(title_lbl, &lv_font_roboto_20, 0);
+    lv_obj_set_style_text_color(title_lbl, staging_ui::theme::text_primary(), 0);
 
-    lv_obj_t * name_ta = lv_textarea_create(name_row);
-    lv_textarea_set_one_line(name_ta, true);
-    lv_obj_set_flex_grow(name_ta, 1);
-    // Fallback matches etc/default_settings.conf's own DeviceName --
-    // deliberately not stock's "Limcet Box", see that file's comment.
+    // Dual-Card Container (Side by Side)
+    lv_obj_t * cards_row = lv_obj_create(content);
+    lv_obj_remove_style_all(cards_row);
+    lv_obj_set_width(cards_row, LV_PCT(100));
+    lv_obj_set_flex_grow(cards_row, 1);
+    lv_obj_set_flex_flow(cards_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(cards_row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+    lv_obj_set_style_pad_column(cards_row, 16, 0);
+    lv_obj_clear_flag(cards_row, LV_OBJ_FLAG_SCROLLABLE);
+
+    // Left Card: Device Info
+    lv_obj_t * card_info = lv_obj_create(cards_row);
+    staging_ui::theme::style_card(card_info);
+    lv_obj_set_width(card_info, 310);
+    lv_obj_set_height(card_info, LV_PCT(100));
+    lv_obj_set_flex_flow(card_info, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(card_info, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_all(card_info, 20, 0);
+
+    lv_obj_t * info_header = lv_label_create(card_info);
+    lv_label_set_text(info_header, "DEVICE INFO");
+    lv_obj_set_style_text_font(info_header, &lv_font_roboto_14, 0);
+    lv_obj_set_style_text_color(info_header, staging_ui::theme::text_secondary(), 0);
+
+    // Device Name
+    lv_obj_t * name_box = lv_obj_create(card_info);
+    lv_obj_remove_style_all(name_box);
+    lv_obj_set_size(name_box, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(name_box, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(name_box, 4, 0);
+
+    lv_obj_t * name_lbl = lv_label_create(name_box);
+    lv_label_set_text(name_lbl, "Device Name");
+    lv_obj_set_style_text_font(name_lbl, &lv_font_roboto_14, 0);
+    lv_obj_set_style_text_color(name_lbl, staging_ui::theme::text_secondary(), 0);
+
     std::string current_name = core::default_store().get_string("DeviceName", "Prado CustomUI", "BlueTooth");
-    lv_textarea_set_text(name_ta, current_name.c_str());
+    lv_obj_t * name_val = lv_label_create(name_box);
+    lv_label_set_text(name_val, current_name.c_str());
+    lv_obj_set_style_text_font(name_val, &lv_font_roboto_24, 0);
+    lv_obj_set_style_text_color(name_val, staging_ui::theme::text_primary(), 0);
 
-    lv_obj_t * name_save_btn = lv_button_create(name_row);
-    theme::style_primary_button(name_save_btn);
-    // style_primary_button()'s pad_ver=16 + HARD min_height=64 (a
-    // style, padding alone can't shrink it below that floor) is sized
-    // for a standalone CTA -- with several such rows stacked above the
-    // paired-device list in this screen's fixed-height `content` card,
-    // they were consuming almost all of it, squeezing the list (the
-    // one actually meant to scroll) down to a ~14px sliver. Overriding
-    // min_height too (not just padding/font, unlike
-    // settings_screen.cpp's Bluetooth row button, which only had a
-    // width problem, not a shared vertical budget to protect).
-    lv_obj_set_style_pad_hor(name_save_btn, 14, 0);
-    lv_obj_set_style_pad_ver(name_save_btn, 8, 0);
-    lv_obj_set_style_text_font(name_save_btn, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_min_height(name_save_btn, 40, 0);
-    lv_obj_add_event_cb(name_save_btn, name_save_btn_cb, LV_EVENT_CLICKED, name_ta);
-    lv_group_add_obj(core::navigation::focus_group(), name_ta);
-    lv_group_add_obj(core::navigation::focus_group(), name_save_btn);
-    lv_obj_t * name_save_label = lv_label_create(name_save_btn);
-    lv_label_set_text(name_save_label, "Save");
+    // PIN / Address
+    lv_obj_t * pin_box = lv_obj_create(card_info);
+    lv_obj_remove_style_all(pin_box);
+    lv_obj_set_size(pin_box, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(pin_box, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(pin_box, 4, 0);
 
-    // Discoverable toggle -- SCAN=1 (see hal/bluetooth.h: this makes
-    // the head unit visible to phones; it does not make the head unit
-    // actively scan for other devices, no matter what the toggle name
-    // implies -- pairing is always phone-initiated on this stack).
-    lv_obj_t * discoverable_row = lv_obj_create(content);
-    lv_obj_set_width(discoverable_row, LV_PCT(100));
-    lv_obj_set_height(discoverable_row, LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(discoverable_row, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(discoverable_row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER,
-                           LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_ver(discoverable_row, 6, 0);  // focus ring clearance, see name_row above
-    lv_obj_t * discoverable_label = lv_label_create(discoverable_row);
-    lv_label_set_text(discoverable_label, "Discoverable to phones");
-    lv_obj_set_flex_grow(discoverable_label, 1);
-    lv_obj_t * discoverable_sw = lv_switch_create(discoverable_row);
+    lv_obj_t * pin_lbl = lv_label_create(pin_box);
+    lv_label_set_text(pin_lbl, "PIN");
+    lv_obj_set_style_text_font(pin_lbl, &lv_font_roboto_14, 0);
+    lv_obj_set_style_text_color(pin_lbl, staging_ui::theme::text_secondary(), 0);
+
+    lv_obj_t * addr_label = lv_label_create(pin_box);
+    lv_label_set_text(addr_label, "0000");
+    lv_obj_set_style_text_font(addr_label, &lv_font_roboto_24, 0);
+    lv_obj_set_style_text_color(addr_label, staging_ui::theme::text_primary(), 0);
+
+    // Discoverable Switch
+    lv_obj_t * disc_row = lv_obj_create(card_info);
+    lv_obj_remove_style_all(disc_row);
+    lv_obj_set_width(disc_row, LV_PCT(100));
+    lv_obj_set_height(disc_row, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(disc_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(disc_row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+
+    lv_obj_t * disc_lbl = lv_label_create(disc_row);
+    lv_label_set_text(disc_lbl, "Discoverable");
+    lv_obj_set_style_text_font(disc_lbl, &lv_font_roboto_20, 0);
+    lv_obj_set_style_text_color(disc_lbl, staging_ui::theme::text_primary(), 0);
+
+    lv_obj_t * discoverable_sw = lv_switch_create(disc_row);
     lv_obj_add_event_cb(discoverable_sw, discoverable_switch_cb, LV_EVENT_VALUE_CHANGED, nullptr);
-    lv_group_add_obj(core::navigation::focus_group(), discoverable_sw);
+    if (core::navigation::focus_group()) {
+        lv_group_add_obj(core::navigation::focus_group(), discoverable_sw);
+    }
 
-    lv_obj_t * list_header_row = lv_obj_create(content);
-    lv_obj_set_width(list_header_row, LV_PCT(100));
-    lv_obj_set_height(list_header_row, LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(list_header_row, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(list_header_row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER,
-                           LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_ver(list_header_row, 6, 0);  // focus ring clearance, see name_row above
-    lv_obj_t * list_title = lv_label_create(list_header_row);
-    lv_label_set_text(list_title, "Paired devices");
-    theme::style_section_label(list_title);
-    lv_obj_t * refresh_btn = lv_button_create(list_header_row);
-    theme::style_primary_button(refresh_btn);
-    // Same shrink as name_save_btn above -- see its comment.
-    lv_obj_set_style_pad_hor(refresh_btn, 14, 0);
-    lv_obj_set_style_pad_ver(refresh_btn, 8, 0);
-    lv_obj_set_style_text_font(refresh_btn, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_min_height(refresh_btn, 40, 0);
-    lv_obj_t * refresh_label = lv_label_create(refresh_btn);
-    lv_label_set_text(refresh_label, "Refresh");
+    // Right Card: Paired Devices List
+    lv_obj_t * card_devices = lv_obj_create(cards_row);
+    staging_ui::theme::style_card(card_devices);
+    lv_obj_set_width(card_devices, 370);
+    lv_obj_set_height(card_devices, LV_PCT(100));
+    lv_obj_set_flex_flow(card_devices, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(card_devices, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+    lv_obj_set_style_pad_all(card_devices, 20, 0);
+    lv_obj_set_style_pad_row(card_devices, 12, 0);
 
-    lv_obj_t * list = lv_list_create(content);
+    lv_obj_t * dev_header_row = lv_obj_create(card_devices);
+    lv_obj_remove_style_all(dev_header_row);
+    lv_obj_set_width(dev_header_row, LV_PCT(100));
+    lv_obj_set_height(dev_header_row, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(dev_header_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(dev_header_row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+
+    lv_obj_t * dev_title = lv_label_create(dev_header_row);
+    lv_label_set_text(dev_title, "Paired Devices");
+    lv_obj_set_style_text_font(dev_title, &lv_font_roboto_20, 0);
+    lv_obj_set_style_text_color(dev_title, staging_ui::theme::text_primary(), 0);
+
+    lv_obj_t * refresh_btn = lv_button_create(dev_header_row);
+    lv_obj_remove_style_all(refresh_btn);
+    lv_obj_set_size(refresh_btn, 80, 32);
+    lv_obj_set_style_radius(refresh_btn, staging_ui::theme::kPillRadius, 0);
+    lv_obj_set_style_bg_color(refresh_btn, staging_ui::theme::surface_container_high(), 0);
+    lv_obj_set_style_bg_opa(refresh_btn, LV_OPA_COVER, 0);
+    staging_ui::theme::style_focusable(refresh_btn);
+
+    lv_obj_t * refresh_lbl = lv_label_create(refresh_btn);
+    lv_label_set_text(refresh_lbl, "Refresh");
+    lv_obj_set_style_text_font(refresh_lbl, &lv_font_roboto_14, 0);
+    lv_obj_set_style_text_color(refresh_lbl, staging_ui::theme::accent_primary(), 0);
+    lv_obj_center(refresh_lbl);
+
+    lv_obj_t * list = lv_obj_create(card_devices);
+    lv_obj_remove_style_all(list);
     lv_obj_set_width(list, LV_PCT(100));
     lv_obj_set_flex_grow(list, 1);
-    lv_obj_set_style_bg_opa(list, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(list, 0, 0);
-    // Room for the first/last row's knob focus ring against the
-    // list's own scroll-clip boundary -- theme::style_list_button()'s
-    // margin_ver only creates a gap BETWEEN rows, not at the very top/
-    // bottom of the list itself. Confirmed clipped on real hardware
-    // without this.
-    lv_obj_set_style_pad_ver(list, 6, 0);
+    lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(list, 8, 0);
 
-    lv_obj_t * status_label = lv_label_create(content);
+    lv_obj_t * status_label = lv_label_create(card_devices);
     lv_label_set_text(status_label, "");
-    theme::style_secondary_text(status_label);
+    lv_obj_set_style_text_font(status_label, &lv_font_roboto_14, 0);
+    lv_obj_set_style_text_color(status_label, staging_ui::theme::text_secondary(), 0);
 
-    // Heap-allocated, freed via LV_EVENT_DELETE on the screen (see
-    // widgets_delete_cb) -- unlike the old plain lv_obj_t*[2] this
-    // replaces, this one is properly cleaned up rather than
-    // intentionally leaked, since it's referenced by every load's poll
-    // timer for the screen's whole lifetime, not just at creation.
     auto * widgets = new BtScreenWidgets{addr_label, list, status_label, refresh_btn, nullptr, {}};
     lv_obj_add_event_cb(scr, widgets_delete_cb, LV_EVENT_DELETE, widgets);
     lv_obj_add_event_cb(refresh_btn, refresh_btn_cb, LV_EVENT_CLICKED, widgets);
-    lv_group_add_obj(core::navigation::focus_group(), refresh_btn);
+
+    if (core::navigation::focus_group()) {
+        lv_group_add_obj(core::navigation::focus_group(), refresh_btn);
+    }
 
     start_bt_load(widgets);
 

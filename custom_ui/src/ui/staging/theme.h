@@ -24,6 +24,9 @@ inline lv_color_t text_on_accent()        { return lv_color_hex(0x111318); }
 inline lv_color_t track_bg()              { return lv_color_hex(0x282c35); }
 inline lv_color_t track_fill()            { return lv_color_hex(0x8ab4f8); }
 
+inline lv_color_t success()               { return lv_color_hex(0x81c995); } // M3 Soft Green
+inline lv_color_t danger()                { return lv_color_hex(0xf28b82); } // M3 Soft Red
+
 // ---- Sizing & Geometry ---------------------------------------------------
 constexpr int32_t kRailWidth = 72;
 constexpr int32_t kMinTouchTarget = 64;

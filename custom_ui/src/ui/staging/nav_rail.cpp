@@ -1,6 +1,12 @@
 #include "ui/staging/nav_rail.h"
 #include "ui/staging/theme.h"
 #include "ui/staging/fonts.h"
+#include "ui/staging/home_dashboard.h"
+#include "ui/staging/settings_screen.h"
+#include "ui/android_auto_screen.h"
+#include "ui/bluetooth_screen.h"
+#include "ui/reverse_camera_screen.h"
+#include "ui/staging/icons.h"
 #include "core/navigation.h"
 
 namespace staging_ui {
@@ -17,6 +23,8 @@ void nav_btn_cb(lv_event_t * e) {
     auto * ctx = static_cast<RailCtx *>(lv_obj_get_user_data(rail));
     if (ctx && ctx->callback) {
         ctx->callback(dest);
+    } else {
+        navigate_to(dest);
     }
 }
 
@@ -24,15 +32,13 @@ void destroy_rail_ctx(lv_event_t * e) {
     delete static_cast<RailCtx *>(lv_event_get_user_data(e));
 }
 
-lv_obj_t * add_rail_button(lv_obj_t * rail, const char * symbol, NavDestination dest, bool active) {
+lv_obj_t * add_rail_button(lv_obj_t * rail, const lv_image_dsc_t * icon_dsc, NavDestination dest, bool active) {
     lv_obj_t * btn = lv_button_create(rail);
     theme::style_nav_button(btn, active);
     lv_obj_add_event_cb(btn, nav_btn_cb, LV_EVENT_CLICKED, reinterpret_cast<void *>(static_cast<uintptr_t>(dest)));
 
-    lv_obj_t * icon = lv_label_create(btn);
-    lv_label_set_text(icon, symbol);
-    lv_obj_set_style_text_font(icon, &lv_font_roboto_24, 0);
-    lv_obj_set_style_text_color(icon, active ? theme::text_on_accent() : theme::text_primary(), 0);
+    lv_color_t icon_color = active ? theme::text_on_accent() : theme::text_primary();
+    lv_obj_t * icon = ui::icons::create_icon(btn, icon_dsc, icon_color);
     lv_obj_center(icon);
 
     if (core::navigation::focus_group()) {
@@ -44,6 +50,44 @@ lv_obj_t * add_rail_button(lv_obj_t * rail, const char * symbol, NavDestination 
 
 } // namespace
 
+void navigate_to(NavDestination dest) {
+    switch (dest) {
+        case NavDestination::Home:
+            if (core::navigation::depth() > 1) {
+                core::navigation::pop();
+            }
+            break;
+        case NavDestination::AndroidAuto:
+            if (core::navigation::depth() > 1) {
+                core::navigation::replace(ui::create_android_auto_screen);
+            } else {
+                core::navigation::push(ui::create_android_auto_screen);
+            }
+            break;
+        case NavDestination::Bluetooth:
+            if (core::navigation::depth() > 1) {
+                core::navigation::replace(ui::create_bluetooth_screen);
+            } else {
+                core::navigation::push(ui::create_bluetooth_screen);
+            }
+            break;
+        case NavDestination::Camera:
+            if (core::navigation::depth() > 1) {
+                core::navigation::replace(ui::create_reverse_camera_screen);
+            } else {
+                core::navigation::push(ui::create_reverse_camera_screen);
+            }
+            break;
+        case NavDestination::Settings:
+            if (core::navigation::depth() > 1) {
+                core::navigation::replace(create_settings_screen);
+            } else {
+                core::navigation::push(create_settings_screen);
+            }
+            break;
+    }
+}
+
 lv_obj_t * create_nav_rail(lv_obj_t * parent, NavDestination active_dest, NavCallback cb) {
     lv_obj_t * rail = lv_obj_create(parent);
     theme::style_nav_rail(rail);
@@ -54,20 +98,20 @@ lv_obj_t * create_nav_rail(lv_obj_t * parent, NavDestination active_dest, NavCal
     lv_obj_add_event_cb(rail, destroy_rail_ctx, LV_EVENT_DELETE, ctx);
 
     // Exact 5 Icons matching the mockup from top to bottom:
-    // 1. Home
-    add_rail_button(rail, LV_SYMBOL_HOME, NavDestination::Home, active_dest == NavDestination::Home);
+    // 1. Home (Material house icon)
+    add_rail_button(rail, &ui::icons::icon_nav_home, NavDestination::Home, active_dest == NavDestination::Home);
 
-    // 2. Android Auto (Navigation arrow / GPS symbol)
-    add_rail_button(rail, LV_SYMBOL_GPS, NavDestination::AndroidAuto, active_dest == NavDestination::AndroidAuto);
+    // 2. Android Auto (Material Navigation chevron/arrowhead)
+    add_rail_button(rail, &ui::icons::icon_nav_navigation, NavDestination::AndroidAuto, active_dest == NavDestination::AndroidAuto);
 
-    // 3. Bluetooth
-    add_rail_button(rail, LV_SYMBOL_BLUETOOTH, NavDestination::Bluetooth, active_dest == NavDestination::Bluetooth);
+    // 3. Bluetooth (Material Bluetooth Rune)
+    add_rail_button(rail, &ui::icons::icon_nav_bluetooth, NavDestination::Bluetooth, active_dest == NavDestination::Bluetooth);
 
-    // 4. Camera (Eye / Camera symbol)
-    add_rail_button(rail, LV_SYMBOL_EYE_OPEN, NavDestination::Camera, active_dest == NavDestination::Camera);
+    // 4. Camera (Material Camera icon)
+    add_rail_button(rail, &ui::icons::icon_nav_camera, NavDestination::Camera, active_dest == NavDestination::Camera);
 
-    // 5. Settings (Gear symbol)
-    add_rail_button(rail, LV_SYMBOL_SETTINGS, NavDestination::Settings, active_dest == NavDestination::Settings);
+    // 5. Settings (Material 6-tooth Gear)
+    add_rail_button(rail, &ui::icons::icon_nav_settings, NavDestination::Settings, active_dest == NavDestination::Settings);
 
     return rail;
 }

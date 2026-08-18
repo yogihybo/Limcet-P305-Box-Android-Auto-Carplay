@@ -3,10 +3,11 @@
 #include "ui/staging/fonts.h"
 #include "ui/staging/nav_rail.h"
 #include "ui/staging/settings_screen.h"
-#include "core/navigation.h"
 #include "ui/android_auto_screen.h"
 #include "ui/bluetooth_screen.h"
 #include "ui/reverse_camera_screen.h"
+#include "ui/staging/icons.h"
+#include "core/navigation.h"
 #include <ctime>
 #include <cstdio>
 
@@ -26,24 +27,7 @@ lv_obj_t * create_home_dashboard() {
     lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
 
     // 1. Persistent 5-Icon Navigation Rail (Home is active)
-    create_nav_rail(scr, NavDestination::Home, [](NavDestination dest) {
-        switch (dest) {
-            case NavDestination::AndroidAuto:
-                core::navigation::push(ui::create_android_auto_screen);
-                break;
-            case NavDestination::Bluetooth:
-                core::navigation::push(ui::create_bluetooth_screen);
-                break;
-            case NavDestination::Camera:
-                core::navigation::push(ui::create_reverse_camera_screen);
-                break;
-            case NavDestination::Settings:
-                core::navigation::push(create_settings_screen);
-                break;
-            case NavDestination::Home:
-                break;
-        }
-    });
+    create_nav_rail(scr, NavDestination::Home);
 
     // 2. Main Dashboard Area
     lv_obj_t * main_area = lv_obj_create(scr);
@@ -91,7 +75,17 @@ lv_obj_t * create_home_dashboard() {
     lv_obj_set_flex_align(card_aa, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_all(card_aa, 24, 0);
 
-    lv_obj_t * aa_title = lv_label_create(card_aa);
+    lv_obj_t * aa_title_box = lv_obj_create(card_aa);
+    lv_obj_remove_style_all(aa_title_box);
+    lv_obj_set_size(aa_title_box, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(aa_title_box, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(aa_title_box, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(aa_title_box, 10, 0);
+
+    lv_obj_t * aa_title_icon = ui::icons::create_icon(aa_title_box, &ui::icons::icon_nav_navigation, theme::accent_primary());
+    (void)aa_title_icon;
+
+    lv_obj_t * aa_title = lv_label_create(aa_title_box);
     lv_label_set_text(aa_title, "Android Auto");
     lv_obj_set_style_text_font(aa_title, &lv_font_roboto_24, 0);
     lv_obj_set_style_text_color(aa_title, theme::text_primary(), 0);
@@ -130,7 +124,17 @@ lv_obj_t * create_home_dashboard() {
     lv_obj_set_flex_align(card_audio, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_all(card_audio, 24, 0);
 
-    lv_obj_t * audio_title = lv_label_create(card_audio);
+    lv_obj_t * audio_title_box = lv_obj_create(card_audio);
+    lv_obj_remove_style_all(audio_title_box);
+    lv_obj_set_size(audio_title_box, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(audio_title_box, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(audio_title_box, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(audio_title_box, 10, 0);
+
+    lv_obj_t * audio_title_icon = ui::icons::create_icon(audio_title_box, &ui::icons::icon_volume, theme::accent_secondary());
+    (void)audio_title_icon;
+
+    lv_obj_t * audio_title = lv_label_create(audio_title_box);
     lv_label_set_text(audio_title, "Audio Volume");
     lv_obj_set_style_text_font(audio_title, &lv_font_roboto_24, 0);
     lv_obj_set_style_text_color(audio_title, theme::text_primary(), 0);
@@ -157,29 +161,26 @@ lv_obj_t * create_home_dashboard() {
     lv_obj_set_flex_flow(ctrl_row, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(ctrl_row, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
-    auto add_ctrl_btn = [ctrl_row](const char * sym) {
+    auto add_ctrl_btn = [ctrl_row](const lv_image_dsc_t * icon_dsc) {
         lv_obj_t * b = lv_button_create(ctrl_row);
         lv_obj_remove_style_all(b);
-        lv_obj_set_size(b, 44, 44);
+        lv_obj_set_size(b, 48, 48);
         lv_obj_set_style_radius(b, theme::kPillRadius, 0);
         lv_obj_set_style_bg_color(b, theme::surface_container_high(), 0);
         lv_obj_set_style_bg_opa(b, LV_OPA_COVER, 0);
         theme::style_focusable(b);
 
-        lv_obj_t * l = lv_label_create(b);
-        lv_label_set_text(l, sym);
-        lv_obj_set_style_text_font(l, &lv_font_roboto_20, 0);
-        lv_obj_set_style_text_color(l, theme::text_primary(), 0);
-        lv_obj_center(l);
+        lv_obj_t * img = ui::icons::create_icon(b, icon_dsc, theme::text_primary());
+        lv_obj_center(img);
 
         if (core::navigation::focus_group()) {
             lv_group_add_obj(core::navigation::focus_group(), b);
         }
     };
 
-    add_ctrl_btn(LV_SYMBOL_PREV);
-    add_ctrl_btn(LV_SYMBOL_PAUSE);
-    add_ctrl_btn(LV_SYMBOL_NEXT);
+    add_ctrl_btn(&ui::icons::icon_prev);
+    add_ctrl_btn(&ui::icons::icon_pause);
+    add_ctrl_btn(&ui::icons::icon_next);
 
     return scr;
 }

@@ -13,6 +13,22 @@ void ScreenManager::push(ScreenFactory factory) {
     stack_.push_back(screen);
 }
 
+void ScreenManager::replace(ScreenFactory factory) {
+    if (stack_.empty()) {
+        push(factory);
+        return;
+    }
+    lv_obj_t * screen = factory();
+    if (stack_.size() > 1) {
+        stack_.pop_back();
+    } else {
+        stack_.clear();
+    }
+    lv_screen_load_anim(screen, LV_SCREEN_LOAD_ANIM_FADE_ON, kScreenAnimTimeMs, 0,
+                         /*auto_del=*/true);
+    stack_.push_back(screen);
+}
+
 void ScreenManager::pop() {
     if (stack_.size() <= 1) {
         return;  // never pop the root screen

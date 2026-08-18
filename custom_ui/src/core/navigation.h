@@ -26,7 +26,9 @@ void init(ScreenManager & manager);
 // stderr warning) if init() was never called -- shouldn't happen in
 // practice, but screens shouldn't crash the process over it.
 void push(ScreenManager::ScreenFactory factory);
+void replace(ScreenManager::ScreenFactory factory);
 void pop();
+size_t depth();
 
 // The single lv_group_t the knob's LVGL encoder indev navigates (see
 // hal/knob.h) -- lazily created on first call. Screens add their own

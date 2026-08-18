@@ -23,12 +23,27 @@ void push(ScreenManager::ScreenFactory factory) {
     g_manager->push(factory);
 }
 
+void replace(ScreenManager::ScreenFactory factory) {
+    if (!g_manager) {
+        std::fprintf(stderr, "%s core::navigation::replace: called before init()\n", core::log_timestamp().c_str());
+        return;
+    }
+    g_manager->replace(factory);
+}
+
 void pop() {
     if (!g_manager) {
         std::fprintf(stderr, "%s core::navigation::pop: called before init()\n", core::log_timestamp().c_str());
         return;
     }
     g_manager->pop();
+}
+
+size_t depth() {
+    if (!g_manager) {
+        return 0;
+    }
+    return g_manager->depth();
 }
 
 lv_group_t * focus_group() {

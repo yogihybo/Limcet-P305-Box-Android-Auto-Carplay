@@ -35,52 +35,33 @@
 
 #include "core/navigation.h"
 #include "core/screen_manager.h"
-#include "ui/theme.h"
+#include "ui/staging/nav_rail.h"
+#include "ui/staging/theme.h"
+#include "ui/staging/fonts.h"
+#include "ui/staging/icons.h"
 
 namespace ui {
 
-namespace {
-
-void back_btn_cb(lv_event_t *) {
-    core::navigation::pop();
-}
-
-}  // namespace
-
 lv_obj_t * create_reverse_camera_screen() {
     lv_obj_t * scr = lv_obj_create(nullptr);
-    // Transparent on purpose -- see this file's top comment. An
-    // opaque background here would defeat the point even if the
-    // layer-blend theory above holds.
+    // Transparent on purpose -- LCDC hardware layer displays video underneath
     lv_obj_set_style_bg_opa(scr, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(scr, 0, 0);
 
-    lv_obj_t * label = lv_label_create(scr);
-    lv_label_set_text(label, "REVERSE");
-    lv_obj_set_style_text_color(label, theme::text_primary(), 0);
-    lv_obj_set_style_bg_color(label, lv_color_hex(0x000000), 0);
-    lv_obj_set_style_bg_opa(label, LV_OPA_50, 0);
-    lv_obj_set_style_radius(label, 8, 0);
-    lv_obj_set_style_pad_all(label, 6, 0);
-    lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 10);
+    // 1. Persistent 5-Icon Navigation Rail (Camera active)
+    staging_ui::create_nav_rail(scr, staging_ui::NavDestination::Camera);
 
-    // Exit affordance -- required now that the home screen's launcher
-    // can push this screen manually as a preview (see home_screen.cpp),
-    // not just via the (not-yet-wired-into-main.cpp) automatic
-    // reverse_gear_watcher path. Semi-transparent so it doesn't
-    // opaquely cover more of the hardware video layer than necessary --
-    // keeps its own text label (unlike theme::add_back_button's
-    // icon-only circle) since "Exit preview" needs to read as more
-    // deliberate than a normal back navigation here.
-    lv_obj_t * back_btn = lv_button_create(scr);
-    lv_obj_set_style_bg_color(back_btn, theme::surface(), 0);
-    lv_obj_set_style_bg_opa(back_btn, LV_OPA_60, 0);
-    lv_obj_set_style_radius(back_btn, 12, 0);
-    lv_obj_align(back_btn, LV_ALIGN_TOP_LEFT, 8, 8);
-    lv_obj_add_event_cb(back_btn, back_btn_cb, LV_EVENT_CLICKED, nullptr);
-    lv_obj_t * back_label = lv_label_create(back_btn);
-    lv_obj_set_style_text_color(back_label, theme::text_primary(), 0);
-    lv_label_set_text(back_label, LV_SYMBOL_LEFT " Exit preview");
+    // 2. Overlay Badges
+    lv_obj_t * label = lv_label_create(scr);
+    lv_label_set_text(label, "REVERSE CAMERA PREVIEW");
+    lv_obj_set_style_text_font(label, &lv_font_roboto_14, 0);
+    lv_obj_set_style_text_color(label, staging_ui::theme::text_primary(), 0);
+    lv_obj_set_style_bg_color(label, lv_color_hex(0x000000), 0);
+    lv_obj_set_style_bg_opa(label, LV_OPA_60, 0);
+    lv_obj_set_style_radius(label, staging_ui::theme::kPillRadius, 0);
+    lv_obj_set_style_pad_hor(label, 16, 0);
+    lv_obj_set_style_pad_ver(label, 6, 0);
+    lv_obj_align(label, LV_ALIGN_TOP_MID, 20, 12);
 
     return scr;
 }

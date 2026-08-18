@@ -136,18 +136,7 @@ public:
     // without bound -- see class comment.
     bool write(const void * interleavedSamples, uint32_t frameCount);
 
-    // Invoked once per buffer, from the writer thread, right after its
-    // real (blocking, real-time-paced) write attempt completes -- see
-    // class comment. audio_channel.cpp uses this to pace acks once the
-    // queue crosses the high-water mark, not to gate every ack (that
-    // was the 2026-08-18 design, reverted -- see class comment).
-    using ConsumedCallback = std::function<void()>;
-    void setConsumedCallback(ConsumedCallback cb) { onConsumed_ = std::move(cb); }
-
-    // Current queue depth, for AudioChannel's own high-water-mark check
-    // -- see class comment. Locks the same mutex_ write()/writerLoop()
-    // use, so this is safe to call from a different thread (the aasdk
-    // strand, in practice).
+    // Current queue depth
     size_t queuedBuffers() const {
         std::lock_guard<std::mutex> lock(mutex_);
         return queue_.size();
@@ -170,13 +159,9 @@ private:
 
     snd_pcm_t * pcmHandle_ = nullptr;
 
-    // 256 buffers @ ~10.6ms (2048B @ 48kHz/16-bit/stereo) = ~2.7s of
-    // audio -- see class comment. Sized to absorb a real media-app
-    // pre-buffer burst (1-2s is typical) without dropping anything;
-    // the high-water-mark ack pacing above is what actually prevents
-    // this from filling in steady-state playback, this cap is a last-
-    // resort backstop for a genuinely stuck writer thread.
-    static constexpr size_t kMaxQueuedBuffers = 256;
+    // 32 buffers @ ~10ms = ~320ms audio buffer -- ample for ALSA jitter absorption
+    // without memory bloating or CPU cache thrashing on single-core ARM926EJ-S.
+    static constexpr size_t kMaxQueuedBuffers = 32;
 
     std::thread writerThread_;
     mutable std::mutex mutex_;
@@ -184,7 +169,6 @@ private:
     std::deque<std::vector<uint8_t>> queue_;
     bool stop_ = false;
     uint32_t droppedBuffers_ = 0;
-    ConsumedCallback onConsumed_;
 };
 
 }  // namespace androidauto

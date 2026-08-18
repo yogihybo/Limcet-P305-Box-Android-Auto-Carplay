@@ -15,6 +15,34 @@ choice)?
 automatically, doesn't modify anything permanent. Run it manually, look
 at the result, decide what's next.
 
+## Firmware A/B test
+
+```sh
+bt-hci-probe.sh            # default: this project's real on-device firmware
+bt-hci-probe.sh device     # same, explicit
+bt-hci-probe.sh reference  # rtkbt's own bundled generic RTL8761B firmware instead
+```
+
+`reference-firmware/` vendors `rtkbt`'s stock `rtl8761b_fw`/
+`rtl8761b_config` (github.com/radxa/rtkbt, GPLv2, unmodified) --
+byte-for-byte different from our real firmware (41,328 vs 43,980
+bytes; different bytes immediately after the shared `"Realtech"`
+header signature). Useful for telling apart "our specific firmware
+blob has an issue" from "this is a `rtk_hciattach`/board-level issue
+a known-community-tested generic firmware would also hit" -- chip
+identification goes through the same patched `lmp_subver=0x434d` table
+entry either way, only the staged file content differs.
+
+Notably, our real firmware's header bytes right after `"Realtech"` are
+literally `4d 43` -- ASCII `"MC"`, which as a little-endian 16-bit
+value is `0x434d`, exactly the customized LMP Subversion our real chip
+reports on every run. `rtkbt`'s generic firmware has different,
+non-matching bytes there. Strong circumstantial evidence this 2-byte
+field is a build/target-chip-ID tag, and our real firmware was
+specifically built for a chip reporting `0x434d` -- not a generic
+target. Worth watching whether the `reference` firmware behaves
+differently as a result.
+
 ## Status: two hardware runs so far, chip ID recognized, one gate left (2026-08-19)
 
 **Run 1**: H5 sync/config handshake completed cleanly (`H5 init

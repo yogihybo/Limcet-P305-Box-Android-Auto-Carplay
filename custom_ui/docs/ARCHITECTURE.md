@@ -20,11 +20,8 @@ stack actually expose," not a design spec.
   (`ARKDISP_GET_VDE_CFG`/`ARKDISP_SET_VDE_CFG`, layer_id 0-4) and
   screen info (`ARKDISP_GET_SCREEN_INFO`). This is the settings screen's
   hook for a "Display" adjustment panel.
-- GPU (Vivante GAL/galcore): available if needed later, but the LVGL
-  baseline deliberately does not depend on it. See
-  `linux-arkmicro/gpu/known-good-pairing-6.2.4.p1.8/README.md` for the
-  known-good `galcore.ko`/`libGAL.so` pairing if GPU-accelerated
-  blitting is ever added.
+- Video Acceleration & Memory Management: Hantro 8190 ASIC H.264 video decoding on `/dev/fb4`.
+  See [`VIDEO_AND_HAL_HANDOFF.md`](VIDEO_AND_HAL_HANDOFF.md) and [`VIDEO_AND_MEMORY_OOM_HANDOFF.md`](VIDEO_AND_MEMORY_OOM_HANDOFF.md) for the Hantro zero-copy display pipeline and video delta flow control / OOM prevention.
 
 ## Touch & Rotary knob input
 

@@ -1,6 +1,7 @@
 #include "hal/androidauto_client.h"
 
 #include <cerrno>
+#include <chrono>
 #include <cstdlib>
 #include <cstring>
 #include <mutex>
@@ -53,6 +54,27 @@ std::mutex g_spawnMutex;
 // firmware integration lands with a fixed install path.
 void trySpawnSidecar() {
     std::lock_guard<std::mutex> lock(g_spawnMutex);
+
+    // 2026-08-19: statusLine() (called every 500ms from
+    // android_auto_screen.cpp's poll_timer_cb, allow_spawn=true by
+    // default) retries twice per call, each attempt reaching here via
+    // ensureConnected() whenever fd_ < 0 -- e.g. right after the
+    // sidecar crashes/gets OOM-killed. Each call below is TWO
+    // std::system() forks (pidof + spawn), so an offline sidecar meant
+    // up to 4 shell fork/execs every 500ms, all on the single LVGL main
+    // thread, right when the system is already under the same pressure
+    // that likely killed the sidecar in the first place. Rate-limited
+    // to one real attempt per 5s -- the sidecar binds its socket almost
+    // immediately once it does start, so this doesn't meaningfully
+    // delay a legitimate respawn, it just stops the redundant retries
+    // in between.
+    static auto lastAttempt = std::chrono::steady_clock::time_point::min();
+    auto now = std::chrono::steady_clock::now();
+    if (now - lastAttempt < std::chrono::seconds(5)) {
+        return;
+    }
+    lastAttempt = now;
+
     if (std::system("pidof androidauto-sidecar >/dev/null 2>&1") == 0) {
         return;  // already running
     }

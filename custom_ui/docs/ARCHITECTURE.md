@@ -278,7 +278,9 @@ in `docs/1.10_SETTINGS_REFERENCE.md` (main repo) — full field reference for
 overridable state additionally lives in `/data/msncfg/Setting.config`
 once provisioned (see `project_language_setting_userdata` memory) —
 this app's settings screens should read/write that layer, not just the
-static `.ini` factory defaults.
+## Performance, CPU Utilization & Process Lifecycles
+
+See [`CPU_USAGE_AND_SPINNING_AUDIT_HANDOFF.md`](CPU_USAGE_AND_SPINNING_AUDIT_HANDOFF.md) for rate-limited sidecar process management, adaptive LVGL main-loop sleep pacing, and serial read yield patterns.
 
 ## Open questions / next steps
 

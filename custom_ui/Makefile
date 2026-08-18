@@ -84,7 +84,7 @@ LVGL_OBJS     := $(patsubst $(LVGL_DIR)/%.c,$(BUILD_DIR)/lvgl-obj/%.o,$(LVGL_SRC
 # over a small local socket protocol via src/hal/androidauto_client.h
 # instead -- zero aasdk knowledge in this binary.
 UI_TARGET     := $(BUILD_DIR)/custom_ui
-UI_SRCS       := $(filter-out src/androidauto/%,$(shell find src -name '*.cpp'))
+UI_SRCS       := $(filter-out src/androidauto/% src/ui/icons.cpp src/ui/icons_m3.cpp,$(shell find src -name '*.cpp'))
 UI_OBJS       := $(patsubst src/%.cpp,$(BUILD_DIR)/ui-obj/%.o,$(UI_SRCS))
 
 # src/ui/staging/'s 3 auto-generated LVGL font C files (lv_font_conv

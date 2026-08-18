@@ -1,1 +1,4 @@
 build/
+src/ui/icons.*
+src/ui/icons_m3.*
+temp log.txt

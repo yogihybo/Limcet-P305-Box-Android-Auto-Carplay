@@ -16,6 +16,10 @@
 #include "ui/bluetooth_screen.h"
 #include "ui/status_bar.h"
 #include "ui/theme.h"
+#include "ui/staging/nav_rail.h"
+#include "ui/staging/theme.h"
+#include "ui/staging/fonts.h"
+#include "ui/staging/icons.h"
 
 namespace ui {
 
@@ -55,14 +59,10 @@ ParsedStatus parse_status_line(const std::string & line) {
 }
 
 lv_color_t color_for_state_name(const std::string & name) {
-    if (name == "Connected") return theme::success();
-    if (name == "Failed" || name == "Unreachable") return theme::danger();
-    if (name == "Idle") return theme::text_secondary();
-    return theme::accent();
-}
-
-void back_btn_cb(lv_event_t *) {
-    core::navigation::pop();
+    if (name == "Connected") return staging_ui::theme::success();
+    if (name == "Failed" || name == "Unreachable") return staging_ui::theme::danger();
+    if (name == "Idle") return staging_ui::theme::text_secondary();
+    return staging_ui::theme::accent_primary();
 }
 
 void connect_btn_cb(lv_event_t *) {
@@ -70,7 +70,7 @@ void connect_btn_cb(lv_event_t *) {
 }
 
 void bluetooth_btn_cb(lv_event_t *) {
-    core::navigation::push(ui::create_bluetooth_screen);
+    staging_ui::navigate_to(staging_ui::NavDestination::Bluetooth);
 }
 
 struct Widgets {
@@ -91,15 +91,6 @@ struct Widgets {
 // it never fires against freed widgets after navigating away. The
 // sidecar process itself (and whatever session it's driving) keeps
 // running regardless of this screen's lifecycle.
-//
-// 2026-08-12: also toggles `content`'s visibility as a whole, not just
-// its text -- per explicit request, this screen should show a real
-// "connect your phone" instructions view whenever there's no active
-// session, and get out of the way once there IS one. `content` uses
-// theme::style_card(), which is fully opaque (bg_opa=LV_OPA_COVER) --
-// left showing while Connected, it would sit on top of and completely
-// hide the AA video hardware layer (see video_visibility.h) that this
-// same screen's setVisible(true) call is supposed to be revealing.
 void poll_timer_cb(lv_timer_t * timer) {
     auto * w = static_cast<Widgets *>(lv_timer_get_user_data(timer));
 
@@ -108,37 +99,10 @@ void poll_timer_cb(lv_timer_t * timer) {
     lv_obj_set_style_text_color(w->state_label, color_for_state_name(status.name), 0);
     lv_label_set_text(w->detail_label, status.detail.c_str());
 
-    // 2026-08-19: real hardware showed the knob stuck routing to AA
-    // (SYSTEM_NAVIGATION/DPAD_CENTER via sendKey()) after the PHONE
-    // ended the session (bye-bye) while the user was still sitting on
-    // this screen -- androidauto_screen_active() used to only flip on
-    // screen create/destroy (see create_android_auto_screen()'s own
-    // comment and screen_delete_cb() below), which tracks whether this
-    // screen INSTANCE is alive, not whether there's actually a live
-    // session to receive those keys. Ticks/presses kept registering in
-    // hal/knob.cpp's own log but had no visible effect (nothing on the
-    // phone left to receive them), and the knob couldn't drive local
-    // LVGL focus (e.g. onto this screen's own back button, now visible
-    // again below) to get back out either. Tying this to the same
-    // Connected/not-Connected check that already gates content/display
-    // visibility fixes both: only route the knob to AA while a session
-    // is genuinely showing video.
     hal::androidauto_screen_active().store(status.name == "Connected", std::memory_order_release);
 
     if (status.name == "Connected") {
         lv_obj_add_flag(w->content, LV_OBJ_FLAG_HIDDEN);
-        // 2026-08-15: per explicit request, AA should take over the
-        // FULL screen once connected, not just the area underneath
-        // this screen's own (now-transparent, see create_android_auto_
-        // screen()'s bg_opa comment) body -- AA's own in-app UI has its
-        // own exit affordance, so this screen's header/back button
-        // don't need to stay visible on top of the video. Hardware-
-        // level layer disable (hal::hide_display(), same ARKFB_HIDE_
-        // WINDOW_REAL ioctl already proven for the video layer itself)
-        // rather than relying solely on LVGL-side transparency, since
-        // it sidesteps the LCDC compositor's alpha-blend behavior
-        // entirely -- see reverse_camera_screen.cpp's own header
-        // comment for the still-open uncertainty that motivates this.
         if (!w->display_hidden) {
             hal::hide_display();
             w->display_hidden = true;
@@ -155,152 +119,110 @@ void poll_timer_cb(lv_timer_t * timer) {
 void screen_delete_cb(lv_event_t * e) {
     auto * pair = static_cast<std::pair<lv_timer_t *, Widgets *> *>(lv_event_get_user_data(e));
     lv_timer_delete(pair->first);
-    // 2026-08-15: defensive restore -- poll_timer_cb() above only calls
-    // hal::show_display() on a Connected->not-Connected transition
-    // observed via its own 500ms poll, which never fires again once
-    // this screen is torn down. Without this, navigating away (or the
-    // app itself exiting) while still Connected would leave the OSD2/
-    // LVGL hardware layer permanently disabled -- this whole UI would
-    // go dark with no way back short of a reboot.
     if (pair->second->display_hidden) {
         hal::show_display();
     }
     delete pair->second;
     delete pair;
-    // 2026-08-12: hide the AA video hardware layer the moment this
-    // screen goes away -- see hal::AndroidAutoClient::setVisible()'s
-    // own comment. Session/decode keep running in the background
-    // regardless (auto-start, see main.cpp's AaAutoStartWatcher); only
-    // the hardware layer's visibility is tied to this screen.
     client().setVisible(false);
-    // 2026-08-15: pairs with the setVisible(true)/androidauto_screen_
-    // active().store(true) below -- the physical knob goes back to
-    // driving local LVGL group navigation on whatever screen the user
-    // navigates to next.
     hal::androidauto_screen_active().store(false, std::memory_order_release);
 }
 
 }  // namespace
 
 lv_obj_t * create_android_auto_screen() {
-    lv_obj_t * scr = nullptr;
-    theme::create_screen_with_header(&scr, "Android Auto", back_btn_cb);
-    // 2026-08-15: found on real hardware -- video decoded correctly,
-    // hal::video_layer reported the frame pushed and the layer shown,
-    // but nothing ever appeared on screen, still showing this screen's
-    // own LVGL content. Root cause: theme::create_screen_with_header()
-    // paints an OPAQUE solid background on `scr` itself
-    // (lv_obj_set_style_bg_color(scr, bg(), 0), bg_opa defaults to
-    // LV_OPA_COVER) -- this screen was covering the ENTIRE 800x480
-    // area, including wherever `content` is hidden once Connected, so
-    // the video hardware layer underneath (fb4/VIDEO_LAYER2, see
-    // hal/video_layer.h's own top comment) had no way to
-    // ever show through regardless of it actually being shown at the
-    // hardware level. Matches the exact pattern already established
-    // and hw-tested for the reverse-camera preview
-    // (reverse_camera_screen.cpp's own bg_opa=LV_OPA_TRANSP) -- header/
-    // status-bar/back-button are separate child widgets with their own
-    // opaque styling, so this only affects the screen's own root fill,
-    // not their visibility.
+    lv_obj_t * scr = lv_obj_create(nullptr);
+    lv_obj_set_style_bg_color(scr, staging_ui::theme::bg(), 0);
     lv_obj_set_style_bg_opa(scr, LV_OPA_TRANSP, 0);
 
-    // 2026-08-12: reveals the AA video hardware layer (if a session is
-    // already running -- e.g. auto-started in the background, see
-    // main.cpp's AaAutoStartWatcher) the moment this screen is
-    // selected, per explicit request: selecting the AA icon should
-    // load the video feed directly, not just show a status screen
-    // while video stays hidden. No-op (returns false, logged nowhere
-    // since it's not an error) if no sidecar/session exists yet --
-    // this doesn't start one, connect_btn_cb()/AutoStartCarLink do
-    // that; this only ever affects visibility. Whether it's ACTUALLY
-    // visible once revealed depends on poll_timer_cb() below hiding
-    // this screen's own opaque `content` card once Connected, since
-    // that would otherwise sit on top of the video layer regardless of
-    // this call.
+    // 1. Persistent 5-Icon Navigation Rail (Android Auto active)
+    staging_ui::create_nav_rail(scr, staging_ui::NavDestination::AndroidAuto);
+
     client().setVisible(true);
-    // 2026-08-19: starts false, not true -- poll_timer_cb() below is
-    // now the real, ongoing source of truth for this flag (see its own
-    // comment), flipping it true only once status is actually
-    // "Connected" and back to false the moment it isn't. Before that
-    // first poll (or whenever not connected), this screen's own back
-    // button/instructions card ARE meaningful focusable widgets, so the
-    // knob needs local LVGL navigation here, not AA routing.
     hal::androidauto_screen_active().store(false, std::memory_order_release);
 
+    // 2. Main Content Card matching mockup_2_android_auto.jpg
     lv_obj_t * content = lv_obj_create(scr);
-    theme::style_card(content);
-    // Bottom offset -10 -> -(status_bar::kHeight + 8): the status bar
-    // (ui/status_bar.h) now sits at the literal bottom of the screen,
-    // so this card needs to stop short of it instead of running to the
-    // screen edge. Height 72% -> 66% to match.
-    lv_obj_set_size(content, LV_PCT(90), LV_PCT(66));
-    lv_obj_align(content, LV_ALIGN_BOTTOM_MID, 0, -(status_bar::kHeight + 8));
+    staging_ui::theme::style_card(content);
+    lv_obj_set_pos(content, staging_ui::theme::kRailWidth + 32, 20);
+    lv_obj_set_size(content, 800 - (staging_ui::theme::kRailWidth + 64), 440);
     lv_obj_set_flex_flow(content, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_style_pad_all(content, 16, 0);
-    lv_obj_set_style_pad_row(content, 10, 0);
+    lv_obj_set_flex_align(content, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_all(content, 24, 0);
 
-    // "Connect your phone" instructions -- shown whenever there's no
-    // active session (poll_timer_cb() hides the WHOLE `content` card,
-    // this header included, once Connected). Per explicit request:
-    // tapping the AA icon with no phone connected should walk the user
-    // through what to do, not just show a bare status line.
-    lv_obj_t * instructions_header = lv_label_create(content);
-    lv_label_set_text(instructions_header, "Connect your phone");
-    theme::style_section_label(instructions_header);
+    // Hero Icon
+    lv_obj_t * hero_icon = ui::icons::create_icon(content, &ui::icons::icon_phone, staging_ui::theme::accent_primary());
+    (void)hero_icon;
 
-    lv_obj_t * step1 = lv_label_create(content);
-    lv_label_set_long_mode(step1, LV_LABEL_LONG_WRAP);
-    lv_obj_set_width(step1, LV_PCT(100));
-    lv_label_set_text(step1,
-                       "1. Pair your phone over Bluetooth first, if you haven't already.");
-    theme::style_secondary_text(step1);
+    // Title & Instructions
+    lv_obj_t * title = lv_label_create(content);
+    lv_label_set_text(title, "Ready to connect");
+    lv_obj_set_style_text_font(title, &lv_font_roboto_24, 0);
+    lv_obj_set_style_text_color(title, staging_ui::theme::text_primary(), 0);
 
-    lv_obj_t * bluetooth_btn = lv_button_create(content);
-    theme::style_primary_button(bluetooth_btn);
-    // Same row-scoped shrink as settings_screen.cpp's own Bluetooth row
-    // button and this screen's Connect button below -- style_primary_button()'s
-    // full CTA sizing is more than a secondary "go pair a device" link
-    // needs here, next to a numbered instruction line rather than
-    // standing alone.
-    lv_obj_set_style_pad_hor(bluetooth_btn, 14, 0);
-    lv_obj_set_style_pad_ver(bluetooth_btn, 8, 0);
-    lv_obj_set_style_text_font(bluetooth_btn, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_min_height(bluetooth_btn, 40, 0);
-    lv_obj_add_event_cb(bluetooth_btn, bluetooth_btn_cb, LV_EVENT_CLICKED, nullptr);
-    lv_group_add_obj(core::navigation::focus_group(), bluetooth_btn);
-    lv_obj_t * bluetooth_btn_label = lv_label_create(bluetooth_btn);
-    lv_label_set_text(bluetooth_btn_label, "Open Bluetooth settings");
+    lv_obj_t * subtitle = lv_label_create(content);
+    lv_label_set_text(subtitle, "Pair phone via Bluetooth to begin wireless session.");
+    lv_obj_set_style_text_font(subtitle, &lv_font_roboto_14, 0);
+    lv_obj_set_style_text_color(subtitle, staging_ui::theme::text_secondary(), 0);
 
-    lv_obj_t * step2 = lv_label_create(content);
-    lv_label_set_long_mode(step2, LV_LABEL_LONG_WRAP);
-    lv_obj_set_width(step2, LV_PCT(100));
-    lv_label_set_text(step2,
-                       "2. Android Auto starts automatically once your phone is detected as "
-                       "Auto-capable over Bluetooth -- no action needed. If it doesn't, or "
-                       "you'd rather start it now, tap Connect below.");
-    theme::style_secondary_text(step2);
-
+    // Connect (Wireless) CTA Button
     lv_obj_t * connect_btn = lv_button_create(content);
-    theme::style_primary_button(connect_btn);
+    lv_obj_remove_style_all(connect_btn);
+    lv_obj_set_size(connect_btn, 420, 52);
+    lv_obj_set_style_radius(connect_btn, staging_ui::theme::kPillRadius, 0);
+    lv_obj_set_style_bg_color(connect_btn, staging_ui::theme::accent_primary(), 0);
+    lv_obj_set_style_bg_opa(connect_btn, LV_OPA_COVER, 0);
+    lv_obj_set_style_bg_color(connect_btn, lv_color_hex(0x6b9be8), LV_STATE_PRESSED);
+    staging_ui::theme::style_focusable(connect_btn);
     lv_obj_add_event_cb(connect_btn, connect_btn_cb, LV_EVENT_CLICKED, nullptr);
-    lv_group_add_obj(core::navigation::focus_group(), connect_btn);
+
     lv_obj_t * connect_label = lv_label_create(connect_btn);
     lv_label_set_text(connect_label, "Connect (Wireless)");
+    lv_obj_set_style_text_font(connect_label, &lv_font_roboto_20, 0);
+    lv_obj_set_style_text_color(connect_label, staging_ui::theme::text_on_accent(), 0);
+    lv_obj_center(connect_label);
 
-    lv_obj_t * state_header = lv_label_create(content);
-    lv_label_set_text(state_header, "Status");
-    theme::style_section_label(state_header);
+    // Open Bluetooth Secondary Button
+    lv_obj_t * bluetooth_btn = lv_button_create(content);
+    lv_obj_remove_style_all(bluetooth_btn);
+    lv_obj_set_size(bluetooth_btn, 420, 52);
+    lv_obj_set_style_radius(bluetooth_btn, staging_ui::theme::kPillRadius, 0);
+    lv_obj_set_style_bg_color(bluetooth_btn, staging_ui::theme::surface_container_high(), 0);
+    lv_obj_set_style_bg_opa(bluetooth_btn, LV_OPA_50, 0);
+    lv_obj_set_style_border_width(bluetooth_btn, 1, 0);
+    lv_obj_set_style_border_color(bluetooth_btn, staging_ui::theme::surface_border(), 0);
+    staging_ui::theme::style_focusable(bluetooth_btn);
+    lv_obj_add_event_cb(bluetooth_btn, bluetooth_btn_cb, LV_EVENT_CLICKED, nullptr);
+
+    lv_obj_t * bluetooth_btn_label = lv_label_create(bluetooth_btn);
+    lv_label_set_text(bluetooth_btn_label, "Open Bluetooth");
+    lv_obj_set_style_text_font(bluetooth_btn_label, &lv_font_roboto_20, 0);
+    lv_obj_set_style_text_color(bluetooth_btn_label, staging_ui::theme::accent_primary(), 0);
+    lv_obj_center(bluetooth_btn_label);
+
+    if (core::navigation::focus_group()) {
+        lv_group_add_obj(core::navigation::focus_group(), connect_btn);
+        lv_group_add_obj(core::navigation::focus_group(), bluetooth_btn);
+    }
+
+    // Status Row
+    lv_obj_t * status_row = lv_obj_create(content);
+    lv_obj_remove_style_all(status_row);
+    lv_obj_set_size(status_row, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(status_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(status_row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(status_row, 8, 0);
 
     ParsedStatus initial = parse_status_line(client().statusLine());
-    lv_obj_t * state_body = lv_label_create(content);
+    lv_obj_t * state_body = lv_label_create(status_row);
     lv_label_set_text(state_body, initial.name.c_str());
+    lv_obj_set_style_text_font(state_body, &lv_font_roboto_14, 0);
     lv_obj_set_style_text_color(state_body, color_for_state_name(initial.name), 0);
 
-    lv_obj_t * detail_body = lv_label_create(content);
-    lv_label_set_long_mode(detail_body, LV_LABEL_LONG_WRAP);
-    lv_obj_set_width(detail_body, LV_PCT(100));
+    lv_obj_t * detail_body = lv_label_create(status_row);
     lv_label_set_text(detail_body, initial.detail.c_str());
-    lv_obj_set_style_text_color(detail_body, lv_color_hex(0xcccccc), 0);
+    lv_obj_set_style_text_font(detail_body, &lv_font_roboto_14, 0);
+    lv_obj_set_style_text_color(detail_body, staging_ui::theme::text_secondary(), 0);
 
     if (initial.name == "Connected") {
         lv_obj_add_flag(content, LV_OBJ_FLAG_HIDDEN);

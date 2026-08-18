@@ -30,6 +30,7 @@
 #include "ui/home_screen.h"
 #include "ui/theme.h"
 #include "ui/staging/home_dashboard.h"
+#include "ui/staging/nav_rail.h"
 
 namespace {
 
@@ -466,7 +467,7 @@ int main() {
         // adding a new ScreenManager API.
         if (aa_auto_start_watcher().consume_navigate_request() &&
             !hal::androidauto_screen_active().load(std::memory_order_acquire)) {
-            core::navigation::push(ui::create_android_auto_screen);
+            staging_ui::navigate_to(staging_ui::NavDestination::AndroidAuto);
         }
         usleep(5000);
     }

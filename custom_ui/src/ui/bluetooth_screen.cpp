@@ -294,17 +294,17 @@ lv_obj_t * create_bluetooth_screen() {
     lv_obj_set_style_pad_row(content, 8, 0);
     lv_obj_clear_flag(content, LV_OBJ_FLAG_SCROLLABLE);
 
-    // Top Header Row (Centered Time)
+    // Top Header Row (Centered Title)
     lv_obj_t * header_row = lv_obj_create(content);
     lv_obj_remove_style_all(header_row);
     lv_obj_set_width(header_row, LV_PCT(100));
-    lv_obj_set_height(header_row, 28);
+    lv_obj_set_height(header_row, 34);
     lv_obj_set_flex_flow(header_row, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(header_row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
     lv_obj_t * title_lbl = lv_label_create(header_row);
     lv_label_set_text(title_lbl, "Bluetooth");
-    lv_obj_set_style_text_font(title_lbl, &lv_font_roboto_20, 0);
+    lv_obj_set_style_text_font(title_lbl, &lv_font_roboto_28, 0);
     lv_obj_set_style_text_color(title_lbl, staging_ui::theme::text_primary(), 0);
 
     // Dual-Card Container (Side by Side)
@@ -328,7 +328,7 @@ lv_obj_t * create_bluetooth_screen() {
 
     lv_obj_t * info_header = lv_label_create(card_info);
     lv_label_set_text(info_header, "Local Bluetooth");
-    lv_obj_set_style_text_font(info_header, &lv_font_roboto_24, 0);
+    lv_obj_set_style_text_font(info_header, &lv_font_roboto_28, 0);
     lv_obj_set_style_text_color(info_header, staging_ui::theme::text_primary(), 0);
 
     // Device Name
@@ -404,7 +404,7 @@ lv_obj_t * create_bluetooth_screen() {
 
     lv_obj_t * dev_title = lv_label_create(dev_header_row);
     lv_label_set_text(dev_title, "Paired Devices");
-    lv_obj_set_style_text_font(dev_title, &lv_font_roboto_20, 0);
+    lv_obj_set_style_text_font(dev_title, &lv_font_roboto_28, 0);
     lv_obj_set_style_text_color(dev_title, staging_ui::theme::text_primary(), 0);
 
     lv_obj_t * refresh_btn = lv_button_create(dev_header_row);

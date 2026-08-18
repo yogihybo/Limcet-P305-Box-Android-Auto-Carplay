@@ -94,7 +94,7 @@ lv_obj_t * create_home_dashboard() {
     lv_obj_t * header = lv_obj_create(main_area);
     lv_obj_remove_style_all(header);
     lv_obj_set_width(header, LV_PCT(100));
-    lv_obj_set_height(header, 28);
+    lv_obj_set_height(header, 34);
     lv_obj_set_flex_flow(header, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(header, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
@@ -105,7 +105,7 @@ lv_obj_t * create_home_dashboard() {
     char buf[16];
     std::snprintf(buf, sizeof(buf), "%02d:%02d", local.tm_hour, local.tm_min);
     lv_label_set_text(clock_lbl, buf);
-    lv_obj_set_style_text_font(clock_lbl, &lv_font_roboto_20, 0);
+    lv_obj_set_style_text_font(clock_lbl, &lv_font_roboto_28, 0);
     lv_obj_set_style_text_color(clock_lbl, theme::text_primary(), 0);
 
     // Dual-Card Container
@@ -137,7 +137,7 @@ lv_obj_t * create_home_dashboard() {
 
     lv_obj_t * aa_title = lv_label_create(aa_header_box);
     lv_label_set_text(aa_title, "Android Auto");
-    lv_obj_set_style_text_font(aa_title, &lv_font_roboto_24, 0);
+    lv_obj_set_style_text_font(aa_title, &lv_font_roboto_28, 0);
     lv_obj_set_style_text_color(aa_title, theme::text_primary(), 0);
 
     lv_obj_t * aa_status = lv_label_create(aa_header_box);
@@ -180,7 +180,7 @@ lv_obj_t * create_home_dashboard() {
     // Title (No icon in front of title to match mockup)
     lv_obj_t * audio_title = lv_label_create(card_audio);
     lv_label_set_text(audio_title, "Audio Volume");
-    lv_obj_set_style_text_font(audio_title, &lv_font_roboto_24, 0);
+    lv_obj_set_style_text_font(audio_title, &lv_font_roboto_28, 0);
     lv_obj_set_style_text_color(audio_title, theme::text_primary(), 0);
 
     // Center Arc Volume Gauge

@@ -125,6 +125,12 @@ int read_mcu_frame(int fd, unsigned char * out_cmd, unsigned char * out_payload,
             return -1;
         } else if (errno != EAGAIN && errno != EINTR) {
             break;
+        } else if (errno == EAGAIN) {
+            // 2026-08-19: this fd is opened blocking (no O_NONBLOCK,
+            // see open() below), so EAGAIN shouldn't occur in practice
+            // today -- cheap defensive yield in case that ever changes,
+            // rather than a tight immediate-retry spin.
+            usleep(1000);
         }
     }
     if (header_read < 2) return 0;

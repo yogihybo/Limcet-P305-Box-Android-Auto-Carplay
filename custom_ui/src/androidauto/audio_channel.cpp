@@ -34,6 +34,28 @@ AudioChannel::AudioChannel(boost::asio::io_service::strand & strand,
 }
 
 void AudioChannel::start() {
+    // 2026-08-19: self-capturing shared_ptr, not a bare `this` -- see
+    // alsa_output.h's own class comment for the full history.
+    // AlsaOutput invokes this from ITS OWN writer thread, so the
+    // pendingPacedAcks_ load below must stay a relaxed atomic read,
+    // not a strand-only access -- the whole point is deciding whether
+    // to post at all WITHOUT already being on strand_. Only actually
+    // posts (and only then does strand_ work: decrement + sendAck())
+    // when there's a real paced ack owed, so this costs nothing during
+    // normal below-high-water-mark playback beyond one atomic load per
+    // write.
+    auto self = shared_from_this();
+    alsaOutput_.setConsumedCallback([this, self]() {
+        if (pendingPacedAcks_.load(std::memory_order_relaxed) == 0) {
+            return;
+        }
+        strand_.post([this, self]() {
+            if (pendingPacedAcks_ > 0) {
+                --pendingPacedAcks_;
+                sendAck();
+            }
+        });
+    });
     channel_->receive(this->shared_from_this());
 }
 
@@ -149,6 +171,21 @@ void AudioChannel::playBuffer(const aasdk::common::DataConstBuffer & buffer) {
         uint32_t frameCount = static_cast<uint32_t>(buffer.size / bytesPerFrame);
         if (frameCount > 0) {
             alsaOutput_.write(buffer.cdata, frameCount);
+
+            // Adaptive high-water-mark pacing -- see alsa_output.h's
+            // own class comment for the full history. Below
+            // kHighWaterMarkBuffers queued, keep acking immediately
+            // (network pipeline stays saturated during normal
+            // playback); at/above it, defer this buffer's ack to
+            // AlsaOutput's consumed callback instead (see start()'s
+            // own comment), so the phone's own max_unacked window
+            // naturally throttles it back to real playback speed
+            // instead of continuing to race ahead into a growing
+            // backlog.
+            if (alsaOutput_.queuedBuffers() >= kHighWaterMarkBuffers) {
+                ++pendingPacedAcks_;
+                return;
+            }
         }
     }
     sendAck();

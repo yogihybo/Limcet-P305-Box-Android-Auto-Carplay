@@ -4,6 +4,7 @@
 // owns the screen stack, ui:: provides screen factories. main() itself
 // is now just wiring + the LVGL tick loop. See docs/IMPLEMENTATION_PLAN.md.
 
+#include <algorithm>
 #include <atomic>
 #include <cerrno>
 #include <chrono>
@@ -464,7 +465,7 @@ int main() {
     // tested. Left logging on afterward, it just drowned out real
     // error output on every boot.
     while (true) {
-        lv_timer_handler();
+        uint32_t sleep_ms = lv_timer_handler();
         // Cheap atomic exchange every iteration -- see
         // AaAutoStartWatcher::run()'s own comment for why this can't
         // just call core::navigation::push() directly from its own
@@ -490,7 +491,14 @@ int main() {
             !hal::androidauto_screen_active().load(std::memory_order_acquire)) {
             staging_ui::navigate_to(staging_ui::NavDestination::AndroidAuto);
         }
-        usleep(5000);
+        // 2026-08-19: was an unconditional 5ms sleep regardless of
+        // what lv_timer_handler() actually needed, waking 200 times/sec
+        // even on a fully static screen with nothing scheduled for tens
+        // of ms. lv_timer_handler() returns the real ms until its next
+        // due timer -- use that instead, clamped to [5, 30]ms so touch/
+        // knob input still gets serviced promptly (min) while a truly
+        // idle screen isn't burning cycles waking up every 5ms (max).
+        usleep(std::min(std::max(sleep_ms, 5u), 30u) * 1000);
     }
 
     return 0;

@@ -110,6 +110,18 @@ namespace androidauto {
 // only defers to it once queuedBuffers() crosses the high-water mark;
 // below that, acks still fire immediately to keep the network pipeline
 // saturated during normal playback.
+//
+// 2026-08-19 REVISED AGAIN: real hardware showed THIS unconditionally
+// firing onConsumed_() on every single write -- with 3 audio channels
+// at 48kHz, that's 100+ calls/sec each doing strand_.post() (heap-
+// allocating and queueing a lambda onto the single shared io_service
+// thread), the overwhelming majority of which were no-ops (no paced
+// ack owed) -- real, unnecessary CPU overhead on an already-stressed
+// single core. audio_channel.cpp's own callback now checks its atomic
+// pendingPacedAcks_ BEFORE deciding to post at all, so strand_.post()
+// is only reached when there's an actual paced ack to send -- i.e.
+// during normal below-high-water-mark playback, onConsumed_ firing
+// costs one atomic load and nothing else.
 class AlsaOutput {
 public:
     // deviceName: a real confirmed PCM device string, see header
@@ -142,6 +154,13 @@ public:
         return queue_.size();
     }
 
+    // 2026-08-19: fires on the writer thread after every real ALSA
+    // write completes -- see audio_channel.cpp's own comment for how
+    // this is used (paced acks under backpressure, cheaply gated so it
+    // costs nothing during normal below-high-water-mark playback).
+    using ConsumedCallback = std::function<void()>;
+    void setConsumedCallback(ConsumedCallback cb) { onConsumed_ = std::move(cb); }
+
     // Stops the writer thread (letting it drain whatever's already
     // queued) and closes the PCM device.
     void close();
@@ -159,9 +178,12 @@ private:
 
     snd_pcm_t * pcmHandle_ = nullptr;
 
-    // 32 buffers @ ~10ms = ~320ms audio buffer -- ample for ALSA jitter absorption
-    // without memory bloating or CPU cache thrashing on single-core ARM926EJ-S.
-    static constexpr size_t kMaxQueuedBuffers = 32;
+    // 256 buffers (~2.7s) -- large enough to absorb a media app's real
+    // 1-2s pre-buffer burst on playback start without dropping
+    // anything; audio_channel.cpp's high-water-mark pacing is the
+    // actual defense against unbounded growth, this is just the
+    // backstop. See this file's own top comment for the full history.
+    static constexpr size_t kMaxQueuedBuffers = 256;
 
     std::thread writerThread_;
     mutable std::mutex mutex_;
@@ -169,6 +191,7 @@ private:
     std::deque<std::vector<uint8_t>> queue_;
     bool stop_ = false;
     uint32_t droppedBuffers_ = 0;
+    ConsumedCallback onConsumed_;
 };
 
 }  // namespace androidauto

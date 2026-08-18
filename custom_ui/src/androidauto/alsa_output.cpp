@@ -147,6 +147,13 @@ void AlsaOutput::writerLoop() {
                 consecutiveErrors = 0;
             }
         }
+        // Fires on every real write -- see alsa_output.h's own class
+        // comment for why this is cheap in practice (the caller checks
+        // its own atomic counter before posting to strand_, so this is
+        // a no-op call the overwhelming majority of the time).
+        if (onConsumed_) {
+            onConsumed_();
+        }
     }
 }
 

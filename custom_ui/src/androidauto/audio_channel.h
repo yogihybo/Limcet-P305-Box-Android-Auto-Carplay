@@ -17,6 +17,7 @@
 // NOT YET hardware-tested.
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -68,6 +69,13 @@ private:
     uint32_t channels_;
     AlsaOutput alsaOutput_;
     bool alsaOpen_ = false;
+
+    // 2026-08-19: see alsa_output.h's own class comment -- read from
+    // AlsaOutput's writer thread (to decide whether to post to
+    // strand_ at all) and written/cleared from strand_ (playBuffer()/
+    // the consumed callback), so this needs to be atomic even though
+    // it's a simple counter.
+    std::atomic<size_t> pendingPacedAcks_{0};
 
     int32_t sessionId_ = 0;
 };

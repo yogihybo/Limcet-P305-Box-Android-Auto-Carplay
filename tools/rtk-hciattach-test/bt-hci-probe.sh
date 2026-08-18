@@ -33,34 +33,42 @@ if pidof blueware >/dev/null 2>&1; then
 fi
 
 echo "=== bt-hci-probe: enabling gpio$GPIO (BTEN_INTERFACE) ==="
-# 2026-08-19 REVISED: Ghidra-decompiled the real bpio_init()/
-# bpio_reset()/bpio_set() functions from the actual /usr/bin/blueware
-# binary (firmware_source/mtd6_rootfs/usr/bin/blueware, all three
-# confirmed operating on the same gpio91 value fd). bpio_init() itself
-# ends by writing "0" (LOW) -- the daemon does NOT come up with the
-# pin high. The real captured stock log (docs/logs/bluetooth log
-# stock_260718.txt, lines 66-87) shows the meaningful transition
-# immediately before real chip communication starts is TWO full
-# low-then-high pulses back to back (bpio_reset/bpio_set/bpio_reset/
-# bpio_set), ending high, right before "realtek selected"/opening
-# librtkvnd.so. This supersedes the previous revision of this script
-# (which removed the pulse entirely based on a doc excerpt that turned
-# out to only cover bpio_init's static enable step, not the real
-# pre-communication reset dance) -- neither bpio_reset() nor bpio_set()
-# has any delay in its own body, so the exact inter-call timing is
-# still unconfirmed (blocked on resolving what looks like vtable-
-# dispatched calls to these two functions); 100ms between each
-# transition here is a conservative placeholder, not a confirmed value.
+# 2026-08-19 REVISED AGAIN: real Realtek RTL8761ATT datasheet (same
+# EN_CHIP-controlled power architecture as our RTL8761BTV) obtained and
+# checked directly -- section 3.3.3 "EN_CHIP Control": "EN_CHIP # pin
+# is active low to trigger reset behavior and the drive low should be
+# longer than 100ms (>100ms) to avoid unconditional reset noise from
+# the PCB board." Figure 5 confirms BT power comes up in <1ms after
+# release. Our previous 100ms low pulses were sitting exactly AT this
+# boundary, not safely above it -- bumped to 150ms with margin.
+#
+# The datasheet's own Table 14 (UART Interface Power-On Timing
+# Parameters) also directly refutes an earlier unverified "200ms
+# post-reset boot delay" claim floated during this investigation: the
+# real max UART-not-ready duration (T_non-rdy) is only 10ms, and T_por
+# (POR release to power management tasks) maxes at 8ms -- the chip is
+# genuinely ready within ~18ms of the final high transition, not 200ms.
+# The final `sleep 1` (1000ms) below was already ~50x more than this
+# real requirement, so left as-is -- harmless margin, not a bug.
+#
+# Two full low-then-high pulses (not just one) still match the real
+# captured stock blueware log (docs/logs/bluetooth log stock_260718.txt,
+# lines 66-87: bpio_reset/bpio_set/bpio_reset/bpio_set immediately
+# before real chip communication starts) -- the datasheet's own Figure
+# 5 only shows a single cycle, so blueware's second cycle is either
+# redundant belt-and-suspenders or serves a distinct purpose this
+# datasheet doesn't cover; keeping both since it costs nothing and
+# matches the one real working reference we have.
 if [ ! -d /sys/class/gpio/gpio$GPIO ]; then
     echo $GPIO > /sys/class/gpio/export 2>/dev/null || true
 fi
 echo out > /sys/class/gpio/gpio$GPIO/direction 2>/dev/null || echo "warn: couldn't set gpio$GPIO direction"
 echo 0 > /sys/class/gpio/gpio$GPIO/value 2>/dev/null
-usleep 100000 2>/dev/null || sleep 1
+usleep 150000 2>/dev/null || sleep 1
 echo 1 > /sys/class/gpio/gpio$GPIO/value 2>/dev/null
-usleep 100000 2>/dev/null || sleep 1
+usleep 150000 2>/dev/null || sleep 1
 echo 0 > /sys/class/gpio/gpio$GPIO/value 2>/dev/null
-usleep 100000 2>/dev/null || sleep 1
+usleep 150000 2>/dev/null || sleep 1
 echo 1 > /sys/class/gpio/gpio$GPIO/value 2>/dev/null
 sleep 1
 

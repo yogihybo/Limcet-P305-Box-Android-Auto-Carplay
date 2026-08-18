@@ -63,9 +63,26 @@ the same pulse fine -- explaining exactly why Run 4 got further than
 Run 3 on identical code. `bt-hci-probe.sh` now matches the real
 sequence exactly (no low pulse).
 
+**Update (real datasheet obtained)**: a genuine Realtek RTL8761ATT
+datasheet (same EN_CHIP-controlled power architecture as our
+RTL8761BTV) was located and checked directly. Section 3.3.3
+"EN_CHIP Control": the low pulse must be **strictly >100ms** ("to
+avoid unconditional reset noise from the PCB board") -- our prior
+100ms pulses sat exactly at that boundary, not safely above it, and
+have been bumped to 150ms. The datasheet's Table 14 also directly
+refutes an unverified "200ms post-reset boot delay" figure that came
+up during this investigation: the real max UART-not-ready duration
+(`T_non-rdy`) is only 10ms, `T_por` maxes at 8ms -- the chip is ready
+within ~18ms of the high transition, not 200ms (our existing 1000ms
+final wait was already far more than sufficient, left as-is). The
+double low-then-high cycle (matching the real captured stock log)
+stays -- the datasheet's own diagram only shows one cycle, but the
+second one costs nothing and matches the one real working reference
+we have.
+
 **Not yet re-tested against hardware** -- next run (ideally from a
-genuinely fresh power cycle, to test the GPIO fix specifically) is
-what confirms whether this reaches `hci0`, or whether Run 4's
+genuinely fresh power cycle) is what confirms whether the corrected,
+now-datasheet-backed pulse width reaches `hci0`, or whether Run 4's
 baud-switch timing issue is still there once sync/chip-ID/firmware-load
 succeed reliably.
 

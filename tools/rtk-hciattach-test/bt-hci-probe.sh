@@ -25,16 +25,20 @@ set -e
 # 2026-08-19: optional A/B test -- pass "reference" as the first
 # argument to stage rtkbt's own bundled generic RTL8761B firmware/
 # config (reference-firmware/, github.com/radxa/rtkbt, GPLv2 repo,
-# unmodified) instead of this project's real on-device
-# etc/rtl8761bt_fw/etc/rtl8761bt_config. Chip identification still goes
-# through the same lmp_subver=0x434d patched table entry either way
-# (src/rtb_fwc.c) -- swapping which file lands at $FW_DIR/rtl8761b_fw
-# is the only difference. Useful for isolating whether a given failure
-# is specific to our real firmware blob or a rtk_hciattach/board-level
-# issue that a known-community-tested generic firmware would also hit.
-# Byte-for-byte different from ours (different size, different header
-# bytes right after the "Realtech" signature) -- see this tool's own
-# README for the comparison.
+# unmodified) instead of this project's real firmware
+# (device-firmware/, a copy of firmware_source/mtd6_rootfs/etc/
+# rtl8761bt_fw+rtl8761bt_config -- bundled here rather than read from
+# /etc/ on the target so this whole tool is self-contained and doesn't
+# depend on those files still being present/unmodified on whatever
+# device it's copied to). Chip identification still goes through the
+# same lmp_subver=0x434d patched table entry either way (src/rtb_fwc.c)
+# -- swapping which file lands at $FW_DIR/rtl8761b_fw is the only
+# difference. Useful for isolating whether a given failure is specific
+# to our real firmware blob or a rtk_hciattach/board-level issue that a
+# known-community-tested generic firmware would also hit. Byte-for-byte
+# different from ours (different size, different header bytes right
+# after the "Realtech" signature) -- see this tool's own README for the
+# comparison.
 FW_SOURCE="${1:-device}"
 
 FW_DIR=/lib/firmware/rtlbt
@@ -45,8 +49,8 @@ HCIATTACH="$SCRIPT_DIR/rtk_hciattach"
 
 case "$FW_SOURCE" in
     device)
-        FW_SRC_FILE=/etc/rtl8761bt_fw
-        CFG_SRC_FILE=/etc/rtl8761bt_config
+        FW_SRC_FILE="$SCRIPT_DIR/device-firmware/rtl8761bt_fw"
+        CFG_SRC_FILE="$SCRIPT_DIR/device-firmware/rtl8761bt_config"
         ;;
     reference)
         FW_SRC_FILE="$SCRIPT_DIR/reference-firmware/rtl8761b_fw"

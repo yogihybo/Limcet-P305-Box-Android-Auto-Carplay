@@ -20,8 +20,7 @@ void style_card(lv_obj_t * obj) {
     lv_obj_set_style_bg_color(obj, surface_card(), 0);
     lv_obj_set_style_bg_opa(obj, LV_OPA_COVER, 0);
     lv_obj_set_style_radius(obj, kCardRadius, 0);
-    lv_obj_set_style_border_width(obj, 1, 0);
-    lv_obj_set_style_border_color(obj, surface_border(), 0);
+    lv_obj_set_style_border_width(obj, 0, 0);
     lv_obj_set_style_pad_all(obj, 20, 0);
     lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
 }

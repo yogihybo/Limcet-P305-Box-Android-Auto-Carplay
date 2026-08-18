@@ -41,6 +41,26 @@ set -e
 # comparison.
 FW_SOURCE="${1:-device}"
 
+# 2026-08-19: optional second argument -- "h4" to attach using the
+# simpler, framing-free Realtek H4 protocol (rtk_h4, same uart[] table
+# in src/hciattach.c, shares the same realtek_init()) instead of H5's
+# SYNC/CONFIG handshake (rtk_h5, default). Useful for telling apart
+# "the wire/baud is fundamentally dead" (H4 would also get nothing)
+# from "something specific to H5's own handshake is wrong" (H4 might
+# get a response where H5 doesn't). Confirmed real, physical reason
+# NOT to suspect a flow-control mismatch either way: this board's
+# pinctrl_uart5 group (linux-arkmicro/linux/arch/arm/boot/dts/
+# ark1668-pinctrl.dtsi) only mux's RX/TX for this UART -- no RTS/CTS
+# pins exist on this board at all, matching UART_FLOWCTL=0.
+PROTO="${2:-rtk_h5}"
+case "$PROTO" in
+    rtk_h5|rtk_h4) ;;
+    *)
+        echo "usage: $0 [device|reference] [rtk_h5|rtk_h4]  (default: device rtk_h5)"
+        exit 1
+        ;;
+esac
+
 FW_DIR=/lib/firmware/rtlbt
 TTY=/dev/ttyHS1
 GPIO=91
@@ -97,6 +117,6 @@ mkdir -p "$FW_DIR"
 cp "$FW_SRC_FILE" "$FW_DIR/rtl8761b_fw"
 cp "$CFG_SRC_FILE" "$FW_DIR/rtl8761b_config"
 
-echo "=== bt-hci-probe: running rtk_hciattach (foreground, Ctrl-C to stop) ==="
+echo "=== bt-hci-probe: running rtk_hciattach ($PROTO, foreground, Ctrl-C to stop) ==="
 echo "Watch for 'HCI Device Index' or check 'ls /sys/class/bluetooth' in another shell."
-"$HCIATTACH" -n -s 1500000 "$TTY" rtk_h5
+"$HCIATTACH" -n -s 1500000 "$TTY" "$PROTO"

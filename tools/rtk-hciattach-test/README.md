@@ -15,13 +15,23 @@ choice)?
 automatically, doesn't modify anything permanent. Run it manually, look
 at the result, decide what's next.
 
-## Firmware A/B test
+## Firmware A/B test / H4 vs H5 protocol test
 
 ```sh
-bt-hci-probe.sh            # default: this project's real firmware
-bt-hci-probe.sh device     # same, explicit
-bt-hci-probe.sh reference  # rtkbt's own bundled generic RTL8761B firmware instead
+bt-hci-probe.sh                     # default: real firmware, H5 protocol
+bt-hci-probe.sh device rtk_h5       # same, explicit
+bt-hci-probe.sh reference           # rtkbt's own bundled generic firmware instead
+bt-hci-probe.sh device rtk_h4       # real firmware, simpler H4 protocol instead of H5
 ```
+
+H4 has no SYNC/CONFIG handshake -- useful for telling apart "the wire/
+baud is fundamentally dead" (H4 would also get nothing) from
+"something specific to H5's own handshake is wrong" (H4 might get a
+response where H5 doesn't). Not a flow-control question either way --
+checked `ark1668-pinctrl.dtsi`'s `pinctrl_uart5` group directly: this
+board's UART5 only muxes RX/TX, no RTS/CTS pins exist on it at all,
+confirming `UART_FLOWCTL=0` matches real board wiring, not just
+software preference.
 
 Both firmware sources are bundled directly in this directory --
 `device-firmware/` (a copy of `firmware_source/mtd6_rootfs/etc/

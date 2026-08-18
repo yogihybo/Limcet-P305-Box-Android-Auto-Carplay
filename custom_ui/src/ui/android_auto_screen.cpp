@@ -99,9 +99,26 @@ void poll_timer_cb(lv_timer_t * timer) {
     lv_obj_set_style_text_color(w->state_label, color_for_state_name(status.name), 0);
     lv_label_set_text(w->detail_label, status.detail.c_str());
 
-    hal::androidauto_screen_active().store(status.name == "Connected", std::memory_order_release);
+    // 2026-08-19: Connected alone isn't the right condition to gate
+    // fb0/knob/touch on -- Android Auto's own in-app exit/back control
+    // sends a real VideoFocusRequestNotification(mode=NATIVE), which
+    // per real AA behavior (researched, not guessed -- see
+    // video_channel.cpp's onVideoFocusRequest() comment) means "give
+    // focus back to your native UI," NOT a disconnect. The session
+    // stays fully Connected in the background the whole time -- real
+    // hardware showed this exact case (bye-bye never sent, session
+    // still Connected) leaving the panel stuck on a frozen AA video
+    // frame with fb0 never switched back. Querying videoFocusNative()
+    // (see hal/androidauto_client.h / androidauto/video_visibility.h)
+    // alongside Connected catches this: only route the knob/touch to
+    // AA, hide fb0, and hide this screen's own content card while a
+    // session is BOTH Connected AND the phone still wants PROJECTED
+    // focus -- i.e. actually showing video.
+    bool connected = status.name == "Connected";
+    bool showingVideo = connected && !client().videoFocusNative();
+    hal::androidauto_screen_active().store(showingVideo, std::memory_order_release);
 
-    if (status.name == "Connected") {
+    if (showingVideo) {
         lv_obj_add_flag(w->content, LV_OBJ_FLAG_HIDDEN);
         if (!w->display_hidden) {
             hal::hide_display();

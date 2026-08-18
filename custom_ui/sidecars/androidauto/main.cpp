@@ -47,6 +47,17 @@
 //                touch through at all (and which couldn't have worked
 //                from THIS process anyway -- the MCU serial port is
 //                read exclusively by custom_ui's own process).
+//   "FOCUS"   -> replies "NATIVE" or "PROJECTED" -- the phone's own
+//                real VideoFocusRequestNotification.mode() (see
+//                androidauto/video_visibility.h's video_focus_native()
+//                and video_channel.cpp's onVideoFocusRequest()), NOT
+//                the same thing as STATUS' Connected/not-Connected: a
+//                session can be fully Connected while focus is NATIVE
+//                (the phone's own in-app exit/back control was used --
+//                it stays connected in the background, this is not a
+//                disconnect). ui/android_auto_screen.cpp polls this
+//                alongside STATUS to know when to switch its own fb0/
+//                LVGL layer back into view.
 //   (anything else) -> replies "ERR unknown command"
 // One thread per accepted connection (expected connection count: 2 as
 // of the status-bar work in src/ui/status_bar.cpp -- android_auto_screen.cpp's
@@ -163,6 +174,15 @@ void handle_connection(int clientFd, androidauto::WirelessSessionManager * manag
         } else if (line == "HIDE") {
             androidauto::video_visible().store(false, std::memory_order_release);
             reply = "OK\n";
+        } else if (line == "FOCUS") {
+            // See video_visibility.h's own comment on video_focus_native()
+            // -- separate from the session's overall Connected/not
+            // state (STATUS above): the phone can request native focus
+            // (its own in-app exit/back control) while staying fully
+            // connected in the background, and custom_ui needs to know
+            // that specifically to switch its own fb0/LVGL layer back
+            // into view.
+            reply = androidauto::video_focus_native().load(std::memory_order_acquire) ? "NATIVE\n" : "PROJECTED\n";
         } else if (line.rfind("KEY ", 0) == 0) {
             std::string arg = line.substr(4);
             char *end = nullptr;

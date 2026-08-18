@@ -18,6 +18,7 @@ namespace staging_ui {
 namespace {
 
 struct DashboardWidgets {
+    lv_obj_t * clock_lbl = nullptr;
     lv_obj_t * aa_status_lbl = nullptr;
     lv_obj_t * connect_lbl = nullptr;
     lv_timer_t * poll_timer = nullptr;
@@ -28,8 +29,21 @@ hal::AndroidAutoClient & client() {
     return c;
 }
 
+void update_clock(DashboardWidgets * w) {
+    if (!w || !w->clock_lbl) return;
+    std::time_t now = std::time(nullptr);
+    std::tm local {};
+    localtime_r(&now, &local);
+    char buf[32];
+    std::strftime(buf, sizeof(buf), "%I:%M %p", &local);
+    const char * formatted = (buf[0] == '0') ? &buf[1] : buf;
+    lv_label_set_text(w->clock_lbl, formatted);
+}
+
 void update_dashboard_status(DashboardWidgets * w) {
-    if (!w || !w->aa_status_lbl || !w->connect_lbl) return;
+    if (!w) return;
+    update_clock(w);
+    if (!w->aa_status_lbl || !w->connect_lbl) return;
     std::string line = client().statusLine(false);
     if (line.rfind("STATE Connected", 0) == 0) {
         lv_label_set_text(w->aa_status_lbl, "Session: Active (Connected)");
@@ -99,14 +113,10 @@ lv_obj_t * create_home_dashboard() {
     lv_obj_set_flex_align(header, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
     lv_obj_t * clock_lbl = lv_label_create(header);
-    std::time_t now = std::time(nullptr);
-    std::tm local {};
-    localtime_r(&now, &local);
-    char buf[16];
-    std::snprintf(buf, sizeof(buf), "%02d:%02d", local.tm_hour, local.tm_min);
-    lv_label_set_text(clock_lbl, buf);
     lv_obj_set_style_text_font(clock_lbl, &lv_font_roboto_28, 0);
     lv_obj_set_style_text_color(clock_lbl, theme::text_primary(), 0);
+    widgets->clock_lbl = clock_lbl;
+    update_clock(widgets);
 
     // Dual-Card Container
     lv_obj_t * cards_row = lv_obj_create(main_area);

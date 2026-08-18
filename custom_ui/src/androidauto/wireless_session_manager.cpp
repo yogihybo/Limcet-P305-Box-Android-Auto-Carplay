@@ -322,8 +322,20 @@ void WirelessSessionManager::run() {
     // WIFI_CONNECT_STATUS, so 5s was too tight a window for what this
     // call now actually waits through (see its own updated comment).
     bwAap.waitForOptionalConnectStatus(15);
-    std::printf("%s androidauto: wireless session: closing bw_aap\n", androidauto::logTimestamp().c_str());
-    bwAap.close();
+    // 2026-08-19: per docs/SESSION_KEEPALIVE_AND_TIMEOUT_HANDOFF.md,
+    // building directly on this function's own comment above (already
+    // decompile-confirmed stock never closes /dev/bw_aap for the whole
+    // connection's lifetime, but this project only took the smaller,
+    // bounded-wait step at the time) -- bwAap.close() moved from here to
+    // after the AA session actually ends, below. Real hardware showed
+    // sessions dying ~20-30s after connecting with a bare TCP EOF
+    // (control channel error 33/TCP_TRANSFER, no AA-protocol bye-bye),
+    // consistent with the phone treating a dropped Bluetooth RFCOMM
+    // tether as an out-of-band "is the vehicle still there" signal and
+    // tearing down the WiFi session on its own timeout. Keeping this
+    // link open for the session's real duration, not just through the
+    // WiFi handshake, is the fuller fix that comment already flagged as
+    // the more faithful (if riskier) match to stock -- now taken.
 
     setStatus(WirelessSessionState::Connecting,
               "Waiting for phone to dial in on 0.0.0.0:" + std::to_string(cfg.wifi_session_port()) +
@@ -351,6 +363,31 @@ void WirelessSessionManager::run() {
         setStatus(WirelessSessionState::Failed, "accept() failed: " + acceptEc.message());
         return;
     }
+
+    // 2026-08-19: per docs/SESSION_KEEPALIVE_AND_TIMEOUT_HANDOFF.md --
+    // this socket previously had no options set at all. Without
+    // TCP_NODELAY, Nagle's algorithm can buffer small outgoing control
+    // frames (PingResponse, InputReport, MediaAckIndication) waiting for
+    // a full MSS or a delayed ACK, adding real latency to exactly the
+    // traffic pingConfig's own timeout is racing against. Without
+    // SO_KEEPALIVE, the kernel never probes a silently-dead WiFi link on
+    // its own -- a half-open connection (AP still up, phone gone) would
+    // sit idle until the next application-level ping actually needed the
+    // socket, rather than being detected proactively. Best-effort: a
+    // failure to set either option isn't fatal, just logged.
+    boost::system::error_code nodelayEc;
+    socket->set_option(boost::asio::ip::tcp::no_delay(true), nodelayEc);
+    if (nodelayEc) {
+        std::printf("%s androidauto: wireless session: TCP_NODELAY set failed: %s\n",
+                    androidauto::logTimestamp().c_str(), nodelayEc.message().c_str());
+    }
+    boost::system::error_code keepaliveEc;
+    socket->set_option(boost::asio::socket_base::keep_alive(true), keepaliveEc);
+    if (keepaliveEc) {
+        std::printf("%s androidauto: wireless session: SO_KEEPALIVE set failed: %s\n",
+                    androidauto::logTimestamp().c_str(), keepaliveEc.message().c_str());
+    }
+
     boost::system::error_code peerEc;
     auto remote = socket->remote_endpoint(peerEc);
     if (!peerEc) {
@@ -383,6 +420,12 @@ void WirelessSessionManager::run() {
         std::lock_guard<std::mutex> lock(sessionMutex_);
         currentSession_.reset();
     }
+
+    // See this function's own comment where bwAap.waitForOptionalConnectStatus()
+    // is called, above -- kept open for the AA session's real duration
+    // now, closed here once it's actually over.
+    std::printf("%s androidauto: wireless session: closing bw_aap\n", androidauto::logTimestamp().c_str());
+    bwAap.close();
 
     setStatus(WirelessSessionState::Failed, "Session ended (io_service stopped)");
 }

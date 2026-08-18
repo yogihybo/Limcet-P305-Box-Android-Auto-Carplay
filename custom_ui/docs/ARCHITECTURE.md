@@ -26,14 +26,11 @@ stack actually expose," not a design spec.
   known-good `galcore.ko`/`libGAL.so` pairing if GPU-accelerated
   blitting is ever added.
 
-## Touch input
+## Touch & Rotary knob input
 
-`/dev/input/eventN`, standard Linux evdev (ARK1680 resistive touch
-controller, built into the kernel). The stock app's Qt/QWS backend
-needed `QWS_MOUSE_PROTO`/`QWS_ARK_MT_DEVICE` env-var gating
-(`project_touch_qws_env_gate`) — that's a Qt/QWS-specific requirement,
-not a hardware one. LVGL reads evdev directly (`lv_indev` + a plain
-`read()` loop against the event device), no equivalent gating needed.
+- Touch Panel & Rotary Encoder: Relayed by the Limcet MCU over `/dev/ttyHS0` (`hal::McuInputHal`).
+- Rotary Navigation in Android Auto: Maps continuous rotation to `KEYCODE_NAVIGATE_NEXT/PREVIOUS` (261/260), center push-button to `KEYCODE_DPAD_CENTER` (23), and hold-and-rotate chords to D-Pad card nudges (`KEYCODE_DPAD_RIGHT/LEFT` 22/21).
+  See [`ROTARY_KNOB_AND_CARD_NAVIGATION_HANDOFF.md`](ROTARY_KNOB_AND_CARD_NAVIGATION_HANDOFF.md) for the complete state machine and AAP keycode mapping.
 
 ## Audio
 

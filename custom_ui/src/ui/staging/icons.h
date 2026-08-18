@@ -20,6 +20,8 @@ extern const lv_image_dsc_t icon_prev;
 extern const lv_image_dsc_t icon_play;
 extern const lv_image_dsc_t icon_pause;
 extern const lv_image_dsc_t icon_next;
+extern const lv_image_dsc_t icon_plus;
+extern const lv_image_dsc_t icon_minus;
 
 // Helper to create an icon widget styled and recolored
 lv_obj_t * create_icon(lv_obj_t * parent, const lv_image_dsc_t * dsc, lv_color_t color);

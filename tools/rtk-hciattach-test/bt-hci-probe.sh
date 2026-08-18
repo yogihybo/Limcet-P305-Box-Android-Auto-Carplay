@@ -56,10 +56,27 @@ PROTO="${2:-rtk_h5}"
 case "$PROTO" in
     rtk_h5|rtk_h4) ;;
     *)
-        echo "usage: $0 [device|reference] [rtk_h5|rtk_h4]  (default: device rtk_h5)"
+        echo "usage: $0 [device|reference] [rtk_h5|rtk_h4] [gdb]  (default: device rtk_h5)"
         exit 1
         ;;
 esac
+
+# 2026-08-19: optional third argument -- "gdb" launches rtk_hciattach
+# under gdbserver (tools/gdbserver/, already on $PATH on-device) on
+# port 2345 instead of running it directly, so a host gdb-multiarch can
+# attach and catch the fc17/fc20 h5_post_hci_cc race live -- static
+# reading confirmed the *shape* of the bug reproduces consistently
+# (docs/BLUEZ_AND_KERNEL_BLUETOOTH_HANDOFF.md's own investigation) but
+# left an unresolved contradiction (h5_post_hci_cc should only be
+# reachable when link_estab_state==H5_HCI_RESET, which should not be
+# the state at that point per the code's own logic) that only live
+# state inspection can settle. See "GDB debugging" section in this
+# tool's own README for the full host-side connect instructions.
+GDB_MODE="${3:-}"
+if [ -n "$GDB_MODE" ] && [ "$GDB_MODE" != "gdb" ]; then
+    echo "usage: $0 [device|reference] [rtk_h5|rtk_h4] [gdb]  (default: device rtk_h5)"
+    exit 1
+fi
 
 FW_DIR=/lib/firmware/rtlbt
 TTY=/dev/ttyHS1
@@ -116,6 +133,16 @@ echo "=== bt-hci-probe: staging firmware ($FW_SOURCE: $FW_SRC_FILE -> $FW_DIR/rt
 mkdir -p "$FW_DIR"
 cp "$FW_SRC_FILE" "$FW_DIR/rtl8761b_fw"
 cp "$CFG_SRC_FILE" "$FW_DIR/rtl8761b_config"
+
+if [ "$GDB_MODE" = "gdb" ]; then
+    echo "=== bt-hci-probe: launching rtk_hciattach ($PROTO) under gdbserver :2345 ==="
+    echo "On your host: gdb-multiarch $SCRIPT_DIR/rtk_hciattach-debug"
+    echo "  (gdb) target remote <device-ip>:2345"
+    echo "  (gdb) b h5_post_hci_cc"
+    echo "  (gdb) continue"
+    echo "See this tool's own README, 'GDB debugging' section, for the full walkthrough."
+    exec gdbserver :2345 "$HCIATTACH" -n -s 1500000 "$TTY" "$PROTO"
+fi
 
 echo "=== bt-hci-probe: running rtk_hciattach ($PROTO, foreground, Ctrl-C to stop) ==="
 echo "Watch for 'HCI Device Index' or check 'ls /sys/class/bluetooth' in another shell."

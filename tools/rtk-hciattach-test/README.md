@@ -47,6 +47,56 @@ issue a known-community-tested generic firmware would also hit" --
 chip identification goes through the same patched `lmp_subver=0x434d`
 table entry either way, only the staged file content differs.
 
+## GDB debugging
+
+The `fc17`/`fc20` baud-switch race (`h5_post_hci_cc: Received
+unexpected cc for cmd fc17, fc20 of cc`) reproduces consistently --
+confirmed twice with two different firmware files (`device` and
+`reference`, both hit the identical error at the identical point).
+Static reading traced the *shape* of the bug but hit a real
+contradiction: `h5_post_hci_cc()` is only reachable when
+`rtb_cfg.link_estab_state == H5_HCI_RESET` (checked directly in
+`hci_recv_frame()`'s dispatch table), yet `link_estab_state = H5_PATCH`
+is set unconditionally before any download packet is ever sent
+(`src/hciattach_rtk.c` around `start_download:`). By the code's own
+logic `h5_post_hci_cc()` shouldn't be reachable at that point at all --
+worth settling with real state, not another guess.
+
+```sh
+bt-hci-probe.sh device rtk_h5 gdb   # launches rtk_hciattach under gdbserver :2345 instead
+```
+
+On your host machine (needs `gdb-multiarch`: `sudo apt-get install -y
+gdb-multiarch`; needs network reachability to the device, not this
+sandbox -- this step has to run on your own machine):
+
+```sh
+gdb-multiarch /path/to/local/copy/of/rtk_hciattach-debug
+(gdb) target remote <device-ip>:2345
+(gdb) b h5_post_hci_cc
+(gdb) continue
+```
+
+`rtk_hciattach-debug` (unstripped, `with debug_info`, built from the
+exact same object files as the shipped `rtk_hciattach` -- only the
+`-s` strip flag differs, so code/data addresses match) is bundled here
+for exactly this -- copy it to your host for symbols; the *device*
+still runs the normal stripped `rtk_hciattach` under `gdbserver`.
+
+When the breakpoint hits:
+
+```
+(gdb) print rtb_cfg.link_estab_state
+(gdb) print rtb_cfg.cmd_state
+```
+
+If `link_estab_state` really is `H5_HCI_RESET` at that point, the real
+bug is upstream of `h5_post_hci_cc()` -- something is setting/leaving
+that state wrong before download starts, not a missing opcode
+assignment. If it's genuinely `H5_PATCH`, that's even more surprising
+and means `hci_recv_frame()`'s dispatch itself isn't matching the
+static read -- either way, this settles it with real data instead of
+another static-analysis guess.
 Notably, our real firmware's header bytes right after `"Realtech"` are
 literally `4d 43` -- ASCII `"MC"`, which as a little-endian 16-bit
 value is `0x434d`, exactly the customized LMP Subversion our real chip

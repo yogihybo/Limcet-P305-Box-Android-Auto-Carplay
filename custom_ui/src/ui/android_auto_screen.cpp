@@ -201,18 +201,14 @@ lv_obj_t * create_android_auto_screen() {
     client().setVisible(true);
     hal::androidauto_screen_active().store(false, std::memory_order_release);
 
-    // 2. Main Content Card matching mockup_2_android_auto.jpg
+    // 2. Main Content Card matching Home Dashboard geometry
     lv_obj_t * content = lv_obj_create(scr);
     staging_ui::theme::style_card(content);
-    lv_obj_set_pos(content, staging_ui::theme::kRailWidth + 32, 20);
-    lv_obj_set_size(content, 800 - (staging_ui::theme::kRailWidth + 64), 440);
+    lv_obj_set_pos(content, staging_ui::theme::kRailWidth + 16, 8);
+    lv_obj_set_size(content, 800 - (staging_ui::theme::kRailWidth + 32), 464);
     lv_obj_set_flex_flow(content, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(content, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_all(content, 24, 0);
-
-    // Hero Icon
-    lv_obj_t * hero_icon = ui::icons::create_icon(content, &ui::icons::icon_phone, staging_ui::theme::accent_primary());
-    (void)hero_icon;
+    lv_obj_set_style_pad_all(content, 32, 0);
 
     // Title & Instructions
     lv_obj_t * title = lv_label_create(content);
@@ -228,7 +224,7 @@ lv_obj_t * create_android_auto_screen() {
     // Connect (Wireless) CTA Button
     lv_obj_t * connect_btn = lv_button_create(content);
     lv_obj_remove_style_all(connect_btn);
-    lv_obj_set_size(connect_btn, 420, 52);
+    lv_obj_set_size(connect_btn, 360, 56);
     lv_obj_set_style_radius(connect_btn, staging_ui::theme::kPillRadius, 0);
     lv_obj_set_style_bg_color(connect_btn, staging_ui::theme::accent_primary(), 0);
     lv_obj_set_style_bg_opa(connect_btn, LV_OPA_COVER, 0);
@@ -242,27 +238,8 @@ lv_obj_t * create_android_auto_screen() {
     lv_obj_set_style_text_color(connect_label, staging_ui::theme::text_on_accent(), 0);
     lv_obj_center(connect_label);
 
-    // Open Bluetooth Secondary Button
-    lv_obj_t * bluetooth_btn = lv_button_create(content);
-    lv_obj_remove_style_all(bluetooth_btn);
-    lv_obj_set_size(bluetooth_btn, 420, 52);
-    lv_obj_set_style_radius(bluetooth_btn, staging_ui::theme::kPillRadius, 0);
-    lv_obj_set_style_bg_color(bluetooth_btn, staging_ui::theme::surface_container_high(), 0);
-    lv_obj_set_style_bg_opa(bluetooth_btn, LV_OPA_50, 0);
-    lv_obj_set_style_border_width(bluetooth_btn, 1, 0);
-    lv_obj_set_style_border_color(bluetooth_btn, staging_ui::theme::surface_border(), 0);
-    staging_ui::theme::style_focusable(bluetooth_btn);
-    lv_obj_add_event_cb(bluetooth_btn, bluetooth_btn_cb, LV_EVENT_CLICKED, nullptr);
-
-    lv_obj_t * bluetooth_btn_label = lv_label_create(bluetooth_btn);
-    lv_label_set_text(bluetooth_btn_label, "Open Bluetooth");
-    lv_obj_set_style_text_font(bluetooth_btn_label, &lv_font_roboto_20, 0);
-    lv_obj_set_style_text_color(bluetooth_btn_label, staging_ui::theme::accent_primary(), 0);
-    lv_obj_center(bluetooth_btn_label);
-
     if (core::navigation::focus_group()) {
         lv_group_add_obj(core::navigation::focus_group(), connect_btn);
-        lv_group_add_obj(core::navigation::focus_group(), bluetooth_btn);
     }
 
     // Status Row

@@ -242,16 +242,16 @@ lv_obj_t * create_bluetooth_screen() {
     // 1. Persistent 5-Icon Navigation Rail (Bluetooth active)
     staging_ui::create_nav_rail(scr, staging_ui::NavDestination::Bluetooth);
 
-    // 2. Main Content Area matching mockup_3_bluetooth.jpg
+    // 2. Main Content Area matching Home Dashboard geometry
     lv_obj_t * content = lv_obj_create(scr);
     lv_obj_remove_style_all(content);
-    lv_obj_set_pos(content, staging_ui::theme::kRailWidth + 24, 16);
-    lv_obj_set_size(content, 800 - (staging_ui::theme::kRailWidth + 48), 448);
+    lv_obj_set_pos(content, staging_ui::theme::kRailWidth + 16, 8);
+    lv_obj_set_size(content, 800 - (staging_ui::theme::kRailWidth + 32), 464);
     lv_obj_set_flex_flow(content, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_style_pad_row(content, 12, 0);
+    lv_obj_set_style_pad_row(content, 8, 0);
     lv_obj_clear_flag(content, LV_OBJ_FLAG_SCROLLABLE);
 
-    // Top Header Row
+    // Top Header Row (Centered Time)
     lv_obj_t * header_row = lv_obj_create(content);
     lv_obj_remove_style_all(header_row);
     lv_obj_set_width(header_row, LV_PCT(100));
@@ -270,23 +270,23 @@ lv_obj_t * create_bluetooth_screen() {
     lv_obj_set_width(cards_row, LV_PCT(100));
     lv_obj_set_flex_grow(cards_row, 1);
     lv_obj_set_flex_flow(cards_row, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(cards_row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+    lv_obj_set_flex_align(cards_row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_column(cards_row, 16, 0);
     lv_obj_clear_flag(cards_row, LV_OBJ_FLAG_SCROLLABLE);
 
-    // Left Card: Device Info
+    // Left Card: Device Info (336px wide x 416px high)
     lv_obj_t * card_info = lv_obj_create(cards_row);
     staging_ui::theme::style_card(card_info);
-    lv_obj_set_width(card_info, 310);
+    lv_obj_set_width(card_info, 336);
     lv_obj_set_height(card_info, LV_PCT(100));
     lv_obj_set_flex_flow(card_info, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(card_info, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_all(card_info, 20, 0);
+    lv_obj_set_style_pad_all(card_info, 24, 0);
 
     lv_obj_t * info_header = lv_label_create(card_info);
-    lv_label_set_text(info_header, "DEVICE INFO");
-    lv_obj_set_style_text_font(info_header, &lv_font_roboto_14, 0);
-    lv_obj_set_style_text_color(info_header, staging_ui::theme::text_secondary(), 0);
+    lv_label_set_text(info_header, "Local Bluetooth");
+    lv_obj_set_style_text_font(info_header, &lv_font_roboto_24, 0);
+    lv_obj_set_style_text_color(info_header, staging_ui::theme::text_primary(), 0);
 
     // Device Name
     lv_obj_t * name_box = lv_obj_create(card_info);
@@ -303,7 +303,7 @@ lv_obj_t * create_bluetooth_screen() {
     std::string current_name = core::default_store().get_string("DeviceName", "Prado CustomUI", "BlueTooth");
     lv_obj_t * name_val = lv_label_create(name_box);
     lv_label_set_text(name_val, current_name.c_str());
-    lv_obj_set_style_text_font(name_val, &lv_font_roboto_24, 0);
+    lv_obj_set_style_text_font(name_val, &lv_font_roboto_20, 0);
     lv_obj_set_style_text_color(name_val, staging_ui::theme::text_primary(), 0);
 
     // PIN / Address
@@ -320,7 +320,7 @@ lv_obj_t * create_bluetooth_screen() {
 
     lv_obj_t * addr_label = lv_label_create(pin_box);
     lv_label_set_text(addr_label, "0000");
-    lv_obj_set_style_text_font(addr_label, &lv_font_roboto_24, 0);
+    lv_obj_set_style_text_font(addr_label, &lv_font_roboto_20, 0);
     lv_obj_set_style_text_color(addr_label, staging_ui::theme::text_primary(), 0);
 
     // Discoverable Switch
@@ -342,14 +342,14 @@ lv_obj_t * create_bluetooth_screen() {
         lv_group_add_obj(core::navigation::focus_group(), discoverable_sw);
     }
 
-    // Right Card: Paired Devices List
+    // Right Card: Paired Devices List (336px wide x 416px high)
     lv_obj_t * card_devices = lv_obj_create(cards_row);
     staging_ui::theme::style_card(card_devices);
-    lv_obj_set_width(card_devices, 370);
+    lv_obj_set_width(card_devices, 336);
     lv_obj_set_height(card_devices, LV_PCT(100));
     lv_obj_set_flex_flow(card_devices, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(card_devices, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
-    lv_obj_set_style_pad_all(card_devices, 20, 0);
+    lv_obj_set_style_pad_all(card_devices, 24, 0);
     lv_obj_set_style_pad_row(card_devices, 12, 0);
 
     lv_obj_t * dev_header_row = lv_obj_create(card_devices);

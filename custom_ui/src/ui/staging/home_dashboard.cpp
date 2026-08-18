@@ -8,15 +8,64 @@
 #include "ui/reverse_camera_screen.h"
 #include "ui/staging/icons.h"
 #include "core/navigation.h"
+#include "hal/androidauto_client.h"
 #include <ctime>
 #include <cstdio>
+#include <string>
 
 namespace staging_ui {
 
 namespace {
 
-void quick_connect_clicked_cb(lv_event_t *) {
-    core::navigation::push(ui::create_android_auto_screen);
+struct DashboardWidgets {
+    lv_obj_t * aa_status_lbl = nullptr;
+    lv_obj_t * connect_lbl = nullptr;
+    lv_timer_t * poll_timer = nullptr;
+};
+
+hal::AndroidAutoClient & client() {
+    static hal::AndroidAutoClient c;
+    return c;
+}
+
+void update_dashboard_status(DashboardWidgets * w) {
+    if (!w || !w->aa_status_lbl || !w->connect_lbl) return;
+    std::string line = client().statusLine(false);
+    if (line.rfind("STATE Connected", 0) == 0) {
+        lv_label_set_text(w->aa_status_lbl, "Session: Active (Connected)");
+        lv_label_set_text(w->connect_lbl, "Open Session");
+    } else if (line.rfind("STATE Connecting", 0) == 0) {
+        lv_label_set_text(w->aa_status_lbl, "Connection: Connecting...");
+        lv_label_set_text(w->connect_lbl, "Connecting...");
+    } else {
+        lv_label_set_text(w->aa_status_lbl, "Connection: Ready to pair");
+        lv_label_set_text(w->connect_lbl, "Quick Connect");
+    }
+}
+
+void poll_timer_cb(lv_timer_t * timer) {
+    auto * w = static_cast<DashboardWidgets *>(lv_timer_get_user_data(timer));
+    update_dashboard_status(w);
+}
+
+void quick_connect_clicked_cb(lv_event_t * e) {
+    std::string line = client().statusLine(false);
+    if (line.rfind("STATE Connected", 0) == 0) {
+        core::navigation::push(ui::create_android_auto_screen);
+    } else {
+        client().requestConnect();
+        core::navigation::push(ui::create_android_auto_screen);
+    }
+}
+
+void dashboard_delete_cb(lv_event_t * e) {
+    auto * w = static_cast<DashboardWidgets *>(lv_event_get_user_data(e));
+    if (w) {
+        if (w->poll_timer) {
+            lv_timer_delete(w->poll_timer);
+        }
+        delete w;
+    }
 }
 
 } // namespace
@@ -25,6 +74,9 @@ lv_obj_t * create_home_dashboard() {
     lv_obj_t * scr = lv_obj_create(nullptr);
     lv_obj_set_style_bg_color(scr, theme::bg(), 0);
     lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
+
+    auto * widgets = new DashboardWidgets();
+    lv_obj_add_event_cb(scr, dashboard_delete_cb, LV_EVENT_DELETE, widgets);
 
     // 1. Persistent 5-Icon Navigation Rail (Home is active)
     create_nav_rail(scr, NavDestination::Home);
@@ -92,6 +144,7 @@ lv_obj_t * create_home_dashboard() {
     lv_label_set_text(aa_status, "Connection: Ready to pair");
     lv_obj_set_style_text_font(aa_status, &lv_font_roboto_14, 0);
     lv_obj_set_style_text_color(aa_status, theme::text_secondary(), 0);
+    widgets->aa_status_lbl = aa_status;
 
     // Bottom "Quick Connect" stadium pill button
     lv_obj_t * connect_btn = lv_button_create(card_aa);
@@ -102,13 +155,14 @@ lv_obj_t * create_home_dashboard() {
     lv_obj_set_style_bg_opa(connect_btn, LV_OPA_COVER, 0);
     lv_obj_set_style_bg_color(connect_btn, lv_color_hex(0x6b9be8), LV_STATE_PRESSED);
     theme::style_focusable(connect_btn);
-    lv_obj_add_event_cb(connect_btn, quick_connect_clicked_cb, LV_EVENT_CLICKED, nullptr);
+    lv_obj_add_event_cb(connect_btn, quick_connect_clicked_cb, LV_EVENT_CLICKED, widgets);
 
     lv_obj_t * connect_lbl = lv_label_create(connect_btn);
     lv_label_set_text(connect_lbl, "Quick Connect");
     lv_obj_set_style_text_font(connect_lbl, &lv_font_roboto_20, 0);
     lv_obj_set_style_text_color(connect_lbl, theme::text_on_accent(), 0);
     lv_obj_center(connect_lbl);
+    widgets->connect_lbl = connect_lbl;
 
     if (core::navigation::focus_group()) {
         lv_group_add_obj(core::navigation::focus_group(), connect_btn);
@@ -149,28 +203,35 @@ lv_obj_t * create_home_dashboard() {
     lv_obj_set_width(ctrl_row, LV_PCT(100));
     lv_obj_set_height(ctrl_row, LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(ctrl_row, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(ctrl_row, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_flex_align(ctrl_row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(ctrl_row, 16, 0);
 
-    auto add_ctrl_btn = [ctrl_row](const lv_image_dsc_t * icon_dsc) {
-        lv_obj_t * b = lv_button_create(ctrl_row);
-        lv_obj_remove_style_all(b);
-        lv_obj_set_size(b, 48, 48);
-        lv_obj_set_style_radius(b, theme::kPillRadius, 0);
-        lv_obj_set_style_bg_color(b, theme::surface_container_high(), 0);
-        lv_obj_set_style_bg_opa(b, LV_OPA_COVER, 0);
-        theme::style_focusable(b);
+    auto make_ctrl_btn = [ctrl_row](const lv_image_dsc_t * dsc) -> lv_obj_t * {
+        lv_obj_t * btn = lv_button_create(ctrl_row);
+        lv_obj_remove_style_all(btn);
+        lv_obj_set_size(btn, 48, 48);
+        lv_obj_set_style_radius(btn, LV_RADIUS_CIRCLE, 0);
+        lv_obj_set_style_bg_color(btn, theme::surface_container_high(), 0);
+        lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
+        lv_obj_set_style_bg_color(btn, theme::surface_pressed(), LV_STATE_PRESSED);
+        theme::style_focusable(btn);
 
-        lv_obj_t * img = ui::icons::create_icon(b, icon_dsc, theme::text_primary());
-        lv_obj_center(img);
+        lv_obj_t * icon = ui::icons::create_icon(btn, dsc, theme::text_primary());
+        lv_obj_center(icon);
 
         if (core::navigation::focus_group()) {
-            lv_group_add_obj(core::navigation::focus_group(), b);
+            lv_group_add_obj(core::navigation::focus_group(), btn);
         }
+        return btn;
     };
 
-    add_ctrl_btn(&ui::icons::icon_prev);
-    add_ctrl_btn(&ui::icons::icon_pause);
-    add_ctrl_btn(&ui::icons::icon_next);
+    make_ctrl_btn(&ui::icons::icon_prev);
+    make_ctrl_btn(&ui::icons::icon_pause);
+    make_ctrl_btn(&ui::icons::icon_next);
+
+    // Initial Status Check & Periodic Poll
+    update_dashboard_status(widgets);
+    widgets->poll_timer = lv_timer_create(poll_timer_cb, 1000, widgets);
 
     return scr;
 }

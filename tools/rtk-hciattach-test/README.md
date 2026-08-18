@@ -15,22 +15,33 @@ choice)?
 automatically, doesn't modify anything permanent. Run it manually, look
 at the result, decide what's next.
 
-## Status: H5 handshake confirmed real, chip auto-detect patched (2026-08-19)
+## Status: two hardware runs so far, chip ID recognized, one gate left (2026-08-19)
 
-Run once already against real hardware. Result: the H5 sync/config
-handshake completed cleanly (`H5 init finished`) -- the module
-genuinely speaks standard Realtek 3-wire HCI over the wire, settling
-the one question this tool exists to answer. It then failed to
-initialize because the real chip reports `LMP Subversion 0x434d`
-("CM" in ASCII) and `HCI Revision 0x6ca9`, neither of which match
-`rtkbt`'s stock `RTL8761BTV` table entry (`0x8761`/`0x000b`) -- almost
-certainly Feasycom customizing the reported ID on an otherwise-genuine
-RTL8761BTV die (see `src/rtb_fwc.c`'s own comment on the patch below
-for the full reasoning). `src/` now carries a small, documented patch
-adding a table entry that matches this exact `lmp_subver` and reuses
-the confirmed-correct `rtl8761b_fw`/`rtl8761b_config` filenames.
+**Run 1**: H5 sync/config handshake completed cleanly (`H5 init
+finished`) -- confirms the module genuinely speaks standard Realtek
+3-wire HCI over the wire, settling the one question this tool exists
+to answer. Then failed to initialize: the real chip reports
+`LMP Subversion 0x434d` ("CM" in ASCII) and `HCI Revision 0x6ca9`,
+neither matching `rtkbt`'s stock `RTL8761BTV` table entry
+(`0x8761`/`0x000b`) -- almost certainly Feasycom customizing the
+reported ID on an otherwise-genuine RTL8761BTV die. Patched
+`src/rtb_fwc.c`'s chip-matching table to recognize `lmp_subver=0x434d`.
+
+**Run 2** (same patched binary): chip ID now recognized
+(`IC: RTL8761BTV (Feasycom BW121)`), firmware/config loaded correctly
+(exact byte count, config bytes match this project's real
+`etc/rtl8761bt_config` verbatim). Hit a second, separate gate: the
+firmware blob's own internal "project ID" byte (`proj_id=14`) maps to
+`project_id[14]=0x8761` in a hardcoded table, and `rtb_get_final_patch()`
+compares that directly against the chip's real (customized) `lmp_subver`
+-- same root cause as the first gate, just a second place it shows up.
+Patched that one comparison to also accept `lmp_subver=0x434d` as a
+valid alias for `0x8761` (see `src/rtb_fwc.c`'s own comment right at
+that check) -- every other chip's check is unaffected.
+
 **Not yet re-tested against hardware** -- next real-hardware run is
-what confirms or refutes this.
+what confirms whether this clears the last gate and `hci0` actually
+appears.
 
 ## What's here
 

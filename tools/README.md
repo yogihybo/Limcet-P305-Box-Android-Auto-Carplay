@@ -44,6 +44,7 @@ boot/crash problem elsewhere in the system.
 | `dmesg` | Static util-linux `dmesg` — timestamps/facility-decoding/color that BusyBox's built-in applet lacks |
 | `strace` | Upstream syscall tracer (static build) |
 | `audio-test` / `touch-selftest` / `uart-test` / `bt-test` / `usb-test` / `mmc-test` | Automated pass/fail wrapper scripts, one per subsystem |
+| `rtk-hciattach-test` | One-shot manual diagnostic (not auto-run, not a stack switcher): attempts kernel-HCI `hci0` bring-up against the real Bluetooth module via `rtk_hciattach`, as an alternative to stock `blueware` — see its own `README.md` |
 
 ## General shell utilities
 

@@ -103,7 +103,7 @@ lv_obj_t * create_stepper_row(lv_obj_t * parent, const lv_image_dsc_t * icon_dsc
     lv_obj_set_height(row, 72);
     lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_hor(row, 8, 0);
+    lv_obj_set_style_pad_hor(row, 16, 0);
 
     // Left Icon + Label
     lv_obj_t * left_box = lv_obj_create(row);

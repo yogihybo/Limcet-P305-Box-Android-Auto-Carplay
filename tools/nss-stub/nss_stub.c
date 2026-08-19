@@ -17,6 +17,7 @@
 #include <grp.h>
 #include <errno.h>
 #include <stddef.h>
+#include <netdb.h>
 
 struct passwd *__wrap_getpwnam(const char *name) { (void)name; return NULL; }
 struct passwd *__wrap_getpwuid(uid_t uid) { (void)uid; return NULL; }
@@ -52,3 +53,24 @@ void *__wrap_dlsym(void *handle, const char *symbol) {
 	return NULL;
 }
 int __wrap_dlclose(void *handle) { (void)handle; return 0; }
+
+/* Added for bluetoothd (tools/bluetoothd-test): libdbus's TCP transport
+ * (_dbus_connect_tcp_socket_with_nonce, getaddrinfo) and its
+ * fill_user_info() (getgrouplist) -- both dead code on this deployment,
+ * we only ever use the unix-domain socket transport and run as root, but
+ * their mere reference at link time pulls in the same broken static-NSS
+ * init path documented above. */
+int __wrap_getgrouplist(const char *user, gid_t group, gid_t *groups,
+			 int *ngroups) {
+	(void)user; (void)group;
+	if (groups && ngroups && *ngroups > 0)
+		groups[0] = group;
+	if (ngroups)
+		*ngroups = 1;
+	return 1;
+}
+int __wrap_getaddrinfo(const char *node, const char *service,
+			const struct addrinfo *hints, struct addrinfo **res) {
+	(void)node; (void)service; (void)hints; (void)res;
+	return EAI_NONAME;
+}

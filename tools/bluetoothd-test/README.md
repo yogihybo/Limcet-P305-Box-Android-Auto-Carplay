@@ -75,6 +75,56 @@ directly (would require setting up a whole separate Buildroot build and
 producing a differently-versioned rootfs, out of scope for a diagnostic
 binary) -- just cross-checked against for correctness.
 
+### Vendored sources (`third_party/`, git submodules)
+
+2026-08-19: all six cross-compiled dependencies plus BlueZ itself are
+now real git submodules here (`third_party/libffi`, `pcre2`, `zlib`,
+`glib`, `expat`, `dbus`, `bluez`) -- same convention as
+`custom_ui/third_party/aasdk`/`lvgl` -- pinned to the exact tags this
+was actually built against (`v3.4.6`, `pcre2-10.43`, `v1.3.1`, `2.78.4`,
+`R_2_6_2`, `dbus-1.14.10`, `5.66`). Previously these only existed in an
+untracked scratch dir (`~/Downloads/bt-cross/`) outside any repo --
+fine for one session, but the whole cross-build dependency chain (glib
+requiring Meson, pkg-config not being installed at all, etc. -- see
+above) would otherwise have to be rediscovered from scratch next time.
+
+**Not vendored as submodules, deliberately -- easily reproducible without
+pinning a source tree:**
+- **Meson 1.12.0 / Ninja 1.13.0** (glib's build system) -- installed via
+  `pip install --user --break-system-packages meson ninja` (no root, no
+  system package available). Pin with `pip install --user
+  --break-system-packages meson==1.12.0 ninja==1.13.0` to match exactly.
+- **pkgconf 1.8.1 / libpkgconf3 1.8.1** (`pkg-config` itself, also not
+  installed) -- extracted directly from Debian's `.deb`s with `dpkg-deb
+  -x`, no root needed: `apt-get download pkgconf-bin libpkgconf3`, then
+  copy `usr/bin/pkgconf` to somewhere on `$PATH` as `pkg-config` and
+  `usr/lib/*/libpkgconf.so.3.0.0` next to it with
+  `LD_LIBRARY_PATH` pointed at that directory (the extracted `.so` isn't
+  on the system's normal library search path).
+
+To rebuild from these submodules: `git submodule update --init
+tools/bluetoothd-test/third_party` (each subdir is already checked out
+at the exact tag above), then follow the build order in this section
+-- `configure --host=arm-linux-gnueabihf --prefix=/usr
+--disable-shared --enable-static` for the autotools ones (`libffi`,
+`pcre2`, `zlib`, `expat`, `dbus`), `meson setup --cross-file
+<your-cross-file> --default-library=static` for `glib` (see this repo's
+own build log/commit messages for the exact option list used -- 
+`-Dtests=false -Dman=false -Dgtk_doc=false -Dselinux=disabled
+-Dlibmount=disabled -Ddtrace=false -Dsystemtap=false -Dxattr=false
+-Dnls=disabled`), each installed into a common staging prefix via
+`make install DESTDIR=<stage>` /
+`DESTDIR=<stage> ninja install` so `PKG_CONFIG_PATH` finds them for the
+next one, then `bluez`'s own `configure --host=arm-linux-gnueabihf
+--prefix=/usr --disable-shared --enable-static --with-pic
+--disable-obex --disable-cups --disable-manpages --disable-udev
+--disable-systemd --disable-client --disable-datafiles
+--with-dbusconfdir=/etc CFLAGS="-fno-pie -O2" LDFLAGS="-all-static
+-no-pie -Wl,--wrap=getpwnam,--wrap=getpwuid,--wrap=getpwnam_r,--wrap=getpwuid_r,--wrap=getpwent,--wrap=setpwent,--wrap=endpwent,--wrap=getgrgid,--wrap=getgrgid_r,--wrap=getgrouplist,--wrap=dlopen,--wrap=dlerror,--wrap=dlsym,--wrap=dlclose,--wrap=getaddrinfo
+<path to ../nss-stub/nss_stub.o>"`. `-all-static`, not bare `-static` --
+see this file's own "Why static" section above for why that distinction
+matters with libtool.
+
 ## What's disabled / not built
 
 - **`bluetoothctl`** (`--disable-client`) -- needs `readline`, not built

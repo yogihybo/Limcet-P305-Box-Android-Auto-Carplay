@@ -80,7 +80,6 @@ fi
 
 FW_DIR=/lib/firmware/rtlbt
 TTY=/dev/ttyHS1
-GPIO=91
 SCRIPT_DIR="$(dirname "$0")"
 HCIATTACH="$SCRIPT_DIR/rtk_hciattach"
 
@@ -104,30 +103,21 @@ if pidof blueware >/dev/null 2>&1; then
     exit 1
 fi
 
-echo "=== bt-hci-probe: enabling gpio$GPIO (BTEN_INTERFACE) ==="
-# 2026-08-19 REVERTED TO SINGLE PULSE: the double low-then-high cycle
-# (added based on blueware's decompiled bpio_reset/bpio_set/bpio_reset/
-# bpio_set sequence, then bumped 100ms->150ms based on the real
-# RTL8761ATT datasheet's >100ms minimum) has NEVER once succeeded on
-# real hardware, cold or warm -- two separate hardware tests both went
-# completely silent (zero H5 SYNC responses). The ONLY sequence that
-# has ever actually worked on this hardware, twice, is this single
-# pulse from this tool's very first commit (661b4c4): one low->high
-# cycle at 100ms. Evidence beats theory here -- the decompile-derived
-# double-pulse theory was reasonable but is empirically wrong (or at
-# least incomplete) for getting the chip to respond at all, whatever
-# blueware's own second cycle is actually for. Real EN_CHIP minimum
-# (RTL8761ATT datasheet section 3.3.3) is still >100ms, so kept at
-# 100ms as the exact value already twice proven to work rather than
-# guessing upward again without hardware evidence.
-if [ ! -d /sys/class/gpio/gpio$GPIO ]; then
-    echo $GPIO > /sys/class/gpio/export 2>/dev/null || true
-fi
-echo out > /sys/class/gpio/gpio$GPIO/direction 2>/dev/null || echo "warn: couldn't set gpio$GPIO direction"
-echo 0 > /sys/class/gpio/gpio$GPIO/value 2>/dev/null
-usleep 100000 2>/dev/null || sleep 1
-echo 1 > /sys/class/gpio/gpio$GPIO/value 2>/dev/null
-sleep 1
+# 2026-08-19 MOVED INTO rtk_hciattach ITSELF: gpio$GPIO handling used to
+# live here as a shell-side pulse before exec'ing rtk_hciattach, but
+# that can't replicate blueware's real order -- blueware opens the
+# UART *while gpio91 is still low* from its first reset pulse, and
+# never closes/reopens that fd through to vendor init. A separate
+# shell pulse followed by a fresh process opening its own new fd loses
+# that property entirely (and risks the chip emitting something on the
+# wire around the pulse that nothing is listening for yet). The GPIO
+# dance (first pulse, then -- with the UART already open -- a settle
+# delay approximating blueware's real intervening daemon-startup work,
+# then the real pulse pair right before vendor init) now lives in
+# src/hciattach.c itself (bt_gpio91_init_and_first_pulse()/
+# bt_gpio91_settle_and_final_pulse()), called from the SAME process
+# that goes on to do H5 sync. See that file's own comment for the full
+# reasoning and this tool's README for the investigation history.
 
 echo "=== bt-hci-probe: staging firmware ($FW_SOURCE: $FW_SRC_FILE -> $FW_DIR/rtl8761b_fw) ==="
 mkdir -p "$FW_DIR"

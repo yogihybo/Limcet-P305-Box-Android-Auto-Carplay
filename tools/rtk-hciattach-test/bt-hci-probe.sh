@@ -124,6 +124,22 @@ mkdir -p "$FW_DIR"
 cp "$FW_SRC_FILE" "$FW_DIR/rtl8761b_fw"
 cp "$CFG_SRC_FILE" "$FW_DIR/rtl8761b_config"
 
+# 2026-08-19: DROPPED the "-s 1500000" initial-speed override. rtk_h5's
+# real table default init_speed is 115200 (src/hciattach.c's uart[]
+# table) -- forcing 1500000 here made the *initial* UART open (and the
+# H5 SYNC handshake itself) happen at the wrong rate before any vendor
+# baud-switch has occurred. This plausibly explains the exact pattern
+# that prompted this fix: a genuinely cold chip's real ROM/bootloader
+# default is 115200, so SYNC at 1500000 would just talk past it
+# (matching every cold-boot total-silence result so far); after
+# blueware runs once, the chip's real UART hardware may still be
+# clocked at 1500000 left over from blueware's own successful vendor
+# baud-switch (the exact same fc17 mechanism, already confirmed
+# reaching "Final speed 1500000" reliably in our own runs) if our
+# GPIO91 pulse doesn't fully clear that state -- coincidentally
+# matching our wrong override and letting SYNC succeed by accident.
+# Now let rtk_hciattach start at the correct 115200 default and do its
+# own real baud-switch after a genuine SYNC, matching blueware exactly.
 if [ "$GDB_MODE" = "gdb" ]; then
     echo "=== bt-hci-probe: launching rtk_hciattach ($PROTO) under gdbserver :2345 ==="
     echo "On your host: gdb-multiarch $SCRIPT_DIR/rtk_hciattach-debug"
@@ -131,9 +147,9 @@ if [ "$GDB_MODE" = "gdb" ]; then
     echo "  (gdb) b h5_post_hci_cc"
     echo "  (gdb) continue"
     echo "See this tool's own README, 'GDB debugging' section, for the full walkthrough."
-    exec gdbserver :2345 "$HCIATTACH" -n -s 1500000 "$TTY" "$PROTO"
+    exec gdbserver :2345 "$HCIATTACH" -n "$TTY" "$PROTO"
 fi
 
 echo "=== bt-hci-probe: running rtk_hciattach ($PROTO, foreground, Ctrl-C to stop) ==="
 echo "Watch for 'HCI Device Index' or check 'ls /sys/class/bluetooth' in another shell."
-"$HCIATTACH" -n -s 1500000 "$TTY" "$PROTO"
+"$HCIATTACH" -n "$TTY" "$PROTO"

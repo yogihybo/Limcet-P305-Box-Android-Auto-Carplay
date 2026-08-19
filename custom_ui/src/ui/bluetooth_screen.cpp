@@ -101,41 +101,47 @@ void remove_device_clicked_cb(lv_event_t * e) {
     const std::string & entry = w->last_devices[index];
     std::printf("%s ui::bluetooth_screen: remove device tapped: '%s'\n", core::log_timestamp().c_str(), entry.c_str());
 
-    hal::BluetoothHandle & h = hal::shared_handle();
-    hal::disconnect_device(h);
+    std::string mac, name;
+    std::string connect_id = hal::split_plist_entry(entry, mac, name) ? mac : entry;
 
-    // "Disconnected", not "Removed" -- see hal::disconnect_device()'s
-    // own comment: no AT command exists to actually unpair/forget a
-    // device, only to disconnect the currently active link. The device
-    // stays paired and will still show up in start_bt_load()'s next
-    // PLIST refresh below.
-    status_label_set(w->status_label, "Disconnected");
+    hal::BluetoothHandle & h = hal::shared_handle();
+    hal::remove_paired_device(h, connect_id);
+
+    status_label_set(w->status_label, "Device removed");
     start_bt_load(w);
 }
 
 void populate_device_list(BtScreenWidgets * w, bool hw_present, bool devices_ok,
                            const std::vector<std::string> & devices) {
     lv_obj_clean(w->list);
-    w->last_devices = devices;
+    w->last_devices.clear();
     if (!hw_present) {
         lv_obj_t * lbl = lv_label_create(w->list);
-        lv_label_set_text(lbl, "/dev/bw_serial unavailable");
+        lv_label_set_text(lbl, "Bluetooth hardware not detected");
         lv_obj_set_style_text_color(lbl, staging_ui::theme::text_secondary(), 0);
-        status_label_set(w->status_label, "Bluetooth hardware not detected");
+        status_label_set(w->status_label, "Bluetooth unavailable");
         return;
     }
-    if (!devices_ok || devices.empty()) {
+    std::vector<std::string> valid_devices;
+    for (const auto & dev : devices) {
+        std::string mac, name;
+        if (hal::split_plist_entry(dev, mac, name) && !mac.empty()) {
+            valid_devices.push_back(dev);
+        }
+    }
+    w->last_devices = valid_devices;
+    if (!devices_ok || valid_devices.empty()) {
         lv_obj_t * lbl = lv_label_create(w->list);
         lv_label_set_text(lbl, "(no paired devices)");
         lv_obj_set_style_text_color(lbl, staging_ui::theme::text_secondary(), 0);
-        status_label_set(w->status_label, "PLIST returned nothing");
+        status_label_set(w->status_label, "Ready to pair new device");
         return;
     }
-    for (size_t i = 0; i < devices.size(); ++i) {
+    for (size_t i = 0; i < valid_devices.size(); ++i) {
         std::string mac, name;
-        std::string label = hal::split_plist_entry(devices[i], mac, name) && !name.empty()
+        std::string label = hal::split_plist_entry(valid_devices[i], mac, name) && !name.empty()
                                  ? name
-                                 : devices[i];
+                                 : valid_devices[i];
 
         lv_obj_t * row = lv_obj_create(w->list);
         lv_obj_remove_style_all(row);

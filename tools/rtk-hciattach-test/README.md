@@ -15,6 +15,40 @@ choice)?
 automatically, doesn't modify anything permanent. Run it manually, look
 at the result, decide what's next.
 
+## GPIO91 handling now lives inside `rtk_hciattach` itself (2026-08-19)
+
+Used to be a shell-side pulse in `bt-hci-probe.sh` before exec'ing
+`rtk_hciattach`, but that can't replicate two real properties of
+`blueware`'s own working sequence (`/usr/bin/blueware`, decompiled via
+Ghidra against the real binary):
+
+1. `blueware` opens `/dev/ttyHS1` **while GPIO91 is still low** from
+   its first reset pulse, and never closes/reopens that fd through to
+   real vendor init -- a separate shell pulse followed by a fresh
+   process opening its own new fd can't replicate "already listening,"
+   and risks losing anything the chip emits on the wire around a
+   pulse.
+2. `blueware`'s real log shows genuine elapsed wall-clock time
+   (`audio_control_init`, 4x `lib_serial_port_init`, several AT status
+   broadcasts, 2 NVM writes) between its first reset pulse and the
+   real pulse pair immediately before vendor init -- not a tight loop.
+
+`src/hciattach.c` now does this itself, in the same process that goes
+on to do H5 sync: `bt_gpio91_init_and_first_pulse()` (called before
+`init_uart()` opens the fd) then `bt_gpio91_settle_and_final_pulse()`
+(called from inside `init_uart()`, right after `open()` succeeds,
+before the fd is ever touched again) -- an 800ms settle delay
+approximates blueware's real intervening work (a labeled estimate, not
+a datasheet-confirmed number -- blueware's own log has no per-line
+timestamps to measure it exactly), then the real low/high/low/high
+pulse pair at 150ms each (the real, sourced RTL8761ATT datasheet
+minimum is `>100ms`, section 3.3.3).
+
+Not yet hardware-tested. Next run is what tells us whether either or
+both of these (fd held open across the pulse, real settle time between
+pulses) actually matter, versus the `fc17`/`fc20` download-phase race
+being a separate, unrelated bug.
+
 ## Firmware A/B test / H4 vs H5 protocol test
 
 ```sh

@@ -47,8 +47,98 @@
 #include <sys/timerfd.h>
 
 #include "hciattach.h"
+#include <sys/stat.h>
 
 #define RFKILL_NODE	"/sys/class/rfkill/rfkill0/state"
+
+/* 2026-08-19: this project's own board (Feasycom BW121 module,
+ * RTL8761BTV silicon) drives its EN_CHIP-equivalent reset pin via
+ * GPIO91, and this reset dance has to live in THIS process (not the
+ * calling shell wrapper) to faithfully match the one real, reliably-
+ * working reference we have: /usr/bin/blueware's own decompiled
+ * sequence (bpio_init/bpio_reset/bpio_set, confirmed via Ghidra
+ * against the real binary). Two things blueware's real sequence does
+ * that a shell-then-exec split can't:
+ *   1. Opens the UART *while GPIO91 is still low* from the FIRST reset
+ *      pulse, and never closes/reopens that fd through the SECOND
+ *      pulse pair right before real vendor init starts. A separate
+ *      shell doing the GPIO dance, then handing off to a fresh process
+ *      that opens its own new fd, can't replicate "already listening"
+ *      -- if the chip emits anything on the wire around a reset pulse,
+ *      a not-yet-open fd simply loses it.
+ *   2. Blueware's real log shows substantial *unrelated* daemon
+ *      startup work (audio_control_init, 4x lib_serial_port_init,
+ *      several AT broadcasts, 2 NVM writes) between the first reset
+ *      pulse and the second pulse pair -- genuinely elapsed wall-clock
+ *      time, not a tight loop. GPIO91_FIRST_LOW_SETTLE_US below
+ *      approximates that gap; it's a labeled estimate, not a
+ *      datasheet-confirmed value (blueware's own log has no per-line
+ *      timestamps to measure it exactly).
+ * The actual per-pulse width (150ms) matches the real, sourced
+ * RTL8761ATT datasheet minimum (section 3.3.3, EN_CHIP must be held
+ * low >100ms) with margin -- see this tool's own README for the full
+ * investigation.
+ */
+#define BT_GPIO91_EXPORT_PATH    "/sys/class/gpio/export"
+#define BT_GPIO91_DIR_PATH       "/sys/class/gpio/gpio91/direction"
+#define BT_GPIO91_VALUE_PATH     "/sys/class/gpio/gpio91/value"
+#define BT_GPIO91_SYSFS_DIR      "/sys/class/gpio/gpio91"
+#define GPIO91_PULSE_US          150000  /* >100ms EN_CHIP minimum, RTL8761ATT datasheet 3.3.3 */
+#define GPIO91_FIRST_LOW_SETTLE_US 800000 /* approximates blueware's real intervening daemon-startup work */
+
+static void bt_gpio91_write(const char *path, const char *val)
+{
+	int fd = open(path, O_WRONLY);
+	if (fd < 0)
+		return;
+	if (write(fd, val, strlen(val)) < 0)
+		RS_ERR("bt_gpio91_write(%s) failed: %s", path, strerror(errno));
+	close(fd);
+}
+
+static void bt_gpio91_set(int high)
+{
+	bt_gpio91_write(BT_GPIO91_VALUE_PATH, high ? "1" : "0");
+}
+
+/* Matches blueware's bpio_init(): export (if not already) + direction=out,
+ * then the FIRST bpio_reset (low). Caller opens the UART fd immediately
+ * after this returns, while gpio91 is still low, matching blueware's
+ * real order (huart open happens right after its own first bpio_reset).
+ */
+static void bt_gpio91_init_and_first_pulse(void)
+{
+	struct stat st;
+
+	if (stat(BT_GPIO91_SYSFS_DIR, &st) < 0)
+		bt_gpio91_write(BT_GPIO91_EXPORT_PATH, "91");
+	bt_gpio91_write(BT_GPIO91_DIR_PATH, "out");
+
+	RS_INFO("gpio91: first pulse (low) -- matches blueware's initial bpio_reset");
+	bt_gpio91_set(0);
+}
+
+/* Matches blueware's real bpio_reset/bpio_set/bpio_reset/bpio_set
+ * immediately before real vendor init -- called with the UART fd
+ * already open (from bt_gpio91_init_and_first_pulse() above), never
+ * reopened in between.
+ */
+static void bt_gpio91_settle_and_final_pulse(void)
+{
+	RS_INFO("gpio91: settling %dms (approximating blueware's real "
+		"intervening daemon-startup work) before the final pulse pair",
+		GPIO91_FIRST_LOW_SETTLE_US / 1000);
+	usleep(GPIO91_FIRST_LOW_SETTLE_US);
+
+	RS_INFO("gpio91: final pulse pair (low/high/low/high)");
+	usleep(GPIO91_PULSE_US);
+	bt_gpio91_set(1);
+	usleep(GPIO91_PULSE_US);
+	bt_gpio91_set(0);
+	usleep(GPIO91_PULSE_US);
+	bt_gpio91_set(1);
+	usleep(GPIO91_PULSE_US);
+}
 
 #ifdef NEED_PPOLL
 #include "ppoll.h"
@@ -233,6 +323,15 @@ static int init_uart(char *dev, struct uart_t *u, int send_break, int raw)
 		       strerror(errno));
 		return -1;
 	}
+
+	/* fd is open now, while gpio91 is still low from
+	 * bt_gpio91_init_and_first_pulse() -- matches blueware's real
+	 * order (huart open right after its own first bpio_reset). Do the
+	 * settle + real pulse pair now, fd held open throughout, never
+	 * reopened. See this function's own top-of-file comment block for
+	 * the full reasoning.
+	 */
+	bt_gpio91_settle_and_final_pulse();
 
 	tcflush(fd, TCIOFLUSH);
 
@@ -510,6 +609,13 @@ start:
 	sa.sa_flags   = SA_NOCLDSTOP;
 	sa.sa_handler = sig_alarm;
 	sigaction(SIGALRM, &sa, NULL);
+
+	/* GPIO91 EN_CHIP-equivalent reset dance -- see this file's own
+	 * top-of-file comment block near bt_gpio91_init_and_first_pulse()
+	 * for the full reasoning. Deliberately before alarm(to) below, not
+	 * counted against the 10s init timeout.
+	 */
+	bt_gpio91_init_and_first_pulse();
 
 	/* 10 seconds should be enough for initialization */
 	alarm(to);

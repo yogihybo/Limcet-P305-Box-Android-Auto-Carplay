@@ -4,3 +4,24 @@
 [submodule "custom_ui/third_party/aasdk"]
 	path = custom_ui/third_party/aasdk
 	url = https://github.com/opencardev/aasdk.git
+[submodule "tools/bluetoothd-test/third_party/libffi"]
+	path = tools/bluetoothd-test/third_party/libffi
+	url = https://github.com/libffi/libffi.git
+[submodule "tools/bluetoothd-test/third_party/pcre2"]
+	path = tools/bluetoothd-test/third_party/pcre2
+	url = https://github.com/PCRE2Project/pcre2.git
+[submodule "tools/bluetoothd-test/third_party/zlib"]
+	path = tools/bluetoothd-test/third_party/zlib
+	url = https://github.com/madler/zlib.git
+[submodule "tools/bluetoothd-test/third_party/glib"]
+	path = tools/bluetoothd-test/third_party/glib
+	url = https://github.com/GNOME/glib.git
+[submodule "tools/bluetoothd-test/third_party/expat"]
+	path = tools/bluetoothd-test/third_party/expat
+	url = https://github.com/libexpat/libexpat.git
+[submodule "tools/bluetoothd-test/third_party/dbus"]
+	path = tools/bluetoothd-test/third_party/dbus
+	url = https://gitlab.freedesktop.org/dbus/dbus.git
+[submodule "tools/bluetoothd-test/third_party/bluez"]
+	path = tools/bluetoothd-test/third_party/bluez
+	url = https://github.com/bluez/bluez.git

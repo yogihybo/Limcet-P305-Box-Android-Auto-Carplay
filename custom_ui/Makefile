@@ -153,6 +153,14 @@ OPENSSL_ARM_INSTALL ?= $(AASDK_DEPS_DIR)/openssl-arm-install-noengine
 # backported the same fix here rather than deviate from upstream).
 ALSA_ARM_INSTALL ?= $(AASDK_DEPS_DIR)/alsa-arm-install-1.2.4
 
+# 2026-08-19: cross-compiled from source, same as every other
+# AASDK_DEPS_DIR entry -- no armhf apt/multiarch on this build machine.
+# See tools/bluetoothd-test/README.md's "Cross-build dependency chain"
+# section for the full build recipe (this is the client-side headers/
+# libdbus-1.a piece of that same vendored dbus submodule -- bluez_client.cpp
+# is the actual D-Bus consumer, see its own header comment).
+DBUS_ARM_INSTALL ?= $(AASDK_DEPS_DIR)/dbus-arm-install
+
 AASDK_DIR       := third_party/aasdk
 AASDK_INCLUDES  := -I$(AASDK_DIR)/include \
                     -I$(AASDK_DIR)/build-arm/protobuf \
@@ -162,6 +170,8 @@ AASDK_INCLUDES  := -I$(AASDK_DIR)/include \
                     -I$(AASDK_DEPS_DIR)/libusb-arm-install/include/libusb-1.0 \
                     -I$(AASDK_DEPS_DIR)/protobuf-arm-install/include \
                     -I$(ALSA_ARM_INSTALL)/include \
+                    -I$(DBUS_ARM_INSTALL)/include/dbus-1.0 \
+                    -I$(DBUS_ARM_INSTALL)/lib/dbus-1.0/include \
                     -Ithird_party/bluez_uapi
 # --start-group/--end-group: aasdk, aap_protobuf, protobuf, and Abseil
 # static-link against each other in ways plain left-to-right link order
@@ -176,6 +186,7 @@ AASDK_LIBS      := -Wl,--start-group \
                     $(OPENSSL_ARM_INSTALL)/lib/libcrypto.a \
                     $(ALSA_ARM_INSTALL)/lib/libasound.a \
                     $(wildcard $(AASDK_DEPS_DIR)/protobuf-arm-install/lib/*.a) \
+                    $(DBUS_ARM_INSTALL)/lib/libdbus-1.a \
                     -Wl,--end-group -lpthread -ldl -lrt
 
 # Same static-NSS-init crash this project already hit and fixed for
@@ -203,7 +214,11 @@ NSS_STUB_OBJ   := $(BUILD_DIR)/aasdk-test-obj/nss_stub_busybox.o
 # tools/nss-stub/nss_stub_busybox.c (the other 4 targets below) and
 # hantro_dlopen.c (androidauto-sidecar's own replacement, see its own
 # header comment).
-AASDK_WRAP_FLAGS := -Wl,--wrap=dlopen,--wrap=dlerror,--wrap=dlsym,--wrap=dlclose,--wrap=getaddrinfo,--wrap=freeaddrinfo,--wrap=gai_strerror,--wrap=gethostbyname,--wrap=gethostbyname2,--wrap=gethostbyaddr,--wrap=getservbyname,--wrap=getservbyport,--wrap=getpwuid_r,--wrap=getgrnam_r
+# getgrouplist added 2026-08-19: libdbus's fill_user_info() (now linked
+# via AASDK_LIBS' libdbus-1.a, see bluez_client.cpp) references it --
+# same static-NSS-init crash family as every other symbol here, see
+# hantro_dlopen.c's own __wrap_getgrouplist comment.
+AASDK_WRAP_FLAGS := -Wl,--wrap=dlopen,--wrap=dlerror,--wrap=dlsym,--wrap=dlclose,--wrap=getaddrinfo,--wrap=freeaddrinfo,--wrap=gai_strerror,--wrap=gethostbyname,--wrap=gethostbyname2,--wrap=gethostbyaddr,--wrap=getservbyname,--wrap=getservbyport,--wrap=getpwuid_r,--wrap=getpwnam_r,--wrap=getgrnam_r,--wrap=getgrouplist
 
 # 2026-08-15: androidauto-sidecar specifically (not the other 4 targets
 # below that also use AASDK_WRAP_FLAGS/NSS_STUB_OBJ) needs a REAL,

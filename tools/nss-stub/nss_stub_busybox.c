@@ -84,9 +84,33 @@ int __wrap_getpwuid_r(uid_t uid, struct passwd *pwd, char *buf,
 	*result = NULL;
 	return 0;
 }
+/* 2026-08-19: libdbus's fill_user_info() also does a by-NAME lookup --
+ * see hantro_dlopen.c's identical addition, same session. */
+int __wrap_getpwnam_r(const char *name, struct passwd *pwd, char *buf,
+		       size_t buflen, struct passwd **result) {
+	(void)name; (void)pwd; (void)buf; (void)buflen;
+	*result = NULL;
+	return 0;
+}
 int __wrap_getgrnam_r(const char *name, struct group *grp, char *buf,
 		       size_t buflen, struct group **result) {
 	(void)name; (void)grp; (void)buf; (void)buflen;
 	*result = NULL;
 	return 0;
+}
+
+/* 2026-08-19: libdbus's fill_user_info() references this -- needed now
+ * that custom_ui/Makefile's AASDK_WRAP_FLAGS (shared by
+ * androidauto-usb-probe-test/androidauto-wireless-probe-test, both
+ * NSS_STUB_OBJ-linked) wraps it too, for bluez_client.cpp's D-Bus
+ * connection. Unused by busybox's own separate build (different
+ * recipe, no --wrap=getgrouplist there) -- safe to add here since
+ * busybox provides its own real getgrouplist via libpwdgrp anyway. */
+int __wrap_getgrouplist(const char *user, gid_t group, gid_t *groups, int *ngroups) {
+	(void)user; (void)group;
+	if (groups && ngroups && *ngroups > 0)
+		groups[0] = group;
+	if (ngroups)
+		*ngroups = 1;
+	return 1;
 }

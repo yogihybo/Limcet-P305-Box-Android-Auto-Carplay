@@ -1,14 +1,49 @@
 #!/bin/sh
-# bluez-bringup.sh -- Attaches Realtek RTL8761BTV over 3-Wire UART H5 and starts BlueZ 5.66
+# Production Bluetooth stack bring-up for custom_ui/androidauto-sidecar --
+# real kernel hci0 (rtk_hciattach) + BlueZ (dbus-daemon + bluetoothd),
+# replacing blueware for whichever process calls this. NOT used by
+# start_msn/MsnCoreApp -- that stock app keeps using blueware directly,
+# unchanged. See tools/rtk-hciattach-test/ and tools/bluetoothd-test/
+# for the original diagnostic versions of this exact sequence and the
+# full hardware-run history behind every step here; this is the
+# production form (fixed /usr/share paths instead of $SCRIPT_DIR-
+# relative ones, since rtk_hciattach/bluetoothd land directly in
+# /usr/bin via install_diag_tools() without their sibling firmware/
+# policy subdirectories).
+#
+# Usage: bluez-bringup.sh start   -- stop blueware, bring up hci0 +
+#                                     bluetoothd, run both in the
+#                                     background, return once bluetoothd
+#                                     is ready (or fail).
+#        bluez-bringup.sh stop    -- stop bluetoothd + rtk_hciattach,
+#                                     freeing the chip back for blueware.
+#        bluez-bringup.sh status  -- show current daemon / interface status.
+#
+# Callers: bluez_stack.cpp (custom_ui/androidauto-sidecar). Not meant to
+# be run interactively, though it's safe to (matches the diagnostic
+# tools' own foreground-friendly behavior).
+set -e
 
-ACTION="${1:-start}"
+FW_DIR=/lib/firmware/rtlbt
+FW_SRC=/usr/share/bluez-bringup/device-firmware
+DBUS_POLICY_DST=/usr/etc/dbus-1/system.d
+DBUS_SYSTEM_CONF=/usr/etc/dbus-1/system-diagnostic.conf
+DBUS_POLICY_SRC=/usr/share/bluez-bringup/dbus-policy
+BUS_SOCKET_DIR=/var/run/run/dbus
+TTY=/dev/ttyHS1
+PID_DIR=/var/run/bluez-bringup
+RTK_HCIATTACH=/usr/bin/rtk_hciattach
+BLUETOOTHD=/usr/bin/bluetoothd
 
-case "$ACTION" in
+case "$1" in
+    start)
+        ;;
     stop)
-        echo "bluez-bringup: stopping BlueZ stack"
-        killall -9 bluetoothd 2>/dev/null || true
-        killall -9 rtk_hciattach 2>/dev/null || true
+        [ -f "$PID_DIR/bluetoothd.pid" ] && kill "$(cat "$PID_DIR/bluetoothd.pid")" 2>/dev/null || killall -9 bluetoothd 2>/dev/null || true
+        [ -f "$PID_DIR/rtk_hciattach.pid" ] && kill "$(cat "$PID_DIR/rtk_hciattach.pid")" 2>/dev/null || killall -9 rtk_hciattach 2>/dev/null || true
+        [ -f "$PID_DIR/dbus-daemon.pid" ] && kill "$(cat "$PID_DIR/dbus-daemon.pid")" 2>/dev/null || true
         hciconfig hci0 down 2>/dev/null || true
+        rm -rf "$PID_DIR"
         exit 0
         ;;
     status)
@@ -19,25 +54,40 @@ case "$ACTION" in
         hciconfig -a 2>/dev/null || echo "hci0: not attached"
         exit 0
         ;;
-    start)
-        ;;
     *)
-        echo "Usage: $0 {start|stop|status}"
+        echo "usage: $0 {start|stop|status}"
         exit 1
         ;;
 esac
 
+if pidof bluetoothd >/dev/null 2>&1 && [ -f "$PID_DIR/bluetoothd.pid" ]; then
+    echo "bluez-bringup: already running"
+    exit 0
+fi
+
 echo "bluez-bringup: stopping blueware (chip is single-owner -- can't share the UART)"
-killall -9 blueware 2>/dev/null || true
+killall blueware >/dev/null 2>&1 || true
+i=0
+while pidof blueware >/dev/null 2>&1 && [ $i -lt 30 ]; do
+    i=$((i + 1))
+    usleep 100000 2>/dev/null || sleep 1
+done
+if pidof blueware >/dev/null 2>&1; then
+    echo "bluez-bringup: blueware still running after 3s, giving up"
+    exit 1
+fi
+
+mkdir -p "$PID_DIR"
 
 echo "bluez-bringup: staging firmware"
-mkdir -p /lib/firmware/rtlbt
+mkdir -p "$FW_DIR"
 
-if [ -f /lib/firmware/rtlbt/rtl8761b_fw ]; then
-    echo "bluez-bringup: firmware already present at /lib/firmware/rtlbt/rtl8761b_fw"
+if [ -f "$FW_DIR/rtl8761b_fw" ]; then
+    echo "bluez-bringup: firmware already present at $FW_DIR/rtl8761b_fw"
 else
     FW_FOUND=""
     for p in \
+        "$FW_SRC/rtl8761bt_fw" \
         /lib/firmware/rtl8761b_fw \
         /lib/firmware/rtl8761bt_fw \
         /etc/firmware/rtl8761b_fw \
@@ -70,37 +120,68 @@ else
     fi
 
     if [ -n "$FW_FOUND" ]; then
-        echo "bluez-bringup: found firmware at $FW_FOUND -> copying to /lib/firmware/rtlbt/rtl8761b_fw"
-        cp "$FW_FOUND" /lib/firmware/rtlbt/rtl8761b_fw
+        echo "bluez-bringup: found firmware at $FW_FOUND -> copying to $FW_DIR/rtl8761b_fw"
+        cp "$FW_FOUND" "$FW_DIR/rtl8761b_fw"
     else
         echo "bluez-bringup: warning: firmware file rtl8761b_fw not found via search, continuing"
     fi
 fi
 
-echo "bluez-bringup: ensuring dbus-daemon is running"
-mkdir -p /var/run/dbus
-if ! pidof dbus-daemon >/dev/null 2>&1; then
-    dbus-daemon --system --fork
+if [ -f "$FW_SRC/rtl8761bt_config" ]; then
+    cp "$FW_SRC/rtl8761bt_config" "$FW_DIR/rtl8761b_config" 2>/dev/null || true
 fi
 
-echo "bluez-bringup: attaching hci0 via rtk_hciattach (3-Wire H5 @ 115200 -> 1.5M)"
-if ! pidof rtk_hciattach >/dev/null 2>&1; then
-    rtk_hciattach -n -s 115200 /dev/ttyHS1 rtk_h5 >/var/log/rtk_hciattach.log 2>&1 &
-    sleep 2
+echo "bluez-bringup: starting rtk_hciattach (hci0)"
+"$RTK_HCIATTACH" -n "$TTY" rtk_h5 >/var/log/rtk_hciattach.log 2>&1 &
+echo $! > "$PID_DIR/rtk_hciattach.pid"
+
+i=0
+while [ ! -e /sys/class/bluetooth/hci0 ] && [ $i -lt 100 ]; do
+    i=$((i + 1))
+    usleep 100000 2>/dev/null || sleep 1
+done
+if [ ! -e /sys/class/bluetooth/hci0 ]; then
+    echo "bluez-bringup: hci0 did not appear within 10s"
+    exit 1
 fi
 
-echo "bluez-bringup: bringing up hci0 interface"
-hciconfig hci0 up 2>/dev/null || true
+echo "bluez-bringup: staging D-Bus config"
+mkdir -p "$DBUS_POLICY_DST"
+[ -f "$DBUS_POLICY_SRC/bluetooth.conf" ] && cp "$DBUS_POLICY_SRC/bluetooth.conf" "$DBUS_POLICY_DST/bluetooth.conf"
+[ -f "$DBUS_POLICY_SRC/system-diagnostic.conf" ] && cp "$DBUS_POLICY_SRC/system-diagnostic.conf" "$DBUS_SYSTEM_CONF"
 
-echo "bluez-bringup: starting bluetoothd daemon"
+mkdir -p "$BUS_SOCKET_DIR"
+if [ ! -S "$BUS_SOCKET_DIR/system_bus_socket" ]; then
+    echo "bluez-bringup: starting system dbus-daemon"
+    dbus-daemon --config-file="$DBUS_SYSTEM_CONF" --nofork >/var/log/dbus-daemon.log 2>&1 &
+    echo $! > "$PID_DIR/dbus-daemon.pid"
+    i=0
+    while [ ! -S "$BUS_SOCKET_DIR/system_bus_socket" ] && [ $i -lt 50 ]; do
+        i=$((i + 1))
+        usleep 100000 2>/dev/null || sleep 1
+    done
+    if [ ! -S "$BUS_SOCKET_DIR/system_bus_socket" ]; then
+        echo "bluez-bringup: system bus socket did not appear within 5s"
+        exit 1
+    fi
+fi
+
+mkdir -p /var/lib/bluetooth
+mkdir -p /usr/lib/bluetooth/plugins
+
+echo "bluez-bringup: starting bluetoothd"
+"$BLUETOOTHD" -n >/var/log/bluetoothd.log 2>&1 &
+echo $! > "$PID_DIR/bluetoothd.pid"
+
+i=0
+while ! pidof bluetoothd >/dev/null 2>&1 && [ $i -lt 30 ]; do
+    i=$((i + 1))
+    usleep 100000 2>/dev/null || sleep 1
+done
 if ! pidof bluetoothd >/dev/null 2>&1; then
-    bluetoothd -n >/var/log/bluetoothd.log 2>&1 &
-    sleep 1
+    echo "bluez-bringup: bluetoothd did not start"
+    exit 1
 fi
 
-echo "bluez-bringup: configuring adapter"
-bluetoothctl power on 2>/dev/null || true
-bluetoothctl discoverable on 2>/dev/null || true
-
-echo "bluez-bringup: BlueZ 5.66 stack successfully initialized"
+echo "bluez-bringup: ready"
 exit 0

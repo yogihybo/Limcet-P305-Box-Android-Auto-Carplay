@@ -10,14 +10,26 @@ namespace androidauto {
 // pre-connection channel this device uses for wireless Android
 // Auto/CarPlay, confirmed from real captured traffic in
 // docs/logs/android auto log v{1,2,3}.txt (stock `sink` binary,
-// class name `BtRfcommController`). This supersedes the earlier
-// BluetoothRFCOMMTransport/accept_rfcomm_connection approach (raw
-// AF_BLUETOOTH/BTPROTO_RFCOMM kernel socket + our own SDP server) --
-// that assumed a standard Linux BlueZ stack, which this device
-// doesn't have. blueware already owns the adapter, already handles
-// pairing/RFCOMM/SDP internally, and already exposes a clean local
-// socket for exactly this purpose -- we just need to be a client of
-// it, the same pattern as `sink`'s own D-Bus interface
+// class name `BtRfcommController`).
+//
+// 2026-08-19 REVERSED: this class's wire-protocol logic (sendFrame/
+// receiveFrame and everything built on them) turned out to be
+// transport-agnostic -- pure read()/write() on fd_ -- so rather than
+// staying tied to blueware's /dev/bw_aap proxy, wireless_session_manager.cpp
+// now gets a REAL kernel hci0 + BlueZ RFCOMM connection via
+// bluez_stack.h/bluez_client.h (real hardware confirmed working this
+// same session, see tools/rtk-hciattach-test/ and
+// tools/bluetoothd-test/'s own READMEs) and calls attach(fd) instead
+// of connect(). This class's own comment below (steps 1-6, the real
+// captured wire format) is unaffected -- only the transport
+// underneath changed, not the protocol spoken over it. connect() (the
+// /dev/bw_aap path) is kept for reference/fallback, not called by the
+// current flow. start_msn/MsnCoreApp is untouched, still uses blueware
+// directly -- this only affects custom_ui/androidauto-sidecar's own
+// wireless AA bootstrap.
+//
+// Everything below this point (message sequence, wire format) is the
+// same pattern as `sink`'s own D-Bus interface
 // (com.arkmicro.auto, see ARCHITECTURE.md).
 //
 // Wire format (confirmed from the captured logs, not guessed):
@@ -70,7 +82,21 @@ public:
     ~BwAapClient();
 
     // Opens /dev/bw_aap. Returns false on failure (logs the reason).
+    // Superseded by attach() below -- see bluez_client.h/bluez_stack.h --
+    // kept for reference/fallback, not called by the current
+    // wireless_session_manager.cpp flow.
     bool connect();
+
+    // 2026-08-19: takes ownership of an already-connected socket fd
+    // (BluezClient::wait_for_connection()'s real RFCOMM connection,
+    // once a phone actually connects to our BlueZ-advertised AA
+    // profile) instead of opening /dev/bw_aap. Every method below
+    // (sendFrame/receiveFrame and everything built on them) is pure
+    // read()/write() on fd_ -- transport-agnostic, works identically
+    // whether fd_ came from AF_UNIX (blueware's proxy) or a real
+    // AF_BLUETOOTH RFCOMM socket. Always succeeds (just stores fd);
+    // caller is responsible for fd being valid (>= 0).
+    void attach(int fd);
 
     void close();
 

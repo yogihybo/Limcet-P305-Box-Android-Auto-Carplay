@@ -114,11 +114,36 @@ int __wrap_getpwuid_r(uid_t uid, struct passwd *pwd, char *buf,
     *result = NULL;
     return 0;
 }
+/* 2026-08-19: libdbus's fill_user_info() also does a by-NAME lookup
+ * (this one), not just by-uid -- same function as __wrap_getgrouplist
+ * below, found via this exact build's own linker warning. */
+int __wrap_getpwnam_r(const char *name, struct passwd *pwd, char *buf,
+                       size_t buflen, struct passwd **result) {
+    (void)name; (void)pwd; (void)buf; (void)buflen;
+    *result = NULL;
+    return 0;
+}
 int __wrap_getgrnam_r(const char *name, struct group *grp, char *buf,
                        size_t buflen, struct group **result) {
     (void)name; (void)grp; (void)buf; (void)buflen;
     *result = NULL;
     return 0;
+}
+
+/* 2026-08-19: libdbus's fill_user_info() (dbus-sysdeps-unix.c) --
+ * linked here now for bluez_client.cpp's D-Bus connection to
+ * bluetoothd (see wireless_session_manager.cpp) -- calls this to
+ * enumerate a UID's supplementary groups. Same static-NSS-init crash
+ * family as the two stubs above; matches the identical gap found and
+ * fixed for tools/bluetoothd-test/bluetoothd (nss_stub.c's own
+ * __wrap_getgrouplist) the same session this was added. */
+int __wrap_getgrouplist(const char *user, gid_t group, gid_t *groups, int *ngroups) {
+    (void)user; (void)group;
+    if (groups && ngroups && *ngroups > 0)
+        groups[0] = group;
+    if (ngroups)
+        *ngroups = 1;
+    return 1;
 }
 
 /* ---- the real loader ---------------------------------------------- */

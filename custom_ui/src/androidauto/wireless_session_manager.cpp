@@ -17,6 +17,8 @@
 #include <aasdk/TCP/TCPEndpoint.hpp>
 #include <aasdk/Transport/TCPTransport.hpp>
 
+#include "androidauto/bluez_client.h"
+#include "androidauto/bluez_stack.h"
 #include "androidauto/bw_aap_client.h"
 #include "androidauto/session.h"
 #include "core/hal_config.h"
@@ -24,6 +26,21 @@
 namespace androidauto {
 
 namespace {
+
+// 2026-08-19: this function has ~6 separate failure-return paths
+// downstream of bluez_stack_start() succeeding (BlueZ agent/profile
+// registration, the connection wait, the BW_AAP handshake steps, the
+// WiFi TCP accept) -- manually calling bluez_stack_stop() at every one
+// is exactly the kind of thing that's easy to miss on the next edit
+// (already found 4 during this change). RAII instead: constructed
+// right after a successful bluez_stack_start(), calls stop()
+// unconditionally in its destructor so the chip is freed back for
+// blueware on every exit path, not just the ones that remember to ask
+// for it. bluez-bringup.sh stop is itself idempotent/safe to call even
+// if nothing is actually running.
+struct BluezStackGuard {
+    ~BluezStackGuard() { androidauto::bluez_stack_stop(); }
+};
 
 // Real, working values from firmware_overlay/etc/wifi_ap.sh /
 // firmware_source/mtd6_rootfs/etc/hostapd/hostapd.conf, not guessed --
@@ -264,12 +281,38 @@ void WirelessSessionManager::run() {
     std::printf("%s androidauto: wireless session: WPP TCP server listening on 0.0.0.0:%u\n", androidauto::logTimestamp().c_str(),
                 cfg.wifi_session_port());
 
-    setStatus(WirelessSessionState::BluetoothHandshake, "Connecting to wireless Android Auto Bluetooth channel...");
-    BwAapClient bwAap;
-    if (!bwAap.connect()) {
-        setStatus(WirelessSessionState::Failed, "Could not open wireless Android Auto Bluetooth channel");
+    // 2026-08-19: real kernel hci0 + BlueZ now drive this instead of
+    // blueware's /dev/bw_aap proxy -- see bluez_stack.h/bluez_client.h
+    // for the full rationale (blueware and bluetoothd can't own the
+    // chip simultaneously; bluez-bringup.sh stops blueware first).
+    // BwAapClient's own wire-protocol logic (sendFrame/receiveFrame and
+    // everything built on them, all pure read()/write() on fd_) is
+    // unchanged -- only where the fd comes from changed, via attach()
+    // instead of connect().
+    setStatus(WirelessSessionState::BluetoothHandshake, "Bringing up hci0 + bluetoothd...");
+    if (!androidauto::bluez_stack_start()) {
+        setStatus(WirelessSessionState::Failed, "Could not bring up hci0/bluetoothd (see logs)");
         return;
     }
+    BluezStackGuard bluezStackGuard;  // frees the chip back for blueware on every exit below
+
+    androidauto::BluezClient bluez;
+    if (!bluez.connect() || !bluez.register_agent() || !bluez.register_profile()) {
+        setStatus(WirelessSessionState::Failed, "Could not register BlueZ agent/profile");
+        return;
+    }
+
+    setStatus(WirelessSessionState::BluetoothHandshake, "Waiting for phone to connect over Bluetooth...");
+    int rfcommFd = bluez.wait_for_connection(30);
+    if (rfcommFd < 0) {
+        setStatus(WirelessSessionState::Failed, "No phone connected to the AA Bluetooth profile within 30s");
+        return;
+    }
+    std::printf("%s androidauto: wireless session: phone connected over BlueZ RFCOMM (fd=%d)\n",
+                androidauto::logTimestamp().c_str(), rfcommFd);
+
+    BwAapClient bwAap;
+    bwAap.attach(rfcommFd);
 
     // outIp/outPort are unused now (no ARP-based connect-out target
     // needed) but startHandshake() still reads back an optional
@@ -426,6 +469,8 @@ void WirelessSessionManager::run() {
     // now, closed here once it's actually over.
     std::printf("%s androidauto: wireless session: closing bw_aap\n", androidauto::logTimestamp().c_str());
     bwAap.close();
+    // bluezStackGuard (still in scope, this whole function body) frees
+    // the chip back for blueware once it destructs at function exit.
 
     setStatus(WirelessSessionState::Failed, "Session ended (io_service stopped)");
 }

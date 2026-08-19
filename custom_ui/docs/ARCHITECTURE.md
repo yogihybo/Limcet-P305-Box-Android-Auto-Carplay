@@ -34,6 +34,12 @@ stack actually expose," not a design spec.
 ALSA, single card: `card0` (`ARK-SDDAC`).
 See [`AUDIO_SUBSYSTEM_HANDOFF.md`](AUDIO_SUBSYSTEM_HANDOFF.md) and [`AUDIO_CPU_SPIKE_AND_SIDECAR_LIFECYCLE_HANDOFF.md`](AUDIO_CPU_SPIKE_AND_SIDECAR_LIFECYCLE_HANDOFF.md) for Android Auto audio flow control, ALSA sample-rate matching (eliminating software resampling), stop/resume stream resets, and sidecar lifecycle management.
 
+## Bluetooth
+
+- Native Linux **BlueZ 5.66** subsystem over kernel `hci0` (via `rtk_hciattach` 3-Wire UART H5 @ 1.5 Mbps on `/dev/ttyHS1`, GPIO 91 reset).
+- Legacy Feasycom `blueware` AT daemon over `/dev/bw_serial` is deprecated.
+- See [`BLUEZ_MIGRATION_AND_BLUEWARE_DEPRECATION_HANDOFF.md`](BLUEZ_MIGRATION_AND_BLUEWARE_DEPRECATION_HANDOFF.md) and [`../../docs/BLUEZ_AND_KERNEL_BLUETOOTH_HANDOFF.md`](../../docs/BLUEZ_AND_KERNEL_BLUETOOTH_HANDOFF.md) for the BlueZ D-Bus integration architecture and `androidauto-sidecar` native `AF_BLUETOOTH` RFCOMM socket roadmap.
+
 ## CarPlay — via `sink` (kept as a black box)
 
 Decompiled from the real vendor `sink` binary

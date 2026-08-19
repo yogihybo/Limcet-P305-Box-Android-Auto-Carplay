@@ -105,20 +105,28 @@ Hardware on the device has been identified by opening the device and reviewing t
 ```mermaid
 flowchart TD
     subgraph Band1["01 Vehicle & External I/O"]
-        DCDC["B+ / GND → DC-DC Converter<br/>+5V / +3V3 / +9V rails"]
-        CANWire["CAN H / CAN L<br/>Vehicle CAN Bus Wiring"]
-        VehicleSignals["ACC / ILL / SWC<br/>Ignition, Dimming, Steering Controls"]
-        ISOAntenna["ISO Antenna Socket<br/>AM/FM Radio Input"]
-        SpeakerWires["Speaker Wires<br/>FR± / FL± / RR± / RL±"]
-        CamPower["CAM PWR<br/>Reversing Camera Power Feed"]
+        subgraph B1_Power["Power & Signals"]
+            DCDC["B+ / GND → DC-DC Converter<br/>+5V / +3V3 / +9V rails"]
+            VehicleSignals["ACC / ILL / SWC<br/>Ignition, Dimming, Steering"]
+            CamPower["CAM PWR<br/>Reversing Camera Feed"]
+        end
+        subgraph B1_Media["Bus & Media Wiring"]
+            CANWire["CAN H / CAN L<br/>Vehicle CAN Bus"]
+            ISOAntenna["ISO Antenna Socket<br/>AM/FM Radio Input"]
+            SpeakerWires["Speaker Wires<br/>FR± / FL± / RR± / RL±"]
+        end
     end
 
     subgraph Band2["02 On-Board Support ICs"]
-        MCU["MCU — STM32F105<br/>Vehicle I/O Hub (/dev/ttyHS0)"]
-        CANTrx["CAN Transceiver<br/>NXP TJA1042"]
-        Tuner["AM/FM Tuner<br/>I2C Control"]
-        DSP["DSP / Tone Processor<br/>Audio EQ / Channel Mix"]
-        VoiceProc["Voice Processor (Schematic Only)<br/>*Not populated on this board*"]
+        subgraph B2_Vehicle["Vehicle Hub"]
+            MCU["MCU — STM32F105<br/>Vehicle I/O Hub (/dev/ttyHS0)"]
+            CANTrx["CAN Transceiver<br/>NXP TJA1042"]
+        end
+        subgraph B2_Audio["Audio & Radio"]
+            DSP["DSP / Tone Processor<br/>Audio EQ / Channel Mix"]
+            Tuner["AM/FM Tuner<br/>I2C Control"]
+            VoiceProc["Voice Processor<br/>*Ref schematic only*"]
+        end
     end
 
     subgraph Band3["03 Application Processor"]
@@ -126,20 +134,30 @@ flowchart TD
     end
 
     subgraph Band4["04 Attached Peripheral ICs"]
-        NAND["NAND Flash<br/>128 MiB SLC (TC58BVG0S3HTA00)"]
-        SDRAM["SDRAM<br/>Nanya NT5CC128M16IP (DDR3)"]
-        RN6752["RN6752 Video Decoder<br/>AHD/CVBS Camera @ I2C 0x2c"]
-        ARK7116["ARK7116 Video Decoder<br/>*Reference design only — not populated*"]
-        USBHost["USB Host / OTG<br/>USB0 (Ext/Gadget) / USB1 (WiFi)"]
-        WiFi["RTL8811CU / RTL8821CU<br/>WiFi Module (via USB1 Host)"]
-        BT["BT Module (FSC-BT8251)<br/>ttyHS1 @ 1.5M, GPIO91 Power"]
+        subgraph B4_Mem["Storage & Memory"]
+            NAND["NAND Flash 128MB<br/>TC58BVG0S3HTA00"]
+            SDRAM["SDRAM DDR3<br/>NT5CC128M16IP"]
+        end
+        subgraph B4_Conn["Connectivity"]
+            WiFi["RTL8811CU WiFi<br/>(via USB1 Host)"]
+            BT["BT FSC-BT8251<br/>ttyHS1 1.5M, GPIO91"]
+            USBHost["USB Host / OTG<br/>USB0 (Ext/Gadget)"]
+        end
+        subgraph B4_Video["Video In"]
+            RN6752["RN6752 Video Decoder<br/>AHD/CVBS @ I2C 0x2c"]
+            ARK7116["ARK7116 Video Decoder<br/>*Ref design only*"]
+        end
     end
 
     subgraph Band5["05 Output & Analog Endpoints"]
-        TFT["TFT LCD Panel<br/>800×480 RGB888 / LVDS + Resistive Touch"]
-        PowerAmp["Power Amp / Sound IC<br/>Rohm BD37033FV (I2C2 @ 0x40)"]
-        Mic["Microphone Input<br/>SoC Internal sdadc / I2S-ADC"]
-        Camera["Reversing Camera<br/>CVBS Analog Video Feed"]
+        subgraph B5_Display["Display & Touch"]
+            TFT["TFT LCD Panel<br/>800×480 RGB888 / LVDS + Resistive Touch"]
+        end
+        subgraph B5_AudioCam["Audio & Camera"]
+            PowerAmp["Power Amp / BD37033FV<br/>Sound IC (I2C2 @ 0x40)"]
+            Mic["Microphone Input<br/>SoC Internal sdadc"]
+            Camera["Reversing Camera<br/>CVBS Analog Video"]
+        end
     end
 
     %% Power Distribution
@@ -226,48 +244,70 @@ The device runs two distinct software stacks depending on which boot path is act
 ```mermaid
 flowchart TD
     subgraph Band1["01 MsnCoreApp Main Process (Qt 4.7.4 QWS — Single PID)"]
-        MainApp["MsnCoreApp<br/>/usr/bin/MsnCoreApp"]
-        Commons["libMsnCommons.so<br/>MsnIniConfig · ArkUtils · ArkDbus"]
-        pLauncher["libLauncher-Box.so<br/>(Plugin 10 — Main UI / Launcher)"]
-        pSetting["libSetting.so<br/>(Plugin 8 — Settings / Factory Menu)"]
-        pCarAuto["libMsnCarAuto.so<br/>(Plugin 13 — Android Auto UI)"]
-        pCarPlay["libMsnCarPlay.so<br/>(Plugin 4 — Apple CarPlay UI)"]
-        pReversing["libCarReversing.so<br/>(Plugin 12 — Reversing Camera Overlay)"]
-        pBT["libBlueTooth.so<br/>(Plugin 3 — Bluetooth Pairing/HFP UI)"]
-        pCanBus["libCanBus.so<br/>(Plugin 400 — CAN Signal Bridge)"]
-        pMcu["libMcuCenter.so<br/>(Plugin 401 — MCU Adapter BoxP300)"]
-        pSound["libMsnSound.so<br/>(Plugin 403 — Sound / ALSA Mixer)"]
+        subgraph B1_Core["Core & Config"]
+            MainApp["MsnCoreApp<br/>/usr/bin/MsnCoreApp"]
+            Commons["libMsnCommons.so<br/>MsnIniConfig · ArkUtils · ArkDbus"]
+        end
+        subgraph B1_Proj["Projection Plugins"]
+            pCarAuto["libMsnCarAuto.so<br/>(Plugin 13 — Android Auto UI)"]
+            pCarPlay["libMsnCarPlay.so<br/>(Plugin 4 — Apple CarPlay UI)"]
+            pReversing["libCarReversing.so<br/>(Plugin 12 — Reversing Overlay)"]
+        end
+        subgraph B1_UI["UI Plugins"]
+            pLauncher["libLauncher-Box.so<br/>(Plugin 10 — Main UI)"]
+            pSetting["libSetting.so<br/>(Plugin 8 — Settings / Factory)"]
+        end
+        subgraph B1_HAL["Hardware Plugins"]
+            pBT["libBlueTooth.so<br/>(Plugin 3 — Bluetooth UI)"]
+            pMcu["libMcuCenter.so<br/>(Plugin 401 — MCU BoxP300)"]
+            pCanBus["libCanBus.so<br/>(Plugin 400 — CAN Bridge)"]
+            pSound["libMsnSound.so<br/>(Plugin 403 — ALSA Mixer)"]
+        end
     end
 
     subgraph Band2["02 IPC & Transport"]
-        DBusDaemon["dbus-daemon<br/>Session Bus & Service Activation"]
+        DBusDaemon["dbus-daemon<br/>Session Bus & Activation"]
         UNIXSock["AF_UNIX Domain Sockets<br/>ArkUtils::open_local_socket"]
         UARTLinks["UART Serial Links<br/>ttyHS0 (MCU) · ttyHS1 (BT)"]
     end
 
     subgraph Band3["03 Protocol Daemons (External Processes)"]
-        SinkDaemon["sink<br/>com.arkmicro.auto (Android Auto Engine)"]
-        CarPlayDaemon["carplay<br/>com.arkmicro.carplay (CarPlay Engine)"]
-        BluewareDaemon["blueware<br/>HFP / A2DP Stack & AT Interface"]
-        HostapdDaemon["hostapd + udhcpd<br/>carplay_wifi AP Provider"]
+        subgraph B3_Engines["Projection Engines"]
+            SinkDaemon["sink<br/>com.arkmicro.auto (AA Engine)"]
+            CarPlayDaemon["carplay<br/>com.arkmicro.carplay (CarPlay)"]
+        end
+        subgraph B3_Services["Connectivity Daemons"]
+            BluewareDaemon["blueware<br/>HFP/A2DP Stack & AT"]
+            HostapdDaemon["hostapd + udhcpd<br/>carplay_wifi AP"]
+        end
     end
 
     subgraph Band4["04 Shared HAL & Middleware"]
-        libArkCmn["libarkcmn.so<br/>arkapi_* ioctl wrapper"]
-        libGAL["libGAL.so<br/>Vivante GC GPU DirectFB Backend"]
-        libMFC["libmfc.so<br/>Hantro DWL H.264 Video Decode"]
-        libQExt["libqextserialport.so<br/>Serial Port Abstraction"]
+        subgraph B4_GfxVid["Graphics & Video"]
+            libGAL["libGAL.so<br/>Vivante DirectFB"]
+            libMFC["libmfc.so<br/>Hantro DWL Decode"]
+            libArkCmn["libarkcmn.so<br/>arkapi_* ioctl wrapper"]
+        end
+        subgraph B4_Comm["Serial & Comm"]
+            libQExt["libqextserialport.so<br/>Serial Port Abstraction"]
+        end
     end
 
     subgraph Band5["05 Kernel Drivers & Device Nodes"]
-        DevFB["/dev/fb0 - /dev/fb4<br/>ark1668_lcdfb (OSD & Video Layers)"]
-        DevHX170["/dev/hx170dec<br/>Hantro G1 Video Decoder"]
-        DevDVR["/dev/dvr<br/>ITU-656 Camera Capture"]
-        DevTTYHS0["/dev/ttyHS0<br/>ark-hsuart (MCU Link)"]
-        DevTTYHS1["/dev/ttyHS1<br/>ark-hsuart (Bluetooth Module)"]
-        DevALSA["ALSA / I2S<br/>i2s-dac / i2s-adc ↔ BD37033"]
-        DevTouch["/dev/input/event0<br/>ark1680_ts Resistive Touch"]
-        DevWlan["wlan0<br/>RTL8811CU / RTL8821CU USB WiFi"]
+        subgraph B5_Display["Display & Video"]
+            DevFB["/dev/fb0 - /dev/fb4<br/>ark1668_lcdfb Layers"]
+            DevHX170["/dev/hx170dec<br/>Hantro G1 Video Decoder"]
+            DevDVR["/dev/dvr<br/>ITU-656 Camera Capture"]
+        end
+        subgraph B5_BusIO["Serial & Audio Buses"]
+            DevTTYHS0["/dev/ttyHS0<br/>ark-hsuart (MCU Link)"]
+            DevTTYHS1["/dev/ttyHS1<br/>ark-hsuart (BT Module)"]
+            DevALSA["ALSA / I2S<br/>i2s-dac/adc ↔ BD37033"]
+        end
+        subgraph B5_Input["Input & Wireless"]
+            DevTouch["/dev/input/event0<br/>ark1680_ts Touch"]
+            DevWlan["wlan0<br/>RTL8811CU WiFi"]
+        end
     end
 
     %% In-process dynamic loading

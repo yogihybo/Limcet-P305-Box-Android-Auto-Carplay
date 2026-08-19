@@ -165,6 +165,21 @@ public:
     // queued) and closes the PCM device.
     void close();
 
+    // 2026-08-19: drops whatever's currently queued (not yet written to
+    // ALSA) without touching the PCM device itself or the writer
+    // thread -- call this on StopIndication so a stale queued backlog
+    // from the session that just ended doesn't bleed into the next
+    // Start (see audio_channel.cpp's onMediaChannelStopIndication()).
+    // Deliberately does NOT call snd_pcm_drop()/snd_pcm_prepare() --
+    // this pipeline has been through several rounds of real hardware
+    // stutter/crash fixes (see this file's own history above), and an
+    // abrupt hardware-level drop on every Stop risks audible clicks for
+    // a benefit (skipping a few hundred ms of already-queued tail
+    // audio) that's marginal at best. Whatever's already past the
+    // queue and in ALSA's own ring buffer just finishes playing out
+    // naturally.
+    void flush();
+
 private:
     void writerLoop();
     // The actual blocking snd_pcm_writei() + XRUN-recovery call,

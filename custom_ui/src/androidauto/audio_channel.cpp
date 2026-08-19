@@ -150,6 +150,18 @@ void AudioChannel::onMediaChannelStartIndication(
 void AudioChannel::onMediaChannelStopIndication(
     const aap_protobuf::service::media::shared::message::Stop &) {
     std::printf("%s androidauto: audio channel (%s) stop\n", logTimestamp().c_str(), pcmDevice_.c_str());
+
+    // 2026-08-19: Start/Stop fire repeatedly within a single AA session
+    // (not just once at connect/disconnect), so without this a stale
+    // queued backlog -- or a pendingPacedAcks_ count left over from
+    // backpressure right before Stop arrived -- could bleed into the
+    // next Start. See alsa_output.h's flush() for why this doesn't
+    // touch the PCM device itself.
+    if (alsaOpen_) {
+        alsaOutput_.flush();
+    }
+    pendingPacedAcks_.store(0, std::memory_order_relaxed);
+
     channel_->receive(this->shared_from_this());
 }
 

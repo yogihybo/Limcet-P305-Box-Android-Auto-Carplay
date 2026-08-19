@@ -98,8 +98,19 @@ void Session::start(aasdk::transport::ITransport::Pointer transport) {
     // an independently confirmed 1:1 mapping -- see that doc).
     videoChannel_ = std::make_shared<VideoChannel>(strand_, messenger);
 
+    // 2026-08-19: was 48000 -- the real /etc/asound.conf has no active
+    // rate override for the dmix that plug:softvol2 routes through
+    // (its own `rate 44100` line is commented out), but every rate
+    // value that IS actually pinned anywhere in that file (dmix2's
+    // live `rate 44100`, dmix's own commented-out `rate 44100` before
+    // it was left to auto-negotiate, dsnoop's commented `rate 16000`)
+    // is 44100, and every real hardware `aplay` test in
+    // docs/1.5_AUDIO_SUBSYSTEM_INVESTIGATION.md's history used 44100
+    // -- not 48000, which appears nowhere else in this project's audio
+    // config/testing history. Matching that instead of introducing a
+    // second, untested rate through the "plug" resample layer.
     audioChannelMedia_ = std::make_shared<AudioChannel>(
-        strand_, messenger, aasdk::messenger::ChannelId::MEDIA_SINK_MEDIA_AUDIO, "plug:softvol2", 48000, 2);
+        strand_, messenger, aasdk::messenger::ChannelId::MEDIA_SINK_MEDIA_AUDIO, "plug:softvol2", 44100, 2);
 
     audioChannelGuidance_ = std::make_shared<AudioChannel>(
         strand_, messenger, aasdk::messenger::ChannelId::MEDIA_SINK_GUIDANCE_AUDIO, "plug:softvol1", 16000, 1);
@@ -371,7 +382,10 @@ void Session::onServiceDiscoveryRequest(
     mediaAudioSink->set_audio_type(aap_protobuf::service::media::sink::message::AUDIO_STREAM_MEDIA);
     mediaAudioSink->set_available_while_in_call(true);
     auto *mediaAudioConfig = mediaAudioSink->add_audio_configs();
-    mediaAudioConfig->set_sampling_rate(48000);
+    // Must match audioChannelMedia_'s own rate above (44100) -- this is
+    // what tells the phone what rate to actually send, the AudioChannel
+    // construction above is what ALSA opens the device at.
+    mediaAudioConfig->set_sampling_rate(44100);
     mediaAudioConfig->set_number_of_bits(16);
     mediaAudioConfig->set_number_of_channels(2);
 

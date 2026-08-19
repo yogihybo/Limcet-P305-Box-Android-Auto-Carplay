@@ -148,14 +148,14 @@ flowchart TD
     CamPower -.->|Power Feed| DCDC
 
     %% Vehicle & Radio to Support ICs
-    CANWire <==>|CAN Bus| CANTrx
-    CANTrx <==>|Rx/Tx Serial| MCU
+    CANWire <-->|CAN Bus| CANTrx
+    CANTrx <-->|Rx/Tx Serial| MCU
     VehicleSignals ==>|Digital/Analog In| MCU
     ISOAntenna --->|RF Analog| Tuner
     Tuner -.->|I2C Control| MCU
 
     %% MCU to SoC
-    MCU <==>|UART /dev/ttyHS0 115200 8N1| ARKBrain
+    MCU <-->|UART /dev/ttyHS0 115200 8N1| ARKBrain
     MCU -.->|I2C Control| DSP
     DSP --->|Analog Audio| PowerAmp
     PowerAmp ==>|Amplified Audio| SpeakerWires
@@ -165,8 +165,8 @@ flowchart TD
     ARKBrain <-->|Real Path: SoC sdadc| Mic
 
     %% Memory & Storage
-    ARKBrain <==>|Parallel NAND Bus| NAND
-    ARKBrain <==>|DDR3 Bus| SDRAM
+    ARKBrain <-->|Parallel NAND Bus| NAND
+    ARKBrain <-->|DDR3 Bus| SDRAM
 
     %% Camera Video Decoder
     Camera --->|CVBS Analog Video| RN6752
@@ -175,9 +175,9 @@ flowchart TD
     ARKBrain -.->|Ref Design Only| ARK7116
 
     %% Wireless & USB
-    ARKBrain <==>|USB Bus (usb1)| WiFi
-    ARKBrain <==>|UART /dev/ttyHS1 1.5M| BT
-    ARKBrain <==>|USB Bus (usb0)| USBHost
+    ARKBrain <-->|USB Bus usb1| WiFi
+    ARKBrain <-->|UART /dev/ttyHS1 1.5M| BT
+    ARKBrain <-->|USB Bus usb0| USBHost
     BT --->|Analog Mic / AEC| Mic
 
     %% Display & Audio Outputs
@@ -289,10 +289,10 @@ flowchart TD
     DBusDaemon -->|Spawns| CarPlayDaemon
 
     %% Local Domain Sockets
-    pCarAuto <==>|AF_UNIX Socket Control| UNIXSock
-    UNIXSock <==> SinkDaemon
-    pCarPlay <==>|AF_UNIX Socket Control| UNIXSock
-    UNIXSock <==> CarPlayDaemon
+    pCarAuto <-->|AF_UNIX Socket Control| UNIXSock
+    UNIXSock <--> SinkDaemon
+    pCarPlay <-->|AF_UNIX Socket Control| UNIXSock
+    UNIXSock <--> CarPlayDaemon
 
     %% Video Decode Pipeline
     SinkDaemon ==>|Decode H.264| libMFC

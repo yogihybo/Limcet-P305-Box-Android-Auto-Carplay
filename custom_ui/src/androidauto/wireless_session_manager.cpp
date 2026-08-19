@@ -264,10 +264,10 @@ void WirelessSessionManager::run() {
     std::printf("%s androidauto: wireless session: WPP TCP server listening on 0.0.0.0:%u\n", androidauto::logTimestamp().c_str(),
                 cfg.wifi_session_port());
 
-    setStatus(WirelessSessionState::BluetoothHandshake, "Connecting to blueware (/dev/bw_aap)...");
+    setStatus(WirelessSessionState::BluetoothHandshake, "Connecting to wireless Android Auto Bluetooth channel...");
     BwAapClient bwAap;
     if (!bwAap.connect()) {
-        setStatus(WirelessSessionState::Failed, "Could not open /dev/bw_aap");
+        setStatus(WirelessSessionState::Failed, "Could not open wireless Android Auto Bluetooth channel");
         return;
     }
 

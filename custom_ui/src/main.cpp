@@ -315,29 +315,10 @@ int main() {
     ui::theme::init(disp);
     std::printf("%s ui: theme applied\n", core::log_timestamp().c_str());
 
-    // Starts /usr/bin/blueware (see hal/bluetooth.h) as early as
-    // possible -- nothing else on this device auto-starts it (stock
-    // firmware's MsnCoreApp did, at runtime; custom_ui replaces that
-    // app and nothing filled the gap until now).
+    // Starts BlueZ 5.66 subsystem (see hal/bluetooth.h) as early as possible.
     hal::ensure_bluetooth_daemon_running();
-    std::printf("%s ui: bluetooth daemon launch requested\n", core::log_timestamp().c_str());
+    std::printf("%s ui: BlueZ daemon launch requested\n", core::log_timestamp().c_str());
 
-    // 2026-08-18: this whole block -- shared_handle() (retries opening
-    // /dev/bw_serial for a couple of seconds, per its own comment),
-    // set_device_name() (AT+NAME=, waits for a response), and
-    // auto_reconnect_paired_device() (HFPCONN, waits for a response) --
-    // used to run synchronously right here, blocking the main thread's
-    // path to touch/knob init and the home screen for well over a
-    // second on real hardware (confirmed via a real boot-log capture:
-    // ~1.5s from "bluetooth daemon launch requested" to "MCU input
-    // started"). The UI has no dependency on any of this completing
-    // first -- moved onto its own background thread so touch/knob/the
-    // home screen/the LVGL main loop start immediately, and Bluetooth
-    // connects in parallel instead of gating startup. Still launched
-    // from here (not deferred further) so blueware gets the earliest
-    // possible head start, matching the original ordering's own intent
-    // for ensure_bluetooth_daemon_running() just above -- only the
-    // BLOCKING is removed, not the early start.
     std::thread([]() {
         hal::BluetoothHandle & bt = hal::shared_handle();
         if (bt.fd >= 0) {

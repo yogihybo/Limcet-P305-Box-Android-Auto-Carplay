@@ -1,0 +1,84 @@
+-hci-probe: running rtk_hciattach (rtk_h5, foreground, Ctrl-C to stop) ===
+Watch for 'HCI Device Index' or check 'ls /sys/class/bluetooth' in another shell.
+Realtek Bluetooth :gpio91: first pulse (low) -- matches blueware's initial bpio_reset
+Realtek Bluetooth :gpio91: settling 800ms (approximating blueware's real intervening daemon-startup work) before the final pulse pair
+Realtek Bluetooth :gpio91: final pulse pair (low/high/low/high)
+Realtek Bluetooth :Realtek Bluetooth init uart with init speed:115200, type:HCI UART H5
+Realtek Bluetooth :Realtek hciattach version 3.1.8bea77d.20220330-143428
+
+Realtek Bluetooth :Use epoll
+Realtek Bluetooth :[SYNC] Get SYNC Resp Pkt
+Realtek Bluetooth :[CONFIG] Get SYNC pkt
+Realtek Bluetooth :[CONFIG] Get CONFG pkt
+Realtek Bluetooth :[CONFIG] Get CONFG resp pkt
+Realtek Bluetooth :dic is 1, cfg field 0x14
+Realtek Bluetooth :H5 init finished
+
+Realtek Bluetooth :Realtek H5 IC
+Realtek Bluetooth :Receive cmd complete event of command: 1001
+Realtek Bluetooth :HCI Version 0x0a
+Realtek Bluetooth :HCI Revision 0x000b
+Realtek Bluetooth :LMP Subversion 0x8761
+Realtek Bluetooth :Receive cmd complete event of command: fc6d
+Realtek Bluetooth :Read ROM version 01
+Realtek Bluetooth :LMP Subversion 0x8761
+Realtek Bluetooth :EVersion 1
+Realtek Bluetooth :Receive cmd complete event of command: fc61
+Realtek Bluetooth :Read chip type 00
+Realtek Bluetooth :Read chip ver 00
+Realtek Bluetooth :IC: RTL8761BTV
+Realtek Bluetooth :Firmware/config: rtl8761b_fw, rtl8761b_config
+Realtek Bluetooth :Couldnt open extra config /opt/rtk_btconfig.txt, No such file or directory
+Realtek Bluetooth :Couldnt access customer BT MAC file /opt/bdaddr
+Realtek Bluetooth :Origin cfg len 33
+Realtek Bluetooth :55 ab 23 87 1b 00 0c 00 10 02 80 92 04 50 c5 ea
+Realtek Bluetooth :19 e1 1b fd af 5f 01 a4 0b e4 00 01 08 7a 00 01
+Realtek Bluetooth :37
+Realtek Bluetooth :Config baudrate: 04928002
+Realtek Bluetooth :uart flow ctrl: 1
+Realtek Bluetooth :Vendor baud from Config file: 04928002
+Realtek Bluetooth :New cfg len 33
+Realtek Bluetooth :55 ab 23 87 1b 00 0c 00 10 02 80 92 04 50 c5 ea
+Realtek Bluetooth :19 e1 1b fd af 5f 01 a4 0b e4 00 01 08 7a 00 01
+Realtek Bluetooth :37
+Realtek Bluetooth :Load FW /lib/firmware/rtlbt/rtl8761b_fw OK, size 43980
+Realtek Bluetooth :rtb_get_fw_project_id: opcode 0, len 1, data 14
+Realtek Bluetooth :FW version 0x6ca9434d, Patch num 2
+Realtek Bluetooth :Chip id 0x0001
+Realtek Bluetooth :Chip id 0x0002
+Realtek Bluetooth :Patch length 0x7404
+Realtek Bluetooth :Start offset 0x00003780
+Realtek Bluetooth :Svn version: 1975570599
+Realtek Bluetooth :Coexistence: BTCOEX_20190327-0202
+
+Realtek Bluetooth :FW  exists, Config file  exists
+Realtek Bluetooth :Total len 29733 for fwc
+Realtek Bluetooth :baudrate in change speed command: 0x02 0x80 0x92 0x04
+Realtek Bluetooth :Receive cmd complete event of command: fc17
+Realtek Bluetooth :Received cc of vendor change baud
+Realtek Bluetooth :Final speed 1500000
+Realtek Bluetooth :end_idx: 117, lp_len: 249, additional pkts: 5
+
+Realtek Bluetooth :Start downloading...
+Realtek Bluetooth :Send additional packet 118
+Realtek Bluetooth :Send additional packet 119
+Realtek Bluetooth :Send additional packet 120
+Realtek Bluetooth :Send additional packet 121
+Realtek Bluetooth :Last packet 250
+Realtek Bluetooth :Send last pkt
+Realtek Bluetooth :Enable host hw flow control
+Realtek Bluetooth :h5_hci_reset: Issue hci reset cmd
+Realtek Bluetooth :Receive cmd complete event of command: 0c03
+Realtek Bluetooth :Received cc of hci reset cmd
+Realtek Bluetooth :Init Process finished
+Realtek Bluetooth :Realtek Bluetooth post process
+Realtek Bluetooth :Device setup complete
+[   98.244584] Bluetooth: Non-link packet received in non-active state
+[   98.356365] Bluetooth: Out-of-order packet arrived (1 != 0)
+/data/rtk-hciattach-test # ./hci-updown up
+HCIDEVUP hci0: OK
+hci0 (hci0): type 0x03
+  bdaddr: dc:0d:30:14:fc:9f
+flags: 0x00000005 (UP RUNNING)
+  acl mtu: 1021:5  sco mtu: 255:11
+  stats: err_rx 0 err_tx 0 cmd_tx 64 evt_rx 65 acl_tx 0 acl_rx 0 byte_rx 2145 byte_tx 1386

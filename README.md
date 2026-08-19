@@ -194,52 +194,68 @@ The device runs two distinct software stacks depending on which boot path is act
 
 ```mermaid
 flowchart TD
-    subgraph S1["01 Main Application & Plugins (Qt 4.7.4 QWS)"]
-        MainApp["MsnCoreApp (/usr/bin/MsnCoreApp)"]
-        Plugins["UI & Projection Plugins<br/>libMsnCarAuto (AA) · libMsnCarPlay (CarPlay) · libLauncher-Box · libSetting"]
-        Adapters["Hardware Adapters<br/>libBlueTooth · libMcuCenter (MCU) · libCanBus · libMsnSound"]
+    subgraph S1["01 User & Vehicle Inputs (Hardware Nodes)"]
+        TouchNode["/dev/input/event0 (ark1680_ts)<br/>Resistive Touch Coordinates (ABS_X, ABS_Y)"]
+        MCUNode["/dev/ttyHS0 (ark-hsuart @ 115200)<br/>MCU Stream: CAN SWC Keys · Reverse Gear · Rotary Knob"]
+        MediaNodes["Peripherals & Audio Nodes<br/>/dev/ttyHS1 (BT AT) · /dev/dvr (Cam) · ALSA I2S · wlan0"]
     end
 
-    subgraph S2["02 IPC & Background Daemons"]
-        IPC["IPC Layer<br/>dbus-daemon (Session Bus) · AF_UNIX Domain Sockets"]
-        Daemons["Projection & Connectivity Daemons<br/>sink (Android Auto) · carplay (Apple CarPlay) · blueware (BT) · hostapd (WiFi)"]
+    subgraph S2["02 Hardware Abstraction & Serial Transport (HAL)"]
+        libQExt["libqextserialport.so<br/>MCU Serial Packet Framer & Parser"]
+        libHAL["Core HAL & Acceleration<br/>libmfc.so (VPU Decode) · libGAL.so (GPU DirectFB) · libarkcmn.so (IOCTLs)"]
     end
 
-    subgraph S3["03 Hardware Abstraction (HAL) & Libraries"]
-        HAL["Middleware Libraries<br/>libmfc.so (Hantro Video) · libGAL.so (Vivante GPU) · libarkcmn.so · libqextserialport.so"]
+    subgraph S3["03 Hardware Adapters & Event Dispatchers"]
+        McuAdapter["libMcuCenter.so (Plugin 401) & libCanBus.so (Plugin 400)<br/>Decodes: SWC Keycodes · Rotary Direction/Press · Reverse Gear State"]
+        BTAdapter["libBlueTooth.so (Plugin 3) & libMsnSound.so (Plugin 403)<br/>BT Pairing / AT Control · ALSA Volume & Mixing"]
     end
 
-    subgraph S4["04 Kernel Drivers & Hardware Nodes"]
-        DisplayDev["Display / Video Nodes: /dev/fb0-/dev/fb4 · /dev/hx170dec · /dev/dvr"]
-        SerialDev["Serial & Audio Nodes: /dev/ttyHS0 (MCU) · /dev/ttyHS1 (BT) · ALSA I2S"]
-        InputDev["Input & Network: /dev/input/event0 (Touch) · wlan0 (WiFi)"]
+    subgraph S4["04 Main Application & UI Plugins (Qt 4.7.4 QWS)"]
+        MainApp["MsnCoreApp (/usr/bin/MsnCoreApp) & libMsnCommons.so"]
+        UIPlugins["UI & Overlay Plugins<br/>libLauncher-Box.so (Launcher/Knob Focus) · libSetting.so · libCarReversing.so (Reverse Cam)"]
+        ProjPlugins["Projection UI Plugins<br/>libMsnCarAuto.so (Android Auto UI) · libMsnCarPlay.so (CarPlay UI)"]
     end
 
-    %% Tier 1 internal and down
-    MainApp --- Plugins
-    MainApp --- Adapters
-    Plugins ==>|D-Bus & UNIX Sockets| IPC
-    Adapters ==>|Serial & AT Packets| IPC
-    IPC ==>|Control & Data Streams| Daemons
+    subgraph S5["05 IPC & Background Projection Daemons"]
+        IPC["IPC Layer: dbus-daemon (Session Bus) · AF_UNIX Sockets"]
+        Daemons["Projection Engines & Daemons<br/>sink (Android Auto) · carplay (Apple CarPlay) · blueware (BT) · hostapd (WiFi)"]
+        DevFB["Display Plane: /dev/fb0 - /dev/fb4 (ark1668_lcdfb Video & OSD Layers)"]
+    end
+
+    %% Tier 1 -> Tier 2
+    TouchNode ==>|Raw Touch Events| MainApp
+    MCUNode ==>|Framed Binary Stream| libQExt
+    MediaNodes <-->|AT Commands & Media Stream| libHAL
 
     %% Tier 2 -> Tier 3
-    Daemons ==>|Decode & Compose API| HAL
+    libQExt ==>|Parsed Packets| McuAdapter
+    libHAL <-->|HAL Driver Links| BTAdapter
 
     %% Tier 3 -> Tier 4
-    HAL ==>|ioctl & Framebuffer Plane| DisplayDev
-    HAL ==>|UART & Audio Driver| SerialDev
-    InputDev -.->|Touch Coordinates| MainApp
+    McuAdapter ==>|Reverse Signal Trigger| UIPlugins
+    McuAdapter ==>|Knob Focus & Menu Ticks| UIPlugins
+    McuAdapter ==>|CAN SWC Keys & Touch Ingestion| ProjPlugins
+    BTAdapter <-->|Audio & Bluetooth State| MainApp
+
+    %% Tier 4 -> Tier 5
+    MainApp --- UIPlugins
+    MainApp --- ProjPlugins
+    ProjPlugins ==>|D-Bus Start & UNIX Control| IPC
+    IPC ==>|Touch Injection & Key Events| Daemons
+    Daemons ==>|H.264 Video & OSD Overlay| DevFB
 
     %% Styling
-    classDef app fill:#d4edda,stroke:#28a745,color:#155724
-    classDef daemon fill:#fff3cd,stroke:#e0a800,color:#856404
+    classDef input fill:#fff3cd,stroke:#e0a800,color:#856404
     classDef hal fill:#d1ecf1,stroke:#17a2b8,color:#0c5460
-    classDef driver fill:#f8d7da,stroke:#dc3545,color:#721c24
+    classDef adapter fill:#e2e3e5,stroke:#383d41,color:#1b1e21
+    classDef app fill:#d4edda,stroke:#28a745,color:#155724
+    classDef daemon fill:#f8d7da,stroke:#dc3545,color:#721c24
 
-    class MainApp,Plugins,Adapters app
-    class IPC,Daemons daemon
-    class HAL hal
-    class DisplayDev,SerialDev,InputDev driver
+    class TouchNode,MCUNode,MediaNodes input
+    class libQExt,libHAL hal
+    class McuAdapter,BTAdapter adapter
+    class MainApp,UIPlugins,ProjPlugins app
+    class IPC,Daemons,DevFB daemon
 ```
 
 **Documentation:**

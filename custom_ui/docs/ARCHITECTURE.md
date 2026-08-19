@@ -32,7 +32,7 @@ stack actually expose," not a design spec.
 ## Audio
 
 ALSA, single card: `card0` (`ARK-SDDAC`).
-See [`AUDIO_SUBSYSTEM_HANDOFF.md`](AUDIO_SUBSYSTEM_HANDOFF.md) for the Android Auto audio flow control, ACK timing, buffer sliding window, and ALSA writer thread architecture.
+See [`AUDIO_SUBSYSTEM_HANDOFF.md`](AUDIO_SUBSYSTEM_HANDOFF.md) and [`AUDIO_CPU_SPIKE_AND_SIDECAR_LIFECYCLE_HANDOFF.md`](AUDIO_CPU_SPIKE_AND_SIDECAR_LIFECYCLE_HANDOFF.md) for Android Auto audio flow control, ALSA sample-rate matching (eliminating software resampling), stop/resume stream resets, and sidecar lifecycle management.
 
 ## CarPlay — via `sink` (kept as a black box)
 

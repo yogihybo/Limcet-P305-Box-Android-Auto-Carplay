@@ -248,7 +248,33 @@ style `--` usages) violated that, not the real upstream content it was
 based on. Reworded the comment and verified with `xml.dom.minidom`
 that the file now parses as well-formed XML before shipping it again.
 
-**Not yet re-tested since this fix.** Next: re-run, confirm the system
-bus actually starts this time, then check org.bluez registration via
-`dbus-send` and basic adapter power-on
-(`org.bluez.Adapter1.Powered = true`).
+## Run 5 (2026-08-19, real hardware): FULL SUCCESS -- BlueZ working end to end
+
+System dbus-daemon started clean, `bluetoothd` came up completely:
+
+- All real plugins loaded (`a2dp`, `avrcp`, `network`, `input`, `hog`,
+  `gap`, `scanparam`, `deviceinfo`, `battery`, `hostname`, `wiimote`,
+  `autopair`, `policy`) -- only `vcp`/`mcp`/`bap` (LE Audio) declined
+  with "D-Bus experimental not enabled", expected: this build didn't
+  pass `--enable-experimental`, not a bug.
+- `Bluetooth management interface 1.14 initialized`, adapter
+  `/org/bluez/hci0` registered (`src/adapter.c:adapter_register()
+  Adapter /org/bluez/hci0 registered`).
+- Real SDP service records added for SPP/OBEX/PAN/HID/A2DP/AVRCP
+  (handles `0x10001`-`0x10005`), device ID record, GATT Manager and LE
+  Advertising Manager both registered for the adapter.
+- Every single `mgmt` command in the whole bring-up sequence completed
+  with status `0x00` (success) -- device class, local name (`BlueZ
+  5.66`), link keys/LTKs/IRKs/connection params all loaded cleanly for
+  `hci0` with zero errors.
+
+This is the entire real BlueZ D-Bus stack working end to end against
+this hardware for the first time -- settles both this tool's and
+`../rtk-hciattach-test/`'s original question definitively: this device
+can run a completely standard Linux Bluetooth stack, `blueware`'s
+AT-command daemon was never load-bearing at any layer.
+
+Not yet exercised: actual pairing/connection to a real phone/peripheral
+(no `bluetoothctl` in this build, see "What's disabled" above -- would
+need `dbus-send`-driven `Adapter1.Powered`/`Adapter1.Discoverable`
+calls, or building `bluetoothctl` with readline, to test that next).

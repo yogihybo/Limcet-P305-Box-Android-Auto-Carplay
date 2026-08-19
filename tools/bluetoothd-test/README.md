@@ -227,6 +227,19 @@ directly instead of fighting it -- `dbus-daemon --config-file=... --nofork`
 alone, with the script's own socket-existence check pointed at the
 right location.
 
+**Run 3 (2026-08-19, real hardware)**: dbus-daemon started this time
+(no more usage-banner exit) but failed differently: `Failed to start
+message bus: Could not get UID and GID for username "messagebus"`.
+Real config's `<user>messagebus</user>` privilege-drop can never
+succeed on this rootfs -- `/etc/passwd` has only `root`, no
+`messagebus` system user was ever created. Fixed with
+`dbus-policy/system-diagnostic.conf`, a copy of the real
+`/usr/etc/dbus-1/system.conf` with only that one line changed to
+`<user>root</user>` (everything else on this device already runs as
+root) -- staged over the real `system.conf` path (not a separate file
+elsewhere) so its own `<includedir>system.d</includedir>` still finds
+`bluetooth.conf`.
+
 **Not yet re-tested since this fix.** Next: re-run, confirm the system
 bus actually starts this time, then check org.bluez registration via
 `dbus-send` and basic adapter power-on

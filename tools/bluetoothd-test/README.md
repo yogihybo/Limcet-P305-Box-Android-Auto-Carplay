@@ -188,11 +188,28 @@ should show `hci0`'s `org.bluez.Adapter1` object if everything's working.
 
 ## Status
 
-**Not yet hardware-tested.** Built and verified only: `bluetoothd` links
-fully static with all `--wrap` symbols confirmed resolved
-(`nm bluetoothd | grep __wrap_` shows all 15), binary is 2.1MB stripped.
-Next: flash the kernel with the new Bluetooth Kconfig options, confirm
-`hci0` still comes up via `../rtk-hciattach-test/`, then run this tool
-and check for the crash class `../nss-stub/README.md` documents, org.bluez
-registration via `dbus-send`, and basic adapter power-on
+**Run 1 (2026-08-19, real hardware)**: kernel flashed with the new
+Bluetooth Kconfig options, `hci0` came up cleanly via
+`../rtk-hciattach-test/` first (same clean run as that tool's own Run
+6). `bluetoothd` itself started and printed `Bluetooth daemon 5.66` --
+**the static-NSS/dlopen crash class this tool was built defensively
+against never fired** (real hardware confirmation the `--wrap` set is
+complete and correct, first time this exact binary has run on-device).
+
+Failed at the very next step: `Failed to connect to socket
+/var/run/dbus/system_bus_socket: No such file or directory`. Root
+cause found and fixed same day: `bt-daemon-probe.sh` checked `pidof
+dbus-daemon` to decide whether to start its own system bus daemon --
+but `/etc/profile` already starts a *session* bus on every login shell
+(`dbus-launch --auto-syntax`), so a `dbus-daemon` process is
+essentially always already running, just not listening on the system
+bus socket bluetoothd needs. `pidof` can't distinguish the two.
+Multiple `dbus-daemon` processes coexist fine (independent sockets) --
+fixed by checking for the actual socket file
+(`[ -S "$BUS_SOCKET_DIR/system_bus_socket" ]`) instead of any process
+by that name.
+
+**Not yet re-tested since this fix.** Next: re-run, confirm the system
+bus actually starts this time, then check org.bluez registration via
+`dbus-send` and basic adapter power-on
 (`org.bluez.Adapter1.Powered = true`).

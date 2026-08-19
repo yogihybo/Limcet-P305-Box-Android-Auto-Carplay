@@ -42,7 +42,17 @@ cp "$SCRIPT_DIR/dbus-policy/bluetooth.conf" "$DBUS_POLICY_DST/bluetooth.conf"
 
 mkdir -p "$BUS_SOCKET_DIR"
 
-if ! pidof dbus-daemon >/dev/null 2>&1; then
+# 2026-08-19: was `pidof dbus-daemon` -- wrong check. /etc/profile
+# already starts a SESSION bus (`dbus-launch --auto-syntax`) on every
+# login shell, so a dbus-daemon process is essentially always already
+# running on this device -- but it's listening on a session socket
+# (dbus-launch picks its own autolaunch address, not
+# $BUS_SOCKET_DIR/system_bus_socket), not the system bus bluetoothd
+# needs. `pidof` can't tell the two apart, so this always skipped
+# starting a real system bus daemon. Multiple dbus-daemon processes
+# coexist fine (independent sockets) -- check for the actual socket
+# file instead of any process by that name.
+if [ ! -S "$BUS_SOCKET_DIR/system_bus_socket" ]; then
     echo "=== bt-daemon-probe: starting system dbus-daemon ($BUS_ADDRESS) ==="
     dbus-daemon --config-file="$DBUS_SYSTEM_CONF" --address="$BUS_ADDRESS" --nofork &
     DBUS_PID=$!
@@ -54,9 +64,7 @@ if ! pidof dbus-daemon >/dev/null 2>&1; then
     done
     echo "dbus-daemon pid $DBUS_PID"
 else
-    echo "=== bt-daemon-probe: dbus-daemon already running, reusing it ==="
-    echo "    (make sure it's listening on $BUS_ADDRESS -- if it was started some"
-    echo "    other way, org.bluez registration below may fail to be reachable.)"
+    echo "=== bt-daemon-probe: system bus socket already exists, reusing it ==="
 fi
 
 export DBUS_SYSTEM_BUS_ADDRESS="$BUS_ADDRESS"

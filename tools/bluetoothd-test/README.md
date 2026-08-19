@@ -240,6 +240,14 @@ root) -- staged over the real `system.conf` path (not a separate file
 elsewhere) so its own `<includedir>system.d</includedir>` still finds
 `bluetooth.conf`.
 
+**Run 4 (2026-08-19, real hardware)**: dbus-daemon rejected
+`system-diagnostic.conf` outright: `Error loading config file: 'Double
+hyphen within comment'`. XML comments can't contain `--` anywhere
+inside them; that new file's own explanatory comment (several em-dash-
+style `--` usages) violated that, not the real upstream content it was
+based on. Reworded the comment and verified with `xml.dom.minidom`
+that the file now parses as well-formed XML before shipping it again.
+
 **Not yet re-tested since this fix.** Next: re-run, confirm the system
 bus actually starts this time, then check org.bluez registration via
 `dbus-send` and basic adapter power-on

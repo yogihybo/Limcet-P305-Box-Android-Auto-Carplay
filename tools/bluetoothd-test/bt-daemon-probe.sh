@@ -28,7 +28,21 @@ SCRIPT_DIR="$(dirname "$0")"
 BLUETOOTHD="$SCRIPT_DIR/bluetoothd"
 DBUS_POLICY_DST=/usr/etc/dbus-1/system.d
 DBUS_SYSTEM_CONF=/usr/etc/dbus-1/system.conf
-BUS_SOCKET_DIR=/var/run/dbus
+# 2026-08-19: was /var/run/dbus with an explicit --address= override --
+# the real on-device dbus-daemon (confirmed via `strings` on the
+# binary: its embedded usage banner has no --address entry at all,
+# unlike the 1.14.10 reference vendored in third_party/dbus/) doesn't
+# support that flag; passing it hits its argument parser's unknown-
+# option fallback and the process exits immediately printing usage,
+# which this script's own `$! `-based PID capture didn't notice (`$!`
+# gives you the backgrounded PID regardless of whether it already
+# exited). Real fix: don't fight this device's own real system.conf
+# default -- /usr/etc/dbus-1/system.conf's own <listen> resolves to
+# this doubled path (a real, if odd, vendor build artifact -- confirmed
+# independently: dbus-send's own client-side fallback error message
+# names this exact same path), so just use it directly instead of
+# trying to override it.
+BUS_SOCKET_DIR=/var/run/run/dbus
 BUS_ADDRESS="unix:path=$BUS_SOCKET_DIR/system_bus_socket"
 
 if pidof bluetoothd >/dev/null 2>&1; then
@@ -53,8 +67,8 @@ mkdir -p "$BUS_SOCKET_DIR"
 # coexist fine (independent sockets) -- check for the actual socket
 # file instead of any process by that name.
 if [ ! -S "$BUS_SOCKET_DIR/system_bus_socket" ]; then
-    echo "=== bt-daemon-probe: starting system dbus-daemon ($BUS_ADDRESS) ==="
-    dbus-daemon --config-file="$DBUS_SYSTEM_CONF" --address="$BUS_ADDRESS" --nofork &
+    echo "=== bt-daemon-probe: starting system dbus-daemon (real config default: $BUS_ADDRESS) ==="
+    dbus-daemon --config-file="$DBUS_SYSTEM_CONF" --nofork &
     DBUS_PID=$!
     # Give it a moment to create the socket before bluetoothd tries to connect.
     i=0
@@ -62,7 +76,11 @@ if [ ! -S "$BUS_SOCKET_DIR/system_bus_socket" ]; then
         i=$((i + 1))
         usleep 100000 2>/dev/null || sleep 1
     done
-    echo "dbus-daemon pid $DBUS_PID"
+    if [ ! -S "$BUS_SOCKET_DIR/system_bus_socket" ]; then
+        echo "dbus-daemon (pid $DBUS_PID) did not create $BUS_SOCKET_DIR/system_bus_socket within 5s -- check it's still running (ps | grep dbus-daemon) and its own stderr above."
+        exit 1
+    fi
+    echo "dbus-daemon pid $DBUS_PID, socket up"
 else
     echo "=== bt-daemon-probe: system bus socket already exists, reusing it ==="
 fi

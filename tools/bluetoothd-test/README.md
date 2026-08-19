@@ -209,6 +209,24 @@ fixed by checking for the actual socket file
 (`[ -S "$BUS_SOCKET_DIR/system_bus_socket" ]`) instead of any process
 by that name.
 
+**Run 2 (2026-08-19, real hardware)**: the pidof fix from Run 1 wasn't
+enough -- `dbus-daemon --config-file=... --address=... --nofork`
+printed dbus-daemon's own usage banner and exited immediately (`$!`
+still captured its PID regardless, so the script's own success message
+was misleading). Root cause: `strings` on the real on-device
+`/usr/bin/dbus-daemon` binary shows its embedded usage text has **no
+`--address` entry at all** -- an old/reduced build that doesn't support
+that flag, unlike the 1.14.10 reference this tool vendors for headers
+only. Independently confirmed via `dbus-send`'s own client-side error
+message, which named the exact same real default address this device's
+`/usr/etc/dbus-1/system.conf` resolves to:
+`unix:path=/var/run/run/dbus/system_bus_socket` (the doubled `run/run`
+-- a real, if odd, vendor build artifact, not a typo). Fixed by
+dropping `--address=` entirely and just using that real default path
+directly instead of fighting it -- `dbus-daemon --config-file=... --nofork`
+alone, with the script's own socket-existence check pointed at the
+right location.
+
 **Not yet re-tested since this fix.** Next: re-run, confirm the system
 bus actually starts this time, then check org.bluez registration via
 `dbus-send` and basic adapter power-on

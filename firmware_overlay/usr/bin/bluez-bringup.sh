@@ -32,19 +32,48 @@ killall -9 blueware 2>/dev/null || true
 
 echo "bluez-bringup: staging firmware"
 mkdir -p /lib/firmware/rtlbt
-if [ ! -f /lib/firmware/rtlbt/rtl8761b_fw ]; then
-    if [ -f /data/rtl8761bt_fw ]; then
-        cp /data/rtl8761bt_fw /lib/firmware/rtlbt/rtl8761b_fw
-    elif [ -f /lib/firmware/rtl8761b_fw ]; then
-        cp /lib/firmware/rtl8761b_fw /lib/firmware/rtlbt/rtl8761b_fw
-    elif [ -f /data/device-firmware/rtl8761bt_fw ]; then
-        cp /data/device-firmware/rtl8761bt_fw /lib/firmware/rtlbt/rtl8761b_fw
-    elif [ -f /data/rtk-hciattach-test/device-firmware/rtl8761bt_fw ]; then
-        cp /data/rtk-hciattach-test/device-firmware/rtl8761bt_fw /lib/firmware/rtlbt/rtl8761b_fw
-    elif [ -f /usr/share/bluez-bringup/device-firmware/rtl8761bt_fw ]; then
-        cp /usr/share/bluez-bringup/device-firmware/rtl8761bt_fw /lib/firmware/rtlbt/rtl8761b_fw
+
+if [ -f /lib/firmware/rtlbt/rtl8761b_fw ]; then
+    echo "bluez-bringup: firmware already present at /lib/firmware/rtlbt/rtl8761b_fw"
+else
+    FW_FOUND=""
+    for p in \
+        /lib/firmware/rtl8761b_fw \
+        /lib/firmware/rtl8761bt_fw \
+        /etc/firmware/rtl8761b_fw \
+        /usr/lib/firmware/rtl8761b_fw \
+        /data/rtl8761bt_fw \
+        /data/rtl8761b_fw \
+        /data/device-firmware/rtl8761bt_fw \
+        /data/device-firmware/rtl8761b_fw \
+        /data/rtk-hciattach-test/device-firmware/rtl8761bt_fw \
+        /data/rtk-hciattach-test/rtl8761b_fw \
+        /data/rtk-hciattach-test/rtl8761bt_fw \
+        /usr/share/bluez-bringup/device-firmware/rtl8761bt_fw; do
+        if [ -f "$p" ]; then
+            FW_FOUND="$p"
+            break
+        fi
+    done
+
+    # Dynamic search if not in standard list
+    if [ -z "$FW_FOUND" ]; then
+        for search_dir in /data /lib /usr /etc; do
+            if [ -d "$search_dir" ]; then
+                match=$(find "$search_dir" -name "*8761*" 2>/dev/null | grep -v "/rtlbt/" | head -n 1)
+                if [ -n "$match" ] && [ -f "$match" ]; then
+                    FW_FOUND="$match"
+                    break
+                fi
+            fi
+        done
+    fi
+
+    if [ -n "$FW_FOUND" ]; then
+        echo "bluez-bringup: found firmware at $FW_FOUND -> copying to /lib/firmware/rtlbt/rtl8761b_fw"
+        cp "$FW_FOUND" /lib/firmware/rtlbt/rtl8761b_fw
     else
-        echo "bluez-bringup: warning: firmware file rtl8761b_fw not found, continuing if already in kernel"
+        echo "bluez-bringup: warning: firmware file rtl8761b_fw not found via search, continuing"
     fi
 fi
 

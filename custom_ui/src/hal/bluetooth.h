@@ -357,7 +357,29 @@ bool sync_clock_from_phone(BluetoothHandle & h);
 // building on, consistent with this project's standing preference to
 // keep clock-related changes scoped to plausibleEpochMillis() rather
 // than a system-wide override (see git history around f37050f).
-bool diagnose_pbdown(BluetoothHandle & h);
+struct BluetoothTelemetry {
+    bool connected = false;
+    int battery_level = -1;      // 0..100 (%) or 0..5, -1 if unknown
+    int signal_strength = -1;    // 0..5 bars, -1 if unknown
+    std::string connected_device_name;
+    std::string track_title;
+    std::string track_artist;
+    std::string track_album;
+    int play_status = 0;         // 0=stopped, 1=playing, 2=paused
+};
+
+// Thread-safe query of the latest live Bluetooth telemetry and state
+BluetoothTelemetry get_telemetry();
+
+// Telephony & Call Control (HFP)
+bool answer_call(BluetoothHandle & h);
+bool hangup_call(BluetoothHandle & h);
+bool dial_number(BluetoothHandle & h, const std::string & number);
+
+// Media Transport Control (AVRCP)
+bool media_play_pause(BluetoothHandle & h);
+bool media_next_track(BluetoothHandle & h);
+bool media_prev_track(BluetoothHandle & h);
 
 void close_bluetooth(BluetoothHandle & h);
 

@@ -116,7 +116,7 @@ void remove_device_clicked_cb(lv_event_t * e) {
 void populate_device_list(BtScreenWidgets * w, bool hw_present, bool devices_ok,
                            const std::vector<std::string> & devices) {
     lv_obj_clean(w->list);
-    w->last_devices = devices;
+    w->last_devices.clear();
     if (!hw_present) {
         lv_obj_t * lbl = lv_label_create(w->list);
         lv_label_set_text(lbl, "/dev/bw_serial unavailable");
@@ -124,18 +124,26 @@ void populate_device_list(BtScreenWidgets * w, bool hw_present, bool devices_ok,
         status_label_set(w->status_label, "Bluetooth hardware not detected");
         return;
     }
-    if (!devices_ok || devices.empty()) {
+    std::vector<std::string> valid_devices;
+    for (const auto & dev : devices) {
+        std::string mac, name;
+        if (hal::split_plist_entry(dev, mac, name) && !mac.empty()) {
+            valid_devices.push_back(dev);
+        }
+    }
+    w->last_devices = valid_devices;
+    if (!devices_ok || valid_devices.empty()) {
         lv_obj_t * lbl = lv_label_create(w->list);
         lv_label_set_text(lbl, "(no paired devices)");
         lv_obj_set_style_text_color(lbl, staging_ui::theme::text_secondary(), 0);
         status_label_set(w->status_label, "PLIST returned nothing");
         return;
     }
-    for (size_t i = 0; i < devices.size(); ++i) {
+    for (size_t i = 0; i < valid_devices.size(); ++i) {
         std::string mac, name;
-        std::string label = hal::split_plist_entry(devices[i], mac, name) && !name.empty()
+        std::string label = hal::split_plist_entry(valid_devices[i], mac, name) && !name.empty()
                                  ? name
-                                 : devices[i];
+                                 : valid_devices[i];
 
         lv_obj_t * row = lv_obj_create(w->list);
         lv_obj_remove_style_all(row);

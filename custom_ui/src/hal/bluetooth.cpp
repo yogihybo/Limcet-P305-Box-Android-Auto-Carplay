@@ -353,14 +353,76 @@ bool send_command(BluetoothHandle & h, const std::string & command,
                      err.c_str(), command.c_str());
     }
 
-    return !response_lines.empty();
+std::mutex g_telemetry_mtx;
+BluetoothTelemetry g_telemetry;
+
+void update_telemetry_from_line(const std::string & line) {
+    std::lock_guard<std::mutex> lock(g_telemetry_mtx);
+    if (line.rfind("+HFPSTAT=", 0) == 0) {
+        int state = -1;
+        if (std::sscanf(line.c_str() + 9, "%d", &state) == 1) {
+            g_telemetry.connected = (state >= 2);
+        }
+    } else if (line.rfind("+A2DPSTAT=", 0) == 0) {
+        int state = -1;
+        if (std::sscanf(line.c_str() + 10, "%d", &state) == 1) {
+            if (state >= 2) g_telemetry.connected = true;
+        }
+    } else if (line.rfind("+DEVSTAT=0", 0) == 0) {
+        g_telemetry.connected = false;
+    } else if (line.rfind("+HFPBATT=", 0) == 0) {
+        int batt = -1;
+        if (std::sscanf(line.c_str() + 9, "%d", &batt) == 1) {
+            g_telemetry.battery_level = batt;
+        }
+    } else if (line.rfind("+HFPSIG=", 0) == 0) {
+        int sig = -1;
+        if (std::sscanf(line.c_str() + 8, "%d", &sig) == 1) {
+            g_telemetry.signal_strength = sig;
+        }
+    } else if (line.rfind("+AAPDEV=", 0) == 0 || line.rfind("+HFPDEV=", 0) == 0) {
+        g_telemetry.connected = true;
+        std::string mac, name;
+        size_t eq = line.find('=');
+        if (eq != std::string::npos) {
+            std::string payload = line.substr(eq + 1);
+            if (split_mac_and_name(payload, mac, name)) {
+                g_telemetry.connected_device_name = name.empty() ? mac : name;
+            } else {
+                g_telemetry.connected_device_name = payload;
+            }
+        }
+    } else if (line.rfind("+PLAYSTAT=", 0) == 0) {
+        int st = 0;
+        if (std::sscanf(line.c_str() + 10, "%d", &st) == 1) {
+            g_telemetry.play_status = st;
+        }
+    } else if (line.rfind("+TRACKINFO=", 0) == 0) {
+        std::string payload = line.substr(11);
+        std::vector<std::string> fields;
+        size_t p = 0;
+        while (p < payload.size()) {
+            auto q1 = payload.find('"', p);
+            if (q1 == std::string::npos) break;
+            auto q2 = payload.find('"', q1 + 1);
+            if (q2 == std::string::npos) break;
+            fields.push_back(payload.substr(q1 + 1, q2 - q1 - 1));
+            p = q2 + 1;
+        }
+        if (fields.size() >= 1) g_telemetry.track_title = fields[0];
+        if (fields.size() >= 2) g_telemetry.track_artist = fields[1];
+        if (fields.size() >= 3) g_telemetry.track_album = fields[2];
+    }
 }
+
+}  // namespace
 
 void start_bluetooth_reader(BluetoothHandle & h) {
     if (h.fd < 0) return;
     ReaderState & rs = reader_state();
     if (rs.started) return;
     rs.started = true;
+    watch_bluetooth_broadcasts(update_telemetry_from_line);
     std::thread(reader_loop, &h).detach();
 }
 
@@ -758,7 +820,17 @@ bool auto_reconnect_paired_device(BluetoothHandle & h) {
         return false;
     }
     std::string mac, name;
-    std::string connect_id = split_plist_entry(devices.front(), mac, name) ? mac : devices.front();
+    std::string connect_id;
+    for (const auto & entry : devices) {
+        if (split_plist_entry(entry, mac, name) && !mac.empty()) {
+            connect_id = mac;
+            break;
+        }
+    }
+    if (connect_id.empty()) {
+        std::printf("%s hal::bluetooth::auto_reconnect_paired_device: no valid paired device MAC found in PLIST, skipping\n", core::log_timestamp().c_str());
+        return false;
+    }
 
     // 2026-08-19: see docs/BLUETOOTH_RECONNECT_HANDOFF.md -- a real
     // captured boot log (docs/logs/bluetooth log stock_260718.txt)
@@ -830,6 +902,41 @@ bool auto_reconnect_paired_device(BluetoothHandle & h) {
     std::printf("%s hal::bluetooth::auto_reconnect_paired_device: giving up after %d attempts\n",
                 core::log_timestamp().c_str(), kMaxAttempts);
     return false;
+}
+
+BluetoothTelemetry get_telemetry() {
+    std::lock_guard<std::mutex> lock(g_telemetry_mtx);
+    return g_telemetry;
+}
+
+bool answer_call(BluetoothHandle & h) {
+    std::vector<std::string> resp;
+    return send_command(h, "HFPANSW", resp);
+}
+
+bool hangup_call(BluetoothHandle & h) {
+    std::vector<std::string> resp;
+    return send_command(h, "HFPCHUP", resp);
+}
+
+bool dial_number(BluetoothHandle & h, const std::string & number) {
+    std::vector<std::string> resp;
+    return send_command(h, "HFPDIAL=" + number, resp);
+}
+
+bool media_play_pause(BluetoothHandle & h) {
+    std::vector<std::string> resp;
+    return send_command(h, "PLAYPAUSE", resp);
+}
+
+bool media_next_track(BluetoothHandle & h) {
+    std::vector<std::string> resp;
+    return send_command(h, "FORWARD", resp);
+}
+
+bool media_prev_track(BluetoothHandle & h) {
+    std::vector<std::string> resp;
+    return send_command(h, "BACKWARD", resp);
 }
 
 }  // namespace hal

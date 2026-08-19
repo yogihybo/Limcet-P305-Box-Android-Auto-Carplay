@@ -85,7 +85,7 @@ Hardware on the device has been identified by opening the device and reviewing t
 | NAND | Toshiba TC58BVG0S3HTA00, 128 MB SLC | Firmware/rootfs storage, on a soldered daughter module (the "Limcet Box" compute module). Background: [§9.0](#90-nand-partition-layout) |
 | MCU | STM32F105RBT6 (ARM Cortex-M3) | Vehicle-side I/O — CAN bus, touch/button/reverse/ACC-IGN signals — talks to the ARK1668 over `/dev/ttyHS0`. Background: [§1.3](docs/1.3_MCU_ADAPTERS.md) |
 | CAN transceiver | NXP TJA1042 | Bridges the MCU's CAN controller to the vehicle CANH/CANL lines. Background: [§1.2](docs/1.2_CANBUS.md) |
-| Bluetooth module | Feasycom FSC-BT8251 V1.1 (Realtek RTL-series BT SoC) | HFP/A2DP/AVRCP/iAP2, over `/dev/ttyHS1` at 1.5Mbps; enable pin `gpio91`. Background: [§1.4](docs/1.4_WIRELESS_AND_INIT.md) |
+| Bluetooth module | Feasycom FSC-BT8251 V1.1 (Realtek RTL8761BTV BT 5.0 baseband) | HFP/A2DP/AVRCP/PAN, over `/dev/ttyHS1` (3-Wire H5 @ 1.5Mbps); enable pin `gpio91`. Background: [§1.4](docs/1.4_WIRELESS_AND_INIT.md), [BLUEZ_AND_KERNEL_BLUETOOTH_HANDOFF.md](docs/BLUEZ_AND_KERNEL_BLUETOOTH_HANDOFF.md) |
 | WiFi chip | Realtek RTL8811CU | Onboard, over USB (`usb1`). Background: [§1.4](docs/1.4_WIRELESS_AND_INIT.md) |
 | Rear camera decoder | RN6752 | CVBS composite → ITU-656 digital video for the reversing camera feed. Background: [§1.1](docs/1.1_HARDWARE_AND_SOC_REFERENCE.md) |
 | Audio DAC/ADC | ARK1668 on-SoC sigma-delta DAC (`ark_sddac`) + ADC (`ark_sdadc`), I2S1 @ `0xe4000000` (DAC) / `0xe8200000` (ADC) | The real, confirmed-only playback/capture path (stock's own `aplay -l`: `card 0: ARKSDDAC [ARK-SDDAC]`). A 2026-07-16 theory that playback instead routed through an external Cirrus Logic CS4334 chip was investigated and reverted — `cs4334_*` disassembles to no-op stubs in stock's own kernel, i.e. a vestigial board-file dai-link with no real chip behind it, not a second physical DAC. Background: [§1.5](docs/1.5_AUDIO_SUBSYSTEM_INVESTIGATION.md) |
@@ -148,41 +148,41 @@ flowchart TD
     CamPower -.->|Power Feed| DCDC
 
     %% Vehicle & Radio to Support ICs
-    CANWire <===>|CAN Bus| CANTrx
-    CANTrx <===>|Rx/Tx Serial| MCU
-    VehicleSignals ===>|Digital/Analog In| MCU
+    CANWire <==>|CAN Bus| CANTrx
+    CANTrx <==>|Rx/Tx Serial| MCU
+    VehicleSignals ==>|Digital/Analog In| MCU
     ISOAntenna --->|RF Analog| Tuner
     Tuner -.->|I2C Control| MCU
 
     %% MCU to SoC
-    MCU <===>|UART /dev/ttyHS0 115200 8N1| ARKBrain
+    MCU <==>|UART /dev/ttyHS0 115200 8N1| ARKBrain
     MCU -.->|I2C Control| DSP
     DSP --->|Analog Audio| PowerAmp
-    PowerAmp ===>|Amplified Audio| SpeakerWires
+    PowerAmp ==>|Amplified Audio| SpeakerWires
 
     %% Voice Processor vs Real Mic Path
     VoiceProc -.->|Ref Schematic Only| Mic
-    ARKBrain <--->|Real Path: SoC sdadc| Mic
+    ARKBrain <-->|Real Path: SoC sdadc| Mic
 
     %% Memory & Storage
-    ARKBrain <===>|Parallel NAND Bus| NAND
-    ARKBrain <===>|DDR3 Bus| SDRAM
+    ARKBrain <==>|Parallel NAND Bus| NAND
+    ARKBrain <==>|DDR3 Bus| SDRAM
 
     %% Camera Video Decoder
     Camera --->|CVBS Analog Video| RN6752
-    RN6752 ===>|ITU-656 Video Bus| ARKBrain
-    ARKBrain <--->|I2C Control 0x2c| RN6752
+    RN6752 ==>|ITU-656 Video Bus| ARKBrain
+    ARKBrain <-->|I2C Control 0x2c| RN6752
     ARKBrain -.->|Ref Design Only| ARK7116
 
     %% Wireless & USB
-    ARKBrain <===>|USB Bus (usb1)| WiFi
-    ARKBrain <===>|UART /dev/ttyHS1 (1.5M)| BT
-    ARKBrain <===>|USB Bus (usb0)| USBHost
+    ARKBrain <==>|USB Bus (usb1)| WiFi
+    ARKBrain <==>|UART /dev/ttyHS1 1.5M| BT
+    ARKBrain <==>|USB Bus (usb0)| USBHost
     BT --->|Analog Mic / AEC| Mic
 
     %% Display & Audio Outputs
-    ARKBrain ===>|RGB888 / LVDS Video| TFT
-    TFT ===>|Resistive Touch (ADC 0xe4500000)| ARKBrain
+    ARKBrain ==>|RGB888 / LVDS Video| TFT
+    TFT ==>|Resistive Touch ADC 0xe4500000| ARKBrain
     ARKBrain --->|I2S1 / Internal DAC| DSP
 
     %% Styling
@@ -217,7 +217,7 @@ The device runs two distinct software stacks depending on which boot path is act
 | Audio control | `libMsnSound.so` (`Sound_BD37033`/`Sound_PT2312`/`Sound_MCU` backends, selected via `SoundType`) | unchanged — background: [§1.5](docs/1.5_AUDIO_SUBSYSTEM_INVESTIGATION.md), [§1.6](docs/1.6_BD37033.md) |
 | MCU protocol | `libMcuCenter.so` (`McuType=6`, `MCUAdapter_BoxP300`, over `/dev/ttyHS0`) | unchanged — background: [§1.3](docs/1.3_MCU_ADAPTERS.md) |
 | CAN adapter SDK | `libCanBus.so` — multi-vendor CAN decoder-box SDK; unused on this device (`CanType=0`, decoding done by the MCU instead) | unchanged — background: [§1.2](docs/1.2_CANBUS.md) |
-| Bluetooth stack | `rtkbt` userspace stack (Realtek), over `/dev/ttyHS1` | unchanged — background: [§1.4](docs/1.4_WIRELESS_AND_INIT.md) |
+| Bluetooth stack | Feasycom `blueware` / `rtkbt` proprietary userspace AT daemon | Upstream Linux **BlueZ 5.66** + kernel `hci0` (via `rtk_hciattach` 3-Wire H5 @ 1.5 Mbps, `bluetoothd`, A2DP/AVRCP/PAN, D-Bus `org.bluez`) — hardware-confirmed functional. Background: [`docs/BLUEZ_AND_KERNEL_BLUETOOTH_HANDOFF.md`](docs/BLUEZ_AND_KERNEL_BLUETOOTH_HANDOFF.md), [§1.4](docs/1.4_WIRELESS_AND_INIT.md) |
 | WiFi AP | `hostapd` + `udhcpd`, SSID `carplay_wifi` | unchanged — background: [§1.4](docs/1.4_WIRELESS_AND_INIT.md) |
 | Remote access | none — serial console is receive-only once Linux boots | SSH (`/usr/bin/sshd`, OpenSSH 4.6p1) + USB CDC-NCM networking baked in; telnet available on stock too via the USB auto-copy payload (§3.0) |
 
@@ -289,16 +289,16 @@ flowchart TD
     DBusDaemon -->|Spawns| CarPlayDaemon
 
     %% Local Domain Sockets
-    pCarAuto <===>|AF_UNIX Socket (Control)| UNIXSock
-    UNIXSock <===> SinkDaemon
-    pCarPlay <===>|AF_UNIX Socket (Control)| UNIXSock
-    UNIXSock <===> CarPlayDaemon
+    pCarAuto <==>|AF_UNIX Socket Control| UNIXSock
+    UNIXSock <==> SinkDaemon
+    pCarPlay <==>|AF_UNIX Socket Control| UNIXSock
+    UNIXSock <==> CarPlayDaemon
 
     %% Video Decode Pipeline
-    SinkDaemon ===>|Decode H.264| libMFC
-    libMFC ===>|ioctl| DevHX170
-    SinkDaemon ===>|Render Video Plane| DevFB
-    CarPlayDaemon ===>|Render Video Plane| DevFB
+    SinkDaemon ==>|Decode H.264| libMFC
+    libMFC ==>|ioctl| DevHX170
+    SinkDaemon ==>|Render Video Plane| DevFB
+    CarPlayDaemon ==>|Render Video Plane| DevFB
 
     %% GUI & Display Rendering
     MainApp -.->|DirectFB / fbdev| libGAL
@@ -311,16 +311,16 @@ flowchart TD
     libArkCmn ---> DevDVR
 
     %% MCU & Vehicle I/O
-    pMcu ===>|Serial Packets| libQExt
-    libQExt ===> UARTLinks
-    UARTLinks ===> DevTTYHS0
+    pMcu ==>|Serial Packets| libQExt
+    libQExt ==> UARTLinks
+    UARTLinks ==> DevTTYHS0
 
     %% Bluetooth & WiFi Orchestration
-    pBT ===>|AT Commands| BluewareDaemon
-    pCarAuto ===>|Trigger BT Pairing| BluewareDaemon
-    BluewareDaemon ===> DevTTYHS1
-    pCarAuto ===>|Start AP| HostapdDaemon
-    HostapdDaemon ===> DevWlan
+    pBT ==>|AT Commands| BluewareDaemon
+    pCarAuto ==>|Trigger BT Pairing| BluewareDaemon
+    BluewareDaemon ==> DevTTYHS1
+    pCarAuto ==>|Start AP| HostapdDaemon
+    HostapdDaemon ==> DevWlan
 
     %% Audio Subsystem
     pSound --->|ALSA Mixer / EQ| DevALSA
@@ -328,7 +328,7 @@ flowchart TD
     BluewareDaemon --->|Call / HFP Audio| DevALSA
 
     %% Input Events
-    DevTouch ===>|Touch Coordinates| pLauncher
+    DevTouch ==>|Touch Coordinates| pLauncher
 
     %% Styling
     classDef core fill:#d4edda,stroke:#28a745,color:#155724

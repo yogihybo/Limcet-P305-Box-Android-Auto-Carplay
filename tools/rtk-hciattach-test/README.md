@@ -206,6 +206,58 @@ without hardware evidence backing a change.
 restores the Run 4 baud-switch-race result, or whether something else
 has also changed in the meantime.
 
+## Run 5 (2026-08-19): full userspace HCI handshake succeeds end-to-end
+
+After moving GPIO91 handling into `rtk_hciattach` itself (fd held open
+across the pulse, settle delay before the final pulse pair -- see the
+section above) and, critically, **dropping the `-s 1500000` override**
+(`bt-hci-probe.sh` was forcing the *initial* UART open/H5 SYNC to
+1.5Mbps on every run all session; `rtk_h5`'s own table default is
+115200, matching what a genuinely cold chip's ROM/bootloader actually
+listens at -- see that commit's message for the full theory), a real
+run succeeded completely:
+
+- H5 SYNC/CONFIG handshake clean.
+- Chip ID this time reported as **standard** `LMP Subversion 0x8761`,
+  `HCI Revision 0x000b` -- NOT the customized `0x434d`/`0x6ca9` seen on
+  every single prior run this session. Strong evidence that the
+  `0x434d` "customized ID" was never real -- it was an artifact of
+  probing the chip's boot ROM at the wrong (1.5M) baud, which this
+  particular ROM/firmware combination apparently still partially
+  responds to but misidentifies through. The `rtb_fwc.c` chip-table
+  patch for `0x434d` may turn out to be unnecessary now; not yet
+  reverted since it's harmless (an additional accepted alias, not a
+  replacement) and removing it isn't worth the risk before more runs
+  confirm `0x8761` is now consistently what's reported.
+- Firmware (43,980 bytes) and config (33 bytes) loaded, byte-exact.
+- Baud switch to 1,500,000 completed (`fc17` CC received cleanly).
+- Full patch download: all 122 packets sent (`end_idx 117` + 5
+  additional + final), no `h5_post_hci_cc` race this time.
+- `h5_hci_reset` issued, its CC (`0x0c03`) received correctly.
+- `Init Process finished.` -- the entire userspace Realtek HCI
+  handshake, start to finish, worked.
+
+The run then failed at the very last step, and it's purely kernel-side:
+
+```
+ERROR: Can't set line discipline 22, Invalid argument
+ERROR: Can't initialize device 22, Invalid argument
+```
+
+`errno 22` is `EINVAL` from `ioctl(fd, TIOCSETD, &i)` with `i = N_HCI`
+(`src/hciattach.c`, right after `init_uart()`'s UART-side work is
+done) -- the *currently running* kernel has no `N_HCI` line discipline
+registered at all, because it doesn't have `CONFIG_BT_HCIUART` built
+in. This is exactly the kernel already built earlier this session
+(`hardware/kernel_dot_config`, commit `ed37ab2`: `CONFIG_BT=y`,
+`CONFIG_BT_HCIUART=y`, `CONFIG_BT_HCIUART_3WIRE=y` plus their real
+`CONFIG_SERIAL_DEV_BUS`/`CONFIG_SERIAL_DEV_CTRL_TTYPORT` prerequisites)
+-- built successfully (`zImage.w_dtb`) but never flashed/booted. That's
+the next and, as far as this tool's own scope goes, likely final step:
+flash that kernel and re-run this script. If `TIOCSETD`/`HCIUARTSETPROTO`
+succeed, `hci0` should come up under the standard kernel Bluetooth
+stack for the first time on this hardware.
+
 ## What's here
 
 - `rtk_hciattach` — static ARM binary, built from `src/` (patched copy

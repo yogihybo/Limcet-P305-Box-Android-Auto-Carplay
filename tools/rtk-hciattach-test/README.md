@@ -258,6 +258,62 @@ flash that kernel and re-run this script. If `TIOCSETD`/`HCIUARTSETPROTO`
 succeed, `hci0` should come up under the standard kernel Bluetooth
 stack for the first time on this hardware.
 
+## Run 6 (2026-08-19): hci0 UP RUNNING -- CONFIRMED, kernel HCI stack live
+
+Flashed the built kernel (`CONFIG_BT_HCIUART_3WIRE=y`). Re-ran the
+script: same clean handshake as Run 5, then `TIOCSETD`/`HCIUARTSETPROTO`
+both succeeded (previously `EINVAL`), `hci0` appeared under
+`/sys/class/bluetooth`. Kernel logged `Non-link packet received in
+non-active state` / `Out-of-order packet arrived (1 != 0)` once right
+after handoff -- confirmed non-fatal: `drivers/bluetooth/hci_h5.c`'s
+`h5_open()` sends its own fresh SYNC on line-discipline attach
+independent of `rtk_hciattach`'s prior session state, and both error
+paths just call `h5_reset_rx()` and keep waiting -- they don't abort
+the resync.
+
+No `hciconfig`/`bluetoothctl`/`btmgmt` exist on this device at all, so
+`src/hci-updown.c` (new, this run) was written to issue the same
+`HCIDEVUP`/`HCIGETDEVINFO` ioctls directly (BlueZ struct layouts/ioctl
+numbers copied by value, no bluez-dev headers needed). Result, on real
+hardware:
+
+```
+$ ./hci-updown up
+HCIDEVUP hci0: OK
+hci0 (hci0): type 0x03
+  bdaddr: dc:0d:30:14:fc:9f
+flags: 0x00000005 (UP RUNNING)
+  acl mtu: 1021:5  sco mtu: 255:11
+  stats: err_rx 0 err_tx 0 cmd_tx 64 evt_rx 65 acl_tx 0 acl_rx 0 byte_rx 2145 byte_tx 1386
+```
+
+`hci0` is genuinely `UP`/`RUNNING`, with the real chip's own BD_ADDR
+and MTUs read back correctly, zero rx/tx errors. **This settles the
+question this whole tool exists to answer**: the RTL8761BTV module
+genuinely speaks standard Linux kernel HCI over 3-wire H5, driven
+entirely by the kernel's own `hci_uart`/`hci_h5` driver + `rtk_hciattach`
+userspace attach -- `blueware`'s AT-command daemon is not load-bearing
+at the wire protocol level. `rtk_hciattach` must still be left running
+in the foreground (it holds the fd/line-discipline attachment open;
+killing it detaches `hci0`).
+
+Recap of what it took to get here, in order: (1) chip-ID table alias
+for `lmp_subver=0x434d` (`src/rtb_fwc.c`) -- later shown likely
+unnecessary once (2) was fixed, since a correctly-probed chip reports
+standard `0x8761`; (2) dropping the wrong `-s 1500000` initial-speed
+override so SYNC happens at the chip's real 115200 default; (3) moving
+GPIO91 handling into `rtk_hciattach` itself with the fd held open
+across the reset pulse and a settle delay before the final pulse pair,
+matching `blueware`'s real decompiled order; (4) building and flashing
+a kernel with `CONFIG_BT_HCIUART_3WIRE=y` (`hardware/kernel_dot_config`,
+commit `ed37ab2`).
+
+Not yet exercised: any real profile traffic over this `hci0` (no
+`bluetoothd`/BlueZ userland on this device yet -- `hci-updown` only
+proves the raw HCI transport is alive, not that pairing/SPP/A2DP/etc.
+work through it). That would need either porting a `bluetoothd` binary
+to this rootfs or driving profiles directly over the raw HCI socket.
+
 ## What's here
 
 - `rtk_hciattach` — static ARM binary, built from `src/` (patched copy

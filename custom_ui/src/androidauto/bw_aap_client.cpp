@@ -73,6 +73,10 @@ BwAapClient::~BwAapClient() {
     this->close();
 }
 
+void BwAapClient::attach(int fd) {
+    fd_ = fd;
+}
+
 bool BwAapClient::connect() {
     // 2026-08-13: retries for a few seconds instead of one immediate
     // attempt -- same reasoning as hal::init_bluetooth()'s own

@@ -27,7 +27,17 @@ set -e
 SCRIPT_DIR="$(dirname "$0")"
 BLUETOOTHD="$SCRIPT_DIR/bluetoothd"
 DBUS_POLICY_DST=/usr/etc/dbus-1/system.d
-DBUS_SYSTEM_CONF=/usr/etc/dbus-1/system.conf
+# 2026-08-19: was the real /usr/etc/dbus-1/system.conf directly --
+# real hardware run failed: "Could not get UID and GID for username
+# \"messagebus\"". This rootfs's /etc/passwd has only root, no
+# messagebus system user, so that config's own <user>messagebus</user>
+# privilege-drop can never succeed. Everything else on this device
+# already runs as root, so use our own copy with just that one line
+# changed (dbus-policy/system-diagnostic.conf) rather than editing the
+# shared system file -- staged into the same /usr/etc/dbus-1/
+# directory as system.conf itself so its own <includedir>system.d</includedir>
+# still resolves to where bluetooth.conf gets staged below.
+DBUS_SYSTEM_CONF=/usr/etc/dbus-1/system-diagnostic.conf
 # 2026-08-19: was /var/run/dbus with an explicit --address= override --
 # the real on-device dbus-daemon (confirmed via `strings` on the
 # binary: its embedded usage banner has no --address entry at all,
@@ -53,6 +63,9 @@ fi
 echo "=== bt-daemon-probe: staging D-Bus policy ($SCRIPT_DIR/dbus-policy/bluetooth.conf -> $DBUS_POLICY_DST/bluetooth.conf) ==="
 mkdir -p "$DBUS_POLICY_DST"
 cp "$SCRIPT_DIR/dbus-policy/bluetooth.conf" "$DBUS_POLICY_DST/bluetooth.conf"
+
+echo "=== bt-daemon-probe: staging D-Bus system config ($SCRIPT_DIR/dbus-policy/system-diagnostic.conf -> $DBUS_SYSTEM_CONF) ==="
+cp "$SCRIPT_DIR/dbus-policy/system-diagnostic.conf" "$DBUS_SYSTEM_CONF"
 
 mkdir -p "$BUS_SOCKET_DIR"
 

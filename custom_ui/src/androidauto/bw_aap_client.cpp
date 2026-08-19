@@ -1,4 +1,5 @@
 #include "androidauto/bw_aap_client.h"
+#include "androidauto/bluetooth_rfcomm_server.h"
 #include "androidauto/log_timing.h"
 
 #include <cerrno>
@@ -114,7 +115,13 @@ bool BwAapClient::connect() {
             std::this_thread::sleep_for(std::chrono::milliseconds(kRetryDelayMs));
         }
     }
-    return false;
+
+    // 2. If /dev/bw_aap is unavailable (running pure BlueZ 5.66 stack),
+    // listen on native BlueZ RFCOMM channel 1 for phone handshake.
+    std::printf("%s androidauto: bw_aap: /dev/bw_aap unavailable, listening on native BlueZ RFCOMM channel 1...\n",
+                androidauto::logTimestamp().c_str());
+    fd_ = accept_rfcomm_connection(1);
+    return (fd_ >= 0);
 }
 
 void BwAapClient::close() {

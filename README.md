@@ -92,7 +92,7 @@ Hardware on the device has been identified by opening the device and reviewing t
 | Audio IC | Rohm BD37033FV | 5.1-ch digital sound processor (volume/mixing/EQ, downstream of the DAC above), I2C bus 2 @ `0x40` — chip does not appear to respond: `bd37033_write_byte timeout` confirmed via `dmesg` on both stock and this project's firmware, root cause not fully resolved. Background: [§1.6](docs/1.6_BD37033.md) |
 | Display adapter | DC_FUJITSU_CON96P_REV_002 (interposer) | Adapts the main board's edge connector to the LCD panel's 96-pin Fujitsu FPC. Background: [§1.7](docs/1.7_DISPLAY_SUBSYSTEM.md) |
 | LCD Display | 800×480 RGB888 | Part of the factory head unit. Background: [§1.7](docs/1.7_DISPLAY_SUBSYSTEM.md) |
-| Touchscreen | ARK1668 on-SoC resistive ADC/TSC block (`ark_adc_mmio_base`, phys `0xe4500000`) | Not a discrete GT911 or similar controller — stock selects `ark1680_ts.ko` at boot, driving the panel's resistive touch layer directly off the SoC's own ADC hardware. Background: [§1.8](docs/1.8_ARK1680_TS_REVERSE_ENGINEERING.md) |
+| Touchscreen | ARK1668 on-SoC resistive ADC/TSC block (`ark_adc_mmio_base`, phys `0xe4500000`) | SoC ADC node `/dev/input/event0` (`ark1680_ts`) is unused/dormant on this board — vehicle touch panel events are read directly by the STM32F105 MCU and forwarded over `/dev/ttyHS0` (`libMcuCenter.so`). Background: [§1.3](docs/1.3_MCU_ADAPTERS.md), [§1.8](docs/1.8_ARK1680_TS_REVERSE_ENGINEERING.md) |
 
 **Connecting to the existing car wiring:**
 
@@ -195,8 +195,8 @@ The device runs two distinct software stacks depending on which boot path is act
 ```mermaid
 flowchart TD
     subgraph S1["01 User & Vehicle Inputs (Hardware Nodes)"]
-        TouchNode["/dev/input/event0 (ark1680_ts)<br/>Resistive Touch Coordinates (ABS_X, ABS_Y)"]
-        MCUNode["/dev/ttyHS0 (ark-hsuart @ 115200)<br/>MCU Stream: CAN SWC Keys · Reverse Gear · Rotary Knob"]
+        TouchNode["/dev/input/event0 (ark1680_ts)<br/>*Unused on this board — SoC ADC dormant*"]
+        MCUNode["/dev/ttyHS0 (ark-hsuart @ 115200)<br/>MCU Stream: Touch X/Y · CAN Keys (SWC) · Reverse Gear · Rotary Knob"]
         MediaNodes["Peripherals & Audio Nodes<br/>/dev/ttyHS1 (BT AT) · /dev/dvr (Cam) · ALSA I2S · wlan0"]
     end
 
@@ -206,7 +206,7 @@ flowchart TD
     end
 
     subgraph S3["03 Hardware Adapters & Event Dispatchers"]
-        McuAdapter["libMcuCenter.so (Plugin 401) & libCanBus.so (Plugin 400)<br/>Decodes: SWC Keycodes · Rotary Direction/Press · Reverse Gear State"]
+        McuAdapter["libMcuCenter.so (Plugin 401) & libCanBus.so (Plugin 400)<br/>Decodes: Touch Coordinates (X/Y) · SWC Keys · Rotary Knob · Reverse State"]
         BTAdapter["libBlueTooth.so (Plugin 3) & libMsnSound.so (Plugin 403)<br/>BT Pairing / AT Control · ALSA Volume & Mixing"]
     end
 
@@ -223,7 +223,7 @@ flowchart TD
     end
 
     %% Tier 1 -> Tier 2
-    TouchNode ==>|Raw Touch Events| MainApp
+    TouchNode -.->|Unused on this board| MainApp
     MCUNode ==>|Framed Binary Stream| libQExt
     MediaNodes <-->|AT Commands & Media Stream| libHAL
 
@@ -232,9 +232,10 @@ flowchart TD
     libHAL <-->|HAL Driver Links| BTAdapter
 
     %% Tier 3 -> Tier 4
+    McuAdapter ==>|Touch Events & UI Taps| MainApp
     McuAdapter ==>|Reverse Signal Trigger| UIPlugins
     McuAdapter ==>|Knob Focus & Menu Ticks| UIPlugins
-    McuAdapter ==>|CAN SWC Keys & Touch Ingestion| ProjPlugins
+    McuAdapter ==>|CAN SWC Keys & Projection Touch| ProjPlugins
     BTAdapter <-->|Audio & Bluetooth State| MainApp
 
     %% Tier 4 -> Tier 5
@@ -250,8 +251,10 @@ flowchart TD
     classDef adapter fill:#e2e3e5,stroke:#383d41,color:#1b1e21
     classDef app fill:#d4edda,stroke:#28a745,color:#155724
     classDef daemon fill:#f8d7da,stroke:#dc3545,color:#721c24
+    classDef dormant fill:#f8f9fa,stroke:#6c757d,color:#6c757d,stroke-dasharray: 4 4
 
-    class TouchNode,MCUNode,MediaNodes input
+    class MCUNode,MediaNodes input
+    class TouchNode dormant
     class libQExt,libHAL hal
     class McuAdapter,BTAdapter adapter
     class MainApp,UIPlugins,ProjPlugins app

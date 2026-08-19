@@ -203,6 +203,11 @@ bool AlsaOutput::writeBlocking(const void * interleavedSamples, uint32_t frameCo
     return true;
 }
 
+void AlsaOutput::flush() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    queue_.clear();
+}
+
 void AlsaOutput::close() {
     if (writerThread_.joinable()) {
         {

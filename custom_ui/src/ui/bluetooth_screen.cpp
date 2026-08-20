@@ -85,15 +85,18 @@ void device_row_clicked_cb(lv_event_t * e) {
     auto index = reinterpret_cast<uintptr_t>(lv_obj_get_user_data(btn));
     if (index >= w->last_devices.size()) return;
     const std::string & entry = w->last_devices[index];
-    std::printf("%s ui::bluetooth_screen: device row tapped: '%s'\n", core::log_timestamp().c_str(), entry.c_str());
 
     std::string mac, name;
     std::string connect_id = hal::split_plist_entry(entry, mac, name) ? mac : entry;
+    std::printf("%s [UI-BT] User clicked CONNECT for device: '%s' (MAC=%s, Name='%s')\n",
+                core::log_timestamp().c_str(), entry.c_str(), mac.c_str(), name.c_str());
 
     hal::BluetoothHandle & h = hal::shared_handle();
     hal::connect_device(h, connect_id);
     status_label_set(w->status_label, "Connecting & Starting Android Auto...");
 
+    std::printf("%s [UI-BT] Triggering Android Auto sidecar requestConnect() & switching screen\n",
+                core::log_timestamp().c_str());
     hal::AndroidAutoClient client;
     client.requestConnect();
     core::navigation::push(ui::create_android_auto_screen);
@@ -106,10 +109,11 @@ void remove_device_clicked_cb(lv_event_t * e) {
     auto index = reinterpret_cast<uintptr_t>(lv_obj_get_user_data(btn));
     if (index >= w->last_devices.size()) return;
     const std::string & entry = w->last_devices[index];
-    std::printf("%s ui::bluetooth_screen: remove device tapped: '%s'\n", core::log_timestamp().c_str(), entry.c_str());
 
     std::string mac, name;
     std::string connect_id = hal::split_plist_entry(entry, mac, name) ? mac : entry;
+    std::printf("%s [UI-BT] User clicked DISCONNECT/REMOVE for device: '%s' (MAC=%s)\n",
+                core::log_timestamp().c_str(), entry.c_str(), connect_id.c_str());
 
     hal::BluetoothHandle & h = hal::shared_handle();
     hal::remove_paired_device(h, connect_id);

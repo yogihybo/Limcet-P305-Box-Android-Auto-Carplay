@@ -200,14 +200,21 @@ bool BluezClient::register_agent() {
 bool BluezClient::register_profile() {
     static const DBusObjectPathVTable vtable = {nullptr, &profile_message_handler, nullptr, nullptr,
                                                  nullptr, nullptr};
-    if (!dbus_connection_register_object_path(impl_->conn, kProfilePath, &vtable, impl_)) {
-        std::fprintf(stderr, "%s androidauto: bluez_client: register_object_path(%s) failed\n",
-                     logTimestamp().c_str(), kProfilePath);
-        return false;
-    }
+    dbus_connection_register_object_path(impl_->conn, kProfilePath, &vtable, impl_);
 
     const char * path = kProfilePath;
     const char * uuid = kAaUuid;
+
+    // Unregister any stale instance first
+    {
+        DBusMessage * unreg = dbus_message_new_method_call("org.bluez", "/org/bluez",
+                                                           "org.bluez.ProfileManager1", "UnregisterProfile");
+        if (unreg) {
+            dbus_message_append_args(unreg, DBUS_TYPE_OBJECT_PATH, &path, DBUS_TYPE_INVALID);
+            DBusMessage * reply = call_and_unref(impl_->conn, unreg, "UnregisterProfile");
+            if (reply) dbus_message_unref(reply);
+        }
+    }
 
     DBusMessage * msg = dbus_message_new_method_call("org.bluez", "/org/bluez",
                                                        "org.bluez.ProfileManager1", "RegisterProfile");

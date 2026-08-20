@@ -7,29 +7,14 @@
 namespace hal {
 
 void init_audio_mixer() {
-    std::printf("%s hal::audio::init_audio_mixer: unmuting DAC, BD37033 amplifier, and ALSA softvol\n",
+    std::printf("%s hal::audio::init_audio_mixer: unmuting ARK-SDDAC hardware DAC and ALSA softmaster\n",
                 core::log_timestamp().c_str());
-
-    // 0. Enable hardware audio line via GPIO 34 (per docs/1.6_BD37033.md)
-    std::system("echo 34 > /sys/class/gpio/export 2>/dev/null || true");
-    std::system("echo out > /sys/class/gpio/gpio34/direction 2>/dev/null || true");
-    std::system("echo 0 > /sys/class/gpio/gpio34/value 2>/dev/null || true");
 
     // 1. Unmute ARK-SDDAC hardware DAC volume (0..127, 118 matches stock /etc/all.sh)
     std::system("amixer cset iface=MIXER,name='Left Playback Volume' 118 >/dev/null 2>&1 || true");
     std::system("amixer cset iface=MIXER,name='Right Playback Volume' 118 >/dev/null 2>&1 || true");
 
-    // 2. Configure BD37033 Power Amplifier (PA) controls
-    // PA Input Select: 1 = Main DAC (SDDAC / Bluetooth / Android Auto)
-    std::system("amixer cset iface=MIXER,name='PA Input Select' 1 >/dev/null 2>&1 || true");
-    std::system("amixer cset iface=MIXER,name='PA Mute' 0 >/dev/null 2>&1 || true");
-    std::system("amixer cset iface=MIXER,name='PA Volume' 40 >/dev/null 2>&1 || true");
-    std::system("amixer cset iface=MIXER,name='PA Fader-FL' 0 >/dev/null 2>&1 || true");
-    std::system("amixer cset iface=MIXER,name='PA Fader-FR' 0 >/dev/null 2>&1 || true");
-    std::system("amixer cset iface=MIXER,name='PA Fader-RL' 0 >/dev/null 2>&1 || true");
-    std::system("amixer cset iface=MIXER,name='PA Fader-RR' 0 >/dev/null 2>&1 || true");
-
-    // 3. Set ALSA software volumes to 100% (255)
+    // 2. Set ALSA software volume controls (softmaster, softmaster1..5) to 100%
     std::system("amixer sset 'softmaster' 100% >/dev/null 2>&1 || true");
     std::system("amixer sset 'softmaster1' 100% >/dev/null 2>&1 || true");
     std::system("amixer sset 'softmaster2' 100% >/dev/null 2>&1 || true");

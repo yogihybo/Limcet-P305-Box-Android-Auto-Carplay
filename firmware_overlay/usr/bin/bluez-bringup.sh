@@ -279,5 +279,25 @@ if ! pidof bluetoothd >/dev/null 2>&1; then
     exit 1
 fi
 
+echo "bluez-bringup: configuring adapter and auto-pairing agent"
+export DBUS_SYSTEM_BUS_ADDRESS="unix:path=$BUS_SOCKET_DIR/system_bus_socket"
+hciconfig hci0 up 2>/dev/null || true
+hciconfig hci0 sspmode 1 2>/dev/null || true
+hciconfig hci0 piscan 2>/dev/null || true
+
+# Power on the adapter via D-Bus and enable discoverable/pairable
+dbus-send --system --dest=org.bluez --type=method_call /org/bluez/hci0 org.freedesktop.DBus.Properties.Set string:org.bluez.Adapter1 string:Powered variant:boolean:true 2>/dev/null || true
+dbus-send --system --dest=org.bluez --type=method_call /org/bluez/hci0 org.freedesktop.DBus.Properties.Set string:org.bluez.Adapter1 string:Pairable variant:boolean:true 2>/dev/null || true
+dbus-send --system --dest=org.bluez --type=method_call /org/bluez/hci0 org.freedesktop.DBus.Properties.Set string:org.bluez.Adapter1 string:Discoverable variant:boolean:true 2>/dev/null || true
+
+# Launch background agent so pairing passkeys/requests are auto-accepted (NoInputNoOutput)
+if [ -x /usr/bin/bluetoothctl ] || [ -x /data/bluetoothctl ]; then
+    BTCTL=$(which bluetoothctl 2>/dev/null || echo "/data/bluetoothctl")
+    if [ -x "$BTCTL" ]; then
+        ( echo "default-agent"; while true; do sleep 3600; done ) | "$BTCTL" >/dev/null 2>&1 &
+        echo $! > "$PID_DIR/agent.pid"
+    fi
+fi
+
 echo "bluez-bringup: ready"
 exit 0

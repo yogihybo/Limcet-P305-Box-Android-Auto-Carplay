@@ -290,13 +290,19 @@ dbus-send --system --dest=org.bluez --type=method_call /org/bluez/hci0 org.freed
 dbus-send --system --dest=org.bluez --type=method_call /org/bluez/hci0 org.freedesktop.DBus.Properties.Set string:org.bluez.Adapter1 string:Pairable variant:boolean:true 2>/dev/null || true
 dbus-send --system --dest=org.bluez --type=method_call /org/bluez/hci0 org.freedesktop.DBus.Properties.Set string:org.bluez.Adapter1 string:Discoverable variant:boolean:true 2>/dev/null || true
 
-# Launch background agent so pairing passkeys/requests are auto-accepted (NoInputNoOutput)
-if [ -x /usr/bin/bluetoothctl ] || [ -x /data/bluetoothctl ]; then
-    BTCTL=$(which bluetoothctl 2>/dev/null || echo "/data/bluetoothctl")
-    if [ -x "$BTCTL" ]; then
-        ( echo "default-agent"; while true; do sleep 3600; done ) | "$BTCTL" >/dev/null 2>&1 &
-        echo $! > "$PID_DIR/agent.pid"
+# Launch dedicated background auto-pairing agent (NoInputNoOutput)
+AGENT_BIN=""
+for a in /usr/bin/bt-agent /data/bt-agent /usr/share/bluez-bringup/bt-agent; do
+    if [ -x "$a" ]; then
+        AGENT_BIN="$a"
+        break
     fi
+done
+
+if [ -n "$AGENT_BIN" ]; then
+    echo "bluez-bringup: starting bt-agent ($AGENT_BIN)"
+    "$AGENT_BIN" >/var/log/bt-agent.log 2>&1 &
+    echo $! > "$PID_DIR/agent.pid"
 fi
 
 echo "bluez-bringup: ready"

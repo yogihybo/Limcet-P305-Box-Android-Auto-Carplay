@@ -230,7 +230,7 @@ bool WirelessSessionManager::ensureAccessPointUp() {
 }
 
 void WirelessSessionManager::run() {
-    // Register BlueZ profile immediately so it is available before any phone connection
+    // Register BlueZ profile immediately so it is available for phone connection
     setStatus(WirelessSessionState::BluetoothHandshake, "Ensuring BlueZ stack is active...");
     if (!androidauto::bluez_stack_start()) {
         setStatus(WirelessSessionState::Failed, "Could not verify BlueZ stack");
@@ -243,6 +243,16 @@ void WirelessSessionManager::run() {
         return;
     }
 
+    setStatus(WirelessSessionState::BluetoothHandshake, "Waiting for phone to connect over Bluetooth...");
+    int rfcommFd = bluez.wait_for_connection(120);
+    if (rfcommFd < 0) {
+        setStatus(WirelessSessionState::Idle, "Ready for connection (Bluetooth profile listening)");
+        return;
+    }
+    std::printf("%s androidauto: wireless session: phone connected over BlueZ RFCOMM (fd=%d)\n",
+                androidauto::logTimestamp().c_str(), rfcommFd);
+
+    // Phone detected with AA connection -- now bring up WiFi AP
     setStatus(WirelessSessionState::StartingAccessPoint, "Starting WiFi access point...");
     if (!ensureAccessPointUp()) {
         setStatus(WirelessSessionState::Failed, "Could not start the WiFi access point (wifi_ap.sh)");
@@ -275,15 +285,6 @@ void WirelessSessionManager::run() {
     }
     std::printf("%s androidauto: wireless session: WPP TCP server listening on 0.0.0.0:%u\n", androidauto::logTimestamp().c_str(),
                 cfg.wifi_session_port());
-
-    setStatus(WirelessSessionState::BluetoothHandshake, "Waiting for phone to connect over Bluetooth...");
-    int rfcommFd = bluez.wait_for_connection(120);
-    if (rfcommFd < 0) {
-        setStatus(WirelessSessionState::Idle, "Ready for connection (Bluetooth profile listening)");
-        return;
-    }
-    std::printf("%s androidauto: wireless session: phone connected over BlueZ RFCOMM (fd=%d)\n",
-                androidauto::logTimestamp().c_str(), rfcommFd);
 
     BwAapClient bwAap;
     bwAap.attach(rfcommFd);

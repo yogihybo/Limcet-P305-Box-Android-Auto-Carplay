@@ -1,10 +1,12 @@
 #include "hal/androidauto_client.h"
 
+#include <atomic>
 #include <cerrno>
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
 #include <mutex>
+#include "core/log_timing.h"
 
 #include <sys/socket.h>
 #include <sys/stat.h>
@@ -56,80 +58,80 @@ std::mutex g_spawnMutex;
 // firmware integration lands with a fixed install path.
 }  // namespace
 
-static bool spawn_sidecar_direct(const std::string & path) {
-    ::chmod(path.c_str(), 0755);
-    pid_t pid = ::fork();
-    if (pid < 0) {
-        std::fprintf(stderr, "hal::androidauto_client: fork() failed: %s\n", std::strerror(errno));
-        return false;
-    }
-    if (pid == 0) {
-        // Child process: close non-standard file descriptors to avoid sharing parent handles
-        for (int fd = 3; fd < 64; ++fd) {
-            ::close(fd);
-        }
-        char * const args[] = { const_cast<char *>(path.c_str()), nullptr };
-        ::execv(path.c_str(), args);
-        std::fprintf(stderr, "hal::androidauto_client: execv(%s) failed: %s\n", path.c_str(), std::strerror(errno));
-        ::_exit(127);
-    }
-    // Parent process
-    std::printf("hal::androidauto_client: successfully spawned %s (pid=%d)\n",
-                path.c_str(), static_cast<int>(pid));
-    return true;
-}
-
 void try_spawn_androidauto_sidecar() {
     std::lock_guard<std::mutex> lock(g_spawnMutex);
 
-    static auto lastAttempt = std::chrono::steady_clock::time_point::min();
-    auto now = std::chrono::steady_clock::now();
-    if (now - lastAttempt < std::chrono::seconds(2)) {
+    static std::atomic<bool> s_sidecar_thread_started{false};
+    if (s_sidecar_thread_started.exchange(true)) {
         return;
     }
-    lastAttempt = now;
 
-    if (std::system("pidof androidauto-sidecar >/dev/null 2>&1") == 0) {
-        return;  // already running
-    }
-
-    char exePath[512];
-    ssize_t len = readlink("/proc/self/exe", exePath, sizeof(exePath) - 1);
-    std::string dir = ".";
-    if (len > 0) {
-        exePath[len] = '\0';
-        std::string p(exePath);
-        auto slash = p.find_last_of('/');
-        if (slash != std::string::npos) {
-            dir = p.substr(0, slash);
-        }
-    }
-
-    std::string candidate_paths[] = {
-        "/data/androidauto-sidecar",
-        dir + "/androidauto-sidecar",
-        "./androidauto-sidecar",
-        "/usr/bin/androidauto-sidecar"
-    };
-
-    for (const auto & path : candidate_paths) {
-        struct stat st {};
-        if (stat(path.c_str(), &st) == 0) {
-            std::printf("hal::androidauto_client: found sidecar at %s\n", path.c_str());
-            if (spawn_sidecar_direct(path)) {
-                for (int i = 0; i < 20; ++i) {
-                    if (access(kSocketPath, F_OK) == 0) {
-                        std::printf("hal::androidauto_client: sidecar socket %s is ready\n", kSocketPath);
-                        break;
-                    }
-                    std::this_thread::sleep_for(std::chrono::milliseconds(50));
-                }
-                return;
+    std::thread([]() {
+        char exePath[512];
+        ssize_t len = readlink("/proc/self/exe", exePath, sizeof(exePath) - 1);
+        std::string dir = ".";
+        if (len > 0) {
+            exePath[len] = '\0';
+            std::string p(exePath);
+            auto slash = p.find_last_of('/');
+            if (slash != std::string::npos) {
+                dir = p.substr(0, slash);
             }
         }
-    }
 
-    std::printf("hal::androidauto_client: warning: androidauto-sidecar binary not found in candidate paths\n");
+        std::string candidate_paths[] = {
+            "/data/androidauto-sidecar",
+            dir + "/androidauto-sidecar",
+            "./androidauto-sidecar",
+            "/usr/bin/androidauto-sidecar"
+        };
+
+        std::string sidecar_bin;
+        for (const auto & path : candidate_paths) {
+            struct stat st {};
+            if (stat(path.c_str(), &st) == 0) {
+                sidecar_bin = path;
+                break;
+            }
+        }
+
+        if (sidecar_bin.empty()) {
+            std::printf("%s [AA-SIDECAR] Notice: androidauto-sidecar binary not found in candidate paths\n",
+                        core::log_timestamp().c_str());
+            return;
+        }
+
+        chmod(sidecar_bin.c_str(), 0755);
+        unlink(kSocketPath);
+
+        // Restart cleanly
+        std::system("killall -9 androidauto-sidecar 2>/dev/null || true");
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+        std::string cmd = sidecar_bin + " 2>&1";
+        std::printf("%s [AA-SIDECAR] Launching %s (streaming logs to custom_ui console)\n",
+                    core::log_timestamp().c_str(), cmd.c_str());
+
+        FILE * fp = popen(cmd.c_str(), "r");
+        if (!fp) {
+            std::fprintf(stderr, "%s [AA-SIDECAR] popen failed for %s\n",
+                         core::log_timestamp().c_str(), cmd.c_str());
+            return;
+        }
+
+        char linebuf[512];
+        while (fgets(linebuf, sizeof(linebuf), fp)) {
+            size_t slen = strlen(linebuf);
+            while (slen > 0 && (linebuf[slen - 1] == '\n' || linebuf[slen - 1] == '\r')) {
+                linebuf[--slen] = '\0';
+            }
+            if (slen > 0) {
+                std::printf("%s %s\n", core::log_timestamp().c_str(), linebuf);
+                fflush(stdout);
+            }
+        }
+        pclose(fp);
+    }).detach();
 }
 
 AndroidAutoClient::AndroidAutoClient() = default;

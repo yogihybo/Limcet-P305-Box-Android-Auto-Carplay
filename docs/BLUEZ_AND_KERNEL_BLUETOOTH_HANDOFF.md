@@ -122,6 +122,21 @@ if ! pidof dbus-daemon >/dev/null; then
     mkdir -p /var/run/dbus
     dbus-daemon --system --fork
 fi
+# NOTE: plain `dbus-daemon` here resolves via PATH to this device's
+# STOCK rootfs binary -- confirmed via `strings` to be real D-Bus
+# **1.0.2**, which predates NEGOTIATE_UNIX_FD entirely (added in
+# 1.3.1). This silently breaks org.bluez.Profile1.NewConnection (the
+# call BlueZ uses to hand a connected RFCOMM socket -- a Unix fd -- to
+# a registered profile, exactly what wireless Android Auto's RFCOMM
+# pairing needs): bluetoothd's own src/profile.c:send_new_connection()
+# fails every attempt, logged in gdbus/object.c's
+# g_dbus_send_message_with_reply() as "Unable to send message (passing
+# fd blocked?)". See §8 below -- this repo now vendors and statically
+# cross-builds a real dbus-daemon 1.14.10 specifically to fix this,
+# with its own real-hardware NSS gotchas (this device's /etc/passwd
+# only has "root", and dbus-daemon's config parser genuinely calls
+# getpwnam_r("root", ...) at startup -- not stubbable as a no-op the
+# way every other static tool in this repo's NSS shim is).
 
 # 3. Attach RTL8761BT to BlueZ HCI stack
 # (rtk_hciattach compiled from radxa/rtkbt/uart)
@@ -173,8 +188,21 @@ sequenceDiagram
 1. Enable **Bluetooth Tethering** in phone Settings.
 2. Pair with the phone: `bluetoothctl pair <PHONE_MAC>` and `bluetoothctl trust <PHONE_MAC>`.
 3. Connect network: `bt-network -c <PHONE_MAC> nap` (or via D-Bus Network1 interface).
-4. Run DHCP client: `udhcpc -i bnep0 -n -q`.
-5. Sync time: `ntpd -n -q -p time.google.com` or `sntp -s 216.239.35.0`.
+4. Run DHCP client: `udhcpc -i bnep0 -n -q -s /etc/udhcpc.script` — the `-s` script argument is
+   **required**; `udhcpc`'s exit code 0 only means "a DHCP server replied", not that the lease was
+   ever applied (no compiled-in default script on this device's busybox build). Omitting it was a
+   real bug here: `bnep0` never got an IP/route at all, which also silently broke DNS (nothing to
+   do with `/etc/resolv.conf`, which already has `nameserver 8.8.8.8` baked in — there was just
+   nowhere to route the query).
+5. Sync time: `ntpd -n -q -p 216.239.35.0` (a literal IP, not a hostname — avoids depending on DNS
+   resolution succeeding at all) or `sntp -s 216.239.35.0`.
+
+**Real, hardware-confirmed alternative that avoids PAN/tethering entirely**: BLE GATT Current Time
+Service (CTS, UUID `0x1805`/characteristic `0x2A2B`) — a standard BLE SIG profile many phones
+implement as a GATT server. `custom_ui/src/hal/ble_cts.cpp` reads it directly over the already-paired
+BLE link via `GetManagedObjects`/`GattCharacteristic1.ReadValue`, no tethering toggle or PAN
+connection needed. Tried first in `hal::bluetooth.cpp`'s `sync_clock_from_phone()`, falling back to
+the PAN path above only if BLE CTS isn't available on the paired device.
 
 ---
 
@@ -186,7 +214,35 @@ sequenceDiagram
 
 ---
 
-## 7. Reference Links
+## 7. Application-Layer Integration (`custom_ui` / `androidauto-sidecar`)
+
+This document covers the kernel/HCI/`bluetoothd` layer only. The application layer built on top of
+it — `custom_ui`'s own RFCOMM `Profile1` registration for wireless Android Auto pairing, the
+static-`dbus-daemon` rebuild that fixes the fd-passing bug in §4 above, and the migration status of
+`custom_ui`'s Bluetooth screen off the legacy `blueware` AT stack — is tracked separately:
+
+* [`custom_ui/docs/BLUEZ_MIGRATION_AND_BLUEWARE_DEPRECATION_HANDOFF.md`](../custom_ui/docs/BLUEZ_MIGRATION_AND_BLUEWARE_DEPRECATION_HANDOFF.md)
+  — architecture/migration-plan doc for moving `custom_ui`'s Bluetooth screen and HAL off
+  `blueware` AT commands onto `org.bluez` D-Bus calls; `custom_ui`'s `hal/bluez_aa_profile.cpp` is
+  the one piece of this already implemented and hardware-confirmed (RFCOMM Profile1, channel 1,
+  role server, AutoConnect, `ConnectProfile` — see this repo's own commit history).
+* [`tools/bluetoothd-test/README.md`](../tools/bluetoothd-test/README.md) — the full real-hardware
+  bring-up log for `bluetoothd` 5.66 + the statically cross-built `dbus-daemon` 1.14.10 referenced
+  in §4 above, including the exact rebuild recipe (`third_party/dbus-1.14.10.tar.xz`, not the git
+  submodule — the submodule alone can't be rebuilt on this machine, see that file's own "Not yet
+  hardware-tested" → "FULL SUCCESS" run log for why) and every gotcha hit getting it to link and
+  actually start on-device (NSS stub requirements, `-all-static` vs `-static`, `expat.pc`'s baked-in
+  prefix, the `root`-username lookup that can't be a no-op).
+* [`tools/nss-stub/`](../tools/nss-stub/) — the static-linking NSS shim family this whole static-Bluetooth
+  toolchain depends on; `nss_stub_dbus_daemon.c` is the `dbus-daemon`-specific provider (see its own
+  file comment for why it can't be a blanket no-op like every sibling provider).
+* [`tools/rtk-hciattach-test/`](../tools/rtk-hciattach-test/) — isolates the raw HCI-attach step
+  (§2/§4 above) from BlueZ/`bluetoothd` itself; the hardware-confirmed baseline `bluetoothd-test`
+  builds on.
+
+---
+
+## 8. Reference Links
 * **Realtek Linux Bluetooth UART Driver & `rtk_hciattach` Source**: [radxa/rtkbt (GitHub)](https://github.com/radxa/rtkbt)
 * **Linux Kernel Mainline Commit for RTL8761B**: [Commit 9d38f887b47b](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=9d38f887b47b)
 * **Firmware Mismatch Diagnostic (Bazzite #3339)**: [ublue-os/bazzite #3339](https://github.com/ublue-os/bazzite/issues/3339)

@@ -373,6 +373,19 @@ void Session::onServiceDiscoveryRequest(
     // for this class of 800x480 automotive display, not a guess.
     videoConfig->set_density(140);
     videoConfig->set_real_density(140);
+    // 2026-08-20: width_margin/height_margin (VideoConfiguration.proto
+    // fields 3/4) were never set at all -- same "optional but silently
+    // required in practice" failure class already proven once for real
+    // on this exact message (density/real_density above, a genuine
+    // captured Gearhead rejection: "Critical error 2 detail: 21 msg:
+    // density missing"). Explicitly zeroing them tells the phone this
+    // device's 800x480 render canvas has no letterboxing margin, rather
+    // than omitting the fields from the wire entirely (proto2's own
+    // behavior for an unset optional field) and leaving Gearhead to
+    // guess. Unconfirmed as a fix for any specific symptom -- additive
+    // and low-risk either way, worth having regardless.
+    videoConfig->set_width_margin(0);
+    videoConfig->set_height_margin(0);
 
     auto *mediaAudioService = response.add_channels();
     mediaAudioService->set_id(
@@ -426,6 +439,11 @@ void Session::onServiceDiscoveryRequest(
     sensorService->set_id(static_cast<std::int32_t>(aasdk::messenger::ChannelId::SENSOR));
     sensorService->mutable_sensor_source_service()->add_sensors()->set_sensor_type(
         aap_protobuf::service::sensorsource::message::SENSOR_DRIVING_STATUS_DATA);
+    // 2026-08-21: real source now exists (Limcet MCU headlight signal,
+    // see sensor_channel.h's header comment) -- advertise it so the
+    // phone actually asks for it via SensorStartRequest.
+    sensorService->mutable_sensor_source_service()->add_sensors()->set_sensor_type(
+        aap_protobuf::service::sensorsource::message::SENSOR_NIGHT_MODE);
 
     // 2026-08-12: found missing by a fresh-eyes subagent review chasing
     // the real hardware bug where the phone engages cleanly (handshake,
@@ -804,6 +822,14 @@ void Session::resumeVideoFocus() {
     boost::asio::post(strand_, [this, self]() {
         if (!videoChannel_) return;
         videoChannel_->requestResumeFocus();
+    });
+}
+
+void Session::sendNightMode(bool nightMode) {
+    auto self = shared_from_this();
+    boost::asio::post(strand_, [this, self, nightMode]() {
+        if (!sensorChannel_) return;
+        sensorChannel_->setNightMode(nightMode);
     });
 }
 

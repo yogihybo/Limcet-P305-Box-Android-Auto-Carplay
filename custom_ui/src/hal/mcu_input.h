@@ -120,6 +120,17 @@ public:
     // (CMD 0x02, b3=13).
     bool get_knob_pressed() const;
 
+    // 2026-08-21: headlight-driven night mode -- infrastructure wired
+    // ahead of the real capture (user confirming the exact code
+    // tomorrow), same framing family as the knob (CMD 0x02, b3=sub-
+    // code, b4=state) per explicit direction ("same type of framing as
+    // the knob input press button but a unique code"). See run()'s own
+    // comment for the placeholder sub-code constant this currently
+    // matches against -- update ONLY that constant once confirmed, the
+    // rest of this chain (display brightness, AA SENSOR_NIGHT_MODE)
+    // doesn't need to change.
+    bool get_night_mode() const;
+
 private:
     void run();
 
@@ -134,6 +145,8 @@ private:
 
     std::atomic<int32_t> knob_ticks_{0};
     std::atomic<bool> knob_pressed_{false};
+
+    std::atomic<bool> night_mode_{false};
 };
 
 }  // namespace hal

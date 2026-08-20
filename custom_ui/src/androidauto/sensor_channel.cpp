@@ -7,6 +7,7 @@
 #include <aasdk/Channel/SensorSource/SensorSourceService.hpp>
 #include <aap_protobuf/service/sensorsource/message/DrivingStatus.pb.h>
 #include <aap_protobuf/service/sensorsource/message/DrivingStatusData.pb.h>
+#include <aap_protobuf/service/sensorsource/message/NightModeData.pb.h>
 #include <aap_protobuf/service/sensorsource/message/SensorBatch.pb.h>
 #include <aap_protobuf/service/sensorsource/message/SensorStartResponseMessage.pb.h>
 #include <aap_protobuf/service/sensorsource/message/SensorType.pb.h>
@@ -82,6 +83,26 @@ void SensorChannel::onSensorStartRequest(
                                     logTimestamp().c_str(), e.what());
                     });
                 channel_->sendSensorEventIndication(batch, eventPromise);
+            } else if (request.type() ==
+                       aap_protobuf::service::sensorsource::message::SENSOR_NIGHT_MODE) {
+                // 2026-08-21: mark subscribed and send the CURRENT
+                // known value right away (same "won't get data until we
+                // send at least one indication" reasoning as
+                // DRIVING_STATUS_DATA above) -- setNightMode() takes
+                // over sending fresh events on every real change from
+                // here on, this is just the initial catch-up.
+                nightModeSensorActive_ = true;
+                aap_protobuf::service::sensorsource::message::SensorBatch batch;
+                batch.add_night_mode_data()->set_night_mode(nightMode_);
+
+                auto eventPromise = aasdk::channel::SendPromise::defer(strand_);
+                eventPromise->then(
+                    []() { std::printf("%s androidauto: night mode sensor event sent\n", logTimestamp().c_str()); },
+                    [](const aasdk::error::Error &e) {
+                        std::printf("%s androidauto: night mode sensor event send failed: %s\n",
+                                    logTimestamp().c_str(), e.what());
+                    });
+                channel_->sendSensorEventIndication(batch, eventPromise);
             }
         },
         [](const aasdk::error::Error &e) {
@@ -90,6 +111,25 @@ void SensorChannel::onSensorStartRequest(
     channel_->sendSensorStartResponse(response, promise);
 
     channel_->receive(this->shared_from_this());
+}
+
+void SensorChannel::setNightMode(bool nightMode) {
+    nightMode_ = nightMode;
+    if (!nightModeSensorActive_) {
+        return;
+    }
+
+    aap_protobuf::service::sensorsource::message::SensorBatch batch;
+    batch.add_night_mode_data()->set_night_mode(nightMode_);
+
+    auto eventPromise = aasdk::channel::SendPromise::defer(strand_);
+    eventPromise->then(
+        []() { std::printf("%s androidauto: night mode sensor event sent\n", logTimestamp().c_str()); },
+        [](const aasdk::error::Error &e) {
+            std::printf("%s androidauto: night mode sensor event send failed: %s\n",
+                        logTimestamp().c_str(), e.what());
+        });
+    channel_->sendSensorEventIndication(batch, eventPromise);
 }
 
 void SensorChannel::onChannelError(const aasdk::error::Error &e) {

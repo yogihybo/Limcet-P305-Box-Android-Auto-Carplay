@@ -12,10 +12,33 @@ During live testing of `custom_ui`, the process attempted to spawn `blueware` an
    - On **2026-08-19**, upstream Linux **BlueZ 5.66** was successfully brought up on the ARK1668 platform:
      - `rtk_hciattach` initializes the RTL8761BTV controller over `/dev/ttyHS1` (3-Wire H5 @ 1.5 Mbps, GPIO 91 reset) and attaches kernel interface **`hci0`**.
      - `bluetoothd 5.66` registers on D-Bus (`org.bluez`), creating standard A2DP, AVRCP, and PAN endpoints.
-2. **`custom_ui` Application Layer (Not Yet Migrated)**:
-   - `custom_ui/src/hal/bluetooth.cpp` and `custom_ui/src/ui/bluetooth_screen.cpp` are currently still implemented against the **legacy proprietary Feasycom `blueware` AT daemon** (`/dev/bw_serial`).
-   - When `custom_ui` starts, `ensure_bluetooth_daemon_running()` spawns `blueware` and opens `/dev/bw_serial`.
-   - **The migration to BlueZ is a work in progress**: `blueware` AT commands must now be formally deprecated and replaced with standard D-Bus calls to `org.bluez`.
+   - See `../../docs/BLUEZ_AND_KERNEL_BLUETOOTH_HANDOFF.md` for the kernel/HCI-layer subsystem doc
+     (Kconfig, GPIO reset sequence, `rtk_hciattach`) and `tools/bluetoothd-test/README.md` for the
+     real-hardware bring-up run log.
+2. **Wireless Android Auto RFCOMM (Hardware-Confirmed, 2026-08-20)**:
+   - `custom_ui/src/hal/bluez_aa_profile.cpp` registers a real `org.bluez.Profile1` for the wireless
+     AA RFCOMM UUID (channel 1, `Role=server`, `AutoConnect=true`), and `androidauto-sidecar`
+     receives the phone's connection via `Profile1.NewConnection`'s passed file descriptor.
+   - This depends on a **real `dbus-daemon`** supporting `NEGOTIATE_UNIX_FD` (added in D-Bus 1.3.1) —
+     this device's stock rootfs `/usr/bin/dbus-daemon` is D-Bus **1.0.2** and silently fails every
+     `NewConnection` fd-passing attempt (`gdbus/object.c`: `"Unable to send message (passing fd
+     blocked?)"`). Fixed by statically cross-building a real `dbus-daemon` 1.14.10 and deploying it
+     to that exact path — see `tools/bluetoothd-test/README.md`'s "`dbus-daemon` itself" section for
+     the full rebuild recipe and the real-hardware gotchas (NSS stub needing a genuine
+     `getpwnam_r("root", ...)` lookup, not a no-op; `-all-static` vs bare `-static`; etc.).
+3. **`custom_ui` Application Layer (Partially Migrated)**:
+   - `custom_ui/src/hal/bluetooth.cpp` and `custom_ui/src/ui/bluetooth_screen.cpp` are still
+     implemented against the **legacy proprietary Feasycom `blueware` AT daemon** (`/dev/bw_serial`)
+     for pairing/device-list/HFP UI — this part of the migration below is **not yet done**.
+   - `custom_ui/src/hal/ble_cts.cpp` is a second, narrower real-BlueZ integration already
+     hardware-verified-logging (not yet hardware-confirmed end-to-end): reads BLE GATT Current Time
+     Service (UUID `0x1805`/`0x2A2B`) directly via `libdbus`/`GetManagedObjects`, as a
+     tethering-free alternative to the PAN clock-sync path.
+   - When `custom_ui` starts, `ensure_bluetooth_daemon_running()` still spawns `blueware` and opens
+     `/dev/bw_serial` for everything except the two real-BlueZ paths above.
+   - **The migration to BlueZ is a work in progress**: `blueware` AT commands must now be formally
+     deprecated and replaced with standard D-Bus calls to `org.bluez` for the remaining UI/pairing
+     surface (§4 below).
 
 ---
 
@@ -92,39 +115,39 @@ Replace `/dev/bw_serial` AT strings with standard D-Bus method calls to the `org
 | **Media Play/Pause**| `AT+PLAYPAUSE` | `Call("org.bluez.MediaControl1", "Play" / "Pause")`|
 | **Track Metadata** | `+TRACKINFO=...` | `PropertiesChanged` on `org.bluez.MediaPlayer1` |
 
-### 3.3 `androidauto-sidecar` Wireless Handshake Migration
-- **Legacy**: Opened `/dev/bw_aap` (proprietary Feasycom local socket proxying RFCOMM).
-- **BlueZ Native**:
-  1. Register the Android Auto RFCOMM SDP service record with `bluetoothd`:
-     - Service UUID: `4de17a00-52cb-11e6-bdf4-0800200c9a66` (Wireless Android Auto RFCOMM).
-  2. Open a standard Linux kernel Bluetooth socket in C++:
-     ```cpp
-     #include <bluetooth/bluetooth.h>
-     #include <bluetooth/rfcomm.h>
-
-     int fd = socket(AF_BLUETOOTH, SOCK_STREAM, BTPROTO_RFCOMM);
-     struct sockaddr_rc addr = {};
-     addr.rc_family = AF_BLUETOOTH;
-     bacpy(&addr.rc_bdaddr, BDADDR_ANY);
-     addr.rc_channel = 1; // Or allocated RFCOMM channel
-     bind(fd, (struct sockaddr *)&addr, sizeof(addr));
-     listen(fd, 1);
-     ```
-  3. Phone connects directly over Bluetooth RFCOMM to negotiate the 5GHz WiFi credentials.
+### 3.3 `androidauto-sidecar` Wireless Handshake Migration — **DONE, hardware-confirmed 2026-08-20**
+- **Legacy**: Opened `/dev/bw_aap` (proprietary Feasycom local socket proxying RFCOMM). Removed.
+- **BlueZ Native (as actually implemented)**: rather than a raw `AF_BLUETOOTH`/`BTPROTO_RFCOMM`
+  socket opened directly by the sidecar, this project registers a real `org.bluez.Profile1` with
+  `bluetoothd` (`custom_ui/src/hal/bluez_aa_profile.cpp`) for the Wireless Android Auto RFCOMM UUID,
+  channel 1, `Role=server`, `AutoConnect=true`, and calls `ConnectProfile` — `bluetoothd` itself
+  owns the RFCOMM listener and hands the connected socket's file descriptor to this process via the
+  `Profile1.NewConnection` D-Bus method (fd-passing, `NEGOTIATE_UNIX_FD`). This needed the real
+  `dbus-daemon` 1.14.10 rebuild described in §1 above — the stock 1.0.2 daemon has no fd-passing
+  support at all, so `NewConnection` silently failed every attempt until that was fixed.
+  Phone then connects over that Bluetooth RFCOMM channel to negotiate the 5GHz WiFi credentials, as
+  originally planned.
 
 ---
 
 ## 4. Migration Action Plan
 
-1. **Step 1: System Boot Integration**:
-   - Add `rtk_hciattach` and `bluetoothd` to system startup scripts.
-   - Verify `hci0` initializes automatically at boot.
-2. **Step 2: Implement `BlueZClient` in `custom_ui`**:
-   - Create `custom_ui/src/hal/bluez_client.h` and `bluez_client.cpp` using `libdbus-1`.
-   - Implement `get_adapter()`, `list_devices()`, `start_discovery()`, `connect_device()`, and `get_telemetry()`.
-3. **Step 3: Update UI Screens**:
-   - Point [`ui/bluetooth_screen.cpp`](file:///c:/Users/Caleb%20Smith/Documents/GitHub/prado-firmware-reconstruction/custom_ui/src/ui/bluetooth_screen.cpp) and [`ui/status_bar.cpp`](file:///c:/Users/Caleb%20Smith/Documents/GitHub/prado-firmware-reconstruction/custom_ui/src/ui/status_bar.cpp) to `BlueZClient`.
-4. **Step 4: Update `androidauto-sidecar`**:
-   - Replace `/dev/bw_aap` polling with a native `BTPROTO_RFCOMM` listener.
-5. **Step 5: Deprecate `blueware`**:
-   - Remove `/dev/bw_serial`, `/dev/bw_aap`, `/dev/bw_iap`, and `blueware` properties files.
+1. **Step 1: System Boot Integration** — ✅ **hardware-confirmed 2026-08-19**:
+   - `rtk_hciattach` + `bluetoothd` bring-up confirmed via `tools/bluetoothd-test/` (not yet
+     promoted into `firmware_overlay/`'s production boot path — still diagnostic-only, see that
+     tool's own README "Not a stack switcher" note).
+   - `hci0` initializes cleanly; not yet automatic at production boot (still manually run via the
+     diagnostic tool script).
+2. **Step 2: Implement a BlueZ D-Bus client in `custom_ui`** — **not started** for the general
+   `BlueZClient` (adapter/device-list/pairing) described in §3.2's table. Two narrower, real
+   D-Bus clients exist already and are further along: `hal/bluez_aa_profile.cpp` (Profile1/RFCOMM,
+   §3.3 — done) and `hal/ble_cts.cpp` (GATT CTS clock read, real `libdbus` C API, matching
+   `bluez_aa_profile.cpp`'s pattern since `dbus-send` can't express an empty `a{sv}` argument
+   cleanly).
+3. **Step 3: Update UI Screens** — **not started**. `ui/bluetooth_screen.cpp` still drives pairing/
+   device-list/HFP UI through `blueware` AT commands.
+4. **Step 4: Update `androidauto-sidecar`** — ✅ **done, hardware-confirmed 2026-08-20** (§3.3
+   above) — implemented via `Profile1`/`NewConnection` fd-passing, not a raw `BTPROTO_RFCOMM`
+   listener as originally sketched here.
+5. **Step 5: Deprecate `blueware`** — **not started**, blocked on Steps 2–3 above (the UI/pairing
+   surface still has no BlueZ-native replacement to cut over to).

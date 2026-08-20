@@ -248,6 +248,9 @@ void handle_connection(int clientFd, androidauto::WirelessSessionManager * manag
 }  // namespace
 
 int main() {
+    setvbuf(stdout, NULL, _IONBF, 0);
+    setvbuf(stderr, NULL, _IONBF, 0);
+
     // Literal first line -- see log_timing.h's own comment. Every log
     // line in this whole process, from here through the entire aasdk
     // session lifetime, is now on one continuous kernel-dmesg-style

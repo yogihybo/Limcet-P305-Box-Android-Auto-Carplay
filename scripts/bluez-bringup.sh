@@ -67,6 +67,7 @@ if pidof bluetoothd >/dev/null 2>&1 && [ -f "$PID_DIR/bluetoothd.pid" ]; then
     exit 0
 fi
 
+mkdir -p "$PID_DIR"
 echo "bluez-bringup: stopping old instances and blueware"
 killall -9 rtk_hciattach >/dev/null 2>&1 || true
 killall blueware >/dev/null 2>&1 || true

@@ -115,27 +115,63 @@ std::string mac_to_dbus_path(const std::string & mac) {
 
 void bluez_monitor_loop(BluetoothHandle * h) {
     std::printf("%s hal::bluetooth: BlueZ status monitor thread started\n", core::log_timestamp().c_str());
+    bool last_connected = false;
+    std::string last_connected_mac;
+    std::string last_connected_name;
+    size_t last_device_count = 0;
+
     while (h->fd >= 0) {
         std::vector<std::string> lines;
         if (run_command_capture("dbus-send --system --print-reply --dest=org.bluez / org.freedesktop.DBus.ObjectManager.GetManagedObjects 2>/dev/null", lines) && !lines.empty()) {
             std::lock_guard<std::mutex> lock(g_telemetry_mtx);
             bool connected = false;
-            std::string name;
+            std::string connected_mac;
+            std::string connected_name;
             int rssi = -1;
+
+            std::string cur_addr, cur_name;
+            bool cur_connected = false, cur_paired = false;
+            size_t total_devices = 0;
+
+            auto flush_device = [&]() {
+                if (!cur_addr.empty()) {
+                    total_devices++;
+                    if (cur_connected) {
+                        connected = true;
+                        connected_mac = cur_addr;
+                        connected_name = cur_name;
+                    }
+                }
+                cur_addr.clear(); cur_name.clear();
+                cur_connected = false; cur_paired = false;
+            };
 
             for (size_t i = 0; i < lines.size(); ++i) {
                 const auto & l = lines[i];
-                if (l.find("string \"Connected\"") != std::string::npos && i + 1 < lines.size()) {
-                    if (lines[i+1].find("boolean true") != std::string::npos) {
-                        connected = true;
+                if (l.find("object path \"/org/bluez/hci0/dev_") != std::string::npos) {
+                    flush_device();
+                } else if (l.find("string \"Address\"") != std::string::npos && i + 1 < lines.size()) {
+                    size_t pos = lines[i+1].find("string \"");
+                    if (pos != std::string::npos) {
+                        cur_addr = lines[i+1].substr(pos + 8);
+                        if (!cur_addr.empty() && cur_addr.back() == '"') cur_addr.pop_back();
                     }
                 } else if (l.find("string \"Name\"") != std::string::npos && i + 1 < lines.size()) {
                     size_t pos = lines[i+1].find("string \"");
                     if (pos != std::string::npos) {
-                        std::string val = lines[i+1].substr(pos + 8);
-                        if (!val.empty() && val.back() == '"') val.pop_back();
-                        name = val;
+                        cur_name = lines[i+1].substr(pos + 8);
+                        if (!cur_name.empty() && cur_name.back() == '"') cur_name.pop_back();
                     }
+                } else if (l.find("string \"Alias\"") != std::string::npos && i + 1 < lines.size() && cur_name.empty()) {
+                    size_t pos = lines[i+1].find("string \"");
+                    if (pos != std::string::npos) {
+                        cur_name = lines[i+1].substr(pos + 8);
+                        if (!cur_name.empty() && cur_name.back() == '"') cur_name.pop_back();
+                    }
+                } else if (l.find("string \"Connected\"") != std::string::npos && i + 1 < lines.size()) {
+                    if (lines[i+1].find("boolean true") != std::string::npos) cur_connected = true;
+                } else if (l.find("string \"Paired\"") != std::string::npos && i + 1 < lines.size()) {
+                    if (lines[i+1].find("boolean true") != std::string::npos) cur_paired = true;
                 } else if (l.find("string \"RSSI\"") != std::string::npos && i + 1 < lines.size()) {
                     int val = 0;
                     if (std::sscanf(lines[i+1].c_str(), "%*[^0-9-]%d", &val) == 1) {
@@ -143,16 +179,42 @@ void bluez_monitor_loop(BluetoothHandle * h) {
                     }
                 }
             }
+            flush_device();
+
+            if (connected != last_connected || connected_mac != last_connected_mac) {
+                if (connected) {
+                    std::printf("%s [BT-EVENT] *** Device Connected ***: %s ('%s') RSSI=%d dBm\n",
+                                core::log_timestamp().c_str(), connected_mac.c_str(),
+                                connected_name.c_str(), rssi);
+                } else {
+                    std::printf("%s [BT-EVENT] *** Device Disconnected ***: (was %s '%s')\n",
+                                core::log_timestamp().c_str(), last_connected_mac.c_str(),
+                                last_connected_name.c_str());
+                }
+                last_connected = connected;
+                last_connected_mac = connected_mac;
+                last_connected_name = connected_name;
+            }
+
+            if (total_devices != last_device_count) {
+                std::printf("%s [BT-STATUS] Total known devices in BlueZ database: %zu\n",
+                            core::log_timestamp().c_str(), total_devices);
+                last_device_count = total_devices;
+            }
 
             g_telemetry.connected = connected;
-            if (!name.empty()) g_telemetry.connected_device_name = name;
+            if (!connected_name.empty()) g_telemetry.connected_device_name = connected_name;
             g_telemetry.signal_strength = rssi;
         } else {
             std::lock_guard<std::mutex> lock(g_telemetry_mtx);
+            if (last_connected) {
+                std::printf("%s [BT-EVENT] Lost connection to BlueZ daemon\n", core::log_timestamp().c_str());
+                last_connected = false;
+            }
             g_telemetry.connected = false;
         }
 
-        std::this_thread::sleep_for(std::chrono::seconds(2));
+        std::this_thread::sleep_for(std::chrono::milliseconds(1500));
     }
 }
 
@@ -314,12 +376,17 @@ bool split_plist_entry(const std::string & entry, std::string & mac, std::string
 
 bool set_adapter_enabled(BluetoothHandle & /*h*/, bool enabled) {
     std::string val = enabled ? "true" : "false";
+    std::printf("%s [BT-CMD] Setting adapter Powered = %s\n", core::log_timestamp().c_str(), val.c_str());
     std::string cmd = "dbus-send --system --dest=org.bluez --type=method_call /org/bluez/hci0 org.freedesktop.DBus.Properties.Set string:org.bluez.Adapter1 string:Powered variant:boolean:" + val + " >/dev/null 2>&1";
     return run_command_simple(cmd);
 }
 
 bool set_discoverable(BluetoothHandle & /*h*/, bool discoverable) {
     std::string val = discoverable ? "true" : "false";
+    std::printf("%s [BT-CMD] Setting adapter Discoverable = %s (piscan)\n", core::log_timestamp().c_str(), val.c_str());
+    if (discoverable) {
+        run_command_simple("hciconfig hci0 piscan >/dev/null 2>&1");
+    }
     std::string cmd = "dbus-send --system --dest=org.bluez --type=method_call /org/bluez/hci0 org.freedesktop.DBus.Properties.Set string:org.bluez.Adapter1 string:Discoverable variant:boolean:" + val + " >/dev/null 2>&1";
     return run_command_simple(cmd);
 }
@@ -336,6 +403,8 @@ bool list_paired_devices(BluetoothHandle & /*h*/, std::vector<std::string> & dev
             if (l.find("object path \"/org/bluez/hci0/dev_") != std::string::npos) {
                 if (!current_addr.empty() && is_paired) {
                     devices.push_back(current_addr + " " + current_name);
+                    std::printf("%s [BT-STATUS] Found paired device: %s ('%s')\n",
+                                core::log_timestamp().c_str(), current_addr.c_str(), current_name.c_str());
                 }
                 current_addr.clear();
                 current_name.clear();
@@ -352,6 +421,12 @@ bool list_paired_devices(BluetoothHandle & /*h*/, std::vector<std::string> & dev
                     current_name = lines[i+1].substr(pos + 8);
                     if (!current_name.empty() && current_name.back() == '"') current_name.pop_back();
                 }
+            } else if (l.find("string \"Name\"") != std::string::npos && i + 1 < lines.size() && current_name.empty()) {
+                size_t pos = lines[i+1].find("string \"");
+                if (pos != std::string::npos) {
+                    current_name = lines[i+1].substr(pos + 8);
+                    if (!current_name.empty() && current_name.back() == '"') current_name.pop_back();
+                }
             } else if (l.find("string \"Paired\"") != std::string::npos && i + 1 < lines.size()) {
                 if (lines[i+1].find("boolean true") != std::string::npos) {
                     is_paired = true;
@@ -360,31 +435,40 @@ bool list_paired_devices(BluetoothHandle & /*h*/, std::vector<std::string> & dev
         }
         if (!current_addr.empty() && is_paired) {
             devices.push_back(current_addr + " " + current_name);
+            std::printf("%s [BT-STATUS] Found paired device: %s ('%s')\n",
+                        core::log_timestamp().c_str(), current_addr.c_str(), current_name.c_str());
         }
     }
+    std::printf("%s [BT-STATUS] list_paired_devices total: %zu paired devices\n", core::log_timestamp().c_str(), devices.size());
     return true;
 }
 
 bool connect_device(BluetoothHandle & /*h*/, const std::string & mac) {
     std::string dev_path = "/org/bluez/hci0/" + mac_to_dbus_path(mac);
-    std::printf("%s hal::bluetooth::connect_device: connecting to %s via %s\n", core::log_timestamp().c_str(), mac.c_str(), dev_path.c_str());
+    std::printf("%s [BT-CMD] Initiating connection to device MAC=%s (D-Bus path: %s)\n",
+                core::log_timestamp().c_str(), mac.c_str(), dev_path.c_str());
     std::string cmd = "dbus-send --system --dest=org.bluez --type=method_call " + dev_path + " org.bluez.Device1.Connect >/dev/null 2>&1";
-    return run_command_simple(cmd);
+    bool ok = run_command_simple(cmd);
+    std::printf("%s [BT-CMD] Connection request to %s: %s\n", core::log_timestamp().c_str(), mac.c_str(), ok ? "sent (OK)" : "failed to dispatch");
+    return ok;
 }
 
 bool disconnect_device(BluetoothHandle & /*h*/) {
-    std::printf("%s hal::bluetooth::disconnect_device: disconnecting active links\n", core::log_timestamp().c_str());
+    std::printf("%s [BT-CMD] Disconnecting active links\n", core::log_timestamp().c_str());
     return true;
 }
 
 bool remove_paired_device(BluetoothHandle & /*h*/, const std::string & mac) {
     std::string dev_path = "/org/bluez/hci0/" + mac_to_dbus_path(mac);
-    std::printf("%s hal::bluetooth::remove_paired_device: removing device %s\n", core::log_timestamp().c_str(), dev_path.c_str());
+    std::printf("%s [BT-CMD] Removing paired device %s from BlueZ adapter\n", core::log_timestamp().c_str(), dev_path.c_str());
     std::string cmd = "dbus-send --system --dest=org.bluez --type=method_call /org/bluez/hci0 org.bluez.Adapter1.RemoveDevice objpath:" + dev_path + " >/dev/null 2>&1";
-    return run_command_simple(cmd);
+    bool ok = run_command_simple(cmd);
+    std::printf("%s [BT-CMD] RemoveDevice %s: %s\n", core::log_timestamp().c_str(), mac.c_str(), ok ? "success" : "failed");
+    return ok;
 }
 
 bool set_device_name(BluetoothHandle & /*h*/, const std::string & name) {
+    std::printf("%s [BT-CMD] Setting Bluetooth local name to '%s'\n", core::log_timestamp().c_str(), name.c_str());
     run_command_simple("hciconfig hci0 name \"" + name + "\" >/dev/null 2>&1");
     std::string cmd = "dbus-send --system --dest=org.bluez --type=method_call /org/bluez/hci0 org.freedesktop.DBus.Properties.Set string:org.bluez.Adapter1 string:Alias \"variant:string:" + name + "\" >/dev/null 2>&1";
     return run_command_simple(cmd);
@@ -403,6 +487,7 @@ bool get_adapter_address(BluetoothHandle & /*h*/, std::string & address) {
             if (pos != std::string::npos) {
                 address = l.substr(pos + 8);
                 if (!address.empty() && address.back() == '"') address.pop_back();
+                std::printf("%s [BT-INFO] Controller BD_ADDR: %s\n", core::log_timestamp().c_str(), address.c_str());
                 return true;
             }
         }

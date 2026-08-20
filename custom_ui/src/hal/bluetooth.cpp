@@ -504,6 +504,12 @@ bool connect_device(BluetoothHandle & /*h*/, const std::string & mac) {
     std::string cmd = "dbus-send --system --dest=org.bluez --type=method_call " + dev_path + " org.bluez.Device1.Connect >/dev/null 2>&1";
     bool ok = run_command_simple(cmd);
     std::printf("%s [BT-CMD] Connection request to %s: %s\n", core::log_timestamp().c_str(), mac.c_str(), ok ? "sent (OK)" : "failed to dispatch");
+
+    // Also request connection for the Android Auto profile explicitly
+    std::string profile_cmd = "dbus-send --system --dest=org.bluez --type=method_call " + dev_path +
+                              " org.bluez.Device1.ConnectProfile string:4de17a00-52cb-11e6-bdf4-0800200c9a66 >/dev/null 2>&1 &";
+    run_command_simple(profile_cmd);
+
     return ok;
 }
 

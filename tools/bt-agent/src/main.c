@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 #include <unistd.h>
 #include <signal.h>
@@ -7,13 +8,14 @@
 
 #define AGENT_PATH "/org/bluez/agent"
 #define AGENT_INTERFACE "org.bluez.Agent1"
-#define PROFILE_INTERFACE "org.bluez.Profile1"
 
-// UUID Constants for Automotive Audio and Android Auto
-#define UUID_A2DP_SINK    "0000110b-0000-1000-8000-00805f9b34fb"
-#define UUID_AVRCP_TARGET "0000110c-0000-1000-8000-00805f9b34fb"
-#define UUID_HFP_HF       "0000111e-0000-1000-8000-00805f9b34fb"
-#define UUID_ANDROID_AUTO "4de17a00-52cb-11e6-bdf4-0800200c9a66"
+#define ENDPOINT_PATH "/org/bluez/endpoint/sbc_sink"
+#define ENDPOINT_INTERFACE "org.bluez.MediaEndpoint1"
+
+#define UUID_A2DP_SINK "0000110b-0000-1000-8000-00805f9b34fb"
+
+// SBC Capabilities: 16k-48k, Mono/Dual/Stereo/JointStereo, 4-16 blocks, 4-8 subbands, Loudness/SNR, bitpool 2-53
+static const uint8_t sbc_capabilities[] = { 0x3f, 0xff, 0x02, 0x35 };
 
 static DBusHandlerResult agent_filter(DBusConnection *conn, DBusMessage *msg, void *user_data)
 {
@@ -51,46 +53,51 @@ static DBusHandlerResult agent_filter(DBusConnection *conn, DBusMessage *msg, vo
     return DBUS_HANDLER_RESULT_HANDLED;
 }
 
-static DBusHandlerResult profile_filter(DBusConnection *conn, DBusMessage *msg, void *user_data)
+static DBusHandlerResult endpoint_filter(DBusConnection *conn, DBusMessage *msg, void *user_data)
 {
     const char *iface = dbus_message_get_interface(msg);
     const char *member = dbus_message_get_member(msg);
 
-    if (!iface || strcmp(iface, PROFILE_INTERFACE) != 0 || !member)
+    if (!iface || strcmp(iface, ENDPOINT_INTERFACE) != 0 || !member)
         return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
-    const char *path = dbus_message_get_path(msg);
-    printf("[bt-agent] Profile1 event on %s: %s\n", path ? path : "unknown", member);
+    printf("[bt-agent] MediaEndpoint1 method call: %s\n", member);
 
-    if (strcmp(member, "NewConnection") == 0) {
+    DBusMessage *reply = NULL;
+    if (strcmp(member, "SetConfiguration") == 0) {
+        const char *transport_path = NULL;
         DBusMessageIter iter;
         dbus_message_iter_init(msg, &iter);
-        const char *dev_path = NULL;
-        int fd = -1;
         if (dbus_message_iter_get_arg_type(&iter) == DBUS_TYPE_OBJECT_PATH) {
-            dbus_message_iter_get_basic(&iter, &dev_path);
+            dbus_message_iter_get_basic(&iter, &transport_path);
         }
-        dbus_message_iter_next(&iter);
-        if (dbus_message_iter_get_arg_type(&iter) == DBUS_TYPE_UNIX_FD) {
-            dbus_message_iter_get_basic(&iter, &fd);
+        printf("[bt-agent] *** A2DP Audio Stream Configured ***: transport=%s\n",
+               transport_path ? transport_path : "unknown");
+        reply = dbus_message_new_method_return(msg);
+    } else if (strcmp(member, "SelectConfiguration") == 0) {
+        // Return 44.1kHz, Joint Stereo, 16 blocks, 8 subbands, Loudness, 2-53 bitpool
+        const uint8_t selected_sbc[] = { 0x21, 0x15, 0x02, 0x35 };
+        reply = dbus_message_new_method_return(msg);
+        DBusMessageIter iter, array_iter;
+        dbus_message_iter_init_append(reply, &iter);
+        dbus_message_iter_open_container(&iter, DBUS_TYPE_ARRAY, "y", &array_iter);
+        for (size_t i = 0; i < sizeof(selected_sbc); ++i) {
+            dbus_message_iter_append_basic(&array_iter, DBUS_TYPE_BYTE, &selected_sbc[i]);
         }
-        printf("[bt-agent] *** Profile Connection Established *** on %s from %s (fd=%d)\n",
-               path ? path : "", dev_path ? dev_path : "unknown", fd);
+        dbus_message_iter_close_container(&iter, &array_iter);
+        printf("[bt-agent] A2DP Codec Configuration Selected (44.1kHz Stereo)\n");
+    } else if (strcmp(member, "ClearConfiguration") == 0) {
+        printf("[bt-agent] A2DP Audio Stream Cleared\n");
+        reply = dbus_message_new_method_return(msg);
+    } else if (strcmp(member, "Release") == 0) {
+        printf("[bt-agent] MediaEndpoint Released\n");
+        reply = dbus_message_new_method_return(msg);
+    }
 
-        DBusMessage *reply = dbus_message_new_method_return(msg);
-        if (reply) {
-            dbus_connection_send(conn, reply, NULL);
-            dbus_connection_flush(conn);
-            dbus_message_unref(reply);
-        }
-        return DBUS_HANDLER_RESULT_HANDLED;
-    } else if (strcmp(member, "RequestDisconnection") == 0 || strcmp(member, "Release") == 0) {
-        DBusMessage *reply = dbus_message_new_method_return(msg);
-        if (reply) {
-            dbus_connection_send(conn, reply, NULL);
-            dbus_connection_flush(conn);
-            dbus_message_unref(reply);
-        }
+    if (reply) {
+        dbus_connection_send(conn, reply, NULL);
+        dbus_connection_flush(conn);
+        dbus_message_unref(reply);
         return DBUS_HANDLER_RESULT_HANDLED;
     }
 
@@ -101,8 +108,8 @@ static const DBusObjectPathVTable agent_vtable = {
     .message_function = agent_filter,
 };
 
-static const DBusObjectPathVTable profile_vtable = {
-    .message_function = profile_filter,
+static const DBusObjectPathVTable endpoint_vtable = {
+    .message_function = endpoint_filter,
 };
 
 static int register_agent(DBusConnection *conn)
@@ -115,7 +122,6 @@ static int register_agent(DBusConnection *conn)
         return 0;
     }
 
-    // Call RegisterAgent(objpath, capability)
     DBusMessage *msg = dbus_message_new_method_call("org.bluez", "/org/bluez",
                                                     "org.bluez.AgentManager1", "RegisterAgent");
     if (!msg) return 0;
@@ -136,7 +142,6 @@ static int register_agent(DBusConnection *conn)
     }
     dbus_message_unref(reply);
 
-    // Call RequestDefaultAgent(objpath)
     msg = dbus_message_new_method_call("org.bluez", "/org/bluez",
                                        "org.bluez.AgentManager1", "RequestDefaultAgent");
     if (!msg) return 0;
@@ -158,94 +163,60 @@ static int register_agent(DBusConnection *conn)
     return 1;
 }
 
-static int register_profile(DBusConnection *conn, const char *path, const char *uuid, const char *name, const char *role, dbus_uint16_t psm, dbus_uint16_t channel)
+static int register_media_endpoint(DBusConnection *conn)
 {
     DBusError err;
     dbus_error_init(&err);
 
-    dbus_connection_register_object_path(conn, path, &profile_vtable, (void *)name);
+    dbus_connection_register_object_path(conn, ENDPOINT_PATH, &endpoint_vtable, NULL);
 
-    DBusMessage *msg = dbus_message_new_method_call("org.bluez", "/org/bluez",
-                                                    "org.bluez.ProfileManager1", "RegisterProfile");
+    DBusMessage *msg = dbus_message_new_method_call("org.bluez", "/org/bluez/hci0",
+                                                    "org.bluez.Media1", "RegisterEndpoint");
     if (!msg) return 0;
 
+    const char *path = ENDPOINT_PATH;
     DBusMessageIter iter, dict;
     dbus_message_iter_init_append(msg, &iter);
     dbus_message_iter_append_basic(&iter, DBUS_TYPE_OBJECT_PATH, &path);
-    dbus_message_iter_append_basic(&iter, DBUS_TYPE_STRING, &uuid);
 
     dbus_message_iter_open_container(&iter, DBUS_TYPE_ARRAY, "{sv}", &dict);
 
-    if (name) {
+    // UUID
+    {
         DBusMessageIter entry, val;
-        const char *key = "Name";
+        const char *key = "UUID";
+        const char *uuid = UUID_A2DP_SINK;
         dbus_message_iter_open_container(&dict, DBUS_TYPE_DICT_ENTRY, NULL, &entry);
         dbus_message_iter_append_basic(&entry, DBUS_TYPE_STRING, &key);
         dbus_message_iter_open_container(&entry, DBUS_TYPE_VARIANT, "s", &val);
-        dbus_message_iter_append_basic(&val, DBUS_TYPE_STRING, &name);
+        dbus_message_iter_append_basic(&val, DBUS_TYPE_STRING, &uuid);
         dbus_message_iter_close_container(&entry, &val);
         dbus_message_iter_close_container(&dict, &entry);
     }
-    if (role) {
-        DBusMessageIter entry, val;
-        const char *key = "Role";
-        dbus_message_iter_open_container(&dict, DBUS_TYPE_DICT_ENTRY, NULL, &entry);
-        dbus_message_iter_append_basic(&entry, DBUS_TYPE_STRING, &key);
-        dbus_message_iter_open_container(&entry, DBUS_TYPE_VARIANT, "s", &val);
-        dbus_message_iter_append_basic(&val, DBUS_TYPE_STRING, &role);
-        dbus_message_iter_close_container(&entry, &val);
-        dbus_message_iter_close_container(&dict, &entry);
-    }
-    if (psm > 0) {
-        DBusMessageIter entry, val;
-        const char *key = "PSM";
-        dbus_message_iter_open_container(&dict, DBUS_TYPE_DICT_ENTRY, NULL, &entry);
-        dbus_message_iter_append_basic(&entry, DBUS_TYPE_STRING, &key);
-        dbus_message_iter_open_container(&entry, DBUS_TYPE_VARIANT, "q", &val);
-        dbus_message_iter_append_basic(&val, DBUS_TYPE_UINT16, &psm);
-        dbus_message_iter_close_container(&entry, &val);
-        dbus_message_iter_close_container(&dict, &entry);
-    }
-    if (channel > 0) {
-        DBusMessageIter entry, val;
-        const char *key = "Channel";
-        dbus_message_iter_open_container(&dict, DBUS_TYPE_DICT_ENTRY, NULL, &entry);
-        dbus_message_iter_append_basic(&entry, DBUS_TYPE_STRING, &key);
-        dbus_message_iter_open_container(&entry, DBUS_TYPE_VARIANT, "q", &val);
-        dbus_message_iter_append_basic(&val, DBUS_TYPE_UINT16, &channel);
-        dbus_message_iter_close_container(&entry, &val);
-        dbus_message_iter_close_container(&dict, &entry);
-    }
+    // Codec
     {
         DBusMessageIter entry, val;
-        const char *key = "RequireAuthentication";
-        dbus_bool_t req_auth = FALSE;
+        const char *key = "Codec";
+        uint8_t codec = 0x00; // SBC
         dbus_message_iter_open_container(&dict, DBUS_TYPE_DICT_ENTRY, NULL, &entry);
         dbus_message_iter_append_basic(&entry, DBUS_TYPE_STRING, &key);
-        dbus_message_iter_open_container(&entry, DBUS_TYPE_VARIANT, "b", &val);
-        dbus_message_iter_append_basic(&val, DBUS_TYPE_BOOLEAN, &req_auth);
+        dbus_message_iter_open_container(&entry, DBUS_TYPE_VARIANT, "y", &val);
+        dbus_message_iter_append_basic(&val, DBUS_TYPE_BYTE, &codec);
         dbus_message_iter_close_container(&entry, &val);
         dbus_message_iter_close_container(&dict, &entry);
     }
+    // Capabilities
     {
-        DBusMessageIter entry, val;
-        const char *key = "RequireAuthorization";
-        dbus_bool_t req_authz = FALSE;
+        DBusMessageIter entry, val, array_iter;
+        const char *key = "Capabilities";
         dbus_message_iter_open_container(&dict, DBUS_TYPE_DICT_ENTRY, NULL, &entry);
         dbus_message_iter_append_basic(&entry, DBUS_TYPE_STRING, &key);
-        dbus_message_iter_open_container(&entry, DBUS_TYPE_VARIANT, "b", &val);
-        dbus_message_iter_append_basic(&val, DBUS_TYPE_BOOLEAN, &req_authz);
-        dbus_message_iter_close_container(&entry, &val);
-        dbus_message_iter_close_container(&dict, &entry);
-    }
-    {
-        DBusMessageIter entry, val;
-        const char *key = "AutoConnect";
-        dbus_bool_t auto_conn = TRUE;
-        dbus_message_iter_open_container(&dict, DBUS_TYPE_DICT_ENTRY, NULL, &entry);
-        dbus_message_iter_append_basic(&entry, DBUS_TYPE_STRING, &key);
-        dbus_message_iter_open_container(&entry, DBUS_TYPE_VARIANT, "b", &val);
-        dbus_message_iter_append_basic(&val, DBUS_TYPE_BOOLEAN, &auto_conn);
+        dbus_message_iter_open_container(&entry, DBUS_TYPE_VARIANT, "ay", &val);
+        dbus_message_iter_open_container(&val, DBUS_TYPE_ARRAY, "y", &array_iter);
+        for (size_t i = 0; i < sizeof(sbc_capabilities); ++i) {
+            dbus_message_iter_append_basic(&array_iter, DBUS_TYPE_BYTE, &sbc_capabilities[i]);
+        }
+        dbus_message_iter_close_container(&val, &array_iter);
         dbus_message_iter_close_container(&entry, &val);
         dbus_message_iter_close_container(&dict, &entry);
     }
@@ -255,13 +226,13 @@ static int register_profile(DBusConnection *conn, const char *path, const char *
     DBusMessage *reply = dbus_connection_send_with_reply_and_block(conn, msg, 5000, &err);
     dbus_message_unref(msg);
     if (!reply) {
-        fprintf(stderr, "[bt-agent] RegisterProfile (%s, UUID: %s) failed: %s\n",
-                name ? name : "", uuid, err.message ? err.message : "unknown error");
+        fprintf(stderr, "[bt-agent] RegisterEndpoint (A2DP SBC Sink) failed: %s\n",
+                err.message ? err.message : "unknown error");
         dbus_error_free(&err);
         return 0;
     }
     dbus_message_unref(reply);
-    printf("[bt-agent] Successfully registered Bluetooth profile '%s' (UUID: %s)\n", name ? name : "", uuid);
+    printf("[bt-agent] Successfully registered Media Endpoint: A2DP SBC Sink on /org/bluez/hci0\n");
     return 1;
 }
 
@@ -303,13 +274,11 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    // Register Audio Profiles so phones discover audio/media services
-    register_profile(conn, "/org/bluez/profile/a2dp_sink", UUID_A2DP_SINK, "A2DP Audio Sink", "server", 25, 0);
-    register_profile(conn, "/org/bluez/profile/avrcp_target", UUID_AVRCP_TARGET, "A/V Remote Control Target", "server", 23, 0);
-    register_profile(conn, "/org/bluez/profile/hfp_hf", UUID_HFP_HF, "Handsfree Audio", "server", 0, 0);
+    // Register A2DP SBC Media Endpoint
+    register_media_endpoint(conn);
 
-    printf("[bt-agent] Bluetooth stack active with Audio (A2DP/HFP/AVRCP) profiles\n");
-    printf("[bt-agent] Dispatching pairing and audio profile events...\n");
+    printf("[bt-agent] Bluetooth stack active with Auto-Pairing Agent + A2DP Media Endpoint\n");
+    printf("[bt-agent] Dispatching pairing and media events...\n");
     while (dbus_connection_read_write_dispatch(conn, -1)) {
         // Event loop
     }

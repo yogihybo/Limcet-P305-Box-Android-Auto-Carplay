@@ -37,9 +37,26 @@
 
 namespace {
 
-// 2026-08-12: auto-starts the wireless Android Auto session the moment
-// blueware reports a nearby phone as Android-Auto-capable, instead of
-// requiring the user to manually open the Android Auto screen first.
+// 2026-08-20: DEAD CODE as of this project's BlueZ migration -- this
+// class's entire trigger (on_broadcast(), below) depends on
+// hal::watch_bluetooth_broadcasts()'s observers actually being called,
+// and nothing in hal/bluetooth.cpp has called them since blueware's own
+// AT-command reader thread (the thing that used to parse +AAPDEV= lines
+// off /dev/bw_serial and broadcast them here) was replaced by BlueZ
+// D-Bus calls throughout that file. on_broadcast() is registered
+// (main() below) but will never fire again. Left in place rather than
+// removed -- harmless as unreachable code, and ripping it out wasn't
+// worth the risk for this change. The REAL equivalent trigger now is
+// hal::aa_profile_server_loop() (hal/bluetooth.cpp) +
+// hal::consume_aa_navigate_request(), polled further down in main()'s
+// own loop -- same AutoStartCarLink-gated behavior, just off a real
+// BlueZ connection event instead of a blueware broadcast that no longer
+// happens.
+//
+// 2026-08-12 (original comment, now describing dead behavior): auto-
+// starts the wireless Android Auto session the moment blueware reports
+// a nearby phone as Android-Auto-capable, instead of requiring the user
+// to manually open the Android Auto screen first.
 //
 // Trigger: a real "+AAPDEV=<mac><sep><name>" broadcast on /dev/bw_serial
 // (see hal/bluetooth.h's top comment -- confirmed live, only ever seen
@@ -319,6 +336,25 @@ int main() {
     ui::theme::init(disp);
     std::printf("%s ui: theme applied\n", core::log_timestamp().c_str());
 
+    // 2026-08-20: hal/audio.h was #included (commit a43df447, "Unmute
+    // DAC/PA on boot") but the actual hal::init_audio_mixer() call was
+    // never added anywhere -- the commit only added the include and an
+    // unrelated sidecar startup-order change, leaving the DAC/softmaster
+    // unmute genuinely dead code. Real hardware symptom this explains:
+    // A2DP (bt-agent) and AA media audio (androidauto-sidecar) both
+    // decode/write real PCM to ALSA successfully, but nothing is
+    // audible on the speakers -- consistent with the ARK-SDDAC hardware
+    // DAC channels and/or ALSA softmaster staying at whatever
+    // uninitialized/muted default they power on with, since nothing
+    // ever ran the amixer unmute commands. amixer settings are ALSA-
+    // driver/kernel state, not per-process, so calling this once here
+    // (custom_ui, the always-running process) covers androidauto-
+    // sidecar and bt-agent's own separate-process ALSA writes too --
+    // matches how blueware-era audio worked (MsnCoreApp/start_msn, the
+    // stock app, does its own equivalent unmute independently; nothing
+    // in custom_ui ever replicated it until now).
+    hal::init_audio_mixer();
+
     // Starts BlueZ 5.66 subsystem (see hal/bluetooth.h) as early as possible.
     hal::ensure_bluetooth_daemon_running();
     std::printf("%s ui: BlueZ daemon launch requested\n", core::log_timestamp().c_str());
@@ -456,6 +492,23 @@ int main() {
         // its own screen_delete_cb()) -- reusing it here instead of
         // adding a new ScreenManager API.
         if (aa_auto_start_watcher().consume_navigate_request() &&
+            !hal::androidauto_screen_active().load(std::memory_order_acquire)) {
+            staging_ui::navigate_to(staging_ui::NavDestination::AndroidAuto);
+        }
+        // 2026-08-20: the REAL AutoStartCarLink-gated auto-navigate
+        // trigger now -- see hal::consume_aa_navigate_request()'s own
+        // header comment. AaAutoStartWatcher above reacts to blueware's
+        // +AAPDEV= broadcast, which has been unreachable dead code since
+        // this project's BlueZ migration (nothing calls
+        // watch_bluetooth_broadcasts()'s observers anymore -- blueware's
+        // AT-command reader thread was replaced by BlueZ D-Bus calls
+        // throughout hal/bluetooth.cpp); left in place, not removed,
+        // since it's harmless as dead code and this file didn't need a
+        // larger rewrite just to delete it. This is the trigger that
+        // actually fires today: hal::aa_profile_server_loop() sets it
+        // once a phone connects over the AA Bluetooth profile AND
+        // AutoStartCarLink is on.
+        if (hal::consume_aa_navigate_request() &&
             !hal::androidauto_screen_active().load(std::memory_order_acquire)) {
             staging_ui::navigate_to(staging_ui::NavDestination::AndroidAuto);
         }

@@ -8,10 +8,26 @@
 // the main UI process to consume via src/hal/androidauto_client.h.
 //
 // Protocol (see src/hal/androidauto_client.h for the client side):
-// newline-delimited text, one request/response pair per line read.
-//   "CONNECT" -> starts/restarts the wireless AA connection sequence
-//                (androidauto::WirelessSessionManager::start()),
-//                replies "OK"
+// newline-delimited text, one request/response pair per line read
+// (recv'd via recvmsg(), not plain read(), specifically so CONNECT_FD's
+// ancillary fd survives -- see recv_chunk()'s own comment below).
+//   "CONNECT_FD" -> MUST be sent together with an SCM_RIGHTS ancillary
+//                fd carrying an already-connected Bluetooth RFCOMM
+//                socket (see hal::androidauto_client's sendConnectFd(),
+//                the sender side) -- starts the wireless AA connection
+//                sequence using that fd
+//                (androidauto::WirelessSessionManager::start(fd)),
+//                replies "OK", or "ERR no fd received" if the ancillary
+//                data didn't arrive. This process owns NO Bluetooth/
+//                D-Bus/BlueZ knowledge at all -- see
+//                wireless_session_manager.h's own header comment for
+//                the full architecture (custom_ui's hal::BluezAaProfile
+//                does that, continuously, independent of this
+//                process's lifecycle).
+//   "CONNECT" -> accepted as an informational no-op for backward
+//                compatibility (logged clearly as such) -- a session
+//                now starts automatically via CONNECT_FD the instant a
+//                phone dials in, not on any explicit request.
 //   "STATUS"  -> replies "STATE <state_name> <message...>"
 //   "SHOW"    -> sets androidauto::video_visible() true (see
 //                video_visibility.h), replies "OK". Sent by
@@ -151,18 +167,62 @@ bool acquireSingleInstanceLock() {
     return true;  // fd deliberately leaked -- held open for the life of the process
 }
 
+// 2026-08-20: reads via recvmsg() (not plain read()) so an SCM_RIGHTS
+// ancillary fd riding alongside a "CONNECT_FD" line (see
+// hal::androidauto_client's sendConnectFd(), the sender side) is
+// captured. recvmsg() behaves identically to read() when no ancillary
+// data is present, so this is a safe drop-in replacement for every
+// other command on this connection too, not just CONNECT_FD -- no need
+// for two different read paths. *outFd is set to the fd received on
+// THIS call (-1 if none); the caller is responsible for it once
+// CONNECT_FD's line is actually parsed.
+ssize_t recv_chunk(int clientFd, char * buf, size_t bufLen, int * outFd) {
+    *outFd = -1;
+    struct msghdr msg {};
+    struct iovec iov {};
+    iov.iov_base = buf;
+    iov.iov_len = bufLen;
+    msg.msg_iov = &iov;
+    msg.msg_iovlen = 1;
+
+    char control[CMSG_SPACE(sizeof(int))];
+    msg.msg_control = control;
+    msg.msg_controllen = sizeof(control);
+
+    ssize_t n = recvmsg(clientFd, &msg, 0);
+    if (n <= 0) {
+        return n;
+    }
+
+    for (struct cmsghdr * cmsg = CMSG_FIRSTHDR(&msg); cmsg != nullptr;
+         cmsg = CMSG_NXTHDR(&msg, cmsg)) {
+        if (cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SCM_RIGHTS) {
+            std::memcpy(outFd, CMSG_DATA(cmsg), sizeof(int));
+        }
+    }
+    return n;
+}
+
 void handle_connection(int clientFd, androidauto::WirelessSessionManager * manager) {
     std::string buf;
     char chunk[512];
+    int pendingFd = -1;  // captured from an SCM_RIGHTS ancillary message, if any, until consumed
 
     while (true) {
         // Read until a full line is buffered.
         size_t newlinePos;
         while ((newlinePos = buf.find('\n')) == std::string::npos) {
-            ssize_t n = read(clientFd, chunk, sizeof(chunk));
+            int recvdFd = -1;
+            ssize_t n = recv_chunk(clientFd, chunk, sizeof(chunk), &recvdFd);
             if (n <= 0) {
                 close(clientFd);
+                if (pendingFd >= 0) close(pendingFd);
                 return;
+            }
+            if (recvdFd >= 0) {
+                std::printf("%s androidauto-sidecar: received ancillary fd=%d on this connection\n",
+                            androidauto::logTimestamp().c_str(), recvdFd);
+                pendingFd = recvdFd;
             }
             buf.append(chunk, static_cast<size_t>(n));
         }
@@ -171,8 +231,33 @@ void handle_connection(int clientFd, androidauto::WirelessSessionManager * manag
         buf.erase(0, newlinePos + 1);
 
         std::string reply;
-        if (line == "CONNECT") {
-            manager->start();
+        if (line == "CONNECT_FD") {
+            std::printf("%s androidauto-sidecar: CONNECT_FD received (fd=%d)\n",
+                        androidauto::logTimestamp().c_str(), pendingFd);
+            if (pendingFd < 0) {
+                std::fprintf(stderr, "%s androidauto-sidecar: CONNECT_FD arrived with no ancillary "
+                             "fd attached -- ignoring\n", androidauto::logTimestamp().c_str());
+                reply = "ERR no fd received\n";
+            } else {
+                manager->start(pendingFd);
+                pendingFd = -1;  // ownership handed to WirelessSessionManager::start()
+                reply = "OK\n";
+            }
+        } else if (line == "CONNECT") {
+            // 2026-08-20: this process no longer owns any Bluetooth/
+            // BlueZ connectivity -- see wireless_session_manager.h's
+            // own header comment. custom_ui's own hal::BluezAaProfile
+            // stays registered and listens for AA RFCOMM connections
+            // continuously, independent of this command; a session now
+            // starts automatically (via CONNECT_FD, above) the instant
+            // a phone actually dials in, not on any explicit request
+            // from here. Kept as an accepted no-op (not "ERR unknown
+            // command") purely for backward compatibility with any
+            // caller still sending it -- logged clearly so it's obvious
+            // in the console this isn't doing anything anymore.
+            std::printf("%s androidauto-sidecar: CONNECT received -- informational no-op now, "
+                        "Bluetooth is custom_ui's job (see CONNECT_FD)\n",
+                        androidauto::logTimestamp().c_str());
             reply = "OK\n";
         } else if (line == "STATUS") {
             reply = std::string("STATE ") + state_name(manager->state()) + " " +
@@ -380,9 +465,15 @@ int main() {
     std::printf("%s androidauto-sidecar: listening on %s\n", androidauto::logTimestamp().c_str(),
                 kSocketPath);
 
+    // 2026-08-20: no longer auto-starts a listen-for-Bluetooth-
+    // connection sequence at boot -- there's no Bluetooth for this
+    // process to listen with anymore (see wireless_session_manager.h's
+    // own header comment). custom_ui's own hal::BluezAaProfile does
+    // that continuously, independent of this process's lifecycle, and
+    // hands a connected fd to CONNECT_FD (handle_connection(), above)
+    // whenever a phone actually dials in. This manager instance just
+    // sits idle until that happens.
     androidauto::WirelessSessionManager manager;
-    // Auto-start wireless AA session listening immediately on boot
-    manager.start();
 
     while (true) {
         int clientFd = accept(listenFd, nullptr, nullptr);

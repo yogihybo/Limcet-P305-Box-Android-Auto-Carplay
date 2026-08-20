@@ -30,6 +30,9 @@
 
 #include "core/hal_config.h"
 #include "core/log_timing.h"
+#include "core/config_store.h"
+#include "hal/androidauto_client.h"
+#include "hal/bluez_aa_profile.h"
 
 namespace hal {
 
@@ -37,6 +40,18 @@ namespace {
 
 std::mutex g_telemetry_mtx;
 BluetoothTelemetry g_telemetry;
+
+// See has_pending_aa_connection()/start_pending_aa_connection()'s own
+// header comments -- aa_profile_server_loop() stashes a connected fd
+// here instead of handing it straight to androidauto-sidecar when
+// AutoStartCarLink is off. Only ever one at a time (matches
+// WirelessSessionManager's own "one session at a time" model) -- a
+// second phone connecting while one is already pending replaces it,
+// closing the older fd rather than leaking it.
+std::mutex g_pendingAaMtx;
+int g_pendingAaFd = -1;
+
+std::atomic<bool> g_aaNavigatePending{false};
 
 // Helpers for executing BlueZ/bluetoothctl commands and capturing stdout
 bool run_command_capture(const std::string & cmd, std::vector<std::string> & lines_out) {
@@ -114,6 +129,41 @@ std::string mac_to_dbus_path(const std::string & mac) {
     return path;
 }
 
+// Reused by sync_clock_from_phone() -- same GetManagedObjects parsing
+// pattern as list_paired_devices()/bluez_monitor_loop() above, just
+// looking for the first currently-Connected device rather than every
+// paired one.
+std::string get_connected_device_mac() {
+    std::vector<std::string> lines;
+    if (!run_command_capture("dbus-send --system --print-reply --dest=org.bluez / org.freedesktop.DBus.ObjectManager.GetManagedObjects 2>/dev/null", lines) || lines.empty()) {
+        return "";
+    }
+    std::string current_addr;
+    bool current_connected = false;
+    for (size_t i = 0; i < lines.size(); ++i) {
+        const auto & l = lines[i];
+        if (l.find("object path \"/org/bluez/hci0/dev_") != std::string::npos) {
+            if (!current_addr.empty() && current_connected) {
+                return current_addr;
+            }
+            current_addr.clear();
+            current_connected = false;
+        } else if (l.find("string \"Address\"") != std::string::npos && i + 1 < lines.size()) {
+            size_t pos = lines[i+1].find("string \"");
+            if (pos != std::string::npos) {
+                current_addr = lines[i+1].substr(pos + 8);
+                if (!current_addr.empty() && current_addr.back() == '"') current_addr.pop_back();
+            }
+        } else if (l.find("string \"Connected\"") != std::string::npos && i + 1 < lines.size()) {
+            if (lines[i+1].find("boolean true") != std::string::npos) current_connected = true;
+        }
+    }
+    if (!current_addr.empty() && current_connected) {
+        return current_addr;
+    }
+    return "";
+}
+
 void bluez_monitor_loop(BluetoothHandle * h) {
     std::printf("%s hal::bluetooth: BlueZ status monitor thread started\n", core::log_timestamp().c_str());
     bool last_connected = false;
@@ -188,21 +238,30 @@ void bluez_monitor_loop(BluetoothHandle * h) {
                                 core::log_timestamp().c_str(), connected_mac.c_str(),
                                 connected_name.c_str(), rssi);
 
-                    // Explicitly trigger Android Auto RFCOMM profile connection on the newly connected device
-                    std::string dev_p = "/org/bluez/hci0/" + mac_to_dbus_path(connected_mac);
-                    std::thread([connected_mac, dev_p]() {
-                        std::printf("%s [BT-CMD] Sending ConnectProfile(AA 4de17a00...) to %s (%s)...\n",
-                                    core::log_timestamp().c_str(), connected_mac.c_str(), dev_p.c_str());
-                        std::vector<std::string> output;
-                        std::string cmd = "dbus-send --system --print-reply --dest=org.bluez " + dev_p +
-                                          " org.bluez.Device1.ConnectProfile string:4de17a00-52cb-11e6-bdf4-0800200c9a66 2>&1";
-                        bool ok = run_command_capture(cmd, output);
-                        std::printf("%s [BT-CMD] ConnectProfile(AA) result (exit=%d):\n",
-                                    core::log_timestamp().c_str(), ok ? 0 : 1);
-                        for (const auto & line : output) {
-                            std::printf("    [BT-CMD-REPLY] %s\n", line.c_str());
-                        }
-                    }).detach();
+                    // 2026-08-20: removed a Device1.ConnectProfile(AA UUID)
+                    // call that used to fire here -- confirmed against
+                    // the vendored BlueZ docs (device-api.txt: "The UUID
+                    // provided is the remote service UUID for the
+                    // profile") that ConnectProfile's UUID argument
+                    // names a service the REMOTE peer (the phone)
+                    // exposes, not one we expose. A phone never runs an
+                    // RFCOMM server for the AA UUID -- it's the client
+                    // in this handshake (matches this project's own
+                    // established finding, this file's header comment,
+                    // that AA pairing/connection is phone-initiated) --
+                    // so this call could only ever fail
+                    // (org.bluez.Error.NotAvailable), and did nothing
+                    // toward getting the phone to dial our registered
+                    // Profile1 server. Real hardware log (2026-08-20)
+                    // showed classic BT + A2DP connecting fine while the
+                    // AA RFCOMM channel never got dialed at all, even
+                    // after a fresh re-pair -- this call was a red
+                    // herring, not a contributing fix. The actual server
+                    // side (BluezClient::register_profile() +
+                    // wait_for_connection(), androidauto-sidecar) is
+                    // already in place and just waits for the phone to
+                    // connect in; there's no BlueZ API to force that
+                    // from our side.
                 } else {
                     std::printf("%s [BT-EVENT] *** Device Disconnected ***: (was %s '%s')\n",
                                 core::log_timestamp().c_str(), last_connected_mac.c_str(),
@@ -232,6 +291,94 @@ void bluez_monitor_loop(BluetoothHandle * h) {
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+    }
+}
+
+// 2026-08-20: this thread is the whole reason Bluetooth connectivity
+// can now live entirely in custom_ui -- registers the Android Auto
+// wireless RFCOMM profile ONCE, then loops forever waiting for
+// bluetoothd to call NewConnection (a real phone dialing in), handing
+// each connected fd off to androidauto-sidecar over their local socket
+// (hal::sendConnectFd()). androidauto-sidecar itself now knows nothing
+// about Bluetooth/D-Bus at all -- see wireless_session_manager.h's own
+// header comment for the full architecture this replaces (the sidecar
+// used to run its own separate BlueZ connection just for this one
+// profile).
+//
+// Heavily logged end to end, deliberately -- this is the one thread
+// responsible for every wireless AA connection attempt ever reaching a
+// session, so its progress needs to be visible in the console at every
+// step, not just success/failure.
+void aa_profile_server_loop() {
+    std::printf("%s [BT-AA-PROFILE] server thread starting\n", core::log_timestamp().c_str());
+
+    BluezAaProfile profile;
+    if (!profile.connect()) {
+        std::fprintf(stderr, "%s [BT-AA-PROFILE] could not connect to system bus -- AA wireless "
+                     "will never work this boot, giving up\n", core::log_timestamp().c_str());
+        return;
+    }
+    if (!profile.register_profile()) {
+        std::fprintf(stderr, "%s [BT-AA-PROFILE] could not register AA RFCOMM profile -- AA "
+                     "wireless will never work this boot, giving up\n", core::log_timestamp().c_str());
+        return;
+    }
+
+    std::printf("%s [BT-AA-PROFILE] AA RFCOMM profile registered -- listening for phone "
+                "connections\n", core::log_timestamp().c_str());
+
+    int consecutiveTimeouts = 0;
+    while (true) {
+        int fd = profile.wait_for_connection(60);
+        if (fd < 0) {
+            ++consecutiveTimeouts;
+            // Once a minute, every minute, forever -- proves this
+            // thread is still alive and still listening, not silently
+            // dead, without spamming the console every single 60s tick
+            // at the same volume as a real connection attempt would.
+            std::printf("%s [BT-AA-PROFILE] still waiting for a phone to connect (%d min so far)\n",
+                        core::log_timestamp().c_str(), consecutiveTimeouts);
+            continue;
+        }
+        consecutiveTimeouts = 0;
+        std::printf("%s [BT-AA-PROFILE] *** phone connected over AA RFCOMM *** fd=%d\n",
+                    core::log_timestamp().c_str(), fd);
+
+        // Real Bluetooth link is up and a phone confirmed AA-capable
+        // right now -- the best available moment to query it for wall-
+        // clock time (see sync_clock_from_phone()'s own header comment).
+        // Moved here from main.cpp's AaAutoStartWatcher, whose own
+        // trigger (blueware's +AAPDEV= broadcast) has been dead since
+        // this project's BlueZ migration -- watch_bluetooth_broadcasts()
+        // observers are registered but nothing in this file has called
+        // them since blueware's AT-command reader thread was replaced by
+        // BlueZ D-Bus calls, so that call site (and the clock sync
+        // riding on it) never actually ran anymore. This is the real,
+        // reliable trigger now.
+        sync_clock_from_phone(shared_handle());
+
+        bool auto_start = core::default_store().get_bool("AutoStartCarLink", true, "General");
+        if (auto_start) {
+            std::printf("%s [BT-AA-PROFILE] AutoStartCarLink is ON -- handing off to "
+                        "androidauto-sidecar immediately\n", core::log_timestamp().c_str());
+            bool ok = hal::sendConnectFd(fd);
+            std::printf("%s [BT-AA-PROFILE] hand-off to androidauto-sidecar: %s\n",
+                        core::log_timestamp().c_str(), ok ? "accepted" : "FAILED");
+            if (ok) {
+                g_aaNavigatePending.store(true, std::memory_order_release);
+            }
+        } else {
+            std::printf("%s [BT-AA-PROFILE] AutoStartCarLink is OFF -- waiting at the connect "
+                        "screen for the user to start Android Auto\n", core::log_timestamp().c_str());
+            std::lock_guard<std::mutex> lock(g_pendingAaMtx);
+            if (g_pendingAaFd >= 0) {
+                std::printf("%s [BT-AA-PROFILE] replacing an earlier still-pending connection "
+                            "(fd=%d, never started) with this one\n",
+                            core::log_timestamp().c_str(), g_pendingAaFd);
+                close(g_pendingAaFd);
+            }
+            g_pendingAaFd = fd;
+        }
     }
 }
 
@@ -348,6 +495,19 @@ void ensure_bluetooth_daemon_running() {
             pclose(fp);
         }).detach();
     }
+
+    // Registers the AA RFCOMM profile and listens for phone connections
+    // for the rest of this process's lifetime -- see
+    // aa_profile_server_loop()'s own comment. Started here (once,
+    // guarded the same way as the bt-agent thread above) rather than
+    // from init_bluetooth()/main.cpp directly, so it comes up
+    // automatically as soon as BlueZ itself is confirmed ready,
+    // regardless of which call path first reached
+    // ensure_bluetooth_daemon_running().
+    static std::atomic<bool> s_aa_profile_thread_started{false};
+    if (!s_aa_profile_thread_started.exchange(true)) {
+        std::thread(aa_profile_server_loop).detach();
+    }
 }
 
 bool init_bluetooth(BluetoothHandle & out, const char * /*path*/) {
@@ -363,7 +523,17 @@ bool init_bluetooth(BluetoothHandle & out, const char * /*path*/) {
     }
 
     run_command_simple("hciconfig hci0 sspmode 1 >/dev/null 2>&1");
-    run_command_simple("hciconfig hci0 class 0x240408 >/dev/null 2>&1");
+    // 2026-08-20: was 0x240408 (major=Audio/Video, minor=2 "Hands-free
+    // device") -- see bluez-bringup.sh's own comment on this same
+    // constant for the full reasoning. 0x240420 keeps the same major/
+    // service class bits but sets minor=8 ("Car audio"), matching real-
+    // world Android-Auto-wireless dongle projects' CoD so Android's
+    // car-detection heuristic offers wireless AA setup instead of
+    // treating this as a plain headset. A2DP/HFP don't care about minor
+    // class, which is why audio kept working with the old value while
+    // AA's RFCOMM profile never got dialed. Unconfirmed on real
+    // hardware yet.
+    run_command_simple("hciconfig hci0 class 0x240420 >/dev/null 2>&1");
     run_command_simple("hciconfig hci0 auth >/dev/null 2>&1");
     run_command_simple("hciconfig hci0 encrypt >/dev/null 2>&1");
     run_command_simple("hciconfig hci0 piscan >/dev/null 2>&1");
@@ -371,7 +541,7 @@ bool init_bluetooth(BluetoothHandle & out, const char * /*path*/) {
     run_command_simple("dbus-send --system --dest=org.bluez --type=method_call /org/bluez/hci0 org.freedesktop.DBus.Properties.Set string:org.bluez.Adapter1 string:Powered variant:boolean:true >/dev/null 2>&1");
     run_command_simple("dbus-send --system --dest=org.bluez --type=method_call /org/bluez/hci0 org.freedesktop.DBus.Properties.Set string:org.bluez.Adapter1 string:Pairable variant:boolean:true >/dev/null 2>&1");
     run_command_simple("dbus-send --system --dest=org.bluez --type=method_call /org/bluez/hci0 org.freedesktop.DBus.Properties.Set string:org.bluez.Adapter1 string:Discoverable variant:boolean:true >/dev/null 2>&1");
-    run_command_simple("dbus-send --system --dest=org.bluez --type=method_call /org/bluez/hci0 org.freedesktop.DBus.Properties.Set string:org.bluez.Adapter1 string:Class variant:uint32:2360328 >/dev/null 2>&1");
+    run_command_simple("dbus-send --system --dest=org.bluez --type=method_call /org/bluez/hci0 org.freedesktop.DBus.Properties.Set string:org.bluez.Adapter1 string:Class variant:uint32:2360352 >/dev/null 2>&1");
     out.fd = 100;  // Positive non-negative handle indicating valid BlueZ instance
     return true;
 }
@@ -521,10 +691,16 @@ bool connect_device(BluetoothHandle & /*h*/, const std::string & mac) {
     bool ok = run_command_simple(cmd);
     std::printf("%s [BT-CMD] Connection request to %s: %s\n", core::log_timestamp().c_str(), mac.c_str(), ok ? "sent (OK)" : "failed to dispatch");
 
-    // Also request connection for the Android Auto profile explicitly
-    std::string profile_cmd = "dbus-send --system --dest=org.bluez --type=method_call " + dev_path +
-                              " org.bluez.Device1.ConnectProfile string:4de17a00-52cb-11e6-bdf4-0800200c9a66 >/dev/null 2>&1 &";
-    run_command_simple(profile_cmd);
+    // 2026-08-20: removed a second Device1.ConnectProfile(AA UUID) call
+    // here for the same reason as bluez_monitor_loop's own auto-fire
+    // (removed above, see its comment) -- ConnectProfile's UUID names a
+    // service the REMOTE device exposes (confirmed against the vendored
+    // BlueZ docs, device-api.txt), and a phone never runs an RFCOMM
+    // server for the AA UUID. This call could never succeed and wasn't
+    // moving the actual handshake forward; Device1.Connect() above is
+    // the real, useful part of this function (brings up the baseband
+    // ACL link so BlueZ can serve our already-registered AA Profile1 to
+    // the phone once it decides to dial in).
 
     return ok;
 }
@@ -571,8 +747,127 @@ bool get_adapter_address(BluetoothHandle & /*h*/, std::string & address) {
     return false;
 }
 
-bool sync_clock_from_phone(BluetoothHandle & /*h*/) {
-    return true;  // Clock sync handled via network / cellular
+// 2026-08-20: real implementation, replacing a stub that just returned
+// true unconditionally. Every AT-command-era clock-sync avenue
+// (AT+CCLK, HFPTIME, BLE CTS, PBAP call history, AA WiFi-SoftAP SNTP,
+// AA SensorChannel GPS) is a confirmed dead end for this project (see
+// memory: project_clock_sync_avenues_exhausted.md) -- but that
+// investigation's one BlueZ-shaped lead was closed based on
+// `blueware`'s own limits (no raw-HCI passthrough mode), not on the
+// real native BlueZ stack this session brought up actually being
+// tried. With a genuine independent hci0/bluetoothd now confirmed
+// working, org.bluez.Network1.Connect("nap") (client role -- connect
+// OUT to the phone's own Bluetooth-tethering hotspot, distinct from
+// this device's own NetworkServer1/NAP role that bluetoothd's
+// "network" plugin already advertises for incoming connections) is a
+// real, previously-untried path: if the phone has Bluetooth tethering
+// enabled, this hands back a bnep0-style interface with real internet
+// behind it, enough for one NTP query.
+//
+// Entirely best-effort and bounded -- most real-world runs will have
+// tethering off and simply fail step 1, matching every other optional-
+// path HAL convention in this codebase. System-wide via busybox's own
+// ntpd (not a hand-rolled NTP client or a raw settimeofday() call) --
+// per explicit user direction this session, overriding the earlier
+// removed boot-time settimeofday() (see memory:
+// feedback_no_boot_time_clock_override.md); this call site (a real
+// Bluetooth link already up and a real phone confirmed nearby, not an
+// unconditional boot-time guess) is the targeted case that revert was
+// about avoiding.
+//
+// bnep0 is disconnected again afterward -- this is a one-shot clock
+// query, not meant to become a persistent second internet route
+// alongside this device's own WiFi AP.
+bool sync_clock_from_phone(BluetoothHandle & h) {
+    if (h.fd < 0) {
+        return false;
+    }
+    std::string mac = get_connected_device_mac();
+    if (mac.empty()) {
+        std::printf("%s hal::bluetooth::sync_clock_from_phone: no currently-connected device, "
+                    "skipping\n", core::log_timestamp().c_str());
+        return false;
+    }
+    std::string dev_path = "/org/bluez/hci0/" + mac_to_dbus_path(mac);
+
+    std::vector<std::string> connectLines;
+    std::string connectCmd = "dbus-send --system --print-reply --dest=org.bluez " + dev_path +
+                              " org.bluez.Network1.Connect string:nap 2>&1";
+    if (!run_command_capture(connectCmd, connectLines) || connectLines.empty()) {
+        std::printf("%s hal::bluetooth::sync_clock_from_phone: Network1.Connect(nap) failed for "
+                    "%s (phone likely has Bluetooth tethering off) -- skipping\n",
+                    core::log_timestamp().c_str(), mac.c_str());
+        return false;
+    }
+
+    std::string iface;
+    for (const auto & l : connectLines) {
+        size_t pos = l.find("string \"");
+        if (pos != std::string::npos) {
+            iface = l.substr(pos + 8);
+            if (!iface.empty() && iface.back() == '"') iface.pop_back();
+            break;
+        }
+    }
+    if (iface.empty()) {
+        std::printf("%s hal::bluetooth::sync_clock_from_phone: Network1.Connect(nap) reply had no "
+                    "interface name -- skipping\n", core::log_timestamp().c_str());
+        return false;
+    }
+    std::printf("%s hal::bluetooth::sync_clock_from_phone: PAN link up on %s, requesting DHCP "
+                "lease...\n", core::log_timestamp().c_str(), iface.c_str());
+
+    // -n: exit rather than daemonize if no lease; -q: quit once a lease
+    // is obtained; -T/-t: bound total wait to a few seconds each try --
+    // this must never hang the caller if the phone's own DHCP server
+    // (part of its tethering stack) doesn't answer.
+    std::string dhcpCmd = "udhcpc -i " + iface + " -n -q -T 3 -t 3 >/dev/null 2>&1";
+    bool haveLease = (std::system(dhcpCmd.c_str()) == 0);
+
+    bool synced = false;
+    if (haveLease) {
+        std::printf("%s hal::bluetooth::sync_clock_from_phone: %s has an IP, querying NTP...\n",
+                    core::log_timestamp().c_str(), iface.c_str());
+        // busybox ntpd's own one-shot mode: queries, sets CLOCK_REALTIME
+        // itself, and exits -- no hand-rolled NTP parsing needed.
+        synced = (std::system("ntpd -n -q -p pool.ntp.org >/dev/null 2>&1") == 0);
+        std::printf("%s hal::bluetooth::sync_clock_from_phone: system clock sync %s\n",
+                    core::log_timestamp().c_str(), synced ? "succeeded" : "failed (ntpd query)");
+    } else {
+        std::printf("%s hal::bluetooth::sync_clock_from_phone: no DHCP lease on %s -- skipping "
+                    "NTP query\n", core::log_timestamp().c_str(), iface.c_str());
+    }
+
+    run_command_simple("dbus-send --system --dest=org.bluez --type=method_call " + dev_path +
+                        " org.bluez.Network1.Disconnect >/dev/null 2>&1");
+    return synced;
+}
+
+bool has_pending_aa_connection() {
+    std::lock_guard<std::mutex> lock(g_pendingAaMtx);
+    return g_pendingAaFd >= 0;
+}
+
+bool start_pending_aa_connection() {
+    int fd;
+    {
+        std::lock_guard<std::mutex> lock(g_pendingAaMtx);
+        if (g_pendingAaFd < 0) {
+            return false;
+        }
+        fd = g_pendingAaFd;
+        g_pendingAaFd = -1;
+    }
+    std::printf("%s [BT-AA-PROFILE] user started Android Auto -- handing off pending fd=%d to "
+                "androidauto-sidecar\n", core::log_timestamp().c_str(), fd);
+    bool ok = hal::sendConnectFd(fd);
+    std::printf("%s [BT-AA-PROFILE] hand-off to androidauto-sidecar: %s\n",
+                core::log_timestamp().c_str(), ok ? "accepted" : "FAILED");
+    return ok;
+}
+
+bool consume_aa_navigate_request() {
+    return g_aaNavigatePending.exchange(false, std::memory_order_acq_rel);
 }
 
 void close_bluetooth(BluetoothHandle & h) {

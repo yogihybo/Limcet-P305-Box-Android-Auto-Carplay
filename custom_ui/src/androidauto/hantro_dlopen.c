@@ -130,13 +130,15 @@ int __wrap_getgrnam_r(const char *name, struct group *grp, char *buf,
     return 0;
 }
 
-/* 2026-08-19: libdbus's fill_user_info() (dbus-sysdeps-unix.c) --
- * linked here now for bluez_client.cpp's D-Bus connection to
- * bluetoothd (see wireless_session_manager.cpp) -- calls this to
- * enumerate a UID's supplementary groups. Same static-NSS-init crash
- * family as the two stubs above; matches the identical gap found and
- * fixed for tools/bluetoothd-test/bluetoothd (nss_stub.c's own
- * __wrap_getgrouplist) the same session this was added. */
+/* 2026-08-19: added for libdbus's fill_user_info() (dbus-sysdeps-unix.c),
+ * which this binary linked at the time for bluez_client.cpp's D-Bus
+ * connection to bluetoothd. 2026-08-20: that D-Bus consumer moved to
+ * src/hal/bluez_aa_profile.cpp, linked into custom_ui instead (see
+ * wireless_session_manager.h's own header comment) -- libdbus no
+ * longer links into this binary at all, so this wrap is likely
+ * vestigial now. Left in place rather than removed untested -- see
+ * Makefile's own AASDK_WRAP_FLAGS comment on the identical situation
+ * for that target's --wrap=getgrouplist. */
 int __wrap_getgrouplist(const char *user, gid_t group, gid_t *groups, int *ngroups) {
     (void)user; (void)group;
     if (groups && ngroups && *ngroups > 0)

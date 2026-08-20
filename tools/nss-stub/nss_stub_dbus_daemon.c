@@ -10,25 +10,76 @@
  * library) references BOTH, which neither existing single-purpose stub
  * file covers alone. No real dlopen needed here (dbus-daemon doesn't
  * load service modules the way androidauto-sidecar's Hantro decoder
- * does), so plain no-op stubs throughout, same as nss_stub.c.
+ * does), so plain no-op stubs for dlopen/getaddrinfo, same as nss_stub.c.
+ *
+ * 2026-08-20 REVISED: getpwnam_r/getpwuid_r/getgrnam_r/getgrgid_r are
+ * NOT plain no-ops here, unlike every other provider in this dir --
+ * real hardware showed dbus-daemon itself failing to start entirely:
+ *   Unknown username "root" in message bus configuration file
+ *   Failed to start message bus: Could not get UID and GID for username "root"
+ * Root cause: unlike bluetoothd (which runs AS uid 0 and never needs to
+ * resolve a username by NAME), dbus-daemon's own config parser
+ * genuinely calls getpwnam_r("root", ...) to resolve this device's
+ * real system-diagnostic.conf's <user>root</user> policy directive at
+ * startup -- a real, load-bearing lookup this process cannot function
+ * without, not a dead code path safe to stub out unconditionally.
+ * "root" (uid/gid 0) is hardcoded below rather than doing a real
+ * /etc/passwd parse -- this device's own /etc/passwd has only that one
+ * entry (see docs/1.4_WIRELESS_AND_INIT.md and this project's own
+ * established convention of runtime-root-only elsewhere, e.g.
+ * MsnCoreApp's own no-multi-user assumptions), so a real parser would
+ * be strictly more code for a result this static build already knows.
+ * Every other username/uid still returns "not found", same as before.
  */
 #include <pwd.h>
 #include <grp.h>
+#include <string.h>
 #include <errno.h>
 #include <stddef.h>
 #include <netdb.h>
 
-struct passwd *__wrap_getpwnam(const char *name) { (void)name; return NULL; }
-struct passwd *__wrap_getpwuid(uid_t uid) { (void)uid; return NULL; }
+struct passwd *__wrap_getpwnam(const char *name) {
+	(void)name;
+	return NULL;  /* no callers needing the non-reentrant form on this build */
+}
+struct passwd *__wrap_getpwuid(uid_t uid) {
+	(void)uid;
+	return NULL;  /* no callers needing the non-reentrant form on this build */
+}
 int __wrap_getpwnam_r(const char *name, struct passwd *pwd, char *buf,
 		       size_t buflen, struct passwd **result) {
-	(void)name; (void)pwd; (void)buf; (void)buflen;
+	if (name && strcmp(name, "root") == 0 && buflen >= 32) {
+		pwd->pw_name = buf;
+		strcpy(buf, "root");
+		pwd->pw_passwd = buf + 5;
+		buf[5] = '\0';
+		pwd->pw_uid = 0;
+		pwd->pw_gid = 0;
+		pwd->pw_gecos = buf + 5;
+		pwd->pw_dir = (char *)"/";
+		pwd->pw_shell = (char *)"/bin/sh";
+		*result = pwd;
+		return 0;
+	}
+	(void)buf; (void)buflen;
 	*result = NULL;
 	return 0;
 }
 int __wrap_getpwuid_r(uid_t uid, struct passwd *pwd, char *buf,
 		       size_t buflen, struct passwd **result) {
-	(void)uid; (void)pwd; (void)buf; (void)buflen;
+	if (uid == 0 && buflen >= 32) {
+		pwd->pw_name = buf;
+		strcpy(buf, "root");
+		pwd->pw_passwd = buf + 5;
+		buf[5] = '\0';
+		pwd->pw_uid = 0;
+		pwd->pw_gid = 0;
+		pwd->pw_gecos = buf + 5;
+		pwd->pw_dir = (char *)"/";
+		pwd->pw_shell = (char *)"/bin/sh";
+		*result = pwd;
+		return 0;
+	}
 	*result = NULL;
 	return 0;
 }
@@ -38,13 +89,33 @@ void __wrap_endpwent(void) {}
 struct group *__wrap_getgrgid(gid_t gid) { (void)gid; return NULL; }
 int __wrap_getgrgid_r(gid_t gid, struct group *grp, char *buf,
 		       size_t buflen, struct group **result) {
-	(void)gid; (void)grp; (void)buf; (void)buflen;
+	if (gid == 0 && buflen >= 32) {
+		static char *no_members[] = { NULL };
+		grp->gr_name = buf;
+		strcpy(buf, "root");
+		grp->gr_passwd = buf + 5;
+		buf[5] = '\0';
+		grp->gr_gid = 0;
+		grp->gr_mem = no_members;
+		*result = grp;
+		return 0;
+	}
 	*result = NULL;
 	return 0;
 }
 int __wrap_getgrnam_r(const char *name, struct group *grp, char *buf,
 		       size_t buflen, struct group **result) {
-	(void)name; (void)grp; (void)buf; (void)buflen;
+	if (name && strcmp(name, "root") == 0 && buflen >= 32) {
+		static char *no_members[] = { NULL };
+		grp->gr_name = buf;
+		strcpy(buf, "root");
+		grp->gr_passwd = buf + 5;
+		buf[5] = '\0';
+		grp->gr_gid = 0;
+		grp->gr_mem = no_members;
+		*result = grp;
+		return 0;
+	}
 	*result = NULL;
 	return 0;
 }

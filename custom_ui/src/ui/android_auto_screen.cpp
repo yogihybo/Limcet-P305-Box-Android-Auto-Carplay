@@ -10,6 +10,7 @@
 #include <utility>
 
 #include "hal/androidauto_client.h"
+#include "hal/bluetooth.h"
 #include "hal/display.h"
 #include "hal/knob.h"
 #include "core/navigation.h"
@@ -65,8 +66,17 @@ lv_color_t color_for_state_name(const std::string & name) {
     return staging_ui::theme::accent_primary();
 }
 
+// 2026-08-20: no longer sends "CONNECT" to the sidecar (a no-op there
+// now -- see sidecars/androidauto/main.cpp's own protocol comment).
+// Bluetooth connectivity is custom_ui's own job (hal::bluetooth.cpp's
+// aa_profile_server_loop()) -- when "Auto-start phone projection"
+// (AutoStartCarLink) is off, a connected phone's fd sits stashed there
+// waiting for exactly this tap. hal::start_pending_aa_connection() is
+// always safe to call: it's a no-op (returns false) if no phone has
+// connected over the AA Bluetooth profile yet, same as the old
+// requestConnect() was a no-op if the sidecar was unreachable.
 void connect_btn_cb(lv_event_t *) {
-    client().requestConnect();
+    hal::start_pending_aa_connection();
 }
 
 void bluetooth_btn_cb(lv_event_t *) {
@@ -106,6 +116,10 @@ struct Widgets {
     // once-per-transition reasoning as display_hidden above -- see
     // poll_timer_cb()'s own comment.
     bool showing_resume = false;
+    // 2026-08-20: same once-per-transition reasoning, for the
+    // not-yet-connected state's own copy -- see poll_timer_cb()'s
+    // handling of hal::has_pending_aa_connection() below.
+    bool showing_pending_ready = false;
 };
 
 // Polls the sidecar and refreshes the status widgets -- created
@@ -173,6 +187,32 @@ void poll_timer_cb(lv_timer_t * timer) {
         lv_obj_remove_event_cb(w->cta_btn, resume_btn_cb);
         lv_obj_add_event_cb(w->cta_btn, connect_btn_cb, LV_EVENT_CLICKED, nullptr);
         w->showing_resume = false;
+        w->showing_pending_ready = false;  // re-evaluated by the block below on the next tick
+    }
+
+    // 2026-08-20: while sitting in the plain not-yet-connected state
+    // (not nativeFocus/backgrounded, not showing the Resume CTA above),
+    // distinguish "no phone connected yet" from "a phone connected over
+    // Bluetooth and is waiting for you to tap Connect" -- this is the
+    // whole point of the "Auto-start phone projection" setting being
+    // off (see hal::has_pending_aa_connection()'s own header comment):
+    // without this, the screen would look identical in both cases and
+    // the user would have no idea a session is actually ready to start.
+    // Only touched on an actual transition, same reasoning as
+    // display_hidden/showing_resume above -- has_pending_aa_connection()
+    // is a cheap mutex-guarded bool check either way, but no reason to
+    // call lv_label_set_text() every 500ms tick when nothing changed.
+    if (!connected && !nativeFocus) {
+        bool pendingReady = hal::has_pending_aa_connection();
+        if (pendingReady && !w->showing_pending_ready) {
+            lv_label_set_text(w->title, "Phone connected");
+            lv_label_set_text(w->subtitle, "Android Auto is ready -- tap Connect to start.");
+            w->showing_pending_ready = true;
+        } else if (!pendingReady && w->showing_pending_ready) {
+            lv_label_set_text(w->title, "Ready to connect");
+            lv_label_set_text(w->subtitle, "Pair phone via Bluetooth to begin wireless session.");
+            w->showing_pending_ready = false;
+        }
     }
 }
 

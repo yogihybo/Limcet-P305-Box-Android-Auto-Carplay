@@ -83,9 +83,48 @@ LVGL_OBJS     := $(patsubst $(LVGL_DIR)/%.c,$(BUILD_DIR)/lvgl-obj/%.o,$(LVGL_SRC
 # libdbus should for CarPlay. custom_ui talks to androidauto-sidecar
 # over a small local socket protocol via src/hal/androidauto_client.h
 # instead -- zero aasdk knowledge in this binary.
+#
+# 2026-08-20: libdbus is now the ONE exception to "custom_ui links no
+# per-integration protocol library" above -- src/hal/bluez_aa_profile.cpp
+# (moved here from src/androidauto/bluez_client.cpp) needs a real D-Bus
+# client to register the Android Auto RFCOMM profile and receive
+# Profile1.NewConnection's UNIX_FD, which a dbus-send shell-out (every
+# other hal/bluetooth.cpp D-Bus call) fundamentally can't do -- there's
+# no way to register an incoming-call object path or block on a
+# connection from a one-shot CLI tool. This is deliberately just
+# libdbus (456KB static, see DBUS_ARM_INSTALL below) -- NOT the full
+# AASDK_INCLUDES/AASDK_LIBS stack (Boost/OpenSSL/libusb/Protobuf) that
+# stays excluded from this binary for the reason above; moving
+# Bluetooth connectivity into custom_ui (see docs -- all AA RFCOMM
+# profile serving used to live in androidauto-sidecar, alongside its own
+# separate BlueZ D-Bus connection) doesn't mean the heavy aasdk stack
+# comes with it.
 UI_TARGET     := $(BUILD_DIR)/custom_ui
 UI_SRCS       := $(filter-out src/androidauto/% src/ui/icons.cpp src/ui/icons_m3.cpp,$(shell find src -name '*.cpp'))
 UI_OBJS       := $(patsubst src/%.cpp,$(BUILD_DIR)/ui-obj/%.o,$(UI_SRCS))
+
+# hal/bluez_aa_profile.cpp's own dbus/dbus.h include path -- not added
+# to the general INCLUDES var since nothing else in this binary needs
+# it; see the explicit per-file compile rule near UI_TARGET's own link
+# rule below for where this is actually used.
+# '=' (lazy/recursive), not ':=' -- DBUS_ARM_INSTALL itself is only
+# defined further down this file (AASDK_INCLUDES/AASDK_LIBS's own
+# section); Make fully parses the file before executing any rule, so a
+# lazily-expanded reference here resolves fine regardless of definition
+# order, whereas ':=' would have expanded DBUS_ARM_INSTALL to empty at
+# this point in the file.
+UI_DBUS_INCLUDES = -I$(DBUS_ARM_INSTALL)/include/dbus-1.0 -I$(DBUS_ARM_INSTALL)/lib/dbus-1.0/include
+UI_DBUS_LIBS      = $(DBUS_ARM_INSTALL)/lib/libdbus-1.a
+# Same static-NSS-init crash class this project already fixed for
+# bluetoothd (tools/bluetoothd-test/README.md's own "Cross-build
+# dependency chain" section) linking this exact libdbus-1.a -- reusing
+# tools/nss-stub/nss_stub.c as-is (the plain no-op provider; unlike
+# androidauto-sidecar this binary never needs a REAL working dlopen) and
+# the identical proven wrap-flag set from that README, not
+# AASDK_WRAP_FLAGS (which wraps a slightly different symbol set tuned
+# for the full aasdk/OpenSSL stack this binary doesn't link).
+UI_NSS_STUB_OBJ   := $(BUILD_DIR)/ui-obj/nss_stub.o
+UI_WRAP_FLAGS     := -Wl,--wrap=getpwnam,--wrap=getpwuid,--wrap=getpwnam_r,--wrap=getpwuid_r,--wrap=getpwent,--wrap=setpwent,--wrap=endpwent,--wrap=getgrgid,--wrap=getgrgid_r,--wrap=getgrouplist,--wrap=dlopen,--wrap=dlerror,--wrap=dlsym,--wrap=dlclose,--wrap=getaddrinfo
 
 # src/ui/staging/'s 3 auto-generated LVGL font C files (lv_font_conv
 # output, same shape as third_party/lvgl's own font sources) -- the
@@ -156,9 +195,18 @@ ALSA_ARM_INSTALL ?= $(AASDK_DEPS_DIR)/alsa-arm-install-1.2.4
 # 2026-08-19: cross-compiled from source, same as every other
 # AASDK_DEPS_DIR entry -- no armhf apt/multiarch on this build machine.
 # See tools/bluetoothd-test/README.md's "Cross-build dependency chain"
-# section for the full build recipe (this is the client-side headers/
-# libdbus-1.a piece of that same vendored dbus submodule -- bluez_client.cpp
-# is the actual D-Bus consumer, see its own header comment).
+# section for the full build recipe.
+#
+# 2026-08-20: NO LONGER part of AASDK_INCLUDES/AASDK_LIBS below --
+# bluez_client.cpp (the one D-Bus consumer that needed it) moved out of
+# src/androidauto/ entirely, to src/hal/bluez_aa_profile.cpp (see
+# UI_TARGET's own comment near UI_DBUS_INCLUDES/UI_DBUS_LIBS above) --
+# Bluetooth connectivity is custom_ui's job now, not
+# androidauto-sidecar's. This var stays defined here (still the one
+# place DBUS_ARM_INSTALL's actual path is configured, UI_DBUS_INCLUDES/
+# UI_DBUS_LIBS reference it lazily) but nothing in src/androidauto/
+# references dbus/dbus.h anymore -- confirmed via grep before making
+# this change.
 DBUS_ARM_INSTALL ?= $(AASDK_DEPS_DIR)/dbus-arm-install
 
 AASDK_DIR       := third_party/aasdk
@@ -170,8 +218,6 @@ AASDK_INCLUDES  := -I$(AASDK_DIR)/include \
                     -I$(AASDK_DEPS_DIR)/libusb-arm-install/include/libusb-1.0 \
                     -I$(AASDK_DEPS_DIR)/protobuf-arm-install/include \
                     -I$(ALSA_ARM_INSTALL)/include \
-                    -I$(DBUS_ARM_INSTALL)/include/dbus-1.0 \
-                    -I$(DBUS_ARM_INSTALL)/lib/dbus-1.0/include \
                     -Ithird_party/bluez_uapi
 # --start-group/--end-group: aasdk, aap_protobuf, protobuf, and Abseil
 # static-link against each other in ways plain left-to-right link order
@@ -186,7 +232,6 @@ AASDK_LIBS      := -Wl,--start-group \
                     $(OPENSSL_ARM_INSTALL)/lib/libcrypto.a \
                     $(ALSA_ARM_INSTALL)/lib/libasound.a \
                     $(wildcard $(AASDK_DEPS_DIR)/protobuf-arm-install/lib/*.a) \
-                    $(DBUS_ARM_INSTALL)/lib/libdbus-1.a \
                     -Wl,--end-group -lpthread -ldl -lrt
 
 # Same static-NSS-init crash this project already hit and fixed for
@@ -214,10 +259,14 @@ NSS_STUB_OBJ   := $(BUILD_DIR)/aasdk-test-obj/nss_stub_busybox.o
 # tools/nss-stub/nss_stub_busybox.c (the other 4 targets below) and
 # hantro_dlopen.c (androidauto-sidecar's own replacement, see its own
 # header comment).
-# getgrouplist added 2026-08-19: libdbus's fill_user_info() (now linked
-# via AASDK_LIBS' libdbus-1.a, see bluez_client.cpp) references it --
-# same static-NSS-init crash family as every other symbol here, see
-# hantro_dlopen.c's own __wrap_getgrouplist comment.
+# getgrouplist added 2026-08-19 for libdbus's fill_user_info() -- libdbus
+# itself no longer links into androidauto-sidecar as of 2026-08-20 (see
+# DBUS_ARM_INSTALL's own comment -- bluez_client.cpp moved to
+# src/hal/bluez_aa_profile.cpp, linked into custom_ui instead), so this
+# specific symbol is likely vestigial now. Left in place rather than
+# removed untested -- --wrap on a symbol nothing actually references is
+# a harmless no-op, and hantro_dlopen.c's __wrap_getgrouplist (this
+# binary's actual wrap provider) still exists regardless.
 AASDK_WRAP_FLAGS := -Wl,--wrap=dlopen,--wrap=dlerror,--wrap=dlsym,--wrap=dlclose,--wrap=getaddrinfo,--wrap=freeaddrinfo,--wrap=gai_strerror,--wrap=gethostbyname,--wrap=gethostbyname2,--wrap=gethostbyaddr,--wrap=getservbyname,--wrap=getservbyport,--wrap=getpwuid_r,--wrap=getpwnam_r,--wrap=getgrnam_r,--wrap=getgrouplist
 
 # 2026-08-15: androidauto-sidecar specifically (not the other 4 targets
@@ -367,9 +416,9 @@ androidauto-wireless-probe-test: $(WIRELESS_TEST_TARGET)
 androidauto-bluetooth-rfcomm-test: $(BT_TEST_TARGET)
 androidauto-bw-aap-test: $(BW_AAP_TEST_TARGET)
 
-$(UI_TARGET): $(UI_OBJS) $(UI_C_OBJS) $(LVGL_OBJS)
+$(UI_TARGET): $(UI_OBJS) $(UI_C_OBJS) $(LVGL_OBJS) $(UI_NSS_STUB_OBJ)
 	@mkdir -p $(dir $@)
-	$(CXX) $(LDFLAGS) -o $@ $^ $(LIBS)
+	$(CXX) $(LDFLAGS) $(UI_WRAP_FLAGS) -o $@ $^ $(UI_DBUS_LIBS) $(LIBS)
 
 $(BUILD_DIR)/ui-obj/%.o: src/%.cpp
 	@mkdir -p $(dir $@)
@@ -378,6 +427,19 @@ $(BUILD_DIR)/ui-obj/%.o: src/%.cpp
 $(BUILD_DIR)/ui-obj/%.o: src/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c -o $@ $<
+
+# hal/bluez_aa_profile.cpp is the one file in the main UI binary that
+# needs dbus/dbus.h -- an explicit (non-pattern) rule for just this one
+# object file, which Make prefers over the generic
+# $(BUILD_DIR)/ui-obj/%.o pattern rule above, same convention this
+# Makefile already uses for HANTRO_DLOPEN_OBJ/HAL_CONFIG_OBJ etc.
+$(BUILD_DIR)/ui-obj/hal/bluez_aa_profile.o: src/hal/bluez_aa_profile.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) $(UI_DBUS_INCLUDES) -c -o $@ $<
+
+$(UI_NSS_STUB_OBJ): ../tools/nss-stub/nss_stub.c
+	@mkdir -p $(dir $@)
+	$(CC) -O2 -c -o $@ $<
 
 $(BUILD_DIR)/ui-obj/androidauto/%.o: src/androidauto/%.cpp
 	@mkdir -p $(dir $@)

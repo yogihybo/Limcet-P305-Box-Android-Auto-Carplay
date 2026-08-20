@@ -10,6 +10,7 @@
 #include <thread>
 
 #include <sys/select.h>
+#include <unistd.h>
 
 #include <boost/asio.hpp>
 
@@ -17,8 +18,6 @@
 #include <aasdk/TCP/TCPEndpoint.hpp>
 #include <aasdk/Transport/TCPTransport.hpp>
 
-#include "androidauto/bluez_client.h"
-#include "androidauto/bluez_stack.h"
 #include "androidauto/bw_aap_client.h"
 #include "androidauto/session.h"
 #include "core/hal_config.h"
@@ -26,21 +25,6 @@
 namespace androidauto {
 
 namespace {
-
-// 2026-08-19: this function has ~6 separate failure-return paths
-// downstream of bluez_stack_start() succeeding (BlueZ agent/profile
-// registration, the connection wait, the BW_AAP handshake steps, the
-// WiFi TCP accept) -- manually calling bluez_stack_stop() at every one
-// is exactly the kind of thing that's easy to miss on the next edit
-// (already found 4 during this change). RAII instead: constructed
-// right after a successful bluez_stack_start(), calls stop()
-// unconditionally in its destructor so the chip is freed back for
-// blueware on every exit path, not just the ones that remember to ask
-// for it. bluez-bringup.sh stop is itself idempotent/safe to call even
-// if nothing is actually running.
-struct BluezStackGuard {
-    ~BluezStackGuard() { androidauto::bluez_stack_stop(); }
-};
 
 // Real, working values from firmware_overlay/etc/wifi_ap.sh /
 // firmware_source/mtd6_rootfs/etc/hostapd/hostapd.conf, not guessed --
@@ -158,7 +142,10 @@ WirelessSessionManager::~WirelessSessionManager() {
     }
 }
 
-void WirelessSessionManager::start() {
+void WirelessSessionManager::start(int rfcommFd) {
+    std::printf("%s androidauto: wireless session: start() called with rfcommFd=%d\n",
+                androidauto::logTimestamp().c_str(), rfcommFd);
+
     // See threadMutex_'s own comment (header) -- start() can race
     // against itself across two independent sidecar client connections
     // (the +AAPDEV= auto-trigger and a manual Connect tap in
@@ -170,7 +157,7 @@ void WirelessSessionManager::start() {
 
     // See start()'s own header comment -- a session already actively
     // progressing or Connected must not be torn down by a redundant
-    // second CONNECT. Deliberately checked/transitioned INSIDE the
+    // second CONNECT_FD. Deliberately checked/transitioned INSIDE the
     // same lock as the thread_ manipulation below, not before it --
     // checking state_ before acquiring threadMutex_ would leave a
     // narrow window where two concurrent start() calls both observe
@@ -183,7 +170,9 @@ void WirelessSessionManager::start() {
     WirelessSessionState current = state_.load(std::memory_order_acquire);
     if (current != WirelessSessionState::Idle && current != WirelessSessionState::Failed) {
         std::printf("%s androidauto: wireless session: start() ignored -- a session is already "
-                    "active (state=%d)\n", androidauto::logTimestamp().c_str(), static_cast<int>(current));
+                    "active (state=%d), closing rfcommFd=%d (unused)\n",
+                    androidauto::logTimestamp().c_str(), static_cast<int>(current), rfcommFd);
+        ::close(rfcommFd);
         return;
     }
 
@@ -191,7 +180,7 @@ void WirelessSessionManager::start() {
         thread_.detach();
     }
     setStatus(WirelessSessionState::StartingAccessPoint, "Starting...");
-    thread_ = std::thread(&WirelessSessionManager::run, this);
+    thread_ = std::thread(&WirelessSessionManager::run, this, rfcommFd);
 }
 
 WirelessSessionState WirelessSessionManager::state() const {
@@ -229,33 +218,26 @@ bool WirelessSessionManager::ensureAccessPointUp() {
     return isApRunning();
 }
 
-void WirelessSessionManager::run() {
-    // Register BlueZ profile immediately so it is available for phone connection
-    setStatus(WirelessSessionState::BluetoothHandshake, "Ensuring BlueZ stack is active...");
-    if (!androidauto::bluez_stack_start()) {
-        setStatus(WirelessSessionState::Failed, "Could not verify BlueZ stack");
-        return;
-    }
-
-    androidauto::BluezClient bluez;
-    if (!bluez.connect() || !bluez.register_agent() || !bluez.register_profile()) {
-        setStatus(WirelessSessionState::Failed, "Could not register BlueZ agent/profile");
-        return;
-    }
-
-    setStatus(WirelessSessionState::BluetoothHandshake, "Waiting for phone to connect over Bluetooth...");
-    int rfcommFd = bluez.wait_for_connection(120);
-    if (rfcommFd < 0) {
-        setStatus(WirelessSessionState::Idle, "Ready for connection (Bluetooth profile listening)");
-        return;
-    }
-    std::printf("%s androidauto: wireless session: phone connected over BlueZ RFCOMM (fd=%d)\n",
+void WirelessSessionManager::run(int rfcommFd) {
+    // 2026-08-20: this function no longer touches BlueZ/D-Bus at all --
+    // rfcommFd is an already-connected RFCOMM socket, registered/
+    // accepted entirely by custom_ui's own hal::BluezAaProfile and
+    // handed to this process over their local Unix socket (see this
+    // class's own header comment for the full architecture). Bluetooth
+    // connectivity is custom_ui's job end to end now; this function's
+    // job starts here: WiFi AP bring-up + the BW_AAP handshake + the
+    // real aasdk session, using the fd it was given.
+    std::printf("%s androidauto: wireless session: run() starting with rfcommFd=%d\n",
                 androidauto::logTimestamp().c_str(), rfcommFd);
 
-    // Phone detected with AA connection -- now bring up WiFi AP
+    // Phone already connected over Bluetooth (custom_ui's job, done
+    // before this function was even called) -- now bring up WiFi AP.
     setStatus(WirelessSessionState::StartingAccessPoint, "Starting WiFi access point...");
     if (!ensureAccessPointUp()) {
         setStatus(WirelessSessionState::Failed, "Could not start the WiFi access point (wifi_ap.sh)");
+        std::printf("%s androidauto: wireless session: closing rfcommFd=%d after AP failure\n",
+                    androidauto::logTimestamp().c_str(), rfcommFd);
+        ::close(rfcommFd);
         return;
     }
     std::printf("%s androidauto: wireless session: AP is up\n", androidauto::logTimestamp().c_str());
@@ -263,6 +245,9 @@ void WirelessSessionManager::run() {
     std::string bssid = readWlan0Mac();
     if (bssid.empty()) {
         setStatus(WirelessSessionState::Failed, "Could not read wlan0's MAC address");
+        std::printf("%s androidauto: wireless session: closing rfcommFd=%d after BSSID failure\n",
+                    androidauto::logTimestamp().c_str(), rfcommFd);
+        ::close(rfcommFd);
         return;
     }
     std::printf("%s androidauto: wireless session: wlan0 bssid=%s\n", androidauto::logTimestamp().c_str(), bssid.c_str());
@@ -281,6 +266,9 @@ void WirelessSessionManager::run() {
         setStatus(WirelessSessionState::Failed,
                   "Could not listen on 0.0.0.0:" + std::to_string(cfg.wifi_session_port()) + ": " +
                       openEc.message());
+        std::printf("%s androidauto: wireless session: closing rfcommFd=%d after TCP listen failure\n",
+                    androidauto::logTimestamp().c_str(), rfcommFd);
+        ::close(rfcommFd);
         return;
     }
     std::printf("%s androidauto: wireless session: WPP TCP server listening on 0.0.0.0:%u\n", androidauto::logTimestamp().c_str(),
@@ -288,6 +276,8 @@ void WirelessSessionManager::run() {
 
     BwAapClient bwAap;
     bwAap.attach(rfcommFd);
+    std::printf("%s androidauto: wireless session: BwAapClient attached to rfcommFd=%d, starting "
+                "BW_AAP handshake\n", androidauto::logTimestamp().c_str(), rfcommFd);
 
     // outIp/outPort are unused now (no ARP-based connect-out target
     // needed) but startHandshake() still reads back an optional
@@ -442,10 +432,13 @@ void WirelessSessionManager::run() {
     // See this function's own comment where bwAap.waitForOptionalConnectStatus()
     // is called, above -- kept open for the AA session's real duration
     // now, closed here once it's actually over.
-    std::printf("%s androidauto: wireless session: closing bw_aap\n", androidauto::logTimestamp().c_str());
+    std::printf("%s androidauto: wireless session: closing bw_aap (rfcommFd=%d)\n",
+                androidauto::logTimestamp().c_str(), rfcommFd);
     bwAap.close();
-    // bluezStackGuard (still in scope, this whole function body) frees
-    // the chip back for blueware once it destructs at function exit.
+    // The underlying Bluetooth connection/adapter is custom_ui's to
+    // manage (hal::BluezAaProfile stays registered and keeps listening
+    // for the next phone connection regardless of this session ending)
+    // -- this function only ever owned the one rfcommFd it was handed.
 
     setStatus(WirelessSessionState::Failed, "Session ended (io_service stopped)");
 }

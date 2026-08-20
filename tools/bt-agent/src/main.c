@@ -26,9 +26,16 @@ static DBusHandlerResult agent_filter(DBusConnection *conn, DBusMessage *msg, vo
     printf("[bt-agent] Received Agent1 method call: %s\n", member);
 
     DBusMessage *reply = NULL;
-    if (strcmp(member, "RequestPinCode") == 0 || strcmp(member, "RequestPasskey") == 0) {
-        printf("[bt-agent] Rejecting PIN/Passkey request (NoInputNoOutput mode)\n");
-        reply = dbus_message_new_error(msg, "org.bluez.Error.Rejected", "No input capability");
+    if (strcmp(member, "RequestPinCode") == 0) {
+        printf("[bt-agent] Providing default PIN '0000'\n");
+        const char *pin = "0000";
+        reply = dbus_message_new_method_return(msg);
+        dbus_message_append_args(reply, DBUS_TYPE_STRING, &pin, DBUS_TYPE_INVALID);
+    } else if (strcmp(member, "RequestPasskey") == 0) {
+        printf("[bt-agent] Providing default passkey 0\n");
+        dbus_uint32_t passkey = 0;
+        reply = dbus_message_new_method_return(msg);
+        dbus_message_append_args(reply, DBUS_TYPE_UINT32, &passkey, DBUS_TYPE_INVALID);
     } else {
         // Auto-approve RequestConfirmation, RequestAuthorization, AuthorizeService, DisplayPasskey, etc.
         printf("[bt-agent] Auto-confirming %s\n", member);

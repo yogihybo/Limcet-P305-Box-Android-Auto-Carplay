@@ -40,11 +40,12 @@ struct BtLoadState {
 };
 
 struct BtScreenWidgets {
-    lv_obj_t * addr_label;
-    lv_obj_t * list;
-    lv_obj_t * status_label;
-    lv_obj_t * refresh_btn;
-    lv_obj_t * spinner;
+    lv_obj_t * addr_label = nullptr;
+    lv_obj_t * list = nullptr;
+    lv_obj_t * status_label = nullptr;
+    lv_obj_t * refresh_btn = nullptr;
+    lv_obj_t * spinner = nullptr;
+    lv_timer_t * poll_timer = nullptr;
     std::vector<std::string> last_devices;
 };
 
@@ -53,7 +54,7 @@ struct BtScreenWidgets {
 void start_bt_load(BtScreenWidgets * w);
 
 void status_label_set(lv_obj_t * label, const char * text) {
-    lv_label_set_text(label, text);
+    if (label) lv_label_set_text(label, text);
 }
 
 void bt_load_worker(BtLoadState * state) {
@@ -255,6 +256,7 @@ void bt_load_poll_cb(lv_timer_t * timer) {
         lv_label_set_text(w->addr_label, "PIN: 0000");
     }
 
+    w->poll_timer = nullptr;
     populate_device_list(w, hw_present, devices_ok, devices);
     w->spinner = nullptr;
     lv_obj_clear_state(w->refresh_btn, LV_STATE_DISABLED);
@@ -265,10 +267,11 @@ void bt_load_poll_cb(lv_timer_t * timer) {
 }
 
 void start_bt_load(BtScreenWidgets * w) {
-    lv_obj_clean(w->list);
-    if (w->spinner) {
-        lv_obj_delete(w->spinner);
+    if (w->poll_timer) {
+        lv_timer_delete(w->poll_timer);
+        w->poll_timer = nullptr;
     }
+    lv_obj_clean(w->list);
     w->spinner = lv_spinner_create(w->list);
     lv_obj_set_size(w->spinner, 40, 40);
     lv_obj_center(w->spinner);
@@ -277,13 +280,9 @@ void start_bt_load(BtScreenWidgets * w) {
 
     auto * state = new BtLoadState();
     auto * ctx = new std::pair<BtScreenWidgets *, BtLoadState *>(w, state);
-    lv_timer_t * timer = lv_timer_create(bt_load_poll_cb, 100, ctx);
+    w->poll_timer = lv_timer_create(bt_load_poll_cb, 100, ctx);
 
     std::thread(bt_load_worker, state).detach();
-
-    lv_obj_add_event_cb(lv_obj_get_screen(w->list), [](lv_event_t * e) {
-        lv_timer_delete(static_cast<lv_timer_t *>(lv_event_get_user_data(e)));
-    }, LV_EVENT_DELETE, timer);
 }
 
 void refresh_btn_cb(lv_event_t * e) {
@@ -298,7 +297,14 @@ void discoverable_switch_cb(lv_event_t * e) {
 }
 
 void widgets_delete_cb(lv_event_t * e) {
-    delete static_cast<BtScreenWidgets *>(lv_event_get_user_data(e));
+    auto * w = static_cast<BtScreenWidgets *>(lv_event_get_user_data(e));
+    if (w) {
+        if (w->poll_timer) {
+            lv_timer_delete(w->poll_timer);
+            w->poll_timer = nullptr;
+        }
+        delete w;
+    }
 }
 
 }  // namespace

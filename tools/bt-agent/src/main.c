@@ -158,7 +158,7 @@ static int register_agent(DBusConnection *conn)
     return 1;
 }
 
-static int register_profile(DBusConnection *conn, const char *path, const char *uuid, const char *name, const char *role)
+static int register_profile(DBusConnection *conn, const char *path, const char *uuid, const char *name, const char *role, dbus_uint16_t psm, dbus_uint16_t channel)
 {
     DBusError err;
     dbus_error_init(&err);
@@ -196,6 +196,48 @@ static int register_profile(DBusConnection *conn, const char *path, const char *
         dbus_message_iter_close_container(&entry, &val);
         dbus_message_iter_close_container(&dict, &entry);
     }
+    if (psm > 0) {
+        DBusMessageIter entry, val;
+        const char *key = "PSM";
+        dbus_message_iter_open_container(&dict, DBUS_TYPE_DICT_ENTRY, NULL, &entry);
+        dbus_message_iter_append_basic(&entry, DBUS_TYPE_STRING, &key);
+        dbus_message_iter_open_container(&entry, DBUS_TYPE_VARIANT, "q", &val);
+        dbus_message_iter_append_basic(&val, DBUS_TYPE_UINT16, &psm);
+        dbus_message_iter_close_container(&entry, &val);
+        dbus_message_iter_close_container(&dict, &entry);
+    }
+    if (channel > 0) {
+        DBusMessageIter entry, val;
+        const char *key = "Channel";
+        dbus_message_iter_open_container(&dict, DBUS_TYPE_DICT_ENTRY, NULL, &entry);
+        dbus_message_iter_append_basic(&entry, DBUS_TYPE_STRING, &key);
+        dbus_message_iter_open_container(&entry, DBUS_TYPE_VARIANT, "q", &val);
+        dbus_message_iter_append_basic(&val, DBUS_TYPE_UINT16, &channel);
+        dbus_message_iter_close_container(&entry, &val);
+        dbus_message_iter_close_container(&dict, &entry);
+    }
+    {
+        DBusMessageIter entry, val;
+        const char *key = "RequireAuthentication";
+        dbus_bool_t req_auth = FALSE;
+        dbus_message_iter_open_container(&dict, DBUS_TYPE_DICT_ENTRY, NULL, &entry);
+        dbus_message_iter_append_basic(&entry, DBUS_TYPE_STRING, &key);
+        dbus_message_iter_open_container(&entry, DBUS_TYPE_VARIANT, "b", &val);
+        dbus_message_iter_append_basic(&val, DBUS_TYPE_BOOLEAN, &req_auth);
+        dbus_message_iter_close_container(&entry, &val);
+        dbus_message_iter_close_container(&dict, &entry);
+    }
+    {
+        DBusMessageIter entry, val;
+        const char *key = "RequireAuthorization";
+        dbus_bool_t req_authz = FALSE;
+        dbus_message_iter_open_container(&dict, DBUS_TYPE_DICT_ENTRY, NULL, &entry);
+        dbus_message_iter_append_basic(&entry, DBUS_TYPE_STRING, &key);
+        dbus_message_iter_open_container(&entry, DBUS_TYPE_VARIANT, "b", &val);
+        dbus_message_iter_append_basic(&val, DBUS_TYPE_BOOLEAN, &req_authz);
+        dbus_message_iter_close_container(&entry, &val);
+        dbus_message_iter_close_container(&dict, &entry);
+    }
     {
         DBusMessageIter entry, val;
         const char *key = "AutoConnect";
@@ -213,13 +255,13 @@ static int register_profile(DBusConnection *conn, const char *path, const char *
     DBusMessage *reply = dbus_connection_send_with_reply_and_block(conn, msg, 5000, &err);
     dbus_message_unref(msg);
     if (!reply) {
-        fprintf(stderr, "[bt-agent] RegisterProfile (%s) notice: %s\n", name ? name : uuid,
-                err.message ? err.message : "unknown");
+        fprintf(stderr, "[bt-agent] RegisterProfile (%s, UUID: %s) failed: %s\n",
+                name ? name : "", uuid, err.message ? err.message : "unknown error");
         dbus_error_free(&err);
         return 0;
     }
     dbus_message_unref(reply);
-    printf("[bt-agent] Registered Bluetooth Profile: '%s' (UUID: %s)\n", name ? name : "", uuid);
+    printf("[bt-agent] Successfully registered Bluetooth profile '%s' (UUID: %s)\n", name ? name : "", uuid);
     return 1;
 }
 
@@ -262,9 +304,9 @@ int main(int argc, char *argv[])
     }
 
     // Register Audio Profiles so phones discover audio/media services
-    register_profile(conn, "/org/bluez/profile/a2dp_sink", UUID_A2DP_SINK, "A2DP Audio Sink", "server");
-    register_profile(conn, "/org/bluez/profile/avrcp_target", UUID_AVRCP_TARGET, "A/V Remote Control Target", "server");
-    register_profile(conn, "/org/bluez/profile/hfp_hf", UUID_HFP_HF, "Handsfree Audio", "server");
+    register_profile(conn, "/org/bluez/profile/a2dp_sink", UUID_A2DP_SINK, "A2DP Audio Sink", "server", 25, 0);
+    register_profile(conn, "/org/bluez/profile/avrcp_target", UUID_AVRCP_TARGET, "A/V Remote Control Target", "server", 23, 0);
+    register_profile(conn, "/org/bluez/profile/hfp_hf", UUID_HFP_HF, "Handsfree Audio", "server", 0, 0);
 
     printf("[bt-agent] Bluetooth stack active with Audio (A2DP/HFP/AVRCP) profiles\n");
     printf("[bt-agent] Dispatching pairing and audio profile events...\n");

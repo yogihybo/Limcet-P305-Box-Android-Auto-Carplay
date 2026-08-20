@@ -235,12 +235,56 @@ bool BluezClient::register_profile() {
         dbus_message_iter_close_container(&dictIter, &entry);
     }
     {
+        DBusMessageIter entry, variant;
+        dbus_message_iter_open_container(&dictIter, DBUS_TYPE_DICT_ENTRY, nullptr, &entry);
+        const char * key = "Role";
+        dbus_message_iter_append_basic(&entry, DBUS_TYPE_STRING, &key);
+        dbus_message_iter_open_container(&entry, DBUS_TYPE_VARIANT, "s", &variant);
+        const char * val = "server";
+        dbus_message_iter_append_basic(&variant, DBUS_TYPE_STRING, &val);
+        dbus_message_iter_close_container(&entry, &variant);
+        dbus_message_iter_close_container(&dictIter, &entry);
+    }
+    {
+        DBusMessageIter entry, variant;
+        dbus_message_iter_open_container(&dictIter, DBUS_TYPE_DICT_ENTRY, nullptr, &entry);
+        const char * key = "Channel";
+        dbus_message_iter_append_basic(&entry, DBUS_TYPE_STRING, &key);
+        dbus_message_iter_open_container(&entry, DBUS_TYPE_VARIANT, "q", &variant);
+        dbus_uint16_t val = 1;
+        dbus_message_iter_append_basic(&variant, DBUS_TYPE_UINT16, &val);
+        dbus_message_iter_close_container(&entry, &variant);
+        dbus_message_iter_close_container(&dictIter, &entry);
+    }
+    {
+        DBusMessageIter entry, variant;
+        dbus_message_iter_open_container(&dictIter, DBUS_TYPE_DICT_ENTRY, nullptr, &entry);
+        const char * key = "AutoConnect";
+        dbus_message_iter_append_basic(&entry, DBUS_TYPE_STRING, &key);
+        dbus_message_iter_open_container(&entry, DBUS_TYPE_VARIANT, "b", &variant);
+        dbus_bool_t val = TRUE;
+        dbus_message_iter_append_basic(&variant, DBUS_TYPE_BOOLEAN, &val);
+        dbus_message_iter_close_container(&entry, &variant);
+        dbus_message_iter_close_container(&dictIter, &entry);
+    }
+    {
         // Matches how AA pairing already works on this project (phone-
         // initiated, no head-unit-driven auth step) -- doesn't gate the
         // RFCOMM connection itself behind a second authentication round.
         DBusMessageIter entry, variant;
         dbus_message_iter_open_container(&dictIter, DBUS_TYPE_DICT_ENTRY, nullptr, &entry);
         const char * key = "RequireAuthentication";
+        dbus_message_iter_append_basic(&entry, DBUS_TYPE_STRING, &key);
+        dbus_message_iter_open_container(&entry, DBUS_TYPE_VARIANT, "b", &variant);
+        dbus_bool_t val = FALSE;
+        dbus_message_iter_append_basic(&variant, DBUS_TYPE_BOOLEAN, &val);
+        dbus_message_iter_close_container(&entry, &variant);
+        dbus_message_iter_close_container(&dictIter, &entry);
+    }
+    {
+        DBusMessageIter entry, variant;
+        dbus_message_iter_open_container(&dictIter, DBUS_TYPE_DICT_ENTRY, nullptr, &entry);
+        const char * key = "RequireAuthorization";
         dbus_message_iter_append_basic(&entry, DBUS_TYPE_STRING, &key);
         dbus_message_iter_open_container(&entry, DBUS_TYPE_VARIANT, "b", &variant);
         dbus_bool_t val = FALSE;

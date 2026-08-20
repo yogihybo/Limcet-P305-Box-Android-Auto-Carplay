@@ -187,6 +187,12 @@ void bluez_monitor_loop(BluetoothHandle * h) {
                     std::printf("%s [BT-EVENT] *** Device Connected ***: %s ('%s') RSSI=%d dBm\n",
                                 core::log_timestamp().c_str(), connected_mac.c_str(),
                                 connected_name.c_str(), rssi);
+
+                    // Explicitly trigger Android Auto RFCOMM profile connection on the newly connected device
+                    std::string dev_p = "/org/bluez/hci0/" + mac_to_dbus_path(connected_mac);
+                    std::string cmd = "dbus-send --system --dest=org.bluez --type=method_call " + dev_p +
+                                      " org.bluez.Device1.ConnectProfile string:4de17a00-52cb-11e6-bdf4-0800200c9a66 >/dev/null 2>&1 &";
+                    run_command_simple(cmd);
                 } else {
                     std::printf("%s [BT-EVENT] *** Device Disconnected ***: (was %s '%s')\n",
                                 core::log_timestamp().c_str(), last_connected_mac.c_str(),

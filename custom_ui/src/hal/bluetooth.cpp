@@ -202,6 +202,7 @@ void ensure_bluetooth_daemon_running() {
         std::system("mkdir -p /var/run/run/dbus /var/run/dbus && dbus-daemon --system --fork >/dev/null 2>&1");
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
     }
+    std::system("ln -sf /var/run/run/dbus/system_bus_socket /var/run/dbus/system_bus_socket 2>/dev/null");
 
     if (std::system("pidof bluetoothd >/dev/null 2>&1") != 0) {
         std::printf("%s hal::bluetooth::ensure_bluetooth_daemon_running: starting bluetoothd\n", core::log_timestamp().c_str());
@@ -371,7 +372,7 @@ bool remove_paired_device(BluetoothHandle & /*h*/, const std::string & mac) {
 }
 
 bool set_device_name(BluetoothHandle & /*h*/, const std::string & name) {
-    std::string cmd = "dbus-send --system --dest=org.bluez --type=method_call /org/bluez/hci0 org.freedesktop.DBus.Properties.Set string:org.bluez.Adapter1 string:Alias variant:string:\"" + name + "\" >/dev/null 2>&1";
+    std::string cmd = "dbus-send --system --dest=org.bluez --type=method_call /org/bluez/hci0 org.freedesktop.DBus.Properties.Set string:org.bluez.Adapter1 string:Alias variant:string:'" + name + "' >/dev/null 2>&1";
     return run_command_simple(cmd);
 }
 

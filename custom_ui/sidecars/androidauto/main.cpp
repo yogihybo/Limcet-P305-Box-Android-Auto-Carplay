@@ -352,10 +352,6 @@ int main() {
 
     std::printf("%s androidauto-sidecar: starting\n", androidauto::logTimestamp().c_str());
 
-    androidauto::WirelessSessionManager manager;
-    // Auto-start wireless AA session listening immediately on boot
-    manager.start();
-
     unlink(kSocketPath);  // stale socket from a previous crashed run
 
     int listenFd = socket(AF_UNIX, SOCK_STREAM, 0);
@@ -383,6 +379,10 @@ int main() {
 
     std::printf("%s androidauto-sidecar: listening on %s\n", androidauto::logTimestamp().c_str(),
                 kSocketPath);
+
+    androidauto::WirelessSessionManager manager;
+    // Auto-start wireless AA session listening immediately on boot
+    manager.start();
 
     while (true) {
         int clientFd = accept(listenFd, nullptr, nullptr);

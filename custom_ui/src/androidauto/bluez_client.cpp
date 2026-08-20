@@ -74,9 +74,14 @@ DBusHandlerResult agent_message_handler(DBusConnection * conn, DBusMessage * msg
         return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
     DBusMessage * reply = nullptr;
-    if (std::strcmp(member, "RequestPinCode") == 0 || std::strcmp(member, "RequestPasskey") == 0) {
-        reply = dbus_message_new_error(msg, "org.bluez.Error.Rejected",
-                                        "No input capability on this agent");
+    if (std::strcmp(member, "RequestPinCode") == 0) {
+        const char * pin = "0000";
+        reply = dbus_message_new_method_return(msg);
+        dbus_message_append_args(reply, DBUS_TYPE_STRING, &pin, DBUS_TYPE_INVALID);
+    } else if (std::strcmp(member, "RequestPasskey") == 0) {
+        dbus_uint32_t passkey = 0;
+        reply = dbus_message_new_method_return(msg);
+        dbus_message_append_args(reply, DBUS_TYPE_UINT32, &passkey, DBUS_TYPE_INVALID);
     } else {
         // Release, RequestConfirmation, RequestAuthorization,
         // AuthorizeService, DisplayPasskey, DisplayPinCode, Cancel --

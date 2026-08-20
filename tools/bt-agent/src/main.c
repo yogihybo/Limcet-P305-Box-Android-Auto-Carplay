@@ -96,6 +96,8 @@ static int register_agent(DBusConnection *conn)
 
 int main(int argc, char *argv[])
 {
+    setvbuf(stdout, NULL, _IONBF, 0);
+    setvbuf(stderr, NULL, _IONBF, 0);
     signal(SIGPIPE, SIG_IGN);
 
     if (getenv("DBUS_SYSTEM_BUS_ADDRESS") == NULL) {

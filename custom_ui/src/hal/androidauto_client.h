@@ -175,6 +175,23 @@ public:
     // Same allow_spawn=false/best-effort semantics as sendKey().
     bool sendTouch(std::uint32_t x, std::uint32_t y, TouchAction action);
 
+    // 2026-08-21: Sends "NIGHT <0|1>" -- forwards the MCU headlight-
+    // driven night-mode state (see hal/mcu_input.h's own
+    // get_night_mode()) into the sidecar's current AA session, where
+    // sidecars/androidauto/main.cpp's own "NIGHT <0|1>" handler calls
+    // androidauto::WirelessSessionManager::sendNightMode(), which
+    // updates SensorChannel's SENSOR_NIGHT_MODE state (sends a fresh
+    // NightModeData event immediately if the phone already subscribed
+    // to that sensor, matching DRIVING_STATUS_DATA's own "send at least
+    // one indication" pattern -- see sensor_channel.cpp). Same
+    // allow_spawn=false/best-effort semantics as sendKey()/sendTouch()
+    // -- a headlight change before any AA connection exists has nothing
+    // to forward to yet; whenever a session does start,
+    // Session::onServiceDiscoveryRequest/SensorChannel's own initial
+    // state (see that class's own header comment on this) covers the
+    // catch-up case.
+    bool sendNightMode(bool nightMode);
+
 private:
     bool ensureConnected(bool allow_spawn = true);
     void disconnect();

@@ -63,6 +63,12 @@
 //                touch through at all (and which couldn't have worked
 //                from THIS process anyway -- the MCU serial port is
 //                read exclusively by custom_ui's own process).
+//   "NIGHT <0|1>" -> forwards custom_ui's own MCU-headlight-driven
+//                night-mode state (WirelessSessionManager::
+//                sendNightMode()) into the current session's
+//                SensorChannel, which reports SENSOR_NIGHT_MODE to the
+//                phone. Same no-session-is-fine / "ERR bad NIGHT
+//                command" contract as KEY/TOUCH above.
 //   "FOCUS"   -> replies "NATIVE" or "PROJECTED" -- the phone's own
 //                real VideoFocusRequestNotification.mode() (see
 //                androidauto/video_visibility.h's video_focus_native()
@@ -318,6 +324,18 @@ void handle_connection(int clientFd, androidauto::WirelessSessionManager * manag
             } else {
                 manager->sendInputTouch(x, y, action);
                 reply = "OK\n";
+            }
+        } else if (line.rfind("NIGHT ", 0) == 0) {
+            // 2026-08-21: forwards custom_ui's own MCU-headlight-driven
+            // night-mode state -- see hal/androidauto_client.h's own
+            // sendNightMode() comment for the full cross-process chain.
+            // Same no-session-is-fine contract as KEY/TOUCH above.
+            std::string arg = line.substr(6);
+            if (arg == "0" || arg == "1") {
+                manager->sendNightMode(arg == "1");
+                reply = "OK\n";
+            } else {
+                reply = "ERR bad NIGHT command\n";
             }
         } else {
             reply = "ERR unknown command\n";

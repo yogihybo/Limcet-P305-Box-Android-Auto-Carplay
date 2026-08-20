@@ -428,12 +428,16 @@ $(BUILD_DIR)/ui-obj/%.o: src/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-# hal/bluez_aa_profile.cpp is the one file in the main UI binary that
-# needs dbus/dbus.h -- an explicit (non-pattern) rule for just this one
-# object file, which Make prefers over the generic
-# $(BUILD_DIR)/ui-obj/%.o pattern rule above, same convention this
-# Makefile already uses for HANTRO_DLOPEN_OBJ/HAL_CONFIG_OBJ etc.
+# hal/bluez_aa_profile.cpp and hal/ble_cts.cpp are the two files in the
+# main UI binary that need dbus/dbus.h -- explicit (non-pattern) rules,
+# which Make prefers over the generic $(BUILD_DIR)/ui-obj/%.o pattern
+# rule above, same convention this Makefile already uses for
+# HANTRO_DLOPEN_OBJ/HAL_CONFIG_OBJ etc.
 $(BUILD_DIR)/ui-obj/hal/bluez_aa_profile.o: src/hal/bluez_aa_profile.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) $(UI_DBUS_INCLUDES) -c -o $@ $<
+
+$(BUILD_DIR)/ui-obj/hal/ble_cts.o: src/hal/ble_cts.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) $(UI_DBUS_INCLUDES) -c -o $@ $<
 

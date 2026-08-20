@@ -116,6 +116,13 @@ public:
     // hasn't been constructed yet.
     void resumeVideoFocus();
 
+    // 2026-08-21: forwards the MCU-headlight-driven night-mode state to
+    // sensorChannel_ (see SensorChannel::setNightMode()'s own comment).
+    // No-op if sensorChannel_ hasn't been constructed yet -- same
+    // "nothing to forward to before a session exists" contract as
+    // sendInputKey()/sendInputTouch() above.
+    void sendNightMode(bool nightMode);
+
 private:
     // Advances cryptor_'s SSL BIO state machine one step and, if it
     // produced outbound handshake bytes, sends them over the control

@@ -188,6 +188,15 @@ public:
     // comment for why this exists at all.
     void resumeVideoFocus();
 
+    // 2026-08-21: forwards the MCU-headlight-driven night-mode state
+    // into the current session's SensorChannel, if a session exists
+    // (same no-op-if-none contract as sendInputKey()/sendInputTouch()).
+    // Called from sidecars/androidauto/main.cpp's own "NIGHT <0|1>"
+    // command handler, in turn from hal/androidauto_client.h's
+    // sendNightMode() -- see SensorChannel::setNightMode()'s own
+    // comment for what actually happens on the wire.
+    void sendNightMode(bool nightMode);
+
 private:
     void run(int rfcommFd);
     void setStatus(WirelessSessionState s, std::string msg);

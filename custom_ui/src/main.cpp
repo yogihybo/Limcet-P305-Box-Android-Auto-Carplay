@@ -22,6 +22,7 @@
 #include "hal/audio.h"
 #include "hal/bluetooth.h"
 #include "hal/display.h"
+#include "hal/display_ctrl.h"
 #include "hal/knob.h"
 #include "hal/mcu_input.h"
 #include "hal/touch.h"
@@ -304,6 +305,54 @@ int acquireSingleInstanceLock() {
                 // defeat the whole point.
 }
 
+// 2026-08-21: MCU headlight -> night mode infrastructure. Only touches
+// backlight/display BRIGHTNESS, not a color-theme swap -- explicit
+// direction ("only change should be the backlight intensity, not
+// theming"). Also forwards the state to androidauto-sidecar so
+// SensorChannel can report SENSOR_NIGHT_MODE to the phone -- see
+// hal::AndroidAutoClient::sendNightMode()/sidecars/androidauto/
+// main.cpp's own "NIGHT <0|1>" command for that half.
+//
+// Dimming policy: a fixed fraction of the user's own saved "Brightness"
+// setting (not a separate stored night-brightness value -- keeps this
+// self-contained, no new Settings UI row needed for the infrastructure
+// to work end to end). 35% floor at 20 -- arbitrary but reasonable
+// starting point, easy to tune once this is actually running against
+// real headlight events tomorrow.
+void apply_night_mode_brightness(bool nightMode) {
+    hal::DisplayCtrlHandle & h = []() -> hal::DisplayCtrlHandle & {
+        static hal::DisplayCtrlHandle handle;
+        static bool tried = false;
+        if (!tried) {
+            hal::init_display_ctrl(handle);
+            tried = true;
+        }
+        return handle;
+    }();
+
+    hal::VdeConfig cfg;
+    if (!hal::get_vde_config(h, hal::DisplayLayer::Osd1, cfg)) {
+        std::fprintf(stderr, "%s ui: apply_night_mode_brightness: get_vde_config failed, "
+                     "skipping\n", core::log_timestamp().c_str());
+        return;
+    }
+
+    int savedBrightness = core::default_store().get_int("Brightness", 128, "General");
+    unsigned int target = nightMode
+                               ? std::max(20, static_cast<int>(savedBrightness * 0.35))
+                               : static_cast<unsigned int>(savedBrightness);
+    cfg.brightness = target;
+
+    if (hal::set_vde_config(h, hal::DisplayLayer::Osd1, cfg)) {
+        std::printf("%s ui: night mode %s -- brightness set to %u (saved=%d)\n",
+                    core::log_timestamp().c_str(), nightMode ? "ON" : "OFF", target,
+                    savedBrightness);
+    } else {
+        std::fprintf(stderr, "%s ui: apply_night_mode_brightness: set_vde_config failed\n",
+                     core::log_timestamp().c_str());
+    }
+}
+
 }  // namespace
 
 int main() {
@@ -512,6 +561,31 @@ int main() {
             !hal::androidauto_screen_active().load(std::memory_order_acquire)) {
             staging_ui::navigate_to(staging_ui::NavDestination::AndroidAuto);
         }
+
+        // 2026-08-21: MCU headlight -> night mode, polled once per loop
+        // iteration (cheap atomic read) -- only acted on an actual
+        // transition, same "don't redo work every tick" convention as
+        // display_hidden/showing_resume elsewhere in this codebase.
+        // Applies the display brightness change directly here (main
+        // thread, safe for the display_ctrl ioctl the same way every
+        // other HAL call from this loop is) and forwards the new state
+        // to androidauto-sidecar over its own local socket -- a fresh
+        // AndroidAutoClient here would open/close a socket connection
+        // every single transition, so this one is process-lifetime like
+        // every other singleton client in this file.
+        {
+            static hal::AndroidAutoClient nightModeClient;
+            static bool lastNightMode = false;
+            static bool nightModeInitialized = false;
+            bool nightMode = mcu_input.get_night_mode();
+            if (!nightModeInitialized || nightMode != lastNightMode) {
+                apply_night_mode_brightness(nightMode);
+                nightModeClient.sendNightMode(nightMode);
+                lastNightMode = nightMode;
+                nightModeInitialized = true;
+            }
+        }
+
         // 2026-08-19: was an unconditional 5ms sleep regardless of
         // what lv_timer_handler() actually needed, waking 200 times/sec
         // even on a fully static screen with nothing scheduled for tens

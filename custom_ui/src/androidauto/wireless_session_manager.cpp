@@ -465,4 +465,11 @@ void WirelessSessionManager::resumeVideoFocus() {
     }
 }
 
+void WirelessSessionManager::sendNightMode(bool nightMode) {
+    std::lock_guard<std::mutex> lock(sessionMutex_);
+    if (currentSession_) {
+        currentSession_->sendNightMode(nightMode);
+    }
+}
+
 }  // namespace androidauto

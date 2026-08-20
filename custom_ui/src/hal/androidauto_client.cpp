@@ -385,4 +385,17 @@ bool AndroidAutoClient::sendTouch(std::uint32_t x, std::uint32_t y, TouchAction 
     return false;
 }
 
+bool AndroidAutoClient::sendNightMode(bool nightMode) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    std::string reply;
+    std::string cmd = std::string("NIGHT ") + (nightMode ? "1" : "0");
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        if (ensureConnected(/*allow_spawn=*/false) && sendCommand(cmd, reply)) {
+            return true;
+        }
+        disconnect();
+    }
+    return false;
+}
+
 }  // namespace hal

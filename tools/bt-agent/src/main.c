@@ -261,14 +261,13 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    // Register Audio and Wireless Profiles so phones discover audio + AA services
+    // Register Audio Profiles so phones discover audio/media services
     register_profile(conn, "/org/bluez/profile/a2dp_sink", UUID_A2DP_SINK, "A2DP Audio Sink", "server");
     register_profile(conn, "/org/bluez/profile/avrcp_target", UUID_AVRCP_TARGET, "A/V Remote Control Target", "server");
     register_profile(conn, "/org/bluez/profile/hfp_hf", UUID_HFP_HF, "Handsfree Audio", "server");
-    register_profile(conn, "/org/bluez/profile/android_auto", UUID_ANDROID_AUTO, "Android Auto Wireless", "server");
 
-    printf("[bt-agent] Bluetooth stack active with Audio (A2DP/HFP/AVRCP) + Android Auto profiles\n");
-    printf("[bt-agent] Dispatching pairing and profile events...\n");
+    printf("[bt-agent] Bluetooth stack active with Audio (A2DP/HFP/AVRCP) profiles\n");
+    printf("[bt-agent] Dispatching pairing and audio profile events...\n");
     while (dbus_connection_read_write_dispatch(conn, -1)) {
         // Event loop
     }

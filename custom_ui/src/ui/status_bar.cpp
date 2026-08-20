@@ -54,14 +54,10 @@ void poll_timer_cb(lv_timer_t * timer) {
     std::snprintf(buf, sizeof(buf), "%02d:%02d", local.tm_hour, local.tm_min);
     lv_label_set_text(w->clock_label, buf);
 
-    // Bluetooth: hardware-reachable signal only, see status_bar.h's top
-    // comment -- fd validity doesn't change at runtime once opened, but
-    // re-checking is nearly free and stays correct if a caller ever
-    // makes init_bluetooth() retry-capable in the future. Shared handle
-    // (hal::shared_handle()) -- main.cpp opens it at startup, this just
-    // reads its already-resolved fd.
-    bool bt_ok = hal::shared_handle().fd >= 0;
-    lv_obj_set_style_text_color(w->bt_icon, bt_ok ? theme::accent() : theme::text_secondary(), 0);
+    // Bluetooth: live connection status from BluetoothTelemetry
+    auto telem = hal::get_telemetry();
+    bool bt_connected = hal::shared_handle().fd >= 0 && telem.connected;
+    lv_obj_set_style_text_color(w->bt_icon, bt_connected ? theme::accent() : theme::text_secondary(), 0);
 
     bool aa_ok = is_aa_connected(aa_client().statusLine(/*allow_spawn=*/false));
     lv_obj_set_style_text_color(w->aa_icon, aa_ok ? theme::success() : theme::text_secondary(), 0);

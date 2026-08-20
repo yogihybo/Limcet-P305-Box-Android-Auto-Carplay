@@ -29,7 +29,7 @@ FW_SRC=/usr/share/bluez-bringup/device-firmware
 DBUS_POLICY_DST=/usr/etc/dbus-1/system.d
 DBUS_SYSTEM_CONF=/usr/etc/dbus-1/system-diagnostic.conf
 DBUS_POLICY_SRC=/usr/share/bluez-bringup/dbus-policy
-BUS_SOCKET_DIR=/var/run/run/dbus
+BUS_SOCKET_DIR=/var/run/dbus
 TTY=/dev/ttyHS1
 PID_DIR=/var/run/bluez-bringup
 RTK_HCIATTACH=/usr/bin/rtk_hciattach
@@ -51,7 +51,7 @@ case "$1" in
         pidof dbus-daemon >/dev/null 2>&1 && echo "dbus-daemon: running" || echo "dbus-daemon: stopped"
         pidof rtk_hciattach >/dev/null 2>&1 && echo "rtk_hciattach: running" || echo "rtk_hciattach: stopped"
         pidof bluetoothd >/dev/null 2>&1 && echo "bluetoothd: running" || echo "bluetoothd: stopped"
-        hciconfig -a 2>/dev/null || echo "hci0: not attached"
+        [ -e /sys/class/bluetooth/hci0 ] && echo "hci0: attached" || echo "hci0: not attached"
         exit 0
         ;;
     *)
@@ -65,7 +65,8 @@ if pidof bluetoothd >/dev/null 2>&1 && [ -f "$PID_DIR/bluetoothd.pid" ]; then
     exit 0
 fi
 
-echo "bluez-bringup: stopping blueware (chip is single-owner -- can't share the UART)"
+echo "bluez-bringup: stopping old instances and blueware"
+killall -9 rtk_hciattach >/dev/null 2>&1 || true
 killall blueware >/dev/null 2>&1 || true
 i=0
 while pidof blueware >/dev/null 2>&1 && [ $i -lt 30 ]; do

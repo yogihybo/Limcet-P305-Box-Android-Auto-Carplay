@@ -285,12 +285,16 @@ echo "bluez-bringup: configuring adapter and auto-pairing agent"
 export DBUS_SYSTEM_BUS_ADDRESS="unix:path=$BUS_SOCKET_DIR/system_bus_socket"
 hciconfig hci0 up 2>/dev/null || true
 hciconfig hci0 sspmode 1 2>/dev/null || true
+hciconfig hci0 class 0x240408 2>/dev/null || true
+hciconfig hci0 auth 2>/dev/null || true
+hciconfig hci0 encrypt 2>/dev/null || true
 hciconfig hci0 piscan 2>/dev/null || true
 
 # Power on the adapter via D-Bus and enable discoverable/pairable
 dbus-send --system --dest=org.bluez --type=method_call /org/bluez/hci0 org.freedesktop.DBus.Properties.Set string:org.bluez.Adapter1 string:Powered variant:boolean:true 2>/dev/null || true
 dbus-send --system --dest=org.bluez --type=method_call /org/bluez/hci0 org.freedesktop.DBus.Properties.Set string:org.bluez.Adapter1 string:Pairable variant:boolean:true 2>/dev/null || true
 dbus-send --system --dest=org.bluez --type=method_call /org/bluez/hci0 org.freedesktop.DBus.Properties.Set string:org.bluez.Adapter1 string:Discoverable variant:boolean:true 2>/dev/null || true
+dbus-send --system --dest=org.bluez --type=method_call /org/bluez/hci0 org.freedesktop.DBus.Properties.Set string:org.bluez.Adapter1 string:Class variant:uint32:2360328 2>/dev/null || true
 
 # Launch dedicated background auto-pairing agent (NoInputNoOutput)
 AGENT_BIN=""

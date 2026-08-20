@@ -107,6 +107,9 @@ DBusHandlerResult profile_message_handler(DBusConnection * conn, DBusMessage * m
     if (!iface || std::strcmp(iface, "org.bluez.Profile1") != 0 || !member)
         return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
+    std::printf("%s androidauto: bluez_client: *** Profile1 method call received ***: %s\n",
+                logTimestamp().c_str(), member);
+
     if (std::strcmp(member, "NewConnection") == 0) {
         DBusMessageIter iter;
         dbus_message_iter_init(msg, &iter);

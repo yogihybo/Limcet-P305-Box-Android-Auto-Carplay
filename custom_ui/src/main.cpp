@@ -346,26 +346,6 @@ int main() {
                 [](const std::string & line) { aa_auto_start_watcher().on_broadcast(line); });
             std::thread(&AaAutoStartWatcher::run, &aa_auto_start_watcher()).detach();
 
-            // 2026-08-19: temporary one-shot diagnostic for the
-            // hal::diagnose_pbdown() clock-sync lead (see that
-            // function's own comment) -- fires PBDOWN the first time a
-            // real phone connection is observed, so the console log
-            // from a normal connect captures whatever it actually
-            // returns. Same +AAPDEV=/+HFPDEV= signal
-            // auto_reconnect_paired_device() already treats as
-            // confirmed-real "a phone is here" evidence. Must run on
-            // its own thread, not inline in this callback -- reader_loop()
-            // is the same thread that delivers send_command()'s reply
-            // lines, so calling send_command() (which diagnose_pbdown()
-            // does) directly from here would deadlock waiting on itself.
-            auto pbdownFired = std::make_shared<std::atomic<bool>>(false);
-            hal::watch_bluetooth_broadcasts([&bt, pbdownFired](const std::string & line) {
-                if ((line.rfind("+AAPDEV=", 0) == 0 || line.rfind("+HFPDEV=", 0) == 0) &&
-                    !pbdownFired->exchange(true)) {
-                    std::thread([&bt]() { hal::diagnose_pbdown(bt); }).detach();
-                }
-            });
-
             // apply the configured Bluetooth name every boot,
             // per request -- previously hal::set_device_name() (AT+NAME=)
             // was only ever called from bluetooth_screen.cpp's Save button,

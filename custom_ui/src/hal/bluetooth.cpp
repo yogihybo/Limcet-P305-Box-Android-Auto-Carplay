@@ -212,6 +212,19 @@ void ensure_bluetooth_daemon_running() {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
     }
+
+    if (std::system("pidof bt-agent >/dev/null 2>&1") != 0) {
+        const char * agents[] = { "/usr/bin/bt-agent", "/data/bt-agent", "./bt-agent" };
+        for (const char * a : agents) {
+            struct stat st {};
+            if (stat(a, &st) == 0) {
+                std::printf("%s hal::bluetooth::ensure_bluetooth_daemon_running: starting %s\n", core::log_timestamp().c_str(), a);
+                std::string cmd = std::string(a) + " >/dev/null 2>&1 &";
+                std::system(cmd.c_str());
+                break;
+            }
+        }
+    }
 }
 
 bool init_bluetooth(BluetoothHandle & out, const char * /*path*/) {

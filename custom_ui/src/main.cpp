@@ -289,6 +289,9 @@ int acquireSingleInstanceLock() {
 }  // namespace
 
 int main() {
+    setvbuf(stdout, NULL, _IONBF, 0);
+    setvbuf(stderr, NULL, _IONBF, 0);
+
     // Literal first line -- see core/log_timing.h's own comment. Every
     // log line in this whole process is now on one continuous kernel-
     // dmesg-style timeline.

@@ -19,6 +19,7 @@
 #include <sys/file.h>
 #include "lvgl.h"
 #include "hal/androidauto_client.h"
+#include "hal/audio.h"
 #include "hal/bluetooth.h"
 #include "hal/display.h"
 #include "hal/knob.h"

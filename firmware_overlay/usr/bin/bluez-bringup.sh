@@ -263,6 +263,8 @@ if [ ! -S "$BUS_SOCKET_DIR/system_bus_socket" ]; then
 fi
 
 mkdir -p /var/lib/bluetooth
+mkdir -p /usr/var/lib
+ln -sf /var/lib/bluetooth /usr/var/lib/bluetooth 2>/dev/null || true
 mkdir -p /usr/lib/bluetooth/plugins
 
 echo "bluez-bringup: starting bluetoothd"

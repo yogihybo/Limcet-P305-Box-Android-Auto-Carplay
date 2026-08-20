@@ -243,9 +243,8 @@ void ensure_bluetooth_daemon_running() {
             std::printf("%s hal::bluetooth::ensure_bluetooth_daemon_running: invoking %s start\n",
                         core::log_timestamp().c_str(), s);
             std::string cmd = std::string(s) + " start >/dev/null 2>&1";
-            if (std::system(cmd.c_str()) == 0) {
-                return;
-            }
+            std::system(cmd.c_str());
+            break;
         }
     }
 

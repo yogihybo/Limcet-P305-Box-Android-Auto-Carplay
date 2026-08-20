@@ -230,6 +230,19 @@ bool WirelessSessionManager::ensureAccessPointUp() {
 }
 
 void WirelessSessionManager::run() {
+    // Register BlueZ profile immediately so it is available before any phone connection
+    setStatus(WirelessSessionState::BluetoothHandshake, "Ensuring BlueZ stack is active...");
+    if (!androidauto::bluez_stack_start()) {
+        setStatus(WirelessSessionState::Failed, "Could not verify BlueZ stack");
+        return;
+    }
+
+    androidauto::BluezClient bluez;
+    if (!bluez.connect() || !bluez.register_agent() || !bluez.register_profile()) {
+        setStatus(WirelessSessionState::Failed, "Could not register BlueZ agent/profile");
+        return;
+    }
+
     setStatus(WirelessSessionState::StartingAccessPoint, "Starting WiFi access point...");
     if (!ensureAccessPointUp()) {
         setStatus(WirelessSessionState::Failed, "Could not start the WiFi access point (wifi_ap.sh)");
@@ -246,24 +259,6 @@ void WirelessSessionManager::run() {
 
     const core::HalConfig & cfg = core::hal_config();
 
-    // 2026-08-12, THIRD revision, now backed by a real confirmed-working
-    // reference implementation (github.com/mossyhub/openautolink,
-    // WppTcpServer.kt) rather than guessing: the head unit IS the TCP
-    // server for Google's real WPP (WiFi Projection Protocol) -- the
-    // phone dials in after the Bluetooth handshake. Their own code
-    // comment describes hitting this project's EXACT symptom and its
-    // cause: "gearhead accepted our SDP advert, dialled our RFCOMM
-    // socket, accepted WifiStartRequest with STATUS_SUCCESS... then
-    // went quiet, because we had advertised a port with nothing bound
-    // to it." Two corrections vs this project's own earlier (reverted)
-    // listen/accept attempt: (1) bind 0.0.0.0 (all interfaces), not the
-    // specific AP address -- their own comment: "we do not know which
-    // local address [the phone] will use until it arrives"; (2) the
-    // listener must already be bound and ready well before
-    // WIFI_INFO_RESPONSE goes out ("AA reaches the proxy within ~2s of
-    // the Bluetooth handshake"), so this binds before the BW_AAP
-    // handshake starts at all, same as this project's earlier attempt
-    // already did structurally -- only the bind address was wrong.
     boost::asio::io_service ioService;
     boost::system::error_code openEc;
     boost::asio::ip::tcp::acceptor acceptor(ioService);
@@ -280,26 +275,6 @@ void WirelessSessionManager::run() {
     }
     std::printf("%s androidauto: wireless session: WPP TCP server listening on 0.0.0.0:%u\n", androidauto::logTimestamp().c_str(),
                 cfg.wifi_session_port());
-
-    // 2026-08-19: real kernel hci0 + BlueZ now drive this instead of
-    // blueware's /dev/bw_aap proxy -- see bluez_stack.h/bluez_client.h
-    // for the full rationale (blueware and bluetoothd can't own the
-    // chip simultaneously; bluez-bringup.sh stops blueware first).
-    // BwAapClient's own wire-protocol logic (sendFrame/receiveFrame and
-    // everything built on them, all pure read()/write() on fd_) is
-    // unchanged -- only where the fd comes from changed, via attach()
-    // instead of connect().
-    setStatus(WirelessSessionState::BluetoothHandshake, "Ensuring BlueZ stack is active...");
-    if (!androidauto::bluez_stack_start()) {
-        setStatus(WirelessSessionState::Failed, "Could not verify BlueZ stack");
-        return;
-    }
-
-    androidauto::BluezClient bluez;
-    if (!bluez.connect() || !bluez.register_agent() || !bluez.register_profile()) {
-        setStatus(WirelessSessionState::Failed, "Could not register BlueZ agent/profile");
-        return;
-    }
 
     setStatus(WirelessSessionState::BluetoothHandshake, "Waiting for phone to connect over Bluetooth...");
     int rfcommFd = bluez.wait_for_connection(120);

@@ -56,6 +56,29 @@ std::mutex g_spawnMutex;
 // firmware integration lands with a fixed install path.
 }  // namespace
 
+static bool spawn_sidecar_direct(const std::string & path) {
+    ::chmod(path.c_str(), 0755);
+    pid_t pid = ::fork();
+    if (pid < 0) {
+        std::fprintf(stderr, "hal::androidauto_client: fork() failed: %s\n", std::strerror(errno));
+        return false;
+    }
+    if (pid == 0) {
+        // Child process: close non-standard file descriptors to avoid sharing parent handles
+        for (int fd = 3; fd < 64; ++fd) {
+            ::close(fd);
+        }
+        char * const args[] = { const_cast<char *>(path.c_str()), nullptr };
+        ::execv(path.c_str(), args);
+        std::fprintf(stderr, "hal::androidauto_client: execv(%s) failed: %s\n", path.c_str(), std::strerror(errno));
+        ::_exit(127);
+    }
+    // Parent process
+    std::printf("hal::androidauto_client: successfully spawned %s (pid=%d)\n",
+                path.c_str(), static_cast<int>(pid));
+    return true;
+}
+
 void try_spawn_androidauto_sidecar() {
     std::lock_guard<std::mutex> lock(g_spawnMutex);
 
@@ -83,24 +106,26 @@ void try_spawn_androidauto_sidecar() {
     }
 
     std::string candidate_paths[] = {
-        dir + "/androidauto-sidecar",
         "/data/androidauto-sidecar",
-        "/usr/bin/androidauto-sidecar",
-        "./androidauto-sidecar"
+        dir + "/androidauto-sidecar",
+        "./androidauto-sidecar",
+        "/usr/bin/androidauto-sidecar"
     };
 
     for (const auto & path : candidate_paths) {
         struct stat st {};
         if (stat(path.c_str(), &st) == 0) {
-            chmod(path.c_str(), 0755);
-            std::printf("hal::androidauto_client: auto-spawning sidecar from %s\n", path.c_str());
-            std::string cmd = path + " &";
-            std::system(cmd.c_str());
-            for (int i = 0; i < 10; ++i) {
-                if (access(kSocketPath, F_OK) == 0) break;
-                std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            std::printf("hal::androidauto_client: found sidecar at %s\n", path.c_str());
+            if (spawn_sidecar_direct(path)) {
+                for (int i = 0; i < 20; ++i) {
+                    if (access(kSocketPath, F_OK) == 0) {
+                        std::printf("hal::androidauto_client: sidecar socket %s is ready\n", kSocketPath);
+                        break;
+                    }
+                    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                }
+                return;
             }
-            return;
         }
     }
 

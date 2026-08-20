@@ -16,17 +16,23 @@ namespace androidauto {
 // receiveFrame and everything built on them) turned out to be
 // transport-agnostic -- pure read()/write() on fd_ -- so rather than
 // staying tied to blueware's /dev/bw_aap proxy, wireless_session_manager.cpp
-// now gets a REAL kernel hci0 + BlueZ RFCOMM connection via
-// bluez_stack.h/bluez_client.h (real hardware confirmed working this
-// same session, see tools/rtk-hciattach-test/ and
-// tools/bluetoothd-test/'s own READMEs) and calls attach(fd) instead
-// of connect(). This class's own comment below (steps 1-6, the real
-// captured wire format) is unaffected -- only the transport
+// now gets a REAL kernel hci0 + BlueZ RFCOMM connection (real hardware
+// confirmed working this same session, see tools/rtk-hciattach-test/
+// and tools/bluetoothd-test/'s own READMEs) and calls attach(fd)
+// instead of connect(). This class's own comment below (steps 1-6, the
+// real captured wire format) is unaffected -- only the transport
 // underneath changed, not the protocol spoken over it. connect() (the
 // /dev/bw_aap path) is kept for reference/fallback, not called by the
 // current flow. start_msn/MsnCoreApp is untouched, still uses blueware
 // directly -- this only affects custom_ui/androidauto-sidecar's own
 // wireless AA bootstrap.
+//
+// 2026-08-20: the fd attach()'d here is now registered/accepted
+// entirely in custom_ui (hal::BluezAaProfile, hal/bluez_aa_profile.h)
+// and handed to this process over their local socket -- see
+// wireless_session_manager.h's own header comment for the full
+// architecture. This class itself is unaffected either way; it only
+// ever cared about having a connected fd, not who connected it.
 //
 // Everything below this point (message sequence, wire format) is the
 // same pattern as `sink`'s own D-Bus interface
@@ -82,15 +88,16 @@ public:
     ~BwAapClient();
 
     // Opens /dev/bw_aap. Returns false on failure (logs the reason).
-    // Superseded by attach() below -- see bluez_client.h/bluez_stack.h --
-    // kept for reference/fallback, not called by the current
-    // wireless_session_manager.cpp flow.
+    // Superseded by attach() below -- kept for reference/fallback, not
+    // called by the current wireless_session_manager.cpp flow.
     bool connect();
 
     // 2026-08-19: takes ownership of an already-connected socket fd
-    // (BluezClient::wait_for_connection()'s real RFCOMM connection,
-    // once a phone actually connects to our BlueZ-advertised AA
-    // profile) instead of opening /dev/bw_aap. Every method below
+    // (hal::BluezAaProfile::wait_for_connection()'s real RFCOMM
+    // connection, once a phone actually connects to our BlueZ-
+    // advertised AA profile, handed here by custom_ui -- see
+    // wireless_session_manager.h's own header comment) instead of
+    // opening /dev/bw_aap. Every method below
     // (sendFrame/receiveFrame and everything built on them) is pure
     // read()/write() on fd_ -- transport-agnostic, works identically
     // whether fd_ came from AF_UNIX (blueware's proxy) or a real

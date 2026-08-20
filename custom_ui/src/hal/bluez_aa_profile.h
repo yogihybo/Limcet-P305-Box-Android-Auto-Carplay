@@ -3,57 +3,64 @@
 #include <cstdint>
 #include <string>
 
-namespace androidauto {
+namespace hal {
 
-// Minimal BlueZ D-Bus client for the Android Auto wireless bootstrap --
-// replaces blueware's /dev/bw_aap local proxy (see bw_aap_client.h's
-// own header comment for why that existed) with a real kernel
-// hci0/BlueZ stack. Owns: pairing (an org.bluez.Agent1 that auto-
-// accepts, matching "pairing is phone-initiated" -- hal/bluetooth.h's
-// own established finding, this project never drove pairing from the
-// head unit side) and SDP/profile advertisement for the well-known
-// Android Auto Wireless service UUID
-// (4de17a00-52cb-11e6-bdf4-0800200c9a66, confirmed real -- see
-// custom_ui/docs/BLUETOOTH_RECONNECT_HANDOFF.md and hal/bluetooth.h)
-// via org.bluez.ProfileManager1.RegisterProfile().
+// BlueZ D-Bus server for the Android Auto wireless RFCOMM profile --
+// SDP/profile advertisement for the well-known Android Auto Wireless
+// service UUID (4de17a00-52cb-11e6-bdf4-0800200c9a66, confirmed real --
+// see custom_ui/docs/BLUETOOTH_RECONNECT_HANDOFF.md and hal/bluetooth.h)
+// via org.bluez.ProfileManager1.RegisterProfile(), plus the blocking
+// wait for BlueZ to hand back a connected RFCOMM socket fd once a phone
+// actually dials in.
+//
+// 2026-08-20: relocated here from custom_ui/src/androidauto/
+// (androidauto::BluezClient) -- moving ALL Bluetooth connectivity into
+// custom_ui, alongside hal/bluetooth.cpp's adapter/pairing/A2DP
+// ownership, instead of splitting it across two processes (custom_ui
+// running bt-agent's Agent1+A2DP, androidauto-sidecar independently
+// running its own separate BlueZ connection just for this one profile).
+// See hal/bluetooth.cpp's aa_profile_server_loop() for the caller: it
+// registers this profile once at boot and hands each connected fd to
+// androidauto-sidecar over their existing local socket (see
+// hal/androidauto_client.h's sendConnectFd()) via SCM_RIGHTS, rather
+// than the sidecar owning any BlueZ/D-Bus knowledge itself.
+//
+// register_agent()/the Agent1 registration this class used to also own
+// is GONE -- bt-agent (spawned by hal::bluetooth::ensure_bluetooth_daemon_running(),
+// same process now) already registers the one NoInputNoOutput default
+// agent this device needs; having a second agent re-register itself
+// here on top of that was pure redundant D-Bus churn (found and
+// removed from the old sidecar-owned call site earlier this session,
+// this move finishes the job by not bringing it back at all).
 //
 // Deliberately raw libdbus, not GDBus/sd-bus -- this project doesn't
 // link glib anywhere, and sd-bus isn't available on this device's
 // glibc/musl-less toolchain. See tools/bluetoothd-test/README.md for
 // why libdbus itself had to be cross-compiled from source (no armhf
-// apt/multiarch on the build machine) -- same vendored dbus, now
-// staged at ~/build-deps/dbus-arm-install for this target to link
-// against too.
+// apt/multiarch on the build machine) -- same vendored dbus, staged at
+// ~/build-deps/dbus-arm-install, now linked into custom_ui itself
+// (Makefile's UI_TARGET) rather than only androidauto-sidecar.
 //
-// Synchronous/blocking by design, same pattern as BwAapClient and
-// accept_rfcomm_connection() -- this is a one-time bootstrap step on
-// WirelessSessionManager's own dedicated thread, not part of the
-// io_service event loop.
-class BluezClient {
+// Synchronous/blocking by design -- runs on its own dedicated
+// background thread (hal::bluetooth's aa_profile_server_loop()), not
+// the LVGL main loop.
+class BluezAaProfile {
 public:
-    BluezClient();
-    ~BluezClient();
+    BluezAaProfile();
+    ~BluezAaProfile();
 
-    BluezClient(const BluezClient &) = delete;
-    BluezClient & operator=(const BluezClient &) = delete;
+    BluezAaProfile(const BluezAaProfile &) = delete;
+    BluezAaProfile & operator=(const BluezAaProfile &) = delete;
 
     // Connects to the system bus (DBUS_SYSTEM_BUS_ADDRESS if set,
     // otherwise libdbus's own compiled-in default -- see
     // tools/bluetoothd-test/bt-daemon-probe.sh's own comment for why
     // this device's real dbus-daemon resolves to the doubled
     // /var/run/run/dbus/system_bus_socket path; this project's own
-    // bluetoothd/dbus-daemon pair, brought up by bluez_stack.h, uses
-    // that same real path). Returns false on failure (logs why).
+    // bluetoothd/dbus-daemon pair, brought up by
+    // hal::ensure_bluetooth_daemon_running(), uses that same real
+    // path). Returns false on failure (logs why).
     bool connect();
-
-    // Registers a NoInputNoOutput (Just Works, auto-accept) Agent1 at
-    // a fixed object path and calls RequestDefaultAgent so bluetoothd
-    // routes every pairing request here -- no head-unit UI for PIN/
-    // passkey entry exists or is planned; matches this project's own
-    // established finding that AA pairing is always phone-initiated.
-    // Must be called before a phone attempts to pair. Returns false on
-    // any D-Bus failure.
-    bool register_agent();
 
     // Registers a profile for the Android Auto Wireless service UUID
     // via org.bluez.ProfileManager1.RegisterProfile() -- BlueZ
@@ -72,21 +79,24 @@ public:
     // returns the connected RFCOMM socket fd BlueZ hands us (via
     // D-Bus's own UNIX_FD passing). Caller owns the fd afterward (same
     // ownership contract as accept_rfcomm_connection() it replaces).
-    // Returns -1 on timeout or any D-Bus failure.
+    // Returns -1 on timeout or any D-Bus failure -- NOT necessarily an
+    // error worth logging loudly, since this is called in a loop by
+    // aa_profile_server_loop() and a timeout just means "no phone
+    // dialed in yet, keep waiting."
     int wait_for_connection(int timeoutSeconds);
 
     void close();
 
-    // Public only so bluez_client.cpp's free-function D-Bus message
-    // handlers (agent_message_handler/profile_message_handler -- plain
-    // C-style callbacks, can't be private members since libdbus takes
-    // a function pointer) can name and use this incomplete type as
-    // their user_data; the real definition still lives entirely in the
-    // .cpp, so this reveals nothing to actual callers of this class.
+    // Public only so bluez_aa_profile.cpp's free-function D-Bus message
+    // handler (profile_message_handler -- a plain C-style callback,
+    // can't be a private member since libdbus takes a function
+    // pointer) can name and use this incomplete type as its user_data;
+    // the real definition still lives entirely in the .cpp, so this
+    // reveals nothing to actual callers of this class.
     struct Impl;
 
 private:
     Impl * impl_;
 };
 
-}  // namespace androidauto
+}  // namespace hal

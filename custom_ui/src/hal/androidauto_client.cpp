@@ -12,6 +12,7 @@
 #include <sys/stat.h>
 #include <sys/un.h>
 #include <sys/time.h>
+#include <sys/uio.h>
 #include <thread>
 #include <unistd.h>
 
@@ -132,6 +133,98 @@ void try_spawn_androidauto_sidecar() {
         }
         pclose(fp);
     }).detach();
+}
+
+bool sendConnectFd(int rfcommFd) {
+    std::printf("%s [BT-AA-PROFILE] sendConnectFd: handing rfcommFd=%d to androidauto-sidecar\n",
+                core::log_timestamp().c_str(), rfcommFd);
+
+    if (std::system("pidof androidauto-sidecar >/dev/null 2>&1") != 0) {
+        std::printf("%s [BT-AA-PROFILE] sendConnectFd: androidauto-sidecar not running yet, "
+                    "spawning it\n", core::log_timestamp().c_str());
+        try_spawn_androidauto_sidecar();
+    }
+
+    struct sockaddr_un addr {};
+    addr.sun_family = AF_UNIX;
+    std::strncpy(addr.sun_path, kSocketPath, sizeof(addr.sun_path) - 1);
+
+    // A freshly-spawned sidecar needs a moment to bind its socket --
+    // same 10-attempt/50ms-apart retry AndroidAutoClient::ensureConnected()
+    // already uses for the same reason.
+    int connFd = -1;
+    for (int attempt = 0; attempt < 10; ++attempt) {
+        int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+        if (fd < 0) break;
+        if (connect(fd, reinterpret_cast<struct sockaddr *>(&addr), sizeof(addr)) == 0) {
+            connFd = fd;
+            break;
+        }
+        close(fd);
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+    if (connFd < 0) {
+        std::fprintf(stderr, "%s [BT-AA-PROFILE] sendConnectFd: could not reach "
+                     "androidauto-sidecar's socket -- closing rfcommFd=%d, dropping this "
+                     "connection\n", core::log_timestamp().c_str(), rfcommFd);
+        close(rfcommFd);
+        return false;
+    }
+
+    // One sendmsg() carrying both the "CONNECT_FD\n" text and the
+    // SCM_RIGHTS ancillary data -- see sidecars/androidauto/main.cpp's
+    // recv_chunk() comment for why this must arrive as a single
+    // message, not two separate writes.
+    const char * line = "CONNECT_FD\n";
+    struct iovec iov {};
+    iov.iov_base = const_cast<char *>(line);
+    iov.iov_len = std::strlen(line);
+
+    struct msghdr msg {};
+    msg.msg_iov = &iov;
+    msg.msg_iovlen = 1;
+
+    char control[CMSG_SPACE(sizeof(int))];
+    msg.msg_control = control;
+    msg.msg_controllen = sizeof(control);
+
+    struct cmsghdr * cmsg = CMSG_FIRSTHDR(&msg);
+    cmsg->cmsg_level = SOL_SOCKET;
+    cmsg->cmsg_type = SCM_RIGHTS;
+    cmsg->cmsg_len = CMSG_LEN(sizeof(int));
+    std::memcpy(CMSG_DATA(cmsg), &rfcommFd, sizeof(int));
+
+    ssize_t sent = sendmsg(connFd, &msg, 0);
+    // rfcommFd's kernel-level ownership is transferred to the receiving
+    // process as soon as sendmsg() succeeds (a dup, not a move -- our
+    // own copy of the fd number is still valid until we close it, but
+    // there's nothing left for us to do with it) -- close our copy
+    // either way, success or failure, so this function never leaks it.
+    close(rfcommFd);
+    if (sent != static_cast<ssize_t>(iov.iov_len)) {
+        std::fprintf(stderr, "%s [BT-AA-PROFILE] sendConnectFd: sendmsg() failed (sent=%zd)\n",
+                     core::log_timestamp().c_str(), sent);
+        close(connFd);
+        return false;
+    }
+
+    struct timeval tv {};
+    tv.tv_sec = 3;
+    setsockopt(connFd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+
+    std::string reply;
+    char buf[256];
+    while (reply.find('\n') == std::string::npos) {
+        ssize_t n = read(connFd, buf, sizeof(buf));
+        if (n <= 0) break;
+        reply.append(buf, static_cast<size_t>(n));
+    }
+    close(connFd);
+
+    bool ok = reply.rfind("OK", 0) == 0;
+    std::printf("%s [BT-AA-PROFILE] sendConnectFd: sidecar reply: '%s' (%s)\n",
+                core::log_timestamp().c_str(), reply.c_str(), ok ? "accepted" : "rejected/unreachable");
+    return ok;
 }
 
 AndroidAutoClient::AndroidAutoClient() = default;

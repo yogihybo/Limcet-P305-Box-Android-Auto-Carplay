@@ -99,6 +99,48 @@ else
     BLUETOOTHD=bluetoothd
 fi
 
+# 2026-08-20: real root cause of AA's RFCOMM channel never getting
+# dialed, found via bluetoothd -d (see this file's own comment on that
+# flag): src/profile.c:send_new_connection() failed on EVERY phone
+# connection attempt ("Android Auto connected to <mac>" immediately
+# followed by "sending NewConnection failed", repeating). Traced to
+# gdbus/object.c's own explicit check+log ("Unable to send message
+# (passing fd blocked?)") -- confirmed this device's stock rootfs
+# dbus-daemon (firmware_source/mtd6_rootfs/usr/bin/dbus-daemon) is real
+# D-Bus **1.0.2** (strings on its sibling libdbus-1.so.3.2.0 confirms
+# the version), and this whole bringup script was invoking plain
+# `dbus-daemon` -- resolving via PATH to that ancient stock binary, NOT
+# any binary this project actually built. DBUS_TYPE_UNIX_FD /
+# NEGOTIATE_UNIX_FD (exactly what Profile1.NewConnection needs to hand
+# us a connected socket) wasn't added to D-Bus until 1.3.1 -- a 1.0.2
+# daemon has no code path for it at all, which is also the likely real
+# explanation for A2DP never actually being audible even after the
+# ARK-SDDAC unmute fix (MediaTransport1.Acquire() also hands back a fd
+# through this same daemon). Our own cross-built dbus-arm-install
+# (AASDK_DEPS_DIR, see custom_ui/Makefile) only ever produced
+# libdbus-1.a + headers -- bin/dbus-daemon was never actually linked
+# until now (tools/bluetoothd-test/dbus-daemon, built from the same
+# vendored dbus-1.14.10 source as bluetoothd's own libdbus-1.a, static,
+# NEGOTIATE_UNIX_FD confirmed present via strings). Same
+# candidate-path-preference pattern as RTK_HCIATTACH/BLUETOOTHD above.
+# Note this one's simpler than those two: tools/bluetoothd-test/
+# dbus-daemon is a top-level file in that dir, so a full image rebuild
+# (install_diag_tools(), build_bootable_sdcard.sh) copies it straight
+# to /usr/bin/dbus-daemon -- DIRECTLY REPLACING the ancient stock
+# binary at that exact path, which is the real, permanent fix; plain
+# `dbus-daemon` below already resolves correctly once that's happened.
+# /data/bluetoothd-test/dbus-daemon is only for the scp-based fast-
+# iteration dev workflow (see this repo's own established convention,
+# e.g. BLUETOOTHD's identical fallback above) BEFORE a full image
+# rebuild has picked up this fix -- checked first so a quick scp of
+# just this one binary is enough to test without rebuilding the whole
+# SD card image.
+if [ -x /data/bluetoothd-test/dbus-daemon ]; then
+    DBUS_DAEMON=/data/bluetoothd-test/dbus-daemon
+else
+    DBUS_DAEMON=dbus-daemon
+fi
+
 echo "bluez-bringup: staging firmware"
 mkdir -p "$FW_DIR"
 
@@ -247,8 +289,8 @@ fi
 
 mkdir -p "$BUS_SOCKET_DIR" /var/run/dbus
 if [ ! -S "$BUS_SOCKET_DIR/system_bus_socket" ]; then
-    echo "bluez-bringup: starting system dbus-daemon"
-    dbus-daemon --config-file="$DBUS_SYSTEM_CONF" --nofork >/var/log/dbus-daemon.log 2>&1 &
+    echo "bluez-bringup: starting system dbus-daemon ($DBUS_DAEMON)"
+    "$DBUS_DAEMON" --config-file="$DBUS_SYSTEM_CONF" --nofork >/var/log/dbus-daemon.log 2>&1 &
     echo $! > "$PID_DIR/dbus-daemon.pid"
     i=0
     while [ ! -S "$BUS_SOCKET_DIR/system_bus_socket" ] && [ $i -lt 50 ]; do
@@ -268,7 +310,22 @@ ln -sf /var/lib/bluetooth /usr/var/lib/bluetooth 2>/dev/null || true
 mkdir -p /usr/lib/bluetooth/plugins
 
 echo "bluez-bringup: starting bluetoothd"
-"$BLUETOOTHD" -n >/var/log/bluetoothd.log 2>&1 &
+# 2026-08-20: -d added (temporary/diagnostic) -- without it, bluetoothd
+# never prints its own src/sdpd-service.c:add_record_to_server() lines,
+# so there's been zero real visibility into whether
+# BluezAaProfile::register_profile()'s RegisterProfile() call actually
+# created a well-formed SDP record for the AA UUID -- only that the
+# D-Bus call itself returned without an error, which isn't the same
+# thing. Real hardware showed AA still never getting dialed after both
+# the CoD (0x240420) and WIFI_INFO_RESPONSE security_mode (5) fixes, so
+# this checks the next real unverified layer: the SDP record itself.
+# Output still lands in /var/log/bluetoothd.log, NOT custom_ui's own
+# console (unlike bt-agent, which is separately re-launched via popen()
+# specifically to stream -- this script's own child processes were
+# never wired into that path) -- cat that file on the device after a
+# test connection attempt. Revert to plain -n once this question is
+# answered; -d is chatty (every D-Bus method call, not just SDP).
+"$BLUETOOTHD" -n -d >/var/log/bluetoothd.log 2>&1 &
 echo $! > "$PID_DIR/bluetoothd.pid"
 
 i=0
@@ -284,8 +341,21 @@ fi
 echo "bluez-bringup: configuring adapter and auto-pairing agent"
 export DBUS_SYSTEM_BUS_ADDRESS="unix:path=$BUS_SOCKET_DIR/system_bus_socket"
 hciconfig hci0 up 2>/dev/null || true
+# 2026-08-20: Class of Device was 0x240408 (major=Audio/Video, minor=2
+# "Hands-free device") -- fine for A2DP/HFP (which only look at major
+# class + service class), but real hardware showed AA's own RFCOMM
+# profile never getting dialed by the phone even after a fresh re-pair,
+# while A2DP connected normally. Decoded per the Bluetooth Core Spec CoD
+# layout (bits2-7 = minor device class): 0x240420 keeps the same major
+# class/service class bits but sets minor=8 ("Car audio", not
+# "Hands-free device") -- the value several real-world Android-Auto-
+# wireless dongle projects specifically use so Android's car-detection
+# heuristic recognizes this as a car, not just a headset, and offers
+# wireless AA setup. Unconfirmed on this hardware yet -- needs a
+# real-hardware retest (may also need another fresh re-pair, since CoD
+# is typically cached at pairing time same as SDP records).
 hciconfig hci0 sspmode 1 2>/dev/null || true
-hciconfig hci0 class 0x240408 2>/dev/null || true
+hciconfig hci0 class 0x240420 2>/dev/null || true
 hciconfig hci0 auth 2>/dev/null || true
 hciconfig hci0 encrypt 2>/dev/null || true
 hciconfig hci0 piscan 2>/dev/null || true
@@ -294,7 +364,7 @@ hciconfig hci0 piscan 2>/dev/null || true
 dbus-send --system --dest=org.bluez --type=method_call /org/bluez/hci0 org.freedesktop.DBus.Properties.Set string:org.bluez.Adapter1 string:Powered variant:boolean:true 2>/dev/null || true
 dbus-send --system --dest=org.bluez --type=method_call /org/bluez/hci0 org.freedesktop.DBus.Properties.Set string:org.bluez.Adapter1 string:Pairable variant:boolean:true 2>/dev/null || true
 dbus-send --system --dest=org.bluez --type=method_call /org/bluez/hci0 org.freedesktop.DBus.Properties.Set string:org.bluez.Adapter1 string:Discoverable variant:boolean:true 2>/dev/null || true
-dbus-send --system --dest=org.bluez --type=method_call /org/bluez/hci0 org.freedesktop.DBus.Properties.Set string:org.bluez.Adapter1 string:Class variant:uint32:2360328 2>/dev/null || true
+dbus-send --system --dest=org.bluez --type=method_call /org/bluez/hci0 org.freedesktop.DBus.Properties.Set string:org.bluez.Adapter1 string:Class variant:uint32:2360352 2>/dev/null || true
 
 # Launch dedicated background auto-pairing agent (NoInputNoOutput)
 AGENT_BIN=""

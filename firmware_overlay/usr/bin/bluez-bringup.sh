@@ -206,8 +206,43 @@ fi
 
 echo "bluez-bringup: staging D-Bus config"
 mkdir -p "$DBUS_POLICY_DST"
-[ -f "$DBUS_POLICY_SRC/bluetooth.conf" ] && cp "$DBUS_POLICY_SRC/bluetooth.conf" "$DBUS_POLICY_DST/bluetooth.conf"
-[ -f "$DBUS_POLICY_SRC/system-diagnostic.conf" ] && cp "$DBUS_POLICY_SRC/system-diagnostic.conf" "$DBUS_SYSTEM_CONF"
+
+if [ -f "$DBUS_POLICY_SRC/bluetooth.conf" ]; then
+    cp "$DBUS_POLICY_SRC/bluetooth.conf" "$DBUS_POLICY_DST/bluetooth.conf"
+elif [ -f /data/bluetoothd-test/dbus-policy/bluetooth.conf ]; then
+    cp /data/bluetoothd-test/dbus-policy/bluetooth.conf "$DBUS_POLICY_DST/bluetooth.conf"
+elif [ ! -f "$DBUS_POLICY_DST/bluetooth.conf" ]; then
+    cat << 'EOF' > "$DBUS_POLICY_DST/bluetooth.conf"
+<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-BUS Bus Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
+<busconfig>
+  <policy user="root">
+    <allow own="org.bluez"/>
+    <allow send_destination="org.bluez"/>
+    <allow send_interface="org.bluez.Agent1"/>
+    <allow send_interface="org.bluez.MediaEndpoint1"/>
+    <allow send_interface="org.bluez.MediaPlayer1"/>
+    <allow send_interface="org.bluez.Profile1"/>
+    <allow send_interface="org.bluez.GattCharacteristic1"/>
+    <allow send_interface="org.bluez.GattDescriptor1"/>
+    <allow send_interface="org.bluez.LEAdvertisement1"/>
+    <allow send_interface="org.freedesktop.DBus.ObjectManager"/>
+    <allow send_interface="org.freedesktop.DBus.Properties"/>
+  </policy>
+  <policy context="default">
+    <allow send_destination="org.bluez"/>
+  </policy>
+</busconfig>
+EOF
+fi
+
+if [ -f "$DBUS_POLICY_SRC/system-diagnostic.conf" ]; then
+    cp "$DBUS_POLICY_SRC/system-diagnostic.conf" "$DBUS_SYSTEM_CONF"
+elif [ -f /data/bluetoothd-test/dbus-policy/system-diagnostic.conf ]; then
+    cp /data/bluetoothd-test/dbus-policy/system-diagnostic.conf "$DBUS_SYSTEM_CONF"
+elif [ -f /usr/etc/dbus-1/system.conf ]; then
+    sed 's/<user>messagebus<\/user>/<user>root<\/user>/g' /usr/etc/dbus-1/system.conf > "$DBUS_SYSTEM_CONF"
+fi
 
 mkdir -p "$BUS_SOCKET_DIR" /var/run/dbus
 if [ ! -S "$BUS_SOCKET_DIR/system_bus_socket" ]; then

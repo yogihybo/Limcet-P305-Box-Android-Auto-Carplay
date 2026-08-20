@@ -281,7 +281,7 @@ void ensure_bluetooth_daemon_running() {
             struct stat st {};
             if (stat(a, &st) == 0) {
                 std::printf("%s hal::bluetooth::ensure_bluetooth_daemon_running: starting %s\n", core::log_timestamp().c_str(), a);
-                std::string cmd = std::string(a) + " >/dev/null 2>&1 &";
+                std::string cmd = std::string(a) + " &";
                 std::system(cmd.c_str());
                 break;
             }

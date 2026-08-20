@@ -301,7 +301,16 @@ bool init_bluetooth(BluetoothHandle & out, const char * /*path*/) {
         close(sock);
     }
 
+    run_command_simple("hciconfig hci0 sspmode 1 >/dev/null 2>&1");
+    run_command_simple("hciconfig hci0 class 0x240408 >/dev/null 2>&1");
+    run_command_simple("hciconfig hci0 auth >/dev/null 2>&1");
+    run_command_simple("hciconfig hci0 encrypt >/dev/null 2>&1");
+    run_command_simple("hciconfig hci0 piscan >/dev/null 2>&1");
+
     run_command_simple("dbus-send --system --dest=org.bluez --type=method_call /org/bluez/hci0 org.freedesktop.DBus.Properties.Set string:org.bluez.Adapter1 string:Powered variant:boolean:true >/dev/null 2>&1");
+    run_command_simple("dbus-send --system --dest=org.bluez --type=method_call /org/bluez/hci0 org.freedesktop.DBus.Properties.Set string:org.bluez.Adapter1 string:Pairable variant:boolean:true >/dev/null 2>&1");
+    run_command_simple("dbus-send --system --dest=org.bluez --type=method_call /org/bluez/hci0 org.freedesktop.DBus.Properties.Set string:org.bluez.Adapter1 string:Discoverable variant:boolean:true >/dev/null 2>&1");
+    run_command_simple("dbus-send --system --dest=org.bluez --type=method_call /org/bluez/hci0 org.freedesktop.DBus.Properties.Set string:org.bluez.Adapter1 string:Class variant:uint32:2360328 >/dev/null 2>&1");
     out.fd = 100;  // Positive non-negative handle indicating valid BlueZ instance
     return true;
 }

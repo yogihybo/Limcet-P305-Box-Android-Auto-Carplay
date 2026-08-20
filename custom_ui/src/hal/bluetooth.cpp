@@ -372,7 +372,8 @@ bool remove_paired_device(BluetoothHandle & /*h*/, const std::string & mac) {
 }
 
 bool set_device_name(BluetoothHandle & /*h*/, const std::string & name) {
-    std::string cmd = "dbus-send --system --dest=org.bluez --type=method_call /org/bluez/hci0 org.freedesktop.DBus.Properties.Set string:org.bluez.Adapter1 string:Alias variant:string:'" + name + "' >/dev/null 2>&1";
+    run_command_simple("hciconfig hci0 name \"" + name + "\" >/dev/null 2>&1");
+    std::string cmd = "dbus-send --system --dest=org.bluez --type=method_call /org/bluez/hci0 org.freedesktop.DBus.Properties.Set string:org.bluez.Adapter1 string:Alias \"variant:string:" + name + "\" >/dev/null 2>&1";
     return run_command_simple(cmd);
 }
 

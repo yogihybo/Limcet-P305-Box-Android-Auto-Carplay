@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cctype>
 #include <cerrno>
 #include <chrono>
@@ -275,17 +276,62 @@ void ensure_bluetooth_daemon_running() {
         }
     }
 
-    if (std::system("pidof bt-agent >/dev/null 2>&1") != 0) {
-        const char * agents[] = { "/usr/bin/bt-agent", "/data/bt-agent", "./bt-agent" };
-        for (const char * a : agents) {
-            struct stat st {};
-            if (stat(a, &st) == 0) {
-                std::printf("%s hal::bluetooth::ensure_bluetooth_daemon_running: starting %s\n", core::log_timestamp().c_str(), a);
-                std::string cmd = std::string(a) + " &";
-                std::system(cmd.c_str());
-                break;
+    // Ensure bt-agent is running and stream its output directly to custom_ui console
+    static std::atomic<bool> s_agent_thread_started{false};
+    if (!s_agent_thread_started.exchange(true)) {
+        std::thread([]() {
+            const char * agents[] = { "/usr/bin/bt-agent", "/data/bt-agent", "./bt-agent" };
+            std::string agent_bin;
+            for (const char * a : agents) {
+                struct stat st {};
+                if (stat(a, &st) == 0 && (st.st_mode & S_IXUSR)) {
+                    agent_bin = a;
+                    break;
+                }
             }
-        }
+            if (agent_bin.empty()) {
+                for (const char * a : agents) {
+                    struct stat st {};
+                    if (stat(a, &st) == 0) {
+                        agent_bin = a;
+                        break;
+                    }
+                }
+            }
+            if (agent_bin.empty()) {
+                std::printf("%s [BT-AGENT] Notice: bt-agent not found in /usr/bin, /data, or ./\n",
+                            core::log_timestamp().c_str());
+                return;
+            }
+
+            // Restart cleanly to ensure it captures system bus
+            std::system("killall -9 bt-agent 2>/dev/null || true");
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+            std::string cmd = agent_bin + " 2>&1";
+            std::printf("%s [BT-AGENT] Launching %s (streaming logs to custom_ui console)\n",
+                        core::log_timestamp().c_str(), cmd.c_str());
+
+            FILE * fp = popen(cmd.c_str(), "r");
+            if (!fp) {
+                std::fprintf(stderr, "%s [BT-AGENT] popen failed for %s\n",
+                             core::log_timestamp().c_str(), cmd.c_str());
+                return;
+            }
+
+            char linebuf[512];
+            while (fgets(linebuf, sizeof(linebuf), fp)) {
+                size_t len = strlen(linebuf);
+                while (len > 0 && (linebuf[len - 1] == '\n' || linebuf[len - 1] == '\r')) {
+                    linebuf[--len] = '\0';
+                }
+                if (len > 0) {
+                    std::printf("%s %s\n", core::log_timestamp().c_str(), linebuf);
+                    fflush(stdout);
+                }
+            }
+            pclose(fp);
+        }).detach();
     }
 }
 

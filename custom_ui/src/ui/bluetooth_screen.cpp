@@ -12,7 +12,9 @@
 #include "core/config_store.h"
 #include "core/log_timing.h"
 #include "core/navigation.h"
+#include "hal/androidauto_client.h"
 #include "hal/bluetooth.h"
+#include "ui/android_auto_screen.h"
 #include "ui/staging/nav_rail.h"
 #include "ui/staging/theme.h"
 #include "ui/staging/fonts.h"
@@ -88,8 +90,12 @@ void device_row_clicked_cb(lv_event_t * e) {
     std::string connect_id = hal::split_plist_entry(entry, mac, name) ? mac : entry;
 
     hal::BluetoothHandle & h = hal::shared_handle();
-    bool ok = hal::connect_device(h, connect_id);
-    status_label_set(w->status_label, ok ? "HFPCONN sent" : "HFPCONN failed / no response");
+    hal::connect_device(h, connect_id);
+    status_label_set(w->status_label, "Connecting & Starting Android Auto...");
+
+    hal::AndroidAutoClient client;
+    client.requestConnect();
+    core::navigation::push(ui::create_android_auto_screen);
 }
 
 void remove_device_clicked_cb(lv_event_t * e) {

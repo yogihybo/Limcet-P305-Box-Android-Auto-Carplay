@@ -145,10 +145,31 @@ void bluez_monitor_loop(BluetoothHandle * h) {
 }  // namespace
 
 void ensure_bluetooth_daemon_running() {
+    static std::mutex mtx;
+    std::lock_guard<std::mutex> lock(mtx);
     if (is_bluez_active()) {
         std::printf("%s hal::bluetooth::ensure_bluetooth_daemon_running: BlueZ (bluetoothd) already running\n",
                     core::log_timestamp().c_str());
         return;
+    }
+
+    // Prefer running the dedicated bringup script if present and executable
+    const char * scripts[] = {
+        "/usr/bin/bluez-bringup.sh",
+        "/data/bluez-bringup.sh",
+        "/usr/share/bluez-bringup/bluez-bringup.sh",
+        "scripts/bluez-bringup.sh"
+    };
+    for (const char * s : scripts) {
+        struct stat st {};
+        if (stat(s, &st) == 0) {
+            std::printf("%s hal::bluetooth::ensure_bluetooth_daemon_running: invoking %s start\n",
+                        core::log_timestamp().c_str(), s);
+            std::string cmd = std::string(s) + " start >/dev/null 2>&1";
+            if (std::system(cmd.c_str()) == 0) {
+                return;
+            }
+        }
     }
 
     // Check if rtk_hciattach is already running / attaching hci0
@@ -156,13 +177,25 @@ void ensure_bluetooth_daemon_running() {
         std::printf("%s hal::bluetooth::ensure_bluetooth_daemon_running: starting rtk_hciattach over /dev/ttyHS1\n",
                     core::log_timestamp().c_str());
         std::system("rtk_hciattach -n -s 115200 /dev/ttyHS1 rtk_h5 >/dev/null 2>&1 &");
-        std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+        for (int i = 0; i < 30; ++i) {
+            struct stat st {};
+            if (stat("/sys/class/bluetooth/hci0", &st) == 0) break;
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+    }
+
+    if (std::system("pidof dbus-daemon >/dev/null 2>&1") != 0) {
+        std::system("mkdir -p /var/run/dbus && dbus-daemon --system --fork >/dev/null 2>&1");
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
     }
 
     if (std::system("pidof bluetoothd >/dev/null 2>&1") != 0) {
         std::printf("%s hal::bluetooth::ensure_bluetooth_daemon_running: starting bluetoothd\n", core::log_timestamp().c_str());
         std::system("bluetoothd -n >/dev/null 2>&1 &");
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        for (int i = 0; i < 20; ++i) {
+            if (std::system("pidof bluetoothd >/dev/null 2>&1") == 0) break;
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
     }
 }
 
@@ -294,8 +327,10 @@ bool remove_paired_device(BluetoothHandle & /*h*/, const std::string & mac) {
 }
 
 bool set_device_name(BluetoothHandle & /*h*/, const std::string & name) {
+    run_command_simple("hciconfig hci0 name \"" + name + "\" >/dev/null 2>&1");
     std::string cmd = "bluetoothctl system-alias \"" + name + "\" >/dev/null 2>&1";
-    return run_command_simple(cmd);
+    bool ok = run_command_simple(cmd);
+    return ok || run_command_simple("hciconfig hci0 >/dev/null 2>&1");
 }
 
 bool set_pairing_pin(BluetoothHandle & /*h*/, const std::string & /*pin*/) {

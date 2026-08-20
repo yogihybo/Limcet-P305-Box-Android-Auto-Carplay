@@ -77,12 +77,28 @@ if pidof blueware >/dev/null 2>&1; then
     exit 1
 fi
 
-mkdir -p "$PID_DIR"
+if [ -x /usr/bin/rtk_hciattach ]; then
+    RTK_HCIATTACH=/usr/bin/rtk_hciattach
+elif [ -x /data/rtk-hciattach-test/rtk_hciattach ]; then
+    RTK_HCIATTACH=/data/rtk-hciattach-test/rtk_hciattach
+elif [ -x /data/rtk_hciattach ]; then
+    RTK_HCIATTACH=/data/rtk_hciattach
+else
+    RTK_HCIATTACH=rtk_hciattach
+fi
+
+if [ -x /usr/bin/bluetoothd ]; then
+    BLUETOOTHD=/usr/bin/bluetoothd
+elif [ -x /data/bluetoothd-test/bluetoothd ]; then
+    BLUETOOTHD=/data/bluetoothd-test/bluetoothd
+else
+    BLUETOOTHD=bluetoothd
+fi
 
 echo "bluez-bringup: staging firmware"
 mkdir -p "$FW_DIR"
 
-if [ -f "$FW_DIR/rtl8761b_fw" ]; then
+if [ -s "$FW_DIR/rtl8761b_fw" ]; then
     echo "bluez-bringup: firmware already present at $FW_DIR/rtl8761b_fw"
 else
     FW_FOUND=""
@@ -99,8 +115,9 @@ else
         /data/rtk-hciattach-test/device-firmware/rtl8761bt_fw \
         /data/rtk-hciattach-test/rtl8761b_fw \
         /data/rtk-hciattach-test/rtl8761bt_fw \
+        /etc/rtl8761bt_fw \
         /usr/share/bluez-bringup/device-firmware/rtl8761bt_fw; do
-        if [ -f "$p" ]; then
+        if [ -s "$p" ]; then
             FW_FOUND="$p"
             break
         fi
@@ -110,8 +127,8 @@ else
     if [ -z "$FW_FOUND" ]; then
         for search_dir in /data /lib /usr /etc; do
             if [ -d "$search_dir" ]; then
-                match=$(find "$search_dir" -name "*8761*" 2>/dev/null | grep -v "/rtlbt/" | head -n 1)
-                if [ -n "$match" ] && [ -f "$match" ]; then
+                match=$(find "$search_dir" -name "*8761*fw*" -o -name "*8761bt_fw" 2>/dev/null | grep -v "/rtlbt/" | head -n 1)
+                if [ -n "$match" ] && [ -s "$match" ]; then
                     FW_FOUND="$match"
                     break
                 fi
@@ -127,8 +144,47 @@ else
     fi
 fi
 
-if [ -f "$FW_SRC/rtl8761bt_config" ]; then
-    cp "$FW_SRC/rtl8761bt_config" "$FW_DIR/rtl8761b_config" 2>/dev/null || true
+if [ -s "$FW_DIR/rtl8761b_config" ]; then
+    echo "bluez-bringup: config already present at $FW_DIR/rtl8761b_config"
+else
+    CFG_FOUND=""
+    for p in \
+        "$FW_SRC/rtl8761bt_config" \
+        /lib/firmware/rtl8761b_config \
+        /lib/firmware/rtl8761bt_config \
+        /etc/firmware/rtl8761b_config \
+        /usr/lib/firmware/rtl8761b_config \
+        /data/rtl8761bt_config \
+        /data/rtl8761b_config \
+        /data/device-firmware/rtl8761bt_config \
+        /data/device-firmware/rtl8761b_config \
+        /data/rtk-hciattach-test/device-firmware/rtl8761bt_config \
+        /data/rtk-hciattach-test/rtl8761b_config \
+        /data/rtk-hciattach-test/rtl8761bt_config \
+        /etc/rtl8761bt_config \
+        /usr/share/bluez-bringup/device-firmware/rtl8761bt_config; do
+        if [ -s "$p" ]; then
+            CFG_FOUND="$p"
+            break
+        fi
+    done
+
+    if [ -z "$CFG_FOUND" ]; then
+        for search_dir in /data /lib /usr /etc; do
+            if [ -d "$search_dir" ]; then
+                match=$(find "$search_dir" -name "*8761*config*" 2>/dev/null | grep -v "/rtlbt/" | head -n 1)
+                if [ -n "$match" ] && [ -s "$match" ]; then
+                    CFG_FOUND="$match"
+                    break
+                fi
+            fi
+        done
+    fi
+
+    if [ -n "$CFG_FOUND" ]; then
+        echo "bluez-bringup: found config at $CFG_FOUND -> copying to $FW_DIR/rtl8761b_config"
+        cp "$CFG_FOUND" "$FW_DIR/rtl8761b_config"
+    fi
 fi
 
 echo "bluez-bringup: starting rtk_hciattach (hci0)"

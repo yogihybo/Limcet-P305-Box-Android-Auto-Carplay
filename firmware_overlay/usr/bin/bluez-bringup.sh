@@ -29,7 +29,9 @@ FW_SRC=/usr/share/bluez-bringup/device-firmware
 DBUS_POLICY_DST=/usr/etc/dbus-1/system.d
 DBUS_SYSTEM_CONF=/usr/etc/dbus-1/system-diagnostic.conf
 DBUS_POLICY_SRC=/usr/share/bluez-bringup/dbus-policy
-BUS_SOCKET_DIR=/var/run/dbus
+BUS_SOCKET_DIR=/var/run/run/dbus
+BUS_ADDRESS="unix:path=$BUS_SOCKET_DIR/system_bus_socket"
+export DBUS_SYSTEM_BUS_ADDRESS="$BUS_ADDRESS"
 TTY=/dev/ttyHS1
 PID_DIR=/var/run/bluez-bringup
 RTK_HCIATTACH=/usr/bin/rtk_hciattach
@@ -207,7 +209,7 @@ mkdir -p "$DBUS_POLICY_DST"
 [ -f "$DBUS_POLICY_SRC/bluetooth.conf" ] && cp "$DBUS_POLICY_SRC/bluetooth.conf" "$DBUS_POLICY_DST/bluetooth.conf"
 [ -f "$DBUS_POLICY_SRC/system-diagnostic.conf" ] && cp "$DBUS_POLICY_SRC/system-diagnostic.conf" "$DBUS_SYSTEM_CONF"
 
-mkdir -p "$BUS_SOCKET_DIR"
+mkdir -p "$BUS_SOCKET_DIR" /var/run/dbus
 if [ ! -S "$BUS_SOCKET_DIR/system_bus_socket" ]; then
     echo "bluez-bringup: starting system dbus-daemon"
     dbus-daemon --config-file="$DBUS_SYSTEM_CONF" --nofork >/var/log/dbus-daemon.log 2>&1 &
@@ -221,6 +223,7 @@ if [ ! -S "$BUS_SOCKET_DIR/system_bus_socket" ]; then
         echo "bluez-bringup: system bus socket did not appear within 5s"
         exit 1
     fi
+    ln -sf "$BUS_SOCKET_DIR/system_bus_socket" /var/run/dbus/system_bus_socket 2>/dev/null || true
 fi
 
 mkdir -p /var/lib/bluetooth

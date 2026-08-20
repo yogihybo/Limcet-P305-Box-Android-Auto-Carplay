@@ -7,23 +7,20 @@
 namespace androidauto {
 
 bool bluez_stack_start() {
-    std::printf("%s androidauto: bluez_stack: starting (stopping blueware first)\n",
-               logTimestamp().c_str());
-    int rc = std::system("/usr/bin/bluez-bringup.sh start");
-    if (rc != 0) {
-        std::fprintf(stderr, "%s androidauto: bluez_stack: bluez-bringup.sh start failed (rc=%d) "
-                     "-- see /var/log/rtk_hciattach.log, /var/log/dbus-daemon.log, "
-                     "/var/log/bluetoothd.log\n", logTimestamp().c_str(), rc);
-        return false;
+    if (std::system("pidof bluetoothd >/dev/null 2>&1") == 0) {
+        std::printf("%s androidauto: bluez_stack: BlueZ stack already running and active\n",
+                   logTimestamp().c_str());
+        return true;
     }
-    std::printf("%s androidauto: bluez_stack: ready\n", logTimestamp().c_str());
-    return true;
+    std::printf("%s androidauto: bluez_stack: starting BlueZ stack\n", logTimestamp().c_str());
+    int rc = std::system("/usr/bin/bluez-bringup.sh start");
+    return (rc == 0);
 }
 
 void bluez_stack_stop() {
-    std::printf("%s androidauto: bluez_stack: stopping (freeing chip back for blueware)\n",
+    // BlueZ is the permanent system Bluetooth stack -- never stop it or revert to blueware
+    std::printf("%s androidauto: bluez_stack: keeping BlueZ stack active permanently\n",
                logTimestamp().c_str());
-    std::system("/usr/bin/bluez-bringup.sh stop");
 }
 
 }  // namespace androidauto

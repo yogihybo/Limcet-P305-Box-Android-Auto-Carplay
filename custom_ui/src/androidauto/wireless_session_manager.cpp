@@ -289,12 +289,11 @@ void WirelessSessionManager::run() {
     // everything built on them, all pure read()/write() on fd_) is
     // unchanged -- only where the fd comes from changed, via attach()
     // instead of connect().
-    setStatus(WirelessSessionState::BluetoothHandshake, "Bringing up hci0 + bluetoothd...");
+    setStatus(WirelessSessionState::BluetoothHandshake, "Ensuring BlueZ stack is active...");
     if (!androidauto::bluez_stack_start()) {
-        setStatus(WirelessSessionState::Failed, "Could not bring up hci0/bluetoothd (see logs)");
+        setStatus(WirelessSessionState::Failed, "Could not verify BlueZ stack");
         return;
     }
-    BluezStackGuard bluezStackGuard;  // frees the chip back for blueware on every exit below
 
     androidauto::BluezClient bluez;
     if (!bluez.connect() || !bluez.register_agent() || !bluez.register_profile()) {
@@ -303,9 +302,9 @@ void WirelessSessionManager::run() {
     }
 
     setStatus(WirelessSessionState::BluetoothHandshake, "Waiting for phone to connect over Bluetooth...");
-    int rfcommFd = bluez.wait_for_connection(30);
+    int rfcommFd = bluez.wait_for_connection(120);
     if (rfcommFd < 0) {
-        setStatus(WirelessSessionState::Failed, "No phone connected to the AA Bluetooth profile within 30s");
+        setStatus(WirelessSessionState::Idle, "Ready for connection (Bluetooth profile listening)");
         return;
     }
     std::printf("%s androidauto: wireless session: phone connected over BlueZ RFCOMM (fd=%d)\n",

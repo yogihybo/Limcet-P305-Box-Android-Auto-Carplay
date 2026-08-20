@@ -7,8 +7,10 @@
 #include <mutex>
 
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/un.h>
 #include <sys/time.h>
+#include <thread>
 #include <unistd.h>
 
 namespace hal {
@@ -55,22 +57,9 @@ std::mutex g_spawnMutex;
 void trySpawnSidecar() {
     std::lock_guard<std::mutex> lock(g_spawnMutex);
 
-    // 2026-08-19: statusLine() (called every 500ms from
-    // android_auto_screen.cpp's poll_timer_cb, allow_spawn=true by
-    // default) retries twice per call, each attempt reaching here via
-    // ensureConnected() whenever fd_ < 0 -- e.g. right after the
-    // sidecar crashes/gets OOM-killed. Each call below is TWO
-    // std::system() forks (pidof + spawn), so an offline sidecar meant
-    // up to 4 shell fork/execs every 500ms, all on the single LVGL main
-    // thread, right when the system is already under the same pressure
-    // that likely killed the sidecar in the first place. Rate-limited
-    // to one real attempt per 5s -- the sidecar binds its socket almost
-    // immediately once it does start, so this doesn't meaningfully
-    // delay a legitimate respawn, it just stops the redundant retries
-    // in between.
     static auto lastAttempt = std::chrono::steady_clock::time_point::min();
     auto now = std::chrono::steady_clock::now();
-    if (now - lastAttempt < std::chrono::seconds(5)) {
+    if (now - lastAttempt < std::chrono::seconds(4)) {
         return;
     }
     lastAttempt = now;
@@ -81,22 +70,34 @@ void trySpawnSidecar() {
 
     char exePath[512];
     ssize_t len = readlink("/proc/self/exe", exePath, sizeof(exePath) - 1);
-    if (len <= 0) return;
-    exePath[len] = '\0';
+    std::string dir = ".";
+    if (len > 0) {
+        exePath[len] = '\0';
+        std::string p(exePath);
+        auto slash = p.find_last_of('/');
+        if (slash != std::string::npos) {
+            dir = p.substr(0, slash);
+        }
+    }
 
-    std::string dir(exePath);
-    auto slash = dir.find_last_of('/');
-    if (slash == std::string::npos) return;
-    dir.resize(slash);
+    std::string candidate_paths[] = {
+        dir + "/androidauto-sidecar",
+        "/data/androidauto-sidecar",
+        "/usr/bin/androidauto-sidecar",
+        "./androidauto-sidecar"
+    };
 
-    // No stdout/stderr redirect -- inherits this process's own fds, so
-    // the sidecar's logging (wireless_session_manager.cpp,
-    // bw_aap_client.cpp, etc.) lands in the same console as custom_ui's
-    // own, instead of the easy-to-miss /tmp/androidauto-sidecar.log
-    // this used to redirect to. Per explicit request during real
-    // hardware AA connection debugging.
-    std::string cmd = dir + "/androidauto-sidecar &";
-    std::system(cmd.c_str());
+    for (const auto & path : candidate_paths) {
+        struct stat st {};
+        if (stat(path.c_str(), &st) == 0 && (st.st_mode & S_IXUSR)) {
+            std::printf("hal::androidauto_client: spawning sidecar from %s\n", path.c_str());
+            std::string cmd = path + " &";
+            std::system(cmd.c_str());
+            return;
+        }
+    }
+
+    std::printf("hal::androidauto_client: warning: androidauto-sidecar binary not found in candidate paths\n");
 }
 }  // namespace
 
@@ -116,42 +117,32 @@ void AndroidAutoClient::disconnect() {
 bool AndroidAutoClient::ensureConnected(bool allow_spawn) {
     if (fd_ >= 0) return true;
 
-    if (allow_spawn) {
+    if (allow_spawn && std::system("pidof androidauto-sidecar >/dev/null 2>&1") != 0) {
         trySpawnSidecar();
     }
-
-    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (fd < 0) return false;
 
     struct sockaddr_un addr {};
     addr.sun_family = AF_UNIX;
     std::strncpy(addr.sun_path, kSocketPath, sizeof(addr.sun_path) - 1);
 
-    if (connect(fd, reinterpret_cast<struct sockaddr *>(&addr), sizeof(addr)) != 0) {
+    int attempts = allow_spawn ? 10 : 1;
+    for (int i = 0; i < attempts; ++i) {
+        int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+        if (fd < 0) return false;
+
+        if (connect(fd, reinterpret_cast<struct sockaddr *>(&addr), sizeof(addr)) == 0) {
+            struct timeval tv {};
+            tv.tv_sec = 1;
+            setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+            fd_ = fd;
+            return true;
+        }
         close(fd);
-        return false;
+        if (i + 1 < attempts) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
     }
-
-    // 2026-08-19: real gap found via code audit -- this socket had no
-    // receive timeout at all, unlike every other IPC path in this
-    // codebase (hal/bluetooth.cpp, bw_aap_client.cpp, etc. all use
-    // select()-based timeouts). sendCommand()'s read() below is called
-    // from statusLine() (polled every 500ms by ui/android_auto_screen.cpp
-    // from the LVGL main thread) and from hal/touch.cpp's sendTouch()
-    // (called at the touch panel's own poll rate) -- both run on the
-    // single LVGL main thread, so an unbounded block here if the
-    // sidecar ever stalls (a hang anywhere in its own blocking
-    // operations -- wifi_ap.sh, the bw_aap handshake waits, etc. --
-    // several of which this same audit pass found real gaps in) would
-    // freeze the ENTIRE UI, not just Android Auto's own screen. 1s is
-    // generous for a normally-fast local IPC round trip while still
-    // bounding the worst case tightly for a real-time UI thread.
-    struct timeval tv {};
-    tv.tv_sec = 1;
-    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-
-    fd_ = fd;
-    return true;
+    return false;
 }
 
 bool AndroidAutoClient::sendCommand(const std::string & line, std::string & reply) {

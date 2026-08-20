@@ -190,9 +190,19 @@ void bluez_monitor_loop(BluetoothHandle * h) {
 
                     // Explicitly trigger Android Auto RFCOMM profile connection on the newly connected device
                     std::string dev_p = "/org/bluez/hci0/" + mac_to_dbus_path(connected_mac);
-                    std::string cmd = "dbus-send --system --dest=org.bluez --type=method_call " + dev_p +
-                                      " org.bluez.Device1.ConnectProfile string:4de17a00-52cb-11e6-bdf4-0800200c9a66 >/dev/null 2>&1 &";
-                    run_command_simple(cmd);
+                    std::thread([connected_mac, dev_p]() {
+                        std::printf("%s [BT-CMD] Sending ConnectProfile(AA 4de17a00...) to %s (%s)...\n",
+                                    core::log_timestamp().c_str(), connected_mac.c_str(), dev_p.c_str());
+                        std::vector<std::string> output;
+                        std::string cmd = "dbus-send --system --print-reply --dest=org.bluez " + dev_p +
+                                          " org.bluez.Device1.ConnectProfile string:4de17a00-52cb-11e6-bdf4-0800200c9a66 2>&1";
+                        bool ok = run_command_capture(cmd, output);
+                        std::printf("%s [BT-CMD] ConnectProfile(AA) result (exit=%d):\n",
+                                    core::log_timestamp().c_str(), ok ? 0 : 1);
+                        for (const auto & line : output) {
+                            std::printf("    [BT-CMD-REPLY] %s\n", line.c_str());
+                        }
+                    }).detach();
                 } else {
                     std::printf("%s [BT-EVENT] *** Device Disconnected ***: (was %s '%s')\n",
                                 core::log_timestamp().c_str(), last_connected_mac.c_str(),

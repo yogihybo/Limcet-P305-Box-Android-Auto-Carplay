@@ -43,6 +43,8 @@ namespace hal {
 
 enum class TouchAction { Down, Move, Up };
 
+void try_spawn_androidauto_sidecar();
+
 class AndroidAutoClient {
 public:
     AndroidAutoClient();

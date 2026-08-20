@@ -322,6 +322,9 @@ int main() {
     hal::ensure_bluetooth_daemon_running();
     std::printf("%s ui: BlueZ daemon launch requested\n", core::log_timestamp().c_str());
 
+    // Auto-spawns androidauto-sidecar if present
+    hal::try_spawn_androidauto_sidecar();
+
     std::thread([]() {
         hal::BluetoothHandle & bt = hal::shared_handle();
         if (bt.fd >= 0) {

@@ -54,12 +54,14 @@ std::mutex g_spawnMutex;
 // current dev/test workflow (both binaries copied to the device
 // together, see scripts/run_on_device.sh); revisit once Phase 6's real
 // firmware integration lands with a fixed install path.
-void trySpawnSidecar() {
+}  // namespace
+
+void try_spawn_androidauto_sidecar() {
     std::lock_guard<std::mutex> lock(g_spawnMutex);
 
     static auto lastAttempt = std::chrono::steady_clock::time_point::min();
     auto now = std::chrono::steady_clock::now();
-    if (now - lastAttempt < std::chrono::seconds(4)) {
+    if (now - lastAttempt < std::chrono::seconds(2)) {
         return;
     }
     lastAttempt = now;
@@ -89,17 +91,21 @@ void trySpawnSidecar() {
 
     for (const auto & path : candidate_paths) {
         struct stat st {};
-        if (stat(path.c_str(), &st) == 0 && (st.st_mode & S_IXUSR)) {
-            std::printf("hal::androidauto_client: spawning sidecar from %s\n", path.c_str());
+        if (stat(path.c_str(), &st) == 0) {
+            chmod(path.c_str(), 0755);
+            std::printf("hal::androidauto_client: auto-spawning sidecar from %s\n", path.c_str());
             std::string cmd = path + " &";
             std::system(cmd.c_str());
+            for (int i = 0; i < 10; ++i) {
+                if (access(kSocketPath, F_OK) == 0) break;
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            }
             return;
         }
     }
 
     std::printf("hal::androidauto_client: warning: androidauto-sidecar binary not found in candidate paths\n");
 }
-}  // namespace
 
 AndroidAutoClient::AndroidAutoClient() = default;
 
@@ -118,7 +124,7 @@ bool AndroidAutoClient::ensureConnected(bool allow_spawn) {
     if (fd_ >= 0) return true;
 
     if (allow_spawn && std::system("pidof androidauto-sidecar >/dev/null 2>&1") != 0) {
-        trySpawnSidecar();
+        try_spawn_androidauto_sidecar();
     }
 
     struct sockaddr_un addr {};

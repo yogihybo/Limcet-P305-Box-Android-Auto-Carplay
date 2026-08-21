@@ -1,0 +1,10 @@
+# Minimal /etc/profile for the new custom_ui rootfs (Phase 3).
+# Deliberately does NOT carry forward stock's CARPLAY_*/CARLIFE_*
+# vendor env block (firmware_overlay/etc/profile) -- those are
+# MsnCoreApp/vendor-CarPlay-stack specific, custom_ui/androidauto-sidecar
+# don't read them at all. TODO before Phase 6 hardware validation:
+# check whether custom_ui's own touch HAL (src/hal/touch.cpp) needs
+# TSLIB_*-style env vars the way stock's tslib integration did -- not
+# yet verified either way, don't assume "not needed" without checking.
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export LD_LIBRARY_PATH=/usr/lib:/lib

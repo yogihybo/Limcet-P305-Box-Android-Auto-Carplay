@@ -1,0 +1,8 @@
+# Minimal busybox inittab for the new custom_ui rootfs (Phase 3).
+# Not a copy of any stock inittab -- this rootfs's busybox is the
+# hardware-confirmed static 1.33.0 rebuild (see busybox_overlay/ in
+# the Buildroot board dir), same init applet/inittab format as stock.
+::sysinit:/etc/rc.d/rcS
+::respawn:-/bin/sh
+::ctrlaltdel:/sbin/reboot
+::shutdown:/bin/umount -a -r

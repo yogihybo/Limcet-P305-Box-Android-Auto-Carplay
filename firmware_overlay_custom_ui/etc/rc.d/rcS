@@ -1,0 +1,103 @@
+#!/bin/sh
+# Trimmed rcS for the new dynamically-linked custom_ui rootfs (Phase 3,
+# merry-snacking-wirth.md). NOT a copy of firmware_overlay/etc/rc.d/rcS
+# -- that one is the stock-derived rootfs's own boot script and stays
+# untouched. This is curation, not stripping: only the generic
+# system/hardware bring-up this rootfs also needs, plus BlueZ/WiFi (now
+# via BlueZ 5.66 + rtk_hciattach instead of blueware), with every
+# MsnCoreApp/blueware/sink/com.arkmicro.auto.service reference dropped
+# entirely -- this app's whole HAL migration exists to retire those.
+#
+# custom_ui/androidauto-sidecar are deliberately NOT auto-started here
+# yet -- Phase 6 (hardware validation) deploys/runs them by hand first;
+# rcS autostart wiring is its own separate, already-tracked task.
+
+mount -t proc none /proc
+mount -t sysfs none /sys
+mount -t ramfs -n none /tmp
+mkdir -p /media
+mount -t ramfs -n none /media
+mkdir -p /var
+mount -t ramfs -n none /var
+mkdir -p /var/run/ /var/lib/lockdown /var/log
+sync
+/sbin/mdev -s
+/sbin/mdev -df &
+
+# Low-latency socket busy-polling -- still relevant, same AA
+# audio-stutter mitigation this project already hardware-confirmed
+# (see project_aa_audio_stutter_investigation memory).
+sysctl -w net.core.busy_poll=50 >/dev/null 2>&1
+sysctl -w net.core.busy_read=50 >/dev/null 2>&1
+
+for f in /proc/asound/card0/pcm0p/xrun_debug /proc/asound/card0/pcm0c/xrun_debug; do
+	[ -e "$f" ] && echo 1 > "$f" 2>/dev/null
+done
+
+# Hardware watchdog -- same real fix, same values (project_watchdog_implemented).
+watchdog -t 5 -T 15 /dev/watchdog
+
+# Vendor libs (libmfc.so, real Hantro H.264 decode used by
+# androidauto-sidecar) hardcode /tmp/dev/ device paths that don't match
+# where mdev actually creates them -- same compat shims as the stock
+# rootfs, still needed here, unrelated to the static/dynamic migration.
+mkdir -p /tmp/dev
+ln -sf /dev/memalloc /tmp/dev/memalloc
+ln -sf /dev/hx170dec /tmp/dev/hx170
+ln -sf /dev/dvr /tmp/dev/dvr
+
+# Userdata mount: ext4 p3 (SD or USB, whichever root came from), same
+# ROOTDEV-derived logic as the stock rootfs (generic infra, not
+# stock-UI-specific -- kept verbatim).
+ROOTDEV=$(cat /proc/cmdline | sed -n 's/.*root=\([^ ]*\).*/\1/p')
+USERDATADEV="${ROOTDEV%?}3"
+if mount -o sync -t ext4 "$USERDATADEV" /data 2>/dev/null; then
+	echo "userdata: ext4 ($USERDATADEV)"
+else
+	echo "userdata: mount failed ($USERDATADEV) -- not yet ported the NAND UBI/yaffs2 fallback chain from stock rcS, ext4-only for this rootfs so far"
+fi
+mkdir -p /data
+
+chmod 600 /etc/ssh/ssh_host_*_key 2>/dev/null
+mkdir -p /var/run/sshd /var/empty
+chmod 755 /var/empty
+/usr/bin/sshd -f /etc/ssh/sshd_config &
+
+# GPU driver -- same real fix/values as stock (registerMemBase/irqLine
+# required since the DT node is disabled/unmatched), galcore.ko here is
+# the SAME kernel-4.19.192-paired build (linux-arkmicro/compiled_modules),
+# not the old stock 3.4.0 one -- see this overlay's own README if that
+# note gets lost.
+modprobe galcore registerMemBase=0xE0F00000 irqLine=32 contiguousSize=0x800000 physSize=0x80000000 powerManagement=0
+
+# WiFi driver -- same real regulatory fix (rtw_country_code=US) as
+# stock, see project_wireless_carplay_aa_channel_plan memory.
+modprobe cfg80211
+modprobe rtl8811cu rtw_drv_log_level=2 rtw_country_code=US
+
+# --- BlueZ (replaces blueware entirely) ---
+# Real system dbus-daemon (Buildroot's own dynamic build, not the
+# device's old reduced one that lacked --address support -- see
+# tools/bluetoothd-test/README.md's Run 2). system-diagnostic.conf is
+# the same real fix (<user>root</user>, this rootfs has no messagebus
+# user either) staged over the real system.conf path so its own
+# <includedir>system.d</includedir> still finds bluetooth.conf.
+mkdir -p /usr/etc/dbus-1/system.d /var/run/dbus
+cp /etc/dbus-policy/system-diagnostic.conf /usr/etc/dbus-1/system.conf
+cp /etc/dbus-policy/bluetooth.conf /usr/etc/dbus-1/system.d/bluetooth.conf
+/usr/bin/dbus-daemon --system --fork
+
+# rtk_hciattach must stay running in the foreground (holds the fd/line
+# discipline open, see tools/rtk-hciattach-test/README.md) -- GPIO91
+# reset handled inside the binary itself.
+/usr/bin/rtk_hciattach -s 115200 /dev/ttyHS1 rtk_h5 &
+sleep 2
+/usr/bin/hci-updown up 2>/dev/null || echo "hci0 up failed -- check rtk_hciattach log"
+
+/usr/sbin/bluetoothd -n &
+
+# --- WiFi AP (wireless AA/CarPlay projection) ---
+/etc/wifi_ap.sh &
+
+echo "custom_ui rootfs: base system + BlueZ + WiFi bring-up done."
+echo "custom_ui/androidauto-sidecar are NOT auto-started -- deploy by hand for Phase 6 hardware validation."

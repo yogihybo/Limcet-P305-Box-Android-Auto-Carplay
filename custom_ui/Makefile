@@ -69,7 +69,8 @@ LDFLAGS       := -static -s
 LIBS          := -lpthread
 
 # --- Dynamic linking for `ui`/`androidauto-sidecar` only (Phase 4 of
-# the new custom_ui rootfs migration, merry-snacking-wirth.md) ---
+# the new general-purpose dynamically-linked rootfs migration,
+# merry-snacking-wirth.md) ---
 # Everything else in this Makefile (carplay-sidecar, the 4
 # androidauto-*-test diagnostic tools) stays on the static
 # CROSS_COMPILE/LDFLAGS above, untouched.

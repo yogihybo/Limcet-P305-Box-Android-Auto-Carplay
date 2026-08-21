@@ -215,44 +215,48 @@ AASDK_LIBS      := -Wl,--start-group \
                     -Wl,--end-group -lpthread -ldl -lrt
 
 # --- Dynamic variant, androidauto-sidecar only (Phase 4) ---
-# Partial-dynamic per the plan's own design choice: openssl/alsa/dbus
-# come from Buildroot's own staging sysroot (built with the SAME
-# Linaro 7.3.1/glibc-2.25 toolchain as CXX_DYN above -- no ABI
-# mismatch); Boost/libusb/Protobuf/aasdk itself stay the existing
-# static .a from AASDK_DEPS_DIR (built with the OLD system Debian
-# toolchain) -- lower risk than rebuilding that whole chain now, but a
-# REAL, unverified mixed-toolchain risk worth surfacing at actual link
-# time, not assumed safe (see merry-snacking-wirth.md's Phase 4 notes).
+# 2026-08-21: Boost/libusb/Protobuf/aasdk itself REBUILT against the
+# matching Linaro 7.3.1 toolchain (see merry-snacking-wirth.md's Phase
+# 4 rebuild-scope notes) -- the earlier "keep them static from the old
+# AASDK_DEPS_DIR" design was tried first and failed at real link time
+# (undefined reference to __libc_single_threaded, a glibc-2.32+ symbol
+# the old system-toolchain .a files referenced; libstdc++ symbol-
+# versioning mismatches on std::__throw_bad_array_new_length/
+# exception_ptr). AASDK_DEPS_DIR_DYN (a separate deps tree,
+# $(HOME)/build-deps-dyn by default) and AASDK_DIR's own
+# build-arm-dyn/ (NOT build-arm/, which the 4 still-static
+# androidauto-*-test tools also link against by that same fixed path --
+# a real conflict hit and fixed 2026-08-21, see build_aasdk.sh's own
+# AASDK_BUILD_SUBDIR comment) keep this fully separate from the static
+# AASDK_DEPS_DIR/AASDK_LIBS above.
 #
-# openssl specifically: Buildroot's libopenssl.mk (this 2019.05-rc1
-# tree) hardcodes `no-shared` for the TARGET build regardless of
-# BR2_STATIC_LIBS -- confirmed via direct inspection, only libssl.a/
-# libcrypto.a exist in BUILDROOT_STAGING, no .so. So openssl stays
-# static even in the "dynamic" build, same as Boost/libusb/Protobuf --
-# but unlike those, it's Buildroot's OWN build (2.25-toolchain-native),
-# not the old AASDK_DEPS_DIR one, and likely doesn't need nss-stub at
-# all (see the AASDK_WRAP_FLAGS comment below).
+# openssl: still from Buildroot's own staging sysroot (2.25-toolchain-
+# native already) -- Buildroot's libopeonssl.mk (this 2019.05-rc1 tree)
+# hardcodes `no-shared` for the TARGET build regardless of
+# BR2_STATIC_LIBS, confirmed via direct inspection, so it stays static
+# either way; no reason to duplicate it into AASDK_DEPS_DIR_DYN too.
+AASDK_DEPS_DIR_DYN ?= $(HOME)/build-deps-dyn
 AASDK_INCLUDES_DYN := -I$(AASDK_DIR)/include \
-                    -I$(AASDK_DIR)/build-arm/protobuf \
-                    -I$(AASDK_DEPS_DIR)/boost-arm-install/include \
+                    -I$(AASDK_DIR)/build-arm-dyn/protobuf \
+                    -I$(AASDK_DEPS_DIR_DYN)/boost-arm-install/include \
                     -I$(BUILDROOT_STAGING)/usr/include \
-                    -I$(AASDK_DEPS_DIR)/libusb-arm-install/include \
-                    -I$(AASDK_DEPS_DIR)/libusb-arm-install/include/libusb-1.0 \
-                    -I$(AASDK_DEPS_DIR)/protobuf-arm-install/include \
+                    -I$(AASDK_DEPS_DIR_DYN)/libusb-arm-install/include \
+                    -I$(AASDK_DEPS_DIR_DYN)/libusb-arm-install/include/libusb-1.0 \
+                    -I$(AASDK_DEPS_DIR_DYN)/protobuf-arm-install/include \
                     -I$(BUILDROOT_STAGING)/usr/include/dbus-1.0 \
                     -I$(BUILDROOT_STAGING)/usr/lib/dbus-1.0/include \
                     -Ithird_party/bluez_uapi
 AASDK_LIBS_DYN  := -Wl,--start-group \
-                    $(AASDK_DIR)/build-arm/lib/libaasdk.a \
-                    $(AASDK_DIR)/build-arm/lib/libaap_protobuf.a \
-                    $(wildcard $(AASDK_DEPS_DIR)/boost-arm-install/lib/*.a) \
-                    $(AASDK_DEPS_DIR)/libusb-arm-install/lib/libusb-1.0.a \
+                    $(AASDK_DIR)/build-arm-dyn/lib/libaasdk.a \
+                    $(AASDK_DIR)/build-arm-dyn/lib/libaap_protobuf.a \
+                    $(wildcard $(AASDK_DEPS_DIR_DYN)/boost-arm-install/lib/*.a) \
+                    $(AASDK_DEPS_DIR_DYN)/libusb-arm-install/lib/libusb-1.0.a \
                     $(BUILDROOT_STAGING)/usr/lib/libssl.a \
                     $(BUILDROOT_STAGING)/usr/lib/libcrypto.a \
-                    $(wildcard $(AASDK_DEPS_DIR)/protobuf-arm-install/lib/*.a) \
+                    $(wildcard $(AASDK_DEPS_DIR_DYN)/protobuf-arm-install/lib/*.a) \
                     -Wl,--end-group \
                     -L$(BUILDROOT_STAGING)/usr/lib -lasound -ldbus-1 \
-                    -lpthread -ldl -lrt
+                    -lpthread -ldl -lrt -lstdc++fs
 
 # Same static-NSS-init crash this project already hit and fixed for
 # nano/htop/tmux/gdbserver/busybox (tools/nss-stub/README.md):

@@ -68,6 +68,31 @@ CFLAGS        := -Wall -Wextra -O2 -MMD -MP $(INCLUDES)
 LDFLAGS       := -static -s
 LIBS          := -lpthread
 
+# --- Dynamic linking for `ui`/`androidauto-sidecar` only (Phase 4 of
+# the new custom_ui rootfs migration, merry-snacking-wirth.md) ---
+# Everything else in this Makefile (carplay-sidecar, the 4
+# androidauto-*-test diagnostic tools) stays on the static
+# CROSS_COMPILE/LDFLAGS above, untouched.
+#
+# CRITICAL: this is NOT just "drop -static". This Makefile's own
+# CROSS_COMPILE above is the SYSTEM Debian arm-linux-gnueabihf-g++
+# (gcc 12, targets GLIBC_2.28+ per this file's own comment on
+# LDFLAGS) -- a dynamically-linked binary from THAT toolchain would
+# reference glibc symbol versions the new rootfs's own libc (2.25,
+# Linaro 7.3.1, same toolchain the kernel/U-Boot/Buildroot already
+# use) doesn't have -- the exact "GLIBC_2.28 not found" failure this
+# project already hit and documented once for busybox
+# (tools/nss-stub/README.md's own history). So the dynamic build also
+# switches to Buildroot's own host toolchain wrapper (pre-sysrooted at
+# BUILDROOT_STAGING below), not just the link mode.
+BUILDROOT_OUTPUT_DIR ?= $(HOME)/Downloads/linux-arkmicro/buildroot/output
+BUILDROOT_STAGING    ?= $(BUILDROOT_OUTPUT_DIR)/staging
+CROSS_COMPILE_DYN     := $(BUILDROOT_OUTPUT_DIR)/host/bin/arm-linux-gnueabihf-
+CXX_DYN               := $(CROSS_COMPILE_DYN)g++
+CC_DYN                := $(CROSS_COMPILE_DYN)gcc
+LDFLAGS_DYN           := -s
+LIBS_DYN              := -lpthread
+
 # --- LVGL (C sources, shared by anything that links the UI) ---
 LVGL_SRCS     := $(shell find $(LVGL_DIR)/src -name '*.c')
 LVGL_OBJS     := $(patsubst $(LVGL_DIR)/%.c,$(BUILD_DIR)/lvgl-obj/%.o,$(LVGL_SRCS))
@@ -189,6 +214,46 @@ AASDK_LIBS      := -Wl,--start-group \
                     $(DBUS_ARM_INSTALL)/lib/libdbus-1.a \
                     -Wl,--end-group -lpthread -ldl -lrt
 
+# --- Dynamic variant, androidauto-sidecar only (Phase 4) ---
+# Partial-dynamic per the plan's own design choice: openssl/alsa/dbus
+# come from Buildroot's own staging sysroot (built with the SAME
+# Linaro 7.3.1/glibc-2.25 toolchain as CXX_DYN above -- no ABI
+# mismatch); Boost/libusb/Protobuf/aasdk itself stay the existing
+# static .a from AASDK_DEPS_DIR (built with the OLD system Debian
+# toolchain) -- lower risk than rebuilding that whole chain now, but a
+# REAL, unverified mixed-toolchain risk worth surfacing at actual link
+# time, not assumed safe (see merry-snacking-wirth.md's Phase 4 notes).
+#
+# openssl specifically: Buildroot's libopenssl.mk (this 2019.05-rc1
+# tree) hardcodes `no-shared` for the TARGET build regardless of
+# BR2_STATIC_LIBS -- confirmed via direct inspection, only libssl.a/
+# libcrypto.a exist in BUILDROOT_STAGING, no .so. So openssl stays
+# static even in the "dynamic" build, same as Boost/libusb/Protobuf --
+# but unlike those, it's Buildroot's OWN build (2.25-toolchain-native),
+# not the old AASDK_DEPS_DIR one, and likely doesn't need nss-stub at
+# all (see the AASDK_WRAP_FLAGS comment below).
+AASDK_INCLUDES_DYN := -I$(AASDK_DIR)/include \
+                    -I$(AASDK_DIR)/build-arm/protobuf \
+                    -I$(AASDK_DEPS_DIR)/boost-arm-install/include \
+                    -I$(BUILDROOT_STAGING)/usr/include \
+                    -I$(AASDK_DEPS_DIR)/libusb-arm-install/include \
+                    -I$(AASDK_DEPS_DIR)/libusb-arm-install/include/libusb-1.0 \
+                    -I$(AASDK_DEPS_DIR)/protobuf-arm-install/include \
+                    -I$(BUILDROOT_STAGING)/usr/include/dbus-1.0 \
+                    -I$(BUILDROOT_STAGING)/usr/lib/dbus-1.0/include \
+                    -Ithird_party/bluez_uapi
+AASDK_LIBS_DYN  := -Wl,--start-group \
+                    $(AASDK_DIR)/build-arm/lib/libaasdk.a \
+                    $(AASDK_DIR)/build-arm/lib/libaap_protobuf.a \
+                    $(wildcard $(AASDK_DEPS_DIR)/boost-arm-install/lib/*.a) \
+                    $(AASDK_DEPS_DIR)/libusb-arm-install/lib/libusb-1.0.a \
+                    $(BUILDROOT_STAGING)/usr/lib/libssl.a \
+                    $(BUILDROOT_STAGING)/usr/lib/libcrypto.a \
+                    $(wildcard $(AASDK_DEPS_DIR)/protobuf-arm-install/lib/*.a) \
+                    -Wl,--end-group \
+                    -L$(BUILDROOT_STAGING)/usr/lib -lasound -ldbus-1 \
+                    -lpthread -ldl -lrt
+
 # Same static-NSS-init crash this project already hit and fixed for
 # nano/htop/tmux/gdbserver/busybox (tools/nss-stub/README.md):
 # libcrypto.a references dlopen/getaddrinfo/gethostbyname internally
@@ -234,7 +299,10 @@ AASDK_WRAP_FLAGS := -Wl,--wrap=dlopen,--wrap=dlerror,--wrap=dlsym,--wrap=dlclose
 # dlsym/dlclose instead of stubs -- androidauto-sidecar's own link rule
 # below uses this instead of NSS_STUB_OBJ; the other 4 AASDK_WRAP_FLAGS
 # targets are unaffected.
-HANTRO_DLOPEN_OBJ := $(BUILD_DIR)/ui-obj/androidauto/hantro_dlopen.o
+# Only androidauto-sidecar links this (no test tool does) -- points at
+# the new dynamic-build object tree directly (Phase 4), no separate
+# static copy needed.
+HANTRO_DLOPEN_OBJ := $(BUILD_DIR)/androidauto-sidecar-obj/androidauto/hantro_dlopen.o
 
 # --- carplay sidecar binary ---
 # -ldbus-1 goes back in once this actually links libdbus -- needs its
@@ -261,25 +329,43 @@ ANDROIDAUTO_SIDECAR_OBJS   := $(BUILD_DIR)/androidauto-sidecar-obj/main.o
 # androidauto/wireless_session_manager.cpp, which IS in AASDK_SRCS,
 # reads it too. Pulled in explicitly here rather than moving the file
 # into src/androidauto/, since it's genuinely shared, non-aasdk-specific
-# code (custom_ui's own hal/bluetooth.cpp uses it as well). Builds via
-# the existing generic $(BUILD_DIR)/ui-obj/%.o pattern rule below --
-# no aasdk/boost includes needed for this file.
-HAL_CONFIG_OBJ := $(BUILD_DIR)/ui-obj/core/hal_config.o
+# code (custom_ui's own hal/bluetooth.cpp uses it as well).
+#
+# Same cross-binary situation for hal/video_layer.cpp (src/hal/video_layer.h,
+# UI_SRCS, but androidauto/video_channel.cpp in AASDK_SRCS calls into it
+# to push decoded frames to the hardware video-overlay layer) and
+# core/log_timing.cpp (custom_ui's own process-wide kernel-dmesg-style
+# timestamp, called from both files above -- androidauto-sidecar has
+# its own separate androidauto::log_timing, different namespace/process,
+# not this one). See HAL_CONFIG_OBJ_DYN/VIDEO_LAYER_OBJ_DYN/
+# LOG_TIMING_CORE_OBJ_DYN below (Phase 4) for how these actually get
+# built now -- both `ui` and `androidauto-sidecar` are dynamic, so
+# there's no longer a static variant of these 3 objects to keep around.
 
-# Same cross-binary situation as HAL_CONFIG_OBJ above: hal/video_layer.cpp
-# (see src/hal/video_layer.h) is part of custom_ui's own UI_SRCS, but
-# androidauto/video_channel.cpp -- in AASDK_SRCS, built into the
-# separate androidauto-sidecar binary -- calls into it directly to push
-# decoded frames to the hardware video-overlay layer.
-VIDEO_LAYER_OBJ := $(BUILD_DIR)/ui-obj/hal/video_layer.o
-
-# Same cross-binary situation again: core/log_timing.cpp (custom_ui's
-# own process-wide kernel-dmesg-style timestamp, see its own header
-# comment) is called from hal_config.cpp/video_layer.cpp above, both
-# shared with androidauto-sidecar -- so this needs pulling into that
-# link too, even though androidauto-sidecar has its own SEPARATE
-# androidauto::log_timing (different namespace/process, not this one).
-LOG_TIMING_CORE_OBJ := $(BUILD_DIR)/ui-obj/core/log_timing.o
+# --- Dynamic-build object trees for `ui`/`androidauto-sidecar` (Phase 4) ---
+# CANNOT just point the existing ui-obj/ pattern rules at CXX_DYN: that
+# directory's object files (AASDK_OBJS/HAL_CONFIG_OBJ/VIDEO_LAYER_OBJ/
+# LOG_TIMING_CORE_OBJ above, same file paths) are ALSO linked into the
+# androidauto-usb-probe-test/androidauto-wireless-probe-test/
+# androidauto-bluetooth-rfcomm-test/androidauto-bw-aap-test targets,
+# which stay on the static/system-toolchain build -- e.g. AASDK_OBJS's
+# own `find src/androidauto -name '*.cpp'` glob includes
+# bluetooth_transport.cpp/bw_aap_client.cpp, the exact same files
+# BT_TRANSPORT_OBJS/BW_AAP_CLIENT_OBJS reference by the same object
+# path. Compiling that one file two different, toolchain-incompatible
+# ways under one path is not possible -- `ui`/`androidauto-sidecar` get
+# their own parallel object trees (ui-dyn-obj/,
+# androidauto-sidecar-obj/androidauto/) instead, so nothing shared with
+# the 4 still-static tools ever gets touched.
+UI_OBJS_DYN          := $(patsubst src/%.cpp,$(BUILD_DIR)/ui-dyn-obj/%.o,$(UI_SRCS))
+UI_C_OBJS_DYN        := $(patsubst src/%.c,$(BUILD_DIR)/ui-dyn-obj/%.o,$(UI_C_SRCS))
+AASDK_OBJS_DYN       := $(patsubst src/%.cpp,$(BUILD_DIR)/androidauto-sidecar-obj/%.o,$(AASDK_SRCS))
+HAL_CONFIG_OBJ_DYN   := $(BUILD_DIR)/ui-dyn-obj/core/hal_config.o
+VIDEO_LAYER_OBJ_DYN  := $(BUILD_DIR)/ui-dyn-obj/hal/video_layer.o
+LOG_TIMING_CORE_OBJ_DYN := $(BUILD_DIR)/ui-dyn-obj/core/log_timing.o
+# LVGL_OBJS (lvgl-obj/) is exclusively used by UI_TARGET already (no
+# test tool links LVGL) -- its existing pattern rule is switched to
+# CC_DYN directly below rather than duplicated into a third tree.
 
 # --- androidauto-usb-probe-test: standalone aasdk link-graph proof ---
 # See tools/androidauto-usb-probe-test/main.cpp -- not part of `all`,
@@ -367,33 +453,57 @@ androidauto-wireless-probe-test: $(WIRELESS_TEST_TARGET)
 androidauto-bluetooth-rfcomm-test: $(BT_TEST_TARGET)
 androidauto-bw-aap-test: $(BW_AAP_TEST_TARGET)
 
-$(UI_TARGET): $(UI_OBJS) $(UI_C_OBJS) $(LVGL_OBJS)
+# --- ui (dynamic, Phase 4) ---
+$(UI_TARGET): $(UI_OBJS_DYN) $(UI_C_OBJS_DYN) $(LVGL_OBJS)
 	@mkdir -p $(dir $@)
-	$(CXX) $(LDFLAGS) -o $@ $^ $(LIBS)
+	$(CXX_DYN) $(LDFLAGS_DYN) -o $@ $^ $(LIBS_DYN)
 
-$(BUILD_DIR)/ui-obj/%.o: src/%.cpp
+$(BUILD_DIR)/ui-dyn-obj/%.o: src/%.cpp
 	@mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) -c -o $@ $<
+	$(CXX_DYN) $(CXXFLAGS) -c -o $@ $<
 
-$(BUILD_DIR)/ui-obj/%.o: src/%.c
+$(BUILD_DIR)/ui-dyn-obj/%.o: src/%.c
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC_DYN) $(CFLAGS) -c -o $@ $<
 
+# Static path (unchanged): still needed for androidauto-usb-probe-test/
+# androidauto-wireless-probe-test/androidauto-bluetooth-rfcomm-test/
+# androidauto-bw-aap-test, which all still link AASDK_OBJS (or a
+# subset, BT_TRANSPORT_OBJS/BW_AAP_CLIENT_OBJS) built via this exact
+# pattern -- see the ui-dyn-obj/androidauto-sidecar-obj comment block
+# above for why this can't just be redirected wholesale.
 $(BUILD_DIR)/ui-obj/androidauto/%.o: src/androidauto/%.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) $(AASDK_INCLUDES) -c -o $@ $<
 
-$(ANDROIDAUTO_SIDECAR_TARGET): $(ANDROIDAUTO_SIDECAR_OBJS) $(AASDK_OBJS) $(HAL_CONFIG_OBJ) $(VIDEO_LAYER_OBJ) $(LOG_TIMING_CORE_OBJ) $(HANTRO_DLOPEN_OBJ)
+# Dynamic path (Phase 4): androidauto-sidecar's own copy of the same
+# src/androidauto/*.cpp sources, compiled with the new toolchain/
+# includes into a separate object tree so nothing here is shared with
+# the static path above.
+$(BUILD_DIR)/androidauto-sidecar-obj/androidauto/%.o: src/androidauto/%.cpp
 	@mkdir -p $(dir $@)
-	$(CXX) $(LDFLAGS) $(AASDK_WRAP_FLAGS) -o $@ $^ $(AASDK_LIBS)
+	$(CXX_DYN) $(CXXFLAGS) $(AASDK_INCLUDES_DYN) -c -o $@ $<
+
+# --- androidauto-sidecar (dynamic, Phase 4) ---
+# No AASDK_WRAP_FLAGS/NSS_STUB_OBJ -- that workaround exists only for
+# the static-glibc-NSS-init crash class (glibc >= 2.34, see
+# tools/nss-stub/README.md), which doesn't apply once dynamic against
+# this rootfs's own glibc 2.25 toolchain (CXX_DYN above). Unverified
+# until this actually links/runs -- if a real static-NSS-style crash
+# somehow still shows up, HANTRO_DLOPEN_OBJ's real dlopen() (still
+# needed regardless, for libmfc.so) or a reintroduced wrap would be the
+# fix, not assumed unnecessary without a real hardware test.
+$(ANDROIDAUTO_SIDECAR_TARGET): $(ANDROIDAUTO_SIDECAR_OBJS) $(AASDK_OBJS_DYN) $(HAL_CONFIG_OBJ_DYN) $(VIDEO_LAYER_OBJ_DYN) $(LOG_TIMING_CORE_OBJ_DYN) $(HANTRO_DLOPEN_OBJ)
+	@mkdir -p $(dir $@)
+	$(CXX_DYN) $(LDFLAGS_DYN) -o $@ $^ $(AASDK_LIBS_DYN)
 
 $(BUILD_DIR)/androidauto-sidecar-obj/%.o: sidecars/androidauto/%.cpp
 	@mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) $(AASDK_INCLUDES) -Isrc -c -o $@ $<
+	$(CXX_DYN) $(CXXFLAGS) $(AASDK_INCLUDES_DYN) -Isrc -c -o $@ $<
 
 $(HANTRO_DLOPEN_OBJ): src/androidauto/hantro_dlopen.c
 	@mkdir -p $(dir $@)
-	$(CC) -O2 -c -o $@ $<
+	$(CC_DYN) -O2 -c -o $@ $<
 
 $(AASDK_TEST_TARGET): $(AASDK_TEST_OBJS) $(AASDK_OBJS) $(NSS_STUB_OBJ)
 	@mkdir -p $(dir $@)
@@ -431,9 +541,12 @@ $(BUILD_DIR)/bw-aap-test-obj/%.o: tools/androidauto-bw-aap-test/%.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) $(AASDK_INCLUDES) -Isrc -c -o $@ $<
 
+# CC_DYN (Phase 4): LVGL is exclusively linked by UI_TARGET (no test
+# tool uses it), safe to switch wholesale -- no static/dynamic split
+# needed here unlike ui-obj/androidauto above.
 $(BUILD_DIR)/lvgl-obj/%.o: $(LVGL_DIR)/%.c
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC_DYN) $(CFLAGS) -c -o $@ $<
 
 $(SIDECAR_TARGET): $(SIDECAR_OBJS)
 	@mkdir -p $(dir $@)

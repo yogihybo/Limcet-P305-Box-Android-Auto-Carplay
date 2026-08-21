@@ -130,6 +130,19 @@ LOOP=$(losetup -Pf --show "$IMAGE")
 MNT=$(mktemp -d)
 mount "${LOOP}p2" "$MNT"
 rsync -a "$CUSTOM_UI_OVERLAY/" "$MNT/"
+# sshd host key permissions: the dev machine's own vboxsf-mounted repo
+# checkout doesn't preserve real Unix permission bits at all (every
+# file reads back as 777 regardless of chmod -- a real, confirmed
+# vboxsf limitation, not specific to these files), so the rsync above
+# just carried that 777 onto the real ext4 image. sshd refuses to
+# start with over-permissive host keys ("Permissions ... are too
+# open"), so fix them here, on the real (loop-mounted, genuine ext4)
+# filesystem where chmod actually sticks -- this is the first point
+# in the whole pipeline where it can.
+if [[ -f "$MNT/etc/ssh/ssh_host_rsa_key" ]]; then
+    chmod 600 "$MNT"/etc/ssh/ssh_host_*_key
+    chmod 644 "$MNT"/etc/ssh/ssh_host_*_key.pub "$MNT/etc/ssh/sshd_config"
+fi
 sync
 umount "$MNT"
 rmdir "$MNT"

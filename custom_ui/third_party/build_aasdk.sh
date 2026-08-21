@@ -40,6 +40,17 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AASDK_DIR="$SCRIPT_DIR/aasdk"
 DEPS_DIR="${AASDK_DEPS_DIR:-$HOME/build-deps}"
+# Defaults to the original hardcoded "build-arm" for backwards
+# compatibility. Override when building against a second, different
+# toolchain (e.g. custom_ui's new dynamically-linked rootfs, Linaro
+# 7.3.1) without clobbering an existing static build-arm/ that other
+# still-static targets (androidauto-usb-probe-test etc., see
+# custom_ui/Makefile) link against by the same fixed path -- real
+# problem hit 2026-08-21: reusing build-arm/ for a different toolchain
+# silently picked up a stale CMakeCache.txt pointing at the wrong
+# dependency versions, and partially overwrote the working static
+# libaap_protobuf.a before the mismatch was caught.
+AASDK_BUILD_SUBDIR="${AASDK_BUILD_SUBDIR:-build-arm}"
 CROSS_COMPILE="${CROSS_COMPILE:-arm-linux-gnueabihf-}"
 
 echo "==> Patching aasdk to build static libs (SHARED -> STATIC, non-macOS branch)..."
@@ -56,6 +67,36 @@ sed -i 's/add_library(aap_protobuf SHARED/add_library(aap_protobuf STATIC/' "$AA
 sed -i 's/set(Boost_USE_STATIC_LIBS OFF)/set(Boost_USE_STATIC_LIBS ON)/' "$AASDK_DIR/CMakeLists.txt"
 sed -i '/add_definitions(-DBOOST_ALL_DYN_LINK)/d' "$AASDK_DIR/CMakeLists.txt"
 
+# GCC < 8's libstdc++ only ships the pre-standardization Filesystem TS
+# under <experimental/filesystem> (requires -lstdc++fs) -- the
+# finalized, non-experimental <filesystem> landed in GCC 8. Hit
+# building ModernLogger.cpp with the Linaro 7.3.1-2018.05 toolchain
+# (custom_ui's new dynamically-linked rootfs): "fatal error: filesystem:
+# No such file or directory". Applied unconditionally (not gated on
+# which CROSS_COMPILE this run uses) -- the __GNUC__ < 8 guard below
+# makes the result self-adapting: falls through to real <filesystem>
+# on the system toolchain (GCC 12, still used for the static
+# androidauto-*-test tools) with zero behavior change there. Idempotent
+# same as the patches above -- a no-op if already applied.
+if grep -q '^#include <filesystem>$' "$AASDK_DIR/src/Common/ModernLogger.cpp"; then
+    sed -i '/^#include <filesystem>$/c\
+#if defined(__GNUC__) \&\& __GNUC__ < 8 \&\& !defined(__clang__)\
+#include <experimental/filesystem>\
+namespace fs = std::experimental::filesystem;\
+#else\
+#include <filesystem>\
+namespace fs = std::filesystem;\
+#endif' "$AASDK_DIR/src/Common/ModernLogger.cpp"
+    sed -i 's/std::filesystem::/fs::/g' "$AASDK_DIR/src/Common/ModernLogger.cpp"
+fi
+if ! grep -q 'stdc++fs' "$AASDK_DIR/CMakeLists.txt"; then
+    sed -i '/target_link_libraries(aasdk PUBLIC/i\
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 8)\
+    target_link_libraries(aasdk PUBLIC stdc++fs)\
+endif()\
+' "$AASDK_DIR/CMakeLists.txt"
+fi
+
 cat > "$DEPS_DIR/arm-toolchain.cmake" <<EOF
 set(CMAKE_SYSTEM_NAME Linux)
 set(CMAKE_SYSTEM_PROCESSOR arm)
@@ -67,8 +108,8 @@ set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
 set(BUILD_SHARED_LIBS OFF)
 EOF
 
-mkdir -p "$AASDK_DIR/build-arm"
-cd "$AASDK_DIR/build-arm"
+mkdir -p "$AASDK_DIR/$AASDK_BUILD_SUBDIR"
+cd "$AASDK_DIR/$AASDK_BUILD_SUBDIR"
 
 echo "==> Configuring aasdk..."
 PATH="$DEPS_DIR/protoc-host/bin:$PATH" \
@@ -88,7 +129,7 @@ echo "==> Building..."
 cmake --build . -j"$(nproc)"
 
 echo
-echo "✔ libaasdk.a + libaap_protobuf.a: $AASDK_DIR/build-arm/lib/"
+echo "✔ libaasdk.a + libaap_protobuf.a: $AASDK_DIR/$AASDK_BUILD_SUBDIR/lib/"
 echo
 echo "Not yet wired into custom_ui/Makefile -- next step is the actual"
 echo "LinuxVideoSink/LinuxAudioSink/etc integration classes (Phase 2,"

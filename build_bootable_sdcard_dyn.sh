@@ -50,8 +50,17 @@
 #                                hand and want to skip the rebuild -- the
 #                                default behavior exists specifically so this
 #                                is never required for a normal deploy).
+#   --interactive                Opt into build_bootable_sdcard.sh's own full
+#                                interactive menu (screen-clearing, step-by-
+#                                step prompts) instead of this wrapper's
+#                                default of running it non-interactively --
+#                                this wrapper only ever targets one fixed
+#                                rootfs/config, so the original script's own
+#                                menu (built for its much wider range of real
+#                                options) isn't needed for a normal deploy.
 #   --dry-run                   passed through
-#   --non-interactive           passed through (recommended for scripted use)
+#   --non-interactive           now the default (see --interactive above);
+#                                this flag still works but is redundant
 #   --help                      show this help
 #
 # 2026-08-22: this wrapper now ALWAYS rebuilds custom_ui/androidauto-sidecar
@@ -101,6 +110,7 @@ IMAGE=""
 PASSTHROUGH_ARGS=()
 DRY_RUN=false
 SKIP_BUILD=false
+INTERACTIVE=false
 
 usage() { grep '^#' "$0" | grep -v '^#!/' | sed 's/^# \?//'; exit 0; }
 
@@ -112,12 +122,32 @@ while [[ $# -gt 0 ]]; do
         --merged-dir)           MERGED_DIR="$2"; shift 2 ;;
         --image)                IMAGE="$2"; PASSTHROUGH_ARGS+=(--image "$2"); shift 2 ;;
         --skip-build)            SKIP_BUILD=true; shift ;;
+        --interactive)           INTERACTIVE=true; shift ;;
         --dry-run)               DRY_RUN=true; PASSTHROUGH_ARGS+=(--dry-run); shift ;;
         --help|-h)               usage ;;
         --)                      shift; PASSTHROUGH_ARGS+=("$@"); break ;;
         *)                       PASSTHROUGH_ARGS+=("$1"); shift ;;
     esac
 done
+
+# 2026-08-23: default to non-interactive, real UX fix. This wrapper is a
+# fixed, purpose-built deploy for one specific rootfs/config -- unlike
+# the original build_bootable_sdcard.sh, which supports many real
+# rootfs/kernel/U-Boot variations and genuinely needs its own
+# interactive menu for that generality. Without this, a plain `sudo
+# ./build_bootable_sdcard_dyn.sh` silently inherited that menu (screen-
+# clearing, `clear` calls in the original script) for a tool that only
+# ever has one real configuration -- confirmed by reading the original
+# script directly, not assumed: NON_INTERACTIVE defaults false there,
+# and this wrapper never passed --non-interactive through on its own.
+# Not a safety-net regression: this wrapper never writes to a real
+# block device itself (no --device passthrough exists here, only
+# --image, a plain file) -- the actual `dd ... of=/dev/sdX` step is a
+# manual command the user runs themselves afterward (see this script's
+# own final echo), so there's no destructive-device confirmation this
+# default could be skipping. --interactive opts back into the original
+# script's own full menu for anyone who genuinely wants it.
+$INTERACTIVE || PASSTHROUGH_ARGS+=(--non-interactive)
 
 # --buildroot-output-dir (or the env var) always wins outright; otherwise
 # derive it from ARKMICRO_DIR (autodetected above, or overridden via

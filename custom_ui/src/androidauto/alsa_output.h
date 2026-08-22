@@ -180,6 +180,27 @@ public:
     // naturally.
     void flush();
 
+    // 2026-08-21: resets the PCM device's own hardware/driver state to
+    // SND_PCM_STATE_PREPARED (real snd_pcm_prepare() call) -- call this
+    // on StartIndication, unlike flush() above this DOES touch the PCM
+    // device itself, deliberately. Real gap found chasing a hardware
+    // report of crashes specifically correlated with start/stop/restart
+    // audio cycling: flush() only ever clears the software queue_, so
+    // if the PCM's hardware ring buffer genuinely ran dry during a Stop
+    // gap (no writes for a while -> real XRUN), nothing proactively
+    // resets it -- the FIRST write() on the next Start just discovers
+    // the XRUN reactively and falls into writeBlocking()'s own
+    // snd_pcm_recover() retry loop under load. Calling this here
+    // instead means that reset happens once, up front, outside the
+    // write-under-backpressure path, so the reactive recovery loop
+    // ideally never has to trigger at all on an ordinary restart --
+    // prevention instead of just bounding the failure mode (see
+    // writeBlocking()'s own updated retry-cap comment for that half).
+    // Safe to call whether or not the device is actually in XRUN --
+    // snd_pcm_prepare() on an already-prepared/running stream is a
+    // normal, harmless no-op per ALSA's own state machine.
+    void prepare();
+
 private:
     void writerLoop();
     // The actual blocking snd_pcm_writei() + XRUN-recovery call,

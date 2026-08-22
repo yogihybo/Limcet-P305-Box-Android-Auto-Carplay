@@ -63,6 +63,40 @@ bool auto_reconnect_paired_device(BluetoothHandle & h);
 // System clock sync
 bool sync_clock_from_phone(BluetoothHandle & h);
 
+// 2026-08-20: gates aa_profile_server_loop()'s (bluetooth.cpp) hand-off
+// of a phone's AA RFCOMM connection to androidauto-sidecar behind the
+// existing "Auto-start phone projection" setting (AutoStartCarLink,
+// see ui/staging/settings_screen.cpp) -- true (the default) hands the
+// fd off immediately and requests the AA screen auto-navigate (see
+// consume_aa_navigate_request() below), matching this project's
+// previous (dead-since-the-BlueZ-migration) +AAPDEV=-triggered
+// behavior. false stashes the connected fd here instead: the AA screen
+// shows its normal not-yet-connected state, and the user's own
+// "Connect" tap (ui/android_auto_screen.cpp's connect_btn_cb()) is what
+// actually starts the session, via start_pending_aa_connection() below.
+//
+// Returns true if a phone has connected over the AA Bluetooth profile
+// and its fd is waiting for the user to manually start the session --
+// false once handed off (or if nothing has connected yet).
+bool has_pending_aa_connection();
+
+// Hands the pending connection's fd to androidauto-sidecar now (the
+// user tapped Connect). No-op, returns false, if nothing is pending --
+// safe to call unconditionally from a Connect button with no separate
+// has_pending_aa_connection() check first.
+bool start_pending_aa_connection();
+
+// Edge-triggered, consumed at most once per real trigger -- same
+// pattern main.cpp's AaAutoStartWatcher::consume_navigate_request()
+// already established (see that class's own comment for why this
+// can't just call core::navigation::push() directly from
+// aa_profile_server_loop()'s own background thread: LVGL/
+// core::navigation must only ever be touched from the main thread).
+// main()'s own loop polls this once per iteration and pushes the
+// Android Auto screen, same as it already does for the (now dead)
+// AaAutoStartWatcher trigger.
+bool consume_aa_navigate_request();
+
 // Live Telemetry
 struct BluetoothTelemetry {
     bool connected = false;

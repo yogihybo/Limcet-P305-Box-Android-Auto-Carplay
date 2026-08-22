@@ -5,6 +5,16 @@
 
 namespace androidauto {
 
+// 2026-08-21: renamed from bw_aap_client.h/BwAapClient -- that name
+// (and the "bw_aap:" log prefix, now "wifi-setup:") came from
+// blueware's own /dev/bw_aap device node, back when this class only
+// ever talked to blueware's local socket proxy. Now that the real
+// production path is a native BlueZ RFCOMM fd (see attach() below),
+// keeping the blueware-derived name was actively misleading -- this
+// class no longer needs or assumes blueware at all. connect() (the
+// literal /dev/bw_aap path) is kept only as an unused reference/
+// fallback, see its own comment.
+//
 // Client for blueware's (Feasycom BT stack, /usr/bin/blueware) local
 // Unix domain socket at /dev/bw_aap -- the REAL Bluetooth
 // pre-connection channel this device uses for wireless Android
@@ -16,17 +26,23 @@ namespace androidauto {
 // receiveFrame and everything built on them) turned out to be
 // transport-agnostic -- pure read()/write() on fd_ -- so rather than
 // staying tied to blueware's /dev/bw_aap proxy, wireless_session_manager.cpp
-// now gets a REAL kernel hci0 + BlueZ RFCOMM connection via
-// bluez_stack.h/bluez_client.h (real hardware confirmed working this
-// same session, see tools/rtk-hciattach-test/ and
-// tools/bluetoothd-test/'s own READMEs) and calls attach(fd) instead
-// of connect(). This class's own comment below (steps 1-6, the real
-// captured wire format) is unaffected -- only the transport
+// now gets a REAL kernel hci0 + BlueZ RFCOMM connection (real hardware
+// confirmed working this same session, see tools/rtk-hciattach-test/
+// and tools/bluetoothd-test/'s own READMEs) and calls attach(fd)
+// instead of connect(). This class's own comment below (steps 1-6, the
+// real captured wire format) is unaffected -- only the transport
 // underneath changed, not the protocol spoken over it. connect() (the
 // /dev/bw_aap path) is kept for reference/fallback, not called by the
 // current flow. start_msn/MsnCoreApp is untouched, still uses blueware
 // directly -- this only affects custom_ui/androidauto-sidecar's own
 // wireless AA bootstrap.
+//
+// 2026-08-20: the fd attach()'d here is now registered/accepted
+// entirely in custom_ui (hal::BluezAaProfile, hal/bluez_aa_profile.h)
+// and handed to this process over their local socket -- see
+// wireless_session_manager.h's own header comment for the full
+// architecture. This class itself is unaffected either way; it only
+// ever cared about having a connected fd, not who connected it.
 //
 // Everything below this point (message sequence, wire format) is the
 // same pattern as `sink`'s own D-Bus interface
@@ -76,21 +92,22 @@ namespace androidauto {
 // connection (if `sink` or MsnCoreApp already holds it open when our
 // code tries to connect, this may fail or interfere -- test carefully,
 // don't assume).
-class BwAapClient {
+class WifiSetupClient {
 public:
-    BwAapClient();
-    ~BwAapClient();
+    WifiSetupClient();
+    ~WifiSetupClient();
 
     // Opens /dev/bw_aap. Returns false on failure (logs the reason).
-    // Superseded by attach() below -- see bluez_client.h/bluez_stack.h --
-    // kept for reference/fallback, not called by the current
-    // wireless_session_manager.cpp flow.
+    // Superseded by attach() below -- kept for reference/fallback, not
+    // called by the current wireless_session_manager.cpp flow.
     bool connect();
 
     // 2026-08-19: takes ownership of an already-connected socket fd
-    // (BluezClient::wait_for_connection()'s real RFCOMM connection,
-    // once a phone actually connects to our BlueZ-advertised AA
-    // profile) instead of opening /dev/bw_aap. Every method below
+    // (hal::BluezAaProfile::wait_for_connection()'s real RFCOMM
+    // connection, once a phone actually connects to our BlueZ-
+    // advertised AA profile, handed here by custom_ui -- see
+    // wireless_session_manager.h's own header comment) instead of
+    // opening /dev/bw_aap. Every method below
     // (sendFrame/receiveFrame and everything built on them) is pure
     // read()/write() on fd_ -- transport-agnostic, works identically
     // whether fd_ came from AF_UNIX (blueware's proxy) or a real

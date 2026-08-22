@@ -172,20 +172,49 @@ bool AlsaOutput::writeBlocking(const void * interleavedSamples, uint32_t frameCo
     const uint8_t * cursor = static_cast<const uint8_t *>(interleavedSamples);
     uint32_t bytesPerFrame = 2 * channels_;  // 16-bit samples, see header comment
     uint32_t remaining = frameCount;
+    // 2026-08-21: bounded -- previously `continue`'d straight back to
+    // snd_pcm_writei() with zero limit and zero backoff whenever
+    // snd_pcm_recover() itself reported success. Real gap: recover()
+    // succeeding only means it re-ran prepare()/resume() on the ALSA
+    // handle, not that the underlying cause is actually gone -- if
+    // snd_pcm_writei() keeps failing right after every "successful"
+    // recovery (a real possibility right after a start/stop/restart
+    // cycle, if the hardware/DMA engine needs more than a software-level
+    // prepare() to truly settle), this was an unbounded tight loop with
+    // no sleep between attempts, hammering the kernel ALSA driver's own
+    // prepare/reset path continuously -- a real hardware report traced
+    // sustained kernel workqueue CPU load specifically correlated with
+    // audio start/stop/restart cycling back to this exact loop. See
+    // AlsaOutput::prepare()'s own comment for the preventive half (reset
+    // PCM state proactively on Start instead of only discovering XRUN
+    // reactively here) -- this is the bound on the failure mode either
+    // way, so a genuinely-stuck PCM state fails gracefully instead of
+    // spinning forever.
+    constexpr int kMaxRecoveryAttempts = 10;
+    int recoveryAttempts = 0;
     while (remaining > 0) {
         snd_pcm_sframes_t written = snd_pcm_writei(pcmHandle_, cursor, remaining);
         if (written < 0) {
-            // ALSA's own documented XRUN-recovery pattern: retry once
-            // via snd_pcm_recover(), then re-attempt the same
-            // remaining frames (not the original full buffer -- some
-            // of it may have already been written in an earlier loop
-            // iteration).
+            if (++recoveryAttempts > kMaxRecoveryAttempts) {
+                std::fprintf(stderr, "%s androidauto::AlsaOutput: giving up on %s after %d consecutive "
+                             "recovery attempts -- PCM state won't settle\n", androidauto::logTimestamp().c_str(),
+                             deviceName_.c_str(), kMaxRecoveryAttempts);
+                return false;
+            }
+            // ALSA's own documented XRUN-recovery pattern: retry via
+            // snd_pcm_recover(), then re-attempt the same remaining
+            // frames (not the original full buffer -- some of it may
+            // have already been written in an earlier loop iteration).
             int recovered = snd_pcm_recover(pcmHandle_, static_cast<int>(written), 1);
             if (recovered < 0) {
                 std::fprintf(stderr, "%s androidauto::AlsaOutput: unrecoverable write error on %s: %s\n", androidauto::logTimestamp().c_str(),
                              deviceName_.c_str(), snd_strerror(recovered));
                 return false;
             }
+            // Small backoff before retrying -- gives the hardware/DMA
+            // engine a real chance to settle instead of hammering it at
+            // full CPU speed on every consecutive failure.
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
             continue;
         }
         if (written == 0) {
@@ -206,6 +235,15 @@ bool AlsaOutput::writeBlocking(const void * interleavedSamples, uint32_t frameCo
 void AlsaOutput::flush() {
     std::lock_guard<std::mutex> lock(mutex_);
     queue_.clear();
+}
+
+void AlsaOutput::prepare() {
+    if (!pcmHandle_) return;
+    int err = snd_pcm_prepare(pcmHandle_);
+    if (err < 0) {
+        std::fprintf(stderr, "%s androidauto::AlsaOutput: snd_pcm_prepare() on %s failed: %s\n",
+                     androidauto::logTimestamp().c_str(), deviceName_.c_str(), snd_strerror(err));
+    }
 }
 
 void AlsaOutput::close() {

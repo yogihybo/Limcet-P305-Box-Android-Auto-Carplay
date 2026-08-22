@@ -143,6 +143,21 @@ void AudioChannel::onMediaChannelStartIndication(
                        "channel won't play\n", logTimestamp().c_str(), pcmDevice_.c_str());
         }
     }
+    // 2026-08-21: proactively reset the PCM's own hardware state on
+    // every Start (not just the first one) -- see AlsaOutput::prepare()'s
+    // own comment for why: onMediaChannelStopIndication()'s flush() only
+    // ever clears the software queue_, so a real XRUN from the PCM
+    // sitting idle during a Stop gap was previously left for the first
+    // post-Start write() to discover reactively, under load, inside
+    // writeBlocking()'s recovery loop. Doing it here instead, before any
+    // audio data has arrived, is what actually prevents the start/stop/
+    // restart-correlated crash rather than just bounding its failure
+    // mode (that bound is real too, see writeBlocking()'s own comment,
+    // but this is the fix that stops it from needing to trigger at all
+    // on an ordinary restart).
+    if (alsaOpen_) {
+        alsaOutput_.prepare();
+    }
 
     channel_->receive(this->shared_from_this());
 }

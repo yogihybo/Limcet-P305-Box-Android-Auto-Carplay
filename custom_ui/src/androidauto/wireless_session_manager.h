@@ -1,11 +1,29 @@
 // Orchestrates the full wireless Android Auto connection sequence on
-// its own background thread: bring up this app's own WiFi AP, bind a
-// TCP listener, run the confirmed Bluetooth-relayed credential handoff
-// (BwAapClient), then accept the phone's incoming connection and start
-// the real aasdk Session -- see docs/IMPLEMENTATION_PLAN.md Phase 2's
-// "Wireless AA" section for why this whole path (not wired AOAP) is
-// the required one on this hardware (single external USB port,
-// normally occupied by the boot rootfs drive).
+// its own background thread, GIVEN an already-connected Bluetooth
+// RFCOMM socket fd: bring up this app's own WiFi AP, bind a TCP
+// listener, run the confirmed Bluetooth-relayed credential handoff
+// (WifiSetupClient) over that fd, then accept the phone's incoming
+// connection and start the real aasdk Session -- see
+// docs/IMPLEMENTATION_PLAN.md Phase 2's "Wireless AA" section for why
+// this whole path (not wired AOAP) is the required one on this
+// hardware (single external USB port, normally occupied by the boot
+// rootfs drive).
+//
+// 2026-08-20: this class no longer knows anything about BlueZ/D-Bus at
+// all -- that ownership moved to custom_ui's own hal/bluetooth.cpp
+// (hal::BluezAaProfile, aa_profile_server_loop()), alongside every
+// other piece of Bluetooth connectivity this project has (adapter
+// power/pairing/A2DP/CoD), instead of split across two processes.
+// custom_ui registers the AA RFCOMM profile, waits for a phone to
+// dial in, and hands the resulting connected fd to this process (a
+// SEPARATE process, still isolated from libdbus/aasdk-heavy
+// dependency mixing -- see docs/ARCHITECTURE.md) over their existing
+// local Unix-domain socket via SCM_RIGHTS (see
+// sidecars/androidauto/main.cpp's "CONNECT_FD" command and
+// hal/androidauto_client.h's sendConnectFd()). This class's own job
+// starts from there: WiFi AP bring-up + the WiFi-setup handshake + the
+// real aasdk session, nothing Bluetooth-specific beyond using the fd
+// it's handed.
 //
 // Runs entirely on its own thread with its own boost::asio::io_service
 // -- deliberately NOT sharing/pumping the LVGL main loop's thread, same
@@ -25,8 +43,8 @@
 //    apply here since sink/MsnCoreApp and custom_ui are never run
 //    concurrently (the same handoff model already used for /dev/fb0
 //    and /dev/ttyHS0). Safe to invoke directly.
-//  - BwAapClient -- the confirmed real 5-step Bluetooth-relayed WiFi
-//    credential handoff (see bw_aap_client.h).
+//  - WifiSetupClient -- the confirmed real 5-step Bluetooth-relayed WiFi
+//    credential handoff (see wifi_setup_client.h).
 //
 // 2026-08-12, THREE REVISIONS IN ONE DAY -- see project memory
 // (project_aa_wireless_tcp_direction_fix) for the full blow-by-blow.
@@ -58,7 +76,7 @@
 //   2. Default port back to 5277 (WPP's real, confirmed default) --
 //      5288 was an unconfirmed guess from earlier the same day and is
 //      wrong.
-// The listener binds BEFORE the BW_AAP handshake even starts (same
+// The listener binds BEFORE the WiFi-setup handshake even starts (same
 // structural timing the earlier attempt already got right, and which
 // that reference project also stresses: "AA reaches the [listener]
 // within ~2s of the Bluetooth handshake").
@@ -73,7 +91,7 @@
 //    WPA2_ENTERPRISE per the vendored enum, matching real captured
 //    traffic) doesn't match this AP's actual config (plain WPA2-
 //    Personal, per hostapd.conf's own wpa_key_mgmt=WPA-PSK) -- a real,
-//    already-documented discrepancy (see bw_aap_client.h). Try 5
+//    already-documented discrepancy (see wifi_setup_client.h). Try 5
 //    (WPA2_PERSONAL) if 8 doesn't work.
 #pragma once
 
@@ -105,26 +123,32 @@ public:
     WirelessSessionManager(const WirelessSessionManager &) = delete;
     WirelessSessionManager & operator=(const WirelessSessionManager &) = delete;
 
-    // Starts the background thread if not already running/finished.
+    // Starts the background thread if not already running/finished,
+    // given an already-connected Bluetooth RFCOMM socket fd (from
+    // custom_ui's own hal::BluezAaProfile -- see this class's own
+    // header comment above). Takes ownership of rfcommFd -- this class
+    // closes it once the session ends (or immediately, if start() is a
+    // no-op because a session is already active; see below).
     // Non-blocking -- returns immediately, progress is reported via
     // state()/statusMessage(). Safe to call repeatedly (e.g. a "Retry"
-    // button); a previous failed/finished attempt's thread is joined
-    // and a fresh one started.
+    // button, or another phone dialing in); a previous failed/finished
+    // attempt's thread is joined and a fresh one started.
     //
-    // 2026-08-13: now a no-op (logs and returns) if a session is
-    // already actively progressing or Connected -- start() used to
-    // unconditionally detach whatever thread_ held and launch a brand
-    // new run(), even over an already-successful session. That was a
-    // real, previously theoretical concern -- with the +AAPDEV=
+    // 2026-08-13: a no-op (logs, closes rfcommFd, and returns) if a
+    // session is already actively progressing or Connected -- start()
+    // used to unconditionally detach whatever thread_ held and launch a
+    // brand new run(), even over an already-successful session. That
+    // was a real, previously theoretical concern -- with the +AAPDEV=
     // auto-trigger now reliable (see main.cpp's AaAutoStartWatcher and
     // this project's own memory notes on the boot-order/debounce
-    // fixes), a second CONNECT can genuinely arrive while a first
+    // fixes), a second CONNECT_FD can genuinely arrive while a first
     // attempt is already Connected (a stray re-detection outside the
-    // debounce window, a manual Connect tap out of habit, etc.) --
-    // restarting from scratch in that case would tear down/orphan a
-    // live working session for no reason. Still safe/expected to call
-    // while Idle/Failed (the actual documented "Retry" use case).
-    void start();
+    // debounce window, a manual Connect tap out of habit, another
+    // phone, etc.) -- restarting from scratch in that case would tear
+    // down/orphan a live working session for no reason. Still
+    // safe/expected to call while Idle/Failed (the actual documented
+    // "Retry" use case).
+    void start(int rfcommFd);
 
     WirelessSessionState state() const;
 
@@ -164,8 +188,17 @@ public:
     // comment for why this exists at all.
     void resumeVideoFocus();
 
+    // 2026-08-21: forwards the MCU-headlight-driven night-mode state
+    // into the current session's SensorChannel, if a session exists
+    // (same no-op-if-none contract as sendInputKey()/sendInputTouch()).
+    // Called from sidecars/androidauto/main.cpp's own "NIGHT <0|1>"
+    // command handler, in turn from hal/androidauto_client.h's
+    // sendNightMode() -- see SensorChannel::setNightMode()'s own
+    // comment for what actually happens on the wire.
+    void sendNightMode(bool nightMode);
+
 private:
-    void run();
+    void run(int rfcommFd);
     void setStatus(WirelessSessionState s, std::string msg);
     bool ensureAccessPointUp();
 
@@ -187,7 +220,20 @@ private:
     std::atomic<WirelessSessionState> state_{WirelessSessionState::Idle};
 
     mutable std::mutex statusMutex_;
-    std::string statusMessage_;
+    // 2026-08-20: real, non-empty default -- statusMessage_ used to
+    // only ever get set inside setStatus(), first called from run(),
+    // which used to fire immediately at sidecar boot (the old self-
+    // driven BlueZ flow). Now that this class only starts once
+    // custom_ui hands it an already-connected fd (see this class's own
+    // header comment), run() may not fire for minutes, or ever, in a
+    // given boot -- leaving this string empty that whole time. Real
+    // hardware symptom this caused: ui/android_auto_screen.cpp's status
+    // row (state_body + detail_body, under the Connect button) parses
+    // statusLine()'s "STATE Idle <this string>" reply -- an empty
+    // string here isn't a missing/removed widget, just blank text next
+    // to a real (non-blank) "Idle" label, easy to mistake for the whole
+    // status line having vanished.
+    std::string statusMessage_ = "Waiting for phone to connect over Bluetooth...";
 
     // Set once in run() right after the Session is constructed,
     // cleared when run() returns (session ended, one way or another)

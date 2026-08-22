@@ -163,7 +163,17 @@ elif $DRY_RUN; then
     echo "  [dry-run] cp $CUSTOM_UI_DIR/build/{custom_ui,androidauto-sidecar,hal.conf,default_settings.conf} $DYN_OVERLAY_DIR/usr/bin/"
     echo "  [dry-run] rsync -a $CUSTOM_UI_DIR/build/alsa/ $DYN_OVERLAY_DIR/usr/bin/alsa/"
 else
-    echo "==> Building custom_ui/androidauto-sidecar fresh (BUILDROOT_OUTPUT_DIR=$BUILDROOT_OUTPUT_DIR, HOME=$REAL_HOME)"
+    # 2026-08-23: this build alone is ~300+ compile steps (LVGL, custom_ui's
+    # own sources, etc.) -- raw make output was flooding the terminal with
+    # no framing around it, real UX complaint. Logged to a file instead;
+    # terminal just gets a one-line "why" banner, a compile-step count on
+    # success, and (critically, so a real failure is never harder to
+    # diagnose than before) the log's own tail printed inline if the build
+    # fails, before this script exits.
+    echo "==> Building custom_ui + androidauto-sidecar from source (glibc 2.30 / Bootlin GCC 8.4.0 toolchain)..."
+    BUILD_LOG="$SCRIPT_DIR/build/custom_ui_build.log"
+    mkdir -p "$(dirname "$BUILD_LOG")"
+    echo "    Full compiler output: $BUILD_LOG"
     # set -e means a failed build stops this script here, before any image
     # work starts -- this is the whole point: never let a stale overlay
     # binary reach $IMAGE silently. Real bug this closes: the overlay was
@@ -190,7 +200,12 @@ else
     # once HOME itself is corrected (both vars already default to
     # $HOME/build-deps*, which now resolves correctly), so not kept
     # here to avoid two sources of truth for the same path.
-    HOME="$REAL_HOME" BUILDROOT_OUTPUT_DIR="$BUILDROOT_OUTPUT_DIR" make -C "$CUSTOM_UI_DIR" ui androidauto-sidecar
+    if ! HOME="$REAL_HOME" BUILDROOT_OUTPUT_DIR="$BUILDROOT_OUTPUT_DIR" make -C "$CUSTOM_UI_DIR" ui androidauto-sidecar > "$BUILD_LOG" 2>&1; then
+        echo "ERROR: custom_ui/androidauto-sidecar build failed -- last 40 lines of $BUILD_LOG:" >&2
+        tail -n 40 "$BUILD_LOG" >&2
+        exit 1
+    fi
+    echo "    Build succeeded ($(grep -c -- ' -c -o ' "$BUILD_LOG") compile steps) -- full output in $BUILD_LOG"
     echo "==> Re-staging fresh binaries + configs into $DYN_OVERLAY_DIR/usr/bin/"
     cp -f "$CUSTOM_UI_DIR/build/custom_ui" "$CUSTOM_UI_DIR/build/androidauto-sidecar" \
           "$CUSTOM_UI_DIR/build/hal.conf" "$CUSTOM_UI_DIR/build/default_settings.conf" \

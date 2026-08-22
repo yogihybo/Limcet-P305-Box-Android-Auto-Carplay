@@ -50,18 +50,20 @@
 #                                hand and want to skip the rebuild -- the
 #                                default behavior exists specifically so this
 #                                is never required for a normal deploy).
-#   --interactive                Opt into build_bootable_sdcard.sh's own full
-#                                interactive menu (screen-clearing, step-by-
-#                                step prompts) instead of this wrapper's
-#                                default of running it non-interactively --
-#                                this wrapper only ever targets one fixed
-#                                rootfs/config, so the original script's own
-#                                menu (built for its much wider range of real
-#                                options) isn't needed for a normal deploy.
 #   --dry-run                   passed through
-#   --non-interactive           now the default (see --interactive above);
-#                                this flag still works but is redundant
 #   --help                      show this help
+#
+# 2026-08-23: this wrapper always runs build_bootable_sdcard.sh
+# non-interactively -- no --interactive opt-out exists. That script's
+# own full menu (screen-clearing, step-by-step prompts) is real and
+# useful for its much wider range of genuine rootfs/kernel/U-Boot
+# options; this wrapper only ever targets one fixed configuration, so
+# there's nothing for that menu to actually offer here. Not a
+# safety-net loss: this wrapper never writes to a real block device
+# itself (no --device passthrough exists, only --image, a plain file)
+# -- the actual `dd ... of=/dev/sdX` write is always a separate manual
+# command the user runs themselves afterward (see this script's own
+# final banner).
 #
 # 2026-08-22: this wrapper now ALWAYS rebuilds custom_ui/androidauto-sidecar
 # and re-stages the fresh binaries + configs into firmware_overlay_dyn/usr/bin/
@@ -72,6 +74,19 @@
 # if the build fails; never proceeds to image creation with a stale binary.
 
 set -euo pipefail
+
+# 2026-08-23: same color palette + banner/status helper conventions as
+# build_bootable_sdcard.sh's own non-menu output (RED/YELLOW/GREEN/
+# CYAN/BOLD/DIM/RESET, info/success/warn/die) -- kept visually
+# consistent with that script on purpose, without sourcing it or
+# reimplementing its actual interactive-menu logic (this wrapper has
+# none of that, see the header comment above).
+RED='\033[0;31m'; YELLOW='\033[1;33m'; GREEN='\033[0;32m'
+CYAN='\033[0;36m'; BOLD='\033[1m'; DIM='\033[2m'; RESET='\033[0m'
+info()    { echo -e "${CYAN}  $*${RESET}"; }
+success() { echo -e "${GREEN}  ✔ $*${RESET}"; }
+warn()    { echo -e "${YELLOW}  ⚠ $*${RESET}"; }
+die()     { echo -e "${RED}ERROR: $*${RESET}" >&2; exit 1; }
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
@@ -107,10 +122,9 @@ BUILDROOT_OUTPUT_DIR="${BUILDROOT_OUTPUT_DIR:-}"
 DYN_OVERLAY_DIR="$SCRIPT_DIR/firmware_overlay_dyn"
 MERGED_DIR="$SCRIPT_DIR/build/dyn_rootfs_merged"
 IMAGE=""
-PASSTHROUGH_ARGS=()
+PASSTHROUGH_ARGS=(--non-interactive)
 DRY_RUN=false
 SKIP_BUILD=false
-INTERACTIVE=false
 
 usage() { grep '^#' "$0" | grep -v '^#!/' | sed 's/^# \?//'; exit 0; }
 
@@ -122,32 +136,12 @@ while [[ $# -gt 0 ]]; do
         --merged-dir)           MERGED_DIR="$2"; shift 2 ;;
         --image)                IMAGE="$2"; PASSTHROUGH_ARGS+=(--image "$2"); shift 2 ;;
         --skip-build)            SKIP_BUILD=true; shift ;;
-        --interactive)           INTERACTIVE=true; shift ;;
         --dry-run)               DRY_RUN=true; PASSTHROUGH_ARGS+=(--dry-run); shift ;;
         --help|-h)               usage ;;
         --)                      shift; PASSTHROUGH_ARGS+=("$@"); break ;;
         *)                       PASSTHROUGH_ARGS+=("$1"); shift ;;
     esac
 done
-
-# 2026-08-23: default to non-interactive, real UX fix. This wrapper is a
-# fixed, purpose-built deploy for one specific rootfs/config -- unlike
-# the original build_bootable_sdcard.sh, which supports many real
-# rootfs/kernel/U-Boot variations and genuinely needs its own
-# interactive menu for that generality. Without this, a plain `sudo
-# ./build_bootable_sdcard_dyn.sh` silently inherited that menu (screen-
-# clearing, `clear` calls in the original script) for a tool that only
-# ever has one real configuration -- confirmed by reading the original
-# script directly, not assumed: NON_INTERACTIVE defaults false there,
-# and this wrapper never passed --non-interactive through on its own.
-# Not a safety-net regression: this wrapper never writes to a real
-# block device itself (no --device passthrough exists here, only
-# --image, a plain file) -- the actual `dd ... of=/dev/sdX` step is a
-# manual command the user runs themselves afterward (see this script's
-# own final echo), so there's no destructive-device confirmation this
-# default could be skipping. --interactive opts back into the original
-# script's own full menu for anyone who genuinely wants it.
-$INTERACTIVE || PASSTHROUGH_ARGS+=(--non-interactive)
 
 # --buildroot-output-dir (or the env var) always wins outright; otherwise
 # derive it from ARKMICRO_DIR (autodetected above, or overridden via
@@ -160,22 +154,16 @@ $INTERACTIVE || PASSTHROUGH_ARGS+=(--non-interactive)
 # official tar export (BR2_TARGET_ROOTFS_TAR) instead of rsyncing the
 # raw target dir, see that step's own comment for why.
 [[ -d "$BUILDROOT_OUTPUT_DIR/target" ]] || {
-    echo "ERROR: Buildroot target dir not found: $BUILDROOT_OUTPUT_DIR/target" >&2
-    echo "       Build ark1668_ft_dyn_defconfig first (see merry-snacking-wirth.md)." >&2
-    exit 1
+    die "Buildroot target dir not found: $BUILDROOT_OUTPUT_DIR/target\n       Build ark1668_ft_dyn_defconfig first (see merry-snacking-wirth.md)."
 }
 [[ -f "$BUILDROOT_OUTPUT_DIR/images/rootfs.tar" ]] || {
-    echo "ERROR: rootfs.tar not found: $BUILDROOT_OUTPUT_DIR/images/rootfs.tar" >&2
-    echo "       Enable BR2_TARGET_ROOTFS_TAR and rebuild ark1668_ft_dyn_defconfig first." >&2
-    exit 1
+    die "rootfs.tar not found: $BUILDROOT_OUTPUT_DIR/images/rootfs.tar\n       Enable BR2_TARGET_ROOTFS_TAR and rebuild ark1668_ft_dyn_defconfig first."
 }
 [[ -d "$DYN_OVERLAY_DIR" ]] || {
-    echo "ERROR: firmware_overlay_dyn/ not found: $DYN_OVERLAY_DIR" >&2
-    exit 1
+    die "firmware_overlay_dyn/ not found: $DYN_OVERLAY_DIR"
 }
 [[ -x "$SCRIPT_DIR/build_bootable_sdcard.sh" ]] || {
-    echo "ERROR: build_bootable_sdcard.sh not found next to this script." >&2
-    exit 1
+    die "build_bootable_sdcard.sh not found next to this script."
 }
 
 # Default image path, same convention as the original script, but a
@@ -187,11 +175,11 @@ $INTERACTIVE || PASSTHROUGH_ARGS+=(--non-interactive)
 
 CUSTOM_UI_DIR="$SCRIPT_DIR/custom_ui"
 if $SKIP_BUILD; then
-    echo "==> --skip-build passed -- deploying whatever's currently staged in $DYN_OVERLAY_DIR/usr/bin/ as-is"
+    warn "--skip-build passed -- deploying whatever's currently staged in $DYN_OVERLAY_DIR/usr/bin/ as-is"
 elif $DRY_RUN; then
-    echo "  [dry-run] make -C $CUSTOM_UI_DIR ui androidauto-sidecar"
-    echo "  [dry-run] cp $CUSTOM_UI_DIR/build/{custom_ui,androidauto-sidecar,hal.conf,default_settings.conf} $DYN_OVERLAY_DIR/usr/bin/"
-    echo "  [dry-run] rsync -a $CUSTOM_UI_DIR/build/alsa/ $DYN_OVERLAY_DIR/usr/bin/alsa/"
+    echo -e "${DIM}  [dry-run] make -C $CUSTOM_UI_DIR ui androidauto-sidecar${RESET}"
+    echo -e "${DIM}  [dry-run] cp $CUSTOM_UI_DIR/build/{custom_ui,androidauto-sidecar,hal.conf,default_settings.conf} $DYN_OVERLAY_DIR/usr/bin/${RESET}"
+    echo -e "${DIM}  [dry-run] rsync -a $CUSTOM_UI_DIR/build/alsa/ $DYN_OVERLAY_DIR/usr/bin/alsa/${RESET}"
 else
     # 2026-08-23: this build alone is ~300+ compile steps (LVGL, custom_ui's
     # own sources, etc.) -- raw make output was flooding the terminal with
@@ -200,10 +188,10 @@ else
     # success, and (critically, so a real failure is never harder to
     # diagnose than before) the log's own tail printed inline if the build
     # fails, before this script exits.
-    echo "==> Building custom_ui + androidauto-sidecar from source (glibc 2.30 / Bootlin GCC 8.4.0 toolchain)..."
+    info "Building custom_ui + androidauto-sidecar from source (glibc 2.30 / Bootlin GCC 8.4.0 toolchain)..."
     BUILD_LOG="$SCRIPT_DIR/build/custom_ui_build.log"
     mkdir -p "$(dirname "$BUILD_LOG")"
-    echo "    Full compiler output: $BUILD_LOG"
+    echo -e "${DIM}    Full compiler output: $BUILD_LOG${RESET}"
     # set -e means a failed build stops this script here, before any image
     # work starts -- this is the whole point: never let a stale overlay
     # binary reach $IMAGE silently. Real bug this closes: the overlay was
@@ -231,12 +219,12 @@ else
     # $HOME/build-deps*, which now resolves correctly), so not kept
     # here to avoid two sources of truth for the same path.
     if ! HOME="$REAL_HOME" BUILDROOT_OUTPUT_DIR="$BUILDROOT_OUTPUT_DIR" make -C "$CUSTOM_UI_DIR" ui androidauto-sidecar > "$BUILD_LOG" 2>&1; then
-        echo "ERROR: custom_ui/androidauto-sidecar build failed -- last 40 lines of $BUILD_LOG:" >&2
+        echo -e "${RED}ERROR: custom_ui/androidauto-sidecar build failed -- last 40 lines of $BUILD_LOG:${RESET}" >&2
         tail -n 40 "$BUILD_LOG" >&2
         exit 1
     fi
-    echo "    Build succeeded ($(grep -c -- ' -c -o ' "$BUILD_LOG") compile steps) -- full output in $BUILD_LOG"
-    echo "==> Re-staging fresh binaries + configs into $DYN_OVERLAY_DIR/usr/bin/"
+    success "Build succeeded ($(grep -c -- ' -c -o ' "$BUILD_LOG") compile steps) -- full output in $BUILD_LOG"
+    info "Re-staging fresh binaries + configs into $DYN_OVERLAY_DIR/usr/bin/"
     cp -f "$CUSTOM_UI_DIR/build/custom_ui" "$CUSTOM_UI_DIR/build/androidauto-sidecar" \
           "$CUSTOM_UI_DIR/build/hal.conf" "$CUSTOM_UI_DIR/build/default_settings.conf" \
           "$DYN_OVERLAY_DIR/usr/bin/"
@@ -275,17 +263,15 @@ fi
 # expected to run under sudo (see REAL_HOME resolution above), so this
 # is not a new privilege requirement.
 ROOTFS_TAR="$BUILDROOT_OUTPUT_DIR/images/rootfs.tar"
-echo "==> Pre-merging Buildroot rootfs.tar + firmware_overlay_dyn into $MERGED_DIR"
+info "Pre-merging Buildroot rootfs.tar + firmware_overlay_dyn into $MERGED_DIR"
 rm -rf "$MERGED_DIR"
 mkdir -p "$MERGED_DIR"
 if $DRY_RUN; then
-    echo "  [dry-run] tar -xf $ROOTFS_TAR -C $MERGED_DIR"
-    echo "  [dry-run] rsync -a $DYN_OVERLAY_DIR/ $MERGED_DIR/"
+    echo -e "${DIM}  [dry-run] tar -xf $ROOTFS_TAR -C $MERGED_DIR${RESET}"
+    echo -e "${DIM}  [dry-run] rsync -a $DYN_OVERLAY_DIR/ $MERGED_DIR/${RESET}"
 else
     [[ -f "$ROOTFS_TAR" ]] || {
-        echo "ERROR: rootfs.tar not found: $ROOTFS_TAR" >&2
-        echo "       Enable BR2_TARGET_ROOTFS_TAR and rebuild ark1668_ft_dyn_defconfig first." >&2
-        exit 1
+        die "rootfs.tar not found: $ROOTFS_TAR\n       Enable BR2_TARGET_ROOTFS_TAR and rebuild ark1668_ft_dyn_defconfig first."
     }
     tar -xf "$ROOTFS_TAR" -C "$MERGED_DIR"
     # Our overlay wins over Buildroot's raw target output here (e.g.
@@ -296,23 +282,22 @@ else
     rsync -a "$DYN_OVERLAY_DIR/" "$MERGED_DIR/"
 fi
 
-echo "==> Running build_bootable_sdcard.sh --rootfs-dir $MERGED_DIR"
+info "Running build_bootable_sdcard.sh --rootfs-dir $MERGED_DIR"
 "$SCRIPT_DIR/build_bootable_sdcard.sh" --rootfs-dir "$MERGED_DIR" "${PASSTHROUGH_ARGS[@]}"
 
 if $DRY_RUN; then
-    echo "[dry-run] Would now re-apply firmware_overlay_dyn/ onto $IMAGE's p2 a second time"
-    echo "[dry-run] (undoes build_bootable_sdcard.sh's own apply_overlay(), which unconditionally"
-    echo "[dry-run]  rsyncs the STOCK firmware_overlay/ on top afterward -- see this script's own"
-    echo "[dry-run]  header comment for why that second pass is necessary)"
+    echo -e "${DIM}[dry-run] Would now re-apply firmware_overlay_dyn/ onto $IMAGE's p2 a second time${RESET}"
+    echo -e "${DIM}[dry-run] (undoes build_bootable_sdcard.sh's own apply_overlay(), which unconditionally${RESET}"
+    echo -e "${DIM}[dry-run]  rsyncs the STOCK firmware_overlay/ on top afterward -- see this script's own${RESET}"
+    echo -e "${DIM}[dry-run]  header comment for why that second pass is necessary)${RESET}"
     exit 0
 fi
 
 [[ -f "$IMAGE" ]] || {
-    echo "ERROR: expected output image not found at $IMAGE after build_bootable_sdcard.sh ran." >&2
-    exit 1
+    die "expected output image not found at $IMAGE after build_bootable_sdcard.sh ran."
 }
 
-echo "==> Re-applying firmware_overlay_dyn/ onto $IMAGE (last write wins over stock's own apply_overlay())"
+info "Re-applying firmware_overlay_dyn/ onto $IMAGE (last write wins over stock's own apply_overlay())"
 LOOP=""
 MNT=""
 cleanup() {
@@ -382,5 +367,5 @@ losetup -d "$LOOP"
 LOOP=""
 trap - EXIT
 
-echo "==> Done: $IMAGE"
-echo "    sudo dd if=\"$IMAGE\" of=/dev/sdX bs=4M status=progress && sync"
+success "Done: $IMAGE"
+echo -e "${DIM}    sudo dd if=\"$IMAGE\" of=/dev/sdX bs=4M status=progress && sync${RESET}"

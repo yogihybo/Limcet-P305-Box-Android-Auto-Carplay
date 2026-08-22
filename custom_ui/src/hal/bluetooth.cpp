@@ -24,6 +24,8 @@
 #include <sys/time.h>
 #include <unistd.h>
 
+#include <dbus/dbus.h>
+
 #define AF_BLUETOOTH_ 31
 #define BTPROTO_HCI_  1
 #define HCIDEVUP_     _IOW('H', 201, int)
@@ -41,6 +43,11 @@ namespace {
 
 std::mutex g_telemetry_mtx;
 BluetoothTelemetry g_telemetry;
+
+// Matches hal/bluez_aa_profile.cpp's/hal/ble_cts.cpp's own kBusAddress --
+// this device's real dbus-daemon (see tools/bluetoothd-test/README.md)
+// resolves its default listen address to this doubled `run/run` path.
+constexpr const char * kBluezMonitorBusAddress = "unix:path=/var/run/run/dbus/system_bus_socket";
 
 // See has_pending_aa_connection()/start_pending_aa_connection()'s own
 // header comments -- aa_profile_server_loop() stashes a connected fd
@@ -130,169 +137,329 @@ std::string mac_to_dbus_path(const std::string & mac) {
     return path;
 }
 
-// Reused by sync_clock_from_phone() -- same GetManagedObjects parsing
-// pattern as list_paired_devices()/bluez_monitor_loop() above, just
-// looking for the first currently-Connected device rather than every
-// paired one.
-std::string get_connected_device_mac() {
-    std::vector<std::string> lines;
-    if (!run_command_capture("dbus-send --system --print-reply --dest=org.bluez / org.freedesktop.DBus.ObjectManager.GetManagedObjects 2>/dev/null", lines) || lines.empty()) {
-        return "";
-    }
-    std::string current_addr;
-    bool current_connected = false;
-    for (size_t i = 0; i < lines.size(); ++i) {
-        const auto & l = lines[i];
-        if (l.find("object path \"/org/bluez/hci0/dev_") != std::string::npos) {
-            if (!current_addr.empty() && current_connected) {
-                return current_addr;
-            }
-            current_addr.clear();
-            current_connected = false;
-        } else if (l.find("string \"Address\"") != std::string::npos && i + 1 < lines.size()) {
-            size_t pos = lines[i+1].find("string \"");
-            if (pos != std::string::npos) {
-                current_addr = lines[i+1].substr(pos + 8);
-                if (!current_addr.empty() && current_addr.back() == '"') current_addr.pop_back();
-            }
-        } else if (l.find("string \"Connected\"") != std::string::npos && i + 1 < lines.size()) {
-            if (lines[i+1].find("boolean true") != std::string::npos) current_connected = true;
+// Walks a GetManagedObjects reply (a{oa{sa{sv}}}) via real DBusMessageIter
+// traversal -- shared by get_connected_device_mac() and the signal-driven
+// monitor below. Replaces the old per-call `popen("dbus-send ...")` +
+// line-based text parsing (see BluezMonitorState's own comment for why
+// that was replaced) with one already-open connection's synchronous
+// method call, matching the pattern hal/ble_cts.cpp's
+// find_cts_characteristic() already established in this codebase.
+struct DeviceSnapshot {
+    std::string address;
+    std::string name;
+    bool connected = false;
+    bool paired = false;
+    int rssi = -1;
+};
+
+bool fetch_managed_devices(DBusConnection * conn, std::vector<DeviceSnapshot> & out) {
+    DBusMessage * msg = dbus_message_new_method_call(
+        "org.bluez", "/", "org.freedesktop.DBus.ObjectManager", "GetManagedObjects");
+    DBusError err;
+    dbus_error_init(&err);
+    DBusMessage * reply = dbus_connection_send_with_reply_and_block(conn, msg, 5000, &err);
+    dbus_message_unref(msg);
+    if (!reply) {
+        if (dbus_error_is_set(&err)) {
+            std::fprintf(stderr, "%s hal::bluetooth: GetManagedObjects failed: %s\n",
+                         core::log_timestamp().c_str(), err.message);
+            dbus_error_free(&err);
         }
+        return false;
     }
-    if (!current_addr.empty() && current_connected) {
-        return current_addr;
+
+    DBusMessageIter iter, objects;
+    dbus_message_iter_init(reply, &iter);
+    dbus_message_iter_recurse(&iter, &objects);
+    while (dbus_message_iter_get_arg_type(&objects) == DBUS_TYPE_DICT_ENTRY) {
+        DBusMessageIter entry;
+        dbus_message_iter_recurse(&objects, &entry);
+        const char * path = nullptr;
+        dbus_message_iter_get_basic(&entry, &path);
+        dbus_message_iter_next(&entry);
+
+        std::string pathStr(path ? path : "");
+        // Real BlueZ device object paths are /org/bluez/hci0/dev_XX_XX...
+        // -- adapter/root/other interfaces at shorter paths are skipped,
+        // matching the old code's own "object path .../dev_" line match.
+        bool isDevice = pathStr.rfind("/org/bluez/hci0/dev_", 0) == 0;
+
+        DBusMessageIter ifaces;
+        dbus_message_iter_recurse(&entry, &ifaces);
+        DeviceSnapshot snap;
+        bool sawDevice1 = false;
+        while (dbus_message_iter_get_arg_type(&ifaces) == DBUS_TYPE_DICT_ENTRY) {
+            DBusMessageIter ifaceEntry;
+            dbus_message_iter_recurse(&ifaces, &ifaceEntry);
+            const char * ifaceName = nullptr;
+            dbus_message_iter_get_basic(&ifaceEntry, &ifaceName);
+            dbus_message_iter_next(&ifaceEntry);
+
+            if (isDevice && ifaceName && std::strcmp(ifaceName, "org.bluez.Device1") == 0) {
+                sawDevice1 = true;
+                DBusMessageIter props;
+                dbus_message_iter_recurse(&ifaceEntry, &props);
+                while (dbus_message_iter_get_arg_type(&props) == DBUS_TYPE_DICT_ENTRY) {
+                    DBusMessageIter propEntry;
+                    dbus_message_iter_recurse(&props, &propEntry);
+                    const char * propName = nullptr;
+                    dbus_message_iter_get_basic(&propEntry, &propName);
+                    dbus_message_iter_next(&propEntry);
+                    if (propName && dbus_message_iter_get_arg_type(&propEntry) == DBUS_TYPE_VARIANT) {
+                        DBusMessageIter variant;
+                        dbus_message_iter_recurse(&propEntry, &variant);
+                        int vtype = dbus_message_iter_get_arg_type(&variant);
+                        if (std::strcmp(propName, "Address") == 0 && vtype == DBUS_TYPE_STRING) {
+                            const char * v = nullptr;
+                            dbus_message_iter_get_basic(&variant, &v);
+                            snap.address = v ? v : "";
+                        } else if (std::strcmp(propName, "Name") == 0 && vtype == DBUS_TYPE_STRING) {
+                            const char * v = nullptr;
+                            dbus_message_iter_get_basic(&variant, &v);
+                            snap.name = v ? v : "";
+                        } else if (std::strcmp(propName, "Alias") == 0 && vtype == DBUS_TYPE_STRING &&
+                                   snap.name.empty()) {
+                            const char * v = nullptr;
+                            dbus_message_iter_get_basic(&variant, &v);
+                            snap.name = v ? v : "";
+                        } else if (std::strcmp(propName, "Connected") == 0 && vtype == DBUS_TYPE_BOOLEAN) {
+                            dbus_bool_t v = FALSE;
+                            dbus_message_iter_get_basic(&variant, &v);
+                            snap.connected = v;
+                        } else if (std::strcmp(propName, "Paired") == 0 && vtype == DBUS_TYPE_BOOLEAN) {
+                            dbus_bool_t v = FALSE;
+                            dbus_message_iter_get_basic(&variant, &v);
+                            snap.paired = v;
+                        } else if (std::strcmp(propName, "RSSI") == 0 &&
+                                   (vtype == DBUS_TYPE_INT16 || vtype == DBUS_TYPE_INT32)) {
+                            dbus_int32_t v = 0;
+                            dbus_message_iter_get_basic(&variant, &v);
+                            snap.rssi = v;
+                        }
+                    }
+                    dbus_message_iter_next(&props);
+                }
+            }
+            dbus_message_iter_next(&ifaces);
+        }
+        if (isDevice && sawDevice1 && !snap.address.empty()) {
+            out.push_back(std::move(snap));
+        }
+        dbus_message_iter_next(&objects);
     }
-    return "";
+    dbus_message_unref(reply);
+    return true;
 }
 
-void bluez_monitor_loop(BluetoothHandle * h) {
-    std::printf("%s hal::bluetooth: BlueZ status monitor thread started\n", core::log_timestamp().c_str());
+// Reused by sync_clock_from_phone() -- same GetManagedObjects walk as
+// the signal-driven monitor below, just looking for the first
+// currently-Connected device rather than every paired one. Opens its
+// own short-lived connection since it's called from a different thread
+// (aa_profile_server_loop()) than the persistent monitor connection
+// below belongs to -- libdbus connections aren't meant to be shared
+// across threads without external locking this codebase doesn't have.
+std::string get_connected_device_mac() {
+    DBusError err;
+    dbus_error_init(&err);
+    DBusConnection * conn = dbus_connection_open_private(kBluezMonitorBusAddress, &err);
+    if (!conn) {
+        dbus_error_free(&err);
+        return "";
+    }
+    dbus_error_init(&err);
+    if (!dbus_bus_register(conn, &err)) {
+        dbus_error_free(&err);
+        dbus_connection_close(conn);
+        dbus_connection_unref(conn);
+        return "";
+    }
+
+    std::vector<DeviceSnapshot> devices;
+    std::string result;
+    if (fetch_managed_devices(conn, devices)) {
+        for (const auto & d : devices) {
+            if (d.connected) {
+                result = d.address;
+                break;
+            }
+        }
+    }
+    dbus_connection_close(conn);
+    dbus_connection_unref(conn);
+    return result;
+}
+
+// 2026-08-21: replaces a `while(true) { popen("dbus-send ...", 1.5s
+// sleep }` loop that ran for the ENTIRE process lifetime -- confirmed
+// real hardware finding: that was a full fork()+exec("dbus-send") every
+// 1.5 seconds, each one opening a brand-new D-Bus system bus connection
+// from scratch, dumping every BlueZ object/interface/property as text,
+// which this code then re-parsed line-by-line -- ~40 process spawns/
+// minute, continuously, for as long as the device is on. On a 173MB-RAM
+// device with no swap, traced as a real contributor to the sustained
+// page-cache/inode-churn growth behind an eventual thrashing-induced AA
+// session drop (ECONNRESET) after several minutes of runtime -- see
+// project memory/session history for the fuller trace.
+//
+// Now: ONE persistent libdbus connection for the process's entire
+// lifetime (matching hal/bluez_aa_profile.cpp's/hal/ble_cts.cpp's own
+// established pattern), subscribed to the real BlueZ signals
+// (PropertiesChanged under every /org/bluez/... object, and
+// InterfacesAdded/Removed on the root ObjectManager) instead of a fixed
+// timer. dbus_connection_read_write_dispatch() blocks (bounded by a
+// timeout so this can still notice h->fd going invalid and exit) until
+// something ACTUALLY happens on the bus -- near-zero idle CPU/process
+// churn instead of continuous polling, and telemetry updates are
+// event-driven rather than up-to-1.5s-stale.
+struct BluezMonitorState {
     bool last_connected = false;
     std::string last_connected_mac;
     std::string last_connected_name;
     size_t last_device_count = 0;
+};
+
+void refresh_bluez_telemetry(DBusConnection * conn, BluezMonitorState & state) {
+    std::vector<DeviceSnapshot> devices;
+    if (!fetch_managed_devices(conn, devices)) {
+        std::lock_guard<std::mutex> lock(g_telemetry_mtx);
+        if (state.last_connected) {
+            std::printf("%s [BT-EVENT] Lost connection to BlueZ daemon\n", core::log_timestamp().c_str());
+            state.last_connected = false;
+        }
+        g_telemetry.connected = false;
+        return;
+    }
+
+    std::lock_guard<std::mutex> lock(g_telemetry_mtx);
+    bool connected = false;
+    std::string connected_mac, connected_name;
+    int rssi = -1;
+    for (const auto & d : devices) {
+        if (d.connected) {
+            connected = true;
+            connected_mac = d.address;
+            connected_name = d.name;
+            rssi = d.rssi;
+            break;
+        }
+    }
+
+    if (connected != state.last_connected || connected_mac != state.last_connected_mac) {
+        if (connected) {
+            std::printf("%s [BT-EVENT] *** Device Connected ***: %s ('%s') RSSI=%d dBm\n",
+                        core::log_timestamp().c_str(), connected_mac.c_str(),
+                        connected_name.c_str(), rssi);
+            // 2026-08-20: no Device1.ConnectProfile(AA UUID) call here --
+            // see git history for this line's own prior comment on why
+            // that call was removed (AA pairing is phone-initiated; the
+            // UUID argument would have named a service the REMOTE peer
+            // exposes, not one we expose, so it could only ever fail).
+        } else {
+            std::printf("%s [BT-EVENT] *** Device Disconnected ***: (was %s '%s')\n",
+                        core::log_timestamp().c_str(), state.last_connected_mac.c_str(),
+                        state.last_connected_name.c_str());
+        }
+        state.last_connected = connected;
+        state.last_connected_mac = connected_mac;
+        state.last_connected_name = connected_name;
+    }
+
+    if (devices.size() != state.last_device_count) {
+        std::printf("%s [BT-STATUS] Total known devices in BlueZ database: %zu\n",
+                    core::log_timestamp().c_str(), devices.size());
+        state.last_device_count = devices.size();
+    }
+
+    g_telemetry.connected = connected;
+    if (!connected_name.empty()) g_telemetry.connected_device_name = connected_name;
+    g_telemetry.signal_strength = rssi;
+}
+
+// 2026-08-21: only ever sets a flag here, deliberately -- does NOT call
+// refresh_bluez_telemetry() (a blocking dbus_connection_send_with_reply_
+// and_block() call) directly from this filter. libdbus filter functions
+// run synchronously from inside dbus_connection_dispatch()'s own
+// processing of this connection's incoming queue; making a blocking
+// send-and-wait call reentrantly from within that is a real, documented
+// libdbus footgun (message-ordering corruption at best, a hang at
+// worst) -- not the same as this codebase's other libdbus call sites
+// (hal/ble_cts.cpp/hal/bluez_aa_profile.cpp), which all call
+// send_with_reply_and_block() from ordinary top-level flow, never from
+// inside a filter. bluez_monitor_loop()'s own while loop checks this
+// flag and does the actual refresh AFTER dispatch returns instead,
+// where a blocking call back onto the same connection is safe.
+std::atomic<bool> g_bluezTelemetryDirty{false};
+
+DBusHandlerResult bluez_signal_filter(DBusConnection *, DBusMessage * msg, void *) {
+    if (dbus_message_is_signal(msg, "org.freedesktop.DBus.Properties", "PropertiesChanged") ||
+        dbus_message_is_signal(msg, "org.freedesktop.DBus.ObjectManager", "InterfacesAdded") ||
+        dbus_message_is_signal(msg, "org.freedesktop.DBus.ObjectManager", "InterfacesRemoved")) {
+        g_bluezTelemetryDirty.store(true, std::memory_order_relaxed);
+    }
+    return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+}
+
+void bluez_monitor_loop(BluetoothHandle * h) {
+    std::printf("%s hal::bluetooth: BlueZ status monitor thread started\n", core::log_timestamp().c_str());
+
+    DBusError err;
+    dbus_error_init(&err);
+    DBusConnection * conn = dbus_connection_open_private(kBluezMonitorBusAddress, &err);
+    if (!conn) {
+        std::fprintf(stderr, "%s hal::bluetooth: BlueZ monitor could not open D-Bus connection: %s\n",
+                     core::log_timestamp().c_str(), err.message ? err.message : "(no message)");
+        dbus_error_free(&err);
+        return;
+    }
+    dbus_error_init(&err);
+    if (!dbus_bus_register(conn, &err)) {
+        std::fprintf(stderr, "%s hal::bluetooth: BlueZ monitor dbus_bus_register failed: %s\n",
+                     core::log_timestamp().c_str(), err.message ? err.message : "(no message)");
+        dbus_error_free(&err);
+        dbus_connection_close(conn);
+        dbus_connection_unref(conn);
+        return;
+    }
+
+    // path_namespace matches every object under /org/bluez (adapter,
+    // every device, every GATT service/characteristic) -- a real
+    // D-Bus match-rule feature (spec since dbus 1.5), not a prefix hack.
+    dbus_bus_add_match(conn,
+        "type='signal',sender='org.bluez',interface='org.freedesktop.DBus.Properties',"
+        "member='PropertiesChanged',path_namespace='/org/bluez'", &err);
+    dbus_bus_add_match(conn,
+        "type='signal',sender='org.bluez',interface='org.freedesktop.DBus.ObjectManager',"
+        "member='InterfacesAdded',path='/'", &err);
+    dbus_bus_add_match(conn,
+        "type='signal',sender='org.bluez',interface='org.freedesktop.DBus.ObjectManager',"
+        "member='InterfacesRemoved',path='/'", &err);
+    dbus_connection_flush(conn);
+
+    BluezMonitorState state;
+    dbus_connection_add_filter(conn, bluez_signal_filter, nullptr, nullptr);
+
+    // Seed initial telemetry once -- signals only fire on FUTURE
+    // changes, they say nothing about the state at the moment this
+    // thread started (e.g. a device already connected before this
+    // thread ran its first dispatch).
+    refresh_bluez_telemetry(conn, state);
 
     while (h->fd >= 0) {
-        std::vector<std::string> lines;
-        if (run_command_capture("dbus-send --system --print-reply --dest=org.bluez / org.freedesktop.DBus.ObjectManager.GetManagedObjects 2>/dev/null", lines) && !lines.empty()) {
-            std::lock_guard<std::mutex> lock(g_telemetry_mtx);
-            bool connected = false;
-            std::string connected_mac;
-            std::string connected_name;
-            int rssi = -1;
-
-            std::string cur_addr, cur_name;
-            bool cur_connected = false, cur_paired = false;
-            size_t total_devices = 0;
-
-            auto flush_device = [&]() {
-                if (!cur_addr.empty()) {
-                    total_devices++;
-                    if (cur_connected) {
-                        connected = true;
-                        connected_mac = cur_addr;
-                        connected_name = cur_name;
-                    }
-                }
-                cur_addr.clear(); cur_name.clear();
-                cur_connected = false; cur_paired = false;
-            };
-
-            for (size_t i = 0; i < lines.size(); ++i) {
-                const auto & l = lines[i];
-                if (l.find("object path \"/org/bluez/hci0/dev_") != std::string::npos) {
-                    flush_device();
-                } else if (l.find("string \"Address\"") != std::string::npos && i + 1 < lines.size()) {
-                    size_t pos = lines[i+1].find("string \"");
-                    if (pos != std::string::npos) {
-                        cur_addr = lines[i+1].substr(pos + 8);
-                        if (!cur_addr.empty() && cur_addr.back() == '"') cur_addr.pop_back();
-                    }
-                } else if (l.find("string \"Name\"") != std::string::npos && i + 1 < lines.size()) {
-                    size_t pos = lines[i+1].find("string \"");
-                    if (pos != std::string::npos) {
-                        cur_name = lines[i+1].substr(pos + 8);
-                        if (!cur_name.empty() && cur_name.back() == '"') cur_name.pop_back();
-                    }
-                } else if (l.find("string \"Alias\"") != std::string::npos && i + 1 < lines.size() && cur_name.empty()) {
-                    size_t pos = lines[i+1].find("string \"");
-                    if (pos != std::string::npos) {
-                        cur_name = lines[i+1].substr(pos + 8);
-                        if (!cur_name.empty() && cur_name.back() == '"') cur_name.pop_back();
-                    }
-                } else if (l.find("string \"Connected\"") != std::string::npos && i + 1 < lines.size()) {
-                    if (lines[i+1].find("boolean true") != std::string::npos) cur_connected = true;
-                } else if (l.find("string \"Paired\"") != std::string::npos && i + 1 < lines.size()) {
-                    if (lines[i+1].find("boolean true") != std::string::npos) cur_paired = true;
-                } else if (l.find("string \"RSSI\"") != std::string::npos && i + 1 < lines.size()) {
-                    int val = 0;
-                    if (std::sscanf(lines[i+1].c_str(), "%*[^0-9-]%d", &val) == 1) {
-                        rssi = val;
-                    }
-                }
-            }
-            flush_device();
-
-            if (connected != last_connected || connected_mac != last_connected_mac) {
-                if (connected) {
-                    std::printf("%s [BT-EVENT] *** Device Connected ***: %s ('%s') RSSI=%d dBm\n",
-                                core::log_timestamp().c_str(), connected_mac.c_str(),
-                                connected_name.c_str(), rssi);
-
-                    // 2026-08-20: removed a Device1.ConnectProfile(AA UUID)
-                    // call that used to fire here -- confirmed against
-                    // the vendored BlueZ docs (device-api.txt: "The UUID
-                    // provided is the remote service UUID for the
-                    // profile") that ConnectProfile's UUID argument
-                    // names a service the REMOTE peer (the phone)
-                    // exposes, not one we expose. A phone never runs an
-                    // RFCOMM server for the AA UUID -- it's the client
-                    // in this handshake (matches this project's own
-                    // established finding, this file's header comment,
-                    // that AA pairing/connection is phone-initiated) --
-                    // so this call could only ever fail
-                    // (org.bluez.Error.NotAvailable), and did nothing
-                    // toward getting the phone to dial our registered
-                    // Profile1 server. Real hardware log (2026-08-20)
-                    // showed classic BT + A2DP connecting fine while the
-                    // AA RFCOMM channel never got dialed at all, even
-                    // after a fresh re-pair -- this call was a red
-                    // herring, not a contributing fix. The actual server
-                    // side (BluezClient::register_profile() +
-                    // wait_for_connection(), androidauto-sidecar) is
-                    // already in place and just waits for the phone to
-                    // connect in; there's no BlueZ API to force that
-                    // from our side.
-                } else {
-                    std::printf("%s [BT-EVENT] *** Device Disconnected ***: (was %s '%s')\n",
-                                core::log_timestamp().c_str(), last_connected_mac.c_str(),
-                                last_connected_name.c_str());
-                }
-                last_connected = connected;
-                last_connected_mac = connected_mac;
-                last_connected_name = connected_name;
-            }
-
-            if (total_devices != last_device_count) {
-                std::printf("%s [BT-STATUS] Total known devices in BlueZ database: %zu\n",
-                            core::log_timestamp().c_str(), total_devices);
-                last_device_count = total_devices;
-            }
-
-            g_telemetry.connected = connected;
-            if (!connected_name.empty()) g_telemetry.connected_device_name = connected_name;
-            g_telemetry.signal_strength = rssi;
-        } else {
-            std::lock_guard<std::mutex> lock(g_telemetry_mtx);
-            if (last_connected) {
-                std::printf("%s [BT-EVENT] Lost connection to BlueZ daemon\n", core::log_timestamp().c_str());
-                last_connected = false;
-            }
-            g_telemetry.connected = false;
+        // Blocks (bounded) until real bus traffic arrives or the
+        // timeout elapses -- the bounded timeout exists only so this
+        // loop can still notice h->fd going invalid and exit cleanly,
+        // not as a polling interval (the actual refresh below, driven
+        // by g_bluezTelemetryDirty, is what responds to real events;
+        // this call doing nothing for the whole timeout is the normal,
+        // expected, near-zero-CPU idle case).
+        dbus_connection_read_write_dispatch(conn, 5000);
+        if (g_bluezTelemetryDirty.exchange(false, std::memory_order_relaxed)) {
+            refresh_bluez_telemetry(conn, state);
         }
-
-        std::this_thread::sleep_for(std::chrono::milliseconds(1500));
     }
+
+    dbus_connection_close(conn);
+    dbus_connection_unref(conn);
 }
 
 // 2026-08-20: this thread is the whole reason Bluetooth connectivity
@@ -329,6 +496,19 @@ void aa_profile_server_loop() {
                 "connections\n", core::log_timestamp().c_str());
 
     int consecutiveTimeouts = 0;
+    // 2026-08-21: tracks whether this loop has EVER successfully handed
+    // a connected fd off to androidauto-sidecar -- purely for the log
+    // wording below, not used for any real logic. This loop only ever
+    // waits for the NEXT org.bluez.Profile1.NewConnection call; it has
+    // no visibility into whether a session it already handed off is
+    // still alive (that's androidauto-sidecar's own state, a separate
+    // process). Without this, "still waiting for a phone to connect"
+    // kept printing every 60s even with a real, currently-active AA
+    // session running -- a real (if once-off) connection had already
+    // happened, this loop was correctly just idle waiting for a SECOND
+    // one that was never coming, but the wording read as "nothing is
+    // connected", which is misleading during an active session.
+    bool everHandedOff = false;
     while (true) {
         int fd = profile.wait_for_connection(60);
         if (fd < 0) {
@@ -337,8 +517,15 @@ void aa_profile_server_loop() {
             // thread is still alive and still listening, not silently
             // dead, without spamming the console every single 60s tick
             // at the same volume as a real connection attempt would.
-            std::printf("%s [BT-AA-PROFILE] still waiting for a phone to connect (%d min so far)\n",
-                        core::log_timestamp().c_str(), consecutiveTimeouts);
+            if (everHandedOff) {
+                std::printf("%s [BT-AA-PROFILE] no NEW phone connection in the last %d min "
+                            "(this only tracks additional RFCOMM connections -- an existing "
+                            "AA session, if any, is unaffected)\n",
+                            core::log_timestamp().c_str(), consecutiveTimeouts);
+            } else {
+                std::printf("%s [BT-AA-PROFILE] still waiting for a phone to connect (%d min so far)\n",
+                            core::log_timestamp().c_str(), consecutiveTimeouts);
+            }
             continue;
         }
         consecutiveTimeouts = 0;
@@ -367,6 +554,7 @@ void aa_profile_server_loop() {
                         core::log_timestamp().c_str(), ok ? "accepted" : "FAILED");
             if (ok) {
                 g_aaNavigatePending.store(true, std::memory_order_release);
+                everHandedOff = true;
             }
         } else {
             std::printf("%s [BT-AA-PROFILE] AutoStartCarLink is OFF -- waiting at the connect "
@@ -835,6 +1023,41 @@ bool sync_clock_from_phone(BluetoothHandle & h) {
     }
     std::printf("%s hal::bluetooth::sync_clock_from_phone: PAN link up on %s, requesting DHCP "
                 "lease...\n", core::log_timestamp().c_str(), iface.c_str());
+
+    // 2026-08-21: real hardware showed the very next udhcpc call failing
+    // in ~40ms -- WAY faster than udhcpc's own -T 3 -t 3 bounded retry
+    // could ever produce for a real "no DHCP server answered" timeout,
+    // which pointed at a race instead: Network1.Connect's D-Bus reply
+    // (the iface name above) can come back before the kernel BNEP
+    // interface it names has actually finished coming up, so udhcpc's
+    // own immediate "no such device"-class failure looked identical to
+    // a real DHCP timeout in the log. Bounded poll for the interface to
+    // actually exist first (/sys/class/net/<iface>, same source ifconfig/
+    // ip itself reads) -- up to 2s, generous for a local kernel netdev
+    // to appear but nowhere near udhcpc's own budget, so this can't turn
+    // a genuine "phone has no NAP/tethering active" case into a long
+    // hang. Fails gracefully either way: if the interface never shows
+    // up, skip DHCP/NTP entirely and return false, same as every other
+    // failure branch in this function -- BLE CTS (tried before this
+    // function's PAN path even starts) already covers the no-tethering
+    // case without ever reaching here.
+    bool ifaceReady = false;
+    std::string ifaceSysPath = "/sys/class/net/" + iface;
+    for (int attempt = 0; attempt < 20; ++attempt) {
+        struct stat st{};
+        if (::stat(ifaceSysPath.c_str(), &st) == 0) {
+            ifaceReady = true;
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    if (!ifaceReady) {
+        std::printf("%s hal::bluetooth::sync_clock_from_phone: %s never appeared -- skipping "
+                    "DHCP/NTP\n", core::log_timestamp().c_str(), iface.c_str());
+        run_command_simple("dbus-send --system --dest=org.bluez --type=method_call " + dev_path +
+                            " org.bluez.Network1.Disconnect >/dev/null 2>&1");
+        return false;
+    }
 
     // 2026-08-20: real hardware showed this always failing at the ntpd
     // step even with Bluetooth tethering genuinely enabled on the phone

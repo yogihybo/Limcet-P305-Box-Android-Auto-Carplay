@@ -255,6 +255,39 @@ specifically so `tools/` wins). `bluez-bringup.sh` additionally checks
 `/data/bluetoothd-test/dbus-daemon` first, for the scp-based
 fast-iteration dev workflow before a full rebuild.
 
+**Real regression this caused, found and fixed 2026-08-21**: because
+`/usr/bin/dbus-daemon` is now replaced system-wide (not just for this
+diagnostic tool's own use), it also became what `/etc/profile`'s
+ordinary `eval \`dbus-launch --auto-syntax\`` line (a per-login
+*session* bus, unrelated to BlueZ/`bluetoothd`'s system bus) resolves
+to on every boot. That line started failing on real hardware:
+```
+dbus[185]: Failed to start message bus: Failed to open
+"/usr/share/dbus-1/session.conf": No such file or directory
+EOF in dbus-launch reading address from bus daemon
+```
+Root cause: dbus's own upstream build convention puts the *session*
+bus config under `$datadir/dbus-1/session.conf` (`/usr/share/dbus-1/`
+with this build's `--prefix=/usr`), separate from the *system* bus
+config under `$sysconfdir/dbus-1/` (the `/usr/etc/dbus-1/system.conf`
+doubled-`run/run` issue documented elsewhere in this file is that same
+sysconfdir path, for the system bus specifically) -- this device's
+real vendor rootfs, however, only ever shipped its session.conf at the
+non-standard `/usr/etc/dbus-1/session.conf`
+(`firmware_source/mtd6_rootfs/usr/etc/dbus-1/session.conf`), never at
+the `/usr/share/dbus-1/` path the freshly-built 1.14.10 binary actually
+looks for. The stock 1.0.2 binary presumably had this path baked in
+differently at its own original vendor build time; this rebuild
+didn't carry that over since `configure` was never given a matching
+`--datadir` override (see this file's own build recipe above).
+Fixed by adding a copy of the real session.conf content at
+`firmware_overlay/usr/share/dbus-1/session.conf` (that directory
+already exists in the overlay for `services/com.arkmicro.auto.service`,
+confirming it's the real, intended session-bus datadir on this
+device) -- lands on every rebuild via `apply_overlay()`, same as every
+other overlay file, restoring the ordinary per-login session bus
+`/etc/profile` has always depended on.
+
 ## What's disabled / not built
 
 - **`bluetoothctl`** (`--disable-client`) -- needs `readline`, not built

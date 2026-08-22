@@ -5,6 +5,16 @@
 
 namespace androidauto {
 
+// 2026-08-21: renamed from bw_aap_client.h/BwAapClient -- that name
+// (and the "bw_aap:" log prefix, now "wifi-setup:") came from
+// blueware's own /dev/bw_aap device node, back when this class only
+// ever talked to blueware's local socket proxy. Now that the real
+// production path is a native BlueZ RFCOMM fd (see attach() below),
+// keeping the blueware-derived name was actively misleading -- this
+// class no longer needs or assumes blueware at all. connect() (the
+// literal /dev/bw_aap path) is kept only as an unused reference/
+// fallback, see its own comment.
+//
 // Client for blueware's (Feasycom BT stack, /usr/bin/blueware) local
 // Unix domain socket at /dev/bw_aap -- the REAL Bluetooth
 // pre-connection channel this device uses for wireless Android
@@ -82,10 +92,10 @@ namespace androidauto {
 // connection (if `sink` or MsnCoreApp already holds it open when our
 // code tries to connect, this may fail or interfere -- test carefully,
 // don't assume).
-class BwAapClient {
+class WifiSetupClient {
 public:
-    BwAapClient();
-    ~BwAapClient();
+    WifiSetupClient();
+    ~WifiSetupClient();
 
     // Opens /dev/bw_aap. Returns false on failure (logs the reason).
     // Superseded by attach() below -- kept for reference/fallback, not

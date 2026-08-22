@@ -9,6 +9,7 @@
 #include "ui/staging/icons.h"
 #include "core/navigation.h"
 #include "hal/androidauto_client.h"
+#include "hal/bluetooth.h"
 #include <ctime>
 #include <cstdio>
 #include <string>
@@ -21,6 +22,9 @@ struct DashboardWidgets {
     lv_obj_t * clock_lbl = nullptr;
     lv_obj_t * aa_status_lbl = nullptr;
     lv_obj_t * connect_lbl = nullptr;
+    lv_obj_t * track_title_lbl = nullptr;
+    lv_obj_t * track_artist_lbl = nullptr;
+    lv_obj_t * playpause_icon = nullptr;
     lv_timer_t * poll_timer = nullptr;
 };
 
@@ -43,17 +47,31 @@ void update_clock(DashboardWidgets * w) {
 void update_dashboard_status(DashboardWidgets * w) {
     if (!w) return;
     update_clock(w);
-    if (!w->aa_status_lbl || !w->connect_lbl) return;
-    std::string line = client().statusLine(false);
-    if (line.rfind("STATE Connected", 0) == 0) {
-        lv_label_set_text(w->aa_status_lbl, "Session: Active (Connected)");
-        lv_label_set_text(w->connect_lbl, "Open Session");
-    } else if (line.rfind("STATE Connecting", 0) == 0) {
-        lv_label_set_text(w->aa_status_lbl, "Connection: Connecting...");
-        lv_label_set_text(w->connect_lbl, "Connecting...");
+    if (w->aa_status_lbl && w->connect_lbl) {
+        std::string line = client().statusLine(false);
+        if (line.rfind("STATE Connected", 0) == 0) {
+            lv_label_set_text(w->aa_status_lbl, "Session: Active (Connected)");
+            lv_label_set_text(w->connect_lbl, "Open Session");
+        } else if (line.rfind("STATE Connecting", 0) == 0) {
+            lv_label_set_text(w->aa_status_lbl, "Connection: Connecting...");
+            lv_label_set_text(w->connect_lbl, "Connecting...");
+        } else {
+            lv_label_set_text(w->aa_status_lbl, "Connection: Ready to pair");
+            lv_label_set_text(w->connect_lbl, "Quick Connect");
+        }
+    }
+
+    if (!w->track_title_lbl || !w->track_artist_lbl) return;
+    hal::BluetoothTelemetry telem = hal::get_telemetry();
+    if (!telem.connected || telem.track_title.empty()) {
+        lv_label_set_text(w->track_title_lbl, "Not Playing");
+        lv_label_set_text(w->track_artist_lbl, telem.connected ? telem.connected_device_name.c_str() : "No device connected");
     } else {
-        lv_label_set_text(w->aa_status_lbl, "Connection: Ready to pair");
-        lv_label_set_text(w->connect_lbl, "Quick Connect");
+        lv_label_set_text(w->track_title_lbl, telem.track_title.c_str());
+        lv_label_set_text(w->track_artist_lbl, telem.track_artist.empty() ? " " : telem.track_artist.c_str());
+    }
+    if (w->playpause_icon) {
+        lv_image_set_src(w->playpause_icon, telem.play_status == 1 ? &ui::icons::icon_pause : &ui::icons::icon_play);
     }
 }
 
@@ -70,6 +88,20 @@ void quick_connect_clicked_cb(lv_event_t * e) {
         client().requestConnect();
         core::navigation::push(ui::create_android_auto_screen);
     }
+}
+
+void media_prev_clicked_cb(lv_event_t * /*e*/) {
+    hal::media_prev_track(hal::shared_handle());
+}
+
+void media_play_pause_clicked_cb(lv_event_t * e) {
+    hal::media_play_pause(hal::shared_handle());
+    auto * w = static_cast<DashboardWidgets *>(lv_event_get_user_data(e));
+    update_dashboard_status(w);
+}
+
+void media_next_clicked_cb(lv_event_t * /*e*/) {
+    hal::media_next_track(hal::shared_handle());
 }
 
 void dashboard_delete_cb(lv_event_t * e) {
@@ -189,23 +221,41 @@ lv_obj_t * create_home_dashboard() {
 
     // Title (No icon in front of title to match mockup)
     lv_obj_t * audio_title = lv_label_create(card_audio);
-    lv_label_set_text(audio_title, "Audio Volume");
+    lv_label_set_text(audio_title, "Now Playing");
     lv_obj_set_style_text_font(audio_title, &lv_font_roboto_28, 0);
     lv_obj_set_style_text_color(audio_title, theme::text_primary(), 0);
 
-    // Center Arc Volume Gauge
-    lv_obj_t * arc = lv_arc_create(card_audio);
-    lv_obj_set_size(arc, 180, 180);
-    lv_arc_set_rotation(arc, 135);
-    lv_arc_set_bg_angles(arc, 0, 270);
-    lv_arc_set_value(arc, 65);
-    lv_obj_align(arc, LV_ALIGN_CENTER, 0, 0);
-    lv_obj_remove_style(arc, nullptr, LV_PART_KNOB);
-    lv_obj_set_style_arc_color(arc, theme::track_bg(), LV_PART_MAIN);
-    lv_obj_set_style_arc_width(arc, 10, LV_PART_MAIN);
-    lv_obj_set_style_arc_color(arc, theme::accent_primary(), LV_PART_INDICATOR);
-    lv_obj_set_style_arc_width(arc, 10, LV_PART_INDICATOR);
-    lv_obj_center(arc);
+    // Track Title / Artist (or Bluetooth device name / connection state
+    // when nothing is playing) -- see hal::get_telemetry()'s own
+    // BluetoothTelemetry struct for where these come from (AVRCP /
+    // BlueZ MediaControl1 track metadata, same source status_bar.cpp
+    // already reads for the bar's connection glyph).
+    lv_obj_t * track_box = lv_obj_create(card_audio);
+    lv_obj_remove_style_all(track_box);
+    lv_obj_set_width(track_box, LV_PCT(100));
+    lv_obj_set_flex_grow(track_box, 1);
+    lv_obj_set_flex_flow(track_box, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(track_box, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_row(track_box, 8, 0);
+    lv_obj_clear_flag(track_box, LV_OBJ_FLAG_SCROLLABLE);
+
+    lv_obj_t * track_title_lbl = lv_label_create(track_box);
+    lv_label_set_text(track_title_lbl, "Not Playing");
+    lv_label_set_long_mode(track_title_lbl, LV_LABEL_LONG_DOT);
+    lv_obj_set_width(track_title_lbl, LV_PCT(100));
+    lv_obj_set_style_text_align(track_title_lbl, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_font(track_title_lbl, &lv_font_roboto_24, 0);
+    lv_obj_set_style_text_color(track_title_lbl, theme::text_primary(), 0);
+    widgets->track_title_lbl = track_title_lbl;
+
+    lv_obj_t * track_artist_lbl = lv_label_create(track_box);
+    lv_label_set_text(track_artist_lbl, "No device connected");
+    lv_label_set_long_mode(track_artist_lbl, LV_LABEL_LONG_DOT);
+    lv_obj_set_width(track_artist_lbl, LV_PCT(100));
+    lv_obj_set_style_text_align(track_artist_lbl, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_font(track_artist_lbl, &lv_font_roboto_14, 0);
+    lv_obj_set_style_text_color(track_artist_lbl, theme::text_secondary(), 0);
+    widgets->track_artist_lbl = track_artist_lbl;
 
     // Bottom Playback Controls Row (Prev / Play / Next)
     lv_obj_t * ctrl_row = lv_obj_create(card_audio);
@@ -216,7 +266,7 @@ lv_obj_t * create_home_dashboard() {
     lv_obj_set_flex_align(ctrl_row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_column(ctrl_row, 16, 0);
 
-    auto make_ctrl_btn = [ctrl_row](const lv_image_dsc_t * dsc) -> lv_obj_t * {
+    auto make_ctrl_btn = [ctrl_row, widgets](const lv_image_dsc_t * dsc, lv_event_cb_t click_cb) -> lv_obj_t * {
         lv_obj_t * btn = lv_button_create(ctrl_row);
         lv_obj_remove_style_all(btn);
         lv_obj_set_size(btn, 48, 48);
@@ -225,6 +275,7 @@ lv_obj_t * create_home_dashboard() {
         lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
         lv_obj_set_style_bg_color(btn, theme::surface_pressed(), LV_STATE_PRESSED);
         theme::style_focusable(btn);
+        lv_obj_add_event_cb(btn, click_cb, LV_EVENT_CLICKED, widgets);
 
         lv_obj_t * icon = ui::icons::create_icon(btn, dsc, theme::text_primary());
         lv_obj_center(icon);
@@ -232,12 +283,12 @@ lv_obj_t * create_home_dashboard() {
         if (core::navigation::focus_group()) {
             lv_group_add_obj(core::navigation::focus_group(), btn);
         }
-        return btn;
+        return icon;
     };
 
-    make_ctrl_btn(&ui::icons::icon_prev);
-    make_ctrl_btn(&ui::icons::icon_pause);
-    make_ctrl_btn(&ui::icons::icon_next);
+    make_ctrl_btn(&ui::icons::icon_prev, media_prev_clicked_cb);
+    widgets->playpause_icon = make_ctrl_btn(&ui::icons::icon_play, media_play_pause_clicked_cb);
+    make_ctrl_btn(&ui::icons::icon_next, media_next_clicked_cb);
 
     // Initial Status Check & Periodic Poll
     update_dashboard_status(widgets);

@@ -112,6 +112,7 @@
 
 #include <fcntl.h>
 #include <sys/file.h>
+#include <sys/mman.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
@@ -384,6 +385,23 @@ int main() {
 
     if (!acquireSingleInstanceLock()) {
         return 1;
+    }
+
+    // 2026-08-21: see custom_ui's own main.cpp for the full comment on
+    // why -- this process is at least as exposed to the same page-cache-
+    // thrashing-without-swap mechanism (no swap on this 173MB device,
+    // this binary is statically linked so its own text segment is the
+    // thing at risk of eviction+refault from the real USB-backed
+    // rootfs), and it's the process actually driving the AA session
+    // that was observed dying with ECONNRESET after several minutes of
+    // runtime. Best-effort/non-fatal, same reasoning as custom_ui.
+    if (mlockall(MCL_CURRENT | MCL_FUTURE) != 0) {
+        std::fprintf(stderr, "%s androidauto-sidecar: mlockall() failed: %s -- continuing "
+                     "without it (process pages may still be reclaimed under memory pressure)\n",
+                     androidauto::logTimestamp().c_str(), std::strerror(errno));
+    } else {
+        std::printf("%s androidauto-sidecar: mlockall(MCL_CURRENT|MCL_FUTURE) succeeded -- "
+                    "process pages pinned against reclaim\n", androidauto::logTimestamp().c_str());
     }
 
     // 2026-08-15: found on real hardware -- alsa-lib bakes the build

@@ -1,15 +1,16 @@
-// Standalone test for BwAapClient -- drives the full confirmed
-// wireless-AA pre-connection sequence (WIFI_VERSION_REQUEST/RESPONSE,
-// WIFI_START_REQUEST, WIFI_INFO_REQUEST/RESPONSE) against blueware's
-// real /dev/bw_aap socket, then keeps listening and hex-dumping
-// whatever follows.
+// Standalone test for WifiSetupClient (renamed 2026-08-21 from
+// BwAapClient/bw_aap_client.h -- see that file's own header comment)
+// -- drives the full confirmed wireless-AA pre-connection sequence
+// (WIFI_VERSION_REQUEST/RESPONSE, WIFI_START_REQUEST, WIFI_INFO_REQUEST/
+// RESPONSE) against blueware's real /dev/bw_aap socket, then keeps
+// listening and hex-dumping whatever follows.
 //
 // Usage: androidauto-bw-aap-test <ap-ip> <ap-port> <ssid> <password> <bssid> [security-mode=8] [seconds=15]
 //
 // ap-ip/ap-port should be this device's own hostapd AP's address and
 // the port the phone should connect to for the real aasdk session
 // (see wireless_probe.h -- confirming which side actually listens
-// here is still open, see bw_aap_client.h). ssid/password/bssid
+// here is still open, see wifi_setup_client.h). ssid/password/bssid
 // should match that same AP. security-mode defaults to 8 (the raw
 // value observed in real captured stock traffic, which numerically
 // maps to WPA2_ENTERPRISE in aap_protobuf's WifiSecurityMode enum --
@@ -23,7 +24,7 @@
 #include <cstdio>
 #include <cstdlib>
 
-#include "androidauto/bw_aap_client.h"
+#include "androidauto/wifi_setup_client.h"
 
 int main(int argc, char **argv) {
     if (argc < 6) {
@@ -41,7 +42,7 @@ int main(int argc, char **argv) {
     int securityMode = argc > 6 ? std::atoi(argv[6]) : 8;
     int seconds = argc > 7 ? std::atoi(argv[7]) : 15;
 
-    androidauto::BwAapClient client;
+    androidauto::WifiSetupClient client;
     if (!client.connect()) {
         return 1;
     }

@@ -2,7 +2,7 @@
 // its own background thread, GIVEN an already-connected Bluetooth
 // RFCOMM socket fd: bring up this app's own WiFi AP, bind a TCP
 // listener, run the confirmed Bluetooth-relayed credential handoff
-// (BwAapClient) over that fd, then accept the phone's incoming
+// (WifiSetupClient) over that fd, then accept the phone's incoming
 // connection and start the real aasdk Session -- see
 // docs/IMPLEMENTATION_PLAN.md Phase 2's "Wireless AA" section for why
 // this whole path (not wired AOAP) is the required one on this
@@ -21,7 +21,7 @@
 // local Unix-domain socket via SCM_RIGHTS (see
 // sidecars/androidauto/main.cpp's "CONNECT_FD" command and
 // hal/androidauto_client.h's sendConnectFd()). This class's own job
-// starts from there: WiFi AP bring-up + the BW_AAP handshake + the
+// starts from there: WiFi AP bring-up + the WiFi-setup handshake + the
 // real aasdk session, nothing Bluetooth-specific beyond using the fd
 // it's handed.
 //
@@ -43,8 +43,8 @@
 //    apply here since sink/MsnCoreApp and custom_ui are never run
 //    concurrently (the same handoff model already used for /dev/fb0
 //    and /dev/ttyHS0). Safe to invoke directly.
-//  - BwAapClient -- the confirmed real 5-step Bluetooth-relayed WiFi
-//    credential handoff (see bw_aap_client.h).
+//  - WifiSetupClient -- the confirmed real 5-step Bluetooth-relayed WiFi
+//    credential handoff (see wifi_setup_client.h).
 //
 // 2026-08-12, THREE REVISIONS IN ONE DAY -- see project memory
 // (project_aa_wireless_tcp_direction_fix) for the full blow-by-blow.
@@ -76,7 +76,7 @@
 //   2. Default port back to 5277 (WPP's real, confirmed default) --
 //      5288 was an unconfirmed guess from earlier the same day and is
 //      wrong.
-// The listener binds BEFORE the BW_AAP handshake even starts (same
+// The listener binds BEFORE the WiFi-setup handshake even starts (same
 // structural timing the earlier attempt already got right, and which
 // that reference project also stresses: "AA reaches the [listener]
 // within ~2s of the Bluetooth handshake").
@@ -91,7 +91,7 @@
 //    WPA2_ENTERPRISE per the vendored enum, matching real captured
 //    traffic) doesn't match this AP's actual config (plain WPA2-
 //    Personal, per hostapd.conf's own wpa_key_mgmt=WPA-PSK) -- a real,
-//    already-documented discrepancy (see bw_aap_client.h). Try 5
+//    already-documented discrepancy (see wifi_setup_client.h). Try 5
 //    (WPA2_PERSONAL) if 8 doesn't work.
 #pragma once
 

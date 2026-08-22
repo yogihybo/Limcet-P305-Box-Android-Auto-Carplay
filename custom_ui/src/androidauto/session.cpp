@@ -98,19 +98,30 @@ void Session::start(aasdk::transport::ITransport::Pointer transport) {
     // an independently confirmed 1:1 mapping -- see that doc).
     videoChannel_ = std::make_shared<VideoChannel>(strand_, messenger);
 
-    // 2026-08-19: was 48000 -- the real /etc/asound.conf has no active
-    // rate override for the dmix that plug:softvol2 routes through
-    // (its own `rate 44100` line is commented out), but every rate
-    // value that IS actually pinned anywhere in that file (dmix2's
-    // live `rate 44100`, dmix's own commented-out `rate 44100` before
-    // it was left to auto-negotiate, dsnoop's commented `rate 16000`)
-    // is 44100, and every real hardware `aplay` test in
-    // docs/1.5_AUDIO_SUBSYSTEM_INVESTIGATION.md's history used 44100
-    // -- not 48000, which appears nowhere else in this project's audio
-    // config/testing history. Matching that instead of introducing a
-    // second, untested rate through the "plug" resample layer.
+    // 2026-08-21 REVERTED back to 48000 -- the 2026-08-19 change to
+    // 44100 (see git history) was based on plausible-but-unconfirmed
+    // ALSA routing inference, not a real observed failure. Real phone-
+    // side logcat (Windows PowerShell.txt, captured 2026-08-21) now
+    // gives a direct, unambiguous answer instead: right after Gearhead
+    // requests proxy creation for every advertised channel, channel 4
+    // (MEDIA_SINK_MEDIA_AUDIO) is the ONE channel that never gets its
+    // "Proxy created" log line -- followed immediately by
+    // `CAR.SERVICE: Critical error 2 detail: 7 msg: wrong sampling
+    // rate 44100`, then `CAR.SETUP.ERROR.LITE: PROTOCOL_WRONG_
+    // CONFIGURATION -- The phone and the car are running incompatible
+    // software`, then a full session teardown ~400ms later -- this IS
+    // the root cause of every "Communication error 2 -- incompatible
+    // software" / Error 33 TCP-EOF drop this project has been chasing.
+    // Guidance/System (16000, unchanged) both got their "Proxy
+    // created" line fine -- only the 44100 media rate was rejected.
+    // `plug:softvol2`'s own "plug" prefix exists specifically to
+    // resample between whatever the app requests and whatever the
+    // underlying dmix path actually settles on -- the concern that
+    // drove the 08-19 change (an "untested second rate through the
+    // resample layer") was never a real risk, just an unverified one,
+    // and is now moot next to a 100%-reproducible real failure.
     audioChannelMedia_ = std::make_shared<AudioChannel>(
-        strand_, messenger, aasdk::messenger::ChannelId::MEDIA_SINK_MEDIA_AUDIO, "plug:softvol2", 44100, 2);
+        strand_, messenger, aasdk::messenger::ChannelId::MEDIA_SINK_MEDIA_AUDIO, "plug:softvol2", 48000, 2);
 
     audioChannelGuidance_ = std::make_shared<AudioChannel>(
         strand_, messenger, aasdk::messenger::ChannelId::MEDIA_SINK_GUIDANCE_AUDIO, "plug:softvol1", 16000, 1);
@@ -395,10 +406,12 @@ void Session::onServiceDiscoveryRequest(
     mediaAudioSink->set_audio_type(aap_protobuf::service::media::sink::message::AUDIO_STREAM_MEDIA);
     mediaAudioSink->set_available_while_in_call(true);
     auto *mediaAudioConfig = mediaAudioSink->add_audio_configs();
-    // Must match audioChannelMedia_'s own rate above (44100) -- this is
-    // what tells the phone what rate to actually send, the AudioChannel
+    // Must match audioChannelMedia_'s own rate above (48000, reverted
+    // 2026-08-21 -- see that constructor's own comment for the real
+    // phone-side "wrong sampling rate 44100" evidence) -- this is what
+    // tells the phone what rate to actually send, the AudioChannel
     // construction above is what ALSA opens the device at.
-    mediaAudioConfig->set_sampling_rate(44100);
+    mediaAudioConfig->set_sampling_rate(48000);
     mediaAudioConfig->set_number_of_bits(16);
     mediaAudioConfig->set_number_of_channels(2);
 

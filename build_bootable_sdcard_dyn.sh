@@ -132,15 +132,30 @@ LOOP=$(losetup -Pf --show "$IMAGE")
 MNT=$(mktemp -d)
 mount "${LOOP}p2" "$MNT"
 rsync -a "$DYN_OVERLAY_DIR/" "$MNT/"
-# sshd host key permissions: the dev machine's own vboxsf-mounted repo
-# checkout doesn't preserve real Unix permission bits at all (every
-# file reads back as 777 regardless of chmod -- a real, confirmed
-# vboxsf limitation, not specific to these files), so the rsync above
-# just carried that 777 onto the real ext4 image. sshd refuses to
-# start with over-permissive host keys ("Permissions ... are too
-# open"), so fix them here, on the real (loop-mounted, genuine ext4)
-# filesystem where chmod actually sticks -- this is the first point
-# in the whole pipeline where it can.
+# Permission safety net: this second-pass rsync is the ONLY thing that
+# lands firmware_overlay_dyn/'s own rcS/wifi_ap.sh and every usr/bin//
+# usr/sbin binary (custom_ui, androidauto-sidecar, sshd, bluetoothd,
+# rtk_hciattach, hci-updown) on the real image -- it runs AFTER (and
+# overwrites) build_bootable_sdcard.sh's own main-rootfs-sync step,
+# which already runs build_tools/apply_rootfs_perms.sh (real,
+# comprehensive: path convention for */bin//*/sbin/etc.rc.d/*.sh/*.so
+# PLUS ELF-magic/shebang content-sniffing for stragglers) on
+# /tmp/sd_p2 right after syncing $ROOTFS_DIR (this wrapper's own
+# pre-merged $MERGED_DIR, which already includes firmware_overlay_dyn/
+# from the FIRST pass above) -- so the first pass's permissions are
+# already covered. This second pass is a distinct, later rsync
+# straight onto the finished image's mounted p2, entirely outside that
+# mechanism, so reuse the same real script here rather than a
+# hand-rolled subset -- same reasoning as build_bootable_sdcard.sh's
+# own header comment: this vboxsf-mounted checkout doesn't reliably
+# carry real Unix permission bits through rsync -a, so don't trust the
+# source tree's mode bits even though the git index itself is now
+# correct (fixed 2026-08-22).
+bash "$SCRIPT_DIR/build_tools/apply_rootfs_perms.sh" "$MNT"
+# sshd host key permissions: same vboxsf-carried-777 problem as above,
+# but these need to be LESS permissive, not executable -- sshd refuses
+# to start with over-permissive host keys ("Permissions ... are too
+# open").
 if [[ -f "$MNT/etc/ssh/ssh_host_rsa_key" ]]; then
     chmod 600 "$MNT"/etc/ssh/ssh_host_*_key
     chmod 644 "$MNT"/etc/ssh/ssh_host_*_key.pub "$MNT/etc/ssh/sshd_config"

@@ -36,9 +36,24 @@
 #   --merged-dir DIR            scratch dir for the pre-merged rootfs (default:
 #                                a fresh dir under this script's own build/)
 #   --image PATH                passed through to build_bootable_sdcard.sh
+#   --skip-build                Skip the automatic `make ui androidauto-sidecar`
+#                                + re-stage step below and deploy whatever's
+#                                currently sitting in firmware_overlay_dyn/ as-is
+#                                (only for when you've already built/staged by
+#                                hand and want to skip the rebuild -- the
+#                                default behavior exists specifically so this
+#                                is never required for a normal deploy).
 #   --dry-run                   passed through
 #   --non-interactive           passed through (recommended for scripted use)
 #   --help                      show this help
+#
+# 2026-08-22: this wrapper now ALWAYS rebuilds custom_ui/androidauto-sidecar
+# and re-stages the fresh binaries + configs into firmware_overlay_dyn/usr/bin/
+# before deploying, unless --skip-build is passed -- a real staleness bug hit
+# this session (the overlay was caught, by chance, holding pre-migration
+# binaries from before a toolchain swap) showed the old manual "make, then
+# remember to cp" workflow had no safety net at all. Fails loudly (set -e)
+# if the build fails; never proceeds to image creation with a stale binary.
 
 set -euo pipefail
 
@@ -49,6 +64,7 @@ MERGED_DIR="$SCRIPT_DIR/build/dyn_rootfs_merged"
 IMAGE=""
 PASSTHROUGH_ARGS=()
 DRY_RUN=false
+SKIP_BUILD=false
 
 usage() { grep '^#' "$0" | grep -v '^#!/' | sed 's/^# \?//'; exit 0; }
 
@@ -58,6 +74,7 @@ while [[ $# -gt 0 ]]; do
         --dyn-overlay)          DYN_OVERLAY_DIR="$2"; shift 2 ;;
         --merged-dir)           MERGED_DIR="$2"; shift 2 ;;
         --image)                IMAGE="$2"; PASSTHROUGH_ARGS+=(--image "$2"); shift 2 ;;
+        --skip-build)            SKIP_BUILD=true; shift ;;
         --dry-run)               DRY_RUN=true; PASSTHROUGH_ARGS+=(--dry-run); shift ;;
         --help|-h)               usage ;;
         --)                      shift; PASSTHROUGH_ARGS+=("$@"); break ;;
@@ -86,6 +103,31 @@ TARGET_DIR="$BUILDROOT_OUTPUT_DIR/target"
     IMAGE="$SCRIPT_DIR/sd_bootable/sd_boot_dyn.img"
     PASSTHROUGH_ARGS+=(--image "$IMAGE")
 }
+
+CUSTOM_UI_DIR="$SCRIPT_DIR/custom_ui"
+if $SKIP_BUILD; then
+    echo "==> --skip-build passed -- deploying whatever's currently staged in $DYN_OVERLAY_DIR/usr/bin/ as-is"
+elif $DRY_RUN; then
+    echo "  [dry-run] make -C $CUSTOM_UI_DIR ui androidauto-sidecar"
+    echo "  [dry-run] cp $CUSTOM_UI_DIR/build/{custom_ui,androidauto-sidecar,hal.conf,default_settings.conf} $DYN_OVERLAY_DIR/usr/bin/"
+    echo "  [dry-run] rsync -a $CUSTOM_UI_DIR/build/alsa/ $DYN_OVERLAY_DIR/usr/bin/alsa/"
+else
+    echo "==> Building custom_ui/androidauto-sidecar fresh (BUILDROOT_OUTPUT_DIR=$BUILDROOT_OUTPUT_DIR)"
+    # set -e means a failed build stops this script here, before any image
+    # work starts -- this is the whole point: never let a stale overlay
+    # binary reach $IMAGE silently. Real bug this closes: the overlay was
+    # found holding a pre-toolchain-migration custom_ui/androidauto-sidecar
+    # (an old manual `make`+`cp` was never redone after the glibc 2.30
+    # swap) during this session's overlay re-verification pass -- caught by
+    # chance via md5sum, not by anything in this pipeline.
+    BUILDROOT_OUTPUT_DIR="$BUILDROOT_OUTPUT_DIR" make -C "$CUSTOM_UI_DIR" ui androidauto-sidecar
+    echo "==> Re-staging fresh binaries + configs into $DYN_OVERLAY_DIR/usr/bin/"
+    cp -f "$CUSTOM_UI_DIR/build/custom_ui" "$CUSTOM_UI_DIR/build/androidauto-sidecar" \
+          "$CUSTOM_UI_DIR/build/hal.conf" "$CUSTOM_UI_DIR/build/default_settings.conf" \
+          "$DYN_OVERLAY_DIR/usr/bin/"
+    rsync -a "$CUSTOM_UI_DIR/build/alsa/" "$DYN_OVERLAY_DIR/usr/bin/alsa/"
+    chmod +x "$DYN_OVERLAY_DIR/usr/bin/custom_ui" "$DYN_OVERLAY_DIR/usr/bin/androidauto-sidecar"
+fi
 
 echo "==> Pre-merging Buildroot output/target + firmware_overlay_dyn into $MERGED_DIR"
 rm -rf "$MERGED_DIR"

@@ -326,6 +326,44 @@ LOOP=$(losetup -Pf --show "$IMAGE")
 MNT=$(mktemp -d)
 mount "${LOOP}p2" "$MNT"
 rsync -a "$DYN_OVERLAY_DIR/" "$MNT/"
+# 2026-08-23: CRITICAL real bug found on an actual deployed image --
+# build_bootable_sdcard.sh's own p2-populate step (never modified here)
+# unconditionally runs build_tools/restore_rootfs_symlinks.sh against
+# $ROOTFS_DIR (our $MERGED_DIR). That script exists to recreate symlinks
+# a Windows checkout of the STOCK rootfs loses, driven by
+# build_tools/rootfs.symlinks -- a manifest harvested from STOCK's own
+# rootfs.img, hardcoding STOCK's glibc 2.27 filenames (e.g.
+# lib/libc.so.6 -> libc-2.27.so, lib/ld-linux-armhf.so.3 -> ld-2.27.so,
+# usr/lib/libdbus-1.so.3 -> libdbus-1.so.3.2.0). Our $MERGED_DIR is a
+# real Linux-native extraction of Buildroot's own rootfs.tar -- it
+# never needed that recovery at all, and already has correct symlinks
+# to the REAL glibc 2.30 files (libc-2.30.so, ld-2.30.so,
+# libdbus-1.so.3.19.13, etc.). But restore_rootfs_symlinks.sh's own
+# Pass 1 unconditionally overwrites any existing symlink that doesn't
+# already match the manifest's expected target -- so it silently
+# replaced our correct 2.30 symlinks with dangling links to
+# nonexistent 2.27-named files. Confirmed on a real built image via
+# debugfs: lib/libc.so.6 and lib/ld-linux-armhf.so.3 (the dynamic
+# linker itself) were both dangling, while the real libc-2.30.so/
+# ld-2.30.so files sat right next to them, untouched and correct --
+# this would have broken every dynamically-linked binary on boot,
+# starting with the linker itself.
+#
+# Real fix, without touching the original script: re-sync lib/ and
+# usr/lib/ from $MERGED_DIR (still holds the correct, pre-corruption
+# state -- tar-extracted Buildroot output + firmware_overlay_dyn/
+# already merged, per the pre-merge step above) back onto the mounted
+# image, AFTER build_bootable_sdcard.sh's own processing -- same
+# "last write wins" pattern already used for README.md/
+# busybox-applets.manifest, just restoring correct symlinks instead of
+# removing stray files. Scoped to lib//usr/lib/ specifically (not a
+# full $MERGED_DIR re-sync) so this doesn't also undo real, legitimate
+# per-build processing that only happens on the original script's own
+# copy -- busybox applet symlink generation (bin//sbin/usr/bin, a
+# separate mechanism, unaffected), kernel module installation, rcS
+# mtd-redirect patching, telnetd install, CRLF fixups.
+rsync -a "$MERGED_DIR/lib/" "$MNT/lib/"
+rsync -a "$MERGED_DIR/usr/lib/" "$MNT/usr/lib/"
 # 2026-08-22: found a stale stock /README.md actually shipping on a
 # real built image -- build_bootable_sdcard.sh's own apply_overlay()
 # (never modified here) rsyncs the ENTIRE stock firmware_overlay/ tree

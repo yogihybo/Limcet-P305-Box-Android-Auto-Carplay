@@ -18,7 +18,7 @@
 #include <aasdk/TCP/TCPEndpoint.hpp>
 #include <aasdk/Transport/TCPTransport.hpp>
 
-#include "androidauto/bw_aap_client.h"
+#include "androidauto/wifi_setup_client.h"
 #include "androidauto/session.h"
 #include "core/hal_config.h"
 
@@ -225,7 +225,7 @@ void WirelessSessionManager::run(int rfcommFd) {
     // handed to this process over their local Unix socket (see this
     // class's own header comment for the full architecture). Bluetooth
     // connectivity is custom_ui's job end to end now; this function's
-    // job starts here: WiFi AP bring-up + the BW_AAP handshake + the
+    // job starts here: WiFi AP bring-up + the WiFi-setup handshake + the
     // real aasdk session, using the fd it was given.
     std::printf("%s androidauto: wireless session: run() starting with rfcommFd=%d\n",
                 androidauto::logTimestamp().c_str(), rfcommFd);
@@ -274,10 +274,10 @@ void WirelessSessionManager::run(int rfcommFd) {
     std::printf("%s androidauto: wireless session: WPP TCP server listening on 0.0.0.0:%u\n", androidauto::logTimestamp().c_str(),
                 cfg.wifi_session_port());
 
-    BwAapClient bwAap;
-    bwAap.attach(rfcommFd);
-    std::printf("%s androidauto: wireless session: BwAapClient attached to rfcommFd=%d, starting "
-                "BW_AAP handshake\n", androidauto::logTimestamp().c_str(), rfcommFd);
+    WifiSetupClient wifiSetup;
+    wifiSetup.attach(rfcommFd);
+    std::printf("%s androidauto: wireless session: WifiSetupClient attached to rfcommFd=%d, starting "
+                "WiFi-setup handshake\n", androidauto::logTimestamp().c_str(), rfcommFd);
 
     // outIp/outPort are unused now (no ARP-based connect-out target
     // needed) but startHandshake() still reads back an optional
@@ -287,20 +287,20 @@ void WirelessSessionManager::run(int rfcommFd) {
     // phone's side -- only our own bind stays on all interfaces.
     std::string startRespIp;
     std::uint16_t startRespPort = cfg.wifi_session_port();
-    std::printf("%s androidauto: wireless session: bw_aap connected, starting handshake "
+    std::printf("%s androidauto: wireless session: wifi-setup connected, starting handshake "
                 "(advertising %s:%u for the phone to dial in on)\n", androidauto::logTimestamp().c_str(), cfg.wifi_ap_address().c_str(),
                 cfg.wifi_session_port());
-    if (!bwAap.startHandshake(cfg.wifi_ap_address(), cfg.wifi_session_port(), startRespIp,
+    if (!wifiSetup.startHandshake(cfg.wifi_ap_address(), cfg.wifi_session_port(), startRespIp,
                                startRespPort)) {
-        setStatus(WirelessSessionState::Failed, "BW_AAP handshake (version request/response) failed");
+        setStatus(WirelessSessionState::Failed, "WiFi-setup handshake (version request/response) failed");
         return;
     }
-    std::printf("%s androidauto: wireless session: BW_AAP handshake (steps 1-3, + optional "
+    std::printf("%s androidauto: wireless session: WiFi-setup handshake (steps 1-3, + optional "
                 "WIFI_START_RESPONSE) done\n", androidauto::logTimestamp().c_str());
 
     setStatus(WirelessSessionState::WaitingForWifiJoin,
               "Waiting for phone to request WiFi credentials...");
-    if (!bwAap.respondToInfoRequest(cfg.wifi_ap_ssid(), cfg.wifi_ap_password(), bssid,
+    if (!wifiSetup.respondToInfoRequest(cfg.wifi_ap_ssid(), cfg.wifi_ap_password(), bssid,
                                      cfg.wifi_ap_security_mode(), 30)) {
         setStatus(WirelessSessionState::Failed,
                   "Phone never requested WiFi credentials (WIFI_INFO_REQUEST timeout)");
@@ -310,7 +310,7 @@ void WirelessSessionManager::run(int rfcommFd) {
                 cfg.wifi_ap_ssid().c_str());
 
     // 2026-08-13: waits briefly for an optional WIFI_CONNECT_STATUS
-    // before closing -- see BwAapClient::waitForOptionalConnectStatus()'s
+    // before closing -- see WifiSetupClient::waitForOptionalConnectStatus()'s
     // own header comment for the full reasoning. Real, decisive finding
     // from decompiling libAndroidAuto.so's RfcommConnectionPrivate: this
     // code used to close /dev/bw_aap immediately after sending
@@ -329,12 +329,12 @@ void WirelessSessionManager::run(int rfcommFd) {
     // exchange happens between WIFI_START_RESPONSE and
     // WIFI_CONNECT_STATUS, so 5s was too tight a window for what this
     // call now actually waits through (see its own updated comment).
-    bwAap.waitForOptionalConnectStatus(15);
+    wifiSetup.waitForOptionalConnectStatus(15);
     // 2026-08-19: per docs/SESSION_KEEPALIVE_AND_TIMEOUT_HANDOFF.md,
     // building directly on this function's own comment above (already
     // decompile-confirmed stock never closes /dev/bw_aap for the whole
     // connection's lifetime, but this project only took the smaller,
-    // bounded-wait step at the time) -- bwAap.close() moved from here to
+    // bounded-wait step at the time) -- wifiSetup.close() moved from here to
     // after the AA session actually ends, below. Real hardware showed
     // sessions dying ~20-30s after connecting with a bare TCP EOF
     // (control channel error 33/TCP_TRANSFER, no AA-protocol bye-bye),
@@ -351,7 +351,7 @@ void WirelessSessionManager::run(int rfcommFd) {
 
     // select()-based accept timeout -- accept() itself has no timeout
     // parameter, same pattern as hal/bluetooth.cpp send_command() /
-    // BwAapClient::receiveFrame().
+    // WifiSetupClient::receiveFrame().
     fd_set readSet;
     FD_ZERO(&readSet);
     int listenFd = acceptor.native_handle();
@@ -429,12 +429,12 @@ void WirelessSessionManager::run(int rfcommFd) {
         currentSession_.reset();
     }
 
-    // See this function's own comment where bwAap.waitForOptionalConnectStatus()
+    // See this function's own comment where wifiSetup.waitForOptionalConnectStatus()
     // is called, above -- kept open for the AA session's real duration
     // now, closed here once it's actually over.
-    std::printf("%s androidauto: wireless session: closing bw_aap (rfcommFd=%d)\n",
+    std::printf("%s androidauto: wireless session: closing wifi-setup link (rfcommFd=%d)\n",
                 androidauto::logTimestamp().c_str(), rfcommFd);
-    bwAap.close();
+    wifiSetup.close();
     // The underlying Bluetooth connection/adapter is custom_ui's to
     // manage (hal::BluezAaProfile stays registered and keeps listening
     // for the next phone connection regardless of this session ending)

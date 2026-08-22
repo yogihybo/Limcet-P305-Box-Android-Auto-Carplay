@@ -92,7 +92,7 @@ private:
     // 2026-08-20: was 8 (WPA2_ENTERPRISE per aap_protobuf's own
     // WifiSecurityMode enum) -- the raw value from an earlier captured
     // packet, passed through "to match known-good bytes rather than
-    // guess" per bw_aap_client.h's own respondToInfoRequest() comment,
+    // guess" per wifi_setup_client.h's own respondToInfoRequest() comment,
     // which already flagged this exact discrepancy and named 5 as the
     // fallback to try. Real hardware test (2026-08-20): phone shows AA
     // as connecting (RFCOMM handshake completes) but the WiFi link

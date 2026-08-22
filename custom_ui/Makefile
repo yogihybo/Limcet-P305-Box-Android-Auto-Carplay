@@ -161,7 +161,36 @@ AASDK_DEPS_DIR  ?= $(HOME)/build-deps
 # original, untouched build) if the no-engine variant ever needs
 # rolling back -- nothing about the original build was modified or
 # removed.
-OPENSSL_ARM_INSTALL ?= $(AASDK_DEPS_DIR)/openssl-arm-install-noengine
+#
+# 2026-08-21: pointed at a second rebuild (openssl-arm-install-noengine-armv7,
+# same no-engine/no-dso/no-afalgeng/no-sock flags, same 1.1.1w source) --
+# the ORIGINAL no-engine build above was configured `linux-generic32`,
+# which OpenSSL's own Configurations/10-main.conf maps to the plain-C
+# fallback for AES/GHASH (aes_core.c, no modes_asm_src at all) with zero
+# ARM assembly, regardless of this being a real armv7 target. Real
+# phone-side symptom this caused: CPU spiking to 80%+ on every AA full-
+# screen video refresh -- every channel (video included) is wrapped in
+# real TLS via aasdk's Cryptor (AES-128-GCM, confirmed in
+# third_party/aasdk/src/Messenger/Cryptor.cpp), and a big I-frame means
+# a burst of SSL_read() calls each paying the generic-C AES-GCM cost.
+# Reconfigured `linux-armv4 -march=armv7-a -mfpu=neon -D__ARM_MAX_ARCH__=8`
+# instead -- this Cortex-A5 has no ARMv8 Crypto Extensions (hardware
+# AES/GHASH don't exist on this core at all, not a config gap), but DOES
+# have NEON, and linux-armv4's asm(armv4_asm) target pulls in real
+# NEON-accelerated bit-sliced AES (bsaes-armv7.S) and NEON GHASH
+# (ghash-armv4.S) with runtime CPU-capability dispatch (OPENSSL_armcap) --
+# `nm` confirms bsaes_cbc_encrypt/gcm_ghash_neon/gcm_gmult_neon are now
+# real defined symbols in libcrypto.a, and confirms the SAME
+# dlopen/getaddrinfo/gethostbyname-free property as the original
+# no-engine build (this rebuild used the identical no-engine/no-dso/
+# no-afalgeng/no-sock flags). See third_party/build_openssl.sh for the
+# full reproducible recipe. Reversible: override back to
+# openssl-arm-install-noengine (the generic32 build, untouched) if this
+# ever needs rolling back. **Not yet hardware-tested for actual CPU
+# usage during AA video playback** -- confirmed to build and link
+# clean, and to genuinely contain the NEON code paths, but real-device
+# `top` numbers during a full-screen refresh are the real verification.
+OPENSSL_ARM_INSTALL ?= $(AASDK_DEPS_DIR)/openssl-arm-install-noengine-armv7
 
 # 2026-08-15: cross-compiled alsa-lib statically with --with-libdl=no
 # (see alsa_output.h's own header comment) -- the other source of a
@@ -365,12 +394,14 @@ BT_TRANSPORT_OBJS := $(BUILD_DIR)/ui-obj/androidauto/bluetooth_transport.o \
 
 # --- androidauto-bw-aap-test: real /dev/bw_aap wireless-AA discovery ---
 # See tools/androidauto-bw-aap-test/main.cpp and
-# src/androidauto/bw_aap_client.h for the full story -- this is the
-# confirmed-real path (see comment above), replaying an actual
-# captured message sequence against blueware's own local socket.
+# src/androidauto/wifi_setup_client.h (renamed 2026-08-21 from
+# bw_aap_client.h/BwAapClient -- see that file's own header comment)
+# for the full story -- this is the confirmed-real path (see comment
+# above), replaying an actual captured message sequence against
+# blueware's own local socket.
 BW_AAP_TEST_TARGET := $(BUILD_DIR)/androidauto-bw-aap-test
 BW_AAP_TEST_OBJS   := $(BUILD_DIR)/bw-aap-test-obj/main.o
-BW_AAP_CLIENT_OBJS := $(BUILD_DIR)/ui-obj/androidauto/bw_aap_client.o
+BW_AAP_CLIENT_OBJS := $(BUILD_DIR)/ui-obj/androidauto/wifi_setup_client.o
 
 .PHONY: all clean ui carplay-sidecar androidauto-sidecar androidauto-usb-probe-test androidauto-wireless-probe-test androidauto-bluetooth-rfcomm-test androidauto-bw-aap-test
 
@@ -428,16 +459,24 @@ $(BUILD_DIR)/ui-obj/%.o: src/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-# hal/bluez_aa_profile.cpp and hal/ble_cts.cpp are the two files in the
-# main UI binary that need dbus/dbus.h -- explicit (non-pattern) rules,
-# which Make prefers over the generic $(BUILD_DIR)/ui-obj/%.o pattern
-# rule above, same convention this Makefile already uses for
-# HANTRO_DLOPEN_OBJ/HAL_CONFIG_OBJ etc.
+# hal/bluez_aa_profile.cpp, hal/ble_cts.cpp, and hal/bluetooth.cpp are
+# the files in the main UI binary that need dbus/dbus.h -- explicit
+# (non-pattern) rules, which Make prefers over the generic
+# $(BUILD_DIR)/ui-obj/%.o pattern rule above, same convention this
+# Makefile already uses for HANTRO_DLOPEN_OBJ/HAL_CONFIG_OBJ etc.
 $(BUILD_DIR)/ui-obj/hal/bluez_aa_profile.o: src/hal/bluez_aa_profile.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) $(UI_DBUS_INCLUDES) -c -o $@ $<
 
 $(BUILD_DIR)/ui-obj/hal/ble_cts.o: src/hal/ble_cts.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) $(UI_DBUS_INCLUDES) -c -o $@ $<
+
+# 2026-08-21: bluez_monitor_loop() (hal/bluetooth.cpp) moved from
+# shelling out to `dbus-send` via popen() every 1.5s to a persistent
+# libdbus connection subscribed to real BlueZ signals -- needs
+# dbus/dbus.h now too, same as the two files above.
+$(BUILD_DIR)/ui-obj/hal/bluetooth.o: src/hal/bluetooth.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) $(UI_DBUS_INCLUDES) -c -o $@ $<
 

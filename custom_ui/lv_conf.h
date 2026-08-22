@@ -82,8 +82,26 @@
      * an unexplained silent hang (alive, spinning, zero further output,
      * no crash) that took real hardware instrumentation to trace back
      * to this line. This is a Linux target with real RAM (not a tiny
-     * MCU) -- sized generously rather than cutting it close again. */
-    #define LV_MEM_SIZE (4 * 1024U * 1024U)   /**< [bytes] */
+     * MCU) -- sized generously rather than cutting it close again.
+     *
+     * 2026-08-21: 4MB was itself never measured, just a generous
+     * overcorrection after the above incident -- on real hardware with
+     * genuine memory pressure concerns (see project memory around the
+     * AA-session hang investigation), reserving a static 4MB LVGL heap
+     * upfront (this app's own widget set is now trimmed to bar/button/
+     * dropdown/image/label/slider/spinner/switch, no calendar/chart/
+     * canvas/table-class widgets that would need real buffer space) is
+     * itself worth questioning. Cut to 1MB -- still >5x the one known
+     * real allocation (the 192000-byte draw buffer above) -- as a
+     * reasoned reduction, not another guess: LV_USE_ASSERT_MALLOC + the
+     * fail-loud LV_ASSERT_HANDLER below mean an actually-too-small pool
+     * fails immediately and unambiguously (stderr message + abort), not
+     * silently, so this is safe to verify on real hardware rather than
+     * risky to try. main.cpp now also logs real lv_mem_monitor() usage
+     * at startup and periodically -- watch that on the next hardware
+     * run to see the real peak and tune this further with actual data
+     * instead of another estimate either way. */
+    #define LV_MEM_SIZE (1 * 1024U * 1024U)   /**< [bytes] */
 
     /** Size of the memory expand for `lv_malloc()` in bytes */
     #define LV_MEM_POOL_EXPAND_SIZE 0
@@ -796,46 +814,48 @@
  * */
 #define LV_WIDGETS_HAS_DEFAULT_VALUE  1
 
-#define LV_USE_ANIMIMG    1
+// 2026-08-21: trimmed to only what src/ui/ actually uses (confirmed by
+// grepping every lv_<widget>_create() call site in this project's own
+// code) -- this app is a handful of fixed dashboard/settings/AA
+// screens, not a general-purpose UI toolkit consumer, and previously
+// had every LVGL v9 widget enabled regardless of use (calendar, chart,
+// keyboard, table, spinbox, tileview, win, menu, msgbox, roller,
+// textarea, list, led, line, span, canvas, imagebutton, arclabel,
+// animimg, scale, tabview, checkbox, buttonmatrix, arc -- all zero real
+// call sites, real dead weight in every build's flash/RAM). Only
+// widgets genuinely constructed anywhere in this project are left
+// enabled below: bar, button, dropdown, image, label, slider, spinner,
+// switch (plus obj itself, always-on core). If a future feature needs
+// one of the disabled ones back, LVGL fails loudly at compile time
+// (missing type/API), not silently -- safe to re-enable individually
+// as needed.
+#define LV_USE_ANIMIMG    0
 
-#define LV_USE_ARC        1
+#define LV_USE_ARC        1   /**< Required by lv_spinner even though no lv_arc_create() call site exists directly in src/ui/ -- LV_USE_SPINNER's own header #errors without it. */
 
-#define LV_USE_ARCLABEL  1
+#define LV_USE_ARCLABEL  0
 
 #define LV_USE_BAR        1
 
 #define LV_USE_BUTTON        1
 
-#define LV_USE_BUTTONMATRIX  1
+#define LV_USE_BUTTONMATRIX  0
 
-#define LV_USE_CALENDAR   1
-#if LV_USE_CALENDAR
-    #define LV_CALENDAR_WEEK_STARTS_MONDAY 0
-    #if LV_CALENDAR_WEEK_STARTS_MONDAY
-        #define LV_CALENDAR_DEFAULT_DAY_NAMES {"Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"}
-    #else
-        #define LV_CALENDAR_DEFAULT_DAY_NAMES {"Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"}
-    #endif
+#define LV_USE_CALENDAR   0
 
-    #define LV_CALENDAR_DEFAULT_MONTH_NAMES {"January", "February", "March",  "April", "May",  "June", "July", "August", "September", "October", "November", "December"}
-    #define LV_USE_CALENDAR_HEADER_ARROW 1
-    #define LV_USE_CALENDAR_HEADER_DROPDOWN 1
-    #define LV_USE_CALENDAR_CHINESE 0
-#endif  /*LV_USE_CALENDAR*/
+#define LV_USE_CANVAS     0
 
-#define LV_USE_CANVAS     1
+#define LV_USE_CHART      0
 
-#define LV_USE_CHART      1
-
-#define LV_USE_CHECKBOX   1
+#define LV_USE_CHECKBOX   0
 
 #define LV_USE_DROPDOWN   1   /**< Requires: lv_label */
 
 #define LV_USE_IMAGE      1   /**< Requires: lv_label */
 
-#define LV_USE_IMAGEBUTTON     1
+#define LV_USE_IMAGEBUTTON     0
 
-#define LV_USE_KEYBOARD   1
+#define LV_USE_KEYBOARD   0
 
 #define LV_USE_LABEL      1
 #if LV_USE_LABEL
@@ -844,48 +864,41 @@
     #define LV_LABEL_WAIT_CHAR_COUNT 3  /**< The count of wait chart */
 #endif
 
-#define LV_USE_LED        1
+#define LV_USE_LED        0
 
-#define LV_USE_LINE       1
+#define LV_USE_LINE       0
 
-#define LV_USE_LIST       1
+#define LV_USE_LIST       0
 
 #define LV_USE_LOTTIE     0  /**< Requires: lv_canvas, thorvg */
 
-#define LV_USE_MENU       1
+#define LV_USE_MENU       0
 
-#define LV_USE_MSGBOX     1
+#define LV_USE_MSGBOX     0
 
-#define LV_USE_ROLLER     1   /**< Requires: lv_label */
+#define LV_USE_ROLLER     0   /**< Requires: lv_label */
 
-#define LV_USE_SCALE      1
+#define LV_USE_SCALE      0
 
 #define LV_USE_SLIDER     1   /**< Requires: lv_bar */
 
-#define LV_USE_SPAN       1
-#if LV_USE_SPAN
-    /** A line of text can contain this maximum number of span descriptors. */
-    #define LV_SPAN_SNIPPET_STACK_SIZE 64
-#endif
+#define LV_USE_SPAN       0
 
-#define LV_USE_SPINBOX    1
+#define LV_USE_SPINBOX    0
 
 #define LV_USE_SPINNER    1
 
 #define LV_USE_SWITCH     1
 
-#define LV_USE_TABLE      1
+#define LV_USE_TABLE      0
 
-#define LV_USE_TABVIEW    1
+#define LV_USE_TABVIEW    0
 
-#define LV_USE_TEXTAREA   1   /**< Requires: lv_label */
-#if LV_USE_TEXTAREA != 0
-    #define LV_TEXTAREA_DEF_PWD_SHOW_TIME 1500    /**< [ms] */
-#endif
+#define LV_USE_TEXTAREA   0   /**< Requires: lv_label */
 
-#define LV_USE_TILEVIEW   1
+#define LV_USE_TILEVIEW   0
 
-#define LV_USE_WIN        1
+#define LV_USE_WIN        0
 
 #define LV_USE_3DTEXTURE  0
 
@@ -907,11 +920,16 @@
     #define LV_THEME_DEFAULT_TRANSITION_TIME 80
 #endif /*LV_USE_THEME_DEFAULT*/
 
+// LV_USE_THEME_DEFAULT stays enabled above -- ui/theme.cpp and
+// ui/staging/theme.cpp both genuinely call lv_theme_default_init()
+// (with this project's own accent palette), it's not dead. SIMPLE and
+// MONO have zero call sites anywhere in src/ -- disabled.
+
 /** A very simple theme that is a good starting point for a custom theme */
-#define LV_USE_THEME_SIMPLE 1
+#define LV_USE_THEME_SIMPLE 0
 
 /** A theme designed for monochrome displays */
-#define LV_USE_THEME_MONO 1
+#define LV_USE_THEME_MONO 0
 
 /*==================
  * LAYOUTS

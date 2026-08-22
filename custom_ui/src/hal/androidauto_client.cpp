@@ -211,6 +211,17 @@ bool sendConnectFd(int rfcommFd) {
     struct timeval tv {};
     tv.tv_sec = 3;
     setsockopt(connFd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    // 2026-08-21: SO_RCVTIMEO alone only bounds read() -- sendmsg()
+    // above (and any plain write()) has no timeout protection from it
+    // at all. On a SOCK_STREAM AF_UNIX socket, if the sidecar's own
+    // receive buffer fills up (e.g. its io_service thread is wedged
+    // and never calling recv()), a later write/sendmsg can block this
+    // process's caller indefinitely once the kernel socket buffer is
+    // full -- a real, previously-unprotected path to freezing whatever
+    // thread called this (see AndroidAutoClient::sendCommand()'s own
+    // comment for the same gap and fix, found chasing a real hardware
+    // hang with a wedged sidecar and zero log output).
+    setsockopt(connFd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
 
     std::string reply;
     char buf[256];
@@ -260,6 +271,17 @@ bool AndroidAutoClient::ensureConnected(bool allow_spawn) {
             struct timeval tv {};
             tv.tv_sec = 1;
             setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+            // 2026-08-21: SO_RCVTIMEO alone only bounds read() in
+            // sendCommand() below -- its write() call had no timeout
+            // protection at all. If the sidecar's own receive buffer
+            // fills up (its io_service thread wedged, never calling
+            // recv()), write() can block the calling thread
+            // indefinitely once the kernel socket buffer is full --
+            // every caller here runs on the LVGL main thread, so this
+            // was a real path to freezing the whole UI with zero log
+            // output (stuck before ever reaching a printf), found
+            // chasing a real hardware hang report.
+            setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
             fd_ = fd;
             return true;
         }

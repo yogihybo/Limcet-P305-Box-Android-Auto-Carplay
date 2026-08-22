@@ -17,6 +17,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/file.h>
+#include <sys/mman.h>
 #include "lvgl.h"
 #include "hal/androidauto_client.h"
 #include "hal/audio.h"
@@ -125,7 +126,7 @@ public:
         // fixed) versus reaching it and being debounced away (a
         // device_id-parsing bug) versus reaching it, triggering
         // requestConnect() correctly, and stalling later inside
-        // WirelessSessionManager::run() itself (see BwAapClient::
+        // WirelessSessionManager::run() itself (see WifiSetupClient::
         // connect()'s new retry loop for the leading real-fix
         // candidate for that last case).
         std::printf("%s ui: +AAPDEV= observed: device_id='%s' name='%s' (last_triggered='%s')\n", core::log_timestamp().c_str(),
@@ -368,6 +369,38 @@ int main() {
         return 1;
     }
 
+    // 2026-08-21: real hardware trace (see project history around an
+    // AA-session ECONNRESET after several minutes of runtime) pointed
+    // at page-cache thrashing without swap as the likely root cause --
+    // this device has only 173MB RAM and no swap configured, so under
+    // memory pressure kswapd0 reclaims clean file-backed pages,
+    // INCLUDING this process's own running code (this binary is
+    // statically linked -- no separate shared-library pages, just this
+    // one executable's own text segment, real-USB-storage-backed since
+    // this rootfs boots from USB). Every re-touch of a reclaimed code
+    // page then means a real disk read via the usb-storage kernel
+    // thread to fault it back in -- confirmed via real /proc/meminfo +
+    // kworker/usb-storage/kswapd0 activity captured during a live crash
+    // (see docs/AUDIO_CPU_SPIKE_AND_SIDECAR_LIFECYCLE_HANDOFF.md-
+    // adjacent session notes). MCL_CURRENT|MCL_FUTURE locks this
+    // process's resident pages now AND all future ones as they're
+    // mapped/faulted in -- prevents the kernel from ever evicting this
+    // process's own pages regardless of what's driving the memory
+    // pressure, without needing to first pin down every source of that
+    // pressure. Best-effort/non-fatal: runs as root on this device
+    // (CAP_IPC_LOCK, so RLIMIT_MEMLOCK doesn't apply), but if it ever
+    // fails (e.g. insufficient lockable memory), that's still strictly
+    // no worse than the un-mlock'd behavior this replaces -- log and
+    // continue rather than treating it as fatal.
+    if (mlockall(MCL_CURRENT | MCL_FUTURE) != 0) {
+        std::fprintf(stderr, "%s ui: mlockall() failed: %s -- continuing without it "
+                     "(process pages may still be reclaimed under memory pressure)\n",
+                     core::log_timestamp().c_str(), std::strerror(errno));
+    } else {
+        std::printf("%s ui: mlockall(MCL_CURRENT|MCL_FUTURE) succeeded -- process pages "
+                    "pinned against reclaim\n", core::log_timestamp().c_str());
+    }
+
     std::printf("%s ui: starting, lv_init()...\n", core::log_timestamp().c_str());
     lv_init();
     std::printf("%s ui: lv_init() done\n", core::log_timestamp().c_str());
@@ -583,6 +616,31 @@ int main() {
                 nightModeClient.sendNightMode(nightMode);
                 lastNightMode = nightMode;
                 nightModeInitialized = true;
+            }
+        }
+
+        // 2026-08-21: real LVGL heap usage, logged every 60s -- added
+        // alongside trimming LV_USE_* widgets and cutting LV_MEM_SIZE
+        // from 4MB to 1MB (see that #define's own comment in lv_conf.h
+        // for why 4MB was never a measured value, just a generous
+        // overcorrection). max_used is the real high-water mark since
+        // process start -- watch this on real hardware to confirm 1MB
+        // is enough (comfortably above max_used) rather than guessing
+        // again; LV_USE_ASSERT_MALLOC + the fail-loud LV_ASSERT_HANDLER
+        // in lv_conf.h mean an actually-too-small pool aborts
+        // immediately with a clear message instead of silently hanging,
+        // so this is safe to verify rather than risky to have changed.
+        {
+            static std::chrono::steady_clock::time_point lastMemLog{};
+            auto now = std::chrono::steady_clock::now();
+            if (lastMemLog.time_since_epoch().count() == 0 ||
+                now - lastMemLog >= std::chrono::seconds(60)) {
+                lastMemLog = now;
+                lv_mem_monitor_t mon{};
+                lv_mem_monitor(&mon);
+                std::printf("%s ui: LVGL heap: used=%u%% max_used=%zu bytes free=%zu bytes frag=%u%%\n",
+                            core::log_timestamp().c_str(), mon.used_pct,
+                            mon.max_used, mon.free_size, mon.frag_pct);
             }
         }
 

@@ -29,8 +29,15 @@
 #   ./build_bootable_sdcard_dyn.sh [options] [-- <extra args passed to build_bootable_sdcard.sh>]
 #
 # Options:
-#   --buildroot-output-dir DIR  Buildroot output/ tree (default:
-#                                ~/Downloads/linux-arkmicro/buildroot/output)
+#   --arkmicro-dir DIR          linux-arkmicro repo root (default:
+#                                autodetected: sibling dir, then
+#                                /home/osboxes/Downloads/linux-arkmicro, then
+#                                ~/Downloads/linux-arkmicro of the REAL
+#                                invoking user even under sudo -- explicit
+#                                override in case none of those are right)
+#   --buildroot-output-dir DIR  Buildroot output/ tree directly (default:
+#                                $ARKMICRO_DIR/buildroot/output; overrides
+#                                --arkmicro-dir's derived value if both given)
 #   --dyn-overlay DIR           firmware_overlay_dyn/ (default: next to
 #                                this script)
 #   --merged-dir DIR            scratch dir for the pre-merged rootfs (default:
@@ -58,7 +65,36 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-BUILDROOT_OUTPUT_DIR="${BUILDROOT_OUTPUT_DIR:-$HOME/Downloads/linux-arkmicro/buildroot/output}"
+
+# 2026-08-22: real bug hit on an actual `sudo ./build_bootable_sdcard_dyn.sh`
+# deploy -- under sudo, $HOME is /root (root's home), not the invoking
+# user's real home, so the old unconditional "$HOME/Downloads/linux-arkmicro"
+# default silently pointed at a nonexistent /root/Downloads/... and
+# reported the real build output "not found" even though it existed at
+# the real user's own $HOME. build_bootable_sdcard.sh's own autodetect()
+# never actually has this problem in practice: it tries a sibling-repo
+# candidate ($SCRIPT_DIR/../linux-arkmicro) and a hardcoded absolute
+# fallback specific to this dev machine BEFORE ever falling back to
+# $HOME -- this wrapper had copied only the naive $HOME-only pattern
+# without that fallback chain. Fixed to match (and improve on) the
+# original: resolve the real invoking user's home via $SUDO_USER when
+# running under sudo, and try the same sibling-repo-first chain.
+REAL_HOME=""
+if [[ -n "${SUDO_USER:-}" ]]; then
+    REAL_HOME="$(getent passwd "$SUDO_USER" 2>/dev/null | cut -d: -f6)"
+    [[ -z "$REAL_HOME" ]] && REAL_HOME="$(eval echo ~"$SUDO_USER" 2>/dev/null || true)"
+fi
+[[ -z "$REAL_HOME" ]] && REAL_HOME="$HOME"
+
+ARKMICRO_DIR=""
+for c in \
+    "$SCRIPT_DIR/../linux-arkmicro" \
+    "/home/osboxes/Downloads/linux-arkmicro" \
+    "$REAL_HOME/Downloads/linux-arkmicro"
+do [[ -d "$c/buildroot" ]] && { ARKMICRO_DIR="$(cd "$c" && pwd)"; break; }; done
+[[ -z "$ARKMICRO_DIR" ]] && ARKMICRO_DIR="$REAL_HOME/Downloads/linux-arkmicro"
+
+BUILDROOT_OUTPUT_DIR="${BUILDROOT_OUTPUT_DIR:-}"
 DYN_OVERLAY_DIR="$SCRIPT_DIR/firmware_overlay_dyn"
 MERGED_DIR="$SCRIPT_DIR/build/dyn_rootfs_merged"
 IMAGE=""
@@ -70,6 +106,7 @@ usage() { grep '^#' "$0" | grep -v '^#!/' | sed 's/^# \?//'; exit 0; }
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --arkmicro-dir)         ARKMICRO_DIR="$2"; shift 2 ;;
         --buildroot-output-dir) BUILDROOT_OUTPUT_DIR="$2"; shift 2 ;;
         --dyn-overlay)          DYN_OVERLAY_DIR="$2"; shift 2 ;;
         --merged-dir)           MERGED_DIR="$2"; shift 2 ;;
@@ -81,6 +118,12 @@ while [[ $# -gt 0 ]]; do
         *)                       PASSTHROUGH_ARGS+=("$1"); shift ;;
     esac
 done
+
+# --buildroot-output-dir (or the env var) always wins outright; otherwise
+# derive it from ARKMICRO_DIR (autodetected above, or overridden via
+# --arkmicro-dir) -- computed here, after flag parsing, so
+# --arkmicro-dir actually takes effect regardless of flag order.
+[[ -z "$BUILDROOT_OUTPUT_DIR" ]] && BUILDROOT_OUTPUT_DIR="$ARKMICRO_DIR/buildroot/output"
 
 TARGET_DIR="$BUILDROOT_OUTPUT_DIR/target"
 [[ -d "$TARGET_DIR" ]] || {

@@ -176,7 +176,12 @@ else
     # BUILDROOT_OUTPUT_DIR-only fix missed this dbus/dbus.h failure: the
     # env var override on the make command line only covers vars the
     # Makefile actually reads that way, not the general "$HOME under
-    # sudo is wrong" problem underneath all of them).
+    # sudo is wrong" problem underneath all of them). Explicit
+    # AASDK_DEPS_DIR/AASDK_DEPS_DIR_DYN passthrough was also tried as a
+    # narrower alternative during a real deploy attempt -- redundant
+    # once HOME itself is corrected (both vars already default to
+    # $HOME/build-deps*, which now resolves correctly), so not kept
+    # here to avoid two sources of truth for the same path.
     HOME="$REAL_HOME" BUILDROOT_OUTPUT_DIR="$BUILDROOT_OUTPUT_DIR" make -C "$CUSTOM_UI_DIR" ui androidauto-sidecar
     echo "==> Re-staging fresh binaries + configs into $DYN_OVERLAY_DIR/usr/bin/"
     cp -f "$CUSTOM_UI_DIR/build/custom_ui" "$CUSTOM_UI_DIR/build/androidauto-sidecar" \

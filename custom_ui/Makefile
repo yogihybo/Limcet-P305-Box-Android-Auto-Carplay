@@ -141,6 +141,8 @@ UI_OBJS       := $(patsubst src/%.cpp,$(BUILD_DIR)/ui-obj/%.o,$(UI_SRCS))
 # this point in the file.
 UI_DBUS_INCLUDES = -I$(DBUS_ARM_INSTALL)/include/dbus-1.0 -I$(DBUS_ARM_INSTALL)/lib/dbus-1.0/include
 UI_DBUS_LIBS      = $(DBUS_ARM_INSTALL)/lib/libdbus-1.a
+UI_DBUS_INCLUDES_DYN = -I$(BUILDROOT_STAGING)/usr/include/dbus-1.0 -I$(BUILDROOT_STAGING)/usr/lib/dbus-1.0/include
+UI_DBUS_LIBS_DYN     = -L$(BUILDROOT_STAGING)/usr/lib -ldbus-1
 # Same static-NSS-init crash class this project already fixed for
 # bluetoothd (tools/bluetoothd-test/README.md's own "Cross-build
 # dependency chain" section) linking this exact libdbus-1.a -- reusing
@@ -541,28 +543,24 @@ androidauto-bw-aap-test: $(BW_AAP_TEST_TARGET)
 # --- ui (dynamic, Phase 4) ---
 $(UI_TARGET): $(UI_OBJS_DYN) $(UI_C_OBJS_DYN) $(LVGL_OBJS)
 	@mkdir -p $(dir $@)
-	$(CXX_DYN) $(LDFLAGS_DYN) -o $@ $^ $(UI_DBUS_LIBS) $(LIBS_DYN)
+	$(CXX_DYN) $(LDFLAGS_DYN) -o $@ $^ $(UI_DBUS_LIBS_DYN) $(LIBS_DYN)
 
 # hal/bluez_aa_profile.cpp, hal/ble_cts.cpp, and hal/bluetooth.cpp need
 # dbus/dbus.h too on this path -- same explicit-rule reasoning as the
 # static ui-obj/ versions below, just with the dynamic toolchain/obj
-# dir. UI_DBUS_INCLUDES (headers) is toolchain-agnostic C, and
-# UI_DBUS_LIBS (a static libdbus-1.a) links into this otherwise-dynamic
-# binary the same way AASDK_LIBS_DYN already statically links
-# Boost/Protobuf/OpenSSL -- mixing a handful of static .a deps into an
-# otherwise-dynamic executable is this Makefile's established pattern,
-# not new here.
+# dir. UI_DBUS_INCLUDES_DYN (headers from Buildroot staging sysroot)
+# and UI_DBUS_LIBS_DYN (-ldbus-1 against Buildroot staging).
 $(BUILD_DIR)/ui-dyn-obj/hal/bluez_aa_profile.o: src/hal/bluez_aa_profile.cpp
 	@mkdir -p $(dir $@)
-	$(CXX_DYN) $(CXXFLAGS) $(UI_DBUS_INCLUDES) -c -o $@ $<
+	$(CXX_DYN) $(CXXFLAGS) $(UI_DBUS_INCLUDES_DYN) -c -o $@ $<
 
 $(BUILD_DIR)/ui-dyn-obj/hal/ble_cts.o: src/hal/ble_cts.cpp
 	@mkdir -p $(dir $@)
-	$(CXX_DYN) $(CXXFLAGS) $(UI_DBUS_INCLUDES) -c -o $@ $<
+	$(CXX_DYN) $(CXXFLAGS) $(UI_DBUS_INCLUDES_DYN) -c -o $@ $<
 
 $(BUILD_DIR)/ui-dyn-obj/hal/bluetooth.o: src/hal/bluetooth.cpp
 	@mkdir -p $(dir $@)
-	$(CXX_DYN) $(CXXFLAGS) $(UI_DBUS_INCLUDES) -c -o $@ $<
+	$(CXX_DYN) $(CXXFLAGS) $(UI_DBUS_INCLUDES_DYN) -c -o $@ $<
 
 $(BUILD_DIR)/ui-dyn-obj/%.o: src/%.cpp
 	@mkdir -p $(dir $@)

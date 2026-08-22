@@ -97,7 +97,10 @@ endif()\
 ' "$AASDK_DIR/CMakeLists.txt"
 fi
 
-cat > "$DEPS_DIR/arm-toolchain.cmake" <<EOF
+mkdir -p "$AASDK_DIR/$AASDK_BUILD_SUBDIR"
+cd "$AASDK_DIR/$AASDK_BUILD_SUBDIR"
+
+cat > "$AASDK_DIR/$AASDK_BUILD_SUBDIR/arm-toolchain.cmake" <<EOF
 set(CMAKE_SYSTEM_NAME Linux)
 set(CMAKE_SYSTEM_PROCESSOR arm)
 set(CMAKE_C_COMPILER ${CROSS_COMPILE}gcc)
@@ -108,13 +111,10 @@ set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
 set(BUILD_SHARED_LIBS OFF)
 EOF
 
-mkdir -p "$AASDK_DIR/$AASDK_BUILD_SUBDIR"
-cd "$AASDK_DIR/$AASDK_BUILD_SUBDIR"
-
 echo "==> Configuring aasdk..."
 PATH="$DEPS_DIR/protoc-host/bin:$PATH" \
 cmake \
-    -DCMAKE_TOOLCHAIN_FILE="$DEPS_DIR/arm-toolchain.cmake" \
+    -DCMAKE_TOOLCHAIN_FILE="$AASDK_DIR/$AASDK_BUILD_SUBDIR/arm-toolchain.cmake" \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_PREFIX_PATH="$DEPS_DIR/boost-arm-install;$DEPS_DIR/openssl-arm-install;$DEPS_DIR/libusb-arm-install;$DEPS_DIR/protobuf-arm-install" \
     -DBoost_USE_STATIC_LIBS=ON \

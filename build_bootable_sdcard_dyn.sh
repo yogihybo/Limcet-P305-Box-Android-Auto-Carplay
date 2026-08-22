@@ -257,6 +257,14 @@ rsync -a "$DYN_OVERLAY_DIR/" "$MNT/"
 # replace it -- this rootfs's own documentation belongs in this
 # source tree (README.md/docs/), not baked into the deployed image.
 rm -f "$MNT/README.md"
+# Same leak, same cause, same fix: busybox-applets.manifest is a
+# build-time-only input (build_bootable_sdcard.sh's own
+# apply_busybox_applets() reads it from $OVERLAY_DIR to generate
+# symlinks during the build) that rides along in
+# firmware_overlay/'s own top level and gets rsynced onto the real
+# image the same way README.md did -- not a runtime file, nothing on
+# the device ever reads it after boot.
+rm -f "$MNT/busybox-applets.manifest"
 # Permission safety net: this second-pass rsync is the ONLY thing that
 # lands firmware_overlay_dyn/'s own rcS/wifi_ap.sh and every usr/bin//
 # usr/sbin binary (custom_ui, androidauto-sidecar, sshd, bluetoothd,

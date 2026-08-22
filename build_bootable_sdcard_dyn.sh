@@ -125,10 +125,18 @@ done
 # --arkmicro-dir actually takes effect regardless of flag order.
 [[ -z "$BUILDROOT_OUTPUT_DIR" ]] && BUILDROOT_OUTPUT_DIR="$ARKMICRO_DIR/buildroot/output"
 
-TARGET_DIR="$BUILDROOT_OUTPUT_DIR/target"
-[[ -d "$TARGET_DIR" ]] || {
-    echo "ERROR: Buildroot target dir not found: $TARGET_DIR" >&2
+# 2026-08-23: checks output/images/rootfs.tar now, not output/target/
+# directly -- the pre-merge step below extracts Buildroot's own
+# official tar export (BR2_TARGET_ROOTFS_TAR) instead of rsyncing the
+# raw target dir, see that step's own comment for why.
+[[ -d "$BUILDROOT_OUTPUT_DIR/target" ]] || {
+    echo "ERROR: Buildroot target dir not found: $BUILDROOT_OUTPUT_DIR/target" >&2
     echo "       Build ark1668_ft_dyn_defconfig first (see merry-snacking-wirth.md)." >&2
+    exit 1
+}
+[[ -f "$BUILDROOT_OUTPUT_DIR/images/rootfs.tar" ]] || {
+    echo "ERROR: rootfs.tar not found: $BUILDROOT_OUTPUT_DIR/images/rootfs.tar" >&2
+    echo "       Enable BR2_TARGET_ROOTFS_TAR and rebuild ark1668_ft_dyn_defconfig first." >&2
     exit 1
 }
 [[ -d "$DYN_OVERLAY_DIR" ]] || {
@@ -191,22 +199,50 @@ else
     chmod +x "$DYN_OVERLAY_DIR/usr/bin/custom_ui" "$DYN_OVERLAY_DIR/usr/bin/androidauto-sidecar"
 fi
 
-echo "==> Pre-merging Buildroot output/target + firmware_overlay_dyn into $MERGED_DIR"
+# 2026-08-23: switched from rsyncing output/target/ directly to
+# extracting Buildroot's own official rootfs.tar (BR2_TARGET_ROOTFS_TAR,
+# enabled alongside the existing ext4 target in
+# ark1668_ft_dyn_defconfig). Real reasons, not just style: the tar is
+# built via Buildroot's own inner-rootfs macro (fs/common.mk), which
+# (a) excludes THIS_IS_NOT_YOUR_ROOT_FILESYSTEM by construction (no
+# manual --exclude needed any more -- kept below anyway, see its own
+# comment) and (b) runs target/ through a real fakeroot pass (chown,
+# mkusers, makedevs -d against the actual permission table) before
+# archiving, which a raw rsync of output/target/ never got at all.
+#
+# Real caveat, found and verified on THIS dev machine, not assumed:
+# fakeroot's chown-faking is broken in this specific sandbox (isolated
+# test: `chown -h -R 0:0` inside a fakeroot session, then `stat`
+# immediately after in the SAME session, still reports the build
+# user's real uid/gid, not 0:0 -- confirmed via two independent tests,
+# with and without FAKEROOTDONTTRYCHOWN). chmod-based faking (setuid
+# bits etc.) DOES work correctly, confirmed the same way. So the
+# ownership-normalization benefit does not actually materialize here
+# -- rootfs.tar still carries the build user's uid/gid, same as the
+# old rsync path did -- but the placeholder-file exclusion and the
+# architectural benefit (one less manually-patched leak class, using
+# Buildroot's own tested export path) are both real regardless, and
+# ownership would likely self-correct on an unrestricted machine
+# without this sandbox's fakeroot limitation.
+#
+# Extracting requires real root (device nodes need CAP_MKNOD, chown
+# during extraction needs root) -- this whole script is already
+# expected to run under sudo (see REAL_HOME resolution above), so this
+# is not a new privilege requirement.
+ROOTFS_TAR="$BUILDROOT_OUTPUT_DIR/images/rootfs.tar"
+echo "==> Pre-merging Buildroot rootfs.tar + firmware_overlay_dyn into $MERGED_DIR"
 rm -rf "$MERGED_DIR"
 mkdir -p "$MERGED_DIR"
 if $DRY_RUN; then
-    echo "  [dry-run] rsync -a $TARGET_DIR/ $MERGED_DIR/"
+    echo "  [dry-run] tar -xf $ROOTFS_TAR -C $MERGED_DIR"
     echo "  [dry-run] rsync -a $DYN_OVERLAY_DIR/ $MERGED_DIR/"
 else
-    # --exclude=THIS_IS_NOT_YOUR_ROOT_FILESYSTEM: 2026-08-22, found
-    # actually shipping inside a real built image -- this is Buildroot's
-    # own standard placeholder file, always present in output/target/
-    # (a warning that target/ isn't directly a usable rootfs). Its own
-    # official image-generator targets (tar/ext2/etc) strip it as a
-    # normal post-processing step; this pipeline bypasses those and
-    # rsyncs output/target/ directly, so it rode along uncleaned into
-    # every deployed image until now.
-    rsync -a --exclude=THIS_IS_NOT_YOUR_ROOT_FILESYSTEM "$TARGET_DIR/" "$MERGED_DIR/"
+    [[ -f "$ROOTFS_TAR" ]] || {
+        echo "ERROR: rootfs.tar not found: $ROOTFS_TAR" >&2
+        echo "       Enable BR2_TARGET_ROOTFS_TAR and rebuild ark1668_ft_dyn_defconfig first." >&2
+        exit 1
+    }
+    tar -xf "$ROOTFS_TAR" -C "$MERGED_DIR"
     # Our overlay wins over Buildroot's raw target output here (e.g.
     # rcS/inittab/profile all get replaced by the trimmed Phase 3
     # versions) -- same ordering convention as build_bootable_sdcard.sh's

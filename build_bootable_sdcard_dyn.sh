@@ -155,7 +155,7 @@ elif $DRY_RUN; then
     echo "  [dry-run] cp $CUSTOM_UI_DIR/build/{custom_ui,androidauto-sidecar,hal.conf,default_settings.conf} $DYN_OVERLAY_DIR/usr/bin/"
     echo "  [dry-run] rsync -a $CUSTOM_UI_DIR/build/alsa/ $DYN_OVERLAY_DIR/usr/bin/alsa/"
 else
-    echo "==> Building custom_ui/androidauto-sidecar fresh (BUILDROOT_OUTPUT_DIR=$BUILDROOT_OUTPUT_DIR)"
+    echo "==> Building custom_ui/androidauto-sidecar fresh (BUILDROOT_OUTPUT_DIR=$BUILDROOT_OUTPUT_DIR, HOME=$REAL_HOME)"
     # set -e means a failed build stops this script here, before any image
     # work starts -- this is the whole point: never let a stale overlay
     # binary reach $IMAGE silently. Real bug this closes: the overlay was
@@ -163,7 +163,21 @@ else
     # (an old manual `make`+`cp` was never redone after the glibc 2.30
     # swap) during this session's overlay re-verification pass -- caught by
     # chance via md5sum, not by anything in this pipeline.
-    BUILDROOT_OUTPUT_DIR="$BUILDROOT_OUTPUT_DIR" make -C "$CUSTOM_UI_DIR" ui androidauto-sidecar
+    #
+    # HOME="$REAL_HOME" (not the ambient $HOME, /root under sudo): this
+    # Makefile has several of its own $(HOME)/build-deps-style defaults
+    # (AASDK_DEPS_DIR, AASDK_DEPS_DIR_DYN, its own BUILDROOT_OUTPUT_DIR
+    # fallback), and every custom_ui/third_party/build_*.sh script make
+    # can invoke as a sub-build has the exact same $HOME-default pattern
+    # -- all of them inherit HOME from this process's environment as a
+    # plain child process, so overriding it once here fixes every one of
+    # them transitively, without hunting down and rewriting each
+    # reference individually (which is exactly how the previous
+    # BUILDROOT_OUTPUT_DIR-only fix missed this dbus/dbus.h failure: the
+    # env var override on the make command line only covers vars the
+    # Makefile actually reads that way, not the general "$HOME under
+    # sudo is wrong" problem underneath all of them).
+    HOME="$REAL_HOME" BUILDROOT_OUTPUT_DIR="$BUILDROOT_OUTPUT_DIR" make -C "$CUSTOM_UI_DIR" ui androidauto-sidecar
     echo "==> Re-staging fresh binaries + configs into $DYN_OVERLAY_DIR/usr/bin/"
     cp -f "$CUSTOM_UI_DIR/build/custom_ui" "$CUSTOM_UI_DIR/build/androidauto-sidecar" \
           "$CUSTOM_UI_DIR/build/hal.conf" "$CUSTOM_UI_DIR/build/default_settings.conf" \

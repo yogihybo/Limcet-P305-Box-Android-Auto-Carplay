@@ -96,8 +96,26 @@ sleep 2
 
 /usr/sbin/bluetoothd -n &
 
-# --- WiFi AP (wireless AA/CarPlay projection) ---
-/etc/wifi_ap.sh &
+# --- WiFi AP: deliberately NOT started here ---
+# 2026-08-22: found and fixed a real regression -- an earlier version of
+# this file started /etc/wifi_ap.sh unconditionally at boot, which is
+# exactly the eager-bringup behavior f42d533 ("Defer WiFi AP bringup
+# until phone connects over Bluetooth AA RFCOMM") deliberately removed.
+# The real, current trigger lives entirely inside custom_ui/
+# androidauto-sidecar's own code, not rcS: hal::BluezAaProfile's
+# Profile1.NewConnection handler (hal/bluez_aa_profile.cpp) hands a
+# real, already-connected RFCOMM fd to hal::sendConnectFd()
+# (hal/androidauto_client.cpp), which delivers it to the sidecar over
+# CONNECT_FD; the sidecar's handle_connection()
+# (sidecars/androidauto/main.cpp) calls
+# WirelessSessionManager::start(fd) -> run(fd) ->
+# ensureAccessPointUp(), which is the only place wifi_ap.sh (and, via
+# it, hostapd) actually runs. Since a real fd only exists once a phone
+# has genuinely connected over Bluetooth, this call chain is
+# event-driven by construction -- there's no other path to it. rcS
+# calling wifi_ap.sh itself would start the AP unconditionally at
+# every boot, colliding with (and defeating the purpose of) this
+# mechanism once custom_ui is wired to autostart (Phase 6/7).
 
-echo "custom_ui rootfs: base system + BlueZ + WiFi bring-up done."
+echo "custom_ui rootfs: base system + BlueZ bring-up done (WiFi AP is event-driven, see custom_ui's WirelessSessionManager)."
 echo "custom_ui/androidauto-sidecar are NOT auto-started -- deploy by hand for Phase 6 hardware validation."

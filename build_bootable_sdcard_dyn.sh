@@ -198,7 +198,15 @@ if $DRY_RUN; then
     echo "  [dry-run] rsync -a $TARGET_DIR/ $MERGED_DIR/"
     echo "  [dry-run] rsync -a $DYN_OVERLAY_DIR/ $MERGED_DIR/"
 else
-    rsync -a "$TARGET_DIR/" "$MERGED_DIR/"
+    # --exclude=THIS_IS_NOT_YOUR_ROOT_FILESYSTEM: 2026-08-22, found
+    # actually shipping inside a real built image -- this is Buildroot's
+    # own standard placeholder file, always present in output/target/
+    # (a warning that target/ isn't directly a usable rootfs). Its own
+    # official image-generator targets (tar/ext2/etc) strip it as a
+    # normal post-processing step; this pipeline bypasses those and
+    # rsyncs output/target/ directly, so it rode along uncleaned into
+    # every deployed image until now.
+    rsync -a --exclude=THIS_IS_NOT_YOUR_ROOT_FILESYSTEM "$TARGET_DIR/" "$MERGED_DIR/"
     # Our overlay wins over Buildroot's raw target output here (e.g.
     # rcS/inittab/profile all get replaced by the trimmed Phase 3
     # versions) -- same ordering convention as build_bootable_sdcard.sh's
@@ -236,6 +244,19 @@ LOOP=$(losetup -Pf --show "$IMAGE")
 MNT=$(mktemp -d)
 mount "${LOOP}p2" "$MNT"
 rsync -a "$DYN_OVERLAY_DIR/" "$MNT/"
+# 2026-08-22: found a stale stock /README.md actually shipping on a
+# real built image -- build_bootable_sdcard.sh's own apply_overlay()
+# (never modified here) rsyncs the ENTIRE stock firmware_overlay/ tree
+# onto p2, including firmware_overlay/README.md itself (documentation
+# for that source directory, never meant to be a deployed file) ->
+# lands at real /README.md. firmware_overlay_dyn/ has no top-level
+# README.md of its own to overwrite it with on this second pass, so it
+# survived untouched -- 20KB of stock MsnCoreApp/blueware/sink
+# documentation with no relevance to this rootfs. Not something this
+# session's overlay work ever intended to ship; remove it rather than
+# replace it -- this rootfs's own documentation belongs in this
+# source tree (README.md/docs/), not baked into the deployed image.
+rm -f "$MNT/README.md"
 # Permission safety net: this second-pass rsync is the ONLY thing that
 # lands firmware_overlay_dyn/'s own rcS/wifi_ap.sh and every usr/bin//
 # usr/sbin binary (custom_ui, androidauto-sidecar, sshd, bluetoothd,

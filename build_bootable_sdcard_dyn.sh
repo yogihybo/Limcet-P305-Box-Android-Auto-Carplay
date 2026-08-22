@@ -122,7 +122,23 @@ BUILDROOT_OUTPUT_DIR="${BUILDROOT_OUTPUT_DIR:-}"
 DYN_OVERLAY_DIR="$SCRIPT_DIR/firmware_overlay_dyn"
 MERGED_DIR="$SCRIPT_DIR/build/dyn_rootfs_merged"
 IMAGE=""
-PASSTHROUGH_ARGS=(--non-interactive)
+# --no-userdata: 2026-08-23, real fix. build_bootable_sdcard.sh's
+# default p3 population rsyncs firmware_source/mtd7_userdata/ onto the
+# image -- stock's own MsnCoreApp/blueware userdata, genuinely
+# irrelevant to custom_ui/androidauto-sidecar. --no-userdata is a real,
+# already-existing, documented mode in the original script (not
+# something invented here) that leaves p3 as valid, empty ext4 -- its
+# own comment confirms "App will populate /data on first boot", which
+# matches this rootfs's own rcS (mounts p3 unconditionally, no content
+# dependency, confirmed by reading it directly). Checked p1's own
+# stock-labeled files (uboot_stock.bin/uboot_hybrid.bin/zImage_stock/
+# reversingtrack.raw) the same way before deciding anything there --
+# all four are genuine, load-bearing boot-chain features (NAND-read
+# fallback, onboard-NAND recovery chainload targets, U-Boot's own
+# instant reverse-camera preview), confirmed via the real U-Boot source
+# (u-boot/include/configs/ark1668_limcet_p305.h), independent of
+# whatever rootfs is on p2 -- not stock leftovers, left untouched.
+PASSTHROUGH_ARGS=(--non-interactive --no-userdata)
 DRY_RUN=false
 SKIP_BUILD=false
 

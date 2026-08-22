@@ -125,6 +125,169 @@ next one, then `bluez`'s own `configure --host=arm-linux-gnueabihf
 see this file's own "Why static" section above for why that distinction
 matters with libtool.
 
+### `dbus-daemon` itself -- built 2026-08-20, previously missing entirely
+
+Everything above only ever built `libdbus-1.a` + headers (the *client*
+library `bluetoothd`/`bt-agent`/`custom_ui` link) -- the actual
+`dbus-daemon` binary (`bus/dbus-daemon` in the `dbus` submodule) was
+never linked. This device's rootfs ships its own `/usr/bin/dbus-daemon`
+(a stock vendor binary, real **D-Bus 1.0.2** -- confirmed via `strings`
+on its sibling `/usr/lib/libdbus-1.so.3.2.0`), and `bluez-bringup.sh`
+was invoking plain `dbus-daemon`, resolving via `PATH` to that ancient
+binary. Unix file-descriptor passing (`NEGOTIATE_UNIX_FD`, exactly what
+`org.bluez.Profile1.NewConnection` needs to hand a connected RFCOMM
+socket to a registered profile) wasn't added to D-Bus until 1.3.1 -- a
+1.0.2 daemon has no code for it at all, which is the real, confirmed
+reason Android Auto's wireless RFCOMM profile could never actually
+receive its connection (`bluetoothd`'s own `src/profile.c:
+send_new_connection()` failed every attempt, root-caused via
+`bluetoothd -n -d`'s own debug output showing `ext_connect()` succeeding
+immediately followed by `send_new_connection() failed` -- see
+`gdbus/object.c`'s own `"Unable to send message (passing fd blocked?)"`
+check in `g_dbus_send_message_with_reply()` for the exact mechanism).
+
+**Build from `third_party/dbus-1.14.10.tar.xz` (this dir), NOT the
+`third_party/dbus` submodule** -- real gotcha found rebuilding this a
+second time: the submodule is a plain git checkout of the tag, which
+only has `configure.ac` (needs `autoreconf`/`automake`/`libtool` to
+generate a real `configure` script) -- none of which are installed on
+this build machine, and there's no root/no cached `.deb`s to install
+them either (same "not vendored, trivially reproducible" reasoning this
+file already documents for meson/pkgconf did NOT hold here -- autotools
+turned out not to be trivially reproducible after all on this specific
+machine). The tarball is the real upstream **release** artifact and
+ships a pre-generated `configure`, sidestepping the whole problem --
+vendored here (1.4MB, same origin as this device's own Buildroot
+package cache, `dl/dbus/dbus-1.14.10.tar.xz`, sha256
+`ba1f21d2bd9d339da2d4aa8780c09df32fea87998b73da24f49ab9df1e36a50f`)
+specifically so this doesn't need rediscovering a second time. (The
+`third_party/dbus` submodule is still useful for browsing/grepping the
+real source against a real git history -- e.g. this file's own citations
+of `src/profile.c`/`gdbus/object.c` line numbers -- just not for
+rebuilding the daemon on this particular machine.)
+
+```sh
+cd tools/bluetoothd-test/third_party
+tar xf dbus-1.14.10.tar.xz -C /tmp   # or anywhere outside the repo
+cd /tmp/dbus-1.14.10
+./configure --host=arm-linux-gnueabihf --prefix=/usr \
+  --disable-shared --enable-static CFLAGS="-fno-pie -O2" \
+  PKG_CONFIG_PATH="$HOME/build-deps/dbus-arm-install/lib/pkgconfig"
+make -C dbus libdbus-1.la CPPFLAGS="-I$HOME/build-deps/dbus-arm-install/include"
+make -C dbus libdbus-internal.la CPPFLAGS="-I$HOME/build-deps/dbus-arm-install/include"
+arm-linux-gnueabihf-gcc -O2 -c -o /tmp/nss_stub_dbus_daemon.o \
+  <repo>/tools/nss-stub/nss_stub_dbus_daemon.c
+cd bus
+make dbus-daemon CPPFLAGS="-I$HOME/build-deps/dbus-arm-install/include" \
+  LDFLAGS="-all-static -static -no-pie \
+  -L$HOME/build-deps/dbus-arm-install/lib \
+  -Wl,--wrap=getpwnam,--wrap=getpwuid,--wrap=getpwnam_r,--wrap=getpwuid_r,--wrap=getpwent,--wrap=setpwent,--wrap=endpwent,--wrap=getgrgid,--wrap=getgrgid_r,--wrap=getgrnam_r,--wrap=getgrouplist,--wrap=dlopen,--wrap=dlerror,--wrap=dlsym,--wrap=dlclose,--wrap=getaddrinfo \
+  /tmp/nss_stub_dbus_daemon.o"
+arm-linux-gnueabihf-strip dbus-daemon
+cp dbus-daemon <repo>/tools/bluetoothd-test/dbus-daemon
+```
+
+Real gotchas hit getting this to actually link, all worth knowing if
+this needs redoing:
+- **Do NOT `source linux-arkmicro/env.source` for this build** --
+  unlike every kernel/U-Boot build in this repo, this one needs the
+  plain system `arm-linux-gnueabihf-gcc` (Debian, gcc 12 -- the same
+  toolchain `~/build-deps/dbus-arm-install`'s other libs, `libexpat.a`
+  included, were built with), not `env.source`'s older bundled Linaro
+  7.3.1 toolchain. Sourcing it anyway (real mistake made rebuilding
+  this) silently shadows the right compiler on `PATH` and produces two
+  confusing failures against the already-built `libexpat.a`: a DWARF-
+  version mismatch at link time (Linaro's older `ld` can't read gcc
+  12's DWARF5 debug info) and `undefined reference to 'arc4random_buf'`
+  (Linaro's older glibc predates that symbol; the expat archive was
+  compiled expecting it). Both vanish immediately using the plain
+  Debian cross-compiler already on `PATH` by default.
+- The `expat.pc` pkg-config file's `Cflags`/`Libs` embed `prefix=/usr`
+  (the eventual on-DEVICE install path baked in at expat's own build
+  time), not this build machine's real
+  `~/build-deps/dbus-arm-install` staging path -- `PKG_CONFIG_PATH`
+  alone gets `./configure` to detect expat, but the generated
+  `Makefile`s still don't find `expat.h`/`-lexpat` at actual compile/
+  link time. Pass `CPPFLAGS`/`LDFLAGS` with the real path explicitly to
+  every `make` invocation, not just `configure`.
+- `bus/dbus-daemon` needs `../dbus/libdbus-internal.la` (an internal-
+  symbols build variant, distinct from the public `libdbus-1.la`
+  `bluetoothd`/`bt-agent`/`custom_ui` link) -- easy to miss since
+  `libdbus-1.la` alone is enough for every OTHER target in this repo.
+- Bare `-static` alone still produces a **PIE, dynamically-linked**
+  binary on this cross toolchain (Debian's `arm-linux-gnueabihf-gcc 12`
+  defaults to `-pie`) -- needs `-no-pie` too. And libtool's own
+  static/shared choice is separate from gcc's `-static` flag entirely --
+  without `-all-static` (a *libtool* flag), it silently still links
+  `libdbus-1.so` if present in the search path. Needs all three
+  together (matches BlueZ's own `configure`'s
+  `LDFLAGS="-all-static -no-pie ..."` above, which is exactly where
+  this combination was copied from).
+- `dbus-daemon`'s own `bus/dbus-sysdeps-util-unix.c:fill_group_info()`
+  (daemon-only code, not present in the client library `bluetoothd`
+  links) references **both** `getgrgid_r` and `getgrnam_r` -- neither
+  existing single-purpose stub file (`../../nss-stub/nss_stub.c`:
+  `getgrgid_r` only; `../../nss-stub/nss_stub_busybox.c`: `getgrnam_r`
+  only) covers the union alone. `nss_stub_dbus_daemon.c` (new file,
+  `tools/nss-stub/`) is a dedicated third provider with everything
+  `dbus-daemon` specifically needs in one file.
+- **`getpwnam_r`/`getpwuid_r`/`getgrnam_r`/`getgrgid_r` can't be plain
+  no-ops here**, unlike every other NSS-stub provider in this repo --
+  real hardware showed `dbus-daemon` refusing to start at all:
+  `Unknown username "root" in message bus configuration file` /
+  `Failed to start message bus: Could not get UID and GID for username
+  "root"`. Unlike `bluetoothd` (runs AS uid 0, never needs to resolve a
+  username by name), `dbus-daemon`'s own config parser genuinely calls
+  `getpwnam_r("root", ...)` to resolve this device's real
+  `system-diagnostic.conf`'s `<user>root</user>` directive at startup --
+  a real, load-bearing lookup, not dead code safe to stub unconditionally.
+  `nss_stub_dbus_daemon.c` hardcodes `"root"` -> uid/gid 0 (this
+  device's `/etc/passwd` only ever has that one entry anyway) rather
+  than a real flat-file parser; every other username/uid still returns
+  "not found".
+
+Deployed via `tools/bluetoothd-test/dbus-daemon` (top-level file in
+this dir), same as `bluetoothd` -- `install_diag_tools()`
+(`build_bootable_sdcard.sh`) copies it straight to `/usr/bin/`,
+**directly replacing** the stock 1.0.2 binary at that exact path on
+every full image rebuild (that function runs after `apply_overlay()`
+specifically so `tools/` wins). `bluez-bringup.sh` additionally checks
+`/data/bluetoothd-test/dbus-daemon` first, for the scp-based
+fast-iteration dev workflow before a full rebuild.
+
+**Real regression this caused, found and fixed 2026-08-21**: because
+`/usr/bin/dbus-daemon` is now replaced system-wide (not just for this
+diagnostic tool's own use), it also became what `/etc/profile`'s
+ordinary `eval \`dbus-launch --auto-syntax\`` line (a per-login
+*session* bus, unrelated to BlueZ/`bluetoothd`'s system bus) resolves
+to on every boot. That line started failing on real hardware:
+```
+dbus[185]: Failed to start message bus: Failed to open
+"/usr/share/dbus-1/session.conf": No such file or directory
+EOF in dbus-launch reading address from bus daemon
+```
+Root cause: dbus's own upstream build convention puts the *session*
+bus config under `$datadir/dbus-1/session.conf` (`/usr/share/dbus-1/`
+with this build's `--prefix=/usr`), separate from the *system* bus
+config under `$sysconfdir/dbus-1/` (the `/usr/etc/dbus-1/system.conf`
+doubled-`run/run` issue documented elsewhere in this file is that same
+sysconfdir path, for the system bus specifically) -- this device's
+real vendor rootfs, however, only ever shipped its session.conf at the
+non-standard `/usr/etc/dbus-1/session.conf`
+(`firmware_source/mtd6_rootfs/usr/etc/dbus-1/session.conf`), never at
+the `/usr/share/dbus-1/` path the freshly-built 1.14.10 binary actually
+looks for. The stock 1.0.2 binary presumably had this path baked in
+differently at its own original vendor build time; this rebuild
+didn't carry that over since `configure` was never given a matching
+`--datadir` override (see this file's own build recipe above).
+Fixed by adding a copy of the real session.conf content at
+`firmware_overlay/usr/share/dbus-1/session.conf` (that directory
+already exists in the overlay for `services/com.arkmicro.auto.service`,
+confirming it's the real, intended session-bus datadir on this
+device) -- lands on every rebuild via `apply_overlay()`, same as every
+other overlay file, restoring the ordinary per-login session bus
+`/etc/profile` has always depended on.
+
 ## What's disabled / not built
 
 - **`bluetoothctl`** (`--disable-client`) -- needs `readline`, not built

@@ -12,6 +12,7 @@
 #include <sys/stat.h>
 #include <sys/un.h>
 #include <sys/time.h>
+#include <sys/uio.h>
 #include <thread>
 #include <unistd.h>
 
@@ -134,6 +135,109 @@ void try_spawn_androidauto_sidecar() {
     }).detach();
 }
 
+bool sendConnectFd(int rfcommFd) {
+    std::printf("%s [BT-AA-PROFILE] sendConnectFd: handing rfcommFd=%d to androidauto-sidecar\n",
+                core::log_timestamp().c_str(), rfcommFd);
+
+    if (std::system("pidof androidauto-sidecar >/dev/null 2>&1") != 0) {
+        std::printf("%s [BT-AA-PROFILE] sendConnectFd: androidauto-sidecar not running yet, "
+                    "spawning it\n", core::log_timestamp().c_str());
+        try_spawn_androidauto_sidecar();
+    }
+
+    struct sockaddr_un addr {};
+    addr.sun_family = AF_UNIX;
+    std::strncpy(addr.sun_path, kSocketPath, sizeof(addr.sun_path) - 1);
+
+    // A freshly-spawned sidecar needs a moment to bind its socket --
+    // same 10-attempt/50ms-apart retry AndroidAutoClient::ensureConnected()
+    // already uses for the same reason.
+    int connFd = -1;
+    for (int attempt = 0; attempt < 10; ++attempt) {
+        int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+        if (fd < 0) break;
+        if (connect(fd, reinterpret_cast<struct sockaddr *>(&addr), sizeof(addr)) == 0) {
+            connFd = fd;
+            break;
+        }
+        close(fd);
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+    if (connFd < 0) {
+        std::fprintf(stderr, "%s [BT-AA-PROFILE] sendConnectFd: could not reach "
+                     "androidauto-sidecar's socket -- closing rfcommFd=%d, dropping this "
+                     "connection\n", core::log_timestamp().c_str(), rfcommFd);
+        close(rfcommFd);
+        return false;
+    }
+
+    // One sendmsg() carrying both the "CONNECT_FD\n" text and the
+    // SCM_RIGHTS ancillary data -- see sidecars/androidauto/main.cpp's
+    // recv_chunk() comment for why this must arrive as a single
+    // message, not two separate writes.
+    const char * line = "CONNECT_FD\n";
+    struct iovec iov {};
+    iov.iov_base = const_cast<char *>(line);
+    iov.iov_len = std::strlen(line);
+
+    struct msghdr msg {};
+    msg.msg_iov = &iov;
+    msg.msg_iovlen = 1;
+
+    char control[CMSG_SPACE(sizeof(int))];
+    msg.msg_control = control;
+    msg.msg_controllen = sizeof(control);
+
+    struct cmsghdr * cmsg = CMSG_FIRSTHDR(&msg);
+    cmsg->cmsg_level = SOL_SOCKET;
+    cmsg->cmsg_type = SCM_RIGHTS;
+    cmsg->cmsg_len = CMSG_LEN(sizeof(int));
+    std::memcpy(CMSG_DATA(cmsg), &rfcommFd, sizeof(int));
+
+    ssize_t sent = sendmsg(connFd, &msg, 0);
+    // rfcommFd's kernel-level ownership is transferred to the receiving
+    // process as soon as sendmsg() succeeds (a dup, not a move -- our
+    // own copy of the fd number is still valid until we close it, but
+    // there's nothing left for us to do with it) -- close our copy
+    // either way, success or failure, so this function never leaks it.
+    close(rfcommFd);
+    if (sent != static_cast<ssize_t>(iov.iov_len)) {
+        std::fprintf(stderr, "%s [BT-AA-PROFILE] sendConnectFd: sendmsg() failed (sent=%zd)\n",
+                     core::log_timestamp().c_str(), sent);
+        close(connFd);
+        return false;
+    }
+
+    struct timeval tv {};
+    tv.tv_sec = 3;
+    setsockopt(connFd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    // 2026-08-21: SO_RCVTIMEO alone only bounds read() -- sendmsg()
+    // above (and any plain write()) has no timeout protection from it
+    // at all. On a SOCK_STREAM AF_UNIX socket, if the sidecar's own
+    // receive buffer fills up (e.g. its io_service thread is wedged
+    // and never calling recv()), a later write/sendmsg can block this
+    // process's caller indefinitely once the kernel socket buffer is
+    // full -- a real, previously-unprotected path to freezing whatever
+    // thread called this (see AndroidAutoClient::sendCommand()'s own
+    // comment for the same gap and fix, found chasing a real hardware
+    // hang with a wedged sidecar and zero log output).
+    setsockopt(connFd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+
+    std::string reply;
+    char buf[256];
+    while (reply.find('\n') == std::string::npos) {
+        ssize_t n = read(connFd, buf, sizeof(buf));
+        if (n <= 0) break;
+        reply.append(buf, static_cast<size_t>(n));
+    }
+    close(connFd);
+
+    bool ok = reply.rfind("OK", 0) == 0;
+    std::printf("%s [BT-AA-PROFILE] sendConnectFd: sidecar reply: '%s' (%s)\n",
+                core::log_timestamp().c_str(), reply.c_str(), ok ? "accepted" : "rejected/unreachable");
+    return ok;
+}
+
 AndroidAutoClient::AndroidAutoClient() = default;
 
 AndroidAutoClient::~AndroidAutoClient() {
@@ -167,6 +271,17 @@ bool AndroidAutoClient::ensureConnected(bool allow_spawn) {
             struct timeval tv {};
             tv.tv_sec = 1;
             setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+            // 2026-08-21: SO_RCVTIMEO alone only bounds read() in
+            // sendCommand() below -- its write() call had no timeout
+            // protection at all. If the sidecar's own receive buffer
+            // fills up (its io_service thread wedged, never calling
+            // recv()), write() can block the calling thread
+            // indefinitely once the kernel socket buffer is full --
+            // every caller here runs on the LVGL main thread, so this
+            // was a real path to freezing the whole UI with zero log
+            // output (stuck before ever reaching a printf), found
+            // chasing a real hardware hang report.
+            setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
             fd_ = fd;
             return true;
         }
@@ -283,6 +398,19 @@ bool AndroidAutoClient::sendTouch(std::uint32_t x, std::uint32_t y, TouchAction 
     std::lock_guard<std::mutex> lock(mutex_);
     std::string reply;
     std::string cmd = "TOUCH " + std::to_string(x) + " " + std::to_string(y) + " " + actionStr;
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        if (ensureConnected(/*allow_spawn=*/false) && sendCommand(cmd, reply)) {
+            return true;
+        }
+        disconnect();
+    }
+    return false;
+}
+
+bool AndroidAutoClient::sendNightMode(bool nightMode) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    std::string reply;
+    std::string cmd = std::string("NIGHT ") + (nightMode ? "1" : "0");
     for (int attempt = 0; attempt < 2; ++attempt) {
         if (ensureConnected(/*allow_spawn=*/false) && sendCommand(cmd, reply)) {
             return true;

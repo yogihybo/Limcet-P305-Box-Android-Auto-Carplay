@@ -8,7 +8,7 @@
 // "since session start" and only used by androidauto/*.cpp's Session/
 // Channel classes; broadened 2026-08-15 per explicit request to cover
 // the whole process and every source file in it, after review found a
-// real gap -- wireless_session_manager.cpp/bw_aap_client.cpp/
+// real gap -- wireless_session_manager.cpp/wifi_setup_client.cpp/
 // usb_probe.cpp/wireless_probe.cpp/bluetooth_rfcomm_server.cpp (the
 // whole pre-session connection setup) and hantro_h264_decoder.cpp/
 // alsa_output.cpp/touch_forwarder.cpp (session-phase code that

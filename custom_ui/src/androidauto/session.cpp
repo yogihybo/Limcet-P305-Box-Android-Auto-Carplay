@@ -98,19 +98,30 @@ void Session::start(aasdk::transport::ITransport::Pointer transport) {
     // an independently confirmed 1:1 mapping -- see that doc).
     videoChannel_ = std::make_shared<VideoChannel>(strand_, messenger);
 
-    // 2026-08-19: was 48000 -- the real /etc/asound.conf has no active
-    // rate override for the dmix that plug:softvol2 routes through
-    // (its own `rate 44100` line is commented out), but every rate
-    // value that IS actually pinned anywhere in that file (dmix2's
-    // live `rate 44100`, dmix's own commented-out `rate 44100` before
-    // it was left to auto-negotiate, dsnoop's commented `rate 16000`)
-    // is 44100, and every real hardware `aplay` test in
-    // docs/1.5_AUDIO_SUBSYSTEM_INVESTIGATION.md's history used 44100
-    // -- not 48000, which appears nowhere else in this project's audio
-    // config/testing history. Matching that instead of introducing a
-    // second, untested rate through the "plug" resample layer.
+    // 2026-08-21 REVERTED back to 48000 -- the 2026-08-19 change to
+    // 44100 (see git history) was based on plausible-but-unconfirmed
+    // ALSA routing inference, not a real observed failure. Real phone-
+    // side logcat (Windows PowerShell.txt, captured 2026-08-21) now
+    // gives a direct, unambiguous answer instead: right after Gearhead
+    // requests proxy creation for every advertised channel, channel 4
+    // (MEDIA_SINK_MEDIA_AUDIO) is the ONE channel that never gets its
+    // "Proxy created" log line -- followed immediately by
+    // `CAR.SERVICE: Critical error 2 detail: 7 msg: wrong sampling
+    // rate 44100`, then `CAR.SETUP.ERROR.LITE: PROTOCOL_WRONG_
+    // CONFIGURATION -- The phone and the car are running incompatible
+    // software`, then a full session teardown ~400ms later -- this IS
+    // the root cause of every "Communication error 2 -- incompatible
+    // software" / Error 33 TCP-EOF drop this project has been chasing.
+    // Guidance/System (16000, unchanged) both got their "Proxy
+    // created" line fine -- only the 44100 media rate was rejected.
+    // `plug:softvol2`'s own "plug" prefix exists specifically to
+    // resample between whatever the app requests and whatever the
+    // underlying dmix path actually settles on -- the concern that
+    // drove the 08-19 change (an "untested second rate through the
+    // resample layer") was never a real risk, just an unverified one,
+    // and is now moot next to a 100%-reproducible real failure.
     audioChannelMedia_ = std::make_shared<AudioChannel>(
-        strand_, messenger, aasdk::messenger::ChannelId::MEDIA_SINK_MEDIA_AUDIO, "plug:softvol2", 44100, 2);
+        strand_, messenger, aasdk::messenger::ChannelId::MEDIA_SINK_MEDIA_AUDIO, "plug:softvol2", 48000, 2);
 
     audioChannelGuidance_ = std::make_shared<AudioChannel>(
         strand_, messenger, aasdk::messenger::ChannelId::MEDIA_SINK_GUIDANCE_AUDIO, "plug:softvol1", 16000, 1);
@@ -373,6 +384,19 @@ void Session::onServiceDiscoveryRequest(
     // for this class of 800x480 automotive display, not a guess.
     videoConfig->set_density(140);
     videoConfig->set_real_density(140);
+    // 2026-08-20: width_margin/height_margin (VideoConfiguration.proto
+    // fields 3/4) were never set at all -- same "optional but silently
+    // required in practice" failure class already proven once for real
+    // on this exact message (density/real_density above, a genuine
+    // captured Gearhead rejection: "Critical error 2 detail: 21 msg:
+    // density missing"). Explicitly zeroing them tells the phone this
+    // device's 800x480 render canvas has no letterboxing margin, rather
+    // than omitting the fields from the wire entirely (proto2's own
+    // behavior for an unset optional field) and leaving Gearhead to
+    // guess. Unconfirmed as a fix for any specific symptom -- additive
+    // and low-risk either way, worth having regardless.
+    videoConfig->set_width_margin(0);
+    videoConfig->set_height_margin(0);
 
     auto *mediaAudioService = response.add_channels();
     mediaAudioService->set_id(
@@ -382,10 +406,12 @@ void Session::onServiceDiscoveryRequest(
     mediaAudioSink->set_audio_type(aap_protobuf::service::media::sink::message::AUDIO_STREAM_MEDIA);
     mediaAudioSink->set_available_while_in_call(true);
     auto *mediaAudioConfig = mediaAudioSink->add_audio_configs();
-    // Must match audioChannelMedia_'s own rate above (44100) -- this is
-    // what tells the phone what rate to actually send, the AudioChannel
+    // Must match audioChannelMedia_'s own rate above (48000, reverted
+    // 2026-08-21 -- see that constructor's own comment for the real
+    // phone-side "wrong sampling rate 44100" evidence) -- this is what
+    // tells the phone what rate to actually send, the AudioChannel
     // construction above is what ALSA opens the device at.
-    mediaAudioConfig->set_sampling_rate(44100);
+    mediaAudioConfig->set_sampling_rate(48000);
     mediaAudioConfig->set_number_of_bits(16);
     mediaAudioConfig->set_number_of_channels(2);
 
@@ -426,6 +452,11 @@ void Session::onServiceDiscoveryRequest(
     sensorService->set_id(static_cast<std::int32_t>(aasdk::messenger::ChannelId::SENSOR));
     sensorService->mutable_sensor_source_service()->add_sensors()->set_sensor_type(
         aap_protobuf::service::sensorsource::message::SENSOR_DRIVING_STATUS_DATA);
+    // 2026-08-21: real source now exists (Limcet MCU headlight signal,
+    // see sensor_channel.h's header comment) -- advertise it so the
+    // phone actually asks for it via SensorStartRequest.
+    sensorService->mutable_sensor_source_service()->add_sensors()->set_sensor_type(
+        aap_protobuf::service::sensorsource::message::SENSOR_NIGHT_MODE);
 
     // 2026-08-12: found missing by a fresh-eyes subagent review chasing
     // the real hardware bug where the phone engages cleanly (handshake,
@@ -804,6 +835,14 @@ void Session::resumeVideoFocus() {
     boost::asio::post(strand_, [this, self]() {
         if (!videoChannel_) return;
         videoChannel_->requestResumeFocus();
+    });
+}
+
+void Session::sendNightMode(bool nightMode) {
+    auto self = shared_from_this();
+    boost::asio::post(strand_, [this, self, nightMode]() {
+        if (!sensorChannel_) return;
+        sensorChannel_->setNightMode(nightMode);
     });
 }
 

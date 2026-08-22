@@ -89,7 +89,18 @@ private:
     std::string wifi_ap_address_ = "192.168.43.1";
     std::string wifi_ap_ssid_ = "custom_ui_wifi";
     std::string wifi_ap_password_ = "88888888";
-    int wifi_ap_security_mode_ = 8;
+    // 2026-08-20: was 8 (WPA2_ENTERPRISE per aap_protobuf's own
+    // WifiSecurityMode enum) -- the raw value from an earlier captured
+    // packet, passed through "to match known-good bytes rather than
+    // guess" per wifi_setup_client.h's own respondToInfoRequest() comment,
+    // which already flagged this exact discrepancy and named 5 as the
+    // fallback to try. Real hardware test (2026-08-20): phone shows AA
+    // as connecting (RFCOMM handshake completes) but the WiFi link
+    // never actually comes up -- consistent with the phone attempting
+    // enterprise 802.1x auth against what hostapd-custom_ui.conf (the
+    // real AP config: wpa=2, wpa_key_mgmt=WPA-PSK) actually serves,
+    // ordinary WPA2-Personal. 5 = WPA2_PERSONAL, matching the real AP.
+    int wifi_ap_security_mode_ = 5;
     // 2026-08-12: briefly changed to 5288 (an unconfirmed guess) after
     // 5277 got ECONNREFUSED with this device connecting OUT to the
     // phone -- reverted back to 5277 once a real confirmed-working

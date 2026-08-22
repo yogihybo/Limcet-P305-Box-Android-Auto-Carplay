@@ -45,6 +45,37 @@ enum class TouchAction { Down, Move, Up };
 
 void try_spawn_androidauto_sidecar();
 
+// 2026-08-20: hands an already-connected Bluetooth RFCOMM socket fd
+// (from hal::BluezAaProfile -- see hal/bluez_aa_profile.h and
+// hal/bluetooth.cpp's aa_profile_server_loop()) to androidauto-sidecar
+// over their existing local socket, via SCM_RIGHTS ancillary data
+// riding alongside a "CONNECT_FD" command line (see
+// sidecars/androidauto/main.cpp's own protocol comment for the
+// receiving side). This is the ONE place in this whole client-side
+// protocol that carries a file descriptor rather than plain text, so
+// it's a free function (not an AndroidAutoClient method) using its own
+// short-lived dedicated connection -- deliberately NOT reusing
+// AndroidAutoClient's own persistent fd_/sendCommand() machinery, which
+// has no concept of ancillary data and multiplexes several unrelated
+// commands (STATUS/SHOW/HIDE/KEY/TOUCH/...) over one long-lived
+// connection; mixing a one-off fd-carrying message into that stream
+// would risk the ancillary data landing on the wrong read() call on the
+// receiving end. Spawns the sidecar if it isn't running yet (matches
+// requestConnect()'s own allow_spawn=true semantics -- this IS the
+// "Android Auto mode active" moment now, arguably more so than the old
+// CONNECT).
+//
+// Always takes ownership of rfcommFd -- closes it (locally) once
+// sendmsg() has handed it off to the kernel, on every path (success or
+// failure), so callers never need to close it themselves. Returns true
+// only if the sidecar actually replied "OK" (meaning
+// WirelessSessionManager::start() was called with the fd); false on
+// any failure to reach the sidecar, dispatch the message, or a
+// non-"OK" reply -- callers should treat false as "this connection
+// attempt didn't make it to a session," not necessarily fatal (a phone
+// can, and will, dial in again).
+bool sendConnectFd(int rfcommFd);
+
 class AndroidAutoClient {
 public:
     AndroidAutoClient();
@@ -143,6 +174,23 @@ public:
     // serial port is read exclusively by custom_ui's own McuInputHal).
     // Same allow_spawn=false/best-effort semantics as sendKey().
     bool sendTouch(std::uint32_t x, std::uint32_t y, TouchAction action);
+
+    // 2026-08-21: Sends "NIGHT <0|1>" -- forwards the MCU headlight-
+    // driven night-mode state (see hal/mcu_input.h's own
+    // get_night_mode()) into the sidecar's current AA session, where
+    // sidecars/androidauto/main.cpp's own "NIGHT <0|1>" handler calls
+    // androidauto::WirelessSessionManager::sendNightMode(), which
+    // updates SensorChannel's SENSOR_NIGHT_MODE state (sends a fresh
+    // NightModeData event immediately if the phone already subscribed
+    // to that sensor, matching DRIVING_STATUS_DATA's own "send at least
+    // one indication" pattern -- see sensor_channel.cpp). Same
+    // allow_spawn=false/best-effort semantics as sendKey()/sendTouch()
+    // -- a headlight change before any AA connection exists has nothing
+    // to forward to yet; whenever a session does start,
+    // Session::onServiceDiscoveryRequest/SensorChannel's own initial
+    // state (see that class's own header comment on this) covers the
+    // catch-up case.
+    bool sendNightMode(bool nightMode);
 
 private:
     bool ensureConnected(bool allow_spawn = true);

@@ -17,11 +17,13 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/file.h>
+#include <sys/mman.h>
 #include "lvgl.h"
 #include "hal/androidauto_client.h"
 #include "hal/audio.h"
 #include "hal/bluetooth.h"
 #include "hal/display.h"
+#include "hal/display_ctrl.h"
 #include "hal/knob.h"
 #include "hal/mcu_input.h"
 #include "hal/touch.h"
@@ -37,9 +39,26 @@
 
 namespace {
 
-// 2026-08-12: auto-starts the wireless Android Auto session the moment
-// blueware reports a nearby phone as Android-Auto-capable, instead of
-// requiring the user to manually open the Android Auto screen first.
+// 2026-08-20: DEAD CODE as of this project's BlueZ migration -- this
+// class's entire trigger (on_broadcast(), below) depends on
+// hal::watch_bluetooth_broadcasts()'s observers actually being called,
+// and nothing in hal/bluetooth.cpp has called them since blueware's own
+// AT-command reader thread (the thing that used to parse +AAPDEV= lines
+// off /dev/bw_serial and broadcast them here) was replaced by BlueZ
+// D-Bus calls throughout that file. on_broadcast() is registered
+// (main() below) but will never fire again. Left in place rather than
+// removed -- harmless as unreachable code, and ripping it out wasn't
+// worth the risk for this change. The REAL equivalent trigger now is
+// hal::aa_profile_server_loop() (hal/bluetooth.cpp) +
+// hal::consume_aa_navigate_request(), polled further down in main()'s
+// own loop -- same AutoStartCarLink-gated behavior, just off a real
+// BlueZ connection event instead of a blueware broadcast that no longer
+// happens.
+//
+// 2026-08-12 (original comment, now describing dead behavior): auto-
+// starts the wireless Android Auto session the moment blueware reports
+// a nearby phone as Android-Auto-capable, instead of requiring the user
+// to manually open the Android Auto screen first.
 //
 // Trigger: a real "+AAPDEV=<mac><sep><name>" broadcast on /dev/bw_serial
 // (see hal/bluetooth.h's top comment -- confirmed live, only ever seen
@@ -107,7 +126,7 @@ public:
         // fixed) versus reaching it and being debounced away (a
         // device_id-parsing bug) versus reaching it, triggering
         // requestConnect() correctly, and stalling later inside
-        // WirelessSessionManager::run() itself (see BwAapClient::
+        // WirelessSessionManager::run() itself (see WifiSetupClient::
         // connect()'s new retry loop for the leading real-fix
         // candidate for that last case).
         std::printf("%s ui: +AAPDEV= observed: device_id='%s' name='%s' (last_triggered='%s')\n", core::log_timestamp().c_str(),
@@ -287,6 +306,54 @@ int acquireSingleInstanceLock() {
                 // defeat the whole point.
 }
 
+// 2026-08-21: MCU headlight -> night mode infrastructure. Only touches
+// backlight/display BRIGHTNESS, not a color-theme swap -- explicit
+// direction ("only change should be the backlight intensity, not
+// theming"). Also forwards the state to androidauto-sidecar so
+// SensorChannel can report SENSOR_NIGHT_MODE to the phone -- see
+// hal::AndroidAutoClient::sendNightMode()/sidecars/androidauto/
+// main.cpp's own "NIGHT <0|1>" command for that half.
+//
+// Dimming policy: a fixed fraction of the user's own saved "Brightness"
+// setting (not a separate stored night-brightness value -- keeps this
+// self-contained, no new Settings UI row needed for the infrastructure
+// to work end to end). 35% floor at 20 -- arbitrary but reasonable
+// starting point, easy to tune once this is actually running against
+// real headlight events tomorrow.
+void apply_night_mode_brightness(bool nightMode) {
+    hal::DisplayCtrlHandle & h = []() -> hal::DisplayCtrlHandle & {
+        static hal::DisplayCtrlHandle handle;
+        static bool tried = false;
+        if (!tried) {
+            hal::init_display_ctrl(handle);
+            tried = true;
+        }
+        return handle;
+    }();
+
+    hal::VdeConfig cfg;
+    if (!hal::get_vde_config(h, hal::DisplayLayer::Osd1, cfg)) {
+        std::fprintf(stderr, "%s ui: apply_night_mode_brightness: get_vde_config failed, "
+                     "skipping\n", core::log_timestamp().c_str());
+        return;
+    }
+
+    int savedBrightness = core::default_store().get_int("Brightness", 128, "General");
+    unsigned int target = nightMode
+                               ? std::max(20, static_cast<int>(savedBrightness * 0.35))
+                               : static_cast<unsigned int>(savedBrightness);
+    cfg.brightness = target;
+
+    if (hal::set_vde_config(h, hal::DisplayLayer::Osd1, cfg)) {
+        std::printf("%s ui: night mode %s -- brightness set to %u (saved=%d)\n",
+                    core::log_timestamp().c_str(), nightMode ? "ON" : "OFF", target,
+                    savedBrightness);
+    } else {
+        std::fprintf(stderr, "%s ui: apply_night_mode_brightness: set_vde_config failed\n",
+                     core::log_timestamp().c_str());
+    }
+}
+
 }  // namespace
 
 int main() {
@@ -300,6 +367,38 @@ int main() {
 
     if (acquireSingleInstanceLock() == -2) {
         return 1;
+    }
+
+    // 2026-08-21: real hardware trace (see project history around an
+    // AA-session ECONNRESET after several minutes of runtime) pointed
+    // at page-cache thrashing without swap as the likely root cause --
+    // this device has only 173MB RAM and no swap configured, so under
+    // memory pressure kswapd0 reclaims clean file-backed pages,
+    // INCLUDING this process's own running code (this binary is
+    // statically linked -- no separate shared-library pages, just this
+    // one executable's own text segment, real-USB-storage-backed since
+    // this rootfs boots from USB). Every re-touch of a reclaimed code
+    // page then means a real disk read via the usb-storage kernel
+    // thread to fault it back in -- confirmed via real /proc/meminfo +
+    // kworker/usb-storage/kswapd0 activity captured during a live crash
+    // (see docs/AUDIO_CPU_SPIKE_AND_SIDECAR_LIFECYCLE_HANDOFF.md-
+    // adjacent session notes). MCL_CURRENT|MCL_FUTURE locks this
+    // process's resident pages now AND all future ones as they're
+    // mapped/faulted in -- prevents the kernel from ever evicting this
+    // process's own pages regardless of what's driving the memory
+    // pressure, without needing to first pin down every source of that
+    // pressure. Best-effort/non-fatal: runs as root on this device
+    // (CAP_IPC_LOCK, so RLIMIT_MEMLOCK doesn't apply), but if it ever
+    // fails (e.g. insufficient lockable memory), that's still strictly
+    // no worse than the un-mlock'd behavior this replaces -- log and
+    // continue rather than treating it as fatal.
+    if (mlockall(MCL_CURRENT | MCL_FUTURE) != 0) {
+        std::fprintf(stderr, "%s ui: mlockall() failed: %s -- continuing without it "
+                     "(process pages may still be reclaimed under memory pressure)\n",
+                     core::log_timestamp().c_str(), std::strerror(errno));
+    } else {
+        std::printf("%s ui: mlockall(MCL_CURRENT|MCL_FUTURE) succeeded -- process pages "
+                    "pinned against reclaim\n", core::log_timestamp().c_str());
     }
 
     std::printf("%s ui: starting, lv_init()...\n", core::log_timestamp().c_str());
@@ -318,6 +417,25 @@ int main() {
     // screen is created, see ui/theme.h.
     ui::theme::init(disp);
     std::printf("%s ui: theme applied\n", core::log_timestamp().c_str());
+
+    // 2026-08-20: hal/audio.h was #included (commit a43df447, "Unmute
+    // DAC/PA on boot") but the actual hal::init_audio_mixer() call was
+    // never added anywhere -- the commit only added the include and an
+    // unrelated sidecar startup-order change, leaving the DAC/softmaster
+    // unmute genuinely dead code. Real hardware symptom this explains:
+    // A2DP (bt-agent) and AA media audio (androidauto-sidecar) both
+    // decode/write real PCM to ALSA successfully, but nothing is
+    // audible on the speakers -- consistent with the ARK-SDDAC hardware
+    // DAC channels and/or ALSA softmaster staying at whatever
+    // uninitialized/muted default they power on with, since nothing
+    // ever ran the amixer unmute commands. amixer settings are ALSA-
+    // driver/kernel state, not per-process, so calling this once here
+    // (custom_ui, the always-running process) covers androidauto-
+    // sidecar and bt-agent's own separate-process ALSA writes too --
+    // matches how blueware-era audio worked (MsnCoreApp/start_msn, the
+    // stock app, does its own equivalent unmute independently; nothing
+    // in custom_ui ever replicated it until now).
+    hal::init_audio_mixer();
 
     // Starts BlueZ 5.66 subsystem (see hal/bluetooth.h) as early as possible.
     hal::ensure_bluetooth_daemon_running();
@@ -459,6 +577,73 @@ int main() {
             !hal::androidauto_screen_active().load(std::memory_order_acquire)) {
             staging_ui::navigate_to(staging_ui::NavDestination::AndroidAuto);
         }
+        // 2026-08-20: the REAL AutoStartCarLink-gated auto-navigate
+        // trigger now -- see hal::consume_aa_navigate_request()'s own
+        // header comment. AaAutoStartWatcher above reacts to blueware's
+        // +AAPDEV= broadcast, which has been unreachable dead code since
+        // this project's BlueZ migration (nothing calls
+        // watch_bluetooth_broadcasts()'s observers anymore -- blueware's
+        // AT-command reader thread was replaced by BlueZ D-Bus calls
+        // throughout hal/bluetooth.cpp); left in place, not removed,
+        // since it's harmless as dead code and this file didn't need a
+        // larger rewrite just to delete it. This is the trigger that
+        // actually fires today: hal::aa_profile_server_loop() sets it
+        // once a phone connects over the AA Bluetooth profile AND
+        // AutoStartCarLink is on.
+        if (hal::consume_aa_navigate_request() &&
+            !hal::androidauto_screen_active().load(std::memory_order_acquire)) {
+            staging_ui::navigate_to(staging_ui::NavDestination::AndroidAuto);
+        }
+
+        // 2026-08-21: MCU headlight -> night mode, polled once per loop
+        // iteration (cheap atomic read) -- only acted on an actual
+        // transition, same "don't redo work every tick" convention as
+        // display_hidden/showing_resume elsewhere in this codebase.
+        // Applies the display brightness change directly here (main
+        // thread, safe for the display_ctrl ioctl the same way every
+        // other HAL call from this loop is) and forwards the new state
+        // to androidauto-sidecar over its own local socket -- a fresh
+        // AndroidAutoClient here would open/close a socket connection
+        // every single transition, so this one is process-lifetime like
+        // every other singleton client in this file.
+        {
+            static hal::AndroidAutoClient nightModeClient;
+            static bool lastNightMode = false;
+            static bool nightModeInitialized = false;
+            bool nightMode = mcu_input.get_night_mode();
+            if (!nightModeInitialized || nightMode != lastNightMode) {
+                apply_night_mode_brightness(nightMode);
+                nightModeClient.sendNightMode(nightMode);
+                lastNightMode = nightMode;
+                nightModeInitialized = true;
+            }
+        }
+
+        // 2026-08-21: real LVGL heap usage, logged every 60s -- added
+        // alongside trimming LV_USE_* widgets and cutting LV_MEM_SIZE
+        // from 4MB to 1MB (see that #define's own comment in lv_conf.h
+        // for why 4MB was never a measured value, just a generous
+        // overcorrection). max_used is the real high-water mark since
+        // process start -- watch this on real hardware to confirm 1MB
+        // is enough (comfortably above max_used) rather than guessing
+        // again; LV_USE_ASSERT_MALLOC + the fail-loud LV_ASSERT_HANDLER
+        // in lv_conf.h mean an actually-too-small pool aborts
+        // immediately with a clear message instead of silently hanging,
+        // so this is safe to verify rather than risky to have changed.
+        {
+            static std::chrono::steady_clock::time_point lastMemLog{};
+            auto now = std::chrono::steady_clock::now();
+            if (lastMemLog.time_since_epoch().count() == 0 ||
+                now - lastMemLog >= std::chrono::seconds(60)) {
+                lastMemLog = now;
+                lv_mem_monitor_t mon{};
+                lv_mem_monitor(&mon);
+                std::printf("%s ui: LVGL heap: used=%u%% max_used=%zu bytes free=%zu bytes frag=%u%%\n",
+                            core::log_timestamp().c_str(), mon.used_pct,
+                            mon.max_used, mon.free_size, mon.frag_pct);
+            }
+        }
+
         // 2026-08-19: was an unconditional 5ms sleep regardless of
         // what lv_timer_handler() actually needed, waking 200 times/sec
         // even on a fully static screen with nothing scheduled for tens

@@ -23,6 +23,19 @@ constexpr unsigned char kKnobClockwise = 65;
 constexpr unsigned char kKnobCounterClockwise = 64;
 constexpr unsigned char kKnobPush = 13;
 
+// 2026-08-21: PLACEHOLDER, not yet captured on real hardware -- user's
+// own words: "same type of framing as the knob input press button but
+// a unique code" (CMD 0x02, b3=sub-code, b4=1 headlights-on/0 off,
+// matching kKnobPush's own press/release b4 semantics, not a momentary
+// tick like the rotation codes). 0xFF is deliberately outside the real
+// knob/button code range seen so far (13/64/65) so this branch can't
+// accidentally fire on a real knob event before the actual value is
+// confirmed -- UPDATE THIS ONE CONSTANT once tomorrow's capture comes
+// in, nothing else in this chain (McuInputHal::get_night_mode(),
+// main.cpp's backlight dimming, sensor_channel.cpp's SENSOR_NIGHT_MODE)
+// needs to change.
+constexpr unsigned char kHeadlightState = 0xFF;
+
 // MCUAdapter_BoxP300::getPackageCheckSum() -- plain byte sum, one's
 // complemented, over cmd+len+payload (not the leading 0x2E signature).
 // Identical to mcu-handshake.c's calc_mcu_checksum().
@@ -254,6 +267,8 @@ void McuInputHal::run() {
                 knob_ticks_.fetch_sub(1, std::memory_order_relaxed);
             } else if (b3 == kKnobPush) {
                 knob_pressed_.store(b4 == 1, std::memory_order_release);
+            } else if (b3 == kHeadlightState) {
+                night_mode_.store(b4 == 1, std::memory_order_release);
             }
         }
     }
@@ -273,6 +288,10 @@ int32_t McuInputHal::consume_knob_ticks() {
 
 bool McuInputHal::get_knob_pressed() const {
     return knob_pressed_.load(std::memory_order_acquire);
+}
+
+bool McuInputHal::get_night_mode() const {
+    return night_mode_.load(std::memory_order_acquire);
 }
 
 }  // namespace hal

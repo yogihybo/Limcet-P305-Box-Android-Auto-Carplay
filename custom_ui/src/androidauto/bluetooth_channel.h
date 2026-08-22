@@ -15,8 +15,8 @@
 // through this channel -- this project's actual classic-Bluetooth
 // pairing already happens entirely outside the aasdk session, via
 // blueware's own AT-command stack (hal/bluetooth.cpp) as part of the
-// BW_AAP wireless handoff that gets a session this far in the first
-// place (see bw_aap_client.h/wireless_session_manager.h). By the time
+// WiFi-setup wireless handoff that gets a session this far in the first
+// place (see wifi_setup_client.h/wireless_session_manager.h). By the time
 // any aasdk Session exists at all, the phone is necessarily already
 // bonded. Wiring a real car_address into this channel would mean the
 // androidauto-sidecar process (separate from custom_ui, no shared

@@ -49,6 +49,13 @@ ln -sf /dev/dvr /tmp/dev/dvr
 # Userdata mount: ext4 p3 (SD or USB, whichever root came from), same
 # ROOTDEV-derived logic as the stock rootfs (generic infra, not
 # stock-UI-specific -- kept verbatim).
+# 2026-08-23: real hw bug -- mkdir /data used to run AFTER the mount
+# attempt, so the mountpoint never existed yet and this always failed
+# regardless of whether p3 actually had a valid ext4 filesystem (it
+# does -- build_bootable_sdcard_dyn.sh always mkfs.ext4's p3). Not
+# actually the documented "no NAND/UBI fallback" limitation this
+# message used to claim.
+mkdir -p /data
 ROOTDEV=$(cat /proc/cmdline | sed -n 's/.*root=\([^ ]*\).*/\1/p')
 USERDATADEV="${ROOTDEV%?}3"
 if mount -o sync -t ext4 "$USERDATADEV" /data 2>/dev/null; then
@@ -56,7 +63,6 @@ if mount -o sync -t ext4 "$USERDATADEV" /data 2>/dev/null; then
 else
 	echo "userdata: mount failed ($USERDATADEV) -- not yet ported the NAND UBI/yaffs2 fallback chain from stock rcS, ext4-only for this rootfs so far"
 fi
-mkdir -p /data
 
 chmod 600 /etc/ssh/ssh_host_*_key 2>/dev/null
 mkdir -p /var/run/sshd /var/empty

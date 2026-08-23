@@ -33,6 +33,7 @@
 #include "core/hal_config.h"
 #include "core/log_timing.h"
 #include "core/config_store.h"
+#include "core/sized_thread.h"
 #include "hal/androidauto_client.h"
 #include "hal/ble_cts.h"
 #include "hal/bluez_aa_profile.h"
@@ -44,14 +45,9 @@ namespace {
 std::mutex g_telemetry_mtx;
 BluetoothTelemetry g_telemetry;
 
-// Matches hal/bluez_aa_profile.cpp's/hal/ble_cts.cpp's own kBusAddress.
-// 2026-08-23: real hw bug -- this used to hardcode a doubled `run/run`
-// path, which was only ever correct for the OLD static
-// tools/bluetoothd-test dbus-daemon on the stock rootfs. This
-// rootfs's real dbus-daemon (Buildroot's own build, see its
-// /usr/share/dbus-1/system.conf <listen>) binds the standard single
-// path -- confirmed hardware-broken ("could not open D-Bus
-// connection") until this was aligned with the other two files.
+// Matches hal/bluez_aa_profile.cpp's/hal/ble_cts.cpp's own kBusAddress --
+// this device's real dbus-daemon (see tools/bluetoothd-test/README.md)
+// resolves its default listen address to this doubled `run/run` path.
 constexpr const char * kBluezMonitorBusAddress = "unix:path=/var/run/dbus/system_bus_socket";
 
 // See has_pending_aa_connection()/start_pending_aa_connection()'s own
@@ -649,7 +645,7 @@ void ensure_bluetooth_daemon_running() {
     // Ensure bt-agent is running and stream its output directly to custom_ui console
     static std::atomic<bool> s_agent_thread_started{false};
     if (!s_agent_thread_started.exchange(true)) {
-        std::thread([]() {
+        core::SizedThread(core::kDefaultThreadStackSize, []() {
             const char * agents[] = { "/usr/bin/bt-agent", "/data/bt-agent", "./bt-agent" };
             std::string agent_bin;
             for (const char * a : agents) {
@@ -714,7 +710,7 @@ void ensure_bluetooth_daemon_running() {
     // ensure_bluetooth_daemon_running().
     static std::atomic<bool> s_aa_profile_thread_started{false};
     if (!s_aa_profile_thread_started.exchange(true)) {
-        std::thread(aa_profile_server_loop).detach();
+        core::SizedThread(core::kDefaultThreadStackSize, aa_profile_server_loop).detach();
     }
 }
 
@@ -759,7 +755,7 @@ void start_bluetooth_reader(BluetoothHandle & h) {
     ReaderState & rs = reader_state();
     if (rs.started) return;
     rs.started = true;
-    std::thread(bluez_monitor_loop, &h).detach();
+    core::SizedThread(core::kDefaultThreadStackSize, bluez_monitor_loop, &h).detach();
 }
 
 void watch_bluetooth_broadcasts(std::function<void(const std::string &)> callback) {

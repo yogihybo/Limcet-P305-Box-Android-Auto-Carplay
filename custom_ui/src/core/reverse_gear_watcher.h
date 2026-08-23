@@ -9,8 +9,8 @@
 #pragma once
 
 #include <atomic>
-#include <thread>
 
+#include "core/sized_thread.h"
 #include "hal/camera.h"
 
 namespace core {
@@ -41,7 +41,7 @@ private:
     void run();
 
     hal::CameraHandle & handle_;
-    std::thread thread_;
+    core::SizedThread thread_;
     std::atomic<bool> running_{false};
     std::atomic<bool> dirty_{false};
     std::atomic<hal::ReverseGearState> latest_{hal::ReverseGearState::Unknown};

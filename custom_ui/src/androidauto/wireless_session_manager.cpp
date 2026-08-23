@@ -7,7 +7,6 @@
 #include <fstream>
 #include <memory>
 #include <string>
-#include <thread>
 
 #include <sys/select.h>
 #include <unistd.h>
@@ -180,7 +179,7 @@ void WirelessSessionManager::start(int rfcommFd) {
         thread_.detach();
     }
     setStatus(WirelessSessionState::StartingAccessPoint, "Starting...");
-    thread_ = std::thread(&WirelessSessionManager::run, this, rfcommFd);
+    thread_ = core::SizedThread(core::kAasdkThreadStackSize, &WirelessSessionManager::run, this, rfcommFd);
 }
 
 WirelessSessionState WirelessSessionManager::state() const {

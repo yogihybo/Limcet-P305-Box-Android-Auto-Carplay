@@ -43,9 +43,10 @@
 #include <atomic>
 #include <cstdint>
 #include <memory>
-#include <thread>
 
 #include <boost/asio.hpp>
+
+#include "core/sized_thread.h"
 
 #include <aasdk/Messenger/IMessenger.hpp>
 #include <aasdk/Channel/MediaSource/IMediaSourceService.hpp>
@@ -95,7 +96,7 @@ private:
     std::int32_t sessionId_ = 0;
 
     std::unique_ptr<AlsaInput> alsaInput_;
-    std::thread captureThread_;
+    core::SizedThread captureThread_;
     std::atomic<bool> capturing_{false};
 };
 

@@ -99,9 +99,9 @@
 #include <cstdint>
 #include <mutex>
 #include <string>
-#include <thread>
 
 #include "androidauto/session.h"
+#include "core/sized_thread.h"
 
 namespace androidauto {
 
@@ -216,7 +216,7 @@ private:
     // symptom of that race would be the whole sidecar process abruptly
     // dying at the exact moment two start() calls overlapped.
     std::mutex threadMutex_;
-    std::thread thread_;
+    core::SizedThread thread_;
     std::atomic<WirelessSessionState> state_{WirelessSessionState::Idle};
 
     mutable std::mutex statusMutex_;

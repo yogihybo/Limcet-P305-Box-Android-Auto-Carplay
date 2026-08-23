@@ -99,19 +99,31 @@ modprobe rtl8811cu rtw_drv_log_level=2 rtw_country_code=US
 mkdir -p /var/run/dbus
 /usr/bin/dbus-daemon --system --fork
 
+# 2026-08-23: real hw bug -- bluetoothd (tools/bluetoothd-test's own
+# static build) was never configured with --localstatedir=/var, so its
+# compiled-in fallback DBus address is /usr/var/run/dbus/... instead of
+# the real /var/run/dbus/... this dbus-daemon actually listens on (see
+# Buildroot's own /usr/share/dbus-1/system.conf <listen>). Point it at
+# the real address explicitly rather than rebuilding just for this.
+export DBUS_SYSTEM_BUS_ADDRESS=unix:path=/var/run/dbus/system_bus_socket
+
 # rtk_hciattach must stay running in the foreground (holds the fd/line
 # discipline open, see tools/rtk-hciattach-test/README.md) -- GPIO91
-# reset handled inside the binary itself. hci-updown talks straight to
-# the kernel via HCIDEVUP ioctl (no dbus dependency at all -- checked
-# its own source, tools/rtk-hciattach-test/src/hci-updown.c), so a
-# "hci0 up failed" here is NOT fallout from the dbus fix above; it's
-# a separate real timing race. Per that tool's own README (Run 5), the
-# full userspace handshake -- 800ms GPIO91 settle, reset pulse, H5
-# sync, baud switch to 1.5M, then a 122-packet/43KB firmware download
-# -- routinely takes several seconds end to end, well past a fixed
-# `sleep 2`, and hci0 only gets registered (TIOCSETD/HCIUARTSETPROTO)
-# at the very end of that sequence. Poll instead of guessing a fixed
-# delay.
+# reset handled inside the binary itself. 2026-08-23: real hw bug --
+# this invocation had gone missing entirely (only the comment survived
+# some earlier edit), so hci0 never had anything attaching it in the
+# first place; the poll loop below was waiting on nothing.
+/usr/bin/rtk_hciattach -s 115200 /dev/ttyHS1 rtk_h5 &
+
+# hci-updown talks straight to the kernel via HCIDEVUP ioctl (no dbus
+# dependency at all -- checked its own source,
+# tools/rtk-hciattach-test/src/hci-updown.c). Per that tool's own
+# README (Run 5), the full userspace handshake -- 800ms GPIO91 settle,
+# reset pulse, H5 sync, baud switch to 1.5M, then a 122-packet/43KB
+# firmware download -- routinely takes several seconds end to end,
+# well past a fixed `sleep 2`, and hci0 only gets registered
+# (TIOCSETD/HCIUARTSETPROTO) at the very end of that sequence. Poll
+# instead of guessing a fixed delay.
 HCI_UP=0
 for i in 1 2 3 4 5 6 7 8 9 10; do
 	/usr/bin/hci-updown up 2>/dev/null && { HCI_UP=1; break; }

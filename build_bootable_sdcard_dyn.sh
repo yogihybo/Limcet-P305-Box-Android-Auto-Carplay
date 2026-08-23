@@ -391,6 +391,24 @@ else
     success "rootfs.tar extracted (real symlinks/permissions/ownership/kernel modules, no repair step needed)"
     rsync -a "$DYN_OVERLAY_DIR/" "$MNT2/"
     success "firmware_overlay_dyn/ applied on top"
+    # 2026-08-23: CRITICAL, hardware-confirmed real bug -- the reasoning
+    # for dropping apply_rootfs_perms.sh (tar -x as real root faithfully
+    # restores archive permissions now that fakeroot is fixed) only ever
+    # covered the tar-extraction step above. This rsync is a SEPARATE
+    # copy from a live source directory, not a tar archive -- it just
+    # faithfully carries whatever mode bits are actually on disk in
+    # firmware_overlay_dyn/, which reflects the git index's own recorded
+    # mode. Real root cause found and fixed at the source (etc/rc.d/rcS
+    # and etc/wifi_ap.sh were genuinely 644 in the git index -- not a
+    # vboxsf/mount illusion this time, confirmed on this real local-disk
+    # checkout with core.fileMode=true, so a normal checkout faithfully
+    # reproduced the wrong bit on real disk too), but this exact bug
+    # class has recurred enough times this session that a cheap,
+    # explicit defensive pass here is worth keeping regardless of
+    # whether the git index is currently correct.
+    chmod +x "$MNT2/etc/rc.d/rcS" 2>/dev/null || true
+    find "$MNT2/etc" -maxdepth 1 -name "*.sh" -exec chmod +x {} + 2>/dev/null || true
+    find "$MNT2/usr/bin" "$MNT2/usr/sbin" -maxdepth 1 -type f -exec chmod +x {} + 2>/dev/null || true
 fi
 # Diagnostic tools (tools/*/) -- genuine, generic, confirmed reusable by
 # the pipeline audit: copy every compiled binary/script/data file from

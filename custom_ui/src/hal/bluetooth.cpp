@@ -47,7 +47,7 @@ BluetoothTelemetry g_telemetry;
 // Matches hal/bluez_aa_profile.cpp's/hal/ble_cts.cpp's own kBusAddress --
 // this device's real dbus-daemon (see tools/bluetoothd-test/README.md)
 // resolves its default listen address to this doubled `run/run` path.
-constexpr const char * kBluezMonitorBusAddress = "unix:path=/var/run/run/dbus/system_bus_socket";
+constexpr const char * kBluezMonitorBusAddress = "unix:path=/var/run/dbus/system_bus_socket";
 
 // See has_pending_aa_connection()/start_pending_aa_connection()'s own
 // header comments -- aa_profile_server_loop() stashes a connected fd
@@ -613,10 +613,9 @@ void ensure_bluetooth_daemon_running() {
     }
 
     if (std::system("pidof dbus-daemon >/dev/null 2>&1") != 0) {
-        std::system("mkdir -p /var/run/run/dbus /var/run/dbus && dbus-daemon --system --fork >/dev/null 2>&1");
+        std::system("mkdir -p /var/run/dbus && dbus-daemon --system --fork >/dev/null 2>&1");
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
     }
-    std::system("ln -sf /var/run/run/dbus/system_bus_socket /var/run/dbus/system_bus_socket 2>/dev/null");
 
     if (std::system("pidof bluetoothd >/dev/null 2>&1") != 0) {
         std::printf("%s hal::bluetooth::ensure_bluetooth_daemon_running: starting bluetoothd\n", core::log_timestamp().c_str());

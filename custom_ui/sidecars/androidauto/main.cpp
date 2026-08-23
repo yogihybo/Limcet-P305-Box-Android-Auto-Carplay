@@ -404,57 +404,25 @@ int main() {
                     "process pages pinned against reclaim\n", androidauto::logTimestamp().c_str());
     }
 
-    // 2026-08-15: found on real hardware -- alsa-lib bakes the build
-    // HOST's own --with-configdir path into libasound.a at compile time
-    // (statically linking it, per the earlier reversible-ALSA-rebuild
-    // work, doesn't change this), so on the actual device
-    // snd_pcm_open("plug:softvol2") failed with "Unknown PCM
-    // plug:softvol2" -- not because that PCM/plugin doesn't exist, but
-    // because alsa.conf itself (which defines what "plug"/"softvol" TYPE
-    // even mean, and which in turn @hooks-loads this device's real
-    // /etc/asound.conf, already present in the rootfs, to define
-    // "softvol2" specifically) couldn't be found at
-    // /home/osboxes/build-deps/alsa-arm-install/share/alsa/alsa.conf,
-    // a path that only ever existed on the build machine.
+    // 2026-08-15: real hw fix for the OLD static-libalsa.a build --
+    // alsa-lib baked the build HOST's own --with-configdir path in at
+    // compile time, so snd_pcm_open("plug:softvol2") failed with
+    // "Unknown PCM plug:softvol2" because alsa.conf itself couldn't be
+    // found on the device at all. Worked around by pointing
+    // ALSA_CONFIG_PATH at a bundled alsa.conf staged next to the
+    // binaries.
     //
-    // 2026-08-15 REVISED: originally shipped that same alsa.conf tree
-    // in the rootfs overlay (firmware_overlay/usr/share/alsa/) and
-    // pointed ALSA_CONFIG_PATH at a fixed /usr/share/alsa/alsa.conf --
-    // but this project has no fixed, real rootfs install path for its
-    // OWN binaries yet either (see hal/androidauto_client.cpp's
-    // trySpawnSidecar() comment: "revisit once Phase 6's real firmware
-    // integration lands"), so a fixed /usr/share path was one more
-    // thing that could drift out of sync with wherever this binary
-    // actually got copied to. Simpler and consistent with how this
-    // process ALREADY gets found (custom_ui's own trySpawnSidecar()
-    // resolves androidauto-sidecar's path via /proc/self/exe, assuming
-    // it lives right next to custom_ui): resolve THIS process's own
-    // executable directory the same way and point ALSA_CONFIG_PATH at
-    // an "alsa/" subdirectory there -- Makefile's
-    // $(BUILD_DIR)/alsa/alsa.conf rule stages the real config tree
-    // (etc/alsa/, copied from the ALSA cross-build's own share/alsa/)
-    // right alongside the compiled binaries, so scp'ing build/ to the
-    // device (this project's real test workflow) carries it along
-    // automatically, same as hal.conf/default_settings.conf already do.
-    // alsa-lib checks this env var before its compiled-in default; must
-    // be set before any ALSA call the AlsaOutput/AlsaInput classes ever
-    // make. If /proc/self/exe can't be resolved (shouldn't happen on
-    // Linux), ALSA_CONFIG_PATH is simply left unset and alsa-lib falls
-    // back to its own compiled-in (build-host-only) default -- same
-    // failure this whole fix addresses, just not expected to trigger.
-    {
-        char exePath[512];
-        ssize_t len = readlink("/proc/self/exe", exePath, sizeof(exePath) - 1);
-        if (len > 0) {
-            exePath[len] = '\0';
-            std::string dir(exePath);
-            auto slash = dir.find_last_of('/');
-            if (slash != std::string::npos) {
-                dir.resize(slash);
-                setenv("ALSA_CONFIG_PATH", (dir + "/alsa/alsa.conf").c_str(), 1);
-            }
-        }
-    }
+    // 2026-08-24: OBSOLETE, removed -- this session's dynamic-linking
+    // migration now links against Buildroot's own real, correctly
+    // target-built alsa-lib (confirmed via `strings` on the actual
+    // libasound.so: compiled-in ALSA_CONFIG_DIR is a real
+    // /usr/share/alsa, not a build-host-only path). Forcing
+    // ALSA_CONFIG_PATH at the old bundled (and by now stale)
+    // build/alsa/alsa.conf actively overrides that correct default with
+    // a leftover from the static-build era instead of just fixing the
+    // real gap (this rootfs's own /etc/asound.conf, staged separately --
+    // see firmware_overlay_dyn/etc/asound.conf) -- removed rather than
+    // left as silent dead weight.
 
     // 2026-08-18: briefly bumped aasdk's own internal logger
     // (ModernLogger, see aasdk/Common/ModernLogger.hpp) from its

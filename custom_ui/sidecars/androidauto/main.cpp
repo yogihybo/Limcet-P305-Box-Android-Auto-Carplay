@@ -108,7 +108,6 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
-#include <thread>
 
 #include <fcntl.h>
 #include <sys/file.h>
@@ -119,6 +118,7 @@
 
 #include "androidauto/log_timing.h"
 #include "core/log_timing.h"
+#include "core/sized_thread.h"
 #include "androidauto/video_visibility.h"
 #include "androidauto/wireless_session_manager.h"
 
@@ -519,7 +519,7 @@ int main() {
                          androidauto::logTimestamp().c_str(), std::strerror(errno));
             break;
         }
-        std::thread(handle_connection, clientFd, &manager).detach();
+        core::SizedThread(core::kDefaultThreadStackSize, handle_connection, clientFd, &manager).detach();
     }
 
     close(listenFd);

@@ -3,6 +3,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <thread>
 
 #include <pthread.h>
 
@@ -23,7 +24,7 @@ namespace {
 // scheduler, LVGL UI rendering, and hardware input handlers. We use standard
 // nice priority (-5) instead, providing prioritized CPU time without starving
 // the rest of the OS.
-void raiseThreadPriority(std::thread & thread, const char * deviceName) {
+void raiseThreadPriority(core::SizedThread & thread, const char * deviceName) {
     (void)thread;
     (void)deviceName;
 }
@@ -75,7 +76,7 @@ bool AlsaOutput::open() {
                sampleRate_, channels_);
 
     stop_ = false;
-    writerThread_ = std::thread(&AlsaOutput::writerLoop, this);
+    writerThread_ = core::SizedThread(core::kAasdkThreadStackSize, &AlsaOutput::writerLoop, this);
     raiseThreadPriority(writerThread_, deviceName_.c_str());
     return true;
 }

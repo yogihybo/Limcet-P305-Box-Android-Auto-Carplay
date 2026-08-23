@@ -31,6 +31,7 @@
 #include "core/log_timing.h"
 #include "core/navigation.h"
 #include "core/screen_manager.h"
+#include "core/sized_thread.h"
 #include "ui/android_auto_screen.h"
 #include "ui/home_screen.h"
 #include "ui/theme.h"
@@ -444,7 +445,7 @@ int main() {
     // Auto-spawns androidauto-sidecar if present
     hal::try_spawn_androidauto_sidecar();
 
-    std::thread([]() {
+    core::SizedThread(core::kDefaultThreadStackSize, []() {
         hal::BluetoothHandle & bt = hal::shared_handle();
         if (bt.fd >= 0) {
             // 2026-08-13: registered BEFORE set_device_name()/
@@ -469,7 +470,7 @@ int main() {
             // run first.
             hal::watch_bluetooth_broadcasts(
                 [](const std::string & line) { aa_auto_start_watcher().on_broadcast(line); });
-            std::thread(&AaAutoStartWatcher::run, &aa_auto_start_watcher()).detach();
+            core::SizedThread(core::kDefaultThreadStackSize, &AaAutoStartWatcher::run, &aa_auto_start_watcher()).detach();
 
             // apply the configured Bluetooth name every boot,
             // per request -- previously hal::set_device_name() (AT+NAME=)

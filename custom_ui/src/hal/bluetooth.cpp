@@ -33,6 +33,7 @@
 #include "core/hal_config.h"
 #include "core/log_timing.h"
 #include "core/config_store.h"
+#include "core/sized_thread.h"
 #include "hal/androidauto_client.h"
 #include "hal/ble_cts.h"
 #include "hal/bluez_aa_profile.h"
@@ -644,7 +645,7 @@ void ensure_bluetooth_daemon_running() {
     // Ensure bt-agent is running and stream its output directly to custom_ui console
     static std::atomic<bool> s_agent_thread_started{false};
     if (!s_agent_thread_started.exchange(true)) {
-        std::thread([]() {
+        core::SizedThread(core::kDefaultThreadStackSize, []() {
             const char * agents[] = { "/usr/bin/bt-agent", "/data/bt-agent", "./bt-agent" };
             std::string agent_bin;
             for (const char * a : agents) {
@@ -709,7 +710,7 @@ void ensure_bluetooth_daemon_running() {
     // ensure_bluetooth_daemon_running().
     static std::atomic<bool> s_aa_profile_thread_started{false};
     if (!s_aa_profile_thread_started.exchange(true)) {
-        std::thread(aa_profile_server_loop).detach();
+        core::SizedThread(core::kDefaultThreadStackSize, aa_profile_server_loop).detach();
     }
 }
 
@@ -754,7 +755,7 @@ void start_bluetooth_reader(BluetoothHandle & h) {
     ReaderState & rs = reader_state();
     if (rs.started) return;
     rs.started = true;
-    std::thread(bluez_monitor_loop, &h).detach();
+    core::SizedThread(core::kDefaultThreadStackSize, bluez_monitor_loop, &h).detach();
 }
 
 void watch_bluetooth_broadcasts(std::function<void(const std::string &)> callback) {

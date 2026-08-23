@@ -7,6 +7,7 @@
 #include <cstring>
 #include <mutex>
 #include "core/log_timing.h"
+#include "core/sized_thread.h"
 
 #include <sys/socket.h>
 #include <sys/stat.h>
@@ -67,7 +68,7 @@ void try_spawn_androidauto_sidecar() {
         return;
     }
 
-    std::thread([]() {
+    core::SizedThread(core::kDefaultThreadStackSize, []() {
         char exePath[512];
         ssize_t len = readlink("/proc/self/exe", exePath, sizeof(exePath) - 1);
         std::string dir = ".";

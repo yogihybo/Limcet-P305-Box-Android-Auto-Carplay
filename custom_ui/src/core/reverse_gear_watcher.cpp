@@ -24,7 +24,7 @@ bool ReverseGearWatcher::start() {
         return false;
     }
     running_.store(true, std::memory_order_release);
-    thread_ = std::thread(&ReverseGearWatcher::run, this);
+    thread_ = core::SizedThread(core::kDefaultThreadStackSize, &ReverseGearWatcher::run, this);
     return true;
 }
 

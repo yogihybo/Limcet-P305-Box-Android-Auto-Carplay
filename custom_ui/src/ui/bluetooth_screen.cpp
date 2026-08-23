@@ -6,12 +6,12 @@
 #include <memory>
 #include <mutex>
 #include <string>
-#include <thread>
 #include <vector>
 
 #include "core/config_store.h"
 #include "core/log_timing.h"
 #include "core/navigation.h"
+#include "core/sized_thread.h"
 #include "hal/androidauto_client.h"
 #include "hal/bluetooth.h"
 #include "ui/android_auto_screen.h"
@@ -286,7 +286,7 @@ void start_bt_load(BtScreenWidgets * w) {
     auto * ctx = new std::pair<BtScreenWidgets *, BtLoadState *>(w, state);
     w->poll_timer = lv_timer_create(bt_load_poll_cb, 100, ctx);
 
-    std::thread(bt_load_worker, state).detach();
+    core::SizedThread(core::kDefaultThreadStackSize, bt_load_worker, state).detach();
 }
 
 void refresh_btn_cb(lv_event_t * e) {

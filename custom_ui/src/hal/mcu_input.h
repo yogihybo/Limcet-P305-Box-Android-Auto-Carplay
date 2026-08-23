@@ -79,7 +79,8 @@
 #include <atomic>
 #include <cstdint>
 #include <string>
-#include <thread>
+
+#include "core/sized_thread.h"
 
 namespace hal {
 
@@ -136,7 +137,7 @@ private:
 
     std::string port_;
     int fd_ = -1;
-    std::thread thread_;
+    core::SizedThread thread_;
     std::atomic<bool> running_{false};
 
     std::atomic<int32_t> x_{0};

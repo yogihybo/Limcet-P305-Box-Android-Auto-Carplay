@@ -61,7 +61,15 @@ mkdir -p /data
 chmod 600 /etc/ssh/ssh_host_*_key 2>/dev/null
 mkdir -p /var/run/sshd /var/empty
 chmod 755 /var/empty
-/usr/bin/sshd -f /etc/ssh/sshd_config &
+# 2026-08-23: real hw bug -- the old hand-carried /usr/bin/sshd had the
+# wrong ELF interpreter for this toolchain (softfloat ld-linux.so.3 vs
+# this project's real hardfloat ld-linux-armhf.so.3) and could never
+# run at all ("not found" is busybox's generic message for that case
+# too). Now built by Buildroot itself (BR2_PACKAGE_OPENSSH) against
+# this project's own real toolchain; it installs to /usr/sbin/sshd,
+# not /usr/bin/sshd (see package/openssh/openssh.mk). Same committed
+# host keys/sshd_config, unchanged.
+/usr/sbin/sshd -f /etc/ssh/sshd_config &
 
 # GPU driver -- same real fix/values as stock (registerMemBase/irqLine
 # required since the DT node is disabled/unmatched), galcore.ko here is
@@ -78,21 +86,38 @@ modprobe rtl8811cu rtw_drv_log_level=2 rtw_country_code=US
 # --- BlueZ (replaces blueware entirely) ---
 # Real system dbus-daemon (Buildroot's own dynamic build, not the
 # device's old reduced one that lacked --address support -- see
-# tools/bluetoothd-test/README.md's Run 2). system-diagnostic.conf is
-# the same real fix (<user>root</user>, this rootfs has no messagebus
-# user either) staged over the real system.conf path so its own
-# <includedir>system.d</includedir> still finds bluetooth.conf.
-mkdir -p /usr/etc/dbus-1/system.d /var/run/dbus
-cp /etc/dbus-policy/system-diagnostic.conf /usr/etc/dbus-1/system.conf
-cp /etc/dbus-policy/bluetooth.conf /usr/etc/dbus-1/system.d/bluetooth.conf
+# tools/bluetoothd-test/README.md's Run 2). 2026-08-23: real hw bug --
+# this used to stage our own config at /usr/etc/dbus-1/..., a path
+# this dbus-daemon's real default sysconfdir (/usr/share/dbus-1/,
+# /etc/dbus-1/) never reads at all, so it was silently ignored and the
+# real default (<user>dbus</user>, no such user on this device) is
+# what actually ran -- "Could not get UID and GID for username dbus".
+# The fix is now just the overlay itself: etc/dbus-1/system-local.conf
+# (<user>root</user>, the real documented local-override point) and
+# etc/dbus-1/system.d/bluetooth.conf (the real includedir) ship
+# directly at their real final paths, no runtime staging needed.
+mkdir -p /var/run/dbus
 /usr/bin/dbus-daemon --system --fork
 
 # rtk_hciattach must stay running in the foreground (holds the fd/line
 # discipline open, see tools/rtk-hciattach-test/README.md) -- GPIO91
-# reset handled inside the binary itself.
-/usr/bin/rtk_hciattach -s 115200 /dev/ttyHS1 rtk_h5 &
-sleep 2
-/usr/bin/hci-updown up 2>/dev/null || echo "hci0 up failed -- check rtk_hciattach log"
+# reset handled inside the binary itself. hci-updown talks straight to
+# the kernel via HCIDEVUP ioctl (no dbus dependency at all -- checked
+# its own source, tools/rtk-hciattach-test/src/hci-updown.c), so a
+# "hci0 up failed" here is NOT fallout from the dbus fix above; it's
+# a separate real timing race. Per that tool's own README (Run 5), the
+# full userspace handshake -- 800ms GPIO91 settle, reset pulse, H5
+# sync, baud switch to 1.5M, then a 122-packet/43KB firmware download
+# -- routinely takes several seconds end to end, well past a fixed
+# `sleep 2`, and hci0 only gets registered (TIOCSETD/HCIUARTSETPROTO)
+# at the very end of that sequence. Poll instead of guessing a fixed
+# delay.
+HCI_UP=0
+for i in 1 2 3 4 5 6 7 8 9 10; do
+	/usr/bin/hci-updown up 2>/dev/null && { HCI_UP=1; break; }
+	sleep 1
+done
+[ "$HCI_UP" = 1 ] || echo "hci0 up failed after 10s -- check rtk_hciattach log"
 
 /usr/sbin/bluetoothd -n &
 

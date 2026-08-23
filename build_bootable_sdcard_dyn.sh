@@ -256,6 +256,15 @@ else
         exit 1
     fi
     success "Build succeeded ($(grep -c -- ' -c -o ' "$BUILD_LOG") compile steps) -- full output in $BUILD_LOG"
+    # 2026-08-23: real papercut -- this whole block runs under sudo, so
+    # every object/binary make just wrote under custom_ui/build/ ends up
+    # root-owned. A normal, non-sudo `make` afterward (e.g. after a
+    # quick source edit) then fails with Permission denied on those
+    # files. Hand the tree back to the real invoking user once the
+    # privileged build step is done.
+    if [[ -n "${SUDO_USER:-}" ]]; then
+        chown -R "$SUDO_USER":"$SUDO_USER" "$CUSTOM_UI_DIR/build"
+    fi
     info "Re-staging fresh binaries + configs into $DYN_OVERLAY_DIR/usr/bin/"
     cp -f "$CUSTOM_UI_DIR/build/custom_ui" "$CUSTOM_UI_DIR/build/androidauto-sidecar" \
           "$CUSTOM_UI_DIR/build/hal.conf" "$CUSTOM_UI_DIR/build/default_settings.conf" \

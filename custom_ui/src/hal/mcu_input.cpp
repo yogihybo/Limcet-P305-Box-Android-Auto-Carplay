@@ -216,7 +216,7 @@ bool McuInputHal::start() {
     send_startup_sequence(fd_);
 
     running_.store(true, std::memory_order_release);
-    thread_ = std::thread(&McuInputHal::run, this);
+    thread_ = core::SizedThread(core::kDefaultThreadStackSize, &McuInputHal::run, this);
     return true;
 }
 

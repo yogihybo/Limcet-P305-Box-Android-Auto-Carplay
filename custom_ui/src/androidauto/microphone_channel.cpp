@@ -146,7 +146,7 @@ void MicrophoneChannel::onMediaSourceOpenRequest(
         alsaInput_ = std::make_unique<AlsaInput>(kMicDevice, kSampleRate, kBitsPerSample, kChannels);
         if (alsaInput_->open()) {
             capturing_.store(true, std::memory_order_release);
-            captureThread_ = std::thread(&MicrophoneChannel::captureLoop, this);
+            captureThread_ = core::SizedThread(core::kAasdkThreadStackSize, &MicrophoneChannel::captureLoop, this);
         } else {
             std::fprintf(stderr, "%s androidauto: microphone capture unavailable -- phone will get "
                          "silence\n", logTimestamp().c_str());

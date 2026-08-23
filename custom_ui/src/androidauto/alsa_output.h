@@ -37,10 +37,11 @@
 #include <functional>
 #include <mutex>
 #include <string>
-#include <thread>
 #include <vector>
 
 #include <alsa/asoundlib.h>
+
+#include "core/sized_thread.h"
 
 namespace androidauto {
 
@@ -221,7 +222,7 @@ private:
     // backstop. See this file's own top comment for the full history.
     static constexpr size_t kMaxQueuedBuffers = 256;
 
-    std::thread writerThread_;
+    core::SizedThread writerThread_;
     mutable std::mutex mutex_;
     std::condition_variable cv_;
     std::deque<std::vector<uint8_t>> queue_;

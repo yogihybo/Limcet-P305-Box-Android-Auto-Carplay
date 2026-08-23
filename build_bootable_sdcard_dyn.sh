@@ -138,7 +138,30 @@ IMAGE=""
 # instant reverse-camera preview), confirmed via the real U-Boot source
 # (u-boot/include/configs/ark1668_limcet_p305.h), independent of
 # whatever rootfs is on p2 -- not stock leftovers, left untouched.
-PASSTHROUGH_ARGS=(--non-interactive --no-userdata)
+#
+# --no-mtd-redirect: 2026-08-23, found during a full audit of every
+# step in build_bootable_sdcard.sh's pipeline (done after the
+# libc-symlink corruption bug -- see the second-pass fix below -- to
+# find every remaining instance of this failure class, not just patch
+# them one at a time as they surface). Two real stock-specific steps,
+# both gated by this ONE already-existing, documented flag (not
+# invented here): patch_rcs_mtd_redirect() inserts a /dev/mtd8-11 ->
+# /nanddata/* symlink block into rcS for stock's own bootlogo/
+# bootanimation/reversingtrack/unicode NAND partitions, and
+# populate_nanddata() copies those same stock blobs from
+# firmware_source/ onto p2. custom_ui/androidauto-sidecar never touch
+# any of mtd8-11 or /nanddata/ -- pure stock MsnCoreApp/blueware
+# plumbing. Full audit confirmed this is the last remaining gap: every
+# other step in the 13-step pipeline is either genuinely generic
+# (partitioning, loop-device, mkfs, U-Boot prep, p1 population --
+# already confirmed load-bearing regardless of rootfs, kernel module
+# install) or already handled (stock overlay via the wrapper's
+# second-pass override, userdata via --no-userdata above,
+# busybox-applet symlinks confirmed SAFE despite reading stock's own
+# manifest -- every target is a generic relative path to "busybox"
+# itself, which is genuinely present in this rootfs too, unlike the
+# libc bug's version-specific wrong filenames).
+PASSTHROUGH_ARGS=(--non-interactive --no-userdata --no-mtd-redirect)
 DRY_RUN=false
 SKIP_BUILD=false
 
@@ -385,6 +408,21 @@ rm -f "$MNT/README.md"
 # image the same way README.md did -- not a runtime file, nothing on
 # the device ever reads it after boot.
 rm -f "$MNT/busybox-applets.manifest"
+# 2026-08-23: found during the full pipeline audit (direct debugfs
+# inspection of a real deployed image's root directory, not just the
+# build log) -- /msnprofile/ (FactoryConfig.ini, MsnProductInfo.ini,
+# arkdata.ini with stock's own RgbMode=5 display setting, arkdata/)
+# is stock's own MsnCoreApp seed-config directory, part of stock
+# firmware_overlay/'s own tree, applied by apply_overlay() the same
+# unconditional way as README.md/busybox-applets.manifest were --
+# firmware_overlay_dyn/ ships no msnprofile/ of its own to overwrite
+# it with, so it rode along untouched. Confirmed genuinely unused by
+# custom_ui's real, current code -- custom_ui/src/core/config_store.h
+# documents that reading /msnprofile/*.ini was deliberately removed
+# ("per explicit request, this app now has NO link to msncfg at all,
+# in either direction"); the file only still mentions the old path in
+# a historical comment, not live code.
+rm -rf "$MNT/msnprofile"
 # Permission safety net: this second-pass rsync is the ONLY thing that
 # lands firmware_overlay_dyn/'s own rcS/wifi_ap.sh and every usr/bin//
 # usr/sbin binary (custom_ui, androidauto-sidecar, sshd, bluetoothd,

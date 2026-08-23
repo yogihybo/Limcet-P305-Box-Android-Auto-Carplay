@@ -177,4 +177,20 @@ fi
 # mechanism once custom_ui is wired to autostart (Phase 6/7).
 
 echo "custom_ui rootfs: base system + BlueZ bring-up done (WiFi AP is event-driven, see custom_ui's WirelessSessionManager)."
-echo "custom_ui/androidauto-sidecar are NOT auto-started -- deploy by hand for Phase 6 hardware validation."
+
+# 2026-08-23: Phase 6/7 -- custom_ui now auto-starts at boot instead of
+# being deployed by hand. Same pattern as stock's own MsnCoreApp
+# autostart (firmware_overlay/etc/rc.d/rcS): a backgrounded subshell
+# that sources /etc/profile first (sets PATH/LD_LIBRARY_PATH the same
+# way an interactive login shell would -- custom_ui's own HAL code
+# invokes several bare-named helpers, e.g. `bluetoothd`/`hci-updown`,
+# via std::system(), which need PATH set correctly). custom_ui itself
+# launches androidauto-sidecar as its own child process (see
+# hal::androidauto_client.cpp's own "[AA-SIDECAR] Launching..." log
+# line, already hardware-confirmed) -- rcS only needs to start
+# custom_ui, not the sidecar separately. 1s delay gives BlueZ/dbus
+# above a moment to settle, same reasoning as stock's own delay
+# (though custom_ui's own ensure_bluetooth_daemon_running() already
+# tolerates BlueZ not being up yet, so this is a small margin, not a
+# hard requirement).
+(sleep 1 && . /etc/profile && /usr/bin/custom_ui) &

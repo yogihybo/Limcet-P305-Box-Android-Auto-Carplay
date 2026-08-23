@@ -3,14 +3,12 @@ Protocol 2
 HostKey /etc/ssh/ssh_host_rsa_key
 HostKey /etc/ssh/ssh_host_dsa_key
 
-UsePrivilegeSeparation yes
 PidFile /var/run/sshd.pid
 
 LoginGraceTime 60
 PermitRootLogin yes
 StrictModes no
 
-RSAAuthentication yes
 PubkeyAuthentication yes
 AuthorizedKeysFile /root/.ssh/authorized_keys
 
@@ -19,5 +17,4 @@ PermitEmptyPasswords no
 ChallengeResponseAuthentication no
 
 # UsePAM no
-PrintLastLog no
 TCPKeepAlive yes

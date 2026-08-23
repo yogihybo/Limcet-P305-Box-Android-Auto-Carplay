@@ -35,6 +35,7 @@ sd_update/output/
 # (bootlogo.raw, arkdata.ini, uEnv.txt, uboot binaries) is tracked so this
 # can't happen silently again.
 sd_bootable/sd_boot.img
+sd_bootable/sd_boot_dyn.img
 # Pre-move (repo-root) location of the same output — kept ignored so any
 # leftover local copy from before the sd_bootable/ move doesn't get staged.
 /sd_boot.img

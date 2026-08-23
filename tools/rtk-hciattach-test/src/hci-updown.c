@@ -100,12 +100,17 @@ int main(int argc, char **argv)
 	}
 
 	if (strcmp(cmd, "up") == 0) {
-		if (ioctl(sock, HCIDEVUP_, dev_id) < 0) {
+		if (ioctl(sock, HCIDEVUP_, dev_id) < 0 && errno != EALREADY) {
 			fprintf(stderr, "HCIDEVUP hci%d failed: %d, %s\n",
 				dev_id, errno, strerror(errno));
 			close(sock);
 			return 1;
 		}
+		/* EALREADY means the device is already up -- the kernel's own
+		 * H5 resync can bring hci0 UP RUNNING before this ioctl runs
+		 * (real hardware-confirmed 2026-08-23: "info" showed UP
+		 * RUNNING with real traffic despite this "failing"), and
+		 * that's success, not an error. */
 		printf("HCIDEVUP hci%d: OK\n", dev_id);
 	} else if (strcmp(cmd, "down") == 0) {
 		if (ioctl(sock, HCIDEVDOWN_, dev_id) < 0) {

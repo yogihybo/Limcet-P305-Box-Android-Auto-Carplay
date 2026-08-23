@@ -8,3 +8,13 @@
 # yet verified either way, don't assume "not needed" without checking.
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 export LD_LIBRARY_PATH=/usr/lib:/lib
+
+# 2026-08-23: real hw gap -- this rootfs's PATH already puts /usr/bin
+# (the real util-linux dmesg from the dmesg-tool package, -T/-x/--color
+# support) ahead of /bin (BusyBox's plain applet), so plain `dmesg`
+# already reaches the right binary here -- unlike stock, which needed
+# a full path override for that reason. But stock's own alias also
+# always requested colored output (`--color=always`), which this
+# profile never carried forward, so `dmesg` here prints monochrome
+# even though the right binary is running. Match stock's behavior.
+alias dmesg='/usr/bin/dmesg --color=always'

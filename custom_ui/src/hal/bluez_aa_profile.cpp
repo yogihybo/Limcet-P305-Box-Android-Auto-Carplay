@@ -13,13 +13,14 @@ namespace hal {
 
 namespace {
 
-// Matches tools/bluetoothd-test/bt-daemon-probe.sh's own real default --
-// this device's /usr/etc/dbus-1/system.conf resolves its <listen> to
-// this doubled `run/run` path (a real, if odd, vendor build artifact,
-// not a typo -- see that script's own comment for how this was
-// confirmed). hal::ensure_bluetooth_daemon_running() brings up exactly
-// that dbus-daemon/bluetoothd pair, so this must match.
-constexpr const char *kBusAddress = "unix:path=/var/run/run/dbus/system_bus_socket";
+// 2026-08-23: real hw bug -- this doubled `run/run` path matched the
+// OLD static bluetoothd-test dbus-daemon's own compiled-in default
+// (tools/bluetoothd-test/bt-daemon-probe.sh). rcS now starts
+// Buildroot's own dbus-daemon package instead, whose real config
+// (/usr/share/dbus-1/system.conf's <listen>, confirmed by direct
+// read) uses the standard single `/var/run/dbus/` path. Must match
+// whatever daemon rcS actually starts.
+constexpr const char *kBusAddress = "unix:path=/var/run/dbus/system_bus_socket";
 constexpr const char *kProfilePath = "/custom_ui/aa_profile";
 // Confirmed real, not guessed -- custom_ui/docs/BLUETOOTH_RECONNECT_HANDOFF.md
 // and hal/bluetooth.h both independently found this exact value: the

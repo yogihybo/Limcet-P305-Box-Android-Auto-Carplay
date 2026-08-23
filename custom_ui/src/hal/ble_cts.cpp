@@ -17,10 +17,11 @@ namespace hal {
 
 namespace {
 
-// Matches hal/bluez_aa_profile.cpp's own kBusAddress -- this device's
-// real dbus-daemon (see tools/bluetoothd-test/README.md) resolves its
-// default listen address to this doubled `run/run` path.
-constexpr const char *kBusAddress = "unix:path=/var/run/run/dbus/system_bus_socket";
+// Matches hal/bluez_aa_profile.cpp's own kBusAddress -- see that
+// file's comment. 2026-08-23: fixed to match Buildroot's own real
+// dbus-daemon (single /var/run/dbus/), not the old static
+// bluetoothd-test daemon's doubled run/run path.
+constexpr const char *kBusAddress = "unix:path=/var/run/dbus/system_bus_socket";
 constexpr const char *kCtsServiceUuid = "00001805-0000-1000-8000-00805f9b34fb";
 constexpr const char *kCtsCurrentTimeCharUuid = "00002a2b-0000-1000-8000-00805f9b34fb";
 

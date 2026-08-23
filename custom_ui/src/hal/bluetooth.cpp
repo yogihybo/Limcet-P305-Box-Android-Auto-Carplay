@@ -576,12 +576,26 @@ void aa_profile_server_loop() {
 void ensure_bluetooth_daemon_running() {
     static std::mutex mtx;
     std::lock_guard<std::mutex> lock(mtx);
-    if (is_bluez_active()) {
+    // 2026-08-23: real hw bug -- this used to `return` here once BlueZ
+    // was found already running, which made sense back when this
+    // function was the ONLY place that ever started dbus-daemon/
+    // rtk_hciattach/bluetoothd. It no longer is: rcS now starts all
+    // three unconditionally at boot, so is_bluez_active() is true on
+    // every real run, and the early `return` was silently skipping
+    // the bt-agent + AA RFCOMM profile bootstrap further down in this
+    // same function -- hardware-confirmed via a full boot log with
+    // ZERO [BT-AGENT]/[BT-AA-PROFILE] output despite the phone
+    // connecting and disconnecting twice. Both of those have their
+    // own std::atomic-guarded start-once logic already, so it's safe
+    // to just skip the daemon-bringup block below instead of the
+    // whole function.
+    bool blueZAlreadyActive = is_bluez_active();
+    if (blueZAlreadyActive) {
         std::printf("%s hal::bluetooth::ensure_bluetooth_daemon_running: BlueZ (bluetoothd) already running\n",
                     core::log_timestamp().c_str());
-        return;
     }
 
+  if (!blueZAlreadyActive) {
     // Prefer running the dedicated bringup script if present and executable
     const char * scripts[] = {
         "/usr/bin/bluez-bringup.sh",
@@ -625,6 +639,7 @@ void ensure_bluetooth_daemon_running() {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
     }
+  }  // !blueZAlreadyActive
 
     // Ensure bt-agent is running and stream its output directly to custom_ui console
     static std::atomic<bool> s_agent_thread_started{false};

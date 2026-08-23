@@ -123,6 +123,10 @@ bool isApRunning() {
     return running;
 }
 
+bool isUdhcpdRunning() {
+    return std::system("pidof udhcpd >/dev/null 2>&1") == 0;
+}
+
 }  // namespace
 
 WirelessSessionManager::WirelessSessionManager() = default;
@@ -201,6 +205,34 @@ void WirelessSessionManager::setStatus(WirelessSessionState s, std::string msg) 
 bool WirelessSessionManager::ensureAccessPointUp() {
     if (isApRunning()) {
         std::printf("%s androidauto: wireless session: AP already up, skipping wifi_ap.sh\n", androidauto::logTimestamp().c_str());
+        // 2026-08-24: real hw bug -- hostapd staying up across sessions
+        // is fine (802.11 association doesn't need DHCP), but udhcpd is
+        // a SEPARATE process wifi_ap.sh backgrounds alongside it
+        // (`udhcpd /etc/udhcpd.conf &`), and this fast path never
+        // re-checked it. If udhcpd died independently of hostapd for
+        // any reason, the phone would still associate to the AP fine
+        // ("connected to custom_ui_wifi") but never get a DHCP lease --
+        // per wifi_setup_client.cpp's own documented reference log
+        // (docs/logs/start_msn_stock_260721.txt), WIFI_CONNECT_STATUS
+        // only arrives once the phone's real DHCP OFFER/ACK has
+        // happened, so no lease means the phone never sends it and
+        // never dials in to the TCP server -- exactly this symptom.
+        // Restart just udhcpd (and re-assert wlan0's static IP, cheap
+        // and idempotent) rather than the whole script, since hostapd
+        // itself is confirmed fine.
+        if (!isUdhcpdRunning()) {
+            std::fprintf(stderr, "%s androidauto: wireless session: AP up but udhcpd is not running -- "
+                         "restarting udhcpd (phone would associate but never get a DHCP lease)\n",
+                         androidauto::logTimestamp().c_str());
+            std::system("ifconfig wlan0 192.168.43.1 netmask 255.255.255.0 2>/dev/null");
+            std::system("mkdir -p /var/lib/misc; touch /data/udhcpd.leases; "
+                        "udhcpd /etc/udhcpd.conf >/dev/null 2>&1 &");
+            for (int i = 0; i < 20 && !isUdhcpdRunning(); ++i) {
+                usleep(100000);
+            }
+            std::printf("%s androidauto: wireless session: udhcpd restarted, running=%s\n",
+                        androidauto::logTimestamp().c_str(), isUdhcpdRunning() ? "yes" : "no");
+        }
         return true;
     }
     // Synchronous: wifi_ap.sh's own long-running daemons (hostapd -B,

@@ -199,7 +199,7 @@ ZIMAGE_STOCK="$OUTPUT_DIR/zImage_stock"
 # ---------------------------------------------------------------------------
 # Requirements
 # ---------------------------------------------------------------------------
-begin_step 1 "Requirements"
+begin_step 1 "Build Script Requirements"
 REQUIREMENTS=(
     "parted|partition the image|parted"
     "mkfs.fat|format p1 as FAT32|dosfstools"
@@ -460,7 +460,7 @@ end_step
 # populate /data themselves on first boot; there is no stock userdata to
 # carry over (this script never had that coupling to begin with).
 # ---------------------------------------------------------------------------
-begin_step 9 "p3 (userdata)"
+begin_step 9 "Populating p3 (userdata)"
 info "Left empty — app populates /data on first boot"
 end_step skip
 
@@ -487,15 +487,15 @@ if ! $DRY_RUN; then
     success "$IMAGE  ($sz)"
 fi
 echo ""
-echo -e "${BOLD}  Write to SD card or USB drive:${RESET}"
+echo -e "${BOLD}  Write disk image USB drive:${RESET}"
 echo -e "${DIM}    sudo dd if=\"$IMAGE\" of=/dev/sdX bs=4M status=progress && sync${RESET}"
 echo ""
 echo -e "${BOLD}  Boot sequence:${RESET}"
 echo "    Stepldr  → loads UBOOT.BIN from BOOT partition"
-echo "    U-Boot   → imports uEnv.txt, shows bootlogo.raw"
-echo "    U-Boot   → 1. bootusb (kernel+DTB from USB, rootfs on SD)"
-echo "    U-Boot   → 2. nandboot fallback"
+echo "    U-Boot   → runs UBOOT and displays loading screens"
+echo "    U-Boot   → attempts to bootusb and boot kernel & rootfs from USB"
+echo "    U-Boot   → falls back to nandboot to boot stock device"
 echo "    Kernel   → mounts p2 ext4 as the root filesystem"
 echo "    rcS      → mounts p3 ext4 as /data"
 echo "    (boothybrid/bootstock/bootmmc remain available as manual U-Boot-prompt"
-echo "     commands for onboard-NAND recovery -- see uboot_hybrid.bin/uboot_stock.bin)"
+echo "    commands for onboard-NAND recovery -- see uboot_hybrid.bin/uboot_stock.bin)"

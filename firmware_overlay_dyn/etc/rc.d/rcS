@@ -124,12 +124,28 @@ export DBUS_SYSTEM_BUS_ADDRESS=unix:path=/var/run/dbus/system_bus_socket
 # well past a fixed `sleep 2`, and hci0 only gets registered
 # (TIOCSETD/HCIUARTSETPROTO) at the very end of that sequence. Poll
 # instead of guessing a fixed delay.
+# 2026-08-23: real hw bug -- this loop used to swallow hci-updown's
+# real stderr (2>/dev/null), so "hci0 up failed" never told us WHY.
+# The kernel's own hci_h5.c does its own independent 3-wire resync on
+# line-discipline attach (H5_SYNC_TIMEOUT = 100ms, retried
+# indefinitely by its own timer -- see h5_timed_event()) -- the two
+# "Non-link packet"/"Out-of-order packet" warnings seen once on every
+# boot (including the confirmed-working hardware run this whole
+# sequence is based on, tools/rtk-hciattach-test/README.md Run 6) are
+# that resync's normal one-shot hiccup, not a stuck loop -- if it were
+# genuinely stuck, the same warnings would repeat every ~100ms
+# forever, which they don't. So HCIDEVUP failing here is NOT
+# obviously just "hci0 isn't registered yet"; capture the real errno
+# instead of guessing further.
 HCI_UP=0
 for i in 1 2 3 4 5 6 7 8 9 10; do
-	/usr/bin/hci-updown up 2>/dev/null && { HCI_UP=1; break; }
+	/usr/bin/hci-updown up 2>/tmp/hci-updown.err && { HCI_UP=1; break; }
 	sleep 1
 done
-[ "$HCI_UP" = 1 ] || echo "hci0 up failed after 10s -- check rtk_hciattach log"
+if [ "$HCI_UP" != 1 ]; then
+	echo "hci0 up failed after 10s -- last hci-updown error:"
+	cat /tmp/hci-updown.err 2>/dev/null
+fi
 
 /usr/sbin/bluetoothd -n &
 

@@ -24,6 +24,12 @@
 
 set -e
 
+# 2026-08-24: LINK_SHARED=1 builds a real .so instead of a .a -- see
+# build_boost.sh's own header comment for the real motivation
+# (page-shareable memory on this 173MB/no-swap device). Unset/0
+# (default) is the exact original static behavior.
+LINK_SHARED="${LINK_SHARED:-0}"
+
 LIBUSB_VERSION="1.0.29"
 BUILD_DIR="${LIBUSB_BUILD_DIR:-$HOME/build-deps}"
 CROSS_COMPILE="${CROSS_COMPILE:-arm-linux-gnueabihf-}"
@@ -41,18 +47,22 @@ fi
 
 cd "libusb-${LIBUSB_VERSION}"
 
-echo "==> Configuring (static only, no udev -- netlink hotplug backend used instead)..."
+STATIC_FLAGS="--enable-static --disable-shared"
+if [[ "$LINK_SHARED" == "1" ]]; then
+    STATIC_FLAGS="--disable-static --enable-shared"
+fi
+
+echo "==> Configuring ($STATIC_FLAGS, no udev -- netlink hotplug backend used instead)..."
 CC="${CROSS_COMPILE}gcc" \
     ./configure --host=arm-linux-gnueabihf \
-    --enable-static --disable-shared --disable-udev \
+    $STATIC_FLAGS --disable-udev \
     --prefix="$BUILD_DIR/libusb-arm-install"
 
 echo "==> Building..."
 make -j"$(nproc)"
 
+echo "==> Installing to $BUILD_DIR/libusb-arm-install..."
+make install
+
 echo
-echo "✔ Static lib: $BUILD_DIR/libusb-${LIBUSB_VERSION}/libusb/.libs/libusb-1.0.a"
-echo "✔ Headers: $BUILD_DIR/libusb-${LIBUSB_VERSION}/libusb/libusb.h"
-echo
-echo "Not yet wired into custom_ui/Makefile -- lands with the actual"
-echo "aasdk integration work (Phase 2, see docs/IMPLEMENTATION_PLAN.md)."
+echo "✔ Installed: $BUILD_DIR/libusb-arm-install/{include,lib}"

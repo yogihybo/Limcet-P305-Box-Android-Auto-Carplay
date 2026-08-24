@@ -111,7 +111,6 @@
 
 #include <fcntl.h>
 #include <sys/file.h>
-#include <sys/mman.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
@@ -387,22 +386,26 @@ int main() {
         return 1;
     }
 
-    // 2026-08-21: see custom_ui's own main.cpp for the full comment on
-    // why -- this process is at least as exposed to the same page-cache-
-    // thrashing-without-swap mechanism (no swap on this 173MB device,
-    // this binary is statically linked so its own text segment is the
-    // thing at risk of eviction+refault from the real USB-backed
-    // rootfs), and it's the process actually driving the AA session
-    // that was observed dying with ECONNRESET after several minutes of
-    // runtime. Best-effort/non-fatal, same reasoning as custom_ui.
-    if (mlockall(MCL_CURRENT | MCL_FUTURE) != 0) {
-        std::fprintf(stderr, "%s androidauto-sidecar: mlockall() failed: %s -- continuing "
-                     "without it (process pages may still be reclaimed under memory pressure)\n",
-                     androidauto::logTimestamp().c_str(), std::strerror(errno));
-    } else {
-        std::printf("%s androidauto-sidecar: mlockall(MCL_CURRENT|MCL_FUTURE) succeeded -- "
-                    "process pages pinned against reclaim\n", androidauto::logTimestamp().c_str());
-    }
+    // 2026-08-21: mlockall(MCL_CURRENT|MCL_FUTURE) was added here as a
+    // mitigation for the OLD static-linked rootfs's real page-cache-
+    // thrashing crash (see custom_ui's own main.cpp for the full
+    // original comment/evidence).
+    //
+    // 2026-08-24: REMOVED -- real hw evidence (a live OOM-killer dump
+    // with the full Mem-Info section, not just the per-task table) shows
+    // this is now actively causing OOM kills of this exact process, not
+    // just no-longer-needed: unevictable:78488kB and mlocked:56268kB out
+    // of ~169MB total managed memory, on top of CMA's own 64MB
+    // reservation, directly starving a write() syscall of reclaimable
+    // page-cache headroom -- MCL_FUTURE keeps pinning every allocation
+    // this process ever makes (video decode buffers, protocol buffers,
+    // everything) for its entire lifetime, not just what's resident at
+    // mlockall() time. This session's dynamic-linking migration already
+    // fixed the actual root cause this was mitigating (this binary's own
+    // code pages are shared/reclaimable-and-refaultable from real shared
+    // libraries now, not private static text) -- keeping mlockall active
+    // on a device this memory-constrained is strictly worse than the
+    // un-mlock'd behavior it was meant to replace.
 
     // 2026-08-15: real hw fix for the OLD static-libalsa.a build --
     // alsa-lib baked the build HOST's own --with-configdir path in at

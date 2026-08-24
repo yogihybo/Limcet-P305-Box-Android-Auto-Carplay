@@ -17,7 +17,7 @@ LIBS    := -lssl -lcrypto -lasound -lpthread -ldl -lrt
 
 BUILD_DIR := build
 
-SRCS_CORE  := src/aap_wire.c src/aap_cryptor.c src/aap_audio.c src/aap_video.c src/aap_session.c src/main.c
+SRCS_CORE  := src/aap_wire.c src/aap_cryptor.c src/aap_audio.c src/aap_video.c src/aap_session.c src/aap_wifi_setup.c src/main.c
 SRCS_NANOPB := ../third_party/nanopb/pb_common.c ../third_party/nanopb/pb_encode.c ../third_party/nanopb/pb_decode.c
 SRCS_PROTO := $(shell find proto_gen -name "*.pb.c")
 

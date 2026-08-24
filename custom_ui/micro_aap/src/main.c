@@ -5,6 +5,7 @@
 #include <signal.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <pthread.h>
 #include <sys/file.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -12,12 +13,49 @@
 #include <poll.h>
 
 #include "aap_session.h"
+#include "aap_wifi_setup.h"
 
 #define SIDECAR_SOCK_PATH "/tmp/androidauto-sidecar.sock"
 #define SIDECAR_LOCK_PATH "/tmp/androidauto-sidecar.lock"
 #define AAP_TCP_PORT      5000
 
 #define MAX_POLL_FDS      16
+
+typedef struct {
+    int rfcomm_fd;
+} wifi_worker_args_t;
+
+static int g_active_rfcomm_fd = -1;
+
+static void *wifi_setup_thread(void *arg) {
+    wifi_worker_args_t *args = (wifi_worker_args_t *)arg;
+    int fd = args->rfcomm_fd;
+    free(args);
+
+    printf("micro_aap: starting WiFi AP and RFCOMM WPP handshake for fd=%d\n", fd);
+    if (!aap_wifi_ensure_ap_up()) {
+        fprintf(stderr, "micro_aap: failed to ensure WiFi AP is running\n");
+        close(fd);
+        if (g_active_rfcomm_fd == fd) g_active_rfcomm_fd = -1;
+        return NULL;
+    }
+
+    char bssid[32] = {0};
+    aap_wifi_get_bssid(bssid, sizeof(bssid));
+
+    bool ok = aap_wifi_setup_handshake(fd, "192.168.43.1", AAP_TCP_PORT,
+                                       "custom_ui_wifi", "custom_ui_wifi_pass",
+                                       bssid, 3 /* WPA2_PSK */);
+    if (!ok) {
+        fprintf(stderr, "micro_aap: WPP handshake failed\n");
+        close(fd);
+        if (g_active_rfcomm_fd == fd) g_active_rfcomm_fd = -1;
+        return NULL;
+    }
+
+    printf("micro_aap: WPP handshake complete, keeping rfcomm_fd=%d open as tether\n", fd);
+    return NULL;
+}
 
 static int acquire_lock(void) {
     int fd = open(SIDECAR_LOCK_PATH, O_CREAT | O_RDWR, 0644);
@@ -157,6 +195,10 @@ int main(int argc, char **argv) {
                 printf("micro_aap: session ended, tearing down\n");
                 aap_session_destroy(session);
                 session = NULL;
+                if (g_active_rfcomm_fd >= 0) {
+                    close(g_active_rfcomm_fd);
+                    g_active_rfcomm_fd = -1;
+                }
             }
         }
 
@@ -193,6 +235,10 @@ int main(int argc, char **argv) {
                 printf("micro_aap: AAP session I/O error or disconnect\n");
                 aap_session_destroy(session);
                 session = NULL;
+                if (g_active_rfcomm_fd >= 0) {
+                    close(g_active_rfcomm_fd);
+                    g_active_rfcomm_fd = -1;
+                }
             }
         }
 
@@ -210,7 +256,20 @@ int main(int argc, char **argv) {
 
                 if (recvd_fd >= 0) {
                     printf("micro_aap: received CONNECT_FD ancillary fd=%d\n", recvd_fd);
-                    close(recvd_fd); /* Managed via TCP server */
+                    if (g_active_rfcomm_fd >= 0) {
+                        close(g_active_rfcomm_fd);
+                    }
+                    g_active_rfcomm_fd = recvd_fd;
+
+                    wifi_worker_args_t *wargs = (wifi_worker_args_t *)malloc(sizeof(wifi_worker_args_t));
+                    wargs->rfcomm_fd = recvd_fd;
+
+                    pthread_t wthread;
+                    pthread_attr_t attr;
+                    pthread_attr_init(&attr);
+                    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+                    pthread_create(&wthread, &attr, wifi_setup_thread, wargs);
+                    pthread_attr_destroy(&attr);
                 }
 
                 const char *reply = "OK\n";
@@ -225,9 +284,11 @@ int main(int argc, char **argv) {
                             case AAP_SESSION_STATE_SERVICE_DISCOVERY: st_name = "Connecting"; break;
                             default: st_name = "Idle"; break;
                         }
+                    } else if (g_active_rfcomm_fd >= 0) {
+                        st_name = "Connecting";
                     }
                     snprintf(status_reply, sizeof(status_reply), "STATE %s %s\n", st_name,
-                             session ? aap_session_get_status_message(session) : "Waiting for phone");
+                             session ? aap_session_get_status_message(session) : (g_active_rfcomm_fd >= 0 ? "WiFi Handshake..." : "Waiting for phone"));
                     reply = status_reply;
                 } else if (strncmp(cmd_buf, "SHOW", 4) == 0) {
                     if (session) aap_session_set_video_visible(session, true);
@@ -264,6 +325,7 @@ int main(int argc, char **argv) {
     if (session) aap_session_destroy(session);
     if (ipc_listen_fd >= 0) close(ipc_listen_fd);
     if (tcp_listen_fd >= 0) close(tcp_listen_fd);
+    if (g_active_rfcomm_fd >= 0) close(g_active_rfcomm_fd);
     unlink(SIDECAR_SOCK_PATH);
     return 0;
 }

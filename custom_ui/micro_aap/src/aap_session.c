@@ -149,19 +149,22 @@ static bool send_media_ack(aap_session_t *s, uint8_t channel_id, int32_t session
     }
 }
 
+static void send_version_request(aap_session_t *s) {
+    uint8_t ver_req[4];
+    uint16_t major = htons(1);
+    uint16_t minor = htons(6);
+    memcpy(&ver_req[0], &major, 2);
+    memcpy(&ver_req[2], &minor, 2);
+
+    printf("aap_session: sending VersionRequest (1.6)\n");
+    send_control_msg(s, AAP_MSG_VERSION_REQUEST, ver_req, sizeof(ver_req), false);
+    set_state(s, AAP_SESSION_STATE_VERSION_HANDSHAKE, "VersionRequest sent, waiting for VersionResponse");
+}
+
 static void handle_control_message(aap_session_t *s, uint16_t msg_id, const uint8_t *payload, size_t payload_len) {
     switch (msg_id) {
-        case AAP_MSG_VERSION_REQUEST: {
-            printf("aap_session: received VersionRequest (raw)\n");
-            uint8_t ver_resp[6];
-            uint16_t major = htons(1);
-            uint16_t minor = htons(6);
-            uint16_t status = htons(0); /* STATUS_SUCCESS */
-            memcpy(&ver_resp[0], &major, 2);
-            memcpy(&ver_resp[2], &minor, 2);
-            memcpy(&ver_resp[4], &status, 2);
-
-            send_control_msg(s, AAP_MSG_VERSION_RESPONSE, ver_resp, sizeof(ver_resp), false);
+        case AAP_MSG_VERSION_RESPONSE: {
+            printf("aap_session: received VersionResponse (%zu bytes)\n", payload_len);
             set_state(s, AAP_SESSION_STATE_TLS_HANDSHAKE, "Version handshake complete, starting TLS");
 
             /* Kick off TLS Client Hello */
@@ -169,6 +172,7 @@ static void handle_control_message(aap_session_t *s, uint16_t msg_id, const uint
             uint8_t hs_buf[2048];
             size_t hs_len = aap_cryptor_read_handshake(s->cryptor, hs_buf, sizeof(hs_buf));
             if (hs_len > 0) {
+                printf("aap_session: sending ClientHello (%zu bytes)\n", hs_len);
                 send_control_msg(s, AAP_MSG_SSL_HANDSHAKE, hs_buf, hs_len, false);
             }
             break;
@@ -460,7 +464,7 @@ aap_session_t *aap_session_create(int tcp_fd) {
     s->last_ping_time = time(NULL);
     s->last_rx_time = time(NULL);
 
-    set_state(s, AAP_SESSION_STATE_VERSION_HANDSHAKE, "Waiting for VersionRequest");
+    send_version_request(s);
     return s;
 }
 

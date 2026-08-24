@@ -17,7 +17,6 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/file.h>
-#include <sys/mman.h>
 #include "lvgl.h"
 #include "hal/androidauto_client.h"
 #include "hal/audio.h"
@@ -370,37 +369,28 @@ int main() {
         return 1;
     }
 
-    // 2026-08-21: real hardware trace (see project history around an
-    // AA-session ECONNRESET after several minutes of runtime) pointed
-    // at page-cache thrashing without swap as the likely root cause --
-    // this device has only 173MB RAM and no swap configured, so under
-    // memory pressure kswapd0 reclaims clean file-backed pages,
-    // INCLUDING this process's own running code (this binary is
-    // statically linked -- no separate shared-library pages, just this
-    // one executable's own text segment, real-USB-storage-backed since
-    // this rootfs boots from USB). Every re-touch of a reclaimed code
-    // page then means a real disk read via the usb-storage kernel
-    // thread to fault it back in -- confirmed via real /proc/meminfo +
-    // kworker/usb-storage/kswapd0 activity captured during a live crash
-    // (see docs/AUDIO_CPU_SPIKE_AND_SIDECAR_LIFECYCLE_HANDOFF.md-
-    // adjacent session notes). MCL_CURRENT|MCL_FUTURE locks this
-    // process's resident pages now AND all future ones as they're
-    // mapped/faulted in -- prevents the kernel from ever evicting this
-    // process's own pages regardless of what's driving the memory
-    // pressure, without needing to first pin down every source of that
-    // pressure. Best-effort/non-fatal: runs as root on this device
-    // (CAP_IPC_LOCK, so RLIMIT_MEMLOCK doesn't apply), but if it ever
-    // fails (e.g. insufficient lockable memory), that's still strictly
-    // no worse than the un-mlock'd behavior this replaces -- log and
-    // continue rather than treating it as fatal.
-    if (mlockall(MCL_CURRENT | MCL_FUTURE) != 0) {
-        std::fprintf(stderr, "%s ui: mlockall() failed: %s -- continuing without it "
-                     "(process pages may still be reclaimed under memory pressure)\n",
-                     core::log_timestamp().c_str(), std::strerror(errno));
-    } else {
-        std::printf("%s ui: mlockall(MCL_CURRENT|MCL_FUTURE) succeeded -- process pages "
-                    "pinned against reclaim\n", core::log_timestamp().c_str());
-    }
+    // 2026-08-21: mlockall(MCL_CURRENT|MCL_FUTURE) was added here as a
+    // mitigation for the OLD static-linked rootfs's real page-cache-
+    // thrashing crash (kswapd0 evicting this binary's own statically-
+    // linked code pages under memory pressure, then a real USB-storage
+    // disk read to fault them back in -- confirmed via live
+    // /proc/meminfo + kworker/usb-storage/kswapd0 activity at the time).
+    //
+    // 2026-08-24: REMOVED -- real hw evidence (OOM-killer dump,
+    // Mem-Info section) shows this is now actively causing the crash
+    // class it was meant to prevent, not just no-longer-needed. This
+    // session's dynamic-linking migration already fixed the actual
+    // root cause (custom_ui's code pages are shared/reclaimable-and-
+    // refaultable-from-a-real-shared-library now, not this binary's
+    // own private static text). MCL_FUTURE keeps pinning EVERY
+    // allocation this process ever makes for the rest of its life, not
+    // just what's resident at mlockall() time -- a live OOM dump showed
+    // unevictable:78488kB and mlocked:56268kB out of ~169MB total
+    // managed memory, well over CMA's own 64MB reservation on top of
+    // that, directly starving a completely unrelated process's write()
+    // syscall of any reclaimable page-cache headroom. Keeping this
+    // active on a device this memory-constrained is strictly worse than
+    // the un-mlock'd behavior it was meant to replace.
 
     std::printf("%s ui: starting, lv_init()...\n", core::log_timestamp().c_str());
     lv_init();

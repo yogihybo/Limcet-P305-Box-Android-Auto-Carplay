@@ -42,6 +42,18 @@
 
 set -e
 
+# 2026-08-24: LINK_SHARED=1 builds real .so's instead of .a's -- for
+# the dynamically-linked custom_ui rootfs (AASDK_DEPS_DIR_DYN=
+# $HOME/build-deps-dyn, a fully separate tree from the static
+# $HOME/build-deps default), to let this ~15-20MB of Boost/Protobuf/
+# AASDK code become page-shareable instead of 100% private per-process
+# memory -- real motivation: two reproducible OOM-killer hits of
+# androidauto-sidecar this session on this 173MB/no-swap device.
+# Unset/0 (default) preserves the exact original static behavior for
+# the old $HOME/build-deps path the static androidauto-*-test
+# diagnostic tools still use -- zero behavior change there.
+LINK_SHARED="${LINK_SHARED:-0}"
+
 # Pinned to 1.83.0 (not the newest release) -- matches Ubuntu 24.04's
 # libboost-all-dev, which is what aasdk's own CI (.github/workflows/
 # ci.yml, runs-on: ubuntu-24.04) actually builds and tests against.
@@ -72,6 +84,11 @@ if [[ ! -d "boost-${BOOST_VERSION}" ]]; then
     rm boost.tar.gz
 fi
 
+SHARED_FLAG="OFF"
+if [[ "$LINK_SHARED" == "1" ]]; then
+    SHARED_FLAG="ON"
+fi
+
 cat > arm-toolchain.cmake <<EOF
 set(CMAKE_SYSTEM_NAME Linux)
 set(CMAKE_SYSTEM_PROCESSOR arm)
@@ -80,17 +97,17 @@ set(CMAKE_CXX_COMPILER ${CROSS_COMPILE}g++)
 set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
 set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
 set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
-set(BUILD_SHARED_LIBS OFF)
+set(BUILD_SHARED_LIBS ${SHARED_FLAG})
 EOF
 
 cd "boost-${BOOST_VERSION}"
 mkdir -p build-arm
 cd build-arm
 
-echo "==> Configuring..."
+echo "==> Configuring (BUILD_SHARED_LIBS=$SHARED_FLAG)..."
 cmake -DCMAKE_TOOLCHAIN_FILE="$BUILD_DIR/arm-toolchain.cmake" \
       -DCMAKE_BUILD_TYPE=Release \
-      -DBUILD_SHARED_LIBS=OFF \
+      -DBUILD_SHARED_LIBS=$SHARED_FLAG \
       ..
 
 echo "==> Building all of Boost (needed for a clean 'cmake --install', see note above)..."

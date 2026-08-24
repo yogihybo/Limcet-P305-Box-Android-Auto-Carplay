@@ -116,9 +116,9 @@ static bool send_control_msg(aap_session_t *s, uint16_t msg_id, const uint8_t *p
         uint8_t cipher[4096];
         size_t cipher_len = aap_cryptor_encrypt(s->cryptor, raw_msg, total_len, cipher, sizeof(cipher));
         if (cipher_len == 0) return false;
-        return send_raw_frame(s, AAP_CHANNEL_CONTROL, AAP_FRAME_BULK, true, true, cipher, cipher_len);
+        return send_raw_frame(s, AAP_CHANNEL_CONTROL, AAP_FRAME_BULK, false, true, cipher, cipher_len);
     } else {
-        return send_raw_frame(s, AAP_CHANNEL_CONTROL, AAP_FRAME_BULK, true, false, raw_msg, total_len);
+        return send_raw_frame(s, AAP_CHANNEL_CONTROL, AAP_FRAME_BULK, false, false, raw_msg, total_len);
     }
 }
 

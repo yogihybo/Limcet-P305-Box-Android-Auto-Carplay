@@ -157,7 +157,7 @@ bool aap_wifi_setup_handshake(int rfcomm_fd, const char *ap_ip, uint16_t ap_port
     /* 3. Send WIFI_START_REQUEST (type 1) */
     aap_protobuf_aaw_WifiStartRequest start_req = aap_protobuf_aaw_WifiStartRequest_init_default;
     strncpy(start_req.ip_address, ap_ip ? ap_ip : "192.168.43.1", sizeof(start_req.ip_address) - 1);
-    start_req.port = ap_port ? ap_port : 5000;
+    start_req.port = ap_port ? ap_port : 5277;
 
     uint8_t pb_buf[256];
     pb_ostream_t ostream = pb_ostream_from_buffer(pb_buf, sizeof(pb_buf));
@@ -170,9 +170,6 @@ bool aap_wifi_setup_handshake(int rfcomm_fd, const char *ap_ip, uint16_t ap_port
     printf("aap_wifi_setup: sent WIFI_START_REQUEST (%s:%u)\n", start_req.ip_address, start_req.port);
 
     /* 4. Process post-start messages (WIFI_START_RESPONSE, WIFI_INFO_REQUEST, WIFI_CONNECT_STATUS) */
-    bool got_start_resp = false;
-    bool sent_info_resp = false;
-
     for (int i = 0; i < 5; i++) {
         if (!recv_wpp_frame(rfcomm_fd, &type, rx_buf, &rx_len, sizeof(rx_buf), 10)) {
             printf("aap_wifi_setup: no more frames on RFCOMM (may be normal if phone is connecting to WiFi)\n");
@@ -182,13 +179,12 @@ bool aap_wifi_setup_handshake(int rfcomm_fd, const char *ap_ip, uint16_t ap_port
         printf("aap_wifi_setup: received WPP frame type=%u (%zu bytes)\n", type, rx_len);
 
         if (type == WPP_MSG_START_RESPONSE) {
-            got_start_resp = true;
             printf("aap_wifi_setup: got WIFI_START_RESPONSE (type 7)\n");
         } else if (type == WPP_MSG_INFO_REQUEST) {
             printf("aap_wifi_setup: got WIFI_INFO_REQUEST (type 2), sending WIFI_INFO_RESPONSE (type 3)\n");
             aap_protobuf_aaw_WifiInfoResponse info_resp = aap_protobuf_aaw_WifiInfoResponse_init_default;
             strncpy(info_resp.ssid, ssid ? ssid : "custom_ui_wifi", sizeof(info_resp.ssid) - 1);
-            strncpy(info_resp.password, password ? password : "custom_ui_wifi_pass", sizeof(info_resp.password) - 1);
+            strncpy(info_resp.password, password ? password : "88888888", sizeof(info_resp.password) - 1);
             strncpy(info_resp.bssid, bssid ? bssid : "", sizeof(info_resp.bssid) - 1);
             info_resp.security_mode = (aap_protobuf_service_wifiprojection_message_WifiSecurityMode)security_mode;
 
@@ -199,7 +195,6 @@ bool aap_wifi_setup_handshake(int rfcomm_fd, const char *ap_ip, uint16_t ap_port
                 fprintf(stderr, "aap_wifi_setup: failed to send WIFI_INFO_RESPONSE\n");
                 return false;
             }
-            sent_info_resp = true;
             printf("aap_wifi_setup: sent WIFI_INFO_RESPONSE (ssid=%s, bssid=%s)\n", info_resp.ssid, info_resp.bssid);
         } else if (type == WPP_MSG_CONNECT_STATUS) {
             printf("aap_wifi_setup: got WIFI_CONNECT_STATUS (type 6)\n");

@@ -17,7 +17,7 @@
 
 #define SIDECAR_SOCK_PATH "/tmp/androidauto-sidecar.sock"
 #define SIDECAR_LOCK_PATH "/tmp/androidauto-sidecar.lock"
-#define AAP_TCP_PORT      5000
+#define AAP_TCP_PORT      5277
 
 #define MAX_POLL_FDS      16
 
@@ -44,8 +44,8 @@ static void *wifi_setup_thread(void *arg) {
     aap_wifi_get_bssid(bssid, sizeof(bssid));
 
     bool ok = aap_wifi_setup_handshake(fd, "192.168.43.1", AAP_TCP_PORT,
-                                       "custom_ui_wifi", "custom_ui_wifi_pass",
-                                       bssid, 3 /* WPA2_PSK */);
+                                       "custom_ui_wifi", "88888888",
+                                       bssid, 5 /* WPA2_PERSONAL */);
     if (!ok) {
         fprintf(stderr, "micro_aap: WPP handshake failed\n");
         close(fd);

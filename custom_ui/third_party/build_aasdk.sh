@@ -52,20 +52,62 @@ DEPS_DIR="${AASDK_DEPS_DIR:-$HOME/build-deps}"
 # libaap_protobuf.a before the mismatch was caught.
 AASDK_BUILD_SUBDIR="${AASDK_BUILD_SUBDIR:-build-arm}"
 CROSS_COMPILE="${CROSS_COMPILE:-arm-linux-gnueabihf-}"
+# OpenSSL stays static from Buildroot's own staging sysroot regardless
+# of LINK_SHARED (Buildroot's libopenssl.mk hardcodes no-shared for
+# the target build, confirmed in custom_ui/Makefile's own comment) --
+# $DEPS_DIR/openssl-arm-install is the OLD static-build-only location
+# and doesn't exist in a LINK_SHARED=1 deps tree (only Boost/Protobuf/
+# libusb get built there). Real bug hit 2026-08-24: leaving
+# CMAKE_PREFIX_PATH pointed at a nonexistent openssl-arm-install
+# silently made find_package(OpenSSL) fall through to the HOST's own
+# x86_64 libssl.so instead of erroring -- "file not recognized: file
+# format not recognized" at the final link step, not at configure
+# time. AASDK_OPENSSL_ROOT lets the caller point at the real ARM
+# OpenSSL explicitly; defaults to the old static location for
+# backwards compatibility.
+AASDK_OPENSSL_ROOT="${AASDK_OPENSSL_ROOT:-$DEPS_DIR/openssl-arm-install}"
 
-echo "==> Patching aasdk to build static libs (SHARED -> STATIC, non-macOS branch)..."
-sed -i 's/add_library(aasdk SHARED/add_library(aasdk STATIC/' "$AASDK_DIR/CMakeLists.txt"
-sed -i 's/add_library(aap_protobuf SHARED/add_library(aap_protobuf STATIC/' "$AASDK_DIR/protobuf/CMakeLists.txt"
-# CMakeLists.txt's own `set(Boost_USE_STATIC_LIBS OFF)` (a plain, non-
-# CACHE set()) shadows our -DBoost_USE_STATIC_LIBS=ON command-line flag
-# for the rest of that directory scope -- confirmed by hitting
-# "Could not find a configuration file for package boost_log_setup
-# that exactly matches requested version" (it found the -static
-# variant but wasn't looking for it). Patch the default directly, and
-# drop -DBOOST_ALL_DYN_LINK (a dynamic-import declspec macro that has
-# no business being defined when linking Boost statically).
-sed -i 's/set(Boost_USE_STATIC_LIBS OFF)/set(Boost_USE_STATIC_LIBS ON)/' "$AASDK_DIR/CMakeLists.txt"
-sed -i '/add_definitions(-DBOOST_ALL_DYN_LINK)/d' "$AASDK_DIR/CMakeLists.txt"
+# 2026-08-24: LINK_SHARED=1 builds real .so's (libaasdk.so/
+# libaap_protobuf.so) against the shared Boost/Protobuf/libusb built
+# by the other build_*.sh scripts with their own LINK_SHARED=1 -- see
+# build_boost.sh's own header comment for the real motivation.
+# Unset/0 (default) is the exact original static behavior.
+#
+# IMPORTANT: aasdk/'s source tree (CMakeLists.txt etc.) is ONE shared
+# checkout, not duplicated per build variant -- these sed patches must
+# self-correct to whichever mode THIS invocation needs, not just apply
+# once, or building the static variant after a shared one (or vice
+# versa) would silently reuse whatever the previous run left in the
+# source tree. Every pattern below matches EITHER current state and
+# rewrites to the target state, so re-running for either variant is
+# always correct regardless of build order.
+if [[ "$LINK_SHARED" == "1" ]]; then
+    echo "==> Patching aasdk to build SHARED libs (this is actually upstream's own real default on non-macOS -- just undoing our own static patch if it's currently applied)..."
+    sed -i -E 's/add_library\(aasdk (STATIC|SHARED)/add_library(aasdk SHARED/' "$AASDK_DIR/CMakeLists.txt"
+    sed -i -E 's/add_library\(aap_protobuf (STATIC|SHARED)/add_library(aap_protobuf SHARED/' "$AASDK_DIR/protobuf/CMakeLists.txt"
+    sed -i -E 's/set\(Boost_USE_STATIC_LIBS (ON|OFF)\)/set(Boost_USE_STATIC_LIBS OFF)/' "$AASDK_DIR/CMakeLists.txt"
+    # Restore add_definitions(-DBOOST_ALL_DYN_LINK) right after the
+    # Boost_USE_STATIC_LIBS line if a prior static-mode run deleted it
+    # -- real macro for dynamic Boost.Log's declspec import/export
+    # markers, upstream's own default for the SHARED path.
+    if ! grep -q 'BOOST_ALL_DYN_LINK' "$AASDK_DIR/CMakeLists.txt"; then
+        sed -i '/set(Boost_USE_STATIC_LIBS OFF)/a add_definitions(-DBOOST_ALL_DYN_LINK)' "$AASDK_DIR/CMakeLists.txt"
+    fi
+else
+    echo "==> Patching aasdk to build static libs (SHARED -> STATIC, non-macOS branch)..."
+    sed -i -E 's/add_library\(aasdk (STATIC|SHARED)/add_library(aasdk STATIC/' "$AASDK_DIR/CMakeLists.txt"
+    sed -i -E 's/add_library\(aap_protobuf (STATIC|SHARED)/add_library(aap_protobuf STATIC/' "$AASDK_DIR/protobuf/CMakeLists.txt"
+    # CMakeLists.txt's own `set(Boost_USE_STATIC_LIBS OFF)` (a plain, non-
+    # CACHE set()) shadows our -DBoost_USE_STATIC_LIBS=ON command-line flag
+    # for the rest of that directory scope -- confirmed by hitting
+    # "Could not find a configuration file for package boost_log_setup
+    # that exactly matches requested version" (it found the -static
+    # variant but wasn't looking for it). Patch the default directly, and
+    # drop -DBOOST_ALL_DYN_LINK (a dynamic-import declspec macro that has
+    # no business being defined when linking Boost statically).
+    sed -i -E 's/set\(Boost_USE_STATIC_LIBS (ON|OFF)\)/set(Boost_USE_STATIC_LIBS ON)/' "$AASDK_DIR/CMakeLists.txt"
+    sed -i '/add_definitions(-DBOOST_ALL_DYN_LINK)/d' "$AASDK_DIR/CMakeLists.txt"
+fi
 
 # GCC < 8's libstdc++ only ships the pre-standardization Filesystem TS
 # under <experimental/filesystem> (requires -lstdc++fs) -- the
@@ -100,6 +142,15 @@ fi
 mkdir -p "$AASDK_DIR/$AASDK_BUILD_SUBDIR"
 cd "$AASDK_DIR/$AASDK_BUILD_SUBDIR"
 
+SHARED_FLAG="OFF"
+BOOST_STATIC_FLAG="ON"
+PROTOBUF_LIB="$DEPS_DIR/protobuf-arm-install/lib/libprotobuf.a"
+if [[ "$LINK_SHARED" == "1" ]]; then
+    SHARED_FLAG="ON"
+    BOOST_STATIC_FLAG="OFF"
+    PROTOBUF_LIB="$DEPS_DIR/protobuf-arm-install/lib/libprotobuf.so"
+fi
+
 cat > "$AASDK_DIR/$AASDK_BUILD_SUBDIR/arm-toolchain.cmake" <<EOF
 set(CMAKE_SYSTEM_NAME Linux)
 set(CMAKE_SYSTEM_PROCESSOR arm)
@@ -108,21 +159,22 @@ set(CMAKE_CXX_COMPILER ${CROSS_COMPILE}g++)
 set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
 set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
 set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
-set(BUILD_SHARED_LIBS OFF)
+set(BUILD_SHARED_LIBS ${SHARED_FLAG})
 EOF
 
-echo "==> Configuring aasdk..."
+echo "==> Configuring aasdk (BUILD_SHARED_LIBS=$SHARED_FLAG, Boost_USE_STATIC_LIBS=$BOOST_STATIC_FLAG)..."
 PATH="$DEPS_DIR/protoc-host/bin:$PATH" \
 cmake \
     -DCMAKE_TOOLCHAIN_FILE="$AASDK_DIR/$AASDK_BUILD_SUBDIR/arm-toolchain.cmake" \
     -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_PREFIX_PATH="$DEPS_DIR/boost-arm-install;$DEPS_DIR/openssl-arm-install;$DEPS_DIR/libusb-arm-install;$DEPS_DIR/protobuf-arm-install" \
-    -DBoost_USE_STATIC_LIBS=ON \
-    -DBUILD_SHARED_LIBS=OFF \
+    -DCMAKE_PREFIX_PATH="$DEPS_DIR/boost-arm-install;$AASDK_OPENSSL_ROOT;$DEPS_DIR/libusb-arm-install;$DEPS_DIR/protobuf-arm-install" \
+    -DOPENSSL_ROOT_DIR="$AASDK_OPENSSL_ROOT" \
+    -DBoost_USE_STATIC_LIBS=$BOOST_STATIC_FLAG \
+    -DBUILD_SHARED_LIBS=$SHARED_FLAG \
     -DAASDK_TEST=OFF \
     -DPROTOBUF_PROTOC_EXECUTABLE="$DEPS_DIR/protoc-host/bin/protoc" \
     -DPROTOBUF_INCLUDE_DIR="$DEPS_DIR/protobuf-arm-install/include" \
-    -DPROTOBUF_LIBRARIES="$DEPS_DIR/protobuf-arm-install/lib/libprotobuf.a" \
+    -DPROTOBUF_LIBRARIES="$PROTOBUF_LIB" \
     ..
 
 echo "==> Building..."

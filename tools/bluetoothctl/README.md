@@ -39,3 +39,28 @@ make
 ```
 
 Cross-compiles with `arm-linux-gnueabihf-gcc` using the staged dependencies and strips the executable (`bluetoothctl`, ~1.9 MB).
+
+## Dynamic build (for the `dyn` rootfs)
+
+2026-08-24: `bluetoothctl.dyn` / `build_dyn.sh` build this same source
+dynamically-linked against Buildroot's own `libglib2`, `readline`,
+`dbus`, and `ncurses` (all enabled in `ark1668_ft_dyn_defconfig`) for
+`ark1668_ft_dyn_defconfig`'s glibc-2.30 rootfs, instead of the fully
+static build above. Verified via `readelf -d`/`objdump -T`: genuine
+dynamic ELF, real `NEEDED` entries for all four libraries plus
+`libc`/`libm`/`libpthread`, max referenced `GLIBC_2.17` (safely under
+the target's 2.30). No `tools/nss-stub` wrapping needed -- that
+workaround is for the static-glibc-NSS crash class only, which
+doesn't apply to a dynamic binary.
+
+Real dependency notes (differ from the static build's flags above):
+this Buildroot's `libglib2` (2.56.4) is built against system PCRE1,
+not PCRE2 -- the static build's `-lpcre2-8` was only needed because
+its own glib was built against pcre2 on a different host, and
+bluetoothctl's own source has no direct pcre2 reference. This
+Buildroot's `ncurses` also has no separate `libtinfo`/`libtinfow` --
+tinfo is merged into `libncurses` itself.
+
+```sh
+BUILDROOT_OUTPUT_DIR=/path/to/linux-arkmicro/buildroot/output ./build_dyn.sh
+```

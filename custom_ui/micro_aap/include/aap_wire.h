@@ -9,17 +9,20 @@
 extern "C" {
 #endif
 
-/* AAP Channel IDs */
+/* AAP Channel IDs (matching authoritative AASDK ChannelId enum) */
 typedef enum {
-    AAP_CHANNEL_CONTROL       = 0,
-    AAP_CHANNEL_MEDIA_AUDIO   = 1,
-    AAP_CHANNEL_SPEECH_AUDIO  = 2,
-    AAP_CHANNEL_SYSTEM_AUDIO  = 3,
-    AAP_CHANNEL_SENSOR        = 4,
-    AAP_CHANNEL_INPUT         = 5,
-    AAP_CHANNEL_VIDEO         = 6,
-    AAP_CHANNEL_BLUETOOTH     = 7,
-    AAP_CHANNEL_NONE          = 255
+    AAP_CHANNEL_CONTROL                  = 0,
+    AAP_CHANNEL_SENSOR                   = 1,
+    AAP_CHANNEL_MEDIA_SINK_GENERIC       = 2,
+    AAP_CHANNEL_MEDIA_SINK_VIDEO         = 3,
+    AAP_CHANNEL_MEDIA_SINK_MEDIA_AUDIO   = 4,
+    AAP_CHANNEL_MEDIA_SINK_GUIDANCE_AUDIO= 5,
+    AAP_CHANNEL_MEDIA_SINK_SYSTEM_AUDIO  = 6,
+    AAP_CHANNEL_MEDIA_SINK_TELEPHONY     = 7,
+    AAP_CHANNEL_INPUT                    = 8,
+    AAP_CHANNEL_MICROPHONE               = 9,
+    AAP_CHANNEL_BLUETOOTH                = 10,
+    AAP_CHANNEL_NONE                     = 255
 } aap_channel_id_t;
 
 /* AAP Frame Types (bits 0-1 of flags) */
@@ -32,7 +35,7 @@ typedef enum {
 
 /* AAP Message & Encryption Flags */
 #define AAP_FLAG_FRAME_TYPE_MASK 0x03
-#define AAP_FLAG_CONTROL         0x04  /* Message type: 1 = control, 0 = specific */
+#define AAP_FLAG_CONTROL         0x04  /* 1 = control message on non-0 channel, 0 = specific message */
 #define AAP_FLAG_ENCRYPTED       0x08  /* 1 = encrypted, 0 = plain */
 
 /* Header Sizes */

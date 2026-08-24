@@ -1,0 +1,9 @@
+# Nanopb options for AAP Protobufs: static arrays and strings
+* max_size: 64
+* max_count: 8
+
+*ServiceDiscoveryResponse.channels max_count: 10
+*VideoConfiguration.codec_resolution type: FT_STATIC
+*AudioConfiguration.sampling_rate type: FT_STATIC
+*KeyBindingResponse.keycodes max_count: 16
+*TouchAction.action type: FT_STATIC

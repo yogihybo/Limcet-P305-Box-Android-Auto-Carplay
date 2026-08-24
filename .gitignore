@@ -58,3 +58,6 @@ tools/mcu_builder/output/
 # build_bootable_sdcard_dyn.sh's own scratch dir (pre-merged rootfs +
 # custom_ui build log) — not a source artifact
 /build/
+
+# Micro-AAP build output
+custom_ui/micro_aap/build/

@@ -312,9 +312,31 @@ AASDK_LIBS      := -Wl,--start-group \
 # hardcodes `no-shared` for the TARGET build regardless of
 # BR2_STATIC_LIBS, confirmed via direct inspection, so it stays static
 # either way; no reason to duplicate it into AASDK_DEPS_DIR_DYN too.
-AASDK_DEPS_DIR_DYN ?= $(HOME)/build-deps-dyn
+# 2026-08-24: Boost/Protobuf/libusb/aasdk itself REBUILT (again) as real
+# SHARED libraries (LINK_SHARED=1 on every build_*.sh, see their own
+# header comments) -- real motivation: two reproducible OOM-killer
+# kills of androidauto-sidecar this session even after the mlockall()
+# fix, because none of this ~15-20MB of static code was page-shareable
+# with anything else on this 173MB/no-swap device. Assessed and ruled
+# out using Buildroot's own bundled protobuf package first (3.6.0,
+# predates Abseil entirely -- a hard architectural incompatibility with
+# aasdk's real v25.3/v30.0 requirement, not a version nuance) -- these
+# are still this project's own cross-builds, at the exact same already-
+# hardware-proven versions, just flipped to shared, in their own fully
+# separate deps tree ($(HOME)/build-deps-dyn-shared) and aasdk build
+# dir (build-arm-dyn-shared/, NOT build-arm-dyn/, which the previous
+# static-Boost dyn build used and which nothing else references
+# anymore). AASDK's own upstream CMakeLists.txt actually defaults to
+# SHARED on non-macOS -- build_aasdk.sh's LINK_SHARED=1 path mostly
+# just stops overriding that default, rather than fighting it.
+#
+# openssl: still static from Buildroot's own staging sysroot regardless
+# (Buildroot's libopenssl.mk, this 2019.05-rc1 tree, hardcodes
+# `no-shared` for the TARGET build, confirmed via direct inspection) --
+# no reason to duplicate it into the shared deps tree.
+AASDK_DEPS_DIR_DYN ?= $(HOME)/build-deps-dyn-shared
 AASDK_INCLUDES_DYN := -I$(AASDK_DIR)/include \
-                    -I$(AASDK_DIR)/build-arm-dyn/protobuf \
+                    -I$(AASDK_DIR)/build-arm-dyn-shared/protobuf \
                     -I$(AASDK_DEPS_DIR_DYN)/boost-arm-install/include \
                     -I$(BUILDROOT_STAGING)/usr/include \
                     -I$(AASDK_DEPS_DIR_DYN)/libusb-arm-install/include \
@@ -323,15 +345,38 @@ AASDK_INCLUDES_DYN := -I$(AASDK_DIR)/include \
                     -I$(BUILDROOT_STAGING)/usr/include/dbus-1.0 \
                     -I$(BUILDROOT_STAGING)/usr/lib/dbus-1.0/include \
                     -Ithird_party/bluez_uapi
-AASDK_LIBS_DYN  := -Wl,--start-group \
-                    $(AASDK_DIR)/build-arm-dyn/lib/libaasdk.a \
-                    $(AASDK_DIR)/build-arm-dyn/lib/libaap_protobuf.a \
-                    $(wildcard $(AASDK_DEPS_DIR_DYN)/boost-arm-install/lib/*.a) \
-                    $(AASDK_DEPS_DIR_DYN)/libusb-arm-install/lib/libusb-1.0.a \
+# AASDK_SHARED_LIB_DIR: where the real .so's this binary needs at
+# runtime actually live -- staged into the rootfs overlay's /usr/lib
+# (already on this device's LD_LIBRARY_PATH, see /etc/profile) by the
+# deploy script, not a Buildroot-managed location. -rpath-link (build-
+# time only, doesn't end up in the binary) lets the cross-linker
+# resolve these against the real .so's instead of erroring on unlinked
+# transitive symbols; the runtime search path comes from
+# LD_LIBRARY_PATH on-device, not this flag.
+# --as-needed: build_boost.sh/build_protobuf.sh build (and this line
+# wildcards in) EVERY Boost/Abseil component, not just what aasdk
+# actually uses (same "install() needs everything built" reason as the
+# static .a wildcard this replaced) -- but unlike static linking, where
+# only referenced object code gets pulled in, explicitly listing every
+# .so on the link line makes the linker mark ALL of them NEEDED
+# regardless of real symbol use. --as-needed drops any of these from
+# the final NEEDED list that nothing in the binary actually
+# references, keeping both the deployed footprint and the runtime
+# dependency graph honest. Re-enabled to the default (--no-as-needed)
+# before the last few libs, which we do want unconditionally.
+AASDK_LIBS_DYN  := -Wl,--as-needed \
+                    $(AASDK_DIR)/build-arm-dyn-shared/lib/libaasdk.so \
+                    $(AASDK_DIR)/build-arm-dyn-shared/lib/libaap_protobuf.so \
+                    $(wildcard $(AASDK_DEPS_DIR_DYN)/boost-arm-install/lib/*.so) \
+                    $(AASDK_DEPS_DIR_DYN)/libusb-arm-install/lib/libusb-1.0.so \
                     $(BUILDROOT_STAGING)/usr/lib/libssl.a \
                     $(BUILDROOT_STAGING)/usr/lib/libcrypto.a \
-                    $(wildcard $(AASDK_DEPS_DIR_DYN)/protobuf-arm-install/lib/*.a) \
-                    -Wl,--end-group \
+                    $(wildcard $(AASDK_DEPS_DIR_DYN)/protobuf-arm-install/lib/*.so) \
+                    -Wl,--no-as-needed \
+                    -Wl,-rpath-link,$(AASDK_DIR)/build-arm-dyn-shared/lib \
+                    -Wl,-rpath-link,$(AASDK_DEPS_DIR_DYN)/boost-arm-install/lib \
+                    -Wl,-rpath-link,$(AASDK_DEPS_DIR_DYN)/libusb-arm-install/lib \
+                    -Wl,-rpath-link,$(AASDK_DEPS_DIR_DYN)/protobuf-arm-install/lib \
                     -L$(BUILDROOT_STAGING)/usr/lib -lasound -ldbus-1 \
                     -lpthread -ldl -lrt -lstdc++fs
 

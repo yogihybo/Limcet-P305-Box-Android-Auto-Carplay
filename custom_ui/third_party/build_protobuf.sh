@@ -33,6 +33,13 @@
 
 set -e
 
+# 2026-08-24: LINK_SHARED=1 builds a real .so (and shared Abseil, via
+# protobuf_ABSL_PROVIDER=module inheriting the same BUILD_SHARED_LIBS)
+# instead of .a's -- see build_boost.sh's own header comment for the
+# real motivation (page-shareable memory on this 173MB/no-swap
+# device). Unset/0 (default) is the exact original static behavior.
+LINK_SHARED="${LINK_SHARED:-0}"
+
 PROTOBUF_VERSION="25.3"
 BUILD_DIR="${PROTOBUF_BUILD_DIR:-$HOME/build-deps}"
 CROSS_COMPILE="${CROSS_COMPILE:-arm-linux-gnueabihf-}"
@@ -60,6 +67,11 @@ if [[ ! -d "protobuf-${PROTOBUF_VERSION}" ]]; then
     rm protobuf.tar.gz
 fi
 
+SHARED_FLAG="OFF"
+if [[ "$LINK_SHARED" == "1" ]]; then
+    SHARED_FLAG="ON"
+fi
+
 cat > arm-toolchain.cmake <<EOF
 set(CMAKE_SYSTEM_NAME Linux)
 set(CMAKE_SYSTEM_PROCESSOR arm)
@@ -68,20 +80,20 @@ set(CMAKE_CXX_COMPILER ${CROSS_COMPILE}g++)
 set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
 set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
 set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
-set(BUILD_SHARED_LIBS OFF)
+set(BUILD_SHARED_LIBS ${SHARED_FLAG})
 EOF
 
 cd "protobuf-${PROTOBUF_VERSION}"
 mkdir -p build-arm
 cd build-arm
 
-echo "==> Configuring (ARM static libprotobuf, host protoc for codegen, bundled Abseil)..."
+echo "==> Configuring (BUILD_SHARED_LIBS=$SHARED_FLAG; ARM libprotobuf, host protoc for codegen, bundled Abseil)..."
 cmake -DCMAKE_TOOLCHAIN_FILE="$BUILD_DIR/arm-toolchain.cmake" \
       -DCMAKE_BUILD_TYPE=Release \
       -Dprotobuf_BUILD_TESTS=OFF \
       -Dprotobuf_BUILD_PROTOC_BINARIES=OFF \
       -Dprotobuf_ABSL_PROVIDER=module \
-      -DBUILD_SHARED_LIBS=OFF \
+      -DBUILD_SHARED_LIBS=$SHARED_FLAG \
       -DProtobuf_PROTOC_EXECUTABLE="$BUILD_DIR/protoc-host/bin/protoc" \
       ..
 

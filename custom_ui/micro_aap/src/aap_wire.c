@@ -11,7 +11,7 @@ size_t aap_parse_frame_header(const uint8_t *buf, size_t buf_len, aap_frame_head
     out_hdr->flags = buf[1];
 
     uint8_t frame_type = out_hdr->flags & AAP_FLAG_FRAME_TYPE_MASK;
-    if (frame_type == AAP_FRAME_FIRST || frame_type == AAP_FRAME_BULK) {
+    if (frame_type == AAP_FRAME_FIRST) {
         if (buf_len < AAP_HEADER_EXTENDED_SIZE) {
             return 0;
         }
@@ -50,7 +50,7 @@ size_t aap_pack_frame_header(uint8_t channel_id, aap_frame_type_t frame_type,
         flags |= AAP_FLAG_ENCRYPTED;
     }
 
-    if (frame_type == AAP_FRAME_FIRST || frame_type == AAP_FRAME_BULK) {
+    if (frame_type == AAP_FRAME_FIRST) {
         if (max_len < AAP_HEADER_EXTENDED_SIZE) {
             return 0;
         }

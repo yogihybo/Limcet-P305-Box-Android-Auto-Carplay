@@ -33,6 +33,8 @@
 #include "aap_protobuf/service/media/shared/message/Start.pb.h"
 #include "aap_protobuf/service/media/shared/message/Stop.pb.h"
 #include "aap_protobuf/service/media/source/message/Ack.pb.h"
+#include "aap_protobuf/service/media/video/message/VideoFocusNotification.pb.h"
+#include "aap_protobuf/service/media/video/message/VideoFocusMode.pb.h"
 
 #include "aap_protobuf/service/inputsource/InputMessageId.pb.h"
 #include "aap_protobuf/service/inputsource/message/InputReport.pb.h"
@@ -122,6 +124,27 @@ static bool send_channel_msg(aap_session_t *s, uint8_t channel_id, uint16_t msg_
         return send_raw_frame(s, channel_id, AAP_FRAME_BULK, false, true, cipher, cipher_len);
     } else {
         return send_raw_frame(s, channel_id, AAP_FRAME_BULK, false, false, raw_msg, total_len);
+    }
+}
+
+static bool send_channel_control_msg(aap_session_t *s, uint8_t channel_id, uint16_t msg_id,
+                                     const uint8_t *proto_data, size_t proto_len, bool encrypt) {
+    uint8_t raw_msg[4096];
+    raw_msg[0] = (uint8_t)(msg_id >> 8);
+    raw_msg[1] = (uint8_t)(msg_id & 0xFF);
+    if (proto_data && proto_len > 0) {
+        if (proto_len + 2 > sizeof(raw_msg)) return false;
+        memcpy(raw_msg + 2, proto_data, proto_len);
+    }
+    size_t total_len = proto_len + 2;
+
+    if (encrypt && aap_cryptor_is_active(s->cryptor)) {
+        uint8_t cipher[4096];
+        size_t cipher_len = aap_cryptor_encrypt(s->cryptor, raw_msg, total_len, cipher, sizeof(cipher));
+        if (cipher_len == 0) return false;
+        return send_raw_frame(s, channel_id, AAP_FRAME_BULK, true, true, cipher, cipher_len);
+    } else {
+        return send_raw_frame(s, channel_id, AAP_FRAME_BULK, true, false, raw_msg, total_len);
     }
 }
 
@@ -446,6 +469,11 @@ static void handle_control_message(aap_session_t *s, uint16_t msg_id, const uint
             break;
         }
 
+        case aap_protobuf_service_control_message_ControlMessageType_MESSAGE_PING_RESPONSE: {
+            /* Ping reply received from phone */
+            break;
+        }
+
         case aap_protobuf_service_control_message_ControlMessageType_MESSAGE_AUDIO_FOCUS_REQUEST: {
             aap_protobuf_service_control_message_AudioFocusRequest req =
                 aap_protobuf_service_control_message_AudioFocusRequest_init_default;
@@ -531,11 +559,40 @@ static void handle_control_message(aap_session_t *s, uint16_t msg_id, const uint
     }
 }
 
+static void handle_channel_open_request(aap_session_t *s, uint8_t channel_id, const uint8_t *payload, size_t payload_len) {
+    aap_protobuf_service_control_message_ChannelOpenRequest req =
+        aap_protobuf_service_control_message_ChannelOpenRequest_init_default;
+    if (payload_len > 0) {
+        pb_istream_t stream = pb_istream_from_buffer(payload, payload_len);
+        pb_decode(&stream, aap_protobuf_service_control_message_ChannelOpenRequest_fields, &req);
+    }
+
+    printf("aap_session: channel %u open request (priority=%d)\n", channel_id, req.priority);
+
+    aap_protobuf_service_control_message_ChannelOpenResponse resp =
+        aap_protobuf_service_control_message_ChannelOpenResponse_init_default;
+    resp.status = aap_protobuf_shared_MessageStatus_STATUS_SUCCESS;
+
+    uint8_t pb_buf[128];
+    pb_ostream_t ostream = pb_ostream_from_buffer(pb_buf, sizeof(pb_buf));
+    pb_encode(&ostream, aap_protobuf_service_control_message_ChannelOpenResponse_fields, &resp);
+
+    send_channel_control_msg(s, channel_id,
+                             aap_protobuf_service_control_message_ControlMessageType_MESSAGE_CHANNEL_OPEN_RESPONSE,
+                             pb_buf, ostream.bytes_written, true);
+    printf("aap_session: channel %u open response sent (STATUS_SUCCESS)\n", channel_id);
+}
+
 static void handle_sensor_channel(aap_session_t *s, const uint8_t *payload, size_t payload_len) {
     if (payload_len < 2) return;
     uint16_t sub_cmd = (uint16_t)((payload[0] << 8) | payload[1]);
     const uint8_t *pb_data = payload + 2;
     size_t pb_len = payload_len - 2;
+
+    if (sub_cmd == aap_protobuf_service_control_message_ControlMessageType_MESSAGE_CHANNEL_OPEN_REQUEST) {
+        handle_channel_open_request(s, AAP_CHANNEL_SENSOR, pb_data, pb_len);
+        return;
+    }
 
     if (sub_cmd == aap_protobuf_service_sensorsource_SensorMessageId_SENSOR_MESSAGE_REQUEST) {
         aap_protobuf_service_sensorsource_message_SensorRequest req =
@@ -580,6 +637,13 @@ static void handle_sensor_channel(aap_session_t *s, const uint8_t *payload, size
 static void handle_input_channel(aap_session_t *s, const uint8_t *payload, size_t payload_len) {
     if (payload_len < 2) return;
     uint16_t sub_cmd = (uint16_t)((payload[0] << 8) | payload[1]);
+    const uint8_t *pb_data = payload + 2;
+    size_t pb_len = payload_len - 2;
+
+    if (sub_cmd == aap_protobuf_service_control_message_ControlMessageType_MESSAGE_CHANNEL_OPEN_REQUEST) {
+        handle_channel_open_request(s, AAP_CHANNEL_INPUT, pb_data, pb_len);
+        return;
+    }
 
     if (sub_cmd == aap_protobuf_service_inputsource_InputMessageId_INPUT_MESSAGE_KEY_BINDING_REQUEST) {
         printf("aap_session: input KeyBindingRequest received -> replying STATUS_SUCCESS\n");
@@ -603,6 +667,11 @@ static void handle_media_channel(aap_session_t *s, uint8_t channel_id, const uin
     const uint8_t *pb_data = payload + 2;
     size_t pb_len = payload_len - 2;
 
+    if (sub_cmd == aap_protobuf_service_control_message_ControlMessageType_MESSAGE_CHANNEL_OPEN_REQUEST) {
+        handle_channel_open_request(s, channel_id, pb_data, pb_len);
+        return;
+    }
+
     switch (sub_cmd) {
         case aap_protobuf_service_media_sink_MediaMessageId_MEDIA_MESSAGE_SETUP: {
             printf("aap_session: channel %u setup request\n", channel_id);
@@ -619,6 +688,43 @@ static void handle_media_channel(aap_session_t *s, uint8_t channel_id, const uin
 
             send_channel_msg(s, channel_id, aap_protobuf_service_media_sink_MediaMessageId_MEDIA_MESSAGE_CONFIG,
                              pb_buf, ostream.bytes_written, true);
+            printf("aap_session: channel %u setup response sent\n", channel_id);
+
+            /* If this is the video sink, send unsolicited VideoFocusNotification (PROJECTED) */
+            if (channel_id == AAP_CHANNEL_MEDIA_SINK_VIDEO) {
+                aap_protobuf_service_media_video_message_VideoFocusNotification focus_notif =
+                    aap_protobuf_service_media_video_message_VideoFocusNotification_init_default;
+                focus_notif.has_focus = true;
+                focus_notif.focus = aap_protobuf_service_media_video_message_VideoFocusMode_VIDEO_FOCUS_PROJECTED;
+                focus_notif.has_unsolicited = true;
+                focus_notif.unsolicited = true;
+
+                ostream = pb_ostream_from_buffer(pb_buf, sizeof(pb_buf));
+                pb_encode(&ostream, aap_protobuf_service_media_video_message_VideoFocusNotification_fields, &focus_notif);
+                send_channel_msg(s, AAP_CHANNEL_MEDIA_SINK_VIDEO,
+                                 aap_protobuf_service_media_sink_MediaMessageId_MEDIA_MESSAGE_VIDEO_FOCUS_NOTIFICATION,
+                                 pb_buf, ostream.bytes_written, true);
+                printf("aap_session: video focus indication sent (unsolicited=1)\n");
+            }
+            break;
+        }
+
+        case aap_protobuf_service_media_sink_MediaMessageId_MEDIA_MESSAGE_VIDEO_FOCUS_REQUEST: {
+            printf("aap_session: video focus request received\n");
+            aap_protobuf_service_media_video_message_VideoFocusNotification focus_notif =
+                aap_protobuf_service_media_video_message_VideoFocusNotification_init_default;
+            focus_notif.has_focus = true;
+            focus_notif.focus = aap_protobuf_service_media_video_message_VideoFocusMode_VIDEO_FOCUS_PROJECTED;
+            focus_notif.has_unsolicited = true;
+            focus_notif.unsolicited = false;
+
+            uint8_t pb_buf[128];
+            pb_ostream_t ostream = pb_ostream_from_buffer(pb_buf, sizeof(pb_buf));
+            pb_encode(&ostream, aap_protobuf_service_media_video_message_VideoFocusNotification_fields, &focus_notif);
+            send_channel_msg(s, AAP_CHANNEL_MEDIA_SINK_VIDEO,
+                             aap_protobuf_service_media_sink_MediaMessageId_MEDIA_MESSAGE_VIDEO_FOCUS_NOTIFICATION,
+                             pb_buf, ostream.bytes_written, true);
+            printf("aap_session: video focus indication sent (unsolicited=0)\n");
             break;
         }
 
@@ -640,6 +746,7 @@ static void handle_media_channel(aap_session_t *s, uint8_t channel_id, const uin
             } else if (channel_id == AAP_CHANNEL_MEDIA_SINK_VIDEO) {
                 s->video_session_id = start.session_id;
                 aap_video_sink_open(s->video_sink);
+                set_state(s, AAP_SESSION_STATE_RUNNING, "Android Auto session running (video active)");
             }
             break;
         }

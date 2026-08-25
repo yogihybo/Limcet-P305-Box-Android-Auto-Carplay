@@ -659,18 +659,12 @@ $(BUILD_DIR)/androidauto-sidecar-obj/androidauto/%.o: src/androidauto/%.cpp
 	@mkdir -p $(dir $@)
 	$(CXX_DYN) $(CXXFLAGS) $(AASDK_INCLUDES_DYN) -c -o $@ $<
 
-# --- androidauto-sidecar (dynamic, Phase 4) ---
-# No AASDK_WRAP_FLAGS/NSS_STUB_OBJ -- that workaround exists only for
-# the static-glibc-NSS-init crash class (glibc >= 2.34, see
-# tools/nss-stub/README.md), which doesn't apply once dynamic against
-# this rootfs's own glibc 2.25 toolchain (CXX_DYN above). Unverified
-# until this actually links/runs -- if a real static-NSS-style crash
-# somehow still shows up, HANTRO_DLOPEN_OBJ's real dlopen() (still
-# needed regardless, for libmfc.so) or a reintroduced wrap would be the
-# fix, not assumed unnecessary without a real hardware test.
-$(ANDROIDAUTO_SIDECAR_TARGET): $(ANDROIDAUTO_SIDECAR_OBJS) $(AASDK_OBJS_DYN) $(HAL_CONFIG_OBJ_DYN) $(VIDEO_LAYER_OBJ_DYN) $(LOG_TIMING_CORE_OBJ_DYN) $(HANTRO_DLOPEN_OBJ)
+.PHONY: $(ANDROIDAUTO_SIDECAR_TARGET)
+# --- androidauto-sidecar (Micro-AAP: Pure C, zero Boost/AASDK/Abseil runtime dependencies) ---
+$(ANDROIDAUTO_SIDECAR_TARGET):
 	@mkdir -p $(dir $@)
-	$(CXX_DYN) $(LDFLAGS_DYN) -o $@ $^ $(AASDK_LIBS_DYN)
+	$(MAKE) -C micro_aap BUILDROOT_OUTPUT_DIR=$(BUILDROOT_OUTPUT_DIR)
+	cp -f micro_aap/build/micro-androidauto-sidecar $@
 
 $(BUILD_DIR)/androidauto-sidecar-obj/%.o: sidecars/androidauto/%.cpp
 	@mkdir -p $(dir $@)

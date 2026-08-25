@@ -6,13 +6,16 @@ BUILDROOT_STAGING    ?= $(BUILDROOT_OUTPUT_DIR)/staging
 CROSS_COMPILE        ?= $(BUILDROOT_OUTPUT_DIR)/host/bin/arm-buildroot-linux-gnueabihf-
 
 CC      := $(CROSS_COMPILE)gcc
-CFLAGS  := -std=gnu11 -Wall -Wextra -O2 -s \
+CFLAGS  := -std=gnu11 -Wall -Wextra -Os \
+           -ffunction-sections -fdata-sections \
+           -fno-unwind-tables -fno-asynchronous-unwind-tables \
+           -fvisibility=hidden \
            -Iinclude \
            -Iproto_gen \
            -I../third_party/nanopb \
            -I$(BUILDROOT_STAGING)/usr/include
 
-LDFLAGS := -s -L$(BUILDROOT_STAGING)/usr/lib
+LDFLAGS := -s -Wl,--gc-sections -Wl,--as-needed -L$(BUILDROOT_STAGING)/usr/lib
 LIBS    := -lssl -lcrypto -lasound -lpthread -ldl -lrt
 
 BUILD_DIR := build

@@ -695,19 +695,20 @@ bool aap_session_process_incoming(aap_session_t *s) {
     s->rx_len += (size_t)n;
     s->last_rx_time = time(NULL);
 
-    while (s->rx_len >= 2) {
+    size_t cursor = 0;
+    while (s->rx_len - cursor >= 2) {
         aap_frame_header_t hdr;
-        size_t hdr_len = aap_parse_frame_header(s->rx_buf, s->rx_len, &hdr);
+        size_t hdr_len = aap_parse_frame_header(s->rx_buf + cursor, s->rx_len - cursor, &hdr);
         if (hdr_len == 0) {
             break; /* Incomplete header */
         }
 
         size_t frame_total = hdr_len + hdr.frame_size;
-        if (s->rx_len < frame_total) {
+        if (s->rx_len - cursor < frame_total) {
             break; /* Incomplete payload */
         }
 
-        const uint8_t *frame_payload = s->rx_buf + hdr_len;
+        const uint8_t *frame_payload = s->rx_buf + cursor + hdr_len;
         size_t payload_len = hdr.frame_size;
 
         uint8_t plain_buf[4096];
@@ -737,9 +738,14 @@ bool aap_session_process_incoming(aap_session_t *s) {
             handle_media_channel(s, hdr.channel_id, active_payload, active_len);
         }
 
-        /* Shift remaining buffer */
-        memmove(s->rx_buf, s->rx_buf + frame_total, s->rx_len - frame_total);
-        s->rx_len -= frame_total;
+        cursor += frame_total;
+    }
+
+    if (cursor > 0) {
+        if (cursor < s->rx_len) {
+            memmove(s->rx_buf, s->rx_buf + cursor, s->rx_len - cursor);
+        }
+        s->rx_len -= cursor;
     }
 
     return true;

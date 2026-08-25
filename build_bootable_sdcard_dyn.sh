@@ -266,7 +266,12 @@ else
         chown -R "$SUDO_USER":"$SUDO_USER" "$CUSTOM_UI_DIR/build"
     fi
     info "Re-staging fresh binaries + configs into $DYN_OVERLAY_DIR/usr/bin/"
-    cp -f "$CUSTOM_UI_DIR/build/custom_ui" "$CUSTOM_UI_DIR/build/androidauto-sidecar" \
+    if [[ -f "$CUSTOM_UI_DIR/micro_aap/build/micro-androidauto-sidecar" ]]; then
+        cp -f "$CUSTOM_UI_DIR/micro_aap/build/micro-androidauto-sidecar" "$DYN_OVERLAY_DIR/usr/bin/androidauto-sidecar"
+    else
+        cp -f "$CUSTOM_UI_DIR/build/androidauto-sidecar" "$DYN_OVERLAY_DIR/usr/bin/androidauto-sidecar"
+    fi
+    cp -f "$CUSTOM_UI_DIR/build/custom_ui" \
           "$CUSTOM_UI_DIR/build/hal.conf" "$CUSTOM_UI_DIR/build/default_settings.conf" \
           "$DYN_OVERLAY_DIR/usr/bin/"
     rsync -a "$CUSTOM_UI_DIR/build/alsa/" "$DYN_OVERLAY_DIR/usr/bin/alsa/"

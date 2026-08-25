@@ -234,14 +234,24 @@ static void handle_control_message(aap_session_t *s, uint16_t msg_id, const uint
             resp.probe_for_support = false;
 
             resp.has_headunit_info = true;
+            resp.headunit_info.has_make = true;
+            strncpy(resp.headunit_info.make, "custom_ui", sizeof(resp.headunit_info.make) - 1);
+            resp.headunit_info.has_model = true;
+            strncpy(resp.headunit_info.model, "prado-firmware-reconstruction", sizeof(resp.headunit_info.model) - 1);
+            resp.headunit_info.has_head_unit_make = true;
             strncpy(resp.headunit_info.head_unit_make, "custom_ui", sizeof(resp.headunit_info.head_unit_make) - 1);
+            resp.headunit_info.has_head_unit_model = true;
             strncpy(resp.headunit_info.head_unit_model, "prado-firmware-reconstruction", sizeof(resp.headunit_info.head_unit_model) - 1);
 
             resp.has_connection_configuration = true;
             resp.connection_configuration.has_ping_configuration = true;
+            resp.connection_configuration.ping_configuration.has_tracked_ping_count = true;
             resp.connection_configuration.ping_configuration.tracked_ping_count = 10;
+            resp.connection_configuration.ping_configuration.has_timeout_ms = true;
             resp.connection_configuration.ping_configuration.timeout_ms = 10000;
+            resp.connection_configuration.ping_configuration.has_interval_ms = true;
             resp.connection_configuration.ping_configuration.interval_ms = 2000;
+            resp.connection_configuration.ping_configuration.has_high_latency_threshold_ms = true;
             resp.connection_configuration.ping_configuration.high_latency_threshold_ms = 1000;
 
             resp.channels_count = 0;
@@ -261,14 +271,24 @@ static void handle_control_message(aap_session_t *s, uint16_t msg_id, const uint
                 aap_protobuf_service_Service *ch = &resp.channels[resp.channels_count++];
                 ch->id = AAP_CHANNEL_MEDIA_SINK_VIDEO;
                 ch->has_media_sink_service = true;
+                ch->media_sink_service.has_available_type = true;
                 ch->media_sink_service.available_type = aap_protobuf_service_media_shared_message_MediaCodecType_MEDIA_CODEC_VIDEO_H264_BP;
+                ch->media_sink_service.has_available_while_in_call = true;
                 ch->media_sink_service.available_while_in_call = true;
                 ch->media_sink_service.video_configs_count = 1;
+                ch->media_sink_service.video_configs[0].has_codec_resolution = true;
                 ch->media_sink_service.video_configs[0].codec_resolution = aap_protobuf_service_media_sink_message_VideoCodecResolutionType_VIDEO_800x480;
+                ch->media_sink_service.video_configs[0].has_frame_rate = true;
                 ch->media_sink_service.video_configs[0].frame_rate = aap_protobuf_service_media_sink_message_VideoFrameRateType_VIDEO_FPS_30;
+                ch->media_sink_service.video_configs[0].has_video_codec_type = true;
+                ch->media_sink_service.video_configs[0].video_codec_type = aap_protobuf_service_media_shared_message_MediaCodecType_MEDIA_CODEC_VIDEO_H264_BP;
+                ch->media_sink_service.video_configs[0].has_density = true;
                 ch->media_sink_service.video_configs[0].density = 140;
+                ch->media_sink_service.video_configs[0].has_real_density = true;
                 ch->media_sink_service.video_configs[0].real_density = 140;
+                ch->media_sink_service.video_configs[0].has_width_margin = true;
                 ch->media_sink_service.video_configs[0].width_margin = 0;
+                ch->media_sink_service.video_configs[0].has_height_margin = true;
                 ch->media_sink_service.video_configs[0].height_margin = 0;
             }
 
@@ -277,8 +297,11 @@ static void handle_control_message(aap_session_t *s, uint16_t msg_id, const uint
                 aap_protobuf_service_Service *ch = &resp.channels[resp.channels_count++];
                 ch->id = AAP_CHANNEL_MEDIA_SINK_MEDIA_AUDIO;
                 ch->has_media_sink_service = true;
+                ch->media_sink_service.has_available_type = true;
                 ch->media_sink_service.available_type = aap_protobuf_service_media_shared_message_MediaCodecType_MEDIA_CODEC_AUDIO_PCM;
+                ch->media_sink_service.has_audio_type = true;
                 ch->media_sink_service.audio_type = aap_protobuf_service_media_sink_message_AudioStreamType_AUDIO_STREAM_MEDIA;
+                ch->media_sink_service.has_available_while_in_call = true;
                 ch->media_sink_service.available_while_in_call = true;
                 ch->media_sink_service.audio_configs_count = 1;
                 ch->media_sink_service.audio_configs[0].sampling_rate = 48000;
@@ -291,8 +314,11 @@ static void handle_control_message(aap_session_t *s, uint16_t msg_id, const uint
                 aap_protobuf_service_Service *ch = &resp.channels[resp.channels_count++];
                 ch->id = AAP_CHANNEL_MEDIA_SINK_GUIDANCE_AUDIO;
                 ch->has_media_sink_service = true;
+                ch->media_sink_service.has_available_type = true;
                 ch->media_sink_service.available_type = aap_protobuf_service_media_shared_message_MediaCodecType_MEDIA_CODEC_AUDIO_PCM;
+                ch->media_sink_service.has_audio_type = true;
                 ch->media_sink_service.audio_type = aap_protobuf_service_media_sink_message_AudioStreamType_AUDIO_STREAM_GUIDANCE;
+                ch->media_sink_service.has_available_while_in_call = true;
                 ch->media_sink_service.available_while_in_call = true;
                 ch->media_sink_service.audio_configs_count = 1;
                 ch->media_sink_service.audio_configs[0].sampling_rate = 16000;
@@ -305,8 +331,11 @@ static void handle_control_message(aap_session_t *s, uint16_t msg_id, const uint
                 aap_protobuf_service_Service *ch = &resp.channels[resp.channels_count++];
                 ch->id = AAP_CHANNEL_MEDIA_SINK_SYSTEM_AUDIO;
                 ch->has_media_sink_service = true;
+                ch->media_sink_service.has_available_type = true;
                 ch->media_sink_service.available_type = aap_protobuf_service_media_shared_message_MediaCodecType_MEDIA_CODEC_AUDIO_PCM;
+                ch->media_sink_service.has_audio_type = true;
                 ch->media_sink_service.audio_type = aap_protobuf_service_media_sink_message_AudioStreamType_AUDIO_STREAM_SYSTEM_AUDIO;
+                ch->media_sink_service.has_available_while_in_call = true;
                 ch->media_sink_service.available_while_in_call = true;
                 ch->media_sink_service.audio_configs_count = 1;
                 ch->media_sink_service.audio_configs[0].sampling_rate = 16000;
@@ -333,6 +362,7 @@ static void handle_control_message(aap_session_t *s, uint16_t msg_id, const uint
                 aap_protobuf_service_Service *ch = &resp.channels[resp.channels_count++];
                 ch->id = AAP_CHANNEL_MICROPHONE;
                 ch->has_media_source_service = true;
+                ch->media_source_service.has_available_type = true;
                 ch->media_source_service.available_type = aap_protobuf_service_media_shared_message_MediaCodecType_MEDIA_CODEC_AUDIO_PCM;
                 ch->media_source_service.has_audio_config = true;
                 ch->media_source_service.audio_config.sampling_rate = 16000;
@@ -352,12 +382,24 @@ static void handle_control_message(aap_session_t *s, uint16_t msg_id, const uint
 
             uint8_t pb_buf[4096];
             pb_ostream_t stream = pb_ostream_from_buffer(pb_buf, sizeof(pb_buf));
-            pb_encode(&stream, aap_protobuf_service_control_message_ServiceDiscoveryResponse_fields, &resp);
+            bool enc_ok = pb_encode(&stream, aap_protobuf_service_control_message_ServiceDiscoveryResponse_fields, &resp);
+            printf("aap_session: ServiceDiscoveryResponse encoded (%zu bytes, success=%d)\n", stream.bytes_written, enc_ok);
 
             send_channel_msg(s, AAP_CHANNEL_CONTROL,
                              aap_protobuf_service_control_message_ControlMessageType_MESSAGE_SERVICE_DISCOVERY_RESPONSE,
                              pb_buf, stream.bytes_written, true);
             set_state(s, AAP_SESSION_STATE_CHANNELS_OPENING, "Service discovery complete, opening channels");
+
+            /* Send immediate initial keepalive ping */
+            aap_protobuf_service_control_message_PingRequest ping =
+                aap_protobuf_service_control_message_PingRequest_init_default;
+            ping.timestamp = plausible_epoch_millis();
+            stream = pb_ostream_from_buffer(pb_buf, sizeof(pb_buf));
+            pb_encode(&stream, aap_protobuf_service_control_message_PingRequest_fields, &ping);
+            send_channel_msg(s, AAP_CHANNEL_CONTROL,
+                             aap_protobuf_service_control_message_ControlMessageType_MESSAGE_PING_REQUEST,
+                             pb_buf, stream.bytes_written, true);
+            s->last_ping_time = time(NULL);
             break;
         }
 
@@ -752,7 +794,7 @@ bool aap_session_process_incoming(aap_session_t *s) {
 }
 
 void aap_session_tick(aap_session_t *s) {
-    if (!s || s->state != AAP_SESSION_STATE_RUNNING) return;
+    if (!s || (s->state != AAP_SESSION_STATE_RUNNING && s->state != AAP_SESSION_STATE_CHANNELS_OPENING)) return;
 
     time_t now = time(NULL);
     if (now - s->last_ping_time >= 2) {

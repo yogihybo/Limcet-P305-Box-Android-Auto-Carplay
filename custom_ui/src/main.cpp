@@ -561,12 +561,21 @@ int main() {
         }
 
         if (reverseChanged) {
+            bool factoryCamera = core::default_store().get_bool("OriginalCarCamera", false, "General");
             if (reverseEngaged) {
-                std::printf("%s [HAL:REVCAM] Reverse gear engaged -- opening camera overlay\n", core::log_timestamp().c_str());
-                staging_ui::navigate_to(staging_ui::NavDestination::Camera);
+                if (factoryCamera) {
+                    std::printf("%s [HAL:REVCAM] Reverse gear engaged -- OEM Factory Camera mode active (hardware video mux active, SoC overlay bypassed)\n", core::log_timestamp().c_str());
+                } else {
+                    std::printf("%s [HAL:REVCAM] Reverse gear engaged -- opening aftermarket camera overlay\n", core::log_timestamp().c_str());
+                    staging_ui::navigate_to(staging_ui::NavDestination::Camera);
+                }
             } else {
-                std::printf("%s [HAL:REVCAM] Reverse gear disengaged -- returning to previous screen\n", core::log_timestamp().c_str());
-                core::navigation::pop();
+                if (factoryCamera) {
+                    std::printf("%s [HAL:REVCAM] Reverse gear disengaged -- OEM Factory Camera\n", core::log_timestamp().c_str());
+                } else {
+                    std::printf("%s [HAL:REVCAM] Reverse gear disengaged -- returning to previous screen\n", core::log_timestamp().c_str());
+                    core::navigation::pop();
+                }
             }
         }
 

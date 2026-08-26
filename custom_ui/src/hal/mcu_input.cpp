@@ -1,4 +1,5 @@
 #include "hal/mcu_input.h"
+#include "hal/androidauto_client.h"
 #include "core/log_timing.h"
 
 #include <cerrno>
@@ -18,24 +19,15 @@ namespace {
 // real baud, see tools/mcu-handshake/mcu-handshake.c's own comment.
 constexpr int kBaud = B38400;
 
-// CMD 0x02 knob/button codes -- see this file's header comment for the
-// live-capture evidence.
-constexpr unsigned char kKnobClockwise = 65;
-constexpr unsigned char kKnobCounterClockwise = 64;
+// CMD 0x02 knob/button codes -- live hardware captured
+constexpr unsigned char kBtnNextTrack = 3;
+constexpr unsigned char kBtnPrevTrack = 4;
+constexpr unsigned char kBtnAnswer = 8;
+constexpr unsigned char kBtnHangup = 9;
+constexpr unsigned char kBtnHome = 12;
 constexpr unsigned char kKnobPush = 13;
-
-// 2026-08-21: PLACEHOLDER, not yet captured on real hardware -- user's
-// own words: "same type of framing as the knob input press button but
-// a unique code" (CMD 0x02, b3=sub-code, b4=1 headlights-on/0 off,
-// matching kKnobPush's own press/release b4 semantics, not a momentary
-// tick like the rotation codes). 0xFF is deliberately outside the real
-// knob/button code range seen so far (13/64/65) so this branch can't
-// accidentally fire on a real knob event before the actual value is
-// confirmed -- UPDATE THIS ONE CONSTANT once tomorrow's capture comes
-// in, nothing else in this chain (McuInputHal::get_night_mode(),
-// main.cpp's backlight dimming, sensor_channel.cpp's SENSOR_NIGHT_MODE)
-// needs to change.
-constexpr unsigned char kHeadlightState = 0xFF;
+constexpr unsigned char kKnobCounterClockwise = 64;
+constexpr unsigned char kKnobClockwise = 65;
 
 // MCUAdapter_BoxP300::getPackageCheckSum() -- plain byte sum, one's
 // complemented, over cmd+len+payload (not the leading 0x2E signature).
@@ -247,7 +239,26 @@ void McuInputHal::run() {
             continue;
         }
 
-        if (cmd == 0x20 && len >= 5) {
+        if (cmd == 0x01 && len >= 1) {
+            // CMD 0x01: Headlights / Illumination status broadcast from MCU (len=6)
+            std::printf("%s hal::mcu_input: CMD 0x01 (Headlights) len=%u payload=[",
+                        core::log_timestamp().c_str(), len);
+            for (unsigned char i = 0; i < len; ++i) {
+                std::printf("%02X%s", payload[i], (i + 1 < len) ? " " : "");
+            }
+            // If any lighting bit is set, headlights are ON
+            bool lights_on = (len >= 4 && payload[3] != 0) || (payload[0] != 0);
+            std::printf("] -> night_mode=%d\n", lights_on ? 1 : 0);
+            night_mode_.store(lights_on, std::memory_order_release);
+        } else if (cmd == 0x04) {
+            // CMD 0x04: Reverse gear engaged (len=6)
+            std::printf("%s hal::mcu_input: Reverse gear ENGAGED (CMD 0x04)\n", core::log_timestamp().c_str());
+            reverse_gear_.store(true, std::memory_order_release);
+        } else if (cmd == 0x12) {
+            // CMD 0x12: Reverse gear disengaged (len=3)
+            std::printf("%s hal::mcu_input: Reverse gear DISENGAGED (CMD 0x12)\n", core::log_timestamp().c_str());
+            reverse_gear_.store(false, std::memory_order_release);
+        } else if (cmd == 0x20 && len >= 5) {
             unsigned char b3 = payload[0];
             unsigned char b4 = payload[1];
             unsigned char b5 = payload[2];
@@ -283,8 +294,28 @@ void McuInputHal::run() {
                 knob_ticks_.fetch_sub(1, std::memory_order_relaxed);
             } else if (b3 == kKnobPush) {
                 knob_pressed_.store(b4 == 1, std::memory_order_release);
-            } else if (b3 == kHeadlightState) {
-                night_mode_.store(b4 == 1, std::memory_order_release);
+            } else if (b3 == kBtnHome) {
+                if (b4 == 1) {
+                    std::printf("%s hal::mcu_input: HOME button pressed (b3=12 b4=1)\n", core::log_timestamp().c_str());
+                    AndroidAutoClient client;
+                    client.sendKey(3 /* KEYCODE_HOME */);
+                }
+            } else if (b3 == kBtnNextTrack) {
+                std::printf("%s hal::mcu_input: NEXT TRACK button (b3=3 b4=%u)\n", core::log_timestamp().c_str(), b4);
+                AndroidAutoClient client;
+                client.sendKey(87 /* KEYCODE_MEDIA_NEXT */);
+            } else if (b3 == kBtnPrevTrack) {
+                std::printf("%s hal::mcu_input: PREV TRACK button (b3=4 b4=%u)\n", core::log_timestamp().c_str(), b4);
+                AndroidAutoClient client;
+                client.sendKey(88 /* KEYCODE_MEDIA_PREVIOUS */);
+            } else if (b3 == kBtnAnswer) {
+                std::printf("%s hal::mcu_input: ANSWER CALL button (b3=8 b4=%u)\n", core::log_timestamp().c_str(), b4);
+                AndroidAutoClient client;
+                client.sendKey(5 /* KEYCODE_CALL */);
+            } else if (b3 == kBtnHangup) {
+                std::printf("%s hal::mcu_input: HANGUP CALL button (b3=9 b4=%u)\n", core::log_timestamp().c_str(), b4);
+                AndroidAutoClient client;
+                client.sendKey(6 /* KEYCODE_ENDCALL */);
             } else {
                 std::printf("%s hal::mcu_input: unhandled cmd=0x02 b3=0x%02X (%u) b4=0x%02X (%u)\n",
                             core::log_timestamp().c_str(), b3, b3, b4, b4);
@@ -329,6 +360,10 @@ bool McuInputHal::get_knob_pressed() const {
 
 bool McuInputHal::get_night_mode() const {
     return night_mode_.load(std::memory_order_acquire);
+}
+
+bool McuInputHal::get_reverse_gear() const {
+    return reverse_gear_.load(std::memory_order_acquire);
 }
 
 }  // namespace hal

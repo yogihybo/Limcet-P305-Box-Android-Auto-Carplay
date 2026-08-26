@@ -599,13 +599,32 @@ int main() {
             staging_ui::navigate_to(staging_ui::NavDestination::AndroidAuto);
         }
 
-        // Reverse gear camera auto-trigger
-        if (reverse_watcher.has_pending_change()) {
+        // Reverse gear camera auto-trigger (dual-redundant: hardware /dev/carback driver + MCU UART CMD 0x04/0x12)
+        static bool lastMcuReverse = false;
+        bool mcuReverse = mcu_input.get_reverse_gear();
+        bool reverseChanged = false;
+        bool reverseEngaged = false;
+
+        if (mcuReverse != lastMcuReverse) {
+            reverseChanged = true;
+            reverseEngaged = mcuReverse;
+            lastMcuReverse = mcuReverse;
+        } else if (reverse_watcher.has_pending_change()) {
             hal::ReverseGearState rev = reverse_watcher.consume_change();
             if (rev == hal::ReverseGearState::Engaged) {
+                reverseChanged = true;
+                reverseEngaged = true;
+            } else if (rev == hal::ReverseGearState::Disengaged) {
+                reverseChanged = true;
+                reverseEngaged = false;
+            }
+        }
+
+        if (reverseChanged) {
+            if (reverseEngaged) {
                 std::printf("%s ui: Reverse engaged -- opening camera overlay\n", core::log_timestamp().c_str());
                 staging_ui::navigate_to(staging_ui::NavDestination::Camera);
-            } else if (rev == hal::ReverseGearState::Disengaged) {
+            } else {
                 std::printf("%s ui: Reverse disengaged -- returning to previous screen\n", core::log_timestamp().c_str());
                 core::navigation::pop();
             }

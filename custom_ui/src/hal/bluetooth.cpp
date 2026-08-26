@@ -167,7 +167,7 @@ bool fetch_managed_devices(DBusConnection * conn, std::vector<DeviceSnapshot> & 
     if (!reply) {
         if (dbus_error_is_set(&err)) {
             if (err.name && std::strcmp(err.name, "org.freedesktop.DBus.Error.ServiceUnknown") != 0) {
-                std::fprintf(stderr, "%s hal::bluetooth: GetManagedObjects failed: %s\n",
+                std::fprintf(stderr, "%s [BT] GetManagedObjects failed: %s\n",
                              core::log_timestamp().c_str(), err.message);
             }
             dbus_error_free(&err);
@@ -407,20 +407,20 @@ DBusHandlerResult bluez_signal_filter(DBusConnection *, DBusMessage * msg, void 
 }
 
 void bluez_monitor_loop(BluetoothHandle * h) {
-    std::printf("%s hal::bluetooth: BlueZ status monitor thread started\n", core::log_timestamp().c_str());
+    std::printf("%s [BT] BlueZ status monitor thread started\n", core::log_timestamp().c_str());
 
     DBusError err;
     dbus_error_init(&err);
     DBusConnection * conn = dbus_connection_open_private(kBluezMonitorBusAddress, &err);
     if (!conn) {
-        std::fprintf(stderr, "%s hal::bluetooth: BlueZ monitor could not open D-Bus connection: %s\n",
+        std::fprintf(stderr, "%s [BT] BlueZ monitor could not open D-Bus connection: %s\n",
                      core::log_timestamp().c_str(), err.message ? err.message : "(no message)");
         dbus_error_free(&err);
         return;
     }
     dbus_error_init(&err);
     if (!dbus_bus_register(conn, &err)) {
-        std::fprintf(stderr, "%s hal::bluetooth: BlueZ monitor dbus_bus_register failed: %s\n",
+        std::fprintf(stderr, "%s [BT] BlueZ monitor dbus_bus_register failed: %s\n",
                      core::log_timestamp().c_str(), err.message ? err.message : "(no message)");
         dbus_error_free(&err);
         dbus_connection_close(conn);
@@ -1144,12 +1144,12 @@ BluetoothHandle & shared_handle() {
 
 bool auto_reconnect_paired_device(BluetoothHandle & h) {
     if (h.fd < 0) {
-        std::printf("%s hal::bluetooth::auto_reconnect_paired_device: no bluetooth handle, skipping\n", core::log_timestamp().c_str());
+        std::printf("%s [BT] auto_reconnect_paired_device: no bluetooth handle, skipping\n", core::log_timestamp().c_str());
         return false;
     }
     std::vector<std::string> devices;
     if (!list_paired_devices(h, devices) || devices.empty()) {
-        std::printf("%s hal::bluetooth::auto_reconnect_paired_device: no paired devices to reconnect to\n", core::log_timestamp().c_str());
+        std::printf("%s [BT] auto_reconnect_paired_device: no paired devices to reconnect to\n", core::log_timestamp().c_str());
         return false;
     }
     std::string mac, name;
@@ -1161,11 +1161,11 @@ bool auto_reconnect_paired_device(BluetoothHandle & h) {
         }
     }
     if (connect_id.empty()) {
-        std::printf("%s hal::bluetooth::auto_reconnect_paired_device: no valid paired device MAC found, skipping\n", core::log_timestamp().c_str());
+        std::printf("%s [BT] auto_reconnect_paired_device: no valid paired device MAC found, skipping\n", core::log_timestamp().c_str());
         return false;
     }
 
-    std::printf("%s hal::bluetooth::auto_reconnect_paired_device: reconnecting to '%s'\n", core::log_timestamp().c_str(), connect_id.c_str());
+    std::printf("%s [BT] auto_reconnect_paired_device: reconnecting to '%s'\n", core::log_timestamp().c_str(), connect_id.c_str());
     return connect_device(h, connect_id);
 }
 

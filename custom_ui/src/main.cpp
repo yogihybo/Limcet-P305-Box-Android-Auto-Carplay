@@ -209,7 +209,7 @@ public:
                     connected = client.requestConnect();
                 }
                 if (!connected) {
-                    std::fprintf(stderr, "%s ui: auto-start requestConnect() failed (sidecar "
+                    std::fprintf(stderr, "%s [UI] auto-start requestConnect() failed (sidecar "
                                  "unreachable)\n", core::log_timestamp().c_str());
                 } else {
                     // 2026-08-12: per explicit request, the EXISTING
@@ -294,12 +294,12 @@ int acquireSingleInstanceLock() {
     constexpr const char * kLockPath = "/tmp/custom_ui.lock";
     int fd = ::open(kLockPath, O_CREAT | O_RDWR, 0644);
     if (fd < 0) {
-        std::fprintf(stderr, "%s ui: open(%s) failed: %s -- continuing without a single-instance guard\n",
+        std::fprintf(stderr, "%s [UI] open(%s) failed: %s -- continuing without a single-instance guard\n",
                      core::log_timestamp().c_str(), kLockPath, std::strerror(errno));
         return -1;
     }
     if (::flock(fd, LOCK_EX | LOCK_NB) != 0) {
-        std::fprintf(stderr, "%s ui: another custom_ui instance already holds %s -- refusing to start a "
+        std::fprintf(stderr, "%s [UI] another custom_ui instance already holds %s -- refusing to start a "
                      "second one (see this function's own comment for why this matters)\n",
                      core::log_timestamp().c_str(), kLockPath);
         ::close(fd);
@@ -434,7 +434,7 @@ int main() {
     core::SizedThread(core::kDefaultThreadStackSize, []() {
         // Starts BlueZ 5.66 subsystem and sidecar in parallel with UI rendering
         hal::ensure_bluetooth_daemon_running();
-        std::printf("%s ui: BlueZ daemon launch requested\n", core::log_timestamp().c_str());
+        std::printf("%s [BT] BlueZ daemon launch requested\n", core::log_timestamp().c_str());
         hal::try_spawn_androidauto_sidecar();
 
         for (int i = 0; i < 30; ++i) {

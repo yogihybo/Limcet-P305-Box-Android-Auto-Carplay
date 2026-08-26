@@ -137,11 +137,11 @@ void try_spawn_androidauto_sidecar() {
 }
 
 bool sendConnectFd(int rfcommFd) {
-    std::printf("%s [BT-AA-PROFILE] sendConnectFd: handing rfcommFd=%d to androidauto-sidecar\n",
+    std::printf("%s [BT] sendConnectFd: handing rfcommFd=%d to androidauto-sidecar\n",
                 core::log_timestamp().c_str(), rfcommFd);
 
     if (std::system("pidof androidauto-sidecar >/dev/null 2>&1") != 0) {
-        std::printf("%s [BT-AA-PROFILE] sendConnectFd: androidauto-sidecar not running yet, "
+        std::printf("%s [BT] sendConnectFd: androidauto-sidecar not running yet, "
                     "spawning it\n", core::log_timestamp().c_str());
         try_spawn_androidauto_sidecar();
     }
@@ -165,7 +165,7 @@ bool sendConnectFd(int rfcommFd) {
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
     if (connFd < 0) {
-        std::fprintf(stderr, "%s [BT-AA-PROFILE] sendConnectFd: could not reach "
+        std::fprintf(stderr, "%s [BT] sendConnectFd: could not reach "
                      "androidauto-sidecar's socket -- closing rfcommFd=%d, dropping this "
                      "connection\n", core::log_timestamp().c_str(), rfcommFd);
         close(rfcommFd);
@@ -203,7 +203,7 @@ bool sendConnectFd(int rfcommFd) {
     // either way, success or failure, so this function never leaks it.
     close(rfcommFd);
     if (sent != static_cast<ssize_t>(iov.iov_len)) {
-        std::fprintf(stderr, "%s [BT-AA-PROFILE] sendConnectFd: sendmsg() failed (sent=%zd)\n",
+        std::fprintf(stderr, "%s [BT] sendConnectFd: sendmsg() failed (sent=%zd)\n",
                      core::log_timestamp().c_str(), sent);
         close(connFd);
         return false;
@@ -234,7 +234,7 @@ bool sendConnectFd(int rfcommFd) {
     close(connFd);
 
     bool ok = reply.rfind("OK", 0) == 0;
-    std::printf("%s [BT-AA-PROFILE] sendConnectFd: sidecar reply: '%s' (%s)\n",
+    std::printf("%s [BT] sendConnectFd: sidecar reply: '%s' (%s)\n",
                 core::log_timestamp().c_str(), reply.c_str(), ok ? "accepted" : "rejected/unreachable");
     return ok;
 }

@@ -181,6 +181,9 @@ bool aap_video_sink_open(aap_video_sink_t *sink) {
     return true;
 }
 
+#define ARKFB_SHOW_WINDOW_REAL 0x4f2b
+#define ARKFB_HIDE_WINDOW_REAL 0x4f2c
+
 void aap_video_sink_close(aap_video_sink_t *sink) {
     if (!sink) return;
 
@@ -206,6 +209,7 @@ void aap_video_sink_close(aap_video_sink_t *sink) {
         sink->hantro_lib = NULL;
     }
     if (sink->fb4_fd >= 0) {
+        ioctl(sink->fb4_fd, ARKFB_HIDE_WINDOW_REAL, 0);
         close(sink->fb4_fd);
         sink->fb4_fd = -1;
     }
@@ -214,9 +218,6 @@ void aap_video_sink_close(aap_video_sink_t *sink) {
         sink->ark_disp_fd = -1;
     }
 }
-
-#define ARKFB_SHOW_WINDOW_REAL 0x4f2b
-#define ARKFB_HIDE_WINDOW_REAL 0x4f2c
 
 static void configure_video_layer(aap_video_sink_t *sink, uint32_t width, uint32_t height) {
     if (sink->fb4_fd < 0 || sink->is_configured) return;

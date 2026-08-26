@@ -439,12 +439,10 @@ static void handle_control_message(aap_session_t *s, uint16_t msg_id, const uint
                 ch->input_source_service.touchscreen_count = 1;
                 ch->input_source_service.touchscreen[0].width = 800;
                 ch->input_source_service.touchscreen[0].height = 480;
-                ch->input_source_service.keycodes_supported_count = 5;
+                ch->input_source_service.keycodes_supported_count = 3;
                 ch->input_source_service.keycodes_supported[0] = 280; /* KEYCODE_SYSTEM_NAVIGATION_UP */
                 ch->input_source_service.keycodes_supported[1] = 281; /* KEYCODE_SYSTEM_NAVIGATION_DOWN */
                 ch->input_source_service.keycodes_supported[2] = 23;  /* KEYCODE_DPAD_CENTER */
-                ch->input_source_service.keycodes_supported[3] = 21;  /* KEYCODE_DPAD_LEFT (nudge prev card) */
-                ch->input_source_service.keycodes_supported[4] = 22;  /* KEYCODE_DPAD_RIGHT (nudge next card) */
             }
 
             /* Channel 9: Microphone */
@@ -1100,6 +1098,12 @@ void aap_session_tick(aap_session_t *s) {
     if (!s || (s->state != AAP_SESSION_STATE_RUNNING && s->state != AAP_SESSION_STATE_CHANNELS_OPENING)) return;
 
     time_t now = time(NULL);
+    if (s->state == AAP_SESSION_STATE_RUNNING && (now - s->last_rx_time > 3)) {
+        printf("aap_session: WiFi connection lost (no data for 3s), closing session\n");
+        set_state(s, AAP_SESSION_STATE_DISCONNECTED, "WiFi disconnected");
+        return;
+    }
+
     if (now - s->last_ping_time >= 1) {
         s->last_ping_time = now;
 

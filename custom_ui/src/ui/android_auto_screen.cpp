@@ -7,12 +7,14 @@
 // process" reasoning this mirrors.
 #include "ui/android_auto_screen.h"
 
+#include <atomic>
 #include <utility>
 
 #include "hal/androidauto_client.h"
 #include "hal/bluetooth.h"
 #include "hal/display.h"
 #include "hal/knob.h"
+#include "core/log_timing.h"
 #include "core/navigation.h"
 #include "ui/bluetooth_screen.h"
 #include "ui/status_bar.h"
@@ -115,6 +117,7 @@ struct Widgets {
     // poll_timer_cb() only issues the ioctl on an actual Connected/
     // not-Connected transition rather than every 500ms tick.
     bool display_hidden = false;
+    bool was_connected = false;
     // Tracks which copy/callback the CTA button currently shows, same
     // once-per-transition reasoning as display_hidden above -- see
     // poll_timer_cb()'s own comment.
@@ -138,22 +141,23 @@ void poll_timer_cb(lv_timer_t * timer) {
     lv_obj_set_style_text_color(w->state_label, color_for_state_name(status.name), 0);
     lv_label_set_text(w->detail_label, status.detail.c_str());
 
-    // 2026-08-19: Connected alone isn't the right condition to gate
-    // fb0/knob/touch on -- Android Auto's own in-app exit/back control
-    // sends a real VideoFocusRequestNotification(mode=NATIVE), which
-    // per real AA behavior (researched, not guessed -- see
-    // video_channel.cpp's onVideoFocusRequest() comment) means "give
-    // focus back to your native UI," NOT a disconnect. The session
-    // stays fully Connected in the background the whole time -- real
-    // hardware showed this exact case (bye-bye never sent, session
-    // still Connected) leaving the panel stuck on a frozen AA video
-    // frame with fb0 never switched back. Querying videoFocusNative()
-    // (see hal/androidauto_client.h / androidauto/video_visibility.h)
-    // alongside Connected catches this: only route the knob/touch to
-    // AA, hide fb0, and hide this screen's own content card while a
-    // session is BOTH Connected AND the phone still wants PROJECTED
-    // focus -- i.e. actually showing video.
     bool connected = status.name == "Connected";
+
+    if (connected) {
+        w->was_connected = true;
+    } else if (w->was_connected) {
+        std::printf("%s ui: AA session ended/disconnected -- returning to LVGL menu\n",
+                    core::log_timestamp().c_str());
+        w->was_connected = false;
+        if (w->display_hidden) {
+            hal::show_display();
+            w->display_hidden = false;
+        }
+        hal::androidauto_screen_active().store(false, std::memory_order_release);
+        core::navigation::pop();
+        return;
+    }
+
     bool nativeFocus = connected && client().videoFocusNative();
     bool showingVideo = connected && !nativeFocus;
     hal::androidauto_screen_active().store(showingVideo, std::memory_order_release);

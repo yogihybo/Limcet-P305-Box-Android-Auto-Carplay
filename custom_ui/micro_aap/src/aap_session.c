@@ -52,6 +52,7 @@
 #include "aap_protobuf/service/bluetooth/message/BluetoothPairingResponse.pb.h"
 #include "aap_protobuf/service/media/source/message/MicrophoneRequest.pb.h"
 #include "aap_protobuf/service/media/source/message/MicrophoneResponse.pb.h"
+#include "aap_microphone.h"
 
 #define RX_BUFFER_SIZE (64 * 1024)
 #define TX_BUFFER_SIZE (64 * 1024)
@@ -105,6 +106,7 @@ struct aap_session {
     aap_audio_sink_t *audio_guidance;
     aap_audio_sink_t *audio_system;
     aap_video_sink_t *video_sink;
+    aap_microphone_t *mic;
 
     aap_channel_assembler_t assemblers[AAP_MAX_CHANNELS];
 
@@ -688,6 +690,36 @@ static void handle_input_channel(aap_session_t *s, const uint8_t *payload, size_
     }
 }
 
+static void on_mic_pcm_captured(aap_session_t *s, uint64_t timestamp_us, const uint8_t *data, size_t len) {
+    if (!s || s->socket_fd < 0 || !s->cryptor) return;
+
+    uint8_t raw_msg[512];
+    if (len + 10 > sizeof(raw_msg)) return;
+
+    /* Message ID 0x0000 (MEDIA_DATA) */
+    raw_msg[0] = 0x00;
+    raw_msg[1] = 0x00;
+
+    /* 8-byte big-endian timestamp in microseconds */
+    raw_msg[2] = (uint8_t)((timestamp_us >> 56) & 0xFF);
+    raw_msg[3] = (uint8_t)((timestamp_us >> 48) & 0xFF);
+    raw_msg[4] = (uint8_t)((timestamp_us >> 40) & 0xFF);
+    raw_msg[5] = (uint8_t)((timestamp_us >> 32) & 0xFF);
+    raw_msg[6] = (uint8_t)((timestamp_us >> 24) & 0xFF);
+    raw_msg[7] = (uint8_t)((timestamp_us >> 16) & 0xFF);
+    raw_msg[8] = (uint8_t)((timestamp_us >> 8) & 0xFF);
+    raw_msg[9] = (uint8_t)(timestamp_us & 0xFF);
+
+    memcpy(&raw_msg[10], data, len);
+    size_t total_len = len + 10;
+
+    uint8_t enc_buf[512 + 64];
+    size_t enc_len = aap_cryptor_encrypt(s->cryptor, raw_msg, total_len, enc_buf, sizeof(enc_buf));
+    if (enc_len > 0) {
+        send_raw_frame(s, AAP_CHANNEL_MICROPHONE, AAP_FRAME_BULK, false, true, enc_buf, enc_len);
+    }
+}
+
 static void handle_microphone_channel(aap_session_t *s, const uint8_t *payload, size_t payload_len) {
     if (payload_len < 2) return;
     uint16_t sub_cmd = (uint16_t)((payload[0] << 8) | payload[1]);
@@ -717,6 +749,15 @@ static void handle_microphone_channel(aap_session_t *s, const uint8_t *payload, 
                          pb_buf, ostream.bytes_written, true);
         printf("aap_session: microphone channel setup response sent\n");
     } else if (sub_cmd == 32769 /* MicrophoneRequest */) {
+        aap_protobuf_service_media_source_message_MicrophoneRequest req =
+            aap_protobuf_service_media_source_message_MicrophoneRequest_init_default;
+        if (pb_len > 0) {
+            pb_istream_t istream = pb_istream_from_buffer(pb_data, pb_len);
+            pb_decode(&istream, aap_protobuf_service_media_source_message_MicrophoneRequest_fields, &req);
+        }
+
+        printf("aap_session: microphone request (open=%d)\n", req.open);
+
         aap_protobuf_service_media_source_message_MicrophoneResponse resp =
             aap_protobuf_service_media_source_message_MicrophoneResponse_init_default;
         resp.status = (int32_t)aap_protobuf_shared_MessageStatus_STATUS_SUCCESS;
@@ -730,6 +771,12 @@ static void handle_microphone_channel(aap_session_t *s, const uint8_t *payload, 
         send_channel_msg(s, AAP_CHANNEL_MICROPHONE, 32770 /* MicrophoneResponse */,
                          pb_buf, ostream.bytes_written, true);
         printf("aap_session: microphone open/close response sent\n");
+
+        if (req.open) {
+            aap_microphone_start(s->mic, s, on_mic_pcm_captured);
+        } else {
+            aap_microphone_stop(s->mic);
+        }
     }
 }
 
@@ -933,6 +980,7 @@ aap_session_t *aap_session_create(int tcp_fd) {
     s->audio_guidance = aap_audio_sink_create("plug:softvol1", 16000, 1);
     s->audio_system = aap_audio_sink_create("plug:softvol4", 16000, 1);
     s->video_sink = aap_video_sink_create(800, 480);
+    s->mic = aap_microphone_create("default");
 
     s->last_ping_time = time(NULL);
     s->last_rx_time = time(NULL);
@@ -958,6 +1006,10 @@ void aap_session_destroy(aap_session_t *s) {
     aap_audio_sink_destroy(s->audio_guidance);
     aap_audio_sink_destroy(s->audio_system);
     aap_video_sink_destroy(s->video_sink);
+    if (s->mic) {
+        aap_microphone_destroy(s->mic);
+        s->mic = NULL;
+    }
     free(s);
 }
 

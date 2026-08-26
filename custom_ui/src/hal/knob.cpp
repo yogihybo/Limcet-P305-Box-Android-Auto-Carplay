@@ -27,6 +27,9 @@ AndroidAutoClient & androidauto_client() {
     return client;
 }
 
+#include <chrono>
+#include <cstdint>
+
 // Edge-detects the push button (McuInputHal::get_knob_pressed() is a
 // level/state getter, not an event) so a held press sends exactly one
 // tap, not a flood of them for as long as the button stays down.
@@ -42,42 +45,75 @@ bool & rotated_while_held() {
     return rotated;
 }
 
+uint64_t & last_press_time_ms() {
+    static uint64_t ms = 0;
+    return ms;
+}
+
+uint64_t & last_release_time_ms() {
+    static uint64_t ms = 0;
+    return ms;
+}
+
+uint64_t & last_held_rotation_time_ms() {
+    static uint64_t ms = 0;
+    return ms;
+}
+
 void mcu_knob_read_cb(lv_indev_t * indev, lv_indev_data_t * data) {
     auto * mcu = static_cast<McuInputHal *>(lv_indev_get_driver_data(indev));
 
     int32_t ticks = mcu->consume_knob_ticks();
-    bool pressed = mcu->get_knob_pressed();
-    bool press_edge = pressed && !knob_was_pressed();
-    bool release_edge = !pressed && knob_was_pressed();
-    knob_was_pressed() = pressed;
+    bool raw_pressed = mcu->get_knob_pressed();
+
+    auto now = std::chrono::steady_clock::now();
+    uint64_t now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+
+    bool press_edge = raw_pressed && !knob_was_pressed();
+    bool release_edge = !raw_pressed && knob_was_pressed();
+    knob_was_pressed() = raw_pressed;
 
     if (press_edge) {
+        last_press_time_ms() = now_ms;
         rotated_while_held() = false;
+    }
+    if (release_edge) {
+        last_release_time_ms() = now_ms;
     }
 
     if (androidauto_screen_active().load(std::memory_order_acquire)) {
+        // Robust Hold-and-Turn detection:
+        // A rotation tick is considered "held" if:
+        // 1. raw_pressed is actively true, OR
+        // 2. press happened within the last 400ms (even if micro-released during detent), OR
+        // 3. continuation of an active hold-rotation sequence within 400ms.
+        bool is_held = raw_pressed ||
+                       (now_ms - last_press_time_ms() < 400 && now_ms - last_release_time_ms() < 350) ||
+                       (now_ms - last_held_rotation_time_ms() < 400);
+
         if (ticks != 0) {
+            if (is_held) {
+                rotated_while_held() = true;
+                last_held_rotation_time_ms() = now_ms;
+            }
+
             std::printf("%s hal::knob: AA active, ticks=%d, held=%d\n",
-                        core::log_timestamp().c_str(), ticks, pressed ? 1 : 0);
-        }
+                        core::log_timestamp().c_str(), ticks, is_held ? 1 : 0);
 
-        if (pressed && ticks != 0) {
-            rotated_while_held() = true;
-        }
+            /* If held while rotating -> card nudge (DPAD_RIGHT / DPAD_LEFT); else intra-card (DPAD_DOWN / DPAD_UP) */
+            std::uint32_t downKey = is_held ? kKeycodeDpadRight : kKeycodeDpadDown;
+            std::uint32_t upKey = is_held ? kKeycodeDpadLeft : kKeycodeDpadUp;
 
-        /* If held while rotating -> card nudge (DPAD_RIGHT / DPAD_LEFT); else intra-card (DPAD_DOWN / DPAD_UP) */
-        std::uint32_t downKey = pressed ? kKeycodeDpadRight : kKeycodeDpadDown;
-        std::uint32_t upKey = pressed ? kKeycodeDpadLeft : kKeycodeDpadUp;
-
-        for (int32_t i = 0; i < ticks; ++i) {
-            androidauto_client().sendKey(downKey);
-        }
-        for (int32_t i = 0; i < -ticks; ++i) {
-            androidauto_client().sendKey(upKey);
+            for (int32_t i = 0; i < ticks; ++i) {
+                androidauto_client().sendKey(downKey);
+            }
+            for (int32_t i = 0; i < -ticks; ++i) {
+                androidauto_client().sendKey(upKey);
+            }
         }
 
         /* Only fire DPAD_CENTER click on release if knob was not rotated while held */
-        if (release_edge && !rotated_while_held()) {
+        if (release_edge && !rotated_while_held() && (now_ms - last_held_rotation_time_ms() > 400)) {
             androidauto_client().sendKey(kKeycodeDpadCenter);
         }
 
@@ -91,8 +127,9 @@ void mcu_knob_read_cb(lv_indev_t * indev, lv_indev_data_t * data) {
     }
 
     data->enc_diff = static_cast<int16_t>(ticks);
-    data->state = pressed ? LV_INDEV_STATE_PRESSED : LV_INDEV_STATE_RELEASED;
+    data->state = raw_pressed ? LV_INDEV_STATE_PRESSED : LV_INDEV_STATE_RELEASED;
 }
+
 
 }  // namespace
 

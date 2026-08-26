@@ -132,6 +132,9 @@ public:
     // doesn't need to change.
     bool get_night_mode() const;
 
+    // Reverse gear state directly reported by MCU (CMD 0x04 = engaged, CMD 0x12 = disengaged)
+    bool get_reverse_gear() const;
+
 private:
     void run();
 
@@ -148,6 +151,7 @@ private:
     std::atomic<bool> knob_pressed_{false};
 
     std::atomic<bool> night_mode_{false};
+    std::atomic<bool> reverse_gear_{false};
     mutable std::atomic<uint64_t> last_touch_ms_{0};
 };
 

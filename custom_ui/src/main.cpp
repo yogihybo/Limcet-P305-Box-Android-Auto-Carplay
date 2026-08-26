@@ -348,11 +348,11 @@ void apply_night_mode_brightness(bool nightMode) {
     cfg.brightness = target;
 
     if (hal::set_vde_config(h, hal::DisplayLayer::Osd1, cfg)) {
-        std::printf("%s ui: night mode %s -- brightness set to %u (saved=%d)\n",
+        std::printf("%s [HAL:DISP] Night mode %s -- brightness set to %u (saved=%d)\n",
                     core::log_timestamp().c_str(), nightMode ? "ON" : "OFF", target,
                     savedBrightness);
     } else {
-        std::fprintf(stderr, "%s ui: apply_night_mode_brightness: set_vde_config failed\n",
+        std::fprintf(stderr, "%s [HAL:DISP] apply_night_mode_brightness: set_vde_config failed\n",
                      core::log_timestamp().c_str());
     }
 }

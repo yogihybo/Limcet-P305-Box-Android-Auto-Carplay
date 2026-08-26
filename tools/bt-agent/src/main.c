@@ -287,13 +287,17 @@ static const DBusObjectPathVTable endpoint_vtable = {
 
 static int register_agent(DBusConnection *conn)
 {
+    static int agent_path_registered = 0;
+    if (!agent_path_registered) {
+        if (!dbus_connection_register_object_path(conn, AGENT_PATH, &agent_vtable, NULL)) {
+            fprintf(stderr, "[BT:AGENT] Failed to register object path %s\n", AGENT_PATH);
+            return 0;
+        }
+        agent_path_registered = 1;
+    }
+
     DBusError err;
     dbus_error_init(&err);
-
-    if (!dbus_connection_register_object_path(conn, AGENT_PATH, &agent_vtable, NULL)) {
-        fprintf(stderr, "[BT:AGENT] Failed to register object path %s\n", AGENT_PATH);
-        return 0;
-    }
 
     DBusMessage *msg = dbus_message_new_method_call("org.bluez", "/org/bluez",
                                                     "org.bluez.AgentManager1", "RegisterAgent");
@@ -306,10 +310,13 @@ static int register_agent(DBusConnection *conn)
                              DBUS_TYPE_STRING, &capability,
                              DBUS_TYPE_INVALID);
 
-    DBusMessage *reply = dbus_connection_send_with_reply_and_block(conn, msg, 5000, &err);
+    DBusMessage *reply = dbus_connection_send_with_reply_and_block(conn, msg, 3000, &err);
     dbus_message_unref(msg);
     if (!reply) {
-        fprintf(stderr, "[BT:AGENT] RegisterAgent failed: %s\n", err.message ? err.message : "unknown");
+        if (!dbus_error_has_name(&err, "org.freedesktop.DBus.Error.ServiceUnknown") &&
+            !dbus_error_has_name(&err, "org.bluez.Error.AlreadyExists")) {
+            fprintf(stderr, "[BT:AGENT] RegisterAgent failed: %s\n", err.message ? err.message : "unknown");
+        }
         dbus_error_free(&err);
         return 0;
     }
@@ -323,10 +330,12 @@ static int register_agent(DBusConnection *conn)
                              DBUS_TYPE_OBJECT_PATH, &path,
                              DBUS_TYPE_INVALID);
 
-    reply = dbus_connection_send_with_reply_and_block(conn, msg, 5000, &err);
+    reply = dbus_connection_send_with_reply_and_block(conn, msg, 3000, &err);
     dbus_message_unref(msg);
     if (!reply) {
-        fprintf(stderr, "[BT:AGENT] RequestDefaultAgent failed: %s\n", err.message ? err.message : "unknown");
+        if (!dbus_error_has_name(&err, "org.freedesktop.DBus.Error.ServiceUnknown")) {
+            fprintf(stderr, "[BT:AGENT] RequestDefaultAgent failed: %s\n", err.message ? err.message : "unknown");
+        }
         dbus_error_free(&err);
         return 0;
     }
@@ -338,13 +347,17 @@ static int register_agent(DBusConnection *conn)
 
 static int register_media_endpoint(DBusConnection *conn)
 {
+    static int endpoint_path_registered = 0;
+    if (!endpoint_path_registered) {
+        if (!dbus_connection_register_object_path(conn, ENDPOINT_PATH, &endpoint_vtable, NULL)) {
+            fprintf(stderr, "[BT:AGENT] Failed to register endpoint object path %s\n", ENDPOINT_PATH);
+            return 0;
+        }
+        endpoint_path_registered = 1;
+    }
+
     DBusError err;
     dbus_error_init(&err);
-
-    if (!dbus_connection_register_object_path(conn, ENDPOINT_PATH, &endpoint_vtable, NULL)) {
-        fprintf(stderr, "[BT:AGENT] Failed to register endpoint object path %s\n", ENDPOINT_PATH);
-        return 0;
-    }
 
     DBusMessage *msg = dbus_message_new_method_call("org.bluez", "/org/bluez/hci0",
                                                     "org.bluez.Media1", "RegisterEndpoint");
@@ -399,11 +412,14 @@ static int register_media_endpoint(DBusConnection *conn)
 
     dbus_message_iter_close_container(&iter, &dict);
 
-    DBusMessage *reply = dbus_connection_send_with_reply_and_block(conn, msg, 5000, &err);
+    DBusMessage *reply = dbus_connection_send_with_reply_and_block(conn, msg, 3000, &err);
     dbus_message_unref(msg);
     if (!reply) {
-        fprintf(stderr, "[BT:AGENT] RegisterEndpoint (A2DP SBC Sink) failed: %s\n",
-                err.message ? err.message : "unknown error");
+        if (!dbus_error_has_name(&err, "org.freedesktop.DBus.Error.ServiceUnknown") &&
+            !dbus_error_has_name(&err, "org.bluez.Error.AlreadyExists")) {
+            fprintf(stderr, "[BT:AGENT] RegisterEndpoint (A2DP SBC Sink) failed: %s\n",
+                    err.message ? err.message : "unknown error");
+        }
         dbus_error_free(&err);
         return 0;
     }
@@ -414,6 +430,8 @@ static int register_media_endpoint(DBusConnection *conn)
 
 int main(int argc, char *argv[])
 {
+    (void)argc;
+    (void)argv;
     setvbuf(stdout, NULL, _IONBF, 0);
     setvbuf(stderr, NULL, _IONBF, 0);
     signal(SIGPIPE, SIG_IGN);
@@ -428,20 +446,50 @@ int main(int argc, char *argv[])
 
     DBusError err;
     dbus_error_init(&err);
-    DBusConnection *conn = dbus_bus_get(DBUS_BUS_SYSTEM, &err);
+    DBusConnection *conn = NULL;
+
+    // Retry connecting to D-Bus system bus
+    for (int retry = 0; retry < 30; ++retry) {
+        conn = dbus_bus_get(DBUS_BUS_SYSTEM, &err);
+        if (conn) break;
+        dbus_error_free(&err);
+        dbus_error_init(&err);
+        usleep(500000); // 500ms
+    }
+
     if (!conn) {
         fprintf(stderr, "[BT:AGENT] Failed to connect to system bus: %s\n", err.message ? err.message : "unknown");
         dbus_error_free(&err);
         return 1;
     }
 
-    if (!register_agent(conn)) {
-        fprintf(stderr, "[BT:AGENT] Failed to register agent\n");
+    // Retry registering agent until bluetoothd is active on D-Bus
+    int agent_registered = 0;
+    for (int retry = 0; retry < 60; ++retry) {
+        if (register_agent(conn)) {
+            agent_registered = 1;
+            break;
+        }
+        usleep(500000); // 500ms
+    }
+
+    if (!agent_registered) {
+        fprintf(stderr, "[BT:AGENT] Failed to register agent after retries\n");
         return 1;
     }
 
-    if (!register_media_endpoint(conn)) {
-        fprintf(stderr, "[BT:AGENT] Failed to register A2DP media endpoint\n");
+    // Retry registering media endpoint until BlueZ adapter is ready
+    int endpoint_registered = 0;
+    for (int retry = 0; retry < 60; ++retry) {
+        if (register_media_endpoint(conn)) {
+            endpoint_registered = 1;
+            break;
+        }
+        usleep(500000); // 500ms
+    }
+
+    if (!endpoint_registered) {
+        fprintf(stderr, "[BT:AGENT] Failed to register A2DP media endpoint after retries\n");
         return 1;
     }
 

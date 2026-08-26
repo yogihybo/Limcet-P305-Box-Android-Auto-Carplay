@@ -104,6 +104,8 @@ std::string format_mac_with_colons(const std::string & raw) {
     return raw;
 }
 
+}  // namespace
+
 // Checks whether upstream BlueZ 5.66 is active (bluetoothd or hci0)
 bool is_bluez_active() {
     if (std::system("pidof bluetoothd >/dev/null 2>&1") == 0) {
@@ -115,6 +117,8 @@ bool is_bluez_active() {
     }
     return false;
 }
+
+namespace {
 
 struct ReaderState {
     std::mutex observer_mtx;
@@ -482,14 +486,31 @@ void aa_profile_server_loop() {
     std::printf("%s [BT-AA-PROFILE] server thread starting\n", core::log_timestamp().c_str());
 
     BluezAaProfile profile;
-    if (!profile.connect()) {
-        std::fprintf(stderr, "%s [BT-AA-PROFILE] could not connect to system bus -- AA wireless "
-                     "will never work this boot, giving up\n", core::log_timestamp().c_str());
+    bool connected = false;
+    for (int attempt = 0; attempt < 60; ++attempt) {
+        if (profile.connect()) {
+            connected = true;
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    }
+    if (!connected) {
+        std::fprintf(stderr, "%s [BT-AA-PROFILE] could not connect to system bus after 30s -- giving up\n",
+                     core::log_timestamp().c_str());
         return;
     }
-    if (!profile.register_profile()) {
-        std::fprintf(stderr, "%s [BT-AA-PROFILE] could not register AA RFCOMM profile -- AA "
-                     "wireless will never work this boot, giving up\n", core::log_timestamp().c_str());
+
+    bool registered = false;
+    for (int attempt = 0; attempt < 60; ++attempt) {
+        if (profile.register_profile()) {
+            registered = true;
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    }
+    if (!registered) {
+        std::fprintf(stderr, "%s [BT-AA-PROFILE] could not register AA RFCOMM profile after 30s -- giving up\n",
+                     core::log_timestamp().c_str());
         return;
     }
 
@@ -668,6 +689,15 @@ void ensure_bluetooth_daemon_running() {
                 std::printf("%s [BT-AGENT] Notice: bt-agent not found in /usr/bin, /data, or ./\n",
                             core::log_timestamp().c_str());
                 return;
+            }
+
+            // Wait for BlueZ daemon to be up and responsive
+            for (int i = 0; i < 60; ++i) {
+                if (is_bluez_active()) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                    break;
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(500));
             }
 
             // Restart cleanly to ensure it captures system bus

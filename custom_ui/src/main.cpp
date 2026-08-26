@@ -434,6 +434,11 @@ int main() {
         std::printf("%s ui: BlueZ daemon launch requested\n", core::log_timestamp().c_str());
         hal::try_spawn_androidauto_sidecar();
 
+        for (int i = 0; i < 30; ++i) {
+            if (hal::is_bluez_active()) break;
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        }
+
         hal::BluetoothHandle & bt = hal::shared_handle();
         if (bt.fd >= 0) {
             // 2026-08-13: registered BEFORE set_device_name()/

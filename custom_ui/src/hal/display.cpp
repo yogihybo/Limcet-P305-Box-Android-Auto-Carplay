@@ -118,9 +118,6 @@ lv_display_t * init_display(const char * fb_path) {
         int probe_fd = open(fb_path, O_RDWR);
         if (probe_fd >= 0) {
             std::printf("%s hal::display::init_display: pre-flight open(%s) ok, probing ioctls...\n", core::log_timestamp().c_str(), fb_path);
-            if (ioctl(probe_fd, FBIOBLANK, FB_BLANK_UNBLANK) != 0) {
-                perror("hal::display::init_display: pre-flight ioctl(FBIOBLANK)");
-            }
             struct fb_var_screeninfo probe_var {};
             struct fb_fix_screeninfo probe_fix {};
             bool got_var = ioctl(probe_fd, FBIOGET_VSCREENINFO, &probe_var) == 0;

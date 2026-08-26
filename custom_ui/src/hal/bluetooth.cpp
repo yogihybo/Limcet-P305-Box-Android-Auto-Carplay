@@ -166,8 +166,10 @@ bool fetch_managed_devices(DBusConnection * conn, std::vector<DeviceSnapshot> & 
     dbus_message_unref(msg);
     if (!reply) {
         if (dbus_error_is_set(&err)) {
-            std::fprintf(stderr, "%s hal::bluetooth: GetManagedObjects failed: %s\n",
-                         core::log_timestamp().c_str(), err.message);
+            if (err.name && std::strcmp(err.name, "org.freedesktop.DBus.Error.ServiceUnknown") != 0) {
+                std::fprintf(stderr, "%s hal::bluetooth: GetManagedObjects failed: %s\n",
+                             core::log_timestamp().c_str(), err.message);
+            }
             dbus_error_free(&err);
         }
         return false;

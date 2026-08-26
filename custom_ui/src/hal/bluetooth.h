@@ -17,6 +17,9 @@ struct BluetoothHandle {
 // Ensures the BlueZ subsystem is active (rtk_hciattach over /dev/ttyHS1 and bluetoothd).
 void ensure_bluetooth_daemon_running();
 
+// Checks whether upstream BlueZ 5.66 is active (bluetoothd or hci0)
+bool is_bluez_active();
+
 // Initializes the BlueZ Bluetooth interface (hci0).
 bool init_bluetooth(BluetoothHandle & out, const char * path = nullptr);
 

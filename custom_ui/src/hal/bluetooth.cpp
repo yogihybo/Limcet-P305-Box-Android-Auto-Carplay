@@ -566,8 +566,10 @@ void aa_profile_server_loop() {
         // them since blueware's AT-command reader thread was replaced by
         // BlueZ D-Bus calls, so that call site (and the clock sync
         // riding on it) never actually ran anymore. This is the real,
-        // reliable trigger now.
-        sync_clock_from_phone(shared_handle());
+        // Spawn clock sync in the background so it never delays AA hand-off
+        core::SizedThread(core::kDefaultThreadStackSize, []() {
+            sync_clock_from_phone(shared_handle());
+        }).detach();
 
         bool auto_start = core::default_store().get_bool("AutoStartCarLink", true, "General");
         if (auto_start) {

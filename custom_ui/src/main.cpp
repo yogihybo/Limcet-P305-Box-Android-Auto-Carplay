@@ -173,8 +173,9 @@ public:
                 // PingRequest.timestamp was leaking "January 1970"
                 // straight to the phone during wireless AA sessions, a
                 // real suspect for a long-running silent-disconnect
-                // bug.
-                hal::sync_clock_from_phone(hal::shared_handle());
+                core::SizedThread(core::kDefaultThreadStackSize, []() {
+                    hal::sync_clock_from_phone(hal::shared_handle());
+                }).detach();
 
                 // requestConnect() spawns androidauto-sidecar itself if
                 // it isn't already running (see AndroidAutoClient's own

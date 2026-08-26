@@ -428,14 +428,12 @@ int main() {
     // in custom_ui ever replicated it until now).
     hal::init_audio_mixer();
 
-    // Starts BlueZ 5.66 subsystem (see hal/bluetooth.h) as early as possible.
-    hal::ensure_bluetooth_daemon_running();
-    std::printf("%s ui: BlueZ daemon launch requested\n", core::log_timestamp().c_str());
-
-    // Auto-spawns androidauto-sidecar if present
-    hal::try_spawn_androidauto_sidecar();
-
     core::SizedThread(core::kDefaultThreadStackSize, []() {
+        // Starts BlueZ 5.66 subsystem and sidecar in parallel with UI rendering
+        hal::ensure_bluetooth_daemon_running();
+        std::printf("%s ui: BlueZ daemon launch requested\n", core::log_timestamp().c_str());
+        hal::try_spawn_androidauto_sidecar();
+
         hal::BluetoothHandle & bt = hal::shared_handle();
         if (bt.fd >= 0) {
             // 2026-08-13: registered BEFORE set_device_name()/

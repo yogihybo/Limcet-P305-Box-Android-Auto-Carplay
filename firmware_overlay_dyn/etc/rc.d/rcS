@@ -89,10 +89,18 @@ modprobe galcore registerMemBase=0xE0F00000 irqLine=32 contiguousSize=0x800000 p
 modprobe cfg80211
 modprobe rtl8811cu rtw_drv_log_level=2 rtw_country_code=US
 
-# --- Instant UI Launch ---
-# Launch custom_ui immediately so LVGL display initializes in <1 second,
-# while Bluetooth / network daemons initialize in parallel in the background.
-(sleep 0.1 && . /etc/profile && /usr/bin/custom_ui) &
+# --- Instant UI Launch & Auto-Respawn Supervisor ---
+# Launch custom_ui immediately so LVGL display initializes in <1 second.
+# Auto-respawn protects against transient voltage sag or exit during engine crank.
+(
+	sleep 0.1
+	. /etc/profile
+	while true; do
+		/usr/bin/custom_ui
+		echo "rcS: custom_ui exited ($?), respawning in 1s..."
+		sleep 1
+	done
+) &
 
 # --- BlueZ (runs in background so it does not block UI) ---
 (

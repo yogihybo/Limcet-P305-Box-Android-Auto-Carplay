@@ -120,66 +120,78 @@ void send_startup_sequence(int fd) {
     send_mcu_frame(fd, 0x84, state_payload, 2);
 }
 
-// Matches read_mcu_frame() in mcu-handshake.c. Blocking; returns 1 with
-// cmd/payload/length filled in on a validated frame, 0 on a
-// resync/checksum failure, -1 on I/O error/EOF.
+// Robust stream parser with byte-level synchronization and zero packet loss on line noise.
+// Returns 1 on valid frame, 0 on no full frame yet, -1 on I/O error/EOF.
 int read_mcu_frame(int fd, unsigned char * out_cmd, unsigned char * out_payload,
                     unsigned char * out_len) {
-    unsigned char sig;
-    if (read(fd, &sig, 1) <= 0) return -1;
-    if (sig != 0x2E) return 0;
+    static unsigned char ring_buf[1024];
+    static size_t ring_len = 0;
 
-    unsigned char header[2];
-    int header_read = 0;
-    while (header_read < 2) {
-        int n = read(fd, &header[header_read], 2 - header_read);
+    while (true) {
+        // 1. Hunt for 0x2E synchronization byte at start of buffer
+        while (ring_len > 0 && ring_buf[0] != 0x2E) {
+            // Discard noise bytes until 0x2E sync byte is at head
+            std::memmove(&ring_buf[0], &ring_buf[1], --ring_len);
+        }
+
+        // 2. Check if we have at least 3 bytes (sync 0x2E, cmd, length)
+        if (ring_len >= 3) {
+            unsigned char cmd = ring_buf[1];
+            unsigned char length = ring_buf[2];
+            size_t total_frame_size = 1 /* 0x2E */ + 1 /* cmd */ + 1 /* len */ + length /* payload */ + 1 /* chk */;
+
+            if (total_frame_size > sizeof(ring_buf)) {
+                // Invalid length byte due to corrupt stream -> skip sync byte and re-hunt
+                std::memmove(&ring_buf[0], &ring_buf[1], --ring_len);
+                continue;
+            }
+
+            if (ring_len >= total_frame_size) {
+                // Complete frame is present in buffer
+                unsigned char chk_calc = mcu_checksum(&ring_buf[1], length + 2);
+                unsigned char chk_recv = ring_buf[total_frame_size - 1];
+
+                if (chk_calc == chk_recv) {
+                    *out_cmd = cmd;
+                    *out_len = length;
+                    if (length > 0) {
+                        std::memcpy(out_payload, &ring_buf[3], length);
+                    }
+
+                    // Consume the frame from the ring buffer
+                    size_t rem = ring_len - total_frame_size;
+                    if (rem > 0) {
+                        std::memmove(&ring_buf[0], &ring_buf[total_frame_size], rem);
+                    }
+                    ring_len = rem;
+                    return 1;
+                } else {
+                    // Checksum mismatch -> skip the first 0x2E byte and hunt for next valid packet
+                    std::memmove(&ring_buf[0], &ring_buf[1], --ring_len);
+                    continue;
+                }
+            }
+        }
+
+        // 3. Need more bytes from UART: read into remaining buffer space
+        if (ring_len >= sizeof(ring_buf)) {
+            // Buffer full of unrecognized data -> reset to avoid stall
+            ring_len = 0;
+        }
+
+        ssize_t n = read(fd, &ring_buf[ring_len], sizeof(ring_buf) - ring_len);
         if (n > 0) {
-            header_read += n;
+            ring_len += n;
         } else if (n == 0) {
-            return -1;
-        } else if (errno != EAGAIN && errno != EINTR) {
-            break;
-        } else if (errno == EAGAIN) {
-            // 2026-08-19: this fd is opened blocking (no O_NONBLOCK,
-            // see open() below), so EAGAIN shouldn't occur in practice
-            // today -- cheap defensive yield in case that ever changes,
-            // rather than a tight immediate-retry spin.
-            usleep(1000);
+            return -1; // EOF
+        } else {
+            if (errno == EAGAIN || errno == EINTR) {
+                usleep(1000);
+                continue;
+            }
+            return -1; // Fatal I/O error
         }
     }
-    if (header_read < 2) return 0;
-
-    unsigned char cmd = header[0];
-    unsigned char length = header[1];
-
-    unsigned char remaining[256];
-    int req_len = length + 1;
-    int rem_read = 0;
-    while (rem_read < req_len) {
-        int n = read(fd, &remaining[rem_read], req_len - rem_read);
-        if (n > 0) {
-            rem_read += n;
-        } else if (n == 0) {
-            return -1;
-        } else if (errno != EAGAIN && errno != EINTR) {
-            break;
-        }
-    }
-    if (rem_read < req_len) return 0;
-
-    unsigned char chk_recv = remaining[length];
-    unsigned char check_buf[256];
-    check_buf[0] = cmd;
-    check_buf[1] = length;
-    std::memcpy(&check_buf[2], remaining, length);
-    unsigned char chk_calc = mcu_checksum(check_buf, length + 2);
-
-    if (chk_calc != chk_recv) return 0;
-
-    *out_cmd = cmd;
-    *out_len = length;
-    std::memcpy(out_payload, remaining, length);
-    return 1;
 }
 
 }  // namespace

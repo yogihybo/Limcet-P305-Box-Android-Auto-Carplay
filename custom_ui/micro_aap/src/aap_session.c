@@ -80,6 +80,12 @@ static int64_t plausible_epoch_millis(void) {
     return FALLBACK_BASELINE_EPOCH_MS + elapsed;
 }
 
+static uint64_t now_micros(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000000ULL + (uint64_t)ts.tv_nsec / 1000ULL;
+}
+
 #define AAP_MAX_CHANNELS 16
 
 typedef struct {
@@ -1112,24 +1118,36 @@ void aap_session_tick(aap_session_t *s) {
 void aap_session_send_key(aap_session_t *s, uint32_t keycode) {
     if (!s || s->state != AAP_SESSION_STATE_RUNNING) return;
 
-    for (int down = 1; down >= 0; down--) {
-        aap_protobuf_service_inputsource_message_InputReport report =
-            aap_protobuf_service_inputsource_message_InputReport_init_default;
-        report.timestamp = (uint64_t)plausible_epoch_millis() * 1000ULL;
-        report.has_key_event = true;
-        report.key_event.keys_count = 1;
-        report.key_event.keys[0].keycode = keycode;
-        report.key_event.keys[0].down = (bool)down;
-        report.key_event.keys[0].metastate = 0;
+    /* Key down report */
+    aap_protobuf_service_inputsource_message_InputReport report =
+        aap_protobuf_service_inputsource_message_InputReport_init_default;
+    report.timestamp = now_micros();
+    report.has_key_event = true;
+    report.key_event.keys_count = 1;
+    report.key_event.keys[0].keycode = keycode;
+    report.key_event.keys[0].down = true;
+    report.key_event.keys[0].metastate = 0;
 
-        uint8_t pb_buf[256];
-        pb_ostream_t ostream = pb_ostream_from_buffer(pb_buf, sizeof(pb_buf));
-        pb_encode(&ostream, aap_protobuf_service_inputsource_message_InputReport_fields, &report);
+    uint8_t pb_buf[256];
+    pb_ostream_t ostream = pb_ostream_from_buffer(pb_buf, sizeof(pb_buf));
+    pb_encode(&ostream, aap_protobuf_service_inputsource_message_InputReport_fields, &report);
 
-        send_channel_msg(s, AAP_CHANNEL_INPUT,
-                         aap_protobuf_service_inputsource_InputMessageId_INPUT_MESSAGE_INPUT_REPORT,
-                         pb_buf, ostream.bytes_written, true);
-    }
+    send_channel_msg(s, AAP_CHANNEL_INPUT,
+                     aap_protobuf_service_inputsource_InputMessageId_INPUT_MESSAGE_INPUT_REPORT,
+                     pb_buf, ostream.bytes_written, true);
+
+    /* Key up report (separated by 10ms for reliable Android InputManager event dispatch) */
+    report.timestamp += 10000ULL;
+    report.key_event.keys[0].down = false;
+
+    ostream = pb_ostream_from_buffer(pb_buf, sizeof(pb_buf));
+    pb_encode(&ostream, aap_protobuf_service_inputsource_message_InputReport_fields, &report);
+
+    send_channel_msg(s, AAP_CHANNEL_INPUT,
+                     aap_protobuf_service_inputsource_InputMessageId_INPUT_MESSAGE_INPUT_REPORT,
+                     pb_buf, ostream.bytes_written, true);
+
+    printf("aap_session: sent keycode %u (down/up)\n", keycode);
 }
 
 void aap_session_send_touch(aap_session_t *s, uint32_t x, uint32_t y, uint32_t action) {
@@ -1137,7 +1155,7 @@ void aap_session_send_touch(aap_session_t *s, uint32_t x, uint32_t y, uint32_t a
 
     aap_protobuf_service_inputsource_message_InputReport report =
         aap_protobuf_service_inputsource_message_InputReport_init_default;
-    report.timestamp = (uint64_t)plausible_epoch_millis() * 1000ULL;
+    report.timestamp = now_micros();
     report.has_touch_event = true;
     report.touch_event.has_action = true;
     report.touch_event.action = (aap_protobuf_service_inputsource_message_PointerAction)action;

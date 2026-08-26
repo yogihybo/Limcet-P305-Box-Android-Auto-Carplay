@@ -330,7 +330,7 @@ void refresh_bluez_telemetry(DBusConnection * conn, BluezMonitorState & state) {
     if (!fetch_managed_devices(conn, devices)) {
         std::lock_guard<std::mutex> lock(g_telemetry_mtx);
         if (state.last_connected) {
-            std::printf("%s [BT-EVENT] Lost connection to BlueZ daemon\n", core::log_timestamp().c_str());
+            std::printf("%s [BT] Lost connection to BlueZ daemon\n", core::log_timestamp().c_str());
             state.last_connected = false;
         }
         g_telemetry.connected = false;
@@ -353,7 +353,7 @@ void refresh_bluez_telemetry(DBusConnection * conn, BluezMonitorState & state) {
 
     if (connected != state.last_connected || connected_mac != state.last_connected_mac) {
         if (connected) {
-            std::printf("%s [BT-EVENT] *** Device Connected ***: %s ('%s') RSSI=%d dBm\n",
+            std::printf("%s [BT] *** Device Connected ***: %s ('%s') RSSI=%d dBm\n",
                         core::log_timestamp().c_str(), connected_mac.c_str(),
                         connected_name.c_str(), rssi);
             // 2026-08-20: no Device1.ConnectProfile(AA UUID) call here --
@@ -362,7 +362,7 @@ void refresh_bluez_telemetry(DBusConnection * conn, BluezMonitorState & state) {
             // UUID argument would have named a service the REMOTE peer
             // exposes, not one we expose, so it could only ever fail).
         } else {
-            std::printf("%s [BT-EVENT] *** Device Disconnected ***: (was %s '%s')\n",
+            std::printf("%s [BT] *** Device Disconnected ***: (was %s '%s')\n",
                         core::log_timestamp().c_str(), state.last_connected_mac.c_str(),
                         state.last_connected_name.c_str());
         }
@@ -372,7 +372,7 @@ void refresh_bluez_telemetry(DBusConnection * conn, BluezMonitorState & state) {
     }
 
     if (devices.size() != state.last_device_count) {
-        std::printf("%s [BT-STATUS] Total known devices in BlueZ database: %zu\n",
+        std::printf("%s [BT] Total known devices in BlueZ database: %zu\n",
                     core::log_timestamp().c_str(), devices.size());
         state.last_device_count = devices.size();
     }
@@ -485,7 +485,7 @@ void bluez_monitor_loop(BluetoothHandle * h) {
 // session, so its progress needs to be visible in the console at every
 // step, not just success/failure.
 void aa_profile_server_loop() {
-    std::printf("%s [BT-AA-PROFILE] server thread starting\n", core::log_timestamp().c_str());
+    std::printf("%s [BT] server thread starting\n", core::log_timestamp().c_str());
 
     BluezAaProfile profile;
     bool connected = false;
@@ -497,7 +497,7 @@ void aa_profile_server_loop() {
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
     if (!connected) {
-        std::fprintf(stderr, "%s [BT-AA-PROFILE] could not connect to system bus after 30s -- giving up\n",
+        std::fprintf(stderr, "%s [BT] could not connect to system bus after 30s -- giving up\n",
                      core::log_timestamp().c_str());
         return;
     }
@@ -511,12 +511,12 @@ void aa_profile_server_loop() {
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
     if (!registered) {
-        std::fprintf(stderr, "%s [BT-AA-PROFILE] could not register AA RFCOMM profile after 30s -- giving up\n",
+        std::fprintf(stderr, "%s [BT] could not register AA RFCOMM profile after 30s -- giving up\n",
                      core::log_timestamp().c_str());
         return;
     }
 
-    std::printf("%s [BT-AA-PROFILE] AA RFCOMM profile registered -- listening for phone "
+    std::printf("%s [BT] AA RFCOMM profile registered -- listening for phone "
                 "connections\n", core::log_timestamp().c_str());
 
     int consecutiveTimeouts = 0;
@@ -542,18 +542,18 @@ void aa_profile_server_loop() {
             // dead, without spamming the console every single 60s tick
             // at the same volume as a real connection attempt would.
             if (everHandedOff) {
-                std::printf("%s [BT-AA-PROFILE] no NEW phone connection in the last %d min "
+                std::printf("%s [BT] no NEW phone connection in the last %d min "
                             "(this only tracks additional RFCOMM connections -- an existing "
                             "AA session, if any, is unaffected)\n",
                             core::log_timestamp().c_str(), consecutiveTimeouts);
             } else {
-                std::printf("%s [BT-AA-PROFILE] still waiting for a phone to connect (%d min so far)\n",
+                std::printf("%s [BT] still waiting for a phone to connect (%d min so far)\n",
                             core::log_timestamp().c_str(), consecutiveTimeouts);
             }
             continue;
         }
         consecutiveTimeouts = 0;
-        std::printf("%s [BT-AA-PROFILE] *** phone connected over AA RFCOMM *** fd=%d\n",
+        std::printf("%s [BT] *** phone connected over AA RFCOMM *** fd=%d\n",
                     core::log_timestamp().c_str(), fd);
 
         // Real Bluetooth link is up and a phone confirmed AA-capable
@@ -571,21 +571,21 @@ void aa_profile_server_loop() {
 
         bool auto_start = core::default_store().get_bool("AutoStartCarLink", true, "General");
         if (auto_start) {
-            std::printf("%s [BT-AA-PROFILE] AutoStartCarLink is ON -- handing off to "
+            std::printf("%s [BT] AutoStartCarLink is ON -- handing off to "
                         "androidauto-sidecar immediately\n", core::log_timestamp().c_str());
             bool ok = hal::sendConnectFd(fd);
-            std::printf("%s [BT-AA-PROFILE] hand-off to androidauto-sidecar: %s\n",
+            std::printf("%s [BT] hand-off to androidauto-sidecar: %s\n",
                         core::log_timestamp().c_str(), ok ? "accepted" : "FAILED");
             if (ok) {
                 g_aaNavigatePending.store(true, std::memory_order_release);
                 everHandedOff = true;
             }
         } else {
-            std::printf("%s [BT-AA-PROFILE] AutoStartCarLink is OFF -- waiting at the connect "
+            std::printf("%s [BT] AutoStartCarLink is OFF -- waiting at the connect "
                         "screen for the user to start Android Auto\n", core::log_timestamp().c_str());
             std::lock_guard<std::mutex> lock(g_pendingAaMtx);
             if (g_pendingAaFd >= 0) {
-                std::printf("%s [BT-AA-PROFILE] replacing an earlier still-pending connection "
+                std::printf("%s [BT] replacing an earlier still-pending connection "
                             "(fd=%d, never started) with this one\n",
                             core::log_timestamp().c_str(), g_pendingAaFd);
                 close(g_pendingAaFd);
@@ -615,8 +615,7 @@ void ensure_bluetooth_daemon_running() {
     // whole function.
     bool blueZAlreadyActive = is_bluez_active();
     if (blueZAlreadyActive) {
-        std::printf("%s hal::bluetooth::ensure_bluetooth_daemon_running: BlueZ (bluetoothd) already running\n",
-                    core::log_timestamp().c_str());
+        std::printf("%s [BT] BlueZ (bluetoothd) already running\n", core::log_timestamp().c_str());
     }
 
   if (!blueZAlreadyActive) {
@@ -630,8 +629,7 @@ void ensure_bluetooth_daemon_running() {
     for (const char * s : scripts) {
         struct stat st {};
         if (stat(s, &st) == 0) {
-            std::printf("%s hal::bluetooth::ensure_bluetooth_daemon_running: invoking %s start\n",
-                        core::log_timestamp().c_str(), s);
+            std::printf("%s [BT] Invoking %s start\n", core::log_timestamp().c_str(), s);
             std::string cmd = std::string(s) + " start >/dev/null 2>&1";
             std::system(cmd.c_str());
             break;
@@ -640,8 +638,7 @@ void ensure_bluetooth_daemon_running() {
 
     // Check if rtk_hciattach is already running / attaching hci0
     if (std::system("pidof rtk_hciattach >/dev/null 2>&1") != 0) {
-        std::printf("%s hal::bluetooth::ensure_bluetooth_daemon_running: starting rtk_hciattach over /dev/ttyHS1\n",
-                    core::log_timestamp().c_str());
+        std::printf("%s [BT] Starting rtk_hciattach over /dev/ttyHS1\n", core::log_timestamp().c_str());
         std::system("rtk_hciattach -n -s 115200 /dev/ttyHS1 rtk_h5 >/dev/null 2>&1 &");
         for (int i = 0; i < 30; ++i) {
             struct stat st {};
@@ -656,7 +653,7 @@ void ensure_bluetooth_daemon_running() {
     }
 
     if (std::system("pidof bluetoothd >/dev/null 2>&1") != 0) {
-        std::printf("%s hal::bluetooth::ensure_bluetooth_daemon_running: starting bluetoothd\n", core::log_timestamp().c_str());
+        std::printf("%s [BT] Starting bluetoothd\n", core::log_timestamp().c_str());
         std::system("bluetoothd -n >/dev/null 2>&1 &");
         for (int i = 0; i < 20; ++i) {
             if (std::system("pidof bluetoothd >/dev/null 2>&1") == 0) break;
@@ -688,7 +685,7 @@ void ensure_bluetooth_daemon_running() {
                 }
             }
             if (agent_bin.empty()) {
-                std::printf("%s [BT-AGENT] Notice: bt-agent not found in /usr/bin, /data, or ./\n",
+                std::printf("%s [BT:AGENT] Notice: bt-agent not found in /usr/bin, /data, or ./\n",
                             core::log_timestamp().c_str());
                 return;
             }
@@ -707,12 +704,12 @@ void ensure_bluetooth_daemon_running() {
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
             std::string cmd = agent_bin + " 2>&1";
-            std::printf("%s [BT-AGENT] Launching %s (streaming logs to custom_ui console)\n",
+            std::printf("%s [BT:AGENT] Launching %s (streaming logs to custom_ui console)\n",
                         core::log_timestamp().c_str(), cmd.c_str());
 
             FILE * fp = popen(cmd.c_str(), "r");
             if (!fp) {
-                std::fprintf(stderr, "%s [BT-AGENT] popen failed for %s\n",
+                std::fprintf(stderr, "%s [BT:AGENT] ERROR: popen failed for %s\n",
                              core::log_timestamp().c_str(), cmd.c_str());
                 return;
             }
@@ -732,14 +729,6 @@ void ensure_bluetooth_daemon_running() {
         }).detach();
     }
 
-    // Registers the AA RFCOMM profile and listens for phone connections
-    // for the rest of this process's lifetime -- see
-    // aa_profile_server_loop()'s own comment. Started here (once,
-    // guarded the same way as the bt-agent thread above) rather than
-    // from init_bluetooth()/main.cpp directly, so it comes up
-    // automatically as soon as BlueZ itself is confirmed ready,
-    // regardless of which call path first reached
-    // ensure_bluetooth_daemon_running().
     static std::atomic<bool> s_aa_profile_thread_started{false};
     if (!s_aa_profile_thread_started.exchange(true)) {
         core::SizedThread(core::kDefaultThreadStackSize, aa_profile_server_loop).detach();
@@ -749,7 +738,7 @@ void ensure_bluetooth_daemon_running() {
 bool init_bluetooth(BluetoothHandle & out, const char * /*path*/) {
     ensure_bluetooth_daemon_running();
 
-    std::printf("%s hal::bluetooth::init_bluetooth: initializing BlueZ 5.66 stack\n", core::log_timestamp().c_str());
+    std::printf("%s [BT] Initializing BlueZ 5.66 stack\n", core::log_timestamp().c_str());
     
     // Direct kernel HCIDEVUP ioctl without requiring external hciconfig binary
     int sock = socket(AF_BLUETOOTH_, SOCK_RAW, BTPROTO_HCI_);
@@ -852,14 +841,14 @@ bool split_plist_entry(const std::string & entry, std::string & mac, std::string
 
 bool set_adapter_enabled(BluetoothHandle & /*h*/, bool enabled) {
     std::string val = enabled ? "true" : "false";
-    std::printf("%s [BT-CMD] Setting adapter Powered = %s\n", core::log_timestamp().c_str(), val.c_str());
+    std::printf("%s [BT] Setting adapter Powered = %s\n", core::log_timestamp().c_str(), val.c_str());
     std::string cmd = "dbus-send --system --dest=org.bluez --type=method_call /org/bluez/hci0 org.freedesktop.DBus.Properties.Set string:org.bluez.Adapter1 string:Powered variant:boolean:" + val + " >/dev/null 2>&1";
     return run_command_simple(cmd);
 }
 
 bool set_discoverable(BluetoothHandle & /*h*/, bool discoverable) {
     std::string val = discoverable ? "true" : "false";
-    std::printf("%s [BT-CMD] Setting adapter Discoverable = %s (piscan)\n", core::log_timestamp().c_str(), val.c_str());
+    std::printf("%s [BT] Setting adapter Discoverable = %s (piscan)\n", core::log_timestamp().c_str(), val.c_str());
     if (discoverable) {
         run_command_simple("hciconfig hci0 piscan >/dev/null 2>&1");
     }
@@ -879,7 +868,7 @@ bool list_paired_devices(BluetoothHandle & /*h*/, std::vector<std::string> & dev
             if (l.find("object path \"/org/bluez/hci0/dev_") != std::string::npos) {
                 if (!current_addr.empty() && is_paired) {
                     devices.push_back(current_addr + " " + current_name);
-                    std::printf("%s [BT-STATUS] Found paired device: %s ('%s')\n",
+                    std::printf("%s [BT] Found paired device: %s ('%s')\n",
                                 core::log_timestamp().c_str(), current_addr.c_str(), current_name.c_str());
                 }
                 current_addr.clear();
@@ -911,21 +900,21 @@ bool list_paired_devices(BluetoothHandle & /*h*/, std::vector<std::string> & dev
         }
         if (!current_addr.empty() && is_paired) {
             devices.push_back(current_addr + " " + current_name);
-            std::printf("%s [BT-STATUS] Found paired device: %s ('%s')\n",
+            std::printf("%s [BT] Found paired device: %s ('%s')\n",
                         core::log_timestamp().c_str(), current_addr.c_str(), current_name.c_str());
         }
     }
-    std::printf("%s [BT-STATUS] list_paired_devices total: %zu paired devices\n", core::log_timestamp().c_str(), devices.size());
+    std::printf("%s [BT] list_paired_devices total: %zu paired devices\n", core::log_timestamp().c_str(), devices.size());
     return true;
 }
 
 bool connect_device(BluetoothHandle & /*h*/, const std::string & mac) {
     std::string dev_path = "/org/bluez/hci0/" + mac_to_dbus_path(mac);
-    std::printf("%s [BT-CMD] Initiating connection to device MAC=%s (D-Bus path: %s)\n",
+    std::printf("%s [BT] Initiating connection to device MAC=%s (D-Bus path: %s)\n",
                 core::log_timestamp().c_str(), mac.c_str(), dev_path.c_str());
     std::string cmd = "dbus-send --system --dest=org.bluez --type=method_call " + dev_path + " org.bluez.Device1.Connect >/dev/null 2>&1";
     bool ok = run_command_simple(cmd);
-    std::printf("%s [BT-CMD] Connection request to %s: %s\n", core::log_timestamp().c_str(), mac.c_str(), ok ? "sent (OK)" : "failed to dispatch");
+    std::printf("%s [BT] Connection request to %s: %s\n", core::log_timestamp().c_str(), mac.c_str(), ok ? "sent (OK)" : "failed to dispatch");
 
     // 2026-08-20: removed a second Device1.ConnectProfile(AA UUID) call
     // here for the same reason as bluez_monitor_loop's own auto-fire
@@ -942,21 +931,21 @@ bool connect_device(BluetoothHandle & /*h*/, const std::string & mac) {
 }
 
 bool disconnect_device(BluetoothHandle & /*h*/) {
-    std::printf("%s [BT-CMD] Disconnecting active links\n", core::log_timestamp().c_str());
+    std::printf("%s [BT] Disconnecting active links\n", core::log_timestamp().c_str());
     return true;
 }
 
 bool remove_paired_device(BluetoothHandle & /*h*/, const std::string & mac) {
     std::string dev_path = "/org/bluez/hci0/" + mac_to_dbus_path(mac);
-    std::printf("%s [BT-CMD] Removing paired device %s from BlueZ adapter\n", core::log_timestamp().c_str(), dev_path.c_str());
+    std::printf("%s [BT] Removing paired device %s from BlueZ adapter\n", core::log_timestamp().c_str(), dev_path.c_str());
     std::string cmd = "dbus-send --system --dest=org.bluez --type=method_call /org/bluez/hci0 org.bluez.Adapter1.RemoveDevice objpath:" + dev_path + " >/dev/null 2>&1";
     bool ok = run_command_simple(cmd);
-    std::printf("%s [BT-CMD] RemoveDevice %s: %s\n", core::log_timestamp().c_str(), mac.c_str(), ok ? "success" : "failed");
+    std::printf("%s [BT] RemoveDevice %s: %s\n", core::log_timestamp().c_str(), mac.c_str(), ok ? "success" : "failed");
     return ok;
 }
 
 bool set_device_name(BluetoothHandle & /*h*/, const std::string & name) {
-    std::printf("%s [BT-CMD] Setting Bluetooth local name to '%s'\n", core::log_timestamp().c_str(), name.c_str());
+    std::printf("%s [BT] Setting Bluetooth local name to '%s'\n", core::log_timestamp().c_str(), name.c_str());
     run_command_simple("hciconfig hci0 name \"" + name + "\" >/dev/null 2>&1");
     std::string cmd = "dbus-send --system --dest=org.bluez --type=method_call /org/bluez/hci0 org.freedesktop.DBus.Properties.Set string:org.bluez.Adapter1 string:Alias \"variant:string:" + name + "\" >/dev/null 2>&1";
     return run_command_simple(cmd);
@@ -975,7 +964,7 @@ bool get_adapter_address(BluetoothHandle & /*h*/, std::string & address) {
             if (pos != std::string::npos) {
                 address = l.substr(pos + 8);
                 if (!address.empty() && address.back() == '"') address.pop_back();
-                std::printf("%s [BT-INFO] Controller BD_ADDR: %s\n", core::log_timestamp().c_str(), address.c_str());
+                std::printf("%s [BT] Controller BD_ADDR: %s\n", core::log_timestamp().c_str(), address.c_str());
                 return true;
             }
         }

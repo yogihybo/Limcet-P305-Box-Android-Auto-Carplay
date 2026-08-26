@@ -20,7 +20,7 @@ const char * mixer_name_for(AudioStream stream) {
 }  // namespace
 
 void init_audio_mixer() {
-    std::printf("%s hal::audio::init_audio_mixer: unmuting ARK-SDDAC hardware DAC and ALSA softmaster\n",
+    std::printf("%s [HAL:AUDIO] Unmuting ARK-SDDAC hardware DAC and ALSA softmaster\n",
                 core::log_timestamp().c_str());
 
     // 1. Unmute ARK-SDDAC hardware DAC volume (0..127, 118 matches stock /etc/all.sh)

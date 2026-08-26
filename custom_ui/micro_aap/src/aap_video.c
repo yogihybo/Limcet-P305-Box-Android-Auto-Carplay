@@ -129,7 +129,7 @@ bool aap_video_sink_open(aap_video_sink_t *sink) {
 
     sink->hantro_lib = dlopen("/usr/lib/libmfc.so", RTLD_NOW);
     if (!sink->hantro_lib) {
-        fprintf(stderr, "aap_video: dlopen(/usr/lib/libmfc.so) failed: %s\n", dlerror());
+        fprintf(stderr, "[AA] dlopen(/usr/lib/libmfc.so) failed: %s\n", dlerror());
         return false;
     }
 
@@ -139,14 +139,14 @@ bool aap_video_sink_open(aap_video_sink_t *sink) {
     sink->h264_release = dlsym(sink->hantro_lib, "H264DecRelease");
 
     if (!sink->h264_init || !sink->h264_decode || !sink->h264_next_picture || !sink->h264_release) {
-        fprintf(stderr, "aap_video: dlsym failed for Hantro functions\n");
+        fprintf(stderr, "[AA] dlsym failed for Hantro functions\n");
         return false;
     }
 
     /* Match original tested H264DecInit arguments (all zeros) to avoid dark overlay */
     int ret = sink->h264_init(&sink->hantro_dec, 0, 0, 0);
     if (ret != 0) {
-        fprintf(stderr, "aap_video: H264DecInit failed with %d\n", ret);
+        fprintf(stderr, "[AA] H264DecInit failed with %d\n", ret);
         return false;
     }
 
@@ -156,13 +156,13 @@ bool aap_video_sink_open(aap_video_sink_t *sink) {
         sink->memalloc_fd = open("/dev/memalloc", O_RDWR | O_SYNC);
     }
     if (sink->memalloc_fd < 0) {
-        fprintf(stderr, "aap_video: open memalloc failed\n");
+        fprintf(stderr, "[AA] open memalloc failed\n");
         return false;
     }
 
     MemallocParams params = {0, STREAM_BUF_SIZE};
     if (ioctl(sink->memalloc_fd, MEMALLOC_IOCXGETBUFFER, &params) != 0) {
-        fprintf(stderr, "aap_video: ioctl MEMALLOC_IOCXGETBUFFER failed\n");
+        fprintf(stderr, "[AA] ioctl MEMALLOC_IOCXGETBUFFER failed\n");
         return false;
     }
 
@@ -170,14 +170,14 @@ bool aap_video_sink_open(aap_video_sink_t *sink) {
     sink->stream_vir_addr = (uint8_t *)mmap(NULL, STREAM_BUF_SIZE, PROT_READ | PROT_WRITE,
                                             MAP_SHARED, sink->memalloc_fd, (off_t)params.busAddress);
     if (sink->stream_vir_addr == MAP_FAILED) {
-        fprintf(stderr, "aap_video: mmap stream buffer failed\n");
+        fprintf(stderr, "[AA] mmap stream buffer failed\n");
         return false;
     }
 
     sink->fb4_fd = open("/dev/fb4", O_RDWR);
     sink->ark_disp_fd = open("/dev/ark_display", O_RDWR);
 
-    printf("aap_video: Hantro H.264 hardware decoder initialized (800x480)\n");
+    printf("[AA] Hantro H.264 hardware decoder initialized (800x480)\n");
     return true;
 }
 
@@ -243,7 +243,7 @@ static void configure_video_layer(aap_video_sink_t *sink, uint32_t width, uint32
     ioctl(sink->fb4_fd, ARK_IO_INIT_FB_DISPLAY, &win);
     ioctl(sink->fb4_fd, ARKFB_SHOW_WINDOW_REAL, 0);
     sink->is_configured = true;
-    printf("aap_video: fb4 configured and shown (%ux%u)\n", width, height);
+    printf("[AA] fb4 configured and shown (%ux%u)\n", width, height);
 }
 
 bool aap_video_sink_decode(aap_video_sink_t *sink, const uint8_t *nalu_data, size_t nalu_len) {

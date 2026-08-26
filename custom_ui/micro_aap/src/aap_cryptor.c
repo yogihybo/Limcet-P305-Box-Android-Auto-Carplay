@@ -157,7 +157,7 @@ bool aap_cryptor_do_handshake(aap_cryptor_t *cryptor) {
         return false;
     }
 
-    fprintf(stderr, "aap_cryptor: SSL_do_handshake error %d\n", err);
+    fprintf(stderr, "[AA] SSL_do_handshake error %d\n", err);
     return false;
 }
 
@@ -186,7 +186,7 @@ size_t aap_cryptor_encrypt(aap_cryptor_t *cryptor, const uint8_t *plain, size_t 
         int written = SSL_write(cryptor->ssl, plain + total_written, (int)(plain_len - total_written));
         if (written <= 0) {
             int err = SSL_get_error(cryptor->ssl, written);
-            fprintf(stderr, "aap_cryptor: SSL_write error %d\n", err);
+            fprintf(stderr, "[AA] SSL_write error %d\n", err);
             return 0;
         }
         total_written += (size_t)written;
@@ -194,7 +194,7 @@ size_t aap_cryptor_encrypt(aap_cryptor_t *cryptor, const uint8_t *plain, size_t 
 
     size_t pending = (size_t)BIO_ctrl_pending(cryptor->write_bio);
     if (pending > max_cipher_len) {
-        fprintf(stderr, "aap_cryptor: cipher buffer overflow (pending %zu > max %zu)\n", pending, max_cipher_len);
+        fprintf(stderr, "[AA] cipher buffer overflow (pending %zu > max %zu)\n", pending, max_cipher_len);
         return 0;
     }
 
@@ -208,7 +208,7 @@ size_t aap_cryptor_decrypt(aap_cryptor_t *cryptor, const uint8_t *cipher, size_t
 
     int written = BIO_write(cryptor->read_bio, cipher, (int)cipher_len);
     if (written <= 0) {
-        fprintf(stderr, "aap_cryptor: BIO_write failed\n");
+        fprintf(stderr, "[AA] BIO_write failed\n");
         return 0;
     }
 
@@ -230,7 +230,7 @@ size_t aap_cryptor_decrypt(aap_cryptor_t *cryptor, const uint8_t *cipher, size_t
             if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) {
                 break;
             }
-            fprintf(stderr, "aap_cryptor: SSL_read error %d\n", err);
+            fprintf(stderr, "[AA] SSL_read error %d\n", err);
             return 0;
         }
 

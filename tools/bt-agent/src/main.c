@@ -41,13 +41,13 @@ static char g_current_transport[256] = {0};
 static void *audio_playback_thread(void *arg)
 {
     char *transport_path = (char *)arg;
-    printf("[bt-agent] Starting A2DP Audio Playback Worker for %s\n", transport_path);
+    printf("[BT:AGENT] Starting A2DP Audio Playback Worker for %s\n", transport_path);
 
     DBusError err;
     dbus_error_init(&err);
     DBusConnection *conn = dbus_bus_get(DBUS_BUS_SYSTEM, &err);
     if (!conn) {
-        fprintf(stderr, "[bt-agent] audio worker: failed to get system bus: %s\n",
+        fprintf(stderr, "[BT:AGENT] audio worker: failed to get system bus: %s\n",
                 err.message ? err.message : "unknown");
         free(transport_path);
         return NULL;
@@ -64,7 +64,7 @@ static void *audio_playback_thread(void *arg)
     DBusMessage *reply = dbus_connection_send_with_reply_and_block(conn, msg, 5000, &err);
     dbus_message_unref(msg);
     if (!reply) {
-        fprintf(stderr, "[bt-agent] MediaTransport1.Acquire failed: %s\n",
+        fprintf(stderr, "[BT:AGENT] MediaTransport1.Acquire failed: %s\n",
                 err.message ? err.message : "unknown");
         dbus_error_free(&err);
         dbus_connection_unref(conn);
@@ -89,7 +89,7 @@ static void *audio_playback_thread(void *arg)
     }
     dbus_message_unref(reply);
 
-    printf("[bt-agent] MediaTransport1 acquired: fd=%d, read_mtu=%u, write_mtu=%u\n",
+    printf("[BT:AGENT] MediaTransport1 acquired: fd=%d, read_mtu=%u, write_mtu=%u\n",
            transport_fd, (unsigned)read_mtu, (unsigned)write_mtu);
 
     if (transport_fd < 0) {
@@ -105,7 +105,7 @@ static void *audio_playback_thread(void *arg)
         alsa_err = snd_pcm_open(&pcm, "default", SND_PCM_STREAM_PLAYBACK, 0);
     }
     if (alsa_err < 0) {
-        fprintf(stderr, "[bt-agent] ALSA snd_pcm_open failed: %s\n", snd_strerror(alsa_err));
+        fprintf(stderr, "[BT:AGENT] ALSA snd_pcm_open failed: %s\n", snd_strerror(alsa_err));
         close(transport_fd);
         dbus_connection_unref(conn);
         free(transport_path);
@@ -149,7 +149,7 @@ static void *audio_playback_thread(void *arg)
         }
     }
 
-    printf("[bt-agent] Audio playback worker exiting for %s\n", transport_path);
+    printf("[BT:AGENT] Audio playback worker exiting for %s\n", transport_path);
     if (pcm) {
         snd_pcm_drain(pcm);
         snd_pcm_close(pcm);
@@ -216,7 +216,7 @@ static DBusHandlerResult endpoint_filter(DBusConnection *conn, DBusMessage *msg,
     if (!iface || strcmp(iface, ENDPOINT_INTERFACE) != 0 || !member)
         return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
-    printf("[bt-agent] MediaEndpoint1 method call: %s\n", member);
+    printf("[BT:AGENT] MediaEndpoint1 method call: %s\n", member);
 
     DBusMessage *reply = NULL;
     if (strcmp(member, "SetConfiguration") == 0) {
@@ -226,7 +226,7 @@ static DBusHandlerResult endpoint_filter(DBusConnection *conn, DBusMessage *msg,
         if (dbus_message_iter_get_arg_type(&iter) == DBUS_TYPE_OBJECT_PATH) {
             dbus_message_iter_get_basic(&iter, &transport_path);
         }
-        printf("[bt-agent] *** A2DP Audio Stream Configured ***: transport=%s\n",
+        printf("[BT:AGENT] *** A2DP Audio Stream Configured ***: transport=%s\n",
                transport_path ? transport_path : "unknown");
         reply = dbus_message_new_method_return(msg);
 
@@ -250,16 +250,16 @@ static DBusHandlerResult endpoint_filter(DBusConnection *conn, DBusMessage *msg,
             dbus_message_iter_append_basic(&array_iter, DBUS_TYPE_BYTE, &selected_sbc[i]);
         }
         dbus_message_iter_close_container(&iter, &array_iter);
-        printf("[bt-agent] A2DP Codec Configuration Selected (44.1kHz Stereo)\n");
+        printf("[BT:AGENT] A2DP Codec Configuration Selected (44.1kHz Stereo)\n");
     } else if (strcmp(member, "ClearConfiguration") == 0) {
-        printf("[bt-agent] A2DP Audio Stream Cleared\n");
+        printf("[BT:AGENT] A2DP Audio Stream Cleared\n");
         if (g_audio_running) {
             g_audio_running = 0;
             pthread_join(g_audio_thread, NULL);
         }
         reply = dbus_message_new_method_return(msg);
     } else if (strcmp(member, "Release") == 0) {
-        printf("[bt-agent] MediaEndpoint Released\n");
+        printf("[BT:AGENT] MediaEndpoint Released\n");
         if (g_audio_running) {
             g_audio_running = 0;
             pthread_join(g_audio_thread, NULL);
@@ -291,7 +291,7 @@ static int register_agent(DBusConnection *conn)
     dbus_error_init(&err);
 
     if (!dbus_connection_register_object_path(conn, AGENT_PATH, &agent_vtable, NULL)) {
-        fprintf(stderr, "[bt-agent] Failed to register object path %s\n", AGENT_PATH);
+        fprintf(stderr, "[BT:AGENT] Failed to register object path %s\n", AGENT_PATH);
         return 0;
     }
 
@@ -309,7 +309,7 @@ static int register_agent(DBusConnection *conn)
     DBusMessage *reply = dbus_connection_send_with_reply_and_block(conn, msg, 5000, &err);
     dbus_message_unref(msg);
     if (!reply) {
-        fprintf(stderr, "[bt-agent] RegisterAgent failed: %s\n", err.message ? err.message : "unknown");
+        fprintf(stderr, "[BT:AGENT] RegisterAgent failed: %s\n", err.message ? err.message : "unknown");
         dbus_error_free(&err);
         return 0;
     }
@@ -326,13 +326,13 @@ static int register_agent(DBusConnection *conn)
     reply = dbus_connection_send_with_reply_and_block(conn, msg, 5000, &err);
     dbus_message_unref(msg);
     if (!reply) {
-        fprintf(stderr, "[bt-agent] RequestDefaultAgent failed: %s\n", err.message ? err.message : "unknown");
+        fprintf(stderr, "[BT:AGENT] RequestDefaultAgent failed: %s\n", err.message ? err.message : "unknown");
         dbus_error_free(&err);
         return 0;
     }
     dbus_message_unref(reply);
 
-    printf("[bt-agent] Successfully registered as default NoInputNoOutput BlueZ Agent\n");
+    printf("[BT:AGENT] Successfully registered as default NoInputNoOutput BlueZ Agent\n");
     return 1;
 }
 
@@ -342,7 +342,7 @@ static int register_media_endpoint(DBusConnection *conn)
     dbus_error_init(&err);
 
     if (!dbus_connection_register_object_path(conn, ENDPOINT_PATH, &endpoint_vtable, NULL)) {
-        fprintf(stderr, "[bt-agent] Failed to register endpoint object path %s\n", ENDPOINT_PATH);
+        fprintf(stderr, "[BT:AGENT] Failed to register endpoint object path %s\n", ENDPOINT_PATH);
         return 0;
     }
 
@@ -402,13 +402,13 @@ static int register_media_endpoint(DBusConnection *conn)
     DBusMessage *reply = dbus_connection_send_with_reply_and_block(conn, msg, 5000, &err);
     dbus_message_unref(msg);
     if (!reply) {
-        fprintf(stderr, "[bt-agent] RegisterEndpoint (A2DP SBC Sink) failed: %s\n",
+        fprintf(stderr, "[BT:AGENT] RegisterEndpoint (A2DP SBC Sink) failed: %s\n",
                 err.message ? err.message : "unknown error");
         dbus_error_free(&err);
         return 0;
     }
     dbus_message_unref(reply);
-    printf("[bt-agent] Successfully registered Media Endpoint: A2DP SBC Sink on /org/bluez/hci0\n");
+    printf("[BT:AGENT] Successfully registered Media Endpoint: A2DP SBC Sink on /org/bluez/hci0\n");
     return 1;
 }
 
@@ -430,23 +430,23 @@ int main(int argc, char *argv[])
     dbus_error_init(&err);
     DBusConnection *conn = dbus_bus_get(DBUS_BUS_SYSTEM, &err);
     if (!conn) {
-        fprintf(stderr, "[bt-agent] Failed to connect to system bus: %s\n", err.message ? err.message : "unknown");
+        fprintf(stderr, "[BT:AGENT] Failed to connect to system bus: %s\n", err.message ? err.message : "unknown");
         dbus_error_free(&err);
         return 1;
     }
 
     if (!register_agent(conn)) {
-        fprintf(stderr, "[bt-agent] Failed to register agent\n");
+        fprintf(stderr, "[BT:AGENT] Failed to register agent\n");
         return 1;
     }
 
     if (!register_media_endpoint(conn)) {
-        fprintf(stderr, "[bt-agent] Failed to register A2DP media endpoint\n");
+        fprintf(stderr, "[BT:AGENT] Failed to register A2DP media endpoint\n");
         return 1;
     }
 
-    printf("[bt-agent] Bluetooth stack active with Auto-Pairing Agent + A2DP Media Endpoint (Audio streaming to ALSA ready)\n");
-    printf("[bt-agent] Dispatching pairing and media events...\n");
+    printf("[BT:AGENT] Bluetooth stack active with Auto-Pairing Agent + A2DP Media Endpoint (Audio streaming to ALSA ready)\n");
+    printf("[BT:AGENT] Dispatching pairing and media events...\n");
 
     while (dbus_connection_read_write_dispatch(conn, -1)) {
         // Event loop running

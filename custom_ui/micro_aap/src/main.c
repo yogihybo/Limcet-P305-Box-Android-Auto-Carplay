@@ -35,9 +35,9 @@ static void *wifi_setup_thread(void *arg) {
     int fd = args->rfcomm_fd;
     free(args);
 
-    printf("micro_aap: starting WiFi AP and RFCOMM WPP handshake for fd=%d\n", fd);
+    printf("[AA] starting WiFi AP and RFCOMM WPP handshake for fd=%d\n", fd);
     if (!aap_wifi_ensure_ap_up()) {
-        fprintf(stderr, "micro_aap: failed to ensure WiFi AP is running\n");
+        fprintf(stderr, "[AA] failed to ensure WiFi AP is running\n");
         close(fd);
         if (g_active_rfcomm_fd == fd) g_active_rfcomm_fd = -1;
         return NULL;
@@ -50,13 +50,13 @@ static void *wifi_setup_thread(void *arg) {
                                        "custom_ui_wifi", "88888888",
                                        bssid, 5 /* WPA2_PERSONAL */);
     if (!ok) {
-        fprintf(stderr, "micro_aap: WPP handshake failed\n");
+        fprintf(stderr, "[AA] WPP handshake failed\n");
         close(fd);
         if (g_active_rfcomm_fd == fd) g_active_rfcomm_fd = -1;
         return NULL;
     }
 
-    printf("micro_aap: WPP handshake complete, keeping rfcomm_fd=%d open as tether\n", fd);
+    printf("[AA] WPP handshake complete, keeping rfcomm_fd=%d open as tether\n", fd);
     return NULL;
 }
 
@@ -168,7 +168,7 @@ int main(int argc, char **argv) {
 
     int lock_fd = acquire_lock();
     if (lock_fd < 0) {
-        fprintf(stderr, "micro_aap: another sidecar instance is already running\n");
+        fprintf(stderr, "[AA] another sidecar instance is already running\n");
         return 1;
     }
 
@@ -203,13 +203,13 @@ int main(int argc, char **argv) {
         sin_addr.sin_addr.s_addr = INADDR_ANY;
         if (bind(tcp_listen_fd, (struct sockaddr *)&sin_addr, sizeof(sin_addr)) == 0) {
             listen(tcp_listen_fd, 2);
-            printf("micro_aap: listening on TCP 0.0.0.0:%d\n", AAP_TCP_PORT);
+            printf("[AA] listening on TCP 0.0.0.0:%d\n", AAP_TCP_PORT);
         } else {
             perror("bind(TCP 5277)");
         }
     }
 
-    printf("micro_aap: listening on %s\n", SIDECAR_SOCK_PATH);
+    printf("[AA] listening on %s\n", SIDECAR_SOCK_PATH);
 
     aap_session_t *session = NULL;
     int client_ipc_fds[MAX_IPC_CLIENTS];
@@ -262,7 +262,7 @@ int main(int argc, char **argv) {
             aap_session_tick(session);
             if (aap_session_get_state(session) == AAP_SESSION_STATE_DISCONNECTED ||
                 aap_session_get_state(session) == AAP_SESSION_STATE_ERROR) {
-                printf("micro_aap: session ended, tearing down\n");
+                printf("[AA] session ended, tearing down\n");
                 aap_session_destroy(session);
                 session = NULL;
                 if (g_active_rfcomm_fd >= 0) {
@@ -307,7 +307,7 @@ int main(int argc, char **argv) {
                 int keepcnt = 3;
                 setsockopt(new_tcp, IPPROTO_TCP, TCP_KEEPCNT, &keepcnt, sizeof(keepcnt));
 
-                printf("micro_aap: incoming phone TCP connection accepted (fd=%d)\n", new_tcp);
+                printf("[AA] incoming phone TCP connection accepted (fd=%d)\n", new_tcp);
                 if (session) {
                     aap_session_destroy(session);
                 }
@@ -318,7 +318,7 @@ int main(int argc, char **argv) {
         /* Handle active AAP session data */
         if (idx_session >= 0 && (fds[idx_session].revents & POLLIN)) {
             if (!aap_session_process_incoming(session)) {
-                printf("micro_aap: AAP session I/O error or disconnect\n");
+                printf("[AA] AAP session I/O error or disconnect\n");
                 aap_session_destroy(session);
                 session = NULL;
                 if (g_active_rfcomm_fd >= 0) {
@@ -347,7 +347,7 @@ int main(int argc, char **argv) {
                 }
 
                 if (recvd_fd >= 0) {
-                    printf("micro_aap: received CONNECT_FD ancillary fd=%d\n", recvd_fd);
+                    printf("[AA] received CONNECT_FD ancillary fd=%d\n", recvd_fd);
                     if (g_active_rfcomm_fd >= 0) {
                         close(g_active_rfcomm_fd);
                     }

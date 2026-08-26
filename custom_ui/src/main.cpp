@@ -572,7 +572,7 @@ int main() {
                 }
             } else {
                 if (factoryCamera) {
-                    std::printf("%s [HAL:REVCAM] Reverse gear disengaged -- OEM Factory Camera\n", core::log_timestamp().c_str());
+                    std::printf("%s [HAL:REVCAM] Reverse gear disengaged -- OEM Factory Camera mode de-activated\n", core::log_timestamp().c_str());
                 } else {
                     std::printf("%s [HAL:REVCAM] Reverse gear disengaged -- returning to previous screen\n", core::log_timestamp().c_str());
                     core::navigation::pop();

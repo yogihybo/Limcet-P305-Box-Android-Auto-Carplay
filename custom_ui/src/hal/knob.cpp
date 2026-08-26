@@ -37,48 +37,27 @@ bool & knob_was_pressed() {
     return was_pressed;
 }
 
-// Tracks whether rotation occurred during the current press-hold
-// so hold-and-rotate does not fire an accidental center click on release.
-bool & rotated_while_held() {
-    static bool rotated = false;
-    return rotated;
-}
-
 void mcu_knob_read_cb(lv_indev_t * indev, lv_indev_data_t * data) {
     auto * mcu = static_cast<McuInputHal *>(lv_indev_get_driver_data(indev));
 
     int32_t ticks = mcu->consume_knob_ticks();
     bool pressed = mcu->get_knob_pressed();
     bool press_edge = pressed && !knob_was_pressed();
-    bool release_edge = !pressed && knob_was_pressed();
     knob_was_pressed() = pressed;
-
-    if (press_edge) {
-        rotated_while_held() = false;
-    }
 
     if (androidauto_screen_active().load(std::memory_order_acquire)) {
         if (ticks != 0) {
-            std::printf("%s hal::knob: AA active, ticks=%d, held=%d\n", core::log_timestamp().c_str(), ticks, pressed ? 1 : 0);
+            std::printf("%s hal::knob: AA active, ticks=%d\n", core::log_timestamp().c_str(), ticks);
         }
-
-        if (pressed && ticks != 0) {
-            rotated_while_held() = true;
-        }
-
-        /* If held while rotating -> card nudge (DPAD_RIGHT / DPAD_LEFT); else intra-card rotary (NAV_DOWN / NAV_UP) */
-        std::uint32_t downKey = pressed ? kKeycodeDpadRight : kKeycodeSystemNavigationDown;
-        std::uint32_t upKey = pressed ? kKeycodeDpadLeft : kKeycodeSystemNavigationUp;
 
         for (int32_t i = 0; i < ticks; ++i) {
-            androidauto_client().sendKey(downKey);
+            androidauto_client().sendKey(kKeycodeSystemNavigationDown);
         }
         for (int32_t i = 0; i < -ticks; ++i) {
-            androidauto_client().sendKey(upKey);
+            androidauto_client().sendKey(kKeycodeSystemNavigationUp);
         }
 
-        /* Only fire DPAD_CENTER click on release if knob was not rotated while held */
-        if (release_edge && !rotated_while_held()) {
+        if (press_edge) {
             androidauto_client().sendKey(kKeycodeDpadCenter);
         }
 

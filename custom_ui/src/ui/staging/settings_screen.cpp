@@ -358,7 +358,121 @@ lv_obj_t * create_settings_screen() {
     create_toggle_row(card, &ui::icons::icon_smartphone, "Auto-Start CarLink",
                       "AutoStartCarLink", "General", true);
 
+    // Phone Projection Mode: Android Auto vs Apple CarPlay
+    {
+        lv_obj_t * row = lv_obj_create(card);
+        lv_obj_remove_style_all(row);
+        lv_obj_set_width(row, LV_PCT(100));
+        lv_obj_set_height(row, 64);
+        lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+        lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        lv_obj_set_style_pad_hor(row, 16, 0);
+
+        lv_obj_t * left_box = lv_obj_create(row);
+        lv_obj_remove_style_all(left_box);
+        lv_obj_set_size(left_box, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+        lv_obj_set_flex_flow(left_box, LV_FLEX_FLOW_ROW);
+        lv_obj_set_flex_align(left_box, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        lv_obj_set_style_pad_column(left_box, 14, 0);
+
+        lv_obj_t * icon = ui::icons::create_icon(left_box, &ui::icons::icon_smartphone, theme::text_secondary());
+        (void)icon;
+
+        lv_obj_t * label = lv_label_create(left_box);
+        lv_label_set_text(label, "Phone Projection");
+        lv_obj_set_style_text_font(label, &lv_font_roboto_20, 0);
+        lv_obj_set_style_text_color(label, theme::text_primary(), 0);
+
+        // Segmented button group: [ Android Auto | CarPlay ]
+        lv_obj_t * btn_box = lv_obj_create(row);
+        lv_obj_remove_style_all(btn_box);
+        lv_obj_set_size(btn_box, 260, 42);
+        lv_obj_set_flex_flow(btn_box, LV_FLEX_FLOW_ROW);
+        lv_obj_set_flex_align(btn_box, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        lv_obj_set_style_pad_column(btn_box, 8, 0);
+
+        std::string current_mode = core::default_store().get_string("ProjectionType", "AndroidAuto", "General");
+        bool is_carplay = (current_mode == "CarPlay");
+
+        lv_obj_t * aa_btn = lv_button_create(btn_box);
+        lv_obj_remove_style_all(aa_btn);
+        lv_obj_set_size(aa_btn, 120, 40);
+        lv_obj_set_style_radius(aa_btn, theme::kPillRadius, 0);
+        theme::style_focusable(aa_btn);
+
+        lv_obj_t * cp_btn = lv_button_create(btn_box);
+        lv_obj_remove_style_all(cp_btn);
+        lv_obj_set_size(cp_btn, 120, 40);
+        lv_obj_set_style_radius(cp_btn, theme::kPillRadius, 0);
+        theme::style_focusable(cp_btn);
+
+        auto update_btn_styles = [aa_btn, cp_btn](bool carplay_active) {
+            // AA Button style
+            lv_obj_set_style_bg_color(aa_btn, carplay_active ? theme::surface_container_high() : theme::accent_primary(), 0);
+            lv_obj_set_style_bg_opa(aa_btn, LV_OPA_COVER, 0);
+            lv_obj_set_style_border_width(aa_btn, carplay_active ? 1 : 0, 0);
+            lv_obj_set_style_border_color(aa_btn, theme::surface_border(), 0);
+
+            // CarPlay Button style
+            lv_obj_set_style_bg_color(cp_btn, carplay_active ? theme::accent_primary() : theme::surface_container_high(), 0);
+            lv_obj_set_style_bg_opa(cp_btn, LV_OPA_COVER, 0);
+            lv_obj_set_style_border_width(cp_btn, carplay_active ? 0 : 1, 0);
+            lv_obj_set_style_border_color(cp_btn, theme::surface_border(), 0);
+
+            lv_obj_t * aa_lbl = lv_obj_get_child(aa_btn, 0);
+            if (aa_lbl) {
+                lv_obj_set_style_text_color(aa_lbl, carplay_active ? theme::text_primary() : theme::text_on_accent(), 0);
+            }
+            lv_obj_t * cp_lbl = lv_obj_get_child(cp_btn, 0);
+            if (cp_lbl) {
+                lv_obj_set_style_text_color(cp_lbl, carplay_active ? theme::text_on_accent() : theme::text_primary(), 0);
+            }
+        };
+
+        lv_obj_t * aa_lbl = lv_label_create(aa_btn);
+        lv_label_set_text(aa_lbl, "Android Auto");
+        lv_obj_set_style_text_font(aa_lbl, &lv_font_roboto_14, 0);
+        lv_obj_center(aa_lbl);
+
+        lv_obj_t * cp_lbl = lv_label_create(cp_btn);
+        lv_label_set_text(cp_lbl, "CarPlay");
+        lv_obj_set_style_text_font(cp_lbl, &lv_font_roboto_14, 0);
+        lv_obj_center(cp_lbl);
+
+        update_btn_styles(is_carplay);
+
+        struct ProjectionCtx {
+            std::function<void(bool)> update_fn;
+        };
+        auto * ctx = new ProjectionCtx{update_btn_styles};
+        lv_obj_add_event_cb(btn_box, [](lv_event_t * e) {
+            delete static_cast<ProjectionCtx *>(lv_event_get_user_data(e));
+        }, LV_EVENT_DELETE, ctx);
+
+        lv_obj_add_event_cb(aa_btn, [](lv_event_t * e) {
+            auto * ctx = static_cast<ProjectionCtx *>(lv_event_get_user_data(e));
+            core::default_store().set_string("ProjectionType", "AndroidAuto", "General");
+            core::default_store().save();
+            ctx->update_fn(false);
+            std::printf("%s [UI] Phone projection set to Android Auto\n", core::log_timestamp().c_str());
+        }, LV_EVENT_CLICKED, ctx);
+
+        lv_obj_add_event_cb(cp_btn, [](lv_event_t * e) {
+            auto * ctx = static_cast<ProjectionCtx *>(lv_event_get_user_data(e));
+            core::default_store().set_string("ProjectionType", "CarPlay", "General");
+            core::default_store().save();
+            ctx->update_fn(true);
+            std::printf("%s [UI] Phone projection set to Apple CarPlay\n", core::log_timestamp().c_str());
+        }, LV_EVENT_CLICKED, ctx);
+
+        if (core::navigation::focus_group()) {
+            lv_group_add_obj(core::navigation::focus_group(), aa_btn);
+            lv_group_add_obj(core::navigation::focus_group(), cp_btn);
+        }
+    }
+
     return scr;
 }
 
 } // namespace staging_ui
+

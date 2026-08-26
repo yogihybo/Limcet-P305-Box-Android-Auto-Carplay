@@ -4,10 +4,12 @@
 #include "ui/staging/nav_rail.h"
 #include "ui/staging/settings_screen.h"
 #include "ui/android_auto_screen.h"
+#include "ui/carplay_screen.h"
 #include "ui/bluetooth_screen.h"
 #include "ui/reverse_camera_screen.h"
 #include "ui/staging/icons.h"
 #include "core/navigation.h"
+#include "core/config_store.h"
 #include "hal/androidauto_client.h"
 #include "hal/bluetooth.h"
 #include <ctime>
@@ -20,6 +22,7 @@ namespace {
 
 struct DashboardWidgets {
     lv_obj_t * clock_lbl = nullptr;
+    lv_obj_t * aa_title_lbl = nullptr;
     lv_obj_t * aa_status_lbl = nullptr;
     lv_obj_t * connect_lbl = nullptr;
     lv_obj_t * track_title_lbl = nullptr;
@@ -47,17 +50,39 @@ void update_clock(DashboardWidgets * w) {
 void update_dashboard_status(DashboardWidgets * w) {
     if (!w) return;
     update_clock(w);
+
+    std::string proj = core::default_store().get_string("ProjectionType", "AndroidAuto", "General");
+    bool is_carplay = (proj == "CarPlay");
+
+    if (w->aa_title_lbl) {
+        lv_label_set_text(w->aa_title_lbl, is_carplay ? "Apple CarPlay" : "Android Auto");
+    }
+
     if (w->aa_status_lbl && w->connect_lbl) {
-        std::string line = client().statusLine(false);
-        if (line.rfind("STATE Connected", 0) == 0) {
-            lv_label_set_text(w->aa_status_lbl, "Session: Active (Connected)");
-            lv_label_set_text(w->connect_lbl, "Open Session");
-        } else if (line.rfind("STATE Connecting", 0) == 0) {
-            lv_label_set_text(w->aa_status_lbl, "Connection: Connecting...");
-            lv_label_set_text(w->connect_lbl, "Connecting...");
+        if (is_carplay) {
+            FILE * f = fopen("/tmp/carplay", "r");
+            bool is_linked = (f != nullptr);
+            if (f) fclose(f);
+
+            if (is_linked) {
+                lv_label_set_text(w->aa_status_lbl, "Session: Active (Connected)");
+                lv_label_set_text(w->connect_lbl, "Open Session");
+            } else {
+                lv_label_set_text(w->aa_status_lbl, "Connection: Ready to pair");
+                lv_label_set_text(w->connect_lbl, "Quick Connect");
+            }
         } else {
-            lv_label_set_text(w->aa_status_lbl, "Connection: Ready to pair");
-            lv_label_set_text(w->connect_lbl, "Quick Connect");
+            std::string line = client().statusLine(false);
+            if (line.rfind("STATE Connected", 0) == 0) {
+                lv_label_set_text(w->aa_status_lbl, "Session: Active (Connected)");
+                lv_label_set_text(w->connect_lbl, "Open Session");
+            } else if (line.rfind("STATE Connecting", 0) == 0) {
+                lv_label_set_text(w->aa_status_lbl, "Connection: Connecting...");
+                lv_label_set_text(w->connect_lbl, "Connecting...");
+            } else {
+                lv_label_set_text(w->aa_status_lbl, "Connection: Ready to pair");
+                lv_label_set_text(w->connect_lbl, "Quick Connect");
+            }
         }
     }
 
@@ -81,11 +106,15 @@ void poll_timer_cb(lv_timer_t * timer) {
 }
 
 void quick_connect_clicked_cb(lv_event_t * e) {
-    std::string line = client().statusLine(false);
-    if (line.rfind("STATE Connected", 0) == 0) {
-        core::navigation::push(ui::create_android_auto_screen);
+    (void)e;
+    std::string proj = core::default_store().get_string("ProjectionType", "AndroidAuto", "General");
+    if (proj == "CarPlay") {
+        core::navigation::push(ui::create_carplay_screen);
     } else {
-        client().requestConnect();
+        std::string line = client().statusLine(false);
+        if (line.rfind("STATE Connected", 0) != 0) {
+            client().requestConnect();
+        }
         core::navigation::push(ui::create_android_auto_screen);
     }
 }
@@ -181,6 +210,7 @@ lv_obj_t * create_home_dashboard() {
     lv_label_set_text(aa_title, "Android Auto");
     lv_obj_set_style_text_font(aa_title, &lv_font_roboto_28, 0);
     lv_obj_set_style_text_color(aa_title, theme::text_primary(), 0);
+    widgets->aa_title_lbl = aa_title;
 
     lv_obj_t * aa_status = lv_label_create(aa_header_box);
     lv_label_set_text(aa_status, "Connection: Ready to pair");

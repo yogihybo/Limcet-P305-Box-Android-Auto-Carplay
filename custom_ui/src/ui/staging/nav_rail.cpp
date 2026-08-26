@@ -4,10 +4,12 @@
 #include "ui/staging/home_dashboard.h"
 #include "ui/staging/settings_screen.h"
 #include "ui/android_auto_screen.h"
+#include "ui/carplay_screen.h"
 #include "ui/bluetooth_screen.h"
 #include "ui/reverse_camera_screen.h"
 #include "ui/staging/icons.h"
 #include "core/navigation.h"
+#include "core/config_store.h"
 
 namespace staging_ui {
 
@@ -103,9 +105,15 @@ void navigate_to(NavDestination dest) {
                 core::navigation::replace(create_home_dashboard);
             }
             break;
-        case NavDestination::AndroidAuto:
-            core::navigation::replace(ui::create_android_auto_screen);
+        case NavDestination::AndroidAuto: {
+            std::string proj = core::default_store().get_string("ProjectionType", "AndroidAuto", "General");
+            if (proj == "CarPlay") {
+                core::navigation::replace(ui::create_carplay_screen);
+            } else {
+                core::navigation::replace(ui::create_android_auto_screen);
+            }
             break;
+        }
         case NavDestination::Bluetooth:
             core::navigation::replace(ui::create_bluetooth_screen);
             break;

@@ -116,6 +116,8 @@ struct aap_session {
 
     time_t last_ping_time;
     time_t last_rx_time;
+
+    bool is_video_focus_native;
 };
 
 static void set_state(aap_session_t *s, aap_session_state_t state, const char *msg) {
@@ -835,13 +837,18 @@ static void handle_media_channel(aap_session_t *s, uint8_t channel_id, const uin
             focus_notif.has_unsolicited = true;
             focus_notif.unsolicited = false;
 
+            s->is_video_focus_native = (focus_notif.focus == aap_protobuf_service_media_video_message_VideoFocusMode_VIDEO_FOCUS_NATIVE ||
+                                        focus_notif.focus == aap_protobuf_service_media_video_message_VideoFocusMode_VIDEO_FOCUS_NATIVE_TRANSIENT);
+            aap_video_sink_set_visible(s->video_sink, !s->is_video_focus_native);
+
             uint8_t pb_buf[128];
             pb_ostream_t ostream = pb_ostream_from_buffer(pb_buf, sizeof(pb_buf));
             pb_encode(&ostream, aap_protobuf_service_media_video_message_VideoFocusNotification_fields, &focus_notif);
             send_channel_msg(s, AAP_CHANNEL_MEDIA_SINK_VIDEO,
                              aap_protobuf_service_media_sink_MediaMessageId_MEDIA_MESSAGE_VIDEO_FOCUS_NOTIFICATION,
                              pb_buf, ostream.bytes_written, true);
-            printf("aap_session: video focus indication sent (unsolicited=0, mode=%d)\n", focus_notif.focus);
+            printf("aap_session: video focus indication sent (unsolicited=0, mode=%d, native=%d)\n",
+                   focus_notif.focus, s->is_video_focus_native);
             break;
         }
 
@@ -1202,4 +1209,31 @@ void aap_session_send_night_mode(aap_session_t *s, bool night_mode) {
 void aap_session_set_video_visible(aap_session_t *s, bool visible) {
     if (!s || !s->video_sink) return;
     aap_video_sink_set_visible(s->video_sink, visible);
+}
+
+bool aap_session_is_video_focus_native(const aap_session_t *s) {
+    return s ? s->is_video_focus_native : false;
+}
+
+void aap_session_request_video_focus(aap_session_t *s, bool projected) {
+    if (!s || s->state != AAP_SESSION_STATE_RUNNING) return;
+
+    aap_protobuf_service_media_video_message_VideoFocusNotification focus_notif =
+        aap_protobuf_service_media_video_message_VideoFocusNotification_init_default;
+    focus_notif.has_focus = true;
+    focus_notif.focus = projected ? aap_protobuf_service_media_video_message_VideoFocusMode_VIDEO_FOCUS_PROJECTED
+                                  : aap_protobuf_service_media_video_message_VideoFocusMode_VIDEO_FOCUS_NATIVE;
+    focus_notif.has_unsolicited = true;
+    focus_notif.unsolicited = true;
+
+    uint8_t pb_buf[128];
+    pb_ostream_t ostream = pb_ostream_from_buffer(pb_buf, sizeof(pb_buf));
+    pb_encode(&ostream, aap_protobuf_service_media_video_message_VideoFocusNotification_fields, &focus_notif);
+    send_channel_msg(s, AAP_CHANNEL_MEDIA_SINK_VIDEO,
+                     aap_protobuf_service_media_sink_MediaMessageId_MEDIA_MESSAGE_VIDEO_FOCUS_NOTIFICATION,
+                     pb_buf, ostream.bytes_written, true);
+
+    s->is_video_focus_native = !projected;
+    aap_video_sink_set_visible(s->video_sink, projected);
+    printf("aap_session: video focus request sent (unsolicited=1, projected=%d)\n", projected ? 1 : 0);
 }

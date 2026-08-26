@@ -12,6 +12,8 @@
 #include <netinet/in.h>
 #include <poll.h>
 
+#include <netinet/tcp.h>
+
 #include "aap_session.h"
 #include "aap_wifi_setup.h"
 
@@ -117,9 +119,19 @@ static void process_single_command(aap_session_t *session, const char *cmd, int 
         if (session) aap_session_set_video_visible(session, false);
         reply = "OK\n";
     } else if (strncmp(cmd, "FOCUS", 5) == 0) {
-        reply = "PROJECTED\n";
+        bool native_focus = session && aap_session_is_video_focus_native(session);
+        reply = native_focus ? "NATIVE\n" : "PROJECTED\n";
     } else if (strncmp(cmd, "RESUME", 6) == 0) {
-        if (session) aap_session_set_video_visible(session, true);
+        if (session) {
+            aap_session_request_video_focus(session, true);
+            aap_session_set_video_visible(session, true);
+        }
+        reply = "OK\n";
+    } else if (strncmp(cmd, "NATIVE", 6) == 0) {
+        if (session) {
+            aap_session_request_video_focus(session, false);
+            aap_session_set_video_visible(session, false);
+        }
         reply = "OK\n";
     } else if (strncmp(cmd, "KEY ", 4) == 0) {
         uint32_t code = (uint32_t)strtoul(cmd + 4, NULL, 10);
@@ -285,6 +297,16 @@ int main(int argc, char **argv) {
         if (idx_tcp_listen >= 0 && (fds[idx_tcp_listen].revents & POLLIN)) {
             int new_tcp = accept(tcp_listen_fd, NULL, NULL);
             if (new_tcp >= 0) {
+                int opt = 1;
+                setsockopt(new_tcp, IPPROTO_TCP, TCP_NODELAY, &opt, sizeof(opt));
+                setsockopt(new_tcp, SOL_SOCKET, SO_KEEPALIVE, &opt, sizeof(opt));
+                int keepidle = 2;
+                setsockopt(new_tcp, IPPROTO_TCP, TCP_KEEPIDLE, &keepidle, sizeof(keepidle));
+                int keepintvl = 1;
+                setsockopt(new_tcp, IPPROTO_TCP, TCP_KEEPINTVL, &keepintvl, sizeof(keepintvl));
+                int keepcnt = 3;
+                setsockopt(new_tcp, IPPROTO_TCP, TCP_KEEPCNT, &keepcnt, sizeof(keepcnt));
+
                 printf("micro_aap: incoming phone TCP connection accepted (fd=%d)\n", new_tcp);
                 if (session) {
                     aap_session_destroy(session);

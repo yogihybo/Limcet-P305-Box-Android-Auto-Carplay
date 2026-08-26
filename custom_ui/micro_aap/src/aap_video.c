@@ -207,6 +207,9 @@ void aap_video_sink_close(aap_video_sink_t *sink) {
     }
 }
 
+#define ARKFB_SHOW_WINDOW_REAL 0x4f2b
+#define ARKFB_HIDE_WINDOW_REAL 0x4f2c
+
 static void configure_video_layer(aap_video_sink_t *sink, uint32_t width, uint32_t height) {
     if (sink->fb4_fd < 0 || sink->is_configured) return;
 
@@ -221,11 +224,15 @@ static void configure_video_layer(aap_video_sink_t *sink, uint32_t width, uint32
     win.format = 0x11; /* YUV420 semi-planar */
     win.out_x = 0;
     win.out_y = 0;
-    win.out_width = 800;
-    win.out_height = 480;
+    win.out_width = width;
+    win.out_height = height;
+    win.interlace_out = 0;
+    win.show_tv = 0;
 
     ioctl(sink->fb4_fd, ARK_IO_INIT_FB_DISPLAY, &win);
+    ioctl(sink->fb4_fd, ARKFB_SHOW_WINDOW_REAL, 0);
     sink->is_configured = true;
+    printf("aap_video: fb4 configured and shown (%ux%u)\n", width, height);
 }
 
 bool aap_video_sink_decode(aap_video_sink_t *sink, const uint8_t *nalu_data, size_t nalu_len) {
@@ -277,8 +284,7 @@ bool aap_video_sink_decode(aap_video_sink_t *sink, const uint8_t *nalu_data, siz
 void aap_video_sink_set_visible(aap_video_sink_t *sink, bool visible) {
     if (!sink) return;
     sink->is_visible = visible;
-    if (sink->ark_disp_fd >= 0) {
-        uint32_t layer_idx = 4; /* Video layer 4 */
-        ioctl(sink->ark_disp_fd, visible ? ARK_DISPLAY_IOC_SHOW : ARK_DISPLAY_IOC_HIDE, &layer_idx);
+    if (sink->fb4_fd >= 0) {
+        ioctl(sink->fb4_fd, visible ? ARKFB_SHOW_WINDOW_REAL : ARKFB_HIDE_WINDOW_REAL, 0);
     }
 }

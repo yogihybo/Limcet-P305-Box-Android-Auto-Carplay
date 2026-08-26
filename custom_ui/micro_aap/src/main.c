@@ -19,7 +19,8 @@
 #define SIDECAR_LOCK_PATH "/tmp/androidauto-sidecar.lock"
 #define AAP_TCP_PORT      5277
 
-#define MAX_POLL_FDS      16
+#define MAX_IPC_CLIENTS 32
+#define MAX_POLL_FDS    (MAX_IPC_CLIENTS + 4)
 
 typedef struct {
     int rfcomm_fd;
@@ -89,6 +90,62 @@ static ssize_t recv_ancillary_fd(int sock_fd, char *buf, size_t buf_len, int *ou
     return n;
 }
 
+static void process_single_command(aap_session_t *session, const char *cmd, int client_fd) {
+    const char *reply = "OK\n";
+    static char status_reply[256];
+
+    if (strncmp(cmd, "STATUS", 6) == 0) {
+        const char *st_name = "Idle";
+        if (session) {
+            switch (aap_session_get_state(session)) {
+                case AAP_SESSION_STATE_RUNNING: st_name = "Connected"; break;
+                case AAP_SESSION_STATE_TLS_HANDSHAKE:
+                case AAP_SESSION_STATE_AUTH:
+                case AAP_SESSION_STATE_SERVICE_DISCOVERY: st_name = "Connecting"; break;
+                default: st_name = "Idle"; break;
+            }
+        } else if (g_active_rfcomm_fd >= 0) {
+            st_name = "Connecting";
+        }
+        snprintf(status_reply, sizeof(status_reply), "STATE %s %s\n", st_name,
+                 session ? aap_session_get_status_message(session) : (g_active_rfcomm_fd >= 0 ? "WiFi Handshake..." : "Waiting for phone"));
+        reply = status_reply;
+    } else if (strncmp(cmd, "SHOW", 4) == 0) {
+        if (session) aap_session_set_video_visible(session, true);
+        reply = "OK\n";
+    } else if (strncmp(cmd, "HIDE", 4) == 0) {
+        if (session) aap_session_set_video_visible(session, false);
+        reply = "OK\n";
+    } else if (strncmp(cmd, "FOCUS", 5) == 0) {
+        reply = "PROJECTED\n";
+    } else if (strncmp(cmd, "RESUME", 6) == 0) {
+        if (session) aap_session_set_video_visible(session, true);
+        reply = "OK\n";
+    } else if (strncmp(cmd, "KEY ", 4) == 0) {
+        uint32_t code = (uint32_t)strtoul(cmd + 4, NULL, 10);
+        if (session) aap_session_send_key(session, code);
+        reply = "OK\n";
+    } else if (strncmp(cmd, "TOUCH ", 6) == 0) {
+        unsigned int x = 0, y = 0;
+        char act[16] = {0};
+        if (sscanf(cmd + 6, "%u %u %15s", &x, &y, act) == 3 && session) {
+            uint32_t action_code = 0; /* DOWN */
+            if (strcmp(act, "MOVE") == 0) action_code = 1;
+            else if (strcmp(act, "UP") == 0) action_code = 2;
+            aap_session_send_touch(session, x, y, action_code);
+        }
+        reply = "OK\n";
+    } else if (strncmp(cmd, "NIGHT ", 6) == 0) {
+        if (session) aap_session_send_night_mode(session, cmd[6] == '1');
+        reply = "OK\n";
+    }
+
+    if (client_fd >= 0) {
+        ssize_t w = write(client_fd, reply, strlen(reply));
+        (void)w;
+    }
+}
+
 int main(int argc, char **argv) {
     (void)argc;
     (void)argv;
@@ -120,9 +177,9 @@ int main(int argc, char **argv) {
         perror("bind(AF_UNIX)");
         return 1;
     }
-    listen(ipc_listen_fd, 4);
+    listen(ipc_listen_fd, 8);
 
-    /* Open AAP TCP server socket on port 5000 */
+    /* Open AAP TCP server socket on port 5277 */
     int tcp_listen_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (tcp_listen_fd >= 0) {
         int opt = 1;
@@ -136,14 +193,15 @@ int main(int argc, char **argv) {
             listen(tcp_listen_fd, 2);
             printf("micro_aap: listening on TCP 0.0.0.0:%d\n", AAP_TCP_PORT);
         } else {
-            perror("bind(TCP 5000)");
+            perror("bind(TCP 5277)");
         }
     }
 
     printf("micro_aap: listening on %s\n", SIDECAR_SOCK_PATH);
 
     aap_session_t *session = NULL;
-    int client_ipc_fds[8] = {-1, -1, -1, -1, -1, -1, -1, -1};
+    int client_ipc_fds[MAX_IPC_CLIENTS];
+    for (int i = 0; i < MAX_IPC_CLIENTS; i++) client_ipc_fds[i] = -1;
 
     while (1) {
         struct pollfd fds[MAX_POLL_FDS];
@@ -171,12 +229,12 @@ int main(int argc, char **argv) {
         }
 
         /* Active IPC clients */
-        int idx_ipc_clients[8];
-        for (int i = 0; i < 8; i++) {
+        int idx_ipc_clients[MAX_IPC_CLIENTS];
+        for (int i = 0; i < MAX_IPC_CLIENTS; i++) {
             idx_ipc_clients[i] = -1;
             if (client_ipc_fds[i] >= 0) {
                 fds[nfds].fd = client_ipc_fds[i];
-                fds[nfds].events = POLLIN;
+                fds[nfds].events = POLLIN | POLLHUP | POLLERR;
                 idx_ipc_clients[i] = nfds++;
             }
         }
@@ -208,11 +266,17 @@ int main(int argc, char **argv) {
         if (fds[idx_ipc_listen].revents & POLLIN) {
             int new_client = accept(ipc_listen_fd, NULL, NULL);
             if (new_client >= 0) {
-                for (int i = 0; i < 8; i++) {
+                int placed = 0;
+                for (int i = 0; i < MAX_IPC_CLIENTS; i++) {
                     if (client_ipc_fds[i] < 0) {
                         client_ipc_fds[i] = new_client;
+                        placed = 1;
                         break;
                     }
+                }
+                if (!placed) {
+                    close(client_ipc_fds[0]);
+                    client_ipc_fds[0] = new_client;
                 }
             }
         }
@@ -243,9 +307,15 @@ int main(int argc, char **argv) {
         }
 
         /* Handle IPC commands */
-        for (int i = 0; i < 8; i++) {
-            if (idx_ipc_clients[i] >= 0 && (fds[idx_ipc_clients[i]].revents & POLLIN)) {
-                char cmd_buf[512] = {0};
+        for (int i = 0; i < MAX_IPC_CLIENTS; i++) {
+            if (idx_ipc_clients[i] >= 0 && (fds[idx_ipc_clients[i]].revents & (POLLIN | POLLHUP | POLLERR))) {
+                if (fds[idx_ipc_clients[i]].revents & (POLLHUP | POLLERR)) {
+                    close(client_ipc_fds[i]);
+                    client_ipc_fds[i] = -1;
+                    continue;
+                }
+
+                char cmd_buf[1024] = {0};
                 int recvd_fd = -1;
                 ssize_t n = recv_ancillary_fd(client_ipc_fds[i], cmd_buf, sizeof(cmd_buf) - 1, &recvd_fd);
                 if (n <= 0) {
@@ -272,52 +342,16 @@ int main(int argc, char **argv) {
                     pthread_attr_destroy(&attr);
                 }
 
-                const char *reply = "OK\n";
-                if (strncmp(cmd_buf, "STATUS", 6) == 0) {
-                    static char status_reply[256];
-                    const char *st_name = "Idle";
-                    if (session) {
-                        switch (aap_session_get_state(session)) {
-                            case AAP_SESSION_STATE_RUNNING: st_name = "Connected"; break;
-                            case AAP_SESSION_STATE_TLS_HANDSHAKE:
-                            case AAP_SESSION_STATE_AUTH:
-                            case AAP_SESSION_STATE_SERVICE_DISCOVERY: st_name = "Connecting"; break;
-                            default: st_name = "Idle"; break;
-                        }
-                    } else if (g_active_rfcomm_fd >= 0) {
-                        st_name = "Connecting";
+                /* Process each newline-delimited command in cmd_buf */
+                char *saveptr = NULL;
+                char *line = strtok_r(cmd_buf, "\r\n", &saveptr);
+                while (line != NULL) {
+                    while (*line == ' ') line++;
+                    if (*line != '\0') {
+                        process_single_command(session, line, client_ipc_fds[i]);
                     }
-                    snprintf(status_reply, sizeof(status_reply), "STATE %s %s\n", st_name,
-                             session ? aap_session_get_status_message(session) : (g_active_rfcomm_fd >= 0 ? "WiFi Handshake..." : "Waiting for phone"));
-                    reply = status_reply;
-                } else if (strncmp(cmd_buf, "SHOW", 4) == 0) {
-                    if (session) aap_session_set_video_visible(session, true);
-                    reply = "OK\n";
-                } else if (strncmp(cmd_buf, "HIDE", 4) == 0) {
-                    if (session) aap_session_set_video_visible(session, false);
-                    reply = "OK\n";
-                } else if (strncmp(cmd_buf, "FOCUS", 5) == 0) {
-                    reply = "PROJECTED\n";
-                } else if (strncmp(cmd_buf, "KEY ", 4) == 0) {
-                    uint32_t code = (uint32_t)strtoul(cmd_buf + 4, NULL, 10);
-                    if (session) aap_session_send_key(session, code);
-                    reply = "OK\n";
-                } else if (strncmp(cmd_buf, "TOUCH ", 6) == 0) {
-                    unsigned int x = 0, y = 0;
-                    char act[16] = {0};
-                    if (sscanf(cmd_buf + 6, "%u %u %15s", &x, &y, act) == 3 && session) {
-                        uint32_t action_code = 0; /* DOWN */
-                        if (strcmp(act, "MOVE") == 0) action_code = 1;
-                        else if (strcmp(act, "UP") == 0) action_code = 2;
-                        aap_session_send_touch(session, x, y, action_code);
-                    }
-                    reply = "OK\n";
-                } else if (strncmp(cmd_buf, "NIGHT ", 6) == 0) {
-                    if (session) aap_session_send_night_mode(session, cmd_buf[6] == '1');
-                    reply = "OK\n";
+                    line = strtok_r(NULL, "\r\n", &saveptr);
                 }
-
-                write(client_ipc_fds[i], reply, strlen(reply));
             }
         }
     }

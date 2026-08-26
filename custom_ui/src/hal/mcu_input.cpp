@@ -269,7 +269,17 @@ void McuInputHal::run() {
                 knob_pressed_.store(b4 == 1, std::memory_order_release);
             } else if (b3 == kHeadlightState) {
                 night_mode_.store(b4 == 1, std::memory_order_release);
+            } else {
+                std::printf("%s hal::mcu_input: unhandled cmd=0x02 b3=0x%02X (%u) b4=0x%02X (%u)\n",
+                            core::log_timestamp().c_str(), b3, b3, b4, b4);
             }
+        } else {
+            std::printf("%s hal::mcu_input: packet cmd=0x%02X len=%u payload=[",
+                        core::log_timestamp().c_str(), cmd, len);
+            for (unsigned char i = 0; i < len; ++i) {
+                std::printf("%02X%s", payload[i], (i + 1 < len) ? " " : "");
+            }
+            std::printf("]\n");
         }
     }
 }

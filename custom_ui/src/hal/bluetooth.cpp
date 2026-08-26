@@ -1011,27 +1011,15 @@ bool sync_clock_from_phone(BluetoothHandle & h) {
     }
     std::string mac = get_connected_device_mac();
     if (mac.empty()) {
-        std::printf("%s hal::bluetooth::sync_clock_from_phone: no currently-connected device, "
-                    "skipping\n", core::log_timestamp().c_str());
+        std::printf("%s [BT] No currently-connected device, skipping clock sync\n", core::log_timestamp().c_str());
         return false;
     }
 
-    // 2026-08-20: tried FIRST, before the Bluetooth-PAN/NTP path below --
-    // see hal/ble_cts.h's own header comment for why this avenue is
-    // newly open (closed before due to blueware's own firmware
-    // limitation, not the actual dual-mode-capable RTL8761BTV chip).
-    // No user action required (unlike PAN, which needs the user to
-    // remember to enable Bluetooth tethering every time) if the phone
-    // exposes GATT CTS -- both paths stay implemented so a real
-    // hardware comparison decides which one to keep active, not a
-    // guess made here.
     if (sync_clock_via_ble_cts(mac)) {
-        std::printf("%s hal::bluetooth::sync_clock_from_phone: BLE CTS succeeded, skipping the "
-                    "PAN/NTP path entirely\n", core::log_timestamp().c_str());
+        std::printf("%s [BT] BLE CTS succeeded, skipping PAN/NTP path\n", core::log_timestamp().c_str());
         return true;
     }
-    std::printf("%s hal::bluetooth::sync_clock_from_phone: BLE CTS didn't work -- falling back "
-                "to Bluetooth PAN/NTP\n", core::log_timestamp().c_str());
+    std::printf("%s [BT] BLE CTS not available -- trying Bluetooth PAN/NTP (1 attempt)\n", core::log_timestamp().c_str());
 
     std::string dev_path = "/org/bluez/hci0/" + mac_to_dbus_path(mac);
 
@@ -1039,8 +1027,7 @@ bool sync_clock_from_phone(BluetoothHandle & h) {
     std::string connectCmd = "dbus-send --system --print-reply --dest=org.bluez " + dev_path +
                               " org.bluez.Network1.Connect string:nap 2>&1";
     if (!run_command_capture(connectCmd, connectLines) || connectLines.empty()) {
-        std::printf("%s hal::bluetooth::sync_clock_from_phone: Network1.Connect(nap) failed for "
-                    "%s (phone likely has Bluetooth tethering off) -- skipping\n",
+        std::printf("%s [BT] Network1.Connect(nap) failed for %s (Bluetooth tethering inactive)\n",
                     core::log_timestamp().c_str(), mac.c_str());
         return false;
     }
@@ -1055,12 +1042,10 @@ bool sync_clock_from_phone(BluetoothHandle & h) {
         }
     }
     if (iface.empty()) {
-        std::printf("%s hal::bluetooth::sync_clock_from_phone: Network1.Connect(nap) reply had no "
-                    "interface name -- skipping\n", core::log_timestamp().c_str());
+        std::printf("%s [BT] Network1.Connect(nap) reply had no interface name -- skipping\n", core::log_timestamp().c_str());
         return false;
     }
-    std::printf("%s hal::bluetooth::sync_clock_from_phone: PAN link up on %s, requesting DHCP "
-                "lease...\n", core::log_timestamp().c_str(), iface.c_str());
+    std::printf("%s [BT] PAN link up on %s, requesting DHCP lease...\n", core::log_timestamp().c_str(), iface.c_str());
 
     // 2026-08-21: real hardware showed the very next udhcpc call failing
     // in ~40ms -- WAY faster than udhcpc's own -T 3 -t 3 bounded retry
@@ -1081,7 +1066,7 @@ bool sync_clock_from_phone(BluetoothHandle & h) {
     // case without ever reaching here.
     bool ifaceReady = false;
     std::string ifaceSysPath = "/sys/class/net/" + iface;
-    for (int attempt = 0; attempt < 20; ++attempt) {
+    for (int attempt = 0; attempt < 3; ++attempt) {
         struct stat st{};
         if (::stat(ifaceSysPath.c_str(), &st) == 0) {
             ifaceReady = true;
@@ -1090,59 +1075,24 @@ bool sync_clock_from_phone(BluetoothHandle & h) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
     if (!ifaceReady) {
-        std::printf("%s hal::bluetooth::sync_clock_from_phone: %s never appeared -- skipping "
-                    "DHCP/NTP\n", core::log_timestamp().c_str(), iface.c_str());
+        std::printf("%s [BT] %s never appeared -- skipping DHCP/NTP\n", core::log_timestamp().c_str(), iface.c_str());
         run_command_simple("dbus-send --system --dest=org.bluez --type=method_call " + dev_path +
                             " org.bluez.Network1.Disconnect >/dev/null 2>&1");
         return false;
     }
 
-    // 2026-08-20: real hardware showed this always failing at the ntpd
-    // step even with Bluetooth tethering genuinely enabled on the phone
-    // (a real DHCP offer/ack was happening -- udhcpc's own exit code 0
-    // proved that much). Two real bugs found, both from this repo's own
-    // working reference (firmware_overlay/etc/wifi_client.sh's udhcpc
-    // call, the only other real udhcpc invocation in this codebase):
-    //
-    // 1. Missing `-s /etc/udhcpc.script` -- udhcpc's exit code only
-    //    means "a DHCP server replied with a lease," NOT that anything
-    //    was actually applied. Without a script, this device's busybox
-    //    build has no compiled-in default script to fall back on, so
-    //    bnep0 never got an IP address or default route at all -- the
-    //    "successful" lease was silently discarded. wifi_client.sh
-    //    always passes -s explicitly; this call site never did.
-    // 2. `pool.ntp.org` as a hostname can't resolve anyway --
-    //    etc/udhcpc.script (see its own content) only ever calls
-    //    ifconfig + `route add default gw` from the lease; it never
-    //    writes /etc/resolv.conf, so there was never a nameserver
-    //    configured for ntpd's own hostname lookup to use, even once
-    //    (1) is fixed. Switched to a hardcoded IP instead of a hostname
-    //    to sidestep DNS entirely -- 216.239.35.0, Google's public NTP
-    //    server, already the exact address this project's own
-    //    docs/BLUEZ_AND_KERNEL_BLUETOOTH_HANDOFF.md names as the real
-    //    fallback for this scenario ("sntp -s 216.239.35.0"), not a
-    //    fresh guess.
-    //
-    // -n: exit rather than daemonize if no lease; -q: quit once a lease
-    // is obtained (and, with -s, applied); -T/-t: bound total wait to a
-    // few seconds each try -- this must never hang the caller if the
-    // phone's own DHCP server (part of its tethering stack) doesn't
-    // answer.
-    std::string dhcpCmd = "udhcpc -i " + iface + " -s /etc/udhcpc.script -n -q -T 3 -t 3 >/dev/null 2>&1";
+    std::string dhcpCmd = "udhcpc -i " + iface + " -s /etc/udhcpc.script -n -q -T 1 -t 1 >/dev/null 2>&1";
     bool haveLease = (std::system(dhcpCmd.c_str()) == 0);
 
     bool synced = false;
     if (haveLease) {
-        std::printf("%s hal::bluetooth::sync_clock_from_phone: %s has an IP, querying NTP...\n",
+        std::printf("%s [BT] %s has an IP, querying NTP...\n",
                     core::log_timestamp().c_str(), iface.c_str());
-        // busybox ntpd's own one-shot mode: queries, sets CLOCK_REALTIME
-        // itself, and exits -- no hand-rolled NTP parsing needed.
         synced = (std::system("ntpd -n -q -p 216.239.35.0 >/dev/null 2>&1") == 0);
-        std::printf("%s hal::bluetooth::sync_clock_from_phone: system clock sync %s\n",
+        std::printf("%s [BT] System clock sync %s\n",
                     core::log_timestamp().c_str(), synced ? "succeeded" : "failed (ntpd query)");
     } else {
-        std::printf("%s hal::bluetooth::sync_clock_from_phone: no DHCP lease on %s -- skipping "
-                    "NTP query\n", core::log_timestamp().c_str(), iface.c_str());
+        std::printf("%s [BT] No DHCP lease on %s -- skipping NTP query\n", core::log_timestamp().c_str(), iface.c_str());
     }
 
     run_command_simple("dbus-send --system --dest=org.bluez --type=method_call " + dev_path +

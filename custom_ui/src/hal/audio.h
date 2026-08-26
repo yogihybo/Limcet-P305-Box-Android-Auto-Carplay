@@ -23,4 +23,8 @@ enum class AudioStream { Media, Guidance, System };
 // completely separate hardware path, see hal/display_ctrl.h).
 bool set_stream_volume(AudioStream stream, int percent);
 
+// Attenuates or restores media and system audio levels when reverse gear is engaged/disengaged
+// according to the ReversingVolumeCut config key (0-100%).
+void apply_reversing_volume_cut(bool in_reverse);
+
 }  // namespace hal

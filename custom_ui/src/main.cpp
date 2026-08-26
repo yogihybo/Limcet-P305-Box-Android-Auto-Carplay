@@ -561,6 +561,7 @@ int main() {
         }
 
         if (reverseChanged) {
+            hal::apply_reversing_volume_cut(reverseEngaged);
             bool factoryCamera = core::default_store().get_bool("OriginalCarCamera", false, "General");
             if (reverseEngaged) {
                 if (factoryCamera) {

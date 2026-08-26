@@ -1115,10 +1115,10 @@ bool start_pending_aa_connection() {
         fd = g_pendingAaFd;
         g_pendingAaFd = -1;
     }
-    std::printf("%s [BT-AA-PROFILE] user started Android Auto -- handing off pending fd=%d to "
+    std::printf("%s [BT] user started Android Auto -- handing off pending fd=%d to "
                 "androidauto-sidecar\n", core::log_timestamp().c_str(), fd);
     bool ok = hal::sendConnectFd(fd);
-    std::printf("%s [BT-AA-PROFILE] hand-off to androidauto-sidecar: %s\n",
+    std::printf("%s [BT] hand-off to androidauto-sidecar: %s\n",
                 core::log_timestamp().c_str(), ok ? "accepted" : "FAILED");
     return ok;
 }

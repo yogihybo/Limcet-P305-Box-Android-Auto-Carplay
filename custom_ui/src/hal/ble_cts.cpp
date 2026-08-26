@@ -26,7 +26,7 @@ constexpr const char *kCtsServiceUuid = "00001805-0000-1000-8000-00805f9b34fb";
 constexpr const char *kCtsCurrentTimeCharUuid = "00002a2b-0000-1000-8000-00805f9b34fb";
 
 void log_err(const char *what, const DBusError &err) {
-    std::fprintf(stderr, "%s [BLE-CTS] %s: %s\n", core::log_timestamp().c_str(), what,
+    std::fprintf(stderr, "%s [BT:CTS] %s: %s\n", core::log_timestamp().c_str(), what,
                  err.message ? err.message : "(no message)");
 }
 
@@ -69,7 +69,7 @@ bool wait_for_services_resolved(DBusConnection *conn, const std::string &deviceP
                     dbus_message_iter_get_basic(&variant, &resolved);
                     dbus_message_unref(reply);
                     if (resolved) {
-                        std::printf("%s [BLE-CTS] ServicesResolved=true after %d check(s)\n",
+                        std::printf("%s [BT:CTS] ServicesResolved=true after %d check(s)\n",
                                     core::log_timestamp().c_str(), attempt);
                         return true;
                     }
@@ -82,7 +82,7 @@ bool wait_for_services_resolved(DBusConnection *conn, const std::string &deviceP
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
-    std::printf("%s [BLE-CTS] ServicesResolved never became true within %ds (%d checks)\n",
+    std::printf("%s [BT:CTS] ServicesResolved never became true within %ds (%d checks)\n",
                 core::log_timestamp().c_str(), timeoutSeconds, attempt);
     return false;
 }
@@ -157,7 +157,7 @@ bool find_cts_characteristic(DBusConnection *conn, const std::string &devicePath
                 if (ifaceStr == "org.bluez.GattService1" && uuid == kCtsServiceUuid &&
                     pathStr.rfind(devicePath, 0) == 0) {
                     servicePath = pathStr;
-                    std::printf("%s [BLE-CTS] found Current Time Service at %s\n",
+                    std::printf("%s [BT:CTS] found Current Time Service at %s\n",
                                 core::log_timestamp().c_str(), servicePath.c_str());
                 } else if (ifaceStr == "org.bluez.GattCharacteristic1" &&
                            uuid == kCtsCurrentTimeCharUuid) {
@@ -171,17 +171,17 @@ bool find_cts_characteristic(DBusConnection *conn, const std::string &devicePath
     dbus_message_unref(reply);
 
     if (servicePath.empty()) {
-        std::printf("%s [BLE-CTS] no Current Time Service (0x1805) found for this device -- "
+        std::printf("%s [BT:CTS] no Current Time Service (0x1805) found for this device -- "
                     "phone likely doesn't expose GATT CTS\n", core::log_timestamp().c_str());
         return false;
     }
     if (charPath.empty() || charPath.rfind(servicePath, 0) != 0) {
-        std::printf("%s [BLE-CTS] Current Time Service found but its Current Time "
+        std::printf("%s [BT:CTS] Current Time Service found but its Current Time "
                     "characteristic (0x2A2B) wasn't -- unusual, treating as unsupported\n",
                     core::log_timestamp().c_str());
         return false;
     }
-    std::printf("%s [BLE-CTS] found Current Time characteristic at %s\n",
+    std::printf("%s [BT:CTS] found Current Time characteristic at %s\n",
                 core::log_timestamp().c_str(), charPath.c_str());
     outCharPath = charPath;
     return true;
@@ -230,7 +230,7 @@ std::vector<uint8_t> read_characteristic_value(DBusConnection *conn, const std::
 }  // namespace
 
 bool sync_clock_via_ble_cts(const std::string &deviceMac) {
-    std::printf("%s [BLE-CTS] attempting Current Time Service read for %s\n",
+    std::printf("%s [BT:CTS] attempting Current Time Service read for %s\n",
                 core::log_timestamp().c_str(), deviceMac.c_str());
 
     DBusError err;
@@ -251,7 +251,7 @@ bool sync_clock_via_ble_cts(const std::string &deviceMac) {
     }
 
     std::string devicePath = "/org/bluez/hci0/" + mac_to_dbus_path(deviceMac);
-    std::printf("%s [BLE-CTS] waiting for GATT services to resolve on %s...\n",
+    std::printf("%s [BT:CTS] waiting for GATT services to resolve on %s...\n",
                 core::log_timestamp().c_str(), devicePath.c_str());
 
     bool ok = false;
@@ -266,7 +266,7 @@ bool sync_clock_via_ble_cts(const std::string &deviceMac) {
                     std::snprintf(buf, sizeof(buf), "%02x ", b);
                     hex += buf;
                 }
-                std::printf("%s [BLE-CTS] read %zu bytes: %s\n", core::log_timestamp().c_str(),
+                std::printf("%s [BT:CTS] read %zu bytes: %s\n", core::log_timestamp().c_str(),
                             data.size(), hex.c_str());
 
                 uint16_t year = static_cast<uint16_t>(data[0] | (data[1] << 8));
@@ -283,27 +283,27 @@ bool sync_clock_via_ble_cts(const std::string &deviceMac) {
                     tmVal.tm_min = minute;
                     tmVal.tm_sec = second;
                     time_t epoch = timegm(&tmVal);
-                    std::printf("%s [BLE-CTS] parsed date: %04u-%02u-%02u %02u:%02u:%02u UTC "
+                    std::printf("%s [BT:CTS] parsed date: %04u-%02u-%02u %02u:%02u:%02u UTC "
                                 "(epoch=%lld)\n", core::log_timestamp().c_str(), year, month, day,
                                 hour, minute, second, static_cast<long long>(epoch));
                     if (epoch > 0) {
                         struct timespec ts {};
                         ts.tv_sec = epoch;
                         if (clock_settime(CLOCK_REALTIME, &ts) == 0) {
-                            std::printf("%s [BLE-CTS] clock_settime succeeded -- system clock "
+                            std::printf("%s [BT:CTS] clock_settime succeeded -- system clock "
                                         "set from BLE CTS\n", core::log_timestamp().c_str());
                             ok = true;
                         } else {
-                            std::fprintf(stderr, "%s [BLE-CTS] clock_settime failed: %s\n",
+                            std::fprintf(stderr, "%s [BT:CTS] clock_settime failed: %s\n",
                                          core::log_timestamp().c_str(), std::strerror(errno));
                         }
                     }
                 } else {
-                    std::printf("%s [BLE-CTS] parsed date fields look implausible -- not "
+                    std::printf("%s [BT:CTS] parsed date fields look implausible -- not "
                                 "setting the clock from this\n", core::log_timestamp().c_str());
                 }
             } else {
-                std::printf("%s [BLE-CTS] ReadValue returned too few bytes (%zu, need >= 7) -- "
+                std::printf("%s [BT:CTS] ReadValue returned too few bytes (%zu, need >= 7) -- "
                             "not a real Current Time value\n", core::log_timestamp().c_str(),
                             data.size());
             }
@@ -312,7 +312,7 @@ bool sync_clock_via_ble_cts(const std::string &deviceMac) {
 
     dbus_connection_close(conn);
     dbus_connection_unref(conn);
-    std::printf("%s [BLE-CTS] %s\n", core::log_timestamp().c_str(),
+    std::printf("%s [BT:CTS] %s\n", core::log_timestamp().c_str(),
                 ok ? "system clock sync via BLE CTS succeeded" : "system clock sync via BLE CTS failed");
     return ok;
 }

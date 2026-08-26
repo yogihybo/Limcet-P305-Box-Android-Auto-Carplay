@@ -165,9 +165,8 @@ UI_WRAP_FLAGS     := -Wl,--wrap=getpwnam,--wrap=getpwuid,--wrap=getpwnam_r,--wra
 UI_C_SRCS     := $(filter-out src/androidauto/%,$(shell find src -name '*.c'))
 UI_C_OBJS     := $(patsubst src/%.c,$(BUILD_DIR)/ui-obj/%.o,$(UI_C_SRCS))
 
-# --- Android Auto (aasdk-backed) sources, shared by the future real
-#     integration and the standalone probe test below ---
-AASDK_SRCS    := $(shell find src/androidauto -name '*.cpp')
+# --- Legacy AASDK sources (archived in custom_ui/archived_aasdk) ---
+AASDK_SRCS    := $(if $(wildcard src/androidauto),$(shell find src/androidauto -name '*.cpp'),)
 AASDK_OBJS    := $(patsubst src/%.cpp,$(BUILD_DIR)/ui-obj/%.o,$(AASDK_SRCS))
 
 # Statically cross-compiled by third_party/build_{boost,openssl,libusb,

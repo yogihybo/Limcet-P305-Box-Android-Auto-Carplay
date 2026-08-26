@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include "core/log_timing.h"
+#include "core/config_store.h"
 
 namespace hal {
 
@@ -44,6 +45,27 @@ bool set_stream_volume(AudioStream stream, int percent) {
     std::snprintf(cmd, sizeof(cmd), "amixer sset '%s' %d%% >/dev/null 2>&1",
                   mixer_name_for(stream), percent);
     return std::system(cmd) == 0;
+}
+
+void apply_reversing_volume_cut(bool in_reverse) {
+    int mediaVol = core::default_store().get_int("MediaVolume", 80, "Audio");
+    int sysVol = core::default_store().get_int("SystemVolume", 80, "Audio");
+    if (in_reverse) {
+        int cut = core::default_store().get_int("ReversingVolumeCut", 70, "General");
+        if (cut < 0) cut = 0;
+        if (cut > 100) cut = 100;
+        int attMedia = (mediaVol * (100 - cut)) / 100;
+        int attSys = (sysVol * (100 - cut)) / 100;
+        std::printf("%s [HAL:AUDIO] Reverse gear engaged -- applying %d%% volume cut (Media: %d%% -> %d%%)\n",
+                    core::log_timestamp().c_str(), cut, mediaVol, attMedia);
+        set_stream_volume(AudioStream::Media, attMedia);
+        set_stream_volume(AudioStream::System, attSys);
+    } else {
+        std::printf("%s [HAL:AUDIO] Reverse gear disengaged -- restoring volume (Media: %d%%)\n",
+                    core::log_timestamp().c_str(), mediaVol);
+        set_stream_volume(AudioStream::Media, mediaVol);
+        set_stream_volume(AudioStream::System, sysVol);
+    }
 }
 
 }  // namespace hal

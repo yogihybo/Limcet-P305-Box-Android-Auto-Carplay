@@ -350,6 +350,8 @@ lv_obj_t * create_settings_screen() {
                           std::printf("%s [HAL:REVCAM] Reversing camera mode set to %s\n",
                                       core::log_timestamp().c_str(), oem ? "OEM Factory Camera" : "Aftermarket Camera");
                       });
+    create_stepper_row(card, &ui::icons::icon_volume, "Reversing Volume Cut (%)", 0, 100, 5,
+                       "ReversingVolumeCut", "General", VdeField::None);
 
     // --- Section 4: System ---
     create_section_header(card, "SYSTEM");

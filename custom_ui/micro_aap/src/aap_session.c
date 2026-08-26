@@ -35,6 +35,8 @@
 #include "aap_protobuf/service/media/source/message/Ack.pb.h"
 #include "aap_protobuf/service/media/video/message/VideoFocusNotification.pb.h"
 #include "aap_protobuf/service/media/video/message/VideoFocusMode.pb.h"
+#include "aap_protobuf/service/media/video/message/VideoFocusRequestNotification.pb.h"
+#include "aap_protobuf/service/media/video/message/VideoFocusReason.pb.h"
 
 #include "aap_protobuf/service/inputsource/InputMessageId.pb.h"
 #include "aap_protobuf/service/inputsource/message/InputReport.pb.h"
@@ -171,6 +173,7 @@ static bool send_channel_control_msg(aap_session_t *s, uint8_t channel_id, uint1
 static bool send_media_ack(aap_session_t *s, uint8_t channel_id, int32_t session_id, uint32_t ack_tokens) {
     aap_protobuf_service_media_source_message_Ack ack = aap_protobuf_service_media_source_message_Ack_init_default;
     ack.session_id = session_id;
+    ack.has_ack = true;
     ack.ack = ack_tokens;
 
     uint8_t pb_buf[128];
@@ -799,10 +802,17 @@ static void handle_media_channel(aap_session_t *s, uint8_t channel_id, const uin
 
         case aap_protobuf_service_media_sink_MediaMessageId_MEDIA_MESSAGE_VIDEO_FOCUS_REQUEST: {
             printf("aap_session: video focus request received\n");
+            aap_protobuf_service_media_video_message_VideoFocusRequestNotification req =
+                aap_protobuf_service_media_video_message_VideoFocusRequestNotification_init_default;
+            if (pb_len > 0) {
+                pb_istream_t istream = pb_istream_from_buffer(pb_data, pb_len);
+                pb_decode(&istream, aap_protobuf_service_media_video_message_VideoFocusRequestNotification_fields, &req);
+            }
+
             aap_protobuf_service_media_video_message_VideoFocusNotification focus_notif =
                 aap_protobuf_service_media_video_message_VideoFocusNotification_init_default;
             focus_notif.has_focus = true;
-            focus_notif.focus = aap_protobuf_service_media_video_message_VideoFocusMode_VIDEO_FOCUS_PROJECTED;
+            focus_notif.focus = req.has_mode ? req.mode : aap_protobuf_service_media_video_message_VideoFocusMode_VIDEO_FOCUS_PROJECTED;
             focus_notif.has_unsolicited = true;
             focus_notif.unsolicited = false;
 
@@ -812,7 +822,7 @@ static void handle_media_channel(aap_session_t *s, uint8_t channel_id, const uin
             send_channel_msg(s, AAP_CHANNEL_MEDIA_SINK_VIDEO,
                              aap_protobuf_service_media_sink_MediaMessageId_MEDIA_MESSAGE_VIDEO_FOCUS_NOTIFICATION,
                              pb_buf, ostream.bytes_written, true);
-            printf("aap_session: video focus indication sent (unsolicited=0)\n");
+            printf("aap_session: video focus indication sent (unsolicited=0, mode=%d)\n", focus_notif.focus);
             break;
         }
 
@@ -847,28 +857,40 @@ static void handle_media_channel(aap_session_t *s, uint8_t channel_id, const uin
             break;
         }
 
-        default: {
-            /* Raw audio or video payload with 8-byte timestamp prefix */
-            const uint8_t *stream_bytes = payload;
-            size_t stream_bytes_len = payload_len;
-            if (payload_len > 8) {
-                stream_bytes = payload + 8;
-                stream_bytes_len = payload_len - 8;
+        case aap_protobuf_service_media_sink_MediaMessageId_MEDIA_MESSAGE_CODEC_CONFIG: {
+            /* SPS/PPS NAL units without timestamp, offset 2 */
+            if (payload_len > 2 && channel_id == AAP_CHANNEL_MEDIA_SINK_VIDEO) {
+                aap_video_sink_decode(s->video_sink, payload + 2, payload_len - 2);
             }
+            break;
+        }
 
-            if (channel_id == AAP_CHANNEL_MEDIA_SINK_MEDIA_AUDIO) {
-                aap_audio_sink_write(s->audio_media, stream_bytes, stream_bytes_len);
-                send_media_ack(s, channel_id, s->media_session_id, 1);
-            } else if (channel_id == AAP_CHANNEL_MEDIA_SINK_GUIDANCE_AUDIO) {
-                aap_audio_sink_write(s->audio_guidance, stream_bytes, stream_bytes_len);
-                send_media_ack(s, channel_id, s->media_session_id, 1);
-            } else if (channel_id == AAP_CHANNEL_MEDIA_SINK_SYSTEM_AUDIO) {
-                aap_audio_sink_write(s->audio_system, stream_bytes, stream_bytes_len);
-                send_media_ack(s, channel_id, s->media_session_id, 1);
-            } else if (channel_id == AAP_CHANNEL_MEDIA_SINK_VIDEO) {
-                aap_video_sink_decode(s->video_sink, stream_bytes, stream_bytes_len);
-                send_media_ack(s, channel_id, s->video_session_id, 1);
+        case aap_protobuf_service_media_sink_MediaMessageId_MEDIA_MESSAGE_DATA: {
+            /* Timestamp is 8 bytes at payload + 2, media stream starts at payload + 10 */
+            if (payload_len > 10) {
+                const uint8_t *stream_bytes = payload + 10;
+                size_t stream_bytes_len = payload_len - 10;
+
+                if (channel_id == AAP_CHANNEL_MEDIA_SINK_MEDIA_AUDIO) {
+                    aap_audio_sink_write(s->audio_media, stream_bytes, stream_bytes_len);
+                    send_media_ack(s, channel_id, s->media_session_id, 1);
+                } else if (channel_id == AAP_CHANNEL_MEDIA_SINK_GUIDANCE_AUDIO) {
+                    aap_audio_sink_write(s->audio_guidance, stream_bytes, stream_bytes_len);
+                    send_media_ack(s, channel_id, s->media_session_id, 1);
+                } else if (channel_id == AAP_CHANNEL_MEDIA_SINK_SYSTEM_AUDIO) {
+                    aap_audio_sink_write(s->audio_system, stream_bytes, stream_bytes_len);
+                    send_media_ack(s, channel_id, s->media_session_id, 1);
+                } else if (channel_id == AAP_CHANNEL_MEDIA_SINK_VIDEO) {
+                    aap_video_sink_decode(s->video_sink, stream_bytes, stream_bytes_len);
+                    send_media_ack(s, channel_id, s->video_session_id, 1);
+                }
             }
+            break;
+        }
+
+        default: {
+            printf("aap_session: channel %u (%s) unhandled sub_cmd 0x%04X (len=%zu)\n",
+                   channel_id, channel_name(channel_id), sub_cmd, payload_len);
             break;
         }
     }
@@ -995,7 +1017,7 @@ void aap_session_tick(aap_session_t *s) {
     if (!s || (s->state != AAP_SESSION_STATE_RUNNING && s->state != AAP_SESSION_STATE_CHANNELS_OPENING)) return;
 
     time_t now = time(NULL);
-    if (now - s->last_ping_time >= 2) {
+    if (now - s->last_ping_time >= 1) {
         s->last_ping_time = now;
 
         aap_protobuf_service_control_message_PingRequest ping =

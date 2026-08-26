@@ -90,3 +90,42 @@ To build the complete bootable SD card image with the new sidecar:
 ```bash
 ./build_bootable_sdcard_dyn.sh
 ```
+
+---
+
+## 5. Boot Sequence & Fast-Startup Architecture
+
+### < 1-Second UI Display Bring-Up
+In earlier firmware versions, GUI initialization was blocked for 7–11 seconds after kernel boot because `rcS` ran a synchronous loop waiting for `hci-updown up` and `rtk_hciattach` Bluetooth firmware loading before starting `custom_ui`.
+
+The system now implements a fully asynchronous, parallel boot pipeline:
+
+1. **Immediate GUI Launch**:
+   - As soon as the root filesystem, `/dev/fb0`, and core kernel drivers are initialized, `rcS` launches `custom_ui` immediately:
+     ```sh
+     (sleep 0.1 && . /etc/profile && /usr/bin/custom_ui) &
+     ```
+2. **Non-Blocking Main Loop**:
+   - `custom_ui` initializes LVGL, loads the UI theme, maps MCU touch/knob devices, and renders the Material-3 Home Dashboard in **< 1 second**.
+   - Bluetooth discovery, DBus daemon, `rtk_hciattach`, and `androidauto-sidecar` are started concurrently on background threads (`core::SizedThread`), completely decoupled from the UI rendering loop.
+
+---
+
+## 6. Input Control Architecture
+
+### Touchscreen Stream Handling
+- Touch events are streamed at ~100Hz over the `/tmp/androidauto-sidecar.sock` Unix domain socket.
+- `micro_aap` uses a re-entrant multi-line command tokenizer (`strtok_r`) and an expanded 32-client connection pool with automatic stale socket cleanup, guaranteeing no dropped touch packets or socket timeouts during fast drags/scrolls.
+
+### Rotary Knob 3-in-1 Gesture Navigation
+The single physical rotary encoder supports:
+1. **Intra-Card Widget Focus (Normal Rotation)**:
+   - Clockwise: `KEYCODE_SYSTEM_NAVIGATION_DOWN` (`281`).
+   - Counter-Clockwise: `KEYCODE_SYSTEM_NAVIGATION_UP` (`280`).
+2. **Inter-Card Nudge (Hold & Rotate Chord)**:
+   - Press & Hold + Rotate Clockwise: `KEYCODE_DPAD_RIGHT` (`22`).
+   - Press & Hold + Rotate Counter-Clockwise: `KEYCODE_DPAD_LEFT` (`21`).
+   - Jumps highlight focus across to adjacent cards (Media $\leftrightarrow$ Maps $\leftrightarrow$ Rail / App Launcher).
+3. **Center Select (Click & Release)**:
+   - Press & Release without turning: `KEYCODE_DPAD_CENTER` (`23`) sent on release.
+

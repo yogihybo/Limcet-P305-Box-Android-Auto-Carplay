@@ -91,7 +91,7 @@ modprobe rtl8811cu rtw_drv_log_level=2 rtw_country_code=US
 
 # --- Instant UI Launch & Auto-Respawn Supervisor ---
 # Launch custom_ui immediately so LVGL display initializes in <1 second.
-# Auto-respawn protects against transient voltage sag or exit during engine crank.
+# Auto-respawn supervisor protects against transient voltage dips during engine crank.
 (
 	sleep 0.1
 	. /etc/profile
@@ -124,22 +124,3 @@ modprobe rtl8811cu rtw_drv_log_level=2 rtw_country_code=US
 	echo "custom_ui rootfs: BlueZ bring-up complete."
 ) &
 
-# 2026-08-24: real hw finding -- androidauto-sidecar's shared-linking
-# conversion (Boost/Protobuf/AASDK, previously one static ~5.4MB
-# binary) means its real transitive NEEDED closure at process exec is
-# ~85 separate .so files (libprotobuf.so alone pulls in ~63 individual
-# Abseil libraries), not 1. ld.so opens/mmaps the WHOLE closure
-# synchronously at exec time, not just what's demand-paged after --
-# on this USB-storage-backed rootfs, that's ~85 real file opens/stats
-# instead of 1 every time the sidecar starts, observed correlating
-# with real kworker+usb-storage I/O-stall symptoms (top: high sys/io,
-# custom_ui in D state) during a live AA session. Warm these into page
-# cache once, here, during otherwise-idle early boot instead of paying
-# that cost during a time-sensitive AA connection attempt later --
-# backgrounded, best-effort (cat exits/fails harmlessly if a file
-# vanishes mid-read), doesn't block the rest of rcS or custom_ui's own
-# startup above. Real fix (reducing the Abseil .so fragmentation
-# itself, e.g. a monolithic libabsl build) is a separate, larger,
-# not-yet-scoped follow-up -- this is a cheap mitigation on top of
-# that, not a replacement for it.
-(cat /usr/lib/*.so* >/dev/null 2>&1) &

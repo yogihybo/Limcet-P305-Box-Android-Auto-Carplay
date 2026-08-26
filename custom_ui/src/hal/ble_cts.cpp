@@ -255,7 +255,7 @@ bool sync_clock_via_ble_cts(const std::string &deviceMac) {
                 core::log_timestamp().c_str(), devicePath.c_str());
 
     bool ok = false;
-    if (wait_for_services_resolved(conn, devicePath, 6)) {
+    if (wait_for_services_resolved(conn, devicePath, 2)) {
         std::string charPath;
         if (find_cts_characteristic(conn, devicePath, charPath)) {
             std::vector<uint8_t> data = read_characteristic_value(conn, charPath);

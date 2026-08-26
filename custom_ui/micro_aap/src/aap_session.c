@@ -45,11 +45,31 @@
 #include "aap_protobuf/service/sensorsource/message/SensorRequest.pb.h"
 #include "aap_protobuf/service/sensorsource/message/SensorStartResponseMessage.pb.h"
 #include "aap_protobuf/service/sensorsource/message/SensorBatch.pb.h"
+#include "aap_protobuf/service/bluetooth/BluetoothMessageId.pb.h"
+#include "aap_protobuf/service/bluetooth/message/BluetoothPairingRequest.pb.h"
+#include "aap_protobuf/service/bluetooth/message/BluetoothPairingResponse.pb.h"
+#include "aap_protobuf/service/media/source/message/MicrophoneRequest.pb.h"
+#include "aap_protobuf/service/media/source/message/MicrophoneResponse.pb.h"
 
 #define RX_BUFFER_SIZE (64 * 1024)
 #define TX_BUFFER_SIZE (64 * 1024)
 
 #define FALLBACK_BASELINE_EPOCH_MS 1755043200000LL // ~2026-08-13 UTC
+
+static const char *channel_name(uint8_t ch) {
+    switch (ch) {
+        case AAP_CHANNEL_CONTROL: return "control";
+        case AAP_CHANNEL_SENSOR: return "sensor";
+        case AAP_CHANNEL_MEDIA_SINK_VIDEO: return "video";
+        case AAP_CHANNEL_MEDIA_SINK_MEDIA_AUDIO: return "audio (plug:softvol2)";
+        case AAP_CHANNEL_MEDIA_SINK_GUIDANCE_AUDIO: return "audio (plug:softvol1)";
+        case AAP_CHANNEL_MEDIA_SINK_SYSTEM_AUDIO: return "audio (plug:softvol4)";
+        case AAP_CHANNEL_INPUT: return "input";
+        case AAP_CHANNEL_MICROPHONE: return "microphone";
+        case AAP_CHANNEL_BLUETOOTH: return "bluetooth";
+        default: return "unknown";
+    }
+}
 
 static int64_t plausible_epoch_millis(void) {
     struct timespec ts;
@@ -176,6 +196,30 @@ static void send_version_request(aap_session_t *s) {
     set_state(s, AAP_SESSION_STATE_VERSION_HANDSHAKE, "VersionRequest sent, waiting for VersionResponse");
 }
 
+static void handle_channel_open_request(aap_session_t *s, uint8_t channel_id, const uint8_t *payload, size_t payload_len) {
+    aap_protobuf_service_control_message_ChannelOpenRequest req =
+        aap_protobuf_service_control_message_ChannelOpenRequest_init_default;
+    if (payload_len > 0) {
+        pb_istream_t stream = pb_istream_from_buffer(payload, payload_len);
+        pb_decode(&stream, aap_protobuf_service_control_message_ChannelOpenRequest_fields, &req);
+    }
+
+    printf("aap_session: channel %u (%s) open request (priority=%d)\n", channel_id, channel_name(channel_id), req.priority);
+
+    aap_protobuf_service_control_message_ChannelOpenResponse resp =
+        aap_protobuf_service_control_message_ChannelOpenResponse_init_default;
+    resp.status = aap_protobuf_shared_MessageStatus_STATUS_SUCCESS;
+
+    uint8_t pb_buf[128];
+    pb_ostream_t ostream = pb_ostream_from_buffer(pb_buf, sizeof(pb_buf));
+    pb_encode(&ostream, aap_protobuf_service_control_message_ChannelOpenResponse_fields, &resp);
+
+    send_channel_control_msg(s, channel_id,
+                             aap_protobuf_service_control_message_ControlMessageType_MESSAGE_CHANNEL_OPEN_RESPONSE,
+                             pb_buf, ostream.bytes_written, true);
+    printf("aap_session: channel %u (%s) open response sent (STATUS_SUCCESS)\n", channel_id, channel_name(channel_id));
+}
+
 static void handle_control_message(aap_session_t *s, uint16_t msg_id, const uint8_t *payload, size_t payload_len) {
     switch (msg_id) {
         case aap_protobuf_service_control_message_ControlMessageType_MESSAGE_VERSION_RESPONSE: {
@@ -229,6 +273,7 @@ static void handle_control_message(aap_session_t *s, uint16_t msg_id, const uint
 
         case aap_protobuf_service_control_message_ControlMessageType_MESSAGE_SERVICE_DISCOVERY_REQUEST: {
             printf("aap_session: received ServiceDiscoveryRequest\n");
+
             aap_protobuf_service_control_message_ServiceDiscoveryResponse resp =
                 aap_protobuf_service_control_message_ServiceDiscoveryResponse_init_default;
 
@@ -426,29 +471,6 @@ static void handle_control_message(aap_session_t *s, uint16_t msg_id, const uint
             break;
         }
 
-        case aap_protobuf_service_control_message_ControlMessageType_MESSAGE_CHANNEL_OPEN_REQUEST: {
-            aap_protobuf_service_control_message_ChannelOpenRequest req =
-                aap_protobuf_service_control_message_ChannelOpenRequest_init_default;
-            pb_istream_t stream = pb_istream_from_buffer(payload, payload_len);
-            pb_decode(&stream, aap_protobuf_service_control_message_ChannelOpenRequest_fields, &req);
-
-            printf("aap_session: received ChannelOpenRequest (priority=%d)\n", req.priority);
-
-            aap_protobuf_service_control_message_ChannelOpenResponse resp =
-                aap_protobuf_service_control_message_ChannelOpenResponse_init_default;
-            resp.status = aap_protobuf_shared_MessageStatus_STATUS_SUCCESS;
-
-            uint8_t pb_buf[128];
-            pb_ostream_t ostream = pb_ostream_from_buffer(pb_buf, sizeof(pb_buf));
-            pb_encode(&ostream, aap_protobuf_service_control_message_ChannelOpenResponse_fields, &resp);
-
-            send_channel_msg(s, AAP_CHANNEL_CONTROL,
-                             aap_protobuf_service_control_message_ControlMessageType_MESSAGE_CHANNEL_OPEN_RESPONSE,
-                             pb_buf, ostream.bytes_written, true);
-            set_state(s, AAP_SESSION_STATE_RUNNING, "Android Auto session running (Micro-AAP)");
-            break;
-        }
-
         case aap_protobuf_service_control_message_ControlMessageType_MESSAGE_PING_REQUEST: {
             aap_protobuf_service_control_message_PingRequest req =
                 aap_protobuf_service_control_message_PingRequest_init_default;
@@ -559,30 +581,6 @@ static void handle_control_message(aap_session_t *s, uint16_t msg_id, const uint
     }
 }
 
-static void handle_channel_open_request(aap_session_t *s, uint8_t channel_id, const uint8_t *payload, size_t payload_len) {
-    aap_protobuf_service_control_message_ChannelOpenRequest req =
-        aap_protobuf_service_control_message_ChannelOpenRequest_init_default;
-    if (payload_len > 0) {
-        pb_istream_t stream = pb_istream_from_buffer(payload, payload_len);
-        pb_decode(&stream, aap_protobuf_service_control_message_ChannelOpenRequest_fields, &req);
-    }
-
-    printf("aap_session: channel %u open request (priority=%d)\n", channel_id, req.priority);
-
-    aap_protobuf_service_control_message_ChannelOpenResponse resp =
-        aap_protobuf_service_control_message_ChannelOpenResponse_init_default;
-    resp.status = aap_protobuf_shared_MessageStatus_STATUS_SUCCESS;
-
-    uint8_t pb_buf[128];
-    pb_ostream_t ostream = pb_ostream_from_buffer(pb_buf, sizeof(pb_buf));
-    pb_encode(&ostream, aap_protobuf_service_control_message_ChannelOpenResponse_fields, &resp);
-
-    send_channel_control_msg(s, channel_id,
-                             aap_protobuf_service_control_message_ControlMessageType_MESSAGE_CHANNEL_OPEN_RESPONSE,
-                             pb_buf, ostream.bytes_written, true);
-    printf("aap_session: channel %u open response sent (STATUS_SUCCESS)\n", channel_id);
-}
-
 static void handle_sensor_channel(aap_session_t *s, const uint8_t *payload, size_t payload_len) {
     if (payload_len < 2) return;
     uint16_t sub_cmd = (uint16_t)((payload[0] << 8) | payload[1]);
@@ -661,6 +659,88 @@ static void handle_input_channel(aap_session_t *s, const uint8_t *payload, size_
     }
 }
 
+static void handle_microphone_channel(aap_session_t *s, const uint8_t *payload, size_t payload_len) {
+    if (payload_len < 2) return;
+    uint16_t sub_cmd = (uint16_t)((payload[0] << 8) | payload[1]);
+    const uint8_t *pb_data = payload + 2;
+    size_t pb_len = payload_len - 2;
+
+    if (sub_cmd == aap_protobuf_service_control_message_ControlMessageType_MESSAGE_CHANNEL_OPEN_REQUEST) {
+        handle_channel_open_request(s, AAP_CHANNEL_MICROPHONE, pb_data, pb_len);
+        return;
+    }
+
+    if (sub_cmd == aap_protobuf_service_media_sink_MediaMessageId_MEDIA_MESSAGE_SETUP) {
+        printf("aap_session: microphone channel setup request\n");
+        aap_protobuf_service_media_shared_message_Config cfg =
+            aap_protobuf_service_media_shared_message_Config_init_default;
+        cfg.status = aap_protobuf_service_media_shared_message_Config_Status_STATUS_READY;
+        cfg.max_unacked = 1;
+        cfg.configuration_indices_count = 1;
+        cfg.configuration_indices[0] = 0;
+
+        uint8_t pb_buf[128];
+        pb_ostream_t ostream = pb_ostream_from_buffer(pb_buf, sizeof(pb_buf));
+        pb_encode(&ostream, aap_protobuf_service_media_shared_message_Config_fields, &cfg);
+
+        send_channel_msg(s, AAP_CHANNEL_MICROPHONE, aap_protobuf_service_media_sink_MediaMessageId_MEDIA_MESSAGE_CONFIG,
+                         pb_buf, ostream.bytes_written, true);
+        printf("aap_session: microphone channel setup response sent\n");
+    } else if (sub_cmd == 32769 /* MicrophoneRequest */) {
+        aap_protobuf_service_media_source_message_MicrophoneResponse resp =
+            aap_protobuf_service_media_source_message_MicrophoneResponse_init_default;
+        resp.status = (int32_t)aap_protobuf_shared_MessageStatus_STATUS_SUCCESS;
+        resp.session_id = 0;
+
+        uint8_t pb_buf[128];
+        pb_ostream_t ostream = pb_ostream_from_buffer(pb_buf, sizeof(pb_buf));
+        pb_encode(&ostream, aap_protobuf_service_media_source_message_MicrophoneResponse_fields, &resp);
+
+        send_channel_msg(s, AAP_CHANNEL_MICROPHONE, 32770 /* MicrophoneResponse */,
+                         pb_buf, ostream.bytes_written, true);
+        printf("aap_session: microphone open/close response sent\n");
+    }
+}
+
+static void handle_bluetooth_channel(aap_session_t *s, const uint8_t *payload, size_t payload_len) {
+    if (payload_len < 2) return;
+    uint16_t sub_cmd = (uint16_t)((payload[0] << 8) | payload[1]);
+    const uint8_t *pb_data = payload + 2;
+    size_t pb_len = payload_len - 2;
+
+    if (sub_cmd == aap_protobuf_service_control_message_ControlMessageType_MESSAGE_CHANNEL_OPEN_REQUEST) {
+        handle_channel_open_request(s, AAP_CHANNEL_BLUETOOTH, pb_data, pb_len);
+        return;
+    }
+
+    if (sub_cmd == aap_protobuf_service_bluetooth_BluetoothMessageId_BLUETOOTH_MESSAGE_PAIRING_REQUEST) {
+        aap_protobuf_service_bluetooth_message_BluetoothPairingRequest req =
+            aap_protobuf_service_bluetooth_message_BluetoothPairingRequest_init_default;
+        if (pb_len > 0) {
+            pb_istream_t stream = pb_istream_from_buffer(pb_data, pb_len);
+            pb_decode(&stream, aap_protobuf_service_bluetooth_message_BluetoothPairingRequest_fields, &req);
+        }
+
+        printf("aap_session: bluetooth pairing request from '%s'\n", req.phone_address);
+
+        aap_protobuf_service_bluetooth_message_BluetoothPairingResponse resp =
+            aap_protobuf_service_bluetooth_message_BluetoothPairingResponse_init_default;
+        resp.status = aap_protobuf_shared_MessageStatus_STATUS_SUCCESS;
+        resp.already_paired = true;
+
+        uint8_t pb_buf[128];
+        pb_ostream_t ostream = pb_ostream_from_buffer(pb_buf, sizeof(pb_buf));
+        pb_encode(&ostream, aap_protobuf_service_bluetooth_message_BluetoothPairingResponse_fields, &resp);
+
+        send_channel_msg(s, AAP_CHANNEL_BLUETOOTH,
+                         aap_protobuf_service_bluetooth_BluetoothMessageId_BLUETOOTH_MESSAGE_PAIRING_RESPONSE,
+                         pb_buf, ostream.bytes_written, true);
+        printf("aap_session: bluetooth pairing response sent (STATUS_SUCCESS, already_paired=true)\n");
+    } else if (sub_cmd == aap_protobuf_service_bluetooth_BluetoothMessageId_BLUETOOTH_MESSAGE_AUTHENTICATION_RESULT) {
+        printf("aap_session: bluetooth authentication result received\n");
+    }
+}
+
 static void handle_media_channel(aap_session_t *s, uint8_t channel_id, const uint8_t *payload, size_t payload_len) {
     if (payload_len < 2) return;
     uint16_t sub_cmd = (uint16_t)((payload[0] << 8) | payload[1]);
@@ -674,7 +754,7 @@ static void handle_media_channel(aap_session_t *s, uint8_t channel_id, const uin
 
     switch (sub_cmd) {
         case aap_protobuf_service_media_sink_MediaMessageId_MEDIA_MESSAGE_SETUP: {
-            printf("aap_session: channel %u setup request\n", channel_id);
+            printf("aap_session: channel %u (%s) setup request\n", channel_id, channel_name(channel_id));
             aap_protobuf_service_media_shared_message_Config cfg =
                 aap_protobuf_service_media_shared_message_Config_init_default;
             cfg.status = aap_protobuf_service_media_shared_message_Config_Status_STATUS_READY;
@@ -688,7 +768,7 @@ static void handle_media_channel(aap_session_t *s, uint8_t channel_id, const uin
 
             send_channel_msg(s, channel_id, aap_protobuf_service_media_sink_MediaMessageId_MEDIA_MESSAGE_CONFIG,
                              pb_buf, ostream.bytes_written, true);
-            printf("aap_session: channel %u setup response sent\n", channel_id);
+            printf("aap_session: channel %u (%s) setup response sent\n", channel_id, channel_name(channel_id));
 
             /* If this is the video sink, send unsolicited VideoFocusNotification (PROJECTED) */
             if (channel_id == AAP_CHANNEL_MEDIA_SINK_VIDEO) {
@@ -734,7 +814,7 @@ static void handle_media_channel(aap_session_t *s, uint8_t channel_id, const uin
             pb_istream_t istream = pb_istream_from_buffer(pb_data, pb_len);
             pb_decode(&istream, aap_protobuf_service_media_shared_message_Start_fields, &start);
 
-            printf("aap_session: channel %u start (session_id=%d)\n", channel_id, start.session_id);
+            printf("aap_session: channel %u (%s) start (session_id=%d)\n", channel_id, channel_name(channel_id), start.session_id);
             if (channel_id == AAP_CHANNEL_MEDIA_SINK_MEDIA_AUDIO) {
                 s->media_session_id = start.session_id;
                 aap_audio_sink_open(s->audio_media);
@@ -752,7 +832,7 @@ static void handle_media_channel(aap_session_t *s, uint8_t channel_id, const uin
         }
 
         case aap_protobuf_service_media_sink_MediaMessageId_MEDIA_MESSAGE_STOP: {
-            printf("aap_session: channel %u stop\n", channel_id);
+            printf("aap_session: channel %u (%s) stop\n", channel_id, channel_name(channel_id));
             if (channel_id == AAP_CHANNEL_MEDIA_SINK_MEDIA_AUDIO) {
                 aap_audio_sink_flush(s->audio_media);
             }
@@ -785,7 +865,6 @@ static void handle_media_channel(aap_session_t *s, uint8_t channel_id, const uin
         }
     }
 }
-
 aap_session_t *aap_session_create(int tcp_fd) {
     if (tcp_fd < 0) return NULL;
 
@@ -870,7 +949,7 @@ bool aap_session_process_incoming(aap_session_t *s) {
                 active_payload = plain_buf;
                 active_len = dec_len;
             } else {
-                fprintf(stderr, "aap_session: decrypt failed on channel %u\n", hdr.channel_id);
+                fprintf(stderr, "aap_session: decrypt failed on channel %u (%s)\n", hdr.channel_id, channel_name(hdr.channel_id));
             }
         }
 
@@ -883,6 +962,10 @@ bool aap_session_process_incoming(aap_session_t *s) {
             handle_sensor_channel(s, active_payload, active_len);
         } else if (hdr.channel_id == AAP_CHANNEL_INPUT) {
             handle_input_channel(s, active_payload, active_len);
+        } else if (hdr.channel_id == AAP_CHANNEL_MICROPHONE) {
+            handle_microphone_channel(s, active_payload, active_len);
+        } else if (hdr.channel_id == AAP_CHANNEL_BLUETOOTH) {
+            handle_bluetooth_channel(s, active_payload, active_len);
         } else {
             handle_media_channel(s, hdr.channel_id, active_payload, active_len);
         }

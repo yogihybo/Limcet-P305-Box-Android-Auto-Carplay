@@ -21,6 +21,7 @@
 #include "hal/androidauto_client.h"
 #include "hal/audio.h"
 #include "hal/bluetooth.h"
+#include "hal/camera.h"
 #include "hal/display.h"
 #include "hal/display_ctrl.h"
 #include "hal/knob.h"
@@ -29,6 +30,7 @@
 #include "core/config_store.h"
 #include "core/log_timing.h"
 #include "core/navigation.h"
+#include "core/reverse_gear_watcher.h"
 #include "core/screen_manager.h"
 #include "core/sized_thread.h"
 #include "ui/android_auto_screen.h"
@@ -512,6 +514,14 @@ int main() {
     }
     std::printf("%s ui: knob %s\n", core::log_timestamp().c_str(), knob ? "initialized" : "unavailable (continuing without it)");
 
+    static hal::CameraHandle camera_handle;
+    bool camera_ok = hal::init_camera(camera_handle);
+    static core::ReverseGearWatcher reverse_watcher(camera_handle);
+    if (camera_ok) {
+        reverse_watcher.start();
+        std::printf("%s ui: ReverseGearWatcher %s\n", core::log_timestamp().c_str(), camera_ok ? "started" : "unavailable");
+    }
+
     core::ScreenManager screens;
     core::navigation::init(screens);  // lets Settings/Bluetooth screens
                                        // push/pop without a captured
@@ -587,6 +597,18 @@ int main() {
         if (hal::consume_aa_navigate_request() &&
             !hal::androidauto_screen_active().load(std::memory_order_acquire)) {
             staging_ui::navigate_to(staging_ui::NavDestination::AndroidAuto);
+        }
+
+        // Reverse gear camera auto-trigger
+        if (reverse_watcher.has_pending_change()) {
+            hal::ReverseGearState rev = reverse_watcher.consume_change();
+            if (rev == hal::ReverseGearState::Engaged) {
+                std::printf("%s ui: Reverse engaged -- opening camera overlay\n", core::log_timestamp().c_str());
+                staging_ui::navigate_to(staging_ui::NavDestination::Camera);
+            } else if (rev == hal::ReverseGearState::Disengaged) {
+                std::printf("%s ui: Reverse disengaged -- returning to previous screen\n", core::log_timestamp().c_str());
+                core::navigation::pop();
+            }
         }
 
         // 2026-08-21: MCU headlight -> night mode, polled once per loop

@@ -46,6 +46,8 @@ void aap_session_send_key(aap_session_t *session, uint32_t keycode);
 void aap_session_send_touch(aap_session_t *session, uint32_t x, uint32_t y, uint32_t action);
 void aap_session_send_night_mode(aap_session_t *session, bool night_mode);
 void aap_session_set_video_visible(aap_session_t *session, bool visible);
+bool aap_session_is_video_focus_native(const aap_session_t *session);
+void aap_session_request_video_focus(aap_session_t *session, bool projected);
 
 int aap_session_get_socket_fd(const aap_session_t *session);
 

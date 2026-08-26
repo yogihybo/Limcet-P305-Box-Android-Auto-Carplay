@@ -2,6 +2,7 @@
 #include "core/log_timing.h"
 
 #include <cerrno>
+#include <chrono>
 #include <cstdio>
 #include <cstring>
 
@@ -257,6 +258,9 @@ void McuInputHal::run() {
             x_.store(x, std::memory_order_relaxed);
             y_.store(y, std::memory_order_relaxed);
             touch_pressed_.store(true, std::memory_order_release);
+            auto now = std::chrono::steady_clock::now();
+            uint64_t ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+            last_touch_ms_.store(ms, std::memory_order_relaxed);
         } else if (cmd == 0x02 && len >= 2) {
             unsigned char b3 = payload[0];
             unsigned char b4 = payload[1];
@@ -286,7 +290,18 @@ void McuInputHal::run() {
 
 McuTouchState McuInputHal::get_touch_state() const {
     McuTouchState s;
-    s.pressed = touch_pressed_.load(std::memory_order_acquire);
+    bool pressed = touch_pressed_.load(std::memory_order_acquire);
+    if (pressed) {
+        auto now = std::chrono::steady_clock::now();
+        uint64_t now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+        uint64_t last_ms = last_touch_ms_.load(std::memory_order_relaxed);
+        if (now_ms > last_ms + 200) {
+            // Auto-release watchdog: finger lifted beyond digitizer active area
+            touch_pressed_.store(false, std::memory_order_release);
+            pressed = false;
+        }
+    }
+    s.pressed = pressed;
     s.x = x_.load(std::memory_order_relaxed);
     s.y = y_.load(std::memory_order_relaxed);
     return s;

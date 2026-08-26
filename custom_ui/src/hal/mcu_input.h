@@ -142,12 +142,13 @@ private:
 
     std::atomic<int32_t> x_{0};
     std::atomic<int32_t> y_{0};
-    std::atomic<bool> touch_pressed_{false};
+    mutable std::atomic<bool> touch_pressed_{false};
 
     std::atomic<int32_t> knob_ticks_{0};
     std::atomic<bool> knob_pressed_{false};
 
     std::atomic<bool> night_mode_{false};
+    mutable std::atomic<uint64_t> last_touch_ms_{0};
 };
 
 }  // namespace hal

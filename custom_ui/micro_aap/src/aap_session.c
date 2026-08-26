@@ -514,6 +514,8 @@ static void handle_control_message(aap_session_t *s, uint16_t msg_id, const uint
             } else {
                 resp.focus_state = aap_protobuf_service_control_message_AudioFocusStateType_AUDIO_FOCUS_STATE_LOSS;
             }
+            resp.has_unsolicited = true;
+            resp.unsolicited = false;
 
             uint8_t pb_buf[128];
             pb_ostream_t ostream = pb_ostream_from_buffer(pb_buf, sizeof(pb_buf));
@@ -522,6 +524,7 @@ static void handle_control_message(aap_session_t *s, uint16_t msg_id, const uint
             send_channel_msg(s, AAP_CHANNEL_CONTROL,
                              aap_protobuf_service_control_message_ControlMessageType_MESSAGE_AUDIO_FOCUS_NOTIFICATION,
                              pb_buf, ostream.bytes_written, true);
+            printf("aap_session: audio focus response sent (state=%d)\n", resp.focus_state);
             break;
         }
 
@@ -604,13 +607,14 @@ static void handle_sensor_channel(aap_session_t *s, const uint8_t *payload, size
             aap_protobuf_service_sensorsource_message_SensorStartResponseMessage_init_default;
         resp.status = aap_protobuf_shared_MessageStatus_STATUS_SUCCESS;
 
-        uint8_t pb_buf[128];
+        uint8_t pb_buf[256];
         pb_ostream_t ostream = pb_ostream_from_buffer(pb_buf, sizeof(pb_buf));
         pb_encode(&ostream, aap_protobuf_service_sensorsource_message_SensorStartResponseMessage_fields, &resp);
 
         send_channel_msg(s, AAP_CHANNEL_SENSOR,
                          aap_protobuf_service_sensorsource_SensorMessageId_SENSOR_MESSAGE_RESPONSE,
                          pb_buf, ostream.bytes_written, true);
+        printf("aap_session: sensor start response sent (type=%d, STATUS_SUCCESS)\n", req.type);
 
         /* Send initial sensor batch data */
         aap_protobuf_service_sensorsource_message_SensorBatch batch =
@@ -625,10 +629,11 @@ static void handle_sensor_channel(aap_session_t *s, const uint8_t *payload, size
         }
 
         ostream = pb_ostream_from_buffer(pb_buf, sizeof(pb_buf));
-        pb_encode(&ostream, aap_protobuf_service_sensorsource_message_SensorBatch_fields, &batch);
+        bool ok = pb_encode(&ostream, aap_protobuf_service_sensorsource_message_SensorBatch_fields, &batch);
         send_channel_msg(s, AAP_CHANNEL_SENSOR,
                          aap_protobuf_service_sensorsource_SensorMessageId_SENSOR_MESSAGE_BATCH,
                          pb_buf, ostream.bytes_written, true);
+        printf("aap_session: sensor batch data sent (type=%d, ok=%d, bytes=%zu)\n", req.type, ok, ostream.bytes_written);
     }
 }
 
@@ -675,6 +680,7 @@ static void handle_microphone_channel(aap_session_t *s, const uint8_t *payload, 
         aap_protobuf_service_media_shared_message_Config cfg =
             aap_protobuf_service_media_shared_message_Config_init_default;
         cfg.status = aap_protobuf_service_media_shared_message_Config_Status_STATUS_READY;
+        cfg.has_max_unacked = true;
         cfg.max_unacked = 1;
         cfg.configuration_indices_count = 1;
         cfg.configuration_indices[0] = 0;
@@ -690,6 +696,7 @@ static void handle_microphone_channel(aap_session_t *s, const uint8_t *payload, 
         aap_protobuf_service_media_source_message_MicrophoneResponse resp =
             aap_protobuf_service_media_source_message_MicrophoneResponse_init_default;
         resp.status = (int32_t)aap_protobuf_shared_MessageStatus_STATUS_SUCCESS;
+        resp.has_session_id = true;
         resp.session_id = 0;
 
         uint8_t pb_buf[128];
@@ -758,7 +765,8 @@ static void handle_media_channel(aap_session_t *s, uint8_t channel_id, const uin
             aap_protobuf_service_media_shared_message_Config cfg =
                 aap_protobuf_service_media_shared_message_Config_init_default;
             cfg.status = aap_protobuf_service_media_shared_message_Config_Status_STATUS_READY;
-            cfg.max_unacked = 8;
+            cfg.has_max_unacked = true;
+            cfg.max_unacked = (channel_id == AAP_CHANNEL_MEDIA_SINK_VIDEO) ? 1 : 8;
             cfg.configuration_indices_count = 1;
             cfg.configuration_indices[0] = 0;
 

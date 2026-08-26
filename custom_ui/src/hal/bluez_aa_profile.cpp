@@ -29,6 +29,10 @@ constexpr const char *kProfilePath = "/custom_ui/aa_profile";
 constexpr const char *kAaUuid = "4de17a00-52cb-11e6-bdf4-0800200c9a66";
 
 void log_dbus_error(const char *what, const DBusError &err) {
+    if (err.name && (std::strcmp(err.name, "org.freedesktop.DBus.Error.ServiceUnknown") == 0 ||
+                     std::strcmp(err.name, "org.bluez.Error.DoesNotExist") == 0)) {
+        return; // Expected while BlueZ daemon is still initializing on boot
+    }
     std::fprintf(stderr, "%s hal::bluez_aa_profile: %s: %s\n", core::log_timestamp().c_str(), what,
                  err.message ? err.message : "(no message)");
 }
@@ -54,6 +58,7 @@ DBusMessage * call_and_unref(DBusConnection * conn, DBusMessage * msg, const cha
 struct BluezAaProfile::Impl {
     DBusConnection * conn = nullptr;
     std::atomic<int> pendingFd{-1};
+    bool pathRegistered = false;
 };
 
 namespace {
@@ -138,9 +143,12 @@ bool BluezAaProfile::connect() {
 }
 
 bool BluezAaProfile::register_profile() {
-    static const DBusObjectPathVTable vtable = {nullptr, &profile_message_handler, nullptr, nullptr,
-                                                 nullptr, nullptr};
-    dbus_connection_register_object_path(impl_->conn, kProfilePath, &vtable, impl_);
+    if (!impl_->pathRegistered) {
+        static const DBusObjectPathVTable vtable = {nullptr, &profile_message_handler, nullptr, nullptr,
+                                                     nullptr, nullptr};
+        dbus_connection_register_object_path(impl_->conn, kProfilePath, &vtable, impl_);
+        impl_->pathRegistered = true;
+    }
 
     const char * path = kProfilePath;
     const char * uuid = kAaUuid;

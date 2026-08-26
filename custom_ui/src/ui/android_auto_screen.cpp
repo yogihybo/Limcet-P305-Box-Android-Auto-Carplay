@@ -76,7 +76,10 @@ lv_color_t color_for_state_name(const std::string & name) {
 // connected over the AA Bluetooth profile yet, same as the old
 // requestConnect() was a no-op if the sidecar was unreachable.
 void connect_btn_cb(lv_event_t *) {
-    hal::start_pending_aa_connection();
+    if (!hal::start_pending_aa_connection()) {
+        hal::BluetoothHandle & h = hal::shared_handle();
+        hal::auto_reconnect_paired_device(h);
+    }
 }
 
 void bluetooth_btn_cb(lv_event_t *) {

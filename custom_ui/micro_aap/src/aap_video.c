@@ -90,7 +90,7 @@ struct aap_video_sink {
 
     void *hantro_lib;
     void *hantro_dec;
-    int (*h264_init)(void **dec_inst, uint32_t no_output_reordering, uint32_t use_display_smoothing);
+    int (*h264_init)(void **dec_inst, uint32_t arg1, uint32_t arg2, uint32_t arg3);
     int (*h264_decode)(void *dec_inst, const H264DecInput *input, H264DecOutput *output);
     int (*h264_next_picture)(void *dec_inst, H264DecPicture *picture, uint32_t end_of_stream);
     void (*h264_release)(void *dec_inst);
@@ -143,7 +143,8 @@ bool aap_video_sink_open(aap_video_sink_t *sink) {
         return false;
     }
 
-    int ret = sink->h264_init(&sink->hantro_dec, 0, 0);
+    /* 2026-08-17: stock calls H264DecInit(&inst, 0, 0, 1) to enable raster output and bitstream flags */
+    int ret = sink->h264_init(&sink->hantro_dec, 0, 0, 1);
     if (ret != 0) {
         fprintf(stderr, "aap_video: H264DecInit failed with %d\n", ret);
         return false;
@@ -246,6 +247,7 @@ bool aap_video_sink_decode(aap_video_sink_t *sink, const uint8_t *nalu_data, siz
     if (nalu_len > STREAM_BUF_SIZE) nalu_len = STREAM_BUF_SIZE;
 
     memcpy(sink->stream_vir_addr, nalu_data, nalu_len);
+    msync(sink->stream_vir_addr, nalu_len, MS_SYNC);
 
     H264DecInput in;
     H264DecOutput out;

@@ -241,7 +241,7 @@ void McuInputHal::run() {
 
         if (cmd == 0x01 && len >= 1) {
             // CMD 0x01: Headlights / Illumination status broadcast from MCU (len=6)
-            std::printf("%s hal::mcu_input: CMD 0x01 (Headlights) len=%u payload=[",
+            std::printf("%s [HAL:MCU] Headlights (CMD 0x01) len=%u payload=[",
                         core::log_timestamp().c_str(), len);
             for (unsigned char i = 0; i < len; ++i) {
                 std::printf("%02X%s", payload[i], (i + 1 < len) ? " " : "");
@@ -251,12 +251,10 @@ void McuInputHal::run() {
             std::printf("] -> night_mode=%d\n", lights_on ? 1 : 0);
             night_mode_.store(lights_on, std::memory_order_release);
         } else if (cmd == 0x04) {
-            // CMD 0x04: Reverse gear engaged (len=6)
-            std::printf("%s hal::mcu_input: Reverse gear ENGAGED (CMD 0x04)\n", core::log_timestamp().c_str());
+            std::printf("%s [HAL:MCU] Reverse gear: ENGAGED (CMD 0x04)\n", core::log_timestamp().c_str());
             reverse_gear_.store(true, std::memory_order_release);
         } else if (cmd == 0x12) {
-            // CMD 0x12: Reverse gear disengaged (len=3)
-            std::printf("%s hal::mcu_input: Reverse gear DISENGAGED (CMD 0x12)\n", core::log_timestamp().c_str());
+            std::printf("%s [HAL:MCU] Reverse gear: DISENGAGED (CMD 0x12)\n", core::log_timestamp().c_str());
             reverse_gear_.store(false, std::memory_order_release);
         } else if (cmd == 0x20 && len >= 5) {
             unsigned char b3 = payload[0];
@@ -296,32 +294,32 @@ void McuInputHal::run() {
                 knob_pressed_.store(b4 == 1, std::memory_order_release);
             } else if (b3 == kBtnHome) {
                 if (b4 == 1) {
-                    std::printf("%s hal::mcu_input: HOME button pressed (b3=12 b4=1)\n", core::log_timestamp().c_str());
+                    std::printf("%s [HAL:MCU] Button: HOME (b3=12 b4=1)\n", core::log_timestamp().c_str());
                     AndroidAutoClient client;
                     client.sendKey(3 /* KEYCODE_HOME */);
                 }
             } else if (b3 == kBtnNextTrack) {
-                std::printf("%s hal::mcu_input: NEXT TRACK button (b3=3 b4=%u)\n", core::log_timestamp().c_str(), b4);
+                std::printf("%s [HAL:MCU] Button: NEXT_TRACK (b3=3 b4=%u)\n", core::log_timestamp().c_str(), b4);
                 AndroidAutoClient client;
                 client.sendKey(87 /* KEYCODE_MEDIA_NEXT */);
             } else if (b3 == kBtnPrevTrack) {
-                std::printf("%s hal::mcu_input: PREV TRACK button (b3=4 b4=%u)\n", core::log_timestamp().c_str(), b4);
+                std::printf("%s [HAL:MCU] Button: PREV_TRACK (b3=4 b4=%u)\n", core::log_timestamp().c_str(), b4);
                 AndroidAutoClient client;
                 client.sendKey(88 /* KEYCODE_MEDIA_PREVIOUS */);
             } else if (b3 == kBtnAnswer) {
-                std::printf("%s hal::mcu_input: ANSWER CALL button (b3=8 b4=%u)\n", core::log_timestamp().c_str(), b4);
+                std::printf("%s [HAL:MCU] Button: ANSWER_CALL (b3=8 b4=%u)\n", core::log_timestamp().c_str(), b4);
                 AndroidAutoClient client;
                 client.sendKey(5 /* KEYCODE_CALL */);
             } else if (b3 == kBtnHangup) {
-                std::printf("%s hal::mcu_input: HANGUP CALL button (b3=9 b4=%u)\n", core::log_timestamp().c_str(), b4);
+                std::printf("%s [HAL:MCU] Button: HANGUP_CALL (b3=9 b4=%u)\n", core::log_timestamp().c_str(), b4);
                 AndroidAutoClient client;
                 client.sendKey(6 /* KEYCODE_ENDCALL */);
             } else {
-                std::printf("%s hal::mcu_input: unhandled cmd=0x02 b3=0x%02X (%u) b4=0x%02X (%u)\n",
+                std::printf("%s [HAL:MCU] Unhandled cmd=0x02 b3=0x%02X (%u) b4=0x%02X (%u)\n",
                             core::log_timestamp().c_str(), b3, b3, b4, b4);
             }
         } else {
-            std::printf("%s hal::mcu_input: packet cmd=0x%02X len=%u payload=[",
+            std::printf("%s [HAL:MCU] Frame cmd=0x%02X len=%u payload=[",
                         core::log_timestamp().c_str(), cmd, len);
             for (unsigned char i = 0; i < len; ++i) {
                 std::printf("%02X%s", payload[i], (i + 1 < len) ? " " : "");

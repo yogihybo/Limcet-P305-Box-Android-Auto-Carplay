@@ -131,11 +131,11 @@ public:
         // WirelessSessionManager::run() itself (see WifiSetupClient::
         // connect()'s new retry loop for the leading real-fix
         // candidate for that last case).
-        std::printf("%s ui: +AAPDEV= observed: device_id='%s' name='%s' (last_triggered='%s')\n", core::log_timestamp().c_str(),
+        std::printf("%s [BT] +AAPDEV= observed: device_id='%s' name='%s' (last_triggered='%s')\n", core::log_timestamp().c_str(),
                     device_id.c_str(), name.c_str(), last_triggered_id_.c_str());
         constexpr auto kDebounceWindow = std::chrono::seconds(30);
         if (device_id == last_triggered_id_ && (now - last_triggered_at_) < kDebounceWindow) {
-            std::printf("%s ui: +AAPDEV= debounced (same device triggered <30s ago)\n", core::log_timestamp().c_str());
+            std::printf("%s [BT] +AAPDEV= debounced (same device triggered <30s ago)\n", core::log_timestamp().c_str());
             return;
         }
         last_triggered_id_ = device_id;
@@ -154,8 +154,8 @@ public:
                     std::lock_guard<std::mutex> lock(mtx_);
                     name = pending_name_;
                 }
-                std::printf("%s ui: +AAPDEV= detected ('%s') -- auto-starting wireless "
-                            "Android Auto\n", core::log_timestamp().c_str(), name.c_str());
+                std::printf("%s [BT] +AAPDEV= detected ('%s') -- auto-starting wireless Android Auto\n",
+                            core::log_timestamp().c_str(), name.c_str());
 
                 // 2026-08-13: this device has no RTC and no NTP client
                 // anywhere in its rootfs -- the system clock starts at
@@ -394,22 +394,22 @@ int main() {
     // active on a device this memory-constrained is strictly worse than
     // the un-mlock'd behavior it was meant to replace.
 
-    std::printf("%s ui: starting, lv_init()...\n", core::log_timestamp().c_str());
+    std::printf("%s [UI] starting, lv_init()...\n", core::log_timestamp().c_str());
     lv_init();
-    std::printf("%s ui: lv_init() done\n", core::log_timestamp().c_str());
+    std::printf("%s [UI] lv_init() done\n", core::log_timestamp().c_str());
 
     lv_display_t * disp = hal::init_display("/dev/fb0");
     if (!disp) {
-        std::fprintf(stderr, "%s ui: hal::init_display() failed, exiting\n", core::log_timestamp().c_str());
+        std::fprintf(stderr, "%s [UI] hal::init_display() failed, exiting\n", core::log_timestamp().c_str());
         return 1;
     }
-    std::printf("%s ui: display initialized\n", core::log_timestamp().c_str());
+    std::printf("%s [UI] display initialized\n", core::log_timestamp().c_str());
 
     // Dark/accent theme for every default-styled widget (buttons,
     // switches, sliders, dropdowns, tabview) -- must run before any
     // screen is created, see ui/theme.h.
     ui::theme::init(disp);
-    std::printf("%s ui: theme applied\n", core::log_timestamp().c_str());
+    std::printf("%s [UI] theme applied\n", core::log_timestamp().c_str());
 
     // 2026-08-20: hal/audio.h was #included (commit a43df447, "Unmute
     // DAC/PA on boot") but the actual hal::init_audio_mixer() call was
@@ -487,113 +487,52 @@ int main() {
             // dual-booting between them.
             std::string btName = core::default_store().get_string("DeviceName", "Prado CustomUI", "BlueTooth");
             if (hal::set_device_name(bt, btName)) {
-                std::printf("%s ui: bluetooth device name set to '%s'\n", core::log_timestamp().c_str(), btName.c_str());
+                std::printf("%s [BT] Bluetooth device name set to '%s'\n", core::log_timestamp().c_str(), btName.c_str());
             } else {
-                std::fprintf(stderr, "%s ui: failed to set bluetooth device name to '%s'\n", core::log_timestamp().c_str(),
+                std::fprintf(stderr, "%s [BT] ERROR: Failed to set bluetooth device name to '%s'\n", core::log_timestamp().c_str(),
                              btName.c_str());
             }
             hal::auto_reconnect_paired_device(bt);
         }
     }).detach();
 
-    // Process-lifetime, intentionally never freed -- same convention as
-    // every other process-lifetime singleton in this codebase. Touch,
-    // knob rotation, and knob push-button all share this one
-    // /dev/ttyHS0 connection -- see hal/mcu_input.h for why (one reader
-    // thread per fd).
     static hal::McuInputHal mcu_input("/dev/ttyHS0");
     bool mcu_ok = mcu_input.start();
-    std::printf("%s ui: MCU input (touch/knob) %s\n", core::log_timestamp().c_str(), mcu_ok ? "started" : "unavailable");
+    std::printf("%s [HAL:MCU] MCU input (touch/knob/buttons) %s\n", core::log_timestamp().c_str(), mcu_ok ? "started" : "unavailable");
 
     lv_indev_t * touch = mcu_ok ? hal::init_touch(mcu_input) : nullptr;
-    std::printf("%s ui: touch %s\n", core::log_timestamp().c_str(), touch ? "initialized" : "unavailable (continuing without it)");
+    std::printf("%s [HAL:MCU] Touchscreen %s\n", core::log_timestamp().c_str(), touch ? "initialized" : "unavailable");
 
     lv_indev_t * knob = mcu_ok ? hal::init_knob(mcu_input) : nullptr;
     if (knob) {
         lv_indev_set_group(knob, core::navigation::focus_group());
     }
-    std::printf("%s ui: knob %s\n", core::log_timestamp().c_str(), knob ? "initialized" : "unavailable (continuing without it)");
+    std::printf("%s [HAL:MCU] Rotary knob %s\n", core::log_timestamp().c_str(), knob ? "initialized" : "unavailable");
 
     static hal::CameraHandle camera_handle;
     bool camera_ok = hal::init_camera(camera_handle);
     static core::ReverseGearWatcher reverse_watcher(camera_handle);
     if (camera_ok) {
         reverse_watcher.start();
-        std::printf("%s ui: ReverseGearWatcher %s\n", core::log_timestamp().c_str(), camera_ok ? "started" : "unavailable");
+        std::printf("%s [HAL:REVCAM] Reverse gear watcher %s\n", core::log_timestamp().c_str(), camera_ok ? "started" : "unavailable");
     }
 
     core::ScreenManager screens;
-    core::navigation::init(screens);  // lets Settings/Bluetooth screens
-                                       // push/pop without a captured
-                                       // ScreenManager* -- see core/navigation.h
-    // 2026-08-19: swapped in the new Material-3 staging_ui home
-    // dashboard (previously ui::create_home_screen, still compiled and
-    // available -- android_auto_screen.cpp/bluetooth_screen.cpp/
-    // reverse_camera_screen.cpp/status_bar.cpp are all unaffected,
-    // every other screen still navigates back via
-    // core::navigation::pop(), not by calling this directly).
-    // Deliberately did NOT swap ui::theme::init() above for
-    // staging_ui::theme::init() -- both call lv_theme_default_init()
-    // globally for the whole display, and those four other screens
-    // rely on ui::theme's palette/font for their own default-widget
-    // styling. staging_ui's own screens set colors/fonts explicitly on
-    // every element they create (see staging_ui/theme.cpp's style_*()
-    // helpers), so they don't depend on the global default theme
-    // either way -- the only visible difference from not switching is
-    // the one unstyled lv_switch on the Settings System tab picking up
-    // ui::theme's blue accent instead of staging_ui's own (both blue).
+    core::navigation::init(screens);
+
     screens.push(staging_ui::create_home_dashboard);
-    std::printf("%s ui: home dashboard (staging_ui) pushed\n", core::log_timestamp().c_str());
+    std::printf("%s [UI] Home dashboard active\n", core::log_timestamp().c_str());
 
-    std::printf("%s ui: LVGL initialized, running main loop\n", core::log_timestamp().c_str());
+    std::printf("%s [UI] Main loop running\n", core::log_timestamp().c_str());
 
-    // Per-iteration heartbeat logging (iterations/sec once a second)
-    // was removed here -- it was a one-time diagnostic for a real bug
-    // (LV_MEM_SIZE too small -> lv_malloc() NULL -> the default assert
-    // handler's while(1) spin, which looked like a hang; see
-    // lv_conf.h's LV_MEM_SIZE comment), confirmed fixed and hardware-
-    // tested. Left logging on afterward, it just drowned out real
-    // error output on every boot.
     while (true) {
         uint32_t sleep_ms = lv_timer_handler();
-        // Cheap atomic exchange every iteration -- see
-        // AaAutoStartWatcher::run()'s own comment for why this can't
-        // just call core::navigation::push() directly from its own
-        // background thread. screens.push() (via core::navigation) is
-        // itself fine to call repeatedly/from an already-elsewhere
-        // navigation state -- same push-based stack every other screen
-        // transition in this app already uses.
-        // 2026-08-19: real gap found via code audit -- consume_navigate_
-        // request() is edge-triggered (exchange(false), so it can't fire
-        // on every tick), but nothing stopped the underlying trigger
-        // (+AAPDEV= detection, see AaAutoStartWatcher's own comment)
-        // from firing a SECOND time later in the same session (e.g. a
-        // mid-drive Bluetooth reconnect) while the user is already on
-        // the AA screen -- push() has no dedup of its own, so that would
-        // stack a duplicate AA screen (and a duplicate poll_timer_cb()
-        // timer, see android_auto_screen.cpp) on top of the current one.
-        // hal::androidauto_screen_active() is already the exact "is the
-        // AA screen the active one right now" flag that screen itself
-        // maintains (set true in create_android_auto_screen(), false in
-        // its own screen_delete_cb()) -- reusing it here instead of
-        // adding a new ScreenManager API.
+
         if (aa_auto_start_watcher().consume_navigate_request() &&
             !hal::androidauto_screen_active().load(std::memory_order_acquire)) {
             staging_ui::navigate_to(staging_ui::NavDestination::AndroidAuto);
         }
-        // 2026-08-20: the REAL AutoStartCarLink-gated auto-navigate
-        // trigger now -- see hal::consume_aa_navigate_request()'s own
-        // header comment. AaAutoStartWatcher above reacts to blueware's
-        // +AAPDEV= broadcast, which has been unreachable dead code since
-        // this project's BlueZ migration (nothing calls
-        // watch_bluetooth_broadcasts()'s observers anymore -- blueware's
-        // AT-command reader thread was replaced by BlueZ D-Bus calls
-        // throughout hal/bluetooth.cpp); left in place, not removed,
-        // since it's harmless as dead code and this file didn't need a
-        // larger rewrite just to delete it. This is the trigger that
-        // actually fires today: hal::aa_profile_server_loop() sets it
-        // once a phone connects over the AA Bluetooth profile AND
-        // AutoStartCarLink is on.
+
         if (hal::consume_aa_navigate_request() &&
             !hal::androidauto_screen_active().load(std::memory_order_acquire)) {
             staging_ui::navigate_to(staging_ui::NavDestination::AndroidAuto);
@@ -622,25 +561,14 @@ int main() {
 
         if (reverseChanged) {
             if (reverseEngaged) {
-                std::printf("%s ui: Reverse engaged -- opening camera overlay\n", core::log_timestamp().c_str());
+                std::printf("%s [HAL:REVCAM] Reverse gear engaged -- opening camera overlay\n", core::log_timestamp().c_str());
                 staging_ui::navigate_to(staging_ui::NavDestination::Camera);
             } else {
-                std::printf("%s ui: Reverse disengaged -- returning to previous screen\n", core::log_timestamp().c_str());
+                std::printf("%s [HAL:REVCAM] Reverse gear disengaged -- returning to previous screen\n", core::log_timestamp().c_str());
                 core::navigation::pop();
             }
         }
 
-        // 2026-08-21: MCU headlight -> night mode, polled once per loop
-        // iteration (cheap atomic read) -- only acted on an actual
-        // transition, same "don't redo work every tick" convention as
-        // display_hidden/showing_resume elsewhere in this codebase.
-        // Applies the display brightness change directly here (main
-        // thread, safe for the display_ctrl ioctl the same way every
-        // other HAL call from this loop is) and forwards the new state
-        // to androidauto-sidecar over its own local socket -- a fresh
-        // AndroidAutoClient here would open/close a socket connection
-        // every single transition, so this one is process-lifetime like
-        // every other singleton client in this file.
         {
             static hal::AndroidAutoClient nightModeClient;
             static bool lastNightMode = false;
@@ -654,17 +582,6 @@ int main() {
             }
         }
 
-        // 2026-08-21: real LVGL heap usage, logged every 60s -- added
-        // alongside trimming LV_USE_* widgets and cutting LV_MEM_SIZE
-        // from 4MB to 1MB (see that #define's own comment in lv_conf.h
-        // for why 4MB was never a measured value, just a generous
-        // overcorrection). max_used is the real high-water mark since
-        // process start -- watch this on real hardware to confirm 1MB
-        // is enough (comfortably above max_used) rather than guessing
-        // again; LV_USE_ASSERT_MALLOC + the fail-loud LV_ASSERT_HANDLER
-        // in lv_conf.h mean an actually-too-small pool aborts
-        // immediately with a clear message instead of silently hanging,
-        // so this is safe to verify rather than risky to have changed.
         {
             static std::chrono::steady_clock::time_point lastMemLog{};
             auto now = std::chrono::steady_clock::now();
@@ -673,7 +590,7 @@ int main() {
                 lastMemLog = now;
                 lv_mem_monitor_t mon{};
                 lv_mem_monitor(&mon);
-                std::printf("%s ui: LVGL heap: used=%u%% max_used=%zu bytes free=%zu bytes frag=%u%%\n",
+                std::printf("%s [UI] LVGL heap: used=%u%% max_used=%zu bytes free=%zu bytes frag=%u%%\n",
                             core::log_timestamp().c_str(), mon.used_pct,
                             mon.max_used, mon.free_size, mon.frag_pct);
             }

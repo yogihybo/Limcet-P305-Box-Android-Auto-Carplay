@@ -76,12 +76,12 @@ static bool alsa_mic_open(aap_microphone_t *mic) {
             continue;
         }
 
-        printf("aap_microphone: successfully opened ALSA capture device '%s' (%u Hz, %d ch)\n",
+        printf("[AA] successfully opened ALSA capture device '%s' (%u Hz, %d ch)\n",
                dev, rate, MIC_CHANNELS);
         return true;
     }
 
-    fprintf(stderr, "aap_microphone: failed to open any ALSA capture device\n");
+    fprintf(stderr, "[AA] failed to open any ALSA capture device\n");
     return false;
 }
 
@@ -97,7 +97,7 @@ static void *mic_capture_thread(void *arg) {
     aap_microphone_t *mic = (aap_microphone_t *)arg;
     uint8_t buffer[MIC_CHUNK_BYTES];
 
-    printf("aap_microphone: capture worker started\n");
+    printf("[AA] capture worker started\n");
 
     while (!mic->stop_flag && mic->capturing) {
         if (!mic->pcm_handle) {
@@ -109,7 +109,7 @@ static void *mic_capture_thread(void *arg) {
         if (frames < 0) {
             int err = snd_pcm_recover(mic->pcm_handle, (int)frames, 0);
             if (err < 0) {
-                fprintf(stderr, "aap_microphone: ALSA read error on %s: %s\n", mic->device_name, snd_strerror(err));
+                fprintf(stderr, "[AA] ALSA read error on %s: %s\n", mic->device_name, snd_strerror(err));
                 usleep(20000);
             }
             continue;
@@ -123,7 +123,7 @@ static void *mic_capture_thread(void *arg) {
     }
 
     alsa_mic_close(mic);
-    printf("aap_microphone: capture worker stopped\n");
+    printf("[AA] capture worker stopped\n");
     return NULL;
 }
 

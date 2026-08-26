@@ -67,12 +67,12 @@ static void *audio_writer_thread(void *arg) {
             snd_pcm_sframes_t written = snd_pcm_writei(sink->pcm_handle, cursor, frames_left);
             if (written < 0) {
                 if (++recovery_attempts > 10) {
-                    fprintf(stderr, "aap_audio: giving up on %s after 10 errors\n", sink->device_name);
+                    fprintf(stderr, "[AA] giving up on %s after 10 errors\n", sink->device_name);
                     break;
                 }
                 int err = snd_pcm_recover(sink->pcm_handle, (int)written, 1);
                 if (err < 0) {
-                    fprintf(stderr, "aap_audio: unrecoverable write error on %s: %s\n",
+                    fprintf(stderr, "[AA] unrecoverable write error on %s: %s\n",
                             sink->device_name, snd_strerror(err));
                     break;
                 }
@@ -119,7 +119,7 @@ bool aap_audio_sink_open(aap_audio_sink_t *sink) {
 
     int err = snd_pcm_open(&sink->pcm_handle, sink->device_name, SND_PCM_STREAM_PLAYBACK, 0);
     if (err < 0) {
-        fprintf(stderr, "aap_audio: snd_pcm_open(%s) failed: %s\n", sink->device_name, snd_strerror(err));
+        fprintf(stderr, "[AA] snd_pcm_open(%s) failed: %s\n", sink->device_name, snd_strerror(err));
         sink->pcm_handle = NULL;
         return false;
     }
@@ -127,7 +127,7 @@ bool aap_audio_sink_open(aap_audio_sink_t *sink) {
     err = snd_pcm_set_params(sink->pcm_handle, SND_PCM_FORMAT_S16_LE, SND_PCM_ACCESS_RW_INTERLEAVED,
                              sink->channels, sink->sample_rate, 1, 200000); /* 200ms latency */
     if (err < 0) {
-        fprintf(stderr, "aap_audio: snd_pcm_set_params(%s) failed: %s\n", sink->device_name, snd_strerror(err));
+        fprintf(stderr, "[AA] snd_pcm_set_params(%s) failed: %s\n", sink->device_name, snd_strerror(err));
         snd_pcm_close(sink->pcm_handle);
         sink->pcm_handle = NULL;
         return false;
@@ -144,7 +144,7 @@ bool aap_audio_sink_open(aap_audio_sink_t *sink) {
     sink->thread_running = (pthread_create(&sink->thread, &attr, audio_writer_thread, sink) == 0);
     pthread_attr_destroy(&attr);
 
-    printf("aap_audio: opened %s (%u Hz, 16-bit, %u ch)\n", sink->device_name, sink->sample_rate, sink->channels);
+    printf("[AA] opened %s (%u Hz, 16-bit, %u ch)\n", sink->device_name, sink->sample_rate, sink->channels);
     return true;
 }
 

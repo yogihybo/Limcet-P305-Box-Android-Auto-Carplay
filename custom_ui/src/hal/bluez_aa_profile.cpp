@@ -33,7 +33,7 @@ void log_dbus_error(const char *what, const DBusError &err) {
                      std::strcmp(err.name, "org.bluez.Error.DoesNotExist") == 0)) {
         return; // Expected while BlueZ daemon is still initializing on boot
     }
-    std::fprintf(stderr, "%s hal::bluez_aa_profile: %s: %s\n", core::log_timestamp().c_str(), what,
+    std::fprintf(stderr, "%s [BT] %s: %s\n", core::log_timestamp().c_str(), what,
                  err.message ? err.message : "(no message)");
 }
 
@@ -77,7 +77,7 @@ DBusHandlerResult profile_message_handler(DBusConnection * conn, DBusMessage * m
     if (!iface || std::strcmp(iface, "org.bluez.Profile1") != 0 || !member)
         return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
-    std::printf("%s [BT-AA-PROFILE] Profile1 method call received: %s\n",
+    std::printf("%s [BT] Profile1 method call received: %s\n",
                 core::log_timestamp().c_str(), member);
 
     if (std::strcmp(member, "NewConnection") == 0) {
@@ -92,7 +92,7 @@ DBusHandlerResult profile_message_handler(DBusConnection * conn, DBusMessage * m
         if (dbus_message_iter_get_arg_type(&iter) == DBUS_TYPE_UNIX_FD) {
             dbus_message_iter_get_basic(&iter, &fd);
         }
-        std::printf("%s [BT-AA-PROFILE] *** NewConnection *** device=%s fd=%d\n",
+        std::printf("%s [BT] *** NewConnection *** device=%s fd=%d\n",
                     core::log_timestamp().c_str(), devicePath ? devicePath : "(unknown)", fd);
         impl->pendingFd.store(fd, std::memory_order_release);
         DBusMessage * reply = dbus_message_new_method_return(msg);
@@ -101,7 +101,7 @@ DBusHandlerResult profile_message_handler(DBusConnection * conn, DBusMessage * m
         return DBUS_HANDLER_RESULT_HANDLED;
     }
     if (std::strcmp(member, "RequestDisconnection") == 0 || std::strcmp(member, "Release") == 0) {
-        std::printf("%s [BT-AA-PROFILE] %s\n", core::log_timestamp().c_str(), member);
+        std::printf("%s [BT] %s\n", core::log_timestamp().c_str(), member);
         DBusMessage * reply = dbus_message_new_method_return(msg);
         dbus_connection_send(conn, reply, nullptr);
         dbus_message_unref(reply);
@@ -137,7 +137,7 @@ bool BluezAaProfile::connect() {
         impl_->conn = nullptr;
         return false;
     }
-    std::printf("%s [BT-AA-PROFILE] connected to system bus (%s)\n",
+    std::printf("%s [BT] connected to system bus (%s)\n",
                 core::log_timestamp().c_str(), kBusAddress);
     return true;
 }
@@ -247,7 +247,7 @@ bool BluezAaProfile::register_profile() {
     if (!reply) return false;
     dbus_message_unref(reply);
 
-    std::printf("%s [BT-AA-PROFILE] AA profile registered (uuid=%s, path=%s) -- BlueZ owns "
+    std::printf("%s [BT] AA profile registered (uuid=%s, path=%s) -- BlueZ owns "
                "channel allocation + SDP advertisement from here\n", core::log_timestamp().c_str(),
                kAaUuid, kProfilePath);
     return true;

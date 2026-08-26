@@ -125,7 +125,7 @@ struct aap_session {
 static void set_state(aap_session_t *s, aap_session_state_t state, const char *msg) {
     s->state = state;
     strncpy(s->status_message, msg ? msg : "", sizeof(s->status_message) - 1);
-    printf("aap_session: [%d] %s\n", state, s->status_message);
+    printf("[AA] [%d] %s\n", state, s->status_message);
 }
 
 static bool send_raw_frame(aap_session_t *s, uint8_t channel_id, aap_frame_type_t frame_type,
@@ -214,7 +214,7 @@ static void send_version_request(aap_session_t *s) {
     memcpy(&ver_req[0], &major, 2);
     memcpy(&ver_req[2], &minor, 2);
 
-    printf("aap_session: sending VersionRequest (1.6)\n");
+    printf("[AA] sending VersionRequest (1.6)\n");
     send_channel_msg(s, AAP_CHANNEL_CONTROL, aap_protobuf_service_control_message_ControlMessageType_MESSAGE_VERSION_REQUEST,
                      ver_req, sizeof(ver_req), false);
     set_state(s, AAP_SESSION_STATE_VERSION_HANDSHAKE, "VersionRequest sent, waiting for VersionResponse");
@@ -228,7 +228,7 @@ static void handle_channel_open_request(aap_session_t *s, uint8_t channel_id, co
         pb_decode(&stream, aap_protobuf_service_control_message_ChannelOpenRequest_fields, &req);
     }
 
-    printf("aap_session: channel %u (%s) open request (priority=%d)\n", channel_id, channel_name(channel_id), req.priority);
+    printf("[AA] channel %u (%s) open request (priority=%d)\n", channel_id, channel_name(channel_id), req.priority);
 
     aap_protobuf_service_control_message_ChannelOpenResponse resp =
         aap_protobuf_service_control_message_ChannelOpenResponse_init_default;
@@ -241,13 +241,13 @@ static void handle_channel_open_request(aap_session_t *s, uint8_t channel_id, co
     send_channel_control_msg(s, channel_id,
                              aap_protobuf_service_control_message_ControlMessageType_MESSAGE_CHANNEL_OPEN_RESPONSE,
                              pb_buf, ostream.bytes_written, true);
-    printf("aap_session: channel %u (%s) open response sent (STATUS_SUCCESS)\n", channel_id, channel_name(channel_id));
+    printf("[AA] channel %u (%s) open response sent (STATUS_SUCCESS)\n", channel_id, channel_name(channel_id));
 }
 
 static void handle_control_message(aap_session_t *s, uint16_t msg_id, const uint8_t *payload, size_t payload_len) {
     switch (msg_id) {
         case aap_protobuf_service_control_message_ControlMessageType_MESSAGE_VERSION_RESPONSE: {
-            printf("aap_session: received VersionResponse (%zu bytes)\n", payload_len);
+            printf("[AA] received VersionResponse (%zu bytes)\n", payload_len);
             set_state(s, AAP_SESSION_STATE_TLS_HANDSHAKE, "Version handshake complete, starting TLS");
 
             /* Kick off TLS Client Hello */
@@ -255,7 +255,7 @@ static void handle_control_message(aap_session_t *s, uint16_t msg_id, const uint
             uint8_t hs_buf[2048];
             size_t hs_len = aap_cryptor_read_handshake(s->cryptor, hs_buf, sizeof(hs_buf));
             if (hs_len > 0) {
-                printf("aap_session: sending ClientHello (%zu bytes)\n", hs_len);
+                printf("[AA] sending ClientHello (%zu bytes)\n", hs_len);
                 send_channel_msg(s, AAP_CHANNEL_CONTROL,
                                  aap_protobuf_service_control_message_ControlMessageType_MESSAGE_ENCAPSULATED_SSL,
                                  hs_buf, hs_len, false);
@@ -264,7 +264,7 @@ static void handle_control_message(aap_session_t *s, uint16_t msg_id, const uint
         }
 
         case aap_protobuf_service_control_message_ControlMessageType_MESSAGE_ENCAPSULATED_SSL: {
-            printf("aap_session: received SSLHandshake (%zu bytes)\n", payload_len);
+            printf("[AA] received SSLHandshake (%zu bytes)\n", payload_len);
             aap_cryptor_write_handshake(s->cryptor, payload, payload_len);
             bool done = aap_cryptor_do_handshake(s->cryptor);
 
@@ -277,7 +277,7 @@ static void handle_control_message(aap_session_t *s, uint16_t msg_id, const uint
             }
 
             if (done && aap_cryptor_is_active(s->cryptor)) {
-                printf("aap_session: TLS handshake completed successfully! Sending AuthComplete\n");
+                printf("[AA] TLS handshake completed successfully! Sending AuthComplete\n");
                 set_state(s, AAP_SESSION_STATE_AUTH, "TLS complete, authenticating");
 
                 aap_protobuf_service_control_message_AuthResponse auth =
@@ -296,7 +296,7 @@ static void handle_control_message(aap_session_t *s, uint16_t msg_id, const uint
         }
 
         case aap_protobuf_service_control_message_ControlMessageType_MESSAGE_SERVICE_DISCOVERY_REQUEST: {
-            printf("aap_session: received ServiceDiscoveryRequest\n");
+            printf("[AA] received ServiceDiscoveryRequest\n");
 
             aap_protobuf_service_control_message_ServiceDiscoveryResponse resp =
                 aap_protobuf_service_control_message_ServiceDiscoveryResponse_init_default;
@@ -482,7 +482,7 @@ static void handle_control_message(aap_session_t *s, uint16_t msg_id, const uint
             uint8_t pb_buf[4096];
             pb_ostream_t stream = pb_ostream_from_buffer(pb_buf, sizeof(pb_buf));
             bool enc_ok = pb_encode(&stream, aap_protobuf_service_control_message_ServiceDiscoveryResponse_fields, &resp);
-            printf("aap_session: ServiceDiscoveryResponse encoded (%zu bytes, success=%d)\n", stream.bytes_written, enc_ok);
+            printf("[AA] ServiceDiscoveryResponse encoded (%zu bytes, success=%d)\n", stream.bytes_written, enc_ok);
 
             send_channel_msg(s, AAP_CHANNEL_CONTROL,
                              aap_protobuf_service_control_message_ControlMessageType_MESSAGE_SERVICE_DISCOVERY_RESPONSE,
@@ -533,7 +533,7 @@ static void handle_control_message(aap_session_t *s, uint16_t msg_id, const uint
             pb_istream_t stream = pb_istream_from_buffer(payload, payload_len);
             pb_decode(&stream, aap_protobuf_service_control_message_AudioFocusRequest_fields, &req);
 
-            printf("aap_session: received AudioFocusRequest (type=%d)\n", req.audio_focus_type);
+            printf("[AA] received AudioFocusRequest (type=%d)\n", req.audio_focus_type);
 
             aap_protobuf_service_control_message_AudioFocusNotification resp =
                 aap_protobuf_service_control_message_AudioFocusNotification_init_default;
@@ -555,12 +555,12 @@ static void handle_control_message(aap_session_t *s, uint16_t msg_id, const uint
             send_channel_msg(s, AAP_CHANNEL_CONTROL,
                              aap_protobuf_service_control_message_ControlMessageType_MESSAGE_AUDIO_FOCUS_NOTIFICATION,
                              pb_buf, ostream.bytes_written, true);
-            printf("aap_session: audio focus response sent (state=%d)\n", resp.focus_state);
+            printf("[AA] audio focus response sent (state=%d)\n", resp.focus_state);
             break;
         }
 
         case aap_protobuf_service_control_message_ControlMessageType_MESSAGE_NAV_FOCUS_REQUEST: {
-            printf("aap_session: received NavFocusRequest\n");
+            printf("[AA] received NavFocusRequest\n");
             aap_protobuf_service_control_message_NavFocusNotification resp =
                 aap_protobuf_service_control_message_NavFocusNotification_init_default;
             resp.focus_type = aap_protobuf_service_control_message_NavFocusType_NAV_FOCUS_PROJECTED;
@@ -581,7 +581,7 @@ static void handle_control_message(aap_session_t *s, uint16_t msg_id, const uint
             pb_istream_t stream = pb_istream_from_buffer(payload, payload_len);
             pb_decode(&stream, aap_protobuf_service_control_message_VoiceSessionNotification_fields, &notif);
 
-            printf("aap_session: received VoiceSessionNotification (status=%d)\n", notif.status);
+            printf("[AA] received VoiceSessionNotification (status=%d)\n", notif.status);
 
             uint8_t pb_buf[128];
             pb_ostream_t ostream = pb_ostream_from_buffer(pb_buf, sizeof(pb_buf));
@@ -594,7 +594,7 @@ static void handle_control_message(aap_session_t *s, uint16_t msg_id, const uint
         }
 
         case aap_protobuf_service_control_message_ControlMessageType_MESSAGE_BYEBYE_REQUEST: {
-            printf("aap_session: received ByeByeRequest\n");
+            printf("[AA] received ByeByeRequest\n");
             aap_protobuf_service_control_message_ByeByeResponse resp =
                 aap_protobuf_service_control_message_ByeByeResponse_init_default;
 
@@ -610,7 +610,7 @@ static void handle_control_message(aap_session_t *s, uint16_t msg_id, const uint
         }
 
         default:
-            printf("aap_session: unhandled control message 0x%04X\n", msg_id);
+            printf("[AA] unhandled control message 0x%04X\n", msg_id);
             break;
     }
 }
@@ -632,7 +632,7 @@ static void handle_sensor_channel(aap_session_t *s, const uint8_t *payload, size
         pb_istream_t istream = pb_istream_from_buffer(pb_data, pb_len);
         pb_decode(&istream, aap_protobuf_service_sensorsource_message_SensorRequest_fields, &req);
 
-        printf("aap_session: sensor start request (type=%d)\n", req.type);
+        printf("[AA] sensor start request (type=%d)\n", req.type);
 
         aap_protobuf_service_sensorsource_message_SensorStartResponseMessage resp =
             aap_protobuf_service_sensorsource_message_SensorStartResponseMessage_init_default;
@@ -645,7 +645,7 @@ static void handle_sensor_channel(aap_session_t *s, const uint8_t *payload, size
         send_channel_msg(s, AAP_CHANNEL_SENSOR,
                          aap_protobuf_service_sensorsource_SensorMessageId_SENSOR_MESSAGE_RESPONSE,
                          pb_buf, ostream.bytes_written, true);
-        printf("aap_session: sensor start response sent (type=%d, STATUS_SUCCESS)\n", req.type);
+        printf("[AA] sensor start response sent (type=%d, STATUS_SUCCESS)\n", req.type);
 
         /* Send initial sensor batch data */
         aap_protobuf_service_sensorsource_message_SensorBatch batch =
@@ -664,7 +664,7 @@ static void handle_sensor_channel(aap_session_t *s, const uint8_t *payload, size
         send_channel_msg(s, AAP_CHANNEL_SENSOR,
                          aap_protobuf_service_sensorsource_SensorMessageId_SENSOR_MESSAGE_BATCH,
                          pb_buf, ostream.bytes_written, true);
-        printf("aap_session: sensor batch data sent (type=%d, ok=%d, bytes=%zu)\n", req.type, ok, ostream.bytes_written);
+        printf("[AA] sensor batch data sent (type=%d, ok=%d, bytes=%zu)\n", req.type, ok, ostream.bytes_written);
     }
 }
 
@@ -680,7 +680,7 @@ static void handle_input_channel(aap_session_t *s, const uint8_t *payload, size_
     }
 
     if (sub_cmd == aap_protobuf_service_inputsource_InputMessageId_INPUT_MESSAGE_KEY_BINDING_REQUEST) {
-        printf("aap_session: input KeyBindingRequest received -> replying STATUS_SUCCESS\n");
+        printf("[AA] input KeyBindingRequest received -> replying STATUS_SUCCESS\n");
         aap_protobuf_service_media_sink_message_KeyBindingResponse resp =
             aap_protobuf_service_media_sink_message_KeyBindingResponse_init_default;
         resp.status = aap_protobuf_shared_MessageStatus_STATUS_SUCCESS;
@@ -737,7 +737,7 @@ static void handle_microphone_channel(aap_session_t *s, const uint8_t *payload, 
     }
 
     if (sub_cmd == aap_protobuf_service_media_sink_MediaMessageId_MEDIA_MESSAGE_SETUP) {
-        printf("aap_session: microphone channel setup request\n");
+        printf("[AA] microphone channel setup request\n");
         aap_protobuf_service_media_shared_message_Config cfg =
             aap_protobuf_service_media_shared_message_Config_init_default;
         cfg.status = aap_protobuf_service_media_shared_message_Config_Status_STATUS_READY;
@@ -752,7 +752,7 @@ static void handle_microphone_channel(aap_session_t *s, const uint8_t *payload, 
 
         send_channel_msg(s, AAP_CHANNEL_MICROPHONE, aap_protobuf_service_media_sink_MediaMessageId_MEDIA_MESSAGE_CONFIG,
                          pb_buf, ostream.bytes_written, true);
-        printf("aap_session: microphone channel setup response sent\n");
+        printf("[AA] microphone channel setup response sent\n");
     } else if (sub_cmd == 32769 /* MicrophoneRequest */) {
         aap_protobuf_service_media_source_message_MicrophoneRequest req =
             aap_protobuf_service_media_source_message_MicrophoneRequest_init_default;
@@ -761,7 +761,7 @@ static void handle_microphone_channel(aap_session_t *s, const uint8_t *payload, 
             pb_decode(&istream, aap_protobuf_service_media_source_message_MicrophoneRequest_fields, &req);
         }
 
-        printf("aap_session: microphone request (open=%d)\n", req.open);
+        printf("[AA] microphone request (open=%d)\n", req.open);
 
         aap_protobuf_service_media_source_message_MicrophoneResponse resp =
             aap_protobuf_service_media_source_message_MicrophoneResponse_init_default;
@@ -775,7 +775,7 @@ static void handle_microphone_channel(aap_session_t *s, const uint8_t *payload, 
 
         send_channel_msg(s, AAP_CHANNEL_MICROPHONE, 32770 /* MicrophoneResponse */,
                          pb_buf, ostream.bytes_written, true);
-        printf("aap_session: microphone open/close response sent\n");
+        printf("[AA] microphone open/close response sent\n");
 
         if (req.open) {
             aap_microphone_start(s->mic, s, on_mic_pcm_captured);
@@ -804,7 +804,7 @@ static void handle_bluetooth_channel(aap_session_t *s, const uint8_t *payload, s
             pb_decode(&stream, aap_protobuf_service_bluetooth_message_BluetoothPairingRequest_fields, &req);
         }
 
-        printf("aap_session: bluetooth pairing request from '%s'\n", req.phone_address);
+        printf("[AA] bluetooth pairing request from '%s'\n", req.phone_address);
 
         aap_protobuf_service_bluetooth_message_BluetoothPairingResponse resp =
             aap_protobuf_service_bluetooth_message_BluetoothPairingResponse_init_default;
@@ -818,9 +818,9 @@ static void handle_bluetooth_channel(aap_session_t *s, const uint8_t *payload, s
         send_channel_msg(s, AAP_CHANNEL_BLUETOOTH,
                          aap_protobuf_service_bluetooth_BluetoothMessageId_BLUETOOTH_MESSAGE_PAIRING_RESPONSE,
                          pb_buf, ostream.bytes_written, true);
-        printf("aap_session: bluetooth pairing response sent (STATUS_SUCCESS, already_paired=true)\n");
+        printf("[AA] bluetooth pairing response sent (STATUS_SUCCESS, already_paired=true)\n");
     } else if (sub_cmd == aap_protobuf_service_bluetooth_BluetoothMessageId_BLUETOOTH_MESSAGE_AUTHENTICATION_RESULT) {
-        printf("aap_session: bluetooth authentication result received\n");
+        printf("[AA] bluetooth authentication result received\n");
     }
 }
 
@@ -837,7 +837,7 @@ static void handle_media_channel(aap_session_t *s, uint8_t channel_id, const uin
 
     switch (sub_cmd) {
         case aap_protobuf_service_media_sink_MediaMessageId_MEDIA_MESSAGE_SETUP: {
-            printf("aap_session: channel %u (%s) setup request\n", channel_id, channel_name(channel_id));
+            printf("[AA] channel %u (%s) setup request\n", channel_id, channel_name(channel_id));
             aap_protobuf_service_media_shared_message_Config cfg =
                 aap_protobuf_service_media_shared_message_Config_init_default;
             cfg.status = aap_protobuf_service_media_shared_message_Config_Status_STATUS_READY;
@@ -852,7 +852,7 @@ static void handle_media_channel(aap_session_t *s, uint8_t channel_id, const uin
 
             send_channel_msg(s, channel_id, aap_protobuf_service_media_sink_MediaMessageId_MEDIA_MESSAGE_CONFIG,
                              pb_buf, ostream.bytes_written, true);
-            printf("aap_session: channel %u (%s) setup response sent\n", channel_id, channel_name(channel_id));
+            printf("[AA] channel %u (%s) setup response sent\n", channel_id, channel_name(channel_id));
 
             /* If this is the video sink, send unsolicited VideoFocusNotification (PROJECTED) */
             if (channel_id == AAP_CHANNEL_MEDIA_SINK_VIDEO) {
@@ -868,13 +868,13 @@ static void handle_media_channel(aap_session_t *s, uint8_t channel_id, const uin
                 send_channel_msg(s, AAP_CHANNEL_MEDIA_SINK_VIDEO,
                                  aap_protobuf_service_media_sink_MediaMessageId_MEDIA_MESSAGE_VIDEO_FOCUS_NOTIFICATION,
                                  pb_buf, ostream.bytes_written, true);
-                printf("aap_session: video focus indication sent (unsolicited=1)\n");
+                printf("[AA] video focus indication sent (unsolicited=1)\n");
             }
             break;
         }
 
         case aap_protobuf_service_media_sink_MediaMessageId_MEDIA_MESSAGE_VIDEO_FOCUS_REQUEST: {
-            printf("aap_session: video focus request received\n");
+            printf("[AA] video focus request received\n");
             aap_protobuf_service_media_video_message_VideoFocusRequestNotification req =
                 aap_protobuf_service_media_video_message_VideoFocusRequestNotification_init_default;
             if (pb_len > 0) {
@@ -899,7 +899,7 @@ static void handle_media_channel(aap_session_t *s, uint8_t channel_id, const uin
             send_channel_msg(s, AAP_CHANNEL_MEDIA_SINK_VIDEO,
                              aap_protobuf_service_media_sink_MediaMessageId_MEDIA_MESSAGE_VIDEO_FOCUS_NOTIFICATION,
                              pb_buf, ostream.bytes_written, true);
-            printf("aap_session: video focus indication sent (unsolicited=0, mode=%d, native=%d)\n",
+            printf("[AA] video focus indication sent (unsolicited=0, mode=%d, native=%d)\n",
                    focus_notif.focus, s->is_video_focus_native);
             break;
         }
@@ -910,7 +910,7 @@ static void handle_media_channel(aap_session_t *s, uint8_t channel_id, const uin
             pb_istream_t istream = pb_istream_from_buffer(pb_data, pb_len);
             pb_decode(&istream, aap_protobuf_service_media_shared_message_Start_fields, &start);
 
-            printf("aap_session: channel %u (%s) start (session_id=%d)\n", channel_id, channel_name(channel_id), start.session_id);
+            printf("[AA] channel %u (%s) start (session_id=%d)\n", channel_id, channel_name(channel_id), start.session_id);
             if (channel_id == AAP_CHANNEL_MEDIA_SINK_MEDIA_AUDIO) {
                 s->media_session_id = start.session_id;
                 aap_audio_sink_open(s->audio_media);
@@ -928,7 +928,7 @@ static void handle_media_channel(aap_session_t *s, uint8_t channel_id, const uin
         }
 
         case aap_protobuf_service_media_sink_MediaMessageId_MEDIA_MESSAGE_STOP: {
-            printf("aap_session: channel %u (%s) stop\n", channel_id, channel_name(channel_id));
+            printf("[AA] channel %u (%s) stop\n", channel_id, channel_name(channel_id));
             if (channel_id == AAP_CHANNEL_MEDIA_SINK_MEDIA_AUDIO) {
                 aap_audio_sink_flush(s->audio_media);
             }
@@ -967,7 +967,7 @@ static void handle_media_channel(aap_session_t *s, uint8_t channel_id, const uin
         }
 
         default: {
-            printf("aap_session: channel %u (%s) unhandled sub_cmd 0x%04X (len=%zu)\n",
+            printf("[AA] channel %u (%s) unhandled sub_cmd 0x%04X (len=%zu)\n",
                    channel_id, channel_name(channel_id), sub_cmd, payload_len);
             break;
         }
@@ -1088,7 +1088,7 @@ bool aap_session_process_incoming(aap_session_t *s) {
                 active_payload = plain_buf;
                 active_len = dec_len;
             } else {
-                fprintf(stderr, "aap_session: decrypt failed on channel %u (%s)\n", hdr.channel_id, channel_name(hdr.channel_id));
+                fprintf(stderr, "[AA] decrypt failed on channel %u (%s)\n", hdr.channel_id, channel_name(hdr.channel_id));
                 cursor += frame_total;
                 continue;
             }

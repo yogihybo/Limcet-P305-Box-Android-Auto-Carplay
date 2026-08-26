@@ -7,6 +7,7 @@
 #include "core/navigation.h"
 #include "hal/audio.h"
 #include "hal/display_ctrl.h"
+#include "core/log_timing.h"
 #include <functional>
 
 namespace staging_ui {
@@ -209,8 +210,19 @@ lv_obj_t * create_stepper_row(lv_obj_t * parent, const lv_image_dsc_t * icon_dsc
     return row;
 }
 
+struct ToggleCtx {
+    std::string key;
+    std::string section;
+    std::function<void(bool)> onChange;
+};
+
+void destroy_toggle_ctx(lv_event_t * e) {
+    delete static_cast<ToggleCtx *>(lv_event_get_user_data(e));
+}
+
 lv_obj_t * create_toggle_row(lv_obj_t * parent, const lv_image_dsc_t * icon_dsc, const char * label_text,
-                            const std::string & key, const std::string & section, bool def_val) {
+                            const std::string & key, const std::string & section, bool def_val,
+                            std::function<void(bool)> on_change = nullptr) {
     lv_obj_t * row = lv_obj_create(parent);
     lv_obj_remove_style_all(row);
     lv_obj_set_width(row, LV_PCT(100));
@@ -239,12 +251,19 @@ lv_obj_t * create_toggle_row(lv_obj_t * parent, const lv_image_dsc_t * icon_dsc,
     lv_obj_t * sw = lv_switch_create(row);
     bool state = core::default_store().get_bool(key, def_val, section);
     if (state) lv_obj_add_state(sw, LV_STATE_CHECKED);
+
+    auto * ctx = new ToggleCtx{key, section, std::move(on_change)};
+    lv_obj_add_event_cb(sw, destroy_toggle_ctx, LV_EVENT_DELETE, ctx);
     lv_obj_add_event_cb(sw, [](lv_event_t * e) {
+        auto * ctx = static_cast<ToggleCtx *>(lv_event_get_user_data(e));
         lv_obj_t * target = static_cast<lv_obj_t *>(lv_event_get_target(e));
         bool val = lv_obj_has_state(target, LV_STATE_CHECKED);
-        core::default_store().set_bool("AutoStartCarLink", val, "General");
+        core::default_store().set_bool(ctx->key, val, ctx->section);
         core::default_store().save();
-    }, LV_EVENT_VALUE_CHANGED, nullptr);
+        if (ctx->onChange) {
+            ctx->onChange(val);
+        }
+    }, LV_EVENT_VALUE_CHANGED, ctx);
 
     if (core::navigation::focus_group()) {
         lv_group_add_obj(core::navigation::focus_group(), sw);
@@ -313,10 +332,6 @@ lv_obj_t * create_settings_screen() {
                        "Hue", "General", VdeField::Hue);
 
     // --- Section 2: Audio ---
-    // Each row drives its own REAL, independent ALSA softvol mixer (see
-    // hal/audio.h's AudioStream comment for the confirmed plug:softvolN
-    // -> softmasterN mapping per androidauto session.cpp's own AudioChannel
-    // construction) -- not just cosmetic config-store writes.
     create_section_header(card, "AUDIO");
     create_stepper_row(card, &ui::icons::icon_volume, "Media Volume", 0, 100, 5,
                        "MediaVolume", "Audio", VdeField::None,
@@ -328,7 +343,15 @@ lv_obj_t * create_settings_screen() {
                        "SystemVolume", "Audio", VdeField::None,
                        [](int v) { hal::set_stream_volume(hal::AudioStream::System, v); });
 
-    // --- Section 3: System ---
+    // --- Section 3: Vehicle & Camera ---
+    create_section_header(card, "VEHICLE & CAMERA");
+    create_toggle_row(card, &ui::icons::icon_nav_camera, "OEM Factory Camera",
+                      "OriginalCarCamera", "General", false, [](bool oem) {
+                          std::printf("%s [HAL:REVCAM] Reversing camera mode set to %s\n",
+                                      core::log_timestamp().c_str(), oem ? "OEM Factory Camera" : "Aftermarket Camera");
+                      });
+
+    // --- Section 4: System ---
     create_section_header(card, "SYSTEM");
     create_toggle_row(card, &ui::icons::icon_smartphone, "Auto-Start CarLink",
                       "AutoStartCarLink", "General", true);

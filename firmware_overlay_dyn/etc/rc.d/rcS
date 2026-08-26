@@ -89,111 +89,32 @@ modprobe galcore registerMemBase=0xE0F00000 irqLine=32 contiguousSize=0x800000 p
 modprobe cfg80211
 modprobe rtl8811cu rtw_drv_log_level=2 rtw_country_code=US
 
-# --- BlueZ (replaces blueware entirely) ---
-# Real system dbus-daemon (Buildroot's own dynamic build, not the
-# device's old reduced one that lacked --address support -- see
-# tools/bluetoothd-test/README.md's Run 2). 2026-08-23: real hw bug --
-# this used to stage our own config at /usr/etc/dbus-1/..., a path
-# this dbus-daemon's real default sysconfdir (/usr/share/dbus-1/,
-# /etc/dbus-1/) never reads at all, so it was silently ignored and the
-# real default (<user>dbus</user>, no such user on this device) is
-# what actually ran -- "Could not get UID and GID for username dbus".
-# The fix is now just the overlay itself: etc/dbus-1/system-local.conf
-# (<user>root</user>, the real documented local-override point) and
-# etc/dbus-1/system.d/bluetooth.conf (the real includedir) ship
-# directly at their real final paths, no runtime staging needed.
-mkdir -p /var/run/dbus
-/usr/bin/dbus-daemon --system --fork
+# --- Instant UI Launch ---
+# Launch custom_ui immediately so LVGL display initializes in <1 second,
+# while Bluetooth / network daemons initialize in parallel in the background.
+(sleep 0.1 && . /etc/profile && /usr/bin/custom_ui) &
 
-# 2026-08-23: real hw bug -- bluetoothd (tools/bluetoothd-test's own
-# static build) was never configured with --localstatedir=/var, so its
-# compiled-in fallback DBus address is /usr/var/run/dbus/... instead of
-# the real /var/run/dbus/... this dbus-daemon actually listens on (see
-# Buildroot's own /usr/share/dbus-1/system.conf <listen>). Point it at
-# the real address explicitly rather than rebuilding just for this.
-export DBUS_SYSTEM_BUS_ADDRESS=unix:path=/var/run/dbus/system_bus_socket
+# --- BlueZ (runs in background so it does not block UI) ---
+(
+	mkdir -p /var/run/dbus
+	/usr/bin/dbus-daemon --system --fork
+	export DBUS_SYSTEM_BUS_ADDRESS=unix:path=/var/run/dbus/system_bus_socket
 
-# rtk_hciattach must stay running in the foreground (holds the fd/line
-# discipline open, see tools/rtk-hciattach-test/README.md) -- GPIO91
-# reset handled inside the binary itself. 2026-08-23: real hw bug --
-# this invocation had gone missing entirely (only the comment survived
-# some earlier edit), so hci0 never had anything attaching it in the
-# first place; the poll loop below was waiting on nothing.
-/usr/bin/rtk_hciattach -s 115200 /dev/ttyHS1 rtk_h5 &
+	/usr/bin/rtk_hciattach -s 115200 /dev/ttyHS1 rtk_h5 &
 
-# hci-updown talks straight to the kernel via HCIDEVUP ioctl (no dbus
-# dependency at all -- checked its own source,
-# tools/rtk-hciattach-test/src/hci-updown.c). Per that tool's own
-# README (Run 5), the full userspace handshake -- 800ms GPIO91 settle,
-# reset pulse, H5 sync, baud switch to 1.5M, then a 122-packet/43KB
-# firmware download -- routinely takes several seconds end to end,
-# well past a fixed `sleep 2`, and hci0 only gets registered
-# (TIOCSETD/HCIUARTSETPROTO) at the very end of that sequence. Poll
-# instead of guessing a fixed delay.
-# 2026-08-23: real hw bug -- this loop used to swallow hci-updown's
-# real stderr (2>/dev/null), so "hci0 up failed" never told us WHY.
-# The kernel's own hci_h5.c does its own independent 3-wire resync on
-# line-discipline attach (H5_SYNC_TIMEOUT = 100ms, retried
-# indefinitely by its own timer -- see h5_timed_event()) -- the two
-# "Non-link packet"/"Out-of-order packet" warnings seen once on every
-# boot (including the confirmed-working hardware run this whole
-# sequence is based on, tools/rtk-hciattach-test/README.md Run 6) are
-# that resync's normal one-shot hiccup, not a stuck loop -- if it were
-# genuinely stuck, the same warnings would repeat every ~100ms
-# forever, which they don't. So HCIDEVUP failing here is NOT
-# obviously just "hci0 isn't registered yet"; capture the real errno
-# instead of guessing further.
-HCI_UP=0
-for i in 1 2 3 4 5 6 7 8 9 10; do
-	/usr/bin/hci-updown up 2>/tmp/hci-updown.err && { HCI_UP=1; break; }
-	sleep 1
-done
-if [ "$HCI_UP" != 1 ]; then
-	echo "hci0 up failed after 10s -- last hci-updown error:"
-	cat /tmp/hci-updown.err 2>/dev/null
-fi
+	HCI_UP=0
+	for i in 1 2 3 4 5 6 7 8 9 10; do
+		/usr/bin/hci-updown up 2>/tmp/hci-updown.err && { HCI_UP=1; break; }
+		sleep 1
+	done
+	if [ "$HCI_UP" != 1 ]; then
+		echo "hci0 up failed after 10s -- last hci-updown error:"
+		cat /tmp/hci-updown.err 2>/dev/null
+	fi
 
-/usr/sbin/bluetoothd -n &
-
-# --- WiFi AP: deliberately NOT started here ---
-# 2026-08-22: found and fixed a real regression -- an earlier version of
-# this file started /etc/wifi_ap.sh unconditionally at boot, which is
-# exactly the eager-bringup behavior f42d533 ("Defer WiFi AP bringup
-# until phone connects over Bluetooth AA RFCOMM") deliberately removed.
-# The real, current trigger lives entirely inside custom_ui/
-# androidauto-sidecar's own code, not rcS: hal::BluezAaProfile's
-# Profile1.NewConnection handler (hal/bluez_aa_profile.cpp) hands a
-# real, already-connected RFCOMM fd to hal::sendConnectFd()
-# (hal/androidauto_client.cpp), which delivers it to the sidecar over
-# CONNECT_FD; the sidecar's handle_connection()
-# (sidecars/androidauto/main.cpp) calls
-# WirelessSessionManager::start(fd) -> run(fd) ->
-# ensureAccessPointUp(), which is the only place wifi_ap.sh (and, via
-# it, hostapd) actually runs. Since a real fd only exists once a phone
-# has genuinely connected over Bluetooth, this call chain is
-# event-driven by construction -- there's no other path to it. rcS
-# calling wifi_ap.sh itself would start the AP unconditionally at
-# every boot, colliding with (and defeating the purpose of) this
-# mechanism once custom_ui is wired to autostart (Phase 6/7).
-
-echo "custom_ui rootfs: base system + BlueZ bring-up done (WiFi AP is event-driven, see custom_ui's WirelessSessionManager)."
-
-# 2026-08-23: Phase 6/7 -- custom_ui now auto-starts at boot instead of
-# being deployed by hand. Same pattern as stock's own MsnCoreApp
-# autostart (firmware_overlay/etc/rc.d/rcS): a backgrounded subshell
-# that sources /etc/profile first (sets PATH/LD_LIBRARY_PATH the same
-# way an interactive login shell would -- custom_ui's own HAL code
-# invokes several bare-named helpers, e.g. `bluetoothd`/`hci-updown`,
-# via std::system(), which need PATH set correctly). custom_ui itself
-# launches androidauto-sidecar as its own child process (see
-# hal::androidauto_client.cpp's own "[AA-SIDECAR] Launching..." log
-# line, already hardware-confirmed) -- rcS only needs to start
-# custom_ui, not the sidecar separately. 1s delay gives BlueZ/dbus
-# above a moment to settle, same reasoning as stock's own delay
-# (though custom_ui's own ensure_bluetooth_daemon_running() already
-# tolerates BlueZ not being up yet, so this is a small margin, not a
-# hard requirement).
-(sleep 1 && . /etc/profile && /usr/bin/custom_ui) &
+	/usr/sbin/bluetoothd -n &
+	echo "custom_ui rootfs: BlueZ bring-up complete."
+) &
 
 # 2026-08-24: real hw finding -- androidauto-sidecar's shared-linking
 # conversion (Boost/Protobuf/AASDK, previously one static ~5.4MB

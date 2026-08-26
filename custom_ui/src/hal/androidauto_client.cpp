@@ -98,7 +98,7 @@ void try_spawn_androidauto_sidecar() {
         }
 
         if (sidecar_bin.empty()) {
-            std::printf("%s [AA-SIDECAR] Notice: androidauto-sidecar binary not found in candidate paths\n",
+            std::printf("%s [AA:SIDECAR] Notice: androidauto-sidecar binary not found in candidate paths\n",
                         core::log_timestamp().c_str());
             return;
         }
@@ -111,12 +111,12 @@ void try_spawn_androidauto_sidecar() {
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
         std::string cmd = sidecar_bin + " 2>&1";
-        std::printf("%s [AA-SIDECAR] Launching %s (streaming logs to custom_ui console)\n",
+        std::printf("%s [AA:SIDECAR] Launching %s (streaming logs to custom_ui console)\n",
                     core::log_timestamp().c_str(), cmd.c_str());
 
         FILE * fp = popen(cmd.c_str(), "r");
         if (!fp) {
-            std::fprintf(stderr, "%s [AA-SIDECAR] popen failed for %s\n",
+            std::fprintf(stderr, "%s [AA:SIDECAR] popen failed for %s\n",
                          core::log_timestamp().c_str(), cmd.c_str());
             return;
         }

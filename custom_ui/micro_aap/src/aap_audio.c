@@ -183,23 +183,29 @@ void aap_audio_sink_prepare(aap_audio_sink_t *sink) {
 
 bool aap_audio_sink_write(aap_audio_sink_t *sink, const uint8_t *pcm_data, size_t pcm_len) {
     if (!sink || !pcm_data || pcm_len == 0) return false;
-    if (pcm_len > AAP_AUDIO_SLOT_MAX_SIZE) {
-        pcm_len = AAP_AUDIO_SLOT_MAX_SIZE;
-    }
 
     pthread_mutex_lock(&sink->mutex);
-    if (sink->count >= AAP_AUDIO_SLOTS) {
-        /* Drop oldest buffer in static ring */
-        sink->read_idx = (sink->read_idx + 1) % AAP_AUDIO_SLOTS;
-        sink->count--;
+    size_t offset = 0;
+    while (offset < pcm_len) {
+        size_t chunk = pcm_len - offset;
+        if (chunk > AAP_AUDIO_SLOT_MAX_SIZE) {
+            chunk = AAP_AUDIO_SLOT_MAX_SIZE;
+        }
+
+        if (sink->count >= AAP_AUDIO_SLOTS) {
+            /* Drop oldest buffer in static ring */
+            sink->read_idx = (sink->read_idx + 1) % AAP_AUDIO_SLOTS;
+            sink->count--;
+        }
+
+        audio_slot_t *slot = &sink->slots[sink->write_idx];
+        memcpy(slot->data, pcm_data + offset, chunk);
+        slot->len = chunk;
+
+        sink->write_idx = (sink->write_idx + 1) % AAP_AUDIO_SLOTS;
+        sink->count++;
+        offset += chunk;
     }
-
-    audio_slot_t *slot = &sink->slots[sink->write_idx];
-    memcpy(slot->data, pcm_data, pcm_len);
-    slot->len = pcm_len;
-
-    sink->write_idx = (sink->write_idx + 1) % AAP_AUDIO_SLOTS;
-    sink->count++;
 
     pthread_cond_signal(&sink->cond);
     pthread_mutex_unlock(&sink->mutex);

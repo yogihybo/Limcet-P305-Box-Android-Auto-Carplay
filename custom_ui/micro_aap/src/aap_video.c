@@ -38,17 +38,23 @@ typedef struct {
 } H264DecOutput;
 
 typedef struct {
-    uint8_t *pOutputPicture;
-    uint32_t outputPictureBusAddress;
     uint32_t picWidth;
     uint32_t picHeight;
-    uint32_t picFormat;
-    uint32_t nbrOfErrMBs;
+    uint32_t cropLeftOffset;
+    uint32_t cropOutWidth;
+    uint32_t cropTopOffset;
+    uint32_t cropOutHeight;
+    const uint32_t *pOutputPicture;
+    uint32_t outputPictureBusAddress;
     uint32_t picId;
-    uint32_t isIdr;
+    uint32_t picCodingType;
+    uint32_t isIdrPicture;
+    uint32_t nbrOfErrMBs;
     uint32_t interlaced;
-    uint32_t field;
-    uint32_t topFieldFirst;
+    uint32_t fieldPicture;
+    uint32_t topField;
+    uint32_t viewId;
+    uint32_t outputFormat; /* 0=raster scan, 1=8x4 tiled */
 } H264DecPicture;
 
 struct ark_disp_update_window {
@@ -252,6 +258,13 @@ bool aap_video_sink_decode(aap_video_sink_t *sink, const uint8_t *nalu_data, siz
     in.picId = ++sink->pic_id;
 
     int ret = sink->h264_decode(sink->hantro_dec, &in, &out);
+    while (ret >= 0 && out.dataLeft > 0) {
+        in.pStream = out.pStrmCurrPos;
+        in.streamBusAddress = out.strmCurrBusAddress;
+        in.dataLen = out.dataLeft;
+        ret = sink->h264_decode(sink->hantro_dec, &in, &out);
+    }
+
     if (ret < 0) {
         return false;
     }
@@ -261,8 +274,10 @@ bool aap_video_sink_decode(aap_video_sink_t *sink, const uint8_t *nalu_data, siz
     bool rendered = false;
 
     while (sink->h264_next_picture(sink->hantro_dec, &pic, 0) == 2 /* kH264DecPicRdy */) {
-        if (!sink->is_configured) {
+        if (!sink->is_configured || pic.picWidth != sink->width || pic.picHeight != sink->height) {
             configure_video_layer(sink, pic.picWidth, pic.picHeight);
+            sink->width = pic.picWidth;
+            sink->height = pic.picHeight;
         }
 
         if (sink->fb4_fd >= 0 && sink->is_visible) {

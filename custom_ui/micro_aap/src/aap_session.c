@@ -80,6 +80,15 @@ static int64_t plausible_epoch_millis(void) {
     return FALLBACK_BASELINE_EPOCH_MS + elapsed;
 }
 
+#define AAP_MAX_CHANNELS 16
+
+typedef struct {
+    uint8_t *buf;
+    size_t len;
+    size_t capacity;
+    uint8_t flags;
+} aap_channel_assembler_t;
+
 struct aap_session {
     int socket_fd;
     aap_session_state_t state;
@@ -90,6 +99,8 @@ struct aap_session {
     aap_audio_sink_t *audio_guidance;
     aap_audio_sink_t *audio_system;
     aap_video_sink_t *video_sink;
+
+    aap_channel_assembler_t assemblers[AAP_MAX_CHANNELS];
 
     uint8_t rx_buf[RX_BUFFER_SIZE];
     size_t rx_len;
@@ -139,11 +150,11 @@ static bool send_channel_msg(aap_session_t *s, uint8_t channel_id, uint16_t msg_
     }
     size_t total_len = proto_len + 2;
 
-    if (encrypt && aap_cryptor_is_active(s->cryptor)) {
-        uint8_t cipher[4096];
-        size_t cipher_len = aap_cryptor_encrypt(s->cryptor, raw_msg, total_len, cipher, sizeof(cipher));
-        if (cipher_len == 0) return false;
-        return send_raw_frame(s, channel_id, AAP_FRAME_BULK, false, true, cipher, cipher_len);
+    if (encrypt) {
+        uint8_t enc_buf[4096 + 64];
+        size_t enc_len = aap_cryptor_encrypt(s->cryptor, raw_msg, total_len, enc_buf, sizeof(enc_buf));
+        if (enc_len == 0) return false;
+        return send_raw_frame(s, channel_id, AAP_FRAME_BULK, false, true, enc_buf, enc_len);
     } else {
         return send_raw_frame(s, channel_id, AAP_FRAME_BULK, false, false, raw_msg, total_len);
     }
@@ -921,6 +932,12 @@ void aap_session_destroy(aap_session_t *s) {
         close(s->socket_fd);
         s->socket_fd = -1;
     }
+    for (int i = 0; i < AAP_MAX_CHANNELS; i++) {
+        if (s->assemblers[i].buf) {
+            free(s->assemblers[i].buf);
+            s->assemblers[i].buf = NULL;
+        }
+    }
     aap_cryptor_destroy(s->cryptor);
     aap_audio_sink_destroy(s->audio_media);
     aap_audio_sink_destroy(s->audio_guidance);
@@ -939,6 +956,26 @@ const char *aap_session_get_status_message(const aap_session_t *session) {
 
 int aap_session_get_socket_fd(const aap_session_t *session) {
     return session ? session->socket_fd : -1;
+}
+
+static void dispatch_aap_message(aap_session_t *s, uint8_t channel_id, uint8_t flags, const uint8_t *payload, size_t len) {
+    (void)flags;
+    if (channel_id == AAP_CHANNEL_CONTROL) {
+        if (len >= 2) {
+            uint16_t msg_id = (uint16_t)((payload[0] << 8) | payload[1]);
+            handle_control_message(s, msg_id, payload + 2, len - 2);
+        }
+    } else if (channel_id == AAP_CHANNEL_SENSOR) {
+        handle_sensor_channel(s, payload, len);
+    } else if (channel_id == AAP_CHANNEL_INPUT) {
+        handle_input_channel(s, payload, len);
+    } else if (channel_id == AAP_CHANNEL_MICROPHONE) {
+        handle_microphone_channel(s, payload, len);
+    } else if (channel_id == AAP_CHANNEL_BLUETOOTH) {
+        handle_bluetooth_channel(s, payload, len);
+    } else {
+        handle_media_channel(s, channel_id, payload, len);
+    }
 }
 
 bool aap_session_process_incoming(aap_session_t *s) {
@@ -969,7 +1006,7 @@ bool aap_session_process_incoming(aap_session_t *s) {
         const uint8_t *frame_payload = s->rx_buf + cursor + hdr_len;
         size_t payload_len = hdr.frame_size;
 
-        uint8_t plain_buf[4096];
+        uint8_t plain_buf[AAP_MAX_PAYLOAD_SIZE + 64];
         const uint8_t *active_payload = frame_payload;
         size_t active_len = payload_len;
 
@@ -980,24 +1017,62 @@ bool aap_session_process_incoming(aap_session_t *s) {
                 active_len = dec_len;
             } else {
                 fprintf(stderr, "aap_session: decrypt failed on channel %u (%s)\n", hdr.channel_id, channel_name(hdr.channel_id));
+                cursor += frame_total;
+                continue;
             }
         }
 
-        if (hdr.channel_id == AAP_CHANNEL_CONTROL) {
-            if (active_len >= 2) {
-                uint16_t msg_id = (uint16_t)((active_payload[0] << 8) | active_payload[1]);
-                handle_control_message(s, msg_id, active_payload + 2, active_len - 2);
+        uint8_t frame_type = hdr.flags & AAP_FLAG_FRAME_TYPE_MASK;
+        uint8_t ch = hdr.channel_id;
+
+        if (frame_type == AAP_FRAME_BULK) {
+            dispatch_aap_message(s, ch, hdr.flags, active_payload, active_len);
+        } else if (ch < AAP_MAX_CHANNELS) {
+            aap_channel_assembler_t *asm_buf = &s->assemblers[ch];
+
+            if (frame_type == AAP_FRAME_FIRST) {
+                asm_buf->len = 0;
+                asm_buf->flags = hdr.flags;
+                size_t needed = hdr.total_size > 0 ? (size_t)hdr.total_size : (active_len + 8192);
+                if (asm_buf->capacity < needed) {
+                    uint8_t *new_buf = (uint8_t *)realloc(asm_buf->buf, needed);
+                    if (new_buf) {
+                        asm_buf->buf = new_buf;
+                        asm_buf->capacity = needed;
+                    }
+                }
             }
-        } else if (hdr.channel_id == AAP_CHANNEL_SENSOR) {
-            handle_sensor_channel(s, active_payload, active_len);
-        } else if (hdr.channel_id == AAP_CHANNEL_INPUT) {
-            handle_input_channel(s, active_payload, active_len);
-        } else if (hdr.channel_id == AAP_CHANNEL_MICROPHONE) {
-            handle_microphone_channel(s, active_payload, active_len);
-        } else if (hdr.channel_id == AAP_CHANNEL_BLUETOOTH) {
-            handle_bluetooth_channel(s, active_payload, active_len);
-        } else {
-            handle_media_channel(s, hdr.channel_id, active_payload, active_len);
+
+            if (!asm_buf->buf) {
+                size_t init_cap = active_len + 8192;
+                asm_buf->buf = (uint8_t *)malloc(init_cap);
+                if (asm_buf->buf) {
+                    asm_buf->capacity = init_cap;
+                    asm_buf->len = 0;
+                }
+            }
+
+            if (asm_buf->buf) {
+                if (asm_buf->len + active_len > asm_buf->capacity) {
+                    size_t new_cap = asm_buf->len + active_len + 16384;
+                    uint8_t *new_buf = (uint8_t *)realloc(asm_buf->buf, new_cap);
+                    if (new_buf) {
+                        asm_buf->buf = new_buf;
+                        asm_buf->capacity = new_cap;
+                    }
+                }
+                if (asm_buf->len + active_len <= asm_buf->capacity) {
+                    memcpy(asm_buf->buf + asm_buf->len, active_payload, active_len);
+                    asm_buf->len += active_len;
+                }
+            }
+
+            if (frame_type == AAP_FRAME_LAST) {
+                if (asm_buf->buf && asm_buf->len > 0) {
+                    dispatch_aap_message(s, ch, asm_buf->flags, asm_buf->buf, asm_buf->len);
+                    asm_buf->len = 0;
+                }
+            }
         }
 
         cursor += frame_total;

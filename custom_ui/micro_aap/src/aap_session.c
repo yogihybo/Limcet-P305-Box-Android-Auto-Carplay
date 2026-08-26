@@ -443,7 +443,9 @@ static void handle_control_message(aap_session_t *s, uint16_t msg_id, const uint
                 ch->input_source_service.touchscreen_count = 1;
                 ch->input_source_service.touchscreen[0].width = 800;
                 ch->input_source_service.touchscreen[0].height = 480;
-                ch->input_source_service.keycodes_supported_count = 10;
+                ch->input_source_service.touchscreen[0].has_type = true;
+                ch->input_source_service.touchscreen[0].type = aap_protobuf_service_inputsource_message_TouchScreenType_CAPACITIVE;
+                ch->input_source_service.keycodes_supported_count = 8;
                 ch->input_source_service.keycodes_supported[0] = 19; /* KEYCODE_DPAD_UP */
                 ch->input_source_service.keycodes_supported[1] = 20; /* KEYCODE_DPAD_DOWN */
                 ch->input_source_service.keycodes_supported[2] = 21; /* KEYCODE_DPAD_LEFT */
@@ -452,8 +454,6 @@ static void handle_control_message(aap_session_t *s, uint16_t msg_id, const uint
                 ch->input_source_service.keycodes_supported[5] = 3;  /* KEYCODE_HOME */
                 ch->input_source_service.keycodes_supported[6] = 87; /* KEYCODE_MEDIA_NEXT */
                 ch->input_source_service.keycodes_supported[7] = 88; /* KEYCODE_MEDIA_PREVIOUS */
-                ch->input_source_service.keycodes_supported[8] = 5;  /* KEYCODE_CALL */
-                ch->input_source_service.keycodes_supported[9] = 6;  /* KEYCODE_ENDCALL */
             }
 
             /* Channel 9: Microphone */
@@ -482,7 +482,11 @@ static void handle_control_message(aap_session_t *s, uint16_t msg_id, const uint
             uint8_t pb_buf[4096];
             pb_ostream_t stream = pb_ostream_from_buffer(pb_buf, sizeof(pb_buf));
             bool enc_ok = pb_encode(&stream, aap_protobuf_service_control_message_ServiceDiscoveryResponse_fields, &resp);
-            printf("[AA] ServiceDiscoveryResponse encoded (%zu bytes, success=%d)\n", stream.bytes_written, enc_ok);
+            if (!enc_ok) {
+                fprintf(stderr, "[AA] ERROR: ServiceDiscoveryResponse encoding failed: %s\n", PB_GET_ERROR(&stream));
+            } else {
+                printf("[AA] ServiceDiscoveryResponse encoded (%zu bytes, success=1)\n", stream.bytes_written);
+            }
 
             send_channel_msg(s, AAP_CHANNEL_CONTROL,
                              aap_protobuf_service_control_message_ControlMessageType_MESSAGE_SERVICE_DISCOVERY_RESPONSE,

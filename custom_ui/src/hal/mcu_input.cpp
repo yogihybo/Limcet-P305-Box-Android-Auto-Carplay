@@ -241,21 +241,25 @@ void McuInputHal::run() {
 
         if (cmd == 0x01 && len >= 1) {
             // CMD 0x01: Headlights / Illumination status broadcast from MCU (len=6)
-            std::printf("%s [HAL:MCU] Headlights (CMD 0x01) len=%u payload=[",
-                        core::log_timestamp().c_str(), len);
-            for (unsigned char i = 0; i < len; ++i) {
-                std::printf("%02X%s", payload[i], (i + 1 < len) ? " " : "");
+            // payload[0]: 0x11 = Lights OFF, 0x13 = Lights ON (bit 1 is the illumination bit)
+            bool lights_on = (payload[0] & 0x02) != 0;
+            static bool first_light = true;
+            bool prev_light = night_mode_.exchange(lights_on, std::memory_order_acq_rel);
+            if (first_light || lights_on != prev_light) {
+                first_light = false;
+                std::printf("%s [HAL:MCU] Headlights: %s (CMD 0x01 payload[0]=0x%02X -> night_mode=%d)\n",
+                            core::log_timestamp().c_str(), lights_on ? "ON" : "OFF", payload[0], lights_on ? 1 : 0);
             }
-            // If any lighting bit is set, headlights are ON
-            bool lights_on = (len >= 4 && payload[3] != 0) || (payload[0] != 0);
-            std::printf("] -> night_mode=%d\n", lights_on ? 1 : 0);
-            night_mode_.store(lights_on, std::memory_order_release);
         } else if (cmd == 0x04) {
-            std::printf("%s [HAL:MCU] Reverse gear: ENGAGED (CMD 0x04)\n", core::log_timestamp().c_str());
-            reverse_gear_.store(true, std::memory_order_release);
+            bool prev = reverse_gear_.exchange(true, std::memory_order_acq_rel);
+            if (!prev) {
+                std::printf("%s [HAL:MCU] Reverse gear: ENGAGED (CMD 0x04)\n", core::log_timestamp().c_str());
+            }
         } else if (cmd == 0x12) {
-            std::printf("%s [HAL:MCU] Reverse gear: DISENGAGED (CMD 0x12)\n", core::log_timestamp().c_str());
-            reverse_gear_.store(false, std::memory_order_release);
+            bool prev = reverse_gear_.exchange(false, std::memory_order_acq_rel);
+            if (prev) {
+                std::printf("%s [HAL:MCU] Reverse gear: DISENGAGED (CMD 0x12)\n", core::log_timestamp().c_str());
+            }
         } else if (cmd == 0x20 && len >= 5) {
             unsigned char b3 = payload[0];
             unsigned char b4 = payload[1];

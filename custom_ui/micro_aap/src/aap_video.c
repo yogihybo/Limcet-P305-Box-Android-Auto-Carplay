@@ -143,16 +143,17 @@ bool aap_video_sink_open(aap_video_sink_t *sink) {
         return false;
     }
 
-    /* 2026-08-17: stock calls H264DecInit(&inst, 0, 0, 1) to enable raster output and bitstream flags */
-    int ret = sink->h264_init(&sink->hantro_dec, 0, 0, 1);
+    /* Match original tested H264DecInit arguments (all zeros) to avoid dark overlay */
+    int ret = sink->h264_init(&sink->hantro_dec, 0, 0, 0);
     if (ret != 0) {
         fprintf(stderr, "aap_video: H264DecInit failed with %d\n", ret);
         return false;
     }
 
-    sink->memalloc_fd = open("/tmp/dev/memalloc", O_RDWR);
+    /* Open memalloc with O_SYNC for cache coherency */
+    sink->memalloc_fd = open("/tmp/dev/memalloc", O_RDWR | O_SYNC);
     if (sink->memalloc_fd < 0) {
-        sink->memalloc_fd = open("/dev/memalloc", O_RDWR);
+        sink->memalloc_fd = open("/dev/memalloc", O_RDWR | O_SYNC);
     }
     if (sink->memalloc_fd < 0) {
         fprintf(stderr, "aap_video: open memalloc failed\n");
@@ -229,6 +230,8 @@ static void configure_video_layer(aap_video_sink_t *sink, uint32_t width, uint32
     win.width = (width + 15) & ~15;
     win.height = (height + 15) & ~15;
     win.format = 0x11; /* YUV420 semi-planar */
+    win.rgb_order = 0;
+    win.yuyv_order = 0;
     win.out_x = 0;
     win.out_y = 0;
     win.out_width = width;
@@ -282,12 +285,10 @@ bool aap_video_sink_decode(aap_video_sink_t *sink, const uint8_t *nalu_data, siz
             sink->height = pic.picHeight;
         }
 
-        if (sink->fb4_fd >= 0 && sink->is_visible) {
+        if (sink->fb4_fd >= 0 && sink->is_visible && pic.outputFormat == 0) {
             struct ark_disp_addr addr;
-            uint32_t aligned_w = (pic.picWidth + 15) & ~15;
-            uint32_t aligned_h = (pic.picHeight + 15) & ~15;
             addr.y = pic.outputPictureBusAddress;
-            addr.cb_cr = pic.outputPictureBusAddress + (aligned_w * aligned_h);
+            addr.cb_cr = pic.outputPictureBusAddress + (pic.picWidth * pic.picHeight);
             addr.reserved0 = 0;
             addr.reserved1 = 0;
             ioctl(sink->fb4_fd, ARK_IO_SET_FB_ADDR, &addr);

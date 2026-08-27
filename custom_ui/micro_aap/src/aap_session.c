@@ -5,6 +5,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <time.h>
+#include <pthread.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
 
@@ -120,6 +121,7 @@ struct aap_session {
     time_t last_rx_time;
 
     bool is_video_focus_native;
+    pthread_mutex_t tx_mutex;
 };
 
 static void set_state(aap_session_t *s, aap_session_state_t state, const char *msg) {
@@ -128,9 +130,9 @@ static void set_state(aap_session_t *s, aap_session_state_t state, const char *m
     printf("[AA] [%d] %s\n", state, s->status_message);
 }
 
-static bool send_raw_frame(aap_session_t *s, uint8_t channel_id, aap_frame_type_t frame_type,
-                           bool is_control, bool is_encrypted,
-                           const uint8_t *payload, size_t payload_len) {
+static bool send_raw_frame_locked(aap_session_t *s, uint8_t channel_id, aap_frame_type_t frame_type,
+                                  bool is_control, bool is_encrypted,
+                                  const uint8_t *payload, size_t payload_len) {
     if (s->socket_fd < 0) return false;
 
     uint8_t header[AAP_HEADER_EXTENDED_SIZE];
@@ -160,14 +162,19 @@ static bool send_channel_msg(aap_session_t *s, uint8_t channel_id, uint16_t msg_
     }
     size_t total_len = proto_len + 2;
 
+    pthread_mutex_lock(&s->tx_mutex);
+    bool ok = false;
     if (encrypt) {
         uint8_t enc_buf[4096 + 64];
         size_t enc_len = aap_cryptor_encrypt(s->cryptor, raw_msg, total_len, enc_buf, sizeof(enc_buf));
-        if (enc_len == 0) return false;
-        return send_raw_frame(s, channel_id, AAP_FRAME_BULK, false, true, enc_buf, enc_len);
+        if (enc_len > 0) {
+            ok = send_raw_frame_locked(s, channel_id, AAP_FRAME_BULK, false, true, enc_buf, enc_len);
+        }
     } else {
-        return send_raw_frame(s, channel_id, AAP_FRAME_BULK, false, false, raw_msg, total_len);
+        ok = send_raw_frame_locked(s, channel_id, AAP_FRAME_BULK, false, false, raw_msg, total_len);
     }
+    pthread_mutex_unlock(&s->tx_mutex);
+    return ok;
 }
 
 static bool send_channel_control_msg(aap_session_t *s, uint8_t channel_id, uint16_t msg_id,
@@ -181,15 +188,21 @@ static bool send_channel_control_msg(aap_session_t *s, uint8_t channel_id, uint1
     }
     size_t total_len = proto_len + 2;
 
+    pthread_mutex_lock(&s->tx_mutex);
+    bool ok = false;
     if (encrypt && aap_cryptor_is_active(s->cryptor)) {
         uint8_t cipher[4096];
         size_t cipher_len = aap_cryptor_encrypt(s->cryptor, raw_msg, total_len, cipher, sizeof(cipher));
-        if (cipher_len == 0) return false;
-        return send_raw_frame(s, channel_id, AAP_FRAME_BULK, true, true, cipher, cipher_len);
+        if (cipher_len > 0) {
+            ok = send_raw_frame_locked(s, channel_id, AAP_FRAME_BULK, true, true, cipher, cipher_len);
+        }
     } else {
-        return send_raw_frame(s, channel_id, AAP_FRAME_BULK, true, false, raw_msg, total_len);
+        ok = send_raw_frame_locked(s, channel_id, AAP_FRAME_BULK, true, false, raw_msg, total_len);
     }
+    pthread_mutex_unlock(&s->tx_mutex);
+    return ok;
 }
+
 
 static bool send_media_ack(aap_session_t *s, uint8_t channel_id, int32_t session_id, uint32_t ack_tokens) {
     aap_protobuf_service_media_source_message_Ack ack = aap_protobuf_service_media_source_message_Ack_init_default;
@@ -723,10 +736,12 @@ static void on_mic_pcm_captured(aap_session_t *s, uint64_t timestamp_us, const u
     size_t total_len = len + 10;
 
     uint8_t enc_buf[512 + 64];
+    pthread_mutex_lock(&s->tx_mutex);
     size_t enc_len = aap_cryptor_encrypt(s->cryptor, raw_msg, total_len, enc_buf, sizeof(enc_buf));
     if (enc_len > 0) {
-        send_raw_frame(s, AAP_CHANNEL_MICROPHONE, AAP_FRAME_BULK, false, true, enc_buf, enc_len);
+        send_raw_frame_locked(s, AAP_CHANNEL_MICROPHONE, AAP_FRAME_BULK, false, true, enc_buf, enc_len);
     }
+    pthread_mutex_unlock(&s->tx_mutex);
 }
 
 static void handle_microphone_channel(aap_session_t *s, const uint8_t *payload, size_t payload_len) {
@@ -787,10 +802,19 @@ static void handle_microphone_channel(aap_session_t *s, const uint8_t *payload, 
         } else {
             aap_microphone_stop(s->mic);
         }
+    } else if (sub_cmd == 32772 /* MEDIA_MESSAGE_ACK */) {
+        /* Media ACK from phone acknowledging mic PCM frames */
+        aap_protobuf_service_media_source_message_Ack ack =
+            aap_protobuf_service_media_source_message_Ack_init_default;
+        if (pb_len > 0) {
+            pb_istream_t istream = pb_istream_from_buffer(pb_data, pb_len);
+            pb_decode(&istream, aap_protobuf_service_media_source_message_Ack_fields, &ack);
+        }
     } else {
         printf("[AA:MIC] unhandled microphone sub_cmd=0x%04X (%u) len=%zu\n", sub_cmd, sub_cmd, payload_len);
     }
 }
+
 
 static void handle_bluetooth_channel(aap_session_t *s, const uint8_t *payload, size_t payload_len) {
     if (payload_len < 2) return;
@@ -986,6 +1010,7 @@ aap_session_t *aap_session_create(int tcp_fd) {
     aap_session_t *s = (aap_session_t *)calloc(1, sizeof(aap_session_t));
     if (!s) return NULL;
 
+    pthread_mutex_init(&s->tx_mutex, NULL);
     s->socket_fd = tcp_fd;
     s->cryptor = aap_cryptor_create();
     s->audio_media = aap_audio_sink_create("plug:softvol2", 48000, 2);
@@ -1022,6 +1047,7 @@ void aap_session_destroy(aap_session_t *s) {
         aap_microphone_destroy(s->mic);
         s->mic = NULL;
     }
+    pthread_mutex_destroy(&s->tx_mutex);
     free(s);
 }
 

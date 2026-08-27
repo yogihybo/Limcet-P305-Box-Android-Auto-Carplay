@@ -34,7 +34,7 @@ static uint64_t get_now_micros(void) {
 static bool alsa_mic_open(aap_microphone_t *mic) {
     if (mic->pcm_handle) return true;
 
-    const char *devs[] = {mic->device_name, "default", "dsnoop", "hw:0,1"};
+    const char *devs[] = {"plughw:0,1", "hw:0,1", mic->device_name, "default", "dsnoop"};
     int num_devs = sizeof(devs) / sizeof(devs[0]);
 
     for (int i = 0; i < num_devs; i++) {
@@ -99,6 +99,7 @@ static void *mic_capture_thread(void *arg) {
 
     printf("[AA] capture worker started\n");
 
+    int chunk_cnt = 0;
     while (!mic->stop_flag && mic->capturing) {
         if (!mic->pcm_handle) {
             usleep(10000);
@@ -118,6 +119,18 @@ static void *mic_capture_thread(void *arg) {
         if (frames > 0 && mic->callback && mic->session) {
             uint64_t ts = get_now_micros();
             size_t bytes = (size_t)frames * 2 * MIC_CHANNELS;
+
+            int16_t *samples = (int16_t *)buffer;
+            int16_t max_sample = 0;
+            for (size_t s_idx = 0; s_idx < (size_t)frames; ++s_idx) {
+                int16_t val = abs(samples[s_idx]);
+                if (val > max_sample) max_sample = val;
+            }
+
+            if (++chunk_cnt % 100 == 0) { // Log amplitude once per second
+                printf("[AA:MIC] capture active: 100 chunks sent, peak_amplitude=%d/32767\n", max_sample);
+            }
+
             mic->callback(mic->session, ts, buffer, bytes);
         }
     }
@@ -126,6 +139,7 @@ static void *mic_capture_thread(void *arg) {
     printf("[AA] capture worker stopped\n");
     return NULL;
 }
+
 
 aap_microphone_t *aap_microphone_create(const char *device_name) {
     aap_microphone_t *mic = (aap_microphone_t *)calloc(1, sizeof(aap_microphone_t));

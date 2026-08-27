@@ -8,6 +8,7 @@
 #include "hal/audio.h"
 #include "hal/display_ctrl.h"
 #include "hal/mcu_input.h"
+#include "hal/timezone.h"
 #include "core/log_timing.h"
 #include <functional>
 
@@ -340,7 +341,116 @@ lv_obj_t * create_settings_screen() {
     create_stepper_row(card, &ui::icons::icon_volume, "Reversing Volume Cut (%)", 0, 100, 5,
                        "ReversingVolumeCut", "General");
 
-    // --- Section 4: System ---
+    // --- Section 4: Date & Time ---
+    create_section_header(card, "DATE & TIME");
+    {
+        lv_obj_t * row = lv_obj_create(card);
+        lv_obj_remove_style_all(row);
+        lv_obj_set_width(row, LV_PCT(100));
+        lv_obj_set_height(row, 64);
+        lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+        lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        lv_obj_set_style_pad_hor(row, 16, 0);
+
+        lv_obj_t * left_box = lv_obj_create(row);
+        lv_obj_remove_style_all(left_box);
+        lv_obj_set_size(left_box, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+        lv_obj_set_flex_flow(left_box, LV_FLEX_FLOW_ROW);
+        lv_obj_set_flex_align(left_box, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        lv_obj_set_style_pad_column(left_box, 14, 0);
+
+        lv_obj_t * icon = ui::icons::create_icon(left_box, &ui::icons::icon_nav_settings, theme::text_secondary());
+        (void)icon;
+
+        lv_obj_t * label = lv_label_create(left_box);
+        lv_label_set_text(label, "Timezone");
+        lv_obj_set_style_text_font(label, &lv_font_roboto_20, 0);
+        lv_obj_set_style_text_color(label, theme::text_primary(), 0);
+
+        // Right Controls: [ < ] [ Timezone Label ] [ > ]
+        lv_obj_t * right_box = lv_obj_create(row);
+        lv_obj_remove_style_all(right_box);
+        lv_obj_set_size(right_box, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+        lv_obj_set_flex_flow(right_box, LV_FLEX_FLOW_ROW);
+        lv_obj_set_flex_align(right_box, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        lv_obj_set_style_pad_column(right_box, 8, 0);
+
+        const auto & tzs = hal::get_timezones();
+        int current_idx = hal::get_current_timezone_index();
+
+        struct TimezoneCtx {
+            int index;
+            lv_obj_t * lbl;
+        };
+        auto * ctx = new TimezoneCtx{current_idx, nullptr};
+        lv_obj_add_event_cb(row, [](lv_event_t * e) {
+            delete static_cast<TimezoneCtx *>(lv_event_get_user_data(e));
+        }, LV_EVENT_DELETE, ctx);
+
+        // Prev Button (<)
+        lv_obj_t * prev_btn = lv_button_create(right_box);
+        lv_obj_remove_style_all(prev_btn);
+        lv_obj_set_size(prev_btn, 36, 36);
+        lv_obj_set_style_radius(prev_btn, LV_RADIUS_CIRCLE, 0);
+        lv_obj_set_style_bg_color(prev_btn, theme::surface_container_high(), 0);
+        lv_obj_set_style_bg_opa(prev_btn, LV_OPA_COVER, 0);
+        theme::style_focusable(prev_btn);
+
+        lv_obj_t * prev_lbl = lv_label_create(prev_btn);
+        lv_label_set_text(prev_lbl, "<");
+        lv_obj_set_style_text_font(prev_lbl, &lv_font_roboto_14, 0);
+        lv_obj_set_style_text_color(prev_lbl, theme::text_primary(), 0);
+        lv_obj_center(prev_lbl);
+
+        // Timezone Label
+        lv_obj_t * tz_lbl = lv_label_create(right_box);
+        lv_obj_set_width(tz_lbl, 270);
+        lv_label_set_text(tz_lbl, tzs[current_idx].label);
+        lv_obj_set_style_text_font(tz_lbl, &lv_font_roboto_14, 0);
+        lv_obj_set_style_text_color(tz_lbl, theme::text_primary(), 0);
+        lv_obj_set_style_text_align(tz_lbl, LV_TEXT_ALIGN_CENTER, 0);
+        ctx->lbl = tz_lbl;
+
+        // Next Button (>)
+        lv_obj_t * next_btn = lv_button_create(right_box);
+        lv_obj_remove_style_all(next_btn);
+        lv_obj_set_size(next_btn, 36, 36);
+        lv_obj_set_style_radius(next_btn, LV_RADIUS_CIRCLE, 0);
+        lv_obj_set_style_bg_color(next_btn, theme::surface_container_high(), 0);
+        lv_obj_set_style_bg_opa(next_btn, LV_OPA_COVER, 0);
+        theme::style_focusable(next_btn);
+
+        lv_obj_t * next_lbl = lv_label_create(next_btn);
+        lv_label_set_text(next_lbl, ">");
+        lv_obj_set_style_text_font(next_lbl, &lv_font_roboto_14, 0);
+        lv_obj_set_style_text_color(next_lbl, theme::text_primary(), 0);
+        lv_obj_center(next_lbl);
+
+        lv_obj_add_event_cb(prev_btn, [](lv_event_t * e) {
+            auto * ctx = static_cast<TimezoneCtx *>(lv_event_get_user_data(e));
+            const auto & timezones = hal::get_timezones();
+            int count = static_cast<int>(timezones.size());
+            ctx->index = (ctx->index - 1 + count) % count;
+            hal::apply_timezone(ctx->index);
+            lv_label_set_text(ctx->lbl, timezones[ctx->index].label);
+        }, LV_EVENT_CLICKED, ctx);
+
+        lv_obj_add_event_cb(next_btn, [](lv_event_t * e) {
+            auto * ctx = static_cast<TimezoneCtx *>(lv_event_get_user_data(e));
+            const auto & timezones = hal::get_timezones();
+            int count = static_cast<int>(timezones.size());
+            ctx->index = (ctx->index + 1) % count;
+            hal::apply_timezone(ctx->index);
+            lv_label_set_text(ctx->lbl, timezones[ctx->index].label);
+        }, LV_EVENT_CLICKED, ctx);
+
+        if (core::navigation::focus_group()) {
+            lv_group_add_obj(core::navigation::focus_group(), prev_btn);
+            lv_group_add_obj(core::navigation::focus_group(), next_btn);
+        }
+    }
+
+    // --- Section 5: System ---
     create_section_header(card, "SYSTEM");
     create_toggle_row(card, &ui::icons::icon_smartphone, "Auto-Start CarLink",
                       "AutoStartCarLink", "General", true);

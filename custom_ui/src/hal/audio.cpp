@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include "core/log_timing.h"
 #include "core/config_store.h"
+#include "hal/androidauto_client.h"
 
 namespace hal {
 
@@ -66,6 +67,21 @@ void apply_reversing_volume_cut(bool in_reverse) {
         set_stream_volume(AudioStream::Media, mediaVol);
         set_stream_volume(AudioStream::System, sysVol);
     }
+}
+
+void set_audio_eq(int bass_db, int mid_db, int treble_db, bool loudness) {
+    std::printf("%s [HAL:AUDIO] Applying 3-Band Parametric EQ: Bass=%d dB, Mid=%d dB, Treble=%d dB, Loudness=%d\n",
+                core::log_timestamp().c_str(), bass_db, mid_db, treble_db, loudness ? 1 : 0);
+    AndroidAutoClient client;
+    client.sendEq(bass_db, mid_db, treble_db, loudness);
+}
+
+void sync_audio_eq() {
+    int bass = core::default_store().get_int("Bass", 0, "Audio");
+    int mid = core::default_store().get_int("Mid", 0, "Audio");
+    int treble = core::default_store().get_int("Treble", 0, "Audio");
+    bool loudness = core::default_store().get_bool("Loudness", false, "Audio");
+    set_audio_eq(bass, mid, treble, loudness);
 }
 
 }  // namespace hal

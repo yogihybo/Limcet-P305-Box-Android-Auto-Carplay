@@ -315,6 +315,20 @@ lv_obj_t * create_settings_screen() {
                        "SystemVolume", "Audio",
                        [](int v) { hal::set_stream_volume(hal::AudioStream::System, v); });
 
+    // 3-Band Parametric Equalizer & Dynamic Loudness
+    create_stepper_row(card, &ui::icons::icon_volume, "Equalizer: Bass (dB)", -6, 6, 1,
+                       "Bass", "Audio",
+                       [](int) { hal::sync_audio_eq(); });
+    create_stepper_row(card, &ui::icons::icon_volume, "Equalizer: Middle (dB)", -6, 6, 1,
+                       "Mid", "Audio",
+                       [](int) { hal::sync_audio_eq(); });
+    create_stepper_row(card, &ui::icons::icon_volume, "Equalizer: Treble (dB)", -6, 6, 1,
+                       "Treble", "Audio",
+                       [](int) { hal::sync_audio_eq(); });
+    create_toggle_row(card, &ui::icons::icon_volume, "Dynamic Loudness",
+                      "Loudness", "Audio", false,
+                      [](bool) { hal::sync_audio_eq(); });
+
     // --- Section 3: Vehicle & Camera ---
     create_section_header(card, "VEHICLE & CAMERA");
     create_toggle_row(card, &ui::icons::icon_nav_camera, "OEM Factory Camera",

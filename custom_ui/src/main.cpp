@@ -528,6 +528,9 @@ int main() {
         hal::send_mcu_setting(0x06, factoryCam ? 1 : 0);
     }
 
+    // Sync saved 3-band EQ and dynamic loudness settings
+    hal::sync_audio_eq();
+
     core::ScreenManager screens;
     core::navigation::init(screens);
 

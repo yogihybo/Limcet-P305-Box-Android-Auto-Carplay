@@ -187,6 +187,9 @@ public:
     // catch-up case.
     bool sendNightMode(bool nightMode);
 
+    // Sends "EQ <bass_db> <mid_db> <treble_db> <loudness:0|1>"
+    bool sendEq(int bass_db, int mid_db, int treble_db, bool loudness);
+
 private:
     bool ensureConnected(bool allow_spawn = true);
     void disconnect();

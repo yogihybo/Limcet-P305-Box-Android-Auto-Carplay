@@ -243,13 +243,15 @@ void send_startup_sequence(int fd, int verbose) {
 
     if (verbose)
         printf("[*] Sending startup sequence: hello (0x81), mode-4 app-state (0x82), "
-               "bit26/27 state-change (0x84)\n");
+               "bit26/27 state-change (0x84), query version (0x85)\n");
 
     send_mcu_frame(fd, 0x81, &hello_payload, 1, verbose);
     usleep(50000);
     send_mcu_frame(fd, 0x82, mode4_payload, 9, verbose);
     usleep(50000);
     send_mcu_frame(fd, 0x84, state_payload, 2, verbose);
+    usleep(50000);
+    send_mcu_frame(fd, 0x85, NULL, 0, verbose);
 }
 
 /* Reads and validates one frame from fd, blocking. Returns 1 with cmd/
@@ -320,12 +322,31 @@ int read_mcu_frame(int fd, unsigned char *out_cmd, unsigned char *out_payload,
 
 void log_frame(unsigned char cmd, const unsigned char *payload, unsigned char len) {
     if (cmd == 0x02 && len >= 2) {
-        printf("[+] CMD 0x02 (handshake request) from MCU: b3=%u b4=%u -- "
-               "no wire reply sent (real MsnCoreApp doesn't send one either)\n",
+        printf("[+] CMD 0x02 (Key Release / Knob) from MCU: b3=%u b4=%u\n",
                payload[0], payload[1]);
     } else if (cmd == 0x20 && len >= 5) {
-        printf("[+] CMD 0x20 (status query) from MCU: b3=%u b4=%u b5=%u b6=%u b7=%u -- "
-               "no wire reply sent\n", payload[0], payload[1], payload[2], payload[3], payload[4]);
+        int x = (payload[1] << 8) | payload[0];
+        int y = (payload[3] << 8) | payload[2];
+        printf("[+] CMD 0x20 (Touch Digitizer) from MCU: X=%d Y=%d state=%u\n",
+               x, y, payload[4]);
+    } else if (cmd == 0x7F && len > 0) {
+        printf("[+] CMD 0x7F (MCU Firmware Version): \"%.*s\"\n", (int)len, (const char *)payload);
+    } else if (cmd == 0x30 && len >= 1) {
+        unsigned char v_int = payload[0];
+        unsigned char v_frac = (len >= 2) ? payload[1] : 0;
+        printf("[+] CMD 0x30 (Battery Voltage Telemetry): %u.%02u V\n", v_int, v_frac);
+    } else if (cmd == 0x05) {
+        printf("[+] CMD 0x05 (HVAC Climate Telemetry): len=%u data=[", len);
+        for (int i = 0; i < len; i++) printf("%02X%s", payload[i], (i + 1 < len) ? " " : "");
+        printf("]\n");
+    } else if (cmd == 0x04) {
+        printf("[+] CMD 0x04 (Steering Wheel Angle): len=%u data=[", len);
+        for (int i = 0; i < len; i++) printf("%02X%s", payload[i], (i + 1 < len) ? " " : "");
+        printf("]\n");
+    } else if (cmd == 0x60) {
+        printf("[+] CMD 0x60 (8-Channel PDC Sensors): len=%u data=[", len);
+        for (int i = 0; i < len; i++) printf("%02X%s", payload[i], (i + 1 < len) ? " " : "");
+        printf("]\n");
     } else {
         printf("[+] CMD 0x%02X from MCU, len=%u\n", cmd, len);
     }

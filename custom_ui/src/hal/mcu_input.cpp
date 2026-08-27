@@ -112,6 +112,8 @@ void send_startup_sequence(int fd) {
     send_mcu_frame(fd, 0x82, mode4_payload, 9);
     usleep(50000);
     send_mcu_frame(fd, 0x84, state_payload, 2);
+    usleep(50000);
+    send_mcu_frame(fd, 0x85, nullptr, 0);
 }
 
 // Robust stream parser with byte-level synchronization and zero packet loss on line noise.
@@ -341,6 +343,19 @@ void McuInputHal::run() {
                 std::printf("%s [HAL:MCU] Unhandled cmd=0x02 b3=0x%02X (%u) b4=0x%02X (%u)\n",
                             core::log_timestamp().c_str(), b3, b3, b4, b4);
             }
+        } else if (cmd == 0x7F && len > 0) {
+            std::string ver(reinterpret_cast<const char*>(payload), len);
+            {
+                std::lock_guard<std::mutex> lock(version_mutex_);
+                mcu_version_ = ver;
+            }
+            std::printf("%s [HAL:MCU] MCU Firmware Version: \"%s\" (CMD 0x7F len=%u)\n",
+                        core::log_timestamp().c_str(), ver.c_str(), len);
+        } else if (cmd == 0x30 && len >= 1) {
+            float v = static_cast<float>(payload[0]) + (len >= 2 ? static_cast<float>(payload[1]) / 100.0f : 0.0f);
+            battery_voltage_.store(v, std::memory_order_relaxed);
+            std::printf("%s [HAL:MCU] Vehicle Battery Voltage: %.2fV (CMD 0x30)\n",
+                        core::log_timestamp().c_str(), v);
         } else {
             std::printf("%s [HAL:MCU] Frame cmd=0x%02X len=%u payload=[",
                         core::log_timestamp().c_str(), cmd, len);
@@ -385,6 +400,15 @@ bool McuInputHal::get_night_mode() const {
 
 bool McuInputHal::get_reverse_gear() const {
     return reverse_gear_.load(std::memory_order_acquire);
+}
+
+std::string McuInputHal::get_mcu_version() const {
+    std::lock_guard<std::mutex> lock(version_mutex_);
+    return mcu_version_;
+}
+
+float McuInputHal::get_battery_voltage() const {
+    return battery_voltage_.load(std::memory_order_relaxed);
 }
 
 void McuInputHal::sync_setting(uint8_t setting_id, uint8_t value) {

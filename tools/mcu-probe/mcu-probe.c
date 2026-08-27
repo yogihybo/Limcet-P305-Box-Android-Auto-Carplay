@@ -275,6 +275,17 @@ void run_sweep_cmds(int fd, int start, int end, int pause_ms) {
            "stop immediately if anything unexpected happens.\n\n",
            start, end, pause_ms);
     for (int c = start; c <= end; c++) {
+        /* CMD 0xE1 = confirmed real "reboot to bootloader" (writes magic
+         * 0x5555AAAA to SRAM 0x20004004, resets into firmware-update mode
+         * -- see docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md). A blind range
+         * sweep must never include it -- send it deliberately via
+         * --send 0xe1 if that's genuinely what's being tested, with a
+         * real recovery plan (USB YMODEM re-flash) in hand first. */
+        if (c == 0xE1) {
+            printf("[*] Skipping 0xE1 (confirmed real reboot-to-bootloader command -- "
+                   "use --send 0xe1 deliberately if you really mean to test this)\n\n");
+            continue;
+        }
         cmd_send_raw(fd, c, NULL, 0);
         usleep(pause_ms * 1000);
         printf("\n");

@@ -313,8 +313,8 @@ void McuInputHal::run() {
                         client.sendKey(3 /* KEYCODE_HOME */);
                         s_drawer_open = true;
                     } else {
-                        std::printf("%s [HAL:MCU] Button: HOME -> Dismiss App Launcher (KEYCODE_BACK=4)\n", core::log_timestamp().c_str());
-                        client.sendKey(4 /* KEYCODE_BACK */);
+                        std::printf("%s [HAL:MCU] Button: HOME -> Return to Navigation/Map (KEYCODE_NAVIGATION=65538)\n", core::log_timestamp().c_str());
+                        client.sendKey(65538 /* KEYCODE_NAVIGATION */);
                         s_drawer_open = false;
                     }
                 }

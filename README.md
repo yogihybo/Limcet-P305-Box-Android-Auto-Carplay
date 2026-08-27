@@ -100,6 +100,28 @@ Hardware on the device has been identified by opening the device and reviewing t
 - Steering wheel controls are not believed to be read via an ADC voltage divider on a dedicated SWC wire, despite the `EnableSWCSwitchHardware` option in the ARK1668 config. The STM32F105 MCU instead decodes Toyota-specific messages directly off the vehicle's **CAN bus** (through the TJA1042 transceiver) and forwards translated key events to the ARK1668 over UART.
 - The reversing camera connects as a standard CVBS composite feed, decoded by the RN6752 into digital video for the SoC. It's believed that this route is used for early camera loading (with 2s of boot) while the rest of the system is still initialising.
 
+#### STM32F105 Companion MCU GPIO Pinout & Hardware Controls
+
+Disassembled and verified from `hardware/MCU/can_app.bin`:
+
+| STM32 Pin | Function / Target | Control Function | Hardware Behavior |
+|---|---|:---:|---|
+| **`GPIOC Pin 13`** | **OEM Camera Bypass Relay** | `0x080058F8` | High = Mechanical relay asserted, connecting factory Toyota camera/screen bypass; Low = Aftermarket mode. |
+| **`GPIOC Pin 2`** | **CVBS Video Multiplexer** | `0x0800591C` | Selects composite video input path to RN6752 ITU-656 decoder. |
+| **`GPIOB Pin 0`** | **CBT16211A Touch Switch** | `0x08005A3C` | High = Closes touch bus switch connecting resistive digitizer lines to MCU ADC. |
+| **`GPIOA Pin 1`** | **Power Amp Mute (`PA_MUTE`)** | `0x0800599C` | High = Hardware mute asserted to external audio amplifier IC. |
+| **`GPIOB Pin 6`** | **Audio AUX / Relay Switch** | `0x08005AA0` | Multiplexes analog audio input lines between SoC DAC and factory AUX input (`AT+AUDROUTE`). |
+| **`GPIOA Pin 9`** | **USB 5V Power Rail** | `0x080059B0` | Toggles 5V VBUS power rail to external USB connector. |
+| **`GPIOA Pin 8`** | **LCD Backlight PWM / Enable**| `0x080059C0` | Enables backlight boost converter / PWM modulation. |
+| **`GPIOA Pin 7`** | **AM/FM Radio Tuner Power** | `0x080059D8` | Power gate for onboard radio tuner IC. |
+| **`GPIOA Pin 2`** | **Bluetooth Module Power** | `0x080059E8` | Power supply rail to Feasycom FSC-BT8251 BT module. |
+| **`GPIOB Pin 5`** | **LCD Panel Reset Line** | `0x080059F8` | Hardware reset strobe to Fujitsu 96-pin LCD panel. |
+| **`GPIOA Pin 14`**| **SoC Hardware Reset Strobe** | `0x08005A18` | Hardware reset trigger to ARK1668 main processor. |
+| **`GPIOA Pin 15`**| **Piezo Reverse Warning Buzzer** | `0x08005A7C` | Generates audible parking sensor / reverse alert beeps. |
+| **`GPIOB Pin 4`** | **Status Indicator LED** | `0x08005A5C` | Flashes system status / heartbeat indicator. |
+
+---
+
 #### Hardware Block Architecture
 
 ```mermaid

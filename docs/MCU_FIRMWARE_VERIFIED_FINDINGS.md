@@ -182,6 +182,58 @@ plausible (not proven) that these MCU-controlled lines relate to it
 directly rather than to a separate downstream amp stage -- but this
 remains unconfirmed without a schematic or a working continuity test.
 
+## Cross-check against `docs/1.3.1_MCU_FIRMWARE_DECOMPILATION.md`: tabular data is genuinely reliable
+
+That doc (a separate, more comprehensive Capstone-based pass over the
+same `can_app.bin`) makes many more claims than the GPIO-pin table
+already checked above -- a full interrupt vector table, three CAN
+mode-dispatch tables, and a 9-entry inbound UART command table. Spot-
+checking a table's correctness earlier in this doc doesn't imply the
+rest is right, so each was independently re-verified byte-for-byte
+against the real file rather than assumed:
+
+- **Interrupt vector table** (§2, 13 entries: SP/Reset/NMI/HardFault/
+  SVCall/SysTick/CAN1_RX0/USART1-3/UART4-5/CAN2_RX0): **13/13 exact
+  matches**.
+- **CAN mode-dispatch tables** (§4, three tables at `0x0800BB80`/
+  `0x0800BB30`/`0x0800BAE8`, {can_id, handler} pairs, 9+10+9 entries):
+  **28/28 exact matches**.
+- **Inbound UART command table** (§5, `0x0800B9E4`, {cmd, handler}
+  pairs): **9/9 exact matches** -- `0x81`, `0x82`, `0xA0`, `0xFF`,
+  `0xE1`, `0x85`, `0x84`, `0x87`, `0x88`, all at the claimed handler
+  addresses.
+
+**Real conclusion: this document's tabular/structural extraction is
+genuinely trustworthy** -- a different reliability class from the
+GPIO-pin table already corrected above. The likely reason: fixed-
+stride jump/dispatch tables are mechanical to extract correctly from a
+disassembly pass, while per-pin GPIO tracing requires real data-flow
+analysis (tracing a literal through register moves across function
+calls), which is exactly where the earlier table went wrong. Table
+*addresses* checking out doesn't guarantee every *semantic label* in
+the same doc is correct (e.g. its own GPIO pinout table at the bottom
+is the same one already corrected above) -- but the command/CAN-ID
+tables themselves are real.
+
+**New, real information this unlocks**: 5 previously-uncatalogued
+inbound command bytes, all now confirmed real (not just described):
+`0x85` (app-protocol response/ACK), `0x87` (Bluetooth AT command
+relay), `0x88` (TEA cryptographic handshake for vendor auth -- 32
+rounds against a fixed key, not a clock setter despite an early guess
+elsewhere), `0xE1` (**reboot to bootloader** -- writes magic
+`0x5555AAAA` to SRAM `0x20004004`, resets into YMODEM firmware-update
+mode), `0xFF` (system state reset). Also 28 real vehicle CAN IDs
+across 3 selectable dispatch modes (speed, HVAC, SWC, reverse gear,
+door status, parking radar, etc.) -- real integration data, not yet
+cross-checked against a live vehicle capture.
+
+**Safety-relevant**: `tools/mcu-probe --sweep-cmds` now explicitly
+skips `0xE1` by default (confirmed real reboot-to-bootloader, not
+something a blind range sweep should ever hit) -- send it only
+deliberately via `--send 0xe1`, with a real recovery plan (USB YMODEM
+re-flash, `tools/mcu_builder/`) in hand first, not as part of general
+probing.
+
 ## Corrections to prior docs, stated plainly
 
 - `docs/HANDOFF_MCU_AUDIO_I2C.md` / `docs/1.3.1_MCU_FIRMWARE_DECOMPILATION.md`'s

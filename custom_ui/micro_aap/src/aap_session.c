@@ -452,8 +452,8 @@ static void handle_control_message(aap_session_t *s, uint16_t msg_id, const uint
                 ch->input_source_service.keycodes_supported[3] = 22; /* KEYCODE_DPAD_RIGHT */
                 ch->input_source_service.keycodes_supported[4] = 23; /* KEYCODE_DPAD_CENTER */
                 ch->input_source_service.keycodes_supported[5] = 3;  /* KEYCODE_HOME */
-                ch->input_source_service.keycodes_supported[6] = 87; /* KEYCODE_MEDIA_NEXT */
-                ch->input_source_service.keycodes_supported[7] = 88; /* KEYCODE_MEDIA_PREVIOUS */
+                ch->input_source_service.keycodes_supported[6] = 4;  /* KEYCODE_BACK */
+                ch->input_source_service.keycodes_supported[7] = 87; /* KEYCODE_MEDIA_NEXT */
             }
 
             /* Channel 9: Microphone */

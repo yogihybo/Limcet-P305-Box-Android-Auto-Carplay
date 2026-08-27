@@ -298,9 +298,25 @@ void McuInputHal::run() {
                 knob_pressed_.store(b4 == 1, std::memory_order_release);
             } else if (b3 == kBtnHome) {
                 if (b4 == 1) {
-                    std::printf("%s [HAL:MCU] Button: HOME (b3=12 b4=1)\n", core::log_timestamp().c_str());
+                    static bool s_drawer_open = false;
+                    static auto s_last_press_time = std::chrono::steady_clock::now();
+                    auto now = std::chrono::steady_clock::now();
+                    auto elapsed_s = std::chrono::duration_cast<std::chrono::seconds>(now - s_last_press_time).count();
+                    s_last_press_time = now;
+                    if (elapsed_s > 10) {
+                        s_drawer_open = false;
+                    }
+
                     AndroidAutoClient client;
-                    client.sendKey(3 /* KEYCODE_HOME */);
+                    if (!s_drawer_open) {
+                        std::printf("%s [HAL:MCU] Button: HOME -> Open App Launcher (KEYCODE_HOME=3)\n", core::log_timestamp().c_str());
+                        client.sendKey(3 /* KEYCODE_HOME */);
+                        s_drawer_open = true;
+                    } else {
+                        std::printf("%s [HAL:MCU] Button: HOME -> Dismiss App Launcher (KEYCODE_BACK=4)\n", core::log_timestamp().c_str());
+                        client.sendKey(4 /* KEYCODE_BACK */);
+                        s_drawer_open = false;
+                    }
                 }
             } else if (b3 == kBtnNextTrack) {
                 std::printf("%s [HAL:MCU] Button: NEXT_TRACK (b3=3 b4=%u)\n", core::log_timestamp().c_str(), b4);

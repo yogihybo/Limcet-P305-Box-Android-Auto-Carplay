@@ -106,3 +106,59 @@ already documented in `tools/nss-stub/README.md` (static linking +
 NSS-stub treatment for any static binary touching `getpwnam`/`dlopen`/
 etc. — the same class of host-toolchain-vs-target-glibc mismatch this
 project has already solved once).
+
+## Known issues — `micro_aap` sidecar (2026-08-27, high-effort code review, not yet fixed)
+
+`androidauto-sidecar` was rewritten from scratch as a pure-C
+implementation (`micro_aap/`, see its own README for the full
+architecture/rationale) to replace the old AASDK/Boost/Protobuf stack.
+Hardware-tested stable for 1+ hour across multiple connect cycles as
+of this writing, but a dedicated review of the new code (~3500 lines,
+`custom_ui/micro_aap/src/*.c`) found 10 real correctness/concurrency
+bugs, none yet fixed. Recorded here for future action rather than
+re-discovering them. Most severe first:
+
+1. **UAF on session teardown** (`aap_session.c:1042`) —
+   `aap_session_destroy()` frees the cryptor and closes the socket
+   before the mic-capture thread is joined. If the mic channel is
+   open when a session ends, that thread can encrypt through
+   already-freed OpenSSL objects.
+2. **Unlocked concurrent SSL encrypt/decrypt** (`aap_session.c:1120`)
+   — the mic thread encrypts under `tx_mutex` (added in `3c878d5` for
+   exactly this class of bug), but the main thread decrypts incoming
+   data on the same `SSL*` with no lock at all.
+3. **NULL-pointer `memcpy` in the video path**
+   (`aap_video.c:253`) — `aap_video_sink_open()` can return `false`
+   after already setting `hantro_dec` (e.g. `/dev/memalloc` failure),
+   leaving `stream_vir_addr` NULL; the caller ignores the return
+   value, and decode only checks `hantro_dec` before writing through
+   it — remote H.264 data triggers the crash after a local hardware
+   init failure.
+4. **Unvalidated `frame_size` overflows the decrypt buffer's logical
+   bound** (`aap_session.c:1115`) — leftover OpenSSL plaintext leaks
+   into the next unrelated frame's parse, a silent protocol desync
+   rather than a crash.
+5. **Unbounded `realloc()` sized directly from a wire `total_size`
+   field** (`aap_session.c:1142`) — a handful of malformed 8-byte
+   headers can OOM the process.
+6. **Oversized frame can never complete inside the 64KB RX buffer**
+   (`aap_session.c:1090`) — the resulting zero-length `read()` gets
+   misread as the peer disconnecting, tearing down an otherwise-live
+   session.
+7. **Unsynchronized fd reuse race** between the main thread and the
+   WiFi-setup handshake thread (`main.c:365`) — a second connection
+   racing a slow handshake could operate on a reused fd.
+8. **Video resolution changes mid-session never re-apply** to the
+   fb4 display layer after the first configure (`aap_video.c:223`) —
+   correctness/UX bug, not a crash.
+9. **Unchecked `malloc()`** in the mic capture thread
+   (`aap_microphone.c:114`) — bites under memory pressure, notably
+   the same pressure #5 above could cause.
+10. **Guidance/system-audio ACKs can carry an uninitialized/stale
+    `session_id`** (`aap_session.c:989`) if those channels start
+    streaming before media audio does.
+
+None of these have been fixed yet — recommended order given real
+severity: #1/#2 (genuine memory-corruption/crash paths), then #5/#6
+(trivially reachable by any malformed or buggy peer, not just error
+conditions), then the rest.

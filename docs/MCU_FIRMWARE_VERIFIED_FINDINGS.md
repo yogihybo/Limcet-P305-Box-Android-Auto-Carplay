@@ -123,6 +123,65 @@ firmware-side investigation a verified starting point (real load base,
 real GPIO helper addresses, real decoded `CMD 0xA0` table) instead of
 re-deriving or re-trusting the unverified prior table.
 
+## Follow-up: real port/pin identification for several more `CMD 0xA0` targets
+
+Continued the same trace method (offset -> poll-site -> apply-function
+-> GPIO helper literal) for the remaining settings. Port bases
+resolved via the same literal-pool method (STM32F1: `GPIOA=0x40010800`,
+`GPIOB=0x40010C00`, `GPIOC=0x40011000`):
+
+| Function | Port.Pin | Driven by |
+|---|---|---|
+| `0x0800559C` | **GPIOB Pin 1** | `id=0x00`'s poll site (`0x08005E4C`, offset `0x3b==1`) |
+| `0x08005654` | **GPIOA Pin 15** | multiple poll sites, incl. offsets `0x3b`, `0x3d`, `0x43`, `0x44` |
+| `0x08005678` | **GPIOB Pin 9** | `id=0x0b`'s offset `0x3d==0` poll site (`0x08005DD0`) |
+| `0x0800569C` | **GPIOB Pin 8** | same site as above |
+| `0x0800598C` | **GPIOC Pin 0** | mic-mux (`id=0x09`) apply chain (read, not write) |
+| `0x0800599C` | **GPIOA Pin 8** | a *read*, not a write -- unrelated to any mute function despite being the address the prior doc cited for `PA_MUTE` |
+| `0x080059B0` | **GPIOC Pin 9** | unclear caller, not traced |
+
+**Real correction**: `id=0x00`'s target is **`GPIOB Pin 1`**, not `GPIOA
+Pin 1` as the prior doc claimed. The prior doc's cited address
+(`0x0800599C`) is a real function, just not this one -- it's a GPIOA
+Pin 8 *read*.
+
+**One genuinely interesting, verified finding**: `id=0x0b` (struct
+offset `0x3d`) drives a coordinated 3-pin enable when cleared to `0` --
+`0x08005DD0` fires `GPIOA Pin 15`, `GPIOB Pin 9`, and `GPIOB Pin 8` HIGH
+together in the same event, via `0x08005678`/`0x0800569C`/`0x08005654`
+each called with arg `1`. That shape (multiple pins enabled together
+in one code path) is more consistent with a subsystem power-up
+sequence than a single-purpose signal like a buzzer beep -- but I
+cannot confirm which physical board function `GPIOB Pin 8`/`Pin 9`
+actually drive without a schematic or continuity test, so this is
+flagged as a real, verified *code* finding, not a confirmed hardware
+answer.
+
+**`id=0x43`/`0x0f` and `id=0x44`/`0x10`** both funnel into
+`0x08005654` (`GPIOA Pin 15`) under separate threshold-compare
+conditions -- not simple direct pin sets, not obviously power-rail
+related.
+
+**`id=0x45`/`0x11`** selects between two states (`bl 0x080058A4` with
+`r0=2` or `r0=3`) -- the only handler in the whole table that calls out
+to a real function rather than only writing state, consistent with the
+old table's "LCD Backlight PWM/Enable" claim for a nearby address,
+though not independently confirmed here.
+
+## Real physical falsification: no TDA7388 on this board
+
+User confirmed via direct physical inspection: **no TDA7388 populated,
+and no unpopulated footprint for one either** -- it's a large,
+hard-to-miss package (Multiwatt/PowerSO), not something that could be
+missed. This directly disproves the separately-pasted claim that
+`PA_MUTE` targets "the TDA7388 speaker amp." Whatever `GPIOB Pin 1`
+(the real target found above for `id=0x00`) actually drives, it isn't
+muting a chip that doesn't exist on this board. Given BD37033 is the
+only confirmed sound-processing chip physically present, it's more
+plausible (not proven) that these MCU-controlled lines relate to it
+directly rather than to a separate downstream amp stage -- but this
+remains unconfirmed without a schematic or a working continuity test.
+
 ## Corrections to prior docs, stated plainly
 
 - `docs/HANDOFF_MCU_AUDIO_I2C.md` / `docs/1.3.1_MCU_FIRMWARE_DECOMPILATION.md`'s

@@ -1199,7 +1199,7 @@ void aap_session_tick(aap_session_t *s) {
 
     time_t now = time(NULL);
     if (s->state == AAP_SESSION_STATE_RUNNING && (now - s->last_rx_time > 3)) {
-        printf("aap_session: WiFi connection lost (no data for 3s), closing session\n");
+        printf("[AA] WiFi connection lost (no data for 3s), closing session\n");
         set_state(s, AAP_SESSION_STATE_DISCONNECTED, "WiFi disconnected");
         return;
     }
@@ -1256,7 +1256,7 @@ void aap_session_send_key(aap_session_t *s, uint32_t keycode) {
                      aap_protobuf_service_inputsource_InputMessageId_INPUT_MESSAGE_INPUT_REPORT,
                      pb_buf, ostream.bytes_written, true);
 
-    printf("aap_session: sent keycode %u (down/up)\n", keycode);
+    printf("[AA] sent keycode %u (down/up)\n", keycode);
 }
 
 void aap_session_send_rotary(aap_session_t *s, int32_t delta) {
@@ -1278,7 +1278,7 @@ void aap_session_send_rotary(aap_session_t *s, int32_t delta) {
                      aap_protobuf_service_inputsource_InputMessageId_INPUT_MESSAGE_INPUT_REPORT,
                      pb_buf, ostream.bytes_written, true);
 
-    printf("aap_session: sent rotary controller (delta=%d)\n", delta);
+    printf("[AA] sent rotary controller (delta=%d)\n", delta);
 }
 
 void aap_session_send_touch(aap_session_t *s, uint32_t x, uint32_t y, uint32_t action) {
@@ -1351,5 +1351,5 @@ void aap_session_request_video_focus(aap_session_t *s, bool projected) {
 
     s->is_video_focus_native = !projected;
     aap_video_sink_set_visible(s->video_sink, projected);
-    printf("aap_session: video focus request sent (unsolicited=1, projected=%d)\n", projected ? 1 : 0);
+    printf("[AA] video focus request sent (unsolicited=1, projected=%d)\n", projected ? 1 : 0);
 }

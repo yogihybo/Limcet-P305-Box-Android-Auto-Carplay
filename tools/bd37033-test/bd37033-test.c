@@ -238,6 +238,61 @@ static bool bitbang_probe_addr(int sda_pin, int scl_pin, uint8_t addr) {
     return ack;
 }
 
+static bool is_gpio_forbidden(int pin) {
+    if (pin >= 0 && pin <= 29) return true;   /* LCD RGB888 display data & timing */
+    if (pin >= 39 && pin <= 52) return true;  /* NAND Flash */
+    if (pin == 62 || pin == 63) return true;  /* Console UART0 */
+    if (pin == 64 || pin == 65) return true;  /* UART1 */
+    if (pin == 66 || pin == 67) return true;  /* MCU UART2 (/dev/ttyHS0) */
+    if (pin == 70 || pin == 71) return true;  /* HW I2C0 DesignWare */
+    if (pin >= 79 && pin <= 81) return true;  /* PWM1-3 / LCD Backlight Power */
+    if (pin >= 82 && pin <= 84) return true;  /* I2S1 Audio DAC */
+    if (pin == 95) return true;               /* Apple MFi Auth Reset */
+    if (pin >= 97 && pin <= 99) return true;  /* SPI */
+    if (pin == 119 || pin == 120) return true;/* UART4 */
+    if (pin == 123 || pin == 124) return true;/* UART5 */
+    if (pin == 127) return true;              /* I2S1 MCLK */
+    if (pin == 130) return true;              /* I2S1 Microphone Capture */
+    return false;
+}
+
+static const int s_safe_gpios[] = {
+    30, 31, 32, 33, 34, 35, 36, 37, 38,
+    53, 54, 55, 56, 57, 58, 59, 60, 61,
+    72, 73, 74, 75, 76, 77, 78,
+    85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 96,
+    100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110,
+    111, 112, 113, 114, 115, 116, 117, 118, 121, 122, 125, 126,
+    128, 129, 131, 132, 133, 134, 135, 136
+};
+
+static const int s_power_enable_pins[] = {
+    34, /* Stock BD37033 standby / reset */
+    35, /* CarA300 peripheral enable */
+    37, /* ZhongHang / BoxP700 enable */
+    96, /* BoxP700 secondary rail */
+    102 /* Bagoo audio/power enable */
+};
+
+static void set_power_rails(int state) {
+    for (size_t i = 0; i < sizeof(s_power_enable_pins)/sizeof(s_power_enable_pins[0]); ++i) {
+        int pin = s_power_enable_pins[i];
+        if (is_gpio_forbidden(pin)) continue;
+        char path[128];
+        snprintf(path, sizeof(path), "/sys/class/gpio/gpio%d/value", pin);
+        if (access(path, F_OK) != 0) {
+            char pstr[16];
+            snprintf(pstr, sizeof(pstr), "%d", pin);
+            gpio_write("/sys/class/gpio/export", pstr);
+            usleep(10000);
+        }
+        snprintf(path, sizeof(path), "/sys/class/gpio/gpio%d/direction", pin);
+        gpio_write(path, "out");
+        snprintf(path, sizeof(path), "/sys/class/gpio/gpio%d/value", pin);
+        gpio_write(path, state ? "1" : "0");
+    }
+}
+
 static void do_scan(void) {
     const char *buses[] = {"/dev/i2c-0", "/dev/i2c-1", "/dev/i2c-2", "/dev/i2c-3"};
     const uint8_t addrs[] = {BD37033_ADDR_GND, BD37033_ADDR_VCC};
@@ -270,16 +325,59 @@ static void do_scan(void) {
                    addr, addr << 1, found ? ">>> ACK RECEIVED (CHIP RESPONDED!) <<<" : "No ACK");
         }
 
-        /* Direct bit-bang test on alternate pins: SDA=GPIO3, SCL=GPIO2 */
-        printf("  Direct Bit-Bang GPIO SDA=3 SCL=2:\n");
-        for (size_t a = 0; a < sizeof(addrs) / sizeof(addrs[0]); ++a) {
-            uint8_t addr = addrs[a];
-            bool found = bitbang_probe_addr(3, 2, addr);
-            printf("    Address 0x%02X (8-bit 0x%02X): %s\n",
-                   addr, addr << 1, found ? ">>> ACK RECEIVED (CHIP RESPONDED!) <<<" : "No ACK");
-        }
-
         printf("\n");
+    }
+}
+
+static void do_sweep(void) {
+    const uint8_t addrs[] = {BD37033_ADDR_GND, BD37033_ADDR_VCC};
+    size_t num_safe = sizeof(s_safe_gpios) / sizeof(s_safe_gpios[0]);
+    int acks_found = 0;
+
+    printf("=== SAFE GPIO MATRIX SWEEP FOR ROHM BD37033 ===\n");
+    printf("Protected Devices: LCD (0-29), NAND (39-52), UARTs (62-67, 119-124),\n");
+    printf("                   I2C0 (70-71), PWM/Backlight (79-81), Audio DAC/ADC (82-84, 127, 130), MFi (95)\n");
+    printf("Testing %zu safe spare GPIOs across power rail enable states...\n\n", num_safe);
+
+    for (int pwr = 0; pwr <= 1; ++pwr) {
+        printf(">>> Power Rails Enable State: %s (GPIO 34, 35, 37, 96, 102 = %d) <<<\n",
+               pwr ? "ASSERTED / HIGH" : "DEASSERTED / LOW", pwr);
+        set_power_rails(pwr);
+        usleep(50000); /* 50ms rail settling */
+
+        for (size_t i = 0; i < num_safe; ++i) {
+            int sda = s_safe_gpios[i];
+            if (is_gpio_forbidden(sda)) continue;
+
+            for (size_t j = 0; j < num_safe; ++j) {
+                int scl = s_safe_gpios[j];
+                if (scl == sda || is_gpio_forbidden(scl)) continue;
+
+                for (size_t a = 0; a < sizeof(addrs) / sizeof(addrs[0]); ++a) {
+                    uint8_t addr = addrs[a];
+                    bool ack = bitbang_probe_addr(sda, scl, addr);
+                    if (ack) {
+                        printf("\n**************************************************************\n");
+                        printf(">>> SUCCESS: ACK RECEIVED FROM BD37033! <<<\n");
+                        printf(">>> SDA Pin = GPIO %d, SCL Pin = GPIO %d, Addr = 0x%02X (8-bit 0x%02X)\n",
+                               sda, scl, addr, addr << 1);
+                        printf(">>> Power Enable State = %d\n", pwr);
+                        printf("**************************************************************\n\n");
+                        acks_found++;
+                    }
+                }
+            }
+        }
+    }
+
+    /* Reset power rails */
+    set_power_rails(0);
+
+    if (acks_found == 0) {
+        printf("\n[SWEEP RESULT]: Completed full sweep across %zu candidate GPIOs and power states.\n", num_safe);
+        printf("[SWEEP RESULT]: Zero ACKs received. The BD37033 I2C control bus is not routed to SoC GPIOs or is unpowered.\n");
+    } else {
+        printf("\n[SWEEP RESULT]: Found %d responsive I2C pin pair(s)!\n", acks_found);
     }
 }
 
@@ -300,7 +398,8 @@ static uint8_t compute_volume_gain(uint8_t level) {
 static void print_usage(const char *prog) {
     printf("Usage: %s <command> [options]\n\n", prog);
     printf("Commands:\n");
-    printf("  --scan                      Scan all I2C buses with GPIO34=0 and GPIO34=1\n");
+    printf("  --scan                      Scan kernel I2C buses with GPIO34=0 and GPIO34=1\n");
+    printf("  --sweep                     Exhaustive safe GPIO matrix sweep across spare SoC pins & power rails\n");
     printf("  --gpio <0|1>                Set GPIO 34 output value\n");
     printf("  --status                    Display current GPIO 34 sysfs status\n");
     printf("  --init <bus> [addr]         Send 20-byte power-on burst (default addr: 0x40)\n");
@@ -310,6 +409,7 @@ static void print_usage(const char *prog) {
     printf("  --raw <bus> <addr> <subaddr> <hex_bytes...>\n");
     printf("\nExamples:\n");
     printf("  %s --scan\n", prog);
+    printf("  %s --sweep\n", prog);
     printf("  %s --gpio 0\n", prog);
     printf("  %s --init /dev/i2c-1 0x40\n", prog);
     printf("  %s --volume /dev/i2c-1 25\n", prog);
@@ -324,6 +424,11 @@ int main(int argc, char **argv) {
 
     if (strcmp(argv[1], "--scan") == 0) {
         do_scan();
+        return 0;
+    }
+
+    if (strcmp(argv[1], "--sweep") == 0) {
+        do_sweep();
         return 0;
     }
 

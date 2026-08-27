@@ -52,4 +52,8 @@ bool set_vde_config(DisplayCtrlHandle & h, DisplayLayer layer, const VdeConfig &
 
 void close_display_ctrl(DisplayCtrlHandle & h);
 
+// Controls physical PWM backlight intensity (0..100%) via sysfs without altering VDE color matrix
+bool set_backlight_brightness(int percent);
+int get_backlight_brightness();
+
 }  // namespace hal

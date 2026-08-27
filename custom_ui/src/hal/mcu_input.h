@@ -78,6 +78,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <mutex>
 #include <string>
 
 #include "core/sized_thread.h"
@@ -135,6 +136,12 @@ public:
     // Reverse gear state directly reported by MCU (CMD 0x04 = engaged, CMD 0x12 = disengaged)
     bool get_reverse_gear() const;
 
+    // MCU Firmware Version string reported via CMD 0x7F
+    std::string get_mcu_version() const;
+
+    // Vehicle battery voltage reported via CMD 0x30
+    float get_battery_voltage() const;
+
     // Synchronize UI setting to MCU via CMD 0xA0
     void sync_setting(uint8_t setting_id, uint8_t value);
 
@@ -155,7 +162,11 @@ private:
 
     std::atomic<bool> night_mode_{false};
     std::atomic<bool> reverse_gear_{false};
+    std::atomic<float> battery_voltage_{0.0f};
     mutable std::atomic<uint64_t> last_touch_ms_{0};
+
+    mutable std::mutex version_mutex_;
+    std::string mcu_version_{"Unknown"};
 };
 
 // Global helper to send CMD 0xA0 settings sync packet to the Limcet MCU

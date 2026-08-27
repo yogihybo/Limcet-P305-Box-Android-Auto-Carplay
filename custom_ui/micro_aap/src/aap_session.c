@@ -452,7 +452,7 @@ static void handle_control_message(aap_session_t *s, uint16_t msg_id, const uint
                 ch->input_source_service.keycodes_supported[3] = 22; /* KEYCODE_DPAD_RIGHT */
                 ch->input_source_service.keycodes_supported[4] = 23; /* KEYCODE_DPAD_CENTER */
                 ch->input_source_service.keycodes_supported[5] = 3;  /* KEYCODE_HOME */
-                ch->input_source_service.keycodes_supported[6] = 4;  /* KEYCODE_BACK */
+                ch->input_source_service.keycodes_supported[6] = 65538; /* KEYCODE_NAVIGATION */
                 ch->input_source_service.keycodes_supported[7] = 87; /* KEYCODE_MEDIA_NEXT */
             }
 
@@ -1212,8 +1212,11 @@ void aap_session_send_key(aap_session_t *s, uint32_t keycode) {
                      aap_protobuf_service_inputsource_InputMessageId_INPUT_MESSAGE_INPUT_REPORT,
                      pb_buf, ostream.bytes_written, true);
 
-    /* Key up report (separated by 10ms for reliable Android InputManager event dispatch) */
-    report.timestamp += 10000ULL;
+    /* 25ms key press hold duration so Android InputManager receives distinct down and up events */
+    usleep(25000);
+
+    /* Key up report */
+    report.timestamp = now_micros();
     report.key_event.keys[0].down = false;
 
     ostream = pb_ostream_from_buffer(pb_buf, sizeof(pb_buf));

@@ -20,6 +20,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <sys/ioctl.h>
+#include <sys/mman.h>
 #include <linux/i2c.h>
 #include <linux/i2c-dev.h>
 
@@ -359,6 +360,310 @@ static bool bitbang_probe_addr(int sda_pin, int scl_pin, uint8_t addr) {
     return true;
 }
 
+/* ============================================================
+ * Raw pinmux register access (bypasses gpiolib/pinctrl entirely)
+ *
+ * Motivation: `/sys/class/gpio/exportN` only lets gpiolib drive a pad's
+ * logic level IF that pad's silicon is currently muxed to the GPIO
+ * function. A live register read (docs/1.5_AUDIO_SUBSYSTEM_INVESTIGATION.md)
+ * found pin 9 (BD37033's SDA per this project's own dts AND the
+ * independent ark1668_tyw_zksw.dts vendor reference board) parked in
+ * LCD function (r7) at rest -- meaning every prior bitbang_probe_addr()
+ * call on pin 9 via plain sysfs GPIO almost certainly never reached the
+ * physical pad electrically. This block reuses tools/pin-force's exact
+ * register technique (same offsets, same PINCTRL_BASE) to force pin 9
+ * into GPIO mode for the duration of a real I2C attempt, then restores
+ * it to LCD immediately after -- matching the brief-window approach
+ * docs/1.7.2_LCD_PIN_CONFLICT_TEST_PROCEDURE.md already hardware-
+ * confirmed doesn't cause lasting corruption.
+ *
+ * Register offsets for pins 70/71 (hw i2c0 SCL/SDA) and pin 121 (i2c-
+ * gpio-1's SCL) are taken directly from tools/pin-dump/pin-dump.sh's
+ * table, itself extracted from this project's own buildable
+ * drivers/pinctrl/pinctrl-ark.c ark1668_pin_map[] -- not re-derived.
+ * ============================================================ */
+#define PINCTRL_BASE 0xE4900000UL
+
+typedef struct {
+    unsigned long reg_off;  /* offset from PINCTRL_BASE */
+    int bit_off;
+    unsigned int mask;
+    unsigned int gpio_val;  /* ARK_PVAL_n that selects plain GPIO */
+    unsigned int alt_val;   /* the pin's "normal" non-GPIO function, for restore */
+    const char *alt_name;
+} pinmux_desc_t;
+
+/* pin 9  (r7/LCD MSB, BD37033 SDA):    reg 0x1c0 off 28 mask 0xf, GPIO=0 LCD=1 */
+static const pinmux_desc_t PIN_9  = { 0x1c0, 28, 0xf, 0, 1, "LCD" };
+/* pin 70 (hw i2c0 SCL): reg 0x1e0 off 16 mask 0x3, GPIO=0 i2c0=ARK_PVAL_2 */
+static const pinmux_desc_t PIN_70 = { 0x1e0, 16, 0x3, 0, 2, "i2c0" };
+/* pin 71 (hw i2c0 SDA): reg 0x1e0 off 18 mask 0x3, GPIO=0 i2c0=ARK_PVAL_2 */
+static const pinmux_desc_t PIN_71 = { 0x1e0, 18, 0x3, 0, 2, "i2c0" };
+/* pin 121 (i2c-gpio-1 SCL): reg 0x1f0 off 4 mask 0x1, GPIO=0, no other named alt seen */
+static const pinmux_desc_t PIN_121 = { 0x1f0, 4, 0x1, 0, 0, "GPIO(default)" };
+
+static int s_memfd = -1;
+static void *s_pinctrl_map = NULL;
+static unsigned long s_pinctrl_page = 0;
+static long s_pagesize = 0;
+
+static bool pinmux_open(void) {
+    if (s_memfd >= 0) return true;
+    s_memfd = open("/dev/mem", O_RDWR | O_SYNC);
+    if (s_memfd < 0) {
+        fprintf(stderr, "[pinmux] open(/dev/mem): %s (need root)\n", strerror(errno));
+        return false;
+    }
+    s_pagesize = sysconf(_SC_PAGESIZE);
+    s_pinctrl_page = PINCTRL_BASE & ~(unsigned long)(s_pagesize - 1);
+    s_pinctrl_map = mmap(NULL, s_pagesize, PROT_READ | PROT_WRITE, MAP_SHARED, s_memfd, s_pinctrl_page);
+    if (s_pinctrl_map == MAP_FAILED) {
+        fprintf(stderr, "[pinmux] mmap failed: %s\n", strerror(errno));
+        close(s_memfd);
+        s_memfd = -1;
+        s_pinctrl_map = NULL;
+        return false;
+    }
+    return true;
+}
+
+static void pinmux_close(void) {
+    if (s_pinctrl_map) { munmap(s_pinctrl_map, s_pagesize); s_pinctrl_map = NULL; }
+    if (s_memfd >= 0) { close(s_memfd); s_memfd = -1; }
+}
+
+static volatile unsigned int *pinmux_reg_ptr(unsigned long reg_off) {
+    unsigned long addr = PINCTRL_BASE + reg_off;
+    return (volatile unsigned int *)((char *)s_pinctrl_map + (addr - s_pinctrl_page));
+}
+
+static unsigned int pinmux_read(const pinmux_desc_t *d) {
+    volatile unsigned int *r = pinmux_reg_ptr(d->reg_off);
+    return (*r >> d->bit_off) & d->mask;
+}
+
+static void pinmux_write(const pinmux_desc_t *d, unsigned int val) {
+    volatile unsigned int *r = pinmux_reg_ptr(d->reg_off);
+    unsigned int cur = *r;
+    cur &= ~(d->mask << d->bit_off);
+    cur |= (val & d->mask) << d->bit_off;
+    *r = cur;
+}
+
+static void pinmux_print_status(const char *label, const pinmux_desc_t *d) {
+    unsigned int v = pinmux_read(d);
+    printf("  [pinmux] %-6s reg=0x%03lx off=%d mask=0x%x -> value=%u (%s)\n",
+           label, d->reg_off, d->bit_off, d->mask, v,
+           v == d->gpio_val ? "GPIO" : (v == d->alt_val ? d->alt_name : "OTHER/unknown"));
+}
+
+/* ============================================================
+ * --pinforce-scan / --pinforce-verify: hold pin 9 (and, defensively,
+ * pin 121) in GPIO mode via raw register write for the duration of a
+ * real I2C bit-bang attempt, then restore. Does NOT dismiss the
+ * hardware i2c0 theory -- see do_i2c0_deep() below for that side.
+ * ============================================================ */
+static bool is_gpio_forbidden(int pin);  /* fwd decl, defined below */
+
+static void do_pinforce_scan(void) {
+    if (!pinmux_open()) return;
+
+    printf("=== pin-force + bit-bang BD37033 probe (SDA=GPIO9, SCL=GPIO121) ===\n\n");
+    printf("Before forcing:\n");
+    pinmux_print_status("pin9", &PIN_9);
+    pinmux_print_status("pin121", &PIN_121);
+
+    unsigned int pin9_saved = pinmux_read(&PIN_9);
+    unsigned int pin121_saved = pinmux_read(&PIN_121);
+
+    printf("\nForcing pin9 -> GPIO, pin121 -> GPIO (brief window)...\n");
+    pinmux_write(&PIN_9, PIN_9.gpio_val);
+    pinmux_write(&PIN_121, PIN_121.gpio_val);
+    usleep(2000);
+
+    pinmux_print_status("pin9", &PIN_9);
+    pinmux_print_status("pin121", &PIN_121);
+
+    set_gpio34_state(0);
+    usleep(20000);
+
+    printf("\nBit-bang probe with pin genuinely in GPIO mode this time:\n");
+    const uint8_t addrs[] = {BD37033_ADDR_GND, BD37033_ADDR_VCC};
+    bool any_ack = false;
+    for (size_t a = 0; a < sizeof(addrs) / sizeof(addrs[0]); ++a) {
+        bool found = bitbang_probe_addr(9, 121, addrs[a]);
+        printf("  Address 0x%02X (8-bit 0x%02X): %s\n", addrs[a], addrs[a] << 1,
+               found ? ">>> ACK RECEIVED (CHIP RESPONDED!) <<<" : "No ACK");
+        any_ack = any_ack || found;
+    }
+
+    printf("\nRestoring pin9 -> %s, pin121 -> saved value...\n", PIN_9.alt_name);
+    pinmux_write(&PIN_9, pin9_saved);
+    pinmux_write(&PIN_121, pin121_saved);
+    pinmux_print_status("pin9", &PIN_9);
+    pinmux_print_status("pin121", &PIN_121);
+
+    if (!any_ack) {
+        printf("\nStill no ACK with the pin genuinely forced to GPIO. This is now a\n"
+               "real negative result (not a muxing artifact) -- worth re-checking\n"
+               "power sequencing (VCC/VDD rails, not just GPIO34) before concluding\n"
+               "the wiring itself is wrong.\n");
+    }
+
+    pinmux_close();
+}
+
+static void do_pinforce_verify(void) {
+    if (!pinmux_open()) return;
+
+    printf("=== pin-force + multi-byte BD37033 verify (SDA=GPIO9, SCL=GPIO121) ===\n\n");
+    unsigned int pin9_saved = pinmux_read(&PIN_9);
+    unsigned int pin121_saved = pinmux_read(&PIN_121);
+
+    pinmux_write(&PIN_9, PIN_9.gpio_val);
+    pinmux_write(&PIN_121, PIN_121.gpio_val);
+    usleep(2000);
+    printf("Pin state during test:\n");
+    pinmux_print_status("pin9", &PIN_9);
+    pinmux_print_status("pin121", &PIN_121);
+
+    set_gpio34_state(0);
+    usleep(20000);
+
+    const uint8_t addrs[] = {BD37033_ADDR_GND, BD37033_ADDR_VCC};
+    bool overall_ok = false;
+    for (size_t a = 0; a < sizeof(addrs) / sizeof(addrs[0]); ++a) {
+        uint8_t addr = addrs[a];
+        printf("\n-- addr 0x%02X --\n", addr);
+        uint8_t unmute_val = 0x00;
+        bool t1 = bitbang_write_bytes(9, 121, addr, 0x06, &unmute_val, 1);
+        printf("  [Test 1] Write reg 0x06 (unmute): %s\n", t1 ? ">>> SUCCESS (ACKed) <<<" : "Failed (NACK)");
+
+        uint8_t vol_val = 0x90;
+        bool t2 = bitbang_write_bytes(9, 121, addr, 0x20, &vol_val, 1);
+        printf("  [Test 2] Write reg 0x20 (volume): %s\n", t2 ? ">>> SUCCESS (ACKed) <<<" : "Failed (NACK)");
+
+        bool t3 = bitbang_write_bytes(9, 121, addr, 0x01, s_bd37033_init_data, sizeof(s_bd37033_init_data));
+        printf("  [Test 3] 22-byte power-on burst (reg 0x01..0x14): %s\n",
+               t3 ? ">>> SUCCESS (ALL BYTES ACKed!) <<<" : "Failed (NACK)");
+
+        if (t1 && t2 && t3) {
+            overall_ok = true;
+            printf("\n  >>> VERIFIED: BD37033 genuinely answers on SDA=GPIO9/SCL=GPIO121"
+                   " at addr 0x%02X with pin correctly forced to GPIO mode <<<\n", addr);
+        }
+    }
+
+    pinmux_write(&PIN_9, pin9_saved);
+    pinmux_write(&PIN_121, pin121_saved);
+    printf("\nRestored pin9/pin121 to their prior pinmux state.\n");
+    if (!overall_ok) {
+        printf("No candidate address produced a full 3-test pass.\n");
+    }
+
+    pinmux_close();
+}
+
+/* ============================================================
+ * --i2c0-deep: a fair, thorough re-test of the hardware i2c0
+ * controller theory -- NOT dismissed just because a quick --scan
+ * pass already came back negative. This differs from --scan by:
+ *   1. Reading back pins 70/71's live pinmux register state first,
+ *      to confirm i2c0 genuinely owns those pads at test time (unlike
+ *      pin 9, nothing else in ark1668-pinctrl.dtsi claims Bank2
+ *      pin6/7, so this is expected to already read as i2c0 -- but
+ *      confirm rather than assume).
+ *   2. Asserting GPIO34 and waiting substantially longer (200ms, not
+ *      20ms) for any analog rail settling before probing.
+ *   3. Using the exact vendor call shape (open -> ioctl(I2C_SLAVE) ->
+ *      write one sub-address byte), not a generic read-or-write probe,
+ *      with several retries and errno reported per attempt so a weak/
+ *      intermittent response isn't silently swallowed.
+ * ============================================================ */
+static void do_i2c0_deep(void) {
+    if (!pinmux_open()) return;
+
+    printf("=== Deep hardware i2c0 (/dev/i2c-0, GPIO70/71) BD37033 re-test ===\n\n");
+    printf("Pin ownership check (expect i2c0 -- nothing else in this project's\n"
+           "pinctrl.dtsi claims Bank2 pin6/7, so this should already read i2c0):\n");
+    pinmux_print_status("pin70", &PIN_70);
+    pinmux_print_status("pin71", &PIN_71);
+
+    unsigned int p70 = pinmux_read(&PIN_70);
+    unsigned int p71 = pinmux_read(&PIN_71);
+    if (p70 != PIN_70.alt_val || p71 != PIN_71.alt_val) {
+        printf("\n  NOTE: pin(s) not currently muxed to i2c0 -- forcing them now so this\n"
+               "  test is genuinely fair, same as the pin-9 fix for the bitbang path.\n");
+        pinmux_write(&PIN_70, PIN_70.alt_val);
+        pinmux_write(&PIN_71, PIN_71.alt_val);
+        usleep(2000);
+        pinmux_print_status("pin70", &PIN_70);
+        pinmux_print_status("pin71", &PIN_71);
+    }
+
+    printf("\nAsserting GPIO34 (standby/power gate) and waiting 200ms for any\n"
+           "analog rail settling...\n");
+    set_gpio34_state(0);
+    usleep(200000);
+
+    const uint8_t addrs[] = {BD37033_ADDR_GND, BD37033_ADDR_VCC};
+    const int RETRIES = 5;
+    bool any_ack = false;
+
+    for (size_t a = 0; a < sizeof(addrs) / sizeof(addrs[0]); ++a) {
+        uint8_t addr = addrs[a];
+        printf("\n-- addr 0x%02X (8-bit 0x%02X) over /dev/i2c-0, %d attempts --\n",
+               addr, addr << 1, RETRIES);
+        for (int attempt = 1; attempt <= RETRIES; ++attempt) {
+            int fd = open("/dev/i2c-0", O_RDWR);
+            if (fd < 0) {
+                printf("  attempt %d: open(/dev/i2c-0) failed: %s\n", attempt, strerror(errno));
+                break;
+            }
+            if (ioctl(fd, I2C_SLAVE, addr) < 0) {
+                printf("  attempt %d: ioctl(I2C_SLAVE) failed: %s\n", attempt, strerror(errno));
+                close(fd);
+                continue;
+            }
+            /* Exact vendor call shape: write a single sub-address byte
+             * (0x01, the first register of the real power-on burst),
+             * not a generic i2c-tools-style probe. */
+            uint8_t sub_addr = 0x01;
+            ssize_t w = write(fd, &sub_addr, 1);
+            int werrno = errno;
+            bool ack = (w == 1);
+            printf("  attempt %d: write(sub_addr=0x01) -> %s\n", attempt,
+                   ack ? ">>> ACK <<<" : "no ACK");
+            if (!ack) {
+                printf("      (write() returned %zd, errno=%s)\n", w, strerror(werrno));
+            }
+            close(fd);
+            any_ack = any_ack || ack;
+            if (ack) break;
+            usleep(20000);
+        }
+    }
+
+    /* Restore pins if we forced them */
+    if (p70 != PIN_70.alt_val || p71 != PIN_71.alt_val) {
+        pinmux_write(&PIN_70, p70);
+        pinmux_write(&PIN_71, p71);
+        printf("\nRestored pin70/71 to their prior pinmux state.\n");
+    }
+
+    printf("\n%s\n", any_ack
+        ? ">>> hardware i2c0 theory CONFIRMED: BD37033 answered on /dev/i2c-0 <<<"
+        : "No ACK on hardware i2c0 even with confirmed-correct pin muxing, a longer\n"
+          "settle, and 5 retries per address using the exact vendor write pattern.\n"
+          "This is now a genuine negative result for the i2c0 theory specifically\n"
+          "(pins were verified in i2c0 function, not just assumed) -- not proof BD37033\n"
+          "is unpopulated, since the GPIO9/121 bit-bang path (see --pinforce-scan/\n"
+          "--pinforce-verify) is the one with independent vendor-reference-board\n"
+          "corroboration (ark1668_tyw_zksw.dts).");
+
+    pinmux_close();
+}
+
 static bool is_gpio_forbidden(int pin) {
     if (pin >= 0 && pin <= 29) return true;   /* LCD RGB888 display data & timing */
     if (pin >= 39 && pin <= 52) return true;  /* NAND Flash */
@@ -621,6 +926,11 @@ static void print_usage(const char *prog) {
     printf("  --scan                      Scan kernel I2C buses with GPIO34=0 and GPIO34=1\n");
     printf("  --sweep                     Exhaustive safe GPIO matrix sweep across spare SoC pins & power rails\n");
     printf("  --verify                    Verify candidate matched pin pairs with multi-byte register writes\n");
+    printf("  --pinforce-scan             Force pin9(SDA)/pin121(SCL) to real GPIO mode via raw register\n");
+    printf("                              write (bypasses gpiolib's LCD-muxed no-op), then bit-bang probe\n");
+    printf("  --pinforce-verify           Same pin-force, but full 3-test multi-byte verify (unmute/volume/burst)\n");
+    printf("  --i2c0-deep                 Fair re-test of the hardware i2c0 (/dev/i2c-0, GPIO70/71) theory:\n");
+    printf("                              confirms pin muxing, 200ms settle, 5 retries/addr, vendor call shape\n");
     printf("  --gpio <0|1>                Set GPIO 34 output value\n");
     printf("  --status                    Display current GPIO 34 sysfs status\n");
     printf("  --init <bus> [addr]         Send 20-byte power-on burst (default addr: 0x40)\n");
@@ -656,6 +966,21 @@ int main(int argc, char **argv) {
 
     if (strcmp(argv[1], "--verify") == 0) {
         do_verify();
+        return 0;
+    }
+
+    if (strcmp(argv[1], "--pinforce-scan") == 0) {
+        do_pinforce_scan();
+        return 0;
+    }
+
+    if (strcmp(argv[1], "--pinforce-verify") == 0) {
+        do_pinforce_verify();
+        return 0;
+    }
+
+    if (strcmp(argv[1], "--i2c0-deep") == 0) {
+        do_i2c0_deep();
         return 0;
     }
 

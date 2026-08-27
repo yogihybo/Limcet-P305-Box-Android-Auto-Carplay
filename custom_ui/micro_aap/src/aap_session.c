@@ -124,6 +124,54 @@ struct aap_session {
     pthread_mutex_t tx_mutex;
 };
 
+static void sync_system_clock_from_phone(int64_t timestamp_val) {
+    if (timestamp_val <= 0) return;
+
+    time_t sec = 0;
+    long nsec = 0;
+
+    /* Normalize timestamp across microseconds (16 digits), milliseconds (13 digits), or seconds (10 digits) */
+    if (timestamp_val > 1000000000000000LL) {
+        /* Microseconds */
+        sec = (time_t)(timestamp_val / 1000000LL);
+        nsec = (long)((timestamp_val % 1000000LL) * 1000L);
+    } else if (timestamp_val > 1000000000000LL) {
+        /* Milliseconds */
+        sec = (time_t)(timestamp_val / 1000LL);
+        nsec = (long)((timestamp_val % 1000LL) * 1000000L);
+    } else if (timestamp_val > 1700000000LL && timestamp_val < 2500000000LL) {
+        /* Seconds */
+        sec = (time_t)timestamp_val;
+        nsec = 0;
+    } else {
+        return; /* Invalid / relative monotonic timestamp */
+    }
+
+    /* Plausibility check: between Jan 2024 and Jan 2040 */
+    if (sec < 1704067200LL || sec > 2208988800LL) {
+        return;
+    }
+
+    static time_t s_last_synced_sec = 0;
+    struct timeval current_tv;
+    gettimeofday(&current_tv, NULL);
+    if (labs((long)(current_tv.tv_sec - sec)) > 2 || s_last_synced_sec == 0) {
+        struct timespec ts = { .tv_sec = sec, .tv_nsec = nsec };
+        if (clock_settime(CLOCK_REALTIME, &ts) == 0) {
+            s_last_synced_sec = sec;
+            char time_str[64];
+            struct tm tm_buf;
+            localtime_r(&sec, &tm_buf);
+            strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", &tm_buf);
+            printf("[AA:CLOCK] Synchronized system time from phone: %s (UTC: %ld)\n",
+                   time_str, (long)sec);
+
+            /* Persist to hardware RTC */
+            system("hwclock -w 2>/dev/null &");
+        }
+    }
+}
+
 static void set_state(aap_session_t *s, aap_session_state_t state, const char *msg) {
     s->state = state;
     strncpy(s->status_message, msg ? msg : "", sizeof(s->status_message) - 1);
@@ -526,6 +574,8 @@ static void handle_control_message(aap_session_t *s, uint16_t msg_id, const uint
             pb_istream_t stream = pb_istream_from_buffer(payload, payload_len);
             pb_decode(&stream, aap_protobuf_service_control_message_PingRequest_fields, &req);
 
+            sync_system_clock_from_phone(req.timestamp);
+
             aap_protobuf_service_control_message_PingResponse resp =
                 aap_protobuf_service_control_message_PingResponse_init_default;
             resp.timestamp = req.timestamp;
@@ -541,7 +591,11 @@ static void handle_control_message(aap_session_t *s, uint16_t msg_id, const uint
         }
 
         case aap_protobuf_service_control_message_ControlMessageType_MESSAGE_PING_RESPONSE: {
-            /* Ping reply received from phone */
+            aap_protobuf_service_control_message_PingResponse resp =
+                aap_protobuf_service_control_message_PingResponse_init_default;
+            pb_istream_t stream = pb_istream_from_buffer(payload, payload_len);
+            pb_decode(&stream, aap_protobuf_service_control_message_PingResponse_fields, &resp);
+            sync_system_clock_from_phone(resp.timestamp);
             break;
         }
 
@@ -978,6 +1032,17 @@ static void handle_media_channel(aap_session_t *s, uint8_t channel_id, const uin
         case aap_protobuf_service_media_sink_MediaMessageId_MEDIA_MESSAGE_DATA: {
             /* Timestamp is 8 bytes at payload + 2, media stream starts at payload + 10 */
             if (payload_len > 10) {
+                const uint8_t *ts_bytes = payload + 2;
+                uint64_t ts_us = ((uint64_t)ts_bytes[0] << 56) |
+                                 ((uint64_t)ts_bytes[1] << 48) |
+                                 ((uint64_t)ts_bytes[2] << 40) |
+                                 ((uint64_t)ts_bytes[3] << 32) |
+                                 ((uint64_t)ts_bytes[4] << 24) |
+                                 ((uint64_t)ts_bytes[5] << 16) |
+                                 ((uint64_t)ts_bytes[6] << 8)  |
+                                 ((uint64_t)ts_bytes[7]);
+                sync_system_clock_from_phone((int64_t)ts_us);
+
                 const uint8_t *stream_bytes = payload + 10;
                 size_t stream_bytes_len = payload_len - 10;
 

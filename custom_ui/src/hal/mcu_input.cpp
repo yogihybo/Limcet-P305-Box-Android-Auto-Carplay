@@ -15,6 +15,8 @@ namespace hal {
 
 namespace {
 
+static McuInputHal * g_mcu_instance = nullptr;
+
 // MCUAdapter_BoxP300::getPortSettings() (libMcuCenter.so) -- confirmed
 // real baud, see tools/mcu-handshake/mcu-handshake.c's own comment.
 constexpr int kBaud = B38400;
@@ -220,6 +222,7 @@ bool McuInputHal::start() {
 
     send_startup_sequence(fd_);
 
+    g_mcu_instance = this;
     running_.store(true, std::memory_order_release);
     thread_ = core::SizedThread(core::kDefaultThreadStackSize, &McuInputHal::run, this);
     return true;
@@ -382,6 +385,21 @@ bool McuInputHal::get_night_mode() const {
 
 bool McuInputHal::get_reverse_gear() const {
     return reverse_gear_.load(std::memory_order_acquire);
+}
+
+void McuInputHal::sync_setting(uint8_t setting_id, uint8_t value) {
+    if (fd_ >= 0) {
+        unsigned char payload[2] = {setting_id, value};
+        send_mcu_frame(fd_, 0xA0, payload, 2);
+        std::printf("%s [HAL:MCU] Synced setting to MCU via CMD 0xA0 (id=0x%02X, val=0x%02X)\n",
+                    core::log_timestamp().c_str(), setting_id, value);
+    }
+}
+
+void send_mcu_setting(uint8_t setting_id, uint8_t value) {
+    if (g_mcu_instance) {
+        g_mcu_instance->sync_setting(setting_id, value);
+    }
 }
 
 }  // namespace hal

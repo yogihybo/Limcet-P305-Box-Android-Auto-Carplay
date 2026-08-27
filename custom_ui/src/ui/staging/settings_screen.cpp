@@ -7,6 +7,7 @@
 #include "core/navigation.h"
 #include "hal/audio.h"
 #include "hal/display_ctrl.h"
+#include "hal/mcu_input.h"
 #include "core/log_timing.h"
 #include <functional>
 
@@ -320,6 +321,7 @@ lv_obj_t * create_settings_screen() {
                        "OriginalCarCamera", "General", false, [](bool oem) {
                            std::printf("%s [HAL:REVCAM] Reversing camera mode set to %s\n",
                                        core::log_timestamp().c_str(), oem ? "OEM Factory Camera" : "Aftermarket Camera");
+                           hal::send_mcu_setting(0x06, oem ? 1 : 0);
                        });
     create_stepper_row(card, &ui::icons::icon_volume, "Reversing Volume Cut (%)", 0, 100, 5,
                        "ReversingVolumeCut", "General");

@@ -446,14 +446,14 @@ static void handle_control_message(aap_session_t *s, uint16_t msg_id, const uint
                 ch->input_source_service.touchscreen[0].has_type = true;
                 ch->input_source_service.touchscreen[0].type = aap_protobuf_service_inputsource_message_TouchScreenType_CAPACITIVE;
                 ch->input_source_service.keycodes_supported_count = 8;
-                ch->input_source_service.keycodes_supported[0] = 19; /* KEYCODE_DPAD_UP */
-                ch->input_source_service.keycodes_supported[1] = 20; /* KEYCODE_DPAD_DOWN */
-                ch->input_source_service.keycodes_supported[2] = 21; /* KEYCODE_DPAD_LEFT */
-                ch->input_source_service.keycodes_supported[3] = 22; /* KEYCODE_DPAD_RIGHT */
-                ch->input_source_service.keycodes_supported[4] = 23; /* KEYCODE_DPAD_CENTER */
-                ch->input_source_service.keycodes_supported[5] = 3;  /* KEYCODE_HOME */
+                ch->input_source_service.keycodes_supported[0] = 260; /* KEYCODE_NAVIGATE_PREVIOUS (CCW) */
+                ch->input_source_service.keycodes_supported[1] = 261; /* KEYCODE_NAVIGATE_NEXT (CW) */
+                ch->input_source_service.keycodes_supported[2] = 21;  /* KEYCODE_DPAD_LEFT */
+                ch->input_source_service.keycodes_supported[3] = 22;  /* KEYCODE_DPAD_RIGHT */
+                ch->input_source_service.keycodes_supported[4] = 23;  /* KEYCODE_DPAD_CENTER */
+                ch->input_source_service.keycodes_supported[5] = 3;   /* KEYCODE_HOME */
                 ch->input_source_service.keycodes_supported[6] = 65538; /* KEYCODE_NAVIGATION */
-                ch->input_source_service.keycodes_supported[7] = 87; /* KEYCODE_MEDIA_NEXT */
+                ch->input_source_service.keycodes_supported[7] = 87;  /* KEYCODE_MEDIA_NEXT */
             }
 
             /* Channel 9: Microphone */

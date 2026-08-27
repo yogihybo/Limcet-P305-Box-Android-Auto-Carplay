@@ -9,13 +9,13 @@ namespace hal {
 
 namespace {
 
-// Android Auto 5-way D-Pad keycodes (Option 1). Must match
-// session.cpp / micro_aap's ServiceDiscoveryResponse keycodes_supported list.
-constexpr std::uint32_t kKeycodeDpadUp = 19;
-constexpr std::uint32_t kKeycodeDpadDown = 20;
-constexpr std::uint32_t kKeycodeDpadLeft = 21;
-constexpr std::uint32_t kKeycodeDpadRight = 22;
-constexpr std::uint32_t kKeycodeDpadCenter = 23;
+// Android Auto Rotary and Nudge keycodes. Must match
+// micro_aap's ServiceDiscoveryResponse keycodes_supported list.
+constexpr std::uint32_t kKeycodeNavigatePrevious = 260; // Rotary CCW (Intra-card / App drawer focus prev)
+constexpr std::uint32_t kKeycodeNavigateNext = 261;     // Rotary CW (Intra-card / App drawer focus next)
+constexpr std::uint32_t kKeycodeDpadLeft = 21;          // Card Nudge Left (Hold + CCW)
+constexpr std::uint32_t kKeycodeDpadRight = 22;         // Card Nudge Right (Hold + CW)
+constexpr std::uint32_t kKeycodeDpadCenter = 23;        // Select / Click
 
 // Own client instance, separate from android_auto_screen.cpp's/
 // status_bar.cpp's -- allow_spawn is always false for sendKey() (see
@@ -100,15 +100,15 @@ void mcu_knob_read_cb(lv_indev_t * indev, lv_indev_data_t * data) {
             std::printf("%s hal::knob: AA active, ticks=%d, held=%d\n",
                         core::log_timestamp().c_str(), ticks, is_held ? 1 : 0);
 
-            /* If held while rotating -> card nudge (DPAD_RIGHT / DPAD_LEFT); else intra-card (DPAD_DOWN / DPAD_UP) */
-            std::uint32_t downKey = is_held ? kKeycodeDpadRight : kKeycodeDpadDown;
-            std::uint32_t upKey = is_held ? kKeycodeDpadLeft : kKeycodeDpadUp;
+            /* If held while rotating -> card nudge (DPAD_RIGHT / DPAD_LEFT); else intra-card sequential focus (NAVIGATE_NEXT / NAVIGATE_PREVIOUS) */
+            std::uint32_t cwKey = is_held ? kKeycodeDpadRight : kKeycodeNavigateNext;
+            std::uint32_t ccwKey = is_held ? kKeycodeDpadLeft : kKeycodeNavigatePrevious;
 
             for (int32_t i = 0; i < ticks; ++i) {
-                androidauto_client().sendKey(downKey);
+                androidauto_client().sendKey(cwKey);
             }
             for (int32_t i = 0; i < -ticks; ++i) {
-                androidauto_client().sendKey(upKey);
+                androidauto_client().sendKey(ccwKey);
             }
         }
 

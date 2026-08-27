@@ -110,7 +110,7 @@ Disassembled and verified from `hardware/MCU/can_app.bin`:
 | **`GPIOC Pin 2`** | **CVBS Video Multiplexer** | `0x0800591C` | Selects composite video input path to RN6752 ITU-656 decoder. |
 | **`GPIOB Pin 0`** | **CBT16211A Touch Switch** | `0x08005A3C` | High = Closes touch bus switch connecting resistive digitizer lines to MCU ADC. |
 | **`GPIOA Pin 1`** | **Power Amp Mute (`PA_MUTE`)** | `0x0800599C` | High = Hardware mute asserted to external audio amplifier IC. |
-| **`GPIOB Pin 6`** | **Audio AUX / Relay Switch** | `0x08005AA0` | Multiplexes analog audio input lines between SoC DAC and factory AUX input (`AT+AUDROUTE`). |
+| **`GPIOB Pin 6`** | **Microphone / Audio Mux Switch** | `0x08005AA0` | High = Routes Toyota 28-pin factory harness roof mic to SoC ADC (`CMD 0xA0 [0x09, 0x01]`); Low = Routes external 3.5mm pigtail jack (`CMD 0xA0 [0x09, 0x00]`). |
 | **`GPIOA Pin 9`** | **USB 5V Power Rail** | `0x080059B0` | Toggles 5V VBUS power rail to external USB connector. |
 | **`GPIOA Pin 8`** | **LCD Backlight PWM / Enable**| `0x080059C0` | Enables backlight boost converter / PWM modulation. |
 | **`GPIOA Pin 7`** | **AM/FM Radio Tuner Power** | `0x080059D8` | Power gate for onboard radio tuner IC. |
@@ -119,6 +119,19 @@ Disassembled and verified from `hardware/MCU/can_app.bin`:
 | **`GPIOA Pin 14`**| **SoC Hardware Reset Strobe** | `0x08005A18` | Hardware reset trigger to ARK1668 main processor. |
 | **`GPIOA Pin 15`**| **Piezo Reverse Warning Buzzer** | `0x08005A7C` | Generates audible parking sensor / reverse alert beeps. |
 | **`GPIOB Pin 4`** | **Status Indicator LED** | `0x08005A5C` | Flashes system status / heartbeat indicator. |
+
+#### Microphone Hardware & Analog Input Multiplexer
+
+The Limcet board supports two mutually-exclusive analog microphone input sources switched by an onboard 2:1 analog multiplexer gated by the STM32 MCU (`GPIOB Pin 6`):
+
+1. **Aftermarket 3.5mm External Jack (`GPIOB Pin 6 = 0`, Default)**:
+   * Connects the harness 3.5mm female pigtail directly to the ArkMicro SoC's internal SAR-ADC (`ahb:sdadc@0` / `MICIN` pin with $3.3\text{V}$ electret bias).
+   * Works out-of-the-box with standard 2-wire electret lavalier microphones.
+2. **Toyota OEM Roof Console Microphone (`GPIOB Pin 6 = 1`, `CMD 0xA0 [0x09, 0x01]`)**:
+   * Disconnects the 3.5mm jack and switches the Toyota 28-pin radio harness microphone lines (`MIC+` Pin 4 / `MIC-` Pin 5) into the SoC ADC.
+   * **Active Power Requirement (`MACC`)**: The Toyota Prado 150 factory roof microphone contains an internal FET preamplifier circuit on the ceiling console that requires $+5\text{V}$ (or $+8\text{V}$) DC power on **Pin 6 (`MACC`)** of the 28-pin Toyota connector. If the piggyback harness does not supply $+5\text{V}$ to `MACC`, the factory roof mic will remain unpowered and silent.
+3. **UI Switching**:
+   * Controlled via `Settings -> AUDIO -> OEM Factory Microphone` toggle in `custom_ui`, saved to `/data/custom_ui/settings.conf` under `[Audio] OEMMicrophone=true/false` and synced across reboots.
 
 ---
 

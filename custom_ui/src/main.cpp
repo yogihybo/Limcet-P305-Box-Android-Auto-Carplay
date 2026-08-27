@@ -524,10 +524,17 @@ int main() {
         std::printf("%s [HAL:REVCAM] Reverse gear watcher %s (app_ready set)\n", core::log_timestamp().c_str(), camera_ok ? "started" : "unavailable");
     }
 
-    // Sync saved camera mode setting to MCU (0x11 = Camera Type: 0=Aftermarket, 1=Factory)
+    // Sync saved camera and microphone mode settings to MCU
     {
         bool factoryCam = core::default_store().get_bool("OriginalCarCamera", false, "General");
         hal::send_mcu_setting(0x11, factoryCam ? 1 : 0);
+
+        bool oemMic = core::default_store().get_bool("OEMMicrophone", false, "Audio");
+        hal::send_mcu_setting(0x09, oemMic ? 1 : 0);
+        std::printf("%s [HAL:MCU] Synced hardware settings to MCU (Camera: %s, Mic: %s)\n",
+                    core::log_timestamp().c_str(),
+                    factoryCam ? "OEM Factory" : "Aftermarket",
+                    oemMic ? "OEM Factory Roof" : "Aftermarket 3.5mm");
     }
 
     // Sync saved 3-band EQ and dynamic loudness settings

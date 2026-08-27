@@ -394,7 +394,7 @@ static void handle_control_message(aap_session_t *s, uint16_t msg_id, const uint
                 ch->media_sink_service.video_configs[0].has_width_margin = true;
                 ch->media_sink_service.video_configs[0].width_margin = 0;
                 ch->media_sink_service.video_configs[0].has_height_margin = true;
-                ch->media_sink_service.video_configs[0].height_margin = 20;
+                ch->media_sink_service.video_configs[0].height_margin = 0;
             }
 
             /* Channel 4: MediaAudioSink */

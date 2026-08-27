@@ -361,18 +361,35 @@ static void do_scan(void) {
     }
 }
 
+typedef struct {
+    int sda;
+    int scl;
+    uint8_t addr;
+    int power_state;
+} sweep_match_t;
+
+#define MAX_MATCHES 64
+
 static void do_sweep(void) {
     const uint8_t addrs[] = {BD37033_ADDR_GND, BD37033_ADDR_VCC};
     size_t num_safe = sizeof(s_safe_gpios) / sizeof(s_safe_gpios[0]);
-    int acks_found = 0;
+    sweep_match_t matches[MAX_MATCHES];
+    size_t num_matches = 0;
 
     printf("=== SAFE GPIO MATRIX SWEEP FOR ROHM BD37033 ===\n");
     printf("Protected Devices: LCD (0-29), NAND (39-52), UARTs (62-67, 119-124),\n");
     printf("                   I2C0 (70-71), PWM/Backlight (79-81), Audio DAC/ADC (82-84, 127, 130), MFi (95)\n");
     printf("Testing %zu safe spare GPIOs across power rail enable states...\n\n", num_safe);
 
+    FILE *log_file = fopen("/data/bd37033_sweep.log", "w");
+    if (!log_file) log_file = fopen("/tmp/bd37033_sweep.log", "w");
+
+    if (log_file) {
+        fprintf(log_file, "=== BD37033 GPIO MATRIX SWEEP LOG ===\n");
+    }
+
     for (int pwr = 0; pwr <= 1; ++pwr) {
-        printf(">>> Power Rails Enable State: %s (GPIO 34, 35, 37, 96, 102 = %d) <<<\n",
+        printf("\n>>> Testing Power Rail State: %s (GPIO 34, 35, 37, 96, 102 = %d) <<<\n",
                pwr ? "ASSERTED / HIGH" : "DEASSERTED / LOW", pwr);
         set_power_rails(pwr);
         usleep(50000); /* 50ms rail settling */
@@ -381,6 +398,9 @@ static void do_sweep(void) {
             int sda = s_safe_gpios[i];
             if (is_gpio_forbidden(sda)) continue;
 
+            printf("\r  [Power=%d] Testing SDA Pin %2d (%2zu/%2zu)...", pwr, sda, i + 1, num_safe);
+            fflush(stdout);
+
             for (size_t j = 0; j < num_safe; ++j) {
                 int scl = s_safe_gpios[j];
                 if (scl == sda || is_gpio_forbidden(scl)) continue;
@@ -388,28 +408,56 @@ static void do_sweep(void) {
                 for (size_t a = 0; a < sizeof(addrs) / sizeof(addrs[0]); ++a) {
                     uint8_t addr = addrs[a];
                     bool ack = bitbang_probe_addr(sda, scl, addr);
-                    if (ack) {
-                        printf("\n**************************************************************\n");
-                        printf(">>> SUCCESS: ACK RECEIVED FROM BD37033! <<<\n");
-                        printf(">>> SDA Pin = GPIO %d, SCL Pin = GPIO %d, Addr = 0x%02X (8-bit 0x%02X)\n",
-                               sda, scl, addr, addr << 1);
-                        printf(">>> Power Enable State = %d\n", pwr);
-                        printf("**************************************************************\n\n");
-                        acks_found++;
+                    if (ack && num_matches < MAX_MATCHES) {
+                        matches[num_matches].sda = sda;
+                        matches[num_matches].scl = scl;
+                        matches[num_matches].addr = addr;
+                        matches[num_matches].power_state = pwr;
+                        num_matches++;
+
+                        if (log_file) {
+                            fprintf(log_file, "MATCH: SDA=%d, SCL=%d, Addr=0x%02X, Power=%d\n",
+                                    sda, scl, addr, pwr);
+                            fflush(log_file);
+                        }
                     }
                 }
             }
         }
+        printf(" Done.\n");
     }
 
     /* Reset power rails */
     set_power_rails(0);
 
-    if (acks_found == 0) {
-        printf("\n[SWEEP RESULT]: Completed full sweep across %zu candidate GPIOs and power states.\n", num_safe);
-        printf("[SWEEP RESULT]: Zero ACKs received. The BD37033 I2C control bus is not routed to SoC GPIOs or is unpowered.\n");
+    /* Print Final Summary Banner */
+    printf("\n==============================================================\n");
+    printf("                  FINAL SWEEP SUMMARY TABLE                   \n");
+    printf("==============================================================\n");
+
+    if (num_matches == 0) {
+        printf("  Total Valid I2C ACKs: 0 (No responsive BD37033 detected)\n");
+        printf("  Result: The Rohm BD37033 I2C control bus is not connected to\n");
+        printf("          the SoC GPIOs on this board, confirming SoundType=0.\n");
+        if (log_file) {
+            fprintf(log_file, "RESULT: 0 matches found.\n");
+        }
     } else {
-        printf("\n[SWEEP RESULT]: Found %d responsive I2C pin pair(s)!\n", acks_found);
+        printf("  Total Confirmed Matches: %zu\n\n", num_matches);
+        printf("  %-10s %-10s %-12s %-12s\n", "SDA Pin", "SCL Pin", "7-bit Addr", "Power Rail");
+        printf("  ---------- ---------- ------------ ------------\n");
+        for (size_t m = 0; m < num_matches; ++m) {
+            printf("  GPIO %-5d GPIO %-5d 0x%02X (0x%02X)   %s\n",
+                   matches[m].sda, matches[m].scl,
+                   matches[m].addr, matches[m].addr << 1,
+                   matches[m].power_state ? "HIGH (1)" : "LOW (0)");
+        }
+    }
+    printf("==============================================================\n");
+    printf("Log saved to: %s\n\n", access("/data/bd37033_sweep.log", F_OK) == 0 ? "/data/bd37033_sweep.log" : "/tmp/bd37033_sweep.log");
+
+    if (log_file) {
+        fclose(log_file);
     }
 }
 

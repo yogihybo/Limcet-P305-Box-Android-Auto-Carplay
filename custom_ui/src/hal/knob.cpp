@@ -97,7 +97,7 @@ void mcu_knob_read_cb(lv_indev_t * indev, lv_indev_data_t * data) {
                 last_held_rotation_time_ms() = now_ms;
             }
 
-            std::printf("%s hal::knob: AA active, ticks=%d, held=%d\n",
+            std::printf("%s [HAL:KNOB] AA active, ticks=%d, held=%d\n",
                         core::log_timestamp().c_str(), ticks, is_held ? 1 : 0);
 
             if (is_held) {

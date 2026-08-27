@@ -329,6 +329,15 @@ lv_obj_t * create_settings_screen() {
     create_toggle_row(card, &ui::icons::icon_volume, "Dynamic Loudness",
                       "Loudness", "Audio", false,
                       [](bool) { hal::sync_audio_eq(); });
+    create_toggle_row(card, &ui::icons::icon_volume, "OEM Factory Microphone",
+                      "OEMMicrophone", "Audio", false,
+                      [](bool oem) {
+                          std::printf("%s [HAL:AUDIO] Microphone input source set to %s (CMD 0xA0 [0x09, %d])\n",
+                                      core::log_timestamp().c_str(),
+                                      oem ? "OEM Factory Roof Mic" : "Aftermarket 3.5mm Mic",
+                                      oem ? 1 : 0);
+                          hal::send_mcu_setting(0x09, oem ? 1 : 0);
+                      });
 
     // --- Section 3: Vehicle & Camera ---
     create_section_header(card, "VEHICLE & CAMERA");

@@ -145,6 +145,99 @@ static bool i2c_probe_addr(const char *bus_path, uint8_t dev_addr) {
     return ack;
 }
 
+static void udelay_5(void) { usleep(5); }
+
+static void gexport(int pin) {
+    int fd = open("/sys/class/gpio/export", O_WRONLY);
+    if (fd >= 0) {
+        char b[16];
+        int n = snprintf(b, sizeof(b), "%d", pin);
+        write(fd, b, n);
+        close(fd);
+    }
+}
+static void gunexport(int pin) {
+    int fd = open("/sys/class/gpio/unexport", O_WRONLY);
+    if (fd >= 0) {
+        char b[16];
+        int n = snprintf(b, sizeof(b), "%d", pin);
+        write(fd, b, n);
+        close(fd);
+    }
+}
+static void gdir(int pin, const char *d) {
+    char p[64];
+    snprintf(p, sizeof(p), "/sys/class/gpio/gpio%d/direction", pin);
+    int fd = open(p, O_WRONLY);
+    if (fd >= 0) {
+        write(fd, d, strlen(d));
+        close(fd);
+    }
+}
+static int gopen(int pin) {
+    char p[64];
+    snprintf(p, sizeof(p), "/sys/class/gpio/gpio%d/value", pin);
+    return open(p, O_RDWR);
+}
+static void gset(int fd, int v) { pwrite(fd, v ? "1" : "0", 1, 0); }
+static int gget(int fd) {
+    char c = ' ';
+    pread(fd, &c, 1, 0);
+    return c == '1';
+}
+
+static bool bitbang_probe_addr(int sda_pin, int scl_pin, uint8_t addr) {
+    gexport(sda_pin);
+    gexport(scl_pin);
+    gdir(scl_pin, "out");
+    gdir(sda_pin, "out");
+    int sda_fd = gopen(sda_pin);
+    int scl_fd = gopen(scl_pin);
+    if (sda_fd < 0 || scl_fd < 0) {
+        if (sda_fd >= 0) close(sda_fd);
+        if (scl_fd >= 0) close(scl_fd);
+        return false;
+    }
+
+    gset(scl_fd, 1);
+    gset(sda_fd, 1);
+    udelay_5();
+
+    /* START */
+    gset(sda_fd, 0); udelay_5();
+    gset(scl_fd, 0); udelay_5();
+
+    /* Write 8 bits: (addr << 1) | 0 */
+    uint8_t byte = (addr << 1) | 0;
+    for (int i = 7; i >= 0; i--) {
+        gset(sda_fd, (byte & (1 << i)) ? 1 : 0);
+        udelay_5();
+        gset(scl_fd, 1); udelay_5();
+        gset(scl_fd, 0); udelay_5();
+    }
+
+    /* Read ACK */
+    gdir(sda_pin, "in");
+    udelay_5();
+    gset(scl_fd, 1); udelay_5();
+    bool ack = !gget(sda_fd);
+    gset(scl_fd, 0); udelay_5();
+    gdir(sda_pin, "out");
+
+    /* STOP */
+    gset(sda_fd, 0); udelay_5();
+    gset(scl_fd, 1); udelay_5();
+    gset(sda_fd, 1); udelay_5();
+
+    close(sda_fd);
+    close(scl_fd);
+    gdir(sda_pin, "in");
+    gdir(scl_pin, "in");
+    gunexport(sda_pin);
+    gunexport(scl_pin);
+    return ack;
+}
+
 static void do_scan(void) {
     const char *buses[] = {"/dev/i2c-0", "/dev/i2c-1", "/dev/i2c-2", "/dev/i2c-3"};
     const uint8_t addrs[] = {BD37033_ADDR_GND, BD37033_ADDR_VCC};
@@ -159,7 +252,7 @@ static void do_scan(void) {
         for (size_t b = 0; b < sizeof(buses) / sizeof(buses[0]); ++b) {
             if (access(buses[b], F_OK) != 0) continue;
 
-            printf("  Bus %s:\n", buses[b]);
+            printf("  Kernel Bus %s:\n", buses[b]);
             for (size_t a = 0; a < sizeof(addrs) / sizeof(addrs[0]); ++a) {
                 uint8_t addr = addrs[a];
                 bool found = i2c_probe_addr(buses[b], addr);
@@ -167,6 +260,25 @@ static void do_scan(void) {
                        addr, addr << 1, found ? ">>> ACK RECEIVED (CHIP RESPONDED!) <<<" : "No ACK");
             }
         }
+
+        /* Direct bit-bang test on stock audio I2C pins: SDA=GPIO9, SCL=GPIO121 */
+        printf("  Direct Bit-Bang GPIO SDA=9 SCL=121 (Stock BD37033 physical pins):\n");
+        for (size_t a = 0; a < sizeof(addrs) / sizeof(addrs[0]); ++a) {
+            uint8_t addr = addrs[a];
+            bool found = bitbang_probe_addr(9, 121, addr);
+            printf("    Address 0x%02X (8-bit 0x%02X): %s\n",
+                   addr, addr << 1, found ? ">>> ACK RECEIVED (CHIP RESPONDED!) <<<" : "No ACK");
+        }
+
+        /* Direct bit-bang test on alternate pins: SDA=GPIO3, SCL=GPIO2 */
+        printf("  Direct Bit-Bang GPIO SDA=3 SCL=2:\n");
+        for (size_t a = 0; a < sizeof(addrs) / sizeof(addrs[0]); ++a) {
+            uint8_t addr = addrs[a];
+            bool found = bitbang_probe_addr(3, 2, addr);
+            printf("    Address 0x%02X (8-bit 0x%02X): %s\n",
+                   addr, addr << 1, found ? ">>> ACK RECEIVED (CHIP RESPONDED!) <<<" : "No ACK");
+        }
+
         printf("\n");
     }
 }

@@ -135,6 +135,9 @@ public:
     // Reverse gear state directly reported by MCU (CMD 0x04 = engaged, CMD 0x12 = disengaged)
     bool get_reverse_gear() const;
 
+    // Synchronize UI setting to MCU via CMD 0xA0
+    void sync_setting(uint8_t setting_id, uint8_t value);
+
 private:
     void run();
 
@@ -154,5 +157,8 @@ private:
     std::atomic<bool> reverse_gear_{false};
     mutable std::atomic<uint64_t> last_touch_ms_{0};
 };
+
+// Global helper to send CMD 0xA0 settings sync packet to the Limcet MCU
+void send_mcu_setting(uint8_t setting_id, uint8_t value);
 
 }  // namespace hal

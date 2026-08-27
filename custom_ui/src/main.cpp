@@ -522,10 +522,10 @@ int main() {
         std::printf("%s [HAL:REVCAM] Reverse gear watcher %s (app_ready set)\n", core::log_timestamp().c_str(), camera_ok ? "started" : "unavailable");
     }
 
-    // Sync saved camera mode setting to MCU
+    // Sync saved camera mode setting to MCU (0x11 = Camera Type: 0=Aftermarket, 1=Factory)
     {
         bool factoryCam = core::default_store().get_bool("OriginalCarCamera", false, "General");
-        hal::send_mcu_setting(0x06, factoryCam ? 1 : 0);
+        hal::send_mcu_setting(0x11, factoryCam ? 1 : 0);
     }
 
     // Sync saved 3-band EQ and dynamic loudness settings
@@ -578,6 +578,7 @@ int main() {
         if (reverseChanged) {
             hal::apply_reversing_volume_cut(reverseEngaged);
             bool factoryCamera = core::default_store().get_bool("OriginalCarCamera", false, "General");
+            hal::send_mcu_setting(0x11, factoryCamera ? 1 : 0);
             if (reverseEngaged) {
                 hal::ack_enter_done(camera_handle);
                 s_wasInAaBeforeReverse = hal::androidauto_screen_active().load(std::memory_order_acquire);

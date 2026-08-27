@@ -284,7 +284,7 @@ static bool is_gpio_forbidden(int pin) {
     if (pin == 119 || pin == 120) return true;/* UART4 */
     if (pin == 123 || pin == 124) return true;/* UART5 */
     if (pin == 127) return true;              /* I2S1 MCLK */
-    if (pin == 130) return true;              /* I2S1 Microphone Capture */
+    if (pin >= 128) return true;              /* PBANK_4 not in kernel sysfs */
     return false;
 }
 
@@ -294,8 +294,7 @@ static const int s_safe_gpios[] = {
     72, 73, 74, 75, 76, 77, 78,
     85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 96,
     100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110,
-    111, 112, 113, 114, 115, 116, 117, 118, 121, 122, 125, 126,
-    128, 129, 131, 132, 133, 134, 135, 136
+    111, 112, 113, 114, 115, 116, 117, 118, 121, 122, 125, 126
 };
 
 static const int s_power_enable_pins[] = {

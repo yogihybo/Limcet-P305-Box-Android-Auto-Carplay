@@ -186,28 +186,47 @@ static int gget(int fd) {
     return c == '1';
 }
 
-static bool bitbang_probe_addr(int sda_pin, int scl_pin, uint8_t addr) {
+static bool bitbang_probe_raw(int sda_pin, int scl_pin, uint8_t addr) {
     gexport(sda_pin);
     gexport(scl_pin);
-    gdir(scl_pin, "out");
-    gdir(sda_pin, "out");
+
+    /* 1. Pull-up Verification: Both lines MUST be pulled HIGH when released */
+    gdir(sda_pin, "in");
+    gdir(scl_pin, "in");
     int sda_fd = gopen(sda_pin);
     int scl_fd = gopen(scl_pin);
     if (sda_fd < 0 || scl_fd < 0) {
         if (sda_fd >= 0) close(sda_fd);
         if (scl_fd >= 0) close(scl_fd);
+        gunexport(sda_pin);
+        gunexport(scl_pin);
         return false;
     }
 
+    udelay_5();
+    int sda_idle = gget(sda_fd);
+    int scl_idle = gget(scl_fd);
+    if (!sda_idle || !scl_idle) {
+        /* Line is grounded, floating low, or lacks I2C pull-up resistors */
+        close(sda_fd);
+        close(scl_fd);
+        gunexport(sda_pin);
+        gunexport(scl_pin);
+        return false;
+    }
+
+    /* 2. Configure for open-drain / output driving */
+    gdir(scl_pin, "out");
+    gdir(sda_pin, "out");
     gset(scl_fd, 1);
     gset(sda_fd, 1);
     udelay_5();
 
-    /* START */
+    /* START condition: SDA goes low while SCL is high */
     gset(sda_fd, 0); udelay_5();
     gset(scl_fd, 0); udelay_5();
 
-    /* Write 8 bits: (addr << 1) | 0 */
+    /* Write 8 bits: (addr << 1) | 0 (WRITE) */
     uint8_t byte = (addr << 1) | 0;
     for (int i = 7; i >= 0; i--) {
         gset(sda_fd, (byte & (1 << i)) ? 1 : 0);
@@ -216,7 +235,7 @@ static bool bitbang_probe_addr(int sda_pin, int scl_pin, uint8_t addr) {
         gset(scl_fd, 0); udelay_5();
     }
 
-    /* Read ACK */
+    /* 9th clock cycle: Release SDA to read ACK */
     gdir(sda_pin, "in");
     udelay_5();
     gset(scl_fd, 1); udelay_5();
@@ -224,7 +243,7 @@ static bool bitbang_probe_addr(int sda_pin, int scl_pin, uint8_t addr) {
     gset(scl_fd, 0); udelay_5();
     gdir(sda_pin, "out");
 
-    /* STOP */
+    /* STOP condition: SDA goes high while SCL is high */
     gset(sda_fd, 0); udelay_5();
     gset(scl_fd, 1); udelay_5();
     gset(sda_fd, 1); udelay_5();
@@ -236,6 +255,19 @@ static bool bitbang_probe_addr(int sda_pin, int scl_pin, uint8_t addr) {
     gunexport(sda_pin);
     gunexport(scl_pin);
     return ack;
+}
+
+/* Strict probe: validates pull-ups, target address ACK, and bogus address NACK */
+static bool bitbang_probe_addr(int sda_pin, int scl_pin, uint8_t addr) {
+    if (!bitbang_probe_raw(sda_pin, scl_pin, addr)) {
+        return false;
+    }
+    /* Anti-False-Positive Check: Bogus address 0x7B MUST return NACK */
+    if (bitbang_probe_raw(sda_pin, scl_pin, 0x7B)) {
+        /* Both target address and 0x7B ACKed -> line is stuck low */
+        return false;
+    }
+    return true;
 }
 
 static bool is_gpio_forbidden(int pin) {

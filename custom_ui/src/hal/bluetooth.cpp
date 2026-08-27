@@ -258,43 +258,8 @@ bool fetch_managed_devices(DBusConnection * conn, std::vector<DeviceSnapshot> & 
     return true;
 }
 
-// Reused by sync_clock_from_phone() -- same GetManagedObjects walk as
-// the signal-driven monitor below, just looking for the first
-// currently-Connected device rather than every paired one. Opens its
-// own short-lived connection since it's called from a different thread
-// (aa_profile_server_loop()) than the persistent monitor connection
-// below belongs to -- libdbus connections aren't meant to be shared
-// across threads without external locking this codebase doesn't have.
-std::string get_connected_device_mac() {
-    DBusError err;
-    dbus_error_init(&err);
-    DBusConnection * conn = dbus_connection_open_private(kBluezMonitorBusAddress, &err);
-    if (!conn) {
-        dbus_error_free(&err);
-        return "";
-    }
-    dbus_error_init(&err);
-    if (!dbus_bus_register(conn, &err)) {
-        dbus_error_free(&err);
-        dbus_connection_close(conn);
-        dbus_connection_unref(conn);
-        return "";
-    }
+// fetch_managed_devices helper is defined above
 
-    std::vector<DeviceSnapshot> devices;
-    std::string result;
-    if (fetch_managed_devices(conn, devices)) {
-        for (const auto & d : devices) {
-            if (d.connected) {
-                result = d.address;
-                break;
-            }
-        }
-    }
-    dbus_connection_close(conn);
-    dbus_connection_unref(conn);
-    return result;
-}
 
 // 2026-08-21: replaces a `while(true) { popen("dbus-send ...", 1.5s
 // sleep }` loop that ran for the ENTIRE process lifetime -- confirmed
@@ -1167,6 +1132,37 @@ bool auto_reconnect_paired_device(BluetoothHandle & h) {
 
     std::printf("%s [BT] auto_reconnect_paired_device: reconnecting to '%s'\n", core::log_timestamp().c_str(), connect_id.c_str());
     return connect_device(h, connect_id);
+}
+
+std::string get_connected_device_mac() {
+    DBusError err;
+    dbus_error_init(&err);
+    DBusConnection * conn = dbus_connection_open_private(kBluezMonitorBusAddress, &err);
+    if (!conn) {
+        dbus_error_free(&err);
+        return "";
+    }
+    dbus_error_init(&err);
+    if (!dbus_bus_register(conn, &err)) {
+        dbus_error_free(&err);
+        dbus_connection_close(conn);
+        dbus_connection_unref(conn);
+        return "";
+    }
+
+    std::vector<DeviceSnapshot> devices;
+    std::string result;
+    if (fetch_managed_devices(conn, devices)) {
+        for (const auto & d : devices) {
+            if (d.connected) {
+                result = d.address;
+                break;
+            }
+        }
+    }
+    dbus_connection_close(conn);
+    dbus_connection_unref(conn);
+    return result;
 }
 
 BluetoothTelemetry get_telemetry() {

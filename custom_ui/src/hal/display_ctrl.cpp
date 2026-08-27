@@ -79,4 +79,43 @@ void close_display_ctrl(DisplayCtrlHandle & h) {
     }
 }
 
+bool set_backlight_brightness(int percent) {
+    if (percent < 0) percent = 0;
+    if (percent > 100) percent = 100;
+    const char * paths[] = {
+        "/sys/class/backlight/backlight/brightness",
+        "/sys/class/backlight/pwm-backlight/brightness",
+        "/sys/devices/platform/pwm-backlight/backlight/pwm-backlight/brightness"
+    };
+    for (const char * path : paths) {
+        FILE * f = fopen(path, "w");
+        if (f) {
+            fprintf(f, "%d\n", percent);
+            fclose(f);
+            return true;
+        }
+    }
+    return false;
+}
+
+int get_backlight_brightness() {
+    const char * paths[] = {
+        "/sys/class/backlight/backlight/brightness",
+        "/sys/class/backlight/pwm-backlight/brightness",
+        "/sys/devices/platform/pwm-backlight/backlight/pwm-backlight/brightness"
+    };
+    for (const char * path : paths) {
+        FILE * f = fopen(path, "r");
+        if (f) {
+            int val = 100;
+            if (fscanf(f, "%d", &val) == 1) {
+                fclose(f);
+                return val;
+            }
+            fclose(f);
+        }
+    }
+    return 100;
+}
+
 }  // namespace hal

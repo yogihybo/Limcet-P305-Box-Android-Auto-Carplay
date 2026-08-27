@@ -322,8 +322,9 @@ lv_obj_t * create_settings_screen() {
 
     // --- Section 1: Display ---
     create_section_header(card, "DISPLAY");
-    create_stepper_row(card, &ui::icons::icon_brightness, "Brightness", 0, 255, 5,
-                       "Brightness", "General", VdeField::Brightness);
+    create_stepper_row(card, &ui::icons::icon_brightness, "Backlight", 0, 100, 5,
+                       "Backlight", "General", VdeField::None,
+                       [](int v) { hal::set_backlight_brightness(v); });
     create_stepper_row(card, &ui::icons::icon_contrast, "Contrast", 0, 255, 5,
                        "Contrast", "General", VdeField::Contrast);
     create_stepper_row(card, &ui::icons::icon_saturation, "Saturation", 0, 255, 5,

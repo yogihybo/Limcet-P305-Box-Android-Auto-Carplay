@@ -309,50 +309,20 @@ int acquireSingleInstanceLock() {
                 // defeat the whole point.
 }
 
-// 2026-08-21: MCU headlight -> night mode infrastructure. Only touches
-// backlight/display BRIGHTNESS, not a color-theme swap -- explicit
-// direction ("only change should be the backlight intensity, not
-// theming"). Also forwards the state to androidauto-sidecar so
-// SensorChannel can report SENSOR_NIGHT_MODE to the phone -- see
-// hal::AndroidAutoClient::sendNightMode()/sidecars/androidauto/
-// main.cpp's own "NIGHT <0|1>" command for that half.
-//
-// Dimming policy: a fixed fraction of the user's own saved "Brightness"
-// setting (not a separate stored night-brightness value -- keeps this
-// self-contained, no new Settings UI row needed for the infrastructure
-// to work end to end). 35% floor at 20 -- arbitrary but reasonable
-// starting point, easy to tune once this is actually running against
-// real headlight events tomorrow.
+// 2026-08-27: MCU headlight -> night mode dimming.
+// Only dims the physical LCD panel LED backlight intensity via PWM sysfs,
+// leaving the VDE color matrix / hue / contrast 100% untouched.
 void apply_night_mode_brightness(bool nightMode) {
-    hal::DisplayCtrlHandle & h = []() -> hal::DisplayCtrlHandle & {
-        static hal::DisplayCtrlHandle handle;
-        static bool tried = false;
-        if (!tried) {
-            hal::init_display_ctrl(handle);
-            tried = true;
-        }
-        return handle;
-    }();
+    int savedBacklight = core::default_store().get_int("Backlight", 100, "General");
+    int target = nightMode
+                     ? std::max(15, static_cast<int>(savedBacklight * 0.30))
+                     : savedBacklight;
 
-    hal::VdeConfig cfg;
-    if (!hal::get_vde_config(h, hal::DisplayLayer::Osd1, cfg)) {
-        std::fprintf(stderr, "%s ui: apply_night_mode_brightness: get_vde_config failed, "
-                     "skipping\n", core::log_timestamp().c_str());
-        return;
-    }
-
-    int savedBrightness = core::default_store().get_int("Brightness", 128, "General");
-    unsigned int target = nightMode
-                               ? std::max(20, static_cast<int>(savedBrightness * 0.35))
-                               : static_cast<unsigned int>(savedBrightness);
-    cfg.brightness = target;
-
-    if (hal::set_vde_config(h, hal::DisplayLayer::Osd1, cfg)) {
-        std::printf("%s [HAL:DISP] Night mode %s -- brightness set to %u (saved=%d)\n",
-                    core::log_timestamp().c_str(), nightMode ? "ON" : "OFF", target,
-                    savedBrightness);
+    if (hal::set_backlight_brightness(target)) {
+        std::printf("%s [HAL:DISP] Night mode %s -- physical backlight set to %d%% (saved=%d%%)\n",
+                    core::log_timestamp().c_str(), nightMode ? "ON" : "OFF", target, savedBacklight);
     } else {
-        std::fprintf(stderr, "%s [HAL:DISP] apply_night_mode_brightness: set_vde_config failed\n",
+        std::fprintf(stderr, "%s [HAL:DISP] apply_night_mode_brightness: set_backlight_brightness failed\n",
                      core::log_timestamp().c_str());
     }
 }

@@ -154,6 +154,16 @@ static void process_single_command(aap_session_t *session, const char *cmd, int 
     } else if (strncmp(cmd, "NIGHT ", 6) == 0) {
         if (session) aap_session_send_night_mode(session, cmd[6] == '1');
         reply = "OK\n";
+    } else if (strncmp(cmd, "EQ ", 3) == 0) {
+        int bass = 0, mid = 0, treble = 0, loud = 0;
+        if (sscanf(cmd + 3, "%d %d %d %d", &bass, &mid, &treble, &loud) == 4) {
+            if (session) {
+                aap_session_set_eq(session, bass, mid, treble, loud != 0);
+            }
+            printf("[AA] Audio EQ updated: Bass=%d dB, Mid=%d dB, Treble=%d dB, Loudness=%d\n",
+                   bass, mid, treble, loud);
+        }
+        reply = "OK\n";
     }
 
     if (client_fd >= 0) {

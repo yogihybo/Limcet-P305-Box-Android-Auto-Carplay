@@ -22,6 +22,9 @@ void aap_audio_sink_prepare(aap_audio_sink_t *sink);
 /* Write PCM frame bytes (interleaved 16-bit) into pre-allocated ring buffer */
 bool aap_audio_sink_write(aap_audio_sink_t *sink, const uint8_t *pcm_data, size_t pcm_len);
 
+/* Configure 3-Band Parametric Equalizer and dynamic loudness */
+void aap_audio_sink_set_eq(aap_audio_sink_t *sink, int bass_db, int mid_db, int treble_db, bool loudness);
+
 size_t aap_audio_sink_queued_buffers(const aap_audio_sink_t *sink);
 
 #ifdef __cplusplus

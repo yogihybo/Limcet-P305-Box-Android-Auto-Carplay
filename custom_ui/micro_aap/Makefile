@@ -16,7 +16,7 @@ CFLAGS  := -std=gnu11 -Wall -Wextra -Os \
            -I$(BUILDROOT_STAGING)/usr/include
 
 LDFLAGS := -s -Wl,--gc-sections -Wl,--as-needed -L$(BUILDROOT_STAGING)/usr/lib
-LIBS    := -lssl -lcrypto -lasound -lpthread -ldl -lrt
+LIBS    := -lssl -lcrypto -lasound -lpthread -ldl -lrt -lm
 
 BUILD_DIR := build
 

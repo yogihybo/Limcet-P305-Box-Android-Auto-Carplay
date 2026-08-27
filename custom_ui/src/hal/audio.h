@@ -27,4 +27,8 @@ bool set_stream_volume(AudioStream stream, int percent);
 // according to the ReversingVolumeCut config key (0-100%).
 void apply_reversing_volume_cut(bool in_reverse);
 
+// Updates 3-Band Parametric Equalizer and dynamic loudness across running audio processors
+void set_audio_eq(int bass_db, int mid_db, int treble_db, bool loudness);
+void sync_audio_eq();
+
 }  // namespace hal

@@ -5,10 +5,22 @@
 #include <string.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <math.h>
 #include <alsa/asoundlib.h>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 #define AAP_AUDIO_SLOTS 64
 #define AAP_AUDIO_SLOT_MAX_SIZE 4096
+
+typedef struct {
+    float b0, b1, b2, a1, a2;
+    float x1[2], x2[2];
+    float y1[2], y2[2];
+    bool  active;
+} biquad_filter_t;
 
 typedef struct {
     uint8_t data[AAP_AUDIO_SLOT_MAX_SIZE];
@@ -32,7 +44,105 @@ struct aap_audio_sink {
     size_t read_idx;
     size_t write_idx;
     size_t count;
+
+    /* Equalizer & Tone processing */
+    pthread_mutex_t eq_mutex;
+    biquad_filter_t eq_bass;
+    biquad_filter_t eq_mid;
+    biquad_filter_t eq_treble;
+    biquad_filter_t eq_loudness_bass;
+    biquad_filter_t eq_loudness_treble;
+    bool            has_active_eq;
 };
+
+static void init_biquad_low_shelf(biquad_filter_t *f, float f0, float gain_db, float fs) {
+    if (fabsf(gain_db) < 0.1f) {
+        f->active = false;
+        memset(f->x1, 0, sizeof(f->x1));
+        memset(f->x2, 0, sizeof(f->x2));
+        memset(f->y1, 0, sizeof(f->y1));
+        memset(f->y2, 0, sizeof(f->y2));
+        return;
+    }
+    float A = powf(10.0f, gain_db / 40.0f);
+    float w0 = 2.0f * (float)M_PI * f0 / fs;
+    float cos_w = cosf(w0);
+    float sin_w = sinf(w0);
+    float alpha = sin_w / 2.0f * 1.41421356f; /* S=1 -> sqrt(2) */
+
+    float a0 = (A + 1.0f) + (A - 1.0f) * cos_w + 2.0f * sqrtf(A) * alpha;
+    f->b0 = (A * ((A + 1.0f) - (A - 1.0f) * cos_w + 2.0f * sqrtf(A) * alpha)) / a0;
+    f->b1 = (2.0f * A * ((A - 1.0f) - (A + 1.0f) * cos_w)) / a0;
+    f->b2 = (A * ((A + 1.0f) - (A - 1.0f) * cos_w - 2.0f * sqrtf(A) * alpha)) / a0;
+    f->a1 = (-2.0f * ((A - 1.0f) + (A + 1.0f) * cos_w)) / a0;
+    f->a2 = ((A + 1.0f) + (A - 1.0f) * cos_w - 2.0f * sqrtf(A) * alpha) / a0;
+    f->active = true;
+}
+
+static void init_biquad_peaking(biquad_filter_t *f, float f0, float gain_db, float Q, float fs) {
+    if (fabsf(gain_db) < 0.1f) {
+        f->active = false;
+        memset(f->x1, 0, sizeof(f->x1));
+        memset(f->x2, 0, sizeof(f->x2));
+        memset(f->y1, 0, sizeof(f->y1));
+        memset(f->y2, 0, sizeof(f->y2));
+        return;
+    }
+    float A = powf(10.0f, gain_db / 40.0f);
+    float w0 = 2.0f * (float)M_PI * f0 / fs;
+    float cos_w = cosf(w0);
+    float sin_w = sinf(w0);
+    float alpha = sin_w / (2.0f * Q);
+
+    float a0 = 1.0f + alpha / A;
+    f->b0 = (1.0f + alpha * A) / a0;
+    f->b1 = (-2.0f * cos_w) / a0;
+    f->b2 = (1.0f - alpha * A) / a0;
+    f->a1 = (-2.0f * cos_w) / a0;
+    f->a2 = (1.0f - alpha / A) / a0;
+    f->active = true;
+}
+
+static void init_biquad_high_shelf(biquad_filter_t *f, float f0, float gain_db, float fs) {
+    if (fabsf(gain_db) < 0.1f) {
+        f->active = false;
+        memset(f->x1, 0, sizeof(f->x1));
+        memset(f->x2, 0, sizeof(f->x2));
+        memset(f->y1, 0, sizeof(f->y1));
+        memset(f->y2, 0, sizeof(f->y2));
+        return;
+    }
+    float A = powf(10.0f, gain_db / 40.0f);
+    float w0 = 2.0f * (float)M_PI * f0 / fs;
+    float cos_w = cosf(w0);
+    float sin_w = sinf(w0);
+    float alpha = sin_w / 2.0f * 1.41421356f;
+
+    float a0 = (A + 1.0f) - (A - 1.0f) * cos_w + 2.0f * sqrtf(A) * alpha;
+    f->b0 = (A * ((A + 1.0f) + (A - 1.0f) * cos_w + 2.0f * sqrtf(A) * alpha)) / a0;
+    f->b1 = (-2.0f * A * ((A - 1.0f) + (A + 1.0f) * cos_w)) / a0;
+    f->b2 = (A * ((A + 1.0f) + (A - 1.0f) * cos_w - 2.0f * sqrtf(A) * alpha)) / a0;
+    f->a1 = (2.0f * ((A - 1.0f) - (A + 1.0f) * cos_w)) / a0;
+    f->a2 = ((A + 1.0f) - (A - 1.0f) * cos_w - 2.0f * sqrtf(A) * alpha) / a0;
+    f->active = true;
+}
+
+static inline int16_t clamp_s16(int32_t val) {
+    if (val > 32767) return 32767;
+    if (val < -32768) return -32768;
+    return (int16_t)val;
+}
+
+static inline float process_biquad(biquad_filter_t *f, float in, int ch) {
+    if (!f->active) return in;
+    float out = f->b0 * in + f->b1 * f->x1[ch] + f->b2 * f->x2[ch]
+                - f->a1 * f->y1[ch] - f->a2 * f->y2[ch];
+    f->x2[ch] = f->x1[ch];
+    f->x1[ch] = in;
+    f->y2[ch] = f->y1[ch];
+    f->y1[ch] = out;
+    return out;
+}
 
 static void *audio_writer_thread(void *arg) {
     aap_audio_sink_t *sink = (aap_audio_sink_t *)arg;
@@ -101,6 +211,7 @@ aap_audio_sink_t *aap_audio_sink_create(const char *device_name, uint32_t sample
 
     pthread_mutex_init(&sink->mutex, NULL);
     pthread_cond_init(&sink->cond, NULL);
+    pthread_mutex_init(&sink->eq_mutex, NULL);
 
     return sink;
 }
@@ -110,7 +221,31 @@ void aap_audio_sink_destroy(aap_audio_sink_t *sink) {
     aap_audio_sink_close(sink);
     pthread_mutex_destroy(&sink->mutex);
     pthread_cond_destroy(&sink->cond);
+    pthread_mutex_destroy(&sink->eq_mutex);
     free(sink);
+}
+
+void aap_audio_sink_set_eq(aap_audio_sink_t *sink, int bass_db, int mid_db, int treble_db, bool loudness) {
+    if (!sink) return;
+    pthread_mutex_lock(&sink->eq_mutex);
+
+    float fs = (float)sink->sample_rate;
+    init_biquad_low_shelf(&sink->eq_bass, 100.0f, (float)bass_db, fs);
+    init_biquad_peaking(&sink->eq_mid, 1000.0f, (float)mid_db, 1.0f, fs);
+    init_biquad_high_shelf(&sink->eq_treble, 8000.0f, (float)treble_db, fs);
+
+    if (loudness) {
+        init_biquad_low_shelf(&sink->eq_loudness_bass, 80.0f, 3.0f, fs);
+        init_biquad_high_shelf(&sink->eq_loudness_treble, 10000.0f, 2.5f, fs);
+    } else {
+        sink->eq_loudness_bass.active = false;
+        sink->eq_loudness_treble.active = false;
+    }
+
+    sink->has_active_eq = (sink->eq_bass.active || sink->eq_mid.active || sink->eq_treble.active ||
+                           sink->eq_loudness_bass.active || sink->eq_loudness_treble.active);
+
+    pthread_mutex_unlock(&sink->eq_mutex);
 }
 
 bool aap_audio_sink_open(aap_audio_sink_t *sink) {
@@ -201,6 +336,35 @@ bool aap_audio_sink_write(aap_audio_sink_t *sink, const uint8_t *pcm_data, size_
         audio_slot_t *slot = &sink->slots[sink->write_idx];
         memcpy(slot->data, pcm_data + offset, chunk);
         slot->len = chunk;
+
+        if (sink->has_active_eq && sink->channels == 2) {
+            int16_t *samples = (int16_t *)slot->data;
+            size_t num_samples = chunk / sizeof(int16_t);
+            pthread_mutex_lock(&sink->eq_mutex);
+            for (size_t s = 0; s < num_samples; s += 2) {
+                float l = (float)samples[s];
+                float r = (float)samples[s + 1];
+
+                l = process_biquad(&sink->eq_bass, l, 0);
+                r = process_biquad(&sink->eq_bass, r, 1);
+
+                l = process_biquad(&sink->eq_mid, l, 0);
+                r = process_biquad(&sink->eq_mid, r, 1);
+
+                l = process_biquad(&sink->eq_treble, l, 0);
+                r = process_biquad(&sink->eq_treble, r, 1);
+
+                l = process_biquad(&sink->eq_loudness_bass, l, 0);
+                r = process_biquad(&sink->eq_loudness_bass, r, 1);
+
+                l = process_biquad(&sink->eq_loudness_treble, l, 0);
+                r = process_biquad(&sink->eq_loudness_treble, r, 1);
+
+                samples[s] = clamp_s16((int32_t)l);
+                samples[s + 1] = clamp_s16((int32_t)r);
+            }
+            pthread_mutex_unlock(&sink->eq_mutex);
+        }
 
         sink->write_idx = (sink->write_idx + 1) % AAP_AUDIO_SLOTS;
         sink->count++;

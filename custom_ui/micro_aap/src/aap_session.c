@@ -1353,3 +1353,10 @@ void aap_session_request_video_focus(aap_session_t *s, bool projected) {
     aap_video_sink_set_visible(s->video_sink, projected);
     printf("[AA] video focus request sent (unsolicited=1, projected=%d)\n", projected ? 1 : 0);
 }
+
+void aap_session_set_eq(aap_session_t *s, int bass_db, int mid_db, int treble_db, bool loudness) {
+    if (!s) return;
+    if (s->audio_media) {
+        aap_audio_sink_set_eq(s->audio_media, bass_db, mid_db, treble_db, loudness);
+    }
+}

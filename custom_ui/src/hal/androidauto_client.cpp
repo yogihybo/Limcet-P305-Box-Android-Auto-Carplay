@@ -434,4 +434,18 @@ bool AndroidAutoClient::sendNightMode(bool nightMode) {
     return false;
 }
 
+bool AndroidAutoClient::sendEq(int bass_db, int mid_db, int treble_db, bool loudness) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    std::string reply;
+    std::string cmd = "EQ " + std::to_string(bass_db) + " " + std::to_string(mid_db) + " "
+                      + std::to_string(treble_db) + " " + (loudness ? "1" : "0");
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        if (ensureConnected(/*allow_spawn=*/false) && sendCommand(cmd, reply)) {
+            return true;
+        }
+        disconnect();
+    }
+    return false;
+}
+
 }  // namespace hal

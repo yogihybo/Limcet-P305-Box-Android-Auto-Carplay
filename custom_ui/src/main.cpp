@@ -27,6 +27,7 @@
 #include "hal/knob.h"
 #include "hal/mcu_input.h"
 #include "hal/touch.h"
+#include "hal/timezone.h"
 #include "core/config_store.h"
 #include "core/log_timing.h"
 #include "core/navigation.h"
@@ -410,6 +411,7 @@ int main() {
     // stock app, does its own equivalent unmute independently; nothing
     // in custom_ui ever replicated it until now).
     hal::init_audio_mixer();
+    hal::apply_timezone(hal::get_current_timezone_index());
 
     core::SizedThread(core::kDefaultThreadStackSize, []() {
         // Starts BlueZ 5.66 subsystem and sidecar in parallel with UI rendering

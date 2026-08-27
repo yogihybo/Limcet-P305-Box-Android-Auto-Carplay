@@ -24,23 +24,15 @@ hal::DisplayCtrlHandle & display_handle() {
     return handle;
 }
 
-enum class VdeField { None, Brightness, Contrast, Saturation, Hue };
-
 struct StepperCtx {
     std::string section;
     std::string key;
-    VdeField vde_field;
     int min;
     int max;
     int step;
     int value;
     lv_obj_t * value_label;
     lv_obj_t * level_bar;
-    // Extra hardware apply beyond the VDE display path -- currently only
-    // used for the Audio section's per-stream ALSA volume (hal::audio.h's
-    // set_stream_volume(), a real independent mixer per stream, see that
-    // header's own comment). nullptr for rows with no such hardware
-    // effect (e.g. VdeField-only Display rows).
     std::function<void(int)> extra_apply;
 };
 
@@ -57,20 +49,6 @@ void destroy_btn_ctx(lv_event_t * e) {
     delete static_cast<StepperBtnCtx *>(lv_event_get_user_data(e));
 }
 
-void apply_vde(VdeField field, int value) {
-    if (field == VdeField::None) return;
-    hal::DisplayCtrlHandle & h = display_handle();
-    hal::VdeConfig cfg;
-    hal::get_vde_config(h, hal::DisplayLayer::Osd1, cfg);
-    switch (field) {
-        case VdeField::Brightness: cfg.brightness = static_cast<unsigned int>(value); break;
-        case VdeField::Contrast:   cfg.contrast = static_cast<unsigned int>(value); break;
-        case VdeField::Saturation: cfg.saturation = static_cast<unsigned int>(value); break;
-        case VdeField::Hue:        cfg.hue = static_cast<unsigned int>(value); break;
-        default: break;
-    }
-    hal::set_vde_config(h, hal::DisplayLayer::Osd1, cfg);
-}
 
 void stepper_click_cb(lv_event_t * e) {
     auto * btn_ctx = static_cast<StepperBtnCtx *>(lv_event_get_user_data(e));
@@ -90,7 +68,6 @@ void stepper_click_cb(lv_event_t * e) {
     }
 
     core::default_store().set_int(ctx->key, ctx->value, ctx->section);
-    apply_vde(ctx->vde_field, ctx->value);
     if (ctx->extra_apply) {
         ctx->extra_apply(ctx->value);
     }
@@ -115,7 +92,7 @@ lv_obj_t * create_section_header(lv_obj_t * parent, const char * title) {
 
 lv_obj_t * create_stepper_row(lv_obj_t * parent, const lv_image_dsc_t * icon_dsc, const char * label_text,
                              int min, int max, int step, const std::string & key,
-                             const std::string & section, VdeField vde_field,
+                             const std::string & section,
                              std::function<void(int)> extra_apply = nullptr) {
     lv_obj_t * row = lv_obj_create(parent);
     lv_obj_remove_style_all(row);
@@ -149,7 +126,7 @@ lv_obj_t * create_stepper_row(lv_obj_t * parent, const lv_image_dsc_t * icon_dsc
     if (initial > max) initial = max;
     initial = min + ((initial - min) / step) * step;
 
-    auto * ctx = new StepperCtx{section, key, vde_field, min, max, step, initial, nullptr, nullptr, extra_apply};
+    auto * ctx = new StepperCtx{section, key, min, max, step, initial, nullptr, nullptr, extra_apply};
     lv_obj_add_event_cb(row, destroy_stepper_ctx, LV_EVENT_DELETE, ctx);
 
     // Right Controls (Percentage + Level Bar + Minus + Plus)
@@ -202,7 +179,6 @@ lv_obj_t * create_stepper_row(lv_obj_t * parent, const lv_image_dsc_t * icon_dsc
         lv_group_add_obj(core::navigation::focus_group(), plus_btn);
     }
 
-    apply_vde(vde_field, initial);
     if (extra_apply) {
         extra_apply(initial);
     }
@@ -323,36 +299,30 @@ lv_obj_t * create_settings_screen() {
     // --- Section 1: Display ---
     create_section_header(card, "DISPLAY");
     create_stepper_row(card, &ui::icons::icon_brightness, "Backlight", 0, 100, 5,
-                       "Backlight", "General", VdeField::None,
+                       "Backlight", "General",
                        [](int v) { hal::set_backlight_brightness(v); });
-    create_stepper_row(card, &ui::icons::icon_contrast, "Contrast", 0, 255, 5,
-                       "Contrast", "General", VdeField::Contrast);
-    create_stepper_row(card, &ui::icons::icon_saturation, "Saturation", 0, 255, 5,
-                       "Saturation", "General", VdeField::Saturation);
-    create_stepper_row(card, &ui::icons::icon_saturation, "Hue", 0, 255, 5,
-                       "Hue", "General", VdeField::Hue);
 
     // --- Section 2: Audio ---
     create_section_header(card, "AUDIO");
     create_stepper_row(card, &ui::icons::icon_volume, "Media Volume", 0, 100, 5,
-                       "MediaVolume", "Audio", VdeField::None,
+                       "MediaVolume", "Audio",
                        [](int v) { hal::set_stream_volume(hal::AudioStream::Media, v); });
     create_stepper_row(card, &ui::icons::icon_bell, "Guidance Volume", 0, 100, 5,
-                       "GuidanceVolume", "Audio", VdeField::None,
+                       "GuidanceVolume", "Audio",
                        [](int v) { hal::set_stream_volume(hal::AudioStream::Guidance, v); });
     create_stepper_row(card, &ui::icons::icon_volume, "System Volume", 0, 100, 5,
-                       "SystemVolume", "Audio", VdeField::None,
+                       "SystemVolume", "Audio",
                        [](int v) { hal::set_stream_volume(hal::AudioStream::System, v); });
 
     // --- Section 3: Vehicle & Camera ---
     create_section_header(card, "VEHICLE & CAMERA");
     create_toggle_row(card, &ui::icons::icon_nav_camera, "OEM Factory Camera",
-                      "OriginalCarCamera", "General", false, [](bool oem) {
-                          std::printf("%s [HAL:REVCAM] Reversing camera mode set to %s\n",
-                                      core::log_timestamp().c_str(), oem ? "OEM Factory Camera" : "Aftermarket Camera");
-                      });
+                       "OriginalCarCamera", "General", false, [](bool oem) {
+                           std::printf("%s [HAL:REVCAM] Reversing camera mode set to %s\n",
+                                       core::log_timestamp().c_str(), oem ? "OEM Factory Camera" : "Aftermarket Camera");
+                       });
     create_stepper_row(card, &ui::icons::icon_volume, "Reversing Volume Cut (%)", 0, 100, 5,
-                       "ReversingVolumeCut", "General", VdeField::None);
+                       "ReversingVolumeCut", "General");
 
     // --- Section 4: System ---
     create_section_header(card, "SYSTEM");

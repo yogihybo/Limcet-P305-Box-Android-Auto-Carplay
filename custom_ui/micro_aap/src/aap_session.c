@@ -394,7 +394,7 @@ static void handle_control_message(aap_session_t *s, uint16_t msg_id, const uint
                 ch->media_sink_service.video_configs[0].has_width_margin = true;
                 ch->media_sink_service.video_configs[0].width_margin = 0;
                 ch->media_sink_service.video_configs[0].has_height_margin = true;
-                ch->media_sink_service.video_configs[0].height_margin = 0;
+                ch->media_sink_service.video_configs[0].height_margin = 20;
             }
 
             /* Channel 4: MediaAudioSink */
@@ -459,15 +459,16 @@ static void handle_control_message(aap_session_t *s, uint16_t msg_id, const uint
                 ch->input_source_service.touchscreen[0].has_type = true;
                 ch->input_source_service.touchscreen[0].type = aap_protobuf_service_inputsource_message_TouchScreenType_CAPACITIVE;
                 ch->input_source_service.keycodes_supported_count = 8;
-                ch->input_source_service.keycodes_supported[0] = 260; /* KEYCODE_NAVIGATE_PREVIOUS (CCW) */
-                ch->input_source_service.keycodes_supported[1] = 261; /* KEYCODE_NAVIGATE_NEXT (CW) */
-                ch->input_source_service.keycodes_supported[2] = 21;  /* KEYCODE_DPAD_LEFT */
-                ch->input_source_service.keycodes_supported[3] = 22;  /* KEYCODE_DPAD_RIGHT */
-                ch->input_source_service.keycodes_supported[4] = 23;  /* KEYCODE_DPAD_CENTER */
-                ch->input_source_service.keycodes_supported[5] = 3;   /* KEYCODE_HOME */
-                ch->input_source_service.keycodes_supported[6] = 65538; /* KEYCODE_NAVIGATION */
-                ch->input_source_service.keycodes_supported[7] = 87;  /* KEYCODE_MEDIA_NEXT */
+                ch->input_source_service.keycodes_supported[0] = 65536; /* KEYCODE_ROTARY_CONTROLLER */
+                ch->input_source_service.keycodes_supported[1] = 21;    /* KEYCODE_DPAD_LEFT */
+                ch->input_source_service.keycodes_supported[2] = 22;    /* KEYCODE_DPAD_RIGHT */
+                ch->input_source_service.keycodes_supported[3] = 23;    /* KEYCODE_DPAD_CENTER */
+                ch->input_source_service.keycodes_supported[4] = 3;     /* KEYCODE_HOME */
+                ch->input_source_service.keycodes_supported[5] = 65538; /* KEYCODE_NAVIGATION */
+                ch->input_source_service.keycodes_supported[6] = 87;    /* KEYCODE_MEDIA_NEXT */
+                ch->input_source_service.keycodes_supported[7] = 88;    /* KEYCODE_MEDIA_PREVIOUS */
             }
+
 
             /* Channel 9: Microphone */
             {
@@ -1256,6 +1257,28 @@ void aap_session_send_key(aap_session_t *s, uint32_t keycode) {
                      pb_buf, ostream.bytes_written, true);
 
     printf("aap_session: sent keycode %u (down/up)\n", keycode);
+}
+
+void aap_session_send_rotary(aap_session_t *s, int32_t delta) {
+    if (!s || s->state != AAP_SESSION_STATE_RUNNING || delta == 0) return;
+
+    aap_protobuf_service_inputsource_message_InputReport report =
+        aap_protobuf_service_inputsource_message_InputReport_init_default;
+    report.timestamp = now_micros();
+    report.has_relative_event = true;
+    report.relative_event.data_count = 1;
+    report.relative_event.data[0].keycode = 65536; /* KEYCODE_ROTARY_CONTROLLER */
+    report.relative_event.data[0].delta = delta;
+
+    uint8_t pb_buf[256];
+    pb_ostream_t ostream = pb_ostream_from_buffer(pb_buf, sizeof(pb_buf));
+    pb_encode(&ostream, aap_protobuf_service_inputsource_message_InputReport_fields, &report);
+
+    send_channel_msg(s, AAP_CHANNEL_INPUT,
+                     aap_protobuf_service_inputsource_InputMessageId_INPUT_MESSAGE_INPUT_REPORT,
+                     pb_buf, ostream.bytes_written, true);
+
+    printf("aap_session: sent rotary controller (delta=%d)\n", delta);
 }
 
 void aap_session_send_touch(aap_session_t *s, uint32_t x, uint32_t y, uint32_t action) {

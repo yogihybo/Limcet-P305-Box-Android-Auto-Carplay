@@ -223,35 +223,40 @@ static bool bitbang_probe_raw(int sda_pin, int scl_pin, uint8_t addr) {
     udelay_5();
 
     /* START condition: SDA goes low while SCL is high */
-    gset(sda_fd, 0); udelay_5();
-    gset(scl_fd, 0); udelay_5();
+    gdir(sda_pin, "out"); gset(sda_fd, 0); udelay_5();
+    gdir(scl_pin, "out"); gset(scl_fd, 0); udelay_5();
 
     /* Write 8 bits: (addr << 1) | 0 (WRITE) */
     uint8_t byte = (addr << 1) | 0;
     for (int i = 7; i >= 0; i--) {
-        gset(sda_fd, (byte & (1 << i)) ? 1 : 0);
+        if (byte & (1 << i)) {
+            gdir(sda_pin, "in"); /* Released HIGH */
+        } else {
+            gdir(sda_pin, "out"); gset(sda_fd, 0); /* Driven LOW */
+        }
         udelay_5();
-        gset(scl_fd, 1); udelay_5();
-        gset(scl_fd, 0); udelay_5();
+        gdir(scl_pin, "in"); /* Clock HIGH */
+        usleep(10);
+        gdir(scl_pin, "out"); gset(scl_fd, 0); /* Clock LOW */
+        udelay_5();
     }
 
     /* 9th clock cycle: Release SDA to read ACK */
     gdir(sda_pin, "in");
-    udelay_5();
-    gset(scl_fd, 1); udelay_5();
+    usleep(10);
+    gdir(scl_pin, "in"); /* Clock HIGH */
+    usleep(10);
     bool ack = !gget(sda_fd);
-    gset(scl_fd, 0); udelay_5();
-    gdir(sda_pin, "out");
+    gdir(scl_pin, "out"); gset(scl_fd, 0); /* Clock LOW */
+    udelay_5();
 
     /* STOP condition: SDA goes high while SCL is high */
-    gset(sda_fd, 0); udelay_5();
-    gset(scl_fd, 1); udelay_5();
-    gset(sda_fd, 1); udelay_5();
+    gdir(sda_pin, "out"); gset(sda_fd, 0); udelay_5();
+    gdir(scl_pin, "in"); usleep(10);
+    gdir(sda_pin, "in"); usleep(10);
 
     close(sda_fd);
     close(scl_fd);
-    gdir(sda_pin, "in");
-    gdir(scl_pin, "in");
     gunexport(sda_pin);
     gunexport(scl_pin);
     return ack;
@@ -274,7 +279,7 @@ static bool bitbang_write_bytes(int sda_pin, int scl_pin, uint8_t dev_addr, uint
         return false;
     }
 
-    udelay_5();
+    usleep(10);
     if (!gget(sda_fd) || !gget(scl_fd)) {
         close(sda_fd);
         close(scl_fd);
@@ -283,87 +288,59 @@ static bool bitbang_write_bytes(int sda_pin, int scl_pin, uint8_t dev_addr, uint
         return false;
     }
 
-    gdir(scl_pin, "out");
-    gdir(sda_pin, "out");
-    gset(scl_fd, 1);
-    gset(sda_fd, 1);
-    udelay_5();
-
     /* START */
-    gset(sda_fd, 0); udelay_5();
-    gset(scl_fd, 0); udelay_5();
+    gdir(sda_pin, "out"); gset(sda_fd, 0); udelay_5();
+    gdir(scl_pin, "out"); gset(scl_fd, 0); udelay_5();
 
-    /* Byte 1: Device Address (WRITE) */
-    uint8_t byte = (dev_addr << 1) | 0;
-    for (int i = 7; i >= 0; i--) {
-        gset(sda_fd, (byte & (1 << i)) ? 1 : 0);
-        udelay_5();
-        gset(scl_fd, 1); udelay_5();
-        gset(scl_fd, 0); udelay_5();
-    }
-    gdir(sda_pin, "in");
-    udelay_5();
-    gset(scl_fd, 1); udelay_5();
-    bool ack = !gget(sda_fd);
-    gset(scl_fd, 0); udelay_5();
-    gdir(sda_pin, "out");
-    if (!ack) goto fail;
+    /* Helper lambda/macro to write 1 byte and check ACK */
+    uint8_t bytes_to_send[2 + len];
+    bytes_to_send[0] = (dev_addr << 1) | 0;
+    bytes_to_send[1] = sub_addr;
+    memcpy(&bytes_to_send[2], data, len);
 
-    /* Byte 2: Sub-Address */
-    byte = sub_addr;
-    for (int i = 7; i >= 0; i--) {
-        gset(sda_fd, (byte & (1 << i)) ? 1 : 0);
-        udelay_5();
-        gset(scl_fd, 1); udelay_5();
-        gset(scl_fd, 0); udelay_5();
-    }
-    gdir(sda_pin, "in");
-    udelay_5();
-    gset(scl_fd, 1); udelay_5();
-    ack = !gget(sda_fd);
-    gset(scl_fd, 0); udelay_5();
-    gdir(sda_pin, "out");
-    if (!ack) goto fail;
-
-    /* Payload Bytes */
-    for (size_t d = 0; d < len; ++d) {
-        byte = data[d];
+    for (size_t b = 0; b < 2 + len; ++b) {
+        uint8_t val = bytes_to_send[b];
         for (int i = 7; i >= 0; i--) {
-            gset(sda_fd, (byte & (1 << i)) ? 1 : 0);
+            if (val & (1 << i)) {
+                gdir(sda_pin, "in");
+            } else {
+                gdir(sda_pin, "out"); gset(sda_fd, 0);
+            }
             udelay_5();
-            gset(scl_fd, 1); udelay_5();
-            gset(scl_fd, 0); udelay_5();
+            gdir(scl_pin, "in");
+            usleep(10);
+            gdir(scl_pin, "out"); gset(scl_fd, 0);
+            udelay_5();
         }
+
+        /* Read ACK */
         gdir(sda_pin, "in");
+        usleep(10);
+        gdir(scl_pin, "in");
+        usleep(10);
+        bool ack = !gget(sda_fd);
+        gdir(scl_pin, "out"); gset(scl_fd, 0);
         udelay_5();
-        gset(scl_fd, 1); udelay_5();
-        ack = !gget(sda_fd);
-        gset(scl_fd, 0); udelay_5();
-        gdir(sda_pin, "out");
         if (!ack) goto fail;
     }
 
     /* STOP */
-    gset(sda_fd, 0); udelay_5();
-    gset(scl_fd, 1); udelay_5();
-    gset(sda_fd, 1); udelay_5();
+    gdir(sda_pin, "out"); gset(sda_fd, 0); udelay_5();
+    gdir(scl_pin, "in"); usleep(10);
+    gdir(sda_pin, "in"); usleep(10);
 
     close(sda_fd);
     close(scl_fd);
-    gdir(sda_pin, "in");
-    gdir(scl_pin, "in");
     gunexport(sda_pin);
     gunexport(scl_pin);
     return true;
 
 fail:
-    gset(sda_fd, 0); udelay_5();
-    gset(scl_fd, 1); udelay_5();
-    gset(sda_fd, 1); udelay_5();
+    gdir(sda_pin, "out"); gset(sda_fd, 0); udelay_5();
+    gdir(scl_pin, "in"); usleep(10);
+    gdir(sda_pin, "in"); usleep(10);
     close(sda_fd);
     close(scl_fd);
-    gdir(sda_pin, "in");
-    gdir(scl_pin, "in");
     gunexport(sda_pin);
     gunexport(scl_pin);
     return false;

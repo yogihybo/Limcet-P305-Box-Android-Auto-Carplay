@@ -1,6 +1,6 @@
 CROSS_COMPILE ?= arm-linux-gnueabihf-
 CC = $(CROSS_COMPILE)gcc
-CFLAGS ?= -Wall -Wextra -O2
+CFLAGS ?= -Wall -Wextra -O2 -static
 
 TARGET = mcu-handshake
 SRC = mcu-handshake.c

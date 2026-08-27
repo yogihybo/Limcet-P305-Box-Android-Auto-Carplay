@@ -257,6 +257,118 @@ static bool bitbang_probe_raw(int sda_pin, int scl_pin, uint8_t addr) {
     return ack;
 }
 
+static bool bitbang_write_bytes(int sda_pin, int scl_pin, uint8_t dev_addr, uint8_t sub_addr, const uint8_t *data, size_t len) {
+    gexport(sda_pin);
+    gexport(scl_pin);
+
+    /* 1. Pull-up Verification */
+    gdir(sda_pin, "in");
+    gdir(scl_pin, "in");
+    int sda_fd = gopen(sda_pin);
+    int scl_fd = gopen(scl_pin);
+    if (sda_fd < 0 || scl_fd < 0) {
+        if (sda_fd >= 0) close(sda_fd);
+        if (scl_fd >= 0) close(scl_fd);
+        gunexport(sda_pin);
+        gunexport(scl_pin);
+        return false;
+    }
+
+    udelay_5();
+    if (!gget(sda_fd) || !gget(scl_fd)) {
+        close(sda_fd);
+        close(scl_fd);
+        gunexport(sda_pin);
+        gunexport(scl_pin);
+        return false;
+    }
+
+    gdir(scl_pin, "out");
+    gdir(sda_pin, "out");
+    gset(scl_fd, 1);
+    gset(sda_fd, 1);
+    udelay_5();
+
+    /* START */
+    gset(sda_fd, 0); udelay_5();
+    gset(scl_fd, 0); udelay_5();
+
+    /* Byte 1: Device Address (WRITE) */
+    uint8_t byte = (dev_addr << 1) | 0;
+    for (int i = 7; i >= 0; i--) {
+        gset(sda_fd, (byte & (1 << i)) ? 1 : 0);
+        udelay_5();
+        gset(scl_fd, 1); udelay_5();
+        gset(scl_fd, 0); udelay_5();
+    }
+    gdir(sda_pin, "in");
+    udelay_5();
+    gset(scl_fd, 1); udelay_5();
+    bool ack = !gget(sda_fd);
+    gset(scl_fd, 0); udelay_5();
+    gdir(sda_pin, "out");
+    if (!ack) goto fail;
+
+    /* Byte 2: Sub-Address */
+    byte = sub_addr;
+    for (int i = 7; i >= 0; i--) {
+        gset(sda_fd, (byte & (1 << i)) ? 1 : 0);
+        udelay_5();
+        gset(scl_fd, 1); udelay_5();
+        gset(scl_fd, 0); udelay_5();
+    }
+    gdir(sda_pin, "in");
+    udelay_5();
+    gset(scl_fd, 1); udelay_5();
+    ack = !gget(sda_fd);
+    gset(scl_fd, 0); udelay_5();
+    gdir(sda_pin, "out");
+    if (!ack) goto fail;
+
+    /* Payload Bytes */
+    for (size_t d = 0; d < len; ++d) {
+        byte = data[d];
+        for (int i = 7; i >= 0; i--) {
+            gset(sda_fd, (byte & (1 << i)) ? 1 : 0);
+            udelay_5();
+            gset(scl_fd, 1); udelay_5();
+            gset(scl_fd, 0); udelay_5();
+        }
+        gdir(sda_pin, "in");
+        udelay_5();
+        gset(scl_fd, 1); udelay_5();
+        ack = !gget(sda_fd);
+        gset(scl_fd, 0); udelay_5();
+        gdir(sda_pin, "out");
+        if (!ack) goto fail;
+    }
+
+    /* STOP */
+    gset(sda_fd, 0); udelay_5();
+    gset(scl_fd, 1); udelay_5();
+    gset(sda_fd, 1); udelay_5();
+
+    close(sda_fd);
+    close(scl_fd);
+    gdir(sda_pin, "in");
+    gdir(scl_pin, "in");
+    gunexport(sda_pin);
+    gunexport(scl_pin);
+    return true;
+
+fail:
+    gset(sda_fd, 0); udelay_5();
+    gset(scl_fd, 1); udelay_5();
+    gset(sda_fd, 1); udelay_5();
+    close(sda_fd);
+    close(scl_fd);
+    gdir(sda_pin, "in");
+    gdir(scl_pin, "in");
+    gunexport(sda_pin);
+    gunexport(scl_pin);
+    return false;
+}
+
 /* Strict probe: validates pull-ups, target address ACK, and bogus address NACK */
 static bool bitbang_probe_addr(int sda_pin, int scl_pin, uint8_t addr) {
     if (!bitbang_probe_raw(sda_pin, scl_pin, addr)) {
@@ -460,6 +572,58 @@ static void do_sweep(void) {
     }
 }
 
+static void do_verify(void) {
+    struct {
+        int sda, scl;
+        uint8_t addr;
+        int pwr;
+    } cands[] = {
+        {61, 54, 0x40, 0},
+        {61, 111, 0x40, 0},
+        {61, 53, 0x40, 1},
+        {61, 58, 0x41, 1},
+        {61, 93, 0x40, 1},
+        {61, 109, 0x40, 1},
+        {61, 111, 0x40, 1},
+    };
+
+    printf("=== VERIFYING BD37033 CANDIDATE I2C PIN PAIRS ===\n\n");
+    for (size_t i = 0; i < sizeof(cands)/sizeof(cands[0]); ++i) {
+        int sda = cands[i].sda;
+        int scl = cands[i].scl;
+        uint8_t addr = cands[i].addr;
+        int pwr = cands[i].pwr;
+
+        printf("Testing Candidate #%zu: SDA=GPIO%d, SCL=GPIO%d, Addr=0x%02X, Power=%d\n",
+               i+1, sda, scl, addr, pwr);
+        set_power_rails(pwr);
+        usleep(20000);
+
+        /* Test 1: Single byte write (Reg 0x06 = 0x00 Unmute) */
+        uint8_t unmute_val = 0x00;
+        bool t1 = bitbang_write_bytes(sda, scl, addr, 0x06, &unmute_val, 1);
+        printf("  [Test 1] 2-Byte Write (Reg 0x06 Unmute): %s\n", t1 ? ">>> SUCCESS (ACKed) <<<" : "Failed (NACK)");
+
+        /* Test 2: Volume write (Reg 0x20 = 0x90) */
+        uint8_t vol_val = 0x90;
+        bool t2 = bitbang_write_bytes(sda, scl, addr, 0x20, &vol_val, 1);
+        printf("  [Test 2] 2-Byte Write (Reg 0x20 Volume): %s\n", t2 ? ">>> SUCCESS (ACKed) <<<" : "Failed (NACK)");
+
+        /* Test 3: Full 20-Byte Power-On Burst */
+        bool t3 = bitbang_write_bytes(sda, scl, addr, 0x01, s_bd37033_init_data, sizeof(s_bd37033_init_data));
+        printf("  [Test 3] 22-Byte Config Burst (Reg 0x01..0x14): %s\n", t3 ? ">>> SUCCESS (ALL 22 BYTES ACKed!) <<<" : "Failed (NACK)");
+
+        if (t1 && t2 && t3) {
+            printf("\n  **************************************************************\n");
+            printf("  >>> VERIFIED: GENUINE WORKING BD37033 HARDWARE BUS FOUND! <<<\n");
+            printf("  >>> PIN CONFIG: SDA=GPIO %d, SCL=GPIO %d, ADDR=0x%02X <<<\n", sda, scl, addr);
+            printf("  **************************************************************\n\n");
+        }
+        printf("\n");
+    }
+    set_power_rails(0);
+}
+
 static uint8_t compute_volume_gain(uint8_t level) {
     if (level == 32) return 0x80;
     if (level == 0)  return 0xFF;
@@ -479,6 +643,7 @@ static void print_usage(const char *prog) {
     printf("Commands:\n");
     printf("  --scan                      Scan kernel I2C buses with GPIO34=0 and GPIO34=1\n");
     printf("  --sweep                     Exhaustive safe GPIO matrix sweep across spare SoC pins & power rails\n");
+    printf("  --verify                    Verify candidate matched pin pairs with multi-byte register writes\n");
     printf("  --gpio <0|1>                Set GPIO 34 output value\n");
     printf("  --status                    Display current GPIO 34 sysfs status\n");
     printf("  --init <bus> [addr]         Send 20-byte power-on burst (default addr: 0x40)\n");
@@ -489,6 +654,7 @@ static void print_usage(const char *prog) {
     printf("\nExamples:\n");
     printf("  %s --scan\n", prog);
     printf("  %s --sweep\n", prog);
+    printf("  %s --verify\n", prog);
     printf("  %s --gpio 0\n", prog);
     printf("  %s --init /dev/i2c-1 0x40\n", prog);
     printf("  %s --volume /dev/i2c-1 25\n", prog);
@@ -508,6 +674,11 @@ int main(int argc, char **argv) {
 
     if (strcmp(argv[1], "--sweep") == 0) {
         do_sweep();
+        return 0;
+    }
+
+    if (strcmp(argv[1], "--verify") == 0) {
+        do_verify();
         return 0;
     }
 

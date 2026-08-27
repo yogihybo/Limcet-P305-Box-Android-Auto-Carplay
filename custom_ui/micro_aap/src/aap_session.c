@@ -757,7 +757,7 @@ static void handle_microphone_channel(aap_session_t *s, const uint8_t *payload, 
         send_channel_msg(s, AAP_CHANNEL_MICROPHONE, aap_protobuf_service_media_sink_MediaMessageId_MEDIA_MESSAGE_CONFIG,
                          pb_buf, ostream.bytes_written, true);
         printf("[AA] microphone channel setup response sent\n");
-    } else if (sub_cmd == 32769 /* MicrophoneRequest */) {
+    } else if (sub_cmd == 32769 || sub_cmd == 32773 /* MicrophoneRequest / MEDIA_MESSAGE_MICROPHONE_REQUEST */) {
         aap_protobuf_service_media_source_message_MicrophoneRequest req =
             aap_protobuf_service_media_source_message_MicrophoneRequest_init_default;
         if (pb_len > 0) {
@@ -765,7 +765,7 @@ static void handle_microphone_channel(aap_session_t *s, const uint8_t *payload, 
             pb_decode(&istream, aap_protobuf_service_media_source_message_MicrophoneRequest_fields, &req);
         }
 
-        printf("[AA] microphone request (open=%d)\n", req.open);
+        printf("[AA:MIC] microphone request (cmd=0x%04X, open=%d)\n", sub_cmd, req.open);
 
         aap_protobuf_service_media_source_message_MicrophoneResponse resp =
             aap_protobuf_service_media_source_message_MicrophoneResponse_init_default;
@@ -777,15 +777,18 @@ static void handle_microphone_channel(aap_session_t *s, const uint8_t *payload, 
         pb_ostream_t ostream = pb_ostream_from_buffer(pb_buf, sizeof(pb_buf));
         pb_encode(&ostream, aap_protobuf_service_media_source_message_MicrophoneResponse_fields, &resp);
 
-        send_channel_msg(s, AAP_CHANNEL_MICROPHONE, 32770 /* MicrophoneResponse */,
+        uint16_t resp_cmd = (sub_cmd == 32773) ? 32774 : 32770;
+        send_channel_msg(s, AAP_CHANNEL_MICROPHONE, resp_cmd,
                          pb_buf, ostream.bytes_written, true);
-        printf("[AA] microphone open/close response sent\n");
+        printf("[AA:MIC] microphone open/close response sent (resp_cmd=0x%04X)\n", resp_cmd);
 
         if (req.open) {
             aap_microphone_start(s->mic, s, on_mic_pcm_captured);
         } else {
             aap_microphone_stop(s->mic);
         }
+    } else {
+        printf("[AA:MIC] unhandled microphone sub_cmd=0x%04X (%u) len=%zu\n", sub_cmd, sub_cmd, payload_len);
     }
 }
 

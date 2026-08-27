@@ -563,22 +563,36 @@ int main() {
             }
         }
 
+        static bool s_wasInAaBeforeReverse = false;
+
         if (reverseChanged) {
             hal::apply_reversing_volume_cut(reverseEngaged);
             bool factoryCamera = core::default_store().get_bool("OriginalCarCamera", false, "General");
             if (reverseEngaged) {
+                s_wasInAaBeforeReverse = hal::androidauto_screen_active().load(std::memory_order_acquire);
                 if (factoryCamera) {
-                    std::printf("%s [HAL:REVCAM] Reverse gear engaged -- OEM Factory Camera mode active (hardware video mux active, SoC overlay bypassed)\n", core::log_timestamp().c_str());
+                    std::printf("%s [HAL:REVCAM] Reverse gear engaged -- OEM Factory Camera mode active (hardware video mux active, was_in_aa=%d)\n",
+                                core::log_timestamp().c_str(), s_wasInAaBeforeReverse ? 1 : 0);
                 } else {
-                    std::printf("%s [HAL:REVCAM] Reverse gear engaged -- opening aftermarket camera overlay\n", core::log_timestamp().c_str());
+                    std::printf("%s [HAL:REVCAM] Reverse gear engaged -- opening aftermarket camera overlay (was_in_aa=%d)\n",
+                                core::log_timestamp().c_str(), s_wasInAaBeforeReverse ? 1 : 0);
                     staging_ui::navigate_to(staging_ui::NavDestination::Camera);
                 }
             } else {
                 if (factoryCamera) {
-                    std::printf("%s [HAL:REVCAM] Reverse gear disengaged -- OEM Factory Camera mode de-activated\n", core::log_timestamp().c_str());
+                    std::printf("%s [HAL:REVCAM] Reverse gear disengaged -- OEM Factory Camera mode de-activated (was_in_aa=%d)\n",
+                                core::log_timestamp().c_str(), s_wasInAaBeforeReverse ? 1 : 0);
+                    if (s_wasInAaBeforeReverse) {
+                        staging_ui::navigate_to(staging_ui::NavDestination::AndroidAuto);
+                    }
                 } else {
-                    std::printf("%s [HAL:REVCAM] Reverse gear disengaged -- returning to previous screen\n", core::log_timestamp().c_str());
-                    core::navigation::pop();
+                    std::printf("%s [HAL:REVCAM] Reverse gear disengaged -- returning to previous screen (was_in_aa=%d)\n",
+                                core::log_timestamp().c_str(), s_wasInAaBeforeReverse ? 1 : 0);
+                    if (s_wasInAaBeforeReverse) {
+                        staging_ui::navigate_to(staging_ui::NavDestination::AndroidAuto);
+                    } else {
+                        core::navigation::pop();
+                    }
                 }
             }
         }

@@ -382,6 +382,16 @@ int main() {
     ui::theme::init(disp);
     std::printf("%s [UI] theme applied\n", core::log_timestamp().c_str());
 
+    // Reset hardware VDE color matrix to neutral factory default (no hue/color distortion)
+    {
+        hal::DisplayCtrlHandle h;
+        if (hal::init_display_ctrl(h)) {
+            hal::VdeConfig neutral_cfg{0, 128, 128, 128};
+            hal::set_vde_config(h, hal::DisplayLayer::Osd1, neutral_cfg);
+            hal::close_display_ctrl(h);
+        }
+    }
+
     // 2026-08-20: hal/audio.h was #included (commit a43df447, "Unmute
     // DAC/PA on boot") but the actual hal::init_audio_mixer() call was
     // never added anywhere -- the commit only added the include and an

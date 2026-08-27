@@ -43,6 +43,7 @@ void aap_session_tick(aap_session_t *session);
 
 /* Forward UI / Car events into the session */
 void aap_session_send_key(aap_session_t *session, uint32_t keycode);
+void aap_session_send_rotary(aap_session_t *session, int32_t delta);
 void aap_session_send_touch(aap_session_t *session, uint32_t x, uint32_t y, uint32_t action);
 void aap_session_send_night_mode(aap_session_t *session, bool night_mode);
 void aap_session_set_video_visible(aap_session_t *session, bool visible);

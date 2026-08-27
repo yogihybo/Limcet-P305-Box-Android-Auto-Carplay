@@ -394,6 +394,19 @@ bool AndroidAutoClient::sendKey(std::uint32_t keycode) {
     return false;
 }
 
+bool AndroidAutoClient::sendRotary(int ticks) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    std::string reply;
+    std::string cmd = "ROTARY " + std::to_string(ticks);
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        if (ensureConnected(/*allow_spawn=*/false) && sendCommand(cmd, reply)) {
+            return true;
+        }
+        disconnect();
+    }
+    return false;
+}
+
 bool AndroidAutoClient::sendTouch(std::uint32_t x, std::uint32_t y, TouchAction action) {
     const char * actionStr = action == TouchAction::Down ? "DOWN" : action == TouchAction::Move ? "MOVE" : "UP";
     std::lock_guard<std::mutex> lock(mutex_);

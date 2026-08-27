@@ -100,15 +100,16 @@ void mcu_knob_read_cb(lv_indev_t * indev, lv_indev_data_t * data) {
             std::printf("%s hal::knob: AA active, ticks=%d, held=%d\n",
                         core::log_timestamp().c_str(), ticks, is_held ? 1 : 0);
 
-            /* If held while rotating -> card nudge (DPAD_RIGHT / DPAD_LEFT); else intra-card sequential focus (NAVIGATE_NEXT / NAVIGATE_PREVIOUS) */
-            std::uint32_t cwKey = is_held ? kKeycodeDpadRight : kKeycodeNavigateNext;
-            std::uint32_t ccwKey = is_held ? kKeycodeDpadLeft : kKeycodeNavigatePrevious;
-
-            for (int32_t i = 0; i < ticks; ++i) {
-                androidauto_client().sendKey(cwKey);
-            }
-            for (int32_t i = 0; i < -ticks; ++i) {
-                androidauto_client().sendKey(ccwKey);
+            if (is_held) {
+                /* Held while rotating -> card nudge (DPAD_RIGHT / DPAD_LEFT) */
+                std::uint32_t key = (ticks > 0) ? kKeycodeDpadRight : kKeycodeDpadLeft;
+                int32_t count = (ticks > 0) ? ticks : -ticks;
+                for (int32_t i = 0; i < count; ++i) {
+                    androidauto_client().sendKey(key);
+                }
+            } else {
+                /* Pure native automotive rotary scroll / intra-container traversal */
+                androidauto_client().sendRotary(ticks);
             }
         }
 

@@ -137,6 +137,10 @@ static void process_single_command(aap_session_t *session, const char *cmd, int 
         uint32_t code = (uint32_t)strtoul(cmd + 4, NULL, 10);
         if (session) aap_session_send_key(session, code);
         reply = "OK\n";
+    } else if (strncmp(cmd, "ROTARY ", 7) == 0) {
+        int ticks = (int)strtol(cmd + 7, NULL, 10);
+        if (session) aap_session_send_rotary(session, ticks);
+        reply = "OK\n";
     } else if (strncmp(cmd, "TOUCH ", 6) == 0) {
         unsigned int x = 0, y = 0;
         char act[16] = {0};

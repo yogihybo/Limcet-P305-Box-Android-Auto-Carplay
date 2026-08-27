@@ -63,6 +63,9 @@ bool remove_paired_device(BluetoothHandle & h, const std::string & mac);
 // Automatically connects to the first available paired device
 bool auto_reconnect_paired_device(BluetoothHandle & h);
 
+// Returns the MAC address of the currently connected Bluetooth device, or empty string
+std::string get_connected_device_mac();
+
 // System clock sync
 bool sync_clock_from_phone(BluetoothHandle & h);
 

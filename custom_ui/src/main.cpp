@@ -473,7 +473,30 @@ int main() {
                 std::fprintf(stderr, "%s [BT] ERROR: Failed to set bluetooth device name to '%s'\n", core::log_timestamp().c_str(),
                              btName.c_str());
             }
-            hal::auto_reconnect_paired_device(bt);
+
+            core::SizedThread(core::kDefaultThreadStackSize, [&bt]() {
+                // Settle delay for BlueZ adapter & bt-agent registration
+                std::this_thread::sleep_for(std::chrono::seconds(2));
+
+                // Auto-reconnect retry loop: keep attempting to connect to paired phone on boot
+                for (int attempt = 1; attempt <= 15; ++attempt) {
+                    std::string connectedMac = hal::get_connected_device_mac();
+                    if (!connectedMac.empty()) {
+                        std::printf("%s [BT] Phone '%s' connected -- auto-reconnect complete\n",
+                                    core::log_timestamp().c_str(), connectedMac.c_str());
+                        break;
+                    }
+
+                    std::printf("%s [BT] Auto-reconnect attempt %d/15...\n",
+                                core::log_timestamp().c_str(), attempt);
+                    if (hal::auto_reconnect_paired_device(bt)) {
+                        std::this_thread::sleep_for(std::chrono::seconds(5));
+                        if (!hal::get_connected_device_mac().empty()) break;
+                    } else {
+                        std::this_thread::sleep_for(std::chrono::seconds(3));
+                    }
+                }
+            }).detach();
         }
     }).detach();
 

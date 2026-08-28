@@ -129,12 +129,11 @@ void uart_send_packet(uint8_t cmd, const uint8_t *payload, uint8_t len) {
     uart_send_byte(calc_checksum(cmd, len, payload));
 }
 
-void uart_send_key_event(uint16_t key_code, bool pressed) {
-    uint8_t payload[3];
-    payload[0] = (uint8_t)(key_code & 0xFF);
-    payload[1] = (uint8_t)((key_code >> 8) & 0xFF);
-    payload[2] = pressed ? 0x01 : 0x00;
-    uart_send_packet(MCU_CMD_INPUT_EVENT, payload, 3);
+void uart_send_key_event(uint8_t key_code, bool pressed) {
+    uint8_t payload[2];
+    payload[0] = key_code;
+    payload[1] = pressed ? 0x01 : 0x00;
+    uart_send_packet(MCU_CMD_INPUT_EVENT, payload, 2);
 }
 
 void uart_send_reverse_state(bool reverse_active) {
@@ -176,27 +175,58 @@ void uart_trigger_bootloader_reset(void) {
 /* Inbound Command Handlers */
 static void handle_init_handshake(const UartPacket *p) {
     (void)p;
-    /* Reply with handshake ACK */
-    uint8_t ack = 0x01;
-    uart_send_packet(MCU_CMD_HANDSHAKE_REQ, &ack, 1);
+    /* 1. Send MCU Firmware Version Report (Matches stock 2E 01 06 130000000000 E5 -> Limcet-V1.0-1302) */
+    uint8_t ver_payload[6] = { 0x13, 0x00, 0x00, 0x00, 0x00, 0x00 };
+    uart_send_packet(MCU_CMD_HANDSHAKE_VER, ver_payload, 6);
+
+    /* 2. Send Vehicle Profile & DIP Switch Report (Matches stock 2E 12 03 010400 E5 -> Toyota Prado 150 Mode) */
+    uint8_t dip_payload[3] = { 0x01, 0x04, 0x00 };
+    uart_send_packet(MCU_CMD_DIP_PROFILE, dip_payload, 3);
 }
 
 static void handle_app_state(const UartPacket *p) {
-    (void)p;
+    /* 0x82: App mode change (e.g. CarPlay active vs OEM head unit active) */
+    if (p->len >= 3) {
+        uint8_t mode = p->payload[2];
+        if (mode == 0x01) {
+            /* Switch relays to CarPlay / Android Auto */
+            GPIOB->BSRR = (1UL << 0); /* PB0 TOUCH_SEL -> SoC */
+            GPIOB->BSRR = (1UL << 6); /* PB6 MIC_SEL   -> SoC */
+        } else if (mode == 0x00) {
+            /* Bypass relays back to OEM Factory Radio */
+            GPIOB->BRR = (1UL << 0);  /* PB0 TOUCH_SEL -> OEM */
+            GPIOB->BRR = (1UL << 6);  /* PB6 MIC_SEL   -> OEM */
+        }
+    }
+}
+
+static void handle_audio_route(const UartPacket *p) {
+    /* 0x84: Audio amplifier mute/unmute control */
+    if (p->len >= 1) {
+        bool mute = (p->payload[0] != 0);
+        if (mute) {
+            GPIOA->BSRR = (1UL << 1); /* PA1 AMP_MUTE -> HIGH (Muted) */
+        } else {
+            GPIOA->BRR = (1UL << 1);  /* PA1 AMP_MUTE -> LOW (Unmuted) */
+        }
+    }
 }
 
 static void handle_sync_settings(const UartPacket *p) {
     (void)p;
+    /* 0xA0: Settings sync ACK */
 }
 
 static void handle_reboot_bootloader(const UartPacket *p) {
     (void)p;
+    /* 0xE1: Enter resident bootloader for YMODEM upgrade */
     uart_trigger_bootloader_reset();
 }
 
 static const UartCmdDispatchEntry g_uart_cmd_table[] = {
     { SOC_CMD_INIT_HANDSHAKE,  {0}, handle_init_handshake },
     { SOC_CMD_APP_STATE,       {0}, handle_app_state },
+    { SOC_CMD_AUDIO_ROUTE,     {0}, handle_audio_route },
     { SOC_CMD_SYNC_SETTINGS,   {0}, handle_sync_settings },
     { SOC_CMD_REBOOT_BOOTLDR,  {0}, handle_reboot_bootloader }
 };

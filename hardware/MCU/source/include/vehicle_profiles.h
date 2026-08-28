@@ -3,17 +3,17 @@
 
 #include "can_driver.h"
 
-/* Standard Steering Wheel Control Keycodes passed to SoC */
-#define KEYCODE_VOL_UP          0x01
-#define KEYCODE_VOL_DOWN        0x02
-#define KEYCODE_NEXT_TRACK      0x03
-#define KEYCODE_PREV_TRACK      0x04
-#define KEYCODE_MODE_SOURCE     0x05
-#define KEYCODE_PHONE_PICKUP    0x06
-#define KEYCODE_PHONE_HANGUP    0x07
-#define KEYCODE_VOICE_ASSIST    0x08
-#define KEYCODE_ENTER_OK        0x09
-#define KEYCODE_BACK            0x0A
+/* Standard Steering Wheel Control Keycodes passed to SoC (Single-byte IDs) */
+#define KEYCODE_PREV_TRACK      0x01   /* Seek- / Prev Track */
+#define KEYCODE_NEXT_TRACK      0x02   /* Seek+ / Next Track */
+#define KEYCODE_VOL_DOWN        0x03   /* Volume Down */
+#define KEYCODE_VOL_UP          0x04   /* Volume Up */
+#define KEYCODE_MODE_SOURCE     0x05   /* Mode / Source */
+#define KEYCODE_MUTE            0x06   /* Audio Mute */
+#define KEYCODE_VOICE_ASSIST    0x07   /* Voice / Siri / Google */
+#define KEYCODE_PHONE_PICKUP    0x08   /* Phone Hook */
+#define KEYCODE_ENTER_OK        0x09   /* Steering OK / Select */
+#define KEYCODE_BACK            0x0A   /* Back */
 
 /* Toyota Prado 150 CAN IDs */
 #define TOYOTA_PRADO_CAN_SWC    0x3C4   /* Steering Wheel Controls */

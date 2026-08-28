@@ -38,11 +38,59 @@ static inline void iwdg_feed(void) {
     IWDG->KR = 0xAAAA;
 }
 
+static void gpio_hardware_init(void) {
+    /* Enable GPIOA, GPIOB, GPIOC, AFIO clocks */
+    RCC->APB2ENR |= (1UL << 2) | (1UL << 3) | (1UL << 4) | (1UL << 0);
+
+    /* Disable JTAG to free PB3, PB4, PA15 for GPIOs while keeping SWD (PA13/PA14) active */
+    AFIO->MAPR = (AFIO->MAPR & ~(7UL << 24)) | (2UL << 24); /* SWJ_CFG: JTAG-DP Disabled, SW-DP Enabled */
+
+    /* PA1: Audio Amp Mute (General purpose output push-pull, 2MHz -> Mode 10, CNF 00 -> 0x02) */
+    /* Start HIGH (Muted) to prevent audio pop on power up */
+    GPIOA->CRL &= ~(0x0FUL << 4);
+    GPIOA->CRL |=  (0x02UL << 4);
+    GPIOA->BSRR =  (1UL << 1);
+
+    /* PB0: 4-Wire Resistive Touch Relay (General purpose output push-pull, 2MHz) */
+    /* Start HIGH (Touch mapped to ArkMicro CarPlay/Android Auto SoC) */
+    GPIOB->CRL &= ~(0x0FUL << 0);
+    GPIOB->CRL |=  (0x02UL << 0);
+    GPIOB->BSRR =  (1UL << 0);
+
+    /* PB6: Microphone Select Multiplexer (General purpose output push-pull, 2MHz) */
+    /* Start HIGH (OEM Roof Microphone routed to ArkMicro SoC) */
+    GPIOB->CRL &= ~(0x0FUL << 24);
+    GPIOB->CRL |=  (0x02UL << 24);
+    GPIOB->BSRR =  (1UL << 6);
+
+    /* PC13: ArkMicro ARK1668 SoC Reset Line (Active-Low ARK_RST#) */
+    GPIOC->CRH &= ~(0x0FUL << 20);
+    GPIOC->CRH |=  (0x02UL << 20);
+
+    /* Hold ArkMicro SoC in hardware reset for 50ms */
+    GPIOC->BRR = (1UL << 13);
+    for (volatile uint32_t i = 0; i < 360000; i++) {
+        __asm__ volatile("nop");
+    }
+
+    /* Release ArkMicro SoC from hardware reset */
+    GPIOC->BSRR = (1UL << 13);
+
+    /* Allow power rails & SoC PLL to stabilize (150ms), then unmute audio amplifier cleanly */
+    for (volatile uint32_t i = 0; i < 1080000; i++) {
+        __asm__ volatile("nop");
+    }
+    GPIOA->BRR = (1UL << 1); /* PA1 = LOW (Unmuted) */
+}
+
 int main(void) {
     /* Initialize System Clocks (72 MHz) */
     clock_init();
 
-    /* Initialize Vehicle Profiles */
+    /* Initialize Hardware GPIOs & Sequence ARK1668 Power-On Reset */
+    gpio_hardware_init();
+
+    /* Initialize Vehicle Profiles (Toyota Prado 150 CAN Matrix) */
     vehicle_profiles_init();
 
     /* Initialize UART to SoC (/dev/ttyHS0 @ 38400 baud) */

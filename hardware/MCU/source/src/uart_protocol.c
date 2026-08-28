@@ -212,6 +212,32 @@ static void handle_audio_route(const UartPacket *p) {
     }
 }
 
+static void handle_diag_read_mem(const UartPacket *p) {
+    /* 0x90: Diagnostic Memory Readback [Addr_B3, Addr_B2, Addr_B1, Addr_B0, Length] */
+    if (p->len >= 5) {
+        uint32_t addr = ((uint32_t)p->payload[0] << 24) |
+                        ((uint32_t)p->payload[1] << 16) |
+                        ((uint32_t)p->payload[2] << 8)  |
+                        ((uint32_t)p->payload[3]);
+        uint8_t count = p->payload[4];
+        if (count > (UART_MAX_PAYLOAD - 4)) {
+            count = (UART_MAX_PAYLOAD - 4);
+        }
+
+        uint8_t reply[UART_MAX_PAYLOAD];
+        reply[0] = p->payload[0];
+        reply[1] = p->payload[1];
+        reply[2] = p->payload[2];
+        reply[3] = p->payload[3];
+
+        const uint8_t *src = (const uint8_t *)addr;
+        for (uint8_t i = 0; i < count; i++) {
+            reply[4 + i] = src[i];
+        }
+        uart_send_packet(SOC_CMD_DIAG_READ_MEM, reply, count + 4);
+    }
+}
+
 static void handle_sync_settings(const UartPacket *p) {
     (void)p;
     /* 0xA0: Settings sync ACK */
@@ -227,6 +253,7 @@ static const UartCmdDispatchEntry g_uart_cmd_table[] = {
     { SOC_CMD_INIT_HANDSHAKE,  {0}, handle_init_handshake },
     { SOC_CMD_APP_STATE,       {0}, handle_app_state },
     { SOC_CMD_AUDIO_ROUTE,     {0}, handle_audio_route },
+    { SOC_CMD_DIAG_READ_MEM,   {0}, handle_diag_read_mem },
     { SOC_CMD_SYNC_SETTINGS,   {0}, handle_sync_settings },
     { SOC_CMD_REBOOT_BOOTLDR,  {0}, handle_reboot_bootloader }
 };

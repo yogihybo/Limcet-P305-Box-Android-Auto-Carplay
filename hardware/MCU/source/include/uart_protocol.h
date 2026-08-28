@@ -26,6 +26,7 @@
 #define SOC_CMD_APP_PROTOCOL    0x85  /* App protocol */
 #define SOC_CMD_SETTINGS_SELECT 0x87  /* Menu / BT command */
 #define SOC_CMD_TIMESTAMP       0x88  /* Timestamp / counter */
+#define SOC_CMD_DIAG_READ_MEM   0x90  /* Diagnostic Flash/SRAM readback */
 #define SOC_CMD_SYNC_SETTINGS   0xA0  /* UI settings sync */
 #define SOC_CMD_REBOOT_BOOTLDR  0xE1  /* Enter bootloader for update */
 #define SOC_CMD_SYSTEM_RESET    0xFF  /* State reset */

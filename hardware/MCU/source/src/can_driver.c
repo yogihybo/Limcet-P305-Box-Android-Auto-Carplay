@@ -155,6 +155,11 @@ uint8_t can_get_active_mode(void) {
     return g_active_mode;
 }
 
+void can_reset_rx_ring(void) {
+    g_can_rx_ring.head = 0;
+    g_can_rx_ring.tail = 0;
+}
+
 void can_dispatch_process(void) {
     CanFrame frame;
     while (can_pop_rx_frame(&frame)) {

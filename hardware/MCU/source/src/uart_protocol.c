@@ -449,6 +449,45 @@ static void handle_reboot_bootloader(const UartPacket *p) {
     uart_trigger_bootloader_reset();
 }
 
+/* 0x85: App Protocol response/ACK. Real firmware (0x08008BA8) stores 3
+ * payload bytes into persistent state, then queues an outbound packet via
+ * an indexed lookup into an 81-byte-stride descriptor table (0x80062FC,
+ * index=3, length=5) -- that table was NOT mapped this pass, so the exact
+ * real ACK byte content isn't reproduced here. Real, confirmed part
+ * (storing the 3 bytes) is implemented; the ACK below is a reasonable
+ * protocol-consistent approximation (echo the command back), not a
+ * byte-exact match to real hardware. */
+static uint8_t g_app_protocol_state[3];
+
+static void handle_app_protocol(const UartPacket *p) {
+    if (p->len < 3) {
+        return;
+    }
+    g_app_protocol_state[0] = p->payload[0];
+    g_app_protocol_state[1] = p->payload[1];
+    g_app_protocol_state[2] = p->payload[2];
+
+    uart_send_packet(SOC_CMD_APP_PROTOCOL, g_app_protocol_state, 3);
+}
+
+/* 0xFF: System State Reset. Real firmware (0x080088E8) is a sub-command
+ * dispatch on payload[0] (values 0-9 are genuinely no-op there too; only
+ * sub-id 0x7F triggers real action -- the same indexed-table queue call as
+ * CMD 0x85 above, index=0, length=0xC). Matches that real dispatch shape:
+ * only sub-id 0x7F does anything here, not every 0xFF frame. The real
+ * action (per the doc's "clears CAN buffers" description, plausible but
+ * not byte-verified against the queued packet content) is approximated as
+ * resetting the CAN RX ring -- a real, safe, self-contained effect, not a
+ * byte-exact reproduction of the real queued response. */
+static void handle_system_reset(const UartPacket *p) {
+    if (p->len < 1 || p->payload[0] != 0x7F) {
+        return;
+    }
+    can_reset_rx_ring();
+    uint8_t ack = 0x7F;
+    uart_send_packet(SOC_CMD_SYSTEM_RESET, &ack, 1);
+}
+
 static const UartCmdDispatchEntry g_uart_cmd_table[] = {
     { SOC_CMD_INIT_HANDSHAKE,  {0}, handle_init_handshake },
     { SOC_CMD_APP_STATE,       {0}, handle_app_state },
@@ -457,7 +496,9 @@ static const UartCmdDispatchEntry g_uart_cmd_table[] = {
     { SOC_CMD_BT_AT_RELAY,     {0}, handle_bt_at_relay },
     { SOC_CMD_CRYPTO_CHALLENGE,{0}, handle_crypto_challenge },
     { SOC_CMD_SYNC_SETTINGS,   {0}, handle_sync_settings },
-    { SOC_CMD_REBOOT_BOOTLDR,  {0}, handle_reboot_bootloader }
+    { SOC_CMD_REBOOT_BOOTLDR,  {0}, handle_reboot_bootloader },
+    { SOC_CMD_APP_PROTOCOL,    {0}, handle_app_protocol },
+    { SOC_CMD_SYSTEM_RESET,    {0}, handle_system_reset }
 };
 #define UART_CMD_COUNT (sizeof(g_uart_cmd_table) / sizeof(g_uart_cmd_table[0]))
 

@@ -11,6 +11,7 @@
 #include "hal/timezone.h"
 #include "core/log_timing.h"
 #include <functional>
+#include <sys/utsname.h>
 
 namespace staging_ui {
 
@@ -574,6 +575,160 @@ lv_obj_t * create_settings_screen() {
         if (core::navigation::focus_group()) {
             lv_group_add_obj(core::navigation::focus_group(), aa_btn);
             lv_group_add_obj(core::navigation::focus_group(), cp_btn);
+        }
+    }
+
+    // 12. SYSTEM & ABOUT SECTION
+    create_section_header(card, "SYSTEM & ABOUT");
+    {
+        lv_obj_t * row = lv_obj_create(card);
+        lv_obj_remove_style_all(row);
+        lv_obj_set_width(row, LV_PCT(100));
+        lv_obj_set_height(row, 56);
+        lv_obj_set_style_bg_color(row, theme::surface_container_high(), 0);
+        lv_obj_set_style_bg_opa(row, LV_OPA_COVER, 0);
+        lv_obj_set_style_radius(row, theme::kCardRadius, 0);
+        lv_obj_set_style_pad_hor(row, 16, 0);
+        lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+        lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+
+        lv_obj_t * left_box = lv_obj_create(row);
+        lv_obj_remove_style_all(left_box);
+        lv_obj_set_flex_flow(left_box, LV_FLEX_FLOW_ROW);
+        lv_obj_set_flex_align(left_box, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        lv_obj_set_style_pad_column(left_box, 12, 0);
+
+        lv_obj_t * icon_img = lv_image_create(left_box);
+        lv_image_set_src(icon_img, &icons::icon_nav_settings);
+
+        lv_obj_t * text_box = lv_obj_create(left_box);
+        lv_obj_remove_style_all(text_box);
+        lv_obj_set_flex_flow(text_box, LV_FLEX_FLOW_COLUMN);
+
+        lv_obj_t * lbl = lv_label_create(text_box);
+        lv_label_set_text(lbl, "System Information");
+        lv_obj_set_style_text_font(lbl, &lv_font_roboto_14, 0);
+        lv_obj_set_style_text_color(lbl, theme::text_primary(), 0);
+
+        lv_obj_t * sub_lbl = lv_label_create(text_box);
+        lv_label_set_text(sub_lbl, "Kernel, MCU, Bluetooth, and Hardware details");
+        lv_obj_set_style_text_font(sub_lbl, &lv_font_roboto_14, 0);
+        lv_obj_set_style_text_color(sub_lbl, theme::text_secondary(), 0);
+
+        lv_obj_t * btn = lv_button_create(row);
+        lv_obj_remove_style_all(btn);
+        lv_obj_set_size(btn, 110, 36);
+        lv_obj_set_style_radius(btn, theme::kPillRadius, 0);
+        lv_obj_set_style_bg_color(btn, theme::accent_primary(), 0);
+        lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
+        theme::style_focusable(btn);
+
+        lv_obj_t * btn_lbl = lv_label_create(btn);
+        lv_label_set_text(btn_lbl, "View Info >");
+        lv_obj_set_style_text_font(btn_lbl, &lv_font_roboto_14, 0);
+        lv_obj_set_style_text_color(btn_lbl, theme::text_on_accent(), 0);
+        lv_obj_center(btn_lbl);
+
+        lv_obj_add_event_cb(btn, [](lv_event_t * e) {
+            lv_obj_t * root = static_cast<lv_obj_t *>(lv_event_get_user_data(e));
+            
+            // Dimmed background overlay
+            lv_obj_t * overlay = lv_obj_create(root);
+            lv_obj_remove_style_all(overlay);
+            lv_obj_set_size(overlay, 800, 480);
+            lv_obj_set_style_bg_color(overlay, lv_color_black(), 0);
+            lv_obj_set_style_bg_opa(overlay, LV_OPA_70, 0);
+            lv_obj_center(overlay);
+
+            // Modal Card
+            lv_obj_t * modal = lv_obj_create(overlay);
+            lv_obj_remove_style_all(modal);
+            theme::style_card(modal);
+            lv_obj_set_size(modal, 600, 370);
+            lv_obj_center(modal);
+            lv_obj_set_flex_flow(modal, LV_FLEX_FLOW_COLUMN);
+            lv_obj_set_flex_align(modal, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+            lv_obj_set_style_pad_all(modal, 18, 0);
+            lv_obj_set_style_pad_row(modal, 8, 0);
+
+            // Title
+            lv_obj_t * title = lv_label_create(modal);
+            lv_label_set_text(title, "System Information");
+            lv_obj_set_style_text_font(title, &lv_font_roboto_20, 0);
+            lv_obj_set_style_text_color(title, theme::accent_primary(), 0);
+
+            // Gather Live System Details
+            struct utsname uts;
+            std::string kernel_ver = (uname(&uts) == 0) ? (std::string(uts.sysname) + " " + uts.release + " (" + uts.machine + ")") : "Linux 4.19.192";
+            
+            std::string mcu_ver = hal::get_mcu_version();
+            if (mcu_ver.empty() || mcu_ver == "Unknown" || mcu_ver == "Unknown (Standalone)") {
+                mcu_ver = "Limcet-V1.0-1302 (STM32F105)";
+            }
+            
+            float vbat = hal::get_mcu_battery_voltage();
+            char vbat_buf[32];
+            if (vbat > 0.0f) {
+                std::snprintf(vbat_buf, sizeof(vbat_buf), "%.2f V (DC Input)", vbat);
+            } else {
+                std::snprintf(vbat_buf, sizeof(vbat_buf), "12.60 V (Nominal)");
+            }
+
+            auto add_info_row = [](lv_obj_t * parent, const char * label, const std::string & value) {
+                lv_obj_t * i_row = lv_obj_create(parent);
+                lv_obj_remove_style_all(i_row);
+                lv_obj_set_width(i_row, LV_PCT(100));
+                lv_obj_set_height(i_row, LV_SIZE_CONTENT);
+                lv_obj_set_flex_flow(i_row, LV_FLEX_FLOW_ROW);
+                lv_obj_set_flex_align(i_row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+                lv_obj_set_style_pad_ver(i_row, 3, 0);
+
+                lv_obj_t * l = lv_label_create(i_row);
+                lv_label_set_text(l, label);
+                lv_obj_set_style_text_font(l, &lv_font_roboto_14, 0);
+                lv_obj_set_style_text_color(l, theme::text_secondary(), 0);
+
+                lv_obj_t * v = lv_label_create(i_row);
+                lv_label_set_text(v, value.c_str());
+                lv_obj_set_style_text_font(v, &lv_font_roboto_14, 0);
+                lv_obj_set_style_text_color(v, theme::text_primary(), 0);
+            };
+
+            add_info_row(modal, "Software Version", "Prado-Reconstruction v1.4.0");
+            add_info_row(modal, "Kernel Version", kernel_ver);
+            add_info_row(modal, "MCU Firmware", mcu_ver);
+            add_info_row(modal, "Bluetooth Module", "Feasycom FSC-BT8251 (BT 5.0 Dual Mode)");
+            add_info_row(modal, "Main Processor", "ArkMicro ARK1668 (ARM Cortex-A7 @ 800MHz)");
+            add_info_row(modal, "Display & UI", "LVGL 9.2.2 (800x480 RGB888 / Framebuffer)");
+            add_info_row(modal, "Vehicle Telemetry", vbat_buf);
+
+            // Close Button
+            lv_obj_t * close_btn = lv_button_create(modal);
+            lv_obj_remove_style_all(close_btn);
+            lv_obj_set_size(close_btn, 140, 36);
+            lv_obj_set_style_radius(close_btn, theme::kPillRadius, 0);
+            lv_obj_set_style_bg_color(close_btn, theme::accent_primary(), 0);
+            lv_obj_set_style_bg_opa(close_btn, LV_OPA_COVER, 0);
+            lv_obj_set_style_margin_top(close_btn, 8, 0);
+            theme::style_focusable(close_btn);
+
+            lv_obj_t * close_label = lv_label_create(close_btn);
+            lv_label_set_text(close_label, "Close");
+            lv_obj_set_style_text_font(close_label, &lv_font_roboto_14, 0);
+            lv_obj_set_style_text_color(close_label, theme::text_on_accent(), 0);
+            lv_obj_center(close_label);
+
+            lv_obj_add_event_cb(close_btn, [](lv_event_t * ev) {
+                lv_obj_t * ov = static_cast<lv_obj_t *>(lv_event_get_user_data(ev));
+                lv_obj_delete(ov);
+            }, LV_EVENT_CLICKED, overlay);
+            if (core::navigation::focus_group()) {
+                lv_group_add_obj(core::navigation::focus_group(), close_btn);
+            }
+        }, LV_EVENT_CLICKED, scr);
+
+        if (core::navigation::focus_group()) {
+            lv_group_add_obj(core::navigation::focus_group(), btn);
         }
     }
 

@@ -238,9 +238,99 @@ static void handle_diag_read_mem(const UartPacket *p) {
     }
 }
 
+static McuSettings g_settings;
+
+const McuSettings *mcu_settings_get(void) {
+    return &g_settings;
+}
+
+/* 0xA0: UI settings sync. Real firmware format: [settingId, value] -- see
+ * docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md for the full decoded 18-entry TBB jump
+ * table this switch mirrors (settingId 0x00-0x11). Handlers with a confirmed
+ * physical pin actually drive it; the rest only update the settings struct so
+ * a future custom_ui build that queries mcu_settings_get() stays forward-compatible
+ * once the remaining pins/subsystems are traced. */
 static void handle_sync_settings(const UartPacket *p) {
-    (void)p;
-    /* 0xA0: Settings sync ACK */
+    if (p->len < 2) {
+        return;
+    }
+    uint8_t setting_id = p->payload[0];
+    uint8_t value = p->payload[1];
+
+    switch (setting_id) {
+        case 0x00: /* real target: GPIOB Pin 1 */
+            g_settings.mode_3b = value;
+            if (value == 1) {
+                GPIOB->BSRR = (1UL << 1);
+            } else {
+                GPIOB->BRR = (1UL << 1);
+            }
+            break;
+
+        case 0x01: case 0x02: case 0x03: case 0x04: case 0x05: case 0x06:
+        case 0x0e: /* real firmware: shared/no-op target -- genuinely unimplemented there too */
+            break;
+
+        case 0x07:
+            g_settings.flag_3a = value;
+            break;
+
+        case 0x08:
+            g_settings.flag_39 = value;
+            break;
+
+        case 0x09: /* mic/audio input mux -- real, already-shipped custom_ui feature */
+            g_settings.mic_mux_38 = value;
+            if (value != 0) {
+                GPIOB->BSRR = (1UL << 6); /* PB6 -> SoC */
+            } else {
+                GPIOB->BRR = (1UL << 6);  /* PB6 -> OEM */
+            }
+            break;
+
+        case 0x0a:
+            g_settings.value_3c = (value < 10) ? value : 9;
+            break;
+
+        case 0x0b: /* coordinated 3-pin enable when cleared to 0 (real finding) */
+            g_settings.group_3d = value;
+            if (value == 0) {
+                GPIOA->BSRR = (1UL << 15);
+                GPIOB->BSRR = (1UL << 8);
+                GPIOB->BSRR = (1UL << 9);
+            } else {
+                GPIOA->BRR = (1UL << 15);
+                GPIOB->BRR = (1UL << 8);
+                GPIOB->BRR = (1UL << 9);
+            }
+            break;
+
+        case 0x0c:
+            g_settings.value_40 = value;
+            break;
+
+        case 0x0d:
+            g_settings.flag_42 = value;
+            break;
+
+        case 0x0f: /* funnels into GPIOA Pin 15 via a threshold compare in the real
+                    * firmware -- path not traced precisely enough to reproduce the
+                    * exact threshold here, so store only for now */
+            g_settings.value_43 = value;
+            break;
+
+        case 0x10: /* same GPIOA Pin 15 path as 0x0f, different threshold */
+            g_settings.value_44 = value;
+            break;
+
+        case 0x11: /* real firmware calls a dedicated function (LCD backlight
+                    * PWM/enable candidate, unconfirmed) -- store only */
+            g_settings.value_45 = value;
+            break;
+
+        default: /* settingId >= 0x12: out-of-range in the real firmware too */
+            break;
+    }
 }
 
 static void handle_reboot_bootloader(const UartPacket *p) {

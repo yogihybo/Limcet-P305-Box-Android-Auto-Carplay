@@ -63,6 +63,31 @@ static void gpio_hardware_init(void) {
     GPIOB->CRL |=  (0x02UL << 24);
     GPIOB->BSRR =  (1UL << 6);
 
+    /* PB1: CMD 0xA0 id=0x00 output (real target per MCU_FIRMWARE_VERIFIED_FINDINGS.md,
+     * driven HIGH when settingId 0x00's struct offset 0x3b == 1). Function unconfirmed
+     * beyond the pin identity itself -- default LOW until a sync_settings frame says otherwise. */
+    GPIOB->CRL &= ~(0x0FUL << 4);
+    GPIOB->CRL |=  (0x02UL << 4);
+    GPIOB->BRR  =  (1UL << 1);
+
+    /* PA15, PB8, PB9: CMD 0xA0 id=0x0b's coordinated 3-pin enable group (real finding --
+     * all three fire HIGH together when struct offset 0x3d is cleared to 0; more consistent
+     * with a subsystem power-up sequence than a single-purpose signal, but which subsystem
+     * is unconfirmed without a schematic). PA15 is free for GPIO use here because JTAG was
+     * already disabled above (SWJ_CFG), which frees PA15/PB3/PB4 from their JTDI/JTDO/NJTRST
+     * alternate functions while leaving SWD (PA13/PA14) intact. Default LOW. */
+    GPIOA->CRH &= ~(0x0FUL << 28);
+    GPIOA->CRH |=  (0x02UL << 28);
+    GPIOA->BRR  =  (1UL << 15);
+
+    GPIOB->CRH &= ~(0x0FUL << 0);
+    GPIOB->CRH |=  (0x02UL << 0);
+    GPIOB->BRR  =  (1UL << 8);
+
+    GPIOB->CRH &= ~(0x0FUL << 4);
+    GPIOB->CRH |=  (0x02UL << 4);
+    GPIOB->BRR  =  (1UL << 9);
+
     /* PC13: ArkMicro ARK1668 SoC Reset Line (Active-Low ARK_RST#) */
     GPIOC->CRH &= ~(0x0FUL << 20);
     GPIOC->CRH |=  (0x02UL << 20);

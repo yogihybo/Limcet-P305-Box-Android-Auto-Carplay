@@ -23,7 +23,12 @@
 #define SOC_CMD_INIT_HANDSHAKE  0x81  /* Init handshake */
 #define SOC_CMD_APP_STATE       0x82  /* App foreground/mode change */
 #define SOC_CMD_AUDIO_ROUTE     0x84  /* Audio routing */
-#define SOC_CMD_APP_PROTOCOL    0x85  /* App protocol */
+#define SOC_CMD_APP_PROTOCOL    0x85  /* App Protocol response/ACK. Real handler
+                                        * (0x08008BA8) stores 3 payload bytes then
+                                        * queues an outbound packet via an unmapped
+                                        * indexed table -- see handle_app_protocol()
+                                        * in uart_protocol.c for what's implemented
+                                        * vs. approximated. */
 #define SOC_CMD_BT_AT_RELAY     0x87  /* Bluetooth AT-command relay to onboard BT module.
                                         * Real firmware's handler at 0x080087A1 loads a
                                         * literal 0x40004800 (real STM32F105 USART3 base)
@@ -50,7 +55,11 @@
 #define SOC_CMD_DIAG_READ_MEM   0x90  /* Diagnostic Flash/SRAM readback */
 #define SOC_CMD_SYNC_SETTINGS   0xA0  /* UI settings sync */
 #define SOC_CMD_REBOOT_BOOTLDR  0xE1  /* Enter bootloader for update */
-#define SOC_CMD_SYSTEM_RESET    0xFF  /* State reset */
+#define SOC_CMD_SYSTEM_RESET    0xFF  /* System State Reset. Real handler (0x080088E8)
+                                        * is a sub-command dispatch on payload[0]:
+                                        * values 0-9 are genuinely no-op there too, only
+                                        * sub-id 0x7F triggers real action -- see
+                                        * handle_system_reset() in uart_protocol.c. */
 
 typedef struct {
     uint8_t cmd;

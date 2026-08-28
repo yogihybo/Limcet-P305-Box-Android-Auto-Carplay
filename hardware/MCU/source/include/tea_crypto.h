@@ -13,24 +13,35 @@
  *   - 32 rounds, real v0/v1/sum decrement pattern (sub, not add -- decrypt
  *     direction, not encrypt)
  *
- * NOT YET RESOLVED: the real 128-bit key. The real firmware reads it from
- * SRAM (0x20000098), not a flash literal directly visible at the cipher
- * call site -- almost certainly populated from the .data section at startup
- * (the standard flash->RAM data-copy every C startup does), but the exact
- * flash source bytes were NOT located in this pass. tea_key_placeholder[]
- * below is explicitly NOT the real key -- it is zeroed and clearly marked,
- * so nobody mistakes a guess for a verified value. Do not fill this in
- * without independently verifying it against a real captured challenge/
- * response pair from live hardware (or locating the real .data copy table
- * in can_app.bin) -- a wrong key that "looks like" it works is worse than
- * leaving CMD 0x88 unimplemented, since it would silently fail the real
- * handshake while looking complete. */
+ * REAL KEY RECOVERED. The cipher reads its key from SRAM 0x20000098 as 4
+ * sequential 32-bit words. That address is NOT a flash literal at the
+ * cipher call site -- it's populated from the real firmware's .data init
+ * table at boot. Traced the whole chain end to end, not guessed:
+ *
+ *   1. Reset vector's second jump target (0x08004198) is exactly the
+ *      function that calls the data/bss init-table walker (0x080041A0) as
+ *      its first instruction -- confirms this whole chain is genuinely on
+ *      the real boot path, not unreached code.
+ *   2. The walker reads a 2-entry table (embedded right after itself,
+ *      PC-relative offsets from 0x080041CC): entry 1 = {src=0x0800BC14,
+ *      dst=0x20000000, size=0xE8, copy_fn}, entry 2 = {src=0x0800BCFC,
+ *      dst=0x200000E8, size=0x2CD8, zero_fn} -- the standard .data-copy +
+ *      .bss-clear pair, with .data occupying RAM 0x20000000-0x200000E8.
+ *   3. 0x20000098 falls inside that .data range at offset 0x98, so its
+ *      real flash source is 0x0800BC14 + 0x98 = 0x0800BCAC. Read directly:
+ *      key[0]=0x0000006D, key[1]=0x0000007C, key[2]=0x000000A9,
+ *      key[3]=0x000000C4 (all surrounding .data bytes are zero, confirming
+ *      this isn't an alignment artifact).
+ *
+ * Worth flagging plainly: each word has only its low byte set. The real
+ * effective key entropy is 32 bits, not the full 128 bits the field width
+ * implies -- a genuinely weak scheme, not a derivation error (the
+ * surrounding zeroed .data bytes rule out an off-by-a-word misread). */
 
-extern const uint32_t tea_key_placeholder[4]; /* NOT the real key -- see above */
+extern const uint32_t tea_real_key[4]; /* Real key, see derivation above */
 
 /* Decrypts an 8-byte (2x uint32) TEA block in place, using the given
- * 128-bit key. Algorithm structure is verified real; correctness for an
- * actual challenge/response depends entirely on using the real key. */
+ * 128-bit key. */
 void tea_decrypt_block(uint32_t *v0, uint32_t *v1, const uint32_t key[4]);
 
 #endif /* TEA_CRYPTO_H */

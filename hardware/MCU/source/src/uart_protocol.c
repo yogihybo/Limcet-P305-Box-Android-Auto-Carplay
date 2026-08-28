@@ -305,10 +305,10 @@ static void handle_bt_at_relay(const UartPacket *p) {
     }
 }
 
-/* 0x88: TEA-cipher anti-clone challenge/response. Real algorithm structure
- * confirmed via disassembly (see tea_crypto.h/.c). Runs against an explicit
- * placeholder key -- NOT expected to match real hardware's response until
- * the real key is recovered (see tea_crypto.h for why it's not guessed). */
+/* 0x88: TEA-cipher anti-clone challenge/response. Real algorithm AND real key
+ * confirmed via disassembly (see tea_crypto.h/.c for the full derivation,
+ * including the real firmware's .data init-table trace that located the key
+ * bytes in flash). */
 static void handle_crypto_challenge(const UartPacket *p) {
     if (p->len < 8) {
         return;
@@ -318,7 +318,7 @@ static void handle_crypto_challenge(const UartPacket *p) {
     uint32_t v1 = ((uint32_t)p->payload[4] << 24) | ((uint32_t)p->payload[5] << 16) |
                   ((uint32_t)p->payload[6] << 8)  |  (uint32_t)p->payload[7];
 
-    tea_decrypt_block(&v0, &v1, tea_key_placeholder);
+    tea_decrypt_block(&v0, &v1, tea_real_key);
 
     uint8_t reply[8];
     reply[0] = (uint8_t)(v0 >> 24); reply[1] = (uint8_t)(v0 >> 16);

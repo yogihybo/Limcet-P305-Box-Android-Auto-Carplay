@@ -384,3 +384,61 @@ be identified on the board.
   simply wrong under either base until corrected. Treat every specific
   address in those two docs as unverified until independently checked
   against the real file, same discipline applied in this doc.
+
+## GPIOC Pin 13 (ArkMicro SoC reset line): real boot behavior confirmed
+## different from the clean-room source's naive fixed-delay assumption
+
+The clean-room `hardware/MCU/source/`'s claim that PC13 is the ArkMicro
+SoC hardware-reset line, held LOW for a fixed 50ms then released, traces
+back to a pasted "handoff" document from earlier in this project's
+history -- **never independently re-derived from the real firmware in
+this session until now.** Direct re-verification against the real
+`can_app.bin`:
+
+**Real boot-time behavior, traced end to end:**
+- The real firmware's top-level init sequence (function at `0x080056C0`,
+  called from what's very likely `main()` via a caller at `0x08006132`
+  alongside CAN/UART/USART3 init calls) ends by calling a shared
+  4-state dispatcher (`0x080058A4`) with `r0=0`, which resolves to
+  **GPIOC Pin 13 = LOW, GPIOC Pin 2 = LOW**. So yes -- PC13 genuinely
+  does get asserted LOW as part of real boot-time hardware init,
+  consistent with "hold something in reset."
+- **But there is no fixed-delay release anywhere in this sequence.**
+  The very next call after the init routine returns is straight into
+  the next subsystem init (`0x8007168`) -- no busy-wait loop, no
+  immediate release-to-HIGH.
+- The actual release-to-HIGH path is a **separate, main-loop-polled
+  function** (branches back to `0x080084E6`, i.e. runs repeatedly, not
+  once at boot) that debounces a status byte (bit 4 of a passed-in
+  argument, source not traced) against a shadow copy, and only once
+  that bit is confirmed changed/stable does it call the *same* shared
+  dispatcher (`0x080058A4`) with `r0=2` or `r0=3` -- the HIGH-driving
+  states for GPIOC Pin 13.
+- **This is the exact same dispatcher `CMD 0xA0` id=0x11 also calls.**
+  The earlier "collision" framing in this doc (id=0x11 vs. the SoC-reset
+  pin) should be revised: it's not two unrelated features colliding on
+  one pin, it's most likely **one coherent reset-release state machine**
+  that both the main-loop poll and `CMD 0xA0` id=0x11 can drive --
+  `id=0x11` may just be another entry point into the same subsystem
+  (e.g. the SoC itself acknowledging/confirming release readiness over
+  UART), not a separate LCD-backlight feature as originally guessed.
+  This doesn't change the recommendation to leave the physical pin
+  toggle unwired in `id=0x11`'s clean-room handler (see above) -- if
+  anything it's a stronger reason to leave it alone until the real
+  gating condition is understood, not a reason to wire it up.
+
+**Practical conclusion for "can the SoC boot":** the real firmware does
+NOT release the SoC from reset on a fixed timer -- it waits for a
+polled condition. The clean-room source's fixed-50ms-then-release
+approach is a real, meaningful simplification, not an exact match. It
+was deliberately NOT changed to mimic the conditional/polled real
+behavior, because that behavior's actual trigger (what sets bit 4 of
+the polled status byte) was not traced far enough to reproduce
+correctly, and a wrong conditional implementation risks the SoC never
+being released at all (stuck in reset indefinitely) -- strictly worse
+than the current fixed-delay approach, which is guaranteed to release
+the SoC after 50ms regardless. **The clean-room source's SoC-boot path
+is unchanged and, if anything, more conservative/safer than a
+best-guess reproduction of the real conditional logic would be.**
+Tracing the real gating condition (what feeds bit 4) is a real,
+bounded follow-up if higher-fidelity behavior is ever needed.

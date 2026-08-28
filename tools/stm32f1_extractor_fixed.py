@@ -252,9 +252,6 @@ if __name__ == '__main__':
         else:
             generate_exception(oocd, vtor_address, exception_number)
             recovered_value = recover_pc(oocd)
-        else:
-            generate_exception(oocd, vtor_address, exception_number)
-            recovered_value = recover_pc(oocd)
 
         if recovered_value is None and skip_value == 'skip':
             continue

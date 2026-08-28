@@ -519,3 +519,62 @@ function) are not resolved by this observation alone -- a real, bounded
 follow-up via multimeter/logic-probe on the physical PC13/PC2 pins during
 normal operation (reverse-gear engagement, etc.) would settle it more
 precisely than firmware archaeology can.
+
+## CMD 0x84 (Audio Route) real handler found -- GPIOC2 finally resolved, PA1's label falsified again
+
+Prompted by a real, sound user question: "there must be an audio mute
+function in the MCU, otherwise AA audio would play back through the
+factory OEM speakers too." Checked directly rather than assumed --
+disassembled the confirmed-real `CMD 0x84` handler (`0x08008808`) properly
+for the first time this session (it had been glanced at once earlier, while
+hunting for `CMD 0x87`, and mislabeled at the time as "unrelated code").
+
+**Real findings, all independently verified:**
+- `CMD 0x84` is NOT a simple PA1 mute toggle. That claim's originally-cited
+  address (`0x0800599C`) was already proven wrong for this exact label
+  earlier this session (it's a GPIOA-bit-8 *read*, unrelated) -- this
+  closes the loop on that: the real `CMD 0x84` handler doesn't touch PA1 at
+  all.
+- The real handler masks the incoming value to 4 bits, ignores it if `>=6`,
+  and stores it into a **debounced/shadowed state field in a different SRAM
+  struct** (base `0x20000238`) than `CMD 0xA0`'s own struct (`0x200001D8`).
+- `value==0` sends the literal ASCII string `"AT+AUDROUTE=1\r\n"` over
+  USART3 -- the same channel `CMD 0x87`'s Bluetooth relay and `id=0x00`'s
+  `"AT+UPGRADE"` command use -- then calls the exact same shared 4-state
+  dispatcher (`0x080058A4`) `CMD 0xA0 id=0x11` calls, with state `0`.
+  `value==3` sends `"AT+AUDROUTE=2\r\n"`, dispatcher state `1`. Values
+  `1/2/4/5` just update the state field, no further action (real, not a
+  gap).
+- **This resolves GPIOC Pin 2**, flagged as unimplemented in the previous
+  correction: full disassembly of the dispatcher's real truth table (traced
+  `0x080058F8`/`0x0800591C` instruction-by-instruction) gives: state 0 =
+  Pin13 LOW/Pin2 LOW, state 1 = Pin13 LOW/Pin2 HIGH, state 2 = Pin13
+  LOW/Pin2 LOW (same physical result as state 0), state 3 = Pin13 HIGH/Pin2
+  LOW.
+- **Real, notable, unresolved finding**: this handler's own gate condition
+  before calling the dispatcher ("proceed if this struct's own offset
+  `0x5e` == 0") is the *opposite* polarity of `CMD 0xA0 id=0x11`'s gate
+  ("proceed if its offset `0x5e` == 1") -- and given the two handlers use
+  different struct bases, it's genuinely unclear whether these are the same
+  underlying flag at different relative offsets into overlapping SRAM, or
+  two independent flags. Not resolved this pass; implemented as two
+  separate local state variables in the clean-room source rather than
+  conflated.
+- **Two real call sites sharing one relay pair is strong, independent
+  support for GPIOC13/PC2 being a combined audio+video OEM-bypass relay**,
+  not video-only as the earlier correction (based on `id=0x11` alone plus
+  the decompilation doc's claim) had it -- audio routing driving the exact
+  same physical pins as the video-relay setting is a much more specific,
+  harder-to-coincidence signal than either finding alone.
+
+**Fixed in the clean-room source**: `handle_audio_route()` (`CMD 0x84`)
+rewritten to match the real logic exactly (debounced state, real
+`AT+AUDROUTE=1/2` sends, dispatcher calls). New `shared_relay_dispatch()`
+helper implements the full real 4-state truth table and is now used by
+BOTH `CMD 0x84` and `CMD 0xA0 id=0x11` (previously id=0x11 only drove Pin
+13 directly, leaving Pin 2 unwired). PA1's `main.c` comment downgraded from
+a confident "Audio Amp Mute" label to explicitly unconfirmed -- kept as a
+boot-time pop-prevention measure regardless, since that's sensible
+independent of its true function, but no longer presented as a settled
+label. Build-verified: `can_app.bin` grows to 4180 bytes. Not written to
+physical hardware.

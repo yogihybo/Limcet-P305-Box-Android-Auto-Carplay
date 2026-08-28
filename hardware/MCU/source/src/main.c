@@ -45,8 +45,18 @@ static void gpio_hardware_init(void) {
     /* Disable JTAG to free PB3, PB4, PA15 for GPIOs while keeping SWD (PA13/PA14) active */
     AFIO->MAPR = (AFIO->MAPR & ~(7UL << 24)) | (2UL << 24); /* SWJ_CFG: JTAG-DP Disabled, SW-DP Enabled */
 
-    /* PA1: Audio Amp Mute (General purpose output push-pull, 2MHz -> Mode 10, CNF 00 -> 0x02) */
-    /* Start HIGH (Muted) to prevent audio pop on power up */
+    /* PA1: "Audio Amp Mute" -- label UNCONFIRMED, not re-derived from real
+     * disassembly this session (General purpose output push-pull, 2MHz ->
+     * Mode 10, CNF 00 -> 0x02). Its originally-cited address (0x0800599C)
+     * was already independently proven wrong for this exact claim (it's a
+     * GPIOA-bit-8 READ, unrelated -- see MCU_FIRMWARE_VERIFIED_FINDINGS.md),
+     * and CMD 0x84 (Audio Route) -- the confirmed real audio-routing command
+     * -- turned out not to touch PA1 at all (see uart_protocol.c's
+     * handle_audio_route(), which sends real "AT+AUDROUTE=1/2" over USART3
+     * and drives GPIOC13/PC2 instead). Kept as a boot-time pop-prevention
+     * measure regardless, since driving it HIGH-then-LOW during power-up
+     * stabilization is a sensible precaution independent of its true real
+     * function, but do not treat "Audio Amp Mute" as a confirmed label. */
     GPIOA->CRL &= ~(0x0FUL << 4);
     GPIOA->CRL |=  (0x02UL << 4);
     GPIOA->BSRR =  (1UL << 1);

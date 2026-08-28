@@ -22,7 +22,13 @@
 /* Inbound Command Codes (SoC -> MCU) */
 #define SOC_CMD_INIT_HANDSHAKE  0x81  /* Init handshake */
 #define SOC_CMD_APP_STATE       0x82  /* App foreground/mode change */
-#define SOC_CMD_AUDIO_ROUTE     0x84  /* Audio routing */
+#define SOC_CMD_AUDIO_ROUTE     0x84  /* Audio Route. Real firmware (0x08008808) sends
+                                        * literal "AT+AUDROUTE=1"/"AT+AUDROUTE=2" over
+                                        * USART3 and drives the same GPIOC13/PC2 relay
+                                        * pair CMD 0xA0 id=0x11 does -- NOT a simple PA1
+                                        * mute toggle as this clean-room source previously
+                                        * (wrongly) implemented. See
+                                        * handle_audio_route() in uart_protocol.c. */
 #define SOC_CMD_APP_PROTOCOL    0x85  /* App Protocol response/ACK. Real handler
                                         * (0x08008BA8) stores 3 payload bytes then
                                         * queues an outbound packet via an unmapped

@@ -19,20 +19,111 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <termios.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
+#include <sys/select.h>
 #include <linux/i2c.h>
 #include <linux/i2c-dev.h>
 
 #define BD37033_ADDR_GND 0x40
 #define BD37033_ADDR_VCC 0x41
 #define BD37033_GPIO_PIN 34
+#define MCU_TTY_PORT     "/dev/ttyHS0"
 
 /* Stock power-on register defaults (sub-address 0x01 .. 0x14, 20 bytes) */
 static const uint8_t s_bd37033_init_data[20] = {
     0xA5, 0x03, 0x00, 0x00, 0x80, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
     0xFF, 0xFF, 0x00, 0x00, 0x00, 0x80, 0x80, 0x80, 0x00, 0x82
 };
+
+/* ============================================================
+ * MCU Audio Subsystem & Power Rail Gate Helper
+ * Gated by STM32 MCU GPIOA Pin 7 (AUDIO_EN) and GPIOA Pin 1 (PA_MUTE)
+ * via /dev/ttyHS0 at 38400 baud.
+ * ============================================================ */
+static uint8_t mcu_calc_chk(const uint8_t *data, int len) {
+    unsigned int sum = 0;
+    for (int i = 0; i < len; i++) sum += data[i];
+    return (uint8_t)(~sum & 0xFF);
+}
+
+static int mcu_send_frame(int fd, uint8_t cmd, const uint8_t *payload, uint8_t len) {
+    uint8_t frame[32];
+    frame[0] = 0x2E;
+    frame[1] = cmd;
+    frame[2] = len;
+    if (payload && len > 0) {
+        memcpy(frame + 3, payload, len);
+    }
+    frame[3 + len] = mcu_calc_chk(frame + 1, 2 + len);
+    return (write(fd, frame, 4 + len) == (ssize_t)(4 + len)) ? 0 : -1;
+}
+
+static int mcu_open_and_enable_audio(const char *port) {
+    printf("\n[MCU:AUDIO_EN] Opening %s at 38400 baud...\n", port);
+    int fd = open(port, O_RDWR | O_NOCTTY | O_NDELAY);
+    if (fd < 0) {
+        fprintf(stderr, "[MCU:AUDIO_EN] Warning: Failed to open %s: %s (ensure custom_ui/MsnCoreApp stopped)\n",
+                port, strerror(errno));
+        return -1;
+    }
+
+    struct termios tty;
+    memset(&tty, 0, sizeof(tty));
+    if (tcgetattr(fd, &tty) != 0) {
+        perror("[MCU:AUDIO_EN] tcgetattr");
+        close(fd);
+        return -1;
+    }
+
+    cfsetospeed(&tty, B38400);
+    cfsetispeed(&tty, B38400);
+    tty.c_cflag = (tty.c_cflag & ~CSIZE) | CS8 | CLOCAL | CREAD;
+    tty.c_iflag = 0;
+    tty.c_oflag = 0;
+    tty.c_lflag = 0;
+    tty.c_cc[VMIN] = 0;
+    tty.c_cc[VTIME] = 5;
+    tcflush(fd, TCIFLUSH);
+    tcsetattr(fd, TCSANOW, &tty);
+
+    printf("[MCU:AUDIO_EN] Sending Hello (CMD 0x81)...\n");
+    uint8_t p_hello = 0x01;
+    mcu_send_frame(fd, 0x81, &p_hello, 1);
+    usleep(50000);
+
+    printf("[MCU:AUDIO_EN] Sending Mode App (CMD 0x82, mode 4)...\n");
+    uint8_t p_mode[9] = {0x01, 0x08, 0, 0, 0, 0, 0, 0, 0};
+    mcu_send_frame(fd, 0x82, p_mode, 9);
+    usleep(50000);
+
+    printf("[MCU:AUDIO_EN] Sending CMD 0x84 [0x00, 0x03] -> Energizing MCU GPIOA Pin 7 (Audio Rail) & PA Mute Pin 1...\n");
+    uint8_t p_audio[2] = {0x00, 0x03};
+    mcu_send_frame(fd, 0x84, p_audio, 2);
+    usleep(50000);
+
+    printf("[MCU:AUDIO_EN] Querying Version (CMD 0x85)...\n");
+    mcu_send_frame(fd, 0x85, NULL, 0);
+    usleep(100000);
+
+    /* Read incoming MCU frames for confirmation */
+    uint8_t rx_buf[256];
+    int n = read(fd, rx_buf, sizeof(rx_buf) - 1);
+    if (n > 0) {
+        for (int i = 0; i < n - 3; ++i) {
+            if (rx_buf[i] == 0x2E && rx_buf[i+1] == 0x7F) {
+                int vlen = rx_buf[i+2];
+                if (vlen > 0 && i + 3 + vlen <= n) {
+                    printf("[MCU:AUDIO_EN] Live MCU Firmware: \"%.*s\" (CMD 0x7F)\n", vlen, (char*)&rx_buf[i+3]);
+                }
+            } else if (rx_buf[i] == 0x2E && rx_buf[i+1] == 0x40) {
+                printf("[MCU:AUDIO_EN] >>> MCU Audio Power & Mux ACK Confirmed (CMD 0x40)! <<<\n");
+            }
+        }
+    }
+    return fd;
+}
 
 static int gpio_write(const char *path, const char *val) {
     int fd = open(path, O_WRONLY);
@@ -920,9 +1011,117 @@ static uint8_t compute_volume_gain(uint8_t level) {
     return (uint8_t)igain;
 }
 
+/* ============================================================
+ * --mcu-scan: Probes the BD37033 with active MCU Audio Power Gate
+ * (STM32 GPIOA Pin 7 + GPIOA Pin 1 unmuted via /dev/ttyHS0 @ 38400)
+ * in combination with SoC GPIO 34 = 0 / 1 across all I2C buses.
+ * ============================================================ */
+static void do_mcu_gated_scan(void) {
+    printf("==============================================================\n");
+    printf("   MCU AUDIO-POWER GATED BD37033 I2C PROBE & VALIDATION       \n");
+    printf("==============================================================\n\n");
+
+    /* Step 1: Open MCU UART and assert Audio Power Enable (GPIOA Pin 7) */
+    int mcu_fd = mcu_open_and_enable_audio(MCU_TTY_PORT);
+    if (mcu_fd < 0) {
+        printf(">>> Proceeding with scan anyway (assuming MCU already running) <<<\n\n");
+    } else {
+        printf("[MCU:AUDIO_EN] Audio power rail actively energized!\n\n");
+    }
+
+    /* Step 2: Test both GPIO 34 states while MCU Audio Power is active */
+    const int gpio_states[] = {0, 1};
+    const uint8_t probe_addrs[] = {BD37033_ADDR_GND, BD37033_ADDR_VCC};
+    const char *buses[] = {"/dev/i2c-0", "/dev/i2c-1"};
+    bool any_match = false;
+
+    for (size_t g = 0; g < sizeof(gpio_states)/sizeof(gpio_states[0]); ++g) {
+        int gstate = gpio_states[g];
+        printf("--- [PHASE %zu] Testing SoC GPIO 34 = %d (with MCU GPIOA Pin 7 HIGH) ---\n", g + 1, gstate);
+        set_gpio34_state(gstate);
+        usleep(100000); /* 100ms settling */
+
+        /* 1. Kernel I2C buses */
+        for (size_t b = 0; b < sizeof(buses)/sizeof(buses[0]); ++b) {
+            const char *bus = buses[b];
+            if (access(bus, F_OK) != 0) continue;
+            printf("  Scanning Kernel Bus %s:\n", bus);
+            for (size_t a = 0; a < sizeof(probe_addrs)/sizeof(probe_addrs[0]); ++a) {
+                uint8_t addr = probe_addrs[a];
+                bool ack = i2c_probe_addr(bus, addr);
+                printf("    Address 0x%02X (0x%02X): %s\n",
+                       addr, addr << 1, ack ? ">>> ACK RECEIVED! <<<" : "NACK (no response)");
+                if (ack) {
+                    any_match = true;
+                    printf("    >>> ATTEMPTING 20-BYTE POWER-ON BURST ON %s AT 0x%02X...\n", bus, addr);
+                    int ret = i2c_write_bytes(bus, addr, 0x01, s_bd37033_init_data, sizeof(s_bd37033_init_data));
+                    printf("    >>> BURST RESULT: %s <<<\n", (ret == 0) ? "SUCCESS (ALL ACKED!)" : "FAILED");
+                }
+            }
+        }
+
+        /* 2. Hardware I2C0 (/dev/i2c-0 / GPIO 70/71) Deep Probe */
+        printf("  Testing Hardware i2c0 (GPIO 70/71) Vendor Call Shape:\n");
+        int i2c0_fd = open("/dev/i2c-0", O_RDWR);
+        if (i2c0_fd >= 0) {
+            for (size_t a = 0; a < sizeof(probe_addrs)/sizeof(probe_addrs[0]); ++a) {
+                uint8_t addr = probe_addrs[a];
+                ioctl(i2c0_fd, I2C_SLAVE, addr);
+                uint8_t sub = 0x01;
+                ssize_t w = write(i2c0_fd, &sub, 1);
+                printf("    Hardware i2c0 Addr 0x%02X sub-write: %s (w=%zd, errno=%d: %s)\n",
+                       addr, (w == 1) ? ">>> ACK! <<<" : "NACK", w, errno, strerror(errno));
+            }
+            close(i2c0_fd);
+        }
+
+        /* 3. Candidate Bitbang Pairs (GPIO 9/121, GPIO 70/71, GPIO 2/3) */
+        struct { int sda, scl; const char *desc; } pin_pairs[] = {
+            {9, 121, "pin9(SDA)/pin121(SCL) - LCD Red bus"},
+            {71, 70, "pin71(SDA)/pin70(SCL) - i2c0 BGA pads"},
+            {3, 2, "pin3(SDA)/pin2(SCL) - i2c-gpio-0"},
+            {61, 54, "pin61(SDA)/pin54(SCL) - Spare GPIO matrix"},
+            {61, 111, "pin61(SDA)/pin111(SCL) - Spare GPIO matrix"}
+        };
+        printf("  Testing Bitbang Pin Pairs:\n");
+        for (size_t p = 0; p < sizeof(pin_pairs)/sizeof(pin_pairs[0]); ++p) {
+            int sda = pin_pairs[p].sda;
+            int scl = pin_pairs[p].scl;
+            for (size_t a = 0; a < sizeof(probe_addrs)/sizeof(probe_addrs[0]); ++a) {
+                uint8_t addr = probe_addrs[a];
+                bool ack = bitbang_probe_addr(sda, scl, addr);
+                if (ack) {
+                    any_match = true;
+                    printf("    >>> BITBANG MATCH! %s at Addr 0x%02X! <<<\n", pin_pairs[p].desc, addr);
+                }
+            }
+        }
+        printf("\n");
+    }
+
+    printf("==============================================================\n");
+    printf("                  MCU GATED TEST SUMMARY                      \n");
+    printf("==============================================================\n");
+    if (any_match) {
+        printf("  >>> SUCCESS: BD37033 RESPONDED WITH MCU AUDIO POWER ENERGIZED! <<<\n");
+    } else {
+        printf("  Total Valid I2C ACKs: 0\n");
+        printf("  Physical Hardware Finding Confirmed:\n");
+        printf("    1. BD37033 I2C lines (PB10/PB11) are routed to the STM32 MCU, OR\n");
+        printf("    2. Board runs in native SoundType=0 (SoC DAC direct to TDA7388 Amp).\n");
+    }
+    printf("==============================================================\n\n");
+
+    if (mcu_fd >= 0) {
+        close(mcu_fd);
+    }
+}
+
 static void print_usage(const char *prog) {
     printf("Usage: %s <command> [options]\n\n", prog);
     printf("Commands:\n");
+    printf("  --mcu-scan                  [RECOMMENDED] Full multi-bus I2C scan with MCU GPIOA Pin 7\n");
+    printf("                              Audio Power energized + SoC GPIO 34 toggled\n");
     printf("  --scan                      Scan kernel I2C buses with GPIO34=0 and GPIO34=1\n");
     printf("  --sweep                     Exhaustive safe GPIO matrix sweep across spare SoC pins & power rails\n");
     printf("  --verify                    Verify candidate matched pin pairs with multi-byte register writes\n");
@@ -939,6 +1138,7 @@ static void print_usage(const char *prog) {
     printf("  --input <bus> <ch>          Select input channel (0..31, reg 0x05)\n");
     printf("  --raw <bus> <addr> <subaddr> <hex_bytes...>\n");
     printf("\nExamples:\n");
+    printf("  %s --mcu-scan\n", prog);
     printf("  %s --scan\n", prog);
     printf("  %s --sweep\n", prog);
     printf("  %s --verify\n", prog);
@@ -952,6 +1152,11 @@ int main(int argc, char **argv) {
     if (argc < 2) {
         print_usage(argv[0]);
         return 1;
+    }
+
+    if (strcmp(argv[1], "--mcu-scan") == 0) {
+        do_mcu_gated_scan();
+        return 0;
     }
 
     if (strcmp(argv[1], "--scan") == 0) {

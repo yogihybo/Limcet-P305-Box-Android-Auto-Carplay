@@ -1,6 +1,6 @@
-CROSS_COMPILE ?= /home/osboxes/Downloads/linux-arkmicro/buildroot/output/host/bin/arm-buildroot-linux-gnueabihf-
+CROSS_COMPILE ?= arm-linux-gnueabihf-
 CC = $(CROSS_COMPILE)gcc
-CFLAGS ?= -Wall -Wextra -O2
+CFLAGS ?= -Wall -Wextra -O2 -static
 
 TARGET = bd37033-test
 SRC = bd37033-test.c

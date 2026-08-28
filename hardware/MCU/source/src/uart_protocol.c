@@ -379,19 +379,39 @@ static void handle_sync_settings(const UartPacket *p) {
             g_settings.flag_42 = value;
             break;
 
-        case 0x0f: /* funnels into GPIOA Pin 15 via a threshold compare in the real
-                    * firmware -- path not traced precisely enough to reproduce the
-                    * exact threshold here, so store only for now */
+        case 0x0f: /* real firmware (0x08008B46): plain store to struct offset 0x43,
+                    * no GPIO effect at all -- corrects an earlier, wrong "feeds a
+                    * PA15 threshold compare" guess; re-traced precisely this session */
             g_settings.value_43 = value;
             break;
 
-        case 0x10: /* same GPIOA Pin 15 path as 0x0f, different threshold */
+        case 0x10: /* real firmware (0x08008B52): plain store to offset 0x44, same
+                    * correction as 0x0f -- no GPIO effect */
             g_settings.value_44 = value;
             break;
 
-        case 0x11: /* real firmware calls a dedicated function (LCD backlight
-                    * PWM/enable candidate, unconfirmed) -- store only */
+        case 0x11: /* Real firmware (0x08008B5E): stores to offset 0x45, then --
+                     * ONLY if struct offset 0x5e (whatever sets it is untraced) == 1 --
+                     * calls a shared 4-state dispatcher (0x080058A4) with r0=2 (value==0)
+                     * or r0=3 (value!=0), which resolves to: GPIOC Pin 13 = HIGH when
+                     * value!=0 else LOW; GPIOC Pin 2 stays LOW either way at this call
+                     * site (other r0 states drive Pin 2 HIGH too, reached from a
+                     * different caller -- id=0x00's value==2 branch queues an outbound
+                     * reply via the same ring-buffer mechanism as CMD 0x87, a separate
+                     * finding not yet implemented here).
+                     *
+                     * DELIBERATELY NOT wiring the physical pin toggle: GPIOC Pin 13 is
+                     * the SAME pin this clean-room source already uses as the ArkMicro
+                     * ARK1668 SoC hardware-reset line (main.c's gpio_hardware_init).
+                     * Toggling it again at runtime from here could unexpectedly assert
+                     * SoC reset. Struct bookkeeping only, until this collision is
+                     * resolved against a real schematic or scope capture -- consistent
+                     * with this project's zero-unverified-hardware-action policy. */
             g_settings.value_45 = value;
+            if (g_settings.flag_5e == 1) {
+                /* Real target confirmed: GPIOC Pin 13 (value!=0 -> HIGH, else LOW).
+                 * NOT driven here -- see comment above. */
+            }
             break;
 
         default: /* settingId >= 0x12: out-of-range in the real firmware too */

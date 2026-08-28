@@ -63,10 +63,14 @@ typedef struct {
     uint8_t  group_3d;     /* id=0x0b: clears to 0 -> fires PA15/PB8/PB9 HIGH together */
     uint16_t value_40;     /* id=0x0c: halfword value, no confirmed GPIO */
     uint8_t  flag_42;      /* id=0x0d: binary flag, no confirmed GPIO */
-    uint8_t  value_43;     /* id=0x0f: threshold value feeding PA15 (real, path unconfirmed) */
-    uint8_t  value_44;     /* id=0x10: threshold value feeding PA15 (real, path unconfirmed) */
-    uint8_t  value_45;     /* id=0x11: 2-state select, real firmware calls out to a
-                             * function (LCD backlight PWM/enable candidate, unconfirmed) */
+    uint8_t  value_43;     /* id=0x0f: plain stored value, confirmed NO GPIO effect */
+    uint8_t  value_44;     /* id=0x10: plain stored value, confirmed NO GPIO effect */
+    uint8_t  value_45;     /* id=0x11: gated by flag_5e; real target GPIOC Pin 13
+                             * (collides with the SoC hardware-reset pin -- see the
+                             * handle_sync_settings id=0x11 case comment) */
+    uint8_t  flag_5e;      /* Gates id=0x11's real GPIO effect (== 1 required). Real
+                             * firmware sets this elsewhere; not traced in this pass --
+                             * defaults to 0, so id=0x11 stays inert until it is. */
 } McuSettings;
 
 typedef void (*UartCmdHandlerFunc)(const UartPacket *packet);

@@ -18,3 +18,21 @@ These files are the **true, live hardware firmware extractions** dumped directly
 
 * **Debug Interface**: SWD (PA13/SWDIO, PA14/SWCLK).
 * **Protection Bypass**: STM32F1 RDP Level 1 bypass via ARM Cortex-M3 Vector Table Offset Register (`VTOR` / `0xE000ED08`) exception handler instruction leaking over the ICode bus (CVE-2020-8004).
+
+---
+
+## **Hardware Architecture & Subsystem Analysis**
+
+### **1. Audio & Power Architecture**
+* **Direct DAC Path (`SoundType=0`)**: The ArkMicro SoC's internal stereo DAC (`plughw:0,0` / `e4000000.sddac`) connects directly via AC-coupling capacitors to the Toyota OEM radio/amplifier Line-In/AUX input.
+* **Software Volume Scaling**: Because the DAC bypasses MCU analog attenuation, volume, muting, and equalizer controls are executed directly in software on the Linux host (within `custom_ui` / `aasdk` / ALSA PCM pipeline).
+* **MCU Power Rails**: The MCU provides hardware gating on `GPIOA Pin 7` (Audio $+8.5\text{V}$ rail enable) and `GPIOA Pin 1` (PA mute), activated via `CMD 0x84 [0x00, 0x03]`.
+
+### **2. STM32 I2C2 Peripheral (`0x40005800`)**
+* `live_app_1302.bin` implements the dedicated STM32 **hardware `I2C2` driver (`0x40005800`)** on **`PB10` (SCL)** and **`PB11` (SDA)** for communicating with the ROHM BD37033 sound processor (if populated).
+* The Linux SoC does not touch the BD37033 I2C lines directly, but dispatches high-level setting commands (`CMD 0xA0`) to the MCU over `/dev/ttyHS0` at 38400 baud.
+
+### **3. Microphone Multiplexer (`GPIOB Pin 6`)**
+* **Switch Line**: Controlled by the MCU's `GPIOB Pin 6` (`0x08005AA0`).
+* **OEM Mode (`GPIOB Pin 6 = 1`)**: Routes the 28-pin Toyota factory harness roof microphone into the SoC SAR-ADC (`plughw:0,1`). Gated via `CMD 0xA0 [0x09, 0x01]`.
+* **Aftermarket Mode (`GPIOB Pin 6 = 0`)**: Routes the 3.5mm pigtail jack to the SoC SAR-ADC (`plughw:0,1`). Gated via `CMD 0xA0 [0x09, 0x00]`.

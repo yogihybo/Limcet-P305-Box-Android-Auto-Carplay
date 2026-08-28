@@ -213,13 +213,19 @@ frame can land:
 mww 0x4000640C 0x00000020
 ```
 
-Repeat. This is naturally a tight polling loop — if OpenOCD's Tcl console is
-being driven interactively this is tedious by hand; consider a small script
-(OpenOCD Tcl `proc`, or driving the Tcl RPC port 6666 from a short Python
-loop) that polls `RF0R` every few ms and dumps any pending frame, running for
-as long as the vehicle is being operated (ignition on, engine running,
-actually driven/reversed/steering-wheel-buttons-pressed) to capture real
-traffic correlated with real actions.
+Repeat. **This is naturally a tight polling loop, and manual interactive
+typing genuinely cannot catch a momentary event** (a quick steering-wheel
+button press, a brief gear transition) — each hand-typed round trip takes
+seconds, far slower than the event itself. `tools/can-sniffer/can_sniffer.py`
+automates exactly this: it performs the whole Phase 1-7 sequence above
+itself, then polls `RF0R` in a tight loop and logs every real frame with a
+high-resolution timestamp to a CSV file, so events can be correlated against
+real-world actions (button presses, gear changes, wheel turns) after the
+fact instead of needing to catch them live. See its own `README.md` for
+usage and the full list of real caveats (transceiver power/enable
+uncertainty, the `DBG_CAN1_STOP` precaution it takes, etc.). Run it for as
+long as the vehicle is being operated (ignition on, engine running, actually
+driven/reversed/steering-wheel-buttons-pressed) to capture real traffic.
 
 ### Decoding a captured frame
 

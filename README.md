@@ -4,6 +4,8 @@ Limcet modules (and various other branded versions) are inexpensive aftermarket 
 
 This repo exists because a Limcet update failed and left the device unresponsive. Serial access made it possible to dump the original partitions; a same-family firmware package was then flashed via SD card and found to boot successfully. Further development since has focused on building a full tool chain from source including UBoot, a more modern kernel and a custom UI.
 
+![custom_ui System Information screen running on real hardware](docs/device_system_info.jpg)
+
 ## Choose Your Path
 
 Four independent ways to reach the device, from lowest to highest risk/commitment. Pick the branch that matches what you're trying to do — you don't need to follow the whole chart, and the first three don't touch NAND at all. Notably, running the **full custom stack — new U-Boot, new 4.19.192 kernel, optionally the new UI** — is itself a zero-NAND-write option: it boots entirely from a USB stick or SD card (§7.0), the same way as booting stock unmodified.

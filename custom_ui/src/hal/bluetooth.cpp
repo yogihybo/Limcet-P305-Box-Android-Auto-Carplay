@@ -1194,4 +1194,23 @@ bool media_prev_track(BluetoothHandle & /*h*/) {
     return run_command_simple("bluetoothctl player.previous >/dev/null 2>&1");
 }
 
+std::string get_bluetooth_hardware_info() {
+    std::string mac;
+    FILE * f = fopen("/sys/class/bluetooth/hci0/address", "r");
+    if (f) {
+        char buf[32];
+        if (fgets(buf, sizeof(buf), f)) {
+            mac = buf;
+            while (!mac.empty() && (mac.back() == '\n' || mac.back() == '\r' || mac.back() == ' ')) {
+                mac.pop_back();
+            }
+        }
+        fclose(f);
+    }
+    if (!mac.empty()) {
+        return "Realtek RTL8821CS (BlueZ 5.66 / " + mac + ")";
+    }
+    return "Realtek RTL8821CS (BlueZ 5.66 hci0)";
+}
+
 }  // namespace hal

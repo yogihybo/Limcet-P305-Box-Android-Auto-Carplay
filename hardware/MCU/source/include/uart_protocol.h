@@ -8,14 +8,14 @@
 #define UART_RX_RING_SIZE       8
 
 /* Outbound Command Codes (MCU -> SoC) */
-#define MCU_CMD_INPUT_EVENT     0x01  /* Key / SWC button event */
-#define MCU_CMD_HANDSHAKE_REQ   0x02  /* Handshake request */
+#define MCU_CMD_HANDSHAKE_VER   0x01  /* Version & handshake report */
+#define MCU_CMD_INPUT_EVENT     0x02  /* Key / SWC button event (2 bytes: [Key, State]) */
 #define MCU_CMD_STATUS_BITS     0x03  /* General status */
 #define MCU_CMD_RADAR_LEVEL     0x04  /* Parking radar distance */
 #define MCU_CMD_STATUS_5018     0x05  /* Power / ACC status */
 #define MCU_CMD_REVERSE_GEAR    0x06  /* Reverse / camera trigger */
 #define MCU_CMD_STEERING_ANGLE  0x0A  /* Steering trajectory angle */
-#define MCU_CMD_STATUS_5026     0x12  /* Status flag */
+#define MCU_CMD_DIP_PROFILE     0x12  /* Vehicle DIP switch profile report */
 #define MCU_CMD_STATUS_QUERY    0x20  /* Status query */
 #define MCU_CMD_VERSION_REPORT  0x7F  /* MCU version string */
 
@@ -47,7 +47,7 @@ typedef struct {
 /* Driver API */
 void uart_protocol_init(uint32_t baudrate);
 void uart_send_packet(uint8_t cmd, const uint8_t *payload, uint8_t len);
-void uart_send_key_event(uint16_t key_code, bool pressed);
+void uart_send_key_event(uint8_t key_code, bool pressed);
 void uart_send_reverse_state(bool reverse_active);
 void uart_send_steering_angle(int16_t angle_deci_degrees);
 void uart_send_radar_levels(uint8_t left, uint8_t mid_left, uint8_t mid_right, uint8_t right);

@@ -18,7 +18,8 @@ C_SOURCES = \
     src/main.c \
     src/can_driver.c \
     src/uart_protocol.c \
-    src/vehicle_profiles.c
+    src/vehicle_profiles.c \
+    src/tea_crypto.c
 
 # Includes
 INCLUDES = -Iinclude

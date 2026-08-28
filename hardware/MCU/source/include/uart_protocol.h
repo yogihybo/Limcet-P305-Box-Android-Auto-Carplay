@@ -35,8 +35,18 @@
                                         * NOT pinned down from disassembly -- 9600 below is a
                                         * documented best-guess (common BT-module AT default),
                                         * not a confirmed value. */
-#define SOC_CMD_CRYPTO_CHALLENGE 0x88 /* TEA-cipher anti-clone challenge/response (real
-                                        * firmware: 0x080050A0) -- NOT implemented here yet */
+#define SOC_CMD_CRYPTO_CHALLENGE 0x88 /* TEA-cipher anti-clone challenge/response. Real
+                                        * firmware's cipher (0x080050A0) is genuine
+                                        * 32-round TEA decrypt, confirmed byte-exact via
+                                        * disassembly (DELTA=0x9E3779B9, sum_init=
+                                        * 0xC6EF3720) -- see tea_crypto.h. The real 128-bit
+                                        * key was NOT recovered (lives in SRAM, populated
+                                        * from .data at startup; the flash source bytes
+                                        * were not located). handle_crypto_challenge()
+                                        * below runs the verified real algorithm against an
+                                        * explicit placeholder key and is NOT expected to
+                                        * produce a hardware-matching response until the
+                                        * real key is found. */
 #define SOC_CMD_DIAG_READ_MEM   0x90  /* Diagnostic Flash/SRAM readback */
 #define SOC_CMD_SYNC_SETTINGS   0xA0  /* UI settings sync */
 #define SOC_CMD_REBOOT_BOOTLDR  0xE1  /* Enter bootloader for update */

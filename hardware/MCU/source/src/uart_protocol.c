@@ -1,5 +1,6 @@
 #include "uart_protocol.h"
 #include "can_driver.h"
+#include "tea_crypto.h"
 
 static uint8_t g_rx_state = 0;
 static uint8_t g_rx_cmd = 0;
@@ -304,6 +305,29 @@ static void handle_bt_at_relay(const UartPacket *p) {
     }
 }
 
+/* 0x88: TEA-cipher anti-clone challenge/response. Real algorithm structure
+ * confirmed via disassembly (see tea_crypto.h/.c). Runs against an explicit
+ * placeholder key -- NOT expected to match real hardware's response until
+ * the real key is recovered (see tea_crypto.h for why it's not guessed). */
+static void handle_crypto_challenge(const UartPacket *p) {
+    if (p->len < 8) {
+        return;
+    }
+    uint32_t v0 = ((uint32_t)p->payload[0] << 24) | ((uint32_t)p->payload[1] << 16) |
+                  ((uint32_t)p->payload[2] << 8)  |  (uint32_t)p->payload[3];
+    uint32_t v1 = ((uint32_t)p->payload[4] << 24) | ((uint32_t)p->payload[5] << 16) |
+                  ((uint32_t)p->payload[6] << 8)  |  (uint32_t)p->payload[7];
+
+    tea_decrypt_block(&v0, &v1, tea_key_placeholder);
+
+    uint8_t reply[8];
+    reply[0] = (uint8_t)(v0 >> 24); reply[1] = (uint8_t)(v0 >> 16);
+    reply[2] = (uint8_t)(v0 >> 8);  reply[3] = (uint8_t)(v0);
+    reply[4] = (uint8_t)(v1 >> 24); reply[5] = (uint8_t)(v1 >> 16);
+    reply[6] = (uint8_t)(v1 >> 8);  reply[7] = (uint8_t)(v1);
+    uart_send_packet(SOC_CMD_CRYPTO_CHALLENGE, reply, 8);
+}
+
 static McuSettings g_settings;
 
 const McuSettings *mcu_settings_get(void) {
@@ -431,6 +455,7 @@ static const UartCmdDispatchEntry g_uart_cmd_table[] = {
     { SOC_CMD_AUDIO_ROUTE,     {0}, handle_audio_route },
     { SOC_CMD_DIAG_READ_MEM,   {0}, handle_diag_read_mem },
     { SOC_CMD_BT_AT_RELAY,     {0}, handle_bt_at_relay },
+    { SOC_CMD_CRYPTO_CHALLENGE,{0}, handle_crypto_challenge },
     { SOC_CMD_SYNC_SETTINGS,   {0}, handle_sync_settings },
     { SOC_CMD_REBOOT_BOOTLDR,  {0}, handle_reboot_bootloader }
 };

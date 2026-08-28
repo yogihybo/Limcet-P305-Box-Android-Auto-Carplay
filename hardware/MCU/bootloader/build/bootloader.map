@@ -1,0 +1,172 @@
+
+Discarded input sections
+
+ .text          0x00000000        0x0 build/startup_stm32f105.o
+ .data          0x00000000        0x0 build/startup_stm32f105.o
+ .bss           0x00000000        0x0 build/startup_stm32f105.o
+ .text          0x00000000        0x0 build/main.o
+ .data          0x00000000        0x0 build/main.o
+ .bss           0x00000000        0x0 build/main.o
+ .text.uart_getc
+                0x00000000       0x14 build/main.o
+ .text          0x00000000        0x0 build/ymodem.o
+ .data          0x00000000        0x0 build/ymodem.o
+ .bss           0x00000000        0x0 build/ymodem.o
+
+Memory Configuration
+
+Name             Origin             Length             Attributes
+FLASH            0x08000000         0x00004000         xr
+RAM              0x20000000         0x00010000         xrw
+*default*        0x00000000         0xffffffff
+
+Linker script and memory map
+
+LOAD build/startup_stm32f105.o
+LOAD build/main.o
+LOAD build/ymodem.o
+                0x20010000                        _estack = (ORIGIN (RAM) + LENGTH (RAM))
+
+.isr_vector     0x08000000       0x40
+                0x08000000                        . = ALIGN (0x4)
+ *(.isr_vector)
+ .isr_vector    0x08000000       0x40 build/startup_stm32f105.o
+                0x08000000                g_pfnVectors
+                0x08000040                        . = ALIGN (0x4)
+
+.text           0x08000040      0x478
+                0x08000040                        . = ALIGN (0x4)
+ *(.text)
+ *(.text*)
+ .text.Default_Handler
+                0x08000040        0x2 build/startup_stm32f105.o
+                0x08000040                DebugMon_Handler
+                0x08000040                HardFault_Handler
+                0x08000040                SysTick_Handler
+                0x08000040                PendSV_Handler
+                0x08000040                NMI_Handler
+                0x08000040                UsageFault_Handler
+                0x08000040                Default_Handler
+                0x08000040                MemManage_Handler
+                0x08000040                SVC_Handler
+                0x08000040                BusFault_Handler
+ *fill*         0x08000042        0x2 
+ .text.Reset_Handler
+                0x08000044       0x54 build/startup_stm32f105.o
+                0x08000044                Reset_Handler
+ .text.uart_init
+                0x08000098       0x60 build/main.o
+                0x08000098                uart_init
+ .text.uart_putc
+                0x080000f8       0x10 build/main.o
+                0x080000f8                uart_putc
+ .text.uart_getc_timeout
+                0x08000108       0x24 build/main.o
+                0x08000108                uart_getc_timeout
+ .text.is_app_valid
+                0x0800012c       0x2c build/main.o
+                0x0800012c                is_app_valid
+ .text.jump_to_application
+                0x08000158       0x20 build/main.o
+                0x08000158                jump_to_application
+ .text.startup.main
+                0x08000178       0x98 build/main.o
+                0x08000178                main
+ .text.flash_wait_busy
+                0x08000210       0x10 build/ymodem.o
+ .text.flash_unlock
+                0x08000220       0x1c build/ymodem.o
+                0x08000220                flash_unlock
+ .text.flash_lock
+                0x0800023c       0x10 build/ymodem.o
+                0x0800023c                flash_lock
+ .text.flash_erase_app_pages
+                0x0800024c       0x4c build/ymodem.o
+                0x0800024c                flash_erase_app_pages
+ .text.flash_write_page
+                0x08000298       0x48 build/ymodem.o
+                0x08000298                flash_write_page
+ .text.ymodem_receive_and_flash
+                0x080002e0      0x1d8 build/ymodem.o
+                0x080002e0                ymodem_receive_and_flash
+ *(.rodata)
+ *(.rodata*)
+                0x080004b8                        . = ALIGN (0x4)
+                0x080004b8                        _etext = .
+                0x080004b8                        _sidata = LOADADDR (.data)
+
+.glue_7         0x080004b8        0x0
+ .glue_7        0x080004b8        0x0 linker stubs
+
+.glue_7t        0x080004b8        0x0
+ .glue_7t       0x080004b8        0x0 linker stubs
+
+.vfp11_veneer   0x080004b8        0x0
+ .vfp11_veneer  0x080004b8        0x0 linker stubs
+
+.v4_bx          0x080004b8        0x0
+ .v4_bx         0x080004b8        0x0 linker stubs
+
+.iplt           0x080004b8        0x0
+ .iplt          0x080004b8        0x0 build/startup_stm32f105.o
+
+.rel.dyn        0x080004b8        0x0
+ .rel.iplt      0x080004b8        0x0 build/startup_stm32f105.o
+ .rel.got       0x080004b8        0x0 build/startup_stm32f105.o
+
+.data           0x20000000        0x0 load address 0x080004b8
+                0x20000000                        . = ALIGN (0x4)
+                0x20000000                        _sdata = .
+ *(.data)
+ *(.data*)
+                0x20000000                        . = ALIGN (0x4)
+                0x20000000                        _edata = .
+
+.igot.plt       0x20000000        0x0 load address 0x080004b8
+ .igot.plt      0x20000000        0x0 build/startup_stm32f105.o
+
+.got            0x20000000       0x14 load address 0x080004b8
+ .got           0x20000000       0x14 build/startup_stm32f105.o
+
+.got.plt        0x20000014        0xc load address 0x080004cc
+ .got.plt       0x20000014        0xc build/startup_stm32f105.o
+                0x20000014                _GLOBAL_OFFSET_TABLE_
+
+.bss            0x20000020        0x0 load address 0x080004d8
+                0x20000020                        . = ALIGN (0x4)
+                0x20000020                        _sbss = .
+ *(.bss)
+ *(.bss*)
+ *(COMMON)
+                0x20000020                        . = ALIGN (0x4)
+                0x20000020                        _ebss = .
+
+/DISCARD/
+ *(.ARM.exidx*)
+ *(.ARM.extab*)
+OUTPUT(build/bootloader.elf elf32-littlearm)
+LOAD linker stubs
+
+.comment        0x00000000       0x1f
+ .comment       0x00000000       0x1f build/startup_stm32f105.o
+                                 0x20 (size before relaxing)
+ .comment       0x0000001f       0x20 build/main.o
+ .comment       0x0000001f       0x20 build/ymodem.o
+
+.note.GNU-stack
+                0x00000000        0x0
+ .note.GNU-stack
+                0x00000000        0x0 build/startup_stm32f105.o
+ .note.GNU-stack
+                0x00000000        0x0 build/main.o
+ .note.GNU-stack
+                0x00000000        0x0 build/ymodem.o
+
+.ARM.attributes
+                0x00000000       0x2d
+ .ARM.attributes
+                0x00000000       0x2d build/startup_stm32f105.o
+ .ARM.attributes
+                0x0000002d       0x2d build/main.o
+ .ARM.attributes
+                0x0000005a       0x2d build/ymodem.o

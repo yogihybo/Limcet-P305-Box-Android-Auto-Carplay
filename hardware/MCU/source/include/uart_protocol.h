@@ -24,10 +24,17 @@
 #define SOC_CMD_APP_STATE       0x82  /* App foreground/mode change */
 #define SOC_CMD_AUDIO_ROUTE     0x84  /* Audio routing */
 #define SOC_CMD_APP_PROTOCOL    0x85  /* App protocol */
-#define SOC_CMD_BT_AT_RELAY     0x87  /* Bluetooth AT-command relay to onboard BT module
-                                        * (real firmware: 0x080087A1, pipes payload to a
-                                        * second UART -- NOT implemented here yet, see
-                                        * docs/1.3.1_MCU_FIRMWARE_DECOMPILATION.md) */
+#define SOC_CMD_BT_AT_RELAY     0x87  /* Bluetooth AT-command relay to onboard BT module.
+                                        * Real firmware's handler at 0x080087A1 loads a
+                                        * literal 0x40004800 (real STM32F105 USART3 base)
+                                        * on its call path -- confirmed via disassembly this
+                                        * session, see docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md.
+                                        * That same call path also confirmed USART3's real
+                                        * TX/RX pins (PB10/PB11, standard no-remap mapping)
+                                        * via a {0xc00,...} GPIO-config struct. Baud rate was
+                                        * NOT pinned down from disassembly -- 9600 below is a
+                                        * documented best-guess (common BT-module AT default),
+                                        * not a confirmed value. */
 #define SOC_CMD_CRYPTO_CHALLENGE 0x88 /* TEA-cipher anti-clone challenge/response (real
                                         * firmware: 0x080050A0) -- NOT implemented here yet */
 #define SOC_CMD_DIAG_READ_MEM   0x90  /* Diagnostic Flash/SRAM readback */
@@ -80,5 +87,9 @@ void uart_send_radar_levels(uint8_t left, uint8_t mid_left, uint8_t mid_right, u
 void uart_process_rx(void);
 void uart_trigger_bootloader_reset(void);
 const McuSettings *mcu_settings_get(void);
+
+/* USART3 / Bluetooth AT relay (CMD 0x87) */
+void usart3_relay_init(void);
+void usart3_relay_send(const uint8_t *data, uint8_t len);
 
 #endif /* UART_PROTOCOL_H */

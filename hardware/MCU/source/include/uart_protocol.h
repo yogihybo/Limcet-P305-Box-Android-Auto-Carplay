@@ -75,13 +75,27 @@ typedef struct {
  * no-op/unimplemented in the real firmware too, not a gap in this reimplementation. */
 typedef struct {
     uint8_t  mode_3b;      /* id=0x00: multi-way mode, drives GPIOB Pin 1 when == 1 */
-    uint8_t  flag_3a;      /* id=0x07: binary flag, no confirmed GPIO */
-    uint8_t  flag_39;      /* id=0x08: binary flag, no confirmed GPIO */
+    uint8_t  flag_3a;      /* id=0x07: write-only in the real firmware, as far as a scan
+                             * of every immediate-offset ldrb/strb access to this offset
+                             * in can_app.bin can show -- found only the handler's own
+                             * write, no reader anywhere else via that addressing form.
+                             * Caveat: doesn't rule out a register-indexed read. */
+    uint8_t  flag_39;      /* id=0x08: same write-only finding/caveat as id=0x07 above. */
     uint8_t  mic_mux_38;   /* id=0x09: mic/audio input mux -- real, drives GPIOB Pin 6 (PB6) */
-    uint8_t  value_3c;     /* id=0x0a: range-checked value (<10), no confirmed GPIO */
+    uint8_t  value_3c;     /* id=0x0a: same write-only finding/caveat as id=0x07 above. */
     uint8_t  group_3d;     /* id=0x0b: clears to 0 -> fires PA15/PB8/PB9 HIGH together */
-    uint16_t value_40;     /* id=0x0c: halfword value, no confirmed GPIO */
-    uint8_t  flag_42;      /* id=0x0d: binary flag, no confirmed GPIO */
+    uint16_t value_40;     /* id=0x0c: REAL READER FOUND (0x08005D8E, same poll function
+                             * as id=0x0b's PA15/PB8/PB9 group above) -- used as a
+                             * threshold compared against a counter/timer at struct
+                             * offset 0x4c (not modeled here), gating that SAME 3-pin
+                             * group together with struct offset 0x13 (must equal 4 or
+                             * 5 -- likely a vehicle-profile/mode field) and 0x3d being
+                             * nonzero. Reveals id=0x0b and id=0x0c work together as one
+                             * coordinated subsystem, not independent settings -- real
+                             * finding, but the physical GPIO effect is still the same
+                             * PA15/PB8/PB9 group already deliberately left unwired for
+                             * id=0x0b (see below), so no new pin toggle added here. */
+    uint8_t  flag_42;      /* id=0x0d: same write-only finding/caveat as id=0x07 above. */
     uint8_t  value_43;     /* id=0x0f: plain stored value, confirmed NO GPIO effect */
     uint8_t  value_44;     /* id=0x10: plain stored value, confirmed NO GPIO effect */
     uint8_t  value_45;     /* id=0x11: gated by flag_5e; real target GPIOC Pin 13

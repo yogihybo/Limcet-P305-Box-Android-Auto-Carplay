@@ -348,9 +348,33 @@ static void handle_sync_settings(const UartPacket *p) {
     uint8_t value = p->payload[1];
 
     switch (setting_id) {
-        case 0x00: /* real target: GPIOB Pin 1 */
-            g_settings.mode_3b = value;
-            if (value == 1) {
+        case 0x00: /* Real firmware (0x080089F8) is a real 4-way branch, not a simple
+                    * binary flag -- re-traced precisely this session:
+                    *   value==1 -> struct[0x3b]=1
+                    *   value==2 -> struct[0x3b]=0, AND sends the literal ASCII string
+                    *               "AT+UPGRADE\r\n" out over USART3 (the same
+                    *               Bluetooth-module UART CMD 0x87 uses) -- a real,
+                    *               concrete finding, not a guess: read directly from
+                    *               the real firmware's own embedded string constant.
+                    *   value==3 -> struct[0x3b]=3
+                    *   else     -> struct[0x3b]=0
+                    * GPIOB Pin 1 itself is driven by a SEPARATE poll site
+                    * (0x08005E4C) that fires HIGH specifically when struct[0x3b]==1
+                    * -- that part of the original finding stands; the LOW case for
+                    * struct[0x3b]==0/3 wasn't individually traced, so this still
+                    * drives LOW for any non-1 value as a reasonable simplification. */
+            switch (value) {
+                case 1: g_settings.mode_3b = 1; break;
+                case 2: {
+                    g_settings.mode_3b = 0;
+                    static const uint8_t kAtUpgrade[] = "AT+UPGRADE\r\n";
+                    usart3_relay_send(kAtUpgrade, sizeof(kAtUpgrade) - 1);
+                    break;
+                }
+                case 3: g_settings.mode_3b = 3; break;
+                default: g_settings.mode_3b = 0; break;
+            }
+            if (g_settings.mode_3b == 1) {
                 GPIOB->BSRR = (1UL << 1);
             } else {
                 GPIOB->BRR = (1UL << 1);

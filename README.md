@@ -1,4 +1,4 @@
-# Limcet P306 CarPlay & Android Auto Piggyback Module
+# Limcet P305/P306 CarPlay & Android Auto Piggyback Module
 
 Limcet modules (and various other branded versions) are inexpensive aftermarket boxes (available on AliExpress) that add Android Auto and CarPlay to an existing factory head unit. They work reasonably well, but the vendor provides almost no information on how they operate or how to update them.
 

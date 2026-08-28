@@ -11,6 +11,7 @@ extern uint32_t _ebss;
 extern int main(void);
 extern void CAN1_RX0_IRQHandler(void);
 extern void USART2_IRQHandler(void);
+extern void USART3_IRQHandler(void);
 
 void Reset_Handler(void);
 void Default_Handler(void);
@@ -83,7 +84,7 @@ void (* const g_pfnVectors[])(void) = {
     Default_Handler,                        /* IRQ 36: SPI2 */
     Default_Handler,                        /* IRQ 37: USART1 */
     USART2_IRQHandler,                      /* IRQ 38: USART2 (SoC Link) */
-    Default_Handler,                        /* IRQ 39: USART3 */
+    USART3_IRQHandler,                      /* IRQ 39: USART3 (Bluetooth AT relay) */
     Default_Handler,                        /* IRQ 40: EXTI15_10 */
     Default_Handler,                        /* IRQ 41: RTCAlarm */
     Default_Handler,                        /* IRQ 42: OTG_FS_WKUP */

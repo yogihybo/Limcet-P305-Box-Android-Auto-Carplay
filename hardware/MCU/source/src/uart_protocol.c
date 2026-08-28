@@ -238,6 +238,72 @@ static void handle_diag_read_mem(const UartPacket *p) {
     }
 }
 
+/* USART3 / Bluetooth AT-command relay (CMD 0x87). Real pins confirmed via
+ * disassembly this session (see uart_protocol.h's SOC_CMD_BT_AT_RELAY comment):
+ * PB10 = TX (AF push-pull), PB11 = RX (input floating/pull-up). Baud is an
+ * unconfirmed best-guess (9600), matching common BT-module AT-mode defaults. */
+static bool g_usart3_initialized = false;
+
+void usart3_relay_init(void) {
+    if (g_usart3_initialized) {
+        return;
+    }
+
+    RCC->APB1ENR |= (1UL << 18); /* USART3EN */
+    RCC->APB2ENR |= (1UL << 3);  /* IOPBEN */
+
+    /* PB10: Alternate Function Push-Pull 50MHz (Mode 11, CNF 10 -> 0x0B) */
+    GPIOB->CRH &= ~(0x0FUL << 8);
+    GPIOB->CRH |=  (0x0BUL << 8);
+
+    /* PB11: Input Floating / Pull-Up (Mode 00, CNF 10 -> 0x08) */
+    GPIOB->CRH &= ~(0x0FUL << 12);
+    GPIOB->CRH |=  (0x08UL << 12);
+    GPIOB->ODR |=  (1UL << 11);
+
+    /* 36 MHz / 9600 = 3750 -> Mantissa = 234 (0xEA), Fraction = 6 -> 0xEA6 */
+    USART3->BRR = 0x00000EA6;
+
+    USART3->CR1 = (1UL << 13) | (1UL << 5) | (1UL << 3) | (1UL << 2); /* UE, RXNEIE, TE, RE */
+    nvic_enable_irq(39);
+
+    g_usart3_initialized = true;
+}
+
+void usart3_relay_send(const uint8_t *data, uint8_t len) {
+    usart3_relay_init();
+    for (uint8_t i = 0; i < len; i++) {
+        while ((USART3->SR & (1UL << 7)) == 0) {} /* TXE */
+        USART3->DR = data[i];
+    }
+}
+
+/* Bluetooth module responses come back asynchronously over USART3 RX; relay them
+ * to the SoC as further SOC_CMD_BT_AT_RELAY-tagged outbound packets. This mirrors
+ * the "relay" concept but the exact reply framing back to the SoC is NOT
+ * independently confirmed from disassembly -- flagged, not asserted as verified. */
+static uint8_t g_usart3_rx_buf[UART_MAX_PAYLOAD];
+static uint8_t g_usart3_rx_idx = 0;
+
+void USART3_IRQHandler(void) {
+    if (USART3->SR & (1UL << 5)) { /* RXNE */
+        uint8_t byte = (uint8_t)(USART3->DR & 0xFF);
+        if (g_usart3_rx_idx < UART_MAX_PAYLOAD) {
+            g_usart3_rx_buf[g_usart3_rx_idx++] = byte;
+        }
+        if (byte == '\n' || g_usart3_rx_idx >= UART_MAX_PAYLOAD) {
+            uart_send_packet(SOC_CMD_BT_AT_RELAY, g_usart3_rx_buf, g_usart3_rx_idx);
+            g_usart3_rx_idx = 0;
+        }
+    }
+}
+
+static void handle_bt_at_relay(const UartPacket *p) {
+    if (p->len > 0) {
+        usart3_relay_send(p->payload, p->len);
+    }
+}
+
 static McuSettings g_settings;
 
 const McuSettings *mcu_settings_get(void) {
@@ -344,6 +410,7 @@ static const UartCmdDispatchEntry g_uart_cmd_table[] = {
     { SOC_CMD_APP_STATE,       {0}, handle_app_state },
     { SOC_CMD_AUDIO_ROUTE,     {0}, handle_audio_route },
     { SOC_CMD_DIAG_READ_MEM,   {0}, handle_diag_read_mem },
+    { SOC_CMD_BT_AT_RELAY,     {0}, handle_bt_at_relay },
     { SOC_CMD_SYNC_SETTINGS,   {0}, handle_sync_settings },
     { SOC_CMD_REBOOT_BOOTLDR,  {0}, handle_reboot_bootloader }
 };

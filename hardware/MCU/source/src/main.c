@@ -88,24 +88,49 @@ static void gpio_hardware_init(void) {
     GPIOB->CRH |=  (0x02UL << 4);
     GPIOB->BRR  =  (1UL << 9);
 
-    /* PC13: ArkMicro ARK1668 SoC Reset Line (Active-Low ARK_RST#) */
-    GPIOC->CRH &= ~(0x0FUL << 20);
-    GPIOC->CRH |=  (0x02UL << 20);
+    /* GPIOB Pin 14: ArkMicro ARK1668 SoC Hardware Reset line -- CORRECTED this
+     * session. This clean-room source previously (wrongly) used PC13 for this,
+     * inherited from a pasted handoff doc, never independently re-derived. Real
+     * disassembly of can_app.bin (0x08005A18, port literal 0x40010C00 = GPIOB,
+     * mask 0x4000 = pin 14) plus this project's own earlier LIVE HARDWARE
+     * finding (connecting SWD halts the CPU before this pin's boot-time
+     * release call runs, holding the whole SoC in reset -- see
+     * docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md's "CRITICAL SAFETY FINDING")
+     * both independently confirm GPIOB Pin 14 is the real reset-release pin,
+     * not GPIOC Pin 13. */
+    GPIOB->CRH &= ~(0x0FUL << 24);
+    GPIOB->CRH |=  (0x02UL << 24);
 
     /* Hold ArkMicro SoC in hardware reset for 50ms */
-    GPIOC->BRR = (1UL << 13);
+    GPIOB->BRR = (1UL << 14);
     for (volatile uint32_t i = 0; i < 360000; i++) {
         __asm__ volatile("nop");
     }
 
     /* Release ArkMicro SoC from hardware reset */
-    GPIOC->BSRR = (1UL << 13);
+    GPIOB->BSRR = (1UL << 14);
 
     /* Allow power rails & SoC PLL to stabilize (150ms), then unmute audio amplifier cleanly */
     for (volatile uint32_t i = 0; i < 1080000; i++) {
         __asm__ volatile("nop");
     }
     GPIOA->BRR = (1UL << 1); /* PA1 = LOW (Unmuted) */
+
+    /* PC13: CMD 0xA0 id=0x11's real target (GPIOC Pin 13) -- NOT the SoC
+     * reset line (see above). Real firmware asserts this LOW as part of the
+     * same boot-time hardware-init sequence this function reimplements
+     * (0x080056C0, confirmed this session), then releases it later via a
+     * main-loop-polled condition -- also reachable from CMD 0xA0 id=0x11
+     * (see docs/1.3.1_MCU_FIRMWARE_DECOMPILATION.md's "Camera Type / Video
+     * Relay Multiplexer" claim and docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md's
+     * discussion of it -- plausible given the structural match, but that
+     * doc's adjacent id=0x0d "camera" claim is independently falsified, so
+     * this is not re-confirmed, just no longer blocked by the reset
+     * collision). Default LOW at boot, matching real firmware's own
+     * boot-time default. */
+    GPIOC->CRH &= ~(0x0FUL << 20);
+    GPIOC->CRH |=  (0x02UL << 20);
+    GPIOC->BRR  =  (1UL << 13);
 }
 
 int main(void) {

@@ -448,17 +448,28 @@ static void handle_sync_settings(const UartPacket *p) {
                      * reply via the same ring-buffer mechanism as CMD 0x87, a separate
                      * finding not yet implemented here).
                      *
-                     * DELIBERATELY NOT wiring the physical pin toggle: GPIOC Pin 13 is
-                     * the SAME pin this clean-room source already uses as the ArkMicro
-                     * ARK1668 SoC hardware-reset line (main.c's gpio_hardware_init).
-                     * Toggling it again at runtime from here could unexpectedly assert
-                     * SoC reset. Struct bookkeeping only, until this collision is
-                     * resolved against a real schematic or scope capture -- consistent
-                     * with this project's zero-unverified-hardware-action policy. */
+                     * NOW WIRED, corrected this session: GPIOC Pin 13 was previously
+                     * believed to collide with the SoC hardware-reset line, so this was
+                     * deliberately left unwired. Re-verified: the real SoC reset pin is
+                     * GPIOB Pin 14 (0x08005A18, confirmed via disassembly AND this
+                     * project's own earlier live-hardware SWD finding), a different
+                     * port/pin entirely -- see main.c's gpio_hardware_init(). GPIOC13's
+                     * real function is most plausibly a camera/video relay multiplexer
+                     * (docs/1.3.1_MCU_FIRMWARE_DECOMPILATION.md's claim, structurally
+                     * consistent with this pin's boot-default + gated-release pattern),
+                     * though that specific label is NOT re-confirmed the way the reset-
+                     * pin correction is -- the same doc's adjacent id=0x0d "camera" claim
+                     * was independently falsified this session (offset 0x42 has zero
+                     * readers anywhere in the firmware). GPIOC Pin 2 stays unwired: its
+                     * real trigger (a different r0 state, reached from id=0x00's own
+                     * value==2 branch) is a separate, unimplemented finding. */
             g_settings.value_45 = value;
             if (g_settings.flag_5e == 1) {
-                /* Real target confirmed: GPIOC Pin 13 (value!=0 -> HIGH, else LOW).
-                 * NOT driven here -- see comment above. */
+                if (value != 0) {
+                    GPIOC->BSRR = (1UL << 13);
+                } else {
+                    GPIOC->BRR = (1UL << 13);
+                }
             }
             break;
 

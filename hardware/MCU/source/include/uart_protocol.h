@@ -98,9 +98,10 @@ typedef struct {
     uint8_t  flag_42;      /* id=0x0d: same write-only finding/caveat as id=0x07 above. */
     uint8_t  value_43;     /* id=0x0f: plain stored value, confirmed NO GPIO effect */
     uint8_t  value_44;     /* id=0x10: plain stored value, confirmed NO GPIO effect */
-    uint8_t  value_45;     /* id=0x11: gated by flag_5e; real target GPIOC Pin 13
-                             * (collides with the SoC hardware-reset pin -- see the
-                             * handle_sync_settings id=0x11 case comment) */
+    uint8_t  value_45;     /* id=0x11: gated by flag_5e; real target GPIOC Pin 13,
+                             * a likely camera/video relay mux -- NOT the SoC reset
+                             * pin (that's GPIOB Pin 14, corrected this session; see
+                             * the handle_sync_settings id=0x11 case comment) */
     uint8_t  flag_5e;      /* Gates id=0x11's real GPIO effect (== 1 required). Real
                              * firmware sets this elsewhere; not traced in this pass --
                              * defaults to 0, so id=0x11 stays inert until it is. */

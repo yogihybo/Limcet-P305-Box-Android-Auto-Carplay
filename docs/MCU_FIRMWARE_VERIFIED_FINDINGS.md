@@ -442,3 +442,45 @@ is unchanged and, if anything, more conservative/safer than a
 best-guess reproduction of the real conditional logic would be.**
 Tracing the real gating condition (what feeds bit 4) is a real,
 bounded follow-up if higher-fidelity behavior is ever needed.
+
+## CORRECTION: the real SoC reset pin is GPIOB Pin 14, not GPIOC Pin 13
+
+The clean-room source's "PC13 = ArkMicro SoC hardware reset" claim (and
+everything built on top of it above, including the "id=0x11 collides
+with the reset pin" caution) was wrong. It traced back to a pasted
+handoff document, never independently re-derived from real disassembly
+in this session until now.
+
+**Real evidence, both independent of each other:**
+- Direct disassembly: `0x08005A18` (port literal `0x40010C00` = GPIOB,
+  mask `0x4000` = pin 14) is a real set/clear function reached from a
+  real mode-dispatch function (`0x08007E7C`) -- genuinely GPIOB Pin 14,
+  not GPIOC Pin 13.
+- This project's own earlier **live hardware** finding (documented in
+  the "CRITICAL SAFETY FINDING" section above, from real SWD sessions
+  before this doc existed): connecting a debugger halts the CPU before
+  a specific boot-time pin-release call runs, holding the whole ARK1668
+  SoC in reset for as long as SWD stays connected. That release call
+  was traced at the time to "GPIOB Pin 14 -> HIGH" via two real callers
+  -- exactly matching the address found independently here.
+
+Both point at the same real pin. GPIOC Pin 13 is a genuinely different
+port/pin (`0x40011000`), with its own real behavior (boot-time LOW
+default, released via a main-loop-polled condition, also reachable
+from `CMD 0xA0 id=0x11`) -- most plausibly a camera/video relay
+multiplexer per `docs/1.3.1_MCU_FIRMWARE_DECOMPILATION.md`'s claim for
+`id=0x11`, though that specific label is NOT re-confirmed to the same
+standard as the reset-pin correction: that same doc's adjacent
+`id=0x0d` "front camera auto-switch" claim was independently falsified
+earlier in this doc (struct offset `0x42` has zero readers anywhere in
+the firmware), so its GPIO semantic labels are not uniformly reliable
+even when its addresses/tables are.
+
+**Fixed in the clean-room source**: `main.c`'s `gpio_hardware_init()`
+now holds/releases GPIOB Pin 14 (not PC13) for the SoC reset sequence.
+`CMD 0xA0 id=0x11`'s handler now drives GPIOC Pin 13 directly (the
+"collision" that justified leaving it unwired no longer applies) --
+GPIOC Pin 2 remains unwired, since its own real trigger (a different
+state of the shared dispatcher, reached from `id=0x00`'s `value==2`
+branch) is a separate, unimplemented finding. Build-verified;
+`can_app.bin` grows to 4064 bytes. Not written to physical hardware.

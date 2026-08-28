@@ -332,6 +332,43 @@ release call ever runs — holds the SoC in reset indefinitely: it's not
 that a continuous signal stopped, it's that a one-time startup action
 never got the chance to happen at all.
 
+## Future reference: a genuinely different RDP-Level-1 bypass worth trying (2026-08-28, not attempted)
+
+Real, different technique found and worth revisiting if the bootloader
+extraction question ever gets picked back up:
+**https://github.com/racerxdl/stm32f0-pico-dump**
+
+Unlike the `CVE-2020-8004` exception/PC-recovery technique already
+ruled out above (which failed because this chip blocks the CPU's own
+flash *execution* while a debugger is attached, not just external
+debug-port reads), this tool exploits a **timing race condition in the
+SWD protocol itself** -- sending minimal commands fast enough to read
+data before the protection state catches up. Since it attacks the
+debug-port protocol timing directly rather than relying on the CPU
+executing/fetching flash, it's a genuinely different attack surface
+than the one we already proved is blocked here.
+
+**Real fit for our situation**: built specifically for **RDP Level 1**
+(confirmed active on this chip, not Level 2 -- SWD access itself was
+never blocked, only flash-content reads).
+
+**Real requirements, not yet available in our setup**:
+- A Raspberry Pi Pico (RP2040) -- cheap, not currently on hand.
+- A controllable **`NRST`** line -- our current SWD wiring is
+  `SWDIO`/`SWCLK`/`GND`/`VCC` only, confirmed no reset line (see the
+  critical safety finding above for why this already mattered once
+  tonight).
+- A controllable **power** switch (relay/MOSFET) to the target,
+  cycled rapidly and repeatedly *by the tool itself* as part of the
+  attack -- not manual power cycling per attempt. Whether there's a
+  realistic point on this board to add one without delicate soldering
+  is unverified.
+
+**Not attempted this session** -- recorded here so it doesn't need
+rediscovering. Worth real consideration next time this is picked up,
+if a Pico is on hand and a genuine `NRST` + switchable-power point can
+be identified on the board.
+
 ## Corrections to prior docs, stated plainly
 
 - `docs/HANDOFF_MCU_AUDIO_I2C.md` / `docs/1.3.1_MCU_FIRMWARE_DECOMPILATION.md`'s

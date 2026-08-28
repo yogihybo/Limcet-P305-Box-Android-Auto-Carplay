@@ -9,6 +9,7 @@
 #include "hal/display_ctrl.h"
 #include "hal/mcu_input.h"
 #include "hal/timezone.h"
+#include "hal/bluetooth.h"
 #include "core/log_timing.h"
 #include <functional>
 #include <sys/utsname.h>
@@ -699,7 +700,7 @@ lv_obj_t * create_settings_screen() {
             add_info_row(modal, "Software Version", "Prado-Reconstruction v1.4.0");
             add_info_row(modal, "Kernel Version", kernel_ver);
             add_info_row(modal, "MCU Firmware", mcu_ver);
-            add_info_row(modal, "Bluetooth Module", "Feasycom FSC-BT8251 (BT 5.0 Dual Mode)");
+            add_info_row(modal, "Bluetooth Subsystem", hal::get_bluetooth_hardware_info());
             add_info_row(modal, "Main Processor", "ArkMicro ARK1668 (ARM Cortex-A7 @ 800MHz)");
             add_info_row(modal, "Display & UI", "LVGL 9.2.2 (800x480 RGB888 / Framebuffer)");
             add_info_row(modal, "Vehicle Telemetry", vbat_buf);

@@ -132,4 +132,7 @@ void close_bluetooth(BluetoothHandle & h);
 
 BluetoothHandle & shared_handle();
 
+// Returns hardware details and active MAC of the Bluetooth adapter
+std::string get_bluetooth_hardware_info();
+
 }  // namespace hal

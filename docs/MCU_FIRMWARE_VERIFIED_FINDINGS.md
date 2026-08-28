@@ -484,3 +484,38 @@ GPIOC Pin 2 remains unwired, since its own real trigger (a different
 state of the shared dispatcher, reached from `id=0x00`'s `value==2`
 branch) is a separate, unimplemented finding. Build-verified;
 `can_app.bin` grows to 4064 bytes. Not written to physical hardware.
+
+## Real, hardware-confirmed: the video relay theory is upgraded from plausible to confirmed
+
+User-reported real hardware observation: with SWD connected (MCU halted,
+same state as the "CRITICAL SAFETY FINDING" above), **the stock Toyota
+head unit's own OEM video feed is completely blanked too**, not just the
+aftermarket CarPlay/Android Auto display.
+
+This is decisive in a way the earlier "aftermarket screen blank"
+observation wasn't. The aftermarket screen going blank is already fully
+explained by the ArkMicro SoC being held in hardware reset (GPIOB14 never
+released while halted) -- nothing running, nothing to display, regardless
+of any video mux. But the STOCK head unit's own feed going dark too can't
+be explained that way: a properly-designed bypass relay should route the
+factory camera straight to the factory screen without the aftermarket
+SoC being alive at all. For the stock feed to also go dark specifically
+while the MCU (not the SoC) is halted is real, direct evidence of a
+physical video relay under **active** MCU control -- one that apparently
+needs the MCU continuously driving it to maintain either video path,
+rather than defaulting to a safe OEM-passthrough state when unpowered or
+halted.
+
+**Real product-safety implication, not just an RE curiosity**: if this
+generalizes to any MCU fault (crash, lockup, brownout) during normal
+driving, not just a deliberate SWD halt, it means the reversing camera
+could black out entirely rather than fail safe to the stock OEM path.
+Worth keeping in mind independent of the reverse-engineering work.
+
+**Still open**: the exact polarity/topology. Which GPIOC13 state
+(HIGH/LOW) maps to which physical routing, and whether GPIOC Pin 2 is a
+second control line for the SAME relay (rather than an unrelated
+function) are not resolved by this observation alone -- a real, bounded
+follow-up via multimeter/logic-probe on the physical PC13/PC2 pins during
+normal operation (reverse-gear engagement, etc.) would settle it more
+precisely than firmware archaeology can.

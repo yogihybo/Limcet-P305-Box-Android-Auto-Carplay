@@ -348,7 +348,7 @@ lv_obj_t * create_settings_screen() {
                                        core::log_timestamp().c_str(), oem ? "OEM Factory Camera" : "Aftermarket Camera");
                            hal::send_mcu_setting(0x11, oem ? 1 : 0);
                        });
-    create_stepper_row(card, &ui::icons::icon_volume, "Reversing Volume Cut (%)", 0, 100, 5,
+    create_stepper_row(card, &ui::icons::icon_volume, "Reverse Vol. Cut (%)", 0, 100, 5,
                        "ReversingVolumeCut", "General");
 
     // --- Section 4: Date & Time ---
@@ -470,10 +470,11 @@ lv_obj_t * create_settings_screen() {
         lv_obj_t * row = lv_obj_create(card);
         lv_obj_remove_style_all(row);
         lv_obj_set_width(row, LV_PCT(100));
-        lv_obj_set_height(row, 64);
+        lv_obj_set_height(row, 72);
         lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
         lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
         lv_obj_set_style_pad_hor(row, 16, 0);
+        lv_obj_set_style_pad_ver(row, 4, 0);
 
         lv_obj_t * left_box = lv_obj_create(row);
         lv_obj_remove_style_all(left_box);
@@ -493,23 +494,24 @@ lv_obj_t * create_settings_screen() {
         // Segmented button group: [ Android Auto | CarPlay ]
         lv_obj_t * btn_box = lv_obj_create(row);
         lv_obj_remove_style_all(btn_box);
-        lv_obj_set_size(btn_box, 260, 42);
+        lv_obj_set_size(btn_box, 270, 52);
         lv_obj_set_flex_flow(btn_box, LV_FLEX_FLOW_ROW);
         lv_obj_set_flex_align(btn_box, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-        lv_obj_set_style_pad_column(btn_box, 8, 0);
+        lv_obj_set_style_pad_column(btn_box, 10, 0);
+        lv_obj_set_style_pad_all(btn_box, 6, 0);
 
         std::string current_mode = core::default_store().get_string("ProjectionType", "AndroidAuto", "General");
         bool is_carplay = (current_mode == "CarPlay");
 
         lv_obj_t * aa_btn = lv_button_create(btn_box);
         lv_obj_remove_style_all(aa_btn);
-        lv_obj_set_size(aa_btn, 120, 40);
+        lv_obj_set_size(aa_btn, 120, 38);
         lv_obj_set_style_radius(aa_btn, theme::kPillRadius, 0);
         theme::style_focusable(aa_btn);
 
         lv_obj_t * cp_btn = lv_button_create(btn_box);
         lv_obj_remove_style_all(cp_btn);
-        lv_obj_set_size(cp_btn, 120, 40);
+        lv_obj_set_size(cp_btn, 120, 38);
         lv_obj_set_style_radius(cp_btn, theme::kPillRadius, 0);
         theme::style_focusable(cp_btn);
 

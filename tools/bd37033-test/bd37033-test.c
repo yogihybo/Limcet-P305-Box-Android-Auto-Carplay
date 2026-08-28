@@ -946,13 +946,15 @@ static void do_sweep(void) {
 }
 
 static void do_verify(void) {
+    int mcu_fd = mcu_open_and_enable_audio(MCU_TTY_PORT);
+
     struct {
         int sda, scl;
         uint8_t addr;
         int pwr;
     } cands[] = {
-        {61, 54, 0x40, 0},
         {61, 111, 0x40, 0},
+        {61, 54, 0x40, 0},
         {61, 53, 0x40, 1},
         {61, 58, 0x41, 1},
         {61, 93, 0x40, 1},
@@ -970,7 +972,7 @@ static void do_verify(void) {
         printf("Testing Candidate #%zu: SDA=GPIO%d, SCL=GPIO%d, Addr=0x%02X, Power=%d\n",
                i+1, sda, scl, addr, pwr);
         set_power_rails(pwr);
-        usleep(20000);
+        usleep(50000);
 
         /* Test 1: Single byte write (Reg 0x06 = 0x00 Unmute) */
         uint8_t unmute_val = 0x00;
@@ -995,6 +997,7 @@ static void do_verify(void) {
         printf("\n");
     }
     set_power_rails(0);
+    if (mcu_fd >= 0) close(mcu_fd);
 }
 
 static uint8_t compute_volume_gain(uint8_t level) {

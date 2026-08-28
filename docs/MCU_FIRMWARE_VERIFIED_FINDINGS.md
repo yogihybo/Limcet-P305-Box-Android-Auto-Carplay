@@ -234,6 +234,104 @@ deliberately via `--send 0xe1`, with a real recovery plan (USB YMODEM
 re-flash, `tools/mcu_builder/`) in hand first, not as part of general
 probing.
 
+## CRITICAL SAFETY FINDING (2026-08-28): connecting SWD holds the whole head unit in reset
+
+Confirmed live, on real hardware, via a real OpenOCD/ST-Link SWD session
+against the physical unit: **connecting a debugger to this MCU takes
+down the entire head unit** -- display blanks, the ARK1668 SoC's own
+console goes silent, everything. This was reproduced multiple times
+across a live session (including after a full power cycle) and is not
+an artifact of any specific command sequence -- it happens as soon as
+SWD is connected. Full causal chain, each link independently verified
+live tonight, not inferred:
+
+1. OpenOCD's own connection/examine sequence briefly halts the core,
+   even with no explicit `halt` ever issued -- standard behavior for
+   establishing full debug control over an `hla_swd` (ST-Link)
+   transport.
+2. RDP Level 1 is active on this chip. Verified live via a precise
+   BusFault trace (`CFSR=0x00008200` -> `BFARVALID`+`PRECISERR`,
+   `BFAR=0x080004D4`, faulting `PC=0x080004AC`): RDP Level 1's real,
+   documented behavior blocks the CPU's *own* flash reads -- not just
+   external debug-port reads -- for as long as a debugger stays
+   attached. This is a standing condition of being connected, not
+   triggered by a specific command.
+3. The instant the briefly-halted core is allowed to execute even one
+   more instruction, it hits the first flash-literal read in its own
+   boot code and BusFaults immediately -- reproduced live, same exact
+   address, every single time (`0x080004AC` reading `0x080004D4`).
+4. That fault happens extremely early -- inside the 16KB resident
+   bootloader (`0x08000000`-`0x08003FFF`), well before the real
+   application (`can_app.bin`, based at `0x08004000`) ever starts
+   running. The core drops straight into its HardFault handler's
+   infinite trap loop (`0x0800020E`/`0x08000210`, confirmed via
+   single-step) and never gets any further.
+5. **The application code that releases the SoC from reset --
+   `GPIOB Pin 14` driven HIGH, see the section below -- lives in the
+   application, not the bootloader, and only runs once, early in the
+   application's own startup.** Since the fault happens before the
+   bootloader ever hands off to the application, that release call
+   never executes.
+6. With no firmware ever configuring/driving that pin, it sits at its
+   power-on-reset default (effectively low) -- holding the ARK1668 in
+   reset for as long as the MCU stays trapped, i.e. for as long as the
+   debugger stays connected.
+
+**Practical implication for any future work on this platform: do not
+connect a debugger to this MCU while the unit needs to stay usable.**
+There is no known way to halt/examine the core without triggering this
+chain -- it is not avoidable by using different OpenOCD commands, only
+by not connecting at all. Recovery requires fully disconnecting SWD
+(killing the OpenOCD process, ideally removing the physical SWD
+connection) and a real power cycle -- a software-only reset does not
+reliably clear residual `VTOR`/`NVIC` state left by any prior debug
+activity (observed directly: a `reset halt` immediately before `resume`
+still reproduced the identical fault on this session).
+
+Also confirmed during this session: the SWD wiring in use has only
+`SWDIO`/`SWCLK`/`GND`/`VCC` -- no `NRST` line -- so "connect under
+reset" is not available as a recovery option; a genuine power cycle is
+the only reliable fix if the connection itself becomes unresponsive
+(e.g. after the target enters a low-power mode with no debugger
+attached to catch it early).
+
+## `GPIOB Pin 14` — real, verified ARK1668 SoC hardware reset control
+
+Found while investigating the above. Real function at `0x08005A18`,
+same shape as every other verified `SetPin(bool)` wrapper this session
+(branches on the boolean parameter to the shared `BSRR`-set or
+`BRR`-clear helper), bitmask `0x4000` (bit 14), port literal at
+`0x08005A38` = **`0x40010C00` = GPIOB** (not GPIOA as the earlier,
+already-corrected table claimed -- same class of port/pin error as
+`id=0x00`'s target found earlier in this doc).
+
+Traced its only two callers, both real: a mode-dispatch function at
+`0x08007E7C` (parameter 0/1/2) calls the full ~9-function pin battery
+including this one, with **opposite states between mode 1 (`state=1`,
+HIGH) and mode 2 (`state=0`, LOW)** -- a deliberate, intentional flip
+between two real system states, not incidental. That dispatch function
+is itself called from a 5-step sequence state machine (`0x08004FD4`
+region, driven by a state counter at SRAM `0x08005050`) and directly
+from a standalone function at `0x08004DF8` which is called from
+`0x08008348` -- a routine that also references the literal `0x5555AAAA`
+and an infinite trap loop (`b.n` to self) immediately adjacent in the
+disassembly, matching `CMD 0xE1`'s already-documented "reboot to
+bootloader" behavior (writes that exact magic to SRAM `0x20004004`,
+spins for a watchdog reset) almost exactly.
+
+**Real interpretation**: this is not a signal requiring continuous
+servicing during normal operation. It's one step in a deliberate,
+multi-subsystem shutdown sequence -- called once to release the SoC
+(mode 1, early in the MCU's own boot) and asserted again (mode 2) as
+part of an orderly power-down or MCU-firmware-update
+(`CMD 0xE1`) sequence, where holding the SoC in a known-safe reset
+state makes real sense before the MCU either reboots into its update
+bootloader or the whole system powers down. This is why halting the
+core anywhere in the bootloader — before the application's one-time
+release call ever runs — holds the SoC in reset indefinitely: it's not
+that a continuous signal stopped, it's that a one-time startup action
+never got the chance to happen at all.
+
 ## Corrections to prior docs, stated plainly
 
 - `docs/HANDOFF_MCU_AUDIO_I2C.md` / `docs/1.3.1_MCU_FIRMWARE_DECOMPILATION.md`'s

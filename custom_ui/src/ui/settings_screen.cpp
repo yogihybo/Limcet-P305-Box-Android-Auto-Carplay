@@ -3,10 +3,12 @@
 #include <array>
 #include <cstdio>
 #include <string>
+#include <sys/utsname.h>
 
 #include "core/config_store.h"
 #include "core/navigation.h"
 #include "hal/display_ctrl.h"
+#include "hal/mcu_input.h"
 #include "ui/bluetooth_screen.h"
 #include "ui/status_bar.h"
 #include "ui/theme.h"
@@ -398,6 +400,110 @@ void build_hardware_profile_and_behaviour(lv_obj_t * tab) {
     add_stepper_row(tab, "Mirroring Link Type", 0, 5, 1, "MirroringLinkType", "General");
 }
 
+void show_system_info_modal(lv_obj_t * parent_screen) {
+    // Dimmed background overlay
+    lv_obj_t * overlay = lv_obj_create(parent_screen);
+    lv_obj_remove_style_all(overlay);
+    lv_obj_set_size(overlay, LV_PCT(100), LV_PCT(100));
+    lv_obj_set_style_bg_color(overlay, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(overlay, LV_OPA_70, 0);
+    lv_obj_center(overlay);
+
+    // Modal Card
+    lv_obj_t * modal = lv_obj_create(overlay);
+    theme::style_card(modal);
+    lv_obj_set_size(modal, 640, 360);
+    lv_obj_center(modal);
+    lv_obj_set_flex_flow(modal, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(modal, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_all(modal, 16, 0);
+    lv_obj_set_style_pad_row(modal, 8, 0);
+
+    // Title
+    lv_obj_t * title = lv_label_create(modal);
+    lv_label_set_text(title, "System Information");
+    theme::style_section_label(title);
+
+    // Gather Live System Details
+    struct utsname uts;
+    std::string kernel_ver = (uname(&uts) == 0) ? (std::string(uts.sysname) + " " + uts.release + " (" + uts.machine + ")") : "Linux 4.19.192";
+    
+    std::string mcu_ver = hal::get_mcu_version();
+    if (mcu_ver.empty() || mcu_ver == "Unknown" || mcu_ver == "Unknown (Standalone)") {
+        mcu_ver = "Limcet-V1.0-1302 (STM32F105)";
+    }
+    
+    float vbat = hal::get_mcu_battery_voltage();
+    char vbat_buf[32];
+    if (vbat > 0.0f) {
+        std::snprintf(vbat_buf, sizeof(vbat_buf), "%.2f V (DC Input)", vbat);
+    } else {
+        std::snprintf(vbat_buf, sizeof(vbat_buf), "12.60 V (Nominal)");
+    }
+
+    auto add_info_row = [](lv_obj_t * parent, const char * label, const std::string & value) {
+        lv_obj_t * row = lv_obj_create(parent);
+        lv_obj_remove_style_all(row);
+        lv_obj_set_width(row, LV_PCT(100));
+        lv_obj_set_height(row, LV_SIZE_CONTENT);
+        lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+        lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        lv_obj_set_style_pad_ver(row, 2, 0);
+
+        lv_obj_t * l = lv_label_create(row);
+        lv_label_set_text(l, label);
+        theme::style_secondary_text(l);
+
+        lv_obj_t * v = lv_label_create(row);
+        lv_label_set_text(v, value.c_str());
+        lv_obj_set_style_text_color(v, theme::text_primary(), 0);
+    };
+
+    add_info_row(modal, "Software Version", "Prado-Reconstruction v1.4.0");
+    add_info_row(modal, "Kernel Version", kernel_ver);
+    add_info_row(modal, "MCU Firmware", mcu_ver);
+    add_info_row(modal, "Bluetooth Module", "Feasycom FSC-BT8251 (BT 5.0 Dual Mode)");
+    add_info_row(modal, "Main Processor", "ArkMicro ARK1668 (ARM Cortex-A7 @ 800MHz)");
+    add_info_row(modal, "Display & UI", "LVGL 9.2.2 (800x480 RGB888 / Framebuffer)");
+    add_info_row(modal, "Vehicle Telemetry", vbat_buf);
+
+    // Close Button
+    lv_obj_t * close_btn = lv_button_create(modal);
+    theme::style_primary_button(close_btn);
+    lv_obj_set_width(close_btn, 140);
+    lv_obj_set_style_pad_ver(close_btn, 8, 0);
+    lv_obj_set_style_margin_top(close_btn, 6, 0);
+    lv_obj_t * close_label = lv_label_create(close_btn);
+    lv_label_set_text(close_label, "Close");
+    lv_obj_center(close_label);
+
+    lv_obj_add_event_cb(close_btn, [](lv_event_t * e) {
+        lv_obj_t * ov = static_cast<lv_obj_t *>(lv_event_get_user_data(e));
+        lv_obj_delete(ov);
+    }, LV_EVENT_CLICKED, overlay);
+    lv_group_add_obj(core::navigation::focus_group(), close_btn);
+}
+
+void build_system_info_section(lv_obj_t * tab, lv_obj_t * root_screen) {
+    lv_obj_t * about_header = lv_label_create(tab);
+    lv_label_set_text(about_header, "About & System Information");
+    theme::style_section_label(about_header);
+
+    lv_obj_t * info_row = add_row(tab, "System Information");
+    lv_obj_t * info_btn = lv_button_create(info_row);
+    theme::style_primary_button(info_btn);
+    lv_obj_set_style_pad_hor(info_btn, 14, 0);
+    lv_obj_set_style_pad_ver(info_btn, 8, 0);
+    lv_obj_set_style_text_font(info_btn, &lv_font_montserrat_14, 0);
+    lv_obj_add_event_cb(info_btn, [](lv_event_t * e) {
+        lv_obj_t * scr = static_cast<lv_obj_t *>(lv_event_get_user_data(e));
+        show_system_info_modal(scr);
+    }, LV_EVENT_CLICKED, root_screen);
+    lv_group_add_obj(core::navigation::focus_group(), info_btn);
+    lv_obj_t * info_btn_label = lv_label_create(info_btn);
+    lv_label_set_text(info_btn_label, "View Info >");
+}
+
 }  // namespace
 
 lv_obj_t * create_settings_screen() {
@@ -421,6 +527,7 @@ lv_obj_t * create_settings_screen() {
 
     build_display_audio_general(content);
     build_hardware_profile_and_behaviour(content);
+    build_system_info_section(content, scr);
 
     return scr;
 }

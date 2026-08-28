@@ -172,4 +172,11 @@ private:
 // Global helper to send CMD 0xA0 settings sync packet to the Limcet MCU
 void send_mcu_setting(uint8_t setting_id, uint8_t value);
 
+// Global getter for the active MCU instance
+McuInputHal * get_mcu_instance();
+
+// Global helpers for version string and voltage telemetry
+std::string get_mcu_version();
+float get_mcu_battery_voltage();
+
 }  // namespace hal

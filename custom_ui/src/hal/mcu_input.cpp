@@ -192,9 +192,14 @@ int read_mcu_frame(int fd, unsigned char * out_cmd, unsigned char * out_payload,
 
 }  // namespace
 
-McuInputHal::McuInputHal(std::string port) : port_(std::move(port)) {}
+McuInputHal::McuInputHal(std::string port) : port_(std::move(port)) {
+    g_mcu_instance = this;
+}
 
 McuInputHal::~McuInputHal() {
+    if (g_mcu_instance == this) {
+        g_mcu_instance = nullptr;
+    }
     running_.store(false, std::memory_order_release);
     if (thread_.joinable()) {
         // read_mcu_frame() blocks in read() with no timeout -- closing
@@ -424,6 +429,24 @@ void send_mcu_setting(uint8_t setting_id, uint8_t value) {
     if (g_mcu_instance) {
         g_mcu_instance->sync_setting(setting_id, value);
     }
+}
+
+McuInputHal * get_mcu_instance() {
+    return g_mcu_instance;
+}
+
+std::string get_mcu_version() {
+    if (g_mcu_instance) {
+        return g_mcu_instance->get_mcu_version();
+    }
+    return "Unknown (Standalone)";
+}
+
+float get_mcu_battery_voltage() {
+    if (g_mcu_instance) {
+        return g_mcu_instance->get_battery_voltage();
+    }
+    return 0.0f;
 }
 
 }  // namespace hal

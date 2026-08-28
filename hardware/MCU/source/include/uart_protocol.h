@@ -39,14 +39,14 @@
                                         * firmware's cipher (0x080050A0) is genuine
                                         * 32-round TEA decrypt, confirmed byte-exact via
                                         * disassembly (DELTA=0x9E3779B9, sum_init=
-                                        * 0xC6EF3720) -- see tea_crypto.h. The real 128-bit
-                                        * key was NOT recovered (lives in SRAM, populated
-                                        * from .data at startup; the flash source bytes
-                                        * were not located). handle_crypto_challenge()
-                                        * below runs the verified real algorithm against an
-                                        * explicit placeholder key and is NOT expected to
-                                        * produce a hardware-matching response until the
-                                        * real key is found. */
+                                        * 0xC6EF3720). The real key was ALSO recovered, by
+                                        * tracing the real firmware's .data init table to
+                                        * find its flash source bytes (0x0800BCAC) -- see
+                                        * tea_crypto.h for the full derivation. Effective
+                                        * key entropy is only 32 bits (each of the 4 key
+                                        * words has just its low byte set) -- a real,
+                                        * confirmed finding about how weak this scheme
+                                        * actually is, not a derivation artifact. */
 #define SOC_CMD_DIAG_READ_MEM   0x90  /* Diagnostic Flash/SRAM readback */
 #define SOC_CMD_SYNC_SETTINGS   0xA0  /* UI settings sync */
 #define SOC_CMD_REBOOT_BOOTLDR  0xE1  /* Enter bootloader for update */

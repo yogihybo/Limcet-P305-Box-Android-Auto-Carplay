@@ -1,8 +1,8 @@
 #include "tea_crypto.h"
 
-/* NOT the real key -- see tea_crypto.h. Zeroed and clearly marked so it can
- * never be mistaken for a verified value. */
-const uint32_t tea_key_placeholder[4] = { 0x00000000, 0x00000000, 0x00000000, 0x00000000 };
+/* Real key, recovered via the real firmware's .data init table -- see the
+ * full derivation trail in tea_crypto.h. Not a guess. */
+const uint32_t tea_real_key[4] = { 0x0000006D, 0x0000007C, 0x000000A9, 0x000000C4 };
 
 #define TEA_DELTA     0x9E3779B9UL
 #define TEA_SUM_INIT  0xC6EF3720UL /* == 32 * TEA_DELTA mod 2^32, confirmed from the

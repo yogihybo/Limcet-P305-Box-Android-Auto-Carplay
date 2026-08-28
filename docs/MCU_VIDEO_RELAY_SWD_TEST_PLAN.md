@@ -279,6 +279,161 @@ mww 0x40010814 0x8000    # PA15 -> LOW
 mww 0x40010C14 0x0300    # PB8, PB9 -> LOW
 ```
 
+## Phase 13 — Startup sequence replication: attempt a full manual boot
+
+**Different in character from Phases 1-12 above.** Those are isolated,
+one-pin-at-a-time diagnostic probes. This phase instead manually replicates
+`hardware/MCU/source/src/main.c`'s own `gpio_hardware_init()` step-for-step,
+via `mww`, including `GPIOB Pin 14` (the real SoC reset-release pin) --
+deliberately excluded from the general sweep above, but the whole point
+here. Since we never ask the CPU to fetch a new instruction (every step is
+a direct DAP-level peripheral-register write, not code execution), this
+carries no RDP/BusFault risk regardless of how long the debugger stays
+connected -- OpenOCD is acting as the sequencer in place of the CPU, not
+resuming it.
+
+**Why this is worth attempting**: if this actually brings the ArkMicro SoC
+up, it validates our reconstructed boot sequence end-to-end against real
+hardware, AND removes the biggest limitation of Phases 1-12 -- with the SoC
+genuinely running, PC13/PC2 toggling (Phase 5-7) could then be re-run to
+observe the **aftermarket** display's response too, not just stock.
+
+**Real, honest uncertainty, stated plainly**: this might not fully work.
+The real firmware's exact timing wasn't independently verified (the 50ms/
+150ms delays below are this project's own documented best-guess, not a
+confirmed value -- see `MCU_FIRMWARE_VERIFIED_FINDINGS.md`'s discussion of
+the real firmware's actual release condition being conditional/polled, not
+a fixed timer). There could also be a SoC power-enable signal this MCU
+doesn't control at all (a separate always-on rail, or something gated
+elsewhere) -- if so, toggling only the reset line won't be sufficient no
+matter how correctly it's sequenced. A partial result (SoC starts
+booting, e.g. a boot-logo flicker, but doesn't fully come up) would still
+be genuinely informative, not a failure to discard.
+
+### Sequence (self-contained -- can be run fresh from `reset halt`, doesn't require Phases 1-12 first)
+
+```
+reset halt
+reg pc                          # sanity check, same as Phase 1
+```
+
+Enable clocks (`AFIOEN`+`IOPAEN`+`IOPBEN`+`IOPCEN` = bits 0,2,3,4):
+```
+mdw 0x40021018
+```
+`NEW = OLD | 0x1D`
+```
+mww 0x40021018 <NEW>
+```
+
+Disable JTAG, keep SW-DP (matches real firmware; harmless to redo since
+we're already connected via SWD, not JTAG):
+```
+mdw 0x40010004    # AFIO->MAPR
+```
+`NEW = (OLD & ~(0x7<<24)) | (0x2<<24)`
+```
+mww 0x40010004 <NEW>
+```
+
+Configure PA1 (mute) and PA15 (id=0x0b group) together via `GPIOA->CRL`/`CRH`:
+```
+mdw 0x40010800
+```
+`NEW = (OLD & ~(0xF<<4)) | (0x2<<4)`
+```
+mww 0x40010800 <NEW>
+mdw 0x40010804
+```
+`NEW = (OLD & ~(0xFU<<28)) | (0x2U<<28)`
+```
+mww 0x40010804 <NEW>
+```
+
+Configure PB0, PB1, PB6 via `GPIOB->CRL`:
+```
+mdw 0x40010C00
+```
+`NEW = (OLD & ~(0xF<<0) & ~(0xF<<4) & ~(0xF<<24)) | (0x2<<0) | (0x2<<4) | (0x2<<24)`
+```
+mww 0x40010C00 <NEW>
+```
+
+Configure PB8, PB9, **PB14** via `GPIOB->CRH` (all three share this register):
+```
+mdw 0x40010C04
+```
+`NEW = (OLD & ~(0xF<<0) & ~(0xF<<4) & ~(0xF<<24)) | (0x2<<0) | (0x2<<4) | (0x2<<24)`
+```
+mww 0x40010C04 <NEW>
+```
+
+Set initial pin states, matching real firmware's own order -- PA1 HIGH
+(muted), PB0 HIGH, PB6 HIGH, PB1 LOW, PA15/PB8/PB9 LOW:
+```
+mww 0x40010810 0x0002              # PA1 HIGH (BSRR)
+mww 0x40010C10 0x0041              # PB0, PB6 HIGH (BSRR)
+mww 0x40010C14 0x0302              # PB1, PB8, PB9 LOW (BRR)
+mww 0x40010814 0x8000              # PA15 LOW (BRR)
+```
+
+**Hold SoC in reset** (`PB14` LOW):
+```
+mww 0x40010C14 0x4000              # PB14 -> LOW (BRR)
+```
+
+Wait ~50ms (this project's own best-guess delay, not independently
+verified against real timing):
+```
+sleep 50
+```
+
+**Release SoC from reset** -- the key step:
+```
+mww 0x40010C10 0x4000              # PB14 -> HIGH (BSRR)
+```
+
+**Watch closely right now and over the next several seconds**: any sign of
+the ArkMicro SoC coming up -- boot logo on the aftermarket display, LED
+activity, anything on `UART2`/`CAN1` if a logic analyzer is also attached,
+audible relay/fan/component power-up. Record whatever happens, including
+"nothing at all."
+
+Wait ~150ms (stabilization, same caveat on timing):
+```
+sleep 150
+```
+
+Unmute (`PA1` LOW):
+```
+mww 0x40010814 0x0002              # PA1 -> LOW (BRR)
+```
+
+Configure and set `PC13` (video relay) LOW, matching real firmware's boot default:
+```
+mdw 0x40011004
+```
+`NEW = (OLD & ~(0xF<<20)) | (0x2<<20)`
+```
+mww 0x40011004 <NEW>
+mww 0x40011014 0x2000              # PC13 -> LOW (BRR)
+```
+
+### If the SoC appears to come up
+
+Re-run Phases 5-7 (PC13/PC2 toggling) from this state -- now potentially
+observable on the **aftermarket** display too, which Phases 1-12 alone
+couldn't reach. Also worth trying: leave it running for a while and see
+whether it stays up, or whether something (missing a real signal this
+sequence doesn't provide) eventually causes it to hang or reset.
+
+### If nothing happens
+
+Still real, useful information -- narrows down that GPIO-level reset-line
+sequencing alone isn't sufficient, pointing at either wrong timing (worth
+trying longer delays) or a genuinely separate, unidentified power-enable
+signal. Not a wasted test either way.
+
 ## Recovery
 
 Standard, already-established recovery for this hardware: fully disconnect

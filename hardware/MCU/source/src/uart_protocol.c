@@ -201,16 +201,100 @@ static void handle_app_state(const UartPacket *p) {
     }
 }
 
+/* Real firmware's shared 4-state dispatcher (0x080058A4), disassembled this
+ * session -- drives GPIOC Pin 13 and GPIOC Pin 2 together, reached from BOTH
+ * CMD 0xA0 id=0x11 (r0=2/3) and CMD 0x84's audio-route handler (r0=0/1).
+ * Real truth table, traced instruction-by-instruction (0x080058F8 drives
+ * Pin 13, 0x0800591C drives Pin 2):
+ *   state 0: Pin13=LOW,  Pin2=LOW
+ *   state 1: Pin13=LOW,  Pin2=HIGH
+ *   state 2: Pin13=LOW,  Pin2=LOW   (same physical result as state 0)
+ *   state 3: Pin13=HIGH, Pin2=LOW
+ * Two real call sites sharing one relay pair is consistent with GPIOC13/PC2
+ * being a combined audio+video OEM-bypass relay, not video-only -- see
+ * MCU_FIRMWARE_VERIFIED_FINDINGS.md's discussion of the CMD 0x84 finding
+ * that prompted this refactor. */
+static void shared_relay_dispatch(uint8_t state) {
+    switch (state) {
+        case 1:
+            GPIOC->BRR  = (1UL << 13);
+            GPIOC->BSRR = (1UL << 2);
+            break;
+        case 3:
+            GPIOC->BSRR = (1UL << 13);
+            GPIOC->BRR  = (1UL << 2);
+            break;
+        case 0:
+        case 2:
+        default:
+            GPIOC->BRR = (1UL << 13);
+            GPIOC->BRR = (1UL << 2);
+            break;
+    }
+}
+
+/* 0x84: Audio Route. Real firmware (0x08008808) is NOT a simple PA1 mute
+ * toggle -- that was never independently disassembly-confirmed (its
+ * originally-cited address, 0x0800599C, was already proven wrong for a
+ * closely related claim -- see MCU_FIRMWARE_VERIFIED_FINDINGS.md). The real
+ * handler:
+ *   - Masks the incoming value to 4 bits (0-15), ignores it entirely if >=6.
+ *   - Stores it into a debounced/shadowed state field (separate SRAM struct,
+ *     base 0x20000238 -- NOT the same struct CMD 0xA0 uses, base 0x200001D8).
+ *   - On a real change, value==0 sends the literal ASCII string
+ *     "AT+AUDROUTE=1\r\n" over USART3 (same channel as CMD 0x87's Bluetooth
+ *     relay and id=0x00's "AT+UPGRADE" command), then calls the shared relay
+ *     dispatcher above with state=0 -- but ONLY if this handler's own gate
+ *     byte (struct offset 0x5e IN THIS STRUCT) == 0.
+ *   - value==3 sends "AT+AUDROUTE=2\r\n", dispatcher state=1, same gate.
+ *   - value==1/2/4/5: state stored, no further action (matches the real
+ *     firmware's own no-op there).
+ * Real, notable, unresolved finding: this handler's gate condition
+ * ("proceed if ==0") is the OPPOSITE polarity of CMD 0xA0 id=0x11's own gate
+ * ("proceed if ==1") -- and it's genuinely unclear whether these are the
+ * same underlying flag at two different relative offsets into overlapping
+ * SRAM structs, or two independent flags. Implemented here as a SEPARATE
+ * local state field (not reusing McuSettings.flag_5e) to avoid conflating
+ * two real values this session couldn't confirm are the same variable. */
+static uint8_t g_audio_route_state = 0;
+static uint8_t g_audio_route_shadow = 0;
+static uint8_t g_audio_route_gate = 0; /* real POR/bss default is 0, which
+                                          * means the dispatcher call fires
+                                          * immediately by default here --
+                                          * unlike id=0x11's own gate, which
+                                          * defaults closed. Real firmware
+                                          * behavior, not an inconsistency. */
+
 static void handle_audio_route(const UartPacket *p) {
-    /* 0x84: Audio amplifier mute/unmute control */
-    if (p->len >= 1) {
-        bool mute = (p->payload[0] != 0);
-        if (mute) {
-            GPIOA->BSRR = (1UL << 1); /* PA1 AMP_MUTE -> HIGH (Muted) */
-        } else {
-            GPIOA->BRR = (1UL << 1);  /* PA1 AMP_MUTE -> LOW (Unmuted) */
+    if (p->len < 1) {
+        return;
+    }
+    uint8_t value = p->payload[0] & 0x0F;
+    if (value >= 6) {
+        return;
+    }
+
+    g_audio_route_state = value;
+    if (g_audio_route_state == g_audio_route_shadow) {
+        return;
+    }
+    g_audio_route_shadow = g_audio_route_state;
+
+    if (value == 0) {
+        static const uint8_t kAudRoute1[] = "AT+AUDROUTE=1\r\n";
+        usart3_relay_send(kAudRoute1, sizeof(kAudRoute1) - 1);
+        if (g_audio_route_gate == 0) {
+            shared_relay_dispatch(0);
+        }
+    } else if (value == 3) {
+        static const uint8_t kAudRoute2[] = "AT+AUDROUTE=2\r\n";
+        usart3_relay_send(kAudRoute2, sizeof(kAudRoute2) - 1);
+        if (g_audio_route_gate == 0) {
+            shared_relay_dispatch(1);
         }
     }
+    /* value == 1,2,4,5: state stored above, no further action -- matches
+     * real firmware exactly. */
 }
 
 static void handle_diag_read_mem(const UartPacket *p) {
@@ -440,36 +524,26 @@ static void handle_sync_settings(const UartPacket *p) {
 
         case 0x11: /* Real firmware (0x08008B5E): stores to offset 0x45, then --
                      * ONLY if struct offset 0x5e (whatever sets it is untraced) == 1 --
-                     * calls a shared 4-state dispatcher (0x080058A4) with r0=2 (value==0)
-                     * or r0=3 (value!=0), which resolves to: GPIOC Pin 13 = HIGH when
-                     * value!=0 else LOW; GPIOC Pin 2 stays LOW either way at this call
-                     * site (other r0 states drive Pin 2 HIGH too, reached from a
-                     * different caller -- id=0x00's value==2 branch queues an outbound
-                     * reply via the same ring-buffer mechanism as CMD 0x87, a separate
-                     * finding not yet implemented here).
+                     * calls the shared_relay_dispatch() helper above (real address
+                     * 0x080058A4) with state=2 (value==0) or state=3 (value!=0).
+                     * Now correctly drives BOTH GPIOC13 and GPIOC2 via the shared
+                     * helper (previously only GPIOC13 was wired; GPIOC2 was left
+                     * unimplemented) -- corrected as part of the CMD 0x84 audio-route
+                     * finding, which uses the exact same dispatcher and revealed the
+                     * full real truth table.
                      *
-                     * NOW WIRED, corrected this session: GPIOC Pin 13 was previously
-                     * believed to collide with the SoC hardware-reset line, so this was
-                     * deliberately left unwired. Re-verified: the real SoC reset pin is
-                     * GPIOB Pin 14 (0x08005A18, confirmed via disassembly AND this
-                     * project's own earlier live-hardware SWD finding), a different
-                     * port/pin entirely -- see main.c's gpio_hardware_init(). GPIOC13's
-                     * real function is most plausibly a camera/video relay multiplexer
-                     * (docs/1.3.1_MCU_FIRMWARE_DECOMPILATION.md's claim, structurally
-                     * consistent with this pin's boot-default + gated-release pattern),
-                     * though that specific label is NOT re-confirmed the way the reset-
-                     * pin correction is -- the same doc's adjacent id=0x0d "camera" claim
-                     * was independently falsified this session (offset 0x42 has zero
-                     * readers anywhere in the firmware). GPIOC Pin 2 stays unwired: its
-                     * real trigger (a different r0 state, reached from id=0x00's own
-                     * value==2 branch) is a separate, unimplemented finding. */
+                     * GPIOC Pin 13 was previously believed to collide with the SoC
+                     * hardware-reset line; re-verified this session that the real SoC
+                     * reset pin is GPIOB Pin 14 (0x08005A18), a different port/pin
+                     * entirely -- see main.c's gpio_hardware_init(). GPIOC13/PC2's
+                     * real function is most plausibly a combined audio+video OEM-
+                     * bypass relay (CMD 0x84 sends real "AT+AUDROUTE=1/2" over USART3
+                     * alongside driving this same dispatcher -- see handle_audio_route()
+                     * above), not video-only as first guessed from
+                     * docs/1.3.1_MCU_FIRMWARE_DECOMPILATION.md's claim alone. */
             g_settings.value_45 = value;
             if (g_settings.flag_5e == 1) {
-                if (value != 0) {
-                    GPIOC->BSRR = (1UL << 13);
-                } else {
-                    GPIOC->BRR = (1UL << 13);
-                }
+                shared_relay_dispatch(value != 0 ? 3 : 2);
             }
             break;
 

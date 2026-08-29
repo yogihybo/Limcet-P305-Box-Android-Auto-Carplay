@@ -661,3 +661,66 @@ variant at all (possibly a pure SoC-side video-source selection with no
 MCU involvement), or it's referenced via a Thumb-mode code path or string-
 construction idiom not covered by the ARM-mode pattern search used here --
 genuinely open, not glossed over.
+
+## RESOLVED: the real "camera" setting is a U-Boot env var, zero MCU involvement
+
+Following up on "we know the camera setting works on stock, it must be
+findable" -- searched the whole stock rootfs (not just `libMcuCenter.so`)
+for the `"AfterMarket Camera"`/`"CameraType"` strings and found real hits
+in `libSetting.so`, which has `FactoryWindow::on_btnCameraType_clicked()`
+(`0x6703c`) -- the actual real button handler.
+
+**Real, decisive finding: this is not a binary OEM/Aftermarket toggle at
+all.** It's a 7-option reverse-camera **video format** selector, presented
+via a real `OptionListDialog`. The option strings, resolved in program
+order from the real binary:
+
+| idx | Label |
+|---|---|
+| 0 | Auto |
+| 1 | CVBS-PAL |
+| 2 | CVBS-NTSC |
+| 3 | AHD 720P 25FPS |
+| 4 | AHD 720P 30FPS |
+| 5 | AHD 1080P 25FPS |
+| 6 | AHD 1080P 30FPS |
+
+This matches, index-for-index, the real kernel driver's own
+`enum carback_camera_mode` (`linux-arkmicro/linux/drivers/media/i2c/
+rn6752.c`: `DYNAMIC, CVBS_PAL, CVBS_NTST, 720P25, 720P30, 1080P25,
+1080P30`) -- confirming this selects the reversing camera's real video
+signal format/protocol (OEM Toyota cameras and generic aftermarket AHD
+cameras genuinely use different signal formats), not an MCU-mediated
+relay choice.
+
+**Real apply mechanism, both confirmed via direct string/call-site
+resolution -- zero MCU/UART/CAN involvement:**
+1. `sprintf("fw_setenv carback_camera_mode %d", selectedIndex); system(...)`
+   -- persists the choice as a **U-Boot environment variable**, read by
+   `linux-arkmicro/u-boot/board/arkmicro/ark1668_limcet_p305/
+   ark1668_display_cfg.c`'s `ark_carback_camera_check()` (already known to
+   this project -- it's the function that gates U-Boot's own instant
+   reverse-camera preview) for the next boot.
+2. `sprintf("echo \"camera_mode %d\" > /sys/devices/platform/i2c-gpio.1/
+   i2c-1/1-002c/dvr", selectedIndex); system(...)` -- applies it
+   immediately at runtime via a sysfs attribute the `rn6752` kernel driver
+   exposes on the real video-decoder chip (I2C address `0x2c` on
+   `i2c-gpio.1`/`i2c-1`, the same device address a nearby, separately-found
+   `cat .../support_max_resolution` capability query also targets).
+
+**This means the `"AfterMarket Camera"`/`"Factory Camera"`/`"CameraType"`
+strings found earlier in `libMcuCenter.so` belong to something else
+entirely** -- unrelated dead code, a different vendor box variant sharing
+the same compiled library, or a genuinely different (never found) UI
+element -- not this real, active, stock-confirmed camera-format feature.
+`custom_ui`'s existing "OEM Factory Camera" binary toggle (sending
+`CMD 0xA0 id=0x11`) was built on a wrong premise from the start: the real
+stock feature is a 7-way format picker with zero MCU involvement, not a
+binary relay switch.
+
+**Fix applied**: `custom_ui`'s camera-format setting now replicates the
+real stock mechanism directly (`fw_setenv` + the same sysfs write), instead
+of any `CMD 0xA0`/`CMD 0x84` MCU command. `CMD 0xA0 id=0x11` is no longer
+sent for camera purposes at all -- freed up for its real, vendor-confirmed
+meaning (the previous section: "Microphone"), now wired to a genuinely
+separate OEM/Aftermarket microphone toggle instead.

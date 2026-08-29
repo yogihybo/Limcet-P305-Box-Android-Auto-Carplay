@@ -6,6 +6,7 @@
 #include "core/config_store.h"
 #include "core/navigation.h"
 #include "hal/audio.h"
+#include "hal/camera.h"
 #include "hal/display_ctrl.h"
 #include "hal/mcu_input.h"
 #include "hal/timezone.h"
@@ -340,28 +341,64 @@ lv_obj_t * create_settings_screen() {
                                       oem ? 1 : 0);
                           hal::send_mcu_setting(0x09, oem ? 1 : 0);
                       });
+    /* CMD 0xA0 id=0x11 -- confirmed 2026-08-29 via direct cross-reference
+     * against the real stock vendor app (MCUAdapter_BoxP300's own settings
+     * list, disassembled from usr/lib/libMcuCenter.so) to be vendor-labeled
+     * "Microphone" -- a DIFFERENT, separate real setting from id=0x09 above
+     * (which is confirmed to be the roof-mic/3.5mm input-jack selector).
+     * id=0x11 drives the GPIOC13/PC2 relay pair (same physical pins CMD
+     * 0x84's real "Audio Route" also drives -- see
+     * MCU_FIRMWARE_VERIFIED_FINDINGS.md's "CMD 0x84" section for the full
+     * finding) -- most plausibly a microphone HARDWARE relay (which
+     * physical mic module/preamp is in the audio path), distinct from
+     * id=0x09's INPUT SOURCE selection, though the exact distinction
+     * between the two isn't independently confirmed beyond the vendor's
+     * own separate labels for them. This toggle was previously (wrongly)
+     * wired to the "OEM Factory Camera" setting -- id=0x11 has nothing to
+     * do with the camera; see that toggle below for the real camera
+     * mechanism (a U-Boot env var + kernel sysfs write, zero MCU
+     * involvement). */
+    create_toggle_row(card, &ui::icons::icon_volume, "OEM Microphone Relay",
+                      "OEMMicrophoneRelay", "Audio", false,
+                      [](bool oem) {
+                          std::printf("%s [HAL:AUDIO] Microphone relay set to %s (CMD 0xA0 [0x11, %d] + CMD 0x84 audio route)\n",
+                                      core::log_timestamp().c_str(),
+                                      oem ? "OEM" : "Aftermarket",
+                                      oem ? 1 : 0);
+                          hal::send_mcu_setting(0x11, oem ? 1 : 0);
+                          /* CMD 0x84 is the more reliably-triggered path to the same
+                           * relay -- its own gate defaults open, unlike id=0x11's.
+                           * Polarity (which value is physically "OEM") is NOT
+                           * confirmed -- verify with tools/mcu-probe --audio-route
+                           * and correct if backwards. */
+                          hal::send_mcu_audio_route(oem ? 0x03 : 0x00);
+                      });
 
     // --- Section 3: Vehicle & Camera ---
     create_section_header(card, "VEHICLE & CAMERA");
+    /* Real mechanism confirmed 2026-08-29 by disassembling stock's actual
+     * button handler (usr/lib/libSetting.so's
+     * FactoryWindow::on_btnCameraType_clicked()) -- this is NOT an MCU
+     * command at all. It's a 7-way reversing-camera video FORMAT selector
+     * (Auto/CVBS-PAL/CVBS-NTSC/AHD-720p25/30/AHD-1080p25/30, matching the
+     * real kernel driver's own enum carback_camera_mode byte-for-byte),
+     * applied via a U-Boot env var (read at next boot by
+     * ark_carback_camera_check()) plus an immediate kernel sysfs write --
+     * see hal::set_camera_format() and MCU_FIRMWARE_VERIFIED_FINDINGS.md's
+     * "RESOLVED: the real camera setting" section for the full finding.
+     * This UI keeps the existing simple binary toggle rather than
+     * expanding to stock's full 7-option picker (a real future upgrade,
+     * not attempted here) -- CvbsPal/Auto are a REASONABLE, not
+     * hardware-verified, choice of the two most likely-useful real modes
+     * (PAL matching a fixed-format factory analog camera, Auto suiting a
+     * self-negotiating aftermarket one). */
     create_toggle_row(card, &ui::icons::icon_nav_camera, "OEM Factory Camera",
                        "OriginalCarCamera", "General", false, [](bool oem) {
-                           std::printf("%s [HAL:REVCAM] Reversing camera mode set to %s\n",
-                                       core::log_timestamp().c_str(), oem ? "OEM Factory Camera" : "Aftermarket Camera");
-                           /* CMD 0xA0 id=0x11 kept for completeness -- real firmware
-                            * gates it behind a condition never confirmed to actually
-                            * hold in practice, so this alone may do nothing. */
-                           hal::send_mcu_setting(0x11, oem ? 1 : 0);
-                           /* CMD 0x84 (Audio Route) is the MORE RELIABLE real path to
-                            * the same GPIOC13/PC2 relay -- its gate defaults open (see
-                            * MCU_FIRMWARE_VERIFIED_FINDINGS.md's "CMD 0x84" section).
-                            * Sending both maximizes the real chance this toggle
-                            * actually does something on hardware. Polarity (which
-                            * value is physically "OEM" vs "aftermarket") is NOT
-                            * confirmed -- kept consistent with id=0x11's own assumed
-                            * polarity above (nonzero -> the same relay state) rather
-                            * than independently guessed; verify with
-                            * tools/mcu-probe --audio-route and correct if backwards. */
-                           hal::send_mcu_audio_route(oem ? 0x03 : 0x00);
+                           std::printf("%s [HAL:REVCAM] Reversing camera format set to %s\n",
+                                       core::log_timestamp().c_str(),
+                                       oem ? "OEM Factory (CVBS-PAL)" : "Aftermarket (Auto)");
+                           hal::set_camera_format(oem ? hal::CameraFormat::CvbsPal
+                                                       : hal::CameraFormat::Auto);
                        });
     create_stepper_row(card, &ui::icons::icon_volume, "Reverse Vol. Cut (%)", 0, 100, 5,
                        "ReversingVolumeCut", "General");

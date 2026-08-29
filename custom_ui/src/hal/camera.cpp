@@ -3,6 +3,7 @@
 
 #include <cerrno>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <fcntl.h>
 #include <sys/ioctl.h>
@@ -116,6 +117,23 @@ void close_camera(CameraHandle & h) {
         close(h.carback_fd);
         h.carback_fd = -1;
     }
+}
+
+void set_camera_format(CameraFormat format) {
+    int mode = static_cast<int>(format);
+
+    char env_cmd[64];
+    std::snprintf(env_cmd, sizeof(env_cmd), "fw_setenv carback_camera_mode %d", mode);
+    int env_rc = std::system(env_cmd);
+
+    char sysfs_cmd[160];
+    std::snprintf(sysfs_cmd, sizeof(sysfs_cmd),
+                   "echo \"camera_mode %d\" > "
+                   "/sys/devices/platform/i2c-gpio.1/i2c-1/1-002c/dvr", mode);
+    int sysfs_rc = std::system(sysfs_cmd);
+
+    std::printf("%s [HAL:REVCAM] Camera format set to %d (fw_setenv rc=%d, sysfs rc=%d)\n",
+                core::log_timestamp().c_str(), mode, env_rc, sysfs_rc);
 }
 
 }  // namespace hal

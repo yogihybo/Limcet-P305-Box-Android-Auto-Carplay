@@ -1114,3 +1114,48 @@ This closes out the `CMD 0xA0` settings-list investigation for this
 session -- both features actually needed (Camera Type, Microphone) are
 implemented against confirmed real mechanisms; the remaining rows are
 documented to the limit of what the real firmware/UI actually exposes.
+
+---
+
+## Cross-check (2026-08-29): Qt translation catalog confirms vocabulary, doesn't resolve remaining ids
+
+User asked whether the real names might be recoverable from the
+Chinese/English translation files. Real, useful answer: `msnprofile/lng/`
+has 19 `.qm` Qt translation catalogs (`lang_en.qm`, `lang_zh-cn.qm`, etc.).
+No `lconvert`/`lrelease` binary was actually installed on this dev
+machine (only broken symlinks pointing at a nonexistent
+`/usr/lib/qt5/bin/lconvert`) -- wrote a direct Qt `.qm` binary-format
+parser instead (documented format: 16-byte magic, tagged sections --
+`0x42`=contexts, `0x69`=messages, `0x88`=numerus rules; each message is
+`Tag_SourceText`(UTF-8)/`Tag_Context`(UTF-8)/`Tag_Translation`(UTF-16BE,
+or the literal marker `0xFFFFFFFF` meaning "no override, use source
+text") terminated by `Tag_End`).
+
+**Real, useful result**: `lang_en.qm`'s `[MCUAdapter_BoxP300]` context
+lists exactly 12 real strings used by that class: `12V Active`,
+`360 camera`, `CAN Active`, `Front camera`, `Front camera time`,
+`Left Camera`, `P Key Active`, `Radar`, `Reversing camera`,
+`Right Camera`, `Speech button`, `Trajectory`. This **independently
+confirms** (from a completely different source than disassembly) the
+three names already pinned to specific ids (`Trajectory`=`0x08`,
+`360 camera`=`0x0A`, `Front camera`/`Front camera time`=`0x0C`), and
+confirms `12V Active`/`CAN Active`/`P Key Active` are `0x0A`'s own value
+options, not separate setting names.
+
+**What it does NOT resolve**: `Left Camera`, `Radar`, `Reversing camera`,
+`Right Camera`, `Speech button` are confirmed real `BoxP300` strings, but
+the `.qm` format carries no per-string numeric id -- only class context.
+Re-checked the disassembly specifically for a stack spill/reload of
+`idx` that could rehabilitate the later `getSetItemText` checks (`cmp
+r8,#15`/`#17`/`#0x87` etc, flagged unreliable in the previous entry
+because `r8` gets reused as a scratch/function-pointer register): **none
+found** -- no `str r8,[sp,#N]` anywhere in the function's early range,
+confirmed by direct disassembly. So these 5 strings' real id mapping
+remains genuinely unresolved with manual disassembly tracing; would need
+a real decompiler (Ghidra/IDA-quality SSA/register-tracking) to pin down
+reliably, not attempted further this session.
+
+Real, honest final state: 5 real ids (`0x0B`,`0x0D`,`0x0E`,`0x0F`,`0x10`,
+`0x11` -- 6 slots) remain without a confirmed name, though the likely
+candidate pool (5 strings above) is now known even if not individually
+attributed.

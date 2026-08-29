@@ -446,7 +446,24 @@ static void handle_sync_settings(const UartPacket *p) {
                     * (0x08005E4C) that fires HIGH specifically when struct[0x3b]==1
                     * -- that part of the original finding stands; the LOW case for
                     * struct[0x3b]==0/3 wasn't individually traced, so this still
-                    * drives LOW for any non-1 value as a reasonable simplification. */
+                    * drives LOW for any non-1 value as a reasonable simplification.
+                    *
+                    * REAL-WORLD MEANING (2026-08-29, app-side trace): this GPIOB1
+                    * toggle (value 0/1, never touching the value==2 upgrade path) is
+                    * very likely THE REAL microphone-source relay -- the stock head
+                    * unit app's own MCUAdapter_BoxP300::getSetItemValueTexts(0)
+                    * returns exactly ["OEM Microphone","AfterMarket Microphone"] for
+                    * this same id=0x00, sent unmodified by syncSettingDataToMcu().
+                    * Real, separately confirmed vendor bug in the STOCK app (not this
+                    * firmware): its own Settings UI shows this row as "Reversing
+                    * camera", not "Microphone" -- a different function
+                    * (getSetItemText()) switches on the same id and has drifted out
+                    * of sync with the one that actually builds the wire frame.
+                    * Strong candidate explanation for a real "stock factory mic never
+                    * worked" complaint -- see custom_ui's "Microphone Source
+                    * (OEM/AfterMarket)" toggle and
+                    * docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md's "COMPLETE" section for
+                    * the full chain. */
             switch (value) {
                 case 1: g_settings.mode_3b = 1; break;
                 case 2: {
@@ -540,7 +557,20 @@ static void handle_sync_settings(const UartPacket *p) {
                      * bypass relay (CMD 0x84 sends real "AT+AUDROUTE=1/2" over USART3
                      * alongside driving this same dispatcher -- see handle_audio_route()
                      * above), not video-only as first guessed from
-                     * docs/1.3.1_MCU_FIRMWARE_DECOMPILATION.md's claim alone. */
+                     * docs/1.3.1_MCU_FIRMWARE_DECOMPILATION.md's claim alone.
+                     *
+                     * REAL, UNRESOLVED CROSS-REFERENCE (2026-08-29): the stock app's
+                     * own Settings UI labels THIS id (0x11) "Microphone" -- but its
+                     * real value options (Off/On/12V Active, from
+                     * getSetItemValueTexts(17)) have nothing to do with OEM/
+                     * AfterMarket mic selection, and the REAL "OEM Microphone"/
+                     * "AfterMarket Microphone" value pair actually lives at id=0x00
+                     * (see that case above), which the stock UI itself mislabels
+                     * "Reversing camera". So id=0x11's "Microphone" label is very
+                     * likely just another instance of the same stock-app labeling
+                     * bug, not independent evidence this GPIOC13/C2 relay is mic-
+                     * related -- not chased further; flagged here so a future pass
+                     * doesn't rediscover the same false lead. */
             g_settings.value_45 = value;
             if (g_settings.flag_5e == 1) {
                 shared_relay_dispatch(value != 0 ? 3 : 2);

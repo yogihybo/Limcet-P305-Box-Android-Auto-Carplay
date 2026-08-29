@@ -889,3 +889,121 @@ found in `msnprofile/*.ini`. Given the real, decisive semantic match
 same port) this is treated as the best available real lead regardless,
 but real-hardware verification (`tools/mcu-probe`, watching both screens)
 is the way to actually confirm it does something.
+
+---
+
+## CONFIRMED (2026-08-29): the real Camera Type setting -- `CMD 0xA0 id=0x01`
+
+Traced hard, per explicit direction, starting from the `libMcuCenter.so`
+string-table lead in the RETRACTION section above. This is now a full,
+byte-exact, disassembly-confirmed finding, not a name-string coincidence.
+
+### Step 1: locating the real `getSetItemValueTexts(int)` implementation
+
+Every `MCUAdapter_Box*`/`MCUAdapter_Msn*`/`MCUAdapter_ZhongHang` sibling
+class in `libMcuCenter.so` overrides `getSetItemValueTexts()`, and several
+(`BoxP300`, `BoxP900`, `MsnDecoder`, `McuAdapter_BoxP230`, `BoxC270`,
+`BoxC280`, `ZhongHang`) reference the exact same `"AfterMarket Camera"`/
+`"OE Camera"`/`"AfterMarket 360"` string cluster -- confirming this is a
+shared vendor concept across the whole product family, not one-off.
+Traced the **confirmed-active** class specifically:
+`MCUAdapter_BoxP300::getSetItemValueTexts(int)` (`0x36750`).
+
+### Step 2: the jump table, walked precisely (not eyeballed)
+
+The function does `cmp r8, #17; addls pc, pc, r8, lsl #2` (r8 = the real
+`int idx` argument, passed via r2 under this function's sret-return ABI)
+-- an 18-entry jump table, indices 0-17. Walked every entry
+programmatically (parsed the real `objdump` listing, resolved every
+`ldr rX,[pc,#N]` + `add rX,pc,rX` PC-relative string-load pair inside each
+handler's real address range) rather than reading table entries by eye,
+which is how the earlier RETRACTION section's off-by-one misread (which
+looked like idx1 was the default case) got caught and corrected. Real,
+complete result:
+
+| idx | target | value texts (append order = value order) |
+|---|---|---|
+| 0 | `0x36910` | `OEM Microphone`, `AfterMarket Microphone` |
+| 1 | `0x369e0` | `AfterMarket Camera`, `Factory Camera`, `AfterMarket 360`, `Factory 360` |
+| 2-7 | `0x36910` | (share idx0's handler -- effectively unused/aliased slots) |
+| 8 | `0x36b54` | `Off`, `On` |
+| 9 | `0x36c18` | `Off`, `On` |
+| 10 | `0x36cdc` | `CAN Active`, `12V Active`, `P Key Active` |
+| 11 | `0x3707c` | (empty -- no fixed strings, dynamic/generic case) |
+| 12 | `0x36ebc` | `Off`, `Radar Active`, `5 s`, `10 s`, `15 s` |
+| 13 | `0x371a4` | `5 s`, `10 s`, `15 s` |
+| 14 | `0x36df8` | `Off`, `On` |
+| 15 | `0x370e0` | `Off`, `On` |
+| 16 | `0x367e8` | `Off`, `On`, `12V Active` |
+| 17 | `0x372ac` | `Off`, `On`, `12V Active` |
+
+**idx1 is unambiguously the Camera Type setting**: exactly 4 value texts,
+in order, matching a real 4-way vendor combobox (single reversing camera
+AfterMarket/Factory paired with a 360-camera-system AfterMarket/Factory).
+
+### Step 3: the real send function -- confirms idx IS the wire id, unmodified for idx=1
+
+`MCUAdapter_BoxP300::syncSettingDataToMcu(int)` (`0x38df8`) is the real
+"push a setting to the MCU" function (reads the current value via
+`MsnIniConfig::value()`, decides what to send). Disassembled its full
+value-dispatch logic (`0x38f18`-`0x39018`) -- **not inferred, read
+directly**:
+
+```
+cmp r4, #12    beq -> remap: id stays 12, value = ((old_value+1)*5) & 0xFF
+cmp r4, #11    beq -> if current_value_index > 1: id becomes 12 (remapped!)
+                      else: id stays 11 unmodified
+cmp r4, #10    beq -> id stays 10, value = old_value + 1
+default:              lr = (uint8_t)idx   <-- id = idx, UNMODIFIED
+```
+
+For every idx except 10/11/12 (which get special value-remapping, not
+relevant to idx=1), the default path fires:
+
+```
+   38f34: uxtb lr, r4       ; lr = (uint8_t)idx        -- becomes payload[0]
+   38f38: mov  r3, #2       ; len = 2
+   38f4c: mov  r2, #160     ; r2 = 0xA0                -- CMD byte, CONFIRMED
+   38f54: strb lr, [sp,#28] ; payload[0] = idx (unmodified for idx=1)
+   38f58: strb ip, [sp,#29] ; payload[1] = current/target value index
+   38f5c: bl   makeMCUProtocol
+```
+
+**This directly, byte-exactly confirms: `CMD 0xA0`, setting id `0x01`
+(idx=1 sent unmodified), value 0-3 selecting AfterMarket Camera / Factory
+Camera / AfterMarket 360 / Factory 360.** Not a name-string coincidence --
+traced through the real send path end to end.
+
+**Implemented**: `hal::sync_video_relay(bool oem)`
+(`custom_ui/src/hal/mcu_input.cpp`) now sends `CMD 0xA0` with
+`payload = [0x01, oem ? 0x01 : 0x00]` -- replacing the retracted
+`CanBus_Raise_Toyota`-based implementation entirely (not just
+downgrading the doc comment this time). `settings_screen.cpp`'s "OEM
+Factory Camera" toggle is unchanged at the call-site level (still calls
+`hal::send_mcu_video_relay(oem)`), only its own doc comment updated.
+**Not yet hardware-tested** -- needs a real device run, watching whether
+the video multiplexer actually switches feeds.
+
+### Related, unresolved discrepancy found during this trace (flagged, not yet fixed)
+
+The **same rigorous idx-walk above directly contradicts this session's
+earlier, less rigorous "`CMD 0xA0 id=0x11` = Microphone" finding**, which
+the already-shipped "OEM Microphone Relay" toggle in `settings_screen.cpp`
+relies on (`hal::send_mcu_setting(0x11, ...)`). Per the table above:
+
+- **idx0 (wire id `0x00`, unmodified -- not a special-cased id) is the
+  real Microphone setting**: `getSetItemValueTexts(0)` returns exactly
+  `"OEM Microphone"` / `"AfterMarket Microphone"`, a genuine OEM/
+  AfterMarket value pair -- not a generic on/off.
+- **idx17 (wire id `0x11`) returns `"Off"`/`"On"`/`"12V Active"`** -- an
+  unrelated 3-way setting, nothing to do with a microphone.
+
+This means the existing "OEM Microphone Relay" toggle (added earlier this
+session, `id=0x11`) is very likely wired to the wrong setting id, and the
+real OEM/AfterMarket microphone toggle is probably `CMD 0xA0 id=0x00`
+instead -- **not fixed in this pass** (out of scope for the specific
+camera-relay trace just requested), but flagged clearly so it isn't lost.
+Real next step if this is picked up: re-verify against
+`MCUAdapter_BoxP300::syncSettingDataToMcu`'s value-remap logic (id=0x00
+isn't one of the 10/11/12 special cases, so it should also be a clean,
+unmodified `payload[0]=0x00` send) before changing the toggle.

@@ -444,31 +444,29 @@ void McuInputHal::sync_video_relay(bool oem) {
     if (fd_ < 0) {
         return;
     }
-    /* Real OEM/Aftermarket video-multiplexer relay toggle -- disassembled
-     * 2026-08-29 from the real stock vendor app's own dedicated function,
-     * CanBus_Raise_Toyota::enableOEMSound(bool) (usr/lib/libCanBus.so,
-     * 0x78a60). Confirmed to use the exact same 0x2E-signature wire
-     * protocol and the same /dev/ttyHS0 port as everything else this
-     * project talks to the MCU over -- see
-     * MCU_FIRMWARE_VERIFIED_FINDINGS.md's "The REAL OEM/Aftermarket relay
-     * toggle" section for the full finding, including a real, unresolved
-     * question about exactly how the MCU's own CMD 0x84 handler parses
-     * this 2-byte payload. Replicated verbatim (exact real bytes, not a
-     * reinterpretation) since that's the safest, most hardware-compatible
-     * choice regardless of that open question. */
-    if (oem) {
-        unsigned char p1[2] = {0x08, 0x01};
-        unsigned char p2[2] = {0x09, 0x01};
-        unsigned char p3[2] = {0x2A, 0x01};
-        send_mcu_frame(fd_, 0x84, p1, 2);
-        send_mcu_frame(fd_, 0x84, p2, 2);
-        send_mcu_frame(fd_, 0x84, p3, 2);
-    } else {
-        unsigned char p[2] = {0x00, 0x00};
-        send_mcu_frame(fd_, 0x84, p, 2);
-    }
-    std::printf("%s [HAL:MCU] Sent real CanBus_Raise_Toyota::enableOEMSound(%s) "
-                "byte sequence\n", core::log_timestamp().c_str(), oem ? "true" : "false");
+    /* Real OEM/Aftermarket "Camera Type" setting -- CONFIRMED 2026-08-29 by
+     * direct disassembly of MCUAdapter_BoxP300::syncSettingDataToMcu(int)
+     * (usr/lib/libMcuCenter.so, 0x38df8), the confirmed-active MCU adapter
+     * class's own real "send this setting to the MCU" function. Traced
+     * byte-for-byte, not inferred:
+     *   - CMD byte passed to makeMCUProtocol() is literally 0xA0 (r2=160
+     *     at 0x38f4c).
+     *   - payload[0] is (uint8_t)idx, i.e. the setting id, UNMODIFIED for
+     *     idx=1 (only idx 10/11/12 get special remapping in this function;
+     *     1 isn't one of them) -- confirmed at 0x38f34/0x38f54.
+     *   - MCUAdapter_BoxP300::getSetItemValueTexts(1) (0x36750) appends
+     *     exactly 4 real strings in this order: "AfterMarket Camera",
+     *     "Factory Camera", "AfterMarket 360", "Factory 360" -- a Qt
+     *     combobox's value list, so list order == value order (0/1/2/3).
+     * This supersedes and REPLACES the retracted CanBus_Raise_Toyota lead
+     * (usr/lib/libCanBus.so is confirmed dead code on this hardware, never
+     * dlopen'd by anything -- see MCU_FIRMWARE_VERIFIED_FINDINGS.md's
+     * "RETRACTION" section). CMD 0xA0 id=0x01: value 0 = AfterMarket
+     * Camera, value 1 = Factory (OEM) Camera. */
+    unsigned char payload[2] = {0x01, static_cast<unsigned char>(oem ? 0x01 : 0x00)};
+    send_mcu_frame(fd_, 0xA0, payload, 2);
+    std::printf("%s [HAL:MCU] Synced Camera Type to MCU via CMD 0xA0 (id=0x01, val=0x%02X, %s)\n",
+                core::log_timestamp().c_str(), payload[1], oem ? "Factory/OEM" : "AfterMarket");
 }
 
 void send_mcu_audio_route(uint8_t value) {

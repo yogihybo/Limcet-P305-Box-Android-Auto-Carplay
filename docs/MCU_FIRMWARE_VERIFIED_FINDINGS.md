@@ -1348,3 +1348,113 @@ firmware's own count. Build-verified: `make` in
 `hardware/MCU/source/` completes clean, `.text` shrank as expected
 (3628 -> 3540 bytes) with the dead handler gone. Confirmed no other tool
 in this project (`tools/mcu-probe`, `custom_ui`) ever referenced it.
+
+---
+
+## Broad security sweep (2026-08-30): every real entry point checked for overflows/backdoors, plus a real, previously-undocumented protocol found
+
+Following the `CMD 0x90` fabrication, did a full sweep of every real
+interrupt-driven entry point in `hardware/MCU/can_app.bin` for buffer
+overflows or other undocumented "backdoor" mechanisms, then fully
+decoded a previously-unexamined protocol found along the way.
+
+### Every real entry point, checked directly
+
+| Peripheral | Real vector (confirmed from the actual vector table) | Role | Overflow check |
+|---|---|---|---|
+| UART2 | `0x08006ECB` | SoC command link (the 9-command dispatch already fully documented) | Clean -- a real 8-slot x 30-byte ring, length hard-bounded `<28` in the RX ISR itself, max write index (26) safely inside each 30-byte slot |
+| USART3 | `0x08006ED3` | Real AT-command TX channel -- confirmed via its real peripheral base address `0x40004800` (STM32F105's actual USART3 base) | Clean -- generic ring-drain, no length issues |
+| UART4 | `0x08006EB9` | **Not Bluetooth as `docs/1.3.1_MCU_FIRMWARE_DECOMPILATION.md` guessed** -- a real, separate device-identification handshake protocol (decoded below), confirmed via its real peripheral base `0x40004C00` | Clean -- every field-accumulation state has a small hard-coded byte limit (5/9/3/9) checked before write |
+| UART5 | `0x08006EC1` | Byte-for-byte the same protocol as UART4 (identical magic values `0x55/0x20/0x32/0x50/0xD3/0xD6`) -- a twin link, not something distinct | Same structure as UART4 -- clean |
+| CAN1_RX0 | `0x08007065` | Fixed-size CAN mailbox -> ring-buffer copy, always reads all 8 possible data-byte positions regardless of DLC | Clean -- no CAN-ID filtering of any kind, no magic ID triggers anything special |
+| USART1 | `0x08006EC9` | Literally a no-op stub (`bx lr`) | Not a real entry point |
+
+**No buffer overflow found anywhere.** The real firmware's bounds-
+checking held up consistently, including in the UART2 RX ISR's unusual
+multi-slot design, which looked suspicious on first read (a `*15`
+stride/multi-slot indexing scheme) but resolved to a genuinely correct,
+safely-bounded implementation once fully traced.
+
+### Real, previously-undocumented finding: UART4/5's real protocol
+
+Traced `0x8007780` (UART4's real handler body) instruction-by-instruction
+and found a genuine, small, well-formed protocol, not previously decoded
+by this project:
+
+- **Sync byte**: `0x55`. A byte matching this in the idle state transitions
+  to a "type" state.
+- **Type byte** (the next byte received) selects one of 5 real sub-
+  messages: `0x20`, `0x32`, `0x50`, `0xD3`, `0xD6`.
+- Types `0x20` and `0x32` are **outbound**: on receiving one, the MCU
+  streams a small fixed field back out over the same UART, one byte per
+  subsequent interrupt call (5 bytes for `0x20`, 9 bytes for `0x32`).
+- Types `0x50`, `0xD3`, `0xD6` are **inbound**: subsequent bytes get
+  accumulated into small fixed-size fields (9, 3, 9 bytes respectively).
+- All five fields live in one shared struct (base `0x20001365`, confirmed
+  identical across UART4 and UART5's own copies of this handler).
+
+**Traced the real populating function for this struct** (`0x80065b4`,
+called from... its own callers not individually chased further, out of
+scope for this pass) and found it copies from 5 fixed FLASH-resident
+source structs (`0x0800BBC8`-`0x0800BBE2`) into the 5 protocol fields.
+Reading those flash bytes directly gives a real, concrete result:
+
+- The `0x20`-response field (5 bytes) = `00 00 00 00 FF` -- a zeroed
+  placeholder with a `0xFF` sentinel/terminator.
+- **The `0x32`-response field (9 bytes) = `"   cD31\0\x93"`** -- a real,
+  readable ASCII string (three leading spaces, then `"cD31"`, then a NUL
+  and a trailing byte, plausibly a length/checksum). This is very likely
+  a real hardware module model/identifier string this MCU announces to
+  whatever's connected on UART4/UART5.
+- The three inbound fields (`0x50`/`0xD3`/`0xD6`) all default to
+  all-zero + a trailing `0xFF` sentinel -- genuine placeholders meant to
+  be overwritten by whatever the connected peer sends, not pre-filled
+  with real data.
+
+**Real, honest conclusion**: this is a genuine device-identification
+handshake protocol with an actual identifier string (`"cD31"`) baked
+into flash, connected to *something* via UART4/UART5 that isn't the
+Bluetooth module (that's confirmed to be on USART3 instead, via its real
+peripheral base address). What specific accessory this is remains
+undetermined -- `"cD31"` is a real, concrete clue for further external
+research, but chasing down what physical device this identifies is
+outside what static analysis alone can settle. No security concern found
+here -- properly bounded, benign identification exchange.
+
+### `CMD 0x87`'s PIN-substitution bytes: exhaustively traced, no writer found
+
+Continuing the earlier open question (`CMD 0x87`'s handler embeds 4
+bytes read from SRAM `0x20000238+2..+5` into the digit positions of a
+static `"AT+PIN=0000\r\n"` template before sending it over USART3):
+found and checked **every single reference** to that struct's base
+address anywhere in the reachable firmware code (8 total call sites --
+`CMD 0xA0`'s id=0x00 handler, `CMD 0x84`, `CMD 0x85`, `CMD 0xFF`, the
+main dispatch loop's own checksum-validation routine, and `CMD 0x87`
+itself). **None of them write offsets 2-5.** `CMD 0x84` writes offsets
+16/17 and reads 94; `CMD 0x85` *reads* offsets 3-5 (copying them
+elsewhere, the opposite of what would populate them); `CMD 0xFF` and the
+checksum routine only read offset 0-2.
+
+Combined with the earlier finding that this SRAM range falls in `.bss`
+(zero-initialized, past `.data`'s real end at `0x200000E8`, confirmed via
+this project's own established `.data` flash-source mapping from the
+`CMD 0x88` TEA key trace), the honest conclusion is: **these 4 bytes are
+very likely always zero for the entire operational life of the
+firmware**, meaning the real `"AT+PIN="` frame this firmware transmits
+almost certainly contains raw NUL bytes in the digit positions, not a
+valid `"0000"` PIN string. This reads as a genuine bug/dead code in the
+real vendor firmware (a template-substitution mechanism whose source
+data was never wired up) rather than an intentional weak-credential
+backdoor -- the command as implemented would send a malformed AT command
+that a real BT module's AT parser would most likely just reject, not a
+working "PIN reset to a known-weak value" backdoor. Not chased further;
+flagged as a real, low-severity firmware-quality finding rather than a
+security vulnerability, since a broken/no-op command isn't exploitable.
+
+### Other avenues checked and closed
+
+- **No real vendor MCU bootloader binary exists to check** -- RDP Level 1
+  blocks external dumping of it (the whole reason this project has its
+  own SWD/DMA-extraction tooling), and this project's own
+  `hardware/MCU/bootloader/` is a clean-room reimplementation, not useful
+  for backdoor-hunting since it isn't derived from real disassembly.

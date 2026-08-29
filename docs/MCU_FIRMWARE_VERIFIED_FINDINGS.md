@@ -1458,3 +1458,75 @@ security vulnerability, since a broken/no-op command isn't exploitable.
   own SWD/DMA-extraction tooling), and this project's own
   `hardware/MCU/bootloader/` is a clean-room reimplementation, not useful
   for backdoor-hunting since it isn't derived from real disassembly.
+
+---
+
+## SRAM code-execution / cold-boot RDP1 bypass -- evaluated, closed by ST's own documented design (2026-08-30)
+
+User proposed a real, legitimate attack class worth taking seriously:
+inject a dump payload into SRAM via SWD (unblocked even under RDP1),
+configure boot mode to run from SRAM instead of flash, reset, and let
+the payload read out flash content via the CPU's own (allowed) access
+rather than the debugger's (blocked) access.
+
+**Verified against ST's own documented RDP Level 1 behavior** (not just
+this project's own prior findings) via a real web search, cross-checked
+against multiple independent sources
+([stm32world.com](https://stm32world.com/wiki/STM32_Readout_Protection_(RDP)),
+[ST Community](https://community.st.com/t5/stm32-mcus-security/rdp-bootloader-cannot-be-used-together/td-p/237314)):
+
+> Access to protected memories is only allowed when booting from User
+> Flash memory, otherwise a system hard fault is generated, blocking all
+> code execution until the next power-on reset. When RDP Level 1 is
+> active, no access to Flash memory can be performed via debug features
+> **even while booting from SRAM or system memory bootloader.**
+
+**This is exactly the proposed attack, and it's closed by design, not
+merely untried.** The instant an SRAM-resident payload attempts to read
+flash content -- the entire point of the payload -- it hard-faults
+immediately, regardless of whether a debugger happens to be attached at
+that exact moment. ST built RDP1 specifically to defeat this class of
+attack.
+
+**Directly corroborated by this project's own already-confirmed live
+hardware behavior**: the BusFault trace in the "CRITICAL SAFETY FINDING"
+section above (`PC=0x080004AC` reading flash `0x080004D4`, `CFSR`
+decoded as `BFARVALID`+`PRECISERR`) is the *same underlying mechanism* --
+RDP1 blocking CPU flash access outside "boot from main flash with no
+debugger attached" -- just triggered by a different one of RDP1's two
+real trigger conditions (debugger-attached vs. non-flash boot mode; the
+proposed attack would hit the latter).
+
+**Real safety note, also verified**: this would NOT have risked
+permanently destroying the real firmware if attempted -- mass erase on
+STM32F1 only happens when *explicitly downgrading* RDP1 to RDP0 via the
+option bytes, not from a boot-mode change while remaining at RDP1. The
+real failure mode is the same safe hard-fault-requiring-power-cycle this
+project has already hit and knows how to recover from.
+
+**Verdict: closed, not just deferred.** Unlike the `racerxdl`
+SWD-protocol-timing-race tool (still the one credible untried avenue,
+see "Future reference" above -- it attacks debug-port protocol timing
+directly, not CPU execution/fetch, a genuinely different mechanism),
+SRAM-code-execution/cold-boot doesn't offer a path this chip's RDP1
+doesn't already specifically defend against.
+
+### Related real finding: a stale, misleading claim of success found and retracted
+
+While evaluating this, found `hardware/MCU/live_dumps/README.md` still
+made confident, specific-looking claims (real-looking SHA-256 hashes, a
+detailed "hardware architecture" analysis) of a **successful** RDP
+bypass via `CVE-2020-8004` -- but the `.bin` files it describes don't
+exist in this checkout. Git history shows why: they were committed once
+(`d737472b`), then deliberately deleted one session later
+(`aba08e68`, "remove unreliable live SWD dump files") after being found
+to disagree with the verified-correct `can_app.bin` on 99.7%+ of
+non-placeholder words, traced to a real bug in the extractor tool
+(`tools/stm32f1_extractor_fixed.py`'s broken `address % 0x200` shortcut
+reading live CPU register state instead of flash). **The README itself
+was never updated or removed alongside the files it describes** -- a
+real documentation-hygiene gap that could have misled a future reader
+(or a future pass of this same investigation) into believing RDP had
+already been bypassed. Retracted in place, original text preserved
+for the historical record, real explanation and pointer to this
+project's actual findings added.

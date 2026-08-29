@@ -145,6 +145,19 @@ public:
     // Synchronize UI setting to MCU via CMD 0xA0
     void sync_setting(uint8_t setting_id, uint8_t value);
 
+    // CMD 0x84 (Audio Route) -- the real OEM-bypass audio+video relay
+    // control, disassembled 2026-08-29 (see MCU_FIRMWARE_VERIFIED_FINDINGS.md's
+    // "CMD 0x84" section). Real firmware only acts on value 0x00 (relay
+    // dispatcher state 0) or 0x03 (state 1) -- sends a real "AT+AUDROUTE=1/2"
+    // over the MCU's own USART3 and drives the shared GPIOC13/PC2 relay pair.
+    // This is the MORE RELIABLE of the two real paths to that relay: its
+    // internal gate defaults open, unlike CMD 0xA0 id=0x11's own gate
+    // (never confirmed to actually be true in practice). Which physical
+    // routing (OEM vs aftermarket) each value corresponds to is NOT
+    // confirmed -- tools/mcu-probe's --audio-route command exists to help
+    // settle that empirically.
+    void sync_audio_route(uint8_t value);
+
 private:
     void run();
 
@@ -171,6 +184,9 @@ private:
 
 // Global helper to send CMD 0xA0 settings sync packet to the Limcet MCU
 void send_mcu_setting(uint8_t setting_id, uint8_t value);
+
+// Global helper for CMD 0x84 (Audio Route) -- see McuInputHal::sync_audio_route()
+void send_mcu_audio_route(uint8_t value);
 
 // Global getter for the active MCU instance
 McuInputHal * get_mcu_instance();

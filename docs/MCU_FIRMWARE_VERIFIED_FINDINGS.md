@@ -578,3 +578,86 @@ boot-time pop-prevention measure regardless, since that's sensible
 independent of its true function, but no longer presented as a settled
 label. Build-verified: `can_app.bin` grows to 4180 bytes. Not written to
 physical hardware.
+
+## Full CMD 0xA0 settings-list cross-reference: real SoC labels matched to real MCU behavior
+
+Prompted by a real user question ("what does stock send for the MCU reverse
+camera toggle") that led to finding the real, actually-active vendor class
+for this hardware (`MCUAdapter_BoxP300`, selected by `McuType=6` in
+`msnprofile/MsnProductInfo.ini` -- confirmed via `MCUAdapter::
+getAdapterInstance()`'s real jump table, not assumed). An earlier symbol
+search had landed on `McuAdapter_BoxP230` instead (a different, inactive
+vendor box model this same shared library also supports) and produced a
+real but irrelevant finding (a synthetic `CMD 0x91` key-press mechanism,
+not in the MCU's own real command table at all) -- corrected before
+drawing conclusions from the wrong class.
+
+**Method**: `BoxP300::syncSettingDataToMcu(int itemIndex)` (`0x38df8`)
+disassembled directly -- confirmed it sends genuine `CMD 0xA0
+[itemIndex, value]`, the same mechanism this project's clean-room source
+and `custom_ui` already use, with `itemIndex` becoming the real MCU
+`settingId` byte-for-byte for every item except `11` (redirected to send
+as `settingId 0x0c` instead of `0x0b`). Each item's real display label was
+then recovered from `BoxP300::getSetItemText(int)` (`0x37e14`) by writing
+a small ARM-condition-code simulator that walks the real binary-search-
+style compare cascade for each concrete index value (catching a real bug
+along the way: ARM lets multiple conditional branches share one `cmp`'s
+flags, e.g. `cmp r8,#12; beq X; bgt Y` -- an initial naive scanner missed
+the second branch and produced wrong results for most indices until
+fixed), resolving each `QMetaObject::tr()` call's actual source-text
+pointer via direct pool-literal + PC-relative address computation (no
+GOT/relocation indirection needed for these -- confirmed the addressing
+mode directly rather than assuming).
+
+**Full real cross-reference** (SoC settings-list index -> label -> real MCU
+`settingId` -> MCU's already-independently-confirmed real behavior):
+
+| idx | Real label | -> settingId | MCU's confirmed real behavior |
+|---|---|---|---|
+| 0 | "Reversing camera" | `0x00` | GPIOB Pin 1, 4-way branch (value=2 sends real `AT+UPGRADE` over USART3) |
+| 1-6 | *(empty string)* | `0x01-0x06` | **confirmed shared/no-op on the MCU side too** -- both ends agree independently |
+| 7 | "Radar" | `0x07` | write-only, no consumer found anywhere in the firmware |
+| 8 | "Trajectory" | `0x08` | write-only, no consumer found |
+| 9 | "Reversing mode" | `0x09` | mic/audio input mux, GPIOB Pin 6 -- plausible real correspondence (mic behavior differing while reversing), not a mismatch |
+| 10 | "360 camera" | `0x0a` | write-only, no consumer found (value transformed +1 before sending) |
+| 11 | "Front camera" | `0x0c` (redirected from `0x0b`) | the real threshold gating the `id=0x0b` PA15/PB8/PB9 subsystem -- confirms that whole subsystem is genuinely camera-related, not the guessed-and-disproven `id=0x0d` |
+| 12 | "Front camera time" | `0x0c` (same target as idx 11) | same threshold, different UI widget/value transform |
+| 13 | "Speech button" | `0x0d` | write-only, no consumer found |
+| 14 | "DVR" | `0x0e` | **confirmed genuine no-op** in the real firmware -- clean cross-confirmation |
+| 15 | "Right Camera" | `0x0f` | plain stored value, confirmed no GPIO effect |
+| 16 | "Left Camera" | `0x10` | plain stored value, confirmed no GPIO effect |
+| **17** | **"Microphone"** | **`0x11`** | **GPIOC13/PC2 relay (gated by an internal flag)** |
+| 18-21 | *(empty string)* | n/a | past the real list's populated range; also past the MCU's own real 18-entry dispatch limit (`settingId >= 0x12` is out-of-range there too) -- doubly closed |
+
+**Two real, decisive corrections this resolves:**
+
+1. **`id=0x11`'s real vendor-assigned meaning is "Microphone," not camera
+   type.** Direct match, no redirect involved for index 17. Fully
+   consistent with the independent finding (previous section) that
+   `id=0x11` drives the exact same relay `CMD 0x84`'s real "Audio Route"
+   drives -- both genuinely about audio routing. `custom_ui`'s "OEM Factory
+   Camera" toggle sending `CMD 0xA0 id=0x11` was targeting the *microphone*
+   setting, not a camera one -- it happened to share the same physical
+   relay pin as the real audio route (which is presumably why the original,
+   unverified assumption seemed plausible), but the real vendor software
+   itself never uses `id=0x11` for camera switching. **Not yet fixed in
+   source** -- documented here first, per explicit instruction to resolve
+   the full picture before making changes.
+
+2. **The real front/360-camera-related settings are `id=0x0a`/`id=0x0c`
+   (and the `id=0x0b` group they gate)** -- not `id=0x0d`, which the
+   original (unverified) decompilation doc guessed and this session already
+   independently disproved (zero readers of that offset anywhere in the
+   firmware). This cross-reference confirms *which* IDs the real "front
+   camera auto-switch"-class feature actually lives at.
+
+**Still genuinely unresolved**: no settings-list item (0-21) resolves to
+`"AfterMarket Camera"`/`"Factory Camera"`/`"CameraType"` specifically --
+those real strings exist in `libMcuCenter.so`'s `.rodata` (confirmed via
+direct string search) but were not found referenced from this generic
+settings-list mechanism via the addressing patterns checked. Either that
+specific toggle isn't implemented via `CMD 0xA0` for the `BoxP300` box
+variant at all (possibly a pure SoC-side video-source selection with no
+MCU involvement), or it's referenced via a Thumb-mode code path or string-
+construction idiom not covered by the ARM-mode pattern search used here --
+genuinely open, not glossed over.

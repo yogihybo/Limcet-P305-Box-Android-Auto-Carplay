@@ -188,6 +188,14 @@ public:
     bool sendNightMode(bool nightMode);
 
     // Sends "EQ <bass_db> <mid_db> <treble_db> <loudness:0|1>"
+    // UNUSED as of 2026-08-29 -- superseded by the system-wide ALSA-level
+    // EQ (custom_ui/ladspa_eq/carpi_eq.c + hal::set_audio_eq(), see that
+    // function's own comment). This only ever reached AA's own in-process
+    // media-stream EQ, silently did nothing without an active AA session,
+    // and never affected any non-AA audio -- kept here, not deleted, in
+    // case AA-specific EQ behavior is ever wanted again, but nothing in
+    // this project calls it anymore. Calling it today alongside the new
+    // system-wide path would double-apply the EQ to AA's own audio.
     bool sendEq(int bass_db, int mid_db, int treble_db, bool loudness);
 
 private:

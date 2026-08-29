@@ -297,31 +297,12 @@ static void handle_audio_route(const UartPacket *p) {
      * real firmware exactly. */
 }
 
-static void handle_diag_read_mem(const UartPacket *p) {
-    /* 0x90: Diagnostic Memory Readback [Addr_B3, Addr_B2, Addr_B1, Addr_B0, Length] */
-    if (p->len >= 5) {
-        uint32_t addr = ((uint32_t)p->payload[0] << 24) |
-                        ((uint32_t)p->payload[1] << 16) |
-                        ((uint32_t)p->payload[2] << 8)  |
-                        ((uint32_t)p->payload[3]);
-        uint8_t count = p->payload[4];
-        if (count > (UART_MAX_PAYLOAD - 4)) {
-            count = (UART_MAX_PAYLOAD - 4);
-        }
-
-        uint8_t reply[UART_MAX_PAYLOAD];
-        reply[0] = p->payload[0];
-        reply[1] = p->payload[1];
-        reply[2] = p->payload[2];
-        reply[3] = p->payload[3];
-
-        const uint8_t *src = (const uint8_t *)addr;
-        for (uint8_t i = 0; i < count; i++) {
-            reply[4 + i] = src[i];
-        }
-        uart_send_packet(SOC_CMD_DIAG_READ_MEM, reply, count + 4);
-    }
-}
+/* handle_diag_read_mem() (CMD 0x90) REMOVED 2026-08-30 -- see the
+ * dispatch table's own comment below for the full explanation. This was
+ * a fictional arbitrary-memory-read handler ([Addr_B3,B2,B1,B0,Length]
+ * -> raw pointer dereference -> echo bytes back), disproven by direct
+ * disassembly of this device's own can_app.bin plus 4 other real
+ * DCn32-family firmware variants -- none of them have it. */
 
 /* USART3 / Bluetooth AT-command relay (CMD 0x87). Real pins confirmed via
  * disassembly this session (see uart_protocol.h's SOC_CMD_BT_AT_RELAY comment):
@@ -631,13 +612,26 @@ static const UartCmdDispatchEntry g_uart_cmd_table[] = {
     { SOC_CMD_INIT_HANDSHAKE,  {0}, handle_init_handshake },
     { SOC_CMD_APP_STATE,       {0}, handle_app_state },
     { SOC_CMD_AUDIO_ROUTE,     {0}, handle_audio_route },
-    { SOC_CMD_DIAG_READ_MEM,   {0}, handle_diag_read_mem },
     { SOC_CMD_BT_AT_RELAY,     {0}, handle_bt_at_relay },
     { SOC_CMD_CRYPTO_CHALLENGE,{0}, handle_crypto_challenge },
     { SOC_CMD_SYNC_SETTINGS,   {0}, handle_sync_settings },
     { SOC_CMD_REBOOT_BOOTLDR,  {0}, handle_reboot_bootloader },
     { SOC_CMD_APP_PROTOCOL,    {0}, handle_app_protocol },
     { SOC_CMD_SYSTEM_RESET,    {0}, handle_system_reset }
+    /* SOC_CMD_DIAG_READ_MEM (0x90) REMOVED 2026-08-30 -- disproven, not
+     * just unconfirmed. Directly read the real 9-entry (cmd,handler_ptr)
+     * dispatch table + its exact bounding loop (cmp r4,#9) out of this
+     * device's own can_app.bin, AND cross-checked against 4 other real
+     * DCn32-family firmware variants (2 more Toyota/generic builds byte-
+     * identical to this device's own, 1 Acura build with a genuinely
+     * different 7-entry table missing 0x84/0x87 too) -- 0x90 appears in
+     * NONE of them. This command never existed; it was a clean-room
+     * fabrication (likely inherited from this source's original,
+     * "largely unverified handoff document" per this file's own header)
+     * that read arbitrary [address,length] and echoed the bytes back --
+     * a real, working RDP-bypass/full-flash-dump primitive, had it been
+     * real. See docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md's "CMD 0x90 --
+     * disproven" section for the full multi-firmware trace. */
 };
 #define UART_CMD_COUNT (sizeof(g_uart_cmd_table) / sizeof(g_uart_cmd_table[0]))
 

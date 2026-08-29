@@ -6,7 +6,6 @@
 #include "core/config_store.h"
 #include "core/navigation.h"
 #include "hal/audio.h"
-#include "hal/camera.h"
 #include "hal/display_ctrl.h"
 #include "hal/mcu_input.h"
 #include "hal/timezone.h"
@@ -376,29 +375,28 @@ lv_obj_t * create_settings_screen() {
 
     // --- Section 3: Vehicle & Camera ---
     create_section_header(card, "VEHICLE & CAMERA");
-    /* Real mechanism confirmed 2026-08-29 by disassembling stock's actual
-     * button handler (usr/lib/libSetting.so's
-     * FactoryWindow::on_btnCameraType_clicked()) -- this is NOT an MCU
-     * command at all. It's a 7-way reversing-camera video FORMAT selector
-     * (Auto/CVBS-PAL/CVBS-NTSC/AHD-720p25/30/AHD-1080p25/30, matching the
-     * real kernel driver's own enum carback_camera_mode byte-for-byte),
-     * applied via a U-Boot env var (read at next boot by
-     * ark_carback_camera_check()) plus an immediate kernel sysfs write --
-     * see hal::set_camera_format() and MCU_FIRMWARE_VERIFIED_FINDINGS.md's
-     * "RESOLVED: the real camera setting" section for the full finding.
-     * This UI keeps the existing simple binary toggle rather than
-     * expanding to stock's full 7-option picker (a real future upgrade,
-     * not attempted here) -- CvbsPal/Auto are a REASONABLE, not
-     * hardware-verified, choice of the two most likely-useful real modes
-     * (PAL matching a fixed-format factory analog camera, Auto suiting a
-     * self-negotiating aftermarket one). */
+    /* Real OEM/Aftermarket video-multiplexer relay toggle -- disassembled
+     * 2026-08-29 from the real stock vendor app's own dedicated function,
+     * CanBus_Raise_Toyota::enableOEMSound(bool) (usr/lib/libCanBus.so,
+     * 0x78a60). NOT the same feature as stock's separate 7-way reversing-
+     * camera video FORMAT picker (FactoryWindow::on_btnCameraType_clicked()
+     * in usr/lib/libSetting.so, a genuinely different real stock feature --
+     * deliberately not implemented here, see
+     * MCU_FIRMWARE_VERIFIED_FINDINGS.md's "RESOLVED: the real camera
+     * setting" section for that finding, kept for the record). This toggle
+     * is specifically the one that controls whether the video (and audio)
+     * multiplexer reverts to the stock OEM feed or stays on the aftermarket
+     * feed -- see hal::send_mcu_video_relay() and
+     * MCU_FIRMWARE_VERIFIED_FINDINGS.md's "The REAL OEM/Aftermarket relay
+     * toggle" section for the full finding, including a real, unresolved
+     * question about exactly how the MCU parses the payload; the real
+     * stock byte sequences are replicated verbatim regardless. */
     create_toggle_row(card, &ui::icons::icon_nav_camera, "OEM Factory Camera",
                        "OriginalCarCamera", "General", false, [](bool oem) {
-                           std::printf("%s [HAL:REVCAM] Reversing camera format set to %s\n",
+                           std::printf("%s [HAL:REVCAM] Video/audio multiplexer set to %s\n",
                                        core::log_timestamp().c_str(),
-                                       oem ? "OEM Factory (CVBS-PAL)" : "Aftermarket (Auto)");
-                           hal::set_camera_format(oem ? hal::CameraFormat::CvbsPal
-                                                       : hal::CameraFormat::Auto);
+                                       oem ? "OEM Factory feed" : "Aftermarket feed");
+                           hal::send_mcu_video_relay(oem);
                        });
     create_stepper_row(card, &ui::icons::icon_volume, "Reverse Vol. Cut (%)", 0, 100, 5,
                        "ReversingVolumeCut", "General");

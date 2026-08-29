@@ -158,6 +158,19 @@ public:
     // settle that empirically.
     void sync_audio_route(uint8_t value);
 
+    // Real OEM/Aftermarket video-multiplexer relay toggle -- disassembled
+    // 2026-08-29 from the real stock vendor app's own dedicated function,
+    // CanBus_Raise_Toyota::enableOEMSound(bool) (usr/lib/libCanBus.so).
+    // Sends the exact real byte sequences stock sends (verbatim, not a
+    // reinterpretation): oem=false sends one real CMD 0x84 frame,
+    // payload [0x00,0x00]; oem=true sends three, payloads [0x08,0x01],
+    // [0x09,0x01], [0x2A,0x01]. See
+    // MCU_FIRMWARE_VERIFIED_FINDINGS.md's "The REAL OEM/Aftermarket relay
+    // toggle" section for the full finding, including a real, unresolved
+    // question about exactly how the MCU's own CMD 0x84 handler parses
+    // this payload.
+    void sync_video_relay(bool oem);
+
 private:
     void run();
 
@@ -187,6 +200,10 @@ void send_mcu_setting(uint8_t setting_id, uint8_t value);
 
 // Global helper for CMD 0x84 (Audio Route) -- see McuInputHal::sync_audio_route()
 void send_mcu_audio_route(uint8_t value);
+
+// Global helper for the real OEM/Aftermarket video-relay toggle -- see
+// McuInputHal::sync_video_relay()
+void send_mcu_video_relay(bool oem);
 
 // Global getter for the active MCU instance
 McuInputHal * get_mcu_instance();

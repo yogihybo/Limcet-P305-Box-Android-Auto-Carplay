@@ -58,7 +58,15 @@
                                         * words has just its low byte set) -- a real,
                                         * confirmed finding about how weak this scheme
                                         * actually is, not a derivation artifact. */
-#define SOC_CMD_DIAG_READ_MEM   0x90  /* Diagnostic Flash/SRAM readback */
+/* SOC_CMD_DIAG_READ_MEM (0x90, "Diagnostic Flash/SRAM readback")
+ * REMOVED 2026-08-30 -- disproven, not just unconfirmed. Read the real
+ * 9-entry (cmd,handler_ptr) dispatch table directly out of this
+ * device's own can_app.bin (and its exact bounding loop, cmp r4,#9),
+ * plus 4 other real DCn32-family firmware variants -- 0x90 appears in
+ * NONE of them. This would have been a real, working arbitrary-memory-
+ * read primitive (RDP-bypass/full-flash-dump vector) had it existed;
+ * it never did. See docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md's "CMD 0x90
+ * -- disproven" section for the full multi-firmware trace. */
 #define SOC_CMD_SYNC_SETTINGS   0xA0  /* UI settings sync */
 #define SOC_CMD_REBOOT_BOOTLDR  0xE1  /* Enter bootloader for update */
 #define SOC_CMD_SYSTEM_RESET    0xFF  /* System State Reset. Real handler (0x080088E8)

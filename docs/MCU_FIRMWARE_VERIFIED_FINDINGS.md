@@ -1268,3 +1268,83 @@ decompiler-verified dataflow analysis, with the two implemented features
 (Camera, Microphone) grounded in the mechanism that actually matters --
 the wire protocol -- not the vendor's own (demonstrably inconsistent)
 display labels.
+
+---
+
+## CMD 0x90 -- disproven (2026-08-30): checked across 5 real firmware images, appears in none
+
+User asked what `SOC_CMD_DIAG_READ_MEM` (0x90, "Diagnostic Flash/SRAM
+readback") actually does, then asked for a thorough check across every
+other real `can_app.bin` this project has. Real, decisive result:
+**this command never existed in any real DCn32-family firmware. It was
+a clean-room fabrication and has been removed from the source.**
+
+### What it claimed to do
+
+The clean-room handler took `[Addr_B3, Addr_B2, Addr_B1, Addr_B0, Length]`,
+did a raw pointer dereference at that 32-bit address, and echoed the
+bytes back over UART. Had this been real, it would have been a genuine,
+working RDP-Level-1 bypass and full-flash-dump primitive -- RDP only
+blocks *external debugger* access, not the CPU's own code reading its
+own flash, so a UART-exposed arbitrary-read command would sidestep the
+whole RDP problem this project spent real effort on elsewhere (see the
+SWD/DMA-extraction tooling, `tools/stm32f1-firmware-extractor`,
+`tools/stm32f1_dma_dump.py`). That's exactly why it needed a hard check
+before being trusted.
+
+### Method: read the real dispatch table directly, in every available firmware
+
+Every real command's own handler in this project's clean-room source
+carries a `Real firmware (0x0800XXXX)` disassembly citation -- `0x90`'s
+comment had none, the one command in the whole file without one. That
+was the first real tell.
+
+Located the real dispatch mechanism directly in this device's own
+`hardware/MCU/can_app.bin` (`arm-linux-gnueabihf-objdump -b binary -m arm
+-M force-thumb --adjust-vma=0x08004000`, this project's own established
+convention): a tight bounded loop --
+
+```
+r4 = 0
+loop:
+  cmd = table[r4].cmd_byte   ; ldrb.w r0,[r0, r4, lsl #3] -- 8-byte stride
+  if (cmd == received_cmd) { call table[r4].handler_ptr; break; }
+  r4++
+  if (r4 < 9) goto loop;      ; cmp r4, #9 -- hard bound, no more than 9
+```
+
+-- and the table itself, read directly out of the binary's data
+(`(cmd_word, handler_ptr_word)` pairs): `0x81, 0x82, 0xA0, 0xFF, 0xE1,
+0x85, 0x84, 0x87, 0x88`. Exactly 9 entries, exactly matching the loop's
+own bound -- no room for a hidden 10th command. `0x90` is not among them.
+
+### Checked against every other real firmware this project has
+
+| Firmware | md5 | Real dispatch table |
+|---|---|---|
+| `hardware/MCU/can_app.bin` (this device) | `bea19bfe...` | `81,82,A0,FF,E1,85,84,87,88` (9) |
+| `DCn32-VOLVO-V2.10-20240909` | `bea19bfe...` (byte-identical to this device's own) | same |
+| `DCn32-VOLVO-V2.10-20240418` | `61222453...` | same 9 commands (different handler addresses, same set) |
+| `DCn32-VOLVO-V3.00-20240403` | `0c636852...` | same 9 commands |
+| `DCn32-ACURA-V1.01-20250409` | `e38e5a3c...` | `81,82,A0,FF,E1,85,88` (only 7 -- a genuinely different variant, missing `0x84`/`0x87` too) |
+
+Same real technique used on each (locate the `ldrb.w r0,[r0,r4,lsl#3]`
+dispatch-read instruction, resolve its PC-relative table-base literal,
+read the table directly from the binary's own bytes). **`0x90` appears
+in zero of the 5 real images** -- including a cross-vendor build (Acura)
+with a genuinely different command set, which rules out "maybe it's a
+Prado-specific thing this device's own dump happens to lack."
+
+### Fix: removed, not just flagged
+
+Real accuracy issue for a project whose whole point is faithful
+reconstruction -- left in place, a proven-fictional arbitrary-memory-
+read handler is a real liability, not a harmless unused stub. Removed
+entirely from `hardware/MCU/source/`:
+`SOC_CMD_DIAG_READ_MEM`'s `#define` (`uart_protocol.h`), its dispatch-
+table entry, and `handle_diag_read_mem()` itself (`uart_protocol.c`) --
+the clean-room table is now 9 entries, exactly matching every real
+firmware's own count. Build-verified: `make` in
+`hardware/MCU/source/` completes clean, `.text` shrank as expected
+(3628 -> 3540 bytes) with the dead handler gone. Confirmed no other tool
+in this project (`tools/mcu-probe`, `custom_ui`) ever referenced it.

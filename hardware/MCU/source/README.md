@@ -92,6 +92,17 @@ Headline real findings, each with much more detail in that doc:
   `docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md`'s "COMPLETE: full settings-name
   resolution via Ghidra" section for the full trace and the complete
   18-id table.
+- **`CMD 0x90` ("Diagnostic Flash/SRAM readback") never existed and has
+  been removed.** It would have been a real, working arbitrary-memory-
+  read primitive (an RDP-Level-1 bypass and full-flash-dump vector, had
+  it been real -- RDP only blocks external debugger access, not the
+  CPU's own flash reads). Checked directly against this device's own
+  `can_app.bin` (its real 9-entry command dispatch table + exact bounding
+  loop, read straight out of the binary) plus 4 other real DCn32-family
+  firmware variants, including a cross-vendor Acura build with a
+  genuinely different 7-entry table -- `0x90` appears in none of them.
+  See `docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md`'s "CMD 0x90 -- disproven"
+  section for the full multi-firmware trace.
 
 ---
 

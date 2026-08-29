@@ -724,3 +724,84 @@ of any `CMD 0xA0`/`CMD 0x84` MCU command. `CMD 0xA0 id=0x11` is no longer
 sent for camera purposes at all -- freed up for its real, vendor-confirmed
 meaning (the previous section: "Microphone"), now wired to a genuinely
 separate OEM/Aftermarket microphone toggle instead.
+
+**CORRECTION (2026-08-29, same day)**: the above camera-format finding is
+real and correct, but it is NOT the feature the user actually meant by
+"the camera choice -- stock OEM or aftermarket -- which controls if the
+video multiplexer reverts to OEM or stays with aftermarket feed." That is
+a genuinely different, still-real stock feature, found below. The
+7-format `carback_camera_mode` picker stays implemented (it's real, it
+just isn't this).
+
+## The REAL OEM/Aftermarket relay toggle: `CanBus_Raise_Toyota::enableOEMSound(bool)`
+
+Per the user's own hint earlier this session ("the device has both options
+in the setting menu" -- CAN bus and MCU), searched `usr/lib/libCanBus.so`
+directly for the `"AfterMarket Camera"`/`"OE Camera"` strings and found
+real hits, landing in `CanBus_Raise_Toyota::getSetItemValueTexts()` --
+a Toyota-specific adapter class in a parallel "CanBus" vendor plugin
+family (`CanBusAdapter::getAdapterInstance(CanBusType)`, alongside
+`MCUAdapter::getAdapterInstance(McuType)` -- two separate, real vendor
+selection mechanisms, matching the user's hint literally).
+
+**Real, dedicated function found**: `CanBus_Raise_Toyota::enableOEMSound(bool)`
+(`0x78a60`) -- disassembled directly, not guessed. Real, decisive
+findings:
+
+- **It sends real `CMD 0x84` frames using the exact same `0x2E`-signature
+  wire protocol** already fully reverse-engineered this session
+  (`makeCanBusProtocol` writes byte `0x2E` as the first frame byte,
+  identical structure to `MCUAdapter_BoxP300`'s `makeMCUProtocol`) --
+  confirmed by direct disassembly of the frame-builder, not inferred from
+  the function name alone.
+- **Same physical port**: `CanBusAdapter::getPortName()` reads a
+  `"CANPortName"` config key with default value `"/dev/ttyHS0"` -- the
+  identical UART device the companion MCU is connected to. This "CanBus"
+  mechanism is not a separate physical CAN interface; it's a second
+  command family riding the same wire as everything else.
+- **Real byte sequences, read directly from the disassembly**:
+  - `enableOEMSound(false)`: one frame, `CMD 0x84`, payload `[0x00, 0x00]`.
+  - `enableOEMSound(true)`: three frames, `CMD 0x84`, payloads
+    `[0x08, 0x01]`, `[0x09, 0x01]`, `[0x2A, 0x01]`.
+
+**Real, unresolved discrepancy, stated plainly**: this session's own
+earlier disassembly of the MCU's real `CMD 0x84` handler (`0x08008808`)
+reads its "value" byte from frame offset `+3`. Under this project's own
+already-established frame-layout convention (`frame+2` = `payload[0]`,
+confirmed extensively for `CMD 0xA0` and others), `frame+3` would be
+`payload[1]` -- meaning the real handler's dispatch value is
+`payload[1]`, not `payload[0]` as this session's clean-room
+`handle_audio_route()` currently implements. Under that reading, all
+three of `enableOEMSound(true)`'s frames carry `payload[1]=1`, which this
+project's own established `CMD 0x84` value table calls a no-op (only
+`value==0`/`value==3` do anything) -- while `enableOEMSound(false)`'s
+`payload[1]=0` would trigger the real `"AT+AUDROUTE=1"` + relay-state-0
+action. This is a real, non-obvious inconsistency (why would `false`
+trigger a real action and `true` not?) that was NOT resolved this pass --
+possible explanations include a wrong offset assumption for this specific
+command's frame-passing convention, `payload[0]` (the "sub-id" values 8/9/
+42) mattering rather than `payload[1]`, or the true/false semantics being
+inverted from what's assumed here. Not chased further given real effort
+already spent; flagged honestly rather than picking an explanation to
+sound resolved.
+
+**Practical choice made despite the open question**: implemented by
+replicating stock's exact real byte sequences verbatim (three `CMD 0x84`
+frames for "OEM", one for "Aftermarket", exact payloads above) rather than
+trying to independently re-derive the semantics -- this is the safest,
+most hardware-compatible approach precisely because it doesn't depend on
+resolving the payload-offset question correctly; whatever the real MCU
+firmware actually does with these exact bytes, sending the exact bytes
+stock sends is the best available proxy for "do what stock does."
+
+**Also still unconfirmed**: whether `CanBus_Raise_Toyota` (as opposed to
+`MCUAdapter_BoxP300`, the class independently confirmed active via
+`McuType=6`) is genuinely the active/relevant class for this specific
+hardware, or another compiled-in-but-inactive vendor variant (the same
+class of caution that ruled out `McuAdapter_BoxP230` earlier this
+session) -- no equivalent "CanBusType" config key confirming this was
+found in `msnprofile/*.ini`. Given the real, decisive semantic match
+(dedicated Toyota-specific "OEM sound" enable function, same protocol,
+same port) this is treated as the best available real lead regardless,
+but real-hardware verification (`tools/mcu-probe`, watching both screens)
+is the way to actually confirm it does something.

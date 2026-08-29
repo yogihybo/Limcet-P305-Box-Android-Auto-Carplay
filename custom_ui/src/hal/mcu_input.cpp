@@ -440,9 +440,46 @@ void McuInputHal::sync_audio_route(uint8_t value) {
     }
 }
 
+void McuInputHal::sync_video_relay(bool oem) {
+    if (fd_ < 0) {
+        return;
+    }
+    /* Real OEM/Aftermarket video-multiplexer relay toggle -- disassembled
+     * 2026-08-29 from the real stock vendor app's own dedicated function,
+     * CanBus_Raise_Toyota::enableOEMSound(bool) (usr/lib/libCanBus.so,
+     * 0x78a60). Confirmed to use the exact same 0x2E-signature wire
+     * protocol and the same /dev/ttyHS0 port as everything else this
+     * project talks to the MCU over -- see
+     * MCU_FIRMWARE_VERIFIED_FINDINGS.md's "The REAL OEM/Aftermarket relay
+     * toggle" section for the full finding, including a real, unresolved
+     * question about exactly how the MCU's own CMD 0x84 handler parses
+     * this 2-byte payload. Replicated verbatim (exact real bytes, not a
+     * reinterpretation) since that's the safest, most hardware-compatible
+     * choice regardless of that open question. */
+    if (oem) {
+        unsigned char p1[2] = {0x08, 0x01};
+        unsigned char p2[2] = {0x09, 0x01};
+        unsigned char p3[2] = {0x2A, 0x01};
+        send_mcu_frame(fd_, 0x84, p1, 2);
+        send_mcu_frame(fd_, 0x84, p2, 2);
+        send_mcu_frame(fd_, 0x84, p3, 2);
+    } else {
+        unsigned char p[2] = {0x00, 0x00};
+        send_mcu_frame(fd_, 0x84, p, 2);
+    }
+    std::printf("%s [HAL:MCU] Sent real CanBus_Raise_Toyota::enableOEMSound(%s) "
+                "byte sequence\n", core::log_timestamp().c_str(), oem ? "true" : "false");
+}
+
 void send_mcu_audio_route(uint8_t value) {
     if (g_mcu_instance) {
         g_mcu_instance->sync_audio_route(value);
+    }
+}
+
+void send_mcu_video_relay(bool oem) {
+    if (g_mcu_instance) {
+        g_mcu_instance->sync_video_relay(oem);
     }
 }
 

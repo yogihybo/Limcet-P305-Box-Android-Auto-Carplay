@@ -71,6 +71,27 @@ Headline real findings, each with much more detail in that doc:
   real firmware's own built-in vehicle-profile guess, not an independent
   Prado-specific capture -- `docs/MCU_CAN_BUS_SWD_SNIFFING_PLAN.md` and
   `tools/can-sniffer/` exist to get a real one.
+- **The full `CMD 0xA0` settings-list (all 18 ids) was fully traced and
+  resolved**, using Ghidra (headless, real decompilation) once manual
+  disassembly hit a genuine register-reuse ambiguity it couldn't resolve
+  on its own. Along the way, a **real inconsistency in the stock vendor
+  firmware's own code** was found and confirmed, not introduced by this
+  project: `id=0x00`'s real *display name* in the stock "Car Setting" UI
+  is **"Reversing camera"**, while its real *value options* (the pair the
+  MCU actually receives on the wire) are `"OEM Microphone"`/
+  `"AfterMarket Microphone"`; conversely `id=0x11` is *named*
+  **"Microphone"** but its value options are the unrelated
+  `"Off"`/`"On"`/`"12V Active"`. Two independent vendor functions
+  (`getSetItemText()` for the display name, `getSetItemValueTexts()` for
+  the value options actually sent by `syncSettingDataToMcu()`) switch on
+  the same id and have genuinely drifted out of sync in the stock code --
+  both findings are independently disassembly-confirmed. This project's
+  own `custom_ui` toggles are wired against the value-options/wire-
+  protocol path (the one that actually reaches the MCU), not the stock
+  UI's own label, since the label is the one shown to be unreliable. See
+  `docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md`'s "COMPLETE: full settings-name
+  resolution via Ghidra" section for the full trace and the complete
+  18-id table.
 
 ---
 

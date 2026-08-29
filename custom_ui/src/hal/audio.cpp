@@ -4,7 +4,7 @@
 #include <cstdlib>
 #include "core/log_timing.h"
 #include "core/config_store.h"
-#include "hal/androidauto_client.h"
+#include "core/system_eq_params.h"
 
 namespace hal {
 
@@ -70,10 +70,32 @@ void apply_reversing_volume_cut(bool in_reverse) {
 }
 
 void set_audio_eq(int bass_db, int mid_db, int treble_db, bool loudness) {
-    std::printf("%s [HAL:AUDIO] Applying 3-Band Parametric EQ: Bass=%d dB, Mid=%d dB, Treble=%d dB, Loudness=%d\n",
-                core::log_timestamp().c_str(), bass_db, mid_db, treble_db, loudness ? 1 : 0);
-    AndroidAutoClient client;
-    client.sendEq(bass_db, mid_db, treble_db, loudness);
+    // 2026-08-29: REWRITTEN -- this used to call AndroidAutoClient::sendEq(),
+    // which only ever reached AA's own in-process media-stream EQ
+    // (micro_aap's aap_audio_sink_set_eq()) over a socket that only exists
+    // while an AA session is actively connected. Real, confirmed bug: the
+    // toggle silently did nothing whenever AA wasn't running (the common
+    // case), and even when it was, it never touched radio/Bluetooth/
+    // CarPlay/anything else. Real fix: write the live params to the file
+    // custom_ui/ladspa_eq/carpi_eq.c's run() callback polls every audio
+    // period -- that plugin sits on dmix's own downstream slave (see
+    // firmware_overlay_dyn/etc/asound.conf), the one place every audio
+    // source on this device actually converges before reaching hardware,
+    // so this now genuinely applies system-wide, regardless of whether AA
+    // is connected. The AA-specific sendEq() path is deliberately no
+    // longer called at all -- keeping both would double-apply the EQ to
+    // AA's own audio once it also passes through carpi_eq_out at the ALSA
+    // level. Real, honest scope note: NOT hardware-tested end to end.
+    core::CarpiEqParams params;
+    params.bass_db = static_cast<float>(bass_db);
+    params.mid_db = static_cast<float>(mid_db);
+    params.treble_db = static_cast<float>(treble_db);
+    params.loudness_enabled = loudness ? 1 : 0;
+    bool ok = core::write_system_eq_params(params);
+    std::printf("%s [HAL:AUDIO] Applying system-wide 3-Band EQ: Bass=%d dB, Mid=%d dB, Treble=%d dB, "
+                "Loudness=%d (params file write %s)\n",
+                core::log_timestamp().c_str(), bass_db, mid_db, treble_db, loudness ? 1 : 0,
+                ok ? "OK" : "FAILED");
 }
 
 void sync_audio_eq() {

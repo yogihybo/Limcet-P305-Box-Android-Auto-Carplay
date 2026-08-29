@@ -96,15 +96,34 @@ BW_AAP_TEST_OBJS     := $(BUILD_DIR)/bw-aap-test-obj/main.o
 # Rules & Targets
 # ==============================================================================
 
-.PHONY: all clean ui carplay-sidecar androidauto-sidecar \
+.PHONY: all clean ui carplay-sidecar androidauto-sidecar ladspa-eq \
         androidauto-usb-probe-test androidauto-wireless-probe-test \
         androidauto-bluetooth-rfcomm-test androidauto-bw-aap-test
 
-all: ui carplay-sidecar androidauto-sidecar
+all: ui carplay-sidecar androidauto-sidecar ladspa-eq
 
 ui: $(UI_TARGET) $(BUILD_DIR)/hal.conf $(BUILD_DIR)/default_settings.conf
 carplay-sidecar: $(SIDECAR_TARGET)
 androidauto-sidecar: $(ANDROIDAUTO_SIDECAR_TARGET) $(BUILD_DIR)/hal.conf $(BUILD_DIR)/alsa/alsa.conf
+
+# --- System-wide EQ/Loudness LADSPA plugin ---
+# Hosted via ALSA's own built-in "type ladspa" PCM plugin (confirmed
+# compiled directly into this target's libasound.so, no separate staged
+# module needed for the hosting mechanism itself -- see
+# firmware_overlay_dyn/etc/asound.conf's own comment). Real, plain-C
+# shared library, zero dependency beyond the vendored ladspa.h (a single,
+# stable, 20+ year old interface header, not a build/runtime dependency
+# on any actual LADSPA SDK or plugin collection). See
+# ladspa_eq/carpi_eq.c's own header comment for the full design
+# reasoning (why a params file instead of ALSA controls, why inserted at
+# dmix rather than per-source).
+LADSPA_EQ_TARGET := $(BUILD_DIR)/ladspa/carpi_eq.so
+ladspa-eq: $(LADSPA_EQ_TARGET)
+
+$(LADSPA_EQ_TARGET): ladspa_eq/carpi_eq.c ladspa_eq/ladspa.h
+	@mkdir -p $(dir $@)
+	$(CC) -shared -fPIC -O2 -Wall -Wextra -Iladspa_eq -o $@ ladspa_eq/carpi_eq.c -lm
+	@echo "Built $@"
 
 # Staged runtime configuration files
 $(BUILD_DIR)/hal.conf: etc/hal.conf

@@ -1038,3 +1038,79 @@ coupling was removed rather than left dangling on a disproven basis.
 
 Real build-verified: `custom_ui` compiles and links clean. Not yet
 hardware-tested.
+
+---
+
+## Full trace (2026-08-29): the complete `CMD 0xA0` settings picture, and why most rows have no real name
+
+Continued past the retracted `getSetItemText` labels, chasing the real
+per-item name mechanism to its actual source. Real, somewhat surprising
+conclusion: **most of the 18 settings genuinely don't have individual
+display names in the vendor UI at all.**
+
+### Where the search went
+
+1. `SettingWindow::getSetItemNameList()` / `getSetItemTextList()`
+   (`usr/lib/libSetting.so`) -- looked like the obvious place, but both
+   turned out to return the **top-level category list**
+   (`Common`/`Sound`/`SysInfo`/`AudioSender`/`DateTime`/`Display`/
+   `Wallpaper`/`Language`), not per-item names within a category.
+2. `SettingWindow::attachItem(QString, QString, QLayout*)` -- the real
+   function that adds one row to a category's UI, called from
+   `SettingPlugin::customEvent(QEvent*)`. But its two `QString` args are
+   read from an incoming `MsnEvent`'s `getParam()`/`getParam2()` at
+   runtime, not from static strings in `libSetting.so` -- items are
+   registered dynamically by whichever plugin owns them.
+3. `MCUAdapter_BoxP300::translateApp()` (`0x38a64`) -- the real sender,
+   traced fully. It builds exactly **one** `MsnEvent` with a
+   `QVariant(QStringList)` containing **two entries**: the internal key
+   `"CarSetting"` and the translated display name `"Car Setting"`
+   (via `tr()`), dispatched through `QCoreApplication::notifyInternal()`.
+   It also separately calls `TranslateAppTitle(0x203, tr("Car Setting"))`
+   to set that app's window title. **That's the entire function** -- it
+   registers one category/app, not 18 per-item labels.
+4. The `"SetItem%1"` string found earlier is not a UI label either --
+   traced its actual use inside `syncSettingDataToMcu(int)` (the
+   `QString::arg()` call right after it takes `r4` = `idx` as the format
+   argument) -- it's a debug log line (`qDebug() << "SetItem" + idx`),
+   not anything user-visible.
+
+### What this means
+
+The `MCUSettingWindow` factory tool (raw `chkA0`-`chkD7` bit checkboxes,
+found and ruled out earlier this session) and the "Car Setting" app
+registered by `translateApp()` are the two real UI surfaces for this
+whole `CMD 0xA0` settings space on the stock hardware -- neither exposes
+18 individually-named rows. The two settings this session actually needed
+(Camera Type, Microphone) have real distinct names purely because
+`getSetItemValueTexts()`'s own **value texts** happen to be self-
+descriptive (`"AfterMarket Camera"` IS both the name and the value), not
+because the vendor UI shows a separate "Camera Type:" label next to them.
+
+### Final consolidated table -- everything confirmed this session
+
+| id | value texts (confirmed, jump-table-walked) | real distinct name (confirmed) | custom_ui |
+|---|---|---|---|
+| `0x00` | `OEM Microphone`, `AfterMarket Microphone` | *(self-descriptive values)* | ✅ "OEM Microphone Relay" |
+| `0x01` | `AfterMarket Camera`, `Factory Camera`, `AfterMarket 360`, `Factory 360` | *(self-descriptive values)* | ✅ "OEM Factory Camera" |
+| `0x02`-`0x07` | *(share id 0x00's handler -- unused/aliased)* | -- | not wired |
+| `0x08` | `Off`, `On` | **"Trajectory"** (confirmed, unclobbered check) | not wired |
+| `0x09` | `Off`, `On` | -- | ✅ "OEM Factory Microphone" (pre-existing) |
+| `0x0A` | `CAN Active`, `12V Active`, `P Key Active` | **"360 camera"** (confirmed, unclobbered check) | not wired |
+| `0x0B` | *(empty/dynamic)* | -- | not wired |
+| `0x0C` | `Off`, `Radar Active`, `5 s`, `10 s`, `15 s` | **"Front camera"** / **"Front camera time"** (confirmed, unclobbered check, two-part) | not wired |
+| `0x0D` | `5 s`, `10 s`, `15 s` | -- | not wired |
+| `0x0E` | `Off`, `On` | -- | not wired |
+| `0x0F` | `Off`, `On` | -- | not wired |
+| `0x10` | `Off`, `On`, `12V Active` | -- | not wired |
+| `0x11` | `Off`, `On`, `12V Active` | -- | not wired |
+
+Rows without a "real distinct name" aren't unlabeled by omission -- traced
+and confirmed they fall into `getSetItemText`'s two generic fallback
+buckets (a real, if unglamorous, finding: the stock UI itself doesn't
+distinguish them by name either).
+
+This closes out the `CMD 0xA0` settings-list investigation for this
+session -- both features actually needed (Camera Type, Microphone) are
+implemented against confirmed real mechanisms; the remaining rows are
+documented to the limit of what the real firmware/UI actually exposes.

@@ -1159,3 +1159,112 @@ Real, honest final state: 5 real ids (`0x0B`,`0x0D`,`0x0E`,`0x0F`,`0x10`,
 `0x11` -- 6 slots) remain without a confirmed name, though the likely
 candidate pool (5 strings above) is now known even if not individually
 attributed.
+
+---
+
+## COMPLETE (2026-08-29): full settings-name resolution via Ghidra, and a real vendor-code inconsistency found
+
+User pointed out Ghidra was available on this machine (`~/tools/ghidra`,
+12.1.2, plus a bundled JDK 21) -- used it for real, headless
+(`analyzeHeadless` + custom Java scripts under `~/ghidra_scripts/`), and
+it resolved what manual disassembly tracing could not: Ghidra's
+decompiler correctly tracks `idx` (the real function parameter) through
+the whole of `MCUAdapter_BoxP300::getSetItemText(int)` via proper
+dataflow analysis -- completely immune to the register-reuse confusion
+that made manual tracing unreliable past a certain point (documented in
+the "RETRACTION" section above). The decompiled C confirms **13 real,
+distinct branches** on the true `idx` value: `0, 7, 8, 9, 10, 11, 12, 13,
+14, 15, 16, 17, 0x87` -- each appending exactly one `tr()`-translated
+string into a dedicated stack local.
+
+**Method**: decompiled the function (`DecompileAddrs.java`), read off the
+`if/else-if` nesting order and which named local (`local_58`...`local_28`)
+each branch populates. Cross-referenced against Ghidra's own resolved
+string data-references (`DumpFuncStrings.java`, found 10 of 13 directly).
+Calibrated the raw `add r5,sp,#N` stack-offset -> Ghidra `local_XX` name
+formula (`local_offset_magnitude = 0x60 - N`) against 3 already-
+independently-confirmed pairs (id 8/10/12, verified via the pre-clobber
+manual trace earlier this session) -- matched exactly, 3-for-3, giving
+real confidence in the formula. Applied it to locate the remaining 3
+strings' exact literal-pool addresses by hand (`id=7`, `id=0x0E`,
+`id=0x11` -- Ghidra's automatic reference scan didn't resolve these 3
+specific loads as string data references, for reasons not investigated
+further) and decoded them directly from `.rodata`.
+
+### Final, complete `getSetItemText` name table (all 13 real branches)
+
+| id | display name (confirmed) |
+|---|---|
+| `0x00` | **Reversing camera** |
+| `0x07` | **Radar** |
+| `0x08` | **Trajectory** |
+| `0x09` | **Reversing mode** |
+| `0x0A` | **360 camera** |
+| `0x0B` | **Front camera** |
+| `0x0C` | **Front camera time** |
+| `0x0D` | **Speech button** |
+| `0x0E` | **DVR** |
+| `0x0F` | **Right Camera** |
+| `0x10` | **Left Camera** |
+| `0x11` | **Microphone** |
+| `0x87` | **BT Pin Code** |
+
+(ids `0x01`-`0x06`, `0x09`'s value-list sibling, etc. that aren't in this
+list get no distinct name from this function -- the list is padded to a
+minimum 2 elements with an empty placeholder string instead.)
+
+### A real, genuine vendor-code inconsistency, not a mistake on this project's part
+
+**`id=0x00`'s real display name is "Reversing camera" -- not
+"Microphone"**, despite its `getSetItemValueTexts(0)` value pair being
+`"OEM Microphone"`/`"AfterMarket Microphone"` (confirmed separately,
+solidly, earlier this session). And **`id=0x11`'s real display name IS
+"Microphone"**, despite its own value texts being the unrelated
+`"Off"`/`"On"`/`"12V Active"`. These two functions -- `getSetItemText()`
+(display name) and `getSetItemValueTexts()` (value options, called by
+the real MCU-send function `syncSettingDataToMcu()`) -- are two
+independent, hand-written `switch`-equivalents over the *same* `idx`
+parameter that have genuinely drifted out of sync in the vendor's own
+code. This isn't a mistranscription on this project's side -- both
+findings are independently disassembly-confirmed, from two different
+functions, and the contradiction is real.
+
+**This does not change what was implemented.** The `custom_ui` mic
+toggle (`id=0x00`) and camera toggle (`id=0x01`) were both fixed based on
+`getSetItemValueTexts()`/`syncSettingDataToMcu()` -- the pair that
+actually determines the wire bytes sent to the real MCU firmware, cross-
+checked directly against the MCU's own firmware handler
+(`hardware/MCU/source/src/uart_protocol.c`'s `case 0x00`). What the stock
+head unit's own "Car Setting" screen happens to *label* that row as
+("Reversing camera") is a separate, cosmetic-only question -- interesting
+as a real finding about vendor code quality, but not something that
+should change the wire-level implementation, which is grounded in the
+functions that actually build and send the MCU protocol frame.
+
+### Final, fully consolidated `CMD 0xA0` table (all 18 ids, everything this session found)
+
+| id | value texts | display name | custom_ui |
+|---|---|---|---|
+| `0x00` | `OEM Microphone` / `AfterMarket Microphone` | Reversing camera *(vendor-code mismatch, see above)* | ✅ "OEM Microphone Relay" |
+| `0x01` | `AfterMarket Camera` / `Factory Camera` / `AfterMarket 360` / `Factory 360` | *(none -- self-descriptive values only)* | ✅ "OEM Factory Camera" |
+| `0x02`-`0x06` | *(share `0x00`'s value handler)* | *(none)* | not wired |
+| `0x07` | *(shares `0x00`'s value handler)* | Radar | not wired |
+| `0x08` | `Off` / `On` | Trajectory | not wired |
+| `0x09` | `Off` / `On` | Reversing mode | ✅ "OEM Factory Microphone" (pre-existing) |
+| `0x0A` | `CAN Active` / `12V Active` / `P Key Active` | 360 camera | not wired |
+| `0x0B` | *(empty/dynamic)* | Front camera | not wired |
+| `0x0C` | `Off` / `Radar Active` / `5s` / `10s` / `15s` | Front camera time | not wired |
+| `0x0D` | `5s` / `10s` / `15s` | Speech button | not wired |
+| `0x0E` | `Off` / `On` | DVR | not wired |
+| `0x0F` | `Off` / `On` | Right Camera | not wired |
+| `0x10` | `Off` / `On` / `12V Active` | Left Camera | not wired |
+| `0x11` | `Off` / `On` / `12V Active` | Microphone | not wired |
+| `0x87` | *(not part of the 0-17 value table)* | BT Pin Code | not wired |
+
+This closes out the `CMD 0xA0` settings investigation completely -- every
+id has now been traced to the fullest extent the real firmware/vendor UI
+supports, using both manual disassembly and (once available) real
+decompiler-verified dataflow analysis, with the two implemented features
+(Camera, Microphone) grounded in the mechanism that actually matters --
+the wire protocol -- not the vendor's own (demonstrably inconsistent)
+display labels.

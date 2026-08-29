@@ -232,6 +232,57 @@ void cmd_setting(int fd, int id, int value) {
     listen_window(fd, 300);
 }
 
+/* CMD 0x84 (Audio Route) -- the real, confirmed OEM-bypass relay control,
+ * disassembled 2026-08-29 (see docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md's
+ * "CMD 0x84 (Audio Route) real handler found" section). Real firmware
+ * (0x08008808) masks the payload byte to 4 bits and only acts on two
+ * values:
+ *   value=0x00: sends "AT+AUDROUTE=1" to the audio/BT module over its own
+ *               USART3, then (if this handler's own internal gate is
+ *               clear -- which it is by default, unlike the CMD 0xA0
+ *               id=0x11 path below) drives the shared GPIOC13/PC2 relay
+ *               pair to dispatcher state 0 (Pin13=LOW, Pin2=LOW).
+ *   value=0x03: sends "AT+AUDROUTE=2", drives the relay to dispatcher
+ *               state 1 (Pin13=LOW, Pin2=HIGH).
+ * Values 1/2/4/5 update internal state only, no observable effect.
+ * Deliberately NOT labeled "aftermarket"/"OEM" here -- which physical
+ * routing each state corresponds to is exactly the open question this
+ * command exists to help answer; watch/listen to both the stock and
+ * aftermarket displays and audio output, and record what each value does. */
+void cmd_audio_route(int fd, int value) {
+    int masked = value & 0x0F;
+    printf("[*] CMD 0x84 (Audio Route) [value=0x%02X, masked=0x%X]", value, masked);
+    if (masked == 0x00) {
+        printf(" -- expect \"AT+AUDROUTE=1\" over USART3 + relay dispatcher state 0\n");
+    } else if (masked == 0x03) {
+        printf(" -- expect \"AT+AUDROUTE=2\" over USART3 + relay dispatcher state 1\n");
+    } else if (masked >= 0x06) {
+        printf(" -- WARNING: masked value >=6 is out of range, real firmware ignores it entirely\n");
+    } else {
+        printf(" -- real firmware: state stored only, no observable effect expected\n");
+    }
+    unsigned char payload[1] = { (unsigned char)value };
+    send_mcu_frame(fd, 0x84, payload, 1, 1);
+    listen_window(fd, 300);
+}
+
+/* CMD 0xA0 id=0x11 -- the OTHER real path to the same GPIOC13/PC2 relay
+ * pair (see cmd_audio_route() above for the shared dispatcher). Real
+ * firmware only acts if its own internal gate byte == 1 -- a condition
+ * whose real trigger is UNCONFIRMED, so this command may have zero
+ * observable effect even though the frame itself sends correctly. Kept
+ * as a thin, clearly-labeled wrapper around --setting rather than a new
+ * code path, since it's the exact same CMD 0xA0 mechanism. */
+void cmd_video_relay(int fd, int value) {
+    printf("[*] CMD 0xA0 id=0x11 (the other real path to the GPIOC13/PC2 relay) "
+           "[value=0x%02X] -- real firmware only acts if an internal gate byte "
+           "== 1, a condition NOT confirmed to ever be true in practice. May "
+           "have no effect even if this command sends correctly; "
+           "cmd_audio_route()/--audio-route is the more reliably-triggered "
+           "path to the same relay.\n", value);
+    cmd_setting(fd, 0x11, value);
+}
+
 void cmd_send_raw(int fd, int cmd, const unsigned char *payload, int len) {
     printf("[*] Raw CMD 0x%02X, %d payload byte(s)\n", cmd, len);
     send_mcu_frame(fd, (unsigned char)cmd, payload, len, 1);
@@ -299,6 +350,12 @@ static void print_usage(const char *prog) {
         "Commands:\n"
         "  --setting <id_hex> <value_hex>   Send CMD 0xA0 [id, value] once\n"
         "  --send <cmd_hex> [byte_hex...]   Send an arbitrary raw frame once\n"
+        "  --audio-route <value_hex>        Send CMD 0x84 (OEM-bypass relay control,\n"
+        "                                   real: value 0x00/0x03 = the two confirmed\n"
+        "                                   AT+AUDROUTE states, others no-op)\n"
+        "  --video-relay <value_hex>        Send CMD 0xA0 id=0x11 (the other real path\n"
+        "                                   to the same relay -- may have no effect,\n"
+        "                                   its own gate condition is unconfirmed)\n"
         "  --sweep-settings [value_hex] [pause_ms]\n"
         "                                   Send CMD 0xA0 for all 18 known setting\n"
         "                                   IDs (0x00-0x11) with the given value\n"
@@ -313,9 +370,12 @@ static void print_usage(const char *prog) {
         "  %s --setting 0x00 0x01           # test the id=0x00 (GPIOB Pin1) candidate\n"
         "  %s --sweep-settings 0x01 500\n"
         "  %s --send 0x81 0x01              # replay the known hello frame\n"
-        "  %s --sweep-cmds 0x00 0x1f --yes-i-am-sure 400\n\n"
+        "  %s --sweep-cmds 0x00 0x1f --yes-i-am-sure 400\n"
+        "  %s --audio-route 0x00            # relay dispatcher state 0 (real, reliable)\n"
+        "  %s --audio-route 0x03            # relay dispatcher state 1 (real, reliable)\n"
+        "  %s --video-relay 0x01            # same relay via id=0x11 (gate unconfirmed)\n\n"
         "IMPORTANT: stop custom_ui first (it holds /dev/ttyHS0 exclusively).\n",
-        prog, prog, prog, prog, prog, prog);
+        prog, prog, prog, prog, prog, prog, prog, prog, prog);
 }
 
 int main(int argc, char **argv) {
@@ -360,6 +420,16 @@ int main(int argc, char **argv) {
         int id = (int)strtoul(argv[argi], NULL, 0);
         int value = (int)strtoul(argv[argi + 1], NULL, 0);
         cmd_setting(fd, id, value);
+
+    } else if (strcmp(command, "--audio-route") == 0) {
+        if (argi >= argc) { print_usage(argv[0]); close(fd); return 1; }
+        int value = (int)strtoul(argv[argi], NULL, 0);
+        cmd_audio_route(fd, value);
+
+    } else if (strcmp(command, "--video-relay") == 0) {
+        if (argi >= argc) { print_usage(argv[0]); close(fd); return 1; }
+        int value = (int)strtoul(argv[argi], NULL, 0);
+        cmd_video_relay(fd, value);
 
     } else if (strcmp(command, "--send") == 0) {
         if (argi >= argc) { print_usage(argv[0]); close(fd); return 1; }

@@ -158,17 +158,25 @@ public:
     // settle that empirically.
     void sync_audio_route(uint8_t value);
 
-    // Real OEM/Aftermarket video-multiplexer relay toggle -- disassembled
-    // 2026-08-29 from the real stock vendor app's own dedicated function,
-    // CanBus_Raise_Toyota::enableOEMSound(bool) (usr/lib/libCanBus.so).
-    // Sends the exact real byte sequences stock sends (verbatim, not a
-    // reinterpretation): oem=false sends one real CMD 0x84 frame,
-    // payload [0x00,0x00]; oem=true sends three, payloads [0x08,0x01],
-    // [0x09,0x01], [0x2A,0x01]. See
-    // MCU_FIRMWARE_VERIFIED_FINDINGS.md's "The REAL OEM/Aftermarket relay
-    // toggle" section for the full finding, including a real, unresolved
-    // question about exactly how the MCU's own CMD 0x84 handler parses
-    // this payload.
+    // UNCONFIRMED / LIKELY WRONG SOURCE, per MCU_FIRMWARE_VERIFIED_FINDINGS.md's
+    // 2026-08-29 "RETRACTION" section -- keep reading before trusting this.
+    // Originally wired to CanBus_Raise_Toyota::enableOEMSound(bool)
+    // (usr/lib/libCanBus.so), but that whole library is confirmed DEAD CODE
+    // on this hardware (zero dlopen references anywhere in the rootfs,
+    // matching the user's own real observation that the stock traffic
+    // logger never shows CAN-bus traffic, only MCU commands). The real,
+    // live location of this toggle is very likely a settings-name string
+    // table found directly inside libMcuCenter.so itself (the confirmed-live
+    // library), containing a genuine "AfterMarket Camera"/"Factory Camera"
+    // pair alongside other real BoxP300-adjacent settings -- but the exact
+    // function/CMD/setting-id driving it hasn't been pinned down yet.
+    // Sends the exact real byte sequences CanBus_Raise_Toyota::enableOEMSound
+    // used (verbatim): oem=false sends one CMD 0x84 frame, payload
+    // [0x00,0x00]; oem=true sends three, payloads [0x08,0x01], [0x09,0x01],
+    // [0x2A,0x01]. Harmless to send (the MCU's own CMD 0x84 handler will
+    // process whatever arrives) but NOT confirmed to be the real toggle --
+    // do not treat this as "the fix" until the libMcuCenter.so lead is
+    // chased down.
     void sync_video_relay(bool oem);
 
 private:

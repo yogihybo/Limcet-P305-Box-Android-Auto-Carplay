@@ -794,6 +794,90 @@ resolving the payload-offset question correctly; whatever the real MCU
 firmware actually does with these exact bytes, sending the exact bytes
 stock sends is the best available proxy for "do what stock does."
 
+---
+
+## RETRACTION (2026-08-29): `CanBus_Raise_Toyota::enableOEMSound` is dead code on this hardware
+
+The user's own real hands-on observation prompted a direct re-check that
+overturns the finding above: **the stock factory-menu traffic logger
+shows MCU command traffic but never any CAN-bus traffic**, on real
+hardware. That observation is now confirmed correct by static analysis,
+not just plausible:
+
+- **`usr/lib/libCanBus.so` is never loaded by anything on this rootfs.**
+  A whole-rootfs string search for the literal substring `"libCanBus"` --
+  the only way any binary could `dlopen()` it by name -- returned **zero
+  hits**, anywhere: not in `MsnCoreApp`, not in `libSetting.so`, not in
+  `libMcuCenter.so`, not in any other `.so`. `readelf -d` confirms it's
+  also not a direct `NEEDED` dependency of any of those. The file exists
+  on disk (probably shipped as part of a shared vendor SDK image used
+  across multiple products) but nothing on this specific build ever
+  instantiates `CanBusAdapter::getAdapterInstance()` or reaches
+  `CanBus_Raise_Toyota` at all. **The whole `CanBus_*` adapter family
+  is orphaned dead weight here, not a live, gated-off code path.**
+- This means `enableOEMSound(bool)`'s `CMD 0x84` frames, verbatim-copied
+  into `custom_ui`'s `hal::sync_video_relay()`, were never actually
+  stock's real mechanism for this device -- they're real bytes from a
+  real function, but a function stock itself never calls on this unit.
+  Sending them may do *something* (the MCU's own `CMD 0x84` handler will
+  still process whatever bytes arrive), but there is no vendor-side
+  confirmation this is the correct OEM/Aftermarket toggle for this
+  hardware. **Treat `sync_video_relay()`/`send_mcu_video_relay()` as
+  unconfirmed, matching the same caution this project already applied to
+  the earlier wrong `McuAdapter_BoxP230` lead** -- not reverted outright
+  (the bytes are harmless to send, and might still coincidentally be
+  correct if a Toyota-specific CAN feature was cloned across
+  `libMcuCenter.so`'s own settings table, see below), but not to be
+  trusted as "the real fix" either.
+
+### The real, live lead: `libMcuCenter.so`'s own internal settings-name string table
+
+While confirming `libCanBus.so` was dead, the exact same strings
+(`"AfterMarket Camera"`, `"OE Camera"`, `"OEM Camera"`) turned up **again**
+inside `libMcuCenter.so` itself -- the confirmed-live library
+`MCUAdapter_BoxP300` lives in. This is a different, real string cluster,
+not a coincidence: a contiguous block of `.rodata` (file offset
+`~0xb2c88`-`~0xb2dec`) reading, in order:
+
+```
+AfterMarket Camera   Factory Camera
+AfterMarket 360       Factory 360
+CAN Active            12V Active
+P Key Active           Radar Active
+10 s / 15 s
+OEM Microphone         AfterMarket Microphone
+Reversing camera       Trajectory
+Reversing mode         360 camera
+Front camera           Front camera time
+Speech button
+Right Camera           Left Camera
+BT Pin Code            Car Setting          Auto Meter
+```
+
+This is unmistakably a genuine vendor settings-label table -- paired
+Factory/AfterMarket labels for Camera, 360, and Microphone, sitting right
+alongside real hardware config concepts (`CAN Active`/`12V Active`/
+`P Key Active`/`Radar Active`, `WhellDelay`, `SettingItemTypes`) that are
+clearly `libMcuCenter.so`'s own internal concern, not something borrowed
+from the dead `libCanBus.so`. **This -- not `CanBus_Raise_Toyota` -- is
+the real, live location of the "OEM Factory Camera" vs "AfterMarket
+Camera" toggle for this device.** `nm -CD` shows no exported symbol
+directly implicated (no `getName`/`getItemName`/`SettingItemTypes`
+function is exported by name -- likely inlined or resolved through a
+private/static helper), and no `MCUAdapter_BoxP307` class exists (`Box-P307`
+sitting nearby is a `LauncherName`/`ProductNumber` string value, not a
+class name) -- so the exact function that indexes into this table and the
+exact `CMD`/setting-id it drives are **not yet pinned down**. This is the
+correct next step, not `CanBus_Raise_Toyota`.
+
+**Also newly confirmed real** in this same string cluster:
+`"OEM Microphone"` / `"AfterMarket Microphone"` as a genuine adjacent
+pair -- corroborates this session's earlier, separate finding that
+`CMD 0xA0 id=0x11` is real vendor-labeled "Microphone" (not
+camera-related), now from a second, independent source (a raw string
+table, not just the `getAdapterInstance`/settings-list cross-reference
+done earlier).
+
 **Also still unconfirmed**: whether `CanBus_Raise_Toyota` (as opposed to
 `MCUAdapter_BoxP300`, the class independently confirmed active via
 `McuType=6`) is genuinely the active/relevant class for this specific

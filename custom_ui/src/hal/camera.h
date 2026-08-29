@@ -88,4 +88,35 @@ ReverseGearState wait_reverse_gear_change(CameraHandle & h);
 
 void close_camera(CameraHandle & h);
 
+// Real reversing-camera video FORMAT selector -- disassembled from the
+// real stock vendor app (usr/lib/libSetting.so's
+// FactoryWindow::on_btnCameraType_clicked(), the "OEM Factory Camera"
+// UI setting) 2026-08-29. NOT a binary OEM/Aftermarket relay toggle
+// (this project's own CMD 0xA0 id=0x11 / CMD 0x84 sends for this were
+// built on a wrong premise -- see docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md).
+// Real mechanism, zero MCU/UART/CAN involvement, matches stock exactly:
+// persists a U-Boot env var (read by
+// linux-arkmicro/u-boot/.../ark1668_display_cfg.c's
+// ark_carback_camera_check() at next boot) AND writes a kernel sysfs
+// attribute the rn6752 video-decoder driver exposes, for an immediate
+// runtime effect.
+enum class CameraFormat {
+    Auto        = 0,  // CARBACK_CAMERA_MODE_DYNAMIC
+    CvbsPal     = 1,  // CARBACK_CAMERA_MODE_CVBS_PAL
+    CvbsNtsc    = 2,  // CARBACK_CAMERA_MODE_CVBS_NTST
+    Ahd720p25   = 3,  // CARBACK_CAMERA_MODE_720P25
+    Ahd720p30   = 4,  // CARBACK_CAMERA_MODE_720P30
+    Ahd1080p25  = 5,  // CARBACK_CAMERA_MODE_1080P25
+    Ahd1080p30  = 6,  // CARBACK_CAMERA_MODE_1080P30
+};
+
+// Runs, in order, exactly what stock's real button handler runs:
+//   fw_setenv carback_camera_mode <N>
+//   echo "camera_mode <N>" > /sys/devices/platform/i2c-gpio.1/i2c-1/1-002c/dvr
+// `format` is a fixed enum value (never raw user/network input), so the
+// same std::system()-based approach this project already uses elsewhere
+// (hal/bluetooth.cpp, hal/androidauto_client.cpp) carries no injection
+// risk here.
+void set_camera_format(CameraFormat format);
+
 }  // namespace hal

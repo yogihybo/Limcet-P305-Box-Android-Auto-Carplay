@@ -18,6 +18,20 @@ listens. This tool actively sends arbitrary, chosen frames on demand --
 single commands, or systematic sweeps -- and reports whatever comes
 back. Different job, same wire protocol underneath.
 
+## Why this, not just the SWD test plans, for the relay commands specifically
+
+`docs/MCU_VIDEO_RELAY_SWD_TEST_PLAN.md` and
+`docs/MCU_CAN_BUS_SWD_SNIFFING_PLAN.md` drive the target directly via SWD,
+which forces a reset and traps the CPU in the bootloader -- the real
+application (and therefore the ArkMicro SoC, held in reset via GPIOB14)
+never runs, so those plans can only ever observe the stock/OEM side of the
+relay. `--audio-route`/`--video-relay` here instead run entirely from the
+Linux side, over the real UART link, against the **real, fully-booted,
+already-deployed MCU firmware** actually processing the command through its
+real gate logic -- meaning both the stock feed AND the aftermarket
+CarPlay/AA display can be watched simultaneously for a real effect. The two
+approaches are complementary, not redundant.
+
 ## Important: stop `custom_ui` first
 
 `custom_ui`'s own MCU HAL (`src/hal/mcu_input.cpp`) holds
@@ -37,6 +51,23 @@ mcu-probe --setting 0x0b 0x00
 
 # Send an arbitrary raw frame once (cmd byte, then any number of payload bytes)
 mcu-probe --send 0x81 0x01
+
+# CMD 0x84 (Audio Route) -- the real, confirmed OEM-bypass audio+video relay
+# control (see docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md's "CMD 0x84" section).
+# Only values 0x00 and 0x03 have a real, confirmed effect: each sends a real
+# "AT+AUDROUTE=1"/"AT+AUDROUTE=2" command over USART3 and drives the shared
+# GPIOC13/PC2 relay pair to one of its two states. This is the MORE
+# RELIABLE of the two real paths to that relay -- its internal gate defaults
+# open, unlike the CMD 0xA0 id=0x11 path below.
+mcu-probe --audio-route 0x00   # relay dispatcher state 0
+mcu-probe --audio-route 0x03   # relay dispatcher state 1
+
+# CMD 0xA0 id=0x11 -- the OTHER real path to the exact same relay. May have
+# NO observable effect: its own gate condition (a struct byte that must
+# equal 1) has never been confirmed to actually become true in practice.
+# Included for completeness / in case that condition does hold on real
+# hardware -- --audio-route above is the better first try.
+mcu-probe --video-relay 0x01
 
 # Sweep all 18 real, disassembly-confirmed CMD 0xA0 setting IDs
 # (0x00-0x11, see docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md) with one

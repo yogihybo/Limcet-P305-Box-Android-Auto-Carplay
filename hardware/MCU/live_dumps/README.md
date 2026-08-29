@@ -1,4 +1,30 @@
-# Live STM32F105 MCU Firmware Dumps
+# Live STM32F105 MCU Firmware Dumps -- RETRACTED, kept for the historical record only
+
+> **RETRACTED (2026-08-28, commit `aba08e68`).** The `.bin` files this
+> README describes were deleted -- they were **not** real flash
+> extractions. Cross-checked against the verified-correct `can_app.bin`,
+> they disagreed on 99.7%+ of non-placeholder words, and
+> `tools/stm32f1_extractor_fixed.py` was found to have a real bug (a
+> broken `address % 0x200` shortcut) that made it read live CPU register
+> state instead of flash content for a large fraction of addresses. RDP
+> Level 1 is confirmed active on this chip and has blocked every
+> extraction method actually tried, including this one -- see
+> `docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md`'s "CRITICAL SAFETY FINDING"
+> section for the real, live-confirmed mechanism (RDP1 BusFaults the
+> CPU's own flash reads while a debugger is attached), and its "CMD 0x90"
+> section for a closely related later finding (a proposed SRAM-code-
+> execution/cold-boot bypass is also closed by RDP1's own documented
+> design, confirmed against ST's own published RDP1 behavior).
+>
+> The rest of this file is kept **only** as a record of what was
+> mistakenly believed at the time -- do not treat any claim below (file
+> contents, hashes, or the "hardware architecture" analysis derived from
+> them) as real. The genuinely real STM32F105 findings from this whole
+> investigation live in `docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md`.
+
+The text below is the ORIGINAL, now-retracted claim, preserved verbatim:
+
+---
 
 These files are the **true, live hardware firmware extractions** dumped directly from the companion STM32F105 microcontroller on the physical Prado head unit using OpenOCD and the CVE-2020-8004 exception exploit (`tools/stm32f1-firmware-extractor`):
 

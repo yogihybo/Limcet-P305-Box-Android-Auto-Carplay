@@ -431,6 +431,21 @@ void send_mcu_setting(uint8_t setting_id, uint8_t value) {
     }
 }
 
+void McuInputHal::sync_audio_route(uint8_t value) {
+    if (fd_ >= 0) {
+        unsigned char payload[1] = {value};
+        send_mcu_frame(fd_, 0x84, payload, 1);
+        std::printf("%s [HAL:MCU] Sent CMD 0x84 Audio Route (val=0x%02X)\n",
+                    core::log_timestamp().c_str(), value);
+    }
+}
+
+void send_mcu_audio_route(uint8_t value) {
+    if (g_mcu_instance) {
+        g_mcu_instance->sync_audio_route(value);
+    }
+}
+
 McuInputHal * get_mcu_instance() {
     return g_mcu_instance;
 }

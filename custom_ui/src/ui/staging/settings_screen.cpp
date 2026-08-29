@@ -347,7 +347,21 @@ lv_obj_t * create_settings_screen() {
                        "OriginalCarCamera", "General", false, [](bool oem) {
                            std::printf("%s [HAL:REVCAM] Reversing camera mode set to %s\n",
                                        core::log_timestamp().c_str(), oem ? "OEM Factory Camera" : "Aftermarket Camera");
+                           /* CMD 0xA0 id=0x11 kept for completeness -- real firmware
+                            * gates it behind a condition never confirmed to actually
+                            * hold in practice, so this alone may do nothing. */
                            hal::send_mcu_setting(0x11, oem ? 1 : 0);
+                           /* CMD 0x84 (Audio Route) is the MORE RELIABLE real path to
+                            * the same GPIOC13/PC2 relay -- its gate defaults open (see
+                            * MCU_FIRMWARE_VERIFIED_FINDINGS.md's "CMD 0x84" section).
+                            * Sending both maximizes the real chance this toggle
+                            * actually does something on hardware. Polarity (which
+                            * value is physically "OEM" vs "aftermarket") is NOT
+                            * confirmed -- kept consistent with id=0x11's own assumed
+                            * polarity above (nonzero -> the same relay state) rather
+                            * than independently guessed; verify with
+                            * tools/mcu-probe --audio-route and correct if backwards. */
+                           hal::send_mcu_audio_route(oem ? 0x03 : 0x00);
                        });
     create_stepper_row(card, &ui::icons::icon_volume, "Reverse Vol. Cut (%)", 0, 100, 5,
                        "ReversingVolumeCut", "General");

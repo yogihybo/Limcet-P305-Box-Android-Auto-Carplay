@@ -1007,3 +1007,34 @@ Real next step if this is picked up: re-verify against
 `MCUAdapter_BoxP300::syncSettingDataToMcu`'s value-remap logic (id=0x00
 isn't one of the 10/11/12 special cases, so it should also be a clean,
 unmodified `payload[0]=0x00` send) before changing the toggle.
+
+---
+
+## FIXED (2026-08-29): the real Microphone setting corrected to `CMD 0xA0 id=0x00`
+
+Follow-up to the "related, unresolved discrepancy" flagged above -- fixed
+per explicit request. `settings_screen.cpp`'s "OEM Microphone Relay"
+toggle now sends `CMD 0xA0 [0x00, value]` instead of the wrong
+`[0x11, value]`.
+
+**Value polarity, confirmed from the real append order** (not assumed
+symmetric with the Camera Type setting, which has opposite polarity):
+`getSetItemValueTexts(0)` appends `"OEM Microphone"` first, then
+`"AfterMarket Microphone"` -- so **value 0 = OEM, value 1 = AfterMarket**.
+
+**Cross-checked safe against the real MCU firmware side too**
+(`hardware/MCU/source/src/uart_protocol.c`, `handle_sync_settings()`,
+`case 0x00`, itself traced from the real firmware's own `0x080089F8`
+handler earlier this session): value 1 drives GPIOB Pin 1 HIGH, value 0
+(or 3) drives it LOW, and value 2 is a distinct, real `AT+UPGRADE`
+trigger -- this toggle only ever sends 0 or 1, never touching the
+upgrade path.
+
+The now-removed `hal::send_mcu_audio_route()` call (previously piggy-
+backed onto this toggle on the theory that `id=0x11` and `CMD 0x84`
+drove the same GPIOC13/PC2 relay) was removed along with the wrong id --
+that theory's premise (id=0x11 being mic-related) no longer holds, so the
+coupling was removed rather than left dangling on a disproven basis.
+
+Real build-verified: `custom_ui` compiles and links clean. Not yet
+hardware-tested.

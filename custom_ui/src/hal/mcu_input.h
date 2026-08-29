@@ -158,25 +158,16 @@ public:
     // settle that empirically.
     void sync_audio_route(uint8_t value);
 
-    // UNCONFIRMED / LIKELY WRONG SOURCE, per MCU_FIRMWARE_VERIFIED_FINDINGS.md's
-    // 2026-08-29 "RETRACTION" section -- keep reading before trusting this.
-    // Originally wired to CanBus_Raise_Toyota::enableOEMSound(bool)
-    // (usr/lib/libCanBus.so), but that whole library is confirmed DEAD CODE
-    // on this hardware (zero dlopen references anywhere in the rootfs,
-    // matching the user's own real observation that the stock traffic
-    // logger never shows CAN-bus traffic, only MCU commands). The real,
-    // live location of this toggle is very likely a settings-name string
-    // table found directly inside libMcuCenter.so itself (the confirmed-live
-    // library), containing a genuine "AfterMarket Camera"/"Factory Camera"
-    // pair alongside other real BoxP300-adjacent settings -- but the exact
-    // function/CMD/setting-id driving it hasn't been pinned down yet.
-    // Sends the exact real byte sequences CanBus_Raise_Toyota::enableOEMSound
-    // used (verbatim): oem=false sends one CMD 0x84 frame, payload
-    // [0x00,0x00]; oem=true sends three, payloads [0x08,0x01], [0x09,0x01],
-    // [0x2A,0x01]. Harmless to send (the MCU's own CMD 0x84 handler will
-    // process whatever arrives) but NOT confirmed to be the real toggle --
-    // do not treat this as "the fix" until the libMcuCenter.so lead is
-    // chased down.
+    // CONFIRMED 2026-08-29 by direct disassembly of the confirmed-active
+    // MCUAdapter_BoxP300::syncSettingDataToMcu(int)/getSetItemValueTexts(int)
+    // (usr/lib/libMcuCenter.so) -- real "Camera Type" setting, CMD 0xA0
+    // id=0x01, value 0=AfterMarket Camera / 1=Factory(OEM) Camera (2 more
+    // values, 2/3, exist for a paired "360 camera" system but aren't used
+    // here). Supersedes and replaces the earlier CanBus_Raise_Toyota lead,
+    // which is confirmed dead code on this hardware (see
+    // MCU_FIRMWARE_VERIFIED_FINDINGS.md's "RETRACTION" section) -- this is
+    // the real mechanism, traced byte-for-byte through the actual send
+    // function, not a name-string coincidence.
     void sync_video_relay(bool oem);
 
 private:

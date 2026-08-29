@@ -375,22 +375,24 @@ lv_obj_t * create_settings_screen() {
 
     // --- Section 3: Vehicle & Camera ---
     create_section_header(card, "VEHICLE & CAMERA");
-    /* Real OEM/Aftermarket video-multiplexer relay toggle -- disassembled
-     * 2026-08-29 from the real stock vendor app's own dedicated function,
-     * CanBus_Raise_Toyota::enableOEMSound(bool) (usr/lib/libCanBus.so,
-     * 0x78a60). NOT the same feature as stock's separate 7-way reversing-
-     * camera video FORMAT picker (FactoryWindow::on_btnCameraType_clicked()
-     * in usr/lib/libSetting.so, a genuinely different real stock feature --
-     * deliberately not implemented here, see
-     * MCU_FIRMWARE_VERIFIED_FINDINGS.md's "RESOLVED: the real camera
-     * setting" section for that finding, kept for the record). This toggle
-     * is specifically the one that controls whether the video (and audio)
-     * multiplexer reverts to the stock OEM feed or stays on the aftermarket
-     * feed -- see hal::send_mcu_video_relay() and
-     * MCU_FIRMWARE_VERIFIED_FINDINGS.md's "The REAL OEM/Aftermarket relay
-     * toggle" section for the full finding, including a real, unresolved
-     * question about exactly how the MCU parses the payload; the real
-     * stock byte sequences are replicated verbatim regardless. */
+    /* Real OEM/Aftermarket "Camera Type" setting -- CONFIRMED 2026-08-29 by
+     * direct disassembly of MCUAdapter_BoxP300::syncSettingDataToMcu(int)/
+     * getSetItemValueTexts(int) (usr/lib/libMcuCenter.so), the confirmed-
+     * active MCU adapter class's own real settings-sync function: CMD 0xA0
+     * id=0x01, value 0=AfterMarket Camera / 1=Factory(OEM) Camera. This
+     * REPLACES an earlier lead (CanBus_Raise_Toyota::enableOEMSound in
+     * usr/lib/libCanBus.so) that turned out to be dead code on this
+     * hardware -- confirmed via a whole-rootfs dlopen-reference sweep,
+     * see MCU_FIRMWARE_VERIFIED_FINDINGS.md's "RETRACTION" section. NOT
+     * the same feature as stock's separate 7-way reversing-camera video
+     * FORMAT picker (FactoryWindow::on_btnCameraType_clicked() in
+     * usr/lib/libSetting.so, a genuinely different real stock feature --
+     * deliberately not implemented here, see "RESOLVED: the real camera
+     * setting" section for that finding, kept for the record). This
+     * toggle is the one that controls whether the video multiplexer
+     * reverts to the stock OEM feed or stays on the aftermarket feed --
+     * see hal::send_mcu_video_relay() and MCU_FIRMWARE_VERIFIED_FINDINGS.md's
+     * "CONFIRMED: the real Camera Type setting" section for the full trace. */
     create_toggle_row(card, &ui::icons::icon_nav_camera, "OEM Factory Camera",
                        "OriginalCarCamera", "General", false, [](bool oem) {
                            std::printf("%s [HAL:REVCAM] Video/audio multiplexer set to %s\n",

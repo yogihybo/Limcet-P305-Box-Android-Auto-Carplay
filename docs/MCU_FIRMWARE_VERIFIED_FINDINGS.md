@@ -2036,6 +2036,74 @@ being connected when the glitch fires (it must genuinely disconnect
 first, not just idle). None of these are checked/ruled out for this
 board yet.
 
+### How this would actually run on this unit's STM32F105RBT6, step by step (2026-08-30)
+
+Mapped directly onto what this project has already confirmed, not the
+tool's generic Blue Pill instructions:
+
+1. **Connect SWD** -- same OpenOCD approach already proven working for
+   `tools/can-sniffer/`. Known, already-confirmed side effect: holds
+   the whole ArkMicro SoC in reset via `GPIOB14` for this phase, screen
+   dark, same as every other SWD plan in this project.
+2. **Load Stage 1 into SRAM, arm the FPB at `0x00000004`, disconnect
+   the debugger.** The FPB redirect is a genuine Cortex-M3 hardware
+   feature that survives disconnection -- it doesn't need the debugger
+   present to keep working. (Same underlying "inject code into SRAM
+   via SWD" capability `docs/MCU_SRAM_TEST_EXECUTION_PLAN.md` already
+   relies on for an unrelated purpose.)
+3. **Power-glitch**: cut `VDD` to just the STM32, restore exactly as
+   `NRST` drops, timed so SRAM retains Stage 1 through the gap. `BOOT0`
+   gets toggled to its normal "boot from main flash" state as part of
+   this -- nothing about the boot-mode pins looks abnormal to anything
+   checking them.
+4. **The part that actually matters here**: the CPU's first post-reset
+   instruction fetch, which would normally read the real reset vector
+   out of this chip's RDP-protected flash, gets silently redirected by
+   the still-armed FPB into the SRAM code instead. Per ST's own
+   documented RDP1 behavior (already live-confirmed on this exact chip
+   earlier this session -- SWD BusFaults the CPU's next flash read
+   *while a debugger is attached*), RDP1's block condition simply isn't
+   present in this scenario: no debugger, ordinary boot-mode pins.
+   Stage 2 then reads real flash as the CPU's own code execution --
+   never something RDP1 has restricted; it only gates the external
+   debug port.
+5. **Stage 2 transmits the dump over a USART.** Per the cross-check
+   above, build it for **USART1/`PA9`** -- the one peripheral this
+   session already confirmed is a dead stub in the real firmware, so
+   there's no contention with the two genuinely active links (`USART2`/
+   SoC link, `USART3`/Bluetooth). Capture on the Pico's own UART RX, or
+   a plain UART-to-USB adapter plus this project's own capture tooling
+   (the same technique class `tools/uart45-probe/` already uses).
+
+**What a real success here would unblock, concretely, not abstractly**:
+- **The real, currently-installed Prado-specific firmware** -- not the
+  generic `DCn32-VOLVO` reference this project has been stuck
+  analyzing all session (confirmed byte-identical to a cross-vendor
+  image, not this unit's own firmware -- see the "Important scope
+  clarification" section near the top of this doc).
+- **Likely the real first-stage bootloader content too**
+  (`0x08000000`-`0x08003FFF`), if the dump covers the full addressable
+  flash range -- the exact gap the `CMD 0xE1` investigation hit a wall
+  on (see that section above).
+- **A real backup image**, which would directly unblock `mcu-probe
+  --reboot-probe --confirm-erase-risk` -- that command is currently,
+  correctly gated specifically because there's nothing to restore from
+  if it wipes the chip. This would supply the missing piece.
+
+**What's honestly still missing before this is executable, specific to
+this project, not generic tool caveats**: a Pi Pico, a controllable
+`NRST` line (current SWD wiring is `SWDIO`/`SWCLK`/`GND`/`VCC` only),
+isolated power switching to just the STM32's `VDD` (likely shares a
+rail with other board components -- unverified whether that's even
+separable without board-level work), physical access to `BOOT1` for
+its pull-up resistor, this chip's actual silicon date code (relevant
+given the tool's own "may be patched in 2020+ revisions" warning), and
+real electrical tuning even once hardware is in hand (the tool's own
+documented failure modes -- line capacitance, current draw needing
+MOSFET buffering -- are board-specific characteristics that don't
+transfer from their reference setup; expect iteration, not a
+first-try success).
+
 **Verdict: a real, credible, chip-family-matched avenue, not closed by
 anything found this session.** Since it needs the same core hardware
 (Pico + `NRST` + switchable power) already on the shopping list for

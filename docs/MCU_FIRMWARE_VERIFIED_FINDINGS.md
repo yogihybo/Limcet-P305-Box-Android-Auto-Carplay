@@ -1662,3 +1662,51 @@ implements the correct `next_head != g_rx_tail` guard before advancing,
 same as `can_driver.c`. Recorded here purely as a real, disassembly-
 confirmed fact about the actual vendor firmware's own behavior, and as
 practical guidance for how to drive it safely from the Linux side.
+
+---
+
+## Real finding (2026-08-30): `CMD 0x88`'s TEA challenge is a full decryption oracle -- the anti-clone scheme was breakable over UART alone, no RDP bypass ever needed
+
+Continued the "what else can we trigger over UART" question. Re-examined
+`CMD 0x88` (already disassembly-confirmed earlier this session: real
+TEA algorithm, real recovered key) specifically for what it reveals as
+a *live, remotely-triggerable* primitive, not just a static fact about
+the flash image.
+
+**Real behavior, confirmed via this project's own clean-room
+`handle_crypto_challenge()` (built directly from the real disassembly)**:
+send any 8-byte value over `CMD 0x88`, the MCU decrypts it with the real,
+fixed key and echoes the full 8-byte plaintext straight back. No rate
+limiting, no attempt counter, no gating on any other state -- a pure,
+stateless decryption oracle.
+
+**Real, standalone security conclusion, independent of this project's
+own key-recovery-via-flash-analysis work**: combined with the already-
+documented fact that the key has only ~32 bits of effective entropy
+(each of its 4 words has just its low byte set), this oracle alone --
+reachable over the same `/dev/ttyHS0` link every other command uses, with
+**zero need for RDP bypass or flash access of any kind** -- would have
+been sufficient to fully break this "anti-clone" authentication scheme.
+A 32-bit keyspace is trivially brute-forceable via chosen-ciphertext
+queries against a live oracle (send a crafted ciphertext, observe the
+plaintext, compare against expected structure to narrow the key). The
+real, practical implication: **the entire RDP-bypass effort this project
+spent real time on was never actually necessary to defeat this specific
+mechanism** -- the vulnerability was reachable the whole time, over the
+wire, from the Linux SoC side alone.
+
+### Also checked and ruled out as a leak: `CMD 0x85`
+
+`CMD 0x85`'s handler reads struct `0x20000238` offsets 3-5 and forwards
+them via `bl 0x8006228`/`0x80062fc` -- traced these two functions fully
+and found them to be a generic **internal event/message-queue primitive**
+(a 40-slot circular queue, `r0`=event type, `r1`/`r2`=data, real
+full/head/tail bit-flag bookkeeping) used by multiple commands
+(`CMD 0x81`'s init handshake posts 4 such events at startup too). Nothing
+here reaches a UART TX path -- it's purely internal firmware-to-firmware
+messaging, not an external echo. Not a leak.
+
+Other real UART outputs (`CMD 0x7F` version string, `CMD 0x30` battery
+voltage, the knob/touch/reverse-gear event frames) are intentional,
+designed-to-be-read status queries -- nothing secret is exposed by them,
+unlike `CMD 0x88`.

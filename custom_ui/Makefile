@@ -170,12 +170,33 @@ $(BUILD_DIR)/lvgl-obj/%.o: $(LVGL_DIR)/%.c
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 # --- Micro-AAP Sidecar Target ---
-.PHONY: $(ANDROIDAUTO_SIDECAR_TARGET)
-$(ANDROIDAUTO_SIDECAR_TARGET):
+# Real fix (2026-08-30): this target's own file path was previously
+# marked .PHONY -- a real anti-pattern, not a deliberate "always
+# rebuild" choice. .PHONY means Make never checks this file's
+# timestamp at all, so `androidauto-sidecar`/`all` could never tell
+# whether the staged copy was actually current; every build silently
+# re-ran the full recursive sub-make and re-copied unconditionally,
+# and anything depending on this target's mtime downstream would see
+# it as perpetually "just rebuilt." FORCE (a genuinely phony dummy
+# target, not this real file) still forces re-entry into the recursive
+# sub-make every time -- unavoidable, since micro_aap's own staleness
+# can't be known without invoking it -- but that sub-make already does
+# real dependency tracking internally (confirmed: reports "Nothing to
+# be done" when genuinely current), and the final copy is now only
+# performed, with output, when the sub-build's own result is actually
+# newer than what's already staged.
+.PHONY: FORCE
+FORCE:
+
+$(ANDROIDAUTO_SIDECAR_TARGET): FORCE
 	@mkdir -p $(dir $@)
 	$(MAKE) -C micro_aap BUILDROOT_OUTPUT_DIR=$(BUILDROOT_OUTPUT_DIR)
-	cp -f micro_aap/build/micro-androidauto-sidecar $@
-	@echo "Staged micro-androidauto-sidecar -> $@"
+	@if [ micro_aap/build/micro-androidauto-sidecar -nt $@ ] || [ ! -e $@ ]; then \
+		cp -f micro_aap/build/micro-androidauto-sidecar $@; \
+		echo "Staged micro-androidauto-sidecar -> $@"; \
+	else \
+		echo "$@ already up to date"; \
+	fi
 
 # --- CarPlay Sidecar Target ---
 $(SIDECAR_TARGET): $(SIDECAR_OBJS)

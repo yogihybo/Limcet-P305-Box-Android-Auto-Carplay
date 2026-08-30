@@ -2215,6 +2215,47 @@ single most concrete, well-defined next step for continuing this
 whole session's flash/SRAM access search, genuinely blocked on
 hardware access rather than more disassembly.
 
+**Real, sharper risk assessment, correcting an earlier understatement
+(2026-08-30).** `tools/mcu-probe`'s `--reboot-probe` command (added
+this session to run this exact experiment) was initially documented as
+merely "reboots the MCU, CAN relay/key-forwarding down for the
+outage." That undersold the actual risk, caught and corrected before
+anyone ran it on real hardware. Re-checking this project's own
+clean-room bootloader reimplementation (`hardware/MCU/bootloader/`,
+the only real, buildable stand-in for the unknown vendor code this
+project has): its `ymodem_receive_and_flash()` calls
+`flash_erase_app_pages()` **before it ever waits for a byte from the
+sender** -- erase-then-receive is standard IAP bootloader design, not
+an implementation quirk of this reimplementation, so the real vendor
+bootloader plausibly does the same thing. That means simply sending
+`CMD 0xE1` and never following up with a real YMODEM transfer could be
+enough to **wipe the application flash outright**, whether or not
+anyone probes for a read-back capability afterward.
+
+**This project has no way to recover from that.** The "have a reflash
+ready" mitigation this doc and `mcu-probe`'s own commit originally
+suggested is not real insurance: `hardware/MCU/can_app.bin` is the
+generic `DCn32-VOLVO-V2.10-20240909` reference build (confirmed
+byte-identical to one of the other 4 cross-vendor reference images
+this project holds -- see the "Important scope clarification" section
+near the top of this doc), not a dump of whatever firmware is actually
+flashed on a real physical unit's MCU today, and not confirmed to
+decode this specific vehicle's CAN bus correctly if written back.
+Writing it over a wiped chip would very plausibly leave real,
+vehicle-specific behavior (SWC key codes, reverse-gear/ACC-IGN
+triggers, illumination decoding) wrong or broken, not "restored."
+
+**Verdict: do not run `--reboot-probe` (or send `CMD 0xE1` by any
+other means) against real hardware until this gap is actually
+closed** -- either a genuine dump of the live, currently-flashed
+firmware exists, or there's a real, separately-verified answer for
+what to flash back if this wipes the chip. `mcu-probe --reboot-probe`
+now requires an explicit `--confirm-erase-risk` flag and refuses to
+run without it, specifically so this can't be triggered by habit or a
+copy-pasted command. This whole `CMD 0xE1` avenue stays open as a real
+lead, just correctly gated behind a real prerequisite it didn't have
+before.
+
 ---
 
 ## Real finding (2026-08-30): no bootloader dump exists in any of the other firmware images; this project's own clean-room bootloader has no read capability either, and its commit message doesn't match its own diff

@@ -114,6 +114,27 @@ read. `--sweep-settings` sends known, catalogued commands only.
 `--yes-i-am-sure` for that reason -- run it with someone watching/
 listening to the vehicle, not unattended, and be ready to Ctrl+C.
 
+**`--reboot-probe` is a different class of risk -- read this before
+using it.** It sends `CMD 0xE1`, the real, confirmed reboot-to-
+bootloader trigger. This project's own bootloader reimplementation
+(`hardware/MCU/bootloader/`) erases the application flash region
+*before* it ever waits for a byte from a sender -- standard IAP
+bootloader design, not an edge case, so the real vendor bootloader very
+plausibly does the same. That means simply sending `CMD 0xE1` and never
+following up with a real YMODEM transfer could be enough to **wipe the
+MCU's application firmware outright** -- and this project holds **no
+confirmed dump of what's actually flashed on a real physical unit** to
+restore it with. `hardware/MCU/can_app.bin` is the generic
+`DCn32-VOLVO` reference build (confirmed byte-identical to one of this
+project's other cross-vendor reference images -- see
+`docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md`'s scope-clarification
+section), not a backup of this unit's own firmware, and not confirmed
+to decode this vehicle's CAN bus correctly if written back. The command
+requires `--confirm-erase-risk` and refuses to run without it; do not
+pass that flag on real hardware until this gap is actually closed (a
+genuine dump of the live firmware, or a real answer for what to flash
+back).
+
 ## Build
 
 Same convention as `mcu-handshake` -- static ARM binary, no Makefile:

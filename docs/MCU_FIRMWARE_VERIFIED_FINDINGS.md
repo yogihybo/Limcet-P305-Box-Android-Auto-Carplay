@@ -1875,3 +1875,85 @@ every brand.** There is no per-device or per-batch key diversification
 of any kind. This is a single point of failure for the whole product
 family's anti-clone scheme, not an isolated weakness in this specific
 Prado installation.
+
+---
+
+## Real finding (2026-08-30), closing the `CMD 0x88` angle: the app-side "anti-clone" check has no consequence at all -- it decrypts, logs, and does nothing else
+
+Followed the key all the way through to its actual use, on the app
+side, to answer "what does the anti-clone key help us to do" for real
+rather than by inference. Traced `usr/lib/libMcuCenter.so`'s
+`MCUAdapter_BoxP300::onRecvMcuProtocol()` (the real function that
+receives every inbound MCU->SoC packet on this device, found via
+Ghidra headless decompilation, `0x0004bacc`, real ELF vaddr --
+Ghidra's own import for this `.so` uses a `+0x10000` address offset
+from `nm`'s reported vaddr, confirmed via the already-known
+`MCUAdapter_Box_Encryption` constructor address as a cross-check).
+
+**Real dispatch structure confirmed**: the function switches on the
+inbound packet's second byte (an opcode, `0x60` for the challenge
+*reply*, distinct from `0x88` which is the outbound challenge the SoC
+itself sends -- `0x88`/`0x60` are the request/response pair of the same
+exchange, not the same byte reused). The `0x60` case:
+
+1. Reads two 32-bit words out of the packet (bytes 3-6 and 7-10) via
+   `makeUInt_High()`.
+2. Stores them into a fixed global pointer (`puVar29`, resolved through
+   a GOT-relative load -- this is `DecryptValues`/`EncryptValues`, the
+   same global family the key traces to).
+3. Runs the **real, byte-exact TEA decrypt** on those two words, using
+   a 4-word key loaded from another global (`piVar27`, `EncryptKeys`)
+   -- confirmed matching TEA's real structure (`DELTA=0x9E3779B9`
+   equivalent as `0x61c88647` accumulator step, standard Feistel
+   `<<4`/`>>5` mixing).
+4. Writes the two decrypted words **back into the same `puVar29`
+   global** (overwriting the just-read ciphertext with the plaintext).
+5. Formats both the ciphertext (before decrypt) and plaintext (after)
+   into human-readable debug strings via `QString::number()` +
+   `QTextStream`, timestamped, and emits them through Qt's own
+   `qt_message_output()` logging path.
+
+**That is the entire handler.** No comparison against an expected
+value. No branch on success/failure. No flag set, no feature
+enabled/disabled, no session state changed, no error path taken. A
+full sweep of every reference to this same global pointer across the
+whole decompiled function (`grep` over every line touching `puVar29`)
+confirms it is written once (step 2) and read back exactly twice, both
+times only to format it into a debug-log string (steps 3's
+post-decrypt log and the earlier pre-decrypt log) -- never read by any
+conditional. This matches the earlier, independent finding via
+`FindDataXrefs.java` (Ghidra's `ReferenceManager`) that nothing else in
+`libMcuCenter.so` references `EncryptKeys`/`EncryptValues`/
+`DecryptValues`/`EncryptCount` at all.
+
+**Real, definitive answer to "what does the anti-clone key help us to
+do"**: on the stock app's own real code path, as it ships today,
+*nothing observable*. The MCU sends a challenge, the SoC app decrypts
+it, and the plaintext goes straight to a debug log line -- never to an
+`if` statement. There is no code anywhere in this library that would
+refuse to operate, degrade functionality, or even set a flag if the
+decrypted value were wrong. Two honest readings, both worth stating:
+
+- **As shipped, the "anti-clone" mechanism is inert** -- vestigial or
+  incomplete instrumentation, not an enforced gate. Cloning a box (or
+  reimplementing the MCU side without ever handling `CMD 0x88`/`0x60`
+  correctly) would produce no functional difference on the SoC app
+  side that this trace can find.
+- This does NOT rule out enforcement happening **MCU-side** instead
+  (i.e., the MCU itself withholding some other behavior pending a
+  successful challenge from its own perspective) -- that would be a
+  separate, not-yet-found code path in `can_app.bin`, not in this
+  library. Nothing in this session's MCU-firmware disassembly (the
+  full 9-entry dispatch table, the `CMD 0x88` handler itself) showed
+  any such gating either, but a dedicated re-pass of `can_app.bin`
+  specifically looking for "MCU refuses X until challenge succeeds"
+  logic has not been done and would be the one remaining way this
+  key could still matter functionally.
+
+**Practical upshot for this project**: recovering/knowing this key
+does not appear to unlock or need to be replicated for any real
+feature this project's own clean-room MCU firmware (`hardware/MCU/source`)
+needs to interoperate with the stock SoC app -- `tea_crypto.c` already
+implements the real algorithm/key faithfully for protocol completeness,
+but there is no evidence the SoC side actually depends on getting a
+correct answer back.

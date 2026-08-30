@@ -1484,6 +1484,38 @@ candidate would be equally useful (rules the hypothesis out cleanly).
 Blocked on hardware access to run, same as the other live-device
 experiments recorded in this doc.
 
+**Real cross-check against the actual `strace`-captured traffic
+(2026-08-30), weakens this hypothesis -- recorded honestly, not
+dropped.** The real 2026-07-22 `strace` capture of `ttyS2`
+(`docs/logs/directfb_strace.txt`) shows `MsnCoreApp` writing
+`[0xFA][arg1][arg2][arg3][len][payload...][chk][0xAF]`-framed data to
+this port -- a completely different frame format from the `[0x55]`-sync
+UART4/UART5 protocol this hypothesis is built on. Checked `can_app.bin`
+directly for any trace of `0xFA`/`0xAF` framing anywhere in the image
+(every one of the 144 `0xFA` bytes in the file, not a sample): all of
+them resolve to either a coincidental `cmp r0/r4, #0xfa` (`#250`)
+ring-buffer wrap-bound check -- unrelated to framing, sitting right
+next to the confirmed real `0x2E` sync-byte check -- or two unrelated
+bytes inside separate multi-byte Thumb-2 instruction encodings. **No
+`[0xFA]...[0xAF]` protocol implementation exists anywhere in this
+firmware image.**
+
+If `ttyS2` really is wired to a UART this same firmware implements,
+this firmware should recognize the framing it's actually being sent --
+it doesn't. Two honest readings, can't distinguish between them without
+a real live test: (a) `ttyS2`'s peer is a genuinely different board/
+chip, not this MCU at all -- matching `docs/1.3_MCU_ADAPTERS.md`'s own
+original speculation (a separate steering-wheel-control bridge, amp/
+DSP controller, etc.); or (b) the real, uncaptured Prado-specific
+firmware (this project only has the generic `DCn32-VOLVO` reference,
+see this doc's own scope-clarification section) implements an
+additional protocol the Volvo build simply doesn't have. `uart45-probe`
+is still worth running -- it's cheap and the `[0x55]` protocol might
+still be reachable via `ttyS2` at some baud even if it's not what
+produced this specific capture -- but this cross-check means a silent
+result there shouldn't be read as ruling out "ttyS2 = this MCU"
+entirely; it only rules out this one specific sub-hypothesis.
+
 ### `CMD 0x87`'s PIN-substitution bytes: exhaustively traced, no writer found
 
 Continuing the earlier open question (`CMD 0x87`'s handler embeds 4

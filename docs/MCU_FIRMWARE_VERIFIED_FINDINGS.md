@@ -2113,6 +2113,64 @@ isn't rediscovered from scratch, same as the `racerxdl` entry above.
 
 ---
 
+## Real, cheap safe-testing option found (2026-08-30/31): `EliasKotlyar/Canfilter` -- same chip, ~$10, zero risk to the real unit
+
+User shared [`EliasKotlyar/Canfilter`](https://github.com/EliasKotlyar/Canfilter),
+a reverse-engineered hardware + firmware project for a commercial
+CAN-filter device. Real, confirmed relevance: it's built around the
+**exact same chip** as this project's companion MCU --
+**STM32F105RBT** -- with **CAN1 on `PA11`/`PA12`**, the standard STM32
+mapping this project's own `can_driver.c` already assumes (CAN2 is on
+a non-default `PB05`/`PB06` remap on their board, irrelevant here --
+this whole project's CAN work has only ever concerned CAN1). Dev
+workflow is STM32CubeMX + SW4STM (a real, free Eclipse/GCC-based STM32
+IDE); this project's own plain Makefile + `arm-*-gcc` build doesn't
+depend on adopting their toolchain, only their hardware.
+
+**Confirmed real and cheap to acquire**: the user confirmed this is a
+device purchasable for about $10 -- resolves the one open question
+from the initial review (whether this requires fabricating a PCB from
+the published design vs. just buying the real thing).
+
+**What this genuinely solves, distinct from both other avenues above**:
+a real, physical STM32F105RBT to flash and run this project's clean-room
+firmware on, completely separate from the actual Limcet unit -- zero
+risk to whatever's really installed there. Specifically better than
+the SRAM test-execution plan (`docs/MCU_SRAM_TEST_EXECUTION_PLAN.md`)
+for one thing that plan can't do: **real flash-resident execution**,
+with correct wait-state timing (the SRAM plan's own honest caveat is
+that its zero-wait-state execution runs the calibrated delay loops --
+the `GPIOB14` SoC-reset-hold/stabilization sequence -- measurably
+faster than intended). It also means the `CMD 0xE1`/YMODEM
+bootloader-reflash cycle becomes something genuinely safe to exercise
+repeatedly, since there's no real firmware at stake on a $10 spare
+board.
+
+**What it can't test, stated plainly -- a different board, not a
+Limcet clone.** The Limcet-specific peripherals this firmware's own
+`main.c` drives -- `GPIOB14`'s SoC-reset control, the `GPIOC13`/`PC2`
+audio/camera-bypass relay, the touch-switch control, whatever the real
+board wires to UART4/5 -- simply don't exist on this alternate
+hardware. What it validates: CAN1 bus behavior, the UART protocol
+logic in the abstract, the `CMD 0xE1`/watchdog-reset/bootloader-entry
+mechanism (a chip-level property, not board-specific wiring), and
+basic build/toolchain correctness on real silicon. It does **not**
+validate the SoC-facing startup sequence or any Limcet-specific GPIO
+relay behavior -- the same class of gap already flagged for the SRAM
+plan, here because it's the wrong board rather than the wrong memory.
+
+**Real, concrete value as a genuine third option in this project's
+"test safely without risking the real unit" toolkit**, complementing
+rather than replacing the other two: `picopwner` (above) aims at
+*recovering* the real unit's actual firmware; the SRAM plan and this
+$10 board both aim at *safely running* this project's own clean-room
+replacement, with each covering what the other can't (SRAM: real
+board wiring but wrong timing/memory; Canfilter board: real flash
+timing but wrong board wiring). Not yet acquired or attempted --
+recorded here so it isn't rediscovered from scratch.
+
+---
+
 ## Consolidated summary (2026-08-30): every RDP-bypass / backdoor / bug-hunting angle considered this session
 
 Written up per explicit request, pulling together the full sweep across

@@ -1428,9 +1428,56 @@ by this project:
   streams a small fixed field back out over the same UART, one byte per
   subsequent interrupt call (5 bytes for `0x20`, 9 bytes for `0x32`).
 - Types `0x50`, `0xD3`, `0xD6` are **inbound**: subsequent bytes get
-  accumulated into small fixed-size fields (9, 3, 9 bytes respectively).
+  accumulated into small fixed-size fields. **Correction (2026-08-30,
+  re-traced precisely against each continuation handler's own entry
+  point and length check, not from memory)**: the real sizes are
+  `0x50`=3 bytes (struct offset `+0x4e`, continuation entry `0x8007908`),
+  `0xD3`=9 bytes (offset `+0x3f`, entry `0x80078ea`), `0xD6`=9 bytes
+  (offset `+0x5d`, entry `0x8007926`) -- this doc previously listed
+  these in a different order ("9, 3, 9 respectively" for
+  `0x50`/`0xD3`/`0xD6`); `0x50` and `0xD3`'s sizes were swapped.
 - All five fields live in one shared struct (base `0x20001365`, confirmed
   identical across UART4 and UART5's own copies of this handler).
+
+**Real, previously-uncaptured finding (2026-08-30): the `0x20`-type
+outbound field is NOT static -- something outside this ISR actively
+refreshes it, and that something also posts real SWC-style key
+events.** Searching every reference to the struct base `0x20001365`
+across the whole binary (not just inside the two ISRs) found a 4th,
+genuinely external hit at `0x800b990`, in a function starting around
+`0x800b8a0` -- far from either UART ISR. That function:
+- Decodes individual bits of a status byte at struct offset `+5`
+  (masks `0x10`/`0x02`/`0x04`/`0x20`/`0x40`/`0x80`/`0x01`) and, for two
+  of them, calls the exact same internal event-post primitive
+  (`0x80062fc`) with the exact same literal values (`0x4101`/`0x4001`)
+  this project already found and documented elsewhere as a real
+  Toyota-profile SWC key-press/release pair (see the earlier "one
+  handler fully decoded" CAN-dispatch finding, `mode=1 CAN ID 0x105`'s
+  handler) -- strong evidence this function is on the same key-event
+  path, not a coincidental reuse of those constants.
+- For most other bit patterns, instead sets a local "mode" value
+  (`r5` -- observed values `0`, `1`, `2`, `3`, `4`, `12`, `13`, `36`)
+  and falls through to a shared tail (`0x800b94c`) that -- gated on a
+  couple of flag bytes and `r5` not being `3`/`4` -- **copies struct
+  offset `+4` (a 4-byte word) and `+8` (a byte) directly into struct
+  offset `+0x21`**, i.e. straight into the `0x20`-type field's own 5
+  bytes, overwriting whatever the flash-populate function
+  (`0x80065b4`) set there at power-on (`00 00 00 00 FF`).
+
+**What this means, stated at the right confidence level**: the `0x20`
+query's real response is only `00 00 00 00 FF` *before* this update
+function has ever run. Once it runs (on whatever real trigger calls
+it -- not yet traced back further this pass), the response reflects
+whatever is currently at struct `+4`/`+8`, which this same function's
+neighboring code treats as related to vehicle status/alert bits, not a
+fixed hardware identifier. This ties the UART4/5 link -- previously
+characterized as a self-contained "device identification handshake" --
+into the same internal event/status pipeline the CAN-bus key-decoding
+logic uses elsewhere in this firmware. **Not yet resolved**: what
+actually calls this function (a periodic poll? a specific CAN frame's
+handler? gated on real vehicle state?), and what struct `+4`/`+5`/`+8`
+concretely represent beyond "status/alert-adjacent." A real, bounded
+follow-up, not chased further this pass.
 
 **Real confirmation, added 2026-08-30 in response to "does the firmware
 actually use UART4/5" -- yes, genuinely, not just a populated vector

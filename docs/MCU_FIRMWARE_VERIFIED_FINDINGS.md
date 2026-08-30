@@ -1530,3 +1530,69 @@ real documentation-hygiene gap that could have misled a future reader
 already been bypassed. Retracted in place, original text preserved
 for the historical record, real explanation and pointer to this
 project's actual findings added.
+
+---
+
+## Real firmware bug found (2026-08-30): CAN1 RX ring buffer has no "full" detection -- producer can silently overwrite unread frames
+
+Continued digging per explicit request ("there must be some bugs in
+there"). Found a real, concrete bug in `can_app.bin`'s own CAN1 receive
+path, not present in this project's own clean-room `can_driver.c` (which
+correctly implements the standard "reserve one slot" full-detection
+pattern this real firmware is missing).
+
+### The real structure, traced precisely
+
+- **Producer**: `CAN1_RX0` ISR (`0x08007065`, confirmed via the real
+  vector table). Reads a shared struct's head index (offset `0x12c`),
+  copies the CAN mailbox into `ring[head]` (a 16-slot, 20-bytes/slot
+  array at struct base `0x200002bc`), then **unconditionally**
+  `head = (head + 1) % 16` -- no check of any kind against the consumer's
+  read position before overwriting a slot.
+- **Consumer**: a loop inside the vehicle-CAN dispatch function (starts
+  around `0x8007fa0`, drains via `0x8007ff2` onward). This side IS
+  correctly guarded: after popping and dispatching one frame (tail index
+  at offset `0x12d`, same struct), it checks `head == tail` (`0x8008034`-
+  `0x8008042`) and only continues looping while there's more to drain --
+  a real, correct emptiness check. (An earlier pass of this same trace
+  briefly mis-read this as unguarded, having looked at an out-of-context
+  fall-through slice of the function in isolation -- corrected once the
+  real loop structure, including this check, was found.)
+
+### The real bug
+
+**The producer side has no reciprocal "is the ring full" check.** A
+properly-designed lock-free single-producer/single-consumer ring buffer
+needs *both* sides guarded -- the consumer must not read past an empty
+buffer (real firmware does this correctly) *and* the producer must not
+write past a full one (real firmware does **not** do this at all). This
+project's own clean-room `can_driver.c` gets this right (`next_head !=
+tail` check before writing, deliberately sacrificing one slot to make
+full unambiguous from empty) -- the real firmware never does.
+
+**Real, concrete trigger condition**: if 16 or more real CAN frames
+arrive on the vehicle bus before the main loop's dispatch function gets
+a chance to run even once (plausible during a burst of simultaneous ECU
+broadcasts, or if the MCU is busy servicing a UART command for a
+stretch), the 17th incoming frame's ISR write silently overwrites
+`ring[0]` -- data no one has read yet. Worse than simple loss: if the
+consumer happens to be mid-`memcpy` out of that exact slot when the ISR
+preempts it (the ISR can fire at any point, including mid-consumer-loop,
+since this is a real interrupt vs. main-loop relationship, not
+mutually exclusive), the consumer could process a **torn, partially-
+overwritten frame** -- acting on genuinely corrupted CAN data (wrong ID,
+wrong bytes) rather than either the old or new frame cleanly.
+
+**Real-world impact**: this is the same ring that feeds the Mode 1/2/3
+vehicle CAN dispatch tables (steering wheel controls, reverse gear,
+etc.) already documented elsewhere in this file -- a burst-triggered
+version of this bug would manifest as occasional dropped or corrupted
+button presses / gear-state transitions under heavy CAN bus load, not a
+security vulnerability but a genuine real-world reliability bug in the
+stock vendor firmware.
+
+Not fixed in this project's own clean-room `can_driver.c` since that
+file already implements the correct pattern independently -- recorded
+here purely as a real, disassembly-confirmed fact about the actual
+vendor firmware's own behavior, for anyone testing against real hardware
+who observes an occasional dropped/garbled CAN-sourced input under load.

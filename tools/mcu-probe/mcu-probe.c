@@ -213,6 +213,90 @@ int listen_window(int fd, int window_ms) {
     return count;
 }
 
+/* Raw, unfiltered byte capture for up to window_ms -- unlike
+ * listen_window()/read_mcu_frame(), this does NOT require a leading
+ * 0x2E or a valid checksum; every byte received is hex-dumped as-is.
+ * Needed for --reboot-probe: after CMD 0xE1 the MCU is expected to
+ * leave the normal BoxP300 protocol entirely (watchdog reset into a
+ * resident bootloader whose real wire protocol is unconfirmed -- see
+ * docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md's CMD 0xE1 section) --
+ * anything read_mcu_frame() would silently discard for not starting
+ * with 0x2E is exactly the data this experiment cares about. Prints
+ * a fresh hex line every time the read goes idle for >200ms, so a
+ * burst of bytes (e.g. a YMODEM 'C'/NAK poll) stays visually grouped
+ * without waiting for the whole window to end. */
+int raw_listen_window(int fd, int window_ms) {
+    int total = 0;
+    unsigned char buf[256];
+    int buf_len = 0;
+    struct timespec deadline, last_rx;
+    clock_gettime(CLOCK_MONOTONIC, &deadline);
+    last_rx = deadline;
+    deadline.tv_sec += window_ms / 1000;
+    deadline.tv_nsec += (window_ms % 1000) * 1000000L;
+    if (deadline.tv_nsec >= 1000000000L) {
+        deadline.tv_sec += 1;
+        deadline.tv_nsec -= 1000000000L;
+    }
+
+    for (;;) {
+        struct timespec now;
+        clock_gettime(CLOCK_MONOTONIC, &now);
+        double remaining = (deadline.tv_sec - now.tv_sec) + (deadline.tv_nsec - now.tv_nsec) / 1e9;
+        if (remaining <= 0)
+            break;
+
+        fd_set rfds;
+        FD_ZERO(&rfds);
+        FD_SET(fd, &rfds);
+        struct timeval tv;
+        double slice = remaining < 0.2 ? remaining : 0.2;
+        tv.tv_sec = (long)slice;
+        tv.tv_usec = (long)((slice - tv.tv_sec) * 1e6);
+
+        int sel = select(fd + 1, &rfds, NULL, NULL, &tv);
+        if (sel > 0) {
+            unsigned char b;
+            int n = read(fd, &b, 1);
+            if (n == 1) {
+                if (buf_len < (int)sizeof(buf))
+                    buf[buf_len++] = b;
+                total++;
+                clock_gettime(CLOCK_MONOTONIC, &last_rx);
+                continue;
+            }
+        }
+
+        /* idle slice elapsed with nothing new -- flush any pending line */
+        if (buf_len > 0) {
+            clock_gettime(CLOCK_MONOTONIC, &now);
+            double idle = (now.tv_sec - last_rx.tv_sec) + (now.tv_nsec - last_rx.tv_nsec) / 1e9;
+            if (idle >= 0.2) {
+                printf("      [RAW]");
+                for (int i = 0; i < buf_len; i++)
+                    printf(" %02X", buf[i]);
+                printf("   (ascii: \"");
+                for (int i = 0; i < buf_len; i++)
+                    putchar((buf[i] >= 0x20 && buf[i] < 0x7f) ? buf[i] : '.');
+                printf("\")\n");
+                fflush(stdout);
+                buf_len = 0;
+            }
+        }
+    }
+    if (buf_len > 0) {
+        printf("      [RAW]");
+        for (int i = 0; i < buf_len; i++)
+            printf(" %02X", buf[i]);
+        printf("   (ascii: \"");
+        for (int i = 0; i < buf_len; i++)
+            putchar((buf[i] >= 0x20 && buf[i] < 0x7f) ? buf[i] : '.');
+        printf("\")\n");
+        fflush(stdout);
+    }
+    return total;
+}
+
 /* ---- mcu-probe's own commands ---- */
 
 /* Real, disassembly-confirmed CMD 0xA0 setting IDs -- see
@@ -287,6 +371,53 @@ void cmd_send_raw(int fd, int cmd, const unsigned char *payload, int len) {
     printf("[*] Raw CMD 0x%02X, %d payload byte(s)\n", cmd, len);
     send_mcu_frame(fd, (unsigned char)cmd, payload, len, 1);
     listen_window(fd, 300);
+}
+
+/* --reboot-probe: send CMD 0xE1 (real, confirmed reboot-to-bootloader --
+ * writes magic 0x5555AAAA to SRAM 0x20004004, then the MCU spins,
+ * starving the IWDG until it force-resets the chip -- see
+ * docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md's CMD 0xE1 section), then stay
+ * on the SAME open fd and raw-capture every byte for a long window --
+ * no gap between send and listen (a separate process re-opening the
+ * port could miss the first bytes out of a fast-starting bootloader),
+ * and no 0x2E-framing assumption (the resident bootloader's real wire
+ * protocol during this window is UNCONFIRMED -- it almost certainly
+ * isn't the BoxP300 app protocol read_mcu_frame() expects; this is the
+ * whole point of using raw_listen_window() instead of listen_window()).
+ *
+ * THIS COMMAND REBOOTS THE MCU. Real, physical consequence: whatever
+ * the MCU currently drives (CAN bus relay, steering-wheel key forwarding,
+ * reverse-camera trigger, etc.) stops responding for the outage. Recover
+ * via the normal USB auto_upgrade.txt/can_app.bin YMODEM reflash path
+ * (tools/mcu_builder/) if the unit doesn't come back on its own -- have
+ * that ready before running this, not after. */
+void cmd_reboot_probe(int fd, int window_secs) {
+    printf("[*] CMD 0xE1 (reboot to bootloader) -- will send, then raw-capture "
+           "%ds of whatever comes back on the SAME open fd (no re-open gap, "
+           "no 0x2E-framing assumption). Expect a real MCU reset: CAN "
+           "relay/key-forwarding/etc. will be down for the outage.\n", window_secs);
+    send_mcu_frame(fd, 0xE1, NULL, 0, 1);
+    printf("[*] Sent. Watching for %ds -- bytes are grouped into a line "
+           "whenever the link goes idle for >200ms, so a burst (e.g. a "
+           "YMODEM 'C'/NAK poll loop) stays visually together...\n", window_secs);
+    int n = raw_listen_window(fd, window_secs * 1000);
+    if (n == 0) {
+        printf("[*] Silent for the whole window -- either the bootloader "
+               "sends nothing unprompted (plausible for a pure YMODEM "
+               "receiver waiting to be sent to, not a red flag by itself), "
+               "the reset didn't happen as expected, or the MCU is still "
+               "down/rebooting past this window. Try --send 0x81 0x01 "
+               "afterward (the known hello frame) to check whether the "
+               "normal application protocol is back, or extend the window "
+               "(--reboot-probe <bigger N>) if the IWDG timeout might be "
+               "longer than assumed.\n");
+    } else {
+        printf("[*] Received %d raw byte(s) total -- see [RAW] lines above. "
+               "Compare against standard YMODEM handshake bytes as a "
+               "baseline (0x43 'C' = CRC-mode poll, 0x15 NAK = checksum-mode "
+               "poll, 0x06 ACK, 0x18 CAN = cancel) -- anything else is the "
+               "real find this experiment is looking for.\n", n);
+    }
 }
 
 /* Sweeps every known-real CMD 0xA0 setting ID with one test value,
@@ -364,7 +495,13 @@ static void print_usage(const char *prog) {
         "                                   Send raw, empty-payload frames across a\n"
         "                                   CMD byte range -- unknown-command probing,\n"
         "                                   requires the confirmation flag\n"
-        "  --listen [seconds]               Just listen for MCU frames (default 10s)\n\n"
+        "  --listen [seconds]               Just listen for MCU frames (default 10s)\n"
+        "  --reboot-probe [seconds]         Send CMD 0xE1 (reboot to bootloader), then\n"
+        "                                   raw-capture everything for N seconds (default\n"
+        "                                   30) -- NOT filtered to 0x2E-framed traffic,\n"
+        "                                   unlike --listen. REBOOTS THE MCU -- have a\n"
+        "                                   YMODEM reflash ready in case it doesn't come\n"
+        "                                   back on its own.\n\n"
         "Examples:\n"
         "  %s --setting 0x0b 0x00           # test the id=0x0b 3-pin-enable candidate\n"
         "  %s --setting 0x00 0x01           # test the id=0x00 (GPIOB Pin1) candidate\n"
@@ -373,9 +510,10 @@ static void print_usage(const char *prog) {
         "  %s --sweep-cmds 0x00 0x1f --yes-i-am-sure 400\n"
         "  %s --audio-route 0x00            # relay dispatcher state 0 (real, reliable)\n"
         "  %s --audio-route 0x03            # relay dispatcher state 1 (real, reliable)\n"
-        "  %s --video-relay 0x01            # same relay via id=0x11 (gate unconfirmed)\n\n"
+        "  %s --video-relay 0x01            # same relay via id=0x11 (gate unconfirmed)\n"
+        "  %s --reboot-probe 30             # trigger CMD 0xE1, watch for 30s\n\n"
         "IMPORTANT: stop custom_ui first (it holds /dev/ttyHS0 exclusively).\n",
-        prog, prog, prog, prog, prog, prog, prog, prog, prog);
+        prog, prog, prog, prog, prog, prog, prog, prog, prog, prog);
 }
 
 int main(int argc, char **argv) {
@@ -469,6 +607,11 @@ int main(int argc, char **argv) {
         if (argi < argc) secs = atoi(argv[argi++]);
         printf("[*] Listening for %ds...\n", secs);
         listen_window(fd, secs * 1000);
+
+    } else if (strcmp(command, "--reboot-probe") == 0) {
+        int secs = 30;
+        if (argi < argc) secs = atoi(argv[argi++]);
+        cmd_reboot_probe(fd, secs);
 
     } else {
         print_usage(argv[0]);

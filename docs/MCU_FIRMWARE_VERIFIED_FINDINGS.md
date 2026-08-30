@@ -2054,3 +2054,116 @@ apart the same way this document has already found for other
 `CMD 0xA0`-family features (e.g. the `getSetItemText()`/
 `getSetItemValueTexts()` display-name/value-option drift documented
 earlier).
+
+---
+
+## Real finding (2026-08-30): `CMD 0xE1` traced end to end -- a real, deliberate reflash-mode trigger, but the actual receiver code isn't in this repo
+
+Continuing the general "can the Linux side reach SRAM/flash" search,
+`CMD 0xE1` (`SOC_CMD_REBOOT_BOOTLDR`, "Enter bootloader for update")
+was the next real candidate -- it's the one command in the whole real
+9-entry dispatch table whose documented purpose is literally "make the
+MCU do something with its own flash." Traced both ends, real
+disassembly/decompilation on each side.
+
+**MCU side (`can_app.bin`, `CMD 0xE1` handler, `0x80088e0`):** the
+handler is a two-instruction shell (`push {r4,lr}; bl 0x80045c4; pop
+{r4,pc}`) around the real payload at `0x80045c4`:
+
+```
+ldr r0, [pc, #8]   ; r0 = 0x5555AAAA   (a magic cookie constant)
+ldr r1, [pc, #12]  ; r1 = 0x20004004   (a fixed SRAM address)
+str r0, [r1, #0]   ; write the cookie there
+b.n  <self>        ; spin forever
+```
+
+Both literal words confirmed by reading the raw flash bytes directly
+(not trusting `objdump`'s garbled literal-pool disassembly): `0x5555AAAA`
+at `0x80045d0`, `0x20004004` at `0x80045d4` -- `0x20004004` is a real,
+valid SRAM address for this chip (STM32F105RBT6's SRAM is
+`0x20000000`-`0x2000FFFF`). No `AIRCR` write, no explicit
+`NVIC_SystemReset()` -- the handler just writes the cookie and halts.
+Given this project's own confirmed-real hardware watchdog
+(`project_watchdog_implemented.md` memory), the halt is a deliberate
+watchdog-starve: normal operation stops feeding the IWDG, and the
+already-configured timeout fires a real hardware reset shortly after.
+**SRAM content survives a watchdog reset** (only a power-on/BOR reset
+clears it) -- so this magic cookie is specifically designed to still be
+readable by whatever code runs immediately after that reset, before
+any `.bss`-clearing C runtime init could wipe it.
+
+**Real structural fact, not previously established this session:** this
+project's own linker script links the application at `0x08004000`, not
+`0x08000000` -- meaning flash `0x08000000`-`0x08003FFF` (16 KB) holds
+something else entirely: a genuinely separate first-stage bootloader,
+confirmed necessary by this project's own real field-update tooling
+(see below), not by the earlier fabricated `live_dumps` claim (that
+specific claimed dump of this exact region was fake and retracted --
+this section reaches the same "a bootloader region exists" conclusion
+completely independently, from the linker script and the real update
+flow, not from that discredited source).
+
+**SoC side (`libMcuCenter.so`, real update flow) -- corrects an
+assumption from `tools/mcu_builder/README.md`.** That README states
+the MCU has a USB port that detects `auto_upgrade.txt` directly; the
+real code says otherwise and is more specific. Decompiled the full
+chain for the active `MCUAdapter_BoxP300` class (Ghidra, `+0x10000`
+offset as established earlier this session):
+
+- `checkMCUUpdateFile()` (`MCUAdapter_BoxP200`, shared base, `0x3d038`)
+  -- scans **Linux-mounted disk partitions** (`FileSystemService::
+  getDiskPartitionPaths()`) for `auto_upgrade.txt`/the update binary.
+  This confirms the trigger file is detected by **Linux userspace
+  noticing a USB drive get mounted**, not by any MCU-side USB-host
+  logic -- the STM32F105RBT6 in this design has no USB host capability
+  used here at all.
+- `onStartUpdateMCU()` (`MCUAdapter_BoxP300`, `0x4a8f8`) -- opens the
+  found update file, computes the YMODEM block count from its size,
+  starts a timer.
+- `onSendUpdateReadyTimer()` (`MCUAdapter_BoxP300`, `0x4a3cc`) -- this
+  is the real, confirmed sender of `CMD 0xE1` itself
+  (`makeMCUProtocol(...,0xe1); ProtocolUtils::writeDatas(...)`), fired
+  on a repeating timer -- a periodic "get ready to be reflashed" ping
+  to the MCU, not a one-shot command.
+- `sendYModemDatas()` (`MCUAdapter_BoxP200`, shared base, `0x3ce0c`)
+  -- the actual byte-pump: builds one real YMODEM packet (header byte,
+  sequence byte, data block, `CRC16_YMODEM()` checksum) and calls
+  `ProtocolUtils::writeDatas()`. **Confirmed one-way send only** -- no
+  read/receive call anywhere in this function, no verify-by-reading-
+  back step.
+
+**Real, concrete conclusion**: the entire SoC-side update flow, across
+all 4 real functions actually driving it, is genuinely a plain,
+one-directional file-push mechanism -- Linux detects a USB-mounted
+update file, tells the MCU to get ready (`CMD 0xE1`, repeated on a
+timer), and streams YMODEM packets. **No read-back, verify-by-reading,
+or diagnostic capability of any kind exists in this SoC-side code.**
+This rules out `libMcuCenter.so`'s own update logic as a source of any
+Linux-side flash/SRAM read primitive -- it was worth checking precisely
+because it's the one place in the whole codebase that legitimately
+needs to talk about MCU flash content, and it still comes up empty.
+
+**What remains genuinely open, and can't be resolved by more static
+analysis**: the actual YMODEM-receiving code that runs on the MCU
+after the watchdog reset -- i.e., the real content of flash
+`0x08000000`-`0x08003FFF` -- is not present anywhere in this
+repository, and there is no trustworthy dump of it (the one claimed
+dump was fabricated and retracted earlier this session). This matters
+because **RDP Level 1 only gates the external SWD/JTAG debug port** --
+it has zero effect on this bootloader's own legitimate code execution,
+so if that unknown bootloader's real YMODEM/IAP protocol happens to
+implement (or is coerced into implementing, e.g. via a malformed
+packet) any read-back, verify, or diagnostic-readout capability, that
+would be a completely valid way to read flash/SRAM from the Linux side
+with no RDP bypass needed at all -- the same reasoning already
+established for why `CMD 0x88`'s decrypt oracle would have mattered,
+just aimed at a different, still-unknown piece of code. **This can
+only be answered by a real hardware experiment** (not available this
+session): trigger `CMD 0xE1` on the real device, then, during the
+post-reset window before/instead of sending a real YMODEM stream, send
+crafted bytes over `/dev/ttyHS0` and observe whether the bootloader
+responds to anything beyond the standard YMODEM handshake (`C`/NAK
+polling, `SOH`/`STX` block accept, `EOT` accept). Recorded here as the
+single most concrete, well-defined next step for continuing this
+whole session's flash/SRAM access search, genuinely blocked on
+hardware access rather than more disassembly.

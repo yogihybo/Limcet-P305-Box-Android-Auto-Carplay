@@ -7,6 +7,45 @@ of the real `hardware/MCU/can_app.bin` (31,996 bytes, SHA-256
 cross-checked byte-for-byte against the file on disk, not assumed from
 prior docs.
 
+## Important scope clarification (added 2026-08-30, applies retroactively to this whole doc)
+
+**`hardware/MCU/can_app.bin` is the generic `DCn32-VOLVO-V2.10-20240909`
+firmware, not a dump of the real, Prado-specific firmware actually
+flashed on this project's physical unit.** Confirmed by direct
+byte-for-byte comparison: `hardware/MCU/can_app.bin` and
+`firmware_dumps/MCU/DCn32-VOLVO-V2.10-20240909/can_app.bin` are
+byte-identical (same MD5, `bea19bfe...`) -- the same file, not two
+independent copies that happen to match. It's a USB update *payload*
+this project holds (`hardware/MCU/MCU_FIRMWARE_REVIEW.md` traces its
+real provenance and update mechanism in detail), not a live extraction
+from the running vehicle. The real firmware genuinely installed on the
+physical Prado unit has never been captured by this project -- see
+`hardware/MCU/live_dumps/README.md` for the one attempt that claimed to
+be exactly that, found fabricated, and retracted.
+
+**Why this doesn't invalidate the findings below.** Every real,
+disassembly-confirmed mechanism this doc documents -- UART wire
+framing, the 9-entry command dispatch table and its handler logic,
+`CMD 0x88`'s TEA cipher, `CMD 0xE1`'s reboot-to-bootloader trick, RDP1
+behavior, the ring-buffer bugs, GPIO pin functions -- is architecture/
+firmware-codebase-level, not vehicle-profile-level. This project's own
+5-firmware cross-check (the "CMD 0x90 -- disproven" section, and the
+shared-TEA-key section) already established that all 5 real reference
+images it holds -- this Volvo build included -- are the same `DCn32`
+codebase with only CAN IDs and vehicle-specific tables differing.
+**What is NOT trustworthy as Prado-specific**: the CAN ID tables
+(Mode 1/2/3 dispatch, §4 of `docs/1.3.1_MCU_FIRMWARE_DECOMPILATION.md`)
+and any vehicle-profile-specific value -- those are real for a Volvo,
+not confirmed for a Toyota Prado. Several places in this doc refer to
+"this device's own `can_app.bin`" as informal shorthand for "the
+`can_app.bin` file this project holds as ground truth" (as opposed to
+one of the other 4 reference images checked for cross-comparison) --
+read that phrase with this clarification in mind, not as a claim that
+this exact binary is confirmed to be what's currently flashed on the
+physical vehicle's MCU.
+
+---
+
 ## Why this doc exists
 
 `docs/HANDOFF_MCU_AUDIO_I2C.md` and `docs/1.3.1_MCU_FIRMWARE_DECOMPILATION.md`
@@ -1545,10 +1584,18 @@ pattern this real firmware is missing).
 
 - **Producer**: `CAN1_RX0` ISR (`0x08007065`, confirmed via the real
   vector table). Reads a shared struct's head index (offset `0x12c`),
-  copies the CAN mailbox into `ring[head]` (a 16-slot, 20-bytes/slot
+  copies the CAN mailbox into `ring[head]` (a **15**-slot, 20-bytes/slot
   array at struct base `0x200002bc`), then **unconditionally**
-  `head = (head + 1) % 16` -- no check of any kind against the consumer's
-  read position before overwriting a slot.
+  `head = (head + 1) % 15` -- no check of any kind against the consumer's
+  read position before overwriting a slot. (Corrected 2026-08-30 from an
+  earlier, wrong "16-slot"/`% 16` claim in this same section -- the real
+  wrap check, read directly from the ISR's own disassembly, is
+  `cmp r0,#15; blt <skip-reset>`, i.e. head cycles through indices
+  `0..14` and resets to `0` on reaching `15`: a genuine 15-slot ring.
+  This matches `hardware/MCU/MCU_FIRMWARE_REVIEW.md` and
+  `docs/1.3.1_MCU_FIRMWARE_DECOMPILATION.md`'s independent "15-slot"
+  finding -- this doc's own number was the one that was wrong, found via
+  a cross-doc consistency check.)
 - **Consumer**: a loop inside the vehicle-CAN dispatch function (starts
   around `0x8007fa0`, drains via `0x8007ff2` onward). This side IS
   correctly guarded: after popping and dispatching one frame (tail index
@@ -1822,7 +1869,7 @@ section above with the full trace.
 
 | Bug | Real-world effect |
 |---|---|
-| CAN1 RX ring buffer has no "full" detection | Producer (ISR) can silently overwrite unread CAN frames under a 16+ frame burst; if it preempts the consumer mid-read, a torn/corrupted frame can be processed. Could manifest as dropped/garbled steering-wheel or reverse-gear signals under heavy bus load. |
+| CAN1 RX ring buffer has no "full" detection | Producer (ISR) can silently overwrite unread CAN frames under a 15+ frame burst; if it preempts the consumer mid-read, a torn/corrupted frame can be processed. Could manifest as dropped/garbled steering-wheel or reverse-gear signals under heavy bus load. |
 | UART2 (SoC-facing) RX ring has the identical missing check | Same bug, same root cause, on the link `custom_ui`/`tools/mcu-probe` actually use. A software burst of 8+ frames without pacing (easily achievable at 38400 baud) can trigger it -- practical guidance: pace frame sends rather than blasting a batch. |
 | `CMD 0x87`'s `"AT+PIN="` digit-substitution bytes are never written anywhere in the reachable firmware | Sits in zero-initialized `.bss` -- the real command almost certainly transmits NUL bytes instead of a valid PIN, a dead/broken vendor feature rather than a working weak-credential backdoor. |
 

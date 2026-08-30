@@ -231,16 +231,63 @@ construction.
   deliberately left for when this plan is actually executed rather than
   spinning up build infra ahead of a documented go-ahead.
 
+## Does this function the same as running from flash? No -- two real, concrete differences (2026-08-30)
+
+Asked directly, checked against the real source rather than assumed.
+Two genuine reasons a full-firmware SRAM test is not a faithful
+end-to-end validation of real, flashed behavior:
+
+1. **The SoC-facing startup sequence is unobservable, not just
+   degraded.** `hardware/MCU/source/src/main.c`'s very first real
+   action holds `GPIOB` Pin 14 (the real ArkMicro SoC hardware-reset
+   line, disassembly-confirmed) low for 50ms, then releases it -- but
+   this project already hard-confirmed on real hardware that
+   **connecting SWD itself holds the whole SoC in reset independent of
+   this GPIO** (the "Connecting SWD holds the whole head unit in
+   reset" caveat above, and `main.c`'s own comment cites it directly).
+   During any SWD-based SRAM test, this firmware's own reset-release
+   sequence runs, but the SoC won't actually come up regardless -- there
+   is no way to observe whether that sequence *works* to bring up a
+   live SoC this way, since the debugger's presence overrides it
+   entirely. This is the single most fundamental thing this firmware
+   does, and it's specifically the one thing this test method can't
+   validate.
+2. **Timing-calibrated code runs measurably faster than intended.**
+   `main.c` has exactly two hand-calibrated NOP-spin delay loops
+   (`for (volatile uint32_t i = 0; i < 360000...)` for the 50ms
+   reset-hold, `< 1080000` for a 150ms power-stabilization wait) --
+   checked, and the only timing-calibrated loops anywhere in the
+   source (every other loop found is bounded by a real data length,
+   not a raw iteration count). These are presumably tuned assuming
+   flash execution at the 2 wait states `clock_init()` itself
+   configures for 72MHz. SRAM access on this chip is zero-wait-state --
+   each loop iteration takes fewer CPU cycles from SRAM than from
+   flash, so both delays would run measurably *shorter* than their
+   real-world intended duration in an SRAM test.
+
+**What remains validly testable despite both of these**: CAN1 bus
+behavior (physically independent of the SoC-reset mechanism) and
+UART4/5's protocol (talks to some other external device, not the SoC)
+-- neither relies on the SoC coming up or on either calibrated delay.
+Other GPIO not tied to the SoC-reset sequence should also behave
+normally. **Not tested faithfully this way**: anything about the
+USART2/SoC-link protocol, or the real-world timing of the SoC
+reset-hold/stabilization sequence itself.
+
 ## What this is genuinely good for
 
-Iterating on hypotheses this session's static analysis reached a real
-limit on -- for example, the UART4/5 investigation's open question
-(`docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md`'s "what information transits
-UART4/5" section): a modified test build with extra instrumentation, or
-one that directly exercises the same `0x20`/`0x32`/`0x50`/`0xD3`/`0xD6`
-message types against real hardware, could observe real behavior no
-amount of further disassembly can settle on its own -- with zero risk
-to whatever's actually flashed on the device.
+Given the above, this is best used narrowly, not as a general
+"does the firmware work" test: iterating on hypotheses this session's
+static analysis reached a real limit on, specifically for subsystems
+independent of the SoC-reset sequence -- for example, the UART4/5
+investigation's open question (`docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md`'s
+"what information transits UART4/5" section): a modified test build
+with extra instrumentation, or one that directly exercises the same
+`0x20`/`0x32`/`0x50`/`0xD3`/`0xD6` message types against real
+hardware, could observe real behavior no amount of further
+disassembly can settle on its own -- with zero risk to whatever's
+actually flashed on the device. Not a substitute for a real,
+end-to-end flash-based test of the SoC-facing startup behavior.
 
 ## Critical files
 - `hardware/MCU/source/stm32f105_app.ld` -- reference for the new

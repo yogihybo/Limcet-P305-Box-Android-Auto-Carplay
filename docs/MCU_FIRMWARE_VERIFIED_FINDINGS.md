@@ -1479,6 +1479,37 @@ handler? gated on real vehicle state?), and what struct `+4`/`+5`/`+8`
 concretely represent beyond "status/alert-adjacent." A real, bounded
 follow-up, not chased further this pass.
 
+**Focused re-check (2026-08-30), specifically for the classic
+"unbounded UART-fed buffer write -> stack/adjacent-memory overflow"
+vulnerability class** -- re-verified against the now-corrected field
+sizes above, not assuming the general "no overflow found anywhere"
+conclusion from the earlier broad sweep still holds without checking.
+Traced the exact write-vs-check instruction order for all three
+inbound types (`0x50`, `0xD3`, `0xD6`), the ones that write
+attacker-controlled bytes: each continuation handler writes the
+received byte at `field[idx]` *before* checking `idx` against the
+field's size (`0x8007850`/`0x78ea`/`0x7908`/`0x7926` region) -- the
+same "check-after-write" shape that would be genuinely dangerous if
+`idx` could ever exceed the field bound first. It can't, verified two
+ways: (1) `idx` is explicitly seeded to `0` at session entry for all
+three types (`0x786a`/`0x785a`/`0x787a`), and (2) the bounds check
+fires immediately after the write that brings `idx` to the field's own
+size (`3`/`9`/`9`), at which point it resets *both* the outer state
+variable and `idx` to `0` (idle) before any further byte can be
+processed -- so the write index used on any given call is always
+strictly `< field_size`, never equal to or past it. A byte received
+mid-session that happens to match another type byte (e.g. `0x55` or
+`0x20`) is still just treated as ordinary accumulated data, not
+re-interpreted -- no state-confusion path either. **No overflow, out-
+of-bounds write, or out-of-bounds leak exists in this protocol's real
+implementation**, for either direction (inbound writes or outbound
+reads), under this specific attack framing. This firmware also has no
+shared, generic "CheckUART"-style length-validation routine the way
+the vulnerability class describes (each protocol -- `USART2`'s `0x2E`
+frames, this `0x55`-sync protocol -- implements its own independent,
+hardcoded-size state machine) -- there's no single validation function
+whose failure would compromise multiple protocols at once.
+
 **Real confirmation, added 2026-08-30 in response to "does the firmware
 actually use UART4/5" -- yes, genuinely, not just a populated vector
 table entry.** Traced the real init code for both peripherals (call

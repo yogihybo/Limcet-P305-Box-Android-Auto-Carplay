@@ -1996,6 +1996,46 @@ checks for).
   in 2020+ chip revisions" -- this board's exact silicon revision/date
   code is unverified.
 
+### Real wiring table and USART choice, re-checked directly against the repo (2026-08-30)
+
+Pulled the actual current README rather than relying on the earlier
+search summary. Real Pi Pico <-> STM32F1 wiring:
+
+| Pi Pico | STM32F1 |
+|---|---|
+| GND | GND |
+| GPIO1 (UART0 RX) | `USARTx_TX` (dump output) |
+| GPIO2 | `VDD` (power-glitch control) |
+| GPIO4 | `NRST` |
+| GPIO5 | `BOOT0` |
+
+Real USART TX pin mapping the tool supports: USART1=`PA9`,
+USART2=`PA2`, USART3=`PB10`.
+
+**Real, direct cross-check against this project's own confirmed pin
+findings -- USART1/`PA9` is the clean choice, not an arbitrary pick.**
+This session already confirmed USART2's real TX pin is `PA2` (the SoC
+link, `ttyHS0`) and USART3's real TX/RX pins are `PB10`/`PB11`
+(the Bluetooth AT relay) -- both already load-bearing, real links.
+**USART1 is the one peripheral this firmware confirmed is a genuine
+no-op stub** (`bx lr`, see the "every real entry point" table above) --
+completely unused, on `PA9`. If this exploit is ever attempted, target
+firmware built for USART1 avoids any possible pin/bus conflict with
+the two real, active links -- worth building for that option first,
+not defaulting to USART2 just because it's the most familiar port.
+(`PA9`'s physical accessibility on this specific board is unverified,
+same open item as `BOOT1`'s pull-up point.)
+
+**Real, concrete failure modes the tool's own docs list** (worth
+checking against this board's actual hardware before attempting, not
+just noted as a rebuttal if the exploit fails): excess capacitance on
+the power/reset lines defeating the glitch timing, the target drawing
+enough current to need MOSFET buffering on the Pico's power-control
+GPIO, picking the wrong USART peripheral, and the debug probe still
+being connected when the glitch fires (it must genuinely disconnect
+first, not just idle). None of these are checked/ruled out for this
+board yet.
+
 **Verdict: a real, credible, chip-family-matched avenue, not closed by
 anything found this session.** Since it needs the same core hardware
 (Pico + `NRST` + switchable power) already on the shopping list for

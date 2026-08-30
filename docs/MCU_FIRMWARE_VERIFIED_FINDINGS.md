@@ -2167,3 +2167,80 @@ polling, `SOH`/`STX` block accept, `EOT` accept). Recorded here as the
 single most concrete, well-defined next step for continuing this
 whole session's flash/SRAM access search, genuinely blocked on
 hardware access rather than more disassembly.
+
+---
+
+## Real finding (2026-08-30): no bootloader dump exists in any of the other firmware images; this project's own clean-room bootloader has no read capability either, and its commit message doesn't match its own diff
+
+Checked all 4 non-this-device reference firmware images
+(`firmware_dumps/MCU/DCn32-VOLVO-V2.10-20240418`,
+`DCn32-VOLVO-V3.00-20240403`, `DCn32-VOLVO-V2.10-20240909`,
+`DCn32-ACURA-V1.01-20250409`) for a bootloader dump, following up on
+the previous section's "the real bootloader isn't in this repo"
+conclusion. **None of them are one** -- every file's real size (31804 /
+31964 / 31996 / 24624 bytes) is consistent with app-only content
+(comfortably under 32 KB), never the ~48 KB+ a combined bootloader
+(16 KB, `0x08000000`-`0x08003FFF`) + app (32 KB, `0x08004000`+) image
+would need. Same structural conclusion as this device's own
+`can_app.bin` -- all 5 real reference images this project has are
+app-only.
+
+**A second, real thing surfaced while checking**: this repo already
+has its own `hardware/MCU/bootloader/` -- a clean-room STM32F105 IAP
+bootloader implementation (`git log`: commit `02b46048`, predates this
+session, 2026-08-28), independent of and not previously cross-linked
+to this session's own `CMD 0xE1` trace above. Worth checking closely
+given the exact coincidence: its `bootloader.h`/`stm32f105.h` already
+define `BOOTLOADER_MAGIC_ADDR 0x20004004` / `BOOTLOADER_MAGIC_VAL
+0x5555AAAA` -- byte-exact matches for the values this session
+independently re-derived via fresh disassembly in the previous
+section. This isn't a new discovery colliding with an old one by
+chance -- it's confirmation that an earlier, unsummarized pass of this
+project already did this exact `CMD 0xE1` disassembly (also recorded,
+found while checking, in `hardware/MCU/MCU_FIRMWARE_REVIEW.md`,
+`docs/1.3.1_MCU_FIRMWARE_DECOMPILATION.md`, and
+`docs/1.3_MCU_ADAPTERS.md` -- all three already had this same magic-
+cookie/watchdog-reset finding on record). This session's independent
+re-derivation in the previous section is real and address-verified,
+just not novel -- flagged here so it's not miscredited.
+
+**Read the actual bootloader source** (`main.c`, `ymodem.c`) to check
+whether it implements any memory-read capability. It does not:
+`main.c`'s entire flow is `check magic -> jump to app` or `run
+ymodem_receive_and_flash() -> jump to app -> else AIRCR system reset`;
+`ymodem.c` implements exactly `flash_unlock()`/`flash_lock()`/
+`flash_erase_app_pages()`/`flash_write_page()`/the YMODEM receive loop
+itself (`SOH`/`STX`/`EOT` framing, CRC16) -- a plain write-only IAP
+receiver, structurally consistent with the one-way `sendYModemDatas()`
+push already traced on the SoC side. No read-flash/read-SRAM function
+exists anywhere in this file.
+
+**Real, honest discrepancy worth recording**: the commit that added
+this bootloader is titled *"add cleanroom STM32F105 IAP bootloader and
+diagnostic memory read command (0x90)"* -- but its actual diff touches
+only `hardware/MCU/bootloader/*`, and grepping that diff and the
+current file contents for `0x90`/`DIAG`/`diagnostic`/`READ_MEM` finds
+nothing at all. The "diagnostic memory read command (0x90)" the
+message describes was never actually implemented in this bootloader --
+most likely a stale/copy-pasted commit message from the same session
+that (per `git log -S`) also touched the app-side `SOC_CMD_DIAG_READ_MEM`
+definition this session already found, confirmed real across zero of 5
+firmware images, and removed as fabricated (see the "CMD 0x90 --
+disproven" section above). Whatever the cause, the practical fact
+matters more than the label: **this project's own clean-room
+bootloader, as it stands today, has no read-flash or read-SRAM
+capability of any kind, by direct inspection of its complete real
+source** -- consistent with, not contradicting, the app-side `CMD 0x90`
+finding.
+
+**Net answer to "is there a bootloader dump/read-capable bootloader
+anywhere in this project"**: no, on both counts checked. The 4 other
+real reference firmware images are all app-only, and this project's
+own clean-room bootloader (the only "bootloader" that exists anywhere
+in this repo as real, buildable source) is a plain write-only IAP
+receiver with a commit message overclaiming a diagnostic feature that
+was never actually written. The genuinely unknown quantity remains
+exactly what the previous section already identified: the REAL vendor
+bootloader that ships on actual hardware at `0x08000000`-`0x08003FFF`
+-- still not present in this repo, still only resolvable by a live
+hardware experiment, not by anything checkable in source.

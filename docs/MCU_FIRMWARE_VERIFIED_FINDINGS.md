@@ -1432,6 +1432,27 @@ by this project:
 - All five fields live in one shared struct (base `0x20001365`, confirmed
   identical across UART4 and UART5's own copies of this handler).
 
+**Real confirmation, added 2026-08-30 in response to "does the firmware
+actually use UART4/5" -- yes, genuinely, not just a populated vector
+table entry.** Traced the real init code for both peripherals (call
+sites at `0x8007718`/`0x80079de`, right before each handler in the
+binary): both explicitly enable their `RCC->APB1ENR` clock-gate bit via
+a shared helper function (`0x8006860`, a generic
+`rcc_apb1_clock_gate(mask, enable)`) --
+`lsls r0, r1, #19` (`UART4EN`, bit 19) for UART4, `lsls r0, r1, #20`
+(`UART5EN`, bit 20) for UART5, both with `enable=1`. Each call site is
+also preceded by two calls to a GPIO pin-config helper (TX+RX pin
+setup) and followed by a real `USART_Init()`-style config call with a
+populated struct -- **both peripherals are configured for 9600 baud**
+(`mov.w r0, #9600` written into the struct's baudrate field, verified
+via the actual init-function call, not assumed). This is new,
+previously-uncaptured information -- the original protocol decode
+above documented the wire format but not the baud rate. If ever
+testing this protocol against a real candidate port, try 9600 baud
+first as the disassembly-confirmed value, not just a guess from the
+existing 9600/19200/38400/115200 fallback list this project uses
+elsewhere.
+
 **Traced the real populating function for this struct** (`0x80065b4`,
 called from... its own callers not individually chased further, out of
 scope for this pass) and found it copies from 5 fixed FLASH-resident

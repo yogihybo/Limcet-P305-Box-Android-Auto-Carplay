@@ -1836,3 +1836,42 @@ section above with the full trace.
 
 - **UART4/UART5** implement a small, genuine device-identification handshake protocol (sync byte `0x55`, 5 message types) with a real flash-baked identifier string, `"cD31"` -- not Bluetooth as `docs/1.3.1_MCU_FIRMWARE_DECOMPILATION.md`'s own guess had it (that's confirmed to be `USART3` instead, via its real peripheral base address). Properly bounded, no vulnerability, but a genuinely new fact about this hardware.
 - **`CMD 0x85`** was checked as a possible leak candidate and ruled out -- it forwards data to a generic internal 40-slot event queue, never reaching a UART TX path.
+
+---
+
+## Real finding (2026-08-30), continuing the `CMD 0x88` angle: the weak TEA key is a single, shared secret across the whole product line, not per-device
+
+Went back to `CMD 0x88` per explicit request. Given it's a full
+decryption oracle with a ~32-bit-effective key (already documented),
+the natural next question: is this key unique to this specific device,
+or shared?
+
+**Checked directly against all 4 other real firmware images this
+project has, by searching for the exact 16-byte key representation
+(`6D 00 00 00 7C 00 00 00 A9 00 00 00 C4 00 00 00`) in each binary's
+raw bytes:**
+
+| Firmware | Key found? | Offset |
+|---|---|---|
+| `hardware/MCU/can_app.bin` (this device) | Yes | `0x7cac` |
+| `DCn32-VOLVO-V2.10-20240418` | Yes | `0x7bec` |
+| `DCn32-VOLVO-V3.00-20240403` | Yes | `0x7c88` |
+| `DCn32-ACURA-V1.01-20250409` | Yes | `0x5ff8` |
+
+**The identical key is present in every single one** -- including the
+Acura variant, which is confirmed elsewhere in this document to have a
+genuinely different command set (7 dispatch entries vs. 9, missing
+`CMD 0x84`/`0x87` entirely). This isn't a per-device, per-vehicle-brand,
+or even per-firmware-variant secret -- it's one single, global key baked
+into the entire "DCn32" product line.
+
+**Real, escalated security implication**: combined with the earlier
+finding that `CMD 0x88` is a full, unrestricted decryption oracle
+reachable over the same UART link every unit exposes, this means
+**extracting or brute-forcing this key from any single unit -- of any
+vehicle brand this vendor ships this platform under -- immediately
+compromises the "anti-clone" authentication on every other unit of
+every brand.** There is no per-device or per-batch key diversification
+of any kind. This is a single point of failure for the whole product
+family's anti-clone scheme, not an isolated weakness in this specific
+Prado installation.

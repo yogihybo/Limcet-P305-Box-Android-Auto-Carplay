@@ -38,17 +38,35 @@ uart45-probe [-p port] [-b baud] [-w window_ms]
 ```
 
 Defaults: `/dev/ttyS2`, 115200 baud, 1500ms listen window per query
-(baud is genuinely unconfirmed for this link -- try 9600/19200/38400
-too if 115200 comes back silent, same fallback order
-`tools/uart-test/` already uses for this port).
+(baud is genuinely unconfirmed for this link). **Try `-b 9600` first**
+-- this session confirmed via the real init-code disassembly that
+UART4/UART5 on the MCU side are both actually configured for 9600
+baud (see `docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md`'s UART4/5 section),
+not a guess. Fall back to 19200/38400/115200 if that's silent, same
+order `tools/uart-test/` already uses for this port.
 
 ```
 killall MsnCoreApp    # frees ttyS2, same requirement as tools/uart-test/
-./uart45-probe
-./uart45-probe -b 38400
-./uart45-probe -b 9600
+./uart45-probe -b 9600     # try this first -- the confirmed MCU-side baud
 ./uart45-probe -b 19200
+./uart45-probe -b 38400
+./uart45-probe             # 115200, the tool's default
 ```
+
+**Real caveat, checked after this tool was first written -- read before
+expecting a result.** The one actual live capture of `ttyS2` traffic
+this project has (a 2026-07-22 `strace`, not a direct listen) shows
+`MsnCoreApp` sending `[0xFA]...[0xAF]`-framed data, a completely
+different frame format from the `[0x55]`-sync protocol this tool
+tests. A full check of `can_app.bin` found **zero** trace of
+`[0xFA]...[0xAF]` framing anywhere in the image -- so if `ttyS2`'s real
+peer is genuinely speaking that captured format, this tool's queries
+won't get a meaningful response from it, and a silent result doesn't
+cleanly rule out "ttyS2 = this MCU's UART4/5" either way. Still worth
+running -- cheap, and the two protocols could coexist on the same link
+at different times -- but go in with that context, not the original,
+more confident framing. Full reasoning in
+`docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md`'s UART4/5 section.
 
 Also usable against any other candidate port (e.g. `-p /dev/ttyHS0` to
 rule out cross-talk, though `ttyHS0`'s own protocol is well-understood

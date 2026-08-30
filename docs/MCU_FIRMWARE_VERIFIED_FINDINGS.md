@@ -2505,3 +2505,78 @@ exactly what the previous section already identified: the REAL vendor
 bootloader that ships on actual hardware at `0x08000000`-`0x08003FFF`
 -- still not present in this repo, still only resolvable by a live
 hardware experiment, not by anything checkable in source.
+
+---
+
+## Real finding (2026-08-30): what information actually transits the UART4/5 link -- traced as far as static analysis can go
+
+Following the field-size correction and the discovery of the external
+`0x20`-field-updating function (both above), asked directly: what real
+information moves over this link, in each direction, and how far can
+it be traced?
+
+### Outbound (MCU -> peer) -- two genuinely different kinds of data
+
+- **Type `0x32`'s field is a fixed, hardcoded identifier**, confirmed
+  at its real flash source location: the string `"   cD31"` (three
+  spaces then `cD31`) plus a NUL and a trailer byte `0x93` lives at
+  `0x0800BBCD`-`0x0800BBD5`, immediately preceded (at `0x0800BBC8`) by
+  the tail end of the CAN Mode-1 dispatch table (its last entry,
+  `0x035 -> 0x0800ABC9`) -- confirming this data sits in the firmware's
+  general-purpose "static tables and constants" region, not somewhere
+  suggesting live/derived content. This is genuinely just "here's what
+  kind of module I am" -- a real identification string, nothing more.
+- **Type `0x20`'s field is not fixed** (see the prior section) -- it
+  reflects live struct data (offsets `+4`/`+8`) that an external
+  function refreshes, and that same function also posts real SWC
+  key-press/release events for other input patterns. The *real-world
+  meaning* of struct `+4`/`+8` themselves was not resolved this pass
+  (see below for why) -- what's established is that this field is
+  genuinely dynamic and tied to the same subsystem as steering-wheel
+  key decoding, not that its specific numeric meaning is known.
+
+### Inbound (peer -> MCU) -- accumulated, but provably never used
+
+**Definitive, not just "not found yet":** the struct base address
+(`0x20001365`) has exactly 4 references anywhere in the entire 32KB
+firmware image -- the flash-populate function (`0x80065b4`), UART4's
+own ISR, UART5's own ISR, and the external `0x20`-field-update function
+found this session. All 4 were individually examined. **None of them
+read** the three inbound fields (`0x50` at `+0x4e`/3 bytes, `0xD3` at
+`+0x3f`/9 bytes, `0xD6` at `+0x5d`/9 bytes) after the UART ISR
+populates them -- the update function only ever *writes* into `+0x21`
+(the `0x20` field), never reads from `+0x3f`/`+0x4e`/`+0x5d`. Since a
+literal-pool cross-reference search is exhaustive for this struct base
+(any code touching these offsets would need to load this same base
+address first, and all such loads were enumerated), this is a clean,
+provable negative: **whatever a real peer sends via types `0x50`/
+`0xD3`/`0xD6` is accepted, stored, and never acted on anywhere in this
+firmware image.** Matches a recurring pattern already documented
+elsewhere in this codebase (`CMD 0x87`'s PIN-substitution bytes, the
+app-side `CMD 0x88` anti-clone check) -- write-only/dead-end data
+paths are a real, repeated characteristic of this firmware, not a
+one-off.
+
+### Where the trace genuinely stops
+
+The external `0x20`-field-update function (`0x800b8a0`) is invoked
+through a function pointer stored in a small data table at
+`0x800bbf0`, immediately following the flash-resident field-source data
+-- confirmed via a direct hit (`0x800b8a1`, the Thumb-bit-set form)
+found in that exact table slot. **No code anywhere in the firmware
+references this table's address as a literal** -- ruling out the
+simple "fixed address, direct call" pattern this project's disassembly
+technique (literal-pool cross-referencing) handles well, and pointing
+instead to a runtime-computed table walk (a base address plus a
+variable index/stride), which this technique can't resolve without a
+much deeper, dedicated trace of whatever computes that index. Not
+pursued further this pass -- a real, bounded next step if this
+specific question (what real-world trigger refreshes the `0x20`
+field, and what do struct `+4`/`+5`/`+8` concretely represent) is
+worth the additional effort. The cheaper alternative, if this is
+wanted: a live hardware test -- query type `0x20` on real hardware
+repeatedly over time/across different vehicle states and see whether
+the returned bytes ever change, which would confirm the "live, not
+static" finding empirically without needing to fully resolve the
+table-walk in source.
+hardware experiment, not by anything checkable in source.

@@ -1453,6 +1453,24 @@ first as the disassembly-confirmed value, not just a guess from the
 existing 9600/19200/38400/115200 fallback list this project uses
 elsewhere.
 
+**Real exchange mechanic, traced from the ISR's own state handlers
+(2026-08-30) -- not a burst reply.** Checked what actually drives each
+byte of the two outbound fields (`0x20`/`0x32`) out over the wire.
+Field byte 0 is sent immediately, inline with processing the type byte
+itself (`0x781e`-`0x7834` for type `0x20`, `0x783a`-`0x7852` for type
+`0x32`). But every *later* byte of the field is only sent from the
+`state==0x20`/`state==0x32` handlers (`0x800788c`, `0x80078ba`), which
+only run again when the next `RXNE` interrupt fires -- i.e. only after
+the querier sends one more byte (any value; it's never read back, only
+its arrival matters, since the byte-out index at struct offset `+123`
+is what actually advances). This is a clocked, one-in/one-out exchange,
+not "send a query, get the whole field back." `tools/uart45-probe/`
+was updated to actually pump the remaining bytes out this way -- its
+first version only sent the 2-byte query and listened once, which
+would have silently captured just `field[0]` and gone quiet, an
+incomplete/misleading test of its own hypothesis. Fixed before this
+was ever run on real hardware.
+
 **Traced the real populating function for this struct** (`0x80065b4`,
 called from... its own callers not individually chased further, out of
 scope for this pass) and found it copies from 5 fixed FLASH-resident

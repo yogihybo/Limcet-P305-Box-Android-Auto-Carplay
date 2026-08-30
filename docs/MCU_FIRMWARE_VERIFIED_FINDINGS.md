@@ -1782,3 +1782,57 @@ anything found this session.** Since it needs the same core hardware
 `racerxdl`, acquiring that hardware would open up trying *both*
 techniques in the same session. Not attempted -- recorded here so it
 isn't rediscovered from scratch, same as the `racerxdl` entry above.
+
+---
+
+## Consolidated summary (2026-08-30): every RDP-bypass / backdoor / bug-hunting angle considered this session
+
+Written up per explicit request, pulling together the full sweep across
+several sessions of digging into `can_app.bin` for anything beyond the
+already-known `CMD 0xA0` settings work. Each row links to its own
+section above with the full trace.
+
+### RDP Level 1 bypass attempts
+
+| Angle | Verdict | Why |
+|---|---|---|
+| `CVE-2020-8004` exception/PC-recovery | **Closed, real** | Live-confirmed on this exact chip: RDP1 BusFaults the CPU's own flash reads while a debugger stays attached (`PC=0x080004AC`, `BFAR=0x080004D4`) -- the earlier `hardware/MCU/live_dumps/` "success" was proven fake and retracted (99.7%+ disagreement vs. the verified-correct image, a real extractor-tool bug). |
+| SRAM code-injection / cold-boot (write payload to SRAM via SWD, boot from SRAM instead of flash) | **Closed, by ST's own design** | Verified against ST's own documented RDP1 behavior: flash access is blocked even when booting from SRAM/system-memory while RDP1 is active. No mass-erase risk from trying, just a safe hard fault -- but the technique itself doesn't work on this chip family. |
+| `racerxdl/stm32f0-pico-dump` (SWD protocol timing race) | **Open, not attempted** | Attacks debug-port protocol timing directly, not CPU execution -- genuinely different mechanism than the two closed above. Needs hardware not currently on hand: Pico, controllable `NRST`, switchable power. |
+| `CTXz/stm32f1-picopwner` (FPB persist-across-reset + power glitch) | **Open, not attempted** | Keeps boot mode at normal "main flash" (unlike the closed SRAM-cold-boot idea) and instead hijacks the reset-vector fetch via a genuine Cortex-M3 debug feature that survives reset. Shares the same missing hardware as `racerxdl`, plus a `BOOT1` pull-up not yet verified accessible on this board. |
+| Shellcode-via-UART-overflow (the Medium article that prompted the `picopwner` search) | **Not applicable here** | Requires a pre-existing buffer overflow in the target's own UART parser -- this firmware doesn't have one (see the sweep below). |
+
+### Fabricated / disproven claims found and corrected
+
+| Claim | Verdict |
+|---|---|
+| `SOC_CMD_DIAG_READ_MEM` (`CMD 0x90`, "Diagnostic Flash/SRAM readback") | **Fabricated, removed from source.** Checked the real dispatch table + its exact bounding loop in 5 real firmware images (this device's own, 2 more byte-identical/near-identical Toyota-generic builds, 1 genuinely different Acura variant) -- appears in none. Would have been a real, working RDP-bypass/full-dump primitive had it existed. |
+| `hardware/MCU/live_dumps/README.md`'s claimed successful `CVE-2020-8004` extraction | **Fake, retracted in place.** Git history shows the `.bin` files were committed once then deliberately deleted a session later after being found to disagree with the verified-correct firmware on 99.7%+ of words -- the README was never updated to match, a real documentation-hygiene gap now fixed. |
+
+### Application-level parsing / memory-safety sweep
+
+| Area | Verdict |
+|---|---|
+| Every real interrupt entry point (UART2/3/4/5, CAN1_RX0, USART1) | **No overflow found.** Checked against the real vector table directly; UART2's initially-suspicious multi-slot ring design traced out to be correctly bounded. |
+| Every stack allocation in the entire binary | **No exploitable buffer found.** The two largest candidates (276, 324 bytes) were confirmed false positives -- `objdump` misdecoding inline jump-table data as instructions, not real function prologues. Largest genuine local buffer anywhere is 44 bytes. |
+| The one real `strcpy()` call in the firmware | **Safe.** Copies a fixed constant string (`"AT+PIN=0000\r\n"`), not UART-derived data. |
+| Length validation architecture | **Centralized and correct.** The UART2 RX ISR enforces `< 28` once, upstream of every handler; every downstream consumer either trusts that pre-validated bound (the buffer is sized to match exactly) or uses its own hardcoded, non-attacker-controlled limit (UART4/5's 5/9/3/9-byte field states). |
+
+### Real bugs found (not security vulnerabilities, but genuine firmware defects)
+
+| Bug | Real-world effect |
+|---|---|
+| CAN1 RX ring buffer has no "full" detection | Producer (ISR) can silently overwrite unread CAN frames under a 16+ frame burst; if it preempts the consumer mid-read, a torn/corrupted frame can be processed. Could manifest as dropped/garbled steering-wheel or reverse-gear signals under heavy bus load. |
+| UART2 (SoC-facing) RX ring has the identical missing check | Same bug, same root cause, on the link `custom_ui`/`tools/mcu-probe` actually use. A software burst of 8+ frames without pacing (easily achievable at 38400 baud) can trigger it -- practical guidance: pace frame sends rather than blasting a batch. |
+| `CMD 0x87`'s `"AT+PIN="` digit-substitution bytes are never written anywhere in the reachable firmware | Sits in zero-initialized `.bss` -- the real command almost certainly transmits NUL bytes instead of a valid PIN, a dead/broken vendor feature rather than a working weak-credential backdoor. |
+
+### The one real, standalone security weakness found
+
+| Finding | Real implication |
+|---|---|
+| `CMD 0x88`'s TEA challenge is a full, stateless decryption oracle (send any 8 bytes, get the plaintext back, no rate limiting) | Combined with the already-documented ~32-bit effective key entropy, this alone -- reachable over the same wire as everything else, zero RDP bypass needed -- would have been sufficient to fully break the "anti-clone" scheme via chosen-ciphertext brute-force. The RDP-bypass effort was never actually necessary to defeat this specific mechanism. |
+
+### Real, benign discoveries along the way
+
+- **UART4/UART5** implement a small, genuine device-identification handshake protocol (sync byte `0x55`, 5 message types) with a real flash-baked identifier string, `"cD31"` -- not Bluetooth as `docs/1.3.1_MCU_FIRMWARE_DECOMPILATION.md`'s own guess had it (that's confirmed to be `USART3` instead, via its real peripheral base address). Properly bounded, no vulnerability, but a genuinely new fact about this hardware.
+- **`CMD 0x85`** was checked as a possible leak candidate and ruled out -- it forwards data to a generic internal 40-slot event queue, never reaching a UART TX path.

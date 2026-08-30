@@ -1596,3 +1596,69 @@ file already implements the correct pattern independently -- recorded
 here purely as a real, disassembly-confirmed fact about the actual
 vendor firmware's own behavior, for anyone testing against real hardware
 who observes an occasional dropped/garbled CAN-sourced input under load.
+
+---
+
+## Real firmware bug found (2026-08-30): the SAME missing "full" check exists on the SoC-facing UART2 link too
+
+Continued digging specifically on the SoC-facing side per explicit
+request. Found the identical bug pattern as the CAN1 ring (previous
+section), on the link `custom_ui`/`tools/mcu-probe`/every other
+SoC-side tool in this project actually talks to the MCU over.
+
+### Real structure, precisely re-traced (an earlier read of this exact
+### ISR during the same pass briefly suspected a length-accounting bug
+### -- `struct[2]` becomes `length + 3` rather than staying as the raw
+### length -- but re-verifying against the real starting index (`struct[3]`
+### starts at 2, not 0, correctly skipping the already-written cmd/length
+### bytes) shows this is exactly correct: `(length+3) - 2 = length+1`
+### trailing bytes get written, matching the real frame format
+### `[CMD][LEN][PAYLOAD(len bytes)][CHECKSUM(1 byte)]` exactly. Recorded
+### here so this false alarm doesn't get rediscovered.)
+
+The real UART2 RX ISR (`0x08006ECB` -> `0x08007298`) implements an
+8-slot, 30-bytes/slot ring (write index at struct offset `0`, matching
+the same struct this session's earlier `CMD 0xA0`/`0x84`/etc. findings
+already use). The **consumer** side (`0x0800720C`, called once per main
+loop iteration) correctly gates on a real "is empty" check
+(`0x080086A0`: `return (struct[0] == struct[1])`) before dequeuing --
+same correct pattern as the CAN1 ring's consumer.
+
+**The producer (the ISR itself) has no reciprocal check.** Its slot-
+advance code (`0x0800738A`-`0x0800739A`) does exactly:
+```
+struct[0]++
+if (struct[0] >= 8) struct[0] = 0
+```
+-- no comparison against `struct[1]` (the consumer's read index) at all,
+identical in structure to the CAN1 producer bug.
+
+### Real, concrete trigger condition
+
+If 8 or more complete `[0x2E]...`-framed SoC->MCU commands arrive over
+`/dev/ttyHS0` before the main loop's dequeue function runs even once,
+the 9th command's ISR-side completion silently overwrites slot 0 --
+data no one has processed yet. As with the CAN1 case, if the main loop
+is mid-copy out of that exact slot when the ISR preempts it (a real
+possibility, not just a race in theory -- the ISR fires asynchronously
+relative to the main loop), the consumer could dequeue a torn,
+part-old/part-new command rather than either cleanly.
+
+**Real-world relevance for this project specifically**: this is the
+exact link `custom_ui`'s `hal::sync_setting()`/`send_mcu_frame()` calls
+use, and any future code that sends several `CMD 0xA0` settings-sync
+frames back-to-back in a tight loop (e.g. a "restore all settings on
+boot" sweep) without pacing them could plausibly hit this -- 8 frames is
+not a large burst for software to produce faster than a 38400-baud UART
+can drain them (a ~13-byte frame takes ~3.4ms to transmit at that baud
+rate; 8 of them back-to-back is ~27ms, well within reach of a tight send
+loop with no delay). Worth keeping frame sends paced/acknowledged rather
+than fired in a rapid unthrottled burst, given the real firmware has no
+protection against this on its own.
+
+This project's own clean-room `uart_protocol.c` does not reproduce this
+bug -- its own RX frame ring (`g_rx_ring`/`g_rx_head`/`g_rx_tail`) already
+implements the correct `next_head != g_rx_tail` guard before advancing,
+same as `can_driver.c`. Recorded here purely as a real, disassembly-
+confirmed fact about the actual vendor firmware's own behavior, and as
+practical guidance for how to drive it safely from the Linux side.

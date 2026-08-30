@@ -1460,6 +1460,30 @@ research, but chasing down what physical device this identifies is
 outside what static analysis alone can settle. No security concern found
 here -- properly bounded, benign identification exchange.
 
+**Real candidate for the physical destination, found 2026-08-30 while
+investigating whether any other tty on the Linux side had been missed.**
+`docs/1.9_KERNEL_REFERENCE.md`'s own DTS-derived hardware map labels the
+SoC's `&uart3` (`/dev/ttyS2`) as **"STM32 companion MCU"** -- a
+physically separate UART link from `ttyHS0` (which uses the SoC's
+`ark-hsuart` peripheral, a different controller family entirely, not
+the generic `uart0-3` block `ttyS2` belongs to). `/dev/ttyS2` ("MSNEry")
+is independently confirmed live (real traffic observed) but its peer
+was never identified (`docs/1.3_MCU_ADAPTERS.md`, `tools/uart-test/`) --
+exactly the profile of an orphaned link that would match this
+UART4/UART5 protocol, since USART2 (SoC command link) and USART3
+(Bluetooth) are both already accounted for elsewhere, leaving UART4/
+UART5 as the STM32's only unaccounted-for peripherals.
+
+**Not yet confirmed -- this is a real, well-grounded hypothesis, not a
+finding.** `tools/uart45-probe/` (added this session) sends the real
+`[0x55, 0x20]`/`[0x55, 0x32]` identify queries this protocol actually
+uses and listens for the expected response (`00 00 00 00 FF` / a real
+`"cD31"` string) against `/dev/ttyS2` by default. A positive result
+would close this open question outright; a negative one at every baud
+candidate would be equally useful (rules the hypothesis out cleanly).
+Blocked on hardware access to run, same as the other live-device
+experiments recorded in this doc.
+
 ### `CMD 0x87`'s PIN-substitution bytes: exhaustively traced, no writer found
 
 Continuing the earlier open question (`CMD 0x87`'s handler embeds 4

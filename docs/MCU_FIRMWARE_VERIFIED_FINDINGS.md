@@ -1957,3 +1957,100 @@ needs to interoperate with the stock SoC app -- `tea_crypto.c` already
 implements the real algorithm/key faithfully for protocol completeness,
 but there is no evidence the SoC side actually depends on getting a
 correct answer back.
+
+---
+
+## Real finding (2026-08-30), verified via Ghidra's Reference API: the "challenge" side is dead too -- `EncryptValues` is generated, then immediately overwritten with a hardcoded constant, and never read again
+
+Re-ran the trace using Ghidra's real `ReferenceManager` API (not manual
+reading) against `EncryptKeys`/`EncryptValues`/`DecryptValues`/
+`EncryptCount`/`gMcuBoxEnCryption`, once headless analysis had fully
+completed (`FindDataXrefs.java`, confirmed `libMcuCenter.so` import
+finished cleanly: "Analysis succeeded"/"Import succeeded"). This
+resolves real code cross-references the decompiler can follow through
+GOT-relative PIC addressing -- something a raw byte search (this
+project's usual technique, which works for the bare-metal MCU firmware
+but not for a PIC shared library) cannot do at all.
+
+**`DecryptValues`** (the previous section's `puVar29`): confirmed
+exactly as traced by hand -- write (`0x4c2f4`, ciphertext in) -> read
+(`0x4c500`, pre-decrypt debug log) -> read+read (`0x4c6c4`, fed into
+the TEA math) -> write (`0x4c710`, plaintext out) -> read (`0x4c920`,
+post-decrypt debug log), all inside `onRecvMcuProtocol`. Verified
+address-for-address using a new script
+(`DecompileWithAddrs.java`, walks `DecompilerUtils.toLines()` and
+prints each line's real instruction address range) against the exact
+addresses the reference search reported -- no daylight between the
+manual trace and the tool-verified one.
+
+**`EncryptKeys`**: read exactly once (`0x4c6b4`), the TEA key load for
+the same decrypt -- consistent with everything already established.
+
+**`EncryptValues` -- genuinely new, and worse than "inert."** Its only
+two references are both **writes**, both inside a completely different
+function, `MCUAdapter_BoxP300::onInited()` (`0x492d0` -- confirmed via
+`getFunctionContaining()`, not guessed). Decompiling that function in
+full shows the real sequence, verbatim:
+
+```c
+clock_gettime(1, local_90);
+srand(local_90[0].tv_sec * 1000 + local_90[0].tv_nsec / 1000000);
+iVar3 = rand();
+piVar10 = *(int **)(iVar12 + DAT_00049928);   /* EncryptValues */
+*piVar10 = iVar3;                              /* real rand() result stored... */
+
+clock_gettime(1, local_90);
+lVar1 = (longlong)local_90[0].tv_sec * 1000 + (longlong)(local_90[0].tv_nsec / 1000000);
+srand((uint)lVar1 >> 4 | (int)((ulonglong)lVar1 >> 0x20) << 0x1c);
+rand();                                        /* ...second rand() result: discarded, unused */
+
+*piVar10     = 0x55a0435b;                     /* ...then immediately overwritten */
+piVar10[1]   = 0x4ae4a4eb;                     /* with a fixed, hardcoded constant pair */
+```
+
+Two separate `rand()` calls, seeded from real wall-clock time both
+times -- genuine, working randomization code, not a stub -- and **both
+results are thrown away**. The first is overwritten one instruction
+later; the second isn't even stored anywhere. What actually lands in
+`EncryptValues` on every single run of `onInited()` (i.e. every app
+start, on every unit, since this is compiled-in immediate data, not
+config) is the same fixed pair: `0x55a0435b` / `0x4ae4a4eb`.
+
+**And it is never read again.** The reference search's only other hit
+for `EncryptValues` is a `DATA` entry (a GOT slot, not code) -- zero
+`READ` references anywhere in the whole library. Cross-checked by name
+too (`ListFuncs.java` against `hallenge`/`Encrypt`/`Auth`/`Crypto`/
+`Clone` substrings): no dedicated "send the challenge" function exists
+under any of those names either.
+
+**What this means, stated plainly**: on the real, active adapter class
+for this hardware (`MCUAdapter_BoxP300` -- confirmed elsewhere in this
+document to be the one actually instantiated and driving the real
+`CMD 0xA0` settings UI on this device, not the separate, thinner
+`MCUAdapter_Box_Encryption` class this session investigated earlier
+before finding it was a dead end of its own), **the "generate a random
+challenge" half of the anti-clone scheme has no live wiring either.**
+The randomization code runs, produces a real value, and that value is
+discarded before anything can use it -- functionally identical to just
+writing the two constants directly, except slower. Combined with the
+earlier finding (the decrypted *reply* is also never compared to
+anything), there is now no discoverable half of this mechanism -- on
+either the challenge-generation or response-validation side -- that
+does anything beyond writing to a debug log and a global nobody reads.
+
+**Revised, more complete answer to "what does the anti-clone key help
+us to do"**: as far as this library's own code goes, it doesn't appear
+to help do anything at all, in either direction. Whatever `CMD 0x88`
+challenge the MCU actually receives and responds to (confirmed real
+and byte-exact on the MCU firmware side, from earlier this session)
+does not, on this evidence, originate from -- or get checked against --
+this SoC-side global-variable pair. Either the real challenge-send call
+site lives somewhere this reference search can't reach (worth a future
+broader sweep of every decompiled function in the library, not just
+the ones named/reachable from the symbols already known), or this
+mechanism is simply vestigial in the shipped SoC app build, consistent
+with the app-side and MCU-side halves of this feature having drifted
+apart the same way this document has already found for other
+`CMD 0xA0`-family features (e.g. the `getSetItemText()`/
+`getSetItemValueTexts()` display-name/value-option drift documented
+earlier).

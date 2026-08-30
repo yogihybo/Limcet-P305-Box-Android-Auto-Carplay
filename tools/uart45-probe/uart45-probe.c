@@ -92,102 +92,97 @@ static int set_interface_attribs(int fd, int speed) {
     return 0;
 }
 
-/* Raw, unfiltered capture -- this protocol has no framing byte to
- * anchor on the way the BoxP300 protocol has 0x2E, so every byte
- * received is real data, printed as-is. Groups a printed line whenever
- * the link idles for >200ms. */
-static int raw_listen(int fd, int window_ms) {
-    int total = 0;
-    unsigned char buf[256];
-    int buf_len = 0;
-    struct timespec deadline, last_rx, now;
-    clock_gettime(CLOCK_MONOTONIC, &deadline);
-    last_rx = deadline;
-    deadline.tv_sec += window_ms / 1000;
-    deadline.tv_nsec += (window_ms % 1000) * 1000000L;
-    if (deadline.tv_nsec >= 1000000000L) { deadline.tv_sec++; deadline.tv_nsec -= 1000000000L; }
-
-    for (;;) {
-        clock_gettime(CLOCK_MONOTONIC, &now);
-        double remaining = (deadline.tv_sec - now.tv_sec) + (deadline.tv_nsec - now.tv_nsec) / 1e9;
-        if (remaining <= 0)
-            break;
-
-        fd_set rfds;
-        FD_ZERO(&rfds);
-        FD_SET(fd, &rfds);
-        struct timeval tv;
-        double slice = remaining < 0.2 ? remaining : 0.2;
-        tv.tv_sec = (long)slice;
-        tv.tv_usec = (long)((slice - tv.tv_sec) * 1e6);
-
-        if (select(fd + 1, &rfds, NULL, NULL, &tv) > 0) {
-            unsigned char b;
-            if (read(fd, &b, 1) == 1) {
-                if (buf_len < (int)sizeof(buf)) buf[buf_len++] = b;
-                total++;
-                clock_gettime(CLOCK_MONOTONIC, &last_rx);
-                continue;
-            }
-        }
-
-        if (buf_len > 0) {
-            clock_gettime(CLOCK_MONOTONIC, &now);
-            double idle = (now.tv_sec - last_rx.tv_sec) + (now.tv_nsec - last_rx.tv_nsec) / 1e9;
-            if (idle >= 0.2) {
-                printf("  [RX]");
-                for (int i = 0; i < buf_len; i++) printf(" %02X", buf[i]);
-                printf("   (ascii: \"");
-                for (int i = 0; i < buf_len; i++)
-                    putchar((buf[i] >= 0x20 && buf[i] < 0x7f) ? buf[i] : '.');
-                printf("\")\n");
-                fflush(stdout);
-                buf_len = 0;
-            }
-        }
-    }
-    if (buf_len > 0) {
-        printf("  [RX]");
-        for (int i = 0; i < buf_len; i++) printf(" %02X", buf[i]);
-        printf("   (ascii: \"");
-        for (int i = 0; i < buf_len; i++)
-            putchar((buf[i] >= 0x20 && buf[i] < 0x7f) ? buf[i] : '.');
-        printf("\")\n");
-        fflush(stdout);
-    }
-    return total;
+/* Wait up to timeout_ms for exactly one byte. Returns 1 and fills *out
+ * on success, 0 on timeout, -1 on read error. */
+static int read_one_byte(int fd, unsigned char *out, int timeout_ms) {
+    fd_set rfds;
+    FD_ZERO(&rfds);
+    FD_SET(fd, &rfds);
+    struct timeval tv;
+    tv.tv_sec = timeout_ms / 1000;
+    tv.tv_usec = (timeout_ms % 1000) * 1000;
+    int sel = select(fd + 1, &rfds, NULL, NULL, &tv);
+    if (sel <= 0)
+        return 0;
+    int n = read(fd, out, 1);
+    if (n == 1) return 1;
+    return -1;
 }
 
-static void try_type(int fd, unsigned char type, const char *label, int window_ms) {
+/* Real protocol mechanic, traced from the MCU's own ISR (0x8007780,
+ * the state==0x20/0x32 handlers at 0x800788c/0x80078ba): field byte 0
+ * is sent back immediately on receiving the type byte itself, but
+ * every SUBSEQUENT byte of the field only gets sent after the querier
+ * sends one more (arbitrary-value) byte -- a clocked, one-in/one-out
+ * exchange, not a burst reply. A plain "send query, then just listen"
+ * (this function's own first implementation) would only ever capture
+ * field[0] and then see nothing, since nothing pumps the rest out.
+ * This "pumps" the remaining field_len-1 bytes explicitly. */
+static void try_type(int fd, unsigned char type, const char *label, int field_len, int byte_timeout_ms) {
     unsigned char query[2] = { 0x55, type };
-    printf("[*] Sending sync 0x55, type 0x%02X (%s)...\n", type, label);
+    printf("[*] Sending sync 0x55, type 0x%02X (%s, expect %d bytes back)...\n",
+           type, label, field_len);
     if (write(fd, query, 2) != 2) {
         fprintf(stderr, "write failed: %s\n", strerror(errno));
         return;
     }
     fflush(stdout);
-    int n = raw_listen(fd, window_ms);
-    if (n == 0)
-        printf("  (silent)\n");
+
+    unsigned char resp[64];
+    int got = 0;
+    while (got < field_len && got < (int)sizeof(resp)) {
+        unsigned char b;
+        int r = read_one_byte(fd, &b, byte_timeout_ms);
+        if (r != 1) {
+            printf("  (timed out after %d of %d expected bytes)\n", got, field_len);
+            break;
+        }
+        resp[got++] = b;
+        if (got < field_len) {
+            unsigned char pump = 0x00;
+            if (write(fd, &pump, 1) != 1) {
+                fprintf(stderr, "write (pump byte) failed: %s\n", strerror(errno));
+                break;
+            }
+        }
+    }
+
+    if (got == 0) {
+        printf("  (silent -- no response to the query byte at all)\n");
+    } else {
+        printf("  [RX %d/%d bytes]", got, field_len);
+        for (int i = 0; i < got; i++) printf(" %02X", resp[i]);
+        printf("   (ascii: \"");
+        for (int i = 0; i < got; i++)
+            putchar((resp[i] >= 0x20 && resp[i] < 0x7f) ? resp[i] : '.');
+        printf("\")\n");
+        if (got == field_len)
+            printf("  -- got the FULL expected field. Strong confirmation this port speaks the real protocol.\n");
+    }
     printf("\n");
 }
 
 int main(int argc, char **argv) {
     const char *port = DEFAULT_PORT;
     int baud = 115200;
-    int window_ms = 1500;
+    int byte_timeout_ms = 500;
     int argi = 1;
 
     while (argi < argc) {
         if (strcmp(argv[argi], "-p") == 0 && argi + 1 < argc) { port = argv[++argi]; argi++; }
         else if (strcmp(argv[argi], "-b") == 0 && argi + 1 < argc) { baud = atoi(argv[++argi]); argi++; }
-        else if (strcmp(argv[argi], "-w") == 0 && argi + 1 < argc) { window_ms = atoi(argv[++argi]); argi++; }
+        else if (strcmp(argv[argi], "-w") == 0 && argi + 1 < argc) { byte_timeout_ms = atoi(argv[++argi]); argi++; }
         else {
             fprintf(stderr,
-                "Usage: %s [-p port] [-b baud] [-w window_ms]\n\n"
+                "Usage: %s [-p port] [-b baud] [-w byte_timeout_ms]\n\n"
                 "Sends the real 'identify' queries (sync 0x55, type 0x20 and\n"
                 "0x32) from the STM32 UART4/UART5 protocol this project's own\n"
-                "disassembly decoded, and raw-listens for a response after each.\n"
+                "disassembly decoded. Real protocol mechanic, traced from the\n"
+                "MCU's own ISR: field byte 0 comes back immediately, but every\n"
+                "later byte only arrives after this tool sends one more\n"
+                "(arbitrary) byte to 'pump' it out -- a clocked, one-in/one-out\n"
+                "exchange, not a burst reply. This tool drives that exchange\n"
+                "properly rather than just listening once.\n\n"
                 "Default port /dev/ttyS2 (the ttyS2/\"MSNEry\" hypothesis --\n"
                 "see this tool's own header comment); pass -p /dev/ttyHS0 or any\n"
                 "other candidate port to test elsewhere.\n\n"
@@ -208,10 +203,10 @@ int main(int argc, char **argv) {
     }
     fcntl(fd, F_SETFL, 0);
     if (set_interface_attribs(fd, baud) < 0) { close(fd); return 1; }
-    printf("[*] %s at %d baud, %dms listen window per query\n\n", port, baud, window_ms);
+    printf("[*] %s at %d baud, %dms timeout per byte\n\n", port, baud, byte_timeout_ms);
 
-    try_type(fd, 0x20, "5-byte placeholder field", window_ms);
-    try_type(fd, 0x32, "9-byte identifier field, expect \"cD31\"", window_ms);
+    try_type(fd, 0x20, "5-byte placeholder field", 5, byte_timeout_ms);
+    try_type(fd, 0x32, "9-byte identifier field, expect \"cD31\"", 9, byte_timeout_ms);
 
     close(fd);
     return 0;

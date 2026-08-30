@@ -31,13 +31,26 @@ then a type byte selecting one of 5 real sub-messages. Types `0x20` and
 A response matching (or even resembling) either of these confirms the
 port under test really is wired to the STM32's UART4/UART5.
 
+**Real exchange mechanic, traced from the ISR itself -- not a burst
+reply.** Field byte 0 is sent back immediately on receiving the type
+byte, but the MCU only sends each *later* byte after receiving one
+more (arbitrary-value) byte from the querier -- a clocked, one-in/
+one-out exchange (confirmed at the disassembly level: the state
+handler for each in-progress field only advances/sends on the next
+`RXNE` interrupt, i.e. the next byte actually received). This tool
+drives that exchange properly -- sends the 2-byte query, then for each
+remaining expected byte: waits for the response byte, sends one more
+arbitrary "pump" byte, repeats. An earlier version of this tool only
+sent the initial query and listened once, which would have silently
+captured just `field[0]` and nothing else -- fixed.
+
 ## Usage
 
 ```
-uart45-probe [-p port] [-b baud] [-w window_ms]
+uart45-probe [-p port] [-b baud] [-w byte_timeout_ms]
 ```
 
-Defaults: `/dev/ttyS2`, 115200 baud, 1500ms listen window per query
+Defaults: `/dev/ttyS2`, 115200 baud, 500ms timeout per expected byte
 (baud is genuinely unconfirmed for this link). **Try `-b 9600` first**
 -- this session confirmed via the real init-code disassembly that
 UART4/UART5 on the MCU side are both actually configured for 9600
@@ -74,12 +87,17 @@ and unrelated to this one).
 
 ## Risk
 
-Low -- this only sends 2 bytes of a read-only "identify yourself"
-query. No write/erase side effect was found anywhere in the traced
-handler for either type byte. Unlike `mcu-probe --reboot-probe`, this
-does not touch `CMD 0xE1` or anything that resets/reflashes the chip.
-Still stop whatever normally holds the port open first (`MsnCoreApp`
-for `ttyS2`), same requirement every other tool in `tools/` documents.
+Low -- this sends a small number of bytes total (2-byte query plus up
+to 8 arbitrary-value "pump" bytes to clock out the rest of the longer
+field) as part of a read-only "identify yourself" exchange. No write/
+erase side effect was found anywhere in the traced handler for either
+type byte -- the pump bytes' actual *value* is never read by the
+firmware in the traced state-machine paths (only their arrival
+matters, to advance the byte-out counter), so their content (`0x00`)
+is not load-bearing. Unlike `mcu-probe --reboot-probe`, this does not
+touch `CMD 0xE1` or anything that resets/reflashes the chip. Still stop
+whatever normally holds the port open first (`MsnCoreApp` for
+`ttyS2`), same requirement every other tool in `tools/` documents.
 
 ## Build
 

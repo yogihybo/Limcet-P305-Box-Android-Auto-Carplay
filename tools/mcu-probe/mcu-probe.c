@@ -385,17 +385,37 @@ void cmd_send_raw(int fd, int cmd, const unsigned char *payload, int len) {
  * isn't the BoxP300 app protocol read_mcu_frame() expects; this is the
  * whole point of using raw_listen_window() instead of listen_window()).
  *
- * THIS COMMAND REBOOTS THE MCU. Real, physical consequence: whatever
- * the MCU currently drives (CAN bus relay, steering-wheel key forwarding,
- * reverse-camera trigger, etc.) stops responding for the outage. Recover
- * via the normal USB auto_upgrade.txt/can_app.bin YMODEM reflash path
- * (tools/mcu_builder/) if the unit doesn't come back on its own -- have
- * that ready before running this, not after. */
+ * REAL RISK, NOT JUST A REBOOT -- READ BEFORE USING --confirm-erase-risk.
+ * This project's own clean-room bootloader reimplementation
+ * (hardware/MCU/bootloader/, a real, buildable stand-in for the actual
+ * vendor code -- see its own README) erases the application flash
+ * region BEFORE it ever waits for a byte from the sender
+ * (ymodem_receive_and_flash() calls flash_erase_app_pages() first,
+ * unconditionally) -- erase-then-receive is standard IAP bootloader
+ * design, not an edge case, so the real vendor bootloader plausibly
+ * does the same. That means simply triggering this command and never
+ * following up with a real YMODEM transfer could be enough to WIPE the
+ * application region outright, with nothing to restore it: this
+ * project holds NO confirmed dump of the firmware actually flashed on
+ * a real physical unit's MCU -- only hardware/MCU/can_app.bin, the
+ * generic DCn32-VOLVO reference build, confirmed byte-identical to one
+ * of the 4 other cross-vendor reference images this project holds (see
+ * docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md's scope-clarification section)
+ * -- NOT a backup of what's really on this unit, and not confirmed to
+ * decode this vehicle's CAN bus correctly if written back. Do not run
+ * this without first having a real answer to "what do I flash back if
+ * this erases the chip" -- a generic Volvo image is not that answer. */
 void cmd_reboot_probe(int fd, int window_secs) {
     printf("[*] CMD 0xE1 (reboot to bootloader) -- will send, then raw-capture "
            "%ds of whatever comes back on the SAME open fd (no re-open gap, "
-           "no 0x2E-framing assumption). Expect a real MCU reset: CAN "
-           "relay/key-forwarding/etc. will be down for the outage.\n", window_secs);
+           "no 0x2E-framing assumption).\n"
+           "[*] REAL RISK: this project's own bootloader reimplementation "
+           "erases the application flash BEFORE waiting for any replacement "
+           "image -- if the real vendor bootloader does the same (likely; "
+           "standard IAP design), this command alone could wipe the MCU's "
+           "application firmware, with no confirmed dump of what's actually "
+           "on this unit to restore -- see this command's own source comment "
+           "before proceeding.\n", window_secs);
     send_mcu_frame(fd, 0xE1, NULL, 0, 1);
     printf("[*] Sent. Watching for %ds -- bytes are grouped into a line "
            "whenever the link goes idle for >200ms, so a burst (e.g. a "
@@ -496,12 +516,18 @@ static void print_usage(const char *prog) {
         "                                   CMD byte range -- unknown-command probing,\n"
         "                                   requires the confirmation flag\n"
         "  --listen [seconds]               Just listen for MCU frames (default 10s)\n"
-        "  --reboot-probe [seconds]         Send CMD 0xE1 (reboot to bootloader), then\n"
+        "  --reboot-probe [seconds] --confirm-erase-risk\n"
+        "                                   Send CMD 0xE1 (reboot to bootloader), then\n"
         "                                   raw-capture everything for N seconds (default\n"
         "                                   30) -- NOT filtered to 0x2E-framed traffic,\n"
-        "                                   unlike --listen. REBOOTS THE MCU -- have a\n"
-        "                                   YMODEM reflash ready in case it doesn't come\n"
-        "                                   back on its own.\n\n"
+        "                                   unlike --listen. DANGEROUS: this project's\n"
+        "                                   own bootloader reimplementation erases the\n"
+        "                                   app flash BEFORE waiting for a replacement\n"
+        "                                   image -- if the real bootloader does the\n"
+        "                                   same, this can wipe the MCU with no confirmed\n"
+        "                                   dump of this unit's real firmware to restore.\n"
+        "                                   Requires --confirm-erase-risk; run without it\n"
+        "                                   first to read the full warning.\n\n"
         "Examples:\n"
         "  %s --setting 0x0b 0x00           # test the id=0x0b 3-pin-enable candidate\n"
         "  %s --setting 0x00 0x01           # test the id=0x00 (GPIOB Pin1) candidate\n"
@@ -511,7 +537,7 @@ static void print_usage(const char *prog) {
         "  %s --audio-route 0x00            # relay dispatcher state 0 (real, reliable)\n"
         "  %s --audio-route 0x03            # relay dispatcher state 1 (real, reliable)\n"
         "  %s --video-relay 0x01            # same relay via id=0x11 (gate unconfirmed)\n"
-        "  %s --reboot-probe 30             # trigger CMD 0xE1, watch for 30s\n\n"
+        "  %s --reboot-probe 30 --confirm-erase-risk   # DANGEROUS, see above\n\n"
         "IMPORTANT: stop custom_ui first (it holds /dev/ttyHS0 exclusively).\n",
         prog, prog, prog, prog, prog, prog, prog, prog, prog, prog);
 }
@@ -609,8 +635,26 @@ int main(int argc, char **argv) {
         listen_window(fd, secs * 1000);
 
     } else if (strcmp(command, "--reboot-probe") == 0) {
-        int secs = 30;
-        if (argi < argc) secs = atoi(argv[argi++]);
+        int secs = 30, confirmed = 0;
+        while (argi < argc) {
+            if (strcmp(argv[argi], "--confirm-erase-risk") == 0) { confirmed = 1; argi++; }
+            else { secs = atoi(argv[argi]); argi++; }
+        }
+        if (!confirmed) {
+            fprintf(stderr,
+                "[-] --reboot-probe requires --confirm-erase-risk.\n"
+                "    This project's own bootloader reimplementation erases the\n"
+                "    application flash BEFORE waiting for any replacement image --\n"
+                "    if the real vendor bootloader does the same (likely -- standard\n"
+                "    IAP design), sending CMD 0xE1 and never following up with a real\n"
+                "    YMODEM transfer could wipe the MCU's application firmware. This\n"
+                "    project holds NO confirmed dump of what's actually flashed on a\n"
+                "    real unit -- hardware/MCU/can_app.bin is a generic DCn32-VOLVO\n"
+                "    reference build, not a backup of this device's own firmware. See\n"
+                "    cmd_reboot_probe()'s own source comment before passing this flag.\n");
+            close(fd);
+            return 1;
+        }
         cmd_reboot_probe(fd, secs);
 
     } else {

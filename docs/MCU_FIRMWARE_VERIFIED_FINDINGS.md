@@ -1710,3 +1710,75 @@ Other real UART outputs (`CMD 0x7F` version string, `CMD 0x30` battery
 voltage, the knob/touch/reverse-gear event frames) are intentional,
 designed-to-be-read status queries -- nothing secret is exposed by them,
 unlike `CMD 0x88`.
+
+---
+
+## Real, still-open RDP1 bypass avenue found (2026-08-30): FPB + power-glitch (`stm32f1-picopwner`)
+
+User shared a Medium article on STM32 shellcode-via-UART firmware
+dumping. Checked it against everything found this session:
+
+**The article's own technique doesn't apply here.** It requires a
+pre-existing buffer overflow in the target's own UART command parser to
+inject shellcode -- this session already checked this firmware's UART
+surface exhaustively (twice, independently) and found no exploitable
+overflow anywhere (see the "Application-level parsing" sweep above).
+No foothold for that specific approach on this firmware.
+
+**But the same search surfaced something real and not yet closed**:
+[`CTXz/stm32f1-picopwner`](https://github.com/CTXz/stm32f1-picopwner) --
+a real, published, STM32F1-specific RDP Level 1 bypass (Obermaier/
+Schink/Moczek's FPB + glitch attack), genuinely different from both
+`CVE-2020-8004` (ruled out earlier -- requires the debugger to stay
+attached to observe leaked state, which triggers RDP1's own block) and
+the SRAM-cold-boot idea evaluated just before this (which changes BOOT
+pin configuration, exactly the condition RDP1's documented design
+checks for).
+
+### Why this one is genuinely different, not closed by anything found so far
+
+1. **While the debugger is still attached**, configure the Cortex-M3's
+   **FPB (Flash Patch and Breakpoint) unit** -- a real debug comparator
+   that redirects instruction *fetches* at a chosen address elsewhere.
+   Point it at `0x00000004` (the reset-vector-pointer fetch) to redirect
+   into SRAM.
+2. Load exploit code into SRAM, **then disconnect the debugger**. FPB
+   patches genuinely **persist across reset** -- a real, documented
+   Cortex-M3 property.
+3. **Power-glitch** the target: cut power briefly and restore it exactly
+   as `NRST` drops low, timed so SRAM retains its contents through the
+   brief loss.
+4. **Critically, `BOOT0`/`BOOT1` stay configured for completely normal
+   "boot from main flash"** -- the same mode used in ordinary operation.
+   This is the real distinction from the SRAM-cold-boot idea already
+   ruled out: RDP1's documented block specifically triggers on "boot
+   mode != main flash" or "debugger attached." This technique satisfies
+   neither condition -- to RDP1's own boot-mode check, this looks like a
+   completely ordinary boot. The FPB redirect is a debug feature, not
+   part of that gate at all, so the reset-vector fetch gets silently
+   hijacked to SRAM without RDP1 having a documented reason to object.
+
+### Real requirements -- shares hardware with the already-documented `racerxdl` avenue
+
+- Raspberry Pi Pico (attack board) -- same requirement already on record
+  for the `racerxdl` SWD-timing-race tool above.
+- A controllable **`NRST`** line -- this project's current SWD wiring has
+  none (`SWDIO`/`SWCLK`/`GND`/`VCC` only), same gap already flagged for
+  `racerxdl`.
+- Controllable, program-timed **power switching** to the target -- same
+  requirement already flagged for `racerxdl`.
+- **New requirement, not previously flagged**: `BOOT1` pulled high via a
+  1k-100k resistor to 3.3V (per the tool's own documented safety
+  requirement). Whether this pin is accessible on this board is
+  unverified.
+- Real, honest limitation from the tool's own docs: no published success-
+  rate data, and the tool's own notes mention the exploit "may be patched
+  in 2020+ chip revisions" -- this board's exact silicon revision/date
+  code is unverified.
+
+**Verdict: a real, credible, chip-family-matched avenue, not closed by
+anything found this session.** Since it needs the same core hardware
+(Pico + `NRST` + switchable power) already on the shopping list for
+`racerxdl`, acquiring that hardware would open up trying *both*
+techniques in the same session. Not attempted -- recorded here so it
+isn't rediscovered from scratch, same as the `racerxdl` entry above.

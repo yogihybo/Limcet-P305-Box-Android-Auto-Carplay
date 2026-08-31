@@ -108,29 +108,31 @@ stock apparently doesn't use it for this purpose.
 This direction is **not** a single closed table the way the inbound one is — it's pieced
 together from the real stock `libMcuCenter.so` disassembly (`MCUAdapter_BoxP300::
 onRecvMcuProtocol`), from `custom_ui`'s own live UART captures, and from earlier,
-never-cross-checked guesses in the now-archived docs. Several codes have **three or four
+never-cross-checked guesses in the now-archived docs. Several codes had **three or four
 different claimed meanings across this project's own history** that were never reconciled
-against each other until now.
+against each other until now — each row below states the single best-supported meaning,
+with any rejected/unconfirmed alternative struck through in Resolution rather than shown as
+its own competing claim.
 
-| Cmd | Payload / bitfield layout | Claim A (`1.3_MCU_ADAPTERS.md`, archived) | Claim C (`custom_ui`, live capture) | Resolution |
-|---|---|---|---|---|
-| `0x00` | — | default/ignored (✅ confirmed, `0x37348`) | — | not disputed |
-| `0x01` | `payload[0]` bit `0x02` = on/off — the ONE bit `custom_ui` actually reads; no other bits decoded | ~~key/button event, type `0x1013`~~ (static disasm, "med" confidence only) | 🟡 **Headlights/illumination status** — live-hardware confirmed | ⚠️ Claim C is what `custom_ui` runs on. Claim A was never independently verified against a live capture, struck through as an unreconciled guess |
-| `0x02` | `payload[0]`(`b3`)=key code, `payload[1]`(`b4`)=1 press/0 release. Live-captured codes: `3`=Next,`4`=Prev,`8`=Answer,`9`=Hangup,`12`=Home,`13`=Knob push,`64`=Knob CCW,`65`=Knob CW | ~~"handshake/reply builder"~~ (later revised *in the same doc* to knob/key event) | 🟡 **Knob/button event** — live-capture confirmed | Claim C is live-capture confirmed and is what `custom_ui` runs on |
-| `0x03` | `QBitArray` bitfield confirmed to exist; **no individual bit meaning resolved** | status bitfield, no type assigned | not handled | UNCONFIRMED |
-| `0x04` | not resolved at byte level in any source — presumably a distance/level value, exact encoding never traced | ✅ **Reverse radar / parking-sensor level** → `transRadarLevel` — "high" confidence, named real function call | ❌ **treated as "Reverse gear: ENGAGED"** with no payload check at all | ⚠️ **Real, unresolved conflict — see the dedicated note below** |
-| `0x05` | not resolved | status, type `0x5018` — explicitly "deliberately left open" | not handled | UNCONFIRMED |
-| `0x06` | `byte[3]` via `QBitArray`; **no individual bit meaning resolved** | status bitfield, type `0x501A` — explicitly "deliberately left open" | clean-room firmware: ~~`MCU_CMD_REVERSE_GEAR`~~ | ⚠️ Real disassembly leaves this deliberately open; the clean-room firmware's own guess is unreconciled with that |
-| `0x07` | not resolved | not present in this table at all | not handled | UNCONFIRMED — single source |
-| `0x0A` | `byte[3]` bit `0` = direction, `byte[4..5]` = 16-bit magnitude, scaled to a signed angle. **Real bit-packing of the magnitude/scale factor still not fully cracked** despite the command's purpose being high-confidence | ✅ **Steering angle / reverse trajectory** — "high" confidence, `"recv track:"` string cited | matches Claim A (`MCU_CMD_STEERING_ANGLE`) | Claim A stands |
-| `0x12` | `byte[4]` read; **no individual bit meaning resolved** | status, type `0x5026` — "deliberately left open" | clean-room: ~~`MCU_CMD_DIP_PROFILE`~~ / `custom_ui`: ❌ **"Reverse gear: DISENGAGED"** | ⚠️ **Three-way unreconciled conflict** |
-| `0x20` | `X=(payload[1]<<8)|payload[0]`, `Y=(payload[3]<<8)|payload[2]`, all-zero payload = release. `payload[4]` (`b7`) values `1`/`2`: possibly touch-down vs. move, **not confirmed** | "reply builder" (static reading only) — later **✅ live-capture confirmed** via corner-touch test, exact pixel-width match | 🟡 matches the live-capture reading exactly | ✅ CONFIRMED (live capture) — the most rigorously verified single finding in the whole corpus |
-| `0x21`/`0x22` | not resolved | `MsnEvent`, meaning unresolved | not handled | UNCONFIRMED, single source |
-| `0x30` | `custom_ui` reads `value = payload[0] + payload[1]/100.0f` (its own battery-voltage interpretation — payload *format* is real, its *meaning* is disputed) | ✅ "arkdata/display-config file I/O" — "high" confidence, real function name | ❌ **treated as battery voltage** | ⚠️ **Real, substantive conflict** — file I/O and battery telemetry are unrelated functions |
-| `0x40` | raw traffic captured, not decoded | live-captured raw traffic, not decoded | not handled | UNCONFIRMED |
-| `0x60` | not resolved (real TEA-decrypted reply content, plaintext structure not documented) | not present at all | not handled | `MCU_FIRMWARE_VERIFIED_FINDINGS.md` separately confirms `0x60` as the real `CMD 0x88` TEA-reply opcode |
-| `0x7F` | `payload[0..27]` = 28-byte ASCII version string | ✅ MCU version report — "high" confidence, `0x38e00` | matches Claim A's command byte, stores payload as ASCII | Command byte/framing confirmed. The SoC's own `/tmp/mcu_version` is separately confirmed hardcoded, not sourced live from this command |
-| `0xE2`/`0xE4` | not resolved at byte level; confirmed only by cited strings (`"End Update Mcu!"`, `"recv update packageid:"`) | ✅ firmware-update handshake (both "high") | not implemented anywhere in this project | confirmed existence/purpose; not wired into anything |
+| Cmd | Payload / bitfield layout | Meaning | Resolution |
+|---|---|---|---|
+| `0x00` | — | Default / ignored (no-op) | ✅ CONFIRMED, `0x37348` |
+| `0x01` | `payload[0]` bit `0x02` = on/off — the ONE bit `custom_ui` actually reads; no other bits decoded | 🟡 **Headlights / illumination status** | Live-hardware confirmed, what `custom_ui` runs on. ~~Static disassembly guessed "key/button event, type 0x1013"~~ ("med" confidence only) — never independently verified against a live capture, superseded here |
+| `0x02` | `payload[0]`(`b3`)=key code, `payload[1]`(`b4`)=1 press/0 release. Live-captured codes: `3`=Next,`4`=Prev,`8`=Answer,`9`=Hangup,`12`=Home,`13`=Knob push,`64`=Knob CCW,`65`=Knob CW | 🟡 **Knob/button event** | Live-capture confirmed, what `custom_ui` runs on. ~~Originally guessed "handshake/reply builder"~~ — the same source doc later self-revised to this reading |
+| `0x03` | `QBitArray` bitfield confirmed to exist; **no individual bit meaning resolved** | UNCONFIRMED | Real bitfield type confirmed via disassembly; not handled by `custom_ui`, no live capture exists to resolve individual bits |
+| `0x04` | not resolved at byte level in any source — presumably a distance/level value, exact encoding never traced | ✅ **Parking radar / distance level** (`transRadarLevel`) | "High"-confidence disassembly, named real function call. ~~`custom_ui` treats this same byte as "Reverse gear: ENGAGED"~~ with no payload check at all — no disassembly support; very plausibly just correlates with reversing (parking sensors active) without meaning reverse gear. See the dedicated reverse-gear note below |
+| `0x05` | not resolved | UNCONFIRMED | Real disassembly explicitly leaves this deliberately open (Qt event type `0x5018`); not handled by `custom_ui` |
+| `0x06` | `byte[3]` via `QBitArray`; **no individual bit meaning resolved** | UNCONFIRMED | Real disassembly leaves this deliberately open (Qt event type `0x501A`). ~~Clean-room firmware guessed `MCU_CMD_REVERSE_GEAR`~~ — never verified, unreconciled with the disassembly's own "left open" finding |
+| `0x07` | not resolved | UNCONFIRMED | Single, never-cross-checked source; no disassembly evidence |
+| `0x0A` | `byte[3]` bit `0` = direction, `byte[4..5]` = 16-bit magnitude, scaled to a signed angle. **Real bit-packing of the magnitude/scale factor still not fully cracked** despite the command's purpose being high-confidence | ✅ **Steering angle / reverse trajectory** | "High"-confidence disassembly, `"recv track:"` string cited, matches `custom_ui`'s `MCU_CMD_STEERING_ANGLE` |
+| `0x12` | `byte[4]` read; **no individual bit meaning resolved** | UNCONFIRMED | Real disassembly leaves this deliberately open (Qt event type `0x5026`). ~~Clean-room firmware guessed `MCU_CMD_DIP_PROFILE`~~ / ~~`custom_ui` treats it as "Reverse gear: DISENGAGED"~~ — neither has disassembly support. See the dedicated reverse-gear note below |
+| `0x20` | `X=(payload[1]<<8)|payload[0]`, `Y=(payload[3]<<8)|payload[2]`, all-zero payload = release. `payload[4]` (`b7`) values `1`/`2`: possibly touch-down vs. move, **not confirmed** | ✅ **Touch coordinate report** | Live-capture confirmed via a corner-touch test, exact pixel-width match — the most rigorously verified single finding in the whole corpus. ~~Static disassembly only knew it as a "reply builder"~~, superseded |
+| `0x21`/`0x22` | not resolved | UNCONFIRMED | Single, never-cross-checked source; `MsnEvent` posted, meaning never resolved |
+| `0x30` | `payload[0] + payload[1]/100.0f` — a real, decodable payload format, but its *meaning* is disputed (see Resolution) | ✅ **Arkdata / display-config file I/O** | "High"-confidence disassembly, real function name cited. ~~`custom_ui` treats this same byte as battery voltage~~ — file I/O and battery telemetry are unrelated functions; the disassembly finding is the stronger evidence, but this is not itself hardware-retested since the correction |
+| `0x40` | raw traffic captured, not decoded | UNCONFIRMED | One real live capture exists with no assigned meaning; not handled by `custom_ui` |
+| `0x60` | not resolved (real TEA-decrypted reply content, plaintext structure not documented) | ✅ **`CMD 0x88` TEA-challenge reply opcode** | Confirmed separately in `MCU_FIRMWARE_VERIFIED_FINDINGS.md`'s `0x88` trace; not handled by `custom_ui` |
+| `0x7F` | `payload[0..27]` = 28-byte ASCII version string | ✅ **MCU version report** | "High"-confidence disassembly, `0x38e00`, matches what `custom_ui` runs on. The SoC's own `/tmp/mcu_version` file is separately confirmed hardcoded, not sourced live from this command — any UI display reading that file isn't reading this command's live payload |
+| `0xE2`/`0xE4` | not resolved at byte level; confirmed only by cited strings (`"End Update Mcu!"`, `"recv update packageid:"`) | ✅ **Firmware-update handshake** | Both "high"-confidence disassembly; not implemented anywhere in this project |
 
 ### The reverse-gear command conflict — the one that actually matters right now
 

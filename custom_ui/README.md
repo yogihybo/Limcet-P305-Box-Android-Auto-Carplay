@@ -49,9 +49,7 @@ custom_ui/
 ├── assets/                    fonts
 ├── scripts/                   device deploy/diagnostic helpers
 ├── docs/
-│   ├── ARCHITECTURE.md          hardware + IPC interface reference
-│   ├── IMPLEMENTATION_PLAN.md   remaining work checklist
-│   └── UI_REDESIGN_PROPOSAL.md  Material 3 / Coolwalk screen spec
+│   └── ARCHITECTURE.md          hardware + IPC interface reference
 └── Makefile                   builds ui, carplay-sidecar,
                                 androidauto-sidecar, ladspa-eq
 ```

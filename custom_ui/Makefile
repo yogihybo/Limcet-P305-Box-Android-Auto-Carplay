@@ -39,9 +39,9 @@ UI_C_OBJS     := $(patsubst src/%.c,$(BUILD_DIR)/ui-obj/%.o,$(UI_C_SRCS))
 
 # --- CarPlay Sidecar Binary ---
 SIDECAR_TARGET   := $(BUILD_DIR)/carplay-sidecar
-SIDECAR_SRCS     := $(shell find sidecars/carplay -name '*.cpp')
-SIDECAR_OBJS     := $(patsubst sidecars/carplay/%.cpp,$(BUILD_DIR)/sidecar-obj/%.o,$(SIDECAR_SRCS))
-SIDECAR_INCLUDES := -Isidecars/carplay
+SIDECAR_SRCS     := $(shell find carplay -name '*.cpp')
+SIDECAR_OBJS     := $(patsubst carplay/%.cpp,$(BUILD_DIR)/sidecar-obj/%.o,$(SIDECAR_SRCS))
+SIDECAR_INCLUDES := -Icarplay
 
 # --- Android Auto Sidecar Target ---
 ANDROIDAUTO_SIDECAR_TARGET := $(BUILD_DIR)/androidauto-sidecar
@@ -156,7 +156,7 @@ $(SIDECAR_TARGET): $(SIDECAR_OBJS)
 	$(CXX) $(LDFLAGS) -o $@ $^ $(LIBS)
 	@echo "Built $@"
 
-$(BUILD_DIR)/sidecar-obj/%.o: sidecars/carplay/%.cpp
+$(BUILD_DIR)/sidecar-obj/%.o: carplay/%.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) $(SIDECAR_INCLUDES) -c -o $@ $<
 

@@ -21,24 +21,21 @@ stack actually expose," not a design spec.
   screen info (`ARKDISP_GET_SCREEN_INFO`). This is the settings screen's
   hook for a "Display" adjustment panel.
 - Video Acceleration & Memory Management: Hantro 8190 ASIC H.264 video decoding on `/dev/fb4`.
-  See [`VIDEO_AND_HAL_HANDOFF.md`](VIDEO_AND_HAL_HANDOFF.md) and [`VIDEO_AND_MEMORY_OOM_HANDOFF.md`](VIDEO_AND_MEMORY_OOM_HANDOFF.md) for the Hantro zero-copy display pipeline and video delta flow control / OOM prevention.
 
 ## Touch & Rotary knob input
 
 - Touch Panel & Rotary Encoder: Relayed by the Limcet MCU over `/dev/ttyHS0` (`hal::McuInputHal`).
 - Rotary Navigation in Android Auto: Maps continuous rotation to `KEYCODE_NAVIGATE_NEXT/PREVIOUS` (261/260), center push-button to `KEYCODE_DPAD_CENTER` (23), and hold-and-rotate chords to D-Pad card nudges (`KEYCODE_DPAD_RIGHT/LEFT` 22/21).
-  See [`ROTARY_KNOB_AND_CARD_NAVIGATION_HANDOFF.md`](ROTARY_KNOB_AND_CARD_NAVIGATION_HANDOFF.md) for the complete state machine and AAP keycode mapping.
 
 ## Audio
 
 ALSA, single card: `card0` (`ARK-SDDAC`).
-See [`AUDIO_SUBSYSTEM_HANDOFF.md`](AUDIO_SUBSYSTEM_HANDOFF.md) and [`AUDIO_CPU_SPIKE_AND_SIDECAR_LIFECYCLE_HANDOFF.md`](AUDIO_CPU_SPIKE_AND_SIDECAR_LIFECYCLE_HANDOFF.md) for Android Auto audio flow control, ALSA sample-rate matching (eliminating software resampling), stop/resume stream resets, and sidecar lifecycle management.
 
 ## Bluetooth
 
 - Native Linux **BlueZ 5.66** subsystem over kernel `hci0` (via `rtk_hciattach` 3-Wire UART H5 @ 1.5 Mbps on `/dev/ttyHS1`, GPIO 91 reset).
 - Legacy Feasycom `blueware` AT daemon over `/dev/bw_serial` is deprecated.
-- See [`BLUEZ_MIGRATION_AND_BLUEWARE_DEPRECATION_HANDOFF.md`](BLUEZ_MIGRATION_AND_BLUEWARE_DEPRECATION_HANDOFF.md) and [`../../docs/BLUEZ_AND_KERNEL_BLUETOOTH_HANDOFF.md`](../../docs/BLUEZ_AND_KERNEL_BLUETOOTH_HANDOFF.md) for the BlueZ D-Bus integration architecture and `androidauto-sidecar` native `AF_BLUETOOTH` RFCOMM socket roadmap.
+- See [`../../docs/BLUEZ_AND_KERNEL_BLUETOOTH_HANDOFF.md`](../../docs/BLUEZ_AND_KERNEL_BLUETOOTH_HANDOFF.md) for the BlueZ D-Bus integration architecture and `androidauto-sidecar` native `AF_BLUETOOTH` RFCOMM socket roadmap.
 
 ## CarPlay — via `sink` (kept as a black box)
 
@@ -65,7 +62,7 @@ step — decompile the 4 `reply_to_*` bodies and the `onLinkStatusChange`
 call site to get argument types/marshalling, not just the dispatch
 routing).
 
-**What this app needs to build**: `sidecars/carplay/`, a standalone
+**What this app needs to build**: `carplay/`, a standalone
 process (own `libdbus` dependency, isolated from the main UI binary —
 see README for why) that calls these 4 methods and listens for the
 status signal, translating between `sink`'s wire format and a small
@@ -221,7 +218,6 @@ protocol, not something that goes through aasdk's `Messenger` at all.
 
 `src/androidauto/bw_aap_client.{h,cpp}` implements all 5 steps above
 (`startHandshake()` for 1-3, `respondToInfoRequest()` for 4-5).
-See [`SESSION_KEEPALIVE_AND_TIMEOUT_HANDOFF.md`](SESSION_KEEPALIVE_AND_TIMEOUT_HANDOFF.md) for the RFCOMM watchdog lifecycle, TCP_NODELAY socket options, and ping keepalive timing.
 
 This **supersedes** an earlier, wrong-assumption approach
 (`src/androidauto/bluetooth_transport.h` /
@@ -286,7 +282,6 @@ once provisioned (see `project_language_setting_userdata` memory) —
 this app's settings screens should read/write that layer, not just the
 ## Performance, CPU Utilization & Process Lifecycles
 
-See [`CPU_USAGE_AND_SPINNING_AUDIT_HANDOFF.md`](CPU_USAGE_AND_SPINNING_AUDIT_HANDOFF.md) for rate-limited sidecar process management, adaptive LVGL main-loop sleep pacing, and serial read yield patterns.
 
 ## Open questions / next steps
 

@@ -221,7 +221,7 @@ it — `custom_ui`'s own RFCOMM `Profile1` registration for wireless Android Aut
 static-`dbus-daemon` rebuild that fixes the fd-passing bug in §4 above, and the migration status of
 `custom_ui`'s Bluetooth screen off the legacy `blueware` AT stack — is tracked separately:
 
-* [`custom_ui/docs/BLUEZ_MIGRATION_AND_BLUEWARE_DEPRECATION_HANDOFF.md`](../custom_ui/docs/BLUEZ_MIGRATION_AND_BLUEWARE_DEPRECATION_HANDOFF.md)
+* [`custom_ui/docs/BLUEZ_MIGRATION_AND_BLUEWARE_DEPRECATION_HANDOFF.md`](../custom_ui/docs/handoffs/BLUEZ_MIGRATION_AND_BLUEWARE_DEPRECATION_HANDOFF.md)
   — architecture/migration-plan doc for moving `custom_ui`'s Bluetooth screen and HAL off
   `blueware` AT commands onto `org.bluez` D-Bus calls; `custom_ui`'s `hal/bluez_aa_profile.cpp` is
   the one piece of this already implemented and hardware-confirmed (RFCOMM Profile1, channel 1,

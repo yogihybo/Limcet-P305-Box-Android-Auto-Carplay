@@ -687,9 +687,9 @@ stock's flat/scattered menu structure:
       just method names
 - [ ] Design + document the sidecar's local Unix-socket protocol
       (start by mirroring the 4 D-Bus requests + 1 signal 1:1)
-- [ ] `sidecars/carplay`: `libdbus` client connecting to `sink`'s
+- [ ] `carplay`: `libdbus` client connecting to `sink`'s
       `com.arkmicro.auto` service
-- [ ] `sidecars/carplay`: Unix domain socket server
+- [ ] `carplay`: Unix domain socket server
 - [ ] `src/hal`: Unix domain socket client for the sidecar (must be
       written so the UI works fine if the socket simply isn't there —
       no sidecar running is a normal, supported state, not an error)

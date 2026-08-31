@@ -29,7 +29,6 @@ The active tab is indicated by an elevated glowing Material stadium badge (`#8ab
 ## 3. Screen Mockups
 
 ### 3.1 Home Dashboard
-![Home Dashboard with Unified Sidebar](/C:/Users/Caleb%20Smith/.gemini/antigravity/brain/9561ae16-59d7-4558-ba39-4b8254f9f666/dashboard_matched_rail_1786969612734.jpg)
 
 * **Left Navigation Rail**: 5 uniform icons with **Home** active.
 * **Card 1 (Android Auto)**: Projection status (*"Ready to pair"* / *"Connected"*) + single-tap **Quick Connect** stadium button.
@@ -39,7 +38,6 @@ The active tab is indicated by an elevated glowing Material stadium badge (`#8ab
 ---
 
 ### 3.2 Settings Screen
-![Settings Screen with Unified Sidebar](/C:/Users/Caleb%20Smith/.gemini/antigravity/brain/9561ae16-59d7-4558-ba39-4b8254f9f666/settings_matched_rail_1786969644011.jpg)
 
 * **Left Navigation Rail**: Exact same 5 uniform icons with **Settings** active.
 * **Top Segmented Chips**: `[ Display ]` (Active), `[ Audio ]`, `[ System ]`.
@@ -65,6 +63,6 @@ The active tab is indicated by an elevated glowing Material stadium badge (`#8ab
 
 ## 5. File References
 
-* [`dashboard_matched_rail.jpg`](file:///c:/Users/Caleb%20Smith/Documents/GitHub/prado-firmware-reconstruction/custom_ui/docs/dashboard_matched_rail.jpg)
-* [`settings_matched_rail.jpg`](file:///c:/Users/Caleb%20Smith/Documents/GitHub/prado-firmware-reconstruction/custom_ui/docs/settings_matched_rail.jpg)
-* Full Proposal Document: [`custom_ui/docs/UI_REDESIGN_PROPOSAL.md`](file:///c:/Users/Caleb%20Smith/Documents/GitHub/prado-firmware-reconstruction/custom_ui/docs/UI_REDESIGN_PROPOSAL.md)
+The screen mockup images this doc originally embedded were host-machine-local
+paths (never portable in the repo) and have since been removed; this document
+is kept for its written spec/token reference only.

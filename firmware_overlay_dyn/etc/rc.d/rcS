@@ -67,15 +67,19 @@ fi
 chmod 600 /etc/ssh/ssh_host_*_key 2>/dev/null
 mkdir -p /var/run/sshd /var/empty
 chmod 755 /var/empty
-# 2026-08-23: real hw bug -- the old hand-carried /usr/bin/sshd had the
-# wrong ELF interpreter for this toolchain (softfloat ld-linux.so.3 vs
-# this project's real hardfloat ld-linux-armhf.so.3) and could never
-# run at all ("not found" is busybox's generic message for that case
-# too). Now built by Buildroot itself (BR2_PACKAGE_OPENSSH) against
-# this project's own real toolchain; it installs to /usr/sbin/sshd,
-# not /usr/bin/sshd (see package/openssh/openssh.mk). Same committed
-# host keys/sshd_config, unchanged.
-/usr/sbin/sshd -f /etc/ssh/sshd_config &
+# 2026-09-01: sshd itself is no longer started here unconditionally --
+# it's now gated by the "SSH Access" toggle in custom_ui's Settings
+# screen (persisted, applied at custom_ui startup, see main.cpp and
+# hal/ssh_access.h). Real reason: root's password is intentionally
+# empty on this rootfs (PermitEmptyPasswords yes, private carplay_wifi
+# network only), so leaving sshd always-on at boot would mean that's
+# always reachable rather than an explicit opt-in. The mkdir/chmod
+# above still run here regardless -- sshd's privsep directory and host
+# key permissions need to be correct whenever it does start, whether
+# that's this boot or a later toggle. (Historical note, still true:
+# built by Buildroot itself (BR2_PACKAGE_OPENSSH) against this
+# project's own real toolchain, installs to /usr/sbin/sshd not
+# /usr/bin/sshd -- see package/openssh/openssh.mk.)
 
 # GPU driver -- same real fix/values as stock (registerMemBase/irqLine
 # required since the DT node is disabled/unmatched), galcore.ko here is

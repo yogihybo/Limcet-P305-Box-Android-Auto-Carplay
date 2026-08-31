@@ -423,6 +423,21 @@ else
     chmod +x "$MNT2/etc/rc.d/rcS" 2>/dev/null || true
     find "$MNT2/etc" -maxdepth 1 -name "*.sh" -exec chmod +x {} + 2>/dev/null || true
     find "$MNT2/usr/bin" "$MNT2/usr/sbin" -maxdepth 1 -type f -exec chmod +x {} + 2>/dev/null || true
+
+    # 2026-09-01: user-requested, private carplay_wifi network only --
+    # empty root's shadow password field so PermitEmptyPasswords yes
+    # (firmware_overlay_dyn/etc/ssh/sshd_config) actually allows a
+    # passwordless `ssh root@<device-ip>`. Buildroot's real generated
+    # shadow locks root entirely ('*', confirmed by inspection -- not a
+    # password we don't know, a deliberately unmatchable hash), and
+    # firmware_overlay_dyn intentionally does NOT ship its own
+    # etc/shadow to override this: a full replacement file would also
+    # overwrite every other real account Buildroot creates (dbus, etc.)
+    # since rsync -a replaces same-path files wholesale, not merges them.
+    # sed patches just root's own line instead -- every other account is
+    # untouched.
+    sed -i 's/^root:[^:]*:/root::/' "$MNT2/etc/shadow"
+    success "root's shadow password field emptied (passwordless SSH, private-network-only by design)"
 fi
 # Diagnostic tools (tools/*/) -- genuine, generic, confirmed reusable by
 # the pipeline audit: copy every compiled binary/script/data file from

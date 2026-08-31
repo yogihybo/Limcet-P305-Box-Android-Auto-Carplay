@@ -60,17 +60,35 @@
 
 ### Dedicated STM32 MCU GPIO Map (`hardware/MCU/can_app.bin`)
 
+> **CORRECTION (2026-08-31), copied from `docs/1.3.1_MCU_FIRMWARE_
+> DECOMPILATION.md`'s own correction of this same table (both docs
+> carried the identical error, likely copy-pasted from one source):**
+> four rows below (`0x0800599C`, `0x080059B0`, `0x080059D8`,
+> `0x080059E8`) are wrong -- both the GPIO port and the function type.
+> All four are real, confirmed **input reads** (`ldr r3,[r2,#8]`, the
+> STM32 `IDR` register offset -- architecturally exclusive to reads,
+> never output control), not the output/power-gate writes claimed
+> here. Real port+pin: `0x0800599C` = `GPIOA Pin 8` (not `GPIOA Pin
+> 1`), `0x080059B0` = `GPIOC Pin 9` (not `GPIOA Pin 9`), `0x080059D8` =
+> `GPIOC Pin 7` (not `GPIOA Pin 7`), `0x080059E8` = `GPIOB Pin 2` (not
+> `GPIOA Pin 2`) -- the last one is the real source `flag_5e` gates on,
+> see `docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md`'s "flag_5e, fully
+> traced" section for the full chain. The "Power Amp Mute"/"USB 5V
+> Power Rail"/"AM/FM Radio Tuner Power"/"Bluetooth Module Power"
+> *labels* for these four rows are consequently also unconfirmed. The
+> other rows were not re-checked this pass.
+
 | Pin | Peripheral / Target | Firmware Function | Hardware Behavior |
 |---|---|:---:|---|
 | **`GPIOB Pin 6`** | **Microphone / Audio Mux Switch** | `0x08005AA0` | `0` = Aftermarket 3.5mm Jack (`CMD 0xA0 [0x09, 0x00]`); `1` = Toyota Factory Roof Mic (`CMD 0xA0 [0x09, 0x01]`). |
 | **`GPIOC Pin 13`** | **OEM Camera Bypass Relay** | `0x080058F8` | High = Asserts mechanical bypass relay for Toyota OEM camera/nav; Low = Aftermarket camera. |
 | **`GPIOC Pin 2`** | **CVBS Video Multiplexer** | `0x0800591C` | Selects composite video input path to RN6752 ITU-656 decoder. |
 | **`GPIOB Pin 0`** | **CBT16211A Touch Switch** | `0x08005A3C` | High = Closes touch bus switch connecting resistive digitizer lines to MCU ADC. |
-| **`GPIOA Pin 1`** | **Power Amp Mute (`PA_MUTE`)** | `0x0800599C` | High = Hardware mute asserted to external audio amplifier IC. |
-| **`GPIOA Pin 9`** | **USB 5V Power Rail** | `0x080059B0` | Toggles 5V VBUS power rail to external USB connector. |
-| **`GPIOA Pin 8`** | **LCD Backlight PWM / Enable** | `0x080059C0` | Enables backlight boost converter / PWM modulation. |
-| **`GPIOA Pin 7`** | **AM/FM Radio Tuner Power** | `0x080059D8` | Power gate for onboard radio tuner IC. |
-| **`GPIOA Pin 2`** | **Bluetooth Module Power** | `0x080059E8` | Power supply rail to Feasycom FSC-BT8251 BT module. |
+| ~~**`GPIOA Pin 1`** | **Power Amp Mute (`PA_MUTE`)**~~ | `0x0800599C` | **WRONG, see correction above.** |
+| ~~**`GPIOA Pin 9`** | **USB 5V Power Rail**~~ | `0x080059B0` | **WRONG, see correction above.** |
+| **`GPIOA Pin 8`** | **LCD Backlight PWM / Enable** | `0x080059C0` | Enables backlight boost converter / PWM modulation. (A different, nearby address from the corrected rows -- not itself re-verified this pass.) |
+| ~~**`GPIOA Pin 7`** | **AM/FM Radio Tuner Power**~~ | `0x080059D8` | **WRONG, see correction above.** |
+| ~~**`GPIOA Pin 2`** | **Bluetooth Module Power**~~ | `0x080059E8` | **WRONG, see correction above -- this is the real `flag_5e` source.** |
 | **`GPIOB Pin 5`** | **LCD Panel Reset Line** | `0x080059F8` | Hardware reset strobe to Fujitsu 96-pin LCD panel. |
 | **`GPIOA Pin 14`**| **SoC Hardware Reset Strobe** | `0x08005A18` | Hardware reset trigger to ARK1668 main processor. |
 | **`GPIOA Pin 15`**| **Piezo Reverse Warning Buzzer**| `0x08005A7C` | Generates audible parking sensor / reverse alert beeps. |

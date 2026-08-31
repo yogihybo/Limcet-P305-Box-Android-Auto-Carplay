@@ -2745,4 +2745,78 @@ repeatedly over time/across different vehicle states and see whether
 the returned bytes ever change, which would confirm the "live, not
 static" finding empirically without needing to fully resolve the
 table-walk in source.
-hardware experiment, not by anything checkable in source.
+
+---
+
+## `flag_5e`, fully traced (2026-08-31) -- and a real correction to this project's own GPIO pinout table found along the way
+
+User asked whether the corrected camera-type toggle (`CMD 0xA0 id=0x11`,
+see the `custom_ui` fix this session) would actually stick, which
+turned on whether `id=0x11`'s own gate condition (`flag_5e`, this
+project's `hardware/MCU/source/include/uart_protocol.h` struct comment,
+previously "Real firmware sets this elsewhere; not traced in this
+pass") could ever become true. Traced it completely.
+
+### The real chain
+
+1. **A real polling function** (entry `0x080084A4`) reads **five real
+   GPIO input pins** into a packed status byte, via a single shared
+   helper (`0x08005582`) that does `ldr r3,[r2,#8]` -- the STM32 `IDR`
+   (input data register) offset, confirmed to be a genuine input read,
+   not an output/control write:
+   - bit 0 = `GPIOA Pin 8`
+   - bit 1 = `GPIOC Pin 9`
+   - bit 2 = `GPIOC Pin 8`
+   - bit 3 = `GPIOC Pin 7`
+   - bit 4 = `GPIOB Pin 2`
+2. The packed byte is change-detected against a stored "last known"
+   value (`0x080085D8`) -- the function returns immediately if nothing
+   changed across any of the five pins.
+3. If something changed, `bit 4` (`GPIOB Pin 2`) is separately
+   extracted, **inverted**, and stored as its own tracked value at SRAM
+   `0x20000066`, which is *itself* change-detected against its own
+   "last known" byte (`0x20000067`).
+4. Only when *this* inverted-bit-4 value newly changes:
+   - New value `0` (i.e. `GPIOB Pin 2` reads HIGH) -> `flag_5e = 0`,
+     calls `FUN_080058A4(0)`.
+   - New value `1` (i.e. `GPIOB Pin 2` reads LOW) -> **`flag_5e = 1`**,
+     then branches on `id=0x11`'s own stored setting value to call
+     `FUN_080058A4(2)` or `FUN_080058A4(3)`.
+
+**Real, precise answer**: `flag_5e` becomes `1` -- enabling `id=0x11`'s
+real `GPIOC Pin 13` camera/video-relay effect -- specifically when
+**`GPIOB Pin 2` transitions to reading LOW**. What `GPIOB Pin 2`
+physically senses on this board (a strap, a connector signal, something
+else) is **not independently confirmed** -- this is the disassembly-
+verified trigger *condition*, not yet its real-world *source*. A real,
+concrete next step if this is worth resolving further: check this
+board's schematic/silkscreen for what's wired to `GPIOB Pin 2`, or
+probe it directly on real hardware.
+
+### Real, wider correction found along the way -- this project's own GPIO pinout table had 4 wrong rows, not just the one relevant to `flag_5e`
+
+Tracing the five input pins above meant resolving their real port+pin
+identities precisely -- and 4 of the 5 addresses involved (`0x0800599C`,
+`0x080059B0`, `0x080059D8`, `0x080059E8`) turned out to be **exact
+matches** for rows already in this project's own long-standing GPIO
+pinout table (`docs/1.3.1_MCU_FIRMWARE_DECOMPILATION.md` §7, copied
+into `docs/HANDOFF_MCU_AUDIO_I2C.md` too) -- and all 4 were wrong, both
+on **port** and on **function type**:
+
+| Address | Table claimed | Real (confirmed via `IDR` read + literal-pool GPIO base) |
+|---|---|---|
+| `0x0800599C` | `GPIOA Pin 1`, "Power Amp Mute" (output) | `GPIOA Pin 8`, input read |
+| `0x080059B0` | `GPIOA Pin 9`, "USB 5V Power Rail" (output) | `GPIOC Pin 9`, input read |
+| `0x080059D8` | `GPIOA Pin 7`, "AM/FM Radio Tuner Power" (output) | `GPIOC Pin 7`, input read |
+| `0x080059E8` | `GPIOA Pin 2`, "Bluetooth Module Power" (output) | `GPIOB Pin 2`, input read (the real `flag_5e` source) |
+
+All four are unambiguous by construction -- `ldr r3,[r2,#8]` is the
+`IDR` offset on every real STM32 GPIO peripheral, architecturally
+impossible to also be an output-control function. The old table's
+port/pin *and* function-type labels for these four rows were both
+wrong, not just stale naming. **Corrected in both docs, with the same
+"the other rows weren't re-checked this pass" caveat** -- this is a
+real, scoped correction of exactly the four addresses independently
+re-derived, not a blanket retraction of the whole table. Worth
+treating any row in that table as needing a fresh check before relying
+on it for something new, given this.

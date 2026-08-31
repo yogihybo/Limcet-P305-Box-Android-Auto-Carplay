@@ -116,9 +116,35 @@ typedef struct {
                              * a likely camera/video relay mux -- NOT the SoC reset
                              * pin (that's GPIOB Pin 14, corrected this session; see
                              * the handle_sync_settings id=0x11 case comment) */
-    uint8_t  flag_5e;      /* Gates id=0x11's real GPIO effect (== 1 required). Real
-                             * firmware sets this elsewhere; not traced in this pass --
-                             * defaults to 0, so id=0x11 stays inert until it is. */
+    uint8_t  flag_5e;      /* Gates id=0x11's real GPIO effect (== 1 required). FULLY
+                             * TRACED 2026-08-31 (was previously "not traced in this
+                             * pass"). Set by a real polling function (entry 0x080084A4,
+                             * writer sites at 0x800859A/0x80085AE) that reads FIVE real
+                             * GPIO input pins into a packed status byte -- GPIOA Pin 8,
+                             * GPIOC Pin 9, GPIOC Pin 8, GPIOC Pin 7, and GPIOB Pin 2 --
+                             * change-detects the whole byte against a stored "last
+                             * known" value, then separately change-detects GPIOB Pin
+                             * 2's own (inverted) bit. flag_5e is set to 1 specifically
+                             * when GPIOB Pin 2 is newly read as LOW (0) -- set to 0
+                             * when it reads HIGH. Real, disassembly-confirmed via
+                             * ldr r3,[r2,#8] (the GPIO IDR/input-data-register offset)
+                             * -- a genuine input read, not a write/output-control
+                             * function. GPIOB Pin 2's real-world physical meaning on
+                             * this board (what it senses -- a strap, a connector
+                             * signal, something else) is NOT independently confirmed;
+                             * this is the disassembly-verified trigger CONDITION, not
+                             * yet the trigger's real-world SOURCE. See
+                             * docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md's flag_5e section
+                             * for the full trace, including a real correction to this
+                             * project's own earlier GPIO pinout table (0x080059E8 was
+                             * previously mislabeled "GPIOA Pin 2, Bluetooth Module
+                             * Power" -- it's actually GPIOB Pin 2, a plain input read,
+                             * not GPIOA, not a power-gate write). Clean-room default
+                             * (0, inert) is unchanged -- this project's own
+                             * reimplementation doesn't drive GPIOB Pin 2 as an input
+                             * sense line at all, so id=0x11 stays inert here regardless
+                             * of this finding; this comment documents the REAL
+                             * firmware's behavior for reference. */
 } McuSettings;
 
 typedef void (*UartCmdHandlerFunc)(const UartPacket *packet);

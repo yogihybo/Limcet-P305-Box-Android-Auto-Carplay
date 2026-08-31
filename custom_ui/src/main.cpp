@@ -583,6 +583,12 @@ int main() {
         }
 
         static bool s_wasInAaBeforeReverse = false;
+        // Separate client instance for the reverse-gear "resume AA video"
+        // fix below -- same one-off-IPC-call pattern as nightModeClient
+        // further down (AndroidAutoClient's constructor is a real no-op,
+        // safe to have multiple independent instances; see its own header
+        // comment on why requestResumeVideo() never spawns the sidecar).
+        static hal::AndroidAutoClient reverseGearAaClient;
 
         if (reverseChanged) {
             hal::apply_reversing_volume_cut(reverseEngaged);
@@ -601,17 +607,37 @@ int main() {
                 }
             } else {
                 hal::ack_exit_done(camera_handle);
+                /* Fix (2026-08-31, real hardware bug report): "AA session
+                 * stays connected in the background but doesn't
+                 * automatically return, only the LVGL interface" --
+                 * confirmed the session itself never drops. Root cause:
+                 * navigate_to(AndroidAuto) only pushes the LVGL screen --
+                 * it says nothing to the phone. The reverse-camera
+                 * interruption (this OEM path switches the LCD's video
+                 * source away from the SoC at the hardware level) is
+                 * exactly the situation androidauto_client.h's own
+                 * requestResumeVideo() comment describes: the phone
+                 * notices its video sink go away and grants itself
+                 * NATIVE focus (its own in-app fallback) as an
+                 * *unsolicited* grant -- the session stays Connected the
+                 * whole time (matches what was observed), but nothing
+                 * was asking it to come back to PROJECTED focus, so it
+                 * never did on its own. Send RESUME explicitly whenever
+                 * returning to AA after reverse gear, not just navigate
+                 * the screen. */
                 if (factoryCamera) {
                     std::printf("%s [HAL:REVCAM] Reverse gear disengaged -- OEM Factory Camera mode de-activated (was_in_aa=%d)\n",
                                 core::log_timestamp().c_str(), s_wasInAaBeforeReverse ? 1 : 0);
                     if (s_wasInAaBeforeReverse) {
                         staging_ui::navigate_to(staging_ui::NavDestination::AndroidAuto);
+                        reverseGearAaClient.requestResumeVideo();
                     }
                 } else {
                     std::printf("%s [HAL:REVCAM] Reverse gear disengaged -- returning to previous screen (was_in_aa=%d)\n",
                                 core::log_timestamp().c_str(), s_wasInAaBeforeReverse ? 1 : 0);
                     if (s_wasInAaBeforeReverse) {
                         staging_ui::navigate_to(staging_ui::NavDestination::AndroidAuto);
+                        reverseGearAaClient.requestResumeVideo();
                     } else {
                         core::navigation::pop();
                     }

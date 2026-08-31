@@ -444,7 +444,36 @@ void McuInputHal::sync_video_relay(bool oem) {
     if (fd_ < 0) {
         return;
     }
-    /* Real OEM/Aftermarket "Camera Type" setting -- CONFIRMED 2026-08-29 by
+    /* CORRECTED 2026-08-31 (real hardware bug report: toggle had no
+     * effect, video stayed stuck on whatever the real stock app last
+     * set, even though a live-hardware toggle from the previous
+     * MCUAdapter_BoxP300::syncSettingDataToMcu()-derived id=0x01 sent
+     * cleanly). Re-checked id=0x01 directly against can_app.bin's own
+     * CMD 0xA0 dispatch table -- it's a confirmed, unconditional no-op
+     * on the real MCU firmware: ids 0x01-0x06 and 0x0e all resolve to
+     * the exact same handler at 0x08008b88, which is `nop; nop; pop
+     * {r4,pc}`, verified via the real TBB jump-table bytes, not
+     * assumed from the disassembly listing's own (separately known to
+     * sometimes misdecode inline data) linear output. The earlier
+     * comment below is still real and accurate about what the STOCK
+     * APP itself sends for this setting (a genuine, disassembly-
+     * confirmed finding) -- it just turns out the real MCU firmware
+     * ignores that command entirely, a real stock-vendor bug this
+     * project inherited by faithfully replicating the app-side
+     * behavior without also checking the MCU-side effect.
+     *
+     * main.cpp's own startup sync and reverse-gear transition handler
+     * were never subject to this bug -- they already send CMD 0xA0
+     * id=0x11 for this same logical setting (hardware/MCU/source's
+     * own uart_protocol.h struct comment: id=0x11's real target is
+     * GPIOC Pin 13, the actual camera/video relay -- gated by an
+     * internal flag whose real trigger condition is still unconfirmed,
+     * but real-hardware behavior indicates it's satisfied in practice).
+     * Switched this function to match, closing the inconsistency
+     * between the two code paths for the same setting.
+     *
+     * Original finding, preserved for the record -- real and accurate
+     * about what the stock app sends, just not sufficient on its own:
      * direct disassembly of MCUAdapter_BoxP300::syncSettingDataToMcu(int)
      * (usr/lib/libMcuCenter.so, 0x38df8), the confirmed-active MCU adapter
      * class's own real "send this setting to the MCU" function. Traced
@@ -461,11 +490,13 @@ void McuInputHal::sync_video_relay(bool oem) {
      * This supersedes and REPLACES the retracted CanBus_Raise_Toyota lead
      * (usr/lib/libCanBus.so is confirmed dead code on this hardware, never
      * dlopen'd by anything -- see MCU_FIRMWARE_VERIFIED_FINDINGS.md's
-     * "RETRACTION" section). CMD 0xA0 id=0x01: value 0 = AfterMarket
-     * Camera, value 1 = Factory (OEM) Camera. */
-    unsigned char payload[2] = {0x01, static_cast<unsigned char>(oem ? 0x01 : 0x00)};
+     * "RETRACTION" section). The stock app sends CMD 0xA0 id=0x01: value
+     * 0 = AfterMarket Camera, value 1 = Factory (OEM) Camera -- but per
+     * the correction above, id=0x01 doesn't do anything on this
+     * firmware, so this function now sends id=0x11 instead. */
+    unsigned char payload[2] = {0x11, static_cast<unsigned char>(oem ? 0x01 : 0x00)};
     send_mcu_frame(fd_, 0xA0, payload, 2);
-    std::printf("%s [HAL:MCU] Synced Camera Type to MCU via CMD 0xA0 (id=0x01, val=0x%02X, %s)\n",
+    std::printf("%s [HAL:MCU] Synced Camera Type to MCU via CMD 0xA0 (id=0x11, val=0x%02X, %s)\n",
                 core::log_timestamp().c_str(), payload[1], oem ? "Factory/OEM" : "AfterMarket");
 }
 

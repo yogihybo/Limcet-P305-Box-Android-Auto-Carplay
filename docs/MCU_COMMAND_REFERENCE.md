@@ -39,7 +39,7 @@ MCU firmware.
 | Cmd | Meaning | Payload / bitfield layout | Status | Note |
 |---|---|---|---|---|
 | `0x81` | Init handshake / keepalive, resets internal state slots | `payload[0] = 0x01` fixed, no further structure | ✅ CONFIRMED | handler `0x080088B5` |
-| `0x82` | App foreground/mode change | `payload[0]`: `0x01`=Media, `0x02`=Navi/AA — plain enum, not a bitfield | ✅ CONFIRMED (that the SoC sends this) / ❌ what the MCU *does* with it is a clean-room guess | `handle_app_state()`'s GPIOB Pin0/Pin6 toggle has no disassembly citation |
+| `0x82` | App foreground/mode change | see the [dedicated table](#cmd-0x82-app-mode-change) below | ✅ CONFIRMED both directions (2026-08-31) — real send function and real MCU handler now both traced | GPIOB Pin0/Pin6 toggle still has no disassembly citation |
 | `0x84` | Audio route select | see [`CMD 0x84`/`0xA0 id=0x11` table](#cmd-0x84--cmd-0xa0-id0x11-shared-relay-dispatcher) | ✅ CONFIRMED (mask/ignore/dispatch logic, `0x08008808`) / ⚠️ payload offset conflict | this command and `0xA0 id=0x11` drive the exact same dispatcher |
 | `0x85` | App-protocol ACK | `payload[0..2]` — 3 raw bytes stored into an internal queue slot; no further bit-level structure resolved | ✅ CONFIRMED (command byte, store, queue mechanism) / ❌ the clean-room reply content is a self-admitted "reasonable approximation," not byte-exact |
 | `0x87` | Bluetooth AT-command relay | `payload[0..n]` = raw ASCII AT-command bytes, verbatim passthrough to USART3 — not a structured bitfield | ✅ CONFIRMED — handler `0x080087A1`, real USART3 base `0x40004800` (PB10/PB11) | baud rate (9600) is an unconfirmed best-guess. Real bug found: the `AT+PIN=0000` template's digit-substitution bytes have no writer anywhere in the firmware — the PIN is very likely always sent malformed |
@@ -86,6 +86,29 @@ switch mechanism is a U-Boot env var (`fw_setenv carback_camera_mode`) plus a ke
 I2C sysfs write — **zero MCU involvement**. This superseded an earlier belief that `id=0x11`
 was how stock itself does the toggle; `id=0x11` is real and has a real hardware effect, but
 stock apparently doesn't use it for this purpose.
+
+### `CMD 0x82` app-mode change
+
+**Send side, real, traced (2026-08-31)**: `MCUAdapter_BoxP300::onModeAppChanged(unsigned int appId, unsigned int mode)` (`0x00035D50` in `libMcuCenter.so`) builds and sends the frame via the same real `getPackageCheckSum()`/`ProtocolUtils::writeDatas()` pipeline this project already independently reverse-engineered. After a fixed 4-byte prefix, it branches on `mode`:
+
+| `mode` value | Extra payload byte appended |
+|---|---|
+| `2`, `4`, `5`, `7`, `13` | `8` |
+| `23` | `0x0A` |
+| anything else | none |
+
+This directly **refutes** the doc's earlier oversimplified framing (`payload[0]: 0x01=Media, 0x02=Navi/AA — plain enum`) — the real function branches on a much wider set of `mode` values, not a clean 2-way enum. `mcu-handshake.c`'s own hardcoded startup send uses `mode=4`, which falls in the `{2,4,5,7,13}` group.
+
+**Not yet closed**: which byte of this multi-field frame ends up at the MCU's `payload[0]` wasn't fully traced — the function keeps appending more fields after the conditional byte before calling `writeDatas()`.
+
+**Receive side, real, traced (2026-08-31)**: the real MCU-firmware handler (`0x08008BD4`, from the confirmed 9-entry dispatch table) reads `payload[0]` and branches:
+
+| `payload[0]` | MCU writes to state struct (`0x20000282`) |
+|---|---|
+| `== 1` | `offset[0]=1`, `offset[1]=4` |
+| anything else | `offset[0]=2`, `offset[1]=1` |
+
+Both branches then call the same already-confirmed generic internal event/message-queue function (`0x08006228`, a 40-slot circular queue also used by `CMD 0x81`'s init handshake) with identical arguments (`event type=0`, data `1,0`) — so `CMD 0x82` itself never touches a GPIO register directly. Whatever real hardware effect follows depends on how that internal event or the written state bytes get consumed elsewhere. The state struct (`0x20000282`) is heavily shared — **89 separate real load sites** found across the firmware via a full literal-pool scan — too broad to fully trace in this pass. The clean-room's `handle_app_state()` GPIOB Pin0/Pin6 toggle guess remains **unconfirmed**, neither proven nor disproven by this trace.
 
 ### `CMD 0x84` / `CMD 0xA0 id=0x11`'s shared relay dispatcher — real 4-state truth table
 

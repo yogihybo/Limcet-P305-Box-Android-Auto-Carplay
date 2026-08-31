@@ -36,17 +36,31 @@ this set is closed and double-checked (cross-referenced between two independent 
 passes, 9/9 exact address matches). No command outside this list does anything on the real
 MCU firmware.
 
-| Cmd | Meaning | Payload / bitfield layout | Status | Note |
+| Cmd | Bit / Field | Meaning | Status | Note |
 |---|---|---|---|---|
-| `0x81` | Init handshake / keepalive, resets internal state slots | `payload[0] = 0x01` fixed, no further structure | ✅ CONFIRMED | handler `0x080088B5` |
-| `0x82` | App foreground/mode change | see the [dedicated table](#cmd-0x82-app-mode-change) below | ✅ CONFIRMED both directions (2026-08-31) — real send function and real MCU handler now both traced | GPIOB Pin0/Pin6 toggle still has no disassembly citation |
-| `0x84` | Audio route select | see [`CMD 0x84`/`0xA0 id=0x11` table](#cmd-0x84--cmd-0xa0-id0x11-shared-relay-dispatcher) | ✅ CONFIRMED (mask/ignore/dispatch logic, `0x08008808`) / ⚠️ payload offset conflict | this command and `0xA0 id=0x11` drive the exact same dispatcher |
-| `0x85` | App-protocol ACK | `payload[0..2]` — 3 raw bytes stored into an internal queue slot; no further bit-level structure resolved | ✅ CONFIRMED (command byte, store, queue mechanism) / ❌ the clean-room reply content is a self-admitted "reasonable approximation," not byte-exact |
-| `0x87` | Bluetooth AT-command relay | `payload[0..n]` = raw ASCII AT-command bytes, verbatim passthrough to USART3 — not a structured bitfield | ✅ CONFIRMED — handler `0x080087A1`, real USART3 base `0x40004800` (PB10/PB11) | baud rate (9600) is an unconfirmed best-guess. Real bug found: the `AT+PIN=0000` template's digit-substitution bytes have no writer anywhere in the firmware — the PIN is very likely always sent malformed |
-| `0x88` | TEA-cipher anti-clone challenge | `payload[0..7]` = 8-byte TEA-encrypted block (one 64-bit cipher round-trip), no sub-fields | ✅ CONFIRMED, fully — real cipher `0x080050A0`, genuine 32-round TEA, key recovered from `.data` `0x0800BCAC`, shared across the whole DCn32 product line, and the decrypted reply is read by nothing on the SoC side (inert as shipped) | see `0x60` below — the clean-room reply is tagged `0x88`, but the real MCU→SoC reply opcode is `0x60`, not `0x88` |
-| `0xA0` | UI settings sync | `payload[0]` = settings `id` (`0x00`–`0x11`), `payload[1]` = value — see the [dedicated sub-table](#cmd-0xa0-sub-table-settings-sync-by-id) below | ✅ CONFIRMED, see the dedicated table below | |
-| `0xE1` | Enter bootloader for update | `payload = [0x00, 0x00]` — the trigger is the command byte alone; the MCU-side effect (writing magic `0x5555AAAA` to SRAM `0x20004004`) is internal, not driven by any payload field | ✅ CONFIRMED end-to-end, both sides | **real risk, not just a documentation note**: the resident bootloader isn't in this repo, and the clean-room bootloader erases flash *before* waiting for the first byte — sending this on real hardware with no follow-up could wipe application flash with no recovery. `tools/mcu-probe --reboot-probe` is gated behind `--confirm-erase-risk` |
-| `0xFF` | System state reset | `payload[0]` = sub-command id (`0x00`–`0x09` all confirmed no-ops; only `0x7F` acts). Separately confirmed (while tracing `CMD 0x87`'s shared SRAM struct) that this handler only *reads* struct offsets `0-2`, never writes them | ✅ CONFIRMED dispatch shape and gate, `0x080088E8` | **Partially traced, not fully**: which sub-id acts and that it reads (not writes) the shared struct is real disassembly. The actual real effect once sub-id `0x7F` fires was never deep-traced past that gate — the clean-room's "resets CAN RX ring buffer" is an explicit approximation, not verified against the real handler's own instructions |
+| `0x81` | — | Init handshake / keepalive, resets internal state slots. `payload[0] = 0x01` fixed, no further structure | ✅ CONFIRMED | handler `0x080088B5` |
+| **`0x82`** | — | **App foreground/mode change**. Real `MCUAdapter_BoxP300::onModeAppChanged(appId, mode)` (`0x00035D50`, `libMcuCenter.so`) builds the frame via the same `getPackageCheckSum()`/`writeDatas()` pipeline already reverse-engineered elsewhere | ✅ CONFIRMED both directions (2026-08-31) — real send function and real MCU handler now both traced | refutes the doc's earlier oversimplified "`0x01`=Media/`0x02`=Navi/AA" 2-way enum guess |
+| ↳ | `mode` (send arg) `2`,`4`,`5`,`7`,`13` | Extra payload byte `8` appended | ✅ confirmed — `mcu-handshake.c`'s hardcoded startup send uses `mode=4`, in this group |
+| ↳ | `mode` (send arg) `23` | Extra payload byte `0x0A` appended | ✅ confirmed |
+| ↳ | `mode` (send arg), anything else | no extra byte appended | ✅ confirmed |
+| ↳ | *(gap)* | which byte of the full frame lands at the MCU's `payload[0]` wasn't fully traced — the function appends more fields after this conditional byte before sending | not yet closed |
+| ↳ | MCU `payload[0] == 1` | MCU writes state struct `0x20000282`: `offset[0]=1, offset[1]=4`; calls the shared internal event-queue function `0x08006228` | ✅ confirmed, `0x08008BD4` |
+| ↳ | MCU `payload[0]`, anything else | MCU writes `offset[0]=2, offset[1]=1`; same event-queue call | ✅ confirmed, `0x08008BD4` |
+| ↳ | *(hypothesis, not confirmed)* | possibly the **input-focus switcher between factory/OEM mode and app mode** — which subsystem the MCU routes knob ticks (`CMD 0x02`) toward. Plausible given the real 2-way state change, but no consumer of that state was found to actually branch input routing on it (the struct has 89 real load sites, too broad to fully trace). A separate report asserted this as already-proven ("routes rotary knob event target and CAN arbitration priority") — checked and rejected, that fabricates a conclusion the trace doesn't support | ❌ unconfirmed, GPIOB Pin0/Pin6 toggle also still has no disassembly citation |
+| **`0x84`** | — | **Audio route select**. Value masked to 4 bits (`&0xF`), ignored if `≥6`. Same dispatcher as `CMD 0xA0 id=0x11` — see the [4-state GPIO table](#cmd-0x84--cmd-0xa0-id0x11-shared-relay-dispatcher) below | ✅ CONFIRMED (mask/ignore/dispatch logic, `0x08008808`) / ⚠️ payload offset conflict | this command and `0xA0 id=0x11` drive the exact same GPIOC13/PC2 dispatcher |
+| ↳ | value `0` | sends real `"AT+AUDROUTE=1\r\n"` + dispatcher state `0` | ✅ confirmed |
+| ↳ | value `1`, `2` | state field updated only, no relay action | ✅ confirmed |
+| ↳ | value `3` | sends real `"AT+AUDROUTE=2\r\n"` + dispatcher state `1` | ✅ confirmed |
+| ↳ | value `4`, `5` | state field updated only, no relay action | ✅ confirmed |
+| ↳ | value `≥6` | ignored entirely | ✅ confirmed |
+| ↳ | *(offset conflict)* | this session's own MCU-side disassembly reads the value from frame `+3` (`payload[1]`), but `custom_ui`'s `handle_audio_route()` reads `payload[0]` | ⚠️ not reconciled |
+| ↳ | *(polarity conflict)* | `CMD 0x84`'s own gate ("proceed if struct offset `0x5e`==0") is the *opposite* polarity of `CMD 0xA0 id=0x11`'s gate ("proceed if its own offset `0x5e`==1") — read from different SRAM struct bases, so whether these are the same flag or two independent ones is unresolved | ⚠️ not reconciled |
+| `0x85` | — | App-protocol ACK. `payload[0..2]` — 3 raw bytes stored into an internal queue slot; no further bit-level structure resolved | ✅ CONFIRMED (command byte, store, queue mechanism) / ❌ the clean-room reply content is a self-admitted "reasonable approximation," not byte-exact |
+| `0x87` | — | Bluetooth AT-command relay. `payload[0..n]` = raw ASCII AT-command bytes, verbatim passthrough to USART3 — not a structured bitfield | ✅ CONFIRMED — handler `0x080087A1`, real USART3 base `0x40004800` (PB10/PB11) | baud rate (9600) is an unconfirmed best-guess. Real bug found: the `AT+PIN=0000` template's digit-substitution bytes have no writer anywhere in the firmware — the PIN is very likely always sent malformed |
+| `0x88` | — | TEA-cipher anti-clone challenge. `payload[0..7]` = 8-byte TEA-encrypted block (one 64-bit cipher round-trip), no sub-fields | ✅ CONFIRMED, fully — real cipher `0x080050A0`, genuine 32-round TEA, key recovered from `.data` `0x0800BCAC`, shared across the whole DCn32 product line, and the decrypted reply is read by nothing on the SoC side (inert as shipped) | see `0x60` below — the clean-room reply is tagged `0x88`, but the real MCU→SoC reply opcode is `0x60`, not `0x88` |
+| `0xA0` | — | UI settings sync. `payload[0]` = settings `id` (`0x00`–`0x11`), `payload[1]` = value — see the [dedicated sub-table](#cmd-0xa0-sub-table-settings-sync-by-id) below | ✅ CONFIRMED, see the dedicated table below | |
+| `0xE1` | — | Enter bootloader for update. `payload = [0x00, 0x00]` — the trigger is the command byte alone; the MCU-side effect (writing magic `0x5555AAAA` to SRAM `0x20004004`) is internal, not driven by any payload field | ✅ CONFIRMED end-to-end, both sides | **real risk, not just a documentation note**: the resident bootloader isn't in this repo, and the clean-room bootloader erases flash *before* waiting for the first byte — sending this on real hardware with no follow-up could wipe application flash with no recovery. `tools/mcu-probe --reboot-probe` is gated behind `--confirm-erase-risk` |
+| `0xFF` | — | System state reset. `payload[0]` = sub-command id (`0x00`–`0x09` all confirmed no-ops; only `0x7F` acts). Separately confirmed (while tracing `CMD 0x87`'s shared SRAM struct) that this handler only *reads* struct offsets `0-2`, never writes them | ✅ CONFIRMED dispatch shape and gate, `0x080088E8` | **Partially traced, not fully**: which sub-id acts and that it reads (not writes) the shared struct is real disassembly. The actual real effect once sub-id `0x7F` fires was never deep-traced past that gate — the clean-room's "resets CAN RX ring buffer" is an explicit approximation, not verified against the real handler's own instructions |
 
 ### `CMD 0xA0` sub-table (settings sync, by `id`)
 
@@ -87,35 +101,12 @@ I2C sysfs write — **zero MCU involvement**. This superseded an earlier belief 
 was how stock itself does the toggle; `id=0x11` is real and has a real hardware effect, but
 stock apparently doesn't use it for this purpose.
 
-### `CMD 0x82` app-mode change
-
-**Send side, real, traced (2026-08-31)**: `MCUAdapter_BoxP300::onModeAppChanged(unsigned int appId, unsigned int mode)` (`0x00035D50` in `libMcuCenter.so`) builds and sends the frame via the same real `getPackageCheckSum()`/`ProtocolUtils::writeDatas()` pipeline this project already independently reverse-engineered. After a fixed 4-byte prefix, it branches on `mode`:
-
-| `mode` value | Extra payload byte appended |
-|---|---|
-| `2`, `4`, `5`, `7`, `13` | `8` |
-| `23` | `0x0A` |
-| anything else | none |
-
-This directly **refutes** the doc's earlier oversimplified framing (`payload[0]: 0x01=Media, 0x02=Navi/AA — plain enum`) — the real function branches on a much wider set of `mode` values, not a clean 2-way enum. `mcu-handshake.c`'s own hardcoded startup send uses `mode=4`, which falls in the `{2,4,5,7,13}` group.
-
-**Not yet closed**: which byte of this multi-field frame ends up at the MCU's `payload[0]` wasn't fully traced — the function keeps appending more fields after the conditional byte before calling `writeDatas()`.
-
-**Receive side, real, traced (2026-08-31)**: the real MCU-firmware handler (`0x08008BD4`, from the confirmed 9-entry dispatch table) reads `payload[0]` and branches:
-
-| `payload[0]` | MCU writes to state struct (`0x20000282`) |
-|---|---|
-| `== 1` | `offset[0]=1`, `offset[1]=4` |
-| anything else | `offset[0]=2`, `offset[1]=1` |
-
-Both branches then call the same already-confirmed generic internal event/message-queue function (`0x08006228`, a 40-slot circular queue also used by `CMD 0x81`'s init handshake) with identical arguments (`event type=0`, data `1,0`) — so `CMD 0x82` itself never touches a GPIO register directly. Whatever real hardware effect follows depends on how that internal event or the written state bytes get consumed elsewhere. The state struct (`0x20000282`) is heavily shared — **89 separate real load sites** found across the firmware via a full literal-pool scan — too broad to fully trace in this pass. The clean-room's `handle_app_state()` GPIOB Pin0/Pin6 toggle guess remains **unconfirmed**, neither proven nor disproven by this trace.
-
-**Hypothesis (2026-08-31), not confirmed**: given the two-state write (`payload==1` vs. else) and the sheer number of consumers of that shared state struct, `CMD 0x82` is possibly the **input-focus switcher between factory/OEM mode and app mode** — i.e., which subsystem the MCU routes knob ticks (`CMD 0x02`) and other front-panel input toward. This is plausible given what's confirmed (a real 2-way state change reaching many parts of the firmware) but not itself traced — no consumer read of offset `0`/`1` was found to actually branch input routing on this state. A separate report tried to assert this specific mechanism ("routes rotary knob event target and CAN arbitration priority across 89 reference sites") as an already-proven fact; that specific claim was checked and rejected — it fabricates a conclusion on top of the honest "too broad to trace" finding above, not something actually found in any of those 89 sites. Recorded here as a real, worth-testing hypothesis only.
-
 ### `CMD 0x84` / `CMD 0xA0 id=0x11`'s shared relay dispatcher — real 4-state truth table
 
 Both commands funnel into the same real dispatcher function (`0x080058A4`), confirmed by
-instruction-by-instruction trace of `0x080058F8`/`0x0800591C`:
+instruction-by-instruction trace of `0x080058F8`/`0x0800591C`. Referenced from both `0x84`'s
+and `0xA0 id=0x11`'s rows above/below — kept as its own table since it's genuinely shared
+physical-pin state, not specific to either command alone:
 
 | Dispatcher state | GPIOC13 | GPIOC2 |
 |---|---|---|
@@ -123,26 +114,6 @@ instruction-by-instruction trace of `0x080058F8`/`0x0800591C`:
 | `1` | LOW | HIGH |
 | `2` | LOW | LOW *(same physical result as state 0)* |
 | `3` | HIGH | LOW |
-
-**`CMD 0x84` value → dispatcher state** (value masked to 4 bits, `&0xF`, ignored if `≥6`):
-
-| `CMD 0x84` value | Action |
-|---|---|
-| `0` | sends real `"AT+AUDROUTE=1\r\n"` + dispatcher state `0` |
-| `1`, `2` | state field updated only, no relay action |
-| `3` | sends real `"AT+AUDROUTE=2\r\n"` + dispatcher state `1` |
-| `4`, `5` | state field updated only, no relay action |
-| `≥6` | ignored entirely |
-
-**Payload offset itself is disputed**: this session's own MCU-side disassembly reads the
-`CMD 0x84` value from frame `+3` (`payload[1]`), but `custom_ui`'s `handle_audio_route()`
-reads `payload[0]` — not reconciled.
-
-**Real, still-unresolved finding**: `CMD 0x84`'s own gate ("proceed if struct offset `0x5e`
-== 0") is the *opposite* polarity of `CMD 0xA0 id=0x11`'s gate ("proceed if its own offset
-`0x5e` == 1") — and the two handlers read that offset from different SRAM struct bases, so
-whether these are the same flag at overlapping offsets or two genuinely independent flags is
-not resolved.
 
 ---
 
@@ -203,7 +174,7 @@ jump to.
 | ↳ | `payload[0]` = `0x01` | not resolved | UNCONFIRMED |
 | ↳ | `payload[1]` = `0x04` | SoC-side handler (`0x0003D7EC`) gates on `payload[1]==0x11` exactly — only that value posts a real `MsnEvent(type=0x5026)`; any other value hits the same shared no-op epilogue as `CMD 0x30`. **This captured frame's value (`0x04`) fails the gate** — a real no-op in the vendor stack | ✅ gate confirmed (2026-08-31); the "Toyota Prado 150 CAN Matrix Mode" reading a separate report attached here is **contradicted** — names a value the code doesn't branch on |
 | ↳ | `payload[2]` = `0x00` | reserved / not resolved | UNCONFIRMED |
-| **`0x20`** | — | **Touch coordinate report**. Live-capture confirmed via a corner-touch test, exact pixel-width match — the most rigorously verified finding in the corpus. ~~Static disassembly only knew it as a "reply builder"~~, superseded | ✅ CONFIRMED |
+| **`0x20`** | — | **Touch coordinate report**. Live-capture confirmed via a corner-touch test, exact pixel-width match — the most rigorously verified finding in the corpus | ✅ CONFIRMED |
 | ↳ | X | `(payload[1]<<8)\|payload[0]` | ✅ confirmed, native `0`–`800` px |
 | ↳ | Y | `(payload[3]<<8)\|payload[2]` | ✅ confirmed, native `0`–`480` px |
 | ↳ | all-zero payload | release | ✅ confirmed |

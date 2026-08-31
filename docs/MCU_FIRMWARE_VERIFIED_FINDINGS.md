@@ -663,8 +663,8 @@ mode directly rather than assuming).
 | 12 | "Front camera time" | `0x0c` (same target as idx 11) | same threshold, different UI widget/value transform |
 | 13 | "Speech button" | `0x0d` | write-only, no consumer found |
 | 14 | "DVR" | `0x0e` | **confirmed genuine no-op** in the real firmware -- clean cross-confirmation |
-| 15 | "Right Camera" | `0x0f` | plain stored value, confirmed no GPIO effect |
-| 16 | "Left Camera" | `0x10` | plain stored value, confirmed no GPIO effect |
+| 15 | "Right Camera" | `0x0f` | **CORRECTED (2026-08-31)** — earlier "confirmed no GPIO effect" was wrong: struct offset `0x43` IS read (`0x08005D30`), gated by a second flag, and drives the same GPIOA Pin 15 / GPIOB Pin 8 / GPIOB Pin 9 relay trio as `id=0x0b`'s PA15/PB8/PB9 subsystem. Confirmed via GPIO port-base literal resolution (`0x40010800`=GPIOA, `0x40010C00`=GPIOB) and byte-identical in the `DCn32-ACURA` firmware dump too |
+| 16 | "Left Camera" | `0x10` | **CORRECTED (2026-08-31)**, same finding as idx 15: struct offset `0x44` is read (`0x08005D80`, adjacent code, different gating flag), driving the identical PA15/PB8/PB9 trio |
 | **17** | **"Microphone"** | **`0x11`** | **GPIOC13/PC2 relay (gated by an internal flag)** |
 | 18-21 | *(empty string)* | n/a | past the real list's populated range; also past the MCU's own real 18-entry dispatch limit (`settingId >= 0x12` is out-of-range there too) -- doubly closed |
 

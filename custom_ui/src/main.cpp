@@ -593,7 +593,25 @@ int main() {
         if (reverseChanged) {
             hal::apply_reversing_volume_cut(reverseEngaged);
             bool factoryCamera = core::default_store().get_bool("OriginalCarCamera", false, "General");
-            hal::send_mcu_setting(0x11, factoryCamera ? 1 : 0);
+            /* Fix (2026-08-31, real hardware regression): "stuck in the
+             * video mux" after exiting reverse with OEM Factory Camera
+             * on. Root cause, found from a real user observation: at app
+             * startup (main() above, ~line 528), sending id=0x11=0 is
+             * what visibly switches the display FROM the factory/OEM
+             * video path BACK to LVGL -- that's a real, observed effect,
+             * not just a settings-preference push. But this line used
+             * to send id=0x11 = the STATIC factoryCamera preference on
+             * BOTH engage and disengage -- when that preference is true,
+             * it sent id=0x11=1 on disengage too, i.e. it never sent the
+             * one value that's actually known to switch the display back
+             * to LVGL. Send the real engage/disengage semantics instead:
+             * 1 (factory) only while actually reversing, 0 (matching the
+             * known-working boot-time "switch to LVGL" command)
+             * unconditionally once reverse ends, regardless of the
+             * user's persisted preference -- that preference should only
+             * govern what shows *during* reverse, not what the display
+             * returns to afterward. */
+            hal::send_mcu_setting(0x11, (reverseEngaged && factoryCamera) ? 1 : 0);
             if (reverseEngaged) {
                 hal::ack_enter_done(camera_handle);
                 s_wasInAaBeforeReverse = hal::androidauto_screen_active().load(std::memory_order_acquire);

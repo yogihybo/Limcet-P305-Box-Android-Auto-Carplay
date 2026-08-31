@@ -102,7 +102,7 @@ BW_AAP_TEST_OBJS     := $(BUILD_DIR)/bw-aap-test-obj/main.o
 
 all: ui carplay-sidecar androidauto-sidecar ladspa-eq
 
-ui: $(UI_TARGET) $(BUILD_DIR)/hal.conf $(BUILD_DIR)/default_settings.conf
+ui: $(UI_TARGET) $(BUILD_DIR)/hal.conf $(BUILD_DIR)/default_settings.conf androidauto-sidecar
 carplay-sidecar: $(SIDECAR_TARGET)
 androidauto-sidecar: $(ANDROIDAUTO_SIDECAR_TARGET) $(BUILD_DIR)/hal.conf $(BUILD_DIR)/alsa/alsa.conf
 

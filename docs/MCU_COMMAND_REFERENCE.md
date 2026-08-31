@@ -192,53 +192,30 @@ jump to.
 
 `custom_ui/src/hal/mcu_input.cpp` currently treats `CMD 0x04` as "reverse gear ENGAGED" and
 `CMD 0x12` as "reverse gear DISENGAGED," with **no payload check on either** — just the
-command byte's presence. A fresh live capture (2026-08-31) confirms both really do fire at
-the right moment (`0x04` on engage, `0x12` on disengage) — this is real, reproducible,
-empirical support for using them as *practical triggers*. It does not, however, settle
-either byte's *true* meaning:
+command byte's presence. Four real candidate signals exist for reverse-gear detection; none
+is both fully confirmed *and* currently used as the primary source:
 
-- `CMD 0x04` is the one "high"-confidence disassembly finding in the whole outbound table
-  that **isn't** about reverse gear at all — it's real, named parking radar/distance
-  telemetry (`transRadarLevel`). Parking sensors very plausibly auto-activate exactly when
-  reversing, which would make this command correlate with reverse gear for a real physical
-  reason, not by coincidence and not because the byte itself encodes gear state. The new
-  capture confirms the *correlation*, not which explanation is right.
-- `CMD 0x12`'s meaning has **three different unreconciled guesses** across this project's
-  own history (unresolved status event / "DIP switch profile" / "reverse disengaged") and
-  zero disassembly support for any of them. It now also has a real, checksum-verified
-  capture showing it firing **once at app startup**, as part of the same telemetry burst
-  the init handshake (`0x81/0x82/0x84/0x85`) triggers — unrelated to reverse gear. This
-  makes it a weaker signal than `0x04`, not a stronger one: the same command byte has now
-  been directly observed doing two different real things, so its mere presence isn't
-  reliably specific to a reverse-gear disengage event even where the correlation holds.
+| Candidate | Mechanism | Evidence for | Evidence against / open gaps | Current status in `custom_ui` |
+|---|---|---|---|---|
+| `CMD 0x04` presence | any frame with this cmd byte, no payload check | Live capture (2026-08-31) confirms it fires reliably on reverse-gear **engage** — real, reproducible | Real, named, *competing* meaning: parking radar/distance telemetry (`transRadarLevel`), the one "high"-confidence disassembly finding in the whole outbound table. Parking sensors very plausibly auto-activate exactly when reversing — correlates for a real physical reason, not necessarily because the byte encodes gear state | ✅ used as "ENGAGED" trigger |
+| `CMD 0x12` presence | any frame with this cmd byte, no payload check | Live capture (2026-08-31) confirms it fires reliably on reverse-gear **disengage** | **Three different unreconciled guesses** across this project's own history (unresolved status event / "DIP switch profile" / "reverse disengaged"), zero disassembly support for any. Also confirmed firing **once at app startup**, unrelated to reverse gear, as part of the same telemetry burst the init handshake triggers — the same byte now directly observed doing two different real things | ✅ used as "DISENGAGED" trigger — weaker case than `0x04`'s |
+| `CMD 0x01` bit `2` + `CMD 0x12`'s `payload[1]==0x11` gate | both post the exact same real Qt event, `MsnEvent(0x5026)`, to app id `0x191` | Real, disassembly-confirmed convergence between two independently-traced commands — a named, specific shared event, not just "this byte showed up." Confirmed via a full-binary search: within the confirmed-active `MCUAdapter_BoxP300` class, only these two commands post it | What actually *consumes* event `0x5026` was traced as far as `MsnCoreApp`'s own main dispatcher — which does **not** test for it at all, so no confirmed downstream behavior either way. Never behaviorally tested against real reverse-gear toggling (unlike `0x04`/`0x12`'s live-capture correlation) | ❌ not wired in — a real, promising lead, not yet actionable |
+| `/dev/carback` | dedicated SoC-level GPIO IRQ, real kernel driver (`linux-arkmicro/linux/drivers/soc/arkmicro/ark-carback.c`) | Completely independent of the MCU UART protocol and all of the guessing above — a real, purpose-built reverse-gear hardware signal | None found — the strongest-evidenced signal of the four | ✅ present, but only checked **second**, as a fallback if the MCU-UART signal doesn't fire first |
 
-`CMD 0x04`'s engage correlation is real and reproducible, but `CMD 0x12` now has a real,
+`CMD 0x04`'s engage correlation is real and reproducible, but `CMD 0x12` has a real,
 demonstrated reason to fire for something else entirely — the practical case for keeping
-these as-is is weaker for `0x12` than it looked before this capture, even though `0x04`'s
-case is genuinely stronger. Neither byte's meaning is disassembly-confirmed either way, and
-`CMD 0x04` specifically has a real, named, competing meaning.
+these as-is is weaker for `0x12` than it looked before the startup-burst capture, even
+though `0x04`'s case is genuinely stronger. Neither UART byte's meaning is
+disassembly-confirmed either way, and `CMD 0x04` specifically has a real, named, competing
+meaning. The `0x5026` lead is real but not yet closed — the next step there is tracing its
+actual consumer (or a live behavioral test of `CMD 0x01` bit `2` against real reverse-gear
+toggling), not wiring it in blind.
 
-**A real, promising new lead (2026-08-31)**: `CMD 0x01` bit `2` and `CMD 0x12`'s
-`payload[1]==0x11` gate both post the **exact same Qt event type**, `MsnEvent(0x5026)`, to
-the same app id (`0x191`) — confirmed by searching the whole `libMcuCenter.so` for every
-real `MOVW r2,#0x5026` instruction: within `MCUAdapter_BoxP300` (the confirmed-active class
-for this hardware), only these two commands post it (3 more hits elsewhere in the binary
-are almost certainly the same pattern repeated in other vehicle-adapter classes, not
-relevant here). This is a materially stronger signal than either command's own presence-only
-heuristic — a named, specific, shared event rather than "this byte showed up." **Not yet
-closed**: what actually consumes event `0x5026` on the receiving side (does it genuinely
-show/hide the reverse-camera view, or something else) hasn't been traced — that's the real
-next step before considering this for `custom_ui`, rather than the weaker `CMD 0x04`/`0x12`
-presence-based triggers currently in use.
-
-This project has a real, independently-sourced, dedicated hardware signal for reverse gear
-that doesn't depend on any of this UART guessing either way: `/dev/carback`, a real
-SoC-level GPIO IRQ driver (`linux-arkmicro/linux/drivers/soc/arkmicro/ark-carback.c`),
-completely unrelated to the MCU UART protocol. `main.cpp`'s dual-redundant detection
-currently checks the MCU-UART signal *first* and only falls back to `/dev/carback` if the
-UART side doesn't fire — worth reconsidering that priority order, or at minimum keeping
-`/dev/carback` as the tie-breaker if the two ever disagree. **Not yet implemented as of this
-doc** — recorded here as the concrete next decision, not a settled fix.
+Given all four, `/dev/carback` is the one candidate with **zero open evidentiary gaps** —
+worth reconsidering `main.cpp`'s current priority order (MCU-UART checked first, `/dev/carback`
+only as fallback), or at minimum keeping `/dev/carback` as the tie-breaker if the two ever
+disagree. **Not yet implemented as of this doc** — recorded here as the concrete next
+decision, not a settled fix.
 
 ---
 

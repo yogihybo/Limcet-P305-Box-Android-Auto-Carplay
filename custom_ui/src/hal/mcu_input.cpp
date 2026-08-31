@@ -249,6 +249,11 @@ void McuInputHal::run() {
             continue;
         }
 
+        // 2026-08-31: capture every successfully parsed frame (any cmd)
+        // into the live diagnostic log, before per-cmd dispatch below --
+        // see get_recent_frames()'s own header comment for why.
+        log_frame(cmd, payload, len);
+
         if (cmd == 0x01 && len >= 1) {
             // CMD 0x01: Headlights / Illumination status broadcast from MCU (len=6)
             // payload[0]: 0x11 = Lights OFF, 0x13 = Lights ON (bit 1 is the illumination bit)
@@ -427,6 +432,27 @@ float McuInputHal::get_battery_voltage() const {
     return battery_voltage_.load(std::memory_order_relaxed);
 }
 
+void McuInputHal::log_frame(unsigned char cmd, const unsigned char * payload, unsigned char len) {
+    char buf[16 + 3 * 256];
+    int n = std::snprintf(buf, sizeof(buf), "%s cmd=0x%02X len=%u payload=[",
+                           core::log_timestamp().c_str(), cmd, len);
+    for (unsigned char i = 0; i < len && n < static_cast<int>(sizeof(buf)) - 4; ++i) {
+        n += std::snprintf(buf + n, sizeof(buf) - n, "%02X%s", payload[i], (i + 1 < len) ? " " : "");
+    }
+    std::snprintf(buf + n, sizeof(buf) - n, "]");
+
+    std::lock_guard<std::mutex> lock(frame_log_mutex_);
+    frame_log_.emplace_back(buf);
+    while (frame_log_.size() > kFrameLogCapacity) {
+        frame_log_.pop_front();
+    }
+}
+
+std::vector<std::string> McuInputHal::get_recent_frames() const {
+    std::lock_guard<std::mutex> lock(frame_log_mutex_);
+    return std::vector<std::string>(frame_log_.begin(), frame_log_.end());
+}
+
 void McuInputHal::sync_setting(uint8_t setting_id, uint8_t value) {
     if (fd_ >= 0) {
         unsigned char payload[2] = {setting_id, value};
@@ -539,6 +565,13 @@ float get_mcu_battery_voltage() {
         return g_mcu_instance->get_battery_voltage();
     }
     return 0.0f;
+}
+
+std::vector<std::string> get_mcu_recent_frames() {
+    if (g_mcu_instance) {
+        return g_mcu_instance->get_recent_frames();
+    }
+    return {};
 }
 
 }  // namespace hal

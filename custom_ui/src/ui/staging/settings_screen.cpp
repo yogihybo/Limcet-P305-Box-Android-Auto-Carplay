@@ -804,6 +804,167 @@ lv_obj_t * create_settings_screen() {
         }
     }
 
+    // 13. MCU LIVE LOG (2026-08-31) -- live view of real, decoded MCU UART
+    // traffic (every frame, any cmd), so protocol questions can be
+    // resolved by watching custom_ui's own settings toggles/knob input/
+    // reverse-gear transitions live, without the stock app's separate
+    // (and single-screen-at-a-time) factory-menu MCU Monitor, and
+    // without a physical UART tap -- this HAL already reads the port for
+    // the running app, so it can just expose what it's already seeing.
+    // See hal::McuInputHal::get_recent_frames()'s own header comment.
+    {
+        lv_obj_t * row = lv_obj_create(card);
+        lv_obj_remove_style_all(row);
+        lv_obj_set_width(row, LV_PCT(100));
+        lv_obj_set_height(row, 56);
+        lv_obj_set_style_bg_color(row, theme::surface_container_high(), 0);
+        lv_obj_set_style_bg_opa(row, LV_OPA_COVER, 0);
+        lv_obj_set_style_radius(row, theme::kCardRadius, 0);
+        lv_obj_set_style_pad_hor(row, 16, 0);
+        lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+        lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+
+        lv_obj_t * left_box = lv_obj_create(row);
+        lv_obj_remove_style_all(left_box);
+        lv_obj_set_flex_flow(left_box, LV_FLEX_FLOW_ROW);
+        lv_obj_set_flex_align(left_box, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        lv_obj_set_style_pad_column(left_box, 12, 0);
+
+        lv_obj_t * icon_img = lv_image_create(left_box);
+        lv_image_set_src(icon_img, &icons::icon_nav_settings);
+
+        lv_obj_t * text_box = lv_obj_create(left_box);
+        lv_obj_remove_style_all(text_box);
+        lv_obj_set_flex_flow(text_box, LV_FLEX_FLOW_COLUMN);
+
+        lv_obj_t * lbl = lv_label_create(text_box);
+        lv_label_set_text(lbl, "MCU Live Log");
+        lv_obj_set_style_text_font(lbl, &lv_font_roboto_14, 0);
+        lv_obj_set_style_text_color(lbl, theme::text_primary(), 0);
+
+        lv_obj_t * sub_lbl = lv_label_create(text_box);
+        lv_label_set_text(sub_lbl, "Live decoded UART frames to/from the MCU");
+        lv_obj_set_style_text_font(sub_lbl, &lv_font_roboto_14, 0);
+        lv_obj_set_style_text_color(sub_lbl, theme::text_secondary(), 0);
+
+        lv_obj_t * btn = lv_button_create(row);
+        lv_obj_remove_style_all(btn);
+        lv_obj_set_size(btn, 110, 36);
+        lv_obj_set_style_radius(btn, theme::kPillRadius, 0);
+        lv_obj_set_style_bg_color(btn, theme::accent_primary(), 0);
+        lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
+        theme::style_focusable(btn);
+
+        lv_obj_t * btn_lbl = lv_label_create(btn);
+        lv_label_set_text(btn_lbl, "View Log >");
+        lv_obj_set_style_text_font(btn_lbl, &lv_font_roboto_14, 0);
+        lv_obj_set_style_text_color(btn_lbl, theme::text_on_accent(), 0);
+        lv_obj_center(btn_lbl);
+
+        lv_obj_add_event_cb(btn, [](lv_event_t * e) {
+            lv_obj_t * root = static_cast<lv_obj_t *>(lv_event_get_user_data(e));
+
+            lv_obj_t * overlay = lv_obj_create(root);
+            lv_obj_remove_style_all(overlay);
+            lv_obj_set_size(overlay, 800, 480);
+            lv_obj_set_style_bg_color(overlay, lv_color_black(), 0);
+            lv_obj_set_style_bg_opa(overlay, LV_OPA_70, 0);
+            lv_obj_center(overlay);
+
+            lv_obj_t * modal = lv_obj_create(overlay);
+            lv_obj_remove_style_all(modal);
+            theme::style_card(modal);
+            lv_obj_set_size(modal, 720, 420);
+            lv_obj_center(modal);
+            lv_obj_set_flex_flow(modal, LV_FLEX_FLOW_COLUMN);
+            lv_obj_set_flex_align(modal, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+            lv_obj_set_style_pad_all(modal, 18, 0);
+            lv_obj_set_style_pad_row(modal, 8, 0);
+
+            lv_obj_t * title = lv_label_create(modal);
+            lv_label_set_text(title, "MCU Live Log");
+            lv_obj_set_style_text_font(title, &lv_font_roboto_20, 0);
+            lv_obj_set_style_text_color(title, theme::accent_primary(), 0);
+
+            // Scrollable log body -- the timer below keeps this in sync
+            // with hal::get_mcu_recent_frames() while the modal is open.
+            lv_obj_t * log_box = lv_obj_create(modal);
+            lv_obj_remove_style_all(log_box);
+            lv_obj_set_width(log_box, LV_PCT(100));
+            lv_obj_set_flex_grow(log_box, 1);
+            lv_obj_set_style_bg_color(log_box, theme::surface_container_high(), 0);
+            lv_obj_set_style_bg_opa(log_box, LV_OPA_COVER, 0);
+            lv_obj_set_style_radius(log_box, theme::kCardRadius, 0);
+            lv_obj_set_style_pad_all(log_box, 8, 0);
+            lv_obj_set_scroll_dir(log_box, LV_DIR_VER);
+            lv_obj_add_flag(log_box, LV_OBJ_FLAG_SCROLLABLE);
+
+            lv_obj_t * log_lbl = lv_label_create(log_box);
+            lv_label_set_long_mode(log_lbl, LV_LABEL_LONG_WRAP);
+            lv_obj_set_width(log_lbl, LV_PCT(100));
+            lv_label_set_text(log_lbl, "(waiting for MCU frames...)");
+            lv_obj_set_style_text_font(log_lbl, &lv_font_roboto_14, 0);
+            lv_obj_set_style_text_color(log_lbl, theme::text_primary(), 0);
+
+            // Refresh timer: pulls the last ~30 frames every 300ms and
+            // auto-scrolls to the newest. Deleted in the Close handler
+            // below -- must not outlive log_lbl/log_box.
+            lv_timer_t * refresh_timer = lv_timer_create([](lv_timer_t * t) {
+                lv_obj_t * label = static_cast<lv_obj_t *>(lv_timer_get_user_data(t));
+                auto frames = hal::get_mcu_recent_frames();
+                std::string text;
+                constexpr size_t kShowLast = 30;
+                size_t start = frames.size() > kShowLast ? frames.size() - kShowLast : 0;
+                for (size_t i = start; i < frames.size(); ++i) {
+                    text += frames[i];
+                    text += "\n";
+                }
+                if (text.empty()) {
+                    text = "(waiting for MCU frames...)";
+                }
+                lv_label_set_text(label, text.c_str());
+                lv_obj_t * box = lv_obj_get_parent(label);
+                lv_obj_scroll_to_y(box, LV_COORD_MAX, LV_ANIM_OFF);
+            }, 300, log_lbl);
+
+            lv_obj_t * close_btn = lv_button_create(modal);
+            lv_obj_remove_style_all(close_btn);
+            lv_obj_set_size(close_btn, 140, 36);
+            lv_obj_set_style_radius(close_btn, theme::kPillRadius, 0);
+            lv_obj_set_style_bg_color(close_btn, theme::accent_primary(), 0);
+            lv_obj_set_style_bg_opa(close_btn, LV_OPA_COVER, 0);
+            lv_obj_set_style_margin_top(close_btn, 8, 0);
+            theme::style_focusable(close_btn);
+
+            lv_obj_t * close_label = lv_label_create(close_btn);
+            lv_label_set_text(close_label, "Close");
+            lv_obj_set_style_text_font(close_label, &lv_font_roboto_14, 0);
+            lv_obj_set_style_text_color(close_label, theme::text_on_accent(), 0);
+            lv_obj_center(close_label);
+
+            struct CloseCtx {
+                lv_obj_t * overlay;
+                lv_timer_t * timer;
+            };
+            auto * close_ctx = new CloseCtx{overlay, refresh_timer};
+
+            lv_obj_add_event_cb(close_btn, [](lv_event_t * ev) {
+                auto * ctx = static_cast<CloseCtx *>(lv_event_get_user_data(ev));
+                lv_timer_delete(ctx->timer);
+                lv_obj_delete(ctx->overlay);
+                delete ctx;
+            }, LV_EVENT_CLICKED, close_ctx);
+
+            if (core::navigation::focus_group()) {
+                lv_group_add_obj(core::navigation::focus_group(), close_btn);
+            }
+        }, LV_EVENT_CLICKED, scr);
+
+        if (core::navigation::focus_group()) {
+            lv_group_add_obj(core::navigation::focus_group(), btn);
+        }
+    }
+
     return scr;
 }
 

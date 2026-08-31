@@ -78,8 +78,10 @@
 
 #include <atomic>
 #include <cstdint>
+#include <deque>
 #include <mutex>
 #include <string>
+#include <vector>
 
 #include "core/sized_thread.h"
 
@@ -184,8 +186,20 @@ public:
     // function, not a name-string coincidence.
     void sync_video_relay(bool oem);
 
+    // 2026-08-31: live diagnostic log -- captures every successfully
+    // parsed MCU->SoC frame (any cmd, not just the ones this HAL acts
+    // on), formatted as one string per frame, in a bounded ring buffer.
+    // Exists so custom_ui's own Settings screen can show a live view of
+    // real MCU traffic without needing the stock app's factory-menu
+    // MCU Monitor screen or a physical UART tap -- since this HAL is
+    // the one already reading /dev/ttyHS0 for the running app, it can
+    // just expose what it's already seeing. Thread-safe: returns a
+    // snapshot copy, safe to call from the LVGL/UI thread on a timer.
+    std::vector<std::string> get_recent_frames() const;
+
 private:
     void run();
+    void log_frame(unsigned char cmd, const unsigned char * payload, unsigned char len);
 
     std::string port_;
     int fd_ = -1;
@@ -206,6 +220,10 @@ private:
 
     mutable std::mutex version_mutex_;
     std::string mcu_version_{"Unknown"};
+
+    static constexpr size_t kFrameLogCapacity = 200;
+    mutable std::mutex frame_log_mutex_;
+    std::deque<std::string> frame_log_;
 };
 
 // Global helper to send CMD 0xA0 settings sync packet to the Limcet MCU
@@ -220,6 +238,12 @@ void send_mcu_video_relay(bool oem);
 
 // Global getter for the active MCU instance
 McuInputHal * get_mcu_instance();
+
+// Global helper for the live MCU traffic log -- see
+// McuInputHal::get_recent_frames(). Returns an empty vector if no MCU
+// instance is running (mirrors get_mcu_version()/get_mcu_battery_voltage()'s
+// existing null-safety pattern).
+std::vector<std::string> get_mcu_recent_frames();
 
 // Global helpers for version string and voltage telemetry
 std::string get_mcu_version();

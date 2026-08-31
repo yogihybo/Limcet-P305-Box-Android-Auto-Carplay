@@ -26,7 +26,7 @@ correction on a specific address/command; this doc's own content was
 cross-checked against it 2026-08-30 and found still accurate, including
 the 15-slot CAN RX ring size below, the `CMD 0xE1` bootloader-trigger
 mechanism, and the write-only/no-read-back update-flow conclusion),
-[../docs/1.3_MCU_ADAPTERS.md](../../docs/1.3_MCU_ADAPTERS.md),
+[../docs/historical/1.3_MCU_ADAPTERS.md](../../docs/historical/1.3_MCU_ADAPTERS.md),
 [../docs/1.2_CANBUS.md](../../docs/1.2_CANBUS.md), [../docs/3.2_SECURITY_REVIEW.md](../../docs/3.2_SECURITY_REVIEW.md),
 `../Prado firmware dump/mtd6_rootfs/usr/lib/libMcuCenter.so` (SoC-side driver).
 

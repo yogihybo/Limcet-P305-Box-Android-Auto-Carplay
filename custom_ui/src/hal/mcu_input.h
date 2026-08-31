@@ -133,7 +133,20 @@ public:
     // doesn't need to change.
     bool get_night_mode() const;
 
-    // Reverse gear state directly reported by MCU (CMD 0x04 = engaged, CMD 0x12 = disengaged)
+    // UNCONFIRMED (2026-08-31): reverse gear state as reported via CMD 0x04
+    // (engaged) / CMD 0x12 (disengaged), with no payload check on either --
+    // just the command byte's presence. Neither mapping has real disassembly
+    // support: CMD 0x04 is the one "high"-confidence finding in the whole
+    // outbound table, and it's confirmed to be parking radar/distance
+    // telemetry (transRadarLevel), not reverse gear -- it very plausibly
+    // just correlates with reversing (parking sensors active) without
+    // meaning reverse gear. CMD 0x12's meaning has FOUR different
+    // unreconciled guesses across this project's own history and zero
+    // disassembly support for any of them. See
+    // docs/MCU_COMMAND_REFERENCE.md's "reverse-gear command conflict"
+    // section for the full cross-check. main.cpp's dual-redundant reverse
+    // detection should treat /dev/carback (a real, independent SoC GPIO IRQ
+    // driver, unrelated to this UART guessing) as authoritative over this.
     bool get_reverse_gear() const;
 
     // MCU Firmware Version string reported via CMD 0x7F

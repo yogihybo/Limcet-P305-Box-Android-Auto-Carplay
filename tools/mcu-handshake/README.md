@@ -38,7 +38,7 @@ If you are debugging or testing drivers without running the full `MsnCoreApp` st
 4. `--no-hello` skips step 2 entirely if you want purely passive listening.
 
 ### Baud rate: confirmed 38400, not a guess
-Earlier versions of this tool (and `docs/1.3_MCU_ADAPTERS.md`) defaulted to
+Earlier versions of this tool (and `docs/historical/1.3_MCU_ADAPTERS.md`) defaulted to
 `115200` as a guess ("try 115200, then 38400"). This is now settled from
 the binary itself: `MCUAdapter_BoxP300::getPortSettings()` in
 `libMcuCenter.so` (Prado's real, active MCU adapter class, `McuType=6`)
@@ -91,7 +91,7 @@ frames alone may be sufficient and reply frames were never the point.
 ### `/dev/ttyS2` — a second, separate serial channel (2026-07-22)
 
 Found via `strace` while debugging an unrelated display bug (see
-`docs/1.3_MCU_ADAPTERS.md`'s "`/dev/ttyS2`" section) — `MsnCoreApp` also opens
+`docs/historical/1.3_MCU_ADAPTERS.md`'s "`/dev/ttyS2`" section) — `MsnCoreApp` also opens
 `/dev/ttyS2` at **4800 baud** and writes real frames using the
 `0xFA...0xAF` format this tool used to build before being corrected to
 the `[0x2E]`-framed protocol above. That correction still holds for
@@ -106,7 +106,7 @@ device.
 `MCUAdapter_BoxP300` itself (confirmed 38400 baud on `ttyHS0`), so this
 is likely either a separate physical peripheral reusing the same
 packaging function (a steering-wheel-control CAN/serial bridge is one
-candidate, see `docs/1.3_MCU_ADAPTERS.md`'s Catalogue), or a secondary port
+candidate, see `docs/historical/1.3_MCU_ADAPTERS.md`'s Catalogue), or a secondary port
 on the same MCU.
 
 ```sh
@@ -175,7 +175,7 @@ results relevant to this tool:
   still unresolved — `libMcuCenter.so` alone doesn't reveal who calls
   it or why; would need either `MsnCoreApp`'s central event dispatcher
   traced by vtable offset, or a live `/dev/ttyHS0` capture per
-  `docs/1.3_MCU_ADAPTERS.md`'s existing Method A/B procedures while
+  `docs/historical/1.3_MCU_ADAPTERS.md`'s existing Method A/B procedures while
   triggering each real-world event separately.
 - `cmd=0xa0`'s 18-case mode table and `cmd=0x88`'s two packed 32-bit
   values aren't fully decoded — see `MCU_FIRMWARE_REVIEW.md` §3.1c.

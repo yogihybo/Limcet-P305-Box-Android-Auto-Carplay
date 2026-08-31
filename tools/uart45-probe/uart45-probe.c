@@ -14,7 +14,7 @@
  * uses the SoC's `ark-hsuart` peripheral, a different controller
  * family entirely). `/dev/ttyS2` ("MSNEry") is independently confirmed
  * live (real traffic seen) but its peer was never identified
- * (docs/1.3_MCU_ADAPTERS.md, tools/uart-test/). This tool tests the
+ * (docs/historical/1.3_MCU_ADAPTERS.md, tools/uart-test/). This tool tests the
  * hypothesis that ttyS2 IS the SoC-side end of the STM32's UART4/UART5.
  *
  * Protocol under test (real, from disassembly, not guessed):

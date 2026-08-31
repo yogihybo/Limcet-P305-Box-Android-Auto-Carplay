@@ -2,7 +2,7 @@
 
 Tests the hypothesis that `/dev/ttyS2` ("MSNEry", real traffic
 confirmed live but its peer never identified -- see
-`docs/1.3_MCU_ADAPTERS.md`, `tools/uart-test/`) is the SoC-side end of
+`docs/historical/1.3_MCU_ADAPTERS.md`, `tools/uart-test/`) is the SoC-side end of
 the STM32 companion MCU's own **UART4/UART5** peripherals -- a real,
 disassembly-confirmed device-identification handshake protocol found
 this session (`docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md`, "Broad security

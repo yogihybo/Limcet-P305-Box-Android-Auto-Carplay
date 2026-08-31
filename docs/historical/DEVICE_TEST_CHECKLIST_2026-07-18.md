@@ -1845,7 +1845,7 @@ directory being absent.
       ```
 - [ ] Compare full `blueware -v`-style verbose output (if available)
       or a raw `/dev/ttyHS1` byte sniff (stop blueware first, per
-      `docs/1.3_MCU_ADAPTERS.md` Method B) against stock's captured
+      `docs/historical/1.3_MCU_ADAPTERS.md` Method B) against stock's captured
       sequence line-by-line, specifically checking whether `nvm_init`
       ever gets attempted at all vs. silently skipped.
 

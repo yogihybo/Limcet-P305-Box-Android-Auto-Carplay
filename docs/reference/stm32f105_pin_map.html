@@ -1,0 +1,689 @@
+<!doctype html><html><head><!-- frame-runtime --><base href="/_f/1788140048-16e2/"><script>window.__FRAME_PREAMBLE={"v":1,"capabilities":{"artifact":"artifact.C-rTGjvr.js","assets":"assets.8Gk803W0.js","comments":"comments.vw5vQdGA.js","db":"db.h-3sndFg.js","downloads":"downloads.C3GSvEDP.js","embed":"embed.CxGAyc-v.js","mcp":"mcp.Bvma3qD7.js","network":"network.B5UA9Su4.js","notifications":"notifications.ssU4jy7G.js","permissions":"permissions.BNySkLV5.js","room":"room.BMMoe2BY.js","sample":"sample.BW2Uysoh.js","self":"artifact.C-rTGjvr.js","user":"user.BpKav-Rf.js"},"transforms":"_transforms.DSB5x63f.js","comments":"_comments.C6E0cR5g.js","translate":"_translate.5HCW4BJh.js"}</script><script>(function(){"use strict";var te=["light","dark","system"],re=/^[A-Za-z0-9_-]{1,64}$/,$=/^[a-zA-Z_:][a-zA-Z0-9_:.-]{0,127}$/,ne=new Set(["class","hidden","value","checked","style","title","alt","placeholder","lang","dir","role","tabindex","disabled","readonly","contenteditable","open","colspan","rowspan"]);function oe(e){const t=e.toLowerCase();return t.startsWith("data-")||t.startsWith("aria-")||ne.has(t)}var Be="http://www.w3.org/1999/xhtml",se="http://www.w3.org/2000/svg",ae=new Set(["script","style","iframe","noscript","noframes","noembed","xmp","plaintext","template","title","textarea","object","embed"]),ie=new Set(["script","style"]);function ce(e){const t=e.localName.toLowerCase();return e.namespaceURI==="http://www.w3.org/1999/xhtml"?!ae.has(t):e.namespaceURI===se?!ie.has(t):!1}function M(e,t){return e===t||(e===160||e===32)&&(t===160||t===32)}function le(e,t){const r=e.length,n=t.length;let s=0;for(;s<r&&s<n&&M(e.charCodeAt(s),t.charCodeAt(s));)s++;let o=0;for(;o<r-s&&o<n-s&&M(e.charCodeAt(r-1-o),t.charCodeAt(n-1-o));)o++;return{p:s,s:o}}function ue(e,t){const r=e.firstChild;if(e.childNodes.length!==1||r===null||r.nodeType!==Node.TEXT_NODE){e.textContent=t;return}const n=r.data,s=n.length,o=t.length,{p:i,s:c}=le(n,t);i===s&&c===0&&s===o||r.replaceData(i,s-i-c,t.slice(i,o-c));const h=r.data,p=e.ownerDocument.getSelection?.()??null,w=p!==null&&p.rangeCount>0&&(p.anchorNode===r||p.focusNode===r)?{anchor:p.anchorNode,anchorOffset:p.anchorOffset,focus:p.focusNode,focusOffset:p.focusOffset}:null;let m=-1,g=-1;for(let f=0;f<h.length&&f<t.length;f++){const v=h.charCodeAt(f),b=t.charCodeAt(f);v!==b&&M(v,b)&&(m<0&&(m=f),g=f)}const a=m>=0;if(a&&r.replaceData(m,g-m+1,t.slice(m,g+1)),a&&w!==null&&w.anchor!==null&&w.focus!==null)try{p.setBaseAndExtent(w.anchor,w.anchorOffset,w.focus,w.focusOffset)}catch{}}var fe=new Set(["html","head","body","frameset"]);function de(e){return e.namespaceURI==="http://www.w3.org/1999/xhtml"&&fe.has(e.localName)}function pe(e){if(e===null||typeof e!="object")return!1;const t=e;if(typeof t.target!="string"||!re.test(t.target)||t.text!==void 0&&typeof t.text!="string")return!1;if(t.attrsSet!==void 0){if(t.attrsSet===null||typeof t.attrsSet!="object")return!1;for(const[r,n]of Object.entries(t.attrsSet))if(!$.test(r)||typeof n!="string")return!1}if(t.attrsRemoved!==void 0){if(!Array.isArray(t.attrsRemoved))return!1;for(const r of t.attrsRemoved)if(typeof r!="string"||!$.test(r))return!1}return!0}function me(e,t){if(e===null||typeof e!="object")return!1;const{seq:r,elements:n}=e;if(typeof r!="number"||!Number.isSafeInteger(r)||!Array.isArray(n)||n.length===0||n.length>64)return!1;for(let s=0;s<n.length;s++)if(!t(n[s]))return!1;return!0}function he(e){return e===null||typeof e!="object"?!1:me(e.__frame_patch,pe)}function _e(e){if(e===null||typeof e!="object")return!1;const t=e.__frame_init;return t!==null&&typeof t=="object"}function ve(e){return e!==null&&typeof e=="object"&&e.__frame_size_poke===!0}function ye(e){if(e===null||typeof e!="object")return!1;const t=e.__frame_theme;if(t===null||typeof t!="object")return!1;const r=t.theme;return typeof r=="string"&&te.includes(r)}var A=/^[\w.-]+\.js$/;function we(e,t,r){return r?"inert":typeof t=="string"&&A.test(t)?e?[t]:"inert":e?"inert":"framed"}function ge(){return{post(e,t){parent.postMessage(e,t)},on(e){const t=r=>{r.source===parent&&e(r.data,r.origin,r.isTrusted)};return addEventListener("message",t),()=>removeEventListener("message",t)}}}function be(){return{post:()=>{},on:()=>()=>{}}}var j="__frame_scroll",Ee=150,Ae=310,Se=160,Te=3e4;function ke(){let e=0,t=!1,r=!1,n=!1,s=0,o=null;const i=l=>{try{sessionStorage.setItem(j,JSON.stringify({y:l}))}catch{}},c=()=>{if(clearTimeout(e),o===null)return;const l=o;o=null,i(l)},h=()=>{if(t){t=!1;return}r=!0,o=scrollY,clearTimeout(e),e=setTimeout(c,Ee)};try{addEventListener("scroll",h,{passive:!0}),addEventListener("pagehide",c)}catch{}const p=()=>{let l;try{l=sessionStorage.getItem(j)}catch{return null}if(l===null)return null;let _;try{_=JSON.parse(l)}catch{_=null}const d=_?.y;if(!(typeof d=="number"&&Number.isFinite(d)&&d>=0)){try{sessionStorage.removeItem(j)}catch{}return null}return d};let w=!1;const m=l=>{try{const _=scrollY;scrollTo({top:l,left:0,behavior:"instant"}),s=l,n=!0,clearTimeout(e),o=null,i(l);const d=scrollY;d!==_&&(t=!0),d!==l&&!w&&(w=!0,addEventListener("load",()=>{try{if(scrollY===d){const T=p();m(T!==null?T:s)}}catch{}},{once:!0}))}catch{}},g=()=>{try{return!!location.hash}catch{return!0}};let a=!1;const f=()=>{try{if(a||innerWidth>Ae||innerHeight>Se)return;a=!0;const l=Date.now(),_=()=>{try{removeEventListener("resize",_)}catch{}if(Date.now()-l>Te||r||g())return;const d=p();m(d!==null?d:s)};addEventListener("resize",_)}catch{}};let v=!1,b=!1;return{restore(){if(v||(v=!0,g()))return;const l=p();l!==null&&(m(l),f())},promoted(){if(b||(b=!0,g()))return;const l=p();l!==null?(m(l),f()):n&&m(s)}}}function Re(e,t,r,n){let s=null;try{s=window.trustedTypes?.createPolicy("frame-runtime",{createScriptURL:h=>h})??null}catch{}const o=window.Worker,i=o?.prototype,c=Object.freeze({Worker:o,workerOn:i?.addEventListener,workerPost:i?.postMessage,workerTerminate:i?.terminate,fetch:window.fetch.bind(window),preventDefault:Event.prototype.preventDefault,policy:s,origins:t});r(e).then(h=>h?.bootTopLevel?h.bootTopLevel(c,n):n.settle()).catch(()=>n.settle())}var De="modulepreload",Ie=function(e){return"/"+e},Ue={},Le=function(t,r,n){let s=Promise.resolve();function o(i){const c=new Event("vite:preloadError",{cancelable:!0});if(c.payload=i,window.dispatchEvent(c),!c.defaultPrevented)throw i}return s.then(i=>{for(const c of i||[])c.status==="rejected"&&o(c.reason);return t().catch(o)})},Oe=window===top,q=Object.getOwnPropertyDescriptor(window,"claude"),k=we(Oe,window.__FRAME_PREAMBLE?.topLevel,q?.writable===!1),N=typeof k=="object"&&k[0],y=N?be():ge();(function(){const e=Object.defineProperty,t=globalThis,r=["RTCPeerConnection","webkitRTCPeerConnection","RTCDataChannel","RTCIceCandidate","RTCSessionDescription","RTCRtpSender","RTCRtpReceiver"];let n=0;for(let s=0;s<r.length;s++){const o=r[s];try{e(t,o,{value:void 0,writable:!1,configurable:!1})}catch{try{delete t[o]}catch{}try{e(t,o,{value:void 0,writable:!1,configurable:!0})}catch{}}typeof t[o]=="function"&&n++}if(n&&k==="framed")try{y.post({__frame_rtc_lockdown_failed:n},"*")}catch{}})();var Pe=1e4,Y=Object.freeze([...window.__FRAME_PREAMBLE?.origins??["https://claude.ai","https://preview.claude.ai"]]);function X(e){for(const t of Y)if(t.endsWith(":*"))try{const r=new URL(e);if(`${r.protocol}//${r.hostname}:*`===t)return!0}catch{}else if(e===t)return!0;return!1}var R=Object.freeze({...window.__FRAME_PREAMBLE?.capabilities}),B=window.__FRAME_PREAMBLE?.transforms,D=window.__FRAME_PREAMBLE?.comments,I=window.__FRAME_PREAMBLE?.translate;function S(e){return Le(()=>import("/_runtime/"+e),void 0)}function G(e,t){return{contract:e.contract,changes:new Set(e.changes??[]),flags:new Set(e.flags??[]),capabilities:e.capabilities??{},capBudgets:e.capBudgets??{},transforms:new Map,shellOrigin:t,mount:x,hooks:O,pipe:()=>({wrap:(r,n)=>(...s)=>{try{return n(...s)}catch(o){return Promise.reject(o)}}})}}var L=null,E=null;function V(e,t,r){try{Object.defineProperty(e,t,{value:r,writable:!1,configurable:!1,enumerable:!0})}catch{try{Object.defineProperty(e,t,{value:r,writable:!1,configurable:!0,enumerable:!0})}catch{}}}var U=!1,O={editBefore:null,edit:null};function Ce(e,t,r=!1){const n=[];let s;if(r)try{O.editBefore?.(e)}catch{}for(const o of e.elements){const i=document.querySelector(`[data-id="${o.target}"]`);if(!i){s=o.target;break}if([...Object.keys(o.attrsSet??{}),...o.attrsRemoved??[]].some(c=>!oe(c))){s=o.target;break}if(o.text!==void 0&&(!ce(i)||de(i))){s=o.target;break}for(const[c,h]of Object.entries(o.attrsSet??{}))if(!J(i,c)){try{i.setAttribute(c,h)}catch{}Z(i,c,h)}for(const c of o.attrsRemoved??[])J(i,c)||(i.removeAttribute(c),Z(i,c,null));typeof o.text=="string"&&ue(i,o.text),n.push(o.target)}if(r)try{O.edit?.(e.seq,n,s)}catch{}if(s!==void 0){y.post({__frame_patch_miss:{seq:e.seq}},t);return}try{document.dispatchEvent(new CustomEvent("claude:edit",{detail:{seq:e.seq,targets:n}}))}catch{}}function Z(e,t,r){if(!(e instanceof HTMLInputElement))return;const n=t.toLowerCase();n==="checked"?e.checked=r!==null:n==="value"&&e.type!=="file"&&(e.value=r??"")}function J(e,t){const r=t.toLowerCase(),n=e;return r==="data-id"||(r==="value"||r==="checked")&&(n.__artifactSecret===!0||/^(password|hidden|file)$/.test(n.type??"")||/(^|\s)(cc-|one-time-code|current-password|new-password)/i.test(`${e.getAttribute("autocomplete")??""} ${n.autocomplete??""}`))}function Q(e){const t=document.documentElement;e==="light"||e==="dark"?(t.dataset.theme=e,t.style.colorScheme=e,U=!0):U&&(delete t.dataset.theme,t.style.colorScheme="",U=!1)}var P=new Map;function Me(){let e;const t={u:new Promise(r=>{e=r}),r:r=>{t.done=!0,e(r)},done:!1,nulled:!1};return t}function F(){for(const e of P.values())e.done||(e.nulled=!0,e.r(null))}var je=Object.freeze(Object.assign(Object.create(null),{call:Function.prototype.call,apply:Function.prototype.apply,bind:Function.prototype.bind})),x=(e,t)=>{const r=P.get(e);if(!r||r.done){r?.nulled&&E&&y.post({__frame_cap_telemetry:{kind:"cap-load-error",cap:e}},E);return}const n=typeof t=="function"?Object.setPrototypeOf(t,je):Object.assign(Object.create(null),t);typeof n.then=="function"&&delete n.then,r.r(Object.freeze(n))};function ee(){const e=q?.value??{};V(window,"claude",e);for(const t of Object.keys(R)){if(e[t]!==void 0){V(e,t,e[t]);continue}P.set(t,Me())}if(e.use===void 0){const t=r=>{if(typeof r!="string"||!Object.hasOwn(R,r))return Promise.resolve(null);const n=P.get(r);return n?n.u:Promise.resolve(e[r]??null)};try{Object.defineProperty(e,"use",{value:t,writable:!0,configurable:!0,enumerable:!1})}catch{}}}if(k==="framed"){const e=B&&A.test(B)?S(B).catch(()=>{}):Promise.resolve(void 0),t=a=>{if(a.type==="auxclick"&&a.button!==1)return;const f=a.target,v=f&&f.closest?f.closest("a[href],area[href]"):null;if(!v)return;const b=v.getAttribute("href");if(!b)return;let l;try{l=new URL(b,document.baseURI)}catch{return}if((l.protocol==="http:"||l.protocol==="https:")&&l.origin!==location.origin){a.preventDefault();const _=(v.getAttribute("target")??"").toLowerCase(),d=a.type==="auxclick"||a.metaKey||a.ctrlKey||a.shiftKey||a.altKey||!["","_self","_top","_parent"].includes(_);y.post({__frame_nav:!0,url:l.href,newTab:d},"*")}};addEventListener("click",t,!0),addEventListener("auxclick",t,!0);const r={},n=a=>{a.isTrusted&&(r.pointer=!0)},s=a=>{a.isTrusted&&(r.click=!0)};addEventListener("pointermove",n,{capture:!0,passive:!0}),addEventListener("click",s,{capture:!0,passive:!0}),e.then(a=>{a?.wireNav&&(a.wireNav(),removeEventListener("click",t,!0),removeEventListener("auxclick",t,!0),removeEventListener("pointermove",n,!0),removeEventListener("click",s,!0),a.wireEngagement?.(r))});let o=null;try{o=ke()}catch{}ee();let i=null,c=null,h=0;const p=y.on((a,f)=>{X(f)&&_e(a)&&(i=a.__frame_init,E=f,p(),clearTimeout(h),c?.())});y.post({__frame_connect:!0},"*");const w=new Promise(a=>{c=a,h=setTimeout(()=>{p(),a()},Pe)}),m=document.readyState==="loading"?new Promise(a=>document.addEventListener("DOMContentLoaded",()=>a(),{once:!0})):Promise.resolve();m.then(()=>{try{o?.restore()}catch{}});const g={cb:null};y.on((a,f)=>{if(X(f)&&ve(a)){try{o?.promoted()}catch{}g.cb?.()}}),w.then(async()=>{if(!i||!E){F();return}Q(i.theme);const a=E;let f=!1,v=!1;y.on((u,z,C)=>{if(z!==a)return;ye(u)&&Q(u.__frame_theme.theme),he(u)&&Ce(u.__frame_patch,a,C);const H=u?.__fc_mode;H&&typeof H=="object"&&!f&&D&&A.test(D)&&(f=!0,S(D).then(K=>K.install?.(a,H.on===!0)).catch(()=>{}));const W=u?.__ft_cmd;W&&typeof W=="object"&&!v&&I&&A.test(I)&&(v=!0,S(I).then(K=>K.install?.(a,W)).catch(()=>{}))});const b=Object.keys(i.capabilities??{}).filter(u=>Object.hasOwn(R,u)).map(u=>[u,R[u]]).filter(u=>typeof u[1]=="string"&&A.test(u[1])),l=await Promise.allSettled(b.map(([,u])=>S(u))),_=await e,d=E;if(_?.buildBoot||y.post({__frame_cap_telemetry:{kind:"cap-load-error",cap:"_transforms"}},d),_?.buildBoot)try{L=_.buildBoot(i,_.TRANSFORMS??{},{shellOrigin:d,mount:x,hooks:O},u=>y.post({__frame_cap_telemetry:u},d))}catch{y.post({__frame_cap_telemetry:{kind:"cap-load-error",cap:"_transforms"}},d),L=G(i,d)}else L=G(i,d);const T=u=>y.post({__frame_cap_telemetry:{kind:"cap-load-error",cap:u}},d),Ne=L;l.forEach((u,z)=>{const C=b[z][0];if(u.status!=="fulfilled"){T(C);return}try{u.value?.install?.(Ne)}catch{T(C)}}),F(),await m,y.post({__frame_ready:!0},E),e.then(u=>u?.installSizeReporter?.(d,g))})}else N&&(ee(),Re(N,Y,S,{settle:F,mount:x}))})();</script><!-- /frame-runtime --><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}</style></head><body>
+<title>STM32F105 Pin Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --bg: #eeeadd;
+    --substrate: #e4ddc9;
+    --substrate-2: #d9d0b6;
+    --ink: #2a2620;
+    --ink-dim: #6b6656;
+    --ink-faint: #9a947f;
+    --border: #c7bd9d;
+    --border-strong: #a89c74;
+
+    --accent: #2f8f4e;      /* = --real, also used as the general UI accent */
+    --accent-soft: #4aa868;
+    --real: #2f8f4e;         /* light green: confirmed real (fixed silicon) function */
+    --gpio: #2f6fb0;         /* light blue: confirmed GPIO function */
+    --interface: #7a4fc4;    /* light purple: confirmed comms interface */
+    --unknown: #8a8470;      /* grey: unconfirmed / no finding */
+
+    --chip-body: #26241f;
+    --chip-ink: #d8d2bf;
+
+    --shadow: 0 1px 2px rgba(40,32,10,0.08), 0 8px 24px -12px rgba(40,32,10,0.18);
+    --radius: 10px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14120e;
+      --substrate: #1b1812;
+      --substrate-2: #221e16;
+      --ink: #ece6d6;
+      --ink-dim: #a89f8a;
+      --ink-faint: #6f6858;
+      --border: #362f22;
+      --border-strong: #4a4030;
+
+      --accent: #5fcf85;
+      --accent-soft: #7fdb9d;
+      --real: #5fcf85;
+      --gpio: #6badf0;
+      --interface: #b295e8;
+      --unknown: #9a927c;
+
+      --chip-body: #0c0b08;
+      --chip-ink: #cfc7ac;
+
+      --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 12px 32px -14px rgba(0,0,0,0.7);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #14120e;
+    --substrate: #1b1812;
+    --substrate-2: #221e16;
+    --ink: #ece6d6;
+    --ink-dim: #a89f8a;
+    --ink-faint: #6f6858;
+    --border: #362f22;
+    --border-strong: #4a4030;
+
+    --accent: #5fcf85;
+    --accent-soft: #7fdb9d;
+    --real: #5fcf85;
+    --gpio: #6badf0;
+    --interface: #b295e8;
+    --unknown: #9a927c;
+
+    --chip-body: #0c0b08;
+    --chip-ink: #cfc7ac;
+
+    --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 12px 32px -14px rgba(0,0,0,0.7);
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", system-ui, sans-serif;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono { font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace; }
+
+  a { color: var(--accent-soft); }
+
+  .wrap {
+    max-width: 1650px;
+    margin: 0 auto;
+    padding: 28px 24px 48px;
+  }
+
+  header.page-head {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 16px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .eyebrow {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11px;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  h1 {
+    font-size: clamp(20px, 2.6vw, 26px);
+    font-weight: 700;
+    margin: 0;
+    text-wrap: balance;
+    letter-spacing: -0.01em;
+  }
+  .sub {
+    color: var(--ink-dim);
+    font-size: 13px;
+    max-width: 82ch;
+  }
+  .sub code { font-family: "IBM Plex Mono", monospace; font-size: 0.92em; color: var(--ink); }
+
+  /* ---- legend ---- */
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+    margin-bottom: 14px;
+    padding: 8px 14px;
+    background: var(--substrate);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  .legend-item {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    font-size: 11.5px;
+    color: var(--ink-dim);
+  }
+  .swatch {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    border-radius: 2px;
+    flex: none;
+    position: relative;
+    top: 1px;
+  }
+  .legend-item b { color: var(--ink); font-weight: 600; }
+
+  /* ---- side-by-side layout ----
+     The chip column is reserved wider than .chip-stage itself so the pin
+     labels (which extend past the die's own box on all four sides) always
+     have clearance to resolve within their own grid column and can never
+     visually reach into the table column next to them. */
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(560px, 990px) minmax(280px, 560px);
+    gap: 32px;
+    align-items: start;
+    justify-content: center;
+  }
+  @media (max-width: 1000px) {
+    .layout { grid-template-columns: 1fr; justify-content: stretch; }
+  }
+
+  /* ---- chip diagram ---- */
+  .chip-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    position: sticky;
+    top: 16px;
+    /* top-side pin labels extend upward past .chip-stage's own box --
+       reserve real room above it so they resolve below the legend
+       instead of drawing over it. */
+    padding-top: 150px;
+  }
+  @media (max-width: 1000px) {
+    .chip-section { position: static; }
+  }
+  .chip-stage {
+    position: relative;
+    width: 100%;
+    max-width: 550px;
+    aspect-ratio: 1 / 1;
+    margin: 0 auto;
+  }
+  .pkg-outline {
+    position: absolute;
+    inset: 13.5%;
+    background: var(--substrate-2);
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+  }
+  .chip-die {
+    position: absolute;
+    inset: 26%;
+    background: var(--chip-body);
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04), 0 2px 10px rgba(0,0,0,0.25);
+  }
+  .chip-die-label {
+    font-family: "IBM Plex Mono", monospace;
+    color: var(--chip-ink);
+    text-align: center;
+    line-height: 1.5;
+  }
+  .chip-die-label .part { font-size: clamp(13px, 2vw, 18px); font-weight: 600; letter-spacing: 0.02em; }
+  .chip-die-label .pkg { font-size: clamp(10px, 1.3vw, 12px); color: var(--ink-faint); }
+  .pin1-dot {
+    position: absolute;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
+  }
+
+  .pin {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: clamp(9.6px, 0.94vw, 12px);
+    line-height: 1;
+    white-space: nowrap;
+    cursor: default;
+  }
+  .pin .num {
+    font-size: 9.6px;
+    color: var(--ink-faint);
+    min-width: 1.2em;
+    text-align: center;
+  }
+  .pin .lead {
+    width: 8px;
+    height: 1.5px;
+    background: var(--border-strong);
+    flex: none;
+  }
+  .pin .name {
+    color: var(--ink-dim);
+    font-weight: 500;
+    padding: 1px 3px;
+    border-radius: 3px;
+  }
+  .pin .desc {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-size: 0.86em;
+    font-weight: 400;
+    font-style: italic;
+    color: var(--ink-faint);
+    letter-spacing: 0;
+  }
+  .pin[data-cat="real"] .desc,
+  .pin[data-cat="gpio"] .desc,
+  .pin[data-cat="interface"] .desc { color: inherit; opacity: 0.75; }
+  /* Positioning (left/top %) and transform (translate + rotate) are set inline
+     per pin by JS, anchored exactly at the package edge so the pin NUMBER
+     always sits nearest the die, with lead + name radiating outward. Top/
+     bottom pins are rotated 90deg so their text reads perpendicular to that
+     edge, matching left/right's natural horizontal reading direction. */
+
+  .pin[data-cat="real"] .name { color: var(--real); background: color-mix(in srgb, var(--real) 14%, transparent); font-weight: 600; }
+  .pin[data-cat="gpio"] .name { color: var(--gpio); background: color-mix(in srgb, var(--gpio) 14%, transparent); font-weight: 600; }
+  .pin[data-cat="interface"] .name { color: var(--interface); background: color-mix(in srgb, var(--interface) 14%, transparent); font-weight: 600; }
+  .pin[data-cat="unknown"] .name { color: var(--unknown); }
+
+  .pin:hover .name, .pin:focus-within .name { outline: 1px solid currentColor; }
+
+  /* tooltip */
+  .pin { position: absolute; }
+  .pin .tip {
+    position: absolute;
+    z-index: 20;
+    display: none;
+    width: max-content;
+    max-width: 280px;
+    background: var(--chip-body);
+    color: var(--chip-ink);
+    border: 1px solid var(--border-strong);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-family: "IBM Plex Sans", sans-serif;
+    font-size: 12.5px;
+    line-height: 1.45;
+    white-space: normal;
+    box-shadow: var(--shadow);
+  }
+  .pin:hover .tip, .pin:focus-within .tip { display: block; }
+  /* left/right pins aren't rotated, so the tip just offsets to the outer side */
+  .pin.side-left .tip { left: 0; top: 50%; transform: translate(calc(-100% - 10px), -50%); }
+  .pin.side-right .tip { right: 0; top: 50%; transform: translate(calc(100% + 10px), -50%); }
+  /* top/bottom pins are rotated 90deg (see JS) -- counter-rotate the tip so
+     its own text stays upright, then offset in the (now-rotated) local axis
+     which renders as "further from the die" on screen. */
+  .pin.side-top .tip { left: 0; top: 50%; transform: translate(calc(-100% - 10px), -50%) rotate(90deg); transform-origin: right center; }
+  .pin.side-bottom .tip { left: 0; top: 50%; transform: translate(calc(-100% - 10px), -50%) rotate(-90deg); transform-origin: right center; }
+  .tip .tip-title { font-family: "IBM Plex Mono", monospace; font-weight: 600; margin-bottom: 4px; }
+  .tip .tip-num { color: var(--ink-faint); font-weight: 400; }
+
+  .chip-caption {
+    font-size: 10.5px;
+    color: var(--ink-faint);
+    text-align: center;
+    max-width: 42ch;
+  }
+
+  /* ---- table ---- */
+  .table-section {
+    /* keep the table's own top aligned with the chip diagram's visible
+       start, since .chip-section reserves padding-top for its own
+       upward-extending pin labels. */
+    padding-top: 150px;
+  }
+  .table-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+  }
+  h2 {
+    font-size: 14px;
+    font-weight: 700;
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+  input#filter {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11.5px;
+    padding: 5px 9px;
+    border-radius: 6px;
+    border: 1px solid var(--border-strong);
+    background: var(--substrate);
+    color: var(--ink);
+    width: 190px;
+    max-width: 100%;
+  }
+  input#filter:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  input#filter::placeholder { color: var(--ink-faint); }
+
+  .table-scroll {
+    overflow: auto;
+    max-height: min(78vh, 780px);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--substrate);
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11.5px;
+  }
+  thead th {
+    text-align: left;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 9.5px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-weight: 500;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border-strong);
+    position: sticky;
+    top: 0;
+    background: var(--substrate);
+  }
+  tbody td {
+    padding: 5px 10px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: var(--substrate-2); }
+  td.num { font-family: "IBM Plex Mono", monospace; color: var(--ink-faint); width: 2.5ch; }
+  td.name { font-family: "IBM Plex Mono", monospace; font-weight: 600; white-space: nowrap; }
+  td.note { color: var(--ink-dim); }
+  td.note code { font-family: "IBM Plex Mono", monospace; font-size: 0.94em; color: var(--ink); background: var(--substrate-2); padding: 1px 4px; border-radius: 3px; }
+  td.source { color: var(--ink-faint); font-size: 10.5px; font-family: "IBM Plex Mono", monospace; max-width: 20ch; }
+  .status-chip {
+    display: inline-block;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 9px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .status-chip.real { color: var(--real); background: color-mix(in srgb, var(--real) 16%, transparent); }
+  .status-chip.gpio { color: var(--gpio); background: color-mix(in srgb, var(--gpio) 16%, transparent); }
+  .status-chip.interface { color: var(--interface); background: color-mix(in srgb, var(--interface) 16%, transparent); }
+  .status-chip.unknown { color: var(--unknown); background: var(--substrate-2); }
+
+  footer {
+    margin-top: 20px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+    font-size: 10.5px;
+    color: var(--ink-faint);
+  }
+
+  @media (max-width: 1000px) {
+    .chip-stage { max-width: 480px; }
+    .table-scroll { max-height: 60vh; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="page-head">
+    <div class="eyebrow">STM32F105RBT6 &middot; LQFP64 &middot; Limcet companion MCU</div>
+    <h1>Pin map, as verified on real hardware</h1>
+    <div class="sub">
+      Every pin on the real package, with this project's own disassembly-confirmed findings overlaid &mdash;
+      not the datasheet's generic alternate-function list. Colored pins carry a real finding;
+      hover or tap one for the source. Package geometry and pin numbering cross-checked against
+      ST's own <code>DS5319</code> pinout (Figure&nbsp;3, Table&nbsp;5) for the LQFP64 package.
+    </div>
+  </header>
+
+  <div class="legend" id="legend"></div>
+
+  <div class="layout">
+    <section class="chip-section">
+      <div class="chip-stage" id="stage">
+        <div class="pkg-outline"></div>
+        <div class="chip-die">
+          <div class="chip-die-label">
+            <div class="part">STM32F105RBT6</div>
+            <div class="pkg">LQFP64 &middot; 10&times;10mm</div>
+          </div>
+        </div>
+        <!-- pins injected by JS -->
+      </div>
+      <div class="chip-caption">Top view. Pin&nbsp;1 marked by the copper dot at the package corner, numbering runs counter-clockwise &mdash; matches silkscreen orientation.</div>
+    </section>
+
+    <section class="table-section">
+      <div class="table-head">
+        <h2>All 64 pins</h2>
+        <input id="filter" type="text" placeholder="Filter: PA2, camera, flag_5e&hellip;" autocomplete="off">
+      </div>
+      <div class="table-scroll">
+        <table id="pintable">
+          <thead>
+            <tr><th>Pin</th><th>Signal</th><th>Status</th><th>Finding</th><th>Source</th></tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <footer>
+    Package pinout and pin numbering: ST <span class="mono">DS5319</span> (STM32F105xx/F107xx datasheet), Figure&nbsp;3 &amp; Table&nbsp;5.
+    Project findings: <span class="mono">docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md</span>,
+    <span class="mono">hardware/MCU/source/include/uart_protocol.h</span>. Own reference only &mdash; verify against the real board before wiring anything.
+  </footer>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // side: L (left, pins 1-16 top-to-bottom), B (bottom, 17-32 left-to-right),
+  // R (right, 33-48 bottom-to-top), T (top, 49-64 right-to-left) -- matches
+  // the real ST LQFP64 pinout diagram (Figure 3) exactly.
+  var PINS = [
+    {n:1,  s:'L', name:'VBAT',              cat:'real',     d:'unconnected',     src:'ST datasheet DS5319; user’s physical board inspection, 2026-08-31', note:'Backup-domain supply (RTC/backup registers) per datasheet. <b>Confirmed unconnected on the real board</b> (2026-08-31) &mdash; consistent with no LSE 32.768kHz RTC crystal being populated (see PC14/PC15): this board doesn’t back the RTC/backup domain across power loss, so VBAT is left floating rather than tied to VDD or a battery/supercap.'},
+    {n:2,  s:'L', name:'PC13',              cat:'gpio',     d:'camera relay',   src:'docs/1.3.1_MCU_FIRMWARE_DECOMPILATION.md §7', note:'<b>OEM Camera Bypass Relay.</b> High closes the mechanical relay to the factory Toyota camera/screen path; low selects aftermarket. Real handler at <code>0x080058F8</code>.'},
+    {n:3,  s:'L', name:'PC14',              cat:'real',     d:'unconnected',     src:'ST datasheet DS5319; user’s physical board inspection, 2026-08-31', note:'OSC32_IN by default (32.768kHz RTC crystal) per datasheet. <b>Confirmed unconnected on the real board</b> (2026-08-31) &mdash; no LSE crystal is populated here; the RTC (if used at all) would run from the internal LSI oscillator instead. Consistent with VBAT (pin 1) also being unconnected.'},
+    {n:4,  s:'L', name:'PC15',              cat:'real',     d:'osc32 out',       src:'ST datasheet DS5319', note:'OSC32_OUT by default, paired with PC14/OSC32_IN &mdash; not independently checked, but almost certainly unconnected too given PC14 is (see its note).'},
+    {n:5,  s:'L', name:'PD0',               cat:'real',     d:'osc in (25MHz)',  src:'ST datasheet DS5319; crystal freq per user’s physical board inspection, 2026-08-31', note:'OSC_IN on LQFP64 after reset. <b>Real HSE crystal confirmed 25MHz</b> by inspecting the real board (2026-08-31) &mdash; corrects an earlier generic 8MHz assumption. Remappable to GPIO/CAN1_RX, not used that way here. Note: the user also flagged that crystal package pins 1 and 3 don’t look connected on the board &mdash; on the common 4-pad SMD crystal footprint those are usually the actual resonator (XTAL) terminals (pins 2/4 being the case/GND tabs), so if genuinely unconnected the oscillator couldn’t run at all; more likely either a different pin-numbering convention for this specific part, or worth a closer look at the solder joints. Not yet resolved.'},
+    {n:6,  s:'L', name:'PD1',               cat:'real',     d:'osc out',         src:'ST datasheet DS5319', note:'OSC_OUT on LQFP64 after reset, paired with PD0/OSC_IN (see its note re: the 25MHz crystal and the pin-1/3 continuity question). Remappable to GPIO/CAN1_TX, not used that way here.'},
+    {n:7,  s:'L', name:'NRST',              cat:'real',     d:'reset',           src:'ST datasheet DS5319', note:'Reset input. Standard system pin.'},
+    {n:8,  s:'L', name:'PC0',               cat:'unknown',  d:'connected, fn TBD', src:'user’s physical board inspection, 2026-08-31', note:'<b>Confirmed connected on the real board</b> (2026-08-31) &mdash; carries a real trace, not floating. Function not yet identified.'},
+    {n:9,  s:'L', name:'PC1',               cat:'unknown',  d:'connected, fn TBD', src:'user’s physical board inspection, 2026-08-31', note:'<b>Confirmed connected on the real board</b> (2026-08-31) &mdash; carries a real trace, not floating. Function not yet identified.'},
+    {n:10, s:'L', name:'PC2',               cat:'gpio',     d:'video mux',      src:'docs/1.3.1_MCU_FIRMWARE_DECOMPILATION.md §7', note:'<b>CVBS Video Multiplexer.</b> Selects the composite video input path to the RN6752 ITU-656 decoder. Real handler at <code>0x0800591C</code>.'},
+    {n:11, s:'L', name:'PC3',               cat:'unknown',  d:'connected, fn TBD', src:'user’s physical board inspection, 2026-08-31', note:'<b>Confirmed connected on the real board</b> (2026-08-31) &mdash; carries a real trace, not floating. Function not yet identified.'},
+    {n:12, s:'L', name:'VSSA',              cat:'real',     d:'analog gnd',      src:'ST datasheet DS5319', note:'Analog ground.'},
+    {n:13, s:'L', name:'VDDA',              cat:'real',     d:'analog supply',   src:'ST datasheet DS5319', note:'Analog supply.'},
+    {n:14, s:'L', name:'PA0',               cat:'unknown',  d:'connected, fn TBD', src:'user’s physical board inspection, 2026-08-31', note:'WKUP-capable. <b>Confirmed connected on the real board</b> (2026-08-31) &mdash; carries a real trace, not floating. Function not yet identified.'},
+    {n:15, s:'L', name:'PA1',               cat:'unknown',  d:'amp mute? (clean-room)', src:'earlier session notes (not re-verified); connection confirmed by user’s physical board inspection, 2026-08-31', note:'Driven by this project’s clean-room <code>main.c</code> as the audio-amp mute line (<code>PA_MUTE</code>) &mdash; a real, working GPIO write in the reimplementation, but the exact real-firmware disassembly address for this specific function was not independently re-verified this session (the nearby address once cited for it turned out to be a different, misattributed function &mdash; see PA8/PC7/PC9/PB2 below). <b>Confirmed connected on the real board</b> (2026-08-31), i.e. genuinely carries a signal &mdash; consistent with, but not proof of, the PA_MUTE theory.'},
+    {n:16, s:'L', name:'PA2',               cat:'interface',d:'uart2 tx (soc)',  src:'uart_protocol.h + app-side 0x2E-framed protocol trace', note:'<b>USART2 TX</b> &mdash; the real SoC command link, <code>/dev/ttyHS0</code>. Confirmed via the clean-room bootloader’s own <code>uart_init()</code> and the app-side 0x2E-framed protocol trace.'},
+    {n:17, s:'B', name:'PA3',               cat:'interface',d:'uart2 rx (soc)',  src:'uart_protocol.h + app-side 0x2E-framed protocol trace', note:'<b>USART2 RX</b> &mdash; paired with PA2, same SoC command link.'},
+    {n:18, s:'B', name:'VSS_4',             cat:'real',     d:'gnd',             src:'ST datasheet DS5319', note:'Ground.'},
+    {n:19, s:'B', name:'VDD_4',             cat:'real',     d:'supply',          src:'ST datasheet DS5319', note:'Digital supply.'},
+    {n:20, s:'B', name:'PA4',               cat:'unknown',  d:'SPI1 NSS? connected', src:'user’s physical board inspection, 2026-08-31', note:'<b>Confirmed connected on the real board</b> (2026-08-31) &mdash; carries a real trace, not floating. Function not yet identified, but note: PA4/PA5/PA6/PA7 are this chip’s default (no-remap) <b>SPI1 NSS/SCK/MISO/MOSI</b> pins, and all four being connected together &mdash; alongside PC4, a plausible CS/IRQ/reset companion line &mdash; is at least consistent with an SPI1 bus to some external device. Unconfirmed hypothesis, not a finding.'},
+    {n:21, s:'B', name:'PA5',               cat:'unknown',  d:'SPI1 SCK? connected', src:'user’s physical board inspection, 2026-08-31', note:'<b>Confirmed connected on the real board</b> (2026-08-31) &mdash; carries a real trace, not floating. See PA4’s note re: the possible SPI1 bus hypothesis (PA4/PA5/PA6/PA7 default SPI1 pins, all found connected together).'},
+    {n:22, s:'B', name:'PA6',               cat:'unknown',  d:'SPI1 MISO? connected', src:'user’s physical board inspection, 2026-08-31', note:'<b>Confirmed connected on the real board</b> (2026-08-31) &mdash; carries a real trace, not floating. See PA4’s note re: the possible SPI1 bus hypothesis.'},
+    {n:23, s:'B', name:'PA7',               cat:'unknown',  d:'SPI1 MOSI? connected', src:'user’s physical board inspection, 2026-08-31', note:'<b>Confirmed connected on the real board</b> (2026-08-31) &mdash; carries a real trace, not floating. See PA4’s note re: the possible SPI1 bus hypothesis.'},
+    {n:24, s:'B', name:'PC4',               cat:'unknown',  d:'connected, fn TBD', src:'user’s physical board inspection, 2026-08-31', note:'<b>Confirmed connected on the real board</b> (2026-08-31) &mdash; carries a real trace, not floating. Not an SPI1 pin itself, but plausible as a companion CS/IRQ/reset line for a device on the PA4-7 SPI1 bus hypothesis (see PA4’s note) &mdash; unconfirmed.'},
+    {n:25, s:'B', name:'PC5',               cat:'unknown',  d:'unused',          src:'— no project finding', note:'No finding either way this session.'},
+    {n:26, s:'B', name:'PB0',               cat:'gpio',     d:'touch switch',   src:'docs/1.3.1_MCU_FIRMWARE_DECOMPILATION.md §7', note:'<b>CBT16211A Touch Switch.</b> High closes the touch bus switch connecting the resistive digitizer lines to the MCU ADC. Real handler at <code>0x08005A3C</code>.'},
+    {n:27, s:'B', name:'PB1',               cat:'unknown',  d:'unused',          src:'— no project finding', note:'No finding either way this session.'},
+    {n:28, s:'B', name:'PB2 / BOOT1', dname:'PB2', cat:'gpio', d:'flag_5e source', src:'flag_5e trace, MCU_FIRMWARE_VERIFIED_FINDINGS.md (2026-08-31)', note:'<b>Real source of <code>flag_5e</code>.</b> Genuine GPIO <i>input</i> read (STM32 <code>IDR</code> register, confirmed via <code>ldr r3,[r2,#8]</code>) &mdash; a prior version of this project’s own docs wrongly labeled this address as “GPIOA Pin 2, Bluetooth Module Power” (wrong port, wrong direction). <code>id=0x11</code>’s real GPIOC13 camera-relay effect only activates when this pin newly reads LOW. What it physically senses is not confirmed &mdash; no schematic access.'},
+    {n:29, s:'B', name:'PB10',              cat:'interface',d:'uart3 tx (bt)',   src:'uart_protocol.h, SOC_CMD_BT_AT_RELAY (0x87) disassembly', note:'<b>USART3 TX</b> &mdash; real Bluetooth AT-command relay to the Feasycom module (<code>CMD 0x87</code>). Confirmed via peripheral base <code>0x40004800</code>.'},
+    {n:30, s:'B', name:'PB11',              cat:'interface',d:'uart3 rx (bt)',   src:'uart_protocol.h, SOC_CMD_BT_AT_RELAY (0x87) disassembly', note:'<b>USART3 RX</b> &mdash; paired with PB10, same Bluetooth AT relay.'},
+    {n:31, s:'B', name:'VSS_1',             cat:'real',     d:'gnd',             src:'ST datasheet DS5319', note:'Ground.'},
+    {n:32, s:'B', name:'VDD_1',             cat:'real',     d:'supply',          src:'ST datasheet DS5319', note:'Digital supply.'},
+    {n:33, s:'R', name:'PB12',              cat:'unknown',  d:'unused',          src:'— no project finding', note:'No finding either way this session.'},
+    {n:34, s:'R', name:'PB13',              cat:'unknown',  d:'unused',          src:'— no project finding', note:'No finding either way this session.'},
+    {n:35, s:'R', name:'PB14',              cat:'gpio',     d:'SoC reset',      src:'live-hardware SWD-halt observation, MCU_FIRMWARE_VERIFIED_FINDINGS.md', note:'<b>ArkMicro SoC hardware reset line.</b> The real reset-release pin for the whole head unit’s SoC &mdash; confirmed both by disassembly and by a live-hardware finding (connecting SWD halts the CPU before this pin’s boot-time release runs, holding the whole SoC in reset). Not PC13, an earlier, wrong guess this project already corrected.'},
+    {n:36, s:'R', name:'PB15',              cat:'unknown',  d:'can transceiver (unconfirmed)', src:'user’s physical board trace (TJA1042 CAN transceiver), 2026-08-31', note:'<b>Connection confirmed, function unconfirmed.</b> Physically traces to the onboard TJA1042 CAN transceiver (found by inspecting the real board), but the TJA1042 is a pure physical-layer part &mdash; it has no frame filtering/decoding of its own, only RXD/TXD (raw CAN bit signal) and control pins (e.g. STB standby). PB15 isn’t one of the STM32F105’s three valid bxCAN1 AFIO remap pairs (default PA11/PA12, partial remap PB8/PB9, full remap PD0/PD1), so it’s likely a control/enable line rather than the RXD/TXD data pin the MCU’s hardware CAN decoder would need. Exact role not yet resolved &mdash; also calls the PA11/PA12 CAN1 assumption below into question, see its note.'},
+    {n:37, s:'R', name:'PC6',               cat:'unknown',  d:'can transceiver (unconfirmed)', src:'user’s physical board trace (TJA1042 CAN transceiver), 2026-08-31', note:'<b>Connection confirmed, function unconfirmed.</b> Physically traces to the onboard TJA1042 CAN transceiver (found by inspecting the real board), alongside PB15. Same caveat: not a valid bxCAN1 AFIO remap pin on this chip, and the TJA1042 itself does no frame decoding (pure physical-layer part) &mdash; exact role (RXD/TXD/control) not yet resolved.'},
+    {n:38, s:'R', name:'PC7',               cat:'gpio',     d:'flag_5e poll',   src:'flag_5e trace, MCU_FIRMWARE_VERIFIED_FINDINGS.md (2026-08-31)', note:'One of the 5 real GPIO <i>input</i> reads feeding <code>flag_5e</code>’s status byte (bit 3). A prior version of this project’s own docs wrongly labeled this address “GPIOA Pin 7, AM/FM Radio Tuner Power” (wrong port, wrong direction).'},
+    {n:39, s:'R', name:'PC8',               cat:'gpio',     d:'flag_5e poll',   src:'flag_5e trace, MCU_FIRMWARE_VERIFIED_FINDINGS.md (2026-08-31)', note:'One of the 5 real GPIO <i>input</i> reads feeding <code>flag_5e</code>’s status byte (bit 2). Newly found this session &mdash; no prior (wrong) label existed for it.'},
+    {n:40, s:'R', name:'PC9',               cat:'gpio',     d:'flag_5e poll',   src:'flag_5e trace, MCU_FIRMWARE_VERIFIED_FINDINGS.md (2026-08-31)', note:'One of the 5 real GPIO <i>input</i> reads feeding <code>flag_5e</code>’s status byte (bit 1). A prior version of this project’s own docs wrongly labeled this address “GPIOA Pin 9, USB 5V Power Rail” (wrong port, wrong direction).'},
+    {n:41, s:'R', name:'PA8',               cat:'gpio',     d:'flag_5e poll',   src:'flag_5e trace, MCU_FIRMWARE_VERIFIED_FINDINGS.md (2026-08-31)', note:'One of the 5 real GPIO <i>input</i> reads feeding <code>flag_5e</code>’s status byte (bit 0). A prior version of this project’s own docs wrongly labeled this address “GPIOA Pin 1, Power Amp Mute” &mdash; both the port <i>and</i> the pin number were wrong.'},
+    {n:42, s:'R', name:'PA9',               cat:'interface',d:'uart1 tx (dead)', src:'CMD 0xA0 dispatch table disassembly (TBB jump table)', note:'<b>USART1 TX.</b> Confirmed a genuine no-op stub (<code>bx lr</code>) in the real firmware &mdash; completely unused. The clean choice if ever building test firmware to dump flash over UART (see the <code>stm32f1-picopwner</code> writeup), since it can’t contend with USART2 or USART3.'},
+    {n:43, s:'R', name:'PA10',              cat:'interface',d:'uart1 rx (dead)', src:'CMD 0xA0 dispatch table disassembly (TBB jump table)', note:'USART1 RX, paired with PA9. Same unused status.'},
+    {n:44, s:'R', name:'PA11',              cat:'unknown',  d:'can1 rx? (unconfirmed)', src:'superseded 2026-08-31 by user’s physical board trace', note:'Previously assumed <b>CAN1 RX</b> purely by cross-reference with a same-chip reference board (EliasKotlyar/Canfilter) &mdash; never actually traced on this board. Superseded: direct inspection of the real board (2026-08-31) found the onboard TJA1042 CAN transceiver instead traces to <b>PB15/PC6</b>, not here. This pin’s real function on this board is unconfirmed again.'},
+    {n:45, s:'R', name:'PA12',              cat:'unknown',  d:'can1 tx? (unconfirmed)', src:'superseded 2026-08-31 by user’s physical board trace', note:'Previously assumed <b>CAN1 TX</b> purely by cross-reference with a same-chip reference board (EliasKotlyar/Canfilter) &mdash; never actually traced on this board. Superseded: direct inspection of the real board (2026-08-31) found the onboard TJA1042 CAN transceiver instead traces to <b>PB15/PC6</b>, not here. This pin’s real function on this board is unconfirmed again.'},
+    {n:46, s:'R', name:'PA13',              cat:'real',     d:'swdio + can trace?', src:'project SWD toolkit; also user’s physical board trace (TJA1042), 2026-08-31', note:'SWDIO &mdash; the real debug port this project’s whole SWD toolkit (can-sniffer, the SRAM test plan) connects through. <b>New finding (2026-08-31):</b> the user also found a trace from the onboard TJA1042 CAN transceiver landing on this same pin, on the real board. Unresolved tension: a genuine second active signal here would conflict with SWD debug use, so this is more likely a shared/passive net (e.g. a pull-up, a reference/supply rail, or a test-point via) rather than the transceiver driving PA13 as a real logic signal &mdash; not yet reconciled.'},
+    {n:47, s:'R', name:'VSS_2',             cat:'real',     d:'gnd',             src:'ST datasheet DS5319', note:'Ground.'},
+    {n:48, s:'R', name:'VDD_2',             cat:'real',     d:'supply',          src:'ST datasheet DS5319', note:'Digital supply.'},
+    {n:49, s:'T', name:'PA14',              cat:'real',     d:'swclk (debug)',   src:'project SWD toolkit (can-sniffer, SRAM test plan)', note:'SWCLK &mdash; paired with PA13, same debug port.'},
+    {n:50, s:'T', name:'PA15',              cat:'unknown',  d:'jtdi, unused',    src:'earlier session notes (not re-verified 2026-08-31)', note:'JTDI by default, freed for GPIO since this firmware disables JTAG (SWD stays live on PA13/PA14). Earlier session notes: part of a 3-pin group with PB8/PB9 fired together by <code>CMD 0xA0 id=0x0b</code> &mdash; not re-verified this session.'},
+    {n:51, s:'T', name:'PC10',              cat:'interface',d:'uart4 tx (id)',   src:'UART4/5 0x55-sync protocol disassembly trace', note:'<b>UART4 TX.</b> Real, disassembly-decoded <code>0x55</code>-sync device-identification protocol &mdash; distinct from the SoC link and Bluetooth relay. Fixed non-remappable pin on this chip.'},
+    {n:52, s:'T', name:'PC11',              cat:'interface',d:'uart4 rx (id)',   src:'UART4/5 0x55-sync protocol disassembly trace', note:'UART4 RX, paired with PC10.'},
+    {n:53, s:'T', name:'PC12',              cat:'interface',d:'uart5 tx (id)',   src:'UART4/5 0x55-sync protocol disassembly trace', note:'<b>UART5 TX.</b> Same real <code>0x55</code>-sync protocol as UART4 &mdash; confirmed a byte-for-byte twin link. Fixed non-remappable pin.'},
+    {n:54, s:'T', name:'PD2',               cat:'interface',d:'uart5 rx (id)',   src:'UART4/5 0x55-sync protocol disassembly trace', note:'UART5 RX, paired with PC12.'},
+    {n:55, s:'T', name:'PB3',               cat:'unknown',  d:'jtdo, unused',    src:'— no project finding', note:'JTDO by default, freed for GPIO since JTAG is disabled here. No finding either way this session.'},
+    {n:56, s:'T', name:'PB4',               cat:'unknown',  d:'unconnected',     src:'user’s physical board inspection, 2026-08-31', note:'JNTRST by default, freed for GPIO since JTAG is disabled here. Appears unconnected on the real board (2026-08-31) &mdash; supersedes an earlier, never-reverified guess of “Status Indicator LED.”'},
+    {n:57, s:'T', name:'PB5',               cat:'unknown',  d:'unconnected',     src:'user’s physical board inspection, 2026-08-31', note:'Appears unconnected on the real board (2026-08-31) &mdash; supersedes an earlier, never-reverified guess of “LCD Panel Reset Line.”'},
+    {n:58, s:'T', name:'PB6',               cat:'gpio',     d:'mic mux',        src:'docs/HANDOFF_MCU_AUDIO_I2C.md, MCUAdapter_ZhongHang disassembly', note:'<b>Microphone / Audio Mux Switch.</b> High routes the Toyota 28-pin factory roof mic to the SoC ADC (<code>CMD 0xA0 [0x09,1]</code>); low routes the aftermarket 3.5mm jack. Real handler at <code>0x08005AA0</code>.'},
+    {n:59, s:'T', name:'PB7',               cat:'unknown',  d:'unconnected',     src:'user’s physical board inspection, 2026-08-31', note:'Appears unconnected on the real board (2026-08-31).'},
+    {n:60, s:'T', name:'BOOT0',             cat:'real',     d:'boot strap',      src:'ST datasheet DS5319', note:'Boot-mode strap, sampled at reset only.'},
+    {n:61, s:'T', name:'PB8',               cat:'unknown',  d:'group w/ PB9',    src:'earlier session notes (not re-verified 2026-08-31)', note:'Earlier session notes: part of the PA15/PB8/PB9 3-pin group, <code>CMD 0xA0 id=0x0b</code> &mdash; not re-verified this session.'},
+    {n:62, s:'T', name:'PB9',               cat:'unknown',  d:'group w/ PB8',    src:'earlier session notes (not re-verified 2026-08-31)', note:'Same PA15/PB8/PB9 group as PB8 &mdash; not re-verified this session.'},
+    {n:63, s:'T', name:'VSS_3',             cat:'real',     d:'gnd',             src:'ST datasheet DS5319', note:'Ground.'},
+    {n:64, s:'T', name:'VDD_3',             cat:'real',     d:'supply',          src:'ST datasheet DS5319', note:'Digital supply.'}
+  ];
+
+  var CAT_LABEL = {
+    real: 'Confirmed, real function',
+    gpio: 'Confirmed GPIO function',
+    interface: 'Confirmed comms interface',
+    unknown: 'Unknown / no finding'
+  };
+  var CAT_ORDER = ['real','gpio','interface','unknown'];
+
+  // ---- legend ----
+  var legend = document.getElementById('legend');
+  CAT_ORDER.forEach(function (cat) {
+    var item = document.createElement('div');
+    item.className = 'legend-item';
+    item.innerHTML = '<span class="swatch" style="background:var(--' + cat + ')"></span><b>' + CAT_LABEL[cat] + '</b>';
+    legend.appendChild(item);
+  });
+
+  // ---- chip diagram layout ----
+  // Every pin anchors exactly at the package edge (PKG%, matching .pkg-outline's
+  // own inset) so the pin NUMBER -- always the first element built, nearest the
+  // anchor -- sits closest to the die, with the lead + name radiating outward.
+  // Left/right pins stay horizontal (already perpendicular to a vertical edge);
+  // top/bottom pins rotate 90deg so their text reads perpendicular to their
+  // (horizontal) edge instead of running along it.
+  var stage = document.getElementById('stage');
+  var bySide = { L: [], B: [], R: [], T: [] };
+  PINS.forEach(function (p) { bySide[p.s].push(p); });
+
+  var PKG = 13.5; // % inset, matches .pkg-outline
+  var SPAN = 100 - 2 * PKG;
+
+  function buildLabel(p) {
+    var lead = document.createElement('span');
+    lead.className = 'lead';
+    var num = document.createElement('span');
+    num.className = 'num';
+    num.textContent = p.n;
+    var name = document.createElement('span');
+    name.className = 'name';
+    name.appendChild(document.createTextNode(p.dname || p.name));
+    if (p.d) {
+      var desc = document.createElement('span');
+      desc.className = 'desc';
+      desc.textContent = ' — ' + p.d;
+      name.appendChild(desc);
+    }
+    return { lead: lead, num: num, name: name };
+  }
+
+  function place(list, sideClass) {
+    var count = list.length;
+    list.forEach(function (p, i) {
+      var el = document.createElement('div');
+      el.className = 'pin side-' + sideClass;
+      el.tabIndex = 0;
+      el.dataset.cat = p.cat;
+
+      var along = PKG + ((i + 0.5) / count) * SPAN; // position along the edge
+      var parts = buildLabel(p);
+
+      if (sideClass === 'right') {
+        el.style.left = (100 - PKG) + '%';
+        el.style.top = along + '%';
+        el.style.transformOrigin = 'left center';
+        el.style.transform = 'translate(0, -50%)';
+        el.appendChild(parts.num);
+        el.appendChild(parts.lead);
+        el.appendChild(parts.name);
+      } else if (sideClass === 'left') {
+        el.style.left = PKG + '%';
+        el.style.top = along + '%';
+        el.style.transformOrigin = 'right center';
+        el.style.transform = 'translate(-100%, -50%)';
+        el.appendChild(parts.name);
+        el.appendChild(parts.lead);
+        el.appendChild(parts.num);
+      } else if (sideClass === 'top') {
+        el.style.left = along + '%';
+        el.style.top = PKG + '%';
+        el.style.transformOrigin = 'left center';
+        el.style.transform = 'translate(0, -50%) rotate(-90deg)';
+        el.appendChild(parts.num);
+        el.appendChild(parts.lead);
+        el.appendChild(parts.name);
+      } else {
+        el.style.left = along + '%';
+        el.style.top = (100 - PKG) + '%';
+        el.style.transformOrigin = 'left center';
+        el.style.transform = 'translate(0, -50%) rotate(90deg)';
+        el.appendChild(parts.num);
+        el.appendChild(parts.lead);
+        el.appendChild(parts.name);
+      }
+
+      var tip = document.createElement('div');
+      tip.className = 'tip';
+      tip.innerHTML = '<div class="tip-title">' + p.name + ' <span class="tip-num">&middot; pin ' + p.n + '</span></div>' + p.note;
+      el.appendChild(tip);
+
+      stage.appendChild(el);
+    });
+  }
+  place(bySide.L, 'left');
+  place(bySide.R, 'right');
+  place(bySide.T, 'top');
+  place(bySide.B, 'bottom');
+
+  // pin-1 marker: at the left side, top corner of the package outline
+  var dot = document.createElement('div');
+  dot.className = 'pin1-dot';
+  dot.style.left = PKG + '%';
+  dot.style.top = PKG + '%';
+  dot.style.transform = 'translate(-50%, -50%)';
+  stage.appendChild(dot);
+
+  // ---- table ----
+  var tbody = document.getElementById('tbody');
+  function renderTable(filterText) {
+    tbody.innerHTML = '';
+    var f = (filterText || '').trim().toLowerCase();
+    PINS.forEach(function (p) {
+      var haystack = (p.n + ' ' + p.name + ' ' + p.note + ' ' + p.src).toLowerCase();
+      if (f && haystack.indexOf(f) === -1) return;
+      var tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td class="num">' + p.n + '</td>' +
+        '<td class="name">' + p.name + '</td>' +
+        '<td><span class="status-chip ' + p.cat + '">' + CAT_LABEL[p.cat] + '</span></td>' +
+        '<td class="note">' + p.note + '</td>' +
+        '<td class="source">' + p.src + '</td>';
+      tbody.appendChild(tr);
+    });
+  }
+  renderTable('');
+  document.getElementById('filter').addEventListener('input', function (e) {
+    renderTable(e.target.value);
+  });
+})();
+</script>
+
+</body></html>

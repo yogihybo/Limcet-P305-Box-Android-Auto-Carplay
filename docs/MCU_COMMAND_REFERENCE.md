@@ -244,6 +244,20 @@ demonstrated reason to fire for something else entirely — the practical case f
 these as-is is weaker for `0x12` than it looked before this capture, even though `0x04`'s
 case is genuinely stronger. Neither byte's meaning is disassembly-confirmed either way, and
 `CMD 0x04` specifically has a real, named, competing meaning.
+
+**A real, promising new lead (2026-08-31)**: `CMD 0x01` bit `2` and `CMD 0x12`'s
+`payload[1]==0x11` gate both post the **exact same Qt event type**, `MsnEvent(0x5026)`, to
+the same app id (`0x191`) — confirmed by searching the whole `libMcuCenter.so` for every
+real `MOVW r2,#0x5026` instruction: within `MCUAdapter_BoxP300` (the confirmed-active class
+for this hardware), only these two commands post it (3 more hits elsewhere in the binary
+are almost certainly the same pattern repeated in other vehicle-adapter classes, not
+relevant here). This is a materially stronger signal than either command's own presence-only
+heuristic — a named, specific, shared event rather than "this byte showed up." **Not yet
+closed**: what actually consumes event `0x5026` on the receiving side (does it genuinely
+show/hide the reverse-camera view, or something else) hasn't been traced — that's the real
+next step before considering this for `custom_ui`, rather than the weaker `CMD 0x04`/`0x12`
+presence-based triggers currently in use.
+
 This project has a real, independently-sourced, dedicated hardware signal for reverse gear
 that doesn't depend on any of this UART guessing either way: `/dev/carback`, a real
 SoC-level GPIO IRQ driver (`linux-arkmicro/linux/drivers/soc/arkmicro/ark-carback.c`),

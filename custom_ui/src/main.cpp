@@ -26,6 +26,7 @@
 #include "hal/display_ctrl.h"
 #include "hal/knob.h"
 #include "hal/mcu_input.h"
+#include "hal/ssh_access.h"
 #include "hal/touch.h"
 #include "hal/timezone.h"
 #include "core/config_store.h"
@@ -536,6 +537,11 @@ int main() {
                     factoryCam ? "OEM Factory" : "Aftermarket",
                     oemMic ? "OEM Factory Roof" : "Aftermarket 3.5mm");
     }
+
+    // Apply the persisted SSH-access toggle -- rcS no longer starts sshd
+    // unconditionally at boot, see settings_screen.cpp's "SSH Access"
+    // toggle and hal/ssh_access.h for why.
+    hal::set_ssh_enabled(core::default_store().get_bool("SshAccess", false, "General"));
 
     // Sync saved 3-band EQ and dynamic loudness settings
     hal::sync_audio_eq();

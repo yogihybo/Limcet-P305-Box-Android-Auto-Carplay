@@ -8,6 +8,7 @@
 #include "hal/audio.h"
 #include "hal/display_ctrl.h"
 #include "hal/mcu_input.h"
+#include "hal/ssh_access.h"
 #include "hal/timezone.h"
 #include "hal/bluetooth.h"
 #include "core/log_timing.h"
@@ -652,6 +653,19 @@ lv_obj_t * create_settings_screen() {
 
     // 12. SYSTEM & ABOUT SECTION
     create_section_header(card, "SYSTEM & ABOUT");
+
+    /* 2026-09-01: root's password is intentionally empty on this rootfs
+     * (see firmware_overlay_dyn/etc/ssh/sshd_config's PermitEmptyPasswords
+     * yes) so SSH just works with zero prompts on the private carplay_wifi
+     * network -- genuinely convenient, but also means sshd being reachable
+     * at all is a real (private-network-only, but still real) exposure.
+     * rcS no longer starts sshd unconditionally at boot -- this toggle
+     * (persisted, applied at startup below and live here) is what actually
+     * controls it, via hal::set_ssh_enabled(). See hal/ssh_access.h. */
+    create_toggle_row(card, &ui::icons::icon_nav_settings, "SSH Access",
+                       "SshAccess", "General", false, [](bool enabled) {
+                           hal::set_ssh_enabled(enabled);
+                       });
     {
         lv_obj_t * row = lv_obj_create(card);
         lv_obj_remove_style_all(row);

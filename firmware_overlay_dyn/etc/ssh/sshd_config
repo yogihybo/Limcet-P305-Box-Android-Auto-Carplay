@@ -13,7 +13,13 @@ PubkeyAuthentication yes
 AuthorizedKeysFile /root/.ssh/authorized_keys
 
 PasswordAuthentication yes
-PermitEmptyPasswords no
+# 2026-09-01: intentional, user-requested -- private carplay_wifi network
+# only, not internet-facing. root's shadow password field is emptied by
+# build_bootable_sdcard_dyn.sh (see that script's own comment) to match.
+# Whether sshd is even running at all is gated by the "SSH Access" toggle
+# in custom_ui's Settings screen (see hal/ssh_access.h) -- rcS no longer
+# starts it unconditionally at boot.
+PermitEmptyPasswords yes
 ChallengeResponseAuthentication no
 
 # UsePAM no

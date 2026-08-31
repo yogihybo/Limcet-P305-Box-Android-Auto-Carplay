@@ -619,26 +619,34 @@ ssh root@192.168.7.1
 ### SSH Access (dynamic/`custom_ui` rootfs)
 
 The newer Buildroot-based rootfs (`build_bootable_sdcard_dyn.sh` + `firmware_overlay_dyn/`,
-the one running `custom_ui`) has its **own, separate** SSH setup — root's password is
-genuinely locked (`*` in `/etc/shadow`) and `PermitEmptyPasswords no`, so password login is
-never possible on this rootfs. Login is **key-only**, via a dedicated deploy keypair:
+the one running `custom_ui`) has its **own, separate** SSH setup from the static rootfs
+above, and it's **off by default** — deliberately, since root's password is intentionally
+*empty* (`PermitEmptyPasswords yes`), so leaving `sshd` always running at boot would mean
+that's always reachable rather than an explicit opt-in.
+
+**Enable it first**: Settings → *SYSTEM & ABOUT* → **SSH Access** toggle in `custom_ui`
+itself (`hal::set_ssh_enabled()`, `custom_ui/src/hal/ssh_access.h`). This starts/stops
+`sshd` live, and the choice persists across reboots (`main.cpp` re-applies it at startup).
+`rcS` no longer starts `sshd` unconditionally the way the static rootfs's does.
+
+Once enabled, two ways to log in — pick whichever's more convenient:
+
+| Method | How |
+|---|---|
+| **Empty password** (private `carplay_wifi` network only — not internet-facing) | `ssh root@<device-ip>`, press Enter at the password prompt |
+| **Key-based** (zero prompts at all) | `ssh -i ~/.ssh/prado_deploy_key root@<device-ip>`, or add an `~/.ssh/config` `Host` alias with `IdentityFile ~/.ssh/prado_deploy_key` for a plain `ssh <alias>` |
 
 | Item | Value |
 |------|-------|
 | Private key | `~/.ssh/prado_deploy_key` (this dev machine only — **not committed to git**) |
 | Public key staged on-device | `firmware_overlay_dyn/root/.ssh/authorized_keys` |
-| Auto-included on rebuild | yes — `build_bootable_sdcard_dyn.sh`'s `rsync -a` overlay step picks up hidden files/permissions automatically, no extra step needed |
-
-**To connect:**
-
-```sh
-ssh -i ~/.ssh/prado_deploy_key root@<device-ip>
-```
+| root's shadow password field | emptied by `build_bootable_sdcard_dyn.sh` at build time (`sed` patch, touches only root's line — the overlay deliberately does *not* ship a full replacement `/etc/shadow`, which would wipe out other real accounts like `dbus`) |
+| Auto-included on rebuild | yes — both the key and the emptied password apply automatically on every rebuild, no extra step needed |
 
 If `~/.ssh/prado_deploy_key` is ever lost, regenerate a new keypair and replace
 `firmware_overlay_dyn/root/.ssh/authorized_keys` with the new public half (keep it `600`,
 the containing `.ssh/` dir `700`), then rebuild/reflash — the old key simply stops working,
-nothing else to clean up.
+nothing else to clean up. The empty-password path doesn't depend on the key at all.
 
 ### USB Networking
 

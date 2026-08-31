@@ -67,18 +67,18 @@ not resolved.
 | id | Real value texts | Real display label (vendor code, often mismatched — see note) | Real MCU-side effect | `custom_ui` wiring |
 |---|---|---|---|---|
 | `0x00` | OEM Microphone / AfterMarket Microphone | "Reversing camera" *(vendor-code mismatch)* | GPIOB Pin 1, 4-way branch; value `2` sends real `AT+UPGRADE` | ✅ "OEM Microphone Relay" |
-| `0x01` | AfterMarket/Factory Camera, AfterMarket/Factory 360 | — | shares `0x00`'s handler — **confirmed genuine no-op on real MCU firmware** | ✅ "OEM Factory Camera" toggle — see the `id=0x11` note below for why it's actually wired to `0x11` instead |
-| `0x02`–`0x06` | shares `0x00`'s handler | — | confirmed shared/no-op | not wired |
-| `0x07` | shares `0x00`'s handler | "Radar" | write-only, no consumer found | not wired |
-| `0x08` | Off/On | "Trajectory" | write-only, no consumer | not wired |
-| `0x09` | Off/On | "Reversing mode" *(vendor-code mismatch)* | mic/audio input mux, GPIOB Pin 6 | ✅ "OEM Factory Microphone" |
+| `0x01` | AfterMarket/Factory Camera, AfterMarket/Factory 360 | — | shares the *same dead no-op handler* (`0x08008B88`) as `0x02`–`0x06`/`0x0E` — **not `0x00`'s own handler** (a separate, real one at `0x080089F8`); "shares `0x00`'s handler" in earlier project notes was loose phrasing, corrected here after re-deriving the real TBB dispatch table byte-for-byte. **Confirmed genuine no-op on real MCU firmware** | ✅ "OEM Factory Camera" toggle — see the `id=0x11` note below for why it's actually wired to `0x11` instead |
+| `0x02`–`0x06` | shares `0x08008B88` (same dead handler as `0x01`/`0x0E`) | — | confirmed shared/no-op | not wired |
+| `0x07` | shares `0x00`'s handler | "Radar" | write-only, no consumer — **exhaustively re-confirmed**: a full raw-byte scan of every possible Thumb2 `ldrb.w [Rn,#0x3A]` encoding in the firmware found zero reads of this struct offset anywhere outside the handler's own two writes | not wired |
+| `0x08` | Off/On | "Trajectory" | write-only, no consumer — same exhaustive scan against this id's real target offset (`0x39`) also found zero reads anywhere in the firmware. ~~A separate claim framed this as "enables/disables calculation of steering track curve"~~ — that's `id=0x07`'s own historical characterization misapplied here; `id=0x08` writes a *different* offset (`0x39`, not `0x3A`) and has no confirmed consumer of any kind | not wired |
+| `0x09` | Off/On | "Reversing mode" *(vendor-code mismatch)* | mic/audio input mux, GPIOB Pin 6. **Cross-firmware confirmed (2026-08-31)**: byte-for-byte identical handler machine code in all 5 known firmware images (this project's `hardware/MCU/can_app.bin` plus all 3 archived `DCn32-VOLVO` dumps and the differently-sized `DCn32-ACURA` dump) — same struct offset `0x38`, same value(1/2)/else-0 branching, confirmed via direct disassembly comparison, not just table-address matching. This is genuinely shared, portable vendor logic, not an artifact of this one firmware build | ✅ "OEM Factory Microphone" |
 | `0x0A` | CAN Active/12V Active/P Key Active | "360 camera" | write-only, no consumer | not wired |
 | `0x0B` | empty/dynamic | "Front camera" | coordinated 3-pin enable (PA15/PB8/PB9) when cleared to 0 | not wired |
 | `0x0C` | Off/Radar Active/5s/10s/15s | "Front camera time" | real reader, thresholds the `0x0B` 3-pin group | not wired |
 | `0x0D` | 5s/10s/15s | "Speech button" | write-only, no consumer | not wired |
 | `0x0E` | Off/On | "DVR" | confirmed genuine no-op | not wired |
-| `0x0F` | Off/On | "Right Camera" | confirmed no GPIO effect | not wired |
-| `0x10` | Off/On/12V Active | "Left Camera" | confirmed no GPIO effect | not wired |
+| `0x0F` | Off/On | "Right Camera" | **CORRECTED (2026-08-31)** — earlier "confirmed no GPIO effect" was wrong. Struct offset `0x43` (this id's real target) IS read, at `0x08005D30` in `hardware/MCU/can_app.bin` — gated by a second flag (a different struct's offset `9`), and when both are true it drives the exact same GPIOA Pin 15 / GPIOB Pin 8 / GPIOB Pin 9 relay trio as `id=0x0B`'s "Front Camera Enable" (confirmed by resolving the GPIO port-base literals: `0x40010800`=GPIOA, `0x40010C00`=GPIOB, masks `0x8000`/`0x200`/`0x100`). Byte-identical consumer code confirmed present in the `DCn32-ACURA` dump too (not ACURA-exclusive, as a separate claim suggested — it's in every checked firmware including this project's own) | not wired |
+| `0x10` | Off/On/12V Active | "Left Camera" | **CORRECTED (2026-08-31)**, same finding as `0x0F` immediately above: struct offset `0x44` is read at `0x08005D80` (adjacent code, gated by a different struct's offset `0xA`), driving the identical PA15/PB8/PB9 trio via the same three helper calls | not wired |
 | `0x11` | Off/On/12V Active | "Microphone" *(vendor-code mismatch)* | **GPIOC13/PC2 relay pair — same dispatcher table as `CMD 0x84` above** | ✅ this is what `custom_ui`'s camera toggle actually sends, gated by `flag_5e` (real GPIOB Pin 2 read) |
 
 **Real vendor-code inconsistency, disassembly-confirmed on both ends**: the display-name

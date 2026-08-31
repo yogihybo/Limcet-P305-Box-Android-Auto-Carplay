@@ -122,15 +122,16 @@ public:
     // (CMD 0x02, b3=13).
     bool get_knob_pressed() const;
 
-    // 2026-08-21: headlight-driven night mode -- infrastructure wired
-    // ahead of the real capture (user confirming the exact code
-    // tomorrow), same framing family as the knob (CMD 0x02, b3=sub-
-    // code, b4=state) per explicit direction ("same type of framing as
-    // the knob input press button but a unique code"). See run()'s own
-    // comment for the placeholder sub-code constant this currently
-    // matches against -- update ONLY that constant once confirmed, the
-    // rest of this chain (display brightness, AA SENSOR_NIGHT_MODE)
-    // doesn't need to change.
+    // CONFIRMED (2026-08-27 wired, 2026-08-31 user-verified end-to-end
+    // on real hardware): headlight-driven night mode. Superseded the
+    // original 2026-08-21 CMD 0x02-based placeholder -- the real
+    // source is CMD 0x01 payload[0] bit 0x02 (see run()'s CMD 0x01
+    // case; also docs/MCU_COMMAND_REFERENCE.md's CMD 0x01 row, now
+    // ✅). Wired into a real, working feature: this bit feeds
+    // night_mode_, main.cpp's loop calls AndroidAutoClient::
+    // sendNightMode() on every change, driving AA's real
+    // SENSOR_NIGHT_MODE channel -- user confirmed toggling headlights
+    // genuinely triggers AA's night mode on real hardware.
     bool get_night_mode() const;
 
     // UNCONFIRMED (2026-08-31): reverse gear state as reported via CMD 0x04

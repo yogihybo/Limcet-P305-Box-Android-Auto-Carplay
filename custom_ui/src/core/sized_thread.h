@@ -29,13 +29,6 @@ namespace core {
 // 32x smaller than glibc's 8MB default, still far above PTHREAD_STACK_MIN.
 constexpr size_t kDefaultThreadStackSize = 256 * 1024;
 
-// For androidauto-sidecar's own heavier threads: the real AASDK session
-// loop (Boost.Asio callbacks, Protobuf message dispatch, video/audio
-// channel handling) and real-time ALSA audio I/O -- deeper, more
-// library-call-heavy stacks than the simple monitor loops above, so a
-// larger (but still 8x smaller than glibc's 8MB default) margin.
-constexpr size_t kAasdkThreadStackSize = 1024 * 1024;
-
 class SizedThread {
 public:
     SizedThread() = default;

@@ -15,11 +15,6 @@ CXX           := $(CROSS_COMPILE)g++
 CC            := $(CROSS_COMPILE)gcc
 BUILD_DIR     := build
 
-# System toolchain fallback for legacy static diagnostic test tools
-SYSTEM_CROSS  ?= arm-linux-gnueabihf-
-SYSTEM_CXX    := $(SYSTEM_CROSS)g++
-SYSTEM_CC     := $(SYSTEM_CROSS)gcc
-
 LVGL_DIR      := third_party/lvgl
 INCLUDES      := -I. -Isrc -Iinclude -I$(LVGL_DIR)
 CXXFLAGS      := -std=c++17 -Wall -Wextra -O2 -MMD -MP $(INCLUDES)
@@ -51,54 +46,11 @@ SIDECAR_INCLUDES := -Isidecars/carplay
 # --- Android Auto Sidecar Target ---
 ANDROIDAUTO_SIDECAR_TARGET := $(BUILD_DIR)/androidauto-sidecar
 
-# --- Legacy Diagnostic Tools Configuration ---
-AASDK_DEPS_DIR   ?= $(HOME)/build-deps
-AASDK_DIR        := third_party/aasdk
-OPENSSL_ARM_INSTALL ?= $(AASDK_DEPS_DIR)/openssl-arm-install-noengine-armv7
-ALSA_ARM_INSTALL    ?= $(AASDK_DEPS_DIR)/alsa-arm-install-1.2.4
-DBUS_ARM_INSTALL    ?= $(AASDK_DEPS_DIR)/dbus-arm-install
-
-AASDK_INCLUDES   := -I$(AASDK_DIR)/include \
-                    -I$(AASDK_DIR)/build-arm/protobuf \
-                    -I$(AASDK_DEPS_DIR)/boost-arm-install/include \
-                    -I$(OPENSSL_ARM_INSTALL)/include \
-                    -I$(AASDK_DEPS_DIR)/libusb-arm-install/include \
-                    -I$(AASDK_DEPS_DIR)/libusb-arm-install/include/libusb-1.0 \
-                    -I$(AASDK_DEPS_DIR)/protobuf-arm-install/include \
-                    -I$(ALSA_ARM_INSTALL)/include \
-                    -Ithird_party/bluez_uapi
-
-AASDK_LIBS       := -Wl,--start-group \
-                    $(AASDK_DIR)/build-arm/lib/libaasdk.a \
-                    $(AASDK_DIR)/build-arm/lib/libaap_protobuf.a \
-                    $(wildcard $(AASDK_DEPS_DIR)/boost-arm-install/lib/*.a) \
-                    $(AASDK_DEPS_DIR)/libusb-arm-install/lib/libusb-1.0.a \
-                    $(OPENSSL_ARM_INSTALL)/lib/libssl.a \
-                    $(OPENSSL_ARM_INSTALL)/lib/libcrypto.a \
-                    $(ALSA_ARM_INSTALL)/lib/libasound.a \
-                    $(wildcard $(AASDK_DEPS_DIR)/protobuf-arm-install/lib/*.a) \
-                    -Wl,--end-group -lpthread -ldl -lrt
-
-AASDK_WRAP_FLAGS := -Wl,--wrap=dlopen,--wrap=dlerror,--wrap=dlsym,--wrap=dlclose,--wrap=getaddrinfo,--wrap=freeaddrinfo,--wrap=gai_strerror,--wrap=gethostbyname,--wrap=gethostbyname2,--wrap=gethostbyaddr,--wrap=getservbyname,--wrap=getservbyport,--wrap=getpwuid_r,--wrap=getpwnam_r,--wrap=getgrnam_r,--wrap=getgrouplist
-NSS_STUB_SRC     := ../tools/nss-stub/nss_stub_busybox.c
-NSS_STUB_OBJ     := $(BUILD_DIR)/aasdk-test-obj/nss_stub_busybox.o
-
-AASDK_TEST_TARGET    := $(BUILD_DIR)/androidauto-usb-probe-test
-AASDK_TEST_OBJS      := $(BUILD_DIR)/aasdk-test-obj/main.o
-WIRELESS_TEST_TARGET := $(BUILD_DIR)/androidauto-wireless-probe-test
-WIRELESS_TEST_OBJS   := $(BUILD_DIR)/wireless-test-obj/main.o
-BT_TEST_TARGET       := $(BUILD_DIR)/androidauto-bluetooth-rfcomm-test
-BT_TEST_OBJS         := $(BUILD_DIR)/bt-test-obj/main.o
-BW_AAP_TEST_TARGET   := $(BUILD_DIR)/androidauto-bw-aap-test
-BW_AAP_TEST_OBJS     := $(BUILD_DIR)/bw-aap-test-obj/main.o
-
 # ==============================================================================
 # Rules & Targets
 # ==============================================================================
 
-.PHONY: all clean ui carplay-sidecar androidauto-sidecar ladspa-eq \
-        androidauto-usb-probe-test androidauto-wireless-probe-test \
-        androidauto-bluetooth-rfcomm-test androidauto-bw-aap-test
+.PHONY: all clean ui carplay-sidecar androidauto-sidecar ladspa-eq
 
 all: ui carplay-sidecar androidauto-sidecar ladspa-eq
 
@@ -207,43 +159,6 @@ $(SIDECAR_TARGET): $(SIDECAR_OBJS)
 $(BUILD_DIR)/sidecar-obj/%.o: sidecars/carplay/%.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) $(SIDECAR_INCLUDES) -c -o $@ $<
-
-# --- Legacy Diagnostic Probe Test Targets ---
-$(NSS_STUB_OBJ): $(NSS_STUB_SRC)
-	@mkdir -p $(dir $@)
-	$(SYSTEM_CC) -O2 -c -o $@ $<
-
-$(AASDK_TEST_TARGET): $(AASDK_TEST_OBJS) $(NSS_STUB_OBJ)
-	@mkdir -p $(dir $@)
-	$(SYSTEM_CXX) -static -s $(AASDK_WRAP_FLAGS) -o $@ $^ $(AASDK_LIBS)
-
-$(BUILD_DIR)/aasdk-test-obj/%.o: tools/androidauto-usb-probe-test/%.cpp
-	@mkdir -p $(dir $@)
-	$(SYSTEM_CXX) $(CXXFLAGS) $(AASDK_INCLUDES) -Isrc -c -o $@ $<
-
-$(WIRELESS_TEST_TARGET): $(WIRELESS_TEST_OBJS) $(NSS_STUB_OBJ)
-	@mkdir -p $(dir $@)
-	$(SYSTEM_CXX) -static -s $(AASDK_WRAP_FLAGS) -o $@ $^ $(AASDK_LIBS)
-
-$(BUILD_DIR)/wireless-test-obj/%.o: tools/androidauto-wireless-probe-test/%.cpp
-	@mkdir -p $(dir $@)
-	$(SYSTEM_CXX) $(CXXFLAGS) $(AASDK_INCLUDES) -Isrc -c -o $@ $<
-
-$(BT_TEST_TARGET): $(BT_TEST_OBJS) $(NSS_STUB_OBJ)
-	@mkdir -p $(dir $@)
-	$(SYSTEM_CXX) -static -s $(AASDK_WRAP_FLAGS) -o $@ $^ $(AASDK_LIBS)
-
-$(BUILD_DIR)/bt-test-obj/%.o: tools/androidauto-bluetooth-rfcomm-test/%.cpp
-	@mkdir -p $(dir $@)
-	$(SYSTEM_CXX) $(CXXFLAGS) $(AASDK_INCLUDES) -Isrc -c -o $@ $<
-
-$(BW_AAP_TEST_TARGET): $(BW_AAP_TEST_OBJS) $(NSS_STUB_OBJ)
-	@mkdir -p $(dir $@)
-	$(SYSTEM_CXX) -static -s $(AASDK_WRAP_FLAGS) -o $@ $^ $(AASDK_LIBS)
-
-$(BUILD_DIR)/bw-aap-test-obj/%.o: tools/androidauto-bw-aap-test/%.cpp
-	@mkdir -p $(dir $@)
-	$(SYSTEM_CXX) $(CXXFLAGS) $(AASDK_INCLUDES) -Isrc -c -o $@ $<
 
 # --- Clean Target ---
 clean:

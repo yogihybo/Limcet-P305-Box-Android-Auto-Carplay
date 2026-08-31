@@ -924,26 +924,65 @@ lv_obj_t * create_settings_screen() {
             lv_obj_set_style_text_font(log_lbl, &lv_font_roboto_14, 0);
             lv_obj_set_style_text_color(log_lbl, theme::text_primary(), 0);
 
-            // Refresh timer: pulls the last ~30 frames every 300ms and
-            // auto-scrolls to the newest. Deleted in the Close handler
-            // below -- must not outlive log_lbl/log_box.
+            // 2026-09-01: real hardware feedback -- CMD 0x20 (touch) frames
+            // fire on every touch sample and drown out everything else in
+            // the ring buffer / visible history. Filtered out of the
+            // DISPLAY by default (the ring buffer itself still captures
+            // them -- get_mcu_recent_frames() is unfiltered -- this is a
+            // view-level filter only, cheap and simple, doesn't touch the
+            // HAL). Toggle the switch below to show them again. Using
+            // lv_switch, not lv_checkbox -- LV_USE_CHECKBOX is disabled in
+            // this project's lv_conf.h (would need a full LVGL rebuild),
+            // and lv_switch is already the one boolean-toggle widget used
+            // everywhere else in this app.
+            lv_obj_t * touch_filter_row = lv_obj_create(modal);
+            lv_obj_remove_style_all(touch_filter_row);
+            lv_obj_set_width(touch_filter_row, LV_PCT(100));
+            lv_obj_set_height(touch_filter_row, LV_SIZE_CONTENT);
+            lv_obj_set_flex_flow(touch_filter_row, LV_FLEX_FLOW_ROW);
+            lv_obj_set_flex_align(touch_filter_row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+            lv_obj_set_style_pad_top(touch_filter_row, 6, 0);
+
+            lv_obj_t * touch_filter_label = lv_label_create(touch_filter_row);
+            lv_label_set_text(touch_filter_label, "Show touch events (CMD 0x20)");
+            lv_obj_set_style_text_font(touch_filter_label, &lv_font_roboto_14, 0);
+            lv_obj_set_style_text_color(touch_filter_label, theme::text_secondary(), 0);
+
+            lv_obj_t * touch_filter_cb = lv_switch_create(touch_filter_row);
+            if (core::navigation::focus_group()) {
+                lv_group_add_obj(core::navigation::focus_group(), touch_filter_cb);
+            }
+
+            struct LogViewCtx {
+                lv_obj_t * label;
+                lv_obj_t * touch_filter_cb;
+            };
+            auto * log_ctx = new LogViewCtx{log_lbl, touch_filter_cb};
+
+            // Refresh timer: pulls the last ~30 (post-filter) frames every
+            // 300ms and auto-scrolls to the newest. Deleted in the Close
+            // handler below -- must not outlive log_lbl/log_box/log_ctx.
             lv_timer_t * refresh_timer = lv_timer_create([](lv_timer_t * t) {
-                lv_obj_t * label = static_cast<lv_obj_t *>(lv_timer_get_user_data(t));
+                auto * ctx = static_cast<LogViewCtx *>(lv_timer_get_user_data(t));
+                bool show_touch = lv_obj_has_state(ctx->touch_filter_cb, LV_STATE_CHECKED);
                 auto frames = hal::get_mcu_recent_frames();
                 std::string text;
                 constexpr size_t kShowLast = 30;
-                size_t start = frames.size() > kShowLast ? frames.size() - kShowLast : 0;
-                for (size_t i = start; i < frames.size(); ++i) {
-                    text += frames[i];
-                    text += "\n";
+                size_t shown = 0;
+                for (auto it = frames.rbegin(); it != frames.rend() && shown < kShowLast; ++it) {
+                    if (!show_touch && it->find("cmd=0x20 ") != std::string::npos) {
+                        continue;
+                    }
+                    text = *it + "\n" + text;
+                    ++shown;
                 }
                 if (text.empty()) {
                     text = "(waiting for MCU frames...)";
                 }
-                lv_label_set_text(label, text.c_str());
-                lv_obj_t * box = lv_obj_get_parent(label);
+                lv_label_set_text(ctx->label, text.c_str());
+                lv_obj_t * box = lv_obj_get_parent(ctx->label);
                 lv_obj_scroll_to_y(box, LV_COORD_MAX, LV_ANIM_OFF);
-            }, 300, log_lbl);
+            }, 300, log_ctx);
 
             lv_obj_t * close_btn = lv_button_create(modal);
             lv_obj_remove_style_all(close_btn);
@@ -963,13 +1002,15 @@ lv_obj_t * create_settings_screen() {
             struct CloseCtx {
                 lv_obj_t * overlay;
                 lv_timer_t * timer;
+                LogViewCtx * log_ctx;
             };
-            auto * close_ctx = new CloseCtx{overlay, refresh_timer};
+            auto * close_ctx = new CloseCtx{overlay, refresh_timer, log_ctx};
 
             lv_obj_add_event_cb(close_btn, [](lv_event_t * ev) {
                 auto * ctx = static_cast<CloseCtx *>(lv_event_get_user_data(ev));
                 lv_timer_delete(ctx->timer);
                 lv_obj_delete(ctx->overlay);
+                delete ctx->log_ctx;
                 delete ctx;
             }, LV_EVENT_CLICKED, close_ctx);
 

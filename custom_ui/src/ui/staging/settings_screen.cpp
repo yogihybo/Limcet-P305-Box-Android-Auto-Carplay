@@ -680,6 +680,7 @@ lv_obj_t * create_settings_screen() {
 
         lv_obj_t * left_box = lv_obj_create(row);
         lv_obj_remove_style_all(left_box);
+        lv_obj_set_size(left_box, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
         lv_obj_set_flex_flow(left_box, LV_FLEX_FLOW_ROW);
         lv_obj_set_flex_align(left_box, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
         lv_obj_set_style_pad_column(left_box, 12, 0);
@@ -689,6 +690,7 @@ lv_obj_t * create_settings_screen() {
 
         lv_obj_t * text_box = lv_obj_create(left_box);
         lv_obj_remove_style_all(text_box);
+        lv_obj_set_size(text_box, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
         lv_obj_set_flex_flow(text_box, LV_FLEX_FLOW_COLUMN);
 
         lv_obj_t * lbl = lv_label_create(text_box);
@@ -840,6 +842,7 @@ lv_obj_t * create_settings_screen() {
 
         lv_obj_t * left_box = lv_obj_create(row);
         lv_obj_remove_style_all(left_box);
+        lv_obj_set_size(left_box, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
         lv_obj_set_flex_flow(left_box, LV_FLEX_FLOW_ROW);
         lv_obj_set_flex_align(left_box, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
         lv_obj_set_style_pad_column(left_box, 12, 0);
@@ -849,6 +852,7 @@ lv_obj_t * create_settings_screen() {
 
         lv_obj_t * text_box = lv_obj_create(left_box);
         lv_obj_remove_style_all(text_box);
+        lv_obj_set_size(text_box, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
         lv_obj_set_flex_flow(text_box, LV_FLEX_FLOW_COLUMN);
 
         lv_obj_t * lbl = lv_label_create(text_box);

@@ -1926,8 +1926,8 @@ full/head/tail bit-flag bookkeeping) used by multiple commands
 here reaches a UART TX path -- it's purely internal firmware-to-firmware
 messaging, not an external echo. Not a leak.
 
-Other real UART outputs (`CMD 0x7F` version string, `CMD 0x30` battery
-voltage, the knob/touch/reverse-gear event frames) are intentional,
+Other real UART outputs (`CMD 0x7F` version string, `CMD 0x30`
+telemetry, the knob/touch/reverse-gear event frames) are intentional,
 designed-to-be-read status queries -- nothing secret is exposed by them,
 unlike `CMD 0x88`.
 

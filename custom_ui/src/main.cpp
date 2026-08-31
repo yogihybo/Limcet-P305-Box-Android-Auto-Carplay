@@ -598,7 +598,22 @@ int main() {
                 hal::ack_enter_done(camera_handle);
                 s_wasInAaBeforeReverse = hal::androidauto_screen_active().load(std::memory_order_acquire);
                 if (factoryCamera) {
-                    std::printf("%s [HAL:REVCAM] Reverse gear engaged -- OEM Factory Camera mode active (hardware video mux active, was_in_aa=%d)\n",
+                    /* Fix (2026-08-31, real hardware bug report): "with OEM
+                     * the screen goes blank even if the stock OEM factory UI
+                     * is active -- the multiplexer switches the feed but to
+                     * a blank frame." Root cause: CMD 0xA0 id=0x11 above
+                     * only switches the hardware video MUX/relay upstream --
+                     * it does nothing to our own SoC-side GUI layer, which
+                     * keeps compositing an opaque LVGL screen (fb0/OSD1)
+                     * over the top of whatever the mux is now showing.
+                     * hide_display() drives the same real ARKFB_HIDE_WINDOW
+                     * ioctl (0x4f2c) already used for the AA full-screen
+                     * video case, fully disabling our GUI layer -- not just
+                     * per-widget transparency -- so the factory feed shows
+                     * through untouched, matching the "switch entirely to
+                     * the factory display" requirement. */
+                    hal::hide_display();
+                    std::printf("%s [HAL:REVCAM] Reverse gear engaged -- OEM Factory Camera mode active (hardware video mux active, GUI layer hidden, was_in_aa=%d)\n",
                                 core::log_timestamp().c_str(), s_wasInAaBeforeReverse ? 1 : 0);
                 } else {
                     std::printf("%s [HAL:REVCAM] Reverse gear engaged -- opening aftermarket camera overlay (was_in_aa=%d)\n",
@@ -626,7 +641,12 @@ int main() {
                  * returning to AA after reverse gear, not just navigate
                  * the screen. */
                 if (factoryCamera) {
-                    std::printf("%s [HAL:REVCAM] Reverse gear disengaged -- OEM Factory Camera mode de-activated (was_in_aa=%d)\n",
+                    // Restore our GUI layer before navigating back -- must
+                    // happen before any staging_ui::navigate_to() below so
+                    // the next screen actually renders instead of staying
+                    // hidden behind the still-disabled fb0/OSD1 layer.
+                    hal::show_display();
+                    std::printf("%s [HAL:REVCAM] Reverse gear disengaged -- OEM Factory Camera mode de-activated, GUI layer restored (was_in_aa=%d)\n",
                                 core::log_timestamp().c_str(), s_wasInAaBeforeReverse ? 1 : 0);
                     if (s_wasInAaBeforeReverse) {
                         staging_ui::navigate_to(staging_ui::NavDestination::AndroidAuto);

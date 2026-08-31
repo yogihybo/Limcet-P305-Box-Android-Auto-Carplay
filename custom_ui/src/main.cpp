@@ -646,6 +646,25 @@ int main() {
                     // the next screen actually renders instead of staying
                     // hidden behind the still-disabled fb0/OSD1 layer.
                     hal::show_display();
+                    /* Real hardware regression (2026-08-31): "couldn't get
+                     * back to lvgl interface after exiting reverse gear."
+                     * Root cause: when s_wasInAaBeforeReverse is false (the
+                     * common case -- reversing from the plain LVGL screen,
+                     * not from AA), NOTHING below calls navigate_to(), and
+                     * show_display()'s force_refresh mechanism only
+                     * re-asserts the fb0/OSD1 layer on LVGL's own NEXT
+                     * flush (see hal/display.cpp's g_display comment) --
+                     * it doesn't force one itself. If the current screen
+                     * is idle with nothing dirty, that flush may not
+                     * happen for a long time, leaving the display stuck
+                     * even though the hardware layer is technically shown
+                     * again. navigate_to() below guarantees a flush via
+                     * lv_screen_load_anim()'s own full invalidate, but the
+                     * no-navigation branch had nothing playing that same
+                     * role. Force one explicitly, unconditionally, so
+                     * there's always an immediate pending flush regardless
+                     * of which branch runs below. */
+                    lv_obj_invalidate(lv_screen_active());
                     std::printf("%s [HAL:REVCAM] Reverse gear disengaged -- OEM Factory Camera mode de-activated, GUI layer restored (was_in_aa=%d)\n",
                                 core::log_timestamp().c_str(), s_wasInAaBeforeReverse ? 1 : 0);
                     if (s_wasInAaBeforeReverse) {

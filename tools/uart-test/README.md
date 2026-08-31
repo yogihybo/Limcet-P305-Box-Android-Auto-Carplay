@@ -2,7 +2,7 @@
 
 Automated passive listen + basic frame check for the live `/ #` root
 shell — POSIX shell script, same style as `tools/audio-test/` etc. Covers
-`docs/1.3_MCU_ADAPTERS.md`'s MCU link (`/dev/ttyHS0`, confirmed working) and
+`docs/historical/1.3_MCU_ADAPTERS.md`'s MCU link (`/dev/ttyHS0`, confirmed working) and
 MSNEry link (`/dev/ttyS2`, real traffic confirmed but the peripheral on
 the other end is still unidentified).
 

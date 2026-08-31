@@ -261,6 +261,17 @@ void McuInputHal::run() {
                             core::log_timestamp().c_str(), lights_on ? "ON" : "OFF", payload[0], lights_on ? 1 : 0);
             }
         } else if (cmd == 0x04) {
+            // UNCONFIRMED (2026-08-31): CMD 0x04 is real, disassembly-
+            // confirmed parking radar/distance telemetry (transRadarLevel),
+            // NOT a reverse-gear boolean -- treating its mere presence as
+            // "engaged" was never verified against real disassembly and
+            // very plausibly just correlates with reversing (parking
+            // sensors active) rather than actually meaning reverse gear.
+            // See docs/MCU_COMMAND_REFERENCE.md and mcu_input.h's own
+            // get_reverse_gear() comment. Kept as a secondary signal only
+            // -- /dev/carback (core::ReverseGearWatcher) is the real,
+            // independently-sourced authority; see main.cpp's dual-
+            // redundant detection.
             bool prev = reverse_gear_.exchange(true, std::memory_order_acq_rel);
             if (!prev) {
                 std::printf("%s [HAL:MCU] Reverse gear: ENGAGED (CMD 0x04)\n", core::log_timestamp().c_str());

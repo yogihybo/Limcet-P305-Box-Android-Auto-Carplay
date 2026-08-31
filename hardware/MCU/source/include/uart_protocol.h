@@ -7,15 +7,48 @@
 #define UART_MAX_PAYLOAD        32
 #define UART_RX_RING_SIZE       8
 
-/* Outbound Command Codes (MCU -> SoC) */
-#define MCU_CMD_HANDSHAKE_VER   0x01  /* Version & handshake report */
-#define MCU_CMD_INPUT_EVENT     0x02  /* Key / SWC button event (2 bytes: [Key, State]) */
-#define MCU_CMD_STATUS_BITS     0x03  /* General status */
-#define MCU_CMD_RADAR_LEVEL     0x04  /* Parking radar distance */
-#define MCU_CMD_STATUS_5018     0x05  /* Power / ACC status */
-#define MCU_CMD_REVERSE_GEAR    0x06  /* Reverse / camera trigger */
-#define MCU_CMD_STEERING_ANGLE  0x0A  /* Steering trajectory angle */
-#define MCU_CMD_DIP_PROFILE     0x12  /* Vehicle DIP switch profile report */
+/* Outbound Command Codes (MCU -> SoC)
+ *
+ * CORRECTED 2026-08-31: several of these labels below were invented
+ * guesses that were never cross-checked against this project's own
+ * real disassembly/live-capture findings, and in some cases directly
+ * contradict them. See docs/MCU_COMMAND_REFERENCE.md for the full,
+ * cross-checked reference with every conflicting claim shown side by
+ * side -- do not trust a single-source label in isolation for this
+ * direction. */
+#define MCU_CMD_HANDSHAKE_VER   0x01  /* WRONG label -- real custom_ui live capture confirms this
+                                        * is headlights/illumination status (payload[0] bit 0x02),
+                                        * not a version/handshake report. See mcu_input.cpp. */
+#define MCU_CMD_INPUT_EVENT     0x02  /* Key / SWC button event -- live-capture confirmed
+                                        * (b3=key code, b4=press state), matches mcu_input.cpp */
+#define MCU_CMD_STATUS_BITS     0x03  /* General status -- UNCONFIRMED, real disassembly of
+                                        * this byte's meaning is explicitly left open */
+#define MCU_CMD_RADAR_LEVEL     0x04  /* Parking radar distance -- CONFIRMED, "high" confidence
+                                        * disassembly (named transRadarLevel call). custom_ui's
+                                        * own mcu_input.cpp treats this SAME byte as "reverse gear
+                                        * engaged" instead, with no payload check -- a real,
+                                        * unresolved conflict, see docs/MCU_COMMAND_REFERENCE.md */
+#define MCU_CMD_STATUS_5018     0x05  /* UNCONFIRMED -- "Power / ACC status" is an educated guess
+                                        * derived from this byte's Qt event-type number (0x5018),
+                                        * not independently verified; real disassembly explicitly
+                                        * leaves this byte's meaning open */
+#define MCU_CMD_REVERSE_GEAR    0x06  /* UNCONFIRMED -- this is this project's OWN clean-room
+                                        * guess for reverse gear, not a disassembly finding. Real
+                                        * stock disassembly leaves this byte deliberately open;
+                                        * a separate doc guessed "PDC radar distance matrix"
+                                        * instead. Three unreconciled guesses on one byte -- see
+                                        * docs/MCU_COMMAND_REFERENCE.md. Real reverse-gear state
+                                        * on the SoC side should come from /dev/carback (a real,
+                                        * independent GPIO IRQ driver), not this UART guess. */
+#define MCU_CMD_STEERING_ANGLE  0x0A  /* Steering trajectory angle -- CONFIRMED to exist/purpose
+                                        * ("high" confidence, "recv track:" string cited); the
+                                        * real bit-packing is still not fully cracked */
+#define MCU_CMD_DIP_PROFILE     0x12  /* UNCONFIRMED -- this project's own clean-room guess.
+                                        * Real stock disassembly leaves this byte's meaning open
+                                        * too; a separate doc guessed "Display State Sync"
+                                        * instead; custom_ui's mcu_input.cpp treats the same byte
+                                        * as "reverse gear disengaged." Four unreconciled guesses
+                                        * on one byte -- see docs/MCU_COMMAND_REFERENCE.md. */
 #define MCU_CMD_STATUS_QUERY    0x20  /* Status query */
 #define MCU_CMD_VERSION_REPORT  0x7F  /* MCU version string */
 

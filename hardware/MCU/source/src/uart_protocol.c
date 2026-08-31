@@ -538,7 +538,7 @@ static void handle_sync_settings(const UartPacket *p) {
                      * bypass relay (CMD 0x84 sends real "AT+AUDROUTE=1/2" over USART3
                      * alongside driving this same dispatcher -- see handle_audio_route()
                      * above), not video-only as first guessed from
-                     * docs/1.3.1_MCU_FIRMWARE_DECOMPILATION.md's claim alone.
+                     * docs/historical/1.3.1_MCU_FIRMWARE_DECOMPILATION.md's claim alone.
                      *
                      * REAL, UNRESOLVED CROSS-REFERENCE (2026-08-29): the stock app's
                      * own Settings UI labels THIS id (0x11) "Microphone" -- but its

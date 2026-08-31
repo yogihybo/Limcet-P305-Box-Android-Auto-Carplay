@@ -131,7 +131,7 @@ static void gpio_hardware_init(void) {
      * same boot-time hardware-init sequence this function reimplements
      * (0x080056C0, confirmed this session), then releases it later via a
      * main-loop-polled condition -- also reachable from CMD 0xA0 id=0x11
-     * (see docs/1.3.1_MCU_FIRMWARE_DECOMPILATION.md's "Camera Type / Video
+     * (see docs/historical/1.3.1_MCU_FIRMWARE_DECOMPILATION.md's "Camera Type / Video
      * Relay Multiplexer" claim and docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md's
      * discussion of it -- plausible given the structural match, but that
      * doc's adjacent id=0x0d "camera" claim is independently falsified, so

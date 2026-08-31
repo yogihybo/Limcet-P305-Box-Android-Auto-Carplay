@@ -34,7 +34,7 @@ shared-TEA-key section) already established that all 5 real reference
 images it holds -- this Volvo build included -- are the same `DCn32`
 codebase with only CAN IDs and vehicle-specific tables differing.
 **What is NOT trustworthy as Prado-specific**: the CAN ID tables
-(Mode 1/2/3 dispatch, §4 of `docs/1.3.1_MCU_FIRMWARE_DECOMPILATION.md`)
+(Mode 1/2/3 dispatch, §4 of `docs/historical/1.3.1_MCU_FIRMWARE_DECOMPILATION.md`)
 and any vehicle-profile-specific value -- those are real for a Volvo,
 not confirmed for a Toyota Prado. Several places in this doc refer to
 "this device's own `can_app.bin`" as informal shorthand for "the
@@ -48,7 +48,7 @@ physical vehicle's MCU.
 
 ## Why this doc exists
 
-`docs/HANDOFF_MCU_AUDIO_I2C.md` and `docs/1.3.1_MCU_FIRMWARE_DECOMPILATION.md`
+`docs/HANDOFF_MCU_AUDIO_I2C.md` and `docs/historical/1.3.1_MCU_FIRMWARE_DECOMPILATION.md`
 cite specific addresses (a GPIO pin-function table, a `CMD 0xA0` jump
 table at `0x080089D8`) for this same binary. Checking those addresses
 directly against the real file, under an **incorrect load base
@@ -221,7 +221,7 @@ plausible (not proven) that these MCU-controlled lines relate to it
 directly rather than to a separate downstream amp stage -- but this
 remains unconfirmed without a schematic or a working continuity test.
 
-## Cross-check against `docs/1.3.1_MCU_FIRMWARE_DECOMPILATION.md`: tabular data is genuinely reliable
+## Cross-check against `docs/historical/1.3.1_MCU_FIRMWARE_DECOMPILATION.md`: tabular data is genuinely reliable
 
 That doc (a separate, more comprehensive Capstone-based pass over the
 same `can_app.bin`) makes many more claims than the GPIO-pin table
@@ -410,7 +410,7 @@ be identified on the board.
 
 ## Corrections to prior docs, stated plainly
 
-- `docs/HANDOFF_MCU_AUDIO_I2C.md` / `docs/1.3.1_MCU_FIRMWARE_DECOMPILATION.md`'s
+- `docs/HANDOFF_MCU_AUDIO_I2C.md` / `docs/historical/1.3.1_MCU_FIRMWARE_DECOMPILATION.md`'s
   GPIO pin-function table (`PA_MUTE`, mic-mux, etc.) cites specific
   addresses under an apparent `0x08000000` load-base assumption that
   doesn't match this firmware's real `0x08004000` base. Some entries
@@ -507,7 +507,7 @@ Both point at the same real pin. GPIOC Pin 13 is a genuinely different
 port/pin (`0x40011000`), with its own real behavior (boot-time LOW
 default, released via a main-loop-polled condition, also reachable
 from `CMD 0xA0 id=0x11`) -- most plausibly a camera/video relay
-multiplexer per `docs/1.3.1_MCU_FIRMWARE_DECOMPILATION.md`'s claim for
+multiplexer per `docs/historical/1.3.1_MCU_FIRMWARE_DECOMPILATION.md`'s claim for
 `id=0x11`, though that specific label is NOT re-confirmed to the same
 standard as the reset-pin correction: that same doc's adjacent
 `id=0x0d` "front camera auto-switch" claim was independently falsified
@@ -1403,7 +1403,7 @@ decoded a previously-unexamined protocol found along the way.
 |---|---|---|---|
 | UART2 | `0x08006ECB` | SoC command link (the 9-command dispatch already fully documented) | Clean -- a real 8-slot x 30-byte ring, length hard-bounded `<28` in the RX ISR itself, max write index (26) safely inside each 30-byte slot |
 | USART3 | `0x08006ED3` | Real AT-command TX channel -- confirmed via its real peripheral base address `0x40004800` (STM32F105's actual USART3 base) | Clean -- generic ring-drain, no length issues |
-| UART4 | `0x08006EB9` | **Not Bluetooth as `docs/1.3.1_MCU_FIRMWARE_DECOMPILATION.md` guessed** -- a real, separate device-identification handshake protocol (decoded below), confirmed via its real peripheral base `0x40004C00` | Clean -- every field-accumulation state has a small hard-coded byte limit (5/9/3/9) checked before write |
+| UART4 | `0x08006EB9` | **Not Bluetooth as `docs/historical/1.3.1_MCU_FIRMWARE_DECOMPILATION.md` guessed** -- a real, separate device-identification handshake protocol (decoded below), confirmed via its real peripheral base `0x40004C00` | Clean -- every field-accumulation state has a small hard-coded byte limit (5/9/3/9) checked before write |
 | UART5 | `0x08006EC1` | Byte-for-byte the same protocol as UART4 (identical magic values `0x55/0x20/0x32/0x50/0xD3/0xD6`) -- a twin link, not something distinct | Same structure as UART4 -- clean |
 | CAN1_RX0 | `0x08007065` | Fixed-size CAN mailbox -> ring-buffer copy, always reads all 8 possible data-byte positions regardless of DLC | Clean -- no CAN-ID filtering of any kind, no magic ID triggers anything special |
 | USART1 | `0x08006EC9` | Literally a no-op stub (`bx lr`) | Not a real entry point |
@@ -1585,7 +1585,7 @@ physically separate UART link from `ttyHS0` (which uses the SoC's
 `ark-hsuart` peripheral, a different controller family entirely, not
 the generic `uart0-3` block `ttyS2` belongs to). `/dev/ttyS2` ("MSNEry")
 is independently confirmed live (real traffic observed) but its peer
-was never identified (`docs/1.3_MCU_ADAPTERS.md`, `tools/uart-test/`) --
+was never identified (`docs/historical/1.3_MCU_ADAPTERS.md`, `tools/uart-test/`) --
 exactly the profile of an orphaned link that would match this
 UART4/UART5 protocol, since USART2 (SoC command link) and USART3
 (Bluetooth) are both already accounted for elsewhere, leaving UART4/
@@ -1621,7 +1621,7 @@ If `ttyS2` really is wired to a UART this same firmware implements,
 this firmware should recognize the framing it's actually being sent --
 it doesn't. Two honest readings, can't distinguish between them without
 a real live test: (a) `ttyS2`'s peer is a genuinely different board/
-chip, not this MCU at all -- matching `docs/1.3_MCU_ADAPTERS.md`'s own
+chip, not this MCU at all -- matching `docs/historical/1.3_MCU_ADAPTERS.md`'s own
 original speculation (a separate steering-wheel-control bridge, amp/
 DSP controller, etc.); or (b) the real, uncaptured Prado-specific
 firmware (this project only has the generic `DCn32-VOLVO` reference,
@@ -1766,7 +1766,7 @@ pattern this real firmware is missing).
   `cmp r0,#15; blt <skip-reset>`, i.e. head cycles through indices
   `0..14` and resets to `0` on reaching `15`: a genuine 15-slot ring.
   This matches `hardware/MCU/MCU_FIRMWARE_REVIEW.md` and
-  `docs/1.3.1_MCU_FIRMWARE_DECOMPILATION.md`'s independent "15-slot"
+  `docs/historical/1.3.1_MCU_FIRMWARE_DECOMPILATION.md`'s independent "15-slot"
   finding -- this doc's own number was the one that was wrong, found via
   a cross-doc consistency check.)
 - **Consumer**: a loop inside the vehicle-CAN dispatch function (starts
@@ -2220,7 +2220,7 @@ section above with the full trace.
 
 ### Real, benign discoveries along the way
 
-- **UART4/UART5** implement a small, genuine device-identification handshake protocol (sync byte `0x55`, 5 message types) with a real flash-baked identifier string, `"cD31"` -- not Bluetooth as `docs/1.3.1_MCU_FIRMWARE_DECOMPILATION.md`'s own guess had it (that's confirmed to be `USART3` instead, via its real peripheral base address). Properly bounded, no vulnerability, but a genuinely new fact about this hardware.
+- **UART4/UART5** implement a small, genuine device-identification handshake protocol (sync byte `0x55`, 5 message types) with a real flash-baked identifier string, `"cD31"` -- not Bluetooth as `docs/historical/1.3.1_MCU_FIRMWARE_DECOMPILATION.md`'s own guess had it (that's confirmed to be `USART3` instead, via its real peripheral base address). Properly bounded, no vulnerability, but a genuinely new fact about this hardware.
 - **`CMD 0x85`** was checked as a possible leak candidate and ruled out -- it forwards data to a generic internal 40-slot event queue, never reaching a UART TX path.
 
 ---
@@ -2625,8 +2625,8 @@ section. This isn't a new discovery colliding with an old one by
 chance -- it's confirmation that an earlier, unsummarized pass of this
 project already did this exact `CMD 0xE1` disassembly (also recorded,
 found while checking, in `hardware/MCU/MCU_FIRMWARE_REVIEW.md`,
-`docs/1.3.1_MCU_FIRMWARE_DECOMPILATION.md`, and
-`docs/1.3_MCU_ADAPTERS.md` -- all three already had this same magic-
+`docs/historical/1.3.1_MCU_FIRMWARE_DECOMPILATION.md`, and
+`docs/historical/1.3_MCU_ADAPTERS.md` -- all three already had this same magic-
 cookie/watchdog-reset finding on record). This session's independent
 re-derivation in the previous section is real and address-verified,
 just not novel -- flagged here so it's not miscredited.
@@ -2799,7 +2799,7 @@ Tracing the five input pins above meant resolving their real port+pin
 identities precisely -- and 4 of the 5 addresses involved (`0x0800599C`,
 `0x080059B0`, `0x080059D8`, `0x080059E8`) turned out to be **exact
 matches** for rows already in this project's own long-standing GPIO
-pinout table (`docs/1.3.1_MCU_FIRMWARE_DECOMPILATION.md` §7, copied
+pinout table (`docs/historical/1.3.1_MCU_FIRMWARE_DECOMPILATION.md` §7, copied
 into `docs/HANDOFF_MCU_AUDIO_I2C.md` too) -- and all 4 were wrong, both
 on **port** and on **function type**:
 

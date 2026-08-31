@@ -7,7 +7,7 @@ This toolkit provides tools for analyzing, decompiling, patching, and rebuilding
 >   `0x105 -> 0x3C4`) has real basis in this project's research; the other
 >   (`0x185 -> 0x025`, the reverse/parking-sensor handler) is **unverified** and
 >   may conflict with SWC traffic per `docs/1.2_CANBUS.md`. See
->   `docs/1.3.1_MCU_FIRMWARE_DECOMPILATION.md`'s warning banner for the full
+>   `docs/historical/1.3.1_MCU_FIRMWARE_DECOMPILATION.md`'s warning banner for the full
 >   explanation before using this preset.
 > - No image-level checksum/CRC verification is confirmed to exist for
 >   `can_app.bin` — only the runtime UART protocol has one. Keep a copy of the

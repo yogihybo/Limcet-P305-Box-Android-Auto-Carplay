@@ -616,6 +616,30 @@ SSH is enabled in the reconstructed rootfs and starts automatically on boot.
 ssh root@192.168.7.1
 ```
 
+### SSH Access (dynamic/`custom_ui` rootfs)
+
+The newer Buildroot-based rootfs (`build_bootable_sdcard_dyn.sh` + `firmware_overlay_dyn/`,
+the one running `custom_ui`) has its **own, separate** SSH setup — root's password is
+genuinely locked (`*` in `/etc/shadow`) and `PermitEmptyPasswords no`, so password login is
+never possible on this rootfs. Login is **key-only**, via a dedicated deploy keypair:
+
+| Item | Value |
+|------|-------|
+| Private key | `~/.ssh/prado_deploy_key` (this dev machine only — **not committed to git**) |
+| Public key staged on-device | `firmware_overlay_dyn/root/.ssh/authorized_keys` |
+| Auto-included on rebuild | yes — `build_bootable_sdcard_dyn.sh`'s `rsync -a` overlay step picks up hidden files/permissions automatically, no extra step needed |
+
+**To connect:**
+
+```sh
+ssh -i ~/.ssh/prado_deploy_key root@<device-ip>
+```
+
+If `~/.ssh/prado_deploy_key` is ever lost, regenerate a new keypair and replace
+`firmware_overlay_dyn/root/.ssh/authorized_keys` with the new public half (keep it `600`,
+the containing `.ssh/` dir `700`), then rebuild/reflash — the old key simply stops working,
+nothing else to clean up.
+
 ### USB Networking
 
 The ARK1680 USB gadget stack is configured to use CDC-NCM (`g_ncm.ko`), which creates a `usb0` network interface when connected to a host PC.

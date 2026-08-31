@@ -593,25 +593,32 @@ int main() {
         if (reverseChanged) {
             hal::apply_reversing_volume_cut(reverseEngaged);
             bool factoryCamera = core::default_store().get_bool("OriginalCarCamera", false, "General");
-            /* Fix (2026-08-31, real hardware regression): "stuck in the
-             * video mux" after exiting reverse with OEM Factory Camera
-             * on. Root cause, found from a real user observation: at app
-             * startup (main() above, ~line 528), sending id=0x11=0 is
-             * what visibly switches the display FROM the factory/OEM
-             * video path BACK to LVGL -- that's a real, observed effect,
-             * not just a settings-preference push. But this line used
-             * to send id=0x11 = the STATIC factoryCamera preference on
-             * BOTH engage and disengage -- when that preference is true,
-             * it sent id=0x11=1 on disengage too, i.e. it never sent the
-             * one value that's actually known to switch the display back
-             * to LVGL. Send the real engage/disengage semantics instead:
-             * 1 (factory) only while actually reversing, 0 (matching the
-             * known-working boot-time "switch to LVGL" command)
-             * unconditionally once reverse ends, regardless of the
-             * user's persisted preference -- that preference should only
-             * govern what shows *during* reverse, not what the display
-             * returns to afterward. */
-            hal::send_mcu_setting(0x11, (reverseEngaged && factoryCamera) ? 1 : 0);
+            /* REMOVED (2026-08-31, real user report + disassembly-confirmed
+             * root cause -- see docs/MCU_COMMAND_REFERENCE.md's CMD 0xA0
+             * id=0x11 section for the full trace): this used to resend
+             * CMD 0xA0 id=0x11 on every reverse-gear transition (1 while
+             * reversing with the factory preference, forced 0 on every
+             * disengage). Real disassembly of the MCU's own id=0x11
+             * handler (0x08008B5E) shows this was never necessary and
+             * actively harmful: the firmware already implements a full
+             * arm-then-trigger design on its own -- id=0x11 just stores
+             * the preference (armed once at boot, main() ~line 528, and
+             * again immediately whenever the user changes the setting,
+             * see settings_screen.cpp's OriginalCarCamera toggle callback)
+             * -- and a separate, fully autonomous flag_5e/GPIOB-Pin-2
+             * edge poller does the actual relay switching in firmware,
+             * with zero software involvement, on every real reverse-gear
+             * transition. The disengage-forced-0 send here unconditionally
+             * DE-ARMED the factory preference back to 0 on every single
+             * disengage -- meaning OEM Factory Camera mode only ever
+             * worked for the first reverse-gear engagement after boot or
+             * a settings change, then silently broke on every subsequent
+             * engagement, since nothing re-armed it except this same
+             * now-removed code's own engage branch. User confirmed by
+             * direct experience that reverse-camera switching worked
+             * better before these sends existed at all -- removed
+             * entirely, trusting the firmware's own already-correct
+             * autonomous design instead of re-fighting it from software. */
             if (reverseEngaged) {
                 hal::ack_enter_done(camera_handle);
                 s_wasInAaBeforeReverse = hal::androidauto_screen_active().load(std::memory_order_acquire);

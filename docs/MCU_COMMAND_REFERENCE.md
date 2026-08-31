@@ -42,7 +42,7 @@ MCU firmware.
 | `0xA0` | UI settings sync | `payload[0]` = settings `id` (`0x00`–`0x11`), `payload[1]` = value — see the dedicated sub-table below for what each `id`'s value byte means | ✅ CONFIRMED, see the dedicated table below | |
 | ~~`0x90`~~ | ~~Diagnostic flash/SRAM readback~~ | — | ❌ **DISPROVEN** | checked against 5 real firmware images (this device + 4 cross-vendor references); appears in none. Removed from `uart_protocol.h`/`.c` entirely — this was a clean-room fabrication from an early, largely-unverified handoff doc |
 | `0xE1` | Enter bootloader for update | `payload = [0x00, 0x00]` — the trigger is the command byte alone; the MCU-side effect (writing magic `0x5555AAAA` to SRAM `0x20004004`) is internal, not driven by any payload field | ✅ CONFIRMED end-to-end, both sides | **real risk, not just a documentation note**: the resident bootloader isn't in this repo, and the clean-room bootloader erases flash *before* waiting for the first byte — sending this on real hardware with no follow-up could wipe application flash with no recovery. `tools/mcu-probe --reboot-probe` is gated behind `--confirm-erase-risk` |
-| `0xFF` | System state reset | `payload[0]` = sub-command id (`0x00`–`0x09` all confirmed no-ops; only `0x7F` acts) | ✅ CONFIRMED dispatch shape | real effect content behind sub-id `0x7F` is approximated, not byte-verified |
+| `0xFF` | System state reset | `payload[0]` = sub-command id (`0x00`–`0x09` all confirmed no-ops; only `0x7F` acts). Separately confirmed (while tracing `CMD 0x87`'s shared SRAM struct) that this handler only *reads* struct offsets `0-2`, never writes them | ✅ CONFIRMED dispatch shape and gate, `0x080088E8` | **Partially traced, not fully**: which sub-id acts and that it reads (not writes) the shared struct is real disassembly. The actual real effect once sub-id `0x7F` fires was never deep-traced past that gate — the clean-room's "resets CAN RX ring buffer" is an explicit approximation, not verified against the real handler's own instructions |
 
 ### `CMD 0x84` / `CMD 0xA0 id=0x11`'s shared relay dispatcher — real 4-state truth table
 
@@ -117,15 +117,15 @@ its own competing claim.
 | Cmd | Payload / bitfield layout | Meaning | Resolution |
 |---|---|---|---|
 | `0x00` | — | Default / ignored (no-op) | ✅ CONFIRMED, `0x37348` |
-| `0x01` | `payload[0]` bit `0x02` = on/off — the ONE bit `custom_ui` actually reads; no other bits decoded | 🟡 **Headlights / illumination status** | Live-hardware confirmed, what `custom_ui` runs on. ~~Static disassembly guessed "key/button event, type 0x1013"~~ ("med" confidence only) — never independently verified against a live capture, superseded here |
-| `0x02` | `payload[0]`(`b3`)=key code, `payload[1]`(`b4`)=1 press/0 release. Live-captured codes: `3`=Next,`4`=Prev,`8`=Answer,`9`=Hangup,`12`=Home,`13`=Knob push,`64`=Knob CCW,`65`=Knob CW | 🟡 **Knob/button event** | Live-capture confirmed, what `custom_ui` runs on. ~~Originally guessed "handshake/reply builder"~~ — the same source doc later self-revised to this reading |
+| `0x01` | `payload[0]` bit `0x02` = on/off — the ONE bit `custom_ui` actually reads; no other bits decoded | 🟡 **Headlights / illumination status** | Live-hardware confirmed, what `custom_ui` runs on. **Independently corroborated from a second, stronger source**: a real captured frame from the *stock* MSN app's own log, `2E 01 06 13 00 00 00 00 00 E5` — `len=6`, `payload[0]=0x13` (`0b00010011`, bit `0x02` set) — matches "Lights ON" exactly. ~~Static disassembly guessed "key/button event, type 0x1013"~~ ("med" confidence only) — never independently verified against a live capture, superseded here |
+| `0x02` | `payload[0]`(`b3`)=key code, `payload[1]`(`b4`)=1 press/0 release *(see open question below — not uniform across all codes)*. Live-captured codes: `3`=Next,`4`=Prev,`8`=Answer,`9`=Hangup,`12`=Home,`13`=Knob push,`64`=Knob CCW,`65`=Knob CW. **Real, likely non-coincidental sub-bit pattern in `b3`** (inferred from the value list, not itself disassembly-confirmed): `8`/`9` (Answer/Hangup), `12`/`13` (Home/Knob push), and `64`/`65` (Knob CCW/CW) each share every bit except bit `0` — consistent with the upper bits identifying a control *group* and bit `0` selecting a state/direction within it. `3`/`4` (Next/Prev) do **not** fit that pattern (`0b011`/`0b100` — no shared group bits), so this isn't a fully uniform scheme | 🟡 **Knob/button event** | Live-capture confirmed, what `custom_ui` runs on. ~~Originally guessed "handshake/reply builder"~~ — the same source doc later self-revised to this reading. **Open question, from a fresh capture**: `b4` is not uniformly press(`1`)/release(`0`) across codes — Home (`b3=12`) was captured with `b4=1`, but Next/Prev/Answer/Hangup (`b3=3/4/8/9`) were all captured with `b4=0`. Whether this means those four report only on release (a momentary-action convention different from Home/knob-push's press-then-release pair), or the capture simply didn't show their `b4=1` edge, is not resolved |
 | `0x03` | `QBitArray` bitfield confirmed to exist; **no individual bit meaning resolved** | UNCONFIRMED | Real bitfield type confirmed via disassembly; not handled by `custom_ui`, no live capture exists to resolve individual bits |
-| `0x04` | not resolved at byte level in any source — presumably a distance/level value, exact encoding never traced | ✅ **Parking radar / distance level** (`transRadarLevel`) | "High"-confidence disassembly, named real function call. ~~`custom_ui` treats this same byte as "Reverse gear: ENGAGED"~~ with no payload check at all — no disassembly support; very plausibly just correlates with reversing (parking sensors active) without meaning reverse gear. See the dedicated reverse-gear note below |
+| `0x04` | not resolved at byte level — presumably a distance/level value, exact encoding never traced. `len=6` in a fresh live capture | ✅ **Parking radar / distance level** (`transRadarLevel`), 🟡 **empirically correlates with reverse gear engaging** | "High"-confidence disassembly, named real function call, for the radar meaning. A fresh live capture confirms this command really does fire when reverse gear engages — real, reproducible correlation, not just a theory. Doesn't settle which is the "true" meaning: parking sensors very plausibly auto-activate exactly when reversing, so a radar-telemetry command would correlate with reverse gear for a real physical reason, not by coincidence. `custom_ui`'s "Reverse gear: ENGAGED" reading has no disassembly support but is now empirically well-supported as a *practical* trigger, if not necessarily the byte's true meaning. See the dedicated reverse-gear note below |
 | `0x05` | not resolved | UNCONFIRMED | Real disassembly explicitly leaves this deliberately open (Qt event type `0x5018`); not handled by `custom_ui` |
 | `0x06` | `byte[3]` via `QBitArray`; **no individual bit meaning resolved** | UNCONFIRMED | Real disassembly leaves this deliberately open (Qt event type `0x501A`). ~~Clean-room firmware guessed `MCU_CMD_REVERSE_GEAR`~~ — never verified, unreconciled with the disassembly's own "left open" finding |
 | `0x07` | not resolved | UNCONFIRMED | Single, never-cross-checked source; no disassembly evidence |
 | `0x0A` | `byte[3]` bit `0` = direction, `byte[4..5]` = 16-bit magnitude, scaled to a signed angle. **Real bit-packing of the magnitude/scale factor still not fully cracked** despite the command's purpose being high-confidence | ✅ **Steering angle / reverse trajectory** | "High"-confidence disassembly, `"recv track:"` string cited, matches `custom_ui`'s `MCU_CMD_STEERING_ANGLE` |
-| `0x12` | `byte[4]` read; **no individual bit meaning resolved** | UNCONFIRMED | Real disassembly leaves this deliberately open (Qt event type `0x5026`). ~~Clean-room firmware guessed `MCU_CMD_DIP_PROFILE`~~ / ~~`custom_ui` treats it as "Reverse gear: DISENGAGED"~~ — neither has disassembly support. See the dedicated reverse-gear note below |
+| `0x12` | `byte[4]` read; **no individual bit meaning resolved**. `len=3` in a fresh live capture — notably shorter than `0x04`'s `len=6`, consistent with these being genuinely different, unrelated commands rather than a matched engage/disengage pair | UNCONFIRMED, 🟡 **empirically correlates with reverse gear disengaging** | Real disassembly leaves this deliberately open (Qt event type `0x5026`). ~~Clean-room firmware guessed `MCU_CMD_DIP_PROFILE`~~ — no disassembly support. A fresh live capture confirms this command really does fire when reverse gear disengages — real, reproducible correlation. `custom_ui`'s "Reverse gear: DISENGAGED" reading is now empirically well-supported as a practical trigger, even though the byte's true meaning is still formally unresolved. See the dedicated reverse-gear note below |
 | `0x20` | `X=(payload[1]<<8)|payload[0]`, `Y=(payload[3]<<8)|payload[2]`, all-zero payload = release. `payload[4]` (`b7`) values `1`/`2`: possibly touch-down vs. move, **not confirmed** | ✅ **Touch coordinate report** | Live-capture confirmed via a corner-touch test, exact pixel-width match — the most rigorously verified single finding in the whole corpus. ~~Static disassembly only knew it as a "reply builder"~~, superseded |
 | `0x21`/`0x22` | not resolved | UNCONFIRMED | Single, never-cross-checked source; `MsnEvent` posted, meaning never resolved |
 | `0x30` | `payload[0] + payload[1]/100.0f` — a real, decodable payload format, but its *meaning* is disputed (see Resolution) | ✅ **Arkdata / display-config file I/O** | "High"-confidence disassembly, real function name cited. ~~`custom_ui` treats this same byte as battery voltage~~ — file I/O and battery telemetry are unrelated functions; the disassembly finding is the stronger evidence, but this is not itself hardware-retested since the correction |
@@ -138,25 +138,34 @@ its own competing claim.
 
 `custom_ui/src/hal/mcu_input.cpp` currently treats `CMD 0x04` as "reverse gear ENGAGED" and
 `CMD 0x12` as "reverse gear DISENGAGED," with **no payload check on either** — just the
-command byte's presence. Neither mapping has any disassembly support:
+command byte's presence. A fresh live capture (2026-08-31) confirms both really do fire at
+the right moment (`0x04` on engage, `0x12` on disengage) — this is real, reproducible,
+empirical support for using them as *practical triggers*. It does not, however, settle
+either byte's *true* meaning:
 
-- `CMD 0x04` is the one "high"-confidence finding in the whole outbound table that
-  **isn't** about reverse gear at all — it's real, named, disassembly-confirmed parking
-  radar/distance telemetry (`transRadarLevel`). It very plausibly fires repeatedly while
-  reversing (parking sensors are active), which would make it *correlate* with reverse gear
-  without *meaning* reverse gear — exactly the kind of thing that looks right in casual
-  testing and is wrong underneath.
-- `CMD 0x12`'s meaning has **four different unreconciled guesses** across this project's own
-  history (unresolved status event / "Display State Sync" / "DIP switch profile" / "reverse
-  disengaged") and zero disassembly support for any of them.
+- `CMD 0x04` is the one "high"-confidence disassembly finding in the whole outbound table
+  that **isn't** about reverse gear at all — it's real, named parking radar/distance
+  telemetry (`transRadarLevel`). Parking sensors very plausibly auto-activate exactly when
+  reversing, which would make this command correlate with reverse gear for a real physical
+  reason, not by coincidence and not because the byte itself encodes gear state. The new
+  capture confirms the *correlation*, not which explanation is right.
+- `CMD 0x12`'s meaning has **three different unreconciled guesses** across this project's
+  own history (unresolved status event / "DIP switch profile" / "reverse disengaged") and
+  zero disassembly support for any of them — but now has the same kind of real empirical
+  correlation `0x04` does.
 
+Given the correlation is now real and reproducible (not just a live-code assumption), the
+practical urgency of demoting these in favor of `/dev/carback` is lower than it looked
+before this capture — but the underlying evidence gap is unchanged: neither byte's meaning
+is disassembly-confirmed, and `CMD 0x04` specifically has a real, named, competing meaning.
 This project has a real, independently-sourced, dedicated hardware signal for reverse gear
-that doesn't depend on any of this guessing: `/dev/carback`, a real SoC-level GPIO IRQ driver
-(`linux-arkmicro/linux/drivers/soc/arkmicro/ark-carback.c`), completely unrelated to the MCU
-UART protocol. `main.cpp`'s dual-redundant detection currently checks the MCU-UART guess
-*first* and only falls back to `/dev/carback` if the UART side doesn't fire — the MCU UART
-signal should be demoted to a fallback (or removed) and `/dev/carback` made authoritative.
-**Not yet implemented as of this doc** — recorded here as the concrete next fix.
+that doesn't depend on any of this UART guessing either way: `/dev/carback`, a real
+SoC-level GPIO IRQ driver (`linux-arkmicro/linux/drivers/soc/arkmicro/ark-carback.c`),
+completely unrelated to the MCU UART protocol. `main.cpp`'s dual-redundant detection
+currently checks the MCU-UART signal *first* and only falls back to `/dev/carback` if the
+UART side doesn't fire — worth reconsidering that priority order, or at minimum keeping
+`/dev/carback` as the tie-breaker if the two ever disagree. **Not yet implemented as of this
+doc** — recorded here as the concrete next decision, not a settled fix.
 
 ---
 

@@ -97,11 +97,12 @@ modprobe rtl8811cu rtw_drv_log_level=2 rtw_country_code=US
 # Launch custom_ui immediately so LVGL display initializes in <1 second.
 # Auto-respawn supervisor protects against transient voltage dips during engine crank.
 # 2026-09-02: output also tee'd to a log file (in addition to the serial
-# console it already went to) so `tail -f /var/log/custom_ui.log` over
-# SSH shows the same live output without needing physical console
-# access -- real need, hit while diagnosing a false reverse-gear
-# trigger that could only be seen on the serial console at the time.
-mkdir -p /var/log
+# console it already went to) so `tail -f /tmp/custom_ui.log` over SSH
+# shows the same live output without needing physical console access --
+# real need, hit while diagnosing a false reverse-gear trigger that
+# could only be seen on the serial console at the time. /tmp (not
+# /var/log) deliberately -- tmpfs, so this clears itself on every
+# reboot rather than accumulating stale log data across boots.
 (
 	sleep 0.1
 	. /etc/profile
@@ -110,7 +111,7 @@ mkdir -p /var/log
 		# would be tee's exit status, not custom_ui's -- route the
 		# real exit code through a temp file instead so the message
 		# below stays accurate.
-		( /usr/bin/custom_ui 2>&1; echo $? > /tmp/.custom_ui_exit ) | tee -a /var/log/custom_ui.log
+		( /usr/bin/custom_ui 2>&1; echo $? > /tmp/.custom_ui_exit ) | tee -a /tmp/custom_ui.log
 		rc=$(cat /tmp/.custom_ui_exit 2>/dev/null)
 		echo "rcS: custom_ui exited (${rc:-?}), respawning in 1s..."
 		sleep 1

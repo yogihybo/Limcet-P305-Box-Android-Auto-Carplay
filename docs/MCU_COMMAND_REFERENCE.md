@@ -290,3 +290,45 @@ If you trace a new command and its meaning conflicts with a row above, **don't s
 overwrite the old claim** — add it as a new conflict row with both claims shown, exactly like
 the table above. The value of this doc is that every claim carries its evidence and its
 counter-claims in one place; a doc that only ever shows the most-recent guess loses that.
+
+## Real, byte-level decode of `CMD 0x04`'s payload (2026-09-02) -- and why this strengthens the case for using it as corroboration
+
+Prompted directly by the `CMD 0x12` false-trigger investigation above: is `CMD 0x04` a
+real, properly-scoped signal we could use to corroborate reverse-gear transitions, or is
+it just as loosely-defined as `CMD 0x12` turned out to be? Traced
+`MCUAdapter_BoxP300::onRecvMcuProtocol`'s real `CMD 0x04` handler directly (not the MCU
+firmware -- this command is MCU->SoC, so the byte-unpacking logic lives on the *consumer*
+side, in `libMcuCenter.so`). Real symbols intact in this specific copy
+(`firmware_dumps/Prado firmware dump/mtd6_rootfs/usr/lib/libMcuCenter.so`) -- confirmed via
+`arm-linux-gnueabihf-objdump -d`, not guessed; other copies of this same library across the
+various `firmware_dumps/*` trees are stripped and don't carry these symbols, so use this
+exact file for any follow-up tracing.
+
+Real decoded structure, handler at `0x37790`:
+
+```
+payload[0] -> transRadarLevel(payload[0]) -> output byte 0
+payload[1] -> transRadarLevel(payload[1]) -> output byte 1
+payload[3] -> range-classified (0-15 -> path A; 16-45 -> level 2; beyond -> a third
+              branch not yet traced) -> output byte 2
+payload[2] -> transRadarLevel(payload[2]) -> output byte 3
+-> packed into MsnEvent(type=0x5019, app=0x191) via setByteArrayParams + dispatchMsnEvent
+```
+
+(`payload[4]`/`payload[5]` not yet traced -- always `0x00` in every real capture so far, so
+low priority.) `transRadarLevel(unsigned char)` itself is an **imported** symbol (resolved
+via PLT, not defined in this library) -- almost certainly a raw-sensor-byte -> discrete
+zone/level lookup, consistent with a real parking-sensor cluster (3 independently-converted
+channels plus a 4th classified value, matching a typical 3-4-sensor rear array).
+
+**Why this matters for the reverse-gear reliability problem**: this is a genuinely
+well-structured, radar-specific event -- three independently-converted sensor channels
+packed into their own distinct `MsnEvent` type (`0x5019`), nothing like `CMD 0x12`'s
+apparent shared/multi-purpose nature (see the CRITICAL section above). And the real
+capture evidence backs this up: `CMD 0x04` **never appeared at all** in the one capture
+confirmed to be a false positive (vehicle parked, headlights only, no radar activity --
+exactly what you'd expect if this command is genuinely tied to real parking sensors), and
+it *did* appear in both real reverse-gear test captures. That makes "require `CMD 0x04`
+radar telemetry to also be present before trusting a `CMD 0x12` engage transition" a real,
+evidence-backed candidate mitigation for the false-trigger problem above -- not a guess.
+**Not yet implemented** -- a real next decision, not a settled fix.

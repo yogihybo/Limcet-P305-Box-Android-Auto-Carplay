@@ -283,19 +283,50 @@ void McuInputHal::run() {
             // Confirmed via a real enter-then-exit test correlated against
             // MCU Live Log captures: payload=[01 04 00] on entering
             // (payload[0]==0x01), payload=[02 01 00] on exiting
-            // (payload[0]==0x02). Pending a second real-world retest to
-            // confirm this mapping before treating it as fully settled.
-            if (payload[0] == 0x01) {
-                bool prev = reverse_gear_.exchange(true, std::memory_order_acq_rel);
-                if (!prev) {
-                    std::printf("%s [HAL:MCU] Reverse gear: ENGAGED (CMD 0x12 payload[0]=0x01)\n",
-                                core::log_timestamp().c_str());
-                }
-            } else if (payload[0] == 0x02) {
-                bool prev = reverse_gear_.exchange(false, std::memory_order_acq_rel);
-                if (prev) {
-                    std::printf("%s [HAL:MCU] Reverse gear: DISENGAGED (CMD 0x12 payload[0]=0x02)\n",
-                                core::log_timestamp().c_str());
+            // (payload[0]==0x02).
+            //
+            // Debounced 2026-09-02 (real hardware bug report): after
+            // wiring the mapping above, exit showed "LVGL flashes up
+            // momentarily on disengage, then blank again" while engage
+            // kept working fine. The hardware video relay itself is
+            // independently confirmed reliable and fully autonomous (it
+            // switches correctly even with custom_ui killed entirely --
+            // see the flag_5e/GPIOB-Pin-2 finding in
+            // docs/MCU_COMMAND_REFERENCE.md), so the flash-then-blank
+            // pattern isn't a relay problem: it's main.cpp's
+            // hide_display()/show_display() being re-triggered by a
+            // second, spurious payload[0]==0x01 frame arriving shortly
+            // after the real payload[0]==0x02 exit frame (a real edge
+            // now drives BOTH directions off the same byte, unlike the
+            // old scheme, so a duplicate/bounced frame right at a
+            // transition now visibly flickers the display where it
+            // previously wouldn't have). A direction flip within
+            // kDebounceWindow of the last *committed* change is treated
+            // as noise and ignored rather than acted on again -- doesn't
+            // affect the first transition from an idle state (no prior
+            // commit to compare against), so normal engage/disengage
+            // responsiveness is unaffected.
+            static uint8_t s_lastCommittedDir = 0;  // 0 = no commit yet
+            static std::chrono::steady_clock::time_point s_lastCommitTime{};
+            constexpr auto kDebounceWindow = std::chrono::milliseconds(300);
+
+            uint8_t dir = payload[0];
+            if (dir == 0x01 || dir == 0x02) {
+                auto now = std::chrono::steady_clock::now();
+                bool isFlip = (s_lastCommittedDir != 0) && (dir != s_lastCommittedDir);
+                bool tooSoon = isFlip && (now - s_lastCommitTime) < kDebounceWindow;
+                if (tooSoon) {
+                    std::printf("%s [HAL:MCU] Ignored likely-bounce CMD 0x12 payload[0]=0x%02X (flip within debounce window)\n",
+                                core::log_timestamp().c_str(), dir);
+                } else {
+                    bool engaged = (dir == 0x01);
+                    bool prev = reverse_gear_.exchange(engaged, std::memory_order_acq_rel);
+                    if (prev != engaged) {
+                        std::printf("%s [HAL:MCU] Reverse gear: %s (CMD 0x12 payload[0]=0x%02X)\n",
+                                    core::log_timestamp().c_str(), engaged ? "ENGAGED" : "DISENGAGED", dir);
+                    }
+                    s_lastCommittedDir = dir;
+                    s_lastCommitTime = now;
                 }
             }
         } else if (cmd == 0x20 && len >= 5) {

@@ -19,6 +19,15 @@ Connecting SWD to this chip **always forces a reset**, regardless of `halt` vs
 `reset halt` — an established, hardware-confirmed fact for this specific
 setup, not something to second-guess. This means:
 
+**Also real, user-observed (2026-09-01, see `MCU_FIRMWARE_VERIFIED_FINDINGS.md`'s
+own "SWD-attached battery drain" section)**: leaving the debugger connected
+for an extended period measurably drains the vehicle battery, while leaving
+it disconnected does not — plausibly the core being held out of any sleep
+state for as long as a debug session is active. Keep any live GPIO
+manipulation session in this plan short (attach, test, detach), or do it
+with the engine running / battery on a charger — don't leave the probe
+connected for extended monitoring.
+
 - We only ever get **bootloader-level context** once connected — no app code has
   run, so GPIO peripheral clocks are NOT enabled and none of the pins below are
   yet configured as outputs. We have to do the clock-enable and pin-mode

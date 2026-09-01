@@ -207,18 +207,76 @@ The history is kept below for context, since it's what led to the real fix.
 |---|---|---|---|---|
 | `CMD 0x04` presence | any frame with this cmd byte, no payload check | Live capture (2026-08-31) confirmed it *correlated* with reverse-gear engage | Real, named, *competing* meaning: parking radar/distance telemetry (`transRadarLevel`), the one "high"-confidence disassembly finding in the whole outbound table. **Confirmed wrong (2026-09-01)**, see below — never actually meant reverse gear at all, just correlated because parking sensors activate around the same time | ❌ demoted to a no-op, no longer touches reverse-gear state |
 | `CMD 0x12` presence, direction-blind | any frame with this cmd byte, no payload check, always treated as disengage | Live capture (2026-08-31) confirmed it fires on what looked like disengage | **Three different unreconciled guesses** across this project's own history, zero disassembly support for any. Also fires once at app startup, unrelated to reverse gear. **Real hardware evidence (2026-09-01)**: user reported a consistent ~5s lag between physically leaving reverse and `custom_ui` switching back; a same-day boot log showed the pattern `0x04`(engage)→`0x12`(assumed disengage, 5.76s later)→`0x04`(engage again, 4ms later) — a 4ms flip isn't real gear-shifting. **RESOLVED**: user confirmed the two `0x12` events captured that session were a real entering/exiting *pair*, not two disengages — `payload=[01 04 00]` was the enter, `payload=[02 01 00]` was the exit. `CMD 0x12` fires on both edges; the old "any `0x12` == disengage" mapping just happened to relabel every enter-event as a disengage too, which is what produced the apparent 4ms flip and the apparent 5s "lag" (it was really `0x04`'s spurious engage racing against `0x12`'s real, correctly-timed enter push) | ❌ superseded by the payload-direction mapping below |
-| `CMD 0x12` **`payload[0]` direction** (`0x01`=entering, `0x02`=exiting) | real payload field, not just command-byte presence | **Hardware-confirmed 2026-09-01**: user directly identified which of the two captured `0x12` events was the real physical enter vs. exit, matching `payload[0]` cleanly (`0x01`→enter, `0x02`→exit) | Only one real enter/exit pair confirmed so far — wired in and **pending a second real-world retest** to fully settle the mapping before treating it as closed. **Real regression hit on first retest (2026-09-02)**: exit showed "LVGL flashes up momentarily, then blank again" while engage kept working. User confirmed the hardware relay itself is independently reliable/autonomous (switches correctly even with `custom_ui` killed), ruling out a relay explanation — pointed instead at a spurious/duplicate `payload[0]==0x01` frame arriving shortly after the real exit frame, re-triggering `hide_display()` right after `show_display()` ran. Fixed with a 300ms debounce on direction flips (`custom_ui` commit `fbdcc7b`). **Second real regression, same retest session**: LVGL only showed momentarily at fresh boot with reverse gear never engaged at all — AA's own video (fb1) became visible through the now-hidden LVGL layer (fb0) shortly after. Root cause: this doc already documents `CMD 0x12` firing once during the MCU's own startup telemetry burst, unrelated to reverse gear — harmless under the old direction-blind mapping (a same-value no-op), but a real false "ENGAGED" under the new payload-direction mapping if that startup frame happens to carry `payload[0]==0x01`, and since it's the very first commit the flip-debounce (which only guards flips *after* a prior commit) never catches it. Fixed with a fixed 5s startup grace window that ignores `CMD 0x12` direction entirely regardless of debounce state (`custom_ui` commit `4b7f230`). Both fixes build-verified, **not yet hardware-retested together** | ✅ **primary signal, debounced + startup-grace-windowed** — `mcu_input.cpp`'s `CMD 0x12` handler branches on `payload[0]`, ignores direction for the first 5s of the MCU input thread's life, and debounces flips within 300ms of the last commit thereafter; `CMD 0x04` no longer touches reverse-gear state at all (`custom_ui` commits `72220bf`, `fbdcc7b`, `4b7f230`) |
+| `CMD 0x12` **`payload[0]` direction** (`0x01`=entering, `0x02`=exiting) | real payload field, not just command-byte presence | **Hardware-confirmed 2026-09-01**: user directly identified which of the two captured `0x12` events was the real physical enter vs. exit, matching `payload[0]` cleanly (`0x01`→enter, `0x02`→exit) | Only one real enter/exit pair confirmed so far — wired in and **pending a second real-world retest** to fully settle the mapping before treating it as closed. **Real regression hit on first retest (2026-09-02)**: exit showed "LVGL flashes up momentarily, then blank again" while engage kept working. User confirmed the hardware relay itself is independently reliable/autonomous (switches correctly even with `custom_ui` killed), ruling out a relay explanation — pointed instead at a spurious/duplicate `payload[0]==0x01` frame arriving shortly after the real exit frame, re-triggering `hide_display()` right after `show_display()` ran. Fixed with a 300ms debounce on direction flips (`custom_ui` commit `fbdcc7b`). **Second real regression, same retest session**: LVGL only showed momentarily at fresh boot with reverse gear never engaged at all — AA's own video (fb1) became visible through the now-hidden LVGL layer (fb0) shortly after. Root cause: this doc already documents `CMD 0x12` firing once during the MCU's own startup telemetry burst, unrelated to reverse gear — harmless under the old direction-blind mapping (a same-value no-op), but a real false "ENGAGED" under the new payload-direction mapping if that startup frame happens to carry `payload[0]==0x01`, and since it's the very first commit the flip-debounce (which only guards flips *after* a prior commit) never catches it. Fixed with a fixed 5s startup grace window that ignores `CMD 0x12` direction entirely regardless of debounce state (`custom_ui` commit `4b7f230`). Both fixes build-verified and hardware-retested successfully for the specific bugs they targeted. **But see the CRITICAL subsection right below this table — a third, more fundamental issue was found on the same retest: `CMD 0x12 payload[0]==0x01` fires from headlights alone, with zero gear change** | ⚠️ **primary signal, debounced + startup-grace-windowed, but confirmed NOT exclusive to reverse gear** — `mcu_input.cpp`'s `CMD 0x12` handler branches on `payload[0]`, ignores direction for the first 5s of the MCU input thread's life, and debounces flips within 300ms of the last commit thereafter; `CMD 0x04` no longer touches reverse-gear state at all (`custom_ui` commits `72220bf`, `fbdcc7b`, `4b7f230`) — mitigation for the false-trigger issue not yet decided, see below |
 | `CMD 0x01` bit `2` + `CMD 0x12`'s `payload[1]==0x11` gate | both post the exact same real Qt event, `MsnEvent(0x5026)`, to app id `0x191` | Real, disassembly-confirmed convergence between two independently-traced commands — a named, specific shared event | What actually *consumes* event `0x5026` was traced as far as `MsnCoreApp`'s own main dispatcher, which doesn't test for it — no confirmed downstream behavior. Confirmed unrelated to the reverse-gear-direction question above (neither real captured disengage payload had `payload[1]==0x11`) | ❌ not wired in — a real, separate lead, unrelated to reverse-gear detection |
 | `/dev/carback` | dedicated SoC-level GPIO IRQ, real kernel driver (`linux-arkmicro/linux/drivers/soc/arkmicro/ark-carback.c`) | Completely independent of the MCU UART protocol — a real, purpose-built reverse-gear hardware signal | **Currently unavailable at runtime** on this exact build/boot (`[HAL:REVCAM] WARN: /dev/carback unavailable`, 2026-09-01 boot log) — not a live fallback option right now, see `project_carback_probe_order_bug.md` memory (IRQ deliberately disabled 2026-08-03) | ✅ present in code as `main.cpp`'s secondary/tie-breaker source, not usable on this particular boot |
 
-**Current model, pending a confirming retest**: `CMD 0x12` is the real reverse-gear
-engage/disengage signal, both directions, distinguished by `payload[0]` (`0x01`=entering,
-`0x02`=exiting). `CMD 0x04` never meant reverse gear at all — real parking radar telemetry
-that just happened to correlate. This replaces the entire `0x04`-engage/`0x12`-disengage split
-this section previously debated. Next step: one more real reverse-in/reverse-out cycle,
-watching the MCU Live Log, to confirm the mapping holds before treating it as fully settled.
+### CRITICAL (2026-09-02): `CMD 0x12` confirmed unreliable on real hardware -- fires from headlights alone, no gear change
 
-Given all four, `/dev/carback` is the one candidate with **zero open evidentiary gaps** —
+The retest called for above happened, and surfaced a real, confirmed false trigger, not
+just an edge case. Real captures, `custom_ui`'s own new console-wide frame logging
+(`hal/mcu_input.cpp`'s `log_frame()`, printing every frame's raw cmd+payload to the
+console, not just the on-screen MCU Live Log ring buffer):
+
+```
+[299.896686] Frame cmd=0x01 payload=[13 00 00 00 00 00]   <- Headlights ON
+[299.925791] Frame cmd=0x12 payload=[01 04 00]              <- 29ms later: "ENGAGED"
+...
+[320.092828] Frame cmd=0x01 payload=[11 00 00 00 00 00]   <- Headlights OFF
+[320.120708] Frame cmd=0x12 payload=[01 04 00]              <- 28ms later: same payload again
+```
+
+**User confirmed directly: the vehicle was in Park, not running, the entire time -- the
+only action taken was turning the headlights on and off.** No real gear change occurred.
+This is a hard, confirmed false positive, not a theory -- `CMD 0x12 payload=[01 04 00]`,
+the exact byte pattern this doc had just confirmed for genuine reverse-gear engagement,
+fired from headlights alone. This got the user stuck on the reverse-camera screen once
+already (LVGL hidden, no real gear event to trigger the disengage side).
+
+**A second capture deepens the mystery rather than resolving it.** The same headlights-OFF
+action produced the *opposite* payload (`[02 01 00]`, the "exit" pattern) on a different
+occasion -- but that specific capture turned out to be during a genuine real reverse-gear
+in/out test (user-confirmed), so it doesn't stand as a second false positive. It does show
+something else worth recording: `CMD 0x01` (headlights) frames kept appearing closely
+bracketing *real* `CMD 0x12` gear transitions too, in a pattern (`0x01` -> `0x04` -> `0x04`
+-> `0x01` -> `0x12`) that doesn't look like a driver actually toggling headlights twice
+mid-reverse-test. This suggests `CMD 0x01` and `CMD 0x12` may both be symptoms of a shared
+internal MCU event/state-machine tick (consistent with the already-documented `MsnEvent
+0x5026` convergence between these two commands) rather than a simple one-directional
+"headlights cause false reverse triggers" rule.
+
+**Leading candidate mechanism, not yet confirmed**: `CMD 0x01` genuinely and correctly
+reports real headlight state (hardware-confirmed separately -- toggling real headlights
+reliably drives AA's night mode via this exact command, a different, solid finding). The
+vehicle's own headlight relay/switch (`ILL+`/switched-12V circuit, real automotive
+electrical hardware entirely outside this project's own boards) is a classic real source of
+switching transients. If that circuit shares any harness routing or grounding with whatever
+physically drives `GPIOB Pin 2` (the still-unconfirmed real signal behind the `flag_5e`
+reverse-camera-relay mechanism documented earlier in this project), a transient there could
+produce a spurious edge read as a real gear-state change -- independent of anything wrong
+in `custom_ui`, the UART protocol, or this head unit's own LCD backlight circuit (already
+confirmed smooth PWM, not relay-based, ruling out *that* specific noise source). **Not yet
+verified** -- would need checking what `GPIOB Pin 2` actually traces to on the schematic/PCB,
+same as the earlier CAN-transceiver pin tracing.
+
+**Mitigation: an open, safety-relevant decision, not yet made.** Real options on the table,
+each with a real tradeoff, recorded here rather than picked unilaterally:
+1. Revive `/dev/carback` (currently unavailable at runtime) as the sole/primary source --
+   cleanest fix if it can be safely re-enabled, sidesteps this whole UART ambiguity with a
+   dedicated hardware signal.
+2. Add a suppression window around unrelated MCU traffic (headlights, buttons) -- real risk
+   of suppressing a *genuine* reverse-gear trigger if a driver touches headlights/buttons
+   right as they actually shift into reverse.
+3. Disable the `CMD 0x12` auto-trigger entirely until a reliable signal exists -- loses
+   automatic camera switching, but eliminates both the false-positive and false-negative risk.
+
+**Current model, still standing but now known-unreliable**: `CMD 0x12`'s `payload[0]`
+(`0x01`=entering, `0x02`=exiting) remains wired in and does correctly track real reverse-gear
+transitions most of the time (confirmed working across multiple real engage/disengage
+cycles) -- but it is now confirmed **not exclusive** to reverse gear, and can fire from at
+least one unrelated real vehicle action. `CMD 0x04` still never meant reverse gear at all.
+
+Given all four candidates, `/dev/carback` is the one with **zero open evidentiary gaps** --
 worth reconsidering `main.cpp`'s current priority order (MCU-UART checked first, `/dev/carback`
 only as fallback), or at minimum keeping `/dev/carback` as the tie-breaker if the two ever
 disagree. **Not yet implemented as of this doc** — recorded here as the concrete next

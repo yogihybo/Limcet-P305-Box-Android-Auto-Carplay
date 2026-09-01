@@ -728,14 +728,19 @@ lv_obj_t * create_settings_screen() {
             // less obviously since it's opened less often). Fix: parent
             // to lv_layer_sys(), the one LVGL layer guaranteed above
             // lv_layer_top() -- no longer needs the screen pointer at all.
+            //
+            // 2026-09-02 follow-up: sized/positioned to the region beside
+            // the rail (not the full 800px screen) so the modal centers
+            // in the actual available card area with zero overlap of the
+            // rail, rather than just no longer being covered by it.
             lv_obj_t * overlay = lv_obj_create(lv_layer_sys());
             lv_obj_remove_style_all(overlay);
-            lv_obj_set_size(overlay, 800, 480);
+            lv_obj_set_size(overlay, 800 - theme::kRailWidth, 480);
+            lv_obj_set_pos(overlay, theme::kRailWidth, 0);
             lv_obj_set_style_bg_color(overlay, lv_color_black(), 0);
             lv_obj_set_style_bg_opa(overlay, LV_OPA_70, 0);
-            lv_obj_center(overlay);
 
-            // Modal Card
+            // Modal Card -- centers within the (rail-excluded) overlay above
             lv_obj_t * modal = lv_obj_create(overlay);
             lv_obj_remove_style_all(modal);
             theme::style_card(modal);
@@ -896,17 +901,26 @@ lv_obj_t * create_settings_screen() {
             // regardless of sibling add-order. Fixed by parenting to
             // lv_layer_sys(), the one LVGL layer guaranteed above
             // lv_layer_top() -- no longer needs the screen pointer at all.
+            //
+            // 2026-09-02 follow-up: sized/positioned to the region beside
+            // the rail (not the full 800px screen) so the modal centers
+            // in the actual available card area with zero overlap of the
+            // rail, rather than just no longer being covered by it. Also
+            // narrowed 720->680 -- 720 left only 4px of margin inside the
+            // 728px-wide (800 - kRailWidth) available area, too tight to
+            // read comfortably as a real margin.
             lv_obj_t * overlay = lv_obj_create(lv_layer_sys());
             lv_obj_remove_style_all(overlay);
-            lv_obj_set_size(overlay, 800, 480);
+            lv_obj_set_size(overlay, 800 - theme::kRailWidth, 480);
+            lv_obj_set_pos(overlay, theme::kRailWidth, 0);
             lv_obj_set_style_bg_color(overlay, lv_color_black(), 0);
             lv_obj_set_style_bg_opa(overlay, LV_OPA_70, 0);
-            lv_obj_center(overlay);
 
+            // Modal card -- centers within the (rail-excluded) overlay above
             lv_obj_t * modal = lv_obj_create(overlay);
             lv_obj_remove_style_all(modal);
             theme::style_card(modal);
-            lv_obj_set_size(modal, 720, 420);
+            lv_obj_set_size(modal, 680, 420);
             lv_obj_center(modal);
             lv_obj_set_flex_flow(modal, LV_FLEX_FLOW_COLUMN);
             lv_obj_set_flex_align(modal, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);

@@ -2859,3 +2859,139 @@ real, scoped correction of exactly the four addresses independently
 re-derived, not a blanket retraction of the whole table. Worth
 treating any row in that table as needing a fresh check before relying
 on it for something new, given this.
+
+## Real finding (2026-09-02): the firmware genuinely transmits CAN frames -- not receive-only, and it targets CAN2, not CAN1
+
+Prompted by a real U0073 (Control Module Communication Bus Off) code
+logged during regular driving, with no `custom_ui`/reverse-gear/camera
+activity around it -- the user asked whether this project's MCU work
+could have caused CAN packet conflicts. Investigated by direct,
+from-scratch disassembly of `hardware/MCU/can_app.bin`, not assumption.
+
+### The transmit function itself, fully traced
+
+A complete `CAN_Transmit()`-equivalent function at `0x08004CD2`
+(`CAN_Transmit(CANx_base, TxMessage*)`):
+
+1. Reads the real `TSR` register (`base+0x08`) and tests the three
+   mailbox-empty flags (`TME0`=bit26, `TME1`=bit27, `TME2`=bit28) to
+   pick a free mailbox index (0/1/2), or returns immediately with no
+   transmission attempted if all three are busy (`r0==4` -> early
+   `pop {r4,pc}`) -- matches real `CAN_Transmit()`'s `CAN_NO_MB` path
+   exactly.
+2. Computes `&sTxMailBox[idx]` as `base + 0x180 + idx*0x10` -- the
+   real STM32 `CAN_TypeDef` offset for the TX mailbox array, same
+   `0x1B0`-family addressing style already confirmed for the RX FIFO
+   side of this firmware.
+3. Packs the caller's message struct into `TIR`/`TDTR`/`TDLR`/`TDHR`:
+   standard-ID path shifts `StdId` into bits `[31:21]`, extended-ID
+   path shifts a 32-bit `ExtId` into bits `[31:3]`, `RTR`/`IDE` bits
+   set accordingly, `DLC` written into `TDTR` bits `[3:0]`, 8 data
+   bytes packed into `TDLR`/`TDHR` -- byte-exact match to the real
+   hardware register layout.
+4. **The last write, unconditionally: reads `TIR` back, ORs in bit 0
+   (`TXRQ`), writes it back.** This is the literal hardware trigger
+   that makes the bxCAN peripheral transmit the frame onto the wire.
+   There is no simulation/loopback framing around this -- it's the
+   real register write real STM32 HAL code uses to fire a
+   transmission.
+
+This settles, with direct evidence, something this project's docs had
+left open: the firmware is not receive-only. It actively drives the
+CAN bus.
+
+### Confirmed genuinely called, not dead code -- and it targets CAN2
+
+Found 2 real call sites via a from-scratch Thumb2 `BL`-instruction
+decoder (a proper 32-bit `BL` bit-pattern decode across every 2-byte
+file offset, not a linear-sweep capstone guess, which desyncs badly
+around embedded literal pools in this binary):
+
+- `0x0800800E` -- inside a periodic, table-driven routine: a rotating
+  index byte (`+0x12D` of a small SRAM state struct at `0x200002BC`,
+  wrapping mod 15) selects one of 15 pre-built 20-byte message
+  templates stored inline in that same struct (`base + index*20`,
+  0-299 bytes, with the index counter itself living right after at
+  offset `0x12C`/`0x12D` -- the struct is sized exactly for 15
+  entries, no coincidence), `memcpy`s the selected template to a
+  stack buffer, then calls `CAN_Transmit(CAN2_base, &stack_msg)`.
+- `0x0800809C` -- the counter-increment function itself (mod-15
+  wraparound, matches the earlier `0x08007078`-family functions
+  already covering the CAN1 side).
+
+**The CAN base literal at this call site is `0x40006800` -- CAN2, not
+CAN1 (`0x40006400`)**, the peripheral the previously-confirmed RX-frame
+unpacking code reads from. This is a new, precise data point for this
+project's long-open "which peripheral is actually live, CAN1 or CAN2"
+question (see the `CMD 0x12`/CAN-pin sections elsewhere in this doc and
+in `docs/MCU_COMMAND_REFERENCE.md`) -- the real answer now looks like
+**both, on different roles**: CAN1 receiving, CAN2 transmitting (or at
+minimum, this one confirmed TX call site uses CAN2; not yet checked
+whether anything also transmits on CAN1).
+
+### What this does NOT establish -- stated plainly, not glossed over
+
+- **The actual IDs/payloads transmitted are not recoverable from the
+  static binary.** The 15-entry template table lives in SRAM
+  (`0x200002BC`), populated at runtime -- there's no corresponding
+  data in the flash image to read. Attempted to cross-reference against
+  `tools/mcu_builder/mcu_decompile.py`'s already-documented "Mode
+  1/2/3 (Profile 1/2/3)" flash tables (`0x0800BAE8`/`0x0800BB30`/
+  `0x0800BB80`) as a plausible source, applying this transmit
+  function's own confirmed 20-byte struct layout (`StdId` u16 @0,
+  `ExtId` u32 @4, `IDE`/`RTR`/`DLC` u8 @8/9/10, 8 data bytes @11) --
+  produced implausible values (`IDE`/`RTR` bytes far outside 0/1,
+  `ExtId` fields that look like flash code addresses, e.g.
+  `0x0800990D`). **That lead doesn't hold up and is not claimed as the
+  real source** -- the RAM table's actual populating code hasn't been
+  found yet, real open question, not answered here.
+- Whether CAN1 also has an active transmit path (this pass only
+  confirmed CAN2's) is unchecked.
+- Whether this CAN2 transmission actually reaches the real vehicle bus
+  at all depends on the same still-open physical-wiring question the
+  rest of this project has been chasing: which physical pins/
+  transceiver this MCU's CAN peripherals are actually wired to on real
+  hardware (`PA13`/`PB15`/`PC6` don't match either bxCAN's real
+  hardware remap pin pairs -- see `docs/MCU_COMMAND_REFERENCE.md`).
+  Nothing here resolves that; if anything it raises the stakes of
+  resolving it, see below.
+
+### Answering the real question this was prompted by: is `custom_ui`'s MCU work implicated in the U0073 (Bus Off) code?
+
+**No, and not just as reassurance -- structurally not possible from
+what's confirmed here:**
+
+1. `custom_ui`/`androidauto-sidecar` communicate with the MCU
+   exclusively over its dedicated UART (`ttyS2`, the `0x2E`-framed
+   protocol) -- neither has any code path onto the CAN bus, direct or
+   indirect.
+2. This project has never modified or reflashed this MCU's firmware --
+   everything traced above is stock behavior, present and running
+   regardless of anything `custom_ui` does or has ever done.
+3. The transmit path found here is **periodic and table-driven**,
+   firing on the MCU's own internal cycle independent of any UART
+   traffic from the SoC -- exactly consistent with the user's own
+   report of "regular driving, no specific triggers": there wasn't a
+   software-side trigger to find, because this transmission runs as
+   continuous background behavior either way.
+
+**The real, honest safety implication, reframed by this finding**:
+this MCU is now confirmed to be an *active* CAN participant, not a
+passive listener -- which makes the project's still-unresolved
+physical CAN wiring/transceiver question (`PA13`/`PB15`/`PC6` vs. the
+real bxCAN hardware pins) more consequential than it looked before, not
+less. A hardware-level fault in that connection (a bad tap, wrong
+termination, a bit-banged/hardware-CAN timing mismatch against the
+real vehicle bus) is a genuine, concrete candidate mechanism for a
+real Bus-Off condition on this vehicle -- but it is a **hardware/
+firmware-design question, orthogonal to anything in this repo's
+software**, not a regression this project's own changes could have
+introduced.
+
+**Practical next step, if this is worth pursuing further**: real,
+on-vehicle CAN bus health data (`docs/MCU_CAN_BUS_SWD_SNIFFING_PLAN.md`
+already has a real, ready-to-run procedure for this) would show
+whether this MCU's own CAN2 transmissions are well-formed on the real
+bus, or whether something at the physical layer is actually degrading
+them -- the only way to move this from "plausible mechanism" to
+"confirmed cause," which this static-analysis pass alone cannot do.

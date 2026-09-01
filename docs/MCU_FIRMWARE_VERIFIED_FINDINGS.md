@@ -3024,3 +3024,41 @@ theory above: an independent vehicle module reporting a bus-off during
 otherwise unremarkable driving fits a hardware-level cause (marginal
 tap, intermittent contact, timing mismatch) better than any
 event-triggered explanation, software or otherwise.
+
+### Real correlation found (2026-09-02): the flat battery lines up with the SWD-drain finding -- now the leading explanation, not the physical CAN wiring theory
+
+User connected `Number of IG On = 5` in the freeze frame (an ignition-
+cycle counter) to a real, remembered event: **the vehicle's battery
+went flat five ignition cycles before this DTC was read** -- and
+confirmed that flat battery was the one from leaving an SWD debugger
+connected, already documented above in "Real, user-observed finding
+(2026-09-01): SWD-attached battery drain."
+
+This matters because a flat battery, and specifically the voltage sag
+that happens during and after recovering from one (jump-starting,
+reconnecting a charger, the alternator re-establishing normal voltage),
+is one of the most common, well-understood real-world causes of a
+`U0073`-class Bus-Off DTC -- low/unstable supply voltage pushes CAN
+transceivers' common-mode levels out of spec and can brown-out an
+ECU's own controller mid-communication, both of which spike a node's
+transmit/receive error counters and can trip Bus-Off on the affected
+module (here, very likely the ABS/VSC ECU itself, not this project's
+MCU). This is a genuinely mundane, textbook mechanism -- it does not
+require the CAN2-transmit or physical-wiring theories above to be
+wrong, but it's a simpler, better-evidenced candidate given the direct
+event correlation, and should be treated as the leading explanation
+unless something rules it out.
+
+**Real, honest reframing of "is this project's work implicated"**:
+the answer is still no for a *software/packet-conflict* mechanism (see
+above -- `custom_ui` has no CAN-bus code path, full stop), but **yes,
+indirectly, through a completely different and already-documented
+mechanism**: an SWD debugging session run as part of this project's own
+CAN/reverse-relay investigation work drained the battery flat (per the
+2026-09-01 finding), and that flat-battery event -- not any UART
+command, not any CAN2 periodic transmission -- is the most likely real
+trigger for this specific DTC, via ordinary voltage-sag brownout, not
+packet conflicts. Worth stating plainly rather than only defending the
+"software isn't the cause" framing: the SWD battery-drain risk already
+flagged as a practical concern for future hardware sessions had a real,
+concrete consequence this time, not just a theoretical one.

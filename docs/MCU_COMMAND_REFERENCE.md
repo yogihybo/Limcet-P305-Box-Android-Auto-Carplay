@@ -332,3 +332,48 @@ it *did* appear in both real reverse-gear test captures. That makes "require `CM
 radar telemetry to also be present before trusting a `CMD 0x12` engage transition" a real,
 evidence-backed candidate mitigation for the false-trigger problem above -- not a guess.
 **Not yet implemented** -- a real next decision, not a settled fix.
+
+## CRITICAL, full trace (2026-09-02): `CMD 0x12` is a hard no-op in the real vendor app for every payload we've ever captured
+
+Full trace of `MCUAdapter_BoxP300::onRecvMcuProtocol`'s real `CMD 0x12` handler (`0x38144`,
+same `libMcuCenter.so` copy as the `CMD 0x04` trace above), prompted by the false-trigger
+investigation -- what does the real stock vendor app actually do with this command?
+
+```
+r3 = payload[1]                    ; frame byte[4]
+cmp r3, #0x11
+bne 0x37348                        ; <- the exact address this file's own dispatch table
+                                    ;    already calls "0x00 | default / ignored"
+; only reached if payload[1] == 0x11:
+MsnEvent(type=0x5026, app=0x191)   ; zero payload data attached (setParams(0,0)) -- a bare
+                                    ; ping, not "entered/exited reverse" with any state
+```
+
+**If `payload[1] != 0x11`, this command is a hard no-op in the real stock software** --
+same code path as an unrecognized command byte. Confirmed by direct comparison of branch
+targets, not inference.
+
+**Every real capture this project has ever gotten has `payload[1]` of `0x04` or `0x01`,
+never `0x11`** -- both the confirmed false positive (headlights, parked, no gear change)
+and the confirmed genuine reverse-gear transitions (`[01 04 00]` entering, `[02 01 00]`
+exiting -- `payload[1]` is `0x04` and `0x01` respectively, neither is `0x11`). Per the real
+vendor app's own dispatch logic, **every single `CMD 0x12` frame captured on this project
+so far is semantically meaningless to the system this protocol actually belongs to.**
+
+**Real reframing this forces**: `custom_ui`'s `payload[0]==0x01/0x02` "entering/exiting"
+interpretation was never backed by any real vendor-software semantics -- it was built
+entirely on timing correlation with real gear changes across a handful of tests, which held
+up every time it was deliberately tested... and has now also been shown to fire from
+headlights alone with zero gear involvement. Given the stock software treats this exact
+traffic as meaningless, `CMD 0x12` with these payload values may not be a dedicated
+reverse-gear signal by intended design at all -- it may be some other internal MCU
+behavior/telemetry that happens to correlate with gear changes for a reason still not
+understood, the same way `CMD 0x04` (parking radar) was found to correlate with engage
+without meaning it directly.
+
+**This meaningfully strengthens the case, argued earlier in this doc, for depending on
+`/dev/carback` and/or `CMD 0x04` radar corroboration rather than trusting `CMD 0x12` alone**
+-- not because `CMD 0x12` has been unreliable in testing (it hasn't, for genuine gear
+changes), but because we now know its apparent meaning was never actually confirmed by the
+one authority that would know for certain: the real vendor software that owns this
+protocol, which discards every frame we've captured as a no-op.

@@ -237,6 +237,23 @@ bool McuInputHal::start() {
 
 void McuInputHal::run() {
     unsigned char cmd, payload[256], len;
+    // 2026-09-02: the MCU is known (disassembly-confirmed, see this file's
+    // own CMD 0x12 case below) to fire a spurious CMD 0x12 once during its
+    // own startup telemetry burst, unrelated to reverse gear. Under the
+    // old direction-blind "any 0x12 == disengage" mapping this was always
+    // harmless (boots already disengaged, so it was a same-value no-op).
+    // Under the new payload[0]-direction mapping it's a real bug if that
+    // startup frame happens to carry payload[0]==0x01: a real hardware
+    // report showed AA's video (fb1) becoming visible through our own
+    // LVGL layer (fb0) briefly after boot with no reverse gear ever
+    // engaged -- exactly what hide_display() firing on a false "ENGAGED"
+    // would produce. The debounce window below only guards flips *after*
+    // a first commit, so this startup frame (the very first commit, no
+    // prior state to compare against) sailed straight through it. Give
+    // the MCU's own init burst a fixed grace window to finish before
+    // trusting any CMD 0x12 direction at all.
+    const auto run_start = std::chrono::steady_clock::now();
+    constexpr auto kStartupGraceWindow = std::chrono::seconds(5);
     while (running_.load(std::memory_order_acquire)) {
         int r = read_mcu_frame(fd_, &cmd, payload, &len);
         if (r != 1) {
@@ -313,9 +330,13 @@ void McuInputHal::run() {
             uint8_t dir = payload[0];
             if (dir == 0x01 || dir == 0x02) {
                 auto now = std::chrono::steady_clock::now();
+                bool inStartupGrace = (now - run_start) < kStartupGraceWindow;
                 bool isFlip = (s_lastCommittedDir != 0) && (dir != s_lastCommittedDir);
                 bool tooSoon = isFlip && (now - s_lastCommitTime) < kDebounceWindow;
-                if (tooSoon) {
+                if (inStartupGrace) {
+                    std::printf("%s [HAL:MCU] Ignored CMD 0x12 payload[0]=0x%02X during startup grace window (known spurious MCU init-burst frame)\n",
+                                core::log_timestamp().c_str(), dir);
+                } else if (tooSoon) {
                     std::printf("%s [HAL:MCU] Ignored likely-bounce CMD 0x12 payload[0]=0x%02X (flip within debounce window)\n",
                                 core::log_timestamp().c_str(), dir);
                 } else {

@@ -2995,3 +2995,32 @@ whether this MCU's own CAN2 transmissions are well-formed on the real
 bus, or whether something at the physical layer is actually degrading
 them -- the only way to move this from "plausible mechanism" to
 "confirmed cause," which this static-analysis pass alone cannot do.
+
+### Real corroborating field data (2026-09-02): U0073 freeze frame from the actual vehicle
+
+User supplied the real Toyota freeze-frame data for the logged U0073.
+Two things worth recording:
+
+- **Parameter set identifies the reporting module**: wheel speeds, yaw
+  rate, lateral/forward G, steering angle, master cylinder pressure,
+  TRC/VSC mode -- this is classic Skid Control ECU (ABS/VSC) freeze-
+  frame data. The DTC was very likely logged by the ABS/VSC module
+  noticing *its own* CAN controller drop off the bus -- a genuine,
+  independent module's view of a real bus-wide health problem, not
+  something isolated to the aftermarket head unit's own diagnostics.
+- **Driving conditions at the fault, ruling out a reverse-gear
+  correlation directly rather than just by absence of report**: 4th
+  gear, `Shift Lever Position: D/M` (forward), steady 44 km/h, mild
+  cornering (`Steering Angle` climbing `-0.1 -> 3.2 -> 5.7`deg`, `Yaw
+  Rate` just starting to register), slight throttle lift and mild
+  engine-braking torque (`-1.1 -> -26.0 -> -35.6 Nm`), `TRC/VSC Off
+  Mode: Normal`. An ordinary gentle turn/lift-off -- reverse gear
+  provably not engaged (`Gear Position: 4th`), so this specific event
+  cannot be tied to the reverse-gear/camera-relay UART work at all,
+  not merely "no trigger reported."
+
+Consistent with, not just uncorrelated to, the physical-layer/wiring
+theory above: an independent vehicle module reporting a bus-off during
+otherwise unremarkable driving fits a hardware-level cause (marginal
+tap, intermittent contact, timing mismatch) better than any
+event-triggered explanation, software or otherwise.

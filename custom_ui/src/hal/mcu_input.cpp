@@ -266,25 +266,37 @@ void McuInputHal::run() {
                             core::log_timestamp().c_str(), lights_on ? "ON" : "OFF", payload[0], lights_on ? 1 : 0);
             }
         } else if (cmd == 0x04) {
-            // UNCONFIRMED (2026-08-31): CMD 0x04 is real, disassembly-
-            // confirmed parking radar/distance telemetry (transRadarLevel),
-            // NOT a reverse-gear boolean -- treating its mere presence as
-            // "engaged" was never verified against real disassembly and
-            // very plausibly just correlates with reversing (parking
-            // sensors active) rather than actually meaning reverse gear.
-            // See docs/MCU_COMMAND_REFERENCE.md and mcu_input.h's own
-            // get_reverse_gear() comment. Kept as a secondary signal only
-            // -- /dev/carback (core::ReverseGearWatcher) is the real,
-            // independently-sourced authority; see main.cpp's dual-
-            // redundant detection.
-            bool prev = reverse_gear_.exchange(true, std::memory_order_acq_rel);
-            if (!prev) {
-                std::printf("%s [HAL:MCU] Reverse gear: ENGAGED (CMD 0x04)\n", core::log_timestamp().c_str());
-            }
-        } else if (cmd == 0x12) {
-            bool prev = reverse_gear_.exchange(false, std::memory_order_acq_rel);
-            if (prev) {
-                std::printf("%s [HAL:MCU] Reverse gear: DISENGAGED (CMD 0x12)\n", core::log_timestamp().c_str());
+            // CMD 0x04 is real, disassembly-confirmed parking radar/distance
+            // telemetry (transRadarLevel), NOT a reverse-gear boolean -- its
+            // old "presence == engaged" mapping was never disassembly-
+            // verified and correlated only because parking sensors happen
+            // to activate around the same time as reversing. Demoted
+            // 2026-09-01: no longer touches reverse_gear_ at all. See
+            // docs/MCU_COMMAND_REFERENCE.md's "reverse-gear command
+            // conflict" section. Kept here only as a no-op placeholder so
+            // future work doesn't have to rediscover this dead end.
+        } else if (cmd == 0x12 && len >= 1) {
+            // CMD 0x12: real reverse-gear engage/disengage push, hardware-
+            // confirmed 2026-09-01 -- payload[0] carries the direction,
+            // not just the command byte's mere presence (the old "any 0x12
+            // == disengaged" mapping was wrong; it fires on BOTH edges).
+            // Confirmed via a real enter-then-exit test correlated against
+            // MCU Live Log captures: payload=[01 04 00] on entering
+            // (payload[0]==0x01), payload=[02 01 00] on exiting
+            // (payload[0]==0x02). Pending a second real-world retest to
+            // confirm this mapping before treating it as fully settled.
+            if (payload[0] == 0x01) {
+                bool prev = reverse_gear_.exchange(true, std::memory_order_acq_rel);
+                if (!prev) {
+                    std::printf("%s [HAL:MCU] Reverse gear: ENGAGED (CMD 0x12 payload[0]=0x01)\n",
+                                core::log_timestamp().c_str());
+                }
+            } else if (payload[0] == 0x02) {
+                bool prev = reverse_gear_.exchange(false, std::memory_order_acq_rel);
+                if (prev) {
+                    std::printf("%s [HAL:MCU] Reverse gear: DISENGAGED (CMD 0x12 payload[0]=0x02)\n",
+                                core::log_timestamp().c_str());
+                }
             }
         } else if (cmd == 0x20 && len >= 5) {
             unsigned char b3 = payload[0];

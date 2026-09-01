@@ -717,11 +717,18 @@ lv_obj_t * create_settings_screen() {
         lv_obj_set_style_text_color(btn_lbl, theme::text_on_accent(), 0);
         lv_obj_center(btn_lbl);
 
-        lv_obj_add_event_cb(btn, [](lv_event_t * e) {
-            lv_obj_t * root = static_cast<lv_obj_t *>(lv_event_get_user_data(e));
-            
-            // Dimmed background overlay
-            lv_obj_t * overlay = lv_obj_create(root);
+        lv_obj_add_event_cb(btn, [](lv_event_t * /*e*/) {
+            // 2026-09-02: create_nav_rail() deliberately places the nav
+            // rail on lv_layer_top() so it stays visible over every
+            // screen (nav_rail.cpp's own comment). An overlay parented to
+            // the settings screen itself therefore always renders BENEATH
+            // the rail regardless of sibling add-order -- real hardware
+            // bug report: "the mcu log window is partially hidden behind
+            // the side bar" (same root cause hits this modal too, just
+            // less obviously since it's opened less often). Fix: parent
+            // to lv_layer_sys(), the one LVGL layer guaranteed above
+            // lv_layer_top() -- no longer needs the screen pointer at all.
+            lv_obj_t * overlay = lv_obj_create(lv_layer_sys());
             lv_obj_remove_style_all(overlay);
             lv_obj_set_size(overlay, 800, 480);
             lv_obj_set_style_bg_color(overlay, lv_color_black(), 0);
@@ -879,10 +886,17 @@ lv_obj_t * create_settings_screen() {
         lv_obj_set_style_text_color(btn_lbl, theme::text_on_accent(), 0);
         lv_obj_center(btn_lbl);
 
-        lv_obj_add_event_cb(btn, [](lv_event_t * e) {
-            lv_obj_t * root = static_cast<lv_obj_t *>(lv_event_get_user_data(e));
-
-            lv_obj_t * overlay = lv_obj_create(root);
+        lv_obj_add_event_cb(btn, [](lv_event_t * /*e*/) {
+            // 2026-09-02: real hardware bug report -- "the mcu log window
+            // is partially hidden behind the side bar." Root cause:
+            // create_nav_rail() deliberately parents the nav rail to
+            // lv_layer_top() so it stays visible over every screen
+            // (nav_rail.cpp's own comment); an overlay parented to the
+            // settings screen itself always renders BENEATH that layer
+            // regardless of sibling add-order. Fixed by parenting to
+            // lv_layer_sys(), the one LVGL layer guaranteed above
+            // lv_layer_top() -- no longer needs the screen pointer at all.
+            lv_obj_t * overlay = lv_obj_create(lv_layer_sys());
             lv_obj_remove_style_all(overlay);
             lv_obj_set_size(overlay, 800, 480);
             lv_obj_set_style_bg_color(overlay, lv_color_black(), 0);

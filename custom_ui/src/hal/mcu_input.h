@@ -136,20 +136,20 @@ public:
     // genuinely triggers AA's night mode on real hardware.
     bool get_night_mode() const;
 
-    // UNCONFIRMED (2026-08-31): reverse gear state as reported via CMD 0x04
-    // (engaged) / CMD 0x12 (disengaged), with no payload check on either --
-    // just the command byte's presence. Neither mapping has real disassembly
-    // support: CMD 0x04 is the one "high"-confidence finding in the whole
-    // outbound table, and it's confirmed to be parking radar/distance
-    // telemetry (transRadarLevel), not reverse gear -- it very plausibly
-    // just correlates with reversing (parking sensors active) without
-    // meaning reverse gear. CMD 0x12's meaning has FOUR different
-    // unreconciled guesses across this project's own history and zero
-    // disassembly support for any of them. See
-    // docs/MCU_COMMAND_REFERENCE.md's "reverse-gear command conflict"
-    // section for the full cross-check. main.cpp's dual-redundant reverse
-    // detection should treat /dev/carback (a real, independent SoC GPIO IRQ
-    // driver, unrelated to this UART guessing) as authoritative over this.
+    // Reverse gear state, hardware-confirmed 2026-09-01 via CMD 0x12's
+    // payload[0] (0x01=entering, 0x02=exiting) -- both directions on one
+    // command, real edge-triggered pushes, not the old "any 0x12 ==
+    // disengaged" mapping. Correlated against a real enter-then-exit test
+    // cross-checked with MCU Live Log captures (payload=[01 04 00] on
+    // entering, [02 01 00] on exiting). Pending a second real-world retest
+    // to fully confirm before treating as settled -- if it flips back,
+    // check docs/MCU_COMMAND_REFERENCE.md's "reverse-gear command
+    // conflict" section first, it has the full history of wrong guesses.
+    // CMD 0x04 (previously mismapped as "engaged") is confirmed parking
+    // radar/distance telemetry (transRadarLevel), demoted to a no-op --
+    // see mcu_input.cpp's own CMD 0x04 case. main.cpp's dual-redundant
+    // reverse detection still treats /dev/carback (a real, independent SoC
+    // GPIO IRQ driver) as authoritative over this when it's available.
     bool get_reverse_gear() const;
 
     // MCU Firmware Version string reported via CMD 0x7F

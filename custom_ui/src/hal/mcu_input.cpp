@@ -441,14 +441,14 @@ void McuInputHal::run() {
             battery_voltage_.store(v, std::memory_order_relaxed);
             std::printf("%s [HAL:MCU] Vehicle Battery Voltage: %.2fV (CMD 0x30)\n",
                         core::log_timestamp().c_str(), v);
-        } else {
-            std::printf("%s [HAL:MCU] Frame cmd=0x%02X len=%u payload=[",
-                        core::log_timestamp().c_str(), cmd, len);
-            for (unsigned char i = 0; i < len; ++i) {
-                std::printf("%02X%s", payload[i], (i + 1 < len) ? " " : "");
-            }
-            std::printf("]\n");
         }
+        // 2026-09-02: no more generic "unhandled command" dump here --
+        // log_frame() above now unconditionally prints every frame's
+        // raw cmd+payload to console, so every command (handled or not)
+        // already gets a raw dump line before any of this function's
+        // own interpreted output. This `else` block would have just
+        // duplicated that line for whichever commands fall through
+        // without their own specific case.
     }
 }
 
@@ -498,12 +498,26 @@ float McuInputHal::get_battery_voltage() const {
 
 void McuInputHal::log_frame(unsigned char cmd, const unsigned char * payload, unsigned char len) {
     char buf[16 + 3 * 256];
-    int n = std::snprintf(buf, sizeof(buf), "%s cmd=0x%02X len=%u payload=[",
+    int n = std::snprintf(buf, sizeof(buf), "%s [HAL:MCU] Frame cmd=0x%02X len=%u payload=[",
                            core::log_timestamp().c_str(), cmd, len);
     for (unsigned char i = 0; i < len && n < static_cast<int>(sizeof(buf)) - 4; ++i) {
         n += std::snprintf(buf + n, sizeof(buf) - n, "%02X%s", payload[i], (i + 1 < len) ? " " : "");
     }
     std::snprintf(buf + n, sizeof(buf) - n, "]");
+
+    // 2026-09-02: real hardware need -- a false reverse-gear trigger
+    // happened with the vehicle stationary and only the headlights
+    // touched, and diagnosing it needed the raw cmd+payload for EVERY
+    // frame (not just the ones an unhandled-command falls through to
+    // the generic dump below), pulled straight from the console/serial
+    // log the user already has open -- not just the ring buffer this
+    // function already fed into the MCU Live Log screen, which needs
+    // touching the touchscreen to view and wasn't reachable while
+    // stuck on a false-triggered reverse-camera screen. Print every
+    // frame here unconditionally, in addition to storing it, so the
+    // regular boot/console log carries full CMD+payload detail for
+    // every frame without needing the on-screen viewer at all.
+    std::printf("%s\n", buf);
 
     std::lock_guard<std::mutex> lock(frame_log_mutex_);
     frame_log_.emplace_back(buf);

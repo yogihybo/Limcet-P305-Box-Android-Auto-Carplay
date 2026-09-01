@@ -334,6 +334,45 @@ the only reliable fix if the connection itself becomes unresponsive
 (e.g. after the target enters a low-power mode with no debugger
 attached to catch it early).
 
+## Real, user-observed finding (2026-09-01): SWD-attached battery drain
+
+Two real, empirical observations from the user, on the actual vehicle, not
+inferred:
+
+1. The MCU stays powered continuously even with the car off (an SWD
+   indicator LED on the debug probe stayed lit) -- confirms the STM32
+   sits on a permanent/`VBAT`-style rail, not switched by ignition/ACC.
+   Consistent with the "arm-then-trigger" `CMD 0xA0 id=0x11` design
+   (see that section above) needing to poll `GPIOB Pin 2` continuously
+   regardless of ignition state.
+2. **Leaving an SWD debugger connected for an extended period measurably
+   drained the vehicle battery; leaving it disconnected did not** (charge
+   was retained normally). These are genuinely different power states,
+   not the same baseline drain observed twice.
+
+**Likely mechanism** (a real, well-known Cortex-M behavior, not yet
+independently re-verified against this specific chip's `DBGMCU`
+configuration): most Cortex-M debug setups disable the core's normal
+sleep/`WFI` entry for as long as a debugger session is attached (the
+`DBGMCU_CR` register's `DBG_SLEEP`/`DBG_STOP`/`DBG_STANDBY` bits exist
+specifically to control this) — unless explicitly configured otherwise,
+attaching a debugger very plausibly forces the core into sustained
+full-active current the whole time it's connected, on top of whatever the
+probe itself draws. The always-on `VBAT`-rail finding above establishes
+the *idle* baseline is apparently fine on its own; it's specifically the
+*debug-attached* state that changes the power profile.
+
+**Practical implication for any future SWD work on this platform** (this
+session's own picopwner/CAN-sniffing planning docs, any future
+`flag_5e`/reverse-gear live-state verification, etc.): treat an
+attached debugger as an active battery drain, not a passive one. A
+quick attach-check-detach session is fine; leaving the probe connected
+for an extended window (overnight, a multi-day test, etc.) risks
+draining the vehicle battery unless the engine is running or the
+battery is on a charger. Not yet quantified (no measured current draw
+figures) -- this is a real, reported qualitative effect, not a
+precise number.
+
 ## `GPIOB Pin 14` — real, verified ARK1668 SoC hardware reset control
 
 Found while investigating the above. Real function at `0x08005A18`,

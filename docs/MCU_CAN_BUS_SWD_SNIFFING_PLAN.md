@@ -28,6 +28,15 @@ project has had since the beginning.
 
 ## Real caveat, stated up front
 
+**Battery drain, user-observed (2026-09-01)**: leaving an SWD debugger
+connected for an extended period measurably drains the vehicle battery
+(see `MCU_FIRMWARE_VERIFIED_FINDINGS.md`'s "SWD-attached battery drain"
+section) — leaving it disconnected does not show the same drain. This
+sniffing procedure inherently involves a live, held-open debug session
+to watch CAN traffic over time, which is exactly the scenario that
+risks draining the battery. Do it with the engine running or the
+battery on a charger, not as a passive overnight/long-duration capture.
+
 Whether the physical CAN transceiver chip (the differential-bus interface
 between `CAN1`'s TX/RX logic-level pins and the actual vehicle bus wiring) is
 powered/enabled independent of anything this MCU or the ArkMicro SoC controls

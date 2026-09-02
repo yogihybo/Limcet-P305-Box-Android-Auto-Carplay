@@ -347,15 +347,18 @@ lv_obj_t * create_settings_screen() {
      * hardware testing (methodical: toggled repeatedly, tested with
      * real reverse gear after each toggle, id=0x11 held fixed to rule
      * out interaction) confirmed this id actually controls the OEM
-     * camera relay, matching stock's own internal "Reversing camera"
-     * label for it (out of sync with the microphone-sounding
-     * value-text strings this toggle's label was based on -- a real
-     * stock vendor bug, not this project's error). A same-methodology
-     * follow-up test found id=0x11 (the "OEM Factory Camera" toggle
-     * below) "didn't seem to do anything" on its own -- id=0x00 is the
-     * confirmed-working lever. Rather than leave this as a separate,
-     * confusingly-labeled duplicate control, it's now folded directly
-     * into "OEM Factory Camera" below -- see hal::McuInputHal::
+     * camera relay. Turned out to be a real indexing error in this
+     * project's own earlier analysis, not a vendor bug: independently
+     * re-derived getSetItemValueTexts(0) and found its real strings are
+     * "AfterMarket Camera"/"Factory Camera"/"AfterMarket 360"/"Factory
+     * 360" -- id=0x00 is consistently, correctly the camera setting by
+     * both name and function (see docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md's
+     * own correction section). A same-methodology follow-up test found
+     * id=0x11 (the "OEM Factory Camera" toggle below) "didn't seem to
+     * do anything" on its own -- id=0x00 is the confirmed-working
+     * lever. Rather than leave this as a separate, confusingly-labeled
+     * duplicate control, it's now folded directly into "OEM Factory
+     * Camera" below -- see hal::McuInputHal::
      * sync_video_relay()'s own comment for the real send logic. */
 
     // --- Section 3: Vehicle & Camera ---

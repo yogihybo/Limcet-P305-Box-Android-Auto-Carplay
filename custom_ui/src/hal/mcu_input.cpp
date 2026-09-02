@@ -645,12 +645,16 @@ void McuInputHal::sync_video_relay(bool oem) {
     /* Added (2026-09-02, real hardware finding -- CONFIRMED, not a
      * hypothesis like CMD 0x84 above): user methodically toggled
      * CMD 0xA0 id=0x00 (the row this UI mislabeled "Microphone Source
-     * (OEM/AfterMarket)" -- stock's own internal label for this exact
-     * id is "Reversing camera", per getSetItemText(), genuinely out of
-     * sync with the microphone-sounding value-text strings this
-     * project's UI label was based on) and tested real reverse gear
-     * after each toggle, with id=0x11 held FIXED throughout to rule
-     * out an interaction effect -- id=0x00 alone reliably controlled
+     * (OEM/AfterMarket)" -- turned out to be a real indexing error in
+     * this project's own earlier analysis, not a vendor bug:
+     * getSetItemValueTexts(0)'s real strings are "AfterMarket Camera"/
+     * "Factory Camera"/"AfterMarket 360"/"Factory 360", independently
+     * re-derived 2026-09-02 -- id=0x00 is consistently, correctly the
+     * camera setting by both name and function, see
+     * docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md's own correction section)
+     * and tested real reverse gear after each toggle, with id=0x11
+     * held FIXED throughout to rule out an interaction effect --
+     * id=0x00 alone reliably controlled
      * whether the OEM relay engaged. Follow-up, also real: with
      * id=0x00 held fixed instead and id=0x11 toggled/tested the same
      * way, id=0x11 "didn't seem to do anything" -- id=0x00 is the one

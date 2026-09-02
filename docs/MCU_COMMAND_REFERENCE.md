@@ -1011,13 +1011,33 @@ class -- **6 real sites**, not just the `CMD 0x81`/`onInited()` one already trac
 | Inside `onRecvMcuProtocol()`'s own `CMD 0xE2` handler body (`0x37d14`) | `0x81` | A real reply-send: receiving the firmware-update-handshake command (`CMD 0xE2`, "End Update Mcu!") makes the adapter re-send the init handshake -- plausibly a post-update re-sync |
 | Inside `onRecvMcuProtocol()`'s own `CMD 0x7F` handler body (`0x398d4`) | `0xE3` | **A real send of `CMD 0xE3`, a value not in this doc's own closed 9-entry SoC->MCU dispatch table.** Since that closed set was independently verified exhaustive earlier in this doc (`0x81 0x82 0xA0 0xFF 0xE1 0x85 0x84 0x87 0x88`, confirmed via the real dispatch loop in `can_app.bin`), a genuine `CMD 0xE3` send from the SoC is a hard no-op on the real MCU firmware -- interesting (the app really does send it, after receiving the MCU's version-report frame) but not actionable. |
 
-**Real limitation hit while chasing `showApp()`'s own caller**: it has zero direct `bl` call
-sites anywhere in either `MsnCoreApp` or `libMcuCenter.so`'s own disassembly, consistent with
-it being a **virtual method** on the shared `MCUAdapter` base-class interface (matching this
-whole class family's naming convention -- `MCUAdapter_BoxP100`, `_BoxP210`, etc. all likely
-share this method) -- called polymorphically through a base-class pointer, which doesn't leave
-a resolvable direct-call symbol the way the other 5 sites did. Not chased further via vtable
-analysis this pass -- a real, bounded follow-up if `showApp()`'s own trigger matters later.
+**`showApp()`'s own caller, chased via real vtable analysis (2026-09-02) -- real limitation
+hit, no reliable answer found.** It has zero direct `bl` call sites anywhere in either
+`MsnCoreApp` or `libMcuCenter.so`, consistent with it being a **virtual method** on the shared
+`MCUAdapter` base-class interface (matching this whole class family's naming convention --
+`MCUAdapter_BoxP100`, `_BoxP210`, etc. all likely share it). Located `showApp()`'s real vtable
+slot precisely, not guessed: `.rel.dyn`'s own `R_ARM_ABS32` relocation for
+`MCUAdapter_BoxP300`'s vtable (`0x000BD930`) shows offset `0x58` (slot `22`) resolves to
+`0x00031F2C` -- `showApp()` itself.
+
+Searched both binaries for the matching real call pattern (`ldr r3,[r_,#88/0x58]` immediately
+followed by `blx r3`, the same real technique that resolved `CMD 0x21`/`0x22`'s dispatch
+earlier in this doc) -- exactly **one** hit, in `MsnCoreApp` at `0x51334`, inside
+`CalibrateDialog::onReadyReadStandardOutput()`. **This is almost certainly a false positive,
+not the real answer** -- a touch-calibration dialog reading a subprocess's stdout has no
+plausible reason to call into an MCU-protocol adapter, and vtable slot `0x58` is just a
+byte-offset coincidence shared by an unrelated class hierarchy's own, differently-typed
+virtual function. Reported here as a real limitation honestly reached, not as a finding.
+
+**Real, more promising lead not yet chased**: neither `MsnCoreApp` nor `libMcuCenter.so`
+imports `MsnLink` at all (the class whose `setMCUUUID()` method `MsnCoreApp` *does* import,
+suggesting `MsnLink` is the real class that owns the active `MCUAdapter*` and could plausibly
+call `showApp()` on it). `MsnLink` is actually defined in a separate shared library,
+`libLinkLibs.so` -- the common infrastructure underneath all of this firmware's wireless-
+mirroring protocol libraries (`libMsnCarAuto.so`, `libMsnCarLife.so`, `libMsnCarPlay.so`,
+`libMsnECLink.so`, `libMsnHiCar.so`, `libMsnMirrLink.so`). A real, bounded next step if this
+is worth finishing: trace `libLinkLibs.so`'s own disassembly for the real `showApp()` call,
+rather than continuing to search the two binaries already checked.
 
 **Real, still-open connection to the `CMD 0x12`/headlights lead**: this now gives `CMD 0x82`
 **three** independent real triggers (`pluginRunningStateChange()`, `onFirstInit()`,

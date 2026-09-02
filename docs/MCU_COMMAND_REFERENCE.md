@@ -42,7 +42,7 @@ MCU firmware.
 | `0x82` | App foreground/mode change (`onModeAppChanged`) | Send-side `mode` `2`/`4`/`5`/`7`/`13` append extra byte `8`; `mode=23` appends `0x0A`; else nothing appended. Receive-side, MCU `payload[0]==1` writes state struct `0x20000282` (`offset[0]=1,[1]=4`); else `offset[0]=2,[1]=1` — both call the same internal event-queue function. **RESOLVED (2026-09-02)**, see the [full consumer trace](#cmd-0x82s-real-consumer-2026-09-02----not-an-input-focus-switcher-a-can-bus-mode-announcement) below: the old "input-focus switcher" hypothesis is wrong. The real consumer narrows the 89-site count down to the 2 that actually read the specific offsets `CMD 0x82` writes, and it transmits real outbound CAN messages when the state reaches a specific value -- a mode announcement to the rest of the vehicle's CAN bus, not a local knob/input router. | **3 real, independent senders**: `onModeAppChanged(uint,uint)` itself (the real Qt slot connected to `MsnApplication`'s `modeAppChanged` signal — builds its own frame directly, not via `makeMCUProtocol()`); `showApp(uint)` (caller not resolved — real vtable slot located, matching call pattern not found in either binary, see the dedicated section below); and, one layer up in `MsnCoreApp` itself, `pluginRunningStateChange()` (3 sites) and `onFirstInit()` (1 site) both emit the `modeAppChanged` signal that reaches `onModeAppChanged()` | ✅ confirmed both directions, consumer resolved |
 | `0x84` | Audio route select — **also drives the same `GPIOC13`/`PC2` relay dispatcher as `CMD 0xA0 id=0x11`**, see the [4-state table](#cmd-0x84--cmd-0xa0-id0x11-shared-relay-dispatcher) below | Masked to 4 bits, `≥6` ignored. Value `0` → `"AT+AUDROUTE=1\r\n"` + relay state `0`; value `3` → `"AT+AUDROUTE=2\r\n"` + relay state `1`; `1`/`2`/`4`/`5` → state-only, no relay action. **RESOLVED (2026-09-02)**, see the [full `CMD 0x82`/`0x84` gate trace](#cmd-0x82--cmd-0x84-real-mcu-side-trace-2026-09-02----the-shared-gate-conflict-is-settled) below: the "2 unreconciled conflicts" are now 1 resolved + 1 reconfirmed. Read-byte conflict (`payload[1]` vs `payload[0]`) reconfirmed as a real, consistent frame-struct convention (offset `+2`=`payload[0]`, `+3`=`payload[1]`), not an actual disagreement. **Gate-polarity "conflict" is resolved**: both `CMD 0x84` and `CMD 0xA0 id=0x11` read/write the exact same absolute SRAM byte (`0x20000236`) for their offset-`0x5e` check — genuinely the same flag, opposite required polarity by design (arm-then-trigger vs. fire-when-not-already-armed), not two independent flags. | **FOUND (2026-09-02): confirmed hard-stubbed dead on this product, not missing evidence.** See the [`onRecvAppProtocol` dead-stub finding](#cmd-0x840x85s-real-provenance-found-2026-09-02----confirmed-hard-stubbed-dead-on-this-exact-product-not-missing-evidence) below | ✅ confirmed, gate-sharing conflict resolved |
 | `0x85` | App-protocol ACK | `payload[0..2]` stored into an internal queue slot | Same dead-stub finding as `0x84` — see the section below | ✅ confirmed shape / ❌ clean-room reply content is an approximation |
-| `0x87` | Bluetooth AT-command relay, verbatim passthrough to `USART3` (`PB10`/`PB11`) | Real bug: `AT+PIN=0000`'s digit-substitution is unwired, very likely always sent malformed | Not confirmed. Real candidate: `McuCenterPlugin::customEvent()`'s generic raw-byte-array event forwarder (structurally fits AT commands' variable-length content) — but the event-kind tag that would narrow this down (`0xC73F`) turned out to be a generic default used 65× across unrelated features, not BT-specific, so this is a plausible mechanism, not a confirmed one | ✅ confirmed (`0x080087A1`) |
+| `0x87` | Bluetooth AT-command relay, verbatim passthrough to `USART3` (`PB10`/`PB11`) | Real bug: `AT+PIN=0000`'s digit-substitution is unwired, very likely always sent malformed | **FOUND (2026-09-02): real evidence this command is never actually used by stock software at all.** `libBlueTooth.so` (`BlueToothAdapter_Blueware::writeCommand()` and siblings) writes AT commands via its **own dedicated `ProtocolUtils`/`MsnSerialPort` instance** (`MsnSerialPortManager::addSerialPort()`), calling `MsnSerialPort::write()` directly with the raw AT-command text — **no `[0x2E][0x87][len]...[checksum]` framing at all**. See the [full trace](#cmd-0x87s-real-provenance-found-2026-09-02----bluetooth-never-goes-through-the-mcu-relay-at-all) below. | ✅ confirmed (`0x080087A1`) |
 | `0x88` | TEA-cipher anti-clone challenge, 8-byte block | Real cipher, genuine key, decrypted reply read by nothing (inert as shipped) | `MsnCoreApp::sendEncryptDatas()` — called from `onEndInit()` (real init) and `onHeartBeatTimer()` (periodic re-send). The one MCU command `MsnCoreApp` sends directly, bypassing the adapter classes entirely | ✅ fully confirmed |
 | `0xA0` | UI settings sync — see the [dedicated sub-table](#cmd-0xa0-sub-table-settings-sync-by-id) below | — | `MCUAdapter_BoxP300::syncSettingDataToMcu(int)`, triggered by real user settings-screen interaction — the cleanest 1:1 architectural match to `custom_ui`'s own `sync_setting()` | ✅ confirmed |
 | `0xE1` | Enter bootloader for update | **Real erase risk**: resident bootloader erases flash before waiting for the first byte, no recovery if nothing follows. `tools/mcu-probe --reboot-probe` gated behind `--confirm-erase-risk` | `MCUAdapter_BoxP300::onSendUpdateReadyTimer()` — a real timer callback, implying this is only armed during an actual firmware-update flow rather than firing ambiently | ✅ confirmed |
@@ -1191,3 +1191,74 @@ MCU firmware's own receive-side code, is genuine and hardware-confirmed to fix a
 but it reframes the comparison: this isn't "`custom_ui` replicates stock's trigger," it's
 "`custom_ui` exercises a real capability of the shared MCU protocol that stock's software for
 this product deliberately never uses."
+
+## `CMD 0x87`'s real provenance, found (2026-09-02) -- Bluetooth never goes through the MCU relay at all
+
+Chased the second loose end. Real, decisive answer, in the same spirit as `CMD 0x84`/`0x85`'s
+finding above -- but different in kind: this isn't dead code on this product, it's evidence
+the *entire mechanism* may never be exercised by real stock software.
+
+**First, confirmed no vehicle-adapter variant sends it either**: broadened the same
+cross-class `makeMCUProtocol()` search used for `CMD 0x84` to `cmd=0x87` (135) -- zero hits,
+across every adapter class in `libMcuCenter.so`, not just `BoxP300`. Unlike `0x84` (found alive
+in `BoxC280`), nothing in this shared library sends `0x87` at all.
+
+**Then found where Bluetooth AT commands actually get sent**: `libBlueTooth.so` -- a
+completely separate library from `libMcuCenter.so`, never previously examined in this doc --
+imports `ProtocolUtils::ProtocolUtils(QObject*, int)` and `MsnSerialPortManager::
+addSerialPort(int, ProtocolUtils*)` directly. `BlueToothAdapter::setupBluetoothSerialPort(int)`
+constructs its **own, independent `ProtocolUtils` instance** and registers it as its own
+serial port -- a structurally separate connection from whatever `MCUAdapter_BoxP300` uses,
+not a shared one.
+
+Three real Bluetooth-chip adapter classes exist (`BlueToothAdapter_SD851`,
+`BlueToothAdapter_HD6956`, `BlueToothAdapter_Blueware` -- the last matching this project's own
+already-documented legacy "blueware" stack this whole migration effort exists to retire), each
+with their own `writeCommand(QString const&)`. Traced `BlueToothAdapter_Blueware::
+writeCommand()` (`0x00045304`) directly: builds the AT command text via `QString::arg()`,
+converts to raw bytes via `QString::toLocal8Bit()`, and calls **`MsnSerialPort::write(void
+const*, int)` directly** -- **no `0x2E` sync byte, no `cmd` byte, no length byte, no
+checksum. Just the raw AT-command text, verbatim, over its own dedicated serial connection.**
+
+**Real, decisive conclusion**: stock software's real Bluetooth-command path does not use
+`CMD 0x87`'s `[0x2E][0x87][len][AT command][checksum]` framing at all -- it opens its own
+serial port and writes AT commands directly to whatever device is on the other end. This
+doesn't contradict the MCU firmware's own confirmed real `CMD 0x87` handler (`0x080087A1`,
+verbatim passthrough to `USART3`) -- that capability is real and implemented on the MCU side
+-- but real stock application software, at least via this path, appears to talk to the
+Bluetooth module directly rather than relaying through the MCU chip. **Not confirmed whether
+this dedicated Bluetooth serial port is a genuinely separate physical UART or the same
+`ttyHS0` channel used for everything else in this doc** -- `setupBluetoothSerialPort()`'s own
+device-path string wasn't resolved this pass (real next step if it matters: same PC-relative
+string-recovery technique used throughout this doc, applied to the literal at `0x36230`'s
+target).
+
+## `showApp()`'s real caller -- second real attempt, same result: not reliably findable this way
+
+Chased the other loose end further. Broadened the vtable-slot-`88` (`0x58`) call-pattern
+search from the two binaries already checked (`MsnCoreApp`, `libMcuCenter.so`, both negative
+or false-positive) to the 6 wireless-mirroring protocol libraries built on `libLinkLibs.so`
+(`libMsnCarAuto.so`, `libMsnCarLife.so`, `libMsnCarPlay.so`, `libMsnECLink.so`,
+`libMsnHiCar.so`, `libMsnMirrLink.so`) -- the real, plausible candidates flagged in the prior
+pass, since `MsnLink` (the class that plausibly owns the active `MCUAdapter*`) lives in
+`libLinkLibs.so` and these are exactly the libraries built on top of it.
+
+**Real hits in 5 of 6** (`libMsnCarLife.so`, `libMsnCarPlay.so`, `libMsnECLink.so`,
+`libMsnHiCar.so`, `libMsnMirrLink.so` -- not `libMsnCarAuto.so`), at first a promising sign
+given how semantically fitting "wireless-mirroring libraries call something related to
+showing an app" sounds. **Checked the actual context of one, and it's a second real false
+positive**: `libMsnCarLife.so`'s hit (`0x6728`) sits inside `CarLifeWindow::onLoadUiSkin()`,
+and the value returned from the vtable call flows straight into building a `QString` for
+`QWidget::setStyleSheet()` -- a stylesheet/theming helper call, unrelated to the MCU protocol
+entirely.
+
+**Real conclusion: vtable slot `0x58` is evidently a common, frequently-overridden slot shared
+by many unrelated `QObject`-derived class hierarchies across this whole codebase** (plausibly
+an early, generic virtual function most classes provide their own version of), which makes
+byte-pattern matching on the slot offset alone fundamentally unreliable here without
+type-aware tooling (a real decompiler with RTTI/vtable-layout resolution) this project doesn't
+have available. Confirmed unreliable twice now, in two independent binaries, not a one-off --
+**`showApp()`'s real caller is being recorded as genuinely not found by this project's current
+tracing methods, not just "not yet chased far enough."** Real alternative if this ever matters
+again: dynamic tracing on real hardware (a breakpoint/log at `showApp()`'s own real address,
+`0x00031F2C`, would settle it in one real run) rather than more static vtable-offset guessing.

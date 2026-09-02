@@ -341,56 +341,22 @@ lv_obj_t * create_settings_screen() {
                                       oem ? 1 : 0);
                           hal::send_mcu_setting(0x09, oem ? 1 : 0);
                       });
-    /* CMD 0xA0 id=0x00 -- "Microphone Source", real candidate fix for the
-     * stock "factory mic never worked" complaint. Full trace in
-     * MCU_FIRMWARE_VERIFIED_FINDINGS.md's "CONFIRMED: the real Camera Type
-     * setting" and "COMPLETE: full settings-name resolution via Ghidra"
-     * sections -- summary:
-     *   - MCUAdapter_BoxP300::getSetItemValueTexts(0) (usr/lib/libMcuCenter.so)
-     *     returns exactly ["OEM Microphone", "AfterMarket Microphone"], and
-     *     syncSettingDataToMcu(int) sends idx UNMODIFIED as the wire id for
-     *     idx=0 (not one of the 10/11/12 special-remap cases) -- so
-     *     CMD 0xA0 id=0x00, value 0=OEM / 1=AfterMarket, is real and
-     *     confirmed via the actual wire-protocol send path, not guessed.
-     *   - Real, separately confirmed vendor bug: the STOCK head unit's own
-     *     end-user Settings app (SettingWindow/SettingPlugin's "Car Setting"
-     *     category -- a real screen real users navigate into and use, e.g.
-     *     for the working Camera Type toggle right above) shows this exact
-     *     row under the label "Reversing camera", not "Microphone" -- traced
-     *     via Ghidra decompilation of getSetItemText(int), which switches on
-     *     the same idx independently of getSetItemValueTexts() and has
-     *     genuinely drifted out of sync with it in the vendor's own code.
-     *     Nobody troubleshooting a mic problem would ever think to touch a
-     *     row titled "Reversing camera".
-     *   - Real, decisive supporting evidence: this specific unit's own
-     *     persisted config (firmware_source/mtd7_userdata/msncfg/carsetting.ini)
-     *     has "SetItem0=1" -- i.e. AfterMarket Microphone -- sitting
-     *     unexamined since nobody could have found their way to the real
-     *     control under its real name. If this vehicle's actual physical
-     *     mic is the OEM roof mic, this single stuck value fully explains
-     *     "stock factory mic never worked."
-     *   - Real, physically-plausible MCU-side action confirmed too
-     *     (hardware/MCU/source/src/uart_protocol.c, CMD 0xA0 id=0x00
-     *     handler): value 1 drives GPIOB Pin 1 HIGH, value 0/3 drives it
-     *     LOW, value 2 is a distinct "AT+UPGRADE" trigger this toggle never
-     *     sends -- consistent with a real mic-source relay, not a no-op.
-     * Kept as a plain two-state toggle deliberately, exactly so both real
-     * values can be tested directly on hardware -- this is the fastest way
-     * to settle which one this vehicle's actual wiring needs. Distinct
-     * from "OEM Factory Microphone" (id=0x09) above -- that's a real,
-     * separate setting; which of the two (if either) is this vehicle's
-     * actual working mic-source control is exactly what real-hardware
-     * testing of both needs to determine. */
-    create_toggle_row(card, &ui::icons::icon_volume, "Microphone Source (OEM/AfterMarket)",
-                      "MicSourceOEM", "Audio", false,
-                      [](bool oem) {
-                          std::printf("%s [HAL:AUDIO] Microphone source set to %s (CMD 0xA0 [0x00, %d]) -- "
-                                      "candidate fix for stock mic never working, test both values on real hardware\n",
-                                      core::log_timestamp().c_str(),
-                                      oem ? "OEM" : "AfterMarket",
-                                      oem ? 0 : 1);
-                          hal::send_mcu_setting(0x00, oem ? 0x00 : 0x01);
-                      });
+    /* REMOVED (2026-09-02, real hardware CONFIRMED, not the earlier
+     * candidate/unconfirmed framing): this standalone "Microphone
+     * Source (OEM/AfterMarket)" toggle sent CMD 0xA0 id=0x00 -- real
+     * hardware testing (methodical: toggled repeatedly, tested with
+     * real reverse gear after each toggle, id=0x11 held fixed to rule
+     * out interaction) confirmed this id actually controls the OEM
+     * camera relay, matching stock's own internal "Reversing camera"
+     * label for it (out of sync with the microphone-sounding
+     * value-text strings this toggle's label was based on -- a real
+     * stock vendor bug, not this project's error). A same-methodology
+     * follow-up test found id=0x11 (the "OEM Factory Camera" toggle
+     * below) "didn't seem to do anything" on its own -- id=0x00 is the
+     * confirmed-working lever. Rather than leave this as a separate,
+     * confusingly-labeled duplicate control, it's now folded directly
+     * into "OEM Factory Camera" below -- see hal::McuInputHal::
+     * sync_video_relay()'s own comment for the real send logic. */
 
     // --- Section 3: Vehicle & Camera ---
     create_section_header(card, "VEHICLE & CAMERA");

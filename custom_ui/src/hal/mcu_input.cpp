@@ -641,6 +641,35 @@ void McuInputHal::sync_video_relay(bool oem) {
      * wiring it in here gives this the same immediate-force capability
      * stock apparently has. */
     sync_audio_route(oem ? 0x03 : 0x00);
+
+    /* Added (2026-09-02, real hardware finding -- CONFIRMED, not a
+     * hypothesis like CMD 0x84 above): user methodically toggled
+     * CMD 0xA0 id=0x00 (the row this UI mislabeled "Microphone Source
+     * (OEM/AfterMarket)" -- stock's own internal label for this exact
+     * id is "Reversing camera", per getSetItemText(), genuinely out of
+     * sync with the microphone-sounding value-text strings this
+     * project's UI label was based on) and tested real reverse gear
+     * after each toggle, with id=0x11 held FIXED throughout to rule
+     * out an interaction effect -- id=0x00 alone reliably controlled
+     * whether the OEM relay engaged. Follow-up, also real: with
+     * id=0x00 held fixed instead and id=0x11 toggled/tested the same
+     * way, id=0x11 "didn't seem to do anything" -- id=0x00 is the one
+     * lever confirmed to actually work on this vehicle's real wiring.
+     * Kept id=0x11's own send above rather than removing it (harmless
+     * either way per this same testing, and it's still the one thing
+     * this doc's own MCU-side disassembly independently confirms has a
+     * real GPIOC13/PC2 effect under its own gate condition) -- adding
+     * id=0x00 here rather than replacing anything, since this is the
+     * confirmed-working signal, not a guess. Real MCU-side handler for
+     * id=0x00 (hardware/MCU/source/src/uart_protocol.c) drives GPIOB
+     * Pin 1: value 1 = HIGH, value 0/3 = LOW -- inverted polarity from
+     * id=0x11 (0=AfterMarket/1=Factory there), matching the polarity
+     * this project's own now-removed standalone toggle already used
+     * (oem ? 0x00 : 0x01). */
+    unsigned char id0_payload[2] = {0x00, static_cast<unsigned char>(oem ? 0x00 : 0x01)};
+    send_mcu_frame(fd_, 0xA0, id0_payload, 2);
+    std::printf("%s [HAL:MCU] Synced Camera Type to MCU via CMD 0xA0 (id=0x00, val=0x%02X, %s) -- confirmed-working lever\n",
+                core::log_timestamp().c_str(), id0_payload[1], oem ? "Factory/OEM" : "AfterMarket");
 }
 
 void send_mcu_audio_route(uint8_t value) {

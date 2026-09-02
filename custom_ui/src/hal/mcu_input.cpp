@@ -517,8 +517,18 @@ float McuInputHal::get_battery_voltage() const {
 
 void McuInputHal::log_frame(unsigned char cmd, const unsigned char * payload, unsigned char len) {
     char buf[16 + 3 * 256];
-    int n = std::snprintf(buf, sizeof(buf), "%s [HAL:MCU] Frame cmd=0x%02X len=%u payload=[",
-                           core::log_timestamp().c_str(), cmd, len);
+    char sub[6];
+    // sub = payload[0], the byte most commands treat as a sub-type/state/
+    // direction selector -- printed explicitly (matching tools/mcu-handshake's
+    // own log_frame() convention, 2026-09-03) alongside the full raw payload,
+    // which was already shown here for every frame unconditionally.
+    if (len >= 1) {
+        std::snprintf(sub, sizeof(sub), "0x%02X", payload[0]);
+    } else {
+        std::snprintf(sub, sizeof(sub), "n/a");
+    }
+    int n = std::snprintf(buf, sizeof(buf), "%s [HAL:MCU] Frame cmd=0x%02X len=%u sub=%s payload=[",
+                           core::log_timestamp().c_str(), cmd, len, sub);
     for (unsigned char i = 0; i < len && n < static_cast<int>(sizeof(buf)) - 4; ++i) {
         n += std::snprintf(buf + n, sizeof(buf) - n, "%02X%s", payload[i], (i + 1 < len) ? " " : "");
     }

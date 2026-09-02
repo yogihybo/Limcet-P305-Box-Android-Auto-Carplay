@@ -3146,3 +3146,43 @@ is very likely NOT the "backcar" mechanism** -- it's a real, separate, previousl
 audio/BT-switch watcher, a genuine new finding on its own merits, but not the lead this
 search was chasing. The real "backcar enable/disable" command referenced in the DTS
 comment remains unidentified after this pass.
+
+## CORRECTION (2026-09-02): the 2026-08-29 "full settings-name resolution" pass had `idx=0`/`idx=1` swapped -- `id=0x00` is the real Camera setting, not `id=0x01`
+
+Prompted by cross-checking a separate "other agent" report's settings table (which claimed
+`id=0x00` = "Microphone Type" and directly contradicted the real hardware test just
+completed on `id=0x00` -- see `docs/MCU_COMMAND_REFERENCE.md`'s `id=0x00` section) --
+independently re-disassembled `MCUAdapter_BoxP300::getSetItemValueTexts(int)` directly
+(`0x00032460` in `firmware_dumps/Prado firmware dump/mtd6_rootfs/usr/lib/libMcuCenter.so`,
+confirmed via real exported symbols, not guessed), tracing the real jump table and each
+`QMetaObject::tr()` string argument byte-for-byte.
+
+**Real, confirmed result**: `getSetItemValueTexts(0)` (i.e. `idx=0`, `CMD 0xA0 id=0x00`)
+returns exactly `["AfterMarket Camera", "Factory Camera", "AfterMarket 360", "Factory
+360"]`. `getSetItemValueTexts(1)` (`idx=1`, `id=0x01`) returns an **empty list** -- the same
+generic no-named-values fallback shared with `idx` 2 through 6, not a combobox at all.
+
+**This is the exact opposite of what the earlier 2026-08-29 pass documented** (which
+attributed the 4 camera strings to `idx=1` and the "OEM Microphone"/"AfterMarket
+Microphone" strings to `idx=0`) -- a real, now-corrected indexing error in this project's
+own prior analysis, not a vendor bug. Given today's real, methodical hardware test already
+independently confirmed `id=0x00` controls the OEM camera relay (see
+`docs/MCU_COMMAND_REFERENCE.md`), this correction means there's no vendor label-vs-function
+mismatch to explain at all: `id=0x00` is consistently, correctly the camera setting by both
+name and real function. The earlier "stock's own internal label for this id is 'Reversing
+camera', out of sync with the microphone-sounding value-text strings" framing (used to
+justify keeping the now-removed standalone "Microphone Source" toggle) was built on the
+same underlying indexing mixup and should be read in that light -- not retracted outright
+(the `getSetItemText()` vs `getSetItemValueTexts()` divergence it described may still be
+real for some other id), but the specific `id=0x00`-is-secretly-camera framing is now fully,
+independently explained without needing it.
+
+**Also worth recording**: `id=0x09` (`OEMMicrophone` in `custom_ui`'s own settings, "OEM
+Factory Microphone" toggle) is a completely separate, already-independently-confirmed real
+setting, untouched by this correction.
+
+**Not yet re-verified**: `getSetItemText(0)`/`getSetItemText(1)` (the UI *label* strings,
+as opposed to the value-texts just traced) weren't re-disassembled in this pass -- only
+`getSetItemValueTexts()` was directly checked. If precision on the real on-screen label
+stock itself shows for `id=0x00` matters for future work, that still needs its own direct
+re-trace rather than trusting the 2026-08-29 pass's claim about it.

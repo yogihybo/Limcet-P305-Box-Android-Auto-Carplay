@@ -352,46 +352,59 @@ int read_mcu_frame(int fd, unsigned char *out_cmd, unsigned char *out_payload,
  * own reply opcode, unrelated to parking sensors). None of these were
  * re-derived guesses -- all four are real, disassembly-confirmed
  * findings from this project's own MCU_COMMAND_REFERENCE.md. */
+/* Formats "sub=0xXX payload=[XX XX ...]" into buf -- sub is payload[0]
+ * (the byte most commands treat as a sub-type/state/direction selector;
+ * "n/a" if len==0), payload is the full raw array regardless of whether
+ * a specific case below already decoded parts of it. Called uniformly
+ * from every branch (2026-09-03, real request: every command's log line
+ * should show the sub byte and the full payload, not just whichever
+ * fields a specific decoder happened to pull out). */
+static void format_sub_payload(char *buf, size_t bufsz, const unsigned char *payload, unsigned char len) {
+    int n = 0;
+    if (len >= 1)
+        n += snprintf(buf + n, bufsz - n, "sub=0x%02X payload=[", payload[0]);
+    else
+        n += snprintf(buf + n, bufsz - n, "sub=n/a payload=[");
+    for (int i = 0; i < len && n < (int)bufsz - 4; i++)
+        n += snprintf(buf + n, bufsz - n, "%02X%s", payload[i], (i + 1 < len) ? " " : "");
+    snprintf(buf + n, bufsz - n, "]");
+}
+
 void log_frame(unsigned char cmd, const unsigned char *payload, unsigned char len) {
+    char sp[3 * 256 + 32];
+    format_sub_payload(sp, sizeof(sp), payload, len);
+
     if (cmd == 0x01 && len >= 1) {
-        printf("[+] CMD 0x01 (Headlights/Illumination Status): payload[0]=0x%02X (bit1=%s)\n",
-               payload[0], (payload[0] & 0x02) ? "ON" : "OFF");
+        printf("[+] CMD 0x01 (Headlights/Illumination Status): bit1=%s -- %s\n",
+               (payload[0] & 0x02) ? "ON" : "OFF", sp);
     } else if (cmd == 0x02 && len >= 2) {
-        printf("[+] CMD 0x02 (Knob/Button Event) from MCU: b3=%u b4=%u\n",
-               payload[0], payload[1]);
+        printf("[+] CMD 0x02 (Knob/Button Event): b3=%u b4=%u -- %s\n",
+               payload[0], payload[1], sp);
     } else if (cmd == 0x03) {
-        printf("[+] CMD 0x03 (Dual-Zone HVAC/Climate Status): len=%u data=[", len);
-        for (int i = 0; i < len; i++) printf("%02X%s", payload[i], (i + 1 < len) ? " " : "");
-        printf("]\n");
+        printf("[+] CMD 0x03 (Dual-Zone HVAC/Climate Status): len=%u -- %s\n", len, sp);
     } else if (cmd == 0x04) {
-        printf("[+] CMD 0x04 (Parking Radar / Distance Level): len=%u data=[", len);
-        for (int i = 0; i < len; i++) printf("%02X%s", payload[i], (i + 1 < len) ? " " : "");
-        printf("]\n");
+        printf("[+] CMD 0x04 (Parking Radar / Distance Level): len=%u -- %s\n", len, sp);
     } else if (cmd == 0x05) {
-        printf("[+] CMD 0x05 (Radar-Family Telemetry, sibling of 0x04): len=%u data=[", len);
-        for (int i = 0; i < len; i++) printf("%02X%s", payload[i], (i + 1 < len) ? " " : "");
-        printf("]\n");
+        printf("[+] CMD 0x05 (Radar-Family Telemetry, sibling of 0x04): len=%u -- %s\n", len, sp);
     } else if (cmd == 0x0A && len >= 4) {
         /* byte[3]=payload[1] bit0=direction, byte[4..5]=payload[2..3]=magnitude
          * (frame layout: payload[n] = byte[2+n], per MCU_COMMAND_REFERENCE.md). */
-        printf("[+] CMD 0x0A (Steering Angle / Reverse Trajectory): dir=%s magnitude_raw=0x%02X%02X\n",
-               (payload[1] & 0x01) ? "1" : "0", payload[2], payload[3]);
+        printf("[+] CMD 0x0A (Steering Angle / Reverse Trajectory): dir=%s magnitude_raw=0x%02X%02X -- %s\n",
+               (payload[1] & 0x01) ? "1" : "0", payload[2], payload[3], sp);
     } else if (cmd == 0x20 && len >= 5) {
         int x = (payload[1] << 8) | payload[0];
         int y = (payload[3] << 8) | payload[2];
-        printf("[+] CMD 0x20 (Touch Coordinate Report) from MCU: X=%d Y=%d state=%u\n",
-               x, y, payload[4]);
+        printf("[+] CMD 0x20 (Touch Coordinate Report): X=%d Y=%d state=%u -- %s\n",
+               x, y, payload[4], sp);
     } else if (cmd == 0x30 && len >= 1) {
-        printf("[+] CMD 0x30 (Arkdata Display-Profile Selector): payload[0]=0x%02X%s\n",
-               payload[0], (payload[0] == 0x0C) ? " (real sub-type)" : " (no-op sub-type)");
+        printf("[+] CMD 0x30 (Arkdata Display-Profile Selector): %s -- %s\n",
+               (payload[0] == 0x0C) ? "real sub-type" : "no-op sub-type", sp);
     } else if (cmd == 0x60) {
-        printf("[+] CMD 0x60 (CMD 0x88 TEA-Challenge Reply): len=%u data=[", len);
-        for (int i = 0; i < len; i++) printf("%02X%s", payload[i], (i + 1 < len) ? " " : "");
-        printf("]\n");
+        printf("[+] CMD 0x60 (CMD 0x88 TEA-Challenge Reply): len=%u -- %s\n", len, sp);
     } else if (cmd == 0x7F && len > 0) {
-        printf("[+] CMD 0x7F (MCU Firmware Version): \"%.*s\"\n", (int)len, (const char *)payload);
+        printf("[+] CMD 0x7F (MCU Firmware Version): \"%.*s\" -- %s\n", (int)len, (const char *)payload, sp);
     } else {
-        printf("[+] CMD 0x%02X from MCU, len=%u\n", cmd, len);
+        printf("[+] CMD 0x%02X from MCU, len=%u -- %s\n", cmd, len, sp);
     }
     fflush(stdout);
 }

@@ -64,48 +64,55 @@ MCU firmware.
 
 ### `CMD 0xA0` sub-table (settings sync, by `id`)
 
-| id | Real value texts | Real display label (vendor code, often mismatched — see note) | Real MCU-side effect | `custom_ui` wiring |
+Real, closed, disassembly-confirmed range: `id` `0x00`–`0x11` (18 entries, real TBB jump
+table). Anything outside this range (e.g. a separate report's claimed `id=0x87`) falls
+outside the confirmed dispatch table and is very unlikely to do anything real.
+
+| id | Vendor label | Values | Real MCU-side effect | `custom_ui` |
 |---|---|---|---|---|
-| `0x00` | **CORRECTED (2026-09-02)**: `AfterMarket Camera` / `Factory Camera` / `AfterMarket 360` / `Factory 360` — the earlier "OEM Microphone / AfterMarket Microphone" claim had `id=0x00`/`id=0x01`'s real value-texts swapped; re-derived directly from `getSetItemValueTexts(0)` (`0x00032460`), byte-for-byte, not guessed | not independently re-checked this pass — see the `id=0x01`/vendor-inconsistency notes below for why the old "Reversing camera" framing no longer needs a mismatch theory | GPIOB Pin 1, 4-way branch; value `2` sends real `AT+UPGRADE`. **HARDWARE-CONFIRMED (2026-09-02)**: real, methodical test (toggled repeatedly, tested with real reverse gear each time, `id=0x11` held fixed to rule out interaction) — `id=0x00` alone reliably controls the OEM camera relay | ✅ now sent automatically by `sync_video_relay()` alongside `id=0x11`/`CMD 0x84` (`custom_ui` commit `11128ca`) — the old standalone "Microphone Source" toggle was removed, its real function folded into "OEM Factory Camera" |
-| `0x01` | **CORRECTED (2026-09-02)**: empty list — `getSetItemValueTexts(1)` returns no value-texts at all, the same generic no-values fallback shared with `id` `0x02`–`0x06`. The earlier "AfterMarket/Factory Camera" claim for this id was `id=0x00`'s real value-texts misattributed here | — | shares the *same dead no-op handler* (`0x08008B88`) as `0x02`–`0x06`/`0x0E` — **not `0x00`'s own handler** (a separate, real one at `0x080089F8`); "shares `0x00`'s handler" in earlier project notes was loose phrasing, corrected here after re-deriving the real TBB dispatch table byte-for-byte. **Confirmed genuine no-op on real MCU firmware** | not wired — never had a real display label to be wired to in the first place, see the correction above |
-| `0x02`–`0x06` | shares `0x08008B88` (same dead handler as `0x01`/`0x0E`) | — | confirmed shared/no-op | not wired |
-| `0x07` | shares `0x00`'s handler | "Radar" | write-only, no consumer — **exhaustively re-confirmed**: a full raw-byte scan of every possible Thumb2 `ldrb.w [Rn,#0x3A]` encoding in the firmware found zero reads of this struct offset anywhere outside the handler's own two writes | not wired |
-| `0x08` | Off/On | "Trajectory" | write-only, no consumer — same exhaustive scan against this id's real target offset (`0x39`) also found zero reads anywhere in the firmware. ~~A separate claim framed this as "enables/disables calculation of steering track curve"~~ — that's `id=0x07`'s own historical characterization misapplied here; `id=0x08` writes a *different* offset (`0x39`, not `0x3A`) and has no confirmed consumer of any kind | not wired |
-| `0x09` | Off/On | "Reversing mode" *(vendor-code mismatch)* | mic/audio input mux, GPIOB Pin 6. **Cross-firmware confirmed (2026-08-31)**: byte-for-byte identical handler machine code in all 5 known firmware images (this project's `hardware/MCU/can_app.bin` plus all 3 archived `DCn32-VOLVO` dumps and the differently-sized `DCn32-ACURA` dump) — same struct offset `0x38`, same value(1/2)/else-0 branching, confirmed via direct disassembly comparison, not just table-address matching. This is genuinely shared, portable vendor logic, not an artifact of this one firmware build | ✅ "OEM Factory Microphone" |
-| `0x0A` | CAN Active/12V Active/P Key Active | "360 camera" | write-only, no consumer | not wired |
-| `0x0B` | empty/dynamic | "Front camera" | coordinated 3-pin enable (PA15/PB8/PB9) when cleared to 0 | not wired |
-| `0x0C` | Off/Radar Active/5s/10s/15s | "Front camera time" | real reader, thresholds the `0x0B` 3-pin group | not wired |
-| `0x0D` | 5s/10s/15s | "Speech button" | write-only, no consumer | not wired |
-| `0x0E` | Off/On | "DVR" | confirmed genuine no-op | not wired |
-| `0x0F` | Off/On | "Right Camera" | **CORRECTED (2026-08-31)** — earlier "confirmed no GPIO effect" was wrong. Struct offset `0x43` (this id's real target) IS read, at `0x08005D30` in `hardware/MCU/can_app.bin` — gated by a second flag (a different struct's offset `9`), and when both are true it drives the exact same GPIOA Pin 15 / GPIOB Pin 8 / GPIOB Pin 9 relay trio as `id=0x0B`'s "Front Camera Enable" (confirmed by resolving the GPIO port-base literals: `0x40010800`=GPIOA, `0x40010C00`=GPIOB, masks `0x8000`/`0x200`/`0x100`). Byte-identical consumer code confirmed present in the `DCn32-ACURA` dump too (not ACURA-exclusive, as a separate claim suggested — it's in every checked firmware including this project's own) | not wired |
-| `0x10` | Off/On/12V Active | "Left Camera" | **CORRECTED (2026-08-31)**, same finding as `0x0F` immediately above: struct offset `0x44` is read at `0x08005D80` (adjacent code, gated by a different struct's offset `0xA`), driving the identical PA15/PB8/PB9 trio via the same three helper calls | not wired |
-| `0x11` | `0`=SoC/LVGL, `1`=OEM Camera | **Video Source / Camera Relay Select** | GPIOC13/PC2 relay pair, same dispatcher table as `CMD 0x84` above, that switches what the LCD panel is actually fed: the SoC's own LCDC output (running `custom_ui`'s LVGL) vs. the OEM factory camera's direct analog feed. **Two independent trigger paths into the same dispatcher, both confirmed by direct disassembly (2026-08-31, `0x08008B5E`)**: (1) this handler *always* stores the sent value to struct offset `0x45`, then **immediately** fires the dispatcher too — but *only if `flag_5e` already reads `1` at that exact moment* (`ldrb [+0x5e]; cmp #1; bne <skip>`); (2) independently, the `flag_5e` edge-poller (below) fires the same dispatcher later, using whatever value is *currently stored*, whenever its own hardware edge occurs. So under normal driving (`flag_5e==0`), sending `id=0x11` only arms the value — but the "send alone never switches anything" framing from the previous version of this row was imprecise; it *can* switch immediately if the edge condition already holds | ✅ this is what `custom_ui`'s camera toggle actually sends |
-| ↳ | — | — | **`flag_5e` gate, fully traced — arm-then-trigger, not send-triggered**: a real polling function reads 5 GPIO input pins (change-detected); one of them, `GPIOB Pin 2`, is separately tracked (inverted) as `flag_5e`. **Only when `GPIOB Pin 2` transitions LOW** does `flag_5e` become `1`, and *at that exact moment* the firmware branches on whatever `id=0x11` value was last sent to pick the relay state — so `id=0x11`'s send just arms the preference; the actual switch happens later, on that GPIO edge. On the *disengage* direction (`GPIOB Pin 2` back HIGH), the poller unconditionally forces dispatcher state `0` (back to LVGL) regardless of what's stored — this path needs no software involvement at all | ✅ fully traced (`0x080084A4`/`0x08005582`/`0x080058A4`) — what physically drives `GPIOB Pin 2` (a strap, a connector signal, a camera-power-detect line, possibly the reverse-gear signal itself) is **not independently confirmed**; real next step is checking the schematic or probing it directly |
-| ↳ | — | — | **A separate report proposed** `GPIOB Pin 2` is literally the vehicle's reverse-gear wire / camera power line, framing the whole mechanism as "the firmware handles reverse-camera switching entirely autonomously once armed, no `custom_ui` involvement needed." **HARDWARE-CONFIRMED (2026-09-01)**: user ran `killall custom_ui` on real hardware (leaving `custom_ui` dead, no process to send/poll anything) and reverse gear still switched to the OEM factory camera feed correctly. This directly confirms the autonomy claim — the MCU's own `GPIOB Pin 2` edge-poller drives the relay entirely independently of `custom_ui` once the preference is armed, exactly as the disassembly predicted. Still not independently confirmed by schematic/probe that `GPIOB Pin 2` specifically *is* the reverse-gear wire (vs. some other signal that happens to correlate with it), but the "no software involvement needed" half of the claim is now real, hardware-observed fact, not just a plausible story | ✅ hardware-confirmed autonomous switching; wire identity still unconfirmed |
-| ↳ | — | — | **RESOLVED (2026-08-31), HARDWARE-CONFIRMED (2026-09-01):** the reverse-gear-triggered resend was removed entirely, not narrowed. The disengage `id=0x11=0` send unconditionally de-armed the factory-camera preference back to `0` on *every* disengage, regardless of the user's real setting — meaning OEM Factory Camera mode only ever worked for the first reverse-gear engagement after boot/a settings change, then silently broke on every subsequent engagement, since nothing re-armed it except that same code's own engage branch (which was itself re-sending the already-armed value every time — real, self-inflicted churn, not defense-in-depth). **User reported, from direct real-world experience, that reverse-camera switching worked better before these sends existed at all** — stronger evidence than the earlier "don't touch a hardware-confirmed fix" caution, which was itself based on a smaller, less complete picture of the mechanism. `main.cpp`'s reverse-gear handler no longer sends `id=0x11` at all; the preference is armed only at boot (`main()` ~line 528) and immediately on every settings change (`settings_screen.cpp`'s `OriginalCarCamera` toggle → `hal::send_mcu_video_relay()`) — both untouched. **Real hardware retest (2026-09-01, boot log)**: multiple full reverse-gear engage/disengage cycles all correctly hid/showed the GUI layer and re-synced the camera-type MCU setting each time, with zero regression — the simplification holds up on real hardware, not just at build time | ✅ code changed (`custom_ui` commit `a4211c2`), hardware-confirmed working |
+| `0x00` | Camera Type | `0`=AfterMarket / `1`=Factory / `2`=AfterMarket 360 / `3`=Factory 360 | `GPIOB Pin 1`. **Hardware-confirmed: controls the OEM camera relay.** (Value `2` is a distinct `AT+UPGRADE` trigger, not a camera value) | ✅ sent by `sync_video_relay()` |
+| `0x01` | — (no real label) | — (no real values) | Dead no-op — shares the same handler as `0x02`–`0x06`/`0x0E` | not wired |
+| `0x02`–`0x06` | — | — | Dead no-op (same shared handler) | not wired |
+| `0x07` | "Radar" | — | Write-only, no consumer | not wired |
+| `0x08` | "Trajectory" | Off/On | Write-only, no consumer | not wired |
+| `0x09` | "Reversing mode" *(vendor mislabel)* | Off/On | Mic/audio input mux, `GPIOB Pin 6`. Confirmed byte-identical across 5 real firmware images | ✅ "OEM Factory Microphone" |
+| `0x0A` | "360 camera" | CAN Active/12V Active/P Key Active | Write-only, no consumer | not wired |
+| `0x0B` | "Front camera" | empty/dynamic | `PA15`/`PB8`/`PB9` 3-pin enable when cleared to `0` | not wired |
+| `0x0C` | "Front camera time" | Off/Radar Active/5s/10s/15s | Real reader, thresholds `0x0B`'s 3-pin group | not wired |
+| `0x0D` | "Speech button" | 5s/10s/15s | Write-only, no consumer | not wired |
+| `0x0E` | "DVR" | Off/On | Dead no-op | not wired |
+| `0x0F` | "Right Camera" | Off/On | `PA15`/`PB8`/`PB9` relay trio (same as `0x0B`), gated by a second flag | not wired |
+| `0x10` | "Left Camera" | Off/On/12V Active | Same `PA15`/`PB8`/`PB9` trio, adjacent gate | not wired |
+| `0x11` | "Video Source" *(vendor mislabel: "Microphone")* | `0`=SoC/LVGL / `1`=OEM Camera | `GPIOC13`/`PC2` relay pair — arm-then-trigger (see below); **hardware-confirmed autonomous switching** | ✅ sent by `sync_video_relay()` |
 
-**CORRECTED (2026-09-02) — `id=0x00` half retracted**: this section previously claimed a
-vendor label/value-text mismatch for `id=0x00` ("values are mic-related but display name is
-'Reversing camera'"). That was built on the same `idx=0`/`idx=1` value-texts swap corrected
-above — `id=0x00`'s real value-texts are the camera strings, not mic-related at all, so
-there's no mismatch left to explain there. **`id=0x11`'s half of this finding stands,
-independently**: its display name is "Microphone" but its values and real hardware effect
-are the camera relay — a real, separate, still-confirmed vendor inconsistency, unaffected by
-this correction (it was never based on the `id=0x00`/`id=0x01` value-texts trace).
+**`id=0x11`'s arm-then-trigger mechanism, in short**: sending `id=0x11` only *arms* the
+preference — the physical relay switch happens later, on the MCU's own `GPIOB Pin 2` edge
+(a real, hardware-polled pin, not something `custom_ui` triggers). Hardware-confirmed to
+work with zero software running at all (`custom_ui` killed entirely, OEM camera still
+engaged correctly). Full trace: `docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md`.
 
-**`id=0x01` vs `id=0x11` for the camera toggle — corrected**: `custom_ui`'s
-`sync_video_relay()` sends `id=0x11` (and, as of today, `id=0x00` and `CMD 0x84` too), not
-`id=0x01`. The earlier reasoning here ("`id=0x01`'s own display label would suggest
-sending it") no longer applies — `id=0x01` never had a real camera-sounding display label to
-begin with; that was `id=0x00`'s real value-texts misattributed to it (see the correction
-above). `id=0x01` is simply, confirmedly, a dead no-op on the real MCU firmware, full stop,
-no "looked promising but wasn't" story needed.
+**Real stock camera-source mechanism, separate from all of the above**: stock's own
+OEM/aftermarket switch is a U-Boot env var (`fw_setenv carback_camera_mode`) plus a kernel
+`rn6752` I2C sysfs write — zero MCU involvement. Unrelated to `id=0x11`'s relay.
 
-**Also fully separate and worth remembering**: the real *stock* OEM/aftermarket camera
-switch mechanism is a U-Boot env var (`fw_setenv carback_camera_mode`) plus a kernel `rn6752`
-I2C sysfs write — **zero MCU involvement**. This superseded an earlier belief that `id=0x11`
-was how stock itself does the toggle; `id=0x11` is real and has a real hardware effect, but
-stock apparently doesn't use it for this purpose.
+<details>
+<summary>Revision history for this table (click to expand)</summary>
+
+- **2026-09-02**: `id=0x00`/`id=0x01`'s value-texts were found swapped in the 2026-08-29
+  pass — `id=0x00` is the real Camera setting (re-derived from `getSetItemValueTexts(0)`,
+  `0x00032460`, byte-for-byte); `id=0x01` has no real value-texts at all. Real hardware
+  testing separately confirmed `id=0x00` controls the OEM relay and `id=0x11` "didn't seem
+  to do anything" on its own — `sync_video_relay()` now sends both, plus `CMD 0x84`.
+- **2026-08-31**: `id=0x0F`/`id=0x10` corrected from "no GPIO effect" to real, confirmed
+  `PA15`/`PB8`/`PB9` relay control. `id=0x09` cross-confirmed identical across 5 real
+  firmware images. `id=0x11`'s `flag_5e`/`GPIOB Pin 2` arm-then-trigger mechanism fully
+  traced.
+- **2026-09-01**: `id=0x11`'s autonomous relay switching hardware-confirmed with
+  `custom_ui` killed entirely. The per-transition resend of `id=0x11` (present until this
+  date) was found to actively break repeat engagements and was removed.
+
+Full evidence trail for every row: `docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md`.
+</details>
 
 ### `CMD 0x84` / `CMD 0xA0 id=0x11`'s shared relay dispatcher — real 4-state truth table
 

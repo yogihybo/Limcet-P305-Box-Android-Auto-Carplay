@@ -67,19 +67,39 @@ fi
 chmod 600 /etc/ssh/ssh_host_*_key 2>/dev/null
 mkdir -p /var/run/sshd /var/empty
 chmod 755 /var/empty
-# 2026-09-01: sshd itself is no longer started here unconditionally --
-# it's now gated by the "SSH Access" toggle in custom_ui's Settings
-# screen (persisted, applied at custom_ui startup, see main.cpp and
-# hal/ssh_access.h). Real reason: root's password is intentionally
-# empty on this rootfs (PermitEmptyPasswords yes, private carplay_wifi
-# network only), so leaving sshd always-on at boot would mean that's
-# always reachable rather than an explicit opt-in. The mkdir/chmod
-# above still run here regardless -- sshd's privsep directory and host
-# key permissions need to be correct whenever it does start, whether
-# that's this boot or a later toggle. (Historical note, still true:
-# built by Buildroot itself (BR2_PACKAGE_OPENSSH) against this
-# project's own real toolchain, installs to /usr/sbin/sshd not
-# /usr/bin/sshd -- see package/openssh/openssh.mk.)
+
+# 2026-09-03: set root's password to a known value ("root") so SSH is
+# ready to use as soon as it's toggled on, without a separate
+# first-login password-set step. Done in-place with sed rather than
+# overlaying a full /etc/passwd/etc/shadow -- those files aren't part
+# of this overlay at all (root's account comes from Buildroot's own
+# base skeleton, which also defines other real system accounts, e.g.
+# sshd's privsep user), so replacing the whole file wholesale would
+# silently delete every other account's entry. This only rewrites
+# root's own password-hash field, idempotent across reboots.
+# Real, deliberate tradeoff, not an oversight: previously root had NO
+# password at all (PermitEmptyPasswords yes) -- a real, known, fixed
+# password is a step up from that, but "root" is still weak by design
+# for convenience. sshd itself is still NOT started here (see below);
+# the real access control is the "SSH Access" toggle staying off by
+# default, not the password.
+sed -i 's#^root:[^:]*:#root:$6$Wa96I06HIlwYtwoq$oZXcAx5.AfKc9n0OkQc7lbkPE.QajfksFmZ6fdv2/lGXtYgucwAiSz2HovE9CO1CLFxU4TPOlkzKv9UwZvo6K0:#' /etc/shadow 2>/dev/null
+
+# sshd itself is no longer started here unconditionally -- it's gated
+# by the "SSH Access" toggle in custom_ui's Settings screen (persisted,
+# applied at custom_ui startup, see main.cpp and hal/ssh_access.h).
+# Real reason: leaving sshd always-on at boot would mean it's always
+# reachable on the private carplay_wifi network rather than an
+# explicit opt-in -- true regardless of whether root has a password or
+# not (2026-09-03: PermitEmptyPasswords left enabled below as a
+# fallback, but root now has a real password so it's no longer the
+# only way in). The mkdir/chmod above still run here regardless --
+# sshd's privsep directory and host key permissions need to be correct
+# whenever it does start, whether that's this boot or a later toggle.
+# (Historical note, still true: built by Buildroot itself
+# (BR2_PACKAGE_OPENSSH) against this project's own real toolchain,
+# installs to /usr/sbin/sshd not /usr/bin/sshd -- see
+# package/openssh/openssh.mk.)
 
 # GPU driver -- same real fix/values as stock (registerMemBase/irqLine
 # required since the DT node is disabled/unmatched), galcore.ko here is

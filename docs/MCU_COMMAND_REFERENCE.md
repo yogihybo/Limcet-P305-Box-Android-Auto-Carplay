@@ -36,31 +36,36 @@ this set is closed and double-checked (cross-referenced between two independent 
 passes, 9/9 exact address matches). No command outside this list does anything on the real
 MCU firmware.
 
-| Cmd | Bit / Field | Meaning | Status | Note |
-|---|---|---|---|---|
-| `0x81` | — | Init handshake / keepalive, resets internal state slots. `payload[0] = 0x01` fixed, no further structure | ✅ CONFIRMED | handler `0x080088B5` |
-| **`0x82`** | — | **App foreground/mode change**. Real `MCUAdapter_BoxP300::onModeAppChanged(appId, mode)` (`0x00035D50`, `libMcuCenter.so`) builds the frame via the same `getPackageCheckSum()`/`writeDatas()` pipeline already reverse-engineered elsewhere | ✅ CONFIRMED both directions (2026-08-31) — real send function and real MCU handler now both traced | refutes the doc's earlier oversimplified "`0x01`=Media/`0x02`=Navi/AA" 2-way enum guess |
-| ↳ | `mode` (send arg) `2`,`4`,`5`,`7`,`13` | Extra payload byte `8` appended | ✅ confirmed — `mcu-handshake.c`'s hardcoded startup send uses `mode=4`, in this group |
-| ↳ | `mode` (send arg) `23` | Extra payload byte `0x0A` appended | ✅ confirmed |
-| ↳ | `mode` (send arg), anything else | no extra byte appended | ✅ confirmed |
-| ↳ | *(gap)* | which byte of the full frame lands at the MCU's `payload[0]` wasn't fully traced — the function appends more fields after this conditional byte before sending | not yet closed |
-| ↳ | MCU `payload[0] == 1` | MCU writes state struct `0x20000282`: `offset[0]=1, offset[1]=4`; calls the shared internal event-queue function `0x08006228` | ✅ confirmed, `0x08008BD4` |
-| ↳ | MCU `payload[0]`, anything else | MCU writes `offset[0]=2, offset[1]=1`; same event-queue call | ✅ confirmed, `0x08008BD4` |
-| ↳ | *(hypothesis, not confirmed)* | possibly the **input-focus switcher between factory/OEM mode and app mode** — which subsystem the MCU routes knob ticks (`CMD 0x02`) toward. Plausible given the real 2-way state change, but no consumer of that state was found to actually branch input routing on it (the struct has 89 real load sites, too broad to fully trace). A separate report asserted this as already-proven ("routes rotary knob event target and CAN arbitration priority") — checked and rejected, that fabricates a conclusion the trace doesn't support | ❌ unconfirmed, GPIOB Pin0/Pin6 toggle also still has no disassembly citation |
-| **`0x84`** | — | **Audio route select**. Value masked to 4 bits (`&0xF`), ignored if `≥6`. Same dispatcher as `CMD 0xA0 id=0x11` — see the [4-state GPIO table](#cmd-0x84--cmd-0xa0-id0x11-shared-relay-dispatcher) below | ✅ CONFIRMED (mask/ignore/dispatch logic, `0x08008808`) / ⚠️ payload offset conflict | this command and `0xA0 id=0x11` drive the exact same GPIOC13/PC2 dispatcher |
-| ↳ | value `0` | sends real `"AT+AUDROUTE=1\r\n"` + dispatcher state `0` | ✅ confirmed |
-| ↳ | value `1`, `2` | state field updated only, no relay action | ✅ confirmed |
-| ↳ | value `3` | sends real `"AT+AUDROUTE=2\r\n"` + dispatcher state `1` | ✅ confirmed |
-| ↳ | value `4`, `5` | state field updated only, no relay action | ✅ confirmed |
-| ↳ | value `≥6` | ignored entirely | ✅ confirmed |
-| ↳ | *(offset conflict)* | this session's own MCU-side disassembly reads the value from frame `+3` (`payload[1]`), but `custom_ui`'s `handle_audio_route()` reads `payload[0]` | ⚠️ not reconciled |
-| ↳ | *(polarity conflict)* | `CMD 0x84`'s own gate ("proceed if struct offset `0x5e`==0") is the *opposite* polarity of `CMD 0xA0 id=0x11`'s gate ("proceed if its own offset `0x5e`==1") — read from different SRAM struct bases, so whether these are the same flag or two independent ones is unresolved | ⚠️ not reconciled |
-| `0x85` | — | App-protocol ACK. `payload[0..2]` — 3 raw bytes stored into an internal queue slot; no further bit-level structure resolved | ✅ CONFIRMED (command byte, store, queue mechanism) / ❌ the clean-room reply content is a self-admitted "reasonable approximation," not byte-exact |
-| `0x87` | — | Bluetooth AT-command relay. `payload[0..n]` = raw ASCII AT-command bytes, verbatim passthrough to USART3 — not a structured bitfield | ✅ CONFIRMED — handler `0x080087A1`, real USART3 base `0x40004800` (PB10/PB11) | baud rate (9600) is an unconfirmed best-guess. Real bug found: the `AT+PIN=0000` template's digit-substitution bytes have no writer anywhere in the firmware — the PIN is very likely always sent malformed |
-| `0x88` | — | TEA-cipher anti-clone challenge. `payload[0..7]` = 8-byte TEA-encrypted block (one 64-bit cipher round-trip), no sub-fields | ✅ CONFIRMED, fully — real cipher `0x080050A0`, genuine 32-round TEA, key recovered from `.data` `0x0800BCAC`, shared across the whole DCn32 product line, and the decrypted reply is read by nothing on the SoC side (inert as shipped) | see `0x60` below — the clean-room reply is tagged `0x88`, but the real MCU→SoC reply opcode is `0x60`, not `0x88` |
-| `0xA0` | — | UI settings sync. `payload[0]` = settings `id` (`0x00`–`0x11`), `payload[1]` = value — see the [dedicated sub-table](#cmd-0xa0-sub-table-settings-sync-by-id) below | ✅ CONFIRMED, see the dedicated table below | |
-| `0xE1` | — | Enter bootloader for update. `payload = [0x00, 0x00]` — the trigger is the command byte alone; the MCU-side effect (writing magic `0x5555AAAA` to SRAM `0x20004004`) is internal, not driven by any payload field | ✅ CONFIRMED end-to-end, both sides | **real risk, not just a documentation note**: the resident bootloader isn't in this repo, and the clean-room bootloader erases flash *before* waiting for the first byte — sending this on real hardware with no follow-up could wipe application flash with no recovery. `tools/mcu-probe --reboot-probe` is gated behind `--confirm-erase-risk` |
-| `0xFF` | — | System state reset. `payload[0]` = sub-command id (`0x00`–`0x09` all confirmed no-ops; only `0x7F` acts). Separately confirmed (while tracing `CMD 0x87`'s shared SRAM struct) that this handler only *reads* struct offsets `0-2`, never writes them | ✅ CONFIRMED dispatch shape and gate, `0x080088E8` | **Partially traced, not fully**: which sub-id acts and that it reads (not writes) the shared struct is real disassembly. The actual real effect once sub-id `0x7F` fires was never deep-traced past that gate — the clean-room's "resets CAN RX ring buffer" is an explicit approximation, not verified against the real handler's own instructions |
+| Cmd | Meaning | Status |
+|---|---|---|
+| `0x81` | Init handshake / keepalive, resets internal state slots. `payload[0]=0x01` fixed | ✅ confirmed (`0x080088B5`) |
+| `0x82` | App foreground/mode change (`onModeAppChanged`). See note below for the mode-byte details | ✅ confirmed both directions |
+| `0x84` | Audio route select — **also drives the same `GPIOC13`/`PC2` relay dispatcher as `CMD 0xA0 id=0x11`**, see the [4-state table](#cmd-0x84--cmd-0xa0-id0x11-shared-relay-dispatcher) below | ✅ confirmed, ⚠️ 2 unreconciled conflicts (see note) |
+| `0x85` | App-protocol ACK. `payload[0..2]` stored into an internal queue slot | ✅ confirmed shape / ❌ clean-room reply content is an approximation |
+| `0x87` | Bluetooth AT-command relay, verbatim passthrough to `USART3` (`PB10`/`PB11`) | ✅ confirmed (`0x080087A1`) — real bug: `AT+PIN=0000`'s digit-substitution is unwired, very likely always sent malformed |
+| `0x88` | TEA-cipher anti-clone challenge, 8-byte block | ✅ fully confirmed — real cipher, genuine key, decrypted reply read by nothing (inert as shipped) |
+| `0xA0` | UI settings sync — see the [dedicated sub-table](#cmd-0xa0-sub-table-settings-sync-by-id) below | ✅ confirmed |
+| `0xE1` | Enter bootloader for update | ✅ confirmed — **real erase risk**: resident bootloader erases flash before waiting for the first byte, no recovery if nothing follows. `tools/mcu-probe --reboot-probe` gated behind `--confirm-erase-risk` |
+| `0xFF` | System state reset, sub-id `0x00`-`0x09` all no-ops, only `0x7F` acts | ✅ dispatch confirmed / partial trace beyond the `0x7F` gate |
+
+**`CMD 0x82` mode-byte detail**: send-side `mode` values `2`/`4`/`5`/`7`/`13` append an extra
+payload byte `8`; `mode=23` appends `0x0A`; anything else appends nothing. Receive-side, MCU
+`payload[0]==1` writes state struct `0x20000282` (`offset[0]=1,[1]=4`); anything else writes
+`offset[0]=2,[1]=1` — both call the same internal event-queue function. **Unconfirmed
+hypothesis, not established**: this struct might be the input-focus switcher between
+factory/OEM and app mode (which subsystem gets knob ticks) — no consumer was found that
+actually branches on it (89 real load sites, too broad to trace fully). A separate report's
+claim that this was already proven ("routes rotary knob event target and CAN arbitration
+priority") was checked and rejected — that overstates what the trace actually shows.
+
+**`CMD 0x84` value detail**: masked to 4 bits, `≥6` ignored. Value `0` sends real
+`"AT+AUDROUTE=1\r\n"` + relay state `0`; value `3` sends `"AT+AUDROUTE=2\r\n"` + relay state
+`1`; values `1`/`2`/`4`/`5` update internal state only, no relay action. **Two real,
+unreconciled conflicts**: (1) this session's MCU-side disassembly reads the value from frame
+`+3` (`payload[1]`), but `custom_ui`'s `handle_audio_route()` reads `payload[0]`; (2) `CMD
+0x84`'s own gate ("proceed if struct offset `0x5e`==0") is the *opposite* polarity of `CMD
+0xA0 id=0x11`'s gate ("proceed if its own offset `0x5e`==1") — read from different SRAM
+struct bases, so whether these are the same flag or two independent ones is unresolved.
 
 ### `CMD 0xA0` sub-table (settings sync, by `id`)
 
@@ -141,63 +146,60 @@ against each other until now — each row below states the single best-supported
 with any rejected/unconfirmed alternative struck through in Resolution rather than shown as
 its own competing claim.
 
-Bit/sub-code breakdowns are shown as indented `↳` rows directly under their command, with
-the specific bit or field named in the **Bit / Field** column — no separate sub-tables to
-jump to.
+| Cmd | Meaning | Status |
+|---|---|---|
+| `0x00` | Default / ignored (no-op) | ✅ confirmed (`0x37348`) |
+| `0x01` | Headlights / illumination status (main use), plus 2 more real sub-fields `custom_ui` doesn't use — see note below | ✅ confirmed |
+| `0x02` | Knob/button event — see note below for the value list | ✅ live-capture confirmed, what `custom_ui` runs on |
+| `0x03` | Vehicle status / HVAC bitfield broadcast — see note below | 🟡 partial — real layout spans more of the frame than mapped |
+| `0x04` | Parking radar / distance level (`transRadarLevel`) — empirically correlates with reverse gear. See the [reverse-gear conflict](#the-reverse-gear-command-conflict--the-one-that-actually-matters-right-now) section | ✅ confirmed |
+| `0x05` | Two competing theories, unreconciled (HVAC vs. radar-adjacent) — see note below | ⚠️ conflict, zero live captures either way |
+| `0x06` | Vehicle dynamics/safety bitfield — bit *positions* confirmed, *meanings* not. See note below | 🟡 partial |
+| `0x07` | Not resolved | ❌ unconfirmed — single, never-cross-checked source |
+| `0x0A` | Steering angle / reverse trajectory — see note below | ✅ confirmed |
+| `0x12` | Reverse-gear-adjacent, real payload structure but NOT a reliable reverse-gear signal — see the [reverse-gear conflict](#the-reverse-gear-command-conflict--the-one-that-actually-matters-right-now) section, superseded 2026-09-02 by the [CRITICAL](#critical-2026-09-02-cmd-0x12-confirmed-unreliable-on-real-hardware----fires-from-headlights-alone-no-gear-change) findings further down | ⚠️ confirmed unreliable |
+| `0x20` | Touch coordinate report — see note below | ✅ confirmed, most rigorously verified finding in the corpus |
+| `0x21`/`0x22` | Not resolved — hypothesis: multi-touch/gesture dispatcher. Scanned all 5 known firmware images, no MCU-side hit resembling an outbound frame | ❌ unconfirmed |
+| `0x30` | Arkdata display-profile selector. `payload[0]==0x0C` is the only handled sub-type, everything else a silent no-op | ✅ confirmed (`/msnprofile/arkdata.ini`) |
+| `0x40` | Fires once during the startup telemetry burst, `len=1`, payload never inspected | 🟡 SoC-side no-op confirmed, MCU-side purpose unconfirmed |
+| `0x60` | `CMD 0x88` TEA-challenge reply opcode (the decrypted reply's real content) | ✅ confirmed — see `MCU_FIRMWARE_VERIFIED_FINDINGS.md`'s `0x88` trace |
+| `0x7F` | MCU version report, `payload[0..27]` = 28-byte ASCII string | ✅ confirmed — `/tmp/mcu_version` is separately hardcoded, not sourced live |
+| `0xE2`/`0xE4` | Firmware-update handshake (cited strings: `"End Update Mcu!"`, `"recv update packageid:"`) | ✅ confirmed — not implemented anywhere in this project |
 
-| Cmd | Bit / Field | Meaning | Status |
-|---|---|---|---|
-| `0x00` | — | Default / ignored (no-op) | ✅ CONFIRMED, `0x37348` |
-| **`0x01`** | — | **Headlights / illumination status** (main use), plus 2 more real sub-fields `custom_ui` doesn't use | ✅ upgraded 🟡→✅ (2026-08-31) — see bits below |
-| ↳ | `payload[0]` bit `1` | Headlights ON/OFF → real `MsnEvent(0x5004)`/`MsnEvent(0x5005)`. Live-hardware confirmed (updates in real time on the stalk); corroborated by a checksum-verified stock-app frame (`2E 01 06 13...`, bit `0x02` set). Wired end-to-end into a real feature: `mcu_input.cpp`→`night_mode_`→`nightModeClient.sendNightMode()`→AA's real `SENSOR_NIGHT_MODE` — user-confirmed on real hardware | ✅ CONFIRMED, disassembly + live hardware + working feature |
-| ↳ | `payload[0]` bit `2` | Reverse-camera override → real `MsnEvent(type=0x5026, param=1)`, dispatched via `MsnApplication::dispatchMsnEvent()` | ✅ CONFIRMED (2026-08-31), `0x0003DC88`/`0x0003E844` — not used by `custom_ui` |
-| ↳ | later payload byte, bit `7` | Legacy key-matrix: bit `7`=press/release, code = byte `\| 0x4000` → real `MsnEvent(type=0x1013)` | ✅ CONFIRMED (2026-08-31), `0x0003DD28` — exact payload index not independently re-derived (a separate report's "`payload[2]`" label is off by one against this doc's own `byte[2+n]` convention; treat as "a later payload byte" until re-checked). Not used by `custom_ui` |
-| **`0x02`** | — | **Knob/button event** | ✅ Live-capture confirmed, what `custom_ui` runs on |
-| ↳ | `b3=3`, `b4`=press/release | Next Track | ✅ confirmed (matches `kBtnNextTrack`, live-tested on real hardware — `3`/`4` confirmed NOT volume) |
-| ↳ | `b3=4` | Prev Track | ✅ confirmed (matches `kBtnPrevTrack`, live-tested) |
-| ↳ | `b3=8` | Answer | 🟡 live-capture |
-| ↳ | `b3=9` | Hangup | 🟡 live-capture |
-| ↳ | `b3=12` | Home | 🟡 live-capture |
-| ↳ | `b3=13` | Knob push (press/release) | 🟡 live-capture |
-| ↳ | `b3=36` | "Mode / Source" (label unconfirmed) | ⚠️ single observation, never seen elsewhere in this project |
-| ↳ | `b3=64` | Knob CCW | 🟡 live-capture |
-| ↳ | `b3=65` | Knob CW | 🟡 live-capture |
-| ↳ | *(pattern)* | `8`/`9`, `12`/`13`, `64`/`65` each share every bit except bit `0` (upper bits = control group, bit `0` = state/direction); `3`/`4` don't fit | inferred from the value list, not disassembly-confirmed |
-| **`0x03`** | — | **Vehicle status / HVAC bitfield broadcast**. Real dispatch (`0x0003BB44`→`0x0003DF98`), real `AirConditionDlg` setters confirmed. Not handled by `custom_ui`, no live capture | 🟡 — real layout spans more of the frame than 2 bytes (also pulls `payload[4]`, `payload[7]`); full map incomplete |
-| ↳ | `payload[0]` bit `5` | `CirculationMode` (also gated by `payload[4]` bits `2`/`5`) | ✅ confirmed by direct trace |
-| ↳ | `payload[0]` bit `6` | `ACEnable` | ✅ confirmed by direct trace |
-| ↳ | `payload[0]` bit `7` | `AirConditionEnable` | ✅ confirmed by direct trace |
-| ↳ | `payload[0]` bits `0`–`4` | unconfirmed door/trunk/handbrake guess (a separate report) | ❌ plausible, not traced |
-| ↳ | `payload[1]` | unconfirmed fan-speed/AC/recirc/defrost guess (a separate report) | ❌ **directly contradicted** — the confirmed HVAC bits above are in `payload[0]`, not `payload[1]` |
-| `0x04` | not resolved at byte level — presumably a distance/level value | ✅ **Parking radar / distance level** (`transRadarLevel`), 🟡 **empirically correlates with reverse gear engaging** | "High"-confidence disassembly, named real function call. A fresh live capture confirms it fires when reverse gear engages. See [the reverse-gear conflict](#the-reverse-gear-command-conflict--the-one-that-actually-matters-right-now) below |
-| **`0x05`** | — | two competing theories, unreconciled — structurally near-identical to `0x04`'s handler | ⚠️ CONFLICT — Qt event type `0x5018` (vs. `0x04`'s `0x5019`); zero live captures either way |
-| ↳ | Theory A: HVAC/climate | same `MsnEvent` dispatch mechanism as `CMD 0x03` (real `AirConditionDlg` elsewhere) — but no direct call from `0x05`'s own handler into any `AirConditionDlg` setter | ❌ unconfirmed |
-| ↳ | Theory B: radar-adjacent | `payload[1]` feeds directly into the same real `transRadarLevel(unsigned char)` function `0x04` uses (`0x04`→`payload[0]`, `0x05`→`payload[1]`) — real, structural | 🟡 real function-call evidence, not conclusive (function name alone doesn't prove semantic reuse) |
-| ↳ | *(context)* | `MCUAdapter_BoxP300` is confirmed the *active* adapter for this hardware — not dead code for the wrong vehicle — but zero captures of `0x05` exist; may simply never fire on real Prado hardware | — |
-| **`0x06`** | — | **Vehicle dynamics/safety bitfield** — bit *positions* confirmed, bit *meanings* not. `payload[0]` via `QBitArray`, bits combined into one packed state value (not 4 independent booleans), passed as one `MsnEvent` param | 🟡 real dispatch (`0x0003BB24`→`0x0003DAD8`) + real event (`MsnEvent(0x501A)` to app `0x190`) re-verified |
-| ↳ | bit `4` | Parking Brake / Handbrake (best-current guess) | ❌ unconfirmed — same weight as `custom_ui`'s own unverified `MCU_CMD_REVERSE_GEAR` guess |
-| ↳ | bit `5` | Footbrake (guess) | ❌ unconfirmed |
-| ↳ | bit `6` | Turn Signals / Hazard (guess) | ❌ unconfirmed |
-| ↳ | bit `7` | Reverse / Transmission (guess) | ❌ unconfirmed |
-| `0x07` | not resolved | UNCONFIRMED | Single, never-cross-checked source; no disassembly evidence |
-| **`0x0A`** | — | **Steering angle / reverse trajectory**. `"recv track:"` string cited, matches `custom_ui`'s `MCU_CMD_STEERING_ANGLE` | ✅ "High"-confidence disassembly |
-| ↳ | `byte[3]` bit `0` | Direction | ✅ confirmed |
-| ↳ | `byte[4..5]` | 16-bit magnitude, scaled to a signed angle | ✅ position confirmed; **scale factor still not cracked** |
-| **`0x12`** | — | 3-byte payload; real checksum-verified capture: `2E 12 03 01 04 00 E5` → `payload=[0x01,0x04,0x00]`. See [the reverse-gear conflict](#the-reverse-gear-command-conflict--the-one-that-actually-matters-right-now) below | ⚠️ CONFLICT — two real but unreconciled findings |
-| ↳ | `payload[0]` = `0x01` | not resolved | UNCONFIRMED |
-| ↳ | `payload[1]` = `0x04` | SoC-side handler (`0x0003D7EC`) gates on `payload[1]==0x11` exactly — only that value posts a real `MsnEvent(type=0x5026)`; any other value hits the same shared no-op epilogue as `CMD 0x30`. **This captured frame's value (`0x04`) fails the gate** — a real no-op in the vendor stack | ✅ gate confirmed (2026-08-31); the "Toyota Prado 150 CAN Matrix Mode" reading a separate report attached here is **contradicted** — names a value the code doesn't branch on |
-| ↳ | `payload[2]` = `0x00` | reserved / not resolved | UNCONFIRMED |
-| **`0x20`** | — | **Touch coordinate report**. Live-capture confirmed via a corner-touch test, exact pixel-width match — the most rigorously verified finding in the corpus | ✅ CONFIRMED |
-| ↳ | X | `(payload[1]<<8)\|payload[0]` | ✅ confirmed, native `0`–`800` px |
-| ↳ | Y | `(payload[3]<<8)\|payload[2]` | ✅ confirmed, native `0`–`480` px |
-| ↳ | all-zero payload | release | ✅ confirmed |
-| ↳ | `payload[4]` (`b7`) | values `1`/`2`, possibly touch-down vs. move — `custom_ui` never branches on it (only used in the all-zero release test), so this stays open even though down/move/release all work correctly on real hardware via the `touch_pressed_`+coordinate-change state machine | ❌ **not confirmed** |
-| `0x21`/`0x22` | not resolved | UNCONFIRMED — hypothesis: multi-touch/gesture event dispatcher | SoC-side handler exists, posts an `MsnEvent`, meaning never resolved. **MCU side (2026-08-31)**: scanned all 5 known firmware images for every literal load of `0x21`/`0x22` — no hit resembles an outbound frame's `cmd` byte. Consistent with unused listener hooks on hardware with no multi-touch digitizer |
-| `0x30` | `payload[0]` is a sub-type selector; only value `12` (`0x0C`) is handled, everything else a silent no-op | ✅ **Arkdata display-profile selector** | **Resolved (2026-08-31)**: `0x0003BB54: cmp r3,#0x30`/`beq 0x3CC7C`; handler checks `payload[0]==0x0C`, then real `QDir`/`QString`/`QFile` calls (strings confirmed: `"/msnprofile/"`, `"arkdata/"`, `"arkdata.ini"`) — Linux-side `/msnprofile/arkdata.ini`, unrelated to U-Boot's own copy. This project's "battery voltage" capture had `payload[0]=12` — exactly the trigger value, so likely coincidental. `custom_ui`'s battery-voltage feature itself unchanged |
-| `0x40` | `len=1`, fires once during the startup telemetry burst, payload value never inspected | 🟡 **SoC-side no-op, confirmed** | Walked the entire real dispatch chain (`2,32,4,5,6,10,18,1,3,127,48,226,228` are the only tested values) — no case for `0x40`, falls to the same shared no-op epilogue as `0x30`/`0x12`. MCU-side purpose still unconfirmed |
-| `0x60` | not resolved (TEA-decrypted reply content) | ✅ **`CMD 0x88` TEA-challenge reply opcode** | Confirmed separately in `MCU_FIRMWARE_VERIFIED_FINDINGS.md`'s `0x88` trace; not handled by `custom_ui` |
-| `0x7F` | `payload[0..27]` = 28-byte ASCII version string | ✅ **MCU version report** | "High"-confidence disassembly, `0x38e00`. `/tmp/mcu_version` is separately confirmed hardcoded, not sourced live |
-| `0xE2`/`0xE4` | not resolved at byte level; confirmed only by cited strings (`"End Update Mcu!"`, `"recv update packageid:"`) | ✅ **Firmware-update handshake** | Both "high"-confidence disassembly; not implemented anywhere in this project |
+**`CMD 0x01` detail**: bit `1` = headlights ON/OFF (`MsnEvent 0x5004`/`0x5005`) — live-hardware
+confirmed, wired end-to-end into `custom_ui`'s AA night-mode feature. Bit `2` = reverse-camera
+override (`MsnEvent 0x5026`) — confirmed, not used by `custom_ui`. A later payload byte's bit
+`7` is a legacy key-matrix press/release, `MsnEvent 0x1013` — confirmed, not used.
+
+**`CMD 0x02` detail**: `b3=3`/`4` = Next/Prev Track (confirmed, live-tested — NOT volume).
+`b3=8`/`9` = Answer/Hangup. `b3=12`/`13` = Home/Knob push. `b3=36` = "Mode/Source" (single
+observation only). `b3=64`/`65` = Knob CCW/CW. The `8`/`9`, `12`/`13`, `64`/`65` pairs each
+share every bit except bit `0` (upper bits = control group, bit `0` = state/direction) — `3`/`4`
+don't fit this pattern, inferred not confirmed.
+
+**`CMD 0x03` detail**: `payload[0]` bits `5`/`6`/`7` confirmed by direct trace as
+`CirculationMode`/`ACEnable`/`AirConditionEnable`. Bits `0`-`4` and `payload[1]` have been
+guessed at (door/trunk/handbrake; fan-speed/AC/recirc/defrost) but the `payload[1]` guess is
+directly contradicted — the confirmed HVAC bits are all in `payload[0]`.
+
+**`CMD 0x05` detail**: Theory A (HVAC/climate) shares `CMD 0x03`'s dispatch mechanism but no
+direct call into any `AirConditionDlg` setter was found. Theory B (radar-adjacent) has real
+structural evidence — `payload[1]` feeds the same `transRadarLevel()` function `CMD 0x04`
+uses. Neither is conclusive; `MCUAdapter_BoxP300` is confirmed the active adapter for this
+hardware, so `0x05` may simply never fire on real Prado hardware rather than being dead code.
+
+**`CMD 0x06` detail**: real dispatch and event (`MsnEvent 0x501A` to app `0x190`)
+re-verified, but bit meanings are unconfirmed guesses only: bit `4`=Parking Brake, bit
+`5`=Footbrake, bit `6`=Turn Signals/Hazard, bit `7`=Reverse/Transmission — none disassembly-confirmed.
+
+**`CMD 0x0A` detail**: `byte[3]` bit `0` = direction (confirmed), `byte[4..5]` = 16-bit
+magnitude scaled to a signed angle (position confirmed, scale factor not cracked).
+
+**`CMD 0x20` detail**: X = `(payload[1]<<8)|payload[0]`, Y = `(payload[3]<<8)|payload[2]`,
+native `0`-`800`/`0`-`480` px, all confirmed. All-zero payload = release, confirmed.
+`payload[4]` (bit `7`) values `1`/`2` possibly distinguish touch-down vs. move, but
+`custom_ui` never branches on it and down/move/release all already work correctly via the
+`touch_pressed_` + coordinate-change state machine — stays unconfirmed, not a real gap.
 
 ---
 

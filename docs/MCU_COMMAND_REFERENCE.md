@@ -205,23 +205,35 @@ native `0`-`800`/`0`-`480` px, all confirmed. All-zero payload = release, confir
 
 ## The reverse-gear command conflict — the one that actually matters right now
 
-`custom_ui/src/hal/mcu_input.cpp` currently treats `CMD 0x04` as "reverse gear ENGAGED" and
-`CMD 0x12` as "reverse gear DISENGAGED," with **no payload check on either** — just the
-command byte's presence. Four real candidate signals exist for reverse-gear detection; none
-is both fully confirmed *and* currently used as the primary source:
+Real, current status of every candidate reverse-gear signal this project has traced. **The
+OEM camera path no longer depends on any of these** (see the "RESOLVED" architecture section
+further down) — this table now matters only for the Aftermarket camera path, volume cut, and
+the AA-resume nudge, which still key off `CMD 0x12`.
 
-**SUPERSEDED (2026-09-01) — resolved, see below.** The `CMD 0x04`(engage)/`CMD 0x12`(disengage)
-split this table originally debated turned out to be the wrong model entirely: `CMD 0x12`
-carries BOTH directions in its own payload, and `CMD 0x04` isn't reverse-gear-related at all.
-The history is kept below for context, since it's what led to the real fix.
+| Candidate | Real status | Currently used for |
+|---|---|---|
+| `CMD 0x04` presence | Confirmed **not** reverse-gear-related — real parking radar telemetry, correlates with reversing by coincidence (sensors activate around the same time) | Not used (demoted to a no-op) |
+| `CMD 0x12` presence, direction-blind (old model) | Superseded — `CMD 0x12` carries both directions in its own payload, this model was wrong | superseded |
+| `CMD 0x12` `payload[0]` direction (`0x01`=entering, `0x02`=exiting) | Tracks *real* reverse-gear transitions reliably when tested directly — but confirmed **not exclusive** to reverse gear: fires from a plain headlights toggle too (hardware-confirmed twice, ~29ms after the headlights frame, zero gear involvement). Also confirmed a hard no-op in the real vendor app for every payload captured so far | Aftermarket camera nav, volume cut, AA-resume nudge. **No longer used for the OEM camera path** (removed 2026-09-02) |
+| `CMD 0x01` bit `2` (`payload[0]=0x15`) | Real disassembly convergence with `CMD 0x12`'s one meaningful case (same `MsnEvent 0x5026`, itself confirmed to have zero consumers). Separately: 2 real live captures both show it firing 150-214ms *before* genuine `CMD 0x04` radar activity — a cleaner correlation than `CMD 0x12` has shown so far | Not wired in — promising lead, not yet implemented |
+| `/dev/carback` | Confirmed dead by **deliberate** 2026-07-17 design decision (real devicetree node removed, not a bug) — not revivable, its old GPIO pin gets reclaimed for the LCD once Linux boots | Present in code as a fallback, not usable on this hardware |
 
-| Candidate | Mechanism | Evidence for | Evidence against / open gaps | Current status in `custom_ui` |
-|---|---|---|---|---|
-| `CMD 0x04` presence | any frame with this cmd byte, no payload check | Live capture (2026-08-31) confirmed it *correlated* with reverse-gear engage | Real, named, *competing* meaning: parking radar/distance telemetry (`transRadarLevel`), the one "high"-confidence disassembly finding in the whole outbound table. **Confirmed wrong (2026-09-01)**, see below — never actually meant reverse gear at all, just correlated because parking sensors activate around the same time | ❌ demoted to a no-op, no longer touches reverse-gear state |
-| `CMD 0x12` presence, direction-blind | any frame with this cmd byte, no payload check, always treated as disengage | Live capture (2026-08-31) confirmed it fires on what looked like disengage | **Three different unreconciled guesses** across this project's own history, zero disassembly support for any. Also fires once at app startup, unrelated to reverse gear. **Real hardware evidence (2026-09-01)**: user reported a consistent ~5s lag between physically leaving reverse and `custom_ui` switching back; a same-day boot log showed the pattern `0x04`(engage)→`0x12`(assumed disengage, 5.76s later)→`0x04`(engage again, 4ms later) — a 4ms flip isn't real gear-shifting. **RESOLVED**: user confirmed the two `0x12` events captured that session were a real entering/exiting *pair*, not two disengages — `payload=[01 04 00]` was the enter, `payload=[02 01 00]` was the exit. `CMD 0x12` fires on both edges; the old "any `0x12` == disengage" mapping just happened to relabel every enter-event as a disengage too, which is what produced the apparent 4ms flip and the apparent 5s "lag" (it was really `0x04`'s spurious engage racing against `0x12`'s real, correctly-timed enter push) | ❌ superseded by the payload-direction mapping below |
-| `CMD 0x12` **`payload[0]` direction** (`0x01`=entering, `0x02`=exiting) | real payload field, not just command-byte presence | **Hardware-confirmed 2026-09-01**: user directly identified which of the two captured `0x12` events was the real physical enter vs. exit, matching `payload[0]` cleanly (`0x01`→enter, `0x02`→exit) | Only one real enter/exit pair confirmed so far — wired in and **pending a second real-world retest** to fully settle the mapping before treating it as closed. **Real regression hit on first retest (2026-09-02)**: exit showed "LVGL flashes up momentarily, then blank again" while engage kept working. User confirmed the hardware relay itself is independently reliable/autonomous (switches correctly even with `custom_ui` killed), ruling out a relay explanation — pointed instead at a spurious/duplicate `payload[0]==0x01` frame arriving shortly after the real exit frame, re-triggering `hide_display()` right after `show_display()` ran. Fixed with a 300ms debounce on direction flips (`custom_ui` commit `fbdcc7b`). **Second real regression, same retest session**: LVGL only showed momentarily at fresh boot with reverse gear never engaged at all — AA's own video (fb1) became visible through the now-hidden LVGL layer (fb0) shortly after. Root cause: this doc already documents `CMD 0x12` firing once during the MCU's own startup telemetry burst, unrelated to reverse gear — harmless under the old direction-blind mapping (a same-value no-op), but a real false "ENGAGED" under the new payload-direction mapping if that startup frame happens to carry `payload[0]==0x01`, and since it's the very first commit the flip-debounce (which only guards flips *after* a prior commit) never catches it. Fixed with a fixed 5s startup grace window that ignores `CMD 0x12` direction entirely regardless of debounce state (`custom_ui` commit `4b7f230`). Both fixes build-verified and hardware-retested successfully for the specific bugs they targeted. **But see the CRITICAL subsection right below this table — a third, more fundamental issue was found on the same retest: `CMD 0x12 payload[0]==0x01` fires from headlights alone, with zero gear change** | ⚠️ **primary signal, debounced + startup-grace-windowed, but confirmed NOT exclusive to reverse gear** — `mcu_input.cpp`'s `CMD 0x12` handler branches on `payload[0]`, ignores direction for the first 5s of the MCU input thread's life, and debounces flips within 300ms of the last commit thereafter; `CMD 0x04` no longer touches reverse-gear state at all (`custom_ui` commits `72220bf`, `fbdcc7b`, `4b7f230`) — mitigation for the false-trigger issue not yet decided, see below |
-| `CMD 0x01` bit `2` + `CMD 0x12`'s `payload[1]==0x11` gate | both post the exact same real Qt event, `MsnEvent(0x5026)`, to app id `0x191` | Real, disassembly-confirmed convergence between two independently-traced commands — a named, specific shared event | What actually *consumes* event `0x5026` was traced as far as `MsnCoreApp`'s own main dispatcher, which doesn't test for it — no confirmed downstream behavior. Confirmed unrelated to the reverse-gear-direction question above (neither real captured disengage payload had `payload[1]==0x11`) | ❌ not wired in — a real, separate lead, unrelated to reverse-gear detection |
-| `/dev/carback` | dedicated SoC-level GPIO IRQ, real kernel driver (`linux-arkmicro/linux/drivers/soc/arkmicro/ark-carback.c`) | Completely independent of the MCU UART protocol — a real, purpose-built reverse-gear hardware signal | **Currently unavailable at runtime** on this exact build/boot (`[HAL:REVCAM] WARN: /dev/carback unavailable`, 2026-09-01 boot log) — not a live fallback option right now, see `project_carback_probe_order_bug.md` memory (IRQ deliberately disabled 2026-08-03) | ✅ present in code as `main.cpp`'s secondary/tie-breaker source, not usable on this particular boot |
+<details>
+<summary>Revision history for this table (click to expand)</summary>
+
+- **2026-08-31/09-01**: originally modeled as `CMD 0x04`=engage/`CMD 0x12`=disengage — wrong
+  model, superseded once `CMD 0x12`'s own payload was found to carry both directions.
+- **2026-09-01**: `CMD 0x12 payload[0]` direction mapping hardware-confirmed (user identified
+  which of two captured events was the real enter vs. exit).
+- **2026-09-02**: two real regressions hit on retest (exit flash-then-blank; boot-time false
+  engage from the MCU's own startup burst) — both fixed (debounce + startup grace window,
+  `custom_ui` commits `fbdcc7b`/`4b7f230`). Then the bigger issue: `payload[0]==0x01`
+  confirmed to fire from headlights alone (see the CRITICAL section below). Ultimately
+  resolved for the OEM path by removing its dependency on this signal entirely rather than
+  continuing to patch around it (see the "RESOLVED" architecture section further down).
+
+Full evidence trail: `docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md`.
+</details>
 
 ### CRITICAL (2026-09-02): `CMD 0x12` confirmed unreliable on real hardware -- fires from headlights alone, no gear change
 

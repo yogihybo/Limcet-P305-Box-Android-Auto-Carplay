@@ -377,3 +377,48 @@ without meaning it directly.
 changes), but because we now know its apparent meaning was never actually confirmed by the
 one authority that would know for certain: the real vendor software that owns this
 protocol, which discards every frame we've captured as a no-op.
+
+## Consolidated command-structure understanding (2026-09-02) -- what's now real, complete, and what remains genuinely open
+
+After the day's deep tracing (`CMD 0x03`, `CMD 0x04`, `CMD 0x06`, `CMD 0x0A`, `CMD 0x12`,
+`CarSignalsWatch`, `/dev/carback`, and every producer of `MsnEvent 0x5026` across the whole
+binary), this is the real, now-complete picture of `MCUAdapter_BoxP300`'s command surface --
+the confirmed-active adapter for this exact product (`McuType=6`).
+
+**Fully resolved this session, real vendor-confirmed meanings**:
+- `CMD 0x03` -- pure AC/climate-control status bitfield (`AirConditionDlg::*`), unrelated to
+  reverse gear.
+- `CMD 0x04` -- real, well-structured rear parking-radar telemetry (3 independently-converted
+  sensor channels via `transRadarLevel()`), `MsnEvent 0x5019`.
+- `CMD 0x0A` -- pure steering-angle/trajectory data (`MsnEvent 0x501C`, a signed angle),
+  assumes reverse mode is already active by some other mechanism -- carries no
+  engage/disengage state of its own.
+- `CMD 0x12` -- only meaningful with `payload[1]==0x11` (posts a bare, dataless
+  `MsnEvent 0x5026`); every other payload value is a hard no-op. **`MsnEvent 0x5026` itself
+  has zero confirmed consumers anywhere in `MsnCoreApp`**, confirmed by checking every one
+  of its 5 producer sites across the whole binary (including two *other* vehicle-adapter
+  variants in the same library, `MCUAdapter_BoxC2` and `MCUAdapter_MsnDecoder`/Holden, which
+  also happen to reuse this event type for their own unrelated hardware) -- a genuine dead
+  end, not an unexplored one.
+- `CarSignalsWatch` -- a real, previously-undocumented SoC-GPIO watcher (GPIO 30/31,
+  independent of the MCU-UART link entirely), traced through to `addAppStates`/
+  `removeAppStates`'s real bit meanings: audio volume and Bluetooth-related, not reverse gear.
+- `/dev/carback` -- confirmed dead by deliberate 2026-07-17 design decision already
+  documented in this product's own devicetree, not a bug or a race to fix.
+
+**Still genuinely unresolved**: the specific "backcar enable/disable" command this
+project's own DTS comment names as the real mechanism has not been identified, despite
+checking the entire closed 9-entry SoC->MCU dispatch table, the full ~14-entry MCU->SoC
+dispatch table for `BoxP300`, the `CarSignalsWatch` GPIO side-channel, and every producer of
+the one plausible event-type candidate. Two honest possibilities, not resolved either way:
+(a) it's encoded in a payload value/field of one of the already-traced commands that wasn't
+individually checked closely enough (most commands' full byte ranges were checked, but not
+exhaustively re-verified against every possible value), or (b) the DTS comment's own
+"backcar enable/disable command" description, while correctly identifying that reverse
+detection is UART-based rather than SoC-GPIO-based, may itself be imprecise about which
+specific command implements it.
+
+**Practical implication for the false-trigger problem this was chasing**: no cleaner
+signal than what's already been found and documented (`CMD 0x04` radar corroboration) was
+uncovered by this pass. The mitigation decision recorded in the CRITICAL section above
+still stands as the real open next step.

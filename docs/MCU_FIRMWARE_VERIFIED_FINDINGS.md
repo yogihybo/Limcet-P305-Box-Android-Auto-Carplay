@@ -2832,6 +2832,35 @@ concrete next step if this is worth resolving further: check this
 board's schematic/silkscreen for what's wired to `GPIOB Pin 2`, or
 probe it directly on real hardware.
 
+**HARDWARE-CONFIRMED (2026-09-01): the switch really is fully
+autonomous.** User ran `killall custom_ui` on real hardware -- leaving
+no process at all to send or poll anything over the MCU UART -- and
+reverse gear still switched to the OEM factory camera feed correctly.
+This directly confirms the disassembly above: the MCU's own `GPIOB
+Pin 2` edge-poller drives the `id=0x11` relay entirely on its own once
+the preference is armed. `GPIOB Pin 2`'s physical wire identity is
+still unconfirmed, but "no software involvement needed" is now a real,
+observed fact, not just what the disassembly predicts.
+
+**RESOLVED (2026-08-31), hardware-confirmed (2026-09-01): the
+reverse-gear-triggered `id=0x11` resend was removed entirely.**
+`custom_ui` used to resend `id=0x11` on every reverse-gear transition
+(re-arming `1` on engage, forcing `0` on disengage). The disengage-
+forced-`0` send unconditionally de-armed the factory-camera preference
+on *every* disengage -- meaning OEM Factory Camera mode only ever
+worked for the first reverse-gear engagement after boot or a settings
+change, then silently broke on every subsequent engagement, since
+nothing re-armed it except that same code's own engage branch (itself
+just re-sending an already-armed value every time -- real,
+self-inflicted churn). The user reported, from direct real-world
+experience, that reverse-camera switching worked *better* before these
+sends existed at all. `main.cpp`'s reverse-gear handler no longer
+sends `id=0x11` reactively at all (`custom_ui` commit `a4211c2`); the
+preference is armed only at boot and immediately on every settings
+change. Real hardware retest (2026-09-01): multiple full engage/
+disengage cycles all worked correctly, zero regression -- confirmed
+the simplification holds on real hardware, not just at build time.
+
 ### Real, wider correction found along the way -- this project's own GPIO pinout table had 4 wrong rows, not just the one relevant to `flag_5e`
 
 Tracing the five input pins above meant resolving their real port+pin

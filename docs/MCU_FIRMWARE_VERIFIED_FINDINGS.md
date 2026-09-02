@@ -3110,3 +3110,39 @@ confirms vocabulary, doesn't resolve remaining ids"): these are very likely Qt
 translation-resource strings (UI label text), not something with a simple direct pointer
 reference from the C++ code that would consume them. **Not resolved** -- the real
 "backcar enable/disable" command this DTS comment refers to remains unidentified.
+
+## Real finding (2026-09-02): a genuine SoC-GPIO car-signal watcher exists (`CarSignalsWatch`) -- but it's audio/Bluetooth-related, not the "backcar" reverse-gear command
+
+Continued digging for the real "backcar enable/disable" command the DTS comment names
+(see the `/dev/carback` section above). Found a real, previously-undocumented class in
+`MsnCoreApp` itself: `CarSignalsWatch` (constructor `0x49b58`) -- watches exactly two SoC
+GPIOs directly via `GPIOOperater`/epoll (**GPIO 30 and GPIO 31**, hardcoded), completely
+independent of the MCU-UART link. This is a real, generic mechanism, not specific to
+carback -- worth recording since it wasn't known to exist before this pass.
+
+Traced the full path: a value change on either GPIO posts `MsnEvent` type `0x5004` (GPIO
+value != 1, "state added") or `0x5005` (GPIO value == 1, "state removed") carrying the
+GPIO's own `getTag()` value as parameter -> `MsnCoreApp::msnAppNotify()` real dispatch
+(confirmed via direct trace, not the earlier "no confirmed consumer" dead end that applied
+to `0x5026`) -> `MsnCoreApp::addAppStates(u64)` / `removeAppStates(u64)`, a generic 64-bit
+vehicle-state bitmask.
+
+**Real, specific bit meanings identified within that bitmask** (via `addAppStates`'s own
+branch logic):
+- bit 24 (`0x1000000`) -> `MsnWindowManager::appStateChange()` -- a real UI state-change
+  response
+- bit 25 (`0x2000000`) -> gated on `MsnApplication::isSoftBluetooth()`, then either
+  `appStateChange()` or writes back to a different `GPIOOperater` -- Bluetooth-related
+- bits 26/27 (`0x4000000`/`0x8000000`) -> both call `SoftVolCtrl::setVolume(index, true)`
+  -- audio volume
+
+**None of these are reverse-gear related.** Could not determine which specific bit(s)
+GPIO 30/31 themselves set -- no `setTag()` call found anywhere in `CarSignalsWatch`'s own
+methods, so `getTag()`'s real return value (and therefore the exact bit) is unresolved.
+But the bits that *are* identifiable all point toward audio/Bluetooth hardware switches,
+not reverse gear -- consistent with, not contradicting, the DTS's own claim that reverse-
+gear detection isn't SoC-GPIO-based on this product at all. **Working read: `CarSignalsWatch`
+is very likely NOT the "backcar" mechanism** -- it's a real, separate, previously-unknown
+audio/BT-switch watcher, a genuine new finding on its own merits, but not the lead this
+search was chasing. The real "backcar enable/disable" command referenced in the DTS
+comment remains unidentified after this pass.

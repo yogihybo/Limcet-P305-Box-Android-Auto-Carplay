@@ -466,3 +466,91 @@ the real gap identified in the same conversation: `custom_ui` never invokes the 
 stock OEM/aftermarket camera switch mechanism (`fw_setenv carback_camera_mode` + kernel
 `rn6752` I2C sysfs write, a separate real hardware decoder chip, unrelated to the MCU relay
 just fixed). Real next step, not yet implemented: wire that mechanism up.
+
+---
+
+## Reverse camera system architecture -- full, consolidated picture (2026-09-02)
+
+After a full day tracing this from multiple directions, this is the complete, real
+architecture as currently understood -- five genuinely separate mechanisms, not one.
+
+### 1. Two independent physical SoC<->MCU UART channels exist, not one
+
+- **`/dev/ttyHS0`** (MMIO `0xE4F00000`, the "HS UART") -- the main channel. `[0x2E][cmd]
+  [len][payload][checksum]` framing. Everything this doc otherwise covers (touch, knob,
+  buttons, settings sync, `CMD 0x12`, etc.) goes over this link. This is the only channel
+  `custom_ui` ever opens (`hal::McuInputHal`'s default `/dev/ttyHS0`).
+- **`ttyS2`** (MMIO `0xE8000000`, U-Boot calls it "UART2") -- a real, *separate* channel,
+  `[0x0d][cmd=0x24][len][payload][checksum]` framing (completely different sync byte and
+  structure). **`custom_ui`/Linux never opens or touches this device at all.** Only used by
+  U-Boot's own `ark_mcu_notify_backcar()` (`u-boot/board/arkmicro/ark1668_limcet_p305/
+  ark1668_display_cfg.c`), ported from real stock `mtd1_uboot.bin` disassembly
+  (`FUN_0006ede4`). Real, honest uncertainty carried over from that original trace: no
+  direct caller of the original stock function was ever found (this project's own fork
+  explicitly wired up a caller, `ark_carback_camera_check()`, that stock itself may never
+  have exercised this way), and the on/off polarity is an *inferred* convention, not
+  disassembly-proven. Whether the current `can_app.bin` MCU firmware's own receiver even
+  understands this framing at all is **unverified** -- not confirmed either way.
+
+### 2. A real SoC GPIO reads reverse-gear state directly -- but only during early boot
+
+`ARK_BACKCAR_GPIO` = SoC GPIO pin 5, active-low, read directly by U-Boot
+(`do_backcarcheck`/`ark_carback_camera_check`) for two real, working things: instant
+boot-time camera preview (`ark_itu656_camera_bypass_enable()`) and triggering the
+`ark_mcu_notify_backcar()` UART2 notification above. **This is the exact same physical pin
+already documented elsewhere in this doc set as removed from Linux's `ark-carback` driver**
+(`ark1668_limcet_p305.dts`, 2026-07-17) -- because once the Linux display driver
+initializes, this same pin gets reclaimed for LCD `r3`. So real, working GPIO-based reverse
+detection genuinely exists on this hardware, but only in the narrow early-boot window
+before the LCD pinmux takes it over -- not usable by `custom_ui`/Linux at runtime, which is
+exactly why `/dev/carback` is correctly absent (see the dedicated section above).
+
+### 3. The MCU's own relay switching is autonomous and hardware-confirmed reliable
+
+Separately from all of the above: the MCU's own `flag_5e`/`GPIOB Pin 2` mechanism
+(traced in full in `docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md`) switches the OEM Factory
+Camera video relay entirely on its own, in firmware, with zero SoC-side involvement --
+**hardware-confirmed twice**: once by killing `custom_ui` entirely and observing OEM camera
+still engage correctly, and again after removing `custom_ui`'s reactive `hide_display()`/
+`show_display()` calls, where the user confirmed OEM camera now switches correctly on
+*every* cycle. This is the one mechanism in this whole picture with zero open reliability
+questions.
+
+### 4. A separate real chip (RN6752) selects which physical camera SOURCE is decoded
+
+The `RN6752` AHD camera decoder (real I2C device on this board, `dvr_rn6752` in the DTS) is
+what actually selects *which physical camera feed* gets decoded when not using the OEM
+passthrough -- controlled via `fw_setenv carback_camera_mode` + a kernel sysfs write, **zero
+MCU involvement**. This is a completely different axis from mechanism #3 above (#3 switches
+*whether the SoC's own video reaches the panel at all*; #4 selects *which camera the SoC's
+own video pipeline is actually looking at*). **Real, confirmed gap**: `custom_ui` never
+invokes this mechanism anywhere in its source -- the "Aftermarket Camera" setting/screen
+does not currently select a real aftermarket camera source at the hardware level. User
+confirmed on real hardware (2026-09-02) that the aftermarket toggle does not work,
+consistent with this gap.
+
+### 5. What `custom_ui` actually does today, post-2026-09-02 simplification
+
+- **OEM Factory Camera**: nothing reactive. Logs the (still-received, still-tracked)
+  `CMD 0x12`-derived state for diagnostics only -- the actual relay switch is 100%
+  autonomous MCU hardware (mechanism #3). This is the fix that closed out today's whole
+  false-trigger bug class.
+- **Aftermarket Camera**: still navigates to its own LVGL camera screen on `CMD 0x12`
+  engage (the same signal already confirmed unreliable -- not yet revisited for this path),
+  and does **not** invoke mechanism #4 (RN6752 source selection) at all -- a real,
+  unimplemented gap, not yet fixed.
+- **Volume cut + AA-resume-video nudge**: both still react to the same `CMD 0x12` signal,
+  independent of camera mode. Deliberately left as-is (low consequence if occasionally
+  wrong -- a redundant volume dip or resume request, not a broken/stuck display).
+
+### Open items, stated plainly
+
+- The "backcar enable/disable" *MCU-to-SoC* command this doc spent most of the day
+  searching for was never found in that direction, despite exhausting the entire
+  `MCUAdapter_BoxP300` dispatch table. Given mechanism #1 above, the real "backcar
+  notification" concept turns out to run the *other* direction (SoC-to-MCU, via `ttyS2`,
+  not `ttyHS0`) -- a genuinely different channel this project's software has never used.
+- Whether `ttyS2`'s protocol is actually understood by the current MCU firmware is
+  unverified either way.
+- Wiring up the RN6752 mechanism for aftermarket camera mode is the concrete, real next
+  step if that mode is worth fixing.

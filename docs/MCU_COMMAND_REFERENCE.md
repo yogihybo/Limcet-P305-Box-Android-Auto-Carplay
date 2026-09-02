@@ -995,3 +995,34 @@ function, a real next step, not yet done).
 (plugin state changes) -- not an init-only event -- and the bulk of the remaining MCU->SoC
 command traffic (`CMD 0x84`/`CMD 0xA0`/etc.) isn't issued from `MsnCoreApp`'s own code at all,
 it's internal to `MCUAdapter_BoxP300` itself, reacting to the same Qt signal infrastructure.
+
+## Every real `makeMCUProtocol()` call site inside `MCUAdapter_BoxP300` (2026-09-02)
+
+Following up directly: found every real call into `makeMCUProtocol()` (the actual frame
+builder every outbound command goes through) within the confirmed-active `MCUAdapter_BoxP300`
+class -- **6 real sites**, not just the `CMD 0x81`/`onInited()` one already traced:
+
+| Call site (enclosing function) | `cmd` sent | What it is |
+|---|---|---|
+| `showApp(unsigned int)` (`0x31f2c`) | `0x82` | **A second, independent trigger for `CMD 0x82`**, distinct from the `pluginRunningStateChange()`/`onFirstInit()` paths already traced above |
+| `syncSettingDataToMcu(int)` (`0x34a78`) | `0xA0` | Confirmed, matches this doc's existing settings-sync finding |
+| `onInited()` (`0x34f50`) | `0x81` | Already traced above -- the real init handshake |
+| `onSendUpdateReadyTimer()` (`0x36598`) | `0xE1` | **Real: bootloader-entry is sent from a timer callback**, not on-demand from user action -- consistent with a real firmware-update-flow gate (presumably only armed during an actual update sequence, not fired ambiently) |
+| Inside `onRecvMcuProtocol()`'s own `CMD 0xE2` handler body (`0x37d14`) | `0x81` | A real reply-send: receiving the firmware-update-handshake command (`CMD 0xE2`, "End Update Mcu!") makes the adapter re-send the init handshake -- plausibly a post-update re-sync |
+| Inside `onRecvMcuProtocol()`'s own `CMD 0x7F` handler body (`0x398d4`) | `0xE3` | **A real send of `CMD 0xE3`, a value not in this doc's own closed 9-entry SoC->MCU dispatch table.** Since that closed set was independently verified exhaustive earlier in this doc (`0x81 0x82 0xA0 0xFF 0xE1 0x85 0x84 0x87 0x88`, confirmed via the real dispatch loop in `can_app.bin`), a genuine `CMD 0xE3` send from the SoC is a hard no-op on the real MCU firmware -- interesting (the app really does send it, after receiving the MCU's version-report frame) but not actionable. |
+
+**Real limitation hit while chasing `showApp()`'s own caller**: it has zero direct `bl` call
+sites anywhere in either `MsnCoreApp` or `libMcuCenter.so`'s own disassembly, consistent with
+it being a **virtual method** on the shared `MCUAdapter` base-class interface (matching this
+whole class family's naming convention -- `MCUAdapter_BoxP100`, `_BoxP210`, etc. all likely
+share this method) -- called polymorphically through a base-class pointer, which doesn't leave
+a resolvable direct-call symbol the way the other 5 sites did. Not chased further via vtable
+analysis this pass -- a real, bounded follow-up if `showApp()`'s own trigger matters later.
+
+**Real, still-open connection to the `CMD 0x12`/headlights lead**: this now gives `CMD 0x82`
+**three** independent real triggers (`pluginRunningStateChange()`, `onFirstInit()`,
+`showApp()`) instead of one -- broadening, not narrowing, the set of real events that could
+plausibly produce the `CMD 0x12` echo already traced. `showApp()` in particular sounds like
+exactly the kind of UI-transition call a night-mode/headlights-driven screen change could
+route through, but this remains unconfirmed -- same honest gap as before, just with one more
+concrete name attached to it.

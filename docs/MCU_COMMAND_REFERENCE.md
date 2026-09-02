@@ -936,3 +936,62 @@ which is deployed on this project's own system anyway), a live test on real stoc
 is put in reverse) would settle who creates/deletes `/tmp/video` in seconds. Low priority
 given the caveat above -- `sink` isn't in this project's own boot path -- but noted here so
 it isn't re-derived from scratch if ever revisited.
+
+## Where the real stock software actually issues MCU commands from (2026-09-02)
+
+Prompted directly by a real question: does `MsnCoreApp` send MCU commands at init, and from
+where? Traced by searching the real, unstripped `MsnCoreApp` binary for every call site into
+the two real MCU-facing entry points it imports (`MsnApplication::sendMsgToMcuCenter()` and
+`MsnLink::setMCUUUID()`), plus tracing `libMcuCenter.so`'s own `MCUAdapter_BoxP300::
+onInited()` directly. The real, complete picture is more layered than "the app sends
+commands":
+
+**`MsnCoreApp` itself barely touches the MCU protocol directly.** Its only import of
+`sendMsgToMcuCenter()` has exactly **one call site** in the whole binary, inside
+`MsnCoreApp::sendEncryptDatas()` -- the real TEA-cipher anti-clone challenge (`CMD 0x88`,
+already fully traced elsewhere in this doc). That function itself has exactly 2 real callers:
+**`MsnCoreApp::onEndInit()`** (a real init-completion hook -- so yes, `CMD 0x88` genuinely
+fires at init) and **`MsnCoreApp::onHeartBeatTimer()`** (so it's also re-sent periodically,
+not just once at startup).
+
+**Everything else is issued from *inside* `libMcuCenter.so`'s `MCUAdapter_BoxP300` itself,
+wired via Qt signals -- not direct calls `MsnCoreApp`'s own code makes.** Traced
+`MCUAdapter_BoxP300::onInited()` (`0x34f50`) directly:
+
+1. **First thing it does**: calls `makeMCUProtocol()` with `cmd=0x81` (`mov r2,#129` right
+   before the call, unambiguous) -- **`CMD 0x81`, the init handshake, is confirmed sent as
+   literally the first MCU-facing action this adapter takes.**
+2. Then wires up 2 real `QObject::connect()` calls to `MsnApplication::instance()`, with real,
+   readable signal/slot strings recovered directly from the binary's own string pool:
+   - `SIGNAL(modeAppChanged(uint,uint))` → `SLOT(onModeAppChanged(uint,uint))` -- **this is
+     the real trigger for `CMD 0x82`**, fired later at runtime whenever `MsnApplication`
+     emits this signal, not at init itself.
+   - `SIGNAL(diskDeviceStatusChange(int,int))` → `SLOT(onDiskStatusChange(int,int))` --
+     unrelated to the MCU protocol (disk/USB device status).
+
+**Traced who actually emits `modeAppChanged` back in `MsnCoreApp`** (4 real call sites into
+the signal's emit stub, `MsnApplication::modeAppChanged(uint,uint)@plt`):
+
+- **3 sites inside `MsnCoreApp::pluginRunningStateChange(uint, int)`** -- different branches
+  of this one function, very likely covering distinct plugin/app-module lifecycle transitions
+  (start/stop/switch). This is the real, concrete, **runtime** trigger for `CMD 0x82` --
+  every time a "plugin" (this vendor architecture's term for an app module -- radio, media,
+  Bluetooth, AA/CarPlay, navigation, etc.) changes running state, `CMD 0x82` fires.
+- **1 site inside `MsnCoreApp::onFirstInit()`** -- so `CMD 0x82` is *also* sent once at real
+  first-init, separately from `CMD 0x81`/`CMD 0x88`'s own init hooks.
+
+**Real, honest connection to the still-open `CMD 0x12`/headlights false-trigger question**:
+this doc already found (see the `CMD 0x82` consumer section above) that `CMD 0x82`'s written
+state can produce a real MCU->SoC `CMD 0x12` echo with `payload[1]` matching every real
+false-positive capture's byte pattern. This pass adds the missing piece on the *sending* side
+-- `CMD 0x82` fires from `pluginRunningStateChange()`, a genuine runtime event, not just
+init -- but **whether a headlights-driven UI change specifically routes through
+`pluginRunningStateChange()`** wasn't traced this pass (would mean finding what calls *that*
+function, a real next step, not yet done).
+
+**Summary answer to "is it first init"**: partially. `CMD 0x81` (adapter init) and `CMD 0x82`
+(via `onFirstInit()`) are both genuinely sent at init. `CMD 0x88` (anti-clone) is sent at init
+*and* periodically via heartbeat. But `CMD 0x82` is also a live, runtime-triggered command
+(plugin state changes) -- not an init-only event -- and the bulk of the remaining MCU->SoC
+command traffic (`CMD 0x84`/`CMD 0xA0`/etc.) isn't issued from `MsnCoreApp`'s own code at all,
+it's internal to `MCUAdapter_BoxP300` itself, reacting to the same Qt signal infrastructure.

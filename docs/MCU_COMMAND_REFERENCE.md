@@ -554,3 +554,31 @@ consistent with this gap.
   unverified either way.
 - Wiring up the RN6752 mechanism for aftermarket camera mode is the concrete, real next
   step if that mode is worth fixing.
+
+## RESOLVED (2026-09-02): OEM camera stuck after settings change, reboot doesn't fix it -- CMD 0x84 was the missing half
+
+Real hardware bug report following the OEM-path simplification above: OEM camera got stuck
+(not showing) after a settings change, persisted across a SoC reboot, but was fixed by
+booting into stock `MsnCoreApp` instead. The reboot-doesn't-fix-it detail was the key clue --
+the MCU is a separate, continuously-powered chip, confirmed unaffected by anything on the
+SoC side, so this couldn't be a `custom_ui`-side state issue; it had to be that `custom_ui`'s
+sync was genuinely incomplete compared to what stock does.
+
+**Root cause**: `CMD 0xA0 id=0x11` (`custom_ui`'s only mechanism for this until now) is gated
+on `flag_5e` already reading `1` -- per the arm-then-trigger design already traced in this
+doc, it only *immediately* forces the `GPIOC13`/`PC2` relay while the MCU currently thinks
+it's in reverse. Outside that window (the common case -- including right after boot, or a
+settings change made while not reversing) it only updates the stored preference; the relay
+itself doesn't physically move until the MCU's own next real `GPIOB Pin 2` edge. A stale
+relay state from before a settings change can therefore persist indefinitely with nothing to
+correct it.
+
+**The fix**: `CMD 0x84` drives the exact same relay dispatcher (already documented above,
+`0`=state0/LVGL/Aftermarket, `3`=state1/OEM) with its own gate polarity -- the opposite of
+`id=0x11`'s. Stock `MsnCoreApp` very plausibly sends this unconditionally as part of its own
+settings sync, which is the most likely reason booting into it fixed the stuck state.
+`custom_ui` already had a real HAL wrapper for this exact command (`sync_audio_route()`/
+`send_mcu_audio_route()`) sitting completely unused -- now wired into `sync_video_relay()`
+so it fires alongside `id=0x11` on every sync (boot and settings-toggle both route through
+this one function now). Build-verified (`custom_ui` commit `f7f0442`), **pending hardware
+retest**.

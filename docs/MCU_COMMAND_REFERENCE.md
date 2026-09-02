@@ -582,3 +582,36 @@ settings sync, which is the most likely reason booting into it fixed the stuck s
 so it fires alongside `id=0x11` on every sync (boot and settings-toggle both route through
 this one function now). Build-verified (`custom_ui` commit `f7f0442`), **pending hardware
 retest**.
+
+## CONFIRMED (2026-09-02): `CMD 0xA0 id=0x00` independently controls the OEM camera relay -- the "Microphone Source" label was always wrong, exactly as flagged
+
+This settles what `settings_screen.cpp`'s own `id=0x00` toggle comment had already flagged as
+a real, untested possibility (added earlier this session, see that comment's own "Kept as a
+plain two-state toggle deliberately, exactly so both real values can be tested directly on
+hardware" note): the stock vendor app's own internal label for this id -- **"Reversing
+camera"**, per `getSetItemText()`, genuinely out of sync with the "OEM Microphone"/
+"AfterMarket Microphone" value-text strings `getSetItemValueTexts()` returns for the same
+id -- was the real, functional truth all along, not the microphone-sounding value names
+`custom_ui` inherited its UI label from.
+
+**Real, methodical hardware test**: user toggled `id=0x00` (the "Microphone Source
+(OEM/AfterMarket)" row) repeatedly, engaging real reverse gear after each toggle to observe
+the effect, with `id=0x11` (the "OEM Factory Camera" toggle) held **fixed** throughout --
+ruling out an interaction effect. `id=0x00` alone reliably determined whether the OEM
+factory relay engaged during reverse. (Testing the Aftermarket side specifically wasn't
+possible -- no physical aftermarket camera is connected on this vehicle, and `custom_ui`
+doesn't yet call `start_camera_stream()` for that screen either, a separate already-
+documented gap -- but the OEM-engage behavior alone is a clean, decisive result.)
+
+This also lines up with the real MCU-side handler already documented for `id=0x00`
+(`hardware/MCU/source/src/uart_protocol.c`): it drives **`GPIOB Pin 1`** -- directly
+adjacent to `GPIOB Pin 2`, the pin this whole day's `flag_5e` tracing has centered on. Not
+confirmed as the identical mechanism, but a real, physically plausible relationship, not a
+coincidence.
+
+**Real open question, not yet resolved**: whether `id=0x00` is now the *primary* mechanism
+(making `id=0x11`/`CMD 0x84` redundant), a *necessary third lever* alongside them, or
+something that happens to correlate for a different physical reason. `custom_ui`'s actual
+sync logic has not yet been changed to send `id=0x00` -- this is a real, confirmed hardware
+finding pending a decision on how to incorporate it, and the misleading "Microphone Source"
+UI label still needs fixing regardless of that decision.

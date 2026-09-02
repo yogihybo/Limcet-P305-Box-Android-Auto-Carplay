@@ -454,3 +454,15 @@ testing has been on.
 **Not yet hardware-retested** -- the real next step is confirming reverse-camera switching
 (both directions, multiple cycles, OEM Factory Camera mode) still works correctly now that
 `custom_ui` does nothing reactive at all for it.
+
+**Real hardware retest (2026-09-02): confirmed working every time.** User confirmed OEM
+Factory Camera reverse-gear switching now works correctly on every cycle after the
+`de1b75d` fix above -- closes out the day's entire `CMD 0x12` investigation for the OEM
+path. The architectural call (stop reacting to a signal proven unreliable, rather than
+continuing to try to make it reliable) was correct.
+
+**Aftermarket camera toggle confirmed NOT working**, same test session -- consistent with
+the real gap identified in the same conversation: `custom_ui` never invokes the actual
+stock OEM/aftermarket camera switch mechanism (`fw_setenv carback_camera_mode` + kernel
+`rn6752` I2C sysfs write, a separate real hardware decoder chip, unrelated to the MCU relay
+just fixed). Real next step, not yet implemented: wire that mechanism up.

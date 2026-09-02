@@ -422,3 +422,35 @@ specific command implements it.
 signal than what's already been found and documented (`CMD 0x04` radar corroboration) was
 uncovered by this pass. The mitigation decision recorded in the CRITICAL section above
 still stands as the real open next step.
+
+## RESOLVED (2026-09-02): stepped back from chasing a reliable reverse-gear signal -- removed the OEM camera path's dependency on one entirely
+
+After the day's exhaustive `CMD 0x12`/`CMD 0x04`/`/dev/carback`/command-structure
+investigation above, the user reframed the actual problem: rather than continuing to hunt
+for a fully reliable software reverse-gear signal, is one even needed? The answer for the
+OEM Factory Camera path turned out to be no -- the MCU's own `flag_5e`/`GPIOB-Pin-2` relay
+switching was already hardware-confirmed fully autonomous earlier this session (OEM camera
+engaged correctly with `custom_ui` completely killed, meaning zero software involvement).
+
+**Real architectural fix, not just documentation**: removed `hal::hide_display()`/
+`show_display()`/`lv_obj_invalidate()` entirely from both the engage and disengage branches
+of `main.cpp`'s OEM Factory Camera handling (`custom_ui` commit `de1b75d`). Every real bug
+this project hit today -- the stuck-in-reverse false trigger, the exit flash-then-blank, the
+boot-time false engage -- came from reactively driving this GUI-hide/show behavior off a
+live reverse-gear detection signal that turned out to be shared/unreliable (see the CRITICAL
+sections above). Removing the reactive dependency removes the entire bug class at its root,
+rather than continuing to patch around an inherently noisy signal.
+
+**Deliberately scoped, not a wholesale removal**: volume cut during reverse, the AA
+video auto-resume nudge on disengage, and the aftermarket camera screen navigation path
+all still use the same `reverseChanged`/`CMD 0x12` detection and were left untouched --
+none of them were the source of today's bugs, and a stray false trigger there is a much
+lower-consequence outcome (a redundant volume dip or resume request) than a visually broken
+or stuck display. If `CMD 0x04` radar corroboration or a `GPIOB Pin 2` hardware trace is
+ever pursued further, it would now matter only for those remaining consumers and for
+aftermarket-camera-mode users, not for the OEM path most of this session's real hardware
+testing has been on.
+
+**Not yet hardware-retested** -- the real next step is confirming reverse-camera switching
+(both directions, multiple cycles, OEM Factory Camera mode) still works correctly now that
+`custom_ui` does nothing reactive at all for it.

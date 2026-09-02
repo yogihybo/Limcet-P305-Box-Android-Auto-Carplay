@@ -629,22 +629,26 @@ int main() {
                 hal::ack_enter_done(camera_handle);
                 s_wasInAaBeforeReverse = hal::androidauto_screen_active().load(std::memory_order_acquire);
                 if (factoryCamera) {
-                    /* Fix (2026-08-31, real hardware bug report): "with OEM
-                     * the screen goes blank even if the stock OEM factory UI
-                     * is active -- the multiplexer switches the feed but to
-                     * a blank frame." Root cause: CMD 0xA0 id=0x11 above
-                     * only switches the hardware video MUX/relay upstream --
-                     * it does nothing to our own SoC-side GUI layer, which
-                     * keeps compositing an opaque LVGL screen (fb0/OSD1)
-                     * over the top of whatever the mux is now showing.
-                     * hide_display() drives the same real ARKFB_HIDE_WINDOW
-                     * ioctl (0x4f2c) already used for the AA full-screen
-                     * video case, fully disabling our GUI layer -- not just
-                     * per-widget transparency -- so the factory feed shows
-                     * through untouched, matching the "switch entirely to
-                     * the factory display" requirement. */
-                    hal::hide_display();
-                    std::printf("%s [HAL:REVCAM] Reverse gear engaged -- OEM Factory Camera mode active (hardware video mux active, GUI layer hidden, was_in_aa=%d)\n",
+                    /* REMOVED (2026-09-02, real hardware-confirmed
+                     * evidence + user-directed simplification): this used
+                     * to call hal::hide_display() here on every engage, to
+                     * stop our own SoC-side GUI layer (fb0/OSD1) from
+                     * blocking the OEM factory feed. That reactive design
+                     * -- keying camera-relay behavior off a live
+                     * reverse-gear detection signal at all -- is exactly
+                     * what caused every real reverse-camera bug this
+                     * project hit today (stuck-in-reverse from a false
+                     * trigger, exit flash-then-blank, boot-time false
+                     * engage; see docs/MCU_COMMAND_REFERENCE.md's CRITICAL
+                     * CMD 0x12 sections). The MCU's own flag_5e/GPIOB-Pin-2
+                     * relay switching is confirmed fully autonomous and
+                     * hardware-level, not an overlay our own GUI layer sits
+                     * on top of -- real hardware test: OEM camera engaged
+                     * correctly with custom_ui completely killed, meaning
+                     * no hide_display() call happened at all, and it still
+                     * worked. Trusting that instead of reacting to a signal
+                     * that's proven unreliable for exactly this purpose. */
+                    std::printf("%s [HAL:REVCAM] Reverse gear engaged -- OEM Factory Camera mode active (MCU relay switches autonomously, no software GUI-hide needed, was_in_aa=%d)\n",
                                 core::log_timestamp().c_str(), s_wasInAaBeforeReverse ? 1 : 0);
                 } else {
                     std::printf("%s [HAL:REVCAM] Reverse gear engaged -- opening aftermarket camera overlay (was_in_aa=%d)\n",
@@ -672,31 +676,25 @@ int main() {
                  * returning to AA after reverse gear, not just navigate
                  * the screen. */
                 if (factoryCamera) {
-                    // Restore our GUI layer before navigating back -- must
-                    // happen before any staging_ui::navigate_to() below so
-                    // the next screen actually renders instead of staying
-                    // hidden behind the still-disabled fb0/OSD1 layer.
-                    hal::show_display();
-                    /* Real hardware regression (2026-08-31): "couldn't get
-                     * back to lvgl interface after exiting reverse gear."
-                     * Root cause: when s_wasInAaBeforeReverse is false (the
-                     * common case -- reversing from the plain LVGL screen,
-                     * not from AA), NOTHING below calls navigate_to(), and
-                     * show_display()'s force_refresh mechanism only
-                     * re-asserts the fb0/OSD1 layer on LVGL's own NEXT
-                     * flush (see hal/display.cpp's g_display comment) --
-                     * it doesn't force one itself. If the current screen
-                     * is idle with nothing dirty, that flush may not
-                     * happen for a long time, leaving the display stuck
-                     * even though the hardware layer is technically shown
-                     * again. navigate_to() below guarantees a flush via
-                     * lv_screen_load_anim()'s own full invalidate, but the
-                     * no-navigation branch had nothing playing that same
-                     * role. Force one explicitly, unconditionally, so
-                     * there's always an immediate pending flush regardless
-                     * of which branch runs below. */
-                    lv_obj_invalidate(lv_screen_active());
-                    std::printf("%s [HAL:REVCAM] Reverse gear disengaged -- OEM Factory Camera mode de-activated, GUI layer restored (was_in_aa=%d)\n",
+                    /* REMOVED (2026-09-02, same reasoning as the engage
+                     * branch above): show_display()/lv_obj_invalidate()
+                     * used to reactively restore our GUI layer here,
+                     * reacting to the same reverse-gear signal now
+                     * confirmed unreliable for this purpose. The MCU's
+                     * relay switching back to SoC output on disengage is
+                     * confirmed autonomous and hardware-level (the
+                     * disengage edge unconditionally forces the dispatcher
+                     * back to LVGL regardless of software, per the
+                     * flag_5e trace in docs/MCU_COMMAND_REFERENCE.md) --
+                     * our own GUI layer was never actually hidden by this
+                     * code path anymore (see the engage branch above), so
+                     * there's nothing left to restore here either. The
+                     * AA-resume-video nudge below is a real, independently
+                     * useful feature (unrelated to display hide/show) and
+                     * stays -- worst case if it fires on a stray signal is
+                     * a harmless redundant resume request, not a visual
+                     * bug like the removed hide/show calls were. */
+                    std::printf("%s [HAL:REVCAM] Reverse gear disengaged -- OEM Factory Camera mode de-activated (MCU relay handles switching autonomously, was_in_aa=%d)\n",
                                 core::log_timestamp().c_str(), s_wasInAaBeforeReverse ? 1 : 0);
                     if (s_wasInAaBeforeReverse) {
                         staging_ui::navigate_to(staging_ui::NavDestination::AndroidAuto);

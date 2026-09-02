@@ -609,9 +609,14 @@ adjacent to `GPIOB Pin 2`, the pin this whole day's `flag_5e` tracing has center
 confirmed as the identical mechanism, but a real, physically plausible relationship, not a
 coincidence.
 
-**Real open question, not yet resolved**: whether `id=0x00` is now the *primary* mechanism
-(making `id=0x11`/`CMD 0x84` redundant), a *necessary third lever* alongside them, or
-something that happens to correlate for a different physical reason. `custom_ui`'s actual
-sync logic has not yet been changed to send `id=0x00` -- this is a real, confirmed hardware
-finding pending a decision on how to incorporate it, and the misleading "Microphone Source"
-UI label still needs fixing regardless of that decision.
+**RESOLVED (2026-09-02)**: a same-methodology follow-up test (`id=0x00` held fixed this
+time, `id=0x11` toggled/tested instead) found `id=0x11` "didn't seem to do anything" on its
+own -- `id=0x00` is the confirmed-working lever, `id=0x11` an unconfirmed-if-load-bearing
+secondary at best. `sync_video_relay()` now sends `id=0x00` alongside the existing `id=0x11`
+and `CMD 0x84` sends (`custom_ui` commit `11128ca`) -- `id=0x11`'s send was kept rather than
+removed (harmless per this same testing, and still the one signal with an independently
+disassembly-confirmed `GPIOC13`/`PC2` effect under its own gate condition), so this adds the
+confirmed-working signal rather than replacing anything not proven harmful to keep. The
+standalone, misleadingly-labeled "Microphone Source" toggle was removed from Settings --
+its real function is now folded into "OEM Factory Camera". Build-verified, **pending
+hardware retest**.

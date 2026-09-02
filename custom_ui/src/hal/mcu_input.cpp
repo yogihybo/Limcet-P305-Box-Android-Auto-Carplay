@@ -102,18 +102,37 @@ void send_mcu_frame(int fd, unsigned char cmd, const unsigned char * payload, in
 // required for the MCU to report touch/knob/button events isn't
 // confirmed, but it's cheap/harmless and matches the only known-working
 // configuration.
+//
+// CORRECTED 2026-09-02: the CMD 0x82 mode value was mode=4 ("the only
+// mode reachable from inside libMcuCenter.so" per the original trace,
+// which never crossed into MsnCoreApp itself). Full tracing this
+// session found the real, actually-sent-at-init value: MsnCoreApp::
+// onFirstInit() calls modeAppChanged(app, mode=1) -- a genuine real
+// init-time send, not a guess. mode=1 isn't in onModeAppChanged()'s
+// special-case set ({2,4,5,7,13} append byte 0x08; 23 appends 0x0A),
+// so no extra byte gets appended -- payload is just the fixed leading
+// byte, no mode-4-specific 0x08 and no padding. See docs/
+// MCU_COMMAND_REFERENCE.md's "CMD 0x82's real consumer" section.
+//
+// CMD 0x85 removed 2026-09-02: exhaustively confirmed (same session)
+// that no code anywhere in MCUAdapter_BoxP300 or the shared MCUAdapter
+// base class ever sends it -- MCUAdapter_BoxP300::onRecvAppProtocol(),
+// the one real candidate entry point, is a hard `bx lr` no-op on this
+// product (real, unlike CMD 0x84, which a *different* vehicle-adapter
+// variant genuinely sends -- 0x85 has no live sender anywhere in this
+// shared library). Sending it never replicated real stock behavior and
+// had no confirmed effect of its own, so it's dropped rather than kept
+// as unexplained traffic.
 void send_startup_sequence(int fd) {
     unsigned char hello_payload = 0x01;
-    unsigned char mode4_payload[9] = {0x01, 0x08, 0, 0, 0, 0, 0, 0, 0};
+    unsigned char mode1_payload[1] = {0x01};
     unsigned char state_payload[2] = {0x00, 0x03};
 
     send_mcu_frame(fd, 0x81, &hello_payload, 1);
     usleep(50000);
-    send_mcu_frame(fd, 0x82, mode4_payload, 9);
+    send_mcu_frame(fd, 0x82, mode1_payload, 1);
     usleep(50000);
     send_mcu_frame(fd, 0x84, state_payload, 2);
-    usleep(50000);
-    send_mcu_frame(fd, 0x85, nullptr, 0);
 }
 
 // Robust stream parser with byte-level synchronization and zero packet loss on line noise.

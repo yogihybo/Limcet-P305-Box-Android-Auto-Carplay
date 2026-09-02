@@ -18,11 +18,20 @@ If you are debugging or testing drivers without running the full `MsnCoreApp` st
    frames real firmware sends anyway:
    - `cmd=0x81, payload=[0x01]` (`2E 81 01 01 7C`) — `MCUAdapter_BoxP300::onInited()`,
      sent unconditionally at startup before ever waiting to receive anything.
-   - `cmd=0x82, payload=[0x01,0x08,0,0,0,0,0,0,0]` (9 bytes) —
-     `onModeAppChanged(mode=4)`, the only mode reachable from inside
-     `libMcuCenter.so`, fired via `msnAppStateChange`'s bit24/25 path.
-   - `cmd=0x84, payload=[0x00,0x03]` — `msnAppStateChange`'s bit26/27
-     "state changed" path.
+   - `cmd=0x82, payload=[0x01]` (1 byte) — `onModeAppChanged(mode=1)`.
+     **CORRECTED 2026-09-02**: previously sent as `mode=4`/9-byte
+     payload ("the only mode reachable from inside `libMcuCenter.so`"
+     — that trace never crossed into `MsnCoreApp` itself). Full tracing
+     found the real init-time call: `MsnCoreApp::onFirstInit()` itself
+     calls `modeAppChanged(app, mode=1)`. `mode=1` isn't in
+     `onModeAppChanged()`'s special-case set (`{2,4,5,7,13}` append a
+     byte `0x08`; `23` appends `0x0A`), so no extra byte gets appended.
+   - `cmd=0x84, payload=[0x00,0x03]` — real effect confirmed
+     2026-09-02 via the MCU firmware's own receive-side trace: masked
+     to 4 bits, drives the shared `GPIOC13`/`PC2` relay dispatcher.
+     The original `msnAppStateChange` bit26/27 attribution wasn't
+     re-confirmed by that later trace — kept only as byte values
+     already proven to work on real hardware, not a re-verified claim.
 3. Listens for incoming MCU frames (`[0x2E][cmd][len][payload...][checksum]`)
    and logs them (`CMD 0x02` = handshake request, `CMD 0x20` = status
    query, anything else logged generically) — **does not send a wire
@@ -142,7 +151,10 @@ results relevant to this tool:
 - **`cmd=0x82`'s branch depends on `payload[2] == 1`** — worth double-checking
   this tool's 9-byte `onModeAppChanged` payload (`01 08 00...`) actually has
   `1` at that exact offset if triggering the `mode=4` branch specifically
-  matters for whatever's being tested.
+  matters for whatever's being tested. **Superseded 2026-09-02**: the tool
+  no longer sends `mode=4` at all — see the "How it works" section above
+  for the real `mode=1` correction. Left here as historical record of the
+  investigation at the time, not current behavior.
 - **Six more real commands this tool never sends**: `0x85`, `0x87`, `0x88`,
   `0xa0` (an 18-case mode-select, the largest handler of the 9), `0xe1`, and
   `0xff`. See the doc for what's known about each.

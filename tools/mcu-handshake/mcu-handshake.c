@@ -41,11 +41,14 @@
  *
  * Confirmed real outgoing wire commands from app->MCU, all implemented
  * in send_startup_sequence(): 0x81 (hello/init, payload=[1]), 0x82
- * (onModeAppChanged mode=4, 9-byte payload), 0x84 (msnAppStateChange
- * bit26/27 state-change, payload=[0x00,0x03]). showApp's own 0x82 case
- * (mode=0xCC, a different 4-byte payload) is a separate, externally-
- * triggered path not reachable from inside libMcuCenter.so and not
- * sent here -- see README.md.
+ * (onModeAppChanged mode=1, 1-byte payload -- CORRECTED 2026-09-02,
+ * see send_startup_sequence()'s own comment for why mode=1 replaced
+ * the original mode=4/9-byte guess), 0x84 (payload=[0x00,0x03]).
+ * showApp's own 0x82 case (mode=0xCC, a different 4-byte payload) is a
+ * separate, externally-triggered path not reachable from inside
+ * libMcuCenter.so and not sent here -- see README.md. cmd=0x85 was
+ * sent here too until 2026-09-02, dropped once exhaustively confirmed
+ * that no real code path ever sends it on this product.
  *
  * Since CMD 0x02 (handshake request) and 0x20 (status query) from the
  * MCU don't get a wire reply in real firmware, this tool no longer
@@ -219,39 +222,54 @@ void send_mcu_frame(int fd, unsigned char cmd, const unsigned char *payload,
     }
 }
 
-/* Sends the three real, disassembly-confirmed frames MsnCoreApp sends
+/* Sends the real, disassembly-confirmed frames MsnCoreApp sends
  * proactively around startup/app-state changes -- not just the 0x81
  * hello. We don't yet know which of these (if any beyond the hello) is
  * what actually makes the MCU close the CBT16211A touch switch, so we
- * send all three: cheap, harmless (they're legitimate frames real
+ * send them all: cheap, harmless (they're legitimate frames real
  * firmware sends anyway), and maximizes the chance of triggering it on
  * a single test run instead of needing several manual re-tests.
  *
  * 1. cmd=0x81, payload=[0x01] -- MCUAdapter_BoxP300::onInited(), sent
  *    unconditionally at startup before receiving anything.
- * 2. cmd=0x82, payload=[0x01,0x08,0,0,0,0,0,0,0] (9 bytes) --
- *    onModeAppChanged(mode=4), the only mode reachable from inside
- *    libMcuCenter.so, via msnAppStateChange's bit24/25 path.
- * 3. cmd=0x84, payload=[0x00,0x03] -- msnAppStateChange's bit26/27
- *    "state changed" path.
- * All three traced from MCUAdapter_BoxP300 in libMcuCenter.so,
- * 2026-07-18 -- see tools/mcu-handshake/README.md for full detail. */
+ * 2. cmd=0x82, payload=[0x01] -- MsnCoreApp::onFirstInit() itself
+ *    calls modeAppChanged(app, mode=1), which reaches MCUAdapter_
+ *    BoxP300::onModeAppChanged() as a real Qt slot. CORRECTED
+ *    2026-09-02: originally sent as mode=4/9-byte payload ("the only
+ *    mode reachable from inside libMcuCenter.so" -- that trace never
+ *    crossed into MsnCoreApp itself, where the real init-time mode=1
+ *    call actually lives). mode=1 isn't in onModeAppChanged()'s
+ *    special-case set ({2,4,5,7,13} append byte 0x08; 23 appends
+ *    0x0A), so no extra byte gets appended here.
+ * 3. cmd=0x84, payload=[0x00,0x03] -- real effect confirmed 2026-09-02
+ *    via the MCU firmware's own receive-side trace: masked to 4 bits,
+ *    drives the shared GPIOC13/PC2 relay dispatcher (payload[1]=3 ->
+ *    "AT+AUDROUTE=2" + relay state 1). The original "msnAppStateChange
+ *    bit26/27" attribution wasn't re-confirmed by that later, more
+ *    thorough trace -- kept here only as the byte values already
+ *    proven to work, not as a re-verified provenance claim.
+ * All three traced from MCUAdapter_BoxP300 in libMcuCenter.so --
+ * see tools/mcu-handshake/README.md and docs/MCU_COMMAND_REFERENCE.md
+ * for full detail. `cmd=0x85` was sent here too until 2026-09-02:
+ * exhaustively confirmed that session that no code anywhere in
+ * MCUAdapter_BoxP300 or the shared MCUAdapter base class ever sends
+ * it (the one real candidate entry point, onRecvAppProtocol(), is a
+ * hard `bx lr` no-op on this product) -- dropped as unexplained
+ * traffic with no real stock precedent and no confirmed effect. */
 void send_startup_sequence(int fd, int verbose) {
     unsigned char hello_payload = 0x01;
-    unsigned char mode4_payload[9] = { 0x01, 0x08, 0, 0, 0, 0, 0, 0, 0 };
+    unsigned char mode1_payload[1] = { 0x01 };
     unsigned char state_payload[2] = { 0x00, 0x03 };
 
     if (verbose)
-        printf("[*] Sending startup sequence: hello (0x81), mode-4 app-state (0x82), "
-               "bit26/27 state-change (0x84), query version (0x85)\n");
+        printf("[*] Sending startup sequence: hello (0x81), mode-1 app-state (0x82), "
+               "audio-route state-change (0x84)\n");
 
     send_mcu_frame(fd, 0x81, &hello_payload, 1, verbose);
     usleep(50000);
-    send_mcu_frame(fd, 0x82, mode4_payload, 9, verbose);
+    send_mcu_frame(fd, 0x82, mode1_payload, 1, verbose);
     usleep(50000);
     send_mcu_frame(fd, 0x84, state_payload, 2, verbose);
-    usleep(50000);
-    send_mcu_frame(fd, 0x85, NULL, 0, verbose);
 }
 
 /* Reads and validates one frame from fd, blocking. Returns 1 with cmd/

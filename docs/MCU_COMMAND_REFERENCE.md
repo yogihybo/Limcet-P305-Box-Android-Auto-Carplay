@@ -59,13 +59,13 @@ outside the confirmed dispatch table and is very unlikely to do anything real.
 | `0x00` | Camera Type | `0`=AfterMarket / `1`=Factory / `2`=AfterMarket 360 / `3`=Factory 360 | `GPIOB Pin 1`. **Hardware-confirmed: controls the OEM camera relay.** (Value `2` is a distinct `AT+UPGRADE` trigger, not a camera value) | ✅ sent by `sync_video_relay()` |
 | `0x01` | — (no real label) | — (no real values) | Dead no-op — shares the same handler as `0x02`–`0x06`/`0x0E` | not wired |
 | `0x02`–`0x06` | — | — | Dead no-op (same shared handler) | not wired |
-| `0x07` | "Radar" | — | Write-only, no consumer | not wired |
-| `0x08` | "Trajectory" | Off/On | Write-only, no consumer | not wired |
+| `0x07` | "Radar" | — | **Re-confirmed (2026-09-02)**: write-only, no consumer. Writes struct offset `0x3a` (`0x8008a4a`/`0x8008a54`); a precise, code-only sweep of the entire binary for any real `ldrb`/`ldrb.w` *read* of that offset found zero hits | not wired |
+| `0x08` | "Trajectory" | Off/On | **Re-confirmed (2026-09-02)**: write-only, no consumer. Writes offset `0x39`, same zero-hit sweep result | not wired |
 | `0x09` | "Reversing mode" *(vendor mislabel)* | Off/On | Mic/audio input mux, `GPIOB Pin 6`. Confirmed byte-identical across 5 real firmware images | ✅ "OEM Factory Microphone" |
-| `0x0A` | "360 camera" | CAN Active/12V Active/P Key Active | Write-only, no consumer | not wired |
+| `0x0A` | "360 camera" | CAN Active/12V Active/P Key Active | **Re-confirmed (2026-09-02)**: write-only, no consumer. Writes offset `0x3c`, same zero-hit sweep result -- see the note below on a real near-miss caught during this re-check | not wired |
 | `0x0B` | "Front camera" | empty/dynamic | `PA15`/`PB8`/`PB9` 3-pin enable when cleared to `0` | not wired |
 | `0x0C` | "Front camera time" | Off/Radar Active/5s/10s/15s | Real reader, thresholds `0x0B`'s 3-pin group | not wired |
-| `0x0D` | "Speech button" | 5s/10s/15s | Write-only, no consumer | not wired |
+| `0x0D` | "Speech button" | 5s/10s/15s | **Re-confirmed (2026-09-02)**: write-only, no consumer. Writes offset `0x42` -- checked directly against the real `PA15`/`PB8`/`PB9` relay function (`0x08005D30`, the same one `id=0x0F`/`id=0x10` feed) since it's structurally adjacent to those offsets (`0x43`/`0x44`); that function reads `0x43`/`0x44`/`0x3d`/`0x40`/`0x4c`/`0x19`/`0x5f` but never `0x42` -- genuinely not part of that subsystem either | not wired |
 | `0x0E` | "DVR" | Off/On | Dead no-op | not wired |
 | `0x0F` | "Right Camera" | Off/On | `PA15`/`PB8`/`PB9` relay trio (same as `0x0B`), gated by a second flag | not wired |
 | `0x10` | "Left Camera" | Off/On/12V Active | Same `PA15`/`PB8`/`PB9` trio, adjacent gate | not wired |
@@ -80,6 +80,18 @@ engaged correctly). Full trace: `docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md`.
 **Real stock camera-source mechanism, separate from all of the above**: stock's own
 OEM/aftermarket switch is a U-Boot env var (`fw_setenv carback_camera_mode`) plus a kernel
 `rn6752` I2C sysfs write — zero MCU involvement. Unrelated to `id=0x11`'s relay.
+
+**Methodology note on the "write-only, no consumer" re-checks above (2026-09-02)**: a first,
+cruder pass (grepping for the struct offset anywhere nearby in the disassembly) produced
+false-positive "consumer" hits for `id=0x07`/`id=0x0A` at addresses just past the real
+`0x0800B9E4` command-dispatch table (`0x0800BA0E`-`0x0800BA86`) — that region is raw constant
+*data* (the tail of the dispatch table plus alignment/padding before the next real data
+table), which `objdump`'s linear disassembly happily decodes into plausible-looking but
+meaningless instructions. Caught before being reported, by checking the hit addresses against
+the already-known dispatch-table range rather than trusting the grep. The re-confirmed
+findings above used a precise, code-only sweep instead (every real `ldrb`/`ldrb.w` *read*
+instruction in the binary, matched against each offset) — a stronger negative result than the
+original claim had, not just a repeat of it.
 
 <details>
 <summary>Revision history for this table (click to expand)</summary>

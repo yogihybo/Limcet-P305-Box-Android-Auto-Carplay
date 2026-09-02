@@ -338,12 +338,16 @@ correction above) actually comes from led to a genuinely new function, `0x080084
 OEM camera relay autonomously, with `custom_ui` killed entirely" finding elsewhere in this
 doc** -- not just corroborating evidence, the literal source code for it. `GPIOB Pin 2` is
 read directly by dedicated, debounced, change-triggered polling code, independent of any UART
-command from the SoC. **Real, valuable open follow-up, not chased this pass**: what `PA8`,
-`PC9`, `PC8`, and `PC7` physically correspond to on this board -- their debounced 2-bit/2-bit
-outputs (struct offsets `0x36`/`0x46`) aren't yet traced to any consumer, and are real
-candidates for some of this doc's still-unconfirmed bit-meaning gaps (e.g. `CMD 0x06`'s
-vehicle-dynamics bits, or the "backcar" mechanism's remaining loose threads) given they sit in
-the exact same scan routine as the one pin already proven load-bearing.
+command from the SoC.
+
+**Follow-up chased and closed (2026-09-02, same day)**: traced `PA8`/`PC9`/`PC8`/`PC7`'s real
+consumers in `can_app.bin` (full detail in `MCU_FIRMWARE_VERIFIED_FINDINGS.md`). They are
+**not** candidates for `CMD 0x06`'s or any other command's vehicle-dynamics bits after all --
+`PA8`/`PC9` select between 3 internal CAN-message-ID dispatch tables, and `PC8`/`PC7` get
+echoed back over the bus only when a diagnostic sub-command queries for them. Real behavior
+reads as a hardware board-variant/configuration selector (consistent with this firmware's
+multi-vehicle-brand build convention), not a live sensor input -- corrected here rather than
+left as an open lead that turned out to be a dead end.
 
 **`CMD 0x82`'s own handler (`0x08008bd4`) re-confirmed independently**: reads `payload[0]`
 from the same `0x20000238`-based "current frame" struct at offset `+2` (consistent with the

@@ -657,6 +657,56 @@ independent of its true function, but no longer presented as a settled
 label. Build-verified: `can_app.bin` grows to 4180 bytes. Not written to
 physical hardware.
 
+## Found the real GPIOB Pin 2 autonomous-relay scanner, and traced its 4 sibling pins (2026-09-02)
+
+Follow-up to the `CMD 0x82`/`CMD 0x84` gate-sharing trace (`docs/MCU_COMMAND_REFERENCE.md`):
+while locating the shared relay dispatcher's (`0x080058A4`) real callers, found a genuinely
+new, free-standing function -- `0x080084A4` -- reached from **neither** SoC->MCU dispatch
+table nor the `CMD 0xA0` id-switch. It's a periodic GPIO scanner:
+
+- Reads 5 real pins via a shared `port_base + mask` helper (`0x08005582`), each resolved from
+  its own wrapper's literal-pool port-base value (STM32F105 standard bases): **`GPIOA Pin 8`**,
+  **`GPIOC Pin 9`**, **`GPIOC Pin 8`**, **`GPIOC Pin 7`**, **`GPIOB Pin 2`** -- packed into
+  bits `0`-`4` of one combined byte.
+- Change-triggered: compares against the previous scan (`0x080085d8`), returns immediately if
+  unchanged -- not a naive act-every-poll loop.
+- `GPIOB Pin 2` (bit `4`), debounced and inverted, writes the shared `0x5e` flag
+  (`0x20000236`) and calls the relay dispatcher directly (`0x0800859e`/`0x080085bc`/
+  `0x080085ce`) -- **this is the literal source of the already-hardware-confirmed autonomous
+  OEM-camera-relay switching**, not just corroborating evidence for it.
+
+**Traced the other 4 pins' consumers this pass** (flagged as a follow-up in the command-ref
+doc, chased down now):
+
+- `PA8`/`PC9` (bits `0`/`1`) combine into a debounced 2-bit value at struct offset `0x36`
+  (`0x2000020E`). Real consumer found: a dispatch function around `0x08007f68` reads this
+  value and, depending on whether it's `1`/`2`/`3`, picks between **3 separate, differently-
+  sized const lookup tables** (`0x0800bae8`/`0x0800bb30`/`0x0800bb80`, 9/10/? entries) to match
+  an incoming key value (read from a different struct, offset `0x12d`) against a handler
+  pointer -- structurally identical to a mode-dependent CAN-message-ID dispatch table swap.
+- `PC8`/`PC7` (bits `2`/`3`) combine into a debounced value at offset `0x46` (`0x2000021E`).
+  Real consumer found: a diagnostic-response builder (`0x0800910c`) that embeds this value
+  (and, for a different sub-id, the `0x36` value above) as a payload byte in an outgoing frame
+  built via `0x08007e0c` -- i.e. these values get **reported back over the bus when a
+  diagnostic sub-command queries for them**, not consumed internally as live vehicle-state
+  inputs.
+
+**Real correction to the follow-up note left in the command-ref doc**: these 4 pins are NOT
+good candidates for `CMD 0x06`'s (or any other command's) still-unconfirmed vehicle-dynamics
+bit meanings after all -- their real, traced behavior (mode-selecting between internal CAN
+dispatch tables; diagnostic readback on query) reads much more like a **hardware
+board-variant/configuration selector** (matching this firmware's own multi-vehicle-brand
+build convention, e.g. the `DCn32-VOLVO`/`DCn32-ACURA` naming already documented at the top of
+this doc) than a live door/handbrake/turn-signal sensor input. Recorded here so the earlier
+speculation isn't mistaken for a settled lead.
+
+**Scope note**: none of this is part of the SoC<->MCU UART protocol `MCU_COMMAND_REFERENCE.md`
+catalogs -- it's internal MCU-side CAN-bus/board-configuration machinery, which is why it
+lives in this "deep trace" doc rather than the command reference. Not chased further: the
+exact 9/10-entry table contents (which CAN message IDs each mode's table actually handles),
+and what physically drives `PA8`/`PC9`/`PC8`/`PC7` on this board (DIP switches, resistor
+straps, or something else) -- real, bounded follow-ups if this ever matters again.
+
 ## Full CMD 0xA0 settings-list cross-reference: real SoC labels matched to real MCU behavior
 
 Prompted by a real user question ("what does stock send for the MCU reverse

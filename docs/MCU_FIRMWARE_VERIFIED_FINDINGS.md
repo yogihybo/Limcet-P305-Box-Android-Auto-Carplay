@@ -3291,3 +3291,27 @@ as opposed to the value-texts just traced) weren't re-disassembled in this pass 
 `getSetItemValueTexts()` was directly checked. If precision on the real on-screen label
 stock itself shows for `id=0x00` matters for future work, that still needs its own direct
 re-trace rather than trusting the 2026-08-29 pass's claim about it.
+
+## New library found while chasing `CMD 0xFF`'s sender: `libCanBus.so` -- a whole separate multi-brand CAN-dashboard subsystem (2026-09-03)
+
+Not previously opened by this project. Contains a real, generic CAN-bus dashboard-integration
+plugin (`CanBusPlugin`) with **4 distinct vehicle-brand adapter classes** sharing one
+`libCanBus.so`: `CanBus_XinRi`, `CanBus_Raise_Volkswagen`, `CanBus_XBS_Mazda`, `CanBus_
+LiHang_JMCE200N` -- each with the same real method-set shape as `libMcuCenter.so`'s
+`MCUAdapter_*` family (`onRecvMcuProtocol`, `onRecvAppProtocol`, `makeCanBusProtocol`,
+`writeCanBusData`, `getPortSettings`, etc.), and confirmed to use the identical `0x2E`
+sync-byte wire framing (`mov r3,#0x2e` found directly inside `makeCanBusProtocol()`). Real
+Qt resource names embedded in the binary (`dazhong_canui`, `canbusimages`) confirm this is
+generic aftermarket/OEM CAN-dashboard integration for several vehicle brands, none of which
+is this product's own Prado/`BoxP300` build -- same "bundled but inactive for this SKU"
+pattern already established for `libMcuCenter.so`'s many `MCUAdapter_BoxPxxx`/`BoxCxxx`
+variants.
+
+Checked all ~20 real `writeCanBusData()` call sites across all 4 classes for `cmd=0xFF`
+(255) via an immediate-constant argument -- none found. Real, honest caveat: this only rules
+out immediate-constant sends; a `cmd` value computed into a register from elsewhere (a
+variable, a lookup table) wouldn't show up this way, so this isn't a fully exhaustive proof
+the way the `writeDatas()` sweep of `MCUAdapter_BoxP300` was. Not chased further -- flagged
+here mainly so this real, substantial sibling library isn't rediscovered from scratch if a
+future pass needs it (e.g. for tracing what these other vehicle-brand adapters do with
+`CMD 0x84`/`0x87`, or anything else this doc has found dead-by-design on `BoxP300`).

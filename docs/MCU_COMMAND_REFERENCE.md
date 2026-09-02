@@ -594,3 +594,73 @@ confirmed-working signal rather than replacing anything not proven harmful to ke
 standalone, misleadingly-labeled "Microphone Source" toggle was removed from Settings --
 its real function is now folded into "OEM Factory Camera". Build-verified, **pending
 hardware retest**.
+
+## NEW FINDING (2026-09-02): the real "backcar enable/disable" mechanism is a filesystem
+## marker consumed by `sink`, not a UART command -- found via a binary nobody had opened yet
+
+The "still genuinely unresolved" item above (no SoC->MCU or MCU->SoC command matches the
+DTS's own "backcar enable/disable command" description) is now closed differently than
+expected. Two real, disassembly-backed steps:
+
+**1. The `MCUAdapter_BoxP300::onRecvMcuProtocol` dispatch is confirmed exhaustively closed.**
+Full linear disassembly of the dispatcher (`0x370d4`, the real, unstripped `libMcuCenter.so`
+copy) shows it is a straight chain of `cmp`/`beq` comparisons, not a jump table -- and it
+handles **exactly 14 values**: `0x01 0x02 0x03 0x04 0x05 0x06 0x0A 0x12 0x20 0x21 0x22 0x30
+0x7F 0xE2 0xE4`. Every other byte (including `0x00`, `0x07`-`0x09`, `0x0B`-`0x11`, and the
+whole `0x13`-`0xFF` range apart from the listed values) falls straight through to the shared
+no-op epilogue at `0x37348`. This rules out possibility (a) from the "still genuinely
+unresolved" note above -- there is no hidden extra command on this channel; the full set was
+already in this doc.
+
+**2. `MsnEvent 0x5026` (the event `CMD 0x12`'s `payload[1]==0x11` case and `CMD 0x01` bit `2`
+both post) has exactly 2 real producers inside `MCUAdapter_BoxP300` and zero real consumers
+anywhere in `MsnCoreApp`** -- re-confirmed this session directly against the real, unstripped
+`MsnCoreApp` binary (`with debug_info, not stripped` per `file`): searched every `movw
+r_,#20518` (the `0x5026` immediate load pattern) in the whole binary, zero hits. So the two
+already-documented producers really do dead-end inside `MsnCoreApp` specifically.
+
+**3. The real consumer lives in a completely different binary this project had never opened:
+`usr/bin/sink`** (also unstripped). It has its own `ArkReverse` class with real, non-stub
+logic (confirmed by disassembling every method, not guessed from symbol names alone):
+- `ArkReverse::init()` opens a local socket (`ArkUtils::open_local_socket()`), then
+  `inotify_init()` + `inotify_add_watch(fd, "/tmp", IN_CREATE|IN_DELETE)` -- watching the
+  **`/tmp` directory itself**, not a device node.
+- `ArkReverse::watchHandleIsExist()` does `access("/tmp/video", F_OK)`.
+- `ArkReverse::run()`'s inotify event loop, on detecting `/tmp/video` come into existence,
+  calls a real, genuinely vendor-named (typo and all) callback: `IArkCallbacks::
+  enterResverseCallback()`.
+
+**This is the real "backcar enable/disable" mechanism the DTS comment describes** -- it's a
+**filesystem marker file (`/tmp/video`)**, watched via `inotify`, not a distinct UART command.
+It explains why the SoC->MCU/MCU->SoC dispatch tables above never turned it up: it was never
+a wire-protocol command to begin with, on either UART channel.
+
+**Also confirmed while chasing this**: wired CarPlay's own equivalent hooks,
+`carplay_backcar_enter`/`carplay_backcar_exit` (imported by `usr/bin/carplay`, exported by
+`usr/lib/libScreenStream.so`), are **hard `bx lr` no-ops in all 4 real firmware images**
+checked (`Prado firmware dump`, `firmware_source`, `ztuzauto_extracted`,
+`AA-NEW-P306_extracted`) -- genuinely dead in every real build, not an artifact of checking
+only one copy. Same "named hook, does nothing" pattern this project has hit repeatedly with
+`MsnEvent 0x5026`'s own consumers.
+
+**Real, still-open gap**: who actually creates/deletes `/tmp/video` was not found this pass.
+Not in any `rc`/init script (`/etc/rc.d/rcS` and the whole rootfs tree grepped, no hit), not
+in `MsnCoreApp`, and this rootfs has no `mdev.conf` at all (so it isn't a hotplug rule
+reacting to a `/dev/videoX` node appearing, at least not through that mechanism). Real
+candidates found referencing the same `"/tmp/video"` string: `carlife` (Baidu CarLife --
+also just a consumer, confirmed via its own `inotify_add_watch`/`inotify_init` imports, same
+watcher pattern as `sink`), `libAvin.so` (an "AV-input" UI module with real symbols like
+`AvinWindow::onDetectSignal()`/`checkHandBreakOrAllowVideoPlay()` -- plausible-looking but
+not confirmed as the producer, and this module reads more like a legally-required
+handbrake/video-while-driving gate than a reverse-gear detector), and `ECLink` (stripped, not
+traced). **Not yet resolved**: which of these (or something else entirely, e.g. a compiled-in
+GPIO poll loop inside one of the stripped binaries) is the actual producer that creates
+`/tmp/video` when the vehicle goes into reverse.
+
+**Practical relevance to `custom_ui`**: this is a real, previously-undocumented, genuinely
+different mechanism from everything traced earlier in this doc (not UART, not `/dev/carback`,
+not `flag_5e`) -- but it's the stock **wireless-mirroring sink's** own reverse hook, i.e. it
+exists to pause/interrupt CarPlay/AA video during reverse, not to switch the OEM camera relay.
+`custom_ui`/`androidauto-sidecar` don't currently watch `/tmp/video` at all. Whether this is
+worth wiring in (e.g. as a corroborating signal, or to replicate stock's own
+pause-mirroring-during-reverse behavior) is a real, new, open decision -- not yet acted on.

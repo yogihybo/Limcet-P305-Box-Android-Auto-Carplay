@@ -1046,3 +1046,64 @@ plausibly produce the `CMD 0x12` echo already traced. `showApp()` in particular 
 exactly the kind of UI-transition call a night-mode/headlights-driven screen change could
 route through, but this remains unconfirmed -- same honest gap as before, just with one more
 concrete name attached to it.
+
+## Full stock-software `CMD` flow map (2026-09-02) -- every real transmit path, not just `makeMCUProtocol()`
+
+Systematic follow-up: rather than only tracking `makeMCUProtocol()` callers, found **every**
+real call into the one function that actually transmits, `ProtocolUtils::writeDatas()`
+(**122 call sites** across the whole `libMcuCenter.so`, most belonging to the *other* vehicle
+adapter classes this shared library also contains -- `BoxC270`, `BoxP210`, etc. -- which are
+inactive on this hardware and out of scope). Filtered to just the confirmed-active
+`MCUAdapter_BoxP300` -- **7 real sites**, one more than the `makeMCUProtocol()`-only pass
+found:
+
+| Real sender | `cmd` | Note |
+|---|---|---|
+| `onInited()` | `0x81` | Already traced -- first action at adapter init |
+| `onModeAppChanged(uint,uint)` | `0x82` | **The real Qt slot connected to `modeAppChanged` -- builds its own frame directly** (not via `makeMCUProtocol()`, which is why the earlier pass missed it). Byte-for-byte matches this doc's existing "mode `2`/`4`/`5`/`7`/`13` append `8`; mode `23` appends `0x0A`" detail, now confirmed against the real send-side code, not just inferred |
+| `showApp(uint)` | `0x82` | Already traced -- a second, still-unconfirmed-caller sender of the same command |
+| `syncSettingDataToMcu(int)` | `0xA0` | Already traced |
+| `onSendUpdateReadyTimer()` | `0xE1` | Already traced |
+| `onRecvMcuProtocol()` (inside `CMD 0xE2`'s own handler body) | `0x81` | Already traced -- reply-send |
+| `onRecvMcuProtocol()` (inside `CMD 0x7F`'s own handler body) | `0xE3` | Already traced -- reply-send, confirmed no-op on the real MCU |
+
+**This means `CMD 0x84`/`0x85`/`0x87`/`0xFF`/`0x88` are never sent from anywhere inside
+`MCUAdapter_BoxP300` itself** -- a real, decisive negative result, not an oversight (the
+81/82/A0/E1/E3 set above is now the *complete* real list of everything this specific class
+ever transmits). `CMD 0x88` was already found to be sent from `MsnCoreApp` directly
+(`sendEncryptDatas()`, not through the adapter at all).
+
+**Checked the shared `MCUAdapter` base class too, for anything sent from common code all
+subclasses would inherit -- none found.** But this surfaced a genuinely new, previously
+undocumented class in the process: **`McuCenterPlugin`**, whose own `customEvent(QEvent*)`
+method has 3 of the 122 real `writeDatas()` sites. Traced its real dispatch:
+
+- It's a generic **Qt custom-event router**: checks the incoming `QEvent`'s own type against 4
+  specific custom type values (`0xC739`/`0xC73D`/`0xC73F`/`0xC743`), each independently
+  dispatched.
+- The `0xC73F` case (the one holding 2 of the 3 `writeDatas()` calls found) calls
+  `MsnEvent::getByteArrayParam()` -- **extracting a pre-built, already-complete raw byte array
+  attached to the event, and forwarding it to the MCU verbatim**, with no per-command
+  structure of its own. This is a real, generic "send these exact bytes" mechanism, distinct
+  from `makeMCUProtocol()`'s structured `(cmd, payload, len)` interface.
+
+**Real, strong hypothesis for where `CMD 0x87` (Bluetooth AT relay) actually comes from**:
+this generic byte-forwarder is a much better structural fit for it than anything in
+`MCUAdapter_BoxP300` -- `CMD 0x87`'s payload is a variable-length, dynamically-built AT
+command string, not a fixed structure, exactly the kind of content something else would
+pre-build as a raw `QByteArray` and hand off via this event mechanism rather than needing its
+own dedicated `makeMCUProtocol()`-style builder. **Not confirmed this pass** -- would need
+finding who actually posts a `0xC73F`-type event with an `MsnEvent` byte-array payload
+(almost certainly the real Bluetooth-handling code, in `libMcuCenter.so` itself or another
+library entirely, e.g. `libBlueTooth.so`) -- a real, concrete next step, not yet done.
+
+**Consolidated picture for comparing against `custom_ui`'s own architecture**: stock's real
+send-side is genuinely split across at least 3 different mechanisms, not one uniform path --
+(1) `MCUAdapter_BoxP300`'s own structured `makeMCUProtocol()` calls (the majority: `0x81`,
+`0x82`×2, `0xA0`, `0xE1`, plus 2 reply-sends), (2) `MsnCoreApp`'s own direct
+`sendMsgToMcuCenter()` call (`0x88` only), and (3) `McuCenterPlugin`'s generic raw-byte
+event-forwarder (very likely `0x87`, possibly others not yet traced). `custom_ui`'s own HAL
+(`custom_ui/src/hal/mcu_input.cpp`) collapses all of this into one uniform `send_mcu_frame()`
+call used everywhere -- a real, deliberate architectural simplification versus stock's
+3-mechanism split, worth keeping in mind as a difference in kind, not just in which commands
+get sent.

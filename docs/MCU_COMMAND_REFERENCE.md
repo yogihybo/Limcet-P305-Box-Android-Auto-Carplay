@@ -1087,15 +1087,26 @@ method has 3 of the 122 real `writeDatas()` sites. Traced its real dispatch:
   structure of its own. This is a real, generic "send these exact bytes" mechanism, distinct
   from `makeMCUProtocol()`'s structured `(cmd, payload, len)` interface.
 
-**Real, strong hypothesis for where `CMD 0x87` (Bluetooth AT relay) actually comes from**:
-this generic byte-forwarder is a much better structural fit for it than anything in
-`MCUAdapter_BoxP300` -- `CMD 0x87`'s payload is a variable-length, dynamically-built AT
-command string, not a fixed structure, exactly the kind of content something else would
-pre-build as a raw `QByteArray` and hand off via this event mechanism rather than needing its
-own dedicated `makeMCUProtocol()`-style builder. **Not confirmed this pass** -- would need
-finding who actually posts a `0xC73F`-type event with an `MsnEvent` byte-array payload
-(almost certainly the real Bluetooth-handling code, in `libMcuCenter.so` itself or another
-library entirely, e.g. `libBlueTooth.so`) -- a real, concrete next step, not yet done.
+**CORRECTION (2026-09-02, same day): the `CMD 0x87` hypothesis above was weaker than
+presented -- `0xC73F` is not a rare, BT-relay-specific tag.** Checked directly rather than
+trusting the earlier read: the exact same `movw r3,#51007 @ 0xc73f` instruction appears **65
+times** throughout `libMcuCenter.so`, as the routine 4th (`MsnEventType kind`) argument to
+`MsnEvent::MsnEvent(int app, int type, MsnEventType kind)` constructor calls scattered across
+completely unrelated features (confirmed several sites sit inside `onRecvMcuProtocol`'s own
+`CMD 0x03`/`CMD 0x0A` handler bodies, nowhere near Bluetooth). So `0xC73F` is very likely the
+**generic/default `MsnEventType`** this whole subsystem uses for ordinary events, and its
+reuse as a `QEvent::type()` value in `McuCenterPlugin::customEvent()`'s dispatch is
+architecturally coherent (this codebase appears to reuse `MsnEventType` enum values directly
+as custom `QEvent::Type` values when an event needs cross-object delivery via Qt's queue) --
+but that means the byte-array-forwarder case is a **general-purpose delivery path**, not one
+narrowly tied to Bluetooth. The original structural argument for `CMD 0x87` (dynamic,
+variable-length AT-command content fitting a generic forwarder better than a fixed
+`makeMCUProtocol()` call) still stands as a plausible reason to route *through* this
+mechanism, but "which of the many real posters actually carries `CMD 0x87`'s bytes" remains
+genuinely unconfirmed, not just under-evidenced. Real next step, if this is worth finishing:
+search for a raw byte-array construction with `0x87` as its second byte (the cmd position)
+somewhere upstream of one of these `MsnEvent` constructions, rather than trying to narrow by
+the event-kind tag alone.
 
 **Consolidated picture for comparing against `custom_ui`'s own architecture**: stock's real
 send-side is genuinely split across at least 3 different mechanisms, not one uniform path --
@@ -1107,3 +1118,29 @@ event-forwarder (very likely `0x87`, possibly others not yet traced). `custom_ui
 call used everywhere -- a real, deliberate architectural simplification versus stock's
 3-mechanism split, worth keeping in mind as a difference in kind, not just in which commands
 get sent.
+
+## `custom_ui` vs. stock -- direct send-side comparison (2026-09-02)
+
+With both sides now mapped (stock above; `custom_ui`'s own real call sites in
+`custom_ui/src/hal/mcu_input.cpp`), a direct comparison:
+
+| Cmd | `custom_ui` sends it... | Stock's real sender | Match? |
+|---|---|---|---|
+| `0x81` | Once, in `send_startup_sequence()` (`McuInputHal`'s own connect-time init, `mcu_input.cpp:230`) | `MCUAdapter_BoxP300::onInited()` | ✅ Same command, different trigger shape -- stock's is the adapter's own real init hook; `custom_ui`'s is a hardcoded burst sent once at device-open time. Functionally equivalent for this command. |
+| `0x82` | Once, fixed `mode=4` payload, same startup burst | 3 real triggers, **varying mode value** (`onFirstInit()`, `pluginRunningStateChange()` with `2`/`4`/`5`/`7`/`13`/`23`, `showApp()`) | ⚠️ Partial -- `custom_ui` sends one fixed value where stock sends a value that actually varies with *which* app/plugin state changed. `custom_ui` never needs to express "which app is foreground" the way stock's multi-plugin architecture does, so this simplification is likely fine in practice, but it's a real architectural gap, not just a smaller command set. |
+| `0x84` | Sent via `sync_audio_route()`, called from `sync_video_relay()` (camera/mic toggle path) | **Never found** -- exhaustively checked every real `writeDatas()` call in `MCUAdapter_BoxP300` and the shared `MCUAdapter` base class, `0x84` isn't among them | ⚠️ **Real, open provenance gap.** `custom_ui`'s `CMD 0x84` send is hardware-confirmed correct (fixed a real "stuck OEM camera" bug this session), and its *effect* was independently reverse-engineered from the MCU-firmware receive side (`can_app.bin`) -- but stock's own real SoC-side sender was never located. Candidates not yet checked: `McuCenterPlugin`'s generic forwarder, or a class outside `libMcuCenter.so` entirely. |
+| `0x85` | Sent once, empty payload, same startup burst | **Never found** as a proactive send either -- same exhaustive check as `0x84` | ⚠️ Same open gap as `0x84`. The doc's own existing description ("App-protocol ACK... stored into a queue slot") suggests stock might only ever send this *reactively*, in response to something the MCU sends first, rather than proactively at startup -- would explain why no unconditional sender turned up, but not confirmed. |
+| `0xA0` | Sent from `sync_setting()` (generic, used by every settings-screen toggle and `sync_video_relay()`) | `MCUAdapter_BoxP300::syncSettingDataToMcu(int)`, triggered by real user settings-screen interaction | ✅ **The closest 1:1 architectural match of any command** -- both sides route every settings change through one generic per-item sync function. |
+| `0x87`, `0x88`, `0xE1` | **Never sent** | `0x87`: real sender still unconfirmed (see the `McuCenterPlugin` section above). `0x88`: `MsnCoreApp::sendEncryptDatas()`, real init + heartbeat. `0xE1`: `onSendUpdateReadyTimer()` | ✅ **Correctly, deliberately absent, not a gap** -- `custom_ui` handles Bluetooth via BlueZ (not the MCU relay), has no vendor anti-clone DRM to satisfy, and implements no MCU firmware-update flow. Omitting all three is the right call, not missing functionality. |
+| `0xFF` | Never sent | Real sender not found in `MCUAdapter_BoxP300` or the base class either | -- Neither side has a confirmed real sender; open on both sides equally, not a `custom_ui` gap. |
+
+**Real, honest summary**: `custom_ui`'s `CMD 0xA0` path is architecturally faithful to stock's
+real design. Its `CMD 0x81`/`0x82` startup handling captures the *effect* stock achieves
+(handshake + one mode announcement) via a simpler, hardcoded mechanism rather than stock's
+event-driven one -- a reasonable simplification given `custom_ui` has no multi-plugin
+architecture to announce transitions for. The real open items are `CMD 0x84`/`0x85`'s
+still-unconfirmed stock provenance -- both commands work correctly in `custom_ui` (verified
+independently from the MCU-firmware receive side and real hardware testing), but exactly
+which stock code path originates them was not found this pass, so "does `custom_ui` replicate
+stock's real trigger conditions for these two" remains genuinely open rather than confirmed
+either way.

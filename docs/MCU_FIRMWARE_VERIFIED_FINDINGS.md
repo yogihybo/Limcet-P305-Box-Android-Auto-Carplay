@@ -3062,3 +3062,51 @@ packet conflicts. Worth stating plainly rather than only defending the
 "software isn't the cause" framing: the SWD battery-drain risk already
 flagged as a practical concern for future hardware sessions had a real,
 concrete consequence this time, not just a theoretical one.
+
+## Real finding (2026-09-02): `/dev/carback` is dead by deliberate design on this product, not a probe-order bug -- and the real signal it names is still unidentified
+
+Investigated why `/dev/carback` is unavailable at runtime, per the user's request to look
+into reviving it as a cleaner reverse-gear signal (see `docs/MCU_COMMAND_REFERENCE.md`'s
+`CMD 0x12` sections for the context this came from).
+
+**The kernel driver itself (`linux/drivers/soc/arkmicro/ark-carback.c`) is fully intact and
+functional** -- real `probe()`, real `cdev`/`class`/`device_create()` sequence, a genuine
+2026-08-03 fix for a `g_carback`/`itu656` probe-order race (both sides checked directly:
+`ark_carback_probe()`'s own corrective `carback_first_enter()` call, gated on
+`ark1668_itu656_is_probed()`, and `itu656`'s own unconditional call at probe end -- the
+fix is real and correctly resolves that specific race, the "g_carback null error" warning
+seen in boot logs is a harmless one-time artifact of it, not a sign of failure).
+
+**The real, actual cause is upstream of the driver entirely**: `ark1668_limcet_p305.dts`
+(this exact product's real devicetree) has **no `ark-carback` platform device node at
+all** -- removed 2026-07-17, with a real, dated, already-existing comment explaining why:
+
+> "Reversing signal detection -- NOT a SoC GPIO on this product... the real kernel's
+> `carback` platform_device has an all-zero platform_data struct (no GPIO baked in), and
+> MsnCoreApp's active MCU adapter for this product (`MCUAdapter_BoxP300`, `McuType=6`)
+> never touches `GPIOOperater` for it -- reverse-gear detection happens entirely on the
+> companion STM32F105 MCU... which just sends a `backcar enable/disable` command to the
+> SoC over the existing HS-UART arktool link"
+
+So `/dev/carback` isn't a bug to fix or a race to win -- **the node was correctly removed
+because it was never real on this product**: its old `detect-gpios` pin (`&gpio0 5`) was
+actually pinctrl pin 5, silently conflicting with LCD `r3`, for a GPIO signal that never
+existed for this purpose in the first place. Reviving it would mean re-adding a real
+display-pin conflict for a signal path this project's own prior work already confirmed is
+not how this product detects reverse gear. **Not a viable path -- closed, not deferred.**
+
+**The real path forward, per this same comment, is confirming the actual `backcar
+enable/disable` command** -- which, given today's finding that `CMD 0x12` is a hard no-op
+in the real vendor app for every payload this project has ever captured (see
+`MCU_COMMAND_REFERENCE.md`), is very likely **not** `CMD 0x12` after all. Searched
+`libMcuCenter.so` for real string evidence: found genuine candidate vocabulary --
+`"Reverse State"` (`0x95d64`), `"Reverse Condition"` (`0x95db0`) -- distinct from the
+already-understood `"Reverse Track"`/`"Reverse Radar"` strings (`CMD 0x0A`/`CMD 0x04`).
+**Real dead end reached, not glossed over**: neither string has a findable direct code
+xref via either a MOVW/MOVT absolute-address pattern or a literal-pool pointer scan (both
+techniques that worked cleanly for other real fixes traced this session) -- consistent
+with this project's own already-documented caveat elsewhere ("Qt translation catalog
+confirms vocabulary, doesn't resolve remaining ids"): these are very likely Qt
+translation-resource strings (UI label text), not something with a simple direct pointer
+reference from the C++ code that would consume them. **Not resolved** -- the real
+"backcar enable/disable" command this DTS comment refers to remains unidentified.

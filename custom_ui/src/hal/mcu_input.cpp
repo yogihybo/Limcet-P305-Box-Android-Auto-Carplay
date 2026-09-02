@@ -613,6 +613,34 @@ void McuInputHal::sync_video_relay(bool oem) {
     send_mcu_frame(fd_, 0xA0, payload, 2);
     std::printf("%s [HAL:MCU] Synced Camera Type to MCU via CMD 0xA0 (id=0x11, val=0x%02X, %s)\n",
                 core::log_timestamp().c_str(), payload[1], oem ? "Factory/OEM" : "AfterMarket");
+
+    /* Added (2026-09-02, real hardware bug report): "OEM camera stuck
+     * after a settings change, SoC reboot doesn't fix it, but booting
+     * into stock MsnCoreApp does." The id=0x11 send above is gated on
+     * flag_5e (struct offset 0x5e) already reading 1 -- per the
+     * arm-then-trigger design, it only *immediately* forces the
+     * GPIOC13/PC2 relay while the MCU currently thinks it's in reverse;
+     * the rest of the time (the common case, including right after
+     * boot or a settings change made while not reversing) it only
+     * updates the stored preference, and the relay itself doesn't move
+     * until the MCU's own next real GPIOB Pin 2 edge. Since the MCU is
+     * a separate, continuously-powered chip (confirmed unaffected by
+     * any SoC-side reboot), a stale relay state from before a settings
+     * change can persist indefinitely with nothing to give it a fresh
+     * edge to correct itself on.
+     *
+     * CMD 0x84 (see docs/MCU_COMMAND_REFERENCE.md's own entry) drives
+     * the exact same relay dispatcher via a real, separate,
+     * disassembly-confirmed value mapping (0=state0/LVGL/Aftermarket,
+     * 3=state1/OEM) with its own gate polarity that's the opposite of
+     * id=0x11's -- stock MsnCoreApp very plausibly sends this
+     * unconditionally as part of its own settings sync, which is the
+     * most likely reason booting into it fixes what an id=0x11-only
+     * sync cannot. sync_audio_route() already existed as a real HAL
+     * wrapper for this exact command but was never called anywhere --
+     * wiring it in here gives this the same immediate-force capability
+     * stock apparently has. */
+    sync_audio_route(oem ? 0x03 : 0x00);
 }
 
 void send_mcu_audio_route(uint8_t value) {

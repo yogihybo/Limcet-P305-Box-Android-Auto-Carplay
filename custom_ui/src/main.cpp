@@ -528,7 +528,11 @@ int main() {
     // Sync saved camera and microphone mode settings to MCU
     {
         bool factoryCam = core::default_store().get_bool("OriginalCarCamera", false, "General");
-        hal::send_mcu_setting(0x11, factoryCam ? 1 : 0);
+        // 2026-09-02: routed through hal::send_mcu_video_relay() (same
+        // function the Settings toggle uses) rather than a raw id=0x11
+        // send here -- see that function's own comment for why both
+        // call sites need to go through the same path now.
+        hal::send_mcu_video_relay(factoryCam);
 
         bool oemMic = core::default_store().get_bool("OEMMicrophone", false, "Audio");
         hal::send_mcu_setting(0x09, oemMic ? 1 : 0);

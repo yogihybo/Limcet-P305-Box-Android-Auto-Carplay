@@ -664,3 +664,31 @@ exists to pause/interrupt CarPlay/AA video during reverse, not to switch the OEM
 `custom_ui`/`androidauto-sidecar` don't currently watch `/tmp/video` at all. Whether this is
 worth wiring in (e.g. as a corroborating signal, or to replicate stock's own
 pause-mirroring-during-reverse behavior) is a real, new, open decision -- not yet acted on.
+
+**Important caveat, checked directly rather than assumed**: `usr/bin/sink` is **not part of
+this project's own dynamic-rootfs deployment at all** -- `firmware_overlay_dyn/etc/rc.d/rcS`
+explicitly documents dropping the whole `MsnCoreApp`/`blueware`/`sink`/
+`com.arkmicro.auto.service` reference chain. So on the system this project actually ships,
+`ArkReverse`/`enterResverseCallback()` never runs, and nothing is watching `/tmp` for this
+marker regardless of what creates it. This finding explains real *stock* vendor-software
+archaeology (what the DTS comment was originally describing, and why `/tmp/video` never
+turned up chasing UART traffic) but does not by itself unblock anything for the currently
+running system -- it would only become directly useful if `custom_ui`/`androidauto-sidecar`
+deliberately chose to replicate the same marker-file convention as a new signal source.
+
+**Re-checked `CarSignalsWatch::startWatchSignals()` while looking for other candidate GPIO
+watchers** (in case a third pin, e.g. the backcar GPIO 5, was also being watched and missed by
+the earlier bits-24-27 pass): confirmed it still only ever opens exactly 2 `GPIOOperater`
+instances (matching the already-documented GPIO 30/31 audio/BT pair) -- no additional pin.
+One real, previously-unnoted nuance: which pins/tags it watches is **read from
+`MsnApplication::getFactorySetting()`** (a config-driven `QVariant::toUInt()`), not hardcoded
+literals -- meaning the exact pin set is theoretically product-config-dependent, though this
+specific build resolves to the same 2 pins either way.
+
+**Real, cheap next step if this is worth settling for good**: rather than more static
+analysis of the 3 remaining stripped candidates (`carlife`, `libAvin.so`, `ECLink` -- none of
+which is deployed on this project's own system anyway), a live test on real stock firmware
+(`inotifywait -m /tmp` or a simple polling `ls -la /tmp` loop, run while a stock-firmware unit
+is put in reverse) would settle who creates/deletes `/tmp/video` in seconds. Low priority
+given the caveat above -- `sink` isn't in this project's own boot path -- but noted here so
+it isn't re-derived from scratch if ever revisited.

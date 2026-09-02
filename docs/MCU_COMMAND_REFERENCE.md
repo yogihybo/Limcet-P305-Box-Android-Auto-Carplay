@@ -299,20 +299,51 @@ conditions. This is real, concrete confirmation of the mechanism this project ha
 (sending both `id=0x11` and `CMD 0x84` together in `sync_video_relay()`) since before this
 byte-level proof existed.
 
-**New, previously-undocumented lead found while locating every caller of the shared
-dispatcher**: a *third* real call site exists at `0x08008b7a`/`0x08008b82`, inside a handler
-block that sequentially writes struct offsets `0x42`-`0x45` (matching the offset pattern
-already documented elsewhere in this doc for `CMD 0xA0 id=0x0B`-`id=0x0F`'s `PA15`/`PB8`/`PB9`
-relay-trio subsystem) -- and the *last* of those blocks (offset `0x45`, i.e. very likely
-`id=0x0F`, "Right Camera") also checks the same `0x5e` flag (`0x20000236`) before calling the
-shared `GPIOC13`/`PC2` dispatcher with state `2` or `3`. **Not confirmed to the exact `id`
-value with full certainty this pass** (didn't individually re-trace the whole `0x0B`-`0x0F`
-switch body to nail down which specific case this tail belongs to) -- but if this holds up,
-it means the `GPIOC13`/`PC2` audio/video relay isn't a 2-command system (`CMD 0x84` +
-`CMD 0xA0 id=0x11`) at all, it's at least a 3-command one, with `id=0x0F` ("Right Camera",
-previously documented as driving only the *separate* `PA15`/`PB8`/`PB9` trio) also reaching
-into the shared relay under some conditions. Real, concrete follow-up for a future pass:
-individually trace the `0x0B`-`0x0F` switch body in full to confirm which exact `id` this is.
+**CORRECTION (2026-09-02, same day): the "third call site" above was id=0x11 itself, not a
+new command** -- re-verified by decoding `CMD 0xA0`'s real `tbb` (table-branch-byte) jump
+table directly from the binary's own bytes (base `0x080089e6`, 18 real entries, bounds-checked
+`id < 18` beforehand, matching the doc's existing "18-entry" claim) rather than assuming from
+code shape alone. `id=0x0F` -> `0x08008b46`, `id=0x10` -> `0x08008b52`, `id=0x11` ->
+`0x08008b5e` -- the call sites at `0x08008b7a`/`0x08008b82` are inside `id=0x11`'s *own* case
+body, exactly where expected. No third command reaches the shared dispatcher this way; the
+earlier "very likely id=0x0F" guess was wrong, corrected here rather than left standing.
+
+**The real news is bigger: found the literal MCU-side source of the hardware-autonomous
+relay-switching mechanism itself.** Tracing where the *previous* pass's `0x08008548`-area
+block (originally mis-assumed to be part of `CMD 0xA0 id=0x11`'s own body -- it isn't, per the
+correction above) actually comes from led to a genuinely new function, `0x080084A4`, which
+**is not reached from either the SoC->MCU dispatch table or the `CMD 0xA0` id-switch at all**
+-- it's a free-standing, periodically-invoked GPIO scanner:
+
+- Calls 5 small wrapper functions, each reading one real GPIO pin via a shared
+  `port_base + mask` helper (`0x08005582`) -- decoded directly from each wrapper's own
+  literal-pool port-base value (STM32F105 standard: GPIOA=`0x40010800`, GPIOB=`0x40010C00`,
+  GPIOC=`0x40011000`): **`GPIOA Pin 8`**, **`GPIOC Pin 9`**, **`GPIOC Pin 8`**,
+  **`GPIOC Pin 7`**, and **`GPIOB Pin 2`** -- packed into bits `0`-`4` of one combined state
+  byte.
+- Compares the combined state against the *previous* scan's value (stored at `0x080085d8`)
+  and returns immediately if unchanged -- a real, deliberate change-only/edge-triggered design,
+  not a naive poll-and-act-every-time loop.
+- On a real change: bits `0`/`1` (`PA8`/`PC9`) combine into a debounced 2-bit "mode" value
+  (stored at struct offset `0x36`, requires 2 consistent reads before committing -- real
+  hardware debounce); bits `2`/`3` (`PC8`/`PC7`) combine similarly into offset `0x46`; **bit
+  `4` (`GPIOB Pin 2`) is extracted, inverted (`rsb r0,r0,#1`), debounced the same way, and on
+  a confirmed change writes the shared `0x5e` flag (`0x20000236`, the exact byte this section
+  already proved `CMD 0x84`/`CMD 0xA0 id=0x11` both gate on) and calls the shared relay
+  dispatcher (`0x080058A4`) directly** -- the real call sites are `0x0800859e`/`0x080085bc`/
+  `0x080085ce`, which is what this doc's *previous* pass had mistakenly attributed to
+  `id=0x11`'s own body.
+
+**This is the real, concrete mechanism behind the already-hardware-confirmed "MCU switches the
+OEM camera relay autonomously, with `custom_ui` killed entirely" finding elsewhere in this
+doc** -- not just corroborating evidence, the literal source code for it. `GPIOB Pin 2` is
+read directly by dedicated, debounced, change-triggered polling code, independent of any UART
+command from the SoC. **Real, valuable open follow-up, not chased this pass**: what `PA8`,
+`PC9`, `PC8`, and `PC7` physically correspond to on this board -- their debounced 2-bit/2-bit
+outputs (struct offsets `0x36`/`0x46`) aren't yet traced to any consumer, and are real
+candidates for some of this doc's still-unconfirmed bit-meaning gaps (e.g. `CMD 0x06`'s
+vehicle-dynamics bits, or the "backcar" mechanism's remaining loose threads) given they sit in
+the exact same scan routine as the one pin already proven load-bearing.
 
 **`CMD 0x82`'s own handler (`0x08008bd4`) re-confirmed independently**: reads `payload[0]`
 from the same `0x20000238`-based "current frame" struct at offset `+2` (consistent with the

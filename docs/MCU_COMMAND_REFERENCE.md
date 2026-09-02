@@ -29,6 +29,44 @@ same pattern already used for `CMD 0x84`/`CMD 0xA0 id=0x11`'s shared relay dispa
 
 ---
 
+## The command-number scheme (2026-09-03)
+
+Not sequential, but genuinely organized once every confirmed command is laid out by value —
+worth knowing before reading the two tables below, since it explains why the numbers look the
+way they do.
+
+**Direction correlates strongly with bit `7` (`0x80`).** Every real, confirmed SoC→MCU
+command (`0x81`, `0x82`, `0x83` — found only on the `BoxC280` vehicle-adapter variant, not
+this product's own `BoxP300` — `0x84`, `0x85`, `0x87`, `0x88`, `0xA0`, `0xE1`, `0xFF`) has the
+high bit set (`≥0x80`). Every MCU→SoC command is `<0x80` *except* three: `0x7F` (sits right at
+the boundary) and `0xE2`/`0xE4` (the firmware-update handshake replies — a real, deliberate
+crossover, since that exchange is a negotiation rather than one-directional telemetry). Not a
+perfect rule, but clearly the dominant organizing bit.
+
+**Within each direction, values cluster by function, not by strict sequence:**
+
+| Range | Direction | Function |
+|---|---|---|
+| `0x00`–`0x06`, `0x0A` | MCU→SoC | Real-time vehicle telemetry (headlights, buttons, HVAC, radar, dynamics, steering) |
+| `0x12` | MCU→SoC | Reverse-camera-adjacent (the confirmed-unreliable one) |
+| `0x20`–`0x22` | MCU→SoC | Touch/UI input |
+| `0x30` | MCU→SoC | Display config |
+| `0x40`, `0x60`, `0x7F` | MCU→SoC | Status/telemetry-burst markers, crypto reply, version report |
+| `0xE2`, `0xE4` | MCU→SoC | Firmware-update handshake replies |
+| `0x81`–`0x88` | SoC→MCU | Basic session control (init, mode, audio, ACK, BT relay, crypto challenge) — **`0x86` is a real, confirmed gap**, never found sent by any adapter variant checked |
+| `0xA0` | SoC→MCU | Settings sync — its own nested 18-entry `id` sub-dispatch, not a new top-level command per setting |
+| `0xE1` | SoC→MCU | Enter bootloader (pairs with the MCU's own `0xE2`/`0xE4` replies — same "E-family" spanning both directions) |
+| `0xFF` | SoC→MCU | System reset — its own nested sub-`id` dispatch (`0x00`–`0x09` no-op, `0x7F` acts) |
+
+**Real takeaway**: this reads as a genuinely coherent design — high bit for direction, value
+ranges grouped by subsystem, and two commands (`0xA0`, `0xFF`) deliberately using a
+second-level sub-ID rather than allocating a new top-level command per setting — not an
+ad-hoc numbering. Very likely inherited from a broader shared-firmware convention this same
+library reuses across every vehicle-adapter variant it contains (`BoxP100`...`BoxP900`,
+`BoxC2xx`, etc.), not something invented specifically for this Prado build.
+
+---
+
 ## SoC → MCU (commands the SoC sends)
 
 The real inbound dispatch table (`0x0800B9E4` in `can_app.bin`) has exactly **9 entries** —

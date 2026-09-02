@@ -39,7 +39,7 @@ MCU firmware.
 | Cmd | Meaning | Values / detail | Status |
 |---|---|---|---|
 | `0x81` | Init handshake / keepalive, resets internal state slots | `payload[0]=0x01` fixed | ✅ confirmed (`0x080088B5`) |
-| `0x82` | App foreground/mode change (`onModeAppChanged`) | Send-side `mode` `2`/`4`/`5`/`7`/`13` append extra byte `8`; `mode=23` appends `0x0A`; else nothing appended. Receive-side, MCU `payload[0]==1` writes state struct `0x20000282` (`offset[0]=1,[1]=4`); else `offset[0]=2,[1]=1` — both call the same internal event-queue function. **Re-confirmed independently (2026-09-02)** via fresh disassembly straight from `can_app.bin`'s own real dispatch table (handler `0x08008bd4`) rather than trusting the prior doc pass — byte-for-byte the same finding. **Unconfirmed hypothesis, still open**: struct might be the input-focus switcher between factory/OEM and app mode (which subsystem gets knob ticks) — no consumer found that branches on it (89 real load sites, too broad to trace fully; not re-attempted this pass). A separate report's claim this was already proven ("routes rotary knob event target and CAN arbitration priority") was checked and rejected — overstates the trace. | ✅ confirmed both directions |
+| `0x82` | App foreground/mode change (`onModeAppChanged`) | Send-side `mode` `2`/`4`/`5`/`7`/`13` append extra byte `8`; `mode=23` appends `0x0A`; else nothing appended. Receive-side, MCU `payload[0]==1` writes state struct `0x20000282` (`offset[0]=1,[1]=4`); else `offset[0]=2,[1]=1` — both call the same internal event-queue function. **RESOLVED (2026-09-02)**, see the [full consumer trace](#cmd-0x82s-real-consumer-2026-09-02----not-an-input-focus-switcher-a-can-bus-mode-announcement) below: the old "input-focus switcher" hypothesis is wrong. The real consumer narrows the 89-site count down to the 2 that actually read the specific offsets `CMD 0x82` writes, and it transmits real outbound CAN messages when the state reaches a specific value -- a mode announcement to the rest of the vehicle's CAN bus, not a local knob/input router. | ✅ confirmed both directions, consumer resolved |
 | `0x84` | Audio route select — **also drives the same `GPIOC13`/`PC2` relay dispatcher as `CMD 0xA0 id=0x11`**, see the [4-state table](#cmd-0x84--cmd-0xa0-id0x11-shared-relay-dispatcher) below | Masked to 4 bits, `≥6` ignored. Value `0` → `"AT+AUDROUTE=1\r\n"` + relay state `0`; value `3` → `"AT+AUDROUTE=2\r\n"` + relay state `1`; `1`/`2`/`4`/`5` → state-only, no relay action. **RESOLVED (2026-09-02)**, see the [full `CMD 0x82`/`0x84` gate trace](#cmd-0x82--cmd-0x84-real-mcu-side-trace-2026-09-02----the-shared-gate-conflict-is-settled) below: the "2 unreconciled conflicts" are now 1 resolved + 1 reconfirmed. Read-byte conflict (`payload[1]` vs `payload[0]`) reconfirmed as a real, consistent frame-struct convention (offset `+2`=`payload[0]`, `+3`=`payload[1]`), not an actual disagreement. **Gate-polarity "conflict" is resolved**: both `CMD 0x84` and `CMD 0xA0 id=0x11` read/write the exact same absolute SRAM byte (`0x20000236`) for their offset-`0x5e` check — genuinely the same flag, opposite required polarity by design (arm-then-trigger vs. fire-when-not-already-armed), not two independent flags. | ✅ confirmed, gate-sharing conflict resolved |
 | `0x85` | App-protocol ACK | `payload[0..2]` stored into an internal queue slot | ✅ confirmed shape / ❌ clean-room reply content is an approximation |
 | `0x87` | Bluetooth AT-command relay, verbatim passthrough to `USART3` (`PB10`/`PB11`) | Real bug: `AT+PIN=0000`'s digit-substitution is unwired, very likely always sent malformed | ✅ confirmed (`0x080087A1`) |
@@ -369,6 +369,42 @@ from the same `0x20000238`-based "current frame" struct at offset `+2` (consiste
 (`0x08006228`) with identical arguments, matching the existing doc entry exactly. The
 already-documented "who consumes `0x20000282`" question (89 real load sites) was not
 re-attempted this pass -- still the real remaining gap for this command.
+
+## `CMD 0x82`'s real consumer (2026-09-02) -- not an input-focus switcher, a CAN-bus mode announcement
+
+The "89 real load sites, too broad to trace fully" excuse this doc carried for a while turned
+out to be solvable by narrowing the search, not by reading all 89: `CMD 0x82`'s receive-side
+handler only ever writes struct `0x20000282`'s **offset `0` and offset `1`** -- so the real
+question is just "which of the 89 sites read *those two specific offsets*," not "what does
+every site referencing this struct do." A precise sweep (every real `ldrb`/`ldrb.w` read of
+offset `0` or offset `1` specifically, not the struct's other fields) found exactly **2** real
+sites, both far more informative than the vague "89, too broad" framing suggested:
+
+**Site 1 (`0x08009194`)**: a diagnostic/status-request responder. On a specific incoming query
+sub-value, it builds and sends a real outbound frame (via the same generic `0x08007e0c`
+frame-builder already found reporting `PA8`/`PC9`/`PC8`/`PC7`'s board-config values back over
+the bus) containing offset `0`'s value (normalized to `1`/`2`) and offset `1`'s raw value --
+i.e. **`CMD 0x82`'s current state gets echoed back verbatim when a diagnostic tool asks for
+it**, the same "readback on query" pattern already found for the board-config pins.
+
+**Site 2 (`0x080093d0`), the real behavioral one**: gated on offset `0` (`!= 2` to proceed at
+all), then checks offset `1` against `4` specifically -- **exactly the value the receive-side
+handler writes when `payload[0]==1`**. When it matches, this function calls a real
+retry-loop transmit helper (`0x08004684`, 3 attempts, real failure handling) **twice**, once
+with message type `6`/state `0`, once with type `5`/state `2`. This is a genuine, real
+consequence -- the MCU announces a mode transition to the rest of the vehicle's CAN bus by
+transmitting 2 distinct outbound messages, not by rerouting which local subsystem receives
+knob/input ticks.
+
+**This settles the old hypothesis: `CMD 0x82` is not an input-focus switcher.** The
+"factory/OEM vs. app mode, which subsystem gets knob ticks" guess (already flagged as
+unconfirmed, and the separate report's stronger "routes rotary knob event target and CAN
+arbitration priority" claim already rejected as overstating the evidence) doesn't hold up --
+the real, traced consequence is outbound CAN telemetry, informing other ECUs on the bus that
+the head-unit's foreground app changed, plus diagnostic readback. Real, honest gap left open:
+the exact real-world meaning of message types `5`/`6` (what other ECU consumes them, and
+what changing "state 0"/"state 2" actually signals) is outside what `can_app.bin` alone can
+answer -- that would need the receiving ECU's own firmware or a real CAN-bus capture.
 
 ## Full `CMD 0x03` byte-level decode (2026-09-02) -- a dual-zone HVAC frame calling straight into `AirConditionDlg`
 

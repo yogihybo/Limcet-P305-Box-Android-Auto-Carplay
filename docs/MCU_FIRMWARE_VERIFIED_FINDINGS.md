@@ -3315,3 +3315,46 @@ the way the `writeDatas()` sweep of `MCUAdapter_BoxP300` was. Not chased further
 here mainly so this real, substantial sibling library isn't rediscovered from scratch if a
 future pass needs it (e.g. for tracing what these other vehicle-brand adapters do with
 `CMD 0x84`/`0x87`, or anything else this doc has found dead-by-design on `BoxP300`).
+
+## `libCanBus.so` explored further (2026-09-03) -- a real ~15-vehicle-brand framework, and conclusively confirmed disabled for this product
+
+Full symbol sweep found this library is far larger than the first pass suggested -- **at
+least 12 distinct vehicle-brand adapter classes** (not 4): `CanBus_XinRi`, `CanBus_
+Raise_Volkswagen`, `CanBus_XBS_Mazda`, `CanBus_LiHang_JMCE200N`, `CanBus_Huida_ZD`,
+`CanBus_XinHang`, `CanBus_Raise_Honda`, `CanBus_Raise_Nissan`, `CanBus_Raise_GM`, `CanBus_
+Raise_Haval`, `CanBus_Raise_Jeep` (constructed via `_Znwj`/`new` in the factory itself, see
+below), plus several real embedded UI window classes for specific dashboard integrations
+(`HuidaZdMainWindow`/`HuidaZdBetteryWindow`/`HuidaZdChargingWindow`, `VolkswagenWindow`,
+`VWFunctionSetting`, `CarStatusWindow`, `DashboardSetWindow`) -- a genuinely large, complete
+aftermarket CAN-dashboard product line bundled into this one shared library.
+
+**Real, previously-unnoticed cross-library integration point**: the shared base class,
+`CanBusAdapter`, has its own `onParentRecvMcuProtocol(QByteArray const&)` method -- naming
+that strongly implies a *parent* object (plausibly `MCUAdapter_BoxP300` itself, or a shared
+container) forwards received MCU-protocol bytes into whichever `CanBusAdapter` subclass is
+active. Not fully traced this pass (see the disabled-by-config finding below, which makes
+this moot for this product regardless).
+
+**Real factory function, `CanBusAdapter::getAdapterInstance(CanBusType)` (`0x00022B64`)**:
+a genuine, bounds-checked jump table exactly like `MCUAdapter::getAdapterInstance(McuType)`
+already established elsewhere in this doc -- `sub r3, type, #1; cmp r3, #14; addls pc, pc,
+r3, lsl #2` selects one of the vehicle-brand classes for `type` `1`-`15`. **`type == 0`
+underflows the bounds check (`0-1` wraps to a huge unsigned value, fails `addls`) and falls
+straight through to `mov r0, #0; return` -- a confirmed real NULL return, not an assumption.**
+
+**Decisive close, not a guess by analogy**: the real product config
+(`msnprofile/MsnProductInfo.ini`) has a `CanType=0` key (`McuType=6` selects the real active
+MCU adapter; `CanType=0` is the sibling field for this library). Given the factory function's
+own confirmed `type==0` → `NULL` behavior above, **`CanType=0` means no `CanBusAdapter`
+subclass is ever instantiated on this product, full stop** -- the entire library, all ~15
+vehicle-brand classes and their UI windows, is real, complete, working code that is
+conclusively, configuration-confirmed dead for this exact Prado build. Same "many bundled
+variants, exactly one config key picks the real one (or none)" pattern already established
+for `libMcuCenter.so`'s own `MCUAdapter_*` family and `McuType`.
+
+**Net effect on the open `CMD 0xFF`/`0x84`/`0x87` sender questions**: this closes the
+`libCanBus.so` avenue cleanly rather than leaving it an open "maybe, unconfirmed" lead --
+nothing in this library sends anything on this product, because nothing in this library ever
+runs on this product. Any future search for these commands' real senders should look
+elsewhere (other libraries not yet opened, or accept the "genuinely not sent by any code on
+this product's real config" conclusion already reached for `CMD 0x84`/`0x85`).

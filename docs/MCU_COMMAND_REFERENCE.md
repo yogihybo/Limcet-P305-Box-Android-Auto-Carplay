@@ -353,13 +353,15 @@ read directly by dedicated, debounced, change-triggered polling code, independen
 command from the SoC.
 
 **Follow-up chased and closed (2026-09-02, same day)**: traced `PA8`/`PC9`/`PC8`/`PC7`'s real
-consumers in `can_app.bin` (full detail in `MCU_FIRMWARE_VERIFIED_FINDINGS.md`). They are
+consumers in `can_app.bin` (full detail, including a same-day correction to how the `PC8`/
+`PC7` consumer was first characterized, in `MCU_FIRMWARE_VERIFIED_FINDINGS.md`). They are
 **not** candidates for `CMD 0x06`'s or any other command's vehicle-dynamics bits after all --
-`PA8`/`PC9` select between 3 internal CAN-message-ID dispatch tables, and `PC8`/`PC7` get
-echoed back over the bus only when a diagnostic sub-command queries for them. Real behavior
-reads as a hardware board-variant/configuration selector (consistent with this firmware's
-multi-vehicle-brand build convention), not a live sensor input -- corrected here rather than
-left as an open lead that turned out to be a dead end.
+`PA8`/`PC9` select between 3 internal CAN-message-ID dispatch tables, and `PC8`/`PC7` feed a
+real (not inert) `CMD 0x30` "Arkdata display-profile selector" send, using the exact one
+sub-type value the SoC-side dispatch treats as meaningful. Real behavior reads as a hardware
+board-variant/configuration selector (consistent with this firmware's multi-vehicle-brand
+build convention), not a live sensor input -- corrected here rather than left as an open lead
+that turned out to be a dead end.
 
 **`CMD 0x82`'s own handler (`0x08008bd4`) re-confirmed independently**: reads `payload[0]`
 from the same `0x20000238`-based "current frame" struct at offset `+2` (consistent with the
@@ -370,7 +372,7 @@ from the same `0x20000238`-based "current frame" struct at offset `+2` (consiste
 already-documented "who consumes `0x20000282`" question (89 real load sites) was not
 re-attempted this pass -- still the real remaining gap for this command.
 
-## `CMD 0x82`'s real consumer (2026-09-02) -- not an input-focus switcher, a CAN-bus mode announcement
+## `CMD 0x82`'s real consumer (2026-09-02) -- not an input-focus switcher; one path is a real MCU->SoC `CMD 0x12` sender, the other is genuine CAN telemetry
 
 The "89 real load sites, too broad to trace fully" excuse this doc carried for a while turned
 out to be solvable by narrowing the search, not by reading all 89: `CMD 0x82`'s receive-side
@@ -378,33 +380,62 @@ handler only ever writes struct `0x20000282`'s **offset `0` and offset `1`** -- 
 question is just "which of the 89 sites read *those two specific offsets*," not "what does
 every site referencing this struct do." A precise sweep (every real `ldrb`/`ldrb.w` read of
 offset `0` or offset `1` specifically, not the struct's other fields) found exactly **2** real
-sites, both far more informative than the vague "89, too broad" framing suggested:
+sites.
 
-**Site 1 (`0x08009194`)**: a diagnostic/status-request responder. On a specific incoming query
-sub-value, it builds and sends a real outbound frame (via the same generic `0x08007e0c`
-frame-builder already found reporting `PA8`/`PC9`/`PC8`/`PC7`'s board-config values back over
-the bus) containing offset `0`'s value (normalized to `1`/`2`) and offset `1`'s raw value --
-i.e. **`CMD 0x82`'s current state gets echoed back verbatim when a diagnostic tool asks for
-it**, the same "readback on query" pattern already found for the board-config pins.
+**CORRECTION (2026-09-02, same day): Site 1 is a real MCU->SoC `CMD 0x12` sender over
+`ttyHS0`, not a generic "over the bus" readback -- this is a significant, load-bearing
+finding, not a footnote.** Re-derived `0x08007e0c`'s exact calling convention mechanically
+(its own prologue: `mov r7,r0` (payload pointer), `mov r5,r1`, `mov r9,r2`; then it writes
+`[sync=0x2E][r9][r5][payload, r5 bytes][checksum]` -- so the caller's second argument is
+`len`, third is `cmd`) rather than trusting an earlier, backwards guess. At the real call site
+(`0x0800917a`): `movs r2,#18; movs r1,#3` → **`cmd=18` (`0x12`), `len=3`** -- a real `CMD 0x12`
+frame, exactly matching this doc's own `[0x2E][cmd][len][payload][checksum]` format and every
+real `CMD 0x12` capture's length (3 bytes) this whole project has ever gotten.
 
-**Site 2 (`0x080093d0`), the real behavioral one**: gated on offset `0` (`!= 2` to proceed at
-all), then checks offset `1` against `4` specifically -- **exactly the value the receive-side
-handler writes when `payload[0]==1`**. When it matches, this function calls a real
-retry-loop transmit helper (`0x08004684`, 3 attempts, real failure handling) **twice**, once
-with message type `6`/state `0`, once with type `5`/state `2`. This is a genuine, real
-consequence -- the MCU announces a mode transition to the rest of the vehicle's CAN bus by
-transmitting 2 distinct outbound messages, not by rerouting which local subsystem receives
-knob/input ticks.
+- If the incoming query's own sub-byte is `0`: sends `CMD 0x12` payload `[1, 17, 0]` --
+  `payload[1]=17` (`0x11`) is a literal, hardcoded value. **This is the exact one case
+  `libMcuCenter.so`'s real dispatch (`0x38144`, traced earlier in this doc) treats as
+  semantically meaningful** -- the only value that posts the real `MsnEvent 0x5026`.
+- Otherwise: sends `CMD 0x12` payload `[1-or-2, X, 0]`, where `X` is **`CMD 0x82`'s own raw
+  state byte** -- literally whatever the receive-side handler most recently wrote (`4` when
+  the SoC sent `payload[0]==1`, `1` otherwise).
+
+**Why this matters well beyond just closing the consumer question**: every real `CMD 0x12`
+capture this whole project has ever gotten has `payload[1]` of `0x04` or `0x01` -- exactly the
+two values `CMD 0x82`'s state field can hold. This function is a strong, concrete candidate
+for where every one of those captures actually originated -- not a dedicated reverse-gear
+signal at all, but this app-mode-state echo mechanism riding on `CMD 0x12`'s frame format. If
+`MsnCoreApp` sends `CMD 0x82` during ordinary app/UI-state transitions (plausibly including
+whatever accompanies a headlights-driven night-mode switch), this would explain the
+already-confirmed real headlights-alone false trigger documented earlier in this doc. **Not
+yet proven end-to-end** -- would need confirming `MsnCoreApp` actually sends `CMD 0x82` around
+a headlights event, which is outside what `can_app.bin` alone can show.
+
+**Site 1's real trigger mechanism, traced as far as time allowed**: it's one entry (item id
+`4`) in a real priority-based event scheduler (`0x0800B8A0`), which reads a "pending flags"
+byte pair at SRAM `0x20001365+5`/`+6`, picks one set bit by fixed priority order, and queues
+`(type=4, itemId)` via `0x08005B90` into a type-indexed dispatch table (`~0x0800BA2C`, our
+handler at index `4`). Item id `4` corresponds to **bit `1`** of the flags byte at `+5`. **Not
+chased to the end**: which specific event actually sets that bit -- searched the 3 other real
+users of this struct (all inside dense CAN-message-ID-matching code, `cmp r5,#0xD3`/`#0x50`/
+`#0xD6`-style real arbitration-ID checks) without finding the exact setter in the time spent.
+Real, bounded follow-up if this is ever worth finishing.
+
+**Site 2 (`0x080093d0`) remains genuine CAN telemetry, unaffected by the Site-1 correction
+above** -- it calls a distinctly different function (`0x08004684`, a retry-loop wrapping real
+CAN-mailbox-availability checks at `0x08006ba4` and a real transmit call at `0x08006c38`, not
+`0x08007e0c`'s UART frame format at all). Gated on offset `0 != 2` and offset `1 == 4`
+(matching `payload[0]==1`'s written state), it calls that CAN transmit path twice, with
+message type `6`/state `0` then type `5`/state `2`. Real, honest gap left open: the exact
+real-world meaning of message types `5`/`6` is outside what `can_app.bin` alone can answer --
+would need the receiving ECU's own firmware or a real CAN-bus capture.
 
 **This settles the old hypothesis: `CMD 0x82` is not an input-focus switcher.** The
 "factory/OEM vs. app mode, which subsystem gets knob ticks" guess (already flagged as
 unconfirmed, and the separate report's stronger "routes rotary knob event target and CAN
 arbitration priority" claim already rejected as overstating the evidence) doesn't hold up --
-the real, traced consequence is outbound CAN telemetry, informing other ECUs on the bus that
-the head-unit's foreground app changed, plus diagnostic readback. Real, honest gap left open:
-the exact real-world meaning of message types `5`/`6` (what other ECU consumes them, and
-what changing "state 0"/"state 2" actually signals) is outside what `can_app.bin` alone can
-answer -- that would need the receiving ECU's own firmware or a real CAN-bus capture.
+the real, traced consequences are a `CMD 0x12` echo back to the SoC (Site 1) and genuine
+outbound CAN telemetry to another ECU (Site 2), neither of which reroutes local input focus.
 
 ## Full `CMD 0x03` byte-level decode (2026-09-02) -- a dual-zone HVAC frame calling straight into `AirConditionDlg`
 

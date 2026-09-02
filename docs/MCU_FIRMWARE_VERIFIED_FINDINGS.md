@@ -685,20 +685,46 @@ doc, chased down now):
   an incoming key value (read from a different struct, offset `0x12d`) against a handler
   pointer -- structurally identical to a mode-dependent CAN-message-ID dispatch table swap.
 - `PC8`/`PC7` (bits `2`/`3`) combine into a debounced value at offset `0x46` (`0x2000021E`).
-  Real consumer found: a diagnostic-response builder (`0x0800910c`) that embeds this value
-  (and, for a different sub-id, the `0x36` value above) as a payload byte in an outgoing frame
-  built via `0x08007e0c` -- i.e. these values get **reported back over the bus when a
-  diagnostic sub-command queries for them**, not consumed internally as live vehicle-state
-  inputs.
 
-**Real correction to the follow-up note left in the command-ref doc**: these 4 pins are NOT
-good candidates for `CMD 0x06`'s (or any other command's) still-unconfirmed vehicle-dynamics
-bit meanings after all -- their real, traced behavior (mode-selecting between internal CAN
-dispatch tables; diagnostic readback on query) reads much more like a **hardware
-board-variant/configuration selector** (matching this firmware's own multi-vehicle-brand
-build convention, e.g. the `DCn32-VOLVO`/`DCn32-ACURA` naming already documented at the top of
-this doc) than a live door/handbrake/turn-signal sensor input. Recorded here so the earlier
-speculation isn't mistaken for a settled lead.
+**CORRECTION (2026-09-02, same day): the `0x0800910c` function is not an inert diagnostic
+readback -- it's a real, load-bearing `CMD 0x30` (Arkdata display-profile selector) sender,
+and `PC8`/`PC7` specifically feed its one meaningful case.** Re-derived `0x08007e0c`'s exact
+calling convention mechanically this time (see the `CMD 0x82` section of
+`MCU_COMMAND_REFERENCE.md` for the full derivation: second argument = `len`, third = `cmd`),
+correcting the earlier "reported back over the bus" framing, which never identified which real
+command this actually was. `0x0800910c` takes a selector argument (`r4`, presumably the
+scheduler item id -- see below) and branches:
+
+- `r4==0`: sends `CMD 0x30` payload `[0x00, <PA8/PC9's 0x36 value>]`.
+- `r4==12`: sends `CMD 0x30` payload `[0x0C, <PC8/PC7's 0x46 value>]` -- **`payload[0]==0x0C`
+  is the exact, single sub-type `MCUAdapter_BoxP300`'s real SoC-side dispatch treats as
+  meaningful** (already documented elsewhere in this doc set as the real trigger for rewriting
+  `/msnprofile/arkdata.ini`), so this is a genuine, real consequence, not a no-op.
+- any other `r4`: sends `CMD 0x30` payload `[0x00, 0x00]` -- a real send, but a confirmed no-op
+  on the receiving end per the same SoC-side dispatch rule.
+
+**So `PC8`/`PC7`'s combined value is very likely a real selector for which arkdata display
+profile gets loaded**, not just a readback value -- `PA8`/`PC9`'s value, by contrast, only
+ever reaches the SoC through the confirmed-inert `r4==0` sub-type, so its role stays limited
+to the internal CAN-dispatch-table selection already found above. Exact mapping from
+`PC8`/`PC7`'s raw 2-bit value to a specific arkdata profile name wasn't traced further --
+the SoC-side `arkdata.ini` rewrite logic (`libMcuCenter.so`) would need its own pass.
+
+**`r4`'s real source, traced as far as time allowed**: `0x0800910c` is called with a fixed
+type argument via the same priority-based event scheduler documented in the `CMD 0x82`
+section above (`0x0800B8A0` → `0x08005B90`, type-indexed dispatch table). Item id `0` and item
+id `12` (matching "bit `6`" in that scheduler's priority list) both plausibly route here --
+not confirmed to the exact table slot this pass, same honest gap as `CMD 0x82`'s own Site 1
+trigger.
+
+**Real correction to the follow-up note left in the command-ref doc, still standing**: these 4
+pins are still NOT good candidates for `CMD 0x06`'s (or any other command's) still-unconfirmed
+vehicle-dynamics bit meanings -- their real, traced behavior (mode-selecting between internal
+CAN dispatch tables; a real but narrow arkdata-profile trigger) still reads like a **hardware
+board-variant/configuration selector** (matching this firmware's own multi-vehicle-brand build
+convention, e.g. the `DCn32-VOLVO`/`DCn32-ACURA` naming already documented at the top of this
+doc) rather than a live door/handbrake/turn-signal sensor input -- that part of the original
+finding holds even after this correction to how "diagnostic readback" was characterized.
 
 **Scope note**: none of this is part of the SoC<->MCU UART protocol `MCU_COMMAND_REFERENCE.md`
 catalogs -- it's internal MCU-side CAN-bus/board-configuration machinery, which is why it

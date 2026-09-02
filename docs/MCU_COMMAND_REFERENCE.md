@@ -39,8 +39,8 @@ MCU firmware.
 | Cmd | Meaning | Values / detail | Status |
 |---|---|---|---|
 | `0x81` | Init handshake / keepalive, resets internal state slots | `payload[0]=0x01` fixed | ✅ confirmed (`0x080088B5`) |
-| `0x82` | App foreground/mode change (`onModeAppChanged`) | Send-side `mode` `2`/`4`/`5`/`7`/`13` append extra byte `8`; `mode=23` appends `0x0A`; else nothing appended. Receive-side, MCU `payload[0]==1` writes state struct `0x20000282` (`offset[0]=1,[1]=4`); else `offset[0]=2,[1]=1` — both call the same internal event-queue function. **Unconfirmed hypothesis**: struct might be the input-focus switcher between factory/OEM and app mode (which subsystem gets knob ticks) — no consumer found that branches on it (89 real load sites, too broad to trace fully). A separate report's claim this was already proven ("routes rotary knob event target and CAN arbitration priority") was checked and rejected — overstates the trace. | ✅ confirmed both directions |
-| `0x84` | Audio route select — **also drives the same `GPIOC13`/`PC2` relay dispatcher as `CMD 0xA0 id=0x11`**, see the [4-state table](#cmd-0x84--cmd-0xa0-id0x11-shared-relay-dispatcher) below | Masked to 4 bits, `≥6` ignored. Value `0` → `"AT+AUDROUTE=1\r\n"` + relay state `0`; value `3` → `"AT+AUDROUTE=2\r\n"` + relay state `1`; `1`/`2`/`4`/`5` → state-only, no relay action. **2 real, unreconciled conflicts**: (1) this session's MCU-side disassembly reads the value from frame `+3` (`payload[1]`), but `custom_ui`'s `handle_audio_route()` reads `payload[0]`; (2) this command's own gate ("proceed if struct offset `0x5e`==0") is the *opposite* polarity of `CMD 0xA0 id=0x11`'s gate ("proceed if its own offset `0x5e`==1") — read from different SRAM struct bases, so whether these are the same flag or two independent ones is unresolved. | ✅ confirmed, ⚠️ 2 unreconciled conflicts |
+| `0x82` | App foreground/mode change (`onModeAppChanged`) | Send-side `mode` `2`/`4`/`5`/`7`/`13` append extra byte `8`; `mode=23` appends `0x0A`; else nothing appended. Receive-side, MCU `payload[0]==1` writes state struct `0x20000282` (`offset[0]=1,[1]=4`); else `offset[0]=2,[1]=1` — both call the same internal event-queue function. **Re-confirmed independently (2026-09-02)** via fresh disassembly straight from `can_app.bin`'s own real dispatch table (handler `0x08008bd4`) rather than trusting the prior doc pass — byte-for-byte the same finding. **Unconfirmed hypothesis, still open**: struct might be the input-focus switcher between factory/OEM and app mode (which subsystem gets knob ticks) — no consumer found that branches on it (89 real load sites, too broad to trace fully; not re-attempted this pass). A separate report's claim this was already proven ("routes rotary knob event target and CAN arbitration priority") was checked and rejected — overstates the trace. | ✅ confirmed both directions |
+| `0x84` | Audio route select — **also drives the same `GPIOC13`/`PC2` relay dispatcher as `CMD 0xA0 id=0x11`**, see the [4-state table](#cmd-0x84--cmd-0xa0-id0x11-shared-relay-dispatcher) below | Masked to 4 bits, `≥6` ignored. Value `0` → `"AT+AUDROUTE=1\r\n"` + relay state `0`; value `3` → `"AT+AUDROUTE=2\r\n"` + relay state `1`; `1`/`2`/`4`/`5` → state-only, no relay action. **RESOLVED (2026-09-02)**, see the [full `CMD 0x82`/`0x84` gate trace](#cmd-0x82--cmd-0x84-real-mcu-side-trace-2026-09-02----the-shared-gate-conflict-is-settled) below: the "2 unreconciled conflicts" are now 1 resolved + 1 reconfirmed. Read-byte conflict (`payload[1]` vs `payload[0]`) reconfirmed as a real, consistent frame-struct convention (offset `+2`=`payload[0]`, `+3`=`payload[1]`), not an actual disagreement. **Gate-polarity "conflict" is resolved**: both `CMD 0x84` and `CMD 0xA0 id=0x11` read/write the exact same absolute SRAM byte (`0x20000236`) for their offset-`0x5e` check — genuinely the same flag, opposite required polarity by design (arm-then-trigger vs. fire-when-not-already-armed), not two independent flags. | ✅ confirmed, gate-sharing conflict resolved |
 | `0x85` | App-protocol ACK | `payload[0..2]` stored into an internal queue slot | ✅ confirmed shape / ❌ clean-room reply content is an approximation |
 | `0x87` | Bluetooth AT-command relay, verbatim passthrough to `USART3` (`PB10`/`PB11`) | Real bug: `AT+PIN=0000`'s digit-substitution is unwired, very likely always sent malformed | ✅ confirmed (`0x080087A1`) |
 | `0x88` | TEA-cipher anti-clone challenge, 8-byte block | Real cipher, genuine key, decrypted reply read by nothing (inert as shipped) | ✅ fully confirmed |
@@ -253,6 +253,75 @@ disagree. **Not yet implemented as of this doc** — recorded here as the concre
 decision, not a settled fix.
 
 ---
+
+## `CMD 0x82` / `CMD 0x84` real MCU-side trace (2026-09-02) -- the shared-gate conflict is settled
+
+Fresh, direct disassembly of `hardware/MCU/can_app.bin` (Thumb-2, real STM32 firmware) this
+time, not `libMcuCenter.so` -- these are SoC->MCU commands, so their real handlers live on the
+MCU side. **Real base-address correction needed first**: this binary's application code does
+not start at `0x08000000` -- that address range is the separate `bootloader.bin`. The real
+base is `0x08004000` (confirmed by cross-checking: `CMD 0x84`'s already-documented handler
+address `0x08008808` only resolves to valid, sensible code -- a real `push {r4,lr}` function
+prologue -- under this base, not `0x08000000`, and every other address cited elsewhere in
+this doc for `can_app.bin` is consistent with it). The real 9-entry SoC->MCU dispatch table
+was re-extracted directly from the binary's own bytes (table base `0x0800B9E4`, confirmed
+identical to the address already cited elsewhere in this doc) to get exact handler addresses:
+`0x81`→`0x080088B5`, `0x82`→`0x08008BD5`, `0xA0`→`0x080089D9`, `0xFF`→`0x080088E9`,
+`0xE1`→`0x080088E1`, `0x85`→`0x08008BA9`, `0x84`→`0x08008809`, `0x87`→`0x080087A1`,
+`0x88`→`0x0800893D` (all Thumb, odd bit set).
+
+**`CMD 0x84` handler (`0x08008808`), the exact real gate check**: reads the incoming frame's
+byte from struct base `0x20000238` offset `+3` (confirmed to be a generic per-command
+"current frame" struct: offset `+0`=cmd, `+1`=len, `+2`=`payload[0]`, `+3`=`payload[1]`,
+etc., re-derived directly rather than assumed). Before calling the shared relay dispatcher
+(`0x080058A4`), it checks `ldrb.w r0, [r0, #0x5e]` against a base loaded from literal
+`0x08008898`, which resolves to **`0x200001D8`** -- so the real absolute address checked is
+`0x200001D8 + 0x5E = 0x20000236`.
+
+**`CMD 0xA0 id=0x11`'s own handler**, independently located and disassembled (found via every
+real caller of the shared dispatcher `0x080058A4`, not assumed): its own gate-arming write
+(`strb.w r0, [r1, #0x5e]` at `0x8008859a`/`0x80085ae`) uses a base loaded from literal
+`0x080085dc`, which resolves to **the exact same `0x200001D8`** -- so its own absolute address
+is also `0x20000236`.
+
+**This resolves the doc's old "read from different SRAM struct bases, unclear if same flag"
+conflict decisively: they are not different bases, they are the same base, same offset, same
+absolute byte.** `CMD 0x84` and `CMD 0xA0 id=0x11` genuinely read/write **one shared flag
+byte at `0x20000236`** -- not two independent flags that happen to occupy the same relative
+offset by coincidence. This also gives the arm-then-trigger mechanism (already documented
+elsewhere in this doc) a much more concrete mechanical explanation: `id=0x11` *arms* by
+writing this byte to `1` only when the MCU's own `GPIOB Pin 2` handler has already set it
+(i.e. "already reversing"), and fires the relay immediately in that case; `CMD 0x84` fires
+the *opposite* case (byte `== 0`, "not currently reversing", the common case right after a
+settings change or boot) -- both are reading and reacting to the same underlying "is the MCU
+currently in a reverse-detected state" flag, from two different code paths with complementary
+conditions. This is real, concrete confirmation of the mechanism this project has relied on
+(sending both `id=0x11` and `CMD 0x84` together in `sync_video_relay()`) since before this
+byte-level proof existed.
+
+**New, previously-undocumented lead found while locating every caller of the shared
+dispatcher**: a *third* real call site exists at `0x08008b7a`/`0x08008b82`, inside a handler
+block that sequentially writes struct offsets `0x42`-`0x45` (matching the offset pattern
+already documented elsewhere in this doc for `CMD 0xA0 id=0x0B`-`id=0x0F`'s `PA15`/`PB8`/`PB9`
+relay-trio subsystem) -- and the *last* of those blocks (offset `0x45`, i.e. very likely
+`id=0x0F`, "Right Camera") also checks the same `0x5e` flag (`0x20000236`) before calling the
+shared `GPIOC13`/`PC2` dispatcher with state `2` or `3`. **Not confirmed to the exact `id`
+value with full certainty this pass** (didn't individually re-trace the whole `0x0B`-`0x0F`
+switch body to nail down which specific case this tail belongs to) -- but if this holds up,
+it means the `GPIOC13`/`PC2` audio/video relay isn't a 2-command system (`CMD 0x84` +
+`CMD 0xA0 id=0x11`) at all, it's at least a 3-command one, with `id=0x0F` ("Right Camera",
+previously documented as driving only the *separate* `PA15`/`PB8`/`PB9` trio) also reaching
+into the shared relay under some conditions. Real, concrete follow-up for a future pass:
+individually trace the `0x0B`-`0x0F` switch body in full to confirm which exact `id` this is.
+
+**`CMD 0x82`'s own handler (`0x08008bd4`) re-confirmed independently**: reads `payload[0]`
+from the same `0x20000238`-based "current frame" struct at offset `+2` (consistent with the
+`+3`=`payload[1]` finding above -- same struct, same convention, cross-validating both).
+`payload[0]==1` writes `{offset[0]=1, offset[1]=4}` into struct `0x20000282`; else
+`{offset[0]=2, offset[1]=1}` -- both branches call the same event-queue function
+(`0x08006228`) with identical arguments, matching the existing doc entry exactly. The
+already-documented "who consumes `0x20000282`" question (89 real load sites) was not
+re-attempted this pass -- still the real remaining gap for this command.
 
 ## Full `CMD 0x03` byte-level decode (2026-09-02) -- a dual-zone HVAC frame calling straight into `AirConditionDlg`
 

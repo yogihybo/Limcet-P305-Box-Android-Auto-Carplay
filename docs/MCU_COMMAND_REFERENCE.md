@@ -132,7 +132,7 @@ its own competing claim.
 | `0x00` | Default / ignored (no-op) | — | ✅ confirmed (`0x37348`) |
 | `0x01` | Headlights / illumination status (main use), plus 2 more real sub-fields `custom_ui` doesn't use | Bit `1` = headlights ON/OFF (`MsnEvent 0x5004`/`0x5005`) — live-hardware confirmed, wired end-to-end into `custom_ui`'s AA night-mode feature. Bit `2` = reverse-camera override (`MsnEvent 0x5026`) — confirmed, not used by `custom_ui`. A later payload byte's bit `7` is a legacy key-matrix press/release, `MsnEvent 0x1013` — confirmed, not used. | ✅ confirmed |
 | `0x02` | Knob/button event | `b3=3`/`4` = Next/Prev Track (confirmed, live-tested — NOT volume). `b3=8`/`9` = Answer/Hangup. `b3=12`/`13` = Home/Knob push. `b3=36` = "Mode/Source" (single observation only). `b3=64`/`65` = Knob CCW/CW. The `8`/`9`, `12`/`13`, `64`/`65` pairs each share every bit except bit `0` (upper bits = control group, bit `0` = state/direction) — `3`/`4` don't fit this pattern, inferred not confirmed. | ✅ live-capture confirmed, what `custom_ui` runs on |
-| `0x03` | Vehicle status / HVAC bitfield broadcast | `payload[0]` bits `5`/`6`/`7` confirmed by direct trace as `CirculationMode`/`ACEnable`/`AirConditionEnable`. Bits `0`-`4` and `payload[1]` have been guessed at (door/trunk/handbrake; fan-speed/AC/recirc/defrost) but the `payload[1]` guess is directly contradicted — the confirmed HVAC bits are all in `payload[0]`. **Re-checked (2026-09-02)**: the real handler is far larger and more complex than the other bitfield commands (`CMD 0x06`'s ~200-byte handler vs. this one's ~1300+ bytes) — builds at least 2 separate 8-bit `QBitArray`s (same per-bit `orr`/`lsl` loop pattern as `CMD 0x06`), plus additional standalone bit tests (`tst`/`ubfx` at bit positions `2`,`5`,`6`) and 2 real range checks (`cmp r1,#0`/`#31`, `cmp r2,#27`) that don't fit a simple flags model at all. Confirms the "spans more of the frame than mapped" status was correct, but the real structure is bigger than a straightforward extra-bitfield gap — not fully cracked this pass, would need a dedicated trace on the scale of the `CMD 0x04`/`0x05` radar work. | 🟡 partial — real layout spans more of the frame than mapped, structure confirmed larger than assumed |
+| `0x03` | Dual-zone HVAC/climate status broadcast — fully traced, real named consumer, not just a bitfield | See the [full `CMD 0x03` byte-level decode](#full-cmd-0x03-byte-level-decode-2026-09-02----a-dual-zone-hvac-frame-calling-straight-into-airconditiondlg) below. Old "`payload[0]` bits `5`/`6`/`7`" claim was correct on the *bits*, wrong on the *byte* — it's `payload[1]`, not `payload[0]`. | ✅ confirmed, real `AirConditionDlg` setter calls, not an inferred event |
 | `0x04` | Parking radar / distance level (`transRadarLevel`) — empirically correlates with reverse gear. See the [reverse-gear conflict](#the-reverse-gear-command-conflict--the-one-that-actually-matters-right-now) section | See the [byte-level `CMD 0x04` decode](#real-byte-level-decode-of-cmd-0x04s-payload-2026-09-02----and-why-this-strengthens-the-case-for-using-it-as-corroboration) further down for the full 4-channel `transRadarLevel()` breakdown | ✅ confirmed |
 | `0x05` | Radar-family telemetry, sibling of `CMD 0x04` — theory now resolved in favor of radar over HVAC | Full re-trace of the handler (`0x38190`) settles the old conflict: it builds a 4-byte `QByteArray`, one byte per `payload[0..3]`, each range-checked against the exact same `cmp X,#15`/`cmp Y,#29` clamp pattern `CMD 0x04`'s `transRadarLevel()`-family classification uses — structurally identical to `CMD 0x04`'s handler, not anything resembling `CMD 0x03`'s `AirConditionDlg` bitfield path. Posts `MsnEvent(app=0x191, type=0x5018)` — **one less than `CMD 0x04`'s `0x5019`**, i.e. an adjacent event-type constant in the same family. Real evidence now favors "front/secondary radar channel, sibling to `CMD 0x04`'s rear radar" over the old HVAC theory; zero live captures still exist either way, so this is a disassembly-only resolution, not hardware-confirmed. | 🟡 resolved by disassembly, no live capture yet |
 | `0x06` | Vehicle dynamics/safety bitfield, real structure now traced beyond "bit positions confirmed" | Handler (`0x38360`) builds a `QBitArray(8)` from `payload[1]` (byte `[3]`) — each of its 8 bits tested independently (`asr`/`tst` per bit) and packed as one `setParams()` argument, i.e. genuinely 8 independent boolean flags, not a single code. A **second, separate 4-bit field** is built from `payload[2]` (byte `[4]`) bits `4`-`7`, but re-packed in a non-obvious order (final nibble = `bit6`\|`bit7`<<1\|`bit4`<<2\|`bit5`<<3) into the other `setParams()` argument — this is a **repacked small code, not 4 independent flags**, correcting the old "bit `4`=Parking Brake / `5`=Footbrake / `6`=Turn Signals / `7`=Reverse" guess table, which assumed 4 independent booleans at those positions. Posts `MsnEvent(app=0x190, type=0x501A)`. Exact semantic labels for either field still unconfirmed — would need the real consumer in `MsnCoreApp` traced next. | 🟡 partial, structure now precise |
@@ -253,6 +253,67 @@ disagree. **Not yet implemented as of this doc** — recorded here as the concre
 decision, not a settled fix.
 
 ---
+
+## Full `CMD 0x03` byte-level decode (2026-09-02) -- a dual-zone HVAC frame calling straight into `AirConditionDlg`
+
+Full trace of `MCUAdapter_BoxP300::onRecvMcuProtocol`'s real `CMD 0x03` handler (`0x388b4`,
+same unstripped `libMcuCenter.so` copy used throughout this doc). This handler is genuinely
+large (~1300 bytes, the biggest single-command handler traced this session) because it isn't
+just decoding a bitfield and posting one event -- it calls **directly into a real, named Qt
+dialog class, `AirConditionDlg`**, synchronously, once per real HVAC setting. That settles the
+old "who consumes this" ambiguity outright: the consumer is `AirConditionDlg` itself, not an
+`MsnEvent` some other subsystem has to interpret.
+
+Real byte layout, `payload[n]` = `byte[2+n]` as elsewhere in this doc:
+
+```
+payload[1] (byte[3]) -- 8-bit flags, QBitArray-packed one bit at a time:
+  bit 5 -> AirConditionDlg::setCirculationMode(uchar)
+  bit 6 -> AirConditionDlg::setACEnable(bool)
+  bit 7 -> AirConditionDlg::setAirConditionEnable(bool)
+  bits 0-4 -> read into the bitarray but no confirmed consumer found in this handler
+
+payload[2] (byte[4]) -- 8-bit flags (same QBitArray pattern) AND reused whole:
+  low nibble (payload[2] & 0xF) -> AirConditionDlg::setAirVolume(uchar) directly
+    (0 -> sentinel 0xFF, i.e. likely "Auto"; 1-15 -> the raw value)
+  bit 6, bit 7 of the bitarray -> composed into a 2-bit code (0/2, 0/4) feeding
+    AirConditionDlg::setWindDirectEx(uchar) (left/main zone)
+  bit 5 of the bitarray -> also feeds into setWindDirectEx_right's composition
+
+payload[3] (byte[5]) -- left-zone target temperature:
+  0x00 -> distinct branch (likely "Off")
+  0x1F (31) -> distinct branch (likely "Auto" / high-limit)
+  0x01-0x1C (1-28) -> range-checked, formatted into a QString via
+    AirConditionDlg::setTemperature(QString left, QString right)'s left argument
+
+payload[4] (byte[6]) -- right-zone target temperature, identical 0 / 31 / 1-28 encoding,
+  same setTemperature() call's right argument
+
+payload[5] (byte[7]) -- more flag bits, gates rather than data:
+  bit 0 -> gates whether a literal "N/A" QString gets built for one of the temperature slots
+  bit 1 -> AirConditionDlg::setACVisible(bool)
+  bit 2 -> gates whether setWindDirectEx gets called at all
+  bit 4 -> a second gate on the setWindDirectEx composition
+
+payload[8] (byte[10]) -- bit 6 / bit 7 feed into setWindDirectEx_right's composition
+  alongside payload[2]'s bit 5 above (the "right zone" wind-direction call)
+```
+
+**This corrects, not just extends, the old doc entry.** The previously "confirmed" claim --
+"`payload[0]` bits `5`/`6`/`7` = `CirculationMode`/`ACEnable`/`AirConditionEnable`" -- had the
+right bit positions and the right real setter names, but the wrong byte: those three calls
+are driven by `payload[1]`, not `payload[0]`. `payload[0]` (byte `[2]`, the very first payload
+byte) has **no confirmed consumer anywhere in this handler** -- not referenced by any of the
+traced setter calls above. This is a real, previously-undocumented gap of its own, distinct
+from the "bits 0-4 of `payload[1]` unconfirmed" gap.
+
+**Not chased further this pass**: the exact `MsnEvent` type this handler posts (if any -- it's
+possible this command's real effect is entirely the direct `AirConditionDlg` calls above, with
+no event dispatch at all, unlike every other MCU->SoC command traced in this doc). The
+function has several branch targets outside the `0x388b4`-`0x38d34` range walked here
+(QString-formatting helper branches for the temperature sentinel values) that weren't
+individually traced -- low priority, since they're formatting detail for the two temperature
+strings already identified, not new fields.
 
 ## What to do when you find another gap
 

@@ -601,7 +601,24 @@ int main() {
         static hal::AndroidAutoClient reverseGearAaClient;
 
         if (reverseChanged) {
-            hal::apply_reversing_volume_cut(reverseEngaged);
+            // 2026-09-03: real hardware report -- input stayed frozen
+            // "for the rest of the session", not just a couple of
+            // seconds -- ruling out the just-fixed requestResumeVideo()
+            // call alone (its socket timeouts bound it to ~2-4s worst
+            // case). apply_reversing_volume_cut() -> set_stream_volume()
+            // shells out to `amixer` via std::system(), which has NO
+            // timeout at all -- if amixer ever blocks (e.g. real
+            // contention on the ALSA control device while AA audio is
+            // actively streaming, the same class of ALSA hardware
+            // flakiness this project has hit before -- see
+            // project_aa_audio_stutter_investigation), this call blocks
+            // the LVGL main thread indefinitely, not just briefly. This
+            // ran BEFORE requestResumeVideo() in the old code, so it's
+            // a real, unbounded freeze candidate independent of that
+            // fix. Same treatment: move off the main thread.
+            std::thread([reverseEngaged]() {
+                hal::apply_reversing_volume_cut(reverseEngaged);
+            }).detach();
             bool factoryCamera = core::default_store().get_bool("OriginalCarCamera", false, "General");
             /* REMOVED (2026-08-31, real user report + disassembly-confirmed
              * root cause -- see docs/MCU_COMMAND_REFERENCE.md's CMD 0xA0

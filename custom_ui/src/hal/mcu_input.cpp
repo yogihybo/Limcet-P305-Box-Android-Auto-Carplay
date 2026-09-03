@@ -273,6 +273,14 @@ void McuInputHal::run() {
     // trusting any CMD 0x12 direction at all.
     const auto run_start = std::chrono::steady_clock::now();
     constexpr auto kStartupGraceWindow = std::chrono::seconds(5);
+    // CMD 0x01 bit-2 corroboration tracking (2026-09-03) -- see the cmd==0x01
+    // and cmd==0x12 branches below for the full real-hardware-evidence
+    // rationale. Shared across both branches, hence function scope rather
+    // than a block-local static. Real captures showed the pulse landing
+    // both before *and* after the CMD 0x12 event it corroborates
+    // (depending on the capture), so both directions are checked.
+    auto s_lastBit2PulseTime = std::chrono::steady_clock::time_point{};
+    auto s_lastCmd12CommitTime = std::chrono::steady_clock::time_point{};
     while (running_.load(std::memory_order_acquire)) {
         int r = read_mcu_frame(fd_, &cmd, payload, &len);
         if (r != 1) {
@@ -300,6 +308,39 @@ void McuInputHal::run() {
                 first_light = false;
                 std::printf("%s [HAL:MCU] Headlights: %s (CMD 0x01 payload[0]=0x%02X -> night_mode=%d)\n",
                             core::log_timestamp().c_str(), lights_on ? "ON" : "OFF", payload[0], lights_on ? 1 : 0);
+            }
+
+            // bit 2 (payload[0] & 0x04): HARDWARE-CONFIRMED 2026-09-03 real
+            // reverse-gear-adjacent transient pulse -- see docs/
+            // MCU_COMMAND_REFERENCE.md's reverse-gear-conflict table. A
+            // real isolated-variable test showed 2/2 genuine CMD 0x12
+            // transitions each accompanied by this pulse (the one
+            // unaccompanied CMD 0x12 in that capture matched the known
+            // startup-burst false positive exactly). Fires symmetrically
+            // on both entering and exiting -- carries no direction of its
+            // own, unlike CMD 0x12's payload[0].
+            //
+            // Corroboration LOGGING ONLY for now, deliberately not gating
+            // reverse_gear_ itself: we don't yet have a real capture
+            // showing whether this bit stays clear during the *known*
+            // headlights-alone false-trigger case (the scenario CMD 0x12
+            // needs help rejecting) -- until that's confirmed, gating the
+            // actual decision on it risks a new failure mode (a missed
+            // pulse blocking a real transition) for an unproven benefit.
+            // Records the pulse time and cross-checks against the most
+            // recent CMD 0x12 commit (covers the pulse-arrives-after-0x12
+            // ordering seen in the newest real capture; the CMD 0x12
+            // branch below does the reverse check for the
+            // pulse-arrives-before ordering seen in earlier captures).
+            if (payload[0] & 0x04) {
+                constexpr auto kCorroborationWindow = std::chrono::milliseconds(500);
+                auto now = std::chrono::steady_clock::now();
+                s_lastBit2PulseTime = now;
+                if (s_lastCmd12CommitTime.time_since_epoch().count() != 0 &&
+                    (now - s_lastCmd12CommitTime) < kCorroborationWindow) {
+                    std::printf("%s [HAL:MCU] CMD 0x01 bit-2 pulse corroborates the recent CMD 0x12 transition\n",
+                                core::log_timestamp().c_str());
+                }
             }
         } else if (cmd == 0x04) {
             // CMD 0x04 is real, disassembly-confirmed parking radar/distance
@@ -364,9 +405,23 @@ void McuInputHal::run() {
                     if (prev != engaged) {
                         std::printf("%s [HAL:MCU] Reverse gear: %s (CMD 0x12 payload[0]=0x%02X)\n",
                                     core::log_timestamp().c_str(), engaged ? "ENGAGED" : "DISENGAGED", dir);
+                        // 2026-09-03: log whether a CMD 0x01 bit-2 pulse
+                        // (see the cmd==0x01 branch above) corroborates
+                        // this transition -- covers the pulse-arrives-
+                        // before ordering seen in earlier real captures.
+                        // Logging only, not a gate -- see that branch's own
+                        // comment for why gating waits on a real
+                        // headlights-alone-false-trigger data point.
+                        constexpr auto kCorroborationWindow = std::chrono::milliseconds(500);
+                        bool corroborated = s_lastBit2PulseTime.time_since_epoch().count() != 0 &&
+                                             (now - s_lastBit2PulseTime) < kCorroborationWindow;
+                        std::printf("%s [HAL:MCU] CMD 0x12 transition %s a recent CMD 0x01 bit-2 pulse\n",
+                                    core::log_timestamp().c_str(),
+                                    corroborated ? "corroborated by" : "had NO recent");
                     }
                     s_lastCommittedDir = dir;
                     s_lastCommitTime = now;
+                    s_lastCmd12CommitTime = now;
                 }
             }
         } else if (cmd == 0x20 && len >= 5) {

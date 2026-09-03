@@ -407,6 +407,14 @@ void McuInputHal::run() {
             static const unsigned char kKeepaliveProbe[8] = {0, 0, 0, 0, 0, 0, 0, 0};
             int cur_fd = fd_.load(std::memory_order_acquire);
             if (cur_fd >= 0) {
+                // 2026-09-04: real hardware capture showed repeated
+                // "Link stale/dead" reconnects during genuine idle
+                // periods with zero CMD 0x88/0x60 reply frames ever
+                // observed -- this line exists to answer the first,
+                // most basic question that capture couldn't: is the
+                // probe actually being transmitted on schedule at all.
+                std::printf("%s [HAL:MCU] Sending CMD 0x88 keepalive probe\n",
+                            core::log_timestamp().c_str());
                 send_mcu_frame(cur_fd, 0x88, kKeepaliveProbe, 8);
             }
             last_probe_sent = now;

@@ -600,6 +600,38 @@ int main() {
         // comment on why requestResumeVideo() never spawns the sidecar).
         static hal::AndroidAutoClient reverseGearAaClient;
 
+        // 2026-09-03: real hardware report -- after a reverse-gear exit,
+        // AA's audio kept playing (the session itself stayed alive, as
+        // expected -- see the comment on hal::androidauto_screen_active()
+        // below) but knob/touch input stopped reaching AA. Root cause:
+        // hal::knob.cpp/hal::touch.cpp only forward input while
+        // androidauto_screen_active() is true, and that flag is only
+        // ever set by android_auto_screen.cpp's poll_timer_cb() once the
+        // phone's video focus is confirmed back to PROJECTED. The single
+        // requestResumeVideo() call below fires exactly once -- if that
+        // one attempt doesn't actually reach androidauto-sidecar (e.g.
+        // its socket is transiently unreachable at exactly this moment,
+        // plausible given everything else in flight during a gear
+        // transition), nothing ever retries, and the flag stays stuck
+        // false indefinitely even though the session (and its audio)
+        // never dropped. Bounded retry here, not a standing poll --
+        // requestResumeVideo() truly reaching the sidecar is enough (the
+        // sidecar itself flips its local focus state immediately on
+        // receipt, see micro_aap/src/aap_session.c's
+        // aap_session_request_video_focus()) -- a standing poll would
+        // also risk fighting a real, later NATIVE focus request the
+        // phone sends on its own (e.g. an incoming call UI).
+        auto resume_video_with_retry = []() {
+            for (int attempt = 0; attempt < 5; ++attempt) {
+                if (reverseGearAaClient.requestResumeVideo()) {
+                    return;
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            }
+            std::fprintf(stderr, "%s [HAL:REVCAM] requestResumeVideo() failed after 5 retries -- "
+                         "AA input forwarding may stay stuck off\n", core::log_timestamp().c_str());
+        };
+
         if (reverseChanged) {
             // 2026-09-03: real hardware report -- input stayed frozen
             // "for the rest of the session", not just a couple of
@@ -740,10 +772,10 @@ int main() {
                         // an internal mutex, so calling it from a
                         // background thread while the main thread may
                         // also touch it (e.g. another reverse-gear
-                        // event) is safe.
-                        std::thread([]() {
-                            reverseGearAaClient.requestResumeVideo();
-                        }).detach();
+                        // event) is safe. resume_video_with_retry()
+                        // (declared above) adds a bounded retry on top
+                        // of the one-shot call -- see its own comment.
+                        std::thread(resume_video_with_retry).detach();
                     }
                 } else {
                     std::printf("%s [HAL:REVCAM] Reverse gear disengaged -- returning to previous screen (was_in_aa=%d)\n",
@@ -751,9 +783,7 @@ int main() {
                     if (s_wasInAaBeforeReverse) {
                         staging_ui::navigate_to(staging_ui::NavDestination::AndroidAuto);
                         // See the comment on the matching call above.
-                        std::thread([]() {
-                            reverseGearAaClient.requestResumeVideo();
-                        }).detach();
+                        std::thread(resume_video_with_retry).detach();
                     } else {
                         core::navigation::pop();
                     }

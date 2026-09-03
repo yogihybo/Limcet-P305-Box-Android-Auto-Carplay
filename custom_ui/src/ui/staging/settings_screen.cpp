@@ -381,7 +381,7 @@ lv_obj_t * create_settings_screen() {
      * reverts to the stock OEM feed or stays on the aftermarket feed --
      * see hal::send_mcu_video_relay() and MCU_FIRMWARE_VERIFIED_FINDINGS.md's
      * "CONFIRMED: the real Camera Type setting" section for the full trace. */
-    create_toggle_row(card, &ui::icons::icon_nav_camera, "OEM Factory Camera",
+    create_toggle_row(card, &ui::icons::icon_nav_camera, "Aftermarket Reverse Camera",
                        "OriginalCarCamera", "General", false, [](bool oem) {
                            std::printf("%s [HAL:REVCAM] Video/audio multiplexer set to %s\n",
                                        core::log_timestamp().c_str(),

@@ -8,6 +8,7 @@
 #include <cstring>
 
 #include <fcntl.h>
+#include <sys/select.h>
 #include <termios.h>
 #include <unistd.h>
 
@@ -137,11 +138,31 @@ void send_startup_sequence(int fd) {
 
 // Robust stream parser with byte-level synchronization and zero packet loss on line noise.
 // Returns 1 on valid frame, 0 on no full frame yet, -1 on I/O error/EOF.
-int read_mcu_frame(int fd, unsigned char * out_cmd, unsigned char * out_payload,
-                    unsigned char * out_len) {
-    static unsigned char ring_buf[1024];
-    static size_t ring_len = 0;
+// 2026-09-04: lifted out of read_mcu_frame() (was function-local static)
+// so a real reconnect (see McuInputHal::run()'s new staleness-triggered
+// reconnect path) can discard whatever partial/stale bytes were sitting
+// in the parser across a close()/open() of the underlying fd, via
+// reset_mcu_frame_parser() below. Still only ever touched from the one
+// MCU reader thread, same as before -- no new thread-safety concern.
+unsigned char ring_buf[1024];
+size_t ring_len = 0;
 
+void reset_mcu_frame_parser() {
+    ring_len = 0;
+}
+
+// 2026-09-04: added a bounded wait (select()) in front of the blocking
+// read() below, keyed off McuInputHal::run()'s new keepalive-probe/
+// staleness-detection logic -- that logic needs the read loop to wake
+// up periodically even when the MCU is silent, to check "is it time to
+// send a CMD 0x88 probe" / "have we gone too long with zero frames".
+// Returns 1 on a valid frame (as before), 0 for BOTH "no full frame
+// yet, keep looping" (the old meaning) and "timed out waiting for
+// data, no error" (new) -- run() doesn't need to tell these apart, both
+// just mean "nothing to act on this call, try again". -1 stays a real
+// fatal I/O error/EOF, unchanged.
+int read_mcu_frame(int fd, unsigned char * out_cmd, unsigned char * out_payload,
+                    unsigned char * out_len, int timeout_ms) {
     while (true) {
         // 1. Hunt for 0x2E synchronization byte at start of buffer
         while (ring_len > 0 && ring_buf[0] != 0x2E) {
@@ -192,6 +213,21 @@ int read_mcu_frame(int fd, unsigned char * out_cmd, unsigned char * out_payload,
         if (ring_len >= sizeof(ring_buf)) {
             // Buffer full of unrecognized data -> reset to avoid stall
             ring_len = 0;
+        }
+
+        fd_set rfds;
+        FD_ZERO(&rfds);
+        FD_SET(fd, &rfds);
+        struct timeval tv;
+        tv.tv_sec = timeout_ms / 1000;
+        tv.tv_usec = (timeout_ms % 1000) * 1000;
+        int sel = select(fd + 1, &rfds, nullptr, nullptr, &tv);
+        if (sel == 0) {
+            return 0; // Timed out, no data -- not an error, see this function's own comment
+        }
+        if (sel < 0) {
+            if (errno == EINTR) continue;
+            return -1; // Fatal select() error
         }
 
         ssize_t n = read(fd, &ring_buf[ring_len], sizeof(ring_buf) - ring_len);
@@ -270,17 +306,134 @@ void McuInputHal::run() {
     // a first commit, so this startup frame (the very first commit, no
     // prior state to compare against) sailed straight through it. Give
     // the MCU's own init burst a fixed grace window to finish before
-    // trusting any CMD 0x12 direction at all.
-    const auto run_start = std::chrono::steady_clock::now();
+    // trusting any CMD 0x12 direction at all. Non-const now (was const)
+    // -- a real reconnect (below) needs to restart this grace window
+    // too, since the reopened link gets its own fresh startup burst.
+    auto run_start = std::chrono::steady_clock::now();
     constexpr auto kStartupGraceWindow = std::chrono::seconds(5);
+
+    // 2026-09-04: first_light/first_reverse used to be block-local
+    // statics (initialized once, ever, for the lifetime of this
+    // thread). Lifted to run()-scope locals so reconnect() below can
+    // reset them to true -- after a real reconnect, the very next CMD
+    // 0x01 frame is a fresh unprompted status report (same mechanism
+    // confirmed via a real mcu-handshake capture at the original
+    // connect), and should be trusted as authoritative again, not
+    // treated as just another "did it change from what we already
+    // think" comparison against a possibly-now-stale prior value.
+    bool first_light = true;
+    bool first_reverse = true;
+
+    // 2026-09-04: real hardware gap -- reverse_gear_/night_mode_/knob/
+    // touch input all depend entirely on this one UART link now (see
+    // this session's CMD 0x01 bit-2 reverse-gear change), and there
+    // was no way to notice a silently dead link short of a hard read()
+    // error, which a cable fault or hung-but-still-open MCU wouldn't
+    // necessarily produce. Two mechanisms, both real, evidence-backed:
+    //
+    // 1. Active probe: send CMD 0x88 (TEA-cipher challenge) every 5s.
+    //    Confirmed safe to send arbitrary content and safe to send
+    //    unsolicited -- disassembly-traced all the way through both
+    //    the MCU firmware side (a full, stateless decrypt oracle, no
+    //    validation/rate-limiting/consequence) and the app side
+    //    (decrypted reply goes straight to a debug log line, nothing
+    //    conditional). Real vendor precedent for resending it on a
+    //    timer: MsnCoreApp::onHeartBeatTimer() does the same thing --
+    //    though disassembly shows that's actually a bounded ~90s
+    //    startup burst (30 sends @ its own real 3000ms QTimer
+    //    interval) that then repurposes the same timer for an
+    //    unrelated demo-tips popup, not an ongoing keepalive -- so 5s,
+    //    indefinitely, is this HAL's own choice, not a borrowed value.
+    //    Content is a fixed dummy 8-byte block -- doesn't need to be a
+    //    validly-derived challenge, the MCU decrypts and echoes back
+    //    whatever it's given regardless (see docs/
+    //    MCU_COMMAND_REFERENCE.md's CMD 0x88/0x60 section).
+    // 2. Passive liveness: ANY successfully parsed frame counts as
+    //    proof of life, not just the CMD 0x60 probe reply -- the MCU is
+    //    otherwise fairly chatty (touch/knob/headlights/HVAC/etc.), so
+    //    this catches a dead link faster than waiting on the probe
+    //    cadence alone whenever something else was about to arrive.
+    //
+    // If NEITHER produces a frame for kLinkStaleTimeout, the link is
+    // declared dead and reconnect() below closes/reopens the port
+    // itself rather than looping forever on it.
+    constexpr auto kProbeInterval = std::chrono::seconds(5);
+    // Generous relative to the probe interval on purpose -- covers a
+    // couple of missed round-trips (real UART hiccups happen) before
+    // committing to a real reconnect, which briefly drops touch/knob
+    // input and resets the startup grace window.
+    constexpr auto kLinkStaleTimeout = std::chrono::seconds(15);
+    auto last_probe_sent = run_start;
+    auto last_frame_time = run_start;
+
+    auto reconnect = [&]() {
+        std::fprintf(stderr, "%s [HAL:MCU] Link stale/dead -- reopening %s\n",
+                     core::log_timestamp().c_str(), port_.c_str());
+        int old_fd = fd_.load(std::memory_order_acquire);
+        if (old_fd >= 0) {
+            close(old_fd);
+        }
+        fd_.store(-1, std::memory_order_release);
+        reset_mcu_frame_parser();
+
+        int new_fd = open(port_.c_str(), O_RDWR | O_NOCTTY);
+        if (new_fd < 0) {
+            std::fprintf(stderr, "%s [HAL:MCU] Reopen of %s failed: %s -- will keep retrying\n",
+                         core::log_timestamp().c_str(), port_.c_str(), std::strerror(errno));
+            return;
+        }
+        if (!set_interface_attribs(new_fd)) {
+            close(new_fd);
+            return;
+        }
+        send_startup_sequence(new_fd);
+        fd_.store(new_fd, std::memory_order_release);
+
+        // Fresh link -- give it the same trust/grace treatment as the
+        // original connect (see the comments on run_start/first_light/
+        // first_reverse above).
+        run_start = std::chrono::steady_clock::now();
+        first_light = true;
+        first_reverse = true;
+        last_probe_sent = run_start;
+        last_frame_time = run_start;
+        std::fprintf(stderr, "%s [HAL:MCU] Reconnected to %s\n",
+                     core::log_timestamp().c_str(), port_.c_str());
+    };
+
     while (running_.load(std::memory_order_acquire)) {
-        int r = read_mcu_frame(fd_, &cmd, payload, &len);
+        auto now = std::chrono::steady_clock::now();
+        if (now - last_probe_sent >= kProbeInterval) {
+            static const unsigned char kKeepaliveProbe[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+            int cur_fd = fd_.load(std::memory_order_acquire);
+            if (cur_fd >= 0) {
+                send_mcu_frame(cur_fd, 0x88, kKeepaliveProbe, 8);
+            }
+            last_probe_sent = now;
+        }
+        if (now - last_frame_time >= kLinkStaleTimeout) {
+            reconnect();
+            continue;
+        }
+
+        int r = read_mcu_frame(fd_, &cmd, payload, &len, /*timeout_ms=*/1000);
+        if (r == 1) {
+            last_frame_time = std::chrono::steady_clock::now();
+            last_frame_epoch_ms_.store(
+                std::chrono::duration_cast<std::chrono::milliseconds>(
+                    last_frame_time.time_since_epoch()).count(),
+                std::memory_order_release);
+        }
         if (r != 1) {
-            // r==0: resync/checksum-fail, r==-1: I/O hiccup or fd
-            // closed by the destructor -- both just loop (or exit if
-            // running_ was cleared). Guard against tight 100% CPU spinning on I/O errors:
-            if (r == -1) {
-                usleep(20000);
+            // r==0: read timed out or a resync/checksum-fail happened
+            // (both expected, not errors) -- r==-1: a real fatal I/O
+            // error/EOF, or the fd was closed by the destructor.
+            // Reconnect on a real error rather than spinning on a dead
+            // fd forever; running_ being cleared (destructor) makes
+            // reconnect() itself a harmless no-op-ish reopen that the
+            // loop's own exit condition catches on the next check.
+            if (r == -1 && running_.load(std::memory_order_acquire)) {
+                reconnect();
             }
             continue;
         }
@@ -294,7 +447,6 @@ void McuInputHal::run() {
             // CMD 0x01: Headlights / Illumination status broadcast from MCU (len=6)
             // payload[0]: 0x11 = Lights OFF, 0x13 = Lights ON (bit 1 is the illumination bit)
             bool lights_on = (payload[0] & 0x02) != 0;
-            static bool first_light = true;
             bool prev_light = night_mode_.exchange(lights_on, std::memory_order_acq_rel);
             if (first_light || lights_on != prev_light) {
                 first_light = false;
@@ -341,7 +493,6 @@ void McuInputHal::run() {
             // section), so it was never a trustworthy source of truth on
             // its own -- CMD 0x01 doesn't share that failure mode.
             bool reversing = (payload[0] & 0x04) != 0;
-            static bool first_reverse = true;
             bool prev_reverse = reverse_gear_.exchange(reversing, std::memory_order_acq_rel);
             if (first_reverse || reversing != prev_reverse) {
                 first_reverse = false;
@@ -521,6 +672,21 @@ bool McuInputHal::get_night_mode() const {
 
 bool McuInputHal::get_reverse_gear() const {
     return reverse_gear_.load(std::memory_order_acquire);
+}
+
+bool McuInputHal::is_link_alive() const {
+    int64_t last_ms = last_frame_epoch_ms_.load(std::memory_order_acquire);
+    if (last_ms == 0) {
+        return false; // Never received a single frame yet
+    }
+    auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
+    // Same threshold run()'s own reconnect logic uses -- if it hasn't
+    // reconnected yet, the link isn't officially "dead", but it's
+    // already past the point where main.cpp/the UI should stop
+    // trusting it as live.
+    constexpr int64_t kLinkStaleTimeoutMs = 15000;
+    return (now_ms - last_ms) < kLinkStaleTimeoutMs;
 }
 
 std::string McuInputHal::get_mcu_version() const {

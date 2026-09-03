@@ -2,6 +2,7 @@
 
 #include <cstdio>
 
+#include "core/async_worker.h"
 #include "core/log_timing.h"
 #include "hal/androidauto_client.h"
 
@@ -25,6 +26,16 @@ constexpr std::uint32_t kKeycodeDpadCenter = 23;        // Select / Click
 AndroidAutoClient & androidauto_client() {
     static AndroidAutoClient client;
     return client;
+}
+
+// 2026-09-03: same reasoning as hal/touch.cpp's touch_forward_worker()
+// -- mcu_knob_read_cb() below is an LVGL indev read callback on the main
+// thread; sendKey()/sendRotary() are real blocking socket calls. Route
+// through the same ordered-async-queue pattern rather than blocking the
+// whole UI on a wedged sidecar for every knob tick/click.
+core::AsyncWorker & knob_forward_worker() {
+    static core::AsyncWorker worker;
+    return worker;
 }
 
 #include <chrono>
@@ -105,17 +116,17 @@ void mcu_knob_read_cb(lv_indev_t * indev, lv_indev_data_t * data) {
                 std::uint32_t key = (ticks > 0) ? kKeycodeDpadRight : kKeycodeDpadLeft;
                 int32_t count = (ticks > 0) ? ticks : -ticks;
                 for (int32_t i = 0; i < count; ++i) {
-                    androidauto_client().sendKey(key);
+                    knob_forward_worker().enqueue([key]() { androidauto_client().sendKey(key); });
                 }
             } else {
                 /* Pure native automotive rotary scroll / intra-container traversal */
-                androidauto_client().sendRotary(ticks);
+                knob_forward_worker().enqueue([ticks]() { androidauto_client().sendRotary(ticks); });
             }
         }
 
         /* Only fire DPAD_CENTER click on release if knob was not rotated while held */
         if (release_edge && !rotated_while_held() && (now_ms - last_held_rotation_time_ms() > 400)) {
-            androidauto_client().sendKey(kKeycodeDpadCenter);
+            knob_forward_worker().enqueue([]() { androidauto_client().sendKey(kKeycodeDpadCenter); });
         }
 
         // Report "nothing happened" to LVGL -- this screen has no

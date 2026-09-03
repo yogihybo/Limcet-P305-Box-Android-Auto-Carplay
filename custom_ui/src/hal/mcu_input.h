@@ -159,26 +159,23 @@ public:
     // night_mode_/knob/touch input all depend entirely on this one
     // UART link (see the CMD 0x01 bit-2 reverse-gear change earlier
     // this session), and the reader thread had no way to notice a
-    // silently dead link (cable fault, MCU reset/crash) short of a
-    // hard read() error -- a link that goes quiet without erroring
-    // (or one whose fd EOFs and is never reopened) would leave every
-    // one of those states frozen at its last value forever, with
-    // nothing anywhere able to tell. run() now sends an unsolicited
-    // CMD 0x88 (TEA-cipher challenge, content-independent -- see this
-    // header's own note above sync_setting() references and
-    // docs/MCU_COMMAND_REFERENCE.md's CMD 0x88/0x60 section) every 5s
-    // as a real, hardware-confirmed-safe probe (stock's own
-    // MsnCoreApp::onHeartBeatTimer() does the same thing, just as a
-    // bounded ~90s startup burst rather than an ongoing keepalive --
-    // see that doc section for the real disassembly trace), and treats
-    // ANY successfully parsed frame (not just the CMD 0x60 reply -- the
-    // MCU is otherwise fairly chatty) as proof of life. If nothing at
-    // all arrives for too long, run() closes and reopens the port
-    // itself rather than looping forever on a dead fd. This getter
-    // exposes that state so main.cpp/the UI can surface it instead of
-    // silently trusting stale values -- true once at least one frame
-    // has ever been received and none of run()'s own reconnect
-    // attempts is currently in flight.
+    // silently dead link short of a hard read() error. Originally
+    // paired with an active CMD 0x88 probe every 5s AND a staleness-
+    // triggered reconnect -- the reconnect half was removed after two
+    // real hardware captures proved its premise wrong: the probe is
+    // confirmed genuinely transmitted on schedule and never once
+    // produced a reply, while a completely healthy link legitimately
+    // went 15+ seconds with zero frames during real idle. See run()'s
+    // own big comment for the full story. What's left: run() still
+    // reconnects on a real read() error/EOF (unambiguous, unlike
+    // "quiet for a while"), and this getter is now purely
+    // informational -- true once at least one frame has ever been
+    // received AND one arrived within the last ~60s (a rough, honest,
+    // NOT hardware-confirmed guess at "clearly wrong" rather than a
+    // tested threshold -- this project doesn't actually know the true
+    // maximum legitimate idle gap on this hardware). Don't wire any
+    // automatic action off this returning false -- surface it to a
+    // human (log/UI), nothing more, until that gap is closed for real.
     bool is_link_alive() const;
 
     // Vehicle battery voltage reported via CMD 0x30

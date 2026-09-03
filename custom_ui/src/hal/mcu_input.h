@@ -155,6 +155,32 @@ public:
     // MCU Firmware Version string reported via CMD 0x7F
     std::string get_mcu_version() const;
 
+    // 2026-09-04: real hardware-motivated addition -- reverse_gear_/
+    // night_mode_/knob/touch input all depend entirely on this one
+    // UART link (see the CMD 0x01 bit-2 reverse-gear change earlier
+    // this session), and the reader thread had no way to notice a
+    // silently dead link (cable fault, MCU reset/crash) short of a
+    // hard read() error -- a link that goes quiet without erroring
+    // (or one whose fd EOFs and is never reopened) would leave every
+    // one of those states frozen at its last value forever, with
+    // nothing anywhere able to tell. run() now sends an unsolicited
+    // CMD 0x88 (TEA-cipher challenge, content-independent -- see this
+    // header's own note above sync_setting() references and
+    // docs/MCU_COMMAND_REFERENCE.md's CMD 0x88/0x60 section) every 5s
+    // as a real, hardware-confirmed-safe probe (stock's own
+    // MsnCoreApp::onHeartBeatTimer() does the same thing, just as a
+    // bounded ~90s startup burst rather than an ongoing keepalive --
+    // see that doc section for the real disassembly trace), and treats
+    // ANY successfully parsed frame (not just the CMD 0x60 reply -- the
+    // MCU is otherwise fairly chatty) as proof of life. If nothing at
+    // all arrives for too long, run() closes and reopens the port
+    // itself rather than looping forever on a dead fd. This getter
+    // exposes that state so main.cpp/the UI can surface it instead of
+    // silently trusting stale values -- true once at least one frame
+    // has ever been received and none of run()'s own reconnect
+    // attempts is currently in flight.
+    bool is_link_alive() const;
+
     // Vehicle battery voltage reported via CMD 0x30
     float get_battery_voltage() const;
 
@@ -202,7 +228,14 @@ private:
     void log_frame(unsigned char cmd, const unsigned char * payload, unsigned char len);
 
     std::string port_;
-    int fd_ = -1;
+    // 2026-09-04: was a plain int -- now written by run()'s own
+    // reconnect path (close/reopen) as well as start()/the destructor,
+    // and read from other member functions (sync_setting() etc.) that
+    // can be called from the LVGL/main thread while run() is live on
+    // its own thread. Atomic makes that cross-thread read/write
+    // well-defined; the actual sequencing (never read a fd mid-reopen)
+    // was already relied on informally before, this just makes it real.
+    std::atomic<int> fd_{-1};
     core::SizedThread thread_;
     std::atomic<bool> running_{false};
 
@@ -217,6 +250,13 @@ private:
     std::atomic<bool> reverse_gear_{false};
     std::atomic<float> battery_voltage_{0.0f};
     mutable std::atomic<uint64_t> last_touch_ms_{0};
+
+    // 2026-09-04: link-liveness tracking -- see is_link_alive()'s own
+    // header comment. Updated by run() on every successfully parsed
+    // frame (any cmd), read by is_link_alive(). Steady-clock epoch
+    // milliseconds, not wall-clock -- immune to any future NTP/RTC
+    // adjustment, matching every other timing calc in this HAL.
+    std::atomic<int64_t> last_frame_epoch_ms_{0};
 
     mutable std::mutex version_mutex_;
     std::string mcu_version_{"Unknown"};

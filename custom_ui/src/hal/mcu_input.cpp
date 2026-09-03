@@ -324,45 +324,31 @@ void McuInputHal::run() {
     bool first_light = true;
     bool first_reverse = true;
 
-    // 2026-09-04: real hardware gap -- reverse_gear_/night_mode_/knob/
-    // touch input all depend entirely on this one UART link now (see
-    // this session's CMD 0x01 bit-2 reverse-gear change), and there
-    // was no way to notice a silently dead link short of a hard read()
-    // error, which a cable fault or hung-but-still-open MCU wouldn't
-    // necessarily produce. Two mechanisms, both real, evidence-backed:
-    //
-    // 1. Active probe: send CMD 0x88 (TEA-cipher challenge) every 5s.
-    //    Confirmed safe to send arbitrary content and safe to send
-    //    unsolicited -- disassembly-traced all the way through both
-    //    the MCU firmware side (a full, stateless decrypt oracle, no
-    //    validation/rate-limiting/consequence) and the app side
-    //    (decrypted reply goes straight to a debug log line, nothing
-    //    conditional). Real vendor precedent for resending it on a
-    //    timer: MsnCoreApp::onHeartBeatTimer() does the same thing --
-    //    though disassembly shows that's actually a bounded ~90s
-    //    startup burst (30 sends @ its own real 3000ms QTimer
-    //    interval) that then repurposes the same timer for an
-    //    unrelated demo-tips popup, not an ongoing keepalive -- so 5s,
-    //    indefinitely, is this HAL's own choice, not a borrowed value.
-    //    Content is a fixed dummy 8-byte block -- doesn't need to be a
-    //    validly-derived challenge, the MCU decrypts and echoes back
-    //    whatever it's given regardless (see docs/
-    //    MCU_COMMAND_REFERENCE.md's CMD 0x88/0x60 section).
-    // 2. Passive liveness: ANY successfully parsed frame counts as
-    //    proof of life, not just the CMD 0x60 probe reply -- the MCU is
-    //    otherwise fairly chatty (touch/knob/headlights/HVAC/etc.), so
-    //    this catches a dead link faster than waiting on the probe
-    //    cadence alone whenever something else was about to arrive.
-    //
-    // If NEITHER produces a frame for kLinkStaleTimeout, the link is
-    // declared dead and reconnect() below closes/reopens the port
-    // itself rather than looping forever on it.
+    // 2026-09-04: real hardware gap this was meant to close --
+    // reverse_gear_/night_mode_/knob/touch input all depend entirely
+    // on this one UART link now (see this session's CMD 0x01 bit-2
+    // reverse-gear change), and there was no way to notice a silently
+    // dead link short of a hard read() error. Originally paired with
+    // an active CMD 0x88 probe every 5s PLUS a "no frame for 15s ->
+    // reconnect" staleness check -- REMOVED the staleness/reconnect
+    // half after two real hardware captures proved its premise wrong:
+    // the probe below is confirmed genuinely transmitted on schedule
+    // (its own log line fires every 5s exactly, write() never errors)
+    // and never once produced a CMD 0x60/0x88 reply, contrary to what
+    // both candidate MCU firmware sources (real vendor disassembly and
+    // this project's own clean-room hardware/MCU/source/) suggested it
+    // should do -- while a completely healthy link legitimately went
+    // 15+ seconds with zero frames of any kind during real idle (no
+    // headlights/knob/gear activity). So "no frame recently" was never
+    // a valid dead-link signal on this hardware; treating it as one
+    // just repeatedly tore down a working connection. Kept: the probe
+    // itself (harmless, still tracked via last_probe_sent below, in
+    // case some future firmware/condition does answer it) and passive
+    // last_frame_time/last_frame_epoch_ms_ tracking (is_link_alive()
+    // stays purely informational, see its own header comment) -- ONLY
+    // a real read() error/EOF (below) triggers reconnect() now, same
+    // as before this whole keepalive feature existed.
     constexpr auto kProbeInterval = std::chrono::seconds(5);
-    // Generous relative to the probe interval on purpose -- covers a
-    // couple of missed round-trips (real UART hiccups happen) before
-    // committing to a real reconnect, which briefly drops touch/knob
-    // input and resets the startup grace window.
-    constexpr auto kLinkStaleTimeout = std::chrono::seconds(15);
     auto last_probe_sent = run_start;
     auto last_frame_time = run_start;
 
@@ -419,11 +405,25 @@ void McuInputHal::run() {
             }
             last_probe_sent = now;
         }
-        if (now - last_frame_time >= kLinkStaleTimeout) {
-            reconnect();
-            continue;
-        }
-
+        // 2026-09-04: REMOVED the "no frame for kLinkStaleTimeout ->
+        // reconnect" branch that used to live here. Real hardware
+        // capture (two consecutive tests) proved the premise wrong:
+        // the CMD 0x88 probe above is confirmed genuinely transmitted
+        // on schedule (its own log line fires every 5s exactly, write()
+        // never errors) and NEVER once produced a CMD 0x60/0x88 reply
+        // -- contrary to what both candidate MCU firmware sources
+        // (real vendor disassembly and this project's own clean-room
+        // hardware/MCU/source/) suggested it should do. Meanwhile a
+        // completely healthy link legitimately went 15+ seconds with
+        // zero frames of any kind during real idle (no headlights/
+        // knob/gear activity) -- so "no frame in 15s" was never a
+        // valid dead-link signal on this hardware to begin with, and
+        // treating it as one just repeatedly tore down a working
+        // connection. last_frame_time/last_frame_epoch_ms_ are still
+        // tracked below (is_link_alive() stays informational), but
+        // nothing acts on staleness anymore -- only a real read()
+        // error/EOF (below) triggers reconnect() now, same as before
+        // this whole keepalive feature existed.
         int r = read_mcu_frame(fd_, &cmd, payload, &len, /*timeout_ms=*/1000);
         if (r == 1) {
             last_frame_time = std::chrono::steady_clock::now();
@@ -689,11 +689,16 @@ bool McuInputHal::is_link_alive() const {
     }
     auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now().time_since_epoch()).count();
-    // Same threshold run()'s own reconnect logic uses -- if it hasn't
-    // reconnected yet, the link isn't officially "dead", but it's
-    // already past the point where main.cpp/the UI should stop
-    // trusting it as live.
-    constexpr int64_t kLinkStaleTimeoutMs = 15000;
+    // 2026-09-04: NOT tied to run()'s own reconnect logic anymore (see
+    // run()'s big comment on why the staleness-triggered reconnect was
+    // removed) -- purely informational now. Widened well past the old
+    // 15s to something that should never legitimately fire during real
+    // idle (two real hardware captures showed a healthy link going
+    // 15+ seconds with zero frames), while still catching a genuinely
+    // dead link eventually. This threshold itself is a rough, honest
+    // guess, not hardware-confirmed -- this project doesn't actually
+    // know the true maximum legitimate idle gap on this hardware.
+    constexpr int64_t kLinkStaleTimeoutMs = 60000;
     return (now_ms - last_ms) < kLinkStaleTimeoutMs;
 }
 

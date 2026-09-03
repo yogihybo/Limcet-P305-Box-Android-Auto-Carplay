@@ -133,6 +133,52 @@ unsigned char calc_fa_checksum(const unsigned char *data, int len) {
     return chk;
 }
 
+/* 2026-09-04: real user request -- every output line gets a timestamp
+ * prefix now, so captures can be correlated against real elapsed time
+ * (this tool's own README/session history repeatedly needed to reason
+ * about inter-frame timing, e.g. "150-214ms before genuine CMD 0x04",
+ * "~29ms after the headlights frame" -- previously only possible by
+ * eyeballing terminal scroll position, not from the log itself).
+ * Same `[%5ld.%06ld]` seconds.microseconds-since-start format
+ * custom_ui's own core::log_timestamp() uses, for consistency across
+ * this project's tooling -- monotonic (CLOCK_MONOTONIC), not
+ * wall-clock, so it's immune to any RTC/NTP adjustment mid-capture and
+ * directly comparable to custom_ui's own MCU Live Log timestamps if
+ * the two are ever cross-referenced.
+ *
+ * Only prefixes the FIRST printf/fprintf of each logical output line
+ * -- callers building a line across several printf() calls (e.g. the
+ * hex-dump loops below) call ts_prefix() once before the first
+ * fragment and leave the rest as plain printf(), same convention as
+ * everywhere else timestamped logging exists in this project. */
+static struct timespec g_start_time;
+static int g_start_time_set = 0;
+
+void ts_init(void) {
+    clock_gettime(CLOCK_MONOTONIC, &g_start_time);
+    g_start_time_set = 1;
+}
+
+void ts_prefix(FILE *stream) {
+    if (!g_start_time_set) {
+        /* Not fatal -- just means ts_init() wasn't called (e.g. a
+         * future call site added before main()'s own init runs).
+         * Falls back to "since the epoch" rather than crashing/
+         * printing garbage, matching core::log_timestamp()'s own
+         * "not started yet" fallback. */
+        ts_init();
+    }
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    long sec = now.tv_sec - g_start_time.tv_sec;
+    long usec = (now.tv_nsec - g_start_time.tv_nsec) / 1000;
+    if (usec < 0) {
+        usec += 1000000;
+        sec -= 1;
+    }
+    fprintf(stream, "[%5ld.%06ld] ", sec, usec);
+}
+
 speed_t get_baud_rate(int speed) {
     switch (speed) {
         case 9600: return B9600;
@@ -156,6 +202,7 @@ speed_t get_baud_rate(int speed) {
 int set_interface_attribs(int fd, int speed) {
     struct termios tty;
     if (tcgetattr(fd, &tty) < 0) {
+        ts_prefix(stderr);
         fprintf(stderr, "Error from tcgetattr: %s\n", strerror(errno));
         return -1;
     }
@@ -181,6 +228,7 @@ int set_interface_attribs(int fd, int speed) {
     tty.c_cc[VTIME] = 1;
 
     if (tcsetattr(fd, TCSANOW, &tty) != 0) {
+        ts_prefix(stderr);
         fprintf(stderr, "Error from tcsetattr: %s\n", strerror(errno));
         return -1;
     }
@@ -209,11 +257,13 @@ void send_mcu_frame(int fd, unsigned char cmd, const unsigned char *payload,
     frame[idx++] = chk;
 
     if (write(fd, frame, idx) < 0) {
+        ts_prefix(stderr);
         fprintf(stderr, "Error writing to serial port: %s\n", strerror(errno));
         return;
     }
 
     if (verbose) {
+        ts_prefix(stdout);
         printf("[TX] cmd=%02X (%d bytes):", cmd, idx);
         for (int i = 0; i < idx; i++)
             printf(" %02X", frame[i]);
@@ -261,9 +311,11 @@ void send_startup_sequence(int fd, int verbose) {
     unsigned char mode1_payload[1] = { 0x01 };
     unsigned char state_payload[2] = { 0x00, 0x03 };
 
-    if (verbose)
+    if (verbose) {
+        ts_prefix(stdout);
         printf("[*] Sending startup sequence: hello (0x81), mode-1 app-state (0x82), "
                "audio-route state-change (0x84)\n");
+    }
 
     send_mcu_frame(fd, 0x81, &hello_payload, 1, verbose);
     usleep(50000);
@@ -318,13 +370,16 @@ int read_mcu_frame(int fd, unsigned char *out_cmd, unsigned char *out_payload,
     unsigned char chk_calc = calc_mcu_checksum(check_buf, length + 2);
 
     if (chk_calc != chk_recv) {
-        if (verbose)
+        if (verbose) {
+            ts_prefix(stdout);
             printf("[-] Checksum mismatch: calc %02X, recv %02X (cmd=%02X len=%d)\n",
                    chk_calc, chk_recv, cmd, length);
+        }
         return 0;
     }
 
     if (verbose) {
+        ts_prefix(stdout);
         printf("[RX] cmd=%02X (len=%d):", cmd, length);
         for (int i = 0; i < length + 1; i++)
             printf(" %02X", remaining[i]);
@@ -373,6 +428,7 @@ static void format_sub_payload(char *buf, size_t bufsz, const unsigned char *pay
 void log_frame(unsigned char cmd, const unsigned char *payload, unsigned char len) {
     char sp[3 * 256 + 32];
     format_sub_payload(sp, sizeof(sp), payload, len);
+    ts_prefix(stdout);
 
     if (cmd == 0x01 && len >= 1) {
         /* bit1 = headlights (real, live-hardware confirmed). bit2 = real
@@ -457,11 +513,13 @@ void send_fa_frame(int fd, unsigned char arg1, unsigned char arg2, unsigned char
     frame[idx++] = 0xAF;
 
     if (write(fd, frame, idx) < 0) {
+        ts_prefix(stderr);
         fprintf(stderr, "Error writing to serial port: %s\n", strerror(errno));
         return;
     }
 
     if (verbose) {
+        ts_prefix(stdout);
         printf("[TX] (%d bytes):", idx);
         for (int i = 0; i < idx; i++)
             printf(" %02X", frame[i]);
@@ -479,8 +537,10 @@ void send_ttys2_probe(int fd, int verbose) {
     unsigned char heartbeat_payload[2] = { 0x02, 0x00 };
     unsigned char status_payload[8] = { 0x6B, 0xBF, 0xFD, 0x39, 0x20, 0xA1, 0x86, 0x57 };
 
-    if (verbose)
+    if (verbose) {
+        ts_prefix(stdout);
         printf("[*] Replaying two frames captured live on ttyS2\n");
+    }
 
     send_fa_frame(fd, 0x00, 0x13, 0x59, heartbeat_payload, 2, verbose);
     usleep(50000);
@@ -538,13 +598,16 @@ int read_fa_frame(int fd, unsigned char *out_arg1, unsigned char *out_arg2,
     unsigned char chk_calc = calc_fa_checksum(check_buf, 5 + length);
 
     if (terminator != 0xAF || chk_calc != chk_recv) {
-        if (verbose)
+        if (verbose) {
+            ts_prefix(stdout);
             printf("[-] ttyS2 frame invalid: term=%02X (want AF), calc %02X, recv %02X\n",
                    terminator, chk_calc, chk_recv);
+        }
         return 0;
     }
 
     if (verbose) {
+        ts_prefix(stdout);
         printf("[RX] arg1=%02X arg2=%02X arg3=%02X len=%d:", arg1, arg2, arg3, length);
         for (int i = 0; i < length; i++)
             printf(" %02X", remaining[i]);
@@ -565,6 +628,7 @@ void listen_forever_ttys2(int fd, int verbose) {
     while (1) {
         int r = read_fa_frame(fd, &arg1, &arg2, &arg3, payload, &len, verbose);
         if (r == 1) {
+            ts_prefix(stdout);
             printf("[+] ttyS2 frame: arg1=%02X arg2=%02X arg3=%02X len=%d\n",
                    arg1, arg2, arg3, len);
             fflush(stdout);
@@ -583,6 +647,7 @@ struct scan_result scan_one_baud(const char *port, int baud, int duration_sec, i
 
     int fd = open(port, O_RDWR | O_NOCTTY | O_NDELAY);
     if (fd < 0) {
+        ts_prefix(stderr);
         fprintf(stderr, "[-] %d baud: failed to open %s: %s\n", baud, port, strerror(errno));
         return res;
     }
@@ -592,6 +657,7 @@ struct scan_result scan_one_baud(const char *port, int baud, int duration_sec, i
         return res;
     }
 
+    ts_prefix(stdout);
     printf("[*] Scanning %d baud for %ds...\n", baud, duration_sec);
     fflush(stdout);
     send_startup_sequence(fd, verbose);
@@ -627,6 +693,7 @@ struct scan_result scan_one_baud(const char *port, int baud, int duration_sec, i
     }
 
     close(fd);
+    ts_prefix(stdout);
     printf("[*] %d baud: %d valid frame(s)\n", baud, res.valid_frames);
     fflush(stdout);
     return res;
@@ -635,6 +702,7 @@ struct scan_result scan_one_baud(const char *port, int baud, int duration_sec, i
 void run_scan(const char *port, int duration_sec, int verbose) {
     struct scan_result results[NUM_SCAN_CANDIDATES];
 
+    ts_prefix(stdout);
     printf("[*] Scanning %d candidate baud rate(s), %ds each -- sends the proactive "
            "hello frame on each, then listens. Toggle an input (reverse/ACC/a button) "
            "on the vehicle to prompt more MCU traffic.\n", NUM_SCAN_CANDIDATES, duration_sec);
@@ -643,6 +711,11 @@ void run_scan(const char *port, int duration_sec, int verbose) {
     for (int i = 0; i < NUM_SCAN_CANDIDATES; i++)
         results[i] = scan_one_baud(port, SCAN_BAUD_CANDIDATES[i], duration_sec, verbose);
 
+    /* Summary table intentionally left unprefixed -- these rows are
+     * already-computed results printed back-to-back after scanning
+     * finishes, not a live capture stream, so a timestamp per row
+     * would all read nearly identical and add clutter, not
+     * correlation value (the whole point of this feature). */
     printf("\n[*] Scan summary:\n");
     printf("%10s %14s\n", "baud", "valid_frames");
     int best = -1;
@@ -664,6 +737,7 @@ void run_scan(const char *port, int duration_sec, int verbose) {
 }
 
 int main(int argc, char **argv) {
+    ts_init();
     char *port = "/dev/ttyHS0";
     int baud = DEFAULT_BAUD;
     int verbose = 0;
@@ -700,10 +774,12 @@ int main(int argc, char **argv) {
         if (!port_given) port = TTYS2_DEFAULT_PORT;
         if (!baud_given) baud = TTYS2_BAUD;
 
+        ts_prefix(stdout);
         printf("[*] --ttys2: opening %s at %d baud (separate protocol from ttyHS0, "
                "see docs/MCU_ADAPTERS.md)...\n", port, baud);
         int fd = open(port, O_RDWR | O_NOCTTY | O_NDELAY);
         if (fd < 0) {
+            ts_prefix(stderr);
             fprintf(stderr, "[-] Failed to open serial port %s: %s\n", port, strerror(errno));
             return 1;
         }
@@ -713,11 +789,14 @@ int main(int argc, char **argv) {
             return 1;
         }
 
-        if (!no_hello)
+        if (!no_hello) {
             send_ttys2_probe(fd, verbose);
-        else if (verbose)
+        } else if (verbose) {
+            ts_prefix(stdout);
             printf("[*] --no-hello given, skipping the two known-frame replay\n");
+        }
 
+        ts_prefix(stdout);
         printf("[*] Listening for ttyS2 frames. Press Ctrl+C to stop.\n");
         fflush(stdout);
         listen_forever_ttys2(fd, verbose);
@@ -730,9 +809,11 @@ int main(int argc, char **argv) {
         return 0;
     }
 
+    ts_prefix(stdout);
     printf("[*] Opening %s at %d baud...\n", port, baud);
     int fd = open(port, O_RDWR | O_NOCTTY | O_NDELAY);
     if (fd < 0) {
+        ts_prefix(stderr);
         fprintf(stderr, "[-] Failed to open serial port %s: %s\n", port, strerror(errno));
         return 1;
     }
@@ -743,11 +824,14 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    if (!no_hello)
+    if (!no_hello) {
         send_startup_sequence(fd, verbose);
-    else if (verbose)
+    } else if (verbose) {
+        ts_prefix(stdout);
         printf("[*] --no-hello given, skipping proactive startup sequence\n");
+    }
 
+    ts_prefix(stdout);
     printf("[*] Listening for MCU frames. Press Ctrl+C to stop.\n");
     fflush(stdout);
 

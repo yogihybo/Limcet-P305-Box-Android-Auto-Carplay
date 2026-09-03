@@ -273,14 +273,6 @@ void McuInputHal::run() {
     // trusting any CMD 0x12 direction at all.
     const auto run_start = std::chrono::steady_clock::now();
     constexpr auto kStartupGraceWindow = std::chrono::seconds(5);
-    // CMD 0x01 bit-2 corroboration tracking (2026-09-03) -- see the cmd==0x01
-    // and cmd==0x12 branches below for the full real-hardware-evidence
-    // rationale. Shared across both branches, hence function scope rather
-    // than a block-local static. Real captures showed the pulse landing
-    // both before *and* after the CMD 0x12 event it corroborates
-    // (depending on the capture), so both directions are checked.
-    auto s_lastBit2PulseTime = std::chrono::steady_clock::time_point{};
-    auto s_lastCmd12CommitTime = std::chrono::steady_clock::time_point{};
     while (running_.load(std::memory_order_acquire)) {
         int r = read_mcu_frame(fd_, &cmd, payload, &len);
         if (r != 1) {
@@ -310,37 +302,51 @@ void McuInputHal::run() {
                             core::log_timestamp().c_str(), lights_on ? "ON" : "OFF", payload[0], lights_on ? 1 : 0);
             }
 
-            // bit 2 (payload[0] & 0x04): HARDWARE-CONFIRMED 2026-09-03 real
-            // reverse-gear-adjacent transient pulse -- see docs/
-            // MCU_COMMAND_REFERENCE.md's reverse-gear-conflict table. A
-            // real isolated-variable test showed 2/2 genuine CMD 0x12
-            // transitions each accompanied by this pulse (the one
-            // unaccompanied CMD 0x12 in that capture matched the known
-            // startup-burst false positive exactly). Fires symmetrically
-            // on both entering and exiting -- carries no direction of its
-            // own, unlike CMD 0x12's payload[0].
+            // bit 2 (payload[0] & 0x04): reverse-gear status -- PRIMARY
+            // source for reverse_gear_ as of 2026-09-03, replacing CMD
+            // 0x12 below (which now only cross-checks, see that branch).
             //
-            // Corroboration LOGGING ONLY for now, deliberately not gating
-            // reverse_gear_ itself: we don't yet have a real capture
-            // showing whether this bit stays clear during the *known*
-            // headlights-alone false-trigger case (the scenario CMD 0x12
-            // needs help rejecting) -- until that's confirmed, gating the
-            // actual decision on it risks a new failure mode (a missed
-            // pulse blocking a real transition) for an unproven benefit.
-            // Records the pulse time and cross-checks against the most
-            // recent CMD 0x12 commit (covers the pulse-arrives-after-0x12
-            // ordering seen in the newest real capture; the CMD 0x12
-            // branch below does the reverse check for the
-            // pulse-arrives-before ordering seen in earlier captures).
-            if (payload[0] & 0x04) {
-                constexpr auto kCorroborationWindow = std::chrono::milliseconds(500);
-                auto now = std::chrono::steady_clock::now();
-                s_lastBit2PulseTime = now;
-                if (s_lastCmd12CommitTime.time_since_epoch().count() != 0 &&
-                    (now - s_lastCmd12CommitTime) < kCorroborationWindow) {
-                    std::printf("%s [HAL:MCU] CMD 0x01 bit-2 pulse corroborates the recent CMD 0x12 transition\n",
-                                core::log_timestamp().c_str());
-                }
+            // RE-CONFIRMED 2026-09-03, real hardware, decisive test: the
+            // earlier conclusion here ("symmetric transient pulse, no
+            // held state") didn't survive a stricter check. Prior
+            // captures were all single-line, moment-of-transition
+            // observations -- equally consistent with a pulse or a held
+            // level, never actually distinguishing the two. This test
+            // closed that gap directly: exactly one CMD 0x01 frame
+            // arrived on ENTERING reverse (payload[0]=0x15, bit set),
+            // and critically, NO further CMD 0x01 frame arrived while
+            // still sitting in reverse -- no spontaneous mid-reverse
+            // reversion, the one thing a real pulse would produce. The
+            // bit only cleared (payload[0]=0x11) on the frame marking
+            // the real EXIT. That's a real, held, level-encoded field --
+            // the same transmission convention as bit 1 (headlights):
+            // re-sent only when the underlying level actually changes,
+            // not on a timer or a self-clearing pulse.
+            //
+            // This also directly answers the original motivating
+            // question (does custom_ui have any way to learn the real
+            // current reverse-gear state at load time, e.g. if the
+            // vehicle is already in reverse when it starts) -- yes: this
+            // same CMD 0x01 frame is confirmed (real capture, see git
+            // history) to arrive unprompted right after connecting, with
+            // real current bit1/bit2 values, same as headlights. The
+            // first_reverse flag below applies that first frame as
+            // authoritative the same way first_light does for
+            // headlights just above.
+            //
+            // CMD 0x12 is demoted to a corroboration-only cross-check:
+            // it's separately confirmed to false-trigger from headlights
+            // alone with zero gear involvement (see this file's CMD 0x12
+            // branch and docs/MCU_COMMAND_REFERENCE.md's conflict
+            // section), so it was never a trustworthy source of truth on
+            // its own -- CMD 0x01 doesn't share that failure mode.
+            bool reversing = (payload[0] & 0x04) != 0;
+            static bool first_reverse = true;
+            bool prev_reverse = reverse_gear_.exchange(reversing, std::memory_order_acq_rel);
+            if (first_reverse || reversing != prev_reverse) {
+                first_reverse = false;
+                std::printf("%s [HAL:MCU] Reverse gear: %s (CMD 0x01 payload[0]=0x%02X)\n",
+                            core::log_timestamp().c_str(), reversing ? "ENGAGED" : "DISENGAGED", payload[0]);
             }
         } else if (cmd == 0x04) {
             // CMD 0x04 is real, disassembly-confirmed parking radar/distance
@@ -353,75 +359,31 @@ void McuInputHal::run() {
             // conflict" section. Kept here only as a no-op placeholder so
             // future work doesn't have to rediscover this dead end.
         } else if (cmd == 0x12 && len >= 1) {
-            // CMD 0x12: real reverse-gear engage/disengage push, hardware-
-            // confirmed 2026-09-01 -- payload[0] carries the direction,
-            // not just the command byte's mere presence (the old "any 0x12
-            // == disengaged" mapping was wrong; it fires on BOTH edges).
-            // Confirmed via a real enter-then-exit test correlated against
-            // MCU Live Log captures: payload=[01 04 00] on entering
-            // (payload[0]==0x01), payload=[02 01 00] on exiting
-            // (payload[0]==0x02).
+            // CMD 0x12: real reverse-gear-adjacent push, direction in
+            // payload[0] (0x01=entering-shape, 0x02=exiting-shape) --
+            // see the long history in docs/MCU_COMMAND_REFERENCE.md.
             //
-            // Debounced 2026-09-02 (real hardware bug report): after
-            // wiring the mapping above, exit showed "LVGL flashes up
-            // momentarily on disengage, then blank again" while engage
-            // kept working fine. The hardware video relay itself is
-            // independently confirmed reliable and fully autonomous (it
-            // switches correctly even with custom_ui killed entirely --
-            // see the flag_5e/GPIOB-Pin-2 finding in
-            // docs/MCU_COMMAND_REFERENCE.md), so the flash-then-blank
-            // pattern isn't a relay problem: it's main.cpp's
-            // hide_display()/show_display() being re-triggered by a
-            // second, spurious payload[0]==0x01 frame arriving shortly
-            // after the real payload[0]==0x02 exit frame (a real edge
-            // now drives BOTH directions off the same byte, unlike the
-            // old scheme, so a duplicate/bounced frame right at a
-            // transition now visibly flickers the display where it
-            // previously wouldn't have). A direction flip within
-            // kDebounceWindow of the last *committed* change is treated
-            // as noise and ignored rather than acted on again -- doesn't
-            // affect the first transition from an idle state (no prior
-            // commit to compare against), so normal engage/disengage
-            // responsiveness is unaffected.
-            static uint8_t s_lastCommittedDir = 0;  // 0 = no commit yet
-            static std::chrono::steady_clock::time_point s_lastCommitTime{};
-            constexpr auto kDebounceWindow = std::chrono::milliseconds(300);
-
+            // DEMOTED 2026-09-03: no longer sets reverse_gear_. CMD 0x01
+            // bit 2 (see that branch above) is now confirmed a real,
+            // held, level-encoded reverse-gear field -- the same
+            // transmission convention as bit 1/headlights -- and doesn't
+            // share CMD 0x12's own confirmed failure mode (firing from a
+            // plain headlights toggle alone, zero gear involvement, ~29ms
+            // after the headlights frame -- see this doc's CMD 0x12
+            // conflict section). Kept here purely as a diagnostic
+            // cross-check against the CMD 0x01-driven state, logged, not
+            // acted on -- real disagreement between the two would be a
+            // genuinely interesting signal worth investigating, not
+            // something to silently discard.
             uint8_t dir = payload[0];
             if (dir == 0x01 || dir == 0x02) {
                 auto now = std::chrono::steady_clock::now();
                 bool inStartupGrace = (now - run_start) < kStartupGraceWindow;
-                bool isFlip = (s_lastCommittedDir != 0) && (dir != s_lastCommittedDir);
-                bool tooSoon = isFlip && (now - s_lastCommitTime) < kDebounceWindow;
-                if (inStartupGrace) {
-                    std::printf("%s [HAL:MCU] Ignored CMD 0x12 payload[0]=0x%02X during startup grace window (known spurious MCU init-burst frame)\n",
-                                core::log_timestamp().c_str(), dir);
-                } else if (tooSoon) {
-                    std::printf("%s [HAL:MCU] Ignored likely-bounce CMD 0x12 payload[0]=0x%02X (flip within debounce window)\n",
-                                core::log_timestamp().c_str(), dir);
-                } else {
-                    bool engaged = (dir == 0x01);
-                    bool prev = reverse_gear_.exchange(engaged, std::memory_order_acq_rel);
-                    if (prev != engaged) {
-                        std::printf("%s [HAL:MCU] Reverse gear: %s (CMD 0x12 payload[0]=0x%02X)\n",
-                                    core::log_timestamp().c_str(), engaged ? "ENGAGED" : "DISENGAGED", dir);
-                        // 2026-09-03: log whether a CMD 0x01 bit-2 pulse
-                        // (see the cmd==0x01 branch above) corroborates
-                        // this transition -- covers the pulse-arrives-
-                        // before ordering seen in earlier real captures.
-                        // Logging only, not a gate -- see that branch's own
-                        // comment for why gating waits on a real
-                        // headlights-alone-false-trigger data point.
-                        constexpr auto kCorroborationWindow = std::chrono::milliseconds(500);
-                        bool corroborated = s_lastBit2PulseTime.time_since_epoch().count() != 0 &&
-                                             (now - s_lastBit2PulseTime) < kCorroborationWindow;
-                        std::printf("%s [HAL:MCU] CMD 0x12 transition %s a recent CMD 0x01 bit-2 pulse\n",
-                                    core::log_timestamp().c_str(),
-                                    corroborated ? "corroborated by" : "had NO recent");
-                    }
-                    s_lastCommittedDir = dir;
-                    s_lastCommitTime = now;
-                    s_lastCmd12CommitTime = now;
+                bool engaged = (dir == 0x01);
+                bool current = reverse_gear_.load(std::memory_order_acquire);
+                if (!inStartupGrace && engaged != current) {
+                    std::printf("%s [HAL:MCU] CMD 0x12 payload[0]=0x%02X (%s) disagrees with CMD 0x01-driven reverse_gear_=%d -- logged only, not acted on\n",
+                                core::log_timestamp().c_str(), dir, engaged ? "engaging-shape" : "exiting-shape", current ? 1 : 0);
                 }
             }
         } else if (cmd == 0x20 && len >= 5) {

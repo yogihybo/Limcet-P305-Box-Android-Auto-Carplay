@@ -65,6 +65,27 @@ ad-hoc numbering. Very likely inherited from a broader shared-firmware conventio
 library reuses across every vehicle-adapter variant it contains (`BoxP100`...`BoxP900`,
 `BoxC2xx`, etc.), not something invented specifically for this Prado build.
 
+**Outside corroboration (2026-09-04)**: [`zugetor/simplesoft-canbus-box-reverse-engineer`](https://github.com/zugetor/simplesoft-canbus-box-reverse-engineer)
+reverse-engineers a completely unrelated commercial product, the Simplesoft RP5-TY-101
+Toyota CAN interface box, and its `decoder.py` shows the **exact same wire protocol shell**
+this project's own `hal::McuInputHal` uses: `0x2E` sync byte, `38400` baud,
+`[0x2E][func_id][len][data...][checksum]` framing, and the identical one's-complement
+checksum algorithm (`~sum(cmd+len+payload) & 0xFF`, written there as
+`(sum(packet[1:-1]) & 0xFF) ^ 0xFF` — the same formula). Real, independent evidence for the
+"broader shared-firmware convention" theory above, not just this project's own speculation.
+
+**Function IDs themselves don't carry over, though** — every byte value that happens to
+overlap between the two products' tables means something different (their `0x20` = SWC key
+input vs. our `0x20` = touch coordinates; their `0x82` = A/C settings vs. our `0x82` = app-mode
+change; their `0x30` = CAN interface version vs. our `0x30` = display-profile selector), so
+each vehicle-adapter variant clearly reassigns the shared ID space per product — nothing here
+is safe to borrow directly. One useful negative-evidence note: their variant has a real `0x90`
+"Data request" query command (head unit asks, box replies with current state) — genuine proof
+the shared base firmware family supports a request/response query mechanism, which explains
+*why* no such command exists in our own confirmed-exhaustive 9-entry SoC→MCU dispatch table
+(a per-variant compile-time trim, not a gap in the underlying design) rather than suggesting
+one was missed.
+
 ---
 
 ## MCU → SoC (commands the MCU sends)

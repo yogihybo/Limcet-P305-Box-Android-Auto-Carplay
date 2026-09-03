@@ -375,8 +375,17 @@ void log_frame(unsigned char cmd, const unsigned char *payload, unsigned char le
     format_sub_payload(sp, sizeof(sp), payload, len);
 
     if (cmd == 0x01 && len >= 1) {
-        printf("[+] CMD 0x01 (Headlights/Illumination Status): bit1=%s -- %s\n",
-               (payload[0] & 0x02) ? "ON" : "OFF", sp);
+        /* bit1 = headlights (real, live-hardware confirmed). bit2 = real
+         * reverse-gear-adjacent pulse -- HARDWARE-CONFIRMED 2026-09-03: a
+         * real capture showed bit1 flipping independently for genuine
+         * headlights toggling, then bit2 flipping (bit1 held clear) for
+         * genuine repeated reverse-gear engage/disengage later in the
+         * same session. Transient/edge behavior, not a held state -- 0x15
+         * appears once per transition then reverts to 0x11. See
+         * docs/MCU_COMMAND_REFERENCE.md's reverse-gear-conflict table. */
+        printf("[+] CMD 0x01 (Headlights/Reverse-Gear Status): bit1(headlights)=%s bit2(reverse-adjacent)=%s -- %s\n",
+               (payload[0] & 0x02) ? "ON" : "OFF",
+               (payload[0] & 0x04) ? "PULSE" : "off", sp);
     } else if (cmd == 0x02 && len >= 2) {
         printf("[+] CMD 0x02 (Knob/Button Event): b3=%u b4=%u -- %s\n",
                payload[0], payload[1], sp);

@@ -702,14 +702,41 @@ int main() {
                                 core::log_timestamp().c_str(), s_wasInAaBeforeReverse ? 1 : 0);
                     if (s_wasInAaBeforeReverse) {
                         staging_ui::navigate_to(staging_ui::NavDestination::AndroidAuto);
-                        reverseGearAaClient.requestResumeVideo();
+                        // 2026-09-03: requestResumeVideo() is a
+                        // synchronous socket round-trip to
+                        // androidauto-sidecar (connect + sendCommand,
+                        // each with a real up-to-1s SO_RCVTIMEO/
+                        // SO_SNDTIMEO, up to 2 attempts -- see
+                        // androidauto_client.cpp's own comments) --
+                        // calling it inline here blocks this same
+                        // lv_timer_handler() loop, so every reverse-
+                        // gear exit froze LVGL (no touch/render) for
+                        // however long that round-trip took, real
+                        // hardware-reported symptom: "delay exiting
+                        // reverse until lvgl becomes responsive
+                        // again". Fire it on a detached background
+                        // thread instead -- same "LVGL/navigation
+                        // stays main-thread-only, IPC calls don't"
+                        // split this file already uses for the
+                        // AA-auto-start client above.
+                        // AndroidAutoClient guards its own state with
+                        // an internal mutex, so calling it from a
+                        // background thread while the main thread may
+                        // also touch it (e.g. another reverse-gear
+                        // event) is safe.
+                        std::thread([]() {
+                            reverseGearAaClient.requestResumeVideo();
+                        }).detach();
                     }
                 } else {
                     std::printf("%s [HAL:REVCAM] Reverse gear disengaged -- returning to previous screen (was_in_aa=%d)\n",
                                 core::log_timestamp().c_str(), s_wasInAaBeforeReverse ? 1 : 0);
                     if (s_wasInAaBeforeReverse) {
                         staging_ui::navigate_to(staging_ui::NavDestination::AndroidAuto);
-                        reverseGearAaClient.requestResumeVideo();
+                        // See the comment on the matching call above.
+                        std::thread([]() {
+                            reverseGearAaClient.requestResumeVideo();
+                        }).detach();
                     } else {
                         core::navigation::pop();
                     }

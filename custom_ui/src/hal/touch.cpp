@@ -1,5 +1,6 @@
 #include "hal/touch.h"
 
+#include "core/async_worker.h"
 #include "hal/androidauto_client.h"
 #include "hal/knob.h"
 
@@ -16,6 +17,22 @@ namespace {
 AndroidAutoClient & androidauto_client() {
     static AndroidAutoClient client;
     return client;
+}
+
+// 2026-09-03: mcu_touch_read_cb() below is an LVGL indev read callback
+// -- it runs on the LVGL main thread, once per touch sample. sendTouch()
+// is a real blocking socket call (bounded ~1s SO_RCVTIMEO/SO_SNDTIMEO,
+// see androidauto_client.cpp) -- calling it inline here means a wedged
+// sidecar freezes the ENTIRE UI (not just AA touch), one read cycle at a
+// time, for as long as dragging continues. Route through AsyncWorker
+// instead: the LVGL thread only ever pushes a cheap lambda onto a
+// mutex-guarded queue, a dedicated worker thread does the actual
+// blocking call, in the same DOWN/MOVE/UP order it was generated (see
+// core/async_worker.h's own header comment for why per-call detached
+// threads aren't safe here).
+core::AsyncWorker & touch_forward_worker() {
+    static core::AsyncWorker worker;
+    return worker;
 }
 
 // Edge-detects DOWN/MOVE/UP from get_touch_state()'s level/state
@@ -44,11 +61,20 @@ void mcu_touch_read_cb(lv_indev_t * indev, lv_indev_data_t * data) {
     if (androidauto_screen_active().load(std::memory_order_acquire)) {
         bool was_pressed = touch_was_pressed();
         if (state.pressed && !was_pressed) {
-            androidauto_client().sendTouch(state.x, state.y, TouchAction::Down);
+            std::uint32_t x = state.x, y = state.y;
+            touch_forward_worker().enqueue([x, y]() {
+                androidauto_client().sendTouch(x, y, TouchAction::Down);
+            });
         } else if (state.pressed && was_pressed) {
-            androidauto_client().sendTouch(state.x, state.y, TouchAction::Move);
+            std::uint32_t x = state.x, y = state.y;
+            touch_forward_worker().enqueue([x, y]() {
+                androidauto_client().sendTouch(x, y, TouchAction::Move);
+            });
         } else if (!state.pressed && was_pressed) {
-            androidauto_client().sendTouch(state.x, state.y, TouchAction::Up);
+            std::uint32_t x = state.x, y = state.y;
+            touch_forward_worker().enqueue([x, y]() {
+                androidauto_client().sendTouch(x, y, TouchAction::Up);
+            });
         }
         touch_was_pressed() = state.pressed;
 

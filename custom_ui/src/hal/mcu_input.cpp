@@ -352,22 +352,6 @@ void McuInputHal::run() {
     auto last_probe_sent = run_start;
     auto last_frame_time = run_start;
 
-    // 2026-09-04: real capture analysis (user-driven) found CMD 0x12
-    // firing at several distinct real transition points -- a headlights
-    // change and a HOME-button-driven factory/custom_ui display-mode
-    // switch -- not arbitrary MCU activity. Tracked here so the CMD
-    // 0x12 log line below can label which nearby tracked event it most
-    // likely correlates with, instead of leaving that correlation to
-    // manual timestamp cross-referencing across separate log lines
-    // every time. A real CMD 0x01-driven reverse-gear change is
-    // deliberately NOT tracked for this correlation -- CMD 0x12 is
-    // itself understood to report the resulting LCD-source switch, so
-    // a real gear change causing it is the expected case, not an
-    // anomaly worth calling out; only the less-obvious causes
-    // (headlights, HOME button) are useful to flag here.
-    auto last_headlight_change = std::chrono::steady_clock::time_point{};
-    auto last_home_button_event = std::chrono::steady_clock::time_point{};
-
     auto reconnect = [&]() {
         std::fprintf(stderr, "%s [HAL:MCU] Link stale/dead -- reopening %s\n",
                      core::log_timestamp().c_str(), port_.c_str());
@@ -472,12 +456,6 @@ void McuInputHal::run() {
             // payload[0]: 0x11 = Lights OFF, 0x13 = Lights ON (bit 1 is the illumination bit)
             bool lights_on = (payload[0] & 0x02) != 0;
             bool prev_light = night_mode_.exchange(lights_on, std::memory_order_acq_rel);
-            if (lights_on != prev_light && !first_light) {
-                // Real change, not just the initial boot-time seed --
-                // see the CMD 0x12 branch below, this is one of the
-                // real transition points its log line correlates against.
-                last_headlight_change = std::chrono::steady_clock::now();
-            }
             if (first_light || lights_on != prev_light) {
                 first_light = false;
                 std::printf("%s [HAL:MCU] Headlights: %s (CMD 0x01 payload[0]=0x%02X -> night_mode=%d)\n",
@@ -545,8 +523,9 @@ void McuInputHal::run() {
             // direction. RE-UNDERSTOOD 2026-09-04, user-driven: earlier
             // theories here (direction-blind, then direction-based, then
             // "some other internal mode/state flag") all missed this --
-            // 0x01 = Factory LCD mode (OEM feed active), 0x02 =
-            // Aftermarket LCD mode (custom_ui feed active). Explains
+            // 0x01 = Aftermarket LCD mode (custom_ui feed active), 0x02 =
+            // Factory LCD mode (OEM feed active) -- corrected 2026-09-04,
+            // was initially recorded backwards. Explains
             // every false-trigger source found so far in one shot: a
             // real reverse-gear engage genuinely switches to the Factory
             // LCD (OEM camera relay) and disengage switches back, but so
@@ -567,35 +546,14 @@ void McuInputHal::run() {
             if (dir == 0x01 || dir == 0x02) {
                 auto now = std::chrono::steady_clock::now();
                 bool inStartupGrace = (now - run_start) < kStartupGraceWindow;
-                const char * lcd_mode = (dir == 0x01) ? "Factory LCD mode" : "Aftermarket LCD mode";
+                // 2026-09-04: user-corrected -- was backwards.
+                const char * lcd_mode = (dir == 0x01) ? "Aftermarket LCD mode" : "Factory LCD mode";
                 if (!inStartupGrace) {
-                    // 2026-09-04: user-driven correlation finding -- this
-                    // LCD-mode switch coincides with a real transition
-                    // point (a headlights change, a real reverse-gear
-                    // change, or a HOME-button switch), not arbitrary MCU
-                    // activity. Label the log line with whichever tracked
-                    // event happened most recently, if within a real
-                    // correlation window -- closes the loop this doc's
-                    // own investigation kept needing (manually cross-
-                    // referencing separate log lines by timestamp)
-                    // directly in the log itself.
-                    constexpr auto kCorrelationWindow = std::chrono::milliseconds(3000);
-                    const char * label = "unexplained (no tracked event in the last 3s)";
-                    auto best_delta = std::chrono::steady_clock::duration::max();
-                    if (last_headlight_change.time_since_epoch().count() != 0 &&
-                        (now - last_headlight_change) < kCorrelationWindow &&
-                        (now - last_headlight_change) < best_delta) {
-                        best_delta = now - last_headlight_change;
-                        label = "near a headlights change";
-                    }
-                    if (last_home_button_event.time_since_epoch().count() != 0 &&
-                        (now - last_home_button_event) < kCorrelationWindow &&
-                        (now - last_home_button_event) < best_delta) {
-                        best_delta = now - last_home_button_event;
-                        label = "near a HOME-button display-mode switch";
-                    }
-                    std::printf("%s [HAL:MCU] CMD 0x12 payload[0]=0x%02X -> %s -- %s -- logged only, not acted on\n",
-                                core::log_timestamp().c_str(), dir, lcd_mode, label);
+                    // 2026-09-04: no correlation tracking here by design --
+                    // this is simply an LCD-source status report, not an
+                    // anomaly that needs explaining against other events.
+                    std::printf("%s [HAL:MCU] CMD 0x12 payload[0]=0x%02X -> %s -- logged only, not acted on\n",
+                                core::log_timestamp().c_str(), dir, lcd_mode);
                 }
             }
         } else if (cmd == 0x20 && len >= 5) {
@@ -639,7 +597,6 @@ void McuInputHal::run() {
                     static bool s_drawer_open = false;
                     static auto s_last_press_time = std::chrono::steady_clock::now();
                     auto now = std::chrono::steady_clock::now();
-                    last_home_button_event = now;
                     auto elapsed_s = std::chrono::duration_cast<std::chrono::seconds>(now - s_last_press_time).count();
                     s_last_press_time = now;
                     if (elapsed_s > 10) {

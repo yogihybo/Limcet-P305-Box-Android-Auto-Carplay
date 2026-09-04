@@ -1,5 +1,6 @@
 #include "hal/mcu_input.h"
 #include "hal/androidauto_client.h"
+#include "core/async_worker.h"
 #include "core/log_timing.h"
 
 #include <cerrno>
@@ -17,6 +18,32 @@ namespace hal {
 namespace {
 
 static McuInputHal * g_mcu_instance = nullptr;
+
+// 2026-09-04: real hardware bug -- every AndroidAutoClient call below
+// (HOME/NEXT/PREV/ANSWER/HANGUP key forwarding, CMD 0x12's AUDIOFOCUS
+// send) used to run synchronously, inline, directly on THIS reader
+// thread -- the single thread that also parses every raw MCU UART
+// frame, including touch (CMD 0x20) and knob (CMD 0x02) events. Each
+// AndroidAutoClient call is bounded by SO_RCVTIMEO/SO_SNDTIMEO=1s x up
+// to 2 attempts (~2s worst case, longer if the sidecar is genuinely
+// wedged) -- while blocked, this thread cannot read/parse anything
+// else off the wire, so touch/knob/every other button freezes
+// simultaneously until the call returns. Confirmed via a real hardware
+// report: "occasionally refusing to respond to knob and touch inputs"
+// while in AA, severe enough the user couldn't even use HOME to exit
+// AA and check LVGL (HOME goes through this same blocked path).
+//
+// Same fix as touch.cpp/knob.cpp's own AA-forwarding path: route
+// through a dedicated core::AsyncWorker so this thread only ever
+// enqueues a job and returns immediately -- never blocks on the
+// sidecar socket. A SEPARATE worker instance from touch/knob's own
+// (each of those lives in its own translation unit) -- fine, since
+// AndroidAutoClient's underlying socket connection is per-instance,
+// not shared state these workers would need to coordinate over.
+core::AsyncWorker & mcu_aa_forward_worker() {
+    static core::AsyncWorker worker;
+    return worker;
+}
 
 // MCUAdapter_BoxP300::getPortSettings() (libMcuCenter.so) -- confirmed
 // real baud, see tools/mcu-handshake/mcu-handshake.c's own comment.
@@ -569,8 +596,12 @@ void McuInputHal::run() {
                 static uint8_t s_lastLcdMode = 0;  // 0 = not yet seen
                 bool realChange = s_lastLcdMode != 0 && dir != s_lastLcdMode;
                 if (realChange && !inStartupGrace) {
-                    AndroidAutoClient client;
-                    client.requestAudioFocus(aftermarket);
+                    // 2026-09-04: async -- see mcu_aa_forward_worker()'s
+                    // header comment. Must never block this thread.
+                    mcu_aa_forward_worker().enqueue([aftermarket]() {
+                        AndroidAutoClient client;
+                        client.requestAudioFocus(aftermarket);
+                    });
                 }
                 s_lastLcdMode = dir;
 
@@ -627,33 +658,49 @@ void McuInputHal::run() {
                         s_drawer_open = false;
                     }
 
-                    AndroidAutoClient client;
+                    // 2026-09-04: async -- see mcu_aa_forward_worker()'s
+                    // header comment. Must never block this thread.
                     if (!s_drawer_open) {
                         std::printf("%s [HAL:MCU] Button: HOME -> Open App Launcher (KEYCODE_HOME=3)\n", core::log_timestamp().c_str());
-                        client.sendKey(3 /* KEYCODE_HOME */);
+                        mcu_aa_forward_worker().enqueue([]() {
+                            AndroidAutoClient client;
+                            client.sendKey(3 /* KEYCODE_HOME */);
+                        });
                         s_drawer_open = true;
                     } else {
                         std::printf("%s [HAL:MCU] Button: HOME -> Return to Navigation/Map (KEYCODE_NAVIGATION=65538)\n", core::log_timestamp().c_str());
-                        client.sendKey(65538 /* KEYCODE_NAVIGATION */);
+                        mcu_aa_forward_worker().enqueue([]() {
+                            AndroidAutoClient client;
+                            client.sendKey(65538 /* KEYCODE_NAVIGATION */);
+                        });
                         s_drawer_open = false;
                     }
                 }
             } else if (b3 == kBtnNextTrack) {
                 std::printf("%s [HAL:MCU] Button: NEXT_TRACK (b3=3 b4=%u)\n", core::log_timestamp().c_str(), b4);
-                AndroidAutoClient client;
-                client.sendKey(87 /* KEYCODE_MEDIA_NEXT */);
+                // 2026-09-04: async -- see mcu_aa_forward_worker()'s header comment.
+                mcu_aa_forward_worker().enqueue([]() {
+                    AndroidAutoClient client;
+                    client.sendKey(87 /* KEYCODE_MEDIA_NEXT */);
+                });
             } else if (b3 == kBtnPrevTrack) {
                 std::printf("%s [HAL:MCU] Button: PREV_TRACK (b3=4 b4=%u)\n", core::log_timestamp().c_str(), b4);
-                AndroidAutoClient client;
-                client.sendKey(88 /* KEYCODE_MEDIA_PREVIOUS */);
+                mcu_aa_forward_worker().enqueue([]() {
+                    AndroidAutoClient client;
+                    client.sendKey(88 /* KEYCODE_MEDIA_PREVIOUS */);
+                });
             } else if (b3 == kBtnAnswer) {
                 std::printf("%s [HAL:MCU] Button: ANSWER_CALL (b3=8 b4=%u)\n", core::log_timestamp().c_str(), b4);
-                AndroidAutoClient client;
-                client.sendKey(5 /* KEYCODE_CALL */);
+                mcu_aa_forward_worker().enqueue([]() {
+                    AndroidAutoClient client;
+                    client.sendKey(5 /* KEYCODE_CALL */);
+                });
             } else if (b3 == kBtnHangup) {
                 std::printf("%s [HAL:MCU] Button: HANGUP_CALL (b3=9 b4=%u)\n", core::log_timestamp().c_str(), b4);
-                AndroidAutoClient client;
-                client.sendKey(6 /* KEYCODE_ENDCALL */);
+                mcu_aa_forward_worker().enqueue([]() {
+                    AndroidAutoClient client;
+                    client.sendKey(6 /* KEYCODE_ENDCALL */);
+                });
             } else {
                 std::printf("%s [HAL:MCU] Unhandled cmd=0x02 b3=0x%02X (%u) b4=0x%02X (%u)\n",
                             core::log_timestamp().c_str(), b3, b3, b4, b4);

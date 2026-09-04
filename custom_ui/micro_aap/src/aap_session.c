@@ -149,53 +149,31 @@ static time_t monotonic_seconds(void) {
     return ts.tv_sec;
 }
 
-static void sync_system_clock_from_phone(int64_t timestamp_val) {
-    if (timestamp_val <= 0) return;
-
-    time_t sec = 0;
-    long nsec = 0;
-
-    /* Normalize timestamp across microseconds (16 digits), milliseconds (13 digits), or seconds (10 digits) */
-    if (timestamp_val > 1000000000000000LL) {
-        /* Microseconds */
-        sec = (time_t)(timestamp_val / 1000000LL);
-        nsec = (long)((timestamp_val % 1000000LL) * 1000L);
-    } else if (timestamp_val > 1000000000000LL) {
-        /* Milliseconds */
-        sec = (time_t)(timestamp_val / 1000LL);
-        nsec = (long)((timestamp_val % 1000LL) * 1000000L);
-    } else if (timestamp_val > 1700000000LL && timestamp_val < 2500000000LL) {
-        /* Seconds */
-        sec = (time_t)timestamp_val;
-        nsec = 0;
-    } else {
-        return; /* Invalid / relative monotonic timestamp */
-    }
-
-    /* Plausibility check: between Jan 2024 and Jan 2040 */
-    if (sec < 1704067200LL || sec > 2208988800LL) {
-        return;
-    }
-
-    static time_t s_last_synced_sec = 0;
-    struct timeval current_tv;
-    gettimeofday(&current_tv, NULL);
-    if (labs((long)(current_tv.tv_sec - sec)) > 2 || s_last_synced_sec == 0) {
-        struct timespec ts = { .tv_sec = sec, .tv_nsec = nsec };
-        if (clock_settime(CLOCK_REALTIME, &ts) == 0) {
-            s_last_synced_sec = sec;
-            char time_str[64];
-            struct tm tm_buf;
-            localtime_r(&sec, &tm_buf);
-            strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", &tm_buf);
-            printf("[AA:CLOCK] Synchronized system time from phone: %s (UTC: %ld)\n",
-                   time_str, (long)sec);
-
-            /* Persist to hardware RTC */
-            system("hwclock -w 2>/dev/null &");
-        }
-    }
-}
+/* 2026-09-04: REMOVED sync_system_clock_from_phone() -- real hardware
+ * bugs traced every one of its real callers to a data source that was
+ * never phone wall-clock time in the first place, confirmed against
+ * this project's own docs/CLOCK_SYNC_HANDOFF.md (already concluded
+ * "the core Android Auto Protocol (AAP) does NOT transmit real
+ * wall-clock time from phone to head unit" before this file was
+ * written to do exactly that anyway):
+ *   - MEDIA_MESSAGE_DATA's embedded timestamp is a media presentation
+ *     timestamp (PTS) for AV sync, not real time -- called on every
+ *     single audio/video frame, producing a clock_settime() storm
+ *     (7 real jumps in 350ms in one real capture) that briefly broke
+ *     AA session timeout tracking (see aap_session_tick()'s own
+ *     monotonic_seconds() fix, same session).
+ *   - PingRequest/PingResponse.timestamp is
+ *     SystemClock.elapsedRealtime()/System.nanoTime() -- monotonic
+ *     microseconds since phone BOOT, not an epoch. Confirmed on real
+ *     hardware producing actively wrong calendar dates. The
+ *     PingResponse case was doubly wrong: that field is just our own
+ *     earlier PingRequest.timestamp echoed back unchanged by the
+ *     phone (a real RTT/latency-measurement pattern, not clock sync),
+ *     so it was resyncing from data this process sent itself.
+ * No remaining caller in this file has a real phone-wall-clock data
+ * source. See CLOCK_SYNC_HANDOFF.md's section 2 for the real
+ * prescribed fix (Bluetooth PBAP call-history timestamps) -- not
+ * implemented here; this file no longer attempts clock sync at all. */
 
 static void set_state(aap_session_t *s, aap_session_state_t state, const char *msg) {
     s->state = state;
@@ -599,7 +577,25 @@ static void handle_control_message(aap_session_t *s, uint16_t msg_id, const uint
             pb_istream_t stream = pb_istream_from_buffer(payload, payload_len);
             pb_decode(&stream, aap_protobuf_service_control_message_PingRequest_fields, &req);
 
-            sync_system_clock_from_phone(req.timestamp);
+            /* 2026-09-04: real hardware bug -- req.timestamp is NOT the
+             * phone's wall-clock time. docs/CLOCK_SYNC_HANDOFF.md
+             * already documents this precisely: PingRequest.timestamp
+             * uses SystemClock.elapsedRealtime()/System.nanoTime()
+             * (monotonic microseconds since phone BOOT), not an
+             * absolute epoch. Real hardware confirmed this producing
+             * actively wrong calendar dates (e.g. "2024-05-28" when
+             * that's nowhere near the real date) -- worse than the
+             * unsynced 1970 epoch fallback, since a wrong-looking-
+             * plausible date can mislead rather than clearly signal
+             * "not synced." Removed the sync_system_clock_from_phone()
+             * call that used to be here -- see that doc's own section
+             * 2 for the real prescribed fix (Bluetooth PBAP call-
+             * history timestamps), not yet implemented in this file.
+             * resp.timestamp = req.timestamp below (echo-back) is
+             * itself further confirmation this field is really for
+             * RTT/latency measurement, not clock sync -- a real
+             * clock-sync design would never just echo the same value
+             * back. */
 
             aap_protobuf_service_control_message_PingResponse resp =
                 aap_protobuf_service_control_message_PingResponse_init_default;
@@ -620,7 +616,13 @@ static void handle_control_message(aap_session_t *s, uint16_t msg_id, const uint
                 aap_protobuf_service_control_message_PingResponse_init_default;
             pb_istream_t stream = pb_istream_from_buffer(payload, payload_len);
             pb_decode(&stream, aap_protobuf_service_control_message_PingResponse_fields, &resp);
-            sync_system_clock_from_phone(resp.timestamp);
+            /* 2026-09-04: see the matching removal in the PING_REQUEST
+             * case above for why -- this is doubly wrong here: resp.timestamp
+             * is just OUR OWN earlier req.timestamp (from
+             * plausible_epoch_millis()) echoed back unchanged by the
+             * phone, so this was resyncing our clock from data we sent
+             * ourselves, not anything from the phone at all. */
+            (void)resp;
             break;
         }
 
@@ -1055,19 +1057,23 @@ static void handle_media_channel(aap_session_t *s, uint8_t channel_id, const uin
         }
 
         case aap_protobuf_service_media_sink_MediaMessageId_MEDIA_MESSAGE_DATA: {
-            /* Timestamp is 8 bytes at payload + 2, media stream starts at payload + 10 */
+            /* 2026-09-04: real hardware bug -- the 8 bytes at payload+2
+             * are this media frame's own presentation timestamp (PTS),
+             * NOT the phone's wall-clock time. This call used to pass
+             * it straight to sync_system_clock_from_phone() on every
+             * single frame -- since MEDIA_MESSAGE_DATA fires many times
+             * per second once video/audio is active, that meant a
+             * clock_settime(CLOCK_REALTIME, ...) storm: a real capture
+             * showed 7 "synchronized" clock jumps in 350ms right after
+             * video went active, each landing tens of seconds apart in
+             * value. Removed entirely -- ts_us was never used for
+             * anything else here (aap_audio_sink_write()/
+             * aap_video_sink_decode() below take only the raw stream
+             * bytes, not a timestamp), so this was pure bug, not a
+             * feature losing its data source. Real clock sync still
+             * happens via the control-channel PingRequest/PingResponse
+             * handlers above, which fire at a sane ~1/s cadence. */
             if (payload_len > 10) {
-                const uint8_t *ts_bytes = payload + 2;
-                uint64_t ts_us = ((uint64_t)ts_bytes[0] << 56) |
-                                 ((uint64_t)ts_bytes[1] << 48) |
-                                 ((uint64_t)ts_bytes[2] << 40) |
-                                 ((uint64_t)ts_bytes[3] << 32) |
-                                 ((uint64_t)ts_bytes[4] << 24) |
-                                 ((uint64_t)ts_bytes[5] << 16) |
-                                 ((uint64_t)ts_bytes[6] << 8)  |
-                                 ((uint64_t)ts_bytes[7]);
-                sync_system_clock_from_phone((int64_t)ts_us);
-
                 const uint8_t *stream_bytes = payload + 10;
                 size_t stream_bytes_len = payload_len - 10;
 

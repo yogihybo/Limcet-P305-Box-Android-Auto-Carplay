@@ -352,6 +352,18 @@ void McuInputHal::run() {
     auto last_probe_sent = run_start;
     auto last_frame_time = run_start;
 
+    // 2026-09-04: real capture analysis (user-driven) found CMD 0x12
+    // firing at several distinct real transition points -- a headlights
+    // change, a real reverse-gear change, and a HOME-button-driven
+    // factory/custom_ui display-mode switch -- not arbitrary MCU
+    // activity. Tracked here so the CMD 0x12 log line below can label
+    // which nearby tracked event it most likely correlates with,
+    // instead of leaving that correlation to manual timestamp
+    // cross-referencing across separate log lines every time.
+    auto last_headlight_change = std::chrono::steady_clock::time_point{};
+    auto last_reverse_change = std::chrono::steady_clock::time_point{};
+    auto last_home_button_event = std::chrono::steady_clock::time_point{};
+
     auto reconnect = [&]() {
         std::fprintf(stderr, "%s [HAL:MCU] Link stale/dead -- reopening %s\n",
                      core::log_timestamp().c_str(), port_.c_str());
@@ -456,6 +468,12 @@ void McuInputHal::run() {
             // payload[0]: 0x11 = Lights OFF, 0x13 = Lights ON (bit 1 is the illumination bit)
             bool lights_on = (payload[0] & 0x02) != 0;
             bool prev_light = night_mode_.exchange(lights_on, std::memory_order_acq_rel);
+            if (lights_on != prev_light && !first_light) {
+                // Real change, not just the initial boot-time seed --
+                // see the CMD 0x12 branch below, this is one of the
+                // real transition points its log line correlates against.
+                last_headlight_change = std::chrono::steady_clock::now();
+            }
             if (first_light || lights_on != prev_light) {
                 first_light = false;
                 std::printf("%s [HAL:MCU] Headlights: %s (CMD 0x01 payload[0]=0x%02X -> night_mode=%d)\n",
@@ -502,6 +520,9 @@ void McuInputHal::run() {
             // its own -- CMD 0x01 doesn't share that failure mode.
             bool reversing = (payload[0] & 0x04) != 0;
             bool prev_reverse = reverse_gear_.exchange(reversing, std::memory_order_acq_rel);
+            if (reversing != prev_reverse && !first_reverse) {
+                last_reverse_change = std::chrono::steady_clock::now();
+            }
             if (first_reverse || reversing != prev_reverse) {
                 first_reverse = false;
                 std::printf("%s [HAL:MCU] Reverse gear: %s (CMD 0x01 payload[0]=0x%02X)\n",
@@ -518,45 +539,68 @@ void McuInputHal::run() {
             // conflict" section. Kept here only as a no-op placeholder so
             // future work doesn't have to rediscover this dead end.
         } else if (cmd == 0x12 && len >= 1) {
-            // CMD 0x12: real reverse-gear-adjacent push, direction in
-            // payload[0] (0x01=entering-shape, 0x02=exiting-shape) --
-            // see the long history in docs/MCU_COMMAND_REFERENCE.md.
+            // CMD 0x12: real LCD-source state broadcast -- payload[0]
+            // states which LCD is currently active, not a reverse-gear
+            // direction. RE-UNDERSTOOD 2026-09-04, user-driven: earlier
+            // theories here (direction-blind, then direction-based, then
+            // "some other internal mode/state flag") all missed this --
+            // 0x01 = Factory LCD mode (OEM feed active), 0x02 =
+            // Aftermarket LCD mode (custom_ui feed active). Explains
+            // every false-trigger source found so far in one shot: a
+            // real reverse-gear engage genuinely switches to the Factory
+            // LCD (OEM camera relay) and disengage switches back, but so
+            // does a HOME-button long-press (user-confirmed: switches
+            // factory<->custom_ui screens directly) and, per earlier
+            // captures, a plain headlights toggle -- all three are real
+            // LCD-source switches from the MCU's point of view, this
+            // command just reports which one is now active, regardless
+            // of what caused it. See docs/MCU_COMMAND_REFERENCE.md for
+            // the full history of superseded theories on this command.
             //
-            // DEMOTED 2026-09-03: no longer sets reverse_gear_. CMD 0x01
-            // bit 2 (see that branch above) is now confirmed a real,
-            // held, level-encoded reverse-gear field -- the same
-            // transmission convention as bit 1/headlights -- and doesn't
-            // share CMD 0x12's own confirmed failure mode (firing from a
-            // plain headlights toggle alone, zero gear involvement, ~29ms
-            // after the headlights frame -- see this doc's CMD 0x12
-            // conflict section). Kept here purely as a diagnostic
-            // cross-check against the CMD 0x01-driven state, logged, not
-            // acted on -- real disagreement between the two would be a
-            // genuinely interesting signal worth investigating, not
-            // something to silently discard.
+            // DEMOTED 2026-09-03 as a reverse_gear_ source: CMD 0x01 bit
+            // 2 (see that branch above) is the real, held, level-encoded
+            // reverse-gear field -- this command was never a reliable
+            // reverse-gear signal on its own (it reports LCD source, not
+            // gear state), kept here purely as a diagnostic log now.
             uint8_t dir = payload[0];
             if (dir == 0x01 || dir == 0x02) {
                 auto now = std::chrono::steady_clock::now();
                 bool inStartupGrace = (now - run_start) < kStartupGraceWindow;
-                bool engaged = (dir == 0x01);
-                bool current = reverse_gear_.load(std::memory_order_acquire);
-                // 2026-09-04: was disagreement-only -- real capture analysis
-                // found that silently skewed what showed up in the log.
-                // Every CMD 0x12 firing observed across 3 real captures so
-                // far has been a false trigger (headlights, HOME long-press,
-                // no real gear activity in any of them), but only the
-                // dir==0x01 ("engaging-shape") ones ever printed anything,
-                // because those are the only ones that actually disagree
-                // with a resting reverse_gear_=false -- dir==0x02
-                // ("exiting-shape") false triggers coincidentally MATCH the
-                // resting false state and were completely invisible, not
-                // because they're any less spurious. Log every non-grace-
-                // window CMD 0x12 event's relationship to reverse_gear_ now,
-                // agreement included, for a complete picture.
+                const char * lcd_mode = (dir == 0x01) ? "Factory LCD mode" : "Aftermarket LCD mode";
                 if (!inStartupGrace) {
-                    std::printf("%s [HAL:MCU] CMD 0x12 payload[0]=0x%02X (%s) %s CMD 0x01-driven reverse_gear_=%d -- logged only, not acted on\n",
-                                core::log_timestamp().c_str(), dir, engaged ? "engaging-shape" : "exiting-shape",
-                                engaged == current ? "matches" : "disagrees with", current ? 1 : 0);
+                    // 2026-09-04: user-driven correlation finding -- this
+                    // LCD-mode switch coincides with a real transition
+                    // point (a headlights change, a real reverse-gear
+                    // change, or a HOME-button switch), not arbitrary MCU
+                    // activity. Label the log line with whichever tracked
+                    // event happened most recently, if within a real
+                    // correlation window -- closes the loop this doc's
+                    // own investigation kept needing (manually cross-
+                    // referencing separate log lines by timestamp)
+                    // directly in the log itself.
+                    constexpr auto kCorrelationWindow = std::chrono::milliseconds(3000);
+                    const char * label = "unexplained (no tracked event in the last 3s)";
+                    auto best_delta = std::chrono::steady_clock::duration::max();
+                    if (last_headlight_change.time_since_epoch().count() != 0 &&
+                        (now - last_headlight_change) < kCorrelationWindow &&
+                        (now - last_headlight_change) < best_delta) {
+                        best_delta = now - last_headlight_change;
+                        label = "near a headlights change";
+                    }
+                    if (last_reverse_change.time_since_epoch().count() != 0 &&
+                        (now - last_reverse_change) < kCorrelationWindow &&
+                        (now - last_reverse_change) < best_delta) {
+                        best_delta = now - last_reverse_change;
+                        label = "near a real CMD 0x01-driven reverse-gear change";
+                    }
+                    if (last_home_button_event.time_since_epoch().count() != 0 &&
+                        (now - last_home_button_event) < kCorrelationWindow &&
+                        (now - last_home_button_event) < best_delta) {
+                        best_delta = now - last_home_button_event;
+                        label = "near a HOME-button display-mode switch";
+                    }
+                    std::printf("%s [HAL:MCU] CMD 0x12 payload[0]=0x%02X -> %s -- %s -- logged only, not acted on\n",
+                                core::log_timestamp().c_str(), dir, lcd_mode, label);
                 }
             }
         } else if (cmd == 0x20 && len >= 5) {
@@ -600,6 +644,7 @@ void McuInputHal::run() {
                     static bool s_drawer_open = false;
                     static auto s_last_press_time = std::chrono::steady_clock::now();
                     auto now = std::chrono::steady_clock::now();
+                    last_home_button_event = now;
                     auto elapsed_s = std::chrono::duration_cast<std::chrono::seconds>(now - s_last_press_time).count();
                     s_last_press_time = now;
                     if (elapsed_s > 10) {

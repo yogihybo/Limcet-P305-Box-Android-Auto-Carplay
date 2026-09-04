@@ -547,13 +547,37 @@ void McuInputHal::run() {
                 auto now = std::chrono::steady_clock::now();
                 bool inStartupGrace = (now - run_start) < kStartupGraceWindow;
                 // 2026-09-04: user-corrected -- was backwards.
-                const char * lcd_mode = (dir == 0x01) ? "Aftermarket LCD mode" : "Factory LCD mode";
+                bool aftermarket = (dir == 0x01);
+                const char * lcd_mode = aftermarket ? "Aftermarket LCD mode" : "Factory LCD mode";
+
+                // 2026-09-04: real hardware need -- pause the phone's own
+                // media playback (channel 4/MEDIA_AUDIO) when focus
+                // shifts to the Factory LCD, resume it on return. Gated
+                // on a REAL change from the last-seen LCD mode, not
+                // every CMD 0x12 firing -- this command is confirmed
+                // (same day, this file) to often just re-announce the
+                // CURRENT unchanged state (e.g. a headlights toggle with
+                // no real LCD switch produces the same payload before
+                // and after), and blindly pausing/resuming on every one
+                // of those would be wrong. s_lastLcdMode is updated even
+                // during the startup grace window (to seed real initial
+                // state correctly, same reasoning as first_light/
+                // first_reverse above) but the actual AUDIOFOCUS send is
+                // still gated on !inStartupGrace, since the one known
+                // spurious CMD 0x12 in the MCU's own init burst carries
+                // no real meaning either way.
+                static uint8_t s_lastLcdMode = 0;  // 0 = not yet seen
+                bool realChange = s_lastLcdMode != 0 && dir != s_lastLcdMode;
+                if (realChange && !inStartupGrace) {
+                    AndroidAutoClient client;
+                    client.requestAudioFocus(aftermarket);
+                }
+                s_lastLcdMode = dir;
+
                 if (!inStartupGrace) {
-                    // 2026-09-04: no correlation tracking here by design --
-                    // this is simply an LCD-source status report, not an
-                    // anomaly that needs explaining against other events.
-                    std::printf("%s [HAL:MCU] CMD 0x12 payload[0]=0x%02X -> %s -- logged only, not acted on\n",
-                                core::log_timestamp().c_str(), dir, lcd_mode);
+                    std::printf("%s [HAL:MCU] CMD 0x12 payload[0]=0x%02X -> %s%s\n",
+                                core::log_timestamp().c_str(), dir, lcd_mode,
+                                realChange ? " -- sent AUDIOFOCUS to sidecar" : " -- logged only, not acted on");
                 }
             }
         } else if (cmd == 0x20 && len >= 5) {

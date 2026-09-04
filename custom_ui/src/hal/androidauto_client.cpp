@@ -434,6 +434,19 @@ bool AndroidAutoClient::sendNightMode(bool nightMode) {
     return false;
 }
 
+bool AndroidAutoClient::requestAudioFocus(bool gain) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    std::string reply;
+    std::string cmd = std::string("AUDIOFOCUS ") + (gain ? "1" : "0");
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        if (ensureConnected(/*allow_spawn=*/false) && sendCommand(cmd, reply)) {
+            return true;
+        }
+        disconnect();
+    }
+    return false;
+}
+
 bool AndroidAutoClient::sendEq(int bass_db, int mid_db, int treble_db, bool loudness) {
     std::lock_guard<std::mutex> lock(mutex_);
     std::string reply;

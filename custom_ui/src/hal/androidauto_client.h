@@ -187,6 +187,20 @@ public:
     // catch-up case.
     bool sendNightMode(bool nightMode);
 
+    // 2026-09-04: real hardware need -- pause/resume the phone's own
+    // media playback (channel 4/MEDIA_AUDIO) when the display relay
+    // switches to/from the OEM Factory LCD (see hal/mcu_input.cpp's
+    // CMD 0x12 handling), same real mechanism every Android Auto head
+    // unit uses to interrupt media for something else (a phone call, a
+    // source switch) -- sends "AUDIOFOCUS <0|1>", which
+    // sidecars/androidauto/main.cpp's own handler forwards to
+    // aap_session_send_audio_focus() as an UNSOLICITED
+    // AudioFocusNotification (gain=false -> AUDIO_FOCUS_STATE_LOSS,
+    // gain=true -> AUDIO_FOCUS_STATE_GAIN_MEDIA_ONLY). Same
+    // allow_spawn=false/best-effort semantics as sendNightMode() --
+    // nothing to forward to if no AA session exists yet.
+    bool requestAudioFocus(bool gain);
+
     // Sends "EQ <bass_db> <mid_db> <treble_db> <loudness:0|1>"
     // UNUSED as of 2026-08-29 -- superseded by the system-wide ALSA-level
     // EQ (custom_ui/ladspa_eq/carpi_eq.c + hal::set_audio_eq(), see that

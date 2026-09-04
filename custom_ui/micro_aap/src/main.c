@@ -154,6 +154,15 @@ static void process_single_command(aap_session_t *session, const char *cmd, int 
     } else if (strncmp(cmd, "NIGHT ", 6) == 0) {
         if (session) aap_session_send_night_mode(session, cmd[6] == '1');
         reply = "OK\n";
+    } else if (strncmp(cmd, "AUDIOFOCUS ", 11) == 0) {
+        /* 2026-09-04: real hardware need -- pause/resume the phone's
+         * own media playback (channel 4/MEDIA_AUDIO) when the display
+         * relay switches to/from the OEM Factory LCD, same real
+         * mechanism every Android Auto head unit uses to interrupt
+         * media for something else. See aap_session_send_audio_focus()'s
+         * own header comment. */
+        if (session) aap_session_send_audio_focus(session, cmd[11] == '1');
+        reply = "OK\n";
     } else if (strncmp(cmd, "EQ ", 3) == 0) {
         int bass = 0, mid = 0, treble = 0, loud = 0;
         if (sscanf(cmd + 3, "%d %d %d %d", &bass, &mid, &treble, &loud) == 4) {

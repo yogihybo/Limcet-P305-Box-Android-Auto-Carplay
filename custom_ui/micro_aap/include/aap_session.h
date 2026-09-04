@@ -51,6 +51,17 @@ bool aap_session_is_video_focus_native(const aap_session_t *session);
 void aap_session_request_video_focus(aap_session_t *session, bool projected);
 void aap_session_set_eq(aap_session_t *session, int bass_db, int mid_db, int treble_db, bool loudness);
 
+/* 2026-09-04: real hardware need -- send an UNSOLICITED
+ * AudioFocusNotification (not a reply to the phone's own
+ * AudioFocusRequest, see AudioFocusNotification.unsolicited) to tell
+ * the phone's currently-playing media app to pause/resume, same real
+ * mechanism every Android Auto head unit uses to interrupt media for
+ * something else (a phone call, a source switch). gain=false sends
+ * AUDIO_FOCUS_STATE_LOSS (channel 4/MEDIA_AUDIO's own app pauses
+ * itself); gain=true sends AUDIO_FOCUS_STATE_GAIN_MEDIA_ONLY (resumes
+ * media specifically, without also claiming guidance/system focus). */
+void aap_session_send_audio_focus(aap_session_t *session, bool gain);
+
 int aap_session_get_socket_fd(const aap_session_t *session);
 
 #ifdef __cplusplus

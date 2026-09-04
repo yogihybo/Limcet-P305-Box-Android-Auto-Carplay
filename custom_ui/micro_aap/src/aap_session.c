@@ -1418,6 +1418,35 @@ void aap_session_send_night_mode(aap_session_t *s, bool night_mode) {
                      pb_buf, ostream.bytes_written, true);
 }
 
+/* 2026-09-04: see this function's own header comment (aap_session.h)
+ * -- an UNSOLICITED AudioFocusNotification, not a reply to the phone's
+ * own AudioFocusRequest (compare against the real reply built in the
+ * MESSAGE_AUDIO_FOCUS_REQUEST case above: same message shape, but that
+ * one sets unsolicited=false since it IS a reply). Real, standard AA
+ * mechanism for "please pause"/"you can resume" -- not a raw channel
+ * STOP/START, which is for the channel's own teardown, not a focus
+ * change the app is meant to react to like any other audio interrupt. */
+void aap_session_send_audio_focus(aap_session_t *s, bool gain) {
+    if (!s || s->state != AAP_SESSION_STATE_RUNNING) return;
+
+    aap_protobuf_service_control_message_AudioFocusNotification notif =
+        aap_protobuf_service_control_message_AudioFocusNotification_init_default;
+    notif.focus_state = gain
+        ? aap_protobuf_service_control_message_AudioFocusStateType_AUDIO_FOCUS_STATE_GAIN_MEDIA_ONLY
+        : aap_protobuf_service_control_message_AudioFocusStateType_AUDIO_FOCUS_STATE_LOSS;
+    notif.has_unsolicited = true;
+    notif.unsolicited = true;
+
+    uint8_t pb_buf[128];
+    pb_ostream_t ostream = pb_ostream_from_buffer(pb_buf, sizeof(pb_buf));
+    pb_encode(&ostream, aap_protobuf_service_control_message_AudioFocusNotification_fields, &notif);
+
+    send_channel_msg(s, AAP_CHANNEL_CONTROL,
+                     aap_protobuf_service_control_message_ControlMessageType_MESSAGE_AUDIO_FOCUS_NOTIFICATION,
+                     pb_buf, ostream.bytes_written, true);
+    printf("[AA] Sent unsolicited AudioFocusNotification: %s\n", gain ? "GAIN_MEDIA_ONLY" : "LOSS");
+}
+
 void aap_session_set_video_visible(aap_session_t *s, bool visible) {
     if (!s || !s->video_sink) return;
     aap_video_sink_set_visible(s->video_sink, visible);

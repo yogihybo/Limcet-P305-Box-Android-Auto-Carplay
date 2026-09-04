@@ -117,12 +117,37 @@ struct aap_session {
     int32_t media_session_id;
     int32_t video_session_id;
 
+    /* 2026-09-04: real hardware bug -- these two used to be wall-clock
+     * (time(NULL)) seconds, which sync_system_clock_from_phone() below
+     * can (and does, on real hardware) instantly jump via
+     * clock_settime(CLOCK_REALTIME, ...) whenever the phone sends a
+     * clock-sync message. A real capture showed two clock-sync
+     * messages 260ms apart carrying real timestamps 217s apart -- the
+     * second one jumped the wall clock forward by 217s mid-session,
+     * and aap_session_tick()'s "now - last_rx_time > 3" check (using
+     * the same jumped wall clock for `now`) immediately saw a fake
+     * 217-second gap and tore down a session that had just finished
+     * configuring video moments earlier. Switched to CLOCK_MONOTONIC
+     * seconds (monotonic_seconds() below) -- immune to any
+     * clock_settime() adjustment, correct for what these two fields
+     * actually measure (elapsed time since an internal event), never
+     * sent over the wire (the real ping timestamp sent to the phone
+     * uses plausible_epoch_millis(), a separate function, unaffected).
+     */
     time_t last_ping_time;
     time_t last_rx_time;
 
     bool is_video_focus_native;
     pthread_mutex_t tx_mutex;
 };
+
+/* See the struct comment on last_ping_time/last_rx_time above for why
+ * this exists instead of plain time(NULL) for elapsed-time tracking. */
+static time_t monotonic_seconds(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return ts.tv_sec;
+}
 
 static void sync_system_clock_from_phone(int64_t timestamp_val) {
     if (timestamp_val <= 0) return;
@@ -564,7 +589,7 @@ static void handle_control_message(aap_session_t *s, uint16_t msg_id, const uint
             send_channel_msg(s, AAP_CHANNEL_CONTROL,
                              aap_protobuf_service_control_message_ControlMessageType_MESSAGE_PING_REQUEST,
                              pb_buf, stream.bytes_written, true);
-            s->last_ping_time = time(NULL);
+            s->last_ping_time = monotonic_seconds();
             break;
         }
 
@@ -1085,8 +1110,8 @@ aap_session_t *aap_session_create(int tcp_fd) {
     s->video_sink = aap_video_sink_create(800, 480);
     s->mic = aap_microphone_create("default");
 
-    s->last_ping_time = time(NULL);
-    s->last_rx_time = time(NULL);
+    s->last_ping_time = monotonic_seconds();
+    s->last_rx_time = monotonic_seconds();
 
     send_version_request(s);
     return s;
@@ -1159,7 +1184,7 @@ bool aap_session_process_incoming(aap_session_t *s) {
     }
 
     s->rx_len += (size_t)n;
-    s->last_rx_time = time(NULL);
+    s->last_rx_time = monotonic_seconds();
 
     size_t cursor = 0;
     while (s->rx_len - cursor >= 2) {
@@ -1262,7 +1287,7 @@ bool aap_session_process_incoming(aap_session_t *s) {
 void aap_session_tick(aap_session_t *s) {
     if (!s || (s->state != AAP_SESSION_STATE_RUNNING && s->state != AAP_SESSION_STATE_CHANNELS_OPENING)) return;
 
-    time_t now = time(NULL);
+    time_t now = monotonic_seconds();
     if (s->state == AAP_SESSION_STATE_RUNNING && (now - s->last_rx_time > 3)) {
         printf("[AA] WiFi connection lost (no data for 3s), closing session\n");
         set_state(s, AAP_SESSION_STATE_DISCONNECTED, "WiFi disconnected");

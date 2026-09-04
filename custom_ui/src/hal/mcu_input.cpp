@@ -354,14 +354,18 @@ void McuInputHal::run() {
 
     // 2026-09-04: real capture analysis (user-driven) found CMD 0x12
     // firing at several distinct real transition points -- a headlights
-    // change, a real reverse-gear change, and a HOME-button-driven
-    // factory/custom_ui display-mode switch -- not arbitrary MCU
-    // activity. Tracked here so the CMD 0x12 log line below can label
-    // which nearby tracked event it most likely correlates with,
-    // instead of leaving that correlation to manual timestamp
-    // cross-referencing across separate log lines every time.
+    // change and a HOME-button-driven factory/custom_ui display-mode
+    // switch -- not arbitrary MCU activity. Tracked here so the CMD
+    // 0x12 log line below can label which nearby tracked event it most
+    // likely correlates with, instead of leaving that correlation to
+    // manual timestamp cross-referencing across separate log lines
+    // every time. A real CMD 0x01-driven reverse-gear change is
+    // deliberately NOT tracked for this correlation -- CMD 0x12 is
+    // itself understood to report the resulting LCD-source switch, so
+    // a real gear change causing it is the expected case, not an
+    // anomaly worth calling out; only the less-obvious causes
+    // (headlights, HOME button) are useful to flag here.
     auto last_headlight_change = std::chrono::steady_clock::time_point{};
-    auto last_reverse_change = std::chrono::steady_clock::time_point{};
     auto last_home_button_event = std::chrono::steady_clock::time_point{};
 
     auto reconnect = [&]() {
@@ -520,9 +524,6 @@ void McuInputHal::run() {
             // its own -- CMD 0x01 doesn't share that failure mode.
             bool reversing = (payload[0] & 0x04) != 0;
             bool prev_reverse = reverse_gear_.exchange(reversing, std::memory_order_acq_rel);
-            if (reversing != prev_reverse && !first_reverse) {
-                last_reverse_change = std::chrono::steady_clock::now();
-            }
             if (first_reverse || reversing != prev_reverse) {
                 first_reverse = false;
                 std::printf("%s [HAL:MCU] Reverse gear: %s (CMD 0x01 payload[0]=0x%02X)\n",
@@ -586,12 +587,6 @@ void McuInputHal::run() {
                         (now - last_headlight_change) < best_delta) {
                         best_delta = now - last_headlight_change;
                         label = "near a headlights change";
-                    }
-                    if (last_reverse_change.time_since_epoch().count() != 0 &&
-                        (now - last_reverse_change) < kCorrelationWindow &&
-                        (now - last_reverse_change) < best_delta) {
-                        best_delta = now - last_reverse_change;
-                        label = "near a real CMD 0x01-driven reverse-gear change";
                     }
                     if (last_home_button_event.time_since_epoch().count() != 0 &&
                         (now - last_home_button_event) < kCorrelationWindow &&

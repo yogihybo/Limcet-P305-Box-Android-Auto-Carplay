@@ -540,9 +540,23 @@ void McuInputHal::run() {
                 bool inStartupGrace = (now - run_start) < kStartupGraceWindow;
                 bool engaged = (dir == 0x01);
                 bool current = reverse_gear_.load(std::memory_order_acquire);
-                if (!inStartupGrace && engaged != current) {
-                    std::printf("%s [HAL:MCU] CMD 0x12 payload[0]=0x%02X (%s) disagrees with CMD 0x01-driven reverse_gear_=%d -- logged only, not acted on\n",
-                                core::log_timestamp().c_str(), dir, engaged ? "engaging-shape" : "exiting-shape", current ? 1 : 0);
+                // 2026-09-04: was disagreement-only -- real capture analysis
+                // found that silently skewed what showed up in the log.
+                // Every CMD 0x12 firing observed across 3 real captures so
+                // far has been a false trigger (headlights, HOME long-press,
+                // no real gear activity in any of them), but only the
+                // dir==0x01 ("engaging-shape") ones ever printed anything,
+                // because those are the only ones that actually disagree
+                // with a resting reverse_gear_=false -- dir==0x02
+                // ("exiting-shape") false triggers coincidentally MATCH the
+                // resting false state and were completely invisible, not
+                // because they're any less spurious. Log every non-grace-
+                // window CMD 0x12 event's relationship to reverse_gear_ now,
+                // agreement included, for a complete picture.
+                if (!inStartupGrace) {
+                    std::printf("%s [HAL:MCU] CMD 0x12 payload[0]=0x%02X (%s) %s CMD 0x01-driven reverse_gear_=%d -- logged only, not acted on\n",
+                                core::log_timestamp().c_str(), dir, engaged ? "engaging-shape" : "exiting-shape",
+                                engaged == current ? "matches" : "disagrees with", current ? 1 : 0);
                 }
             }
         } else if (cmd == 0x20 && len >= 5) {

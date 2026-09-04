@@ -195,8 +195,10 @@ public:
     // source switch) -- sends "AUDIOFOCUS <0|1>", which
     // sidecars/androidauto/main.cpp's own handler forwards to
     // aap_session_send_audio_focus() as an UNSOLICITED
-    // AudioFocusNotification (gain=false -> AUDIO_FOCUS_STATE_LOSS,
-    // gain=true -> AUDIO_FOCUS_STATE_GAIN_MEDIA_ONLY). Same
+    // AudioFocusNotification (gain=false -> AUDIO_FOCUS_STATE_LOSS_TRANSIENT,
+    // gain=true -> AUDIO_FOCUS_STATE_GAIN_MEDIA_ONLY -- LOSS_TRANSIENT
+    // not plain LOSS, real-hardware-confirmed necessary for apps to
+    // auto-resume on the matching GAIN). Same
     // allow_spawn=false/best-effort semantics as sendNightMode() --
     // nothing to forward to if no AA session exists yet.
     bool requestAudioFocus(bool gain);

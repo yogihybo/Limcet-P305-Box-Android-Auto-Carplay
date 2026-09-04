@@ -139,6 +139,24 @@ struct aap_session {
 
     bool is_video_focus_native;
     pthread_mutex_t tx_mutex;
+
+    /* 2026-09-04: real hardware bug -- aap_session_send_key() used to
+     * usleep(25000) between the key-down and key-up sends, blocking
+     * the ENTIRE event loop thread (main.c's single poll() loop --
+     * this whole sidecar has no per-connection threads) for 25ms per
+     * key. A burst of quick key sends (e.g. rapid knob rotation, each
+     * tick forwarded as its own KEY command) compounds this into a
+     * real, if smaller, instance of the same "one thread blocks, every
+     * other IPC/AAP/session responsibility that thread owns freezes
+     * with it" bug class as mcu_input.cpp's reader-thread freeze and
+     * this file's own SO_SNDTIMEO fix (see main.c's own comment on
+     * that). Fixed by deferring the key-up: send it immediately when
+     * due, flushed either by aap_session_tick() (called every loop
+     * iteration, ~100ms worst case) or by the next key send arriving
+     * first -- see flush_pending_key_up() below. */
+    bool pending_key_up;
+    uint32_t pending_key_up_code;
+    uint64_t pending_key_up_due_us;
 };
 
 /* See the struct comment on last_ping_time/last_rx_time above for why
@@ -1290,8 +1308,39 @@ bool aap_session_process_incoming(aap_session_t *s) {
     return true;
 }
 
+/* Sends the deferred key-up report for a prior aap_session_send_key()
+ * call, if one is still pending -- see the struct's own comment on
+ * pending_key_up. Safe to call whether or not one is actually pending. */
+static void flush_pending_key_up(aap_session_t *s) {
+    if (!s->pending_key_up) return;
+    s->pending_key_up = false;
+
+    aap_protobuf_service_inputsource_message_InputReport report =
+        aap_protobuf_service_inputsource_message_InputReport_init_default;
+    report.timestamp = now_micros();
+    report.has_key_event = true;
+    report.key_event.keys_count = 1;
+    report.key_event.keys[0].keycode = s->pending_key_up_code;
+    report.key_event.keys[0].down = false;
+    report.key_event.keys[0].metastate = 0;
+
+    uint8_t pb_buf[256];
+    pb_ostream_t ostream = pb_ostream_from_buffer(pb_buf, sizeof(pb_buf));
+    pb_encode(&ostream, aap_protobuf_service_inputsource_message_InputReport_fields, &report);
+
+    send_channel_msg(s, AAP_CHANNEL_INPUT,
+                     aap_protobuf_service_inputsource_InputMessageId_INPUT_MESSAGE_INPUT_REPORT,
+                     pb_buf, ostream.bytes_written, true);
+
+    printf("[AA] sent keycode %u (up, deferred)\n", s->pending_key_up_code);
+}
+
 void aap_session_tick(aap_session_t *s) {
     if (!s || (s->state != AAP_SESSION_STATE_RUNNING && s->state != AAP_SESSION_STATE_CHANNELS_OPENING)) return;
+
+    if (s->pending_key_up && now_micros() >= s->pending_key_up_due_us) {
+        flush_pending_key_up(s);
+    }
 
     time_t now = monotonic_seconds();
     if (s->state == AAP_SESSION_STATE_RUNNING && (now - s->last_rx_time > 3)) {
@@ -1320,6 +1369,14 @@ void aap_session_tick(aap_session_t *s) {
 void aap_session_send_key(aap_session_t *s, uint32_t keycode) {
     if (!s || s->state != AAP_SESSION_STATE_RUNNING) return;
 
+    /* If a previous key's up-report is still pending (a new key
+     * arrived faster than the 25ms hold elapsed -- e.g. rapid knob
+     * rotation), flush it now rather than losing/overwriting it, same
+     * as the original blocking code's own strict sequencing. See the
+     * struct's own comment on pending_key_up for why this is deferred
+     * instead of a blocking usleep(). */
+    flush_pending_key_up(s);
+
     /* Key down report */
     aap_protobuf_service_inputsource_message_InputReport report =
         aap_protobuf_service_inputsource_message_InputReport_init_default;
@@ -1338,21 +1395,16 @@ void aap_session_send_key(aap_session_t *s, uint32_t keycode) {
                      aap_protobuf_service_inputsource_InputMessageId_INPUT_MESSAGE_INPUT_REPORT,
                      pb_buf, ostream.bytes_written, true);
 
-    /* 25ms key press hold duration so Android InputManager receives distinct down and up events */
-    usleep(25000);
+    /* 25ms key press hold duration so Android InputManager receives
+     * distinct down and up events -- deferred, not blocked on here.
+     * Flushed by aap_session_tick() (called every event-loop iteration,
+     * ~100ms worst case) or by the next aap_session_send_key() call,
+     * whichever comes first. */
+    s->pending_key_up = true;
+    s->pending_key_up_code = keycode;
+    s->pending_key_up_due_us = now_micros() + 25000;
 
-    /* Key up report */
-    report.timestamp = now_micros();
-    report.key_event.keys[0].down = false;
-
-    ostream = pb_ostream_from_buffer(pb_buf, sizeof(pb_buf));
-    pb_encode(&ostream, aap_protobuf_service_inputsource_message_InputReport_fields, &report);
-
-    send_channel_msg(s, AAP_CHANNEL_INPUT,
-                     aap_protobuf_service_inputsource_InputMessageId_INPUT_MESSAGE_INPUT_REPORT,
-                     pb_buf, ostream.bytes_written, true);
-
-    printf("[AA] sent keycode %u (down/up)\n", keycode);
+    printf("[AA] sent keycode %u (down)\n", keycode);
 }
 
 void aap_session_send_rotary(aap_session_t *s, int32_t delta) {

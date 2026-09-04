@@ -8,6 +8,9 @@
 #include "ui/android_auto_screen.h"
 
 #include <atomic>
+#include <chrono>
+#include <mutex>
+#include <thread>
 #include <utility>
 
 #include "hal/androidauto_client.h"
@@ -16,6 +19,7 @@
 #include "hal/knob.h"
 #include "core/log_timing.h"
 #include "core/navigation.h"
+#include "core/sized_thread.h"
 #include "ui/bluetooth_screen.h"
 #include "ui/status_bar.h"
 #include "ui/theme.h"
@@ -68,6 +72,56 @@ lv_color_t color_for_state_name(const std::string & name) {
     return staging_ui::theme::accent_primary();
 }
 
+// 2026-09-04: real hardware bug -- poll_timer_cb() used to call
+// client().statusLine()/videoFocusNative() directly, inline, on the
+// LVGL main thread every 500ms. Each is a synchronous AndroidAutoClient
+// socket call bounded by SO_RCVTIMEO/SO_SNDTIMEO=1s x up to 2 attempts
+// (~2s worst case each), so a wedged sidecar could freeze the WHOLE UI
+// (not just this screen -- the entire lv_timer_handler() loop) for
+// seconds at a time. Same bug class as mcu_input.cpp's reader-thread
+// freeze (see that file's own header comment) -- fixed the same way in
+// spirit, but LVGL has no thread-safe cross-thread posting mechanism
+// in this codebase (lv_async_call() itself calls lv_malloc()/
+// lv_timer_create(), neither guarded by a mutex here -- unsafe to call
+// from a background thread), so instead of an AsyncWorker job queue,
+// this uses the SAME "background thread writes into a mutex-guarded
+// cache, LVGL timer only ever reads the cache" pattern this file's own
+// sibling (ui/bluetooth_screen.cpp's BtLoadState/bt_load_worker) and
+// ui/status_bar.cpp already use. poll_timer_cb() below never blocks --
+// it only locks a small in-process mutex and copies out plain data.
+struct PollCache {
+    std::mutex mtx;
+    std::string status_line{"STATE Idle"};
+    bool native_focus = false;
+    std::atomic<bool> stop{false};
+};
+
+void poll_background_loop(PollCache * cache) {
+    while (!cache->stop.load(std::memory_order_acquire)) {
+        std::string status = client().statusLine();
+        // Only spend a second socket round-trip on videoFocusNative()
+        // when actually Connected -- matches the original inline
+        // code's own short-circuit (`connected && ...`).
+        bool nf = status.rfind("STATE Connected", 0) == 0 && client().videoFocusNative();
+        {
+            std::lock_guard<std::mutex> lock(cache->mtx);
+            cache->status_line = std::move(status);
+            cache->native_focus = nf;
+        }
+        // Sleep in small increments (not one 500ms sleep) so a
+        // screen_delete_cb()'s stop request is picked up promptly
+        // rather than waiting out a full cycle.
+        for (int i = 0; i < 5 && !cache->stop.load(std::memory_order_acquire); ++i) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+    }
+    // Background thread owns cache's lifetime once started -- the LVGL
+    // side only ever sets stop=true (screen_delete_cb below), never
+    // touches cache again after that, so it's safe for this thread to
+    // free it once its own loop actually exits.
+    delete cache;
+}
+
 // 2026-08-20: no longer sends "CONNECT" to the sidecar (a no-op there
 // now -- see sidecars/androidauto/main.cpp's own protocol comment).
 // Bluetooth connectivity is custom_ui's own job (hal::bluetooth.cpp's
@@ -77,11 +131,20 @@ lv_color_t color_for_state_name(const std::string & name) {
 // always safe to call: it's a no-op (returns false) if no phone has
 // connected over the AA Bluetooth profile yet, same as the old
 // requestConnect() was a no-op if the sidecar was unreachable.
+// 2026-09-04: both start_pending_aa_connection() (a blocking
+// sendmsg()/SCM_RIGHTS socket send) and auto_reconnect_paired_device()
+// (dbus-send via connect_device()) can block for real time -- moved
+// off the LVGL thread so tapping Connect doesn't freeze the UI. Fire-
+// and-forget: this screen's own poll_background_loop() picks up the
+// resulting connection state on its own next cycle, same eventual-
+// consistency model bt_load_worker already uses.
 void connect_btn_cb(lv_event_t *) {
-    if (!hal::start_pending_aa_connection()) {
-        hal::BluetoothHandle & h = hal::shared_handle();
-        hal::auto_reconnect_paired_device(h);
-    }
+    core::SizedThread(core::kDefaultThreadStackSize, []() {
+        if (!hal::start_pending_aa_connection()) {
+            hal::BluetoothHandle & h = hal::shared_handle();
+            hal::auto_reconnect_paired_device(h);
+        }
+    }).detach();
 }
 
 void bluetooth_btn_cb(lv_event_t *) {
@@ -99,7 +162,10 @@ void bluetooth_btn_cb(lv_event_t *) {
 // "RESUME" instead, asking the phone to grant PROJECTED focus back --
 // see AndroidAutoClient::requestResumeVideo()'s own comment.
 void resume_btn_cb(lv_event_t *) {
-    client().requestResumeVideo();
+    // 2026-09-04: async, same reasoning as connect_btn_cb() above.
+    core::SizedThread(core::kDefaultThreadStackSize, []() {
+        client().requestResumeVideo();
+    }).detach();
 }
 
 struct Widgets {
@@ -134,9 +200,19 @@ struct Widgets {
 // sidecar process itself (and whatever session it's driving) keeps
 // running regardless of this screen's lifecycle.
 void poll_timer_cb(lv_timer_t * timer) {
-    auto * w = static_cast<Widgets *>(lv_timer_get_user_data(timer));
+    auto * ctx = static_cast<std::pair<Widgets *, PollCache *> *>(lv_timer_get_user_data(timer));
+    Widgets * w = ctx->first;
+    PollCache * cache = ctx->second;
 
-    ParsedStatus status = parse_status_line(client().statusLine());
+    std::string raw_status;
+    bool nativeFocusCached;
+    {
+        std::lock_guard<std::mutex> lock(cache->mtx);
+        raw_status = cache->status_line;
+        nativeFocusCached = cache->native_focus;
+    }
+
+    ParsedStatus status = parse_status_line(raw_status);
     lv_label_set_text(w->state_label, status.name.c_str());
     lv_obj_set_style_text_color(w->state_label, color_for_state_name(status.name), 0);
     lv_label_set_text(w->detail_label, status.detail.c_str());
@@ -158,7 +234,7 @@ void poll_timer_cb(lv_timer_t * timer) {
         return;
     }
 
-    bool nativeFocus = connected && client().videoFocusNative();
+    bool nativeFocus = connected && nativeFocusCached;
     bool showingVideo = connected && !nativeFocus;
     hal::androidauto_screen_active().store(showingVideo, std::memory_order_release);
 
@@ -223,15 +299,32 @@ void poll_timer_cb(lv_timer_t * timer) {
     }
 }
 
+struct ScreenCtx {
+    lv_timer_t * timer;
+    Widgets * widgets;
+    PollCache * cache;
+    std::pair<Widgets *, PollCache *> * poll_ctx;
+};
+
 void screen_delete_cb(lv_event_t * e) {
-    auto * pair = static_cast<std::pair<lv_timer_t *, Widgets *> *>(lv_event_get_user_data(e));
-    lv_timer_delete(pair->first);
-    if (pair->second->display_hidden) {
+    auto * ctx = static_cast<ScreenCtx *>(lv_event_get_user_data(e));
+    lv_timer_delete(ctx->timer);
+    // Signals the background poll loop to stop; it frees `cache` itself
+    // once its own loop notices -- see poll_background_loop()'s own
+    // comment on this ownership split.
+    ctx->cache->stop.store(true, std::memory_order_release);
+    if (ctx->widgets->display_hidden) {
         hal::show_display();
     }
-    delete pair->second;
-    delete pair;
-    client().setVisible(false);
+    delete ctx->widgets;
+    delete ctx->poll_ctx;
+    delete ctx;
+    // 2026-09-04: async -- see connect_btn_cb()'s own comment. Nothing
+    // downstream depends on this completing before navigation away
+    // finishes; the sidecar just needs to eventually hear about it.
+    core::SizedThread(core::kDefaultThreadStackSize, []() {
+        client().setVisible(false);
+    }).detach();
     hal::androidauto_screen_active().store(false, std::memory_order_release);
 }
 
@@ -245,7 +338,10 @@ lv_obj_t * create_android_auto_screen() {
     // 1. Persistent 5-Icon Navigation Rail (Android Auto active)
     staging_ui::create_nav_rail(scr, staging_ui::NavDestination::AndroidAuto);
 
-    client().setVisible(true);
+    // 2026-09-04: async -- see screen_delete_cb()'s own comment.
+    core::SizedThread(core::kDefaultThreadStackSize, []() {
+        client().setVisible(true);
+    }).detach();
     hal::androidauto_screen_active().store(false, std::memory_order_release);
 
     // 2. Main Content Card matching Home Dashboard geometry
@@ -297,25 +393,31 @@ lv_obj_t * create_android_auto_screen() {
     lv_obj_set_flex_align(status_row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_column(status_row, 8, 0);
 
-    ParsedStatus initial = parse_status_line(client().statusLine());
+    // 2026-09-04: no longer a blocking client().statusLine() call here
+    // -- see poll_background_loop()'s own comment. Shows a neutral
+    // "Idle" placeholder for at most one 500ms tick (or until the
+    // background loop's own first result lands, whichever is later);
+    // poll_timer_cb() corrects it immediately once the cache has a
+    // real value, same as it already does for every subsequent change.
     lv_obj_t * state_body = lv_label_create(status_row);
-    lv_label_set_text(state_body, initial.name.c_str());
+    lv_label_set_text(state_body, "Idle");
     lv_obj_set_style_text_font(state_body, &lv_font_roboto_14, 0);
-    lv_obj_set_style_text_color(state_body, color_for_state_name(initial.name), 0);
+    lv_obj_set_style_text_color(state_body, color_for_state_name("Idle"), 0);
 
     lv_obj_t * detail_body = lv_label_create(status_row);
-    lv_label_set_text(detail_body, initial.detail.c_str());
+    lv_label_set_text(detail_body, "");
     lv_obj_set_style_text_font(detail_body, &lv_font_roboto_14, 0);
     lv_obj_set_style_text_color(detail_body, staging_ui::theme::text_secondary(), 0);
 
-    if (initial.name == "Connected") {
-        lv_obj_add_flag(content, LV_OBJ_FLAG_HIDDEN);
-    }
-
     auto * widgets = new Widgets{content, state_body, detail_body, title, subtitle, connect_btn, connect_label};
-    lv_timer_t * timer = lv_timer_create(poll_timer_cb, 500, widgets);
-    auto * pair = new std::pair<lv_timer_t *, Widgets *>(timer, widgets);
-    lv_obj_add_event_cb(scr, screen_delete_cb, LV_EVENT_DELETE, pair);
+
+    auto * cache = new PollCache();
+    core::SizedThread(core::kDefaultThreadStackSize, poll_background_loop, cache).detach();
+
+    auto * poll_ctx = new std::pair<Widgets *, PollCache *>(widgets, cache);
+    lv_timer_t * timer = lv_timer_create(poll_timer_cb, 500, poll_ctx);
+    auto * ctx = new ScreenCtx{timer, widgets, cache, poll_ctx};
+    lv_obj_add_event_cb(scr, screen_delete_cb, LV_EVENT_DELETE, ctx);
 
     return scr;
 }

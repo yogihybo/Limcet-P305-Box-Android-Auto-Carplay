@@ -78,6 +78,17 @@ void bt_load_worker(BtLoadState * state) {
     state->ready.store(true, std::memory_order_release);
 }
 
+// 2026-09-04: real hardware bug -- these three click/switch handlers
+// used to call hal::connect_device()/hal::remove_paired_device()/
+// hal::set_discoverable() (all dbus-send/popen()-based, see
+// bluetooth.cpp) directly, inline, on the LVGL thread with no
+// application-level timeout at all -- if the system bus hangs, the
+// WHOLE UI freezes indefinitely, not just this screen. Same bug class
+// as mcu_input.cpp's reader-thread freeze (see that file's header
+// comment) -- fixed the same way this file's own bt_load_worker()
+// already handles its (also blocking) BlueZ calls: a detached
+// core::SizedThread, fire-and-forget where nothing downstream needs to
+// wait for completion.
 void device_row_clicked_cb(lv_event_t * e) {
     lv_obj_t * btn = static_cast<lv_obj_t *>(lv_event_get_target(e));
     auto * w = static_cast<BtScreenWidgets *>(lv_event_get_user_data(e));
@@ -91,14 +102,20 @@ void device_row_clicked_cb(lv_event_t * e) {
     std::printf("%s [UI-BT] User clicked CONNECT for device: '%s' (MAC=%s, Name='%s')\n",
                 core::log_timestamp().c_str(), entry.c_str(), mac.c_str(), name.c_str());
 
-    hal::BluetoothHandle & h = hal::shared_handle();
-    hal::connect_device(h, connect_id);
     status_label_set(w->status_label, "Connecting & Starting Android Auto...");
 
     std::printf("%s [UI-BT] Triggering Android Auto sidecar requestConnect() & switching screen\n",
                 core::log_timestamp().c_str());
-    hal::AndroidAutoClient client;
-    client.requestConnect();
+    core::SizedThread(core::kDefaultThreadStackSize, [connect_id]() {
+        hal::BluetoothHandle & h = hal::shared_handle();
+        hal::connect_device(h, connect_id);
+        hal::AndroidAutoClient client;
+        client.requestConnect();
+    }).detach();
+    // Navigates immediately -- android_auto_screen.cpp's own
+    // poll_background_loop() picks up the real connection state as
+    // soon as it lands, same eventual-consistency model as everywhere
+    // else this bug class was fixed.
     core::navigation::push(ui::create_android_auto_screen);
 }
 
@@ -115,11 +132,34 @@ void remove_device_clicked_cb(lv_event_t * e) {
     std::printf("%s [UI-BT] User clicked DISCONNECT/REMOVE for device: '%s' (MAC=%s)\n",
                 core::log_timestamp().c_str(), entry.c_str(), connect_id.c_str());
 
-    hal::BluetoothHandle & h = hal::shared_handle();
-    hal::remove_paired_device(h, connect_id);
-
-    status_label_set(w->status_label, "Device removed");
-    start_bt_load(w);
+    status_label_set(w->status_label, "Removing device...");
+    // start_bt_load() itself touches LVGL widgets, so it can only run
+    // on the LVGL thread -- kick it off via the SAME atomic-ready +
+    // lv_timer poll pattern bt_load_poll_cb() already uses, rather
+    // than calling it directly from the background thread below.
+    auto * ready = new std::atomic<bool>(false);
+    auto * poll_ctx = new std::pair<BtScreenWidgets *, std::atomic<bool> *>(w, ready);
+    if (w->poll_timer) {
+        lv_timer_delete(w->poll_timer);
+    }
+    w->poll_timer = lv_timer_create(
+        [](lv_timer_t * timer) {
+            auto * ctx = static_cast<std::pair<BtScreenWidgets *, std::atomic<bool> *> *>(
+                lv_timer_get_user_data(timer));
+            if (!ctx->second->load(std::memory_order_acquire)) return;
+            BtScreenWidgets * w2 = ctx->first;
+            w2->poll_timer = nullptr;
+            lv_timer_delete(timer);
+            delete ctx->second;
+            delete ctx;
+            start_bt_load(w2);
+        },
+        100, poll_ctx);
+    core::SizedThread(core::kDefaultThreadStackSize, [connect_id, ready]() {
+        hal::BluetoothHandle & h = hal::shared_handle();
+        hal::remove_paired_device(h, connect_id);
+        ready->store(true, std::memory_order_release);
+    }).detach();
 }
 
 void populate_device_list(BtScreenWidgets * w, bool hw_present, bool devices_ok,
@@ -297,7 +337,12 @@ void refresh_btn_cb(lv_event_t * e) {
 void discoverable_switch_cb(lv_event_t * e) {
     lv_obj_t * sw = static_cast<lv_obj_t *>(lv_event_get_target(e));
     bool checked = lv_obj_has_state(sw, LV_STATE_CHECKED);
-    hal::set_discoverable(hal::shared_handle(), checked);
+    // 2026-09-04: async -- see device_row_clicked_cb()'s own comment.
+    // Fire-and-forget: the switch's own visual state already reflects
+    // the user's intent immediately, nothing needs to wait for this.
+    core::SizedThread(core::kDefaultThreadStackSize, [checked]() {
+        hal::set_discoverable(hal::shared_handle(), checked);
+    }).detach();
 }
 
 void widgets_delete_cb(lv_event_t * e) {

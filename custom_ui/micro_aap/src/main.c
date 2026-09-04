@@ -8,6 +8,7 @@
 #include <pthread.h>
 #include <sys/file.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <sys/un.h>
 #include <netinet/in.h>
 #include <poll.h>
@@ -329,6 +330,28 @@ int main(int argc, char **argv) {
                 setsockopt(new_tcp, IPPROTO_TCP, TCP_KEEPINTVL, &keepintvl, sizeof(keepintvl));
                 int keepcnt = 3;
                 setsockopt(new_tcp, IPPROTO_TCP, TCP_KEEPCNT, &keepcnt, sizeof(keepcnt));
+                /* 2026-09-04: real hardware bug -- this whole sidecar is
+                 * one poll()-based event loop, and every outbound AAP
+                 * frame goes through a raw blocking write() on this
+                 * socket (send_raw_frame_locked() in aap_session.c). No
+                 * timeout was ever set on it -- if the phone's WiFi link
+                 * stalls while the kernel's own send buffer for this fd
+                 * is full, that write() can block the ENTIRE event loop
+                 * indefinitely (no app-level bound at all), freezing
+                 * video/audio/key/touch/rotary forwarding AND the local
+                 * IPC socket custom_ui talks to, until the OS's own TCP
+                 * retransmission gives up -- which can be far longer
+                 * than seconds. Same bug class as custom_ui's own
+                 * mcu_input.cpp reader-thread freeze (see that file's
+                 * header comment), just at the protocol-socket layer
+                 * instead of a UI-forwarding one. 5s matches this
+                 * sidecar's own already-generous keepalive/probe
+                 * cadence above -- long enough to ride out a brief real
+                 * stall, short enough that a genuinely dead link doesn't
+                 * wedge the whole process.
+                 */
+                struct timeval send_timeout = {.tv_sec = 5, .tv_usec = 0};
+                setsockopt(new_tcp, SOL_SOCKET, SO_SNDTIMEO, &send_timeout, sizeof(send_timeout));
 
                 printf("[AA] incoming phone TCP connection accepted (fd=%d)\n", new_tcp);
                 if (session) {

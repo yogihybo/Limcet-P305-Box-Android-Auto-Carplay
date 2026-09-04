@@ -12,8 +12,6 @@
 #include "core/config_store.h"
 #include "hal/androidauto_client.h"
 #include "hal/bluetooth.h"
-#include "hal/mcu_input.h"
-#include "core/log_timing.h"
 #include <ctime>
 #include <cstdio>
 #include <string>
@@ -133,33 +131,6 @@ void media_play_pause_clicked_cb(lv_event_t * e) {
 
 void media_next_clicked_cb(lv_event_t * /*e*/) {
     hal::media_next_track(hal::shared_handle());
-}
-
-// 2026-09-04: real hardware need -- returning to the OEM Factory LCD
-// previously required a physical HOME-button long-press (~1.4s hold,
-// see docs/MCU_COMMAND_REFERENCE.md's CMD 0x12 investigation). Wires
-// the same real, hardware-confirmed relay command custom_ui already
-// sends for the "Aftermarket Reverse Camera" setting toggle
-// (hal::send_mcu_video_relay(), CMD 0xA0 id=0x00/id=0x11 + CMD 0x84 --
-// see that function's own header comment for the full real-hardware
-// trace) to a direct on-screen button instead. hal::send_mcu_video_relay()
-// itself is a few fast, non-blocking write()s to the MCU serial port
-// (not a socket/IPC round-trip like AndroidAutoClient's calls), so
-// calling it directly here on the LVGL thread is safe, same as every
-// other settings-screen toggle in this codebase already does.
-//
-// Real, honest caveat, not yet resolved by a hardware test: this
-// command is confirmed (real, methodical testing) to control which
-// camera relay engages *when reverse gear transitions* -- it has NOT
-// yet been confirmed whether sending it alone, with no gear
-// transition happening, forces an immediate switch of whatever's
-// currently on screen, or only arms a preference for the next real
-// transition (matching CMD 0xA0 id=0x11's own confirmed arm-then-
-// trigger gating). This button is the direct way to find out.
-void factory_lcd_clicked_cb(lv_event_t * /*e*/) {
-    std::printf("%s [UI] Home dashboard: \"Return to Factory LCD\" pressed -- sending hal::send_mcu_video_relay(true)\n",
-                core::log_timestamp().c_str());
-    hal::send_mcu_video_relay(true);
 }
 
 void dashboard_delete_cb(lv_event_t * e) {
@@ -348,31 +319,6 @@ lv_obj_t * create_home_dashboard() {
     make_ctrl_btn(&ui::icons::icon_prev, media_prev_clicked_cb);
     widgets->playpause_icon = make_ctrl_btn(&ui::icons::icon_play, media_play_pause_clicked_cb);
     make_ctrl_btn(&ui::icons::icon_next, media_next_clicked_cb);
-
-    // "Return to Factory LCD" -- see factory_lcd_clicked_cb's own
-    // comment for the real hardware context. A slim footer row below
-    // the two dashboard cards; main_area is flex-column with cards_row
-    // set to flex_grow(1), so this fixed-height sibling just takes its
-    // own space at the bottom without needing to touch that layout.
-    lv_obj_t * factory_lcd_btn = lv_button_create(main_area);
-    lv_obj_remove_style_all(factory_lcd_btn);
-    lv_obj_set_size(factory_lcd_btn, LV_PCT(100), 44);
-    lv_obj_set_style_radius(factory_lcd_btn, theme::kPillRadius, 0);
-    lv_obj_set_style_bg_color(factory_lcd_btn, theme::surface_container_high(), 0);
-    lv_obj_set_style_bg_opa(factory_lcd_btn, LV_OPA_COVER, 0);
-    lv_obj_set_style_bg_color(factory_lcd_btn, theme::surface_pressed(), LV_STATE_PRESSED);
-    theme::style_focusable(factory_lcd_btn);
-    lv_obj_add_event_cb(factory_lcd_btn, factory_lcd_clicked_cb, LV_EVENT_CLICKED, nullptr);
-
-    lv_obj_t * factory_lcd_lbl = lv_label_create(factory_lcd_btn);
-    lv_label_set_text(factory_lcd_lbl, "Return to Factory LCD");
-    lv_obj_set_style_text_font(factory_lcd_lbl, &lv_font_roboto_14, 0);
-    lv_obj_set_style_text_color(factory_lcd_lbl, theme::text_primary(), 0);
-    lv_obj_center(factory_lcd_lbl);
-
-    if (core::navigation::focus_group()) {
-        lv_group_add_obj(core::navigation::focus_group(), factory_lcd_btn);
-    }
 
     // Initial Status Check & Periodic Poll
     update_dashboard_status(widgets);

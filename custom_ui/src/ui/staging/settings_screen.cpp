@@ -12,6 +12,7 @@
 #include "hal/timezone.h"
 #include "hal/bluetooth.h"
 #include "core/log_timing.h"
+#include "core/sized_thread.h"
 #include <functional>
 #include <sys/utsname.h>
 
@@ -74,7 +75,17 @@ void stepper_click_cb(lv_event_t * e) {
 
     core::default_store().set_int(ctx->key, ctx->value, ctx->section);
     if (ctx->extra_apply) {
-        ctx->extra_apply(ctx->value);
+        // 2026-09-04: real hardware bug -- extra_apply() (e.g. the
+        // Media/Guidance/System volume steppers' hal::set_stream_volume(),
+        // which shells out to `amixer` via std::system() with NO timeout
+        // at all) used to run inline here, on the LVGL thread. Volume
+        // steppers get tapped repeatedly in normal use, so this was an
+        // easy real trigger for the exact class of freeze main.cpp's own
+        // apply_reversing_volume_cut() fix already addressed for the
+        // reverse-gear path -- see that fix's own comment. Moved off the
+        // LVGL thread the same way: fire-and-forget on a detached thread,
+        // since nothing here needs to wait for amixer to finish.
+        core::SizedThread(core::kDefaultThreadStackSize, ctx->extra_apply, ctx->value).detach();
     }
     core::default_store().save();
 }
@@ -633,7 +644,14 @@ lv_obj_t * create_settings_screen() {
      * controls it, via hal::set_ssh_enabled(). See hal/ssh_access.h. */
     create_toggle_row(card, &ui::icons::icon_nav_settings, "SSH Access",
                        "SshAccess", "General", false, [](bool enabled) {
-                           hal::set_ssh_enabled(enabled);
+                           // 2026-09-04: real hardware bug -- set_ssh_enabled()
+                           // shells out via std::system() (pidof/mkdir/sshd/
+                           // killall), no timeout at all -- was running inline
+                           // on the LVGL thread. Same fix as the volume steppers
+                           // above: fire-and-forget on a detached thread.
+                           core::SizedThread(core::kDefaultThreadStackSize, [enabled]() {
+                               hal::set_ssh_enabled(enabled);
+                           }).detach();
                        });
     {
         lv_obj_t * row = lv_obj_create(card);

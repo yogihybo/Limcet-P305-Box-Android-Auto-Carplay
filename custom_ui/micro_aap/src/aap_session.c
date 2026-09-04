@@ -1425,7 +1425,18 @@ void aap_session_send_night_mode(aap_session_t *s, bool night_mode) {
  * one sets unsolicited=false since it IS a reply). Real, standard AA
  * mechanism for "please pause"/"you can resume" -- not a raw channel
  * STOP/START, which is for the channel's own teardown, not a focus
- * change the app is meant to react to like any other audio interrupt. */
+ * change the app is meant to react to like any other audio interrupt.
+ *
+ * Real hardware finding, same day: AUDIO_FOCUS_STATE_LOSS (a
+ * permanent-style loss) made the phone's media app pause correctly,
+ * but it did NOT auto-resume on the following GAIN -- required a
+ * manual play press. That's real, standard Android AudioFocus
+ * behavior, not a bug: a plain LOSS tells the app "don't expect focus
+ * back," and well-behaved apps deliberately don't auto-resume after
+ * it (to avoid music blasting back unexpectedly). LOSS_TRANSIENT is
+ * the correct state for "you'll get it back shortly" interruptions
+ * like this one -- apps are expected to auto-resume on the matching
+ * GAIN, the same way they already do for a phone call. */
 void aap_session_send_audio_focus(aap_session_t *s, bool gain) {
     if (!s || s->state != AAP_SESSION_STATE_RUNNING) return;
 
@@ -1433,7 +1444,7 @@ void aap_session_send_audio_focus(aap_session_t *s, bool gain) {
         aap_protobuf_service_control_message_AudioFocusNotification_init_default;
     notif.focus_state = gain
         ? aap_protobuf_service_control_message_AudioFocusStateType_AUDIO_FOCUS_STATE_GAIN_MEDIA_ONLY
-        : aap_protobuf_service_control_message_AudioFocusStateType_AUDIO_FOCUS_STATE_LOSS;
+        : aap_protobuf_service_control_message_AudioFocusStateType_AUDIO_FOCUS_STATE_LOSS_TRANSIENT;
     notif.has_unsolicited = true;
     notif.unsolicited = true;
 
@@ -1444,7 +1455,7 @@ void aap_session_send_audio_focus(aap_session_t *s, bool gain) {
     send_channel_msg(s, AAP_CHANNEL_CONTROL,
                      aap_protobuf_service_control_message_ControlMessageType_MESSAGE_AUDIO_FOCUS_NOTIFICATION,
                      pb_buf, ostream.bytes_written, true);
-    printf("[AA] Sent unsolicited AudioFocusNotification: %s\n", gain ? "GAIN_MEDIA_ONLY" : "LOSS");
+    printf("[AA] Sent unsolicited AudioFocusNotification: %s\n", gain ? "GAIN_MEDIA_ONLY" : "LOSS_TRANSIENT");
 }
 
 void aap_session_set_video_visible(aap_session_t *s, bool visible) {

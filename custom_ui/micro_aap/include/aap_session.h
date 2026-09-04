@@ -57,9 +57,13 @@ void aap_session_set_eq(aap_session_t *session, int bass_db, int mid_db, int tre
  * the phone's currently-playing media app to pause/resume, same real
  * mechanism every Android Auto head unit uses to interrupt media for
  * something else (a phone call, a source switch). gain=false sends
- * AUDIO_FOCUS_STATE_LOSS (channel 4/MEDIA_AUDIO's own app pauses
- * itself); gain=true sends AUDIO_FOCUS_STATE_GAIN_MEDIA_ONLY (resumes
- * media specifically, without also claiming guidance/system focus). */
+ * AUDIO_FOCUS_STATE_LOSS_TRANSIENT (channel 4/MEDIA_AUDIO's own app
+ * pauses itself, expecting focus back soon -- plain AUDIO_FOCUS_STATE_LOSS
+ * was tried first and real-hardware-confirmed to NOT auto-resume on
+ * the matching GAIN, since a permanent-style loss tells apps not to
+ * expect focus back); gain=true sends AUDIO_FOCUS_STATE_GAIN_MEDIA_ONLY
+ * (resumes media specifically, without also claiming guidance/system
+ * focus). */
 void aap_session_send_audio_focus(aap_session_t *session, bool gain);
 
 int aap_session_get_socket_fd(const aap_session_t *session);

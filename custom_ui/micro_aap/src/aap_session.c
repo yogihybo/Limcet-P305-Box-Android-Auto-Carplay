@@ -116,6 +116,17 @@ struct aap_session {
 
     int32_t media_session_id;
     int32_t video_session_id;
+    /* 2026-09-05: real hardware bug found via code review -- guidance
+     * and system audio's own start.session_id from MEDIA_MESSAGE_START
+     * were never saved anywhere; MEDIA_MESSAGE_DATA's ACK for both
+     * channels used media_session_id instead (wrong, or 0 if the media
+     * channel hadn't even started yet). The phone expects each
+     * channel's ACK to carry THAT channel's own session_id -- a
+     * mismatched token is ignored, and once the negotiated unacked-
+     * frame window fills up, turn-by-turn guidance audio (and any
+     * system/alert sounds) permanently stalls. */
+    int32_t guidance_session_id;
+    int32_t system_session_id;
 
     /* 2026-09-04: real hardware bug -- these two used to be wall-clock
      * (time(NULL)) seconds, which sync_system_clock_from_phone() below
@@ -1047,9 +1058,18 @@ static void handle_media_channel(aap_session_t *s, uint8_t channel_id, const uin
                 aap_audio_sink_open(s->audio_media);
                 aap_audio_sink_prepare(s->audio_media);
             } else if (channel_id == AAP_CHANNEL_MEDIA_SINK_GUIDANCE_AUDIO) {
+                /* 2026-09-05: real hardware bug found via code review --
+                 * this channel's own session_id was never saved (see
+                 * this struct's own comment on guidance_session_id),
+                 * and aap_audio_sink_prepare() was never called at all
+                 * for this sink, unlike media_audio above. */
+                s->guidance_session_id = start.session_id;
                 aap_audio_sink_open(s->audio_guidance);
+                aap_audio_sink_prepare(s->audio_guidance);
             } else if (channel_id == AAP_CHANNEL_MEDIA_SINK_SYSTEM_AUDIO) {
+                s->system_session_id = start.session_id;
                 aap_audio_sink_open(s->audio_system);
+                aap_audio_sink_prepare(s->audio_system);
             } else if (channel_id == AAP_CHANNEL_MEDIA_SINK_VIDEO) {
                 s->video_session_id = start.session_id;
                 aap_video_sink_open(s->video_sink);
@@ -1100,10 +1120,17 @@ static void handle_media_channel(aap_session_t *s, uint8_t channel_id, const uin
                     send_media_ack(s, channel_id, s->media_session_id, 1);
                 } else if (channel_id == AAP_CHANNEL_MEDIA_SINK_GUIDANCE_AUDIO) {
                     aap_audio_sink_write(s->audio_guidance, stream_bytes, stream_bytes_len);
-                    send_media_ack(s, channel_id, s->media_session_id, 1);
+                    /* 2026-09-05: real hardware bug found via code review --
+                     * was s->media_session_id (wrong channel's session
+                     * id, or 0 if media_audio hadn't started yet). The
+                     * phone rejects/ignores an ACK whose session_id
+                     * doesn't match the channel it was sent for; once
+                     * its unacked-frame window fills, turn-by-turn
+                     * guidance audio stalls permanently. */
+                    send_media_ack(s, channel_id, s->guidance_session_id, 1);
                 } else if (channel_id == AAP_CHANNEL_MEDIA_SINK_SYSTEM_AUDIO) {
                     aap_audio_sink_write(s->audio_system, stream_bytes, stream_bytes_len);
-                    send_media_ack(s, channel_id, s->media_session_id, 1);
+                    send_media_ack(s, channel_id, s->system_session_id, 1);
                 } else if (channel_id == AAP_CHANNEL_MEDIA_SINK_VIDEO) {
                     aap_video_sink_decode(s->video_sink, stream_bytes, stream_bytes_len);
                     send_media_ack(s, channel_id, s->video_session_id, 1);
@@ -1231,7 +1258,25 @@ bool aap_session_process_incoming(aap_session_t *s) {
         size_t active_len = payload_len;
 
         if (hdr.flags & AAP_FLAG_ENCRYPTED) {
+            /* 2026-09-05: real hardware bug found via code review --
+             * s->cryptor wraps a single OpenSSL SSL* (aap_cryptor.c),
+             * which is not thread-safe for concurrent use. Every
+             * encrypt call site (send_channel_msg()'s two paths, and
+             * on_mic_pcm_captured() on the mic capture thread) already
+             * locks s->tx_mutex around aap_cryptor_encrypt() -- this
+             * decrypt call, on the main event-loop thread, was the one
+             * path that didn't, so a concurrent SSL_write() (from the
+             * mic thread, whenever voice input/Assistant is active)
+             * could run at the same time as this SSL_read(), corrupting
+             * OpenSSL's internal handshake/cipher state and producing
+             * exactly the "[AA] decrypt failed on channel ..." failures
+             * (or worse) seen right when a mic session starts. Reusing
+             * tx_mutex here (rather than adding a second, cryptor-
+             * internal mutex) matches what already protects every
+             * other real use of this same SSL* elsewhere in this file. */
+            pthread_mutex_lock(&s->tx_mutex);
             size_t dec_len = aap_cryptor_decrypt(s->cryptor, frame_payload, payload_len, plain_buf, sizeof(plain_buf));
+            pthread_mutex_unlock(&s->tx_mutex);
             if (dec_len > 0) {
                 active_payload = plain_buf;
                 active_len = dec_len;
@@ -1343,8 +1388,19 @@ void aap_session_tick(aap_session_t *s) {
     }
 
     time_t now = monotonic_seconds();
-    if (s->state == AAP_SESSION_STATE_RUNNING && (now - s->last_rx_time > 3)) {
-        printf("[AA] WiFi connection lost (no data for 3s), closing session\n");
+    /* 2026-09-05: real hardware bug found via code review -- this
+     * threshold was hardcoded to 3s, but ServiceDiscoveryResponse
+     * above negotiates a REAL ping config with the phone: pings every
+     * 2s, and a 10s timeout before either side should give up
+     * (ping_configuration.interval_ms=2000, timeout_ms=10000). A 3s
+     * local watchdog left only ~1s of margin over the ping interval
+     * itself -- any single delayed ping response (WiFi retransmission,
+     * phone doze/power-saving latency) could trip this and unilaterally
+     * tear down a session neither side actually considered dead yet,
+     * despite having explicitly agreed to a 10s grace period. Aligned
+     * to the same 10s this side already told the phone to expect. */
+    if (s->state == AAP_SESSION_STATE_RUNNING && (now - s->last_rx_time > 10)) {
+        printf("[AA] WiFi connection lost (no data for 10s), closing session\n");
         set_state(s, AAP_SESSION_STATE_DISCONNECTED, "WiFi disconnected");
         return;
     }

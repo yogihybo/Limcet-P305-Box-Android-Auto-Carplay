@@ -30,6 +30,61 @@ typedef struct {
 } wifi_worker_args_t;
 
 static int g_active_rfcomm_fd = -1;
+/* 2026-09-05: real hardware bug found via code review -- g_active_rfcomm_fd
+ * was a plain global int, read/written from both this file's main
+ * poll() loop and wifi_setup_thread (a detached, unjoined thread per
+ * connection) with zero synchronization. This mutex makes every actual
+ * read-modify-write of the variable atomic and consistent -- it does
+ * NOT by itself guarantee a still-running OLD wifi_setup_thread can
+ * never be mid-blocking-call on an fd the main thread just close()'d
+ * out from under it (that would need real cooperative cancellation,
+ * e.g. a self-pipe to wake a blocked select()/read(), a bigger change
+ * than this pass). What bounds THAT residual risk is the SO_RCVTIMEO
+ * fix in aap_wifi_setup.c: any blocking read() on a stale/reused fd
+ * now fails within 10s instead of hanging forever, so the real-world
+ * exposure is "briefly confused for up to ~10s on a rapid successive
+ * reconnect", not "permanent thread/fd leak". */
+static pthread_mutex_t g_rfcomm_fd_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+/* Clears g_active_rfcomm_fd only if it still matches `fd` -- used by a
+ * wifi_setup_thread instance at its own exit points, so an OLDER
+ * thread's belated cleanup can never clobber a NEWER connection's fd
+ * that has since replaced it. */
+static void clear_active_rfcomm_fd_if_matches(int fd) {
+    pthread_mutex_lock(&g_rfcomm_fd_mutex);
+    if (g_active_rfcomm_fd == fd) {
+        g_active_rfcomm_fd = -1;
+    }
+    pthread_mutex_unlock(&g_rfcomm_fd_mutex);
+}
+
+static int read_active_rfcomm_fd(void) {
+    pthread_mutex_lock(&g_rfcomm_fd_mutex);
+    int fd = g_active_rfcomm_fd;
+    pthread_mutex_unlock(&g_rfcomm_fd_mutex);
+    return fd;
+}
+
+static void close_and_clear_active_rfcomm_fd(void) {
+    pthread_mutex_lock(&g_rfcomm_fd_mutex);
+    if (g_active_rfcomm_fd >= 0) {
+        close(g_active_rfcomm_fd);
+        g_active_rfcomm_fd = -1;
+    }
+    pthread_mutex_unlock(&g_rfcomm_fd_mutex);
+}
+
+/* Closes whatever fd was previously active (if any) and installs
+ * new_fd as the new active one, atomically w.r.t. every other reader/
+ * writer of g_active_rfcomm_fd. */
+static void replace_active_rfcomm_fd(int new_fd) {
+    pthread_mutex_lock(&g_rfcomm_fd_mutex);
+    if (g_active_rfcomm_fd >= 0) {
+        close(g_active_rfcomm_fd);
+    }
+    g_active_rfcomm_fd = new_fd;
+    pthread_mutex_unlock(&g_rfcomm_fd_mutex);
+}
 
 static void *wifi_setup_thread(void *arg) {
     wifi_worker_args_t *args = (wifi_worker_args_t *)arg;
@@ -40,7 +95,7 @@ static void *wifi_setup_thread(void *arg) {
     if (!aap_wifi_ensure_ap_up()) {
         fprintf(stderr, "[AA] failed to ensure WiFi AP is running\n");
         close(fd);
-        if (g_active_rfcomm_fd == fd) g_active_rfcomm_fd = -1;
+        clear_active_rfcomm_fd_if_matches(fd);
         return NULL;
     }
 
@@ -53,7 +108,7 @@ static void *wifi_setup_thread(void *arg) {
     if (!ok) {
         fprintf(stderr, "[AA] WPP handshake failed\n");
         close(fd);
-        if (g_active_rfcomm_fd == fd) g_active_rfcomm_fd = -1;
+        clear_active_rfcomm_fd_if_matches(fd);
         return NULL;
     }
 
@@ -107,11 +162,11 @@ static void process_single_command(aap_session_t *session, const char *cmd, int 
                 case AAP_SESSION_STATE_SERVICE_DISCOVERY: st_name = "Connecting"; break;
                 default: st_name = "Idle"; break;
             }
-        } else if (g_active_rfcomm_fd >= 0) {
+        } else if (read_active_rfcomm_fd() >= 0) {
             st_name = "Connecting";
         }
         snprintf(status_reply, sizeof(status_reply), "STATE %s %s\n", st_name,
-                 session ? aap_session_get_status_message(session) : (g_active_rfcomm_fd >= 0 ? "WiFi Handshake..." : "Waiting for phone"));
+                 session ? aap_session_get_status_message(session) : (read_active_rfcomm_fd() >= 0 ? "WiFi Handshake..." : "Waiting for phone"));
         reply = status_reply;
     } else if (strncmp(cmd, "SHOW", 4) == 0) {
         if (session) aap_session_set_video_visible(session, true);
@@ -289,10 +344,7 @@ int main(int argc, char **argv) {
                 printf("[AA] session ended, tearing down\n");
                 aap_session_destroy(session);
                 session = NULL;
-                if (g_active_rfcomm_fd >= 0) {
-                    close(g_active_rfcomm_fd);
-                    g_active_rfcomm_fd = -1;
-                }
+                close_and_clear_active_rfcomm_fd();
             }
         }
 
@@ -367,10 +419,7 @@ int main(int argc, char **argv) {
                 printf("[AA] AAP session I/O error or disconnect\n");
                 aap_session_destroy(session);
                 session = NULL;
-                if (g_active_rfcomm_fd >= 0) {
-                    close(g_active_rfcomm_fd);
-                    g_active_rfcomm_fd = -1;
-                }
+                close_and_clear_active_rfcomm_fd();
             }
         }
 
@@ -394,10 +443,7 @@ int main(int argc, char **argv) {
 
                 if (recvd_fd >= 0) {
                     printf("[AA] received CONNECT_FD ancillary fd=%d\n", recvd_fd);
-                    if (g_active_rfcomm_fd >= 0) {
-                        close(g_active_rfcomm_fd);
-                    }
-                    g_active_rfcomm_fd = recvd_fd;
+                    replace_active_rfcomm_fd(recvd_fd);
 
                     wifi_worker_args_t *wargs = (wifi_worker_args_t *)malloc(sizeof(wifi_worker_args_t));
                     wargs->rfcomm_fd = recvd_fd;
@@ -427,7 +473,7 @@ int main(int argc, char **argv) {
     if (session) aap_session_destroy(session);
     if (ipc_listen_fd >= 0) close(ipc_listen_fd);
     if (tcp_listen_fd >= 0) close(tcp_listen_fd);
-    if (g_active_rfcomm_fd >= 0) close(g_active_rfcomm_fd);
+    close_and_clear_active_rfcomm_fd();
     unlink(SIDECAR_SOCK_PATH);
     return 0;
 }

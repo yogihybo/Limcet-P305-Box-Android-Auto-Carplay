@@ -9,48 +9,51 @@
 
 /* Outbound Command Codes (MCU -> SoC)
  *
- * CORRECTED 2026-08-31: several of these labels below were invented
- * guesses that were never cross-checked against this project's own
- * real disassembly/live-capture findings, and in some cases directly
- * contradict them. See docs/MCU_COMMAND_REFERENCE.md for the full,
- * cross-checked reference with every conflicting claim shown side by
- * side -- do not trust a single-source label in isolation for this
- * direction. */
-#define MCU_CMD_HANDSHAKE_VER   0x01  /* WRONG label -- real custom_ui live capture confirms this
-                                        * is headlights/illumination status (payload[0] bit 0x02),
-                                        * not a version/handshake report. See mcu_input.cpp. */
-#define MCU_CMD_INPUT_EVENT     0x02  /* Key / SWC button event -- live-capture confirmed
-                                        * (b3=key code, b4=press state), matches mcu_input.cpp */
-#define MCU_CMD_STATUS_BITS     0x03  /* General status -- UNCONFIRMED, real disassembly of
-                                        * this byte's meaning is explicitly left open */
-#define MCU_CMD_RADAR_LEVEL     0x04  /* Parking radar distance -- CONFIRMED, "high" confidence
-                                        * disassembly (named transRadarLevel call). custom_ui's
-                                        * own mcu_input.cpp treats this SAME byte as "reverse gear
-                                        * engaged" instead, with no payload check -- a real,
-                                        * unresolved conflict, see docs/MCU_COMMAND_REFERENCE.md */
-#define MCU_CMD_STATUS_5018     0x05  /* UNCONFIRMED -- "Power / ACC status" is an educated guess
-                                        * derived from this byte's Qt event-type number (0x5018),
-                                        * not independently verified; real disassembly explicitly
-                                        * leaves this byte's meaning open */
-#define MCU_CMD_REVERSE_GEAR    0x06  /* UNCONFIRMED -- this is this project's OWN clean-room
-                                        * guess for reverse gear, not a disassembly finding. Real
-                                        * stock disassembly leaves this byte deliberately open;
-                                        * a separate doc guessed "PDC radar distance matrix"
-                                        * instead. Three unreconciled guesses on one byte -- see
-                                        * docs/MCU_COMMAND_REFERENCE.md. Real reverse-gear state
-                                        * on the SoC side should come from /dev/carback (a real,
-                                        * independent GPIO IRQ driver), not this UART guess. */
-#define MCU_CMD_STEERING_ANGLE  0x0A  /* Steering trajectory angle -- CONFIRMED to exist/purpose
-                                        * ("high" confidence, "recv track:" string cited); the
-                                        * real bit-packing is still not fully cracked */
-#define MCU_CMD_DIP_PROFILE     0x12  /* UNCONFIRMED -- this project's own clean-room guess.
-                                        * Real stock disassembly leaves this byte's meaning open
-                                        * too; a separate doc guessed "Display State Sync"
-                                        * instead; custom_ui's mcu_input.cpp treats the same byte
-                                        * as "reverse gear disengaged." Four unreconciled guesses
-                                        * on one byte -- see docs/MCU_COMMAND_REFERENCE.md. */
-#define MCU_CMD_STATUS_QUERY    0x20  /* Status query */
-#define MCU_CMD_VERSION_REPORT  0x7F  /* MCU version string */
+ * Canonical mapping per docs/MCU_COMMAND_REFERENCE.md and verified
+ * live hardware traces. */
+#define MCU_CMD_ILLUMINATION_STATUS 0x01 /* Vehicle illumination & gear status broadcast (len=6).
+                                          * payload[0] bit 1 (0x02): Headlights ON/OFF (0x13=ON, 0x11=OFF).
+                                          * payload[0] bit 2 (0x04): Reverse gear active (0x15=REV, 0x11=OFF).
+                                          * payload[0] bit 7 (0x80): Legacy key matrix press/release. */
+#define MCU_CMD_INPUT_EVENT         0x02 /* Knob / button / SWC event (b3=keycode, b4=state:
+                                          * 0=release, 1=press, 2=held/repeat-tick confirmed 2026-09-04). */
+#define MCU_CMD_HVAC_STATUS         0x03 /* Dual-zone HVAC / climate broadcast (AirConditionDlg). */
+#define MCU_CMD_RADAR_LEVEL         0x04 /* Parking radar 4-channel distance level (transRadarLevel). */
+#define MCU_CMD_FRONT_RADAR         0x05 /* Radar-family telemetry (front/secondary radar channel, MsnEvent 0x5018). */
+#define MCU_CMD_VEHICLE_DYNAMICS    0x06 /* Vehicle dynamics/safety bitfield (payload[1] 8 flags,
+                                          * payload[2] 4-bit nibble, MsnEvent 0x501A). NOT reverse gear. */
+#define MCU_CMD_STEERING_ANGLE      0x0A /* Steering angle / reverse trajectory (recv track). */
+#define MCU_CMD_LCD_SOURCE_REPORT   0x12 /* LCD source status report (confirmed 2026-09-04):
+                                          * payload[0] = 0x01: Aftermarket LCD mode (custom_ui feed active)
+                                          * payload[0] = 0x02: Factory LCD mode (OEM feed active).
+                                          * Re-announced on screen switches, headlights, reverse disengage. */
+#define MCU_CMD_STATUS_QUERY        0x20 /* Resistive touch coordinate report (X_hi, X_lo, Y_hi, Y_lo, state). */
+#define MCU_CMD_DISPLAY_PROFILE     0x30 /* Arkdata display-profile selector (payload[0]==0x0C). */
+#define MCU_CMD_STARTUP_BURST       0x40 /* Telemetry burst marker (len=1). */
+#define MCU_CMD_CRYPTO_REPLY        0x60 /* CMD 0x88 TEA-cipher challenge decrypted reply opcode. */
+#define MCU_CMD_VERSION_REPORT      0x7F /* MCU version string report (28-byte ASCII string). */
+#define MCU_CMD_UPGRADE_ACK         0xE2 /* Firmware update ACK handshake. */
+
+/* Backward-compatibility aliases */
+#define MCU_CMD_HANDSHAKE_VER       MCU_CMD_ILLUMINATION_STATUS
+#define MCU_CMD_DIP_PROFILE         MCU_CMD_LCD_SOURCE_REPORT
+#define MCU_CMD_STATUS_BITS         MCU_CMD_HVAC_STATUS
+#define MCU_CMD_STATUS_5018         MCU_CMD_FRONT_RADAR
+#define MCU_CMD_REVERSE_GEAR        MCU_CMD_VEHICLE_DYNAMICS
+
+/* Bitfield definitions for MCU_CMD_ILLUMINATION_STATUS (0x01) */
+#define MCU_STATUS_BASE_FLAGS       0x11 /* Base resting state: bit 0 and bit 4 asserted */
+#define MCU_STATUS_BIT_ILLUM        0x02 /* Bit 1: Headlights / Illumination (0=Off, 1=On) */
+#define MCU_STATUS_BIT_REVERSE      0x04 /* Bit 2: Reverse gear engaged (0=Off, 1=On) */
+
+/* Button state definitions for MCU_CMD_INPUT_EVENT (0x02) */
+#define MCU_KEY_STATE_RELEASE       0x00
+#define MCU_KEY_STATE_PRESS         0x01
+#define MCU_KEY_STATE_HELD          0x02
+
+/* LCD mode constants for MCU_CMD_LCD_SOURCE_REPORT (0x12) */
+#define MCU_LCD_SOURCE_AFTERMARKET  0x01
+#define MCU_LCD_SOURCE_FACTORY      0x02
 
 /* Inbound Command Codes (SoC -> MCU) */
 #define SOC_CMD_INIT_HANDSHAKE  0x81  /* Init handshake */
@@ -193,6 +196,9 @@ void uart_protocol_init(uint32_t baudrate);
 void uart_send_packet(uint8_t cmd, const uint8_t *payload, uint8_t len);
 void uart_send_key_event(uint8_t key_code, bool pressed);
 void uart_send_reverse_state(bool reverse_active);
+void uart_send_headlights_state(bool lights_on);
+void uart_send_lcd_source(uint8_t mode);
+void uart_send_version_report(void);
 void uart_send_steering_angle(int16_t angle_deci_degrees);
 void uart_send_radar_levels(uint8_t left, uint8_t mid_left, uint8_t mid_right, uint8_t right);
 void uart_process_rx(void);

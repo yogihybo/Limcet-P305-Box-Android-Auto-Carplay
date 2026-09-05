@@ -76,12 +76,28 @@ void mcu_knob_read_cb(lv_indev_t * indev, lv_indev_data_t * data) {
 
     int32_t ticks = mcu->consume_knob_ticks();
     bool raw_pressed = mcu->get_knob_pressed();
+    // 2026-09-05: real hardware bug found via code review -- raw_pressed
+    // is a pure level flag polled on this callback's own ~30ms LVGL
+    // cadence. A fast tap whose press AND release both land between two
+    // polls leaves raw_pressed==false right here with knob_was_pressed()
+    // also still false from before -- the level-transition edge check
+    // below would never fire, silently dropping the click. mcu_input.cpp
+    // counts every real press event at the true source (the raw UART
+    // frame dispatch), so it can never miss one regardless of this
+    // callback's own polling cadence.
+    uint32_t press_events = mcu->consume_knob_press_events();
 
     auto now = std::chrono::steady_clock::now();
     uint64_t now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
 
-    bool press_edge = raw_pressed && !knob_was_pressed();
-    bool release_edge = !raw_pressed && knob_was_pressed();
+    bool press_edge = press_events > 0;
+    // A press this cycle that's ALREADY released again by the time we
+    // poll (the fast-tap case) needs its own synthetic release too --
+    // the plain level check (`!raw_pressed && knob_was_pressed()`) can
+    // never see it, since knob_was_pressed() was never set true for a
+    // transition this polling cadence missed entirely.
+    bool level_release_edge = !raw_pressed && knob_was_pressed();
+    bool release_edge = level_release_edge || (press_edge && !raw_pressed);
     knob_was_pressed() = raw_pressed;
 
     if (press_edge) {
@@ -139,7 +155,16 @@ void mcu_knob_read_cb(lv_indev_t * indev, lv_indev_data_t * data) {
     }
 
     data->enc_diff = static_cast<int16_t>(ticks);
-    data->state = raw_pressed ? LV_INDEV_STATE_PRESSED : LV_INDEV_STATE_RELEASED;
+    // 2026-09-05: same reliable-press-event reasoning as press_edge
+    // above -- report PRESSED for at least this one poll when a press
+    // happened, even if raw_pressed has already gone back to false (the
+    // fast-tap case), so LVGL's own encoder click state machine
+    // actually observes a press before the release it would otherwise
+    // see with no matching press -- previously that transition was
+    // silently invisible to LVGL, not just to this file's own edge
+    // detector above.
+    bool reported_pressed = raw_pressed || press_edge;
+    data->state = reported_pressed ? LV_INDEV_STATE_PRESSED : LV_INDEV_STATE_RELEASED;
 }
 
 

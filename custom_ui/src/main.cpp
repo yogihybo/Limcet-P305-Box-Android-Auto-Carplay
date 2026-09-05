@@ -583,24 +583,53 @@ int main() {
         }
 
         // Reverse gear camera auto-trigger (dual-redundant: hardware /dev/carback driver + MCU UART CMD 0x04/0x12)
+        //
+        // 2026-09-05: real hardware bug found via code review -- with
+        // two independent sources for the SAME real-world event, a
+        // single gear transition can double-fire: if /dev/carback's
+        // GPIO edge lands a few ms before the MCU's own UART frame,
+        // the carback branch (else-if) fires reverseChanged this
+        // iteration, but lastMcuReverse is only updated inside the
+        // OTHER branch -- so once the MCU frame catches up on the very
+        // next iteration, `mcuReverse != lastMcuReverse` is STILL true
+        // (lastMcuReverse never got updated when carback handled it),
+        // firing reverseChanged a second time for the exact same
+        // engage/disengage. Fixed by consolidating into one
+        // source-agnostic currentReverseState and only ever firing
+        // reverseChanged when the newly-resolved state actually
+        // differs from it -- both sources still independently detect
+        // and consume their own edges exactly as before (so a genuine
+        // later real transition from either one is never missed), this
+        // only gates the DOWNSTREAM action on the state having
+        // actually changed.
         static bool lastMcuReverse = false;
+        static bool currentReverseState = false;
         bool mcuReverse = mcu_input.get_reverse_gear();
         bool reverseChanged = false;
-        bool reverseEngaged = false;
+        bool reverseEngaged = currentReverseState;
+
+        bool resolvedState = currentReverseState;
+        bool sourceFired = false;
 
         if (mcuReverse != lastMcuReverse) {
-            reverseChanged = true;
-            reverseEngaged = mcuReverse;
             lastMcuReverse = mcuReverse;
+            resolvedState = mcuReverse;
+            sourceFired = true;
         } else if (reverse_watcher.has_pending_change()) {
             hal::ReverseGearState rev = reverse_watcher.consume_change();
             if (rev == hal::ReverseGearState::Engaged) {
-                reverseChanged = true;
-                reverseEngaged = true;
+                resolvedState = true;
+                sourceFired = true;
             } else if (rev == hal::ReverseGearState::Disengaged) {
-                reverseChanged = true;
-                reverseEngaged = false;
+                resolvedState = false;
+                sourceFired = true;
             }
+        }
+
+        if (sourceFired && resolvedState != currentReverseState) {
+            reverseChanged = true;
+            reverseEngaged = resolvedState;
+            currentReverseState = resolvedState;
         }
 
         static bool s_wasInAaBeforeReverse = false;

@@ -222,6 +222,18 @@ struct ToggleCtx {
     std::string key;
     std::string section;
     std::function<void(bool)> onChange;
+    // 2026-09-05: real hardware bug found via code review -- the
+    // "Aftermarket Reverse Camera" toggle's own on-disk key
+    // ("OriginalCarCamera") and downstream consumer (main.cpp's
+    // factoryCamera) both use the opposite polarity from what this
+    // label promises (checked -> true is stored, but true there means
+    // OEM Factory mode, not Aftermarket). Rather than touch every other
+    // toggle's shared storage behavior, or rename the on-disk key
+    // (losing anyone's already-saved preference under the old,
+    // mislabeled toggle), this one flag inverts what gets stored/read
+    // for JUST this one toggle -- every other create_toggle_row() call
+    // leaves it false (the default) and is completely unaffected.
+    bool invert_stored_value = false;
 };
 
 void destroy_toggle_ctx(lv_event_t * e) {
@@ -230,7 +242,8 @@ void destroy_toggle_ctx(lv_event_t * e) {
 
 lv_obj_t * create_toggle_row(lv_obj_t * parent, const lv_image_dsc_t * icon_dsc, const char * label_text,
                             const std::string & key, const std::string & section, bool def_val,
-                            std::function<void(bool)> on_change = nullptr) {
+                            std::function<void(bool)> on_change = nullptr,
+                            bool invert_stored_value = false) {
     lv_obj_t * row = lv_obj_create(parent);
     lv_obj_remove_style_all(row);
     lv_obj_set_width(row, LV_PCT(100));
@@ -257,19 +270,27 @@ lv_obj_t * create_toggle_row(lv_obj_t * parent, const lv_image_dsc_t * icon_dsc,
     lv_obj_set_style_text_color(label, theme::text_primary(), 0);
 
     lv_obj_t * sw = lv_switch_create(row);
-    bool state = core::default_store().get_bool(key, def_val, section);
+    // def_val (like the on-disk value itself) is always expressed in
+    // the KEY's own polarity, unaffected by invert_stored_value -- only
+    // the switch's displayed checked state gets inverted, below.
+    bool stored = core::default_store().get_bool(key, def_val, section);
+    bool state = invert_stored_value ? !stored : stored;
     if (state) lv_obj_add_state(sw, LV_STATE_CHECKED);
 
-    auto * ctx = new ToggleCtx{key, section, std::move(on_change)};
+    auto * ctx = new ToggleCtx{key, section, std::move(on_change), invert_stored_value};
     lv_obj_add_event_cb(sw, destroy_toggle_ctx, LV_EVENT_DELETE, ctx);
     lv_obj_add_event_cb(sw, [](lv_event_t * e) {
         auto * ctx = static_cast<ToggleCtx *>(lv_event_get_user_data(e));
         lv_obj_t * target = static_cast<lv_obj_t *>(lv_event_get_target(e));
-        bool val = lv_obj_has_state(target, LV_STATE_CHECKED);
-        core::default_store().set_bool(ctx->key, val, ctx->section);
+        bool checked = lv_obj_has_state(target, LV_STATE_CHECKED);
+        bool to_store = ctx->invert_stored_value ? !checked : checked;
+        core::default_store().set_bool(ctx->key, to_store, ctx->section);
         core::default_store().save();
         if (ctx->onChange) {
-            ctx->onChange(val);
+            // onChange always receives the switch's own natural checked
+            // state (matching what the label describes), never the
+            // possibly-inverted on-disk value.
+            ctx->onChange(checked);
         }
     }, LV_EVENT_VALUE_CHANGED, ctx);
 
@@ -408,13 +429,23 @@ lv_obj_t * create_settings_screen() {
      * reverts to the stock OEM feed or stays on the aftermarket feed --
      * see hal::send_mcu_video_relay() and MCU_FIRMWARE_VERIFIED_FINDINGS.md's
      * "CONFIRMED: the real Camera Type setting" section for the full trace. */
+    // 2026-09-05: real hardware bug found via code review -- this
+    // toggle used to store the switch's own raw checked-state directly
+    // into "OriginalCarCamera" (true=checked -> OEM Factory mode), the
+    // exact inverse of what its "Aftermarket Reverse Camera" label
+    // promises (checked should mean aftermarket is active). invert=true
+    // flips storage/read for just this toggle -- see ToggleCtx's own
+    // comment. onChange now receives `aftermarket` (the switch's
+    // natural checked state, matching the label) instead of the old
+    // `oem` naming, which was really just the raw on-disk value.
     create_toggle_row(card, &ui::icons::icon_nav_camera, "Aftermarket Reverse Camera",
-                       "OriginalCarCamera", "General", false, [](bool oem) {
+                       "OriginalCarCamera", "General", false, [](bool aftermarket) {
+                           bool oem = !aftermarket;
                            std::printf("%s [HAL:REVCAM] Video/audio multiplexer set to %s\n",
                                        core::log_timestamp().c_str(),
                                        oem ? "OEM Factory feed" : "Aftermarket feed");
                            hal::send_mcu_video_relay(oem);
-                       });
+                       }, /*invert_stored_value=*/true);
     create_stepper_row(card, &ui::icons::icon_volume, "Reverse Vol. Cut (%)", 0, 100, 5,
                        "ReversingVolumeCut", "General");
 

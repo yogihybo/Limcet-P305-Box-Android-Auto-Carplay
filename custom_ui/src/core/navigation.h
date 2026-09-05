@@ -30,15 +30,23 @@ void replace(ScreenManager::ScreenFactory factory);
 void pop();
 size_t depth();
 
-// The single lv_group_t the knob's LVGL encoder indev navigates (see
-// hal/knob.h) -- lazily created on first call. Screens add their own
-// focusable widgets to this via lv_group_add_obj(focus_group(), obj)
-// as they build themselves, same "reach the one shared instance
-// without a captured pointer" rationale as push()/pop() above. LVGL
-// automatically removes an object from its group when the object
-// itself is deleted (ScreenManager::pop() deleting the outgoing
-// screen's objects), so there's no manual cleanup needed when
-// navigating between screens.
+// 2026-09-05: real hardware bug found via code review -- this used to
+// return ONE process-wide lv_group_t every screen piled its own
+// widgets onto. push() never deletes the screen underneath (kept alive
+// for a future pop()), and LVGL only removes an object from its group
+// when that object is deleted -- so a screen's widgets stayed
+// registered in this shared group forever, even after being buried by
+// a push(), letting the knob's rotary focus land on (and activate)
+// widgets belonging to a screen the user can no longer see. Now
+// delegates to core::ScreenManager::current_group() -- each screen
+// gets its OWN dedicated group (created in push()/replace(), rebound
+// onto the knob indev immediately, freed when that screen is later
+// torn down), so only the screen actually on top is ever reachable.
+// Screens still add their own focusable widgets to this via
+// lv_group_add_obj(focus_group(), obj) exactly as before, same
+// "reach the current instance without a captured pointer" rationale
+// as push()/pop() above -- only what this returns changed, not how
+// it's used.
 lv_group_t * focus_group();
 
 }  // namespace core::navigation

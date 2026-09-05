@@ -236,7 +236,19 @@ static void maybe_update_coeffs(carpi_eq_t *p) {
         return; /* unchanged -- skip recomputing coefficients */
     }
 
+    /* 2026-09-05: real hardware bug found via code review -- instantiate()
+     * stores whatever sample_rate the host passes with no validation.
+     * If that's ever 0 (a host misconfiguration, or a future asound.conf
+     * edit that drops the rate), w0 = 2*pi*f0/fs below divides by zero,
+     * producing inf/NaN biquad coefficients -- silence or digital noise
+     * through the ENTIRE system-wide audio mixer (every source routes
+     * through this one dmix-attached instance), not just this stream.
+     * Falls back to 44100 (this plugin's own documented/expected rate,
+     * per asound.conf) rather than silently computing garbage. */
     float fs = (float)p->sample_rate;
+    if (fs <= 8000.0f) {
+        fs = 44100.0f;
+    }
     for (int ch = 0; ch < 2; ++ch) {
         init_low_shelf(&p->bass[ch], 100.0f, params.bass_db, fs);
         init_peaking(&p->mid[ch], 1000.0f, params.mid_db, 1.0f, fs);

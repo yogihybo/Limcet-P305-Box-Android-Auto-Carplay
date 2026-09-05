@@ -411,7 +411,25 @@ int main() {
     // matches how blueware-era audio worked (MsnCoreApp/start_msn, the
     // stock app, does its own equivalent unmute independently; nothing
     // in custom_ui ever replicated it until now).
-    hal::init_audio_mixer();
+    // 2026-09-05: real hardware finding via code review -- this runs 8
+    // sequential std::system("amixer ...") calls (each forking a real
+    // /bin/sh + amixer process), synchronously, before this function
+    // ever reaches the LVGL loop below -- delaying the very first
+    // rendered frame by however long 8 shell forks take on this
+    // single-core Cortex-A5 (real, if one-time, cost). Nothing after
+    // this point depends on it having completed first (apply_timezone()
+    // below is unrelated; ensure_bluetooth_daemon_running() right below
+    // that is ALREADY backgrounded the same way) -- matches this
+    // project's own established boot-speed priority (rcS's own comment:
+    // "Launch custom_ui immediately so LVGL display initializes in <1
+    // second"). Note: set_stream_volume()'s own std::system("amixer
+    // ...") calls (the ones actually triggered by settings-screen
+    // taps/steppers) were already fixed the same way in an earlier pass
+    // this session -- this is the one remaining synchronous amixer call
+    // site, at boot only.
+    core::SizedThread(core::kDefaultThreadStackSize, []() {
+        hal::init_audio_mixer();
+    }).detach();
     hal::apply_timezone(hal::get_current_timezone_index());
 
     core::SizedThread(core::kDefaultThreadStackSize, []() {
@@ -510,10 +528,15 @@ int main() {
     lv_indev_t * touch = mcu_ok ? hal::init_touch(mcu_input) : nullptr;
     std::printf("%s [HAL:MCU] Touchscreen %s\n", core::log_timestamp().c_str(), touch ? "initialized" : "unavailable");
 
+    // 2026-09-05: real hardware bug found via code review -- used to
+    // bind this indev to core::navigation::focus_group() right here,
+    // before any ScreenManager/screen even exists. Now each screen gets
+    // its OWN dedicated focus group (see screen_manager.h's own
+    // comment), rebound onto this indev by ScreenManager itself on
+    // every push()/replace()/pop() -- the real, correct binding happens
+    // once screens.set_indev(knob) below is followed by the first
+    // push(), so no manual binding is needed (or correct) here anymore.
     lv_indev_t * knob = mcu_ok ? hal::init_knob(mcu_input) : nullptr;
-    if (knob) {
-        lv_indev_set_group(knob, core::navigation::focus_group());
-    }
     std::printf("%s [HAL:MCU] Rotary knob %s\n", core::log_timestamp().c_str(), knob ? "initialized" : "unavailable");
 
     static hal::CameraHandle camera_handle;
@@ -556,6 +579,11 @@ int main() {
 
     core::ScreenManager screens;
     core::navigation::init(screens);
+    // 2026-09-05: must happen before the first push() below -- see
+    // screen_manager.h's own comment on set_indev()/StackEntry.
+    if (knob) {
+        screens.set_indev(knob);
+    }
 
     screens.push(staging_ui::create_home_dashboard);
     std::printf("%s [UI] Home dashboard active\n", core::log_timestamp().c_str());

@@ -190,18 +190,33 @@ void quick_connect_clicked_cb(lv_event_t * e) {
     }
 }
 
+// 2026-09-05: real hardware bug found via code review -- these three
+// hal:: calls are all run_command_simple() (std::system(), no
+// timeout), and media_play_pause() specifically can spawn TWO
+// subshells in sequence (`player.play || player.pause` -- the first
+// one fails whenever something is already playing, falling through to
+// the second). Blocked the LVGL thread for ~300-600ms per tap, running
+// directly inline in these click handlers. Moved to detached
+// background threads, same pattern as this file's own
+// quick_connect_clicked_cb() fix above.
 void media_prev_clicked_cb(lv_event_t * /*e*/) {
-    hal::media_prev_track(hal::shared_handle());
+    core::SizedThread(core::kDefaultThreadStackSize, []() {
+        hal::media_prev_track(hal::shared_handle());
+    }).detach();
 }
 
 void media_play_pause_clicked_cb(lv_event_t * e) {
-    hal::media_play_pause(hal::shared_handle());
+    core::SizedThread(core::kDefaultThreadStackSize, []() {
+        hal::media_play_pause(hal::shared_handle());
+    }).detach();
     auto * w = static_cast<DashboardWidgets *>(lv_event_get_user_data(e));
     update_dashboard_status(w);
 }
 
 void media_next_clicked_cb(lv_event_t * /*e*/) {
-    hal::media_next_track(hal::shared_handle());
+    core::SizedThread(core::kDefaultThreadStackSize, []() {
+        hal::media_next_track(hal::shared_handle());
+    }).detach();
 }
 
 void dashboard_delete_cb(lv_event_t * e) {

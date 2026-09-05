@@ -677,30 +677,45 @@ void McuInputHal::run() {
                     }
                 }
             } else if (b3 == kBtnNextTrack) {
-                std::printf("%s [HAL:MCU] Button: NEXT_TRACK (b3=3 b4=%u)\n", core::log_timestamp().c_str(), b4);
-                // 2026-09-04: async -- see mcu_aa_forward_worker()'s header comment.
-                mcu_aa_forward_worker().enqueue([]() {
-                    AndroidAutoClient client;
-                    client.sendKey(87 /* KEYCODE_MEDIA_NEXT */);
-                });
+                // 2026-09-05: real hardware bug found via code review --
+                // the MCU sends one frame on press (b4==1) AND one on
+                // release (b4==0) for every button, same as kBtnHome/
+                // kKnobClockwise/kKnobPush above already correctly check
+                // -- this branch (and the 3 below it) fired on BOTH,
+                // sending the keycode twice per tap (e.g. skipping two
+                // tracks instead of one).
+                if (b4 == 1) {
+                    std::printf("%s [HAL:MCU] Button: NEXT_TRACK (b3=3 b4=%u)\n", core::log_timestamp().c_str(), b4);
+                    // 2026-09-04: async -- see mcu_aa_forward_worker()'s header comment.
+                    mcu_aa_forward_worker().enqueue([]() {
+                        AndroidAutoClient client;
+                        client.sendKey(87 /* KEYCODE_MEDIA_NEXT */);
+                    });
+                }
             } else if (b3 == kBtnPrevTrack) {
-                std::printf("%s [HAL:MCU] Button: PREV_TRACK (b3=4 b4=%u)\n", core::log_timestamp().c_str(), b4);
-                mcu_aa_forward_worker().enqueue([]() {
-                    AndroidAutoClient client;
-                    client.sendKey(88 /* KEYCODE_MEDIA_PREVIOUS */);
-                });
+                if (b4 == 1) {
+                    std::printf("%s [HAL:MCU] Button: PREV_TRACK (b3=4 b4=%u)\n", core::log_timestamp().c_str(), b4);
+                    mcu_aa_forward_worker().enqueue([]() {
+                        AndroidAutoClient client;
+                        client.sendKey(88 /* KEYCODE_MEDIA_PREVIOUS */);
+                    });
+                }
             } else if (b3 == kBtnAnswer) {
-                std::printf("%s [HAL:MCU] Button: ANSWER_CALL (b3=8 b4=%u)\n", core::log_timestamp().c_str(), b4);
-                mcu_aa_forward_worker().enqueue([]() {
-                    AndroidAutoClient client;
-                    client.sendKey(5 /* KEYCODE_CALL */);
-                });
+                if (b4 == 1) {
+                    std::printf("%s [HAL:MCU] Button: ANSWER_CALL (b3=8 b4=%u)\n", core::log_timestamp().c_str(), b4);
+                    mcu_aa_forward_worker().enqueue([]() {
+                        AndroidAutoClient client;
+                        client.sendKey(5 /* KEYCODE_CALL */);
+                    });
+                }
             } else if (b3 == kBtnHangup) {
-                std::printf("%s [HAL:MCU] Button: HANGUP_CALL (b3=9 b4=%u)\n", core::log_timestamp().c_str(), b4);
-                mcu_aa_forward_worker().enqueue([]() {
-                    AndroidAutoClient client;
-                    client.sendKey(6 /* KEYCODE_ENDCALL */);
-                });
+                if (b4 == 1) {
+                    std::printf("%s [HAL:MCU] Button: HANGUP_CALL (b3=9 b4=%u)\n", core::log_timestamp().c_str(), b4);
+                    mcu_aa_forward_worker().enqueue([]() {
+                        AndroidAutoClient client;
+                        client.sendKey(6 /* KEYCODE_ENDCALL */);
+                    });
+                }
             } else {
                 std::printf("%s [HAL:MCU] Unhandled cmd=0x02 b3=0x%02X (%u) b4=0x%02X (%u)\n",
                             core::log_timestamp().c_str(), b3, b3, b4, b4);

@@ -157,7 +157,29 @@ struct DeviceSnapshot {
     int rssi = -1;
 };
 
-bool fetch_managed_devices(DBusConnection * conn, std::vector<DeviceSnapshot> & out) {
+// 2026-09-05: real hardware bug found via code review -- refresh_bluez_telemetry()
+// only ever queried org.bluez.Device1 (connected/name/rssi), never
+// org.bluez.MediaPlayer1 (the Track dict + Status string BlueZ exposes
+// for an active AVRCP session), so BluetoothTelemetry::track_title/
+// track_artist/play_status were declared in the header but NEVER
+// actually written anywhere in this file -- the Home Dashboard's media
+// card showed "Not Playing" permanently, even with Bluetooth audio
+// actively playing through the car speakers. A MediaPlayer1 object is
+// its own top-level entry in the SAME GetManagedObjects response
+// fetch_managed_devices() already walks (nested under the owning
+// device's own path, e.g. .../dev_XX_.../player0, but a sibling ENTRY
+// in the outer loop, not nested inside Device1's own property dict) --
+// extracted here in the same pass rather than a second D-Bus round-trip.
+struct PlayerSnapshot {
+    std::string title;
+    std::string artist;
+    std::string album;
+    int status = 0;  // 0=stopped, 1=playing, 2=paused -- matches BluetoothTelemetry::play_status
+    bool found = false;
+};
+
+bool fetch_managed_devices(DBusConnection * conn, std::vector<DeviceSnapshot> & out,
+                            PlayerSnapshot * player_out = nullptr) {
     DBusMessage * msg = dbus_message_new_method_call(
         "org.bluez", "/", "org.freedesktop.DBus.ObjectManager", "GetManagedObjects");
     DBusError err;
@@ -246,6 +268,62 @@ bool fetch_managed_devices(DBusConnection * conn, std::vector<DeviceSnapshot> & 
                     }
                     dbus_message_iter_next(&props);
                 }
+            } else if (player_out && ifaceName && std::strcmp(ifaceName, "org.bluez.MediaPlayer1") == 0) {
+                DBusMessageIter props;
+                dbus_message_iter_recurse(&ifaceEntry, &props);
+                while (dbus_message_iter_get_arg_type(&props) == DBUS_TYPE_DICT_ENTRY) {
+                    DBusMessageIter propEntry;
+                    dbus_message_iter_recurse(&props, &propEntry);
+                    const char * propName = nullptr;
+                    dbus_message_iter_get_basic(&propEntry, &propName);
+                    dbus_message_iter_next(&propEntry);
+                    if (propName && dbus_message_iter_get_arg_type(&propEntry) == DBUS_TYPE_VARIANT) {
+                        DBusMessageIter variant;
+                        dbus_message_iter_recurse(&propEntry, &variant);
+                        int vtype = dbus_message_iter_get_arg_type(&variant);
+                        if (std::strcmp(propName, "Status") == 0 && vtype == DBUS_TYPE_STRING) {
+                            const char * v = nullptr;
+                            dbus_message_iter_get_basic(&variant, &v);
+                            std::string status = v ? v : "";
+                            player_out->status = (status == "playing") ? 1
+                                                : (status == "paused") ? 2
+                                                : 0;
+                            player_out->found = true;
+                        } else if (std::strcmp(propName, "Track") == 0 && vtype == DBUS_TYPE_ARRAY) {
+                            // Track is itself a{sv} -- one more level of
+                            // dict-entry/variant nesting than the flat
+                            // Device1 properties above.
+                            DBusMessageIter track;
+                            dbus_message_iter_recurse(&variant, &track);
+                            while (dbus_message_iter_get_arg_type(&track) == DBUS_TYPE_DICT_ENTRY) {
+                                DBusMessageIter trackEntry;
+                                dbus_message_iter_recurse(&track, &trackEntry);
+                                const char * trackKey = nullptr;
+                                dbus_message_iter_get_basic(&trackEntry, &trackKey);
+                                dbus_message_iter_next(&trackEntry);
+                                if (trackKey && dbus_message_iter_get_arg_type(&trackEntry) == DBUS_TYPE_VARIANT) {
+                                    DBusMessageIter trackVariant;
+                                    dbus_message_iter_recurse(&trackEntry, &trackVariant);
+                                    if (dbus_message_iter_get_arg_type(&trackVariant) == DBUS_TYPE_STRING) {
+                                        const char * v = nullptr;
+                                        dbus_message_iter_get_basic(&trackVariant, &v);
+                                        if (std::strcmp(trackKey, "Title") == 0) {
+                                            player_out->title = v ? v : "";
+                                            player_out->found = true;
+                                        } else if (std::strcmp(trackKey, "Artist") == 0) {
+                                            player_out->artist = v ? v : "";
+                                            player_out->found = true;
+                                        } else if (std::strcmp(trackKey, "Album") == 0) {
+                                            player_out->album = v ? v : "";
+                                        }
+                                    }
+                                }
+                                dbus_message_iter_next(&track);
+                            }
+                        }
+                    }
+                    dbus_message_iter_next(&props);
+                }
             }
             dbus_message_iter_next(&ifaces);
         }
@@ -292,7 +370,8 @@ struct BluezMonitorState {
 
 void refresh_bluez_telemetry(DBusConnection * conn, BluezMonitorState & state) {
     std::vector<DeviceSnapshot> devices;
-    if (!fetch_managed_devices(conn, devices)) {
+    PlayerSnapshot player;
+    if (!fetch_managed_devices(conn, devices, &player)) {
         std::lock_guard<std::mutex> lock(g_telemetry_mtx);
         if (state.last_connected) {
             std::printf("%s [BT] Lost connection to BlueZ daemon\n", core::log_timestamp().c_str());
@@ -345,6 +424,22 @@ void refresh_bluez_telemetry(DBusConnection * conn, BluezMonitorState & state) {
     g_telemetry.connected = connected;
     if (!connected_name.empty()) g_telemetry.connected_device_name = connected_name;
     g_telemetry.signal_strength = rssi;
+
+    // MediaPlayer1 only exists while a device has an active AVRCP media
+    // session -- clear the track fields when it's gone (device
+    // disconnected, or just not playing anything) rather than showing
+    // stale metadata from whatever last played.
+    if (player.found) {
+        g_telemetry.track_title = player.title;
+        g_telemetry.track_artist = player.artist;
+        g_telemetry.track_album = player.album;
+        g_telemetry.play_status = player.status;
+    } else {
+        g_telemetry.track_title.clear();
+        g_telemetry.track_artist.clear();
+        g_telemetry.track_album.clear();
+        g_telemetry.play_status = 0;
+    }
 }
 
 // 2026-08-21: only ever sets a flag here, deliberately -- does NOT call

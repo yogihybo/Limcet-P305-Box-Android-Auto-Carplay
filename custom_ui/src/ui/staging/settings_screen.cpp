@@ -14,6 +14,7 @@
 #include "core/log_timing.h"
 #include "core/sized_thread.h"
 #include <functional>
+#include <memory>
 #include <sys/utsname.h>
 
 namespace staging_ui {
@@ -196,7 +197,22 @@ lv_obj_t * create_stepper_row(lv_obj_t * parent, const lv_image_dsc_t * icon_dsc
     }
 
     if (extra_apply) {
-        extra_apply(initial);
+        // 2026-09-05: real hardware bug found via code review -- this
+        // used to call extra_apply(initial) synchronously right here,
+        // during screen construction. For the Media/Guidance/System
+        // volume steppers, extra_apply is hal::set_stream_volume(),
+        // which shells out via std::system("amixer ...") with no
+        // timeout (same call already fixed for the click-handler case
+        // below, in stepper_click_cb) -- three of these back to back
+        // (one per volume stepper) made every visit to the Settings
+        // screen visibly stutter while the LVGL thread blocked on
+        // three sequential subshell forks. Async for the same reason
+        // and via the same detached-thread pattern as that fix -- the
+        // real intent here (making sure amixer's actual level matches
+        // the persisted setting every time this screen opens, in case
+        // something else changed it) is preserved, it just no longer
+        // blocks rendering the screen itself.
+        core::SizedThread(core::kDefaultThreadStackSize, extra_apply, initial).detach();
     }
 
     return row;
@@ -704,7 +720,12 @@ lv_obj_t * create_settings_screen() {
         lv_obj_set_style_text_color(btn_lbl, theme::text_on_accent(), 0);
         lv_obj_center(btn_lbl);
 
-        lv_obj_add_event_cb(btn, [](lv_event_t * /*e*/) {
+        lv_obj_add_event_cb(btn, [](lv_event_t * e) {
+            // 2026-09-05: retrieved (not captured -- this must stay a
+            // plain, non-capturing lambda to match lv_event_cb_t) so the
+            // new scr-delete cleanup handler below can be registered
+            // against the actual screen object.
+            lv_obj_t * scr = static_cast<lv_obj_t *>(lv_event_get_user_data(e));
             // 2026-09-02: create_nav_rail() deliberately places the nav
             // rail on lv_layer_top() so it stays visible over every
             // screen (nav_rail.cpp's own comment). An overlay parented to
@@ -805,13 +826,41 @@ lv_obj_t * create_settings_screen() {
             lv_obj_set_style_text_color(close_label, theme::text_on_accent(), 0);
             lv_obj_center(close_label);
 
+            // 2026-09-05: real hardware bug found via code review --
+            // `overlay` is parented to lv_layer_sys(), NOT to `scr`, so
+            // navigating away (which deletes `scr`) never cascades into
+            // deleting this modal -- it was left stuck on top of
+            // whatever screen the user navigated to, permanently
+            // blocking touch there, unless the user happened to press
+            // Close first. Fixed with a shared "closed" flag: whichever
+            // fires first (the Close button, or scr's own deletion on
+            // navigation) does the real cleanup and marks it done; the
+            // other becomes a safe no-op.
+            auto closed = std::make_shared<bool>(false);
+            using OverlayCloseCtx = std::pair<lv_obj_t *, std::shared_ptr<bool>>;
+
+            auto * close_btn_ctx = new OverlayCloseCtx(overlay, closed);
             lv_obj_add_event_cb(close_btn, [](lv_event_t * ev) {
-                lv_obj_t * ov = static_cast<lv_obj_t *>(lv_event_get_user_data(ev));
-                lv_obj_delete(ov);
-            }, LV_EVENT_CLICKED, overlay);
+                auto * ctx = static_cast<OverlayCloseCtx *>(lv_event_get_user_data(ev));
+                if (!*ctx->second) {
+                    lv_obj_delete(ctx->first);
+                    *ctx->second = true;
+                }
+                delete ctx;
+            }, LV_EVENT_CLICKED, close_btn_ctx);
             if (core::navigation::focus_group()) {
                 lv_group_add_obj(core::navigation::focus_group(), close_btn);
             }
+
+            auto * scr_close_ctx = new OverlayCloseCtx(overlay, closed);
+            lv_obj_add_event_cb(scr, [](lv_event_t * ev) {
+                auto * ctx = static_cast<OverlayCloseCtx *>(lv_event_get_user_data(ev));
+                if (!*ctx->second) {
+                    lv_obj_delete(ctx->first);
+                    *ctx->second = true;
+                }
+                delete ctx;
+            }, LV_EVENT_DELETE, scr_close_ctx);
         }, LV_EVENT_CLICKED, scr);
 
         if (core::navigation::focus_group()) {
@@ -878,7 +927,12 @@ lv_obj_t * create_settings_screen() {
         lv_obj_set_style_text_color(btn_lbl, theme::text_on_accent(), 0);
         lv_obj_center(btn_lbl);
 
-        lv_obj_add_event_cb(btn, [](lv_event_t * /*e*/) {
+        lv_obj_add_event_cb(btn, [](lv_event_t * e) {
+            // 2026-09-05: retrieved (not captured -- this must stay a
+            // plain, non-capturing lambda to match lv_event_cb_t) so the
+            // new scr-delete cleanup handler below can be registered
+            // against the actual screen object.
+            lv_obj_t * scr = static_cast<lv_obj_t *>(lv_event_get_user_data(e));
             // 2026-09-02: real hardware bug report -- "the mcu log window
             // is partially hidden behind the side bar." Root cause:
             // create_nav_rail() deliberately parents the nav rail to
@@ -1014,24 +1068,52 @@ lv_obj_t * create_settings_screen() {
             lv_obj_set_style_text_color(close_label, theme::text_on_accent(), 0);
             lv_obj_center(close_label);
 
+            // 2026-09-05: real hardware bug found via code review --
+            // same issue as the System Information modal above, worse
+            // here since this one also has a 300ms refresh_timer:
+            // `overlay` lives on lv_layer_sys(), not as a child of
+            // `scr`, so navigating away without pressing Close left
+            // both the modal AND its timer running forever in the
+            // background -- permanently blocking touch on whatever
+            // screen the user navigated to, while leaking CPU. Same
+            // shared "closed" flag fix as that modal: whichever fires
+            // first (Close button or scr's own deletion) does the real
+            // cleanup, the other becomes a safe no-op.
             struct CloseCtx {
                 lv_obj_t * overlay;
                 lv_timer_t * timer;
                 LogViewCtx * log_ctx;
+                std::shared_ptr<bool> closed;
             };
-            auto * close_ctx = new CloseCtx{overlay, refresh_timer, log_ctx};
+            auto closed = std::make_shared<bool>(false);
+            auto * close_ctx = new CloseCtx{overlay, refresh_timer, log_ctx, closed};
 
             lv_obj_add_event_cb(close_btn, [](lv_event_t * ev) {
                 auto * ctx = static_cast<CloseCtx *>(lv_event_get_user_data(ev));
-                lv_timer_delete(ctx->timer);
-                lv_obj_delete(ctx->overlay);
-                delete ctx->log_ctx;
+                if (!*ctx->closed) {
+                    lv_timer_delete(ctx->timer);
+                    lv_obj_delete(ctx->overlay);
+                    delete ctx->log_ctx;
+                    *ctx->closed = true;
+                }
                 delete ctx;
             }, LV_EVENT_CLICKED, close_ctx);
 
             if (core::navigation::focus_group()) {
                 lv_group_add_obj(core::navigation::focus_group(), close_btn);
             }
+
+            auto * scr_close_ctx = new CloseCtx{overlay, refresh_timer, log_ctx, closed};
+            lv_obj_add_event_cb(scr, [](lv_event_t * ev) {
+                auto * ctx = static_cast<CloseCtx *>(lv_event_get_user_data(ev));
+                if (!*ctx->closed) {
+                    lv_timer_delete(ctx->timer);
+                    lv_obj_delete(ctx->overlay);
+                    delete ctx->log_ctx;
+                    *ctx->closed = true;
+                }
+                delete ctx;
+            }, LV_EVENT_DELETE, scr_close_ctx);
         }, LV_EVENT_CLICKED, scr);
 
         if (core::navigation::focus_group()) {

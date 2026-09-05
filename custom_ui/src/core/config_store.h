@@ -61,6 +61,7 @@
 #pragma once
 
 #include <map>
+#include <mutex>
 #include <string>
 
 namespace core {
@@ -121,6 +122,22 @@ private:
 
     std::string live_path_;
     std::map<std::string, Entry> values_;
+
+    // 2026-09-05: real hardware bug found via code review -- values_ is
+    // read from and written to across multiple threads with zero
+    // synchronization: the LVGL main thread (settings/home-dashboard
+    // screens), hal/bluetooth.cpp's aa_profile_server_loop() background
+    // thread (get_bool("AutoStartCarLink")), and main.cpp's detached
+    // apply_reversing_volume_cut() thread. An unsynchronized concurrent
+    // read+write on std::map is undefined behavior -- real risk of
+    // corrupting the map's internal tree structure and segfaulting, not
+    // just returning a stale value. Guards every public entry point
+    // (get_*/set_*/save()/load()); mutable so the const get_*() methods
+    // can still lock it. parse_file() (private, only ever called from
+    // load() with the lock already held) deliberately does NOT lock its
+    // own -- std::mutex is non-recursive, a second lock from the same
+    // thread would deadlock.
+    mutable std::mutex mutex_;
 };
 
 // Process-wide store against this app's OWN live path,

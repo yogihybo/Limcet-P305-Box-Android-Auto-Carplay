@@ -254,11 +254,26 @@ bool BluezAaProfile::register_profile() {
 }
 
 int BluezAaProfile::wait_for_connection(int timeoutSeconds) {
-    impl_->pendingFd.store(-1, std::memory_order_relaxed);
+    // 2026-09-05: real hardware bug found via code review -- a plain
+    // store(-1) here unconditionally discards whatever was already in
+    // pendingFd, which is a real, open file descriptor if BlueZ's own
+    // NewConnection D-Bus call was dispatched and handled before this
+    // function was (re-)entered. Using exchange() instead means a
+    // fd that's already sitting there is returned immediately (and
+    // never silently leaked/dropped) rather than being wiped out from
+    // under a phone that already connected.
+    int already_pending = impl_->pendingFd.exchange(-1, std::memory_order_acquire);
+    if (already_pending >= 0) {
+        return already_pending;
+    }
     auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(timeoutSeconds);
     while (std::chrono::steady_clock::now() < deadline) {
         dbus_connection_read_write_dispatch(impl_->conn, 200);
-        int fd = impl_->pendingFd.load(std::memory_order_acquire);
+        // Same reasoning as above -- exchange() rather than load()+a
+        // separate store() (which the very next call's own entry used
+        // to do), so a connection this call successfully picks up can
+        // never be handed out a second time by a future call.
+        int fd = impl_->pendingFd.exchange(-1, std::memory_order_acquire);
         if (fd >= 0) return fd;
     }
     return -1;

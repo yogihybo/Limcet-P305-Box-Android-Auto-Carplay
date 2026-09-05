@@ -62,6 +62,16 @@ int g_pendingAaFd = -1;
 
 std::atomic<bool> g_aaNavigatePending{false};
 
+// 2026-09-05: real hardware bug found via code review -- moved here
+// (file scope, was a static local inside ensure_bluetooth_daemon_running())
+// so aa_profile_server_loop() itself (below) can reset it on its own
+// early-return paths. Guards against starting a second copy of the
+// loop while one is already running -- but if the ALREADY-running one
+// exits early (its own 30s connect/register timeouts) without this
+// ever being reset, ensure_bluetooth_daemon_running() would refuse to
+// ever start a replacement.
+std::atomic<bool> g_aaProfileThreadStarted{false};
+
 // Helpers for executing BlueZ/bluetoothctl commands and capturing stdout
 bool run_command_capture(const std::string & cmd, std::vector<std::string> & lines_out) {
     lines_out.clear();
@@ -559,6 +569,12 @@ void aa_profile_server_loop() {
     if (!connected) {
         std::fprintf(stderr, "%s [BT] could not connect to system bus after 30s -- giving up\n",
                      core::log_timestamp().c_str());
+        // 2026-09-05: see g_aaProfileThreadStarted's own comment --
+        // this thread is about to end without ever registering the AA
+        // RFCOMM profile; reset so a later ensure_bluetooth_daemon_running()
+        // call (e.g. once dbus/bluetoothd actually comes up) can start
+        // a real replacement instead of silently no-op'ing forever.
+        g_aaProfileThreadStarted.store(false, std::memory_order_release);
         return;
     }
 
@@ -573,6 +589,7 @@ void aa_profile_server_loop() {
     if (!registered) {
         std::fprintf(stderr, "%s [BT] could not register AA RFCOMM profile after 30s -- giving up\n",
                      core::log_timestamp().c_str());
+        g_aaProfileThreadStarted.store(false, std::memory_order_release);
         return;
     }
 
@@ -616,20 +633,30 @@ void aa_profile_server_loop() {
         std::printf("%s [BT] *** phone connected over AA RFCOMM *** fd=%d\n",
                     core::log_timestamp().c_str(), fd);
 
-        // Real Bluetooth link is up and a phone confirmed AA-capable
-        // right now -- the best available moment to query it for wall-
-        // clock time (see sync_clock_from_phone()'s own header comment).
-        // Moved here from main.cpp's AaAutoStartWatcher, whose own
-        // trigger (blueware's +AAPDEV= broadcast) has been dead since
-        // this project's BlueZ migration -- watch_bluetooth_broadcasts()
-        // observers are registered but nothing in this file has called
-        // them since blueware's AT-command reader thread was replaced by
-        // BlueZ D-Bus calls, so that call site (and the clock sync
-        // riding on it) never actually ran anymore. This is the real,
-        // Spawn clock sync in the background so it never delays AA hand-off
-        core::SizedThread(core::kDefaultThreadStackSize, []() {
-            sync_clock_from_phone(shared_handle());
-        }).detach();
+        // 2026-09-05: DISABLED -- real hardware bug found via code
+        // review. This call fires on EVERY AA RFCOMM connection, right
+        // as hal::sendConnectFd(fd) below is about to hand the SAME
+        // Bluetooth link off to androidauto-sidecar for the WPP WiFi
+        // handshake. sync_clock_from_phone()'s BLE CTS attempt is
+        // already a confirmed dead end on this hardware (see
+        // project_clock_sync_avenues_exhausted memory), so in practice
+        // this ALWAYS falls through to its PAN fallback --
+        // org.bluez.Network1.Connect("nap") plus a udhcpc lease on
+        // bnep0 -- concurrently, on the SAME underlying Bluetooth ACL
+        // link the AA RFCOMM channel and its WPP handshake are actively
+        // using. Real risk: L2CAP channel renegotiation tearing down
+        // the RFCOMM connection mid-handshake, and (if udhcpc actually
+        // succeeds) bnep0's own route replacing the default gateway,
+        // breaking the WiFi AP (wlan0) route the AA TCP session needs.
+        // Zero offsetting benefit right now either way: this project's
+        // own project_pending_ntp_query_failure memory already found
+        // the PAN path's own NTP query fails on real hardware
+        // regardless of any collision, and explicitly deferred this
+        // whole mechanism "until AA wireless connection itself is
+        // confirmed stable" -- which is exactly the opposite of firing
+        // it on every single AA connection attempt. Function kept
+        // intact (not deleted) for whenever that's revisited; just not
+        // invoked from this real collision-prone hot path anymore.
 
         bool auto_start = core::default_store().get_bool("AutoStartCarLink", true, "General");
         if (auto_start) {
@@ -749,6 +776,7 @@ void ensure_bluetooth_daemon_running() {
             if (agent_bin.empty()) {
                 std::printf("%s [BT:AGENT] Notice: bt-agent not found in /usr/bin, /data, or ./\n",
                             core::log_timestamp().c_str());
+                s_agent_thread_started.store(false, std::memory_order_release);
                 return;
             }
 
@@ -773,6 +801,7 @@ void ensure_bluetooth_daemon_running() {
             if (!fp) {
                 std::fprintf(stderr, "%s [BT:AGENT] ERROR: popen failed for %s\n",
                              core::log_timestamp().c_str(), cmd.c_str());
+                s_agent_thread_started.store(false, std::memory_order_release);
                 return;
             }
 
@@ -788,11 +817,19 @@ void ensure_bluetooth_daemon_running() {
                 }
             }
             pclose(fp);
+            // 2026-09-05: real hardware bug found via code review --
+            // this flag was set true once and never reset. If bt-agent
+            // exits (bluetoothd restarted, its D-Bus connection severed,
+            // an hciconfig reset, etc.), fgets() returns EOF, this
+            // reader loop ends, pclose() returns -- and this file's own
+            // ensure_bluetooth_daemon_running() would never respawn
+            // bt-agent again, permanently breaking PIN/SSP pairing and
+            // agent authorization until the whole process restarted.
+            s_agent_thread_started.store(false, std::memory_order_release);
         }).detach();
     }
 
-    static std::atomic<bool> s_aa_profile_thread_started{false};
-    if (!s_aa_profile_thread_started.exchange(true)) {
+    if (!g_aaProfileThreadStarted.exchange(true)) {
         core::SizedThread(core::kDefaultThreadStackSize, aa_profile_server_loop).detach();
     }
 }

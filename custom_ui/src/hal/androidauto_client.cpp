@@ -100,6 +100,7 @@ void try_spawn_androidauto_sidecar() {
         if (sidecar_bin.empty()) {
             std::printf("%s [AA:SIDECAR] Notice: androidauto-sidecar binary not found in candidate paths\n",
                         core::log_timestamp().c_str());
+            s_sidecar_thread_started.store(false, std::memory_order_release);
             return;
         }
 
@@ -118,6 +119,7 @@ void try_spawn_androidauto_sidecar() {
         if (!fp) {
             std::fprintf(stderr, "%s [AA:SIDECAR] popen failed for %s\n",
                          core::log_timestamp().c_str(), cmd.c_str());
+            s_sidecar_thread_started.store(false, std::memory_order_release);
             return;
         }
 
@@ -133,6 +135,17 @@ void try_spawn_androidauto_sidecar() {
             }
         }
         pclose(fp);
+        // 2026-09-05: real hardware bug found via code review -- this
+        // flag was set true once and never reset. If androidauto-sidecar
+        // ever exits/crashes/gets OOM-killed, fgets() returns EOF, this
+        // reader loop ends, pclose() returns -- and every future call to
+        // try_spawn_androidauto_sidecar() (a tapped "Connect" button, a
+        // freshly re-plugged/re-paired phone) returned immediately
+        // without ever launching a new instance, permanently. Android
+        // Auto stayed dead until the whole custom_ui process itself
+        // restarted. Resetting here lets the NEXT genuine spawn attempt
+        // actually spawn.
+        s_sidecar_thread_started.store(false, std::memory_order_release);
     }).detach();
 }
 

@@ -798,7 +798,20 @@ int main() {
             bool nightMode = mcu_input.get_night_mode();
             if (!nightModeInitialized || nightMode != lastNightMode) {
                 apply_night_mode_brightness(nightMode);
-                nightModeClient.sendNightMode(nightMode);
+                // 2026-09-05: real hardware bug found via code review --
+                // sendNightMode() is a synchronous AF_UNIX socket call
+                // (up to 2 attempts, ~1-2s timeout each), called inline
+                // here on the same lv_timer_handler() loop as everything
+                // else in this function -- same freeze mechanism as
+                // apply_reversing_volume_cut()'s own fix above (see that
+                // comment), just triggered by headlights instead of
+                // reverse gear. AndroidAutoClient guards its own state
+                // with an internal mutex, so calling it from a detached
+                // thread is safe even if another event touches a
+                // DIFFERENT AndroidAutoClient instance concurrently.
+                std::thread([nightMode]() {
+                    nightModeClient.sendNightMode(nightMode);
+                }).detach();
                 lastNightMode = nightMode;
                 nightModeInitialized = true;
             }

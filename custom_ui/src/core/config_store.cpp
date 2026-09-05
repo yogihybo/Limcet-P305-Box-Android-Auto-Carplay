@@ -146,6 +146,7 @@ std::string ConfigStore::resolve_default_seed_path() {
 }
 
 void ConfigStore::load() {
+    std::lock_guard<std::mutex> lock(mutex_);
     values_.clear();
     parse_file(live_path_, /*is_live_layer=*/true);
     parse_file(resolve_default_seed_path(), /*is_live_layer=*/false);
@@ -162,35 +163,67 @@ void ConfigStore::load() {
 }
 
 bool ConfigStore::save() {
+    std::lock_guard<std::mutex> lock(mutex_);
     mkdir_parents(live_path_);
-    std::ofstream f(live_path_, std::ios::trunc);
-    if (!f.is_open()) {
-        std::fprintf(stderr, "%s core::ConfigStore::save: failed to open %s (%s)\n", core::log_timestamp().c_str(),
-                     live_path_.c_str(), std::strerror(errno));
-        return false;
-    }
 
-    // Only ever writes keys that are (now) part of the live layer --
-    // after load()'s promotion step (see its comment) that's every key
-    // this app knows about, so this ends up as a full self-contained
-    // copy, not just a handful of user-touched overrides.
-    std::string current_section;
-    for (auto & [map_key, entry] : values_) {
-        if (!entry.from_live) continue;
-        size_t slash = map_key.find('/');
-        std::string section = map_key.substr(0, slash);
-        std::string key = map_key.substr(slash + 1);
-        if (section != current_section) {
-            f << "[" << section << "]\n";
-            current_section = section;
+    // 2026-09-05: real hardware bug found via code review -- this used
+    // to truncate live_path_ directly in place (std::ios::trunc), which
+    // leaves a real window (between the truncate and the last write
+    // completing) where a power cut -- genuinely common in an
+    // automotive 12V environment: ignition-off, or an engine-crank
+    // voltage dip -- corrupts or zeroes settings.conf with no recovery.
+    // Fixed the same way write_system_eq_params() already does it:
+    // write to a scratch file, then rename() it into place. rename() on
+    // the same filesystem is atomic -- readers always see either the
+    // complete old file or the complete new one, never a partial write,
+    // and nothing else keeps live_path_ open across this call (unlike
+    // the real custom_ui.log inode-leak bug fixed in rcS -- ConfigStore
+    // only ever opens this path for the brief duration of one load()/
+    // save() call), so a plain rename is safe here with no fd-lifetime
+    // concern.
+    std::string tmp_path = live_path_ + ".tmp";
+    {
+        std::ofstream f(tmp_path, std::ios::trunc);
+        if (!f.is_open()) {
+            std::fprintf(stderr, "%s core::ConfigStore::save: failed to open %s (%s)\n", core::log_timestamp().c_str(),
+                         tmp_path.c_str(), std::strerror(errno));
+            return false;
         }
-        f << key << "=" << entry.value << "\n";
+
+        // Only ever writes keys that are (now) part of the live layer --
+        // after load()'s promotion step (see its comment) that's every key
+        // this app knows about, so this ends up as a full self-contained
+        // copy, not just a handful of user-touched overrides.
+        std::string current_section;
+        for (auto & [map_key, entry] : values_) {
+            if (!entry.from_live) continue;
+            size_t slash = map_key.find('/');
+            std::string section = map_key.substr(0, slash);
+            std::string key = map_key.substr(slash + 1);
+            if (section != current_section) {
+                f << "[" << section << "]\n";
+                current_section = section;
+            }
+            f << key << "=" << entry.value << "\n";
+        }
+        if (!f.good()) {
+            std::fprintf(stderr, "%s core::ConfigStore::save: write to %s failed\n", core::log_timestamp().c_str(),
+                         tmp_path.c_str());
+            return false;
+        }
+    }  // f closed (and flushed) here, before the rename below
+
+    if (std::rename(tmp_path.c_str(), live_path_.c_str()) != 0) {
+        std::fprintf(stderr, "%s core::ConfigStore::save: failed to rename %s into place (%s)\n",
+                     core::log_timestamp().c_str(), live_path_.c_str(), std::strerror(errno));
+        return false;
     }
     return true;
 }
 
 int ConfigStore::get_int(const std::string & key, int default_value,
                           const std::string & section) const {
+    std::lock_guard<std::mutex> lock(mutex_);
     auto it = values_.find(make_map_key(section, key));
     if (it == values_.end()) return default_value;
     try {
@@ -202,6 +235,7 @@ int ConfigStore::get_int(const std::string & key, int default_value,
 
 bool ConfigStore::get_bool(const std::string & key, bool default_value,
                             const std::string & section) const {
+    std::lock_guard<std::mutex> lock(mutex_);
     auto it = values_.find(make_map_key(section, key));
     if (it == values_.end()) return default_value;
     std::string v = it->second.value;
@@ -213,38 +247,49 @@ bool ConfigStore::get_bool(const std::string & key, bool default_value,
 
 std::string ConfigStore::get_string(const std::string & key, const std::string & default_value,
                                      const std::string & section) const {
+    std::lock_guard<std::mutex> lock(mutex_);
     auto it = values_.find(make_map_key(section, key));
     if (it == values_.end()) return default_value;
     return it->second.value;
 }
 
 void ConfigStore::set_int(const std::string & key, int value, const std::string & section) {
+    std::lock_guard<std::mutex> lock(mutex_);
     values_[make_map_key(section, key)] = Entry{std::to_string(value), true};
 }
 
 void ConfigStore::set_bool(const std::string & key, bool value, const std::string & section) {
+    std::lock_guard<std::mutex> lock(mutex_);
     values_[make_map_key(section, key)] = Entry{value ? "true" : "false", true};
 }
 
 void ConfigStore::set_string(const std::string & key, const std::string & value,
                               const std::string & section) {
+    std::lock_guard<std::mutex> lock(mutex_);
     values_[make_map_key(section, key)] = Entry{value, true};
 }
 
 ConfigStore & default_store() {
-    static ConfigStore store("/data/settings.conf");
-    static bool loaded = false;
-    if (!loaded) {
-        store.load();
+    // 2026-09-05: the old `static bool loaded` check-then-act pattern
+    // was itself an unsynchronized data race -- two threads calling
+    // default_store() for the very first time concurrently could both
+    // observe loaded==false and both call load()/save(). Replaced with
+    // an immediately-invoked lambda inside the static initializer:
+    // C++11 guarantees function-local static initialization runs
+    // exactly once, thread-safely (a concurrent caller blocks until
+    // the first one finishes), with no manual flag/mutex needed.
+    static ConfigStore & store = []() -> ConfigStore & {
+        static ConfigStore s("/data/settings.conf");
+        s.load();
         // Persist immediately -- see load()'s comment: this makes the
         // live file self-contained from this app's very first run
         // rather than waiting for the user to touch a setting.
         // Best-effort/non-fatal, same as every other optional-write
         // pattern in this codebase (e.g. a dev host build has nowhere
         // real to write this).
-        store.save();
-        loaded = true;
-    }
+        s.save();
+        return s;
+    }();
     return store;
 }
 

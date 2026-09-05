@@ -27,6 +27,7 @@
 #include "ui/staging/theme.h"
 #include "ui/staging/fonts.h"
 #include "ui/staging/icons.h"
+#include "ui/staging/home_dashboard.h"
 
 namespace ui {
 
@@ -230,7 +231,24 @@ void poll_timer_cb(lv_timer_t * timer) {
             w->display_hidden = false;
         }
         hal::androidauto_screen_active().store(false, std::memory_order_release);
-        core::navigation::pop();
+        // 2026-09-05: real hardware bug found via code review -- when
+        // AA is opened via the nav rail's own AA tab (nav_rail.cpp uses
+        // core::navigation::replace(), not push()), the screen stack
+        // depth stays at 1. ScreenManager::pop() explicitly refuses to
+        // pop the root screen (stack_.size() <= 1), so this pop() was a
+        // silent no-op in that case, stranding the user on the now-
+        // disconnected AA screen with a blank card and no way back
+        // except a manual nav-rail tap. Only actually returns to a
+        // PREVIOUS screen via pop() when one genuinely exists on the
+        // stack (i.e. AA was reached via push(), e.g. from the Home
+        // Dashboard's own Quick Connect/bluetooth_screen.cpp's Connect
+        // button) -- otherwise falls back to a fresh Home Dashboard via
+        // replace(), matching what the nav-rail path expects to land on.
+        if (core::navigation::depth() > 1) {
+            core::navigation::pop();
+        } else {
+            core::navigation::replace(staging_ui::create_home_dashboard);
+        }
         return;
     }
 

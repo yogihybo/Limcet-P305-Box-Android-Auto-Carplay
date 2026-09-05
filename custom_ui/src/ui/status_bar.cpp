@@ -1,13 +1,8 @@
 #include "ui/status_bar.h"
 
-#include <atomic>
-#include <chrono>
 #include <cstdio>
 #include <ctime>
-#include <mutex>
-#include <thread>
 
-#include "core/sized_thread.h"
 #include "hal/androidauto_client.h"
 #include "hal/bluetooth.h"
 #include "ui/theme.h"
@@ -16,72 +11,35 @@ namespace ui::status_bar {
 
 namespace {
 
-// Process-lifetime singleton, same pattern as every other HAL handle
-// in this codebase (settings_screen.cpp's display_handle()) --
-// connected lazily once, shared by every screen's status bar instance
-// rather than one per screen visit, so navigating around the app
-// doesn't repeatedly reconnect the sidecar socket.
-//
-// Deliberately a SEPARATE hal::AndroidAutoClient from android_auto_screen.cpp's
-// own -- see status_bar.h's top comment for why a second socket
-// connection is the simpler, more decoupled choice here over threading
-// a shared client instance across translation units.
-hal::AndroidAutoClient & aa_client() {
-    static hal::AndroidAutoClient c;
-    return c;
-}
-
 // Collapses the sidecar's full STATE grammar (see android_auto_screen.cpp's
 // own, more detailed parse_status_line()) down to a single yes/no for
 // the glyph: lit (accent) only when actively Connected, dim
 // (secondary) for every other state -- Idle, mid-handshake, Failed, or
 // "sidecar not running at all" (the common case before the AA screen
-// has ever been opened, since this bar polls with allow_spawn=false).
-// A 28px-tall bar glyph has no room for the detail android_auto_screen.cpp
-// shows; that screen remains the place to see *why* it isn't connected.
+// has ever been opened, since the shared status poll runs with
+// allow_spawn=false by default). A 28px-tall bar glyph has no room for
+// the detail android_auto_screen.cpp shows; that screen remains the
+// place to see *why* it isn't connected.
 bool is_aa_connected(const std::string & line) {
     return line.rfind("STATE Connected", 0) == 0;
-}
-
-// 2026-09-04: real hardware bug -- poll_timer_cb() used to call
-// aa_client().statusLine(false) directly, inline, on the LVGL main
-// thread every 1000ms, on EVERY screen (this bar is persistent, not
-// AA-specific). That's a synchronous AndroidAutoClient socket call
-// bounded by SO_RCVTIMEO/SO_SNDTIMEO=1s x up to 2 attempts (~2s worst
-// case) -- since that exceeds the 1000ms poll period, a wedged sidecar
-// could freeze the entire UI continuously, on any screen. Same bug
-// class as mcu_input.cpp's reader-thread freeze and
-// android_auto_screen.cpp's own poll_timer_cb() (see that file's
-// PollCache for the fuller version of this same comment) -- fixed the
-// same way: a background thread owns the blocking call, the LVGL timer
-// only ever reads a cached atomic bool.
-struct PollCache {
-    std::atomic<bool> aa_ok{false};
-    std::atomic<bool> stop{false};
-};
-
-void poll_background_loop(PollCache * cache) {
-    while (!cache->stop.load(std::memory_order_acquire)) {
-        bool ok = is_aa_connected(aa_client().statusLine(/*allow_spawn=*/false));
-        cache->aa_ok.store(ok, std::memory_order_relaxed);
-        for (int i = 0; i < 10 && !cache->stop.load(std::memory_order_acquire); ++i) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        }
-    }
-    // Background thread owns cache's lifetime once started -- the LVGL
-    // side only ever sets stop=true, never touches cache again after
-    // that (widgets_delete_cb below), so it's safe for this thread to
-    // free it once its own loop actually exits.
-    delete cache;
 }
 
 struct Widgets {
     lv_obj_t * clock_label;
     lv_obj_t * bt_icon;
     lv_obj_t * aa_icon;
-    PollCache * cache;
 };
 
+// 2026-09-05: real hardware bug found via code review -- this bar,
+// android_auto_screen.cpp, and home_dashboard.cpp each used to run
+// their OWN independent AndroidAutoClient + background poll thread,
+// all three hitting the sidecar with STATUS every 500-1000ms -- 3
+// sockets, 3 threads, for the exact same piece of information. Now
+// reads hal::cached_android_auto_status(), which is backed by ONE
+// shared poller (see androidauto_client.h's own comment) -- this
+// function itself never blocks (the real socket I/O happens on that
+// shared background thread), so no per-bar PollCache/thread is needed
+// here anymore at all.
 void poll_timer_cb(lv_timer_t * timer) {
     auto * w = static_cast<Widgets *>(lv_timer_get_user_data(timer));
 
@@ -97,7 +55,7 @@ void poll_timer_cb(lv_timer_t * timer) {
     bool bt_connected = hal::shared_handle().fd >= 0 && telem.connected;
     lv_obj_set_style_text_color(w->bt_icon, bt_connected ? theme::accent() : theme::text_secondary(), 0);
 
-    bool aa_ok = w->cache->aa_ok.load(std::memory_order_relaxed);
+    bool aa_ok = is_aa_connected(hal::cached_android_auto_status().status_line);
     lv_obj_set_style_text_color(w->aa_icon, aa_ok ? theme::success() : theme::text_secondary(), 0);
 }
 
@@ -107,12 +65,7 @@ void screen_delete_cb(lv_event_t * e) {
 }
 
 void widgets_delete_cb(lv_event_t * e) {
-    auto * w = static_cast<Widgets *>(lv_event_get_user_data(e));
-    // Signals the background poll loop to stop; it frees `cache` itself
-    // once its own loop notices -- see poll_background_loop()'s own
-    // comment on this ownership split.
-    w->cache->stop.store(true, std::memory_order_release);
-    delete w;
+    delete static_cast<Widgets *>(lv_event_get_user_data(e));
 }
 
 }  // namespace
@@ -163,17 +116,12 @@ void create(lv_obj_t * scr) {
     lv_obj_set_style_text_font(bt_icon, &lv_font_montserrat_20, 0);
     lv_obj_set_style_text_color(bt_icon, theme::text_secondary(), 0);
 
-    auto * cache = new PollCache();
-    core::SizedThread(core::kDefaultThreadStackSize, poll_background_loop, cache).detach();
-
-    auto * widgets = new Widgets{clock_label, bt_icon, aa_icon, cache};
+    auto * widgets = new Widgets{clock_label, bt_icon, aa_icon};
     lv_obj_add_event_cb(bar, widgets_delete_cb, LV_EVENT_DELETE, widgets);
 
     // Runs immediately once (not just on the first 1s tick) so the bar
     // never shows the "--:--" placeholder for a full second after a
-    // screen loads. The AA icon itself may still show its prior/default
-    // (dim) state for a moment until poll_background_loop()'s first
-    // real result lands in the cache -- never blocks either way.
+    // screen loads.
     lv_timer_t * timer = lv_timer_create(poll_timer_cb, 1000, widgets);
     lv_obj_add_event_cb(scr, screen_delete_cb, LV_EVENT_DELETE, timer);
     poll_timer_cb(timer);

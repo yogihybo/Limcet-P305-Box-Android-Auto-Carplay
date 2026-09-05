@@ -263,6 +263,9 @@ void AndroidAutoClient::disconnect() {
         close(fd_);
         fd_ = -1;
     }
+    // A stale connection's leftover bytes (if any) must never be
+    // mistaken for the start of a fresh connection's first reply.
+    readBuffer_.clear();
 }
 
 bool AndroidAutoClient::ensureConnected(bool allow_spawn) {
@@ -314,15 +317,22 @@ bool AndroidAutoClient::sendCommand(const std::string & line, std::string & repl
         return false;
     }
 
-    reply.clear();
+    // 2026-09-05: see readBuffer_'s own header comment -- reads
+    // accumulate into the PERSISTENT member buffer (which may already
+    // hold leftover bytes from a previous call's read() that returned
+    // more than one line), not a local one that's discarded whole.
     char buf[512];
-    while (reply.find('\n') == std::string::npos) {
+    while (readBuffer_.find('\n') == std::string::npos) {
         ssize_t n = read(fd_, buf, sizeof(buf));
         if (n <= 0) return false;
-        reply.append(buf, static_cast<size_t>(n));
+        readBuffer_.append(buf, static_cast<size_t>(n));
     }
-    // Trim to just the first line (protocol is one line per response).
-    reply.resize(reply.find('\n'));
+    // First line is this command's reply; anything after its newline
+    // stays in readBuffer_ for the NEXT sendCommand() call to consume,
+    // instead of being discarded.
+    size_t nl = readBuffer_.find('\n');
+    reply = readBuffer_.substr(0, nl);
+    readBuffer_.erase(0, nl + 1);
     return true;
 }
 
@@ -472,6 +482,58 @@ bool AndroidAutoClient::sendEq(int bass_db, int mid_db, int treble_db, bool loud
         disconnect();
     }
     return false;
+}
+
+namespace {
+
+// See AndroidAutoStatusSnapshot's own header comment for why this
+// exists -- one shared poller instead of 3 independent ones.
+struct SharedStatusCache {
+    std::mutex mtx;
+    AndroidAutoStatusSnapshot snapshot;
+};
+
+SharedStatusCache & shared_status_cache() {
+    static SharedStatusCache c;
+    return c;
+}
+
+std::atomic<bool> g_statusPollAllowSpawn{false};
+std::atomic<bool> g_statusPollStarted{false};
+
+void status_poll_loop() {
+    // Dedicated instance/socket, separate from any UI-owned
+    // AndroidAutoClient (e.g. one used for one-off actions like
+    // requestConnect()) -- this one's sole job is the shared poll.
+    AndroidAutoClient client;
+    while (true) {
+        bool allow_spawn = g_statusPollAllowSpawn.load(std::memory_order_acquire);
+        std::string line = client.statusLine(allow_spawn);
+        bool native = false;
+        if (line.rfind("STATE Connected", 0) == 0) {
+            native = client.videoFocusNative();
+        }
+        {
+            std::lock_guard<std::mutex> lock(shared_status_cache().mtx);
+            shared_status_cache().snapshot.status_line = std::move(line);
+            shared_status_cache().snapshot.native_focus = native;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    }
+}
+
+}  // namespace
+
+AndroidAutoStatusSnapshot cached_android_auto_status() {
+    if (!g_statusPollStarted.exchange(true)) {
+        core::SizedThread(core::kDefaultThreadStackSize, status_poll_loop).detach();
+    }
+    std::lock_guard<std::mutex> lock(shared_status_cache().mtx);
+    return shared_status_cache().snapshot;
+}
+
+void set_android_auto_status_poll_allow_spawn(bool allow) {
+    g_statusPollAllowSpawn.store(allow, std::memory_order_release);
 }
 
 }  // namespace hal

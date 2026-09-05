@@ -103,6 +103,23 @@ void mcu_knob_read_cb(lv_indev_t * indev, lv_indev_data_t * data) {
     if (press_edge) {
         last_press_time_ms() = now_ms;
         rotated_while_held() = false;
+        // 2026-09-05: real hardware bug found via code review --
+        // last_held_rotation_time_ms() used to only ever be set (never
+        // cleared), so a FRESH press right after a PREVIOUS,
+        // already-concluded hold-and-turn gesture inherited that
+        // gesture's stale timestamp. Two real, related consequences:
+        // (1) below, is_held's own "continuation of an active
+        // hold-rotation sequence within 400ms" check could treat this
+        // brand new press+rotate as a continuation of the OLD gesture
+        // even though nothing is actually still held; (2) the
+        // DPAD_CENTER click-on-release check further down requires
+        // now_ms - last_held_rotation_time_ms() > 400 -- a clean,
+        // unrelated tap landing within 400ms of the PREVIOUS gesture's
+        // last rotation had its own legitimate click silently dropped.
+        // Resetting here means every press starts its own gesture
+        // tracking from a clean slate, matching rotated_while_held()'s
+        // own reset just above.
+        last_held_rotation_time_ms() = 0;
     }
     if (release_edge) {
         last_release_time_ms() = now_ms;

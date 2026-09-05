@@ -123,18 +123,61 @@ modprobe rtl8811cu rtw_drv_log_level=2 rtw_country_code=US
 # could only be seen on the serial console at the time. /tmp (not
 # /var/log) deliberately -- tmpfs, so this clears itself on every
 # reboot rather than accumulating stale log data across boots.
+#
+# 2026-09-05: REMOVED the console mirror (`tee` writing to its own
+# inherited stdout, i.e. the serial console, IN ADDITION to the log
+# file) -- real hardware root cause of a "random hang on all input in
+# AA mode" that survived every earlier threading fix this session
+# (mcu_input.cpp's reader thread, every LVGL polling/click-handler
+# path). custom_ui logs heavily (kernel-style timestamps on every
+# line, verbose per-touch/per-knob debug in AA mode specifically) via
+# plain printf() on BOTH the MCU reader thread (mcu_input.cpp) and the
+# LVGL thread itself (hal/knob.cpp's own AA-active debug line) -- with
+# nothing physically attached to read the serial console (the normal,
+# unattended, deployed-in-a-car case), that tty's small kernel output
+# buffer fills, `tee`'s write() to it blocks, `tee` stops draining its
+# stdin pipe from custom_ui, that 64KB pipe fills next, and THEN any
+# printf() in custom_ui -- on ANY thread, regardless of how well that
+# thread's own AndroidAutoClient/amixer/dbus-send calls were
+# decoupled -- blocks too. This explains why AA mode specifically
+# (far higher log volume) and why it looked "random" (depends only on
+# whether a serial terminal happens to be attached and draining at the
+# time, not on anything this app does). Writing to /tmp/custom_ui.log
+# alone doesn't have this risk (tmpfs writes don't block on a reader);
+# the SSH-`tail -f` need that motivated adding the log file in the
+# first place already covers live-output visibility without ever
+# needing the console mirror.
 (
 	sleep 0.1
 	. /etc/profile
 	while true; do
-		# busybox ash has no PIPESTATUS, so $? after the pipe below
-		# would be tee's exit status, not custom_ui's -- route the
-		# real exit code through a temp file instead so the message
-		# below stays accurate.
-		( /usr/bin/custom_ui 2>&1; echo $? > /tmp/.custom_ui_exit ) | tee -a /tmp/custom_ui.log
-		rc=$(cat /tmp/.custom_ui_exit 2>/dev/null)
+		/usr/bin/custom_ui >> /tmp/custom_ui.log 2>&1
+		rc=$?
 		echo "rcS: custom_ui exited (${rc:-?}), respawning in 1s..."
 		sleep 1
+	done
+) &
+
+# --- Bound /tmp/custom_ui.log growth ---
+# /tmp is tmpfs on this 173MB, no-swap device -- every byte this log
+# file holds is real RAM, not disk, and a normal session can run
+# uninterrupted for hours between respawns (the loop above only
+# reopens/rechecks the file if custom_ui actually exits). Removing the
+# console mirror above closes the real BLOCKING risk (see that
+# comment), but an unbounded log is still its own real, separate risk
+# on this device -- caps it at 8MB, trimmed back to the most recent 2MB
+# (still plenty for `tail -f`/post-mortem review over SSH) rather than
+# ever truncating to nothing.
+(
+	while true; do
+		sleep 300
+		if [ -f /tmp/custom_ui.log ]; then
+			size=$(wc -c < /tmp/custom_ui.log 2>/dev/null)
+			if [ "${size:-0}" -gt 8388608 ]; then
+				tail -c 2097152 /tmp/custom_ui.log > /tmp/custom_ui.log.new 2>/dev/null \
+					&& mv /tmp/custom_ui.log.new /tmp/custom_ui.log
+			fi
+		fi
 	done
 ) &
 

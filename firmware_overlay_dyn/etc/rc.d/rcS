@@ -168,14 +168,35 @@ modprobe rtl8811cu rtw_drv_log_level=2 rtw_country_code=US
 # on this device -- caps it at 8MB, trimmed back to the most recent 2MB
 # (still plenty for `tail -f`/post-mortem review over SSH) rather than
 # ever truncating to nothing.
+#
+# 2026-09-05: REAL BUG, self-introduced and fixed -- the original
+# version of this job used `tail ... > .new && mv .new custom_ui.log`.
+# custom_ui's own stdout fd was opened ONCE (by the shell's `>>`
+# redirect above) for the entire life of the process, pointing at the
+# log file's INODE, not its path. `mv` changes the directory entry to
+# point at a *different* inode (the just-written .new file) -- it does
+# NOT retarget any already-open fd. custom_ui's fd kept writing into
+# the now-unlinked original inode, whose pages tmpfs can never reclaim
+# while that fd stays open (i.e. for the rest of the process's life) --
+# a slow, silent, unbounded RAM leak on exactly the device this cap was
+# meant to protect, PLUS the visible /tmp/custom_ui.log staying frozen
+# at whatever size it was trimmed to (custom_ui was no longer writing
+# to that path at all), so the size check above would never fire again
+# either. Fixed: truncate the SAME inode in place -- write the kept
+# tail to a scratch file, then `cat` it back over the ORIGINAL path
+# (opens that path with O_TRUNC on the inode custom_ui's fd already
+# references, no rename involved) -- custom_ui's own O_APPEND fd
+# correctly continues writing at the new (shorter) end-of-file on its
+# very next write(), no gap, no second inode.
 (
 	while true; do
 		sleep 300
 		if [ -f /tmp/custom_ui.log ]; then
 			size=$(wc -c < /tmp/custom_ui.log 2>/dev/null)
 			if [ "${size:-0}" -gt 8388608 ]; then
-				tail -c 2097152 /tmp/custom_ui.log > /tmp/custom_ui.log.new 2>/dev/null \
-					&& mv /tmp/custom_ui.log.new /tmp/custom_ui.log
+				tail -c 2097152 /tmp/custom_ui.log > /tmp/custom_ui.log.tail 2>/dev/null \
+					&& cat /tmp/custom_ui.log.tail > /tmp/custom_ui.log 2>/dev/null
+				rm -f /tmp/custom_ui.log.tail
 			fi
 		fi
 	done

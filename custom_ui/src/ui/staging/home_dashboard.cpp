@@ -10,15 +10,74 @@
 #include "ui/staging/icons.h"
 #include "core/navigation.h"
 #include "core/config_store.h"
+#include "core/sized_thread.h"
 #include "hal/androidauto_client.h"
 #include "hal/bluetooth.h"
+#include <atomic>
+#include <chrono>
 #include <ctime>
 #include <cstdio>
+#include <mutex>
 #include <string>
+#include <thread>
 
 namespace staging_ui {
 
 namespace {
+
+hal::AndroidAutoClient & client() {
+    static hal::AndroidAutoClient c;
+    return c;
+}
+
+// 2026-09-05: real hardware bug -- missed in the fecf0f4 sweep that
+// fixed this exact issue in status_bar.cpp/android_auto_screen.cpp.
+// update_dashboard_status() used to call client().statusLine(false)
+// directly, inline, on the LVGL thread every 1000ms via poll_timer_cb()
+// -- a synchronous AndroidAutoClient socket call bounded by
+// SO_RCVTIMEO/SO_SNDTIMEO=1s x up to 2 attempts (~2s worst case),
+// same freeze mechanism as every other instance of this bug class this
+// session (see mcu_input.cpp's own header comment). Made worse here by
+// a SECOND real bug: create_home_dashboard()'s screen is pushed via
+// core::navigation::push() (auto_del=false, see quick_connect_clicked_cb()
+// below) whenever the user opens AA/CarPlay -- the home screen and its
+// poll_timer are never deleted, just hidden, so this synchronous call
+// kept firing every second in the BACKGROUND even while a totally
+// different screen (e.g. Android Auto, mid-video-playback) was active,
+// competing for the same LVGL thread.
+//
+// Fixed the same way as android_auto_screen.cpp's own PollCache: a
+// background thread owns the blocking call, the LVGL timer only ever
+// reads a mutex-guarded cache -- AND the background thread (and the
+// LVGL timer itself) both pause while this screen isn't the visible
+// one (LV_EVENT_SCREEN_UNLOADED/LOADED below), closing the second bug
+// too rather than just working around it.
+struct PollCache {
+    std::mutex mtx;
+    std::string status_line{"STATE Idle"};
+    std::atomic<bool> paused{false};
+    std::atomic<bool> stop{false};
+};
+
+void poll_background_loop(PollCache * cache) {
+    while (!cache->stop.load(std::memory_order_acquire)) {
+        if (!cache->paused.load(std::memory_order_acquire)) {
+            std::string status = client().statusLine(/*allow_spawn=*/false);
+            std::lock_guard<std::mutex> lock(cache->mtx);
+            cache->status_line = std::move(status);
+        }
+        // Sleep in small increments so pause/stop are picked up
+        // promptly rather than waiting out a full cycle.
+        for (int i = 0; i < 10 && !cache->stop.load(std::memory_order_acquire); ++i) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+    }
+    // Background thread owns cache's lifetime once started -- the LVGL
+    // side only ever sets stop=true (dashboard_delete_cb below), never
+    // touches cache again after that, so it's safe for this thread to
+    // free it once its own loop actually exits.
+    delete cache;
+}
 
 struct DashboardWidgets {
     lv_obj_t * clock_lbl = nullptr;
@@ -29,12 +88,8 @@ struct DashboardWidgets {
     lv_obj_t * track_artist_lbl = nullptr;
     lv_obj_t * playpause_icon = nullptr;
     lv_timer_t * poll_timer = nullptr;
+    PollCache * cache = nullptr;
 };
-
-hal::AndroidAutoClient & client() {
-    static hal::AndroidAutoClient c;
-    return c;
-}
 
 void update_clock(DashboardWidgets * w) {
     if (!w || !w->clock_lbl) return;
@@ -58,7 +113,7 @@ void update_dashboard_status(DashboardWidgets * w) {
         lv_label_set_text(w->aa_title_lbl, is_carplay ? "Apple CarPlay" : "Android Auto");
     }
 
-    if (w->aa_status_lbl && w->connect_lbl) {
+    if (w->aa_status_lbl && w->connect_lbl && w->cache) {
         if (is_carplay) {
             FILE * f = fopen("/tmp/carplay", "r");
             bool is_linked = (f != nullptr);
@@ -72,7 +127,11 @@ void update_dashboard_status(DashboardWidgets * w) {
                 lv_label_set_text(w->connect_lbl, "Quick Connect");
             }
         } else {
-            std::string line = client().statusLine(false);
+            std::string line;
+            {
+                std::lock_guard<std::mutex> lock(w->cache->mtx);
+                line = w->cache->status_line;
+            }
             if (line.rfind("STATE Connected", 0) == 0) {
                 lv_label_set_text(w->aa_status_lbl, "Session: Active (Connected)");
                 lv_label_set_text(w->connect_lbl, "Open Session");
@@ -106,14 +165,26 @@ void poll_timer_cb(lv_timer_t * timer) {
 }
 
 void quick_connect_clicked_cb(lv_event_t * e) {
-    (void)e;
+    auto * w = static_cast<DashboardWidgets *>(lv_event_get_user_data(e));
     std::string proj = core::default_store().get_string("ProjectionType", "AndroidAuto", "General");
     if (proj == "CarPlay") {
         core::navigation::push(ui::create_carplay_screen);
     } else {
-        std::string line = client().statusLine(false);
+        // 2026-09-05: async -- see this file's own PollCache comment.
+        // Uses the cached status (up to ~1s stale, same as the label
+        // this button sits next to) instead of a fresh blocking
+        // statusLine() call; requestConnect() moved to a detached
+        // thread, fire-and-forget -- android_auto_screen.cpp's own
+        // poll loop picks up the real connection state once it lands.
+        std::string line;
+        if (w && w->cache) {
+            std::lock_guard<std::mutex> lock(w->cache->mtx);
+            line = w->cache->status_line;
+        }
         if (line.rfind("STATE Connected", 0) != 0) {
-            client().requestConnect();
+            core::SizedThread(core::kDefaultThreadStackSize, []() {
+                client().requestConnect();
+            }).detach();
         }
         core::navigation::push(ui::create_android_auto_screen);
     }
@@ -139,8 +210,42 @@ void dashboard_delete_cb(lv_event_t * e) {
         if (w->poll_timer) {
             lv_timer_delete(w->poll_timer);
         }
+        // Signals the background poll loop to stop; it frees `cache`
+        // itself once its own loop notices -- see poll_background_loop()'s
+        // own comment on this ownership split.
+        if (w->cache) {
+            w->cache->stop.store(true, std::memory_order_release);
+        }
         delete w;
     }
+}
+
+// 2026-09-05: this screen is only ever hidden (LV_OBJ_FLAG_HIDDEN is
+// never set on it), not deleted, once the user navigates to AA/CarPlay
+// via core::navigation::push() (auto_del=false -- see ScreenManager::push()'s
+// own comment) -- it stays alive on the nav stack for a future pop().
+// Without this, poll_timer_cb() and its background poller would keep
+// running indefinitely in the background for as long as ANY other
+// screen is on top, wastefully polling the sidecar every second while
+// nothing on this screen is even visible. Pausing both here (and
+// resuming on LV_EVENT_SCREEN_LOADED, fired when navigation::pop()
+// brings this screen back) closes that gap without changing this
+// screen's push()/pop() lifecycle or navigation semantics at all.
+void dashboard_unloaded_cb(lv_event_t * e) {
+    auto * w = static_cast<DashboardWidgets *>(lv_event_get_user_data(e));
+    if (!w) return;
+    if (w->poll_timer) lv_timer_pause(w->poll_timer);
+    if (w->cache) w->cache->paused.store(true, std::memory_order_release);
+}
+
+void dashboard_loaded_cb(lv_event_t * e) {
+    auto * w = static_cast<DashboardWidgets *>(lv_event_get_user_data(e));
+    if (!w) return;
+    if (w->poll_timer) lv_timer_resume(w->poll_timer);
+    if (w->cache) w->cache->paused.store(false, std::memory_order_release);
+    // Refresh immediately rather than waiting for the next 1s tick, so
+    // returning to this screen doesn't show up-to-1s-stale status.
+    update_dashboard_status(w);
 }
 
 } // namespace
@@ -151,7 +256,11 @@ lv_obj_t * create_home_dashboard() {
     lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
 
     auto * widgets = new DashboardWidgets();
+    widgets->cache = new PollCache();
+    core::SizedThread(core::kDefaultThreadStackSize, poll_background_loop, widgets->cache).detach();
     lv_obj_add_event_cb(scr, dashboard_delete_cb, LV_EVENT_DELETE, widgets);
+    lv_obj_add_event_cb(scr, dashboard_unloaded_cb, LV_EVENT_SCREEN_UNLOADED, widgets);
+    lv_obj_add_event_cb(scr, dashboard_loaded_cb, LV_EVENT_SCREEN_LOADED, widgets);
 
     // 1. Persistent 5-Icon Navigation Rail (Home is active)
     create_nav_rail(scr, NavDestination::Home);

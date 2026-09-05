@@ -72,6 +72,8 @@ std::atomic<bool> g_aaNavigatePending{false};
 // ever start a replacement.
 std::atomic<bool> g_aaProfileThreadStarted{false};
 
+std::atomic<bool> g_bluezWatchdogStarted{false};
+
 // Helpers for executing BlueZ/bluetoothctl commands and capturing stdout
 bool run_command_capture(const std::string & cmd, std::vector<std::string> & lines_out) {
     lines_out.clear();
@@ -834,8 +836,39 @@ void ensure_bluetooth_daemon_running() {
     }
 }
 
+// 2026-09-05: real hardware bug found via code review -- the fixes
+// above make s_agent_thread_started/g_aaProfileThreadStarted correctly
+// resettable when bt-agent/aa_profile_server_loop exit, so
+// ensure_bluetooth_daemon_running() can genuinely respawn them on a
+// LATER call. But nothing in this codebase ever MADE a later call --
+// it was (and without this watchdog, still would be) invoked exactly
+// once, from init_bluetooth()'s own one-shot lazy-init below. rcS
+// itself doesn't supervise/respawn bluetoothd or rtk_hciattach either
+// (unlike custom_ui's own explicit while-loop respawn of itself and
+// androidauto-sidecar) -- if bluetoothd crashes or the BT chip is
+// reset, this device would otherwise stay Bluetooth-dead until the
+// whole process restarted, with no automatic recovery path at all.
+// This periodic call is what actually closes that gap: idempotent and
+// cheap when everything's healthy (ensure_bluetooth_daemon_running()'s
+// own is_bluez_active() check makes it a near-instant no-op in that
+// case), and does the real dbus-daemon/rtk_hciattach/bluetoothd
+// restart plus bt-agent/AA-profile respawn work it already knows how
+// to do whenever it isn't.
+void start_bluez_watchdog() {
+    if (g_bluezWatchdogStarted.exchange(true)) {
+        return;
+    }
+    core::SizedThread(core::kDefaultThreadStackSize, []() {
+        while (true) {
+            std::this_thread::sleep_for(std::chrono::seconds(30));
+            ensure_bluetooth_daemon_running();
+        }
+    }).detach();
+}
+
 bool init_bluetooth(BluetoothHandle & out, const char * /*path*/) {
     ensure_bluetooth_daemon_running();
+    start_bluez_watchdog();
 
     std::printf("%s [BT] Initializing BlueZ 5.66 stack\n", core::log_timestamp().c_str());
     

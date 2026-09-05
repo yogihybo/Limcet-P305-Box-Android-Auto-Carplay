@@ -181,6 +181,33 @@ modprobe rtl8811cu rtw_drv_log_level=2 rtw_country_code=US
 	done
 ) &
 
+# --- Console mirror, decoupled from custom_ui itself ---
+# 2026-09-05: real console visibility is still wanted (per user
+# request) -- but NOT by feeding the console from the same pipe
+# custom_ui writes to, which is exactly the mechanism that caused the
+# hang this whole fix exists for (see the "REMOVED the console mirror"
+# comment above). Instead, this is a fully independent process that
+# tails the already-decoupled, already-size-capped log file above and
+# mirrors it to /dev/console on its own. If the console isn't attached
+# or draining, THIS process is the only thing that stalls/lags --
+# custom_ui's own writes go straight to the tmpfs file regardless and
+# are never affected by whatever state this tailer is in.
+#
+# This gets the practical effect of a ring buffer without a new binary:
+# `tail -F` re-opens the file if it shrinks, so the periodic truncate
+# job above (capped at 8MB, trimmed to 2MB) doubles as the bound on how
+# much backlog a newly-attached console can ever be flooded with --
+# there is no unbounded catch-up dump possible, just whatever's
+# currently in the (small, capped) file. `-F` (not `-f`) so this also
+# survives custom_ui's log file not existing yet at boot and any future
+# real log rotation, not just growth-in-place.
+(
+	while [ ! -e /tmp/custom_ui.log ]; do
+		sleep 0.2
+	done
+	tail -F -n 0 /tmp/custom_ui.log > /dev/console 2>/dev/null
+) &
+
 # --- BlueZ (runs in background so it does not block UI) ---
 (
 	mkdir -p /var/run/dbus

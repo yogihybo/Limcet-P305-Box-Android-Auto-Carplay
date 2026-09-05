@@ -571,6 +571,17 @@ int main() {
             staging_ui::navigate_to(staging_ui::NavDestination::AndroidAuto);
         }
 
+        // 2026-09-05: real hardware bug found via code review -- the
+        // physical HOME button used to forward to AndroidAutoClient
+        // unconditionally, doing nothing while on the LVGL Home/Settings/
+        // Bluetooth screens. mcu_input.cpp's own CMD 0x02 dispatch now
+        // sets this flag instead of forwarding to AA whenever HOME is
+        // pressed while AA isn't the active screen -- same
+        // hal::consume_aa_navigate_request() pattern just above.
+        if (hal::consume_home_navigate_request()) {
+            staging_ui::navigate_to(staging_ui::NavDestination::Home);
+        }
+
         // Reverse gear camera auto-trigger (dual-redundant: hardware /dev/carback driver + MCU UART CMD 0x04/0x12)
         static bool lastMcuReverse = false;
         bool mcuReverse = mcu_input.get_reverse_gear();

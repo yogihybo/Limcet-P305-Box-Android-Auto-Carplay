@@ -124,6 +124,13 @@ public:
     // (CMD 0x02, b3=13).
     bool get_knob_pressed() const;
 
+    // 2026-09-05: number of real press events (CMD 0x02, b3=13, b4==1)
+    // recorded since the last call, then reset to 0 -- same "accumulate,
+    // then destructively consume" contract as consume_knob_ticks(),
+    // covering fast press+release cycles get_knob_pressed()'s own level
+    // polling can miss entirely (see knob_press_events_'s own comment).
+    uint32_t consume_knob_press_events();
+
     // CONFIRMED (2026-08-27 wired, 2026-08-31 user-verified end-to-end
     // on real hardware): headlight-driven night mode. Superseded the
     // original 2026-08-21 CMD 0x02-based placeholder -- the real
@@ -236,12 +243,32 @@ private:
     core::SizedThread thread_;
     std::atomic<bool> running_{false};
 
-    std::atomic<int32_t> x_{0};
-    std::atomic<int32_t> y_{0};
+    // 2026-09-05: real hardware bug found via code review -- x_/y_ used
+    // to be two SEPARATE atomics, stored/loaded independently. A reader
+    // (get_touch_state(), LVGL thread) racing the writer (run(), MCU
+    // reader thread) mid-update could observe a torn pair -- the new x
+    // paired with the still-old y (or vice versa) -- since nothing
+    // orders the two loads/stores together as one unit; touch_pressed_'s
+    // own acquire/release only synchronizes with a PRIOR release, not
+    // the in-progress one. Packed into a single atomic 64-bit word
+    // (upper 32 bits = x, lower 32 bits = y) so one store/load always
+    // publishes/observes both coordinates together, atomically.
+    std::atomic<uint64_t> touch_coords_{0};
     mutable std::atomic<bool> touch_pressed_{false};
 
     std::atomic<int32_t> knob_ticks_{0};
     std::atomic<bool> knob_pressed_{false};
+    // 2026-09-05: real hardware bug found via code review -- knob_pressed_
+    // above is a pure level flag, polled by knob.cpp's LVGL indev read
+    // callback on its own ~30ms cadence. A press+release cycle that
+    // completes entirely between two polls (a fast tap) is invisible to
+    // level-polling -- the edge detector never sees raw_pressed go
+    // true. This counter records every real press EVENT as it happens
+    // (fetch_add at the source, in run()'s own CMD 0x02 dispatch),
+    // matching knob_ticks_'s own existing "accumulate, then
+    // destructively consume" pattern -- consume_knob_press_events()
+    // can never miss a press regardless of polling cadence.
+    std::atomic<uint32_t> knob_press_events_{0};
 
     std::atomic<bool> night_mode_{false};
     std::atomic<bool> reverse_gear_{false};
@@ -285,5 +312,18 @@ std::vector<std::string> get_mcu_recent_frames();
 // Global helpers for version string and voltage telemetry
 std::string get_mcu_version();
 float get_mcu_battery_voltage();
+
+// 2026-09-05: real hardware bug found via code review -- the physical
+// HOME button used to be forwarded to AndroidAutoClient unconditionally,
+// even when Android Auto isn't the active screen (e.g. the user is on
+// the LVGL Home Dashboard, Settings, or Bluetooth screens), where it did
+// nothing at all. Set (in run()'s own CMD 0x02 dispatch) only when HOME
+// is pressed while androidauto_screen_active() is false; consumed here
+// by main.cpp's own event loop to drive real LVGL navigation instead --
+// same "hal:: sets a flag, main.cpp (which already knows about both
+// hal:: and ui::) consumes it and navigates" pattern already established
+// by hal::consume_aa_navigate_request() in bluetooth.cpp, so this file
+// itself never needs to depend on any ui:: header.
+bool consume_home_navigate_request();
 
 }  // namespace hal

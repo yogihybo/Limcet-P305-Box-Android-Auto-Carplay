@@ -1,5 +1,7 @@
 #include "hal/mcu_input.h"
 #include "hal/androidauto_client.h"
+#include "hal/bluetooth.h"
+#include "hal/knob.h"
 #include "core/async_worker.h"
 #include "core/log_timing.h"
 
@@ -7,6 +9,8 @@
 #include <chrono>
 #include <cstdio>
 #include <cstring>
+#include <mutex>
+#include <thread>
 
 #include <fcntl.h>
 #include <sys/select.h>
@@ -18,6 +22,12 @@ namespace hal {
 namespace {
 
 static McuInputHal * g_mcu_instance = nullptr;
+
+// 2026-09-05: see consume_home_navigate_request()'s own declaration in
+// mcu_input.h for the full reasoning -- set here (CMD 0x02's kBtnHome
+// branch) when HOME is pressed while Android Auto isn't the active
+// screen, consumed by main.cpp to drive real LVGL navigation.
+std::atomic<bool> g_homeNavigatePending{false};
 
 // 2026-09-04: real hardware bug -- every AndroidAutoClient call below
 // (HOME/NEXT/PREV/ANSWER/HANGUP key forwarding, CMD 0x12's AUDIOFOCUS
@@ -99,6 +109,23 @@ bool set_interface_attribs(int fd) {
     return true;
 }
 
+// 2026-09-05: real hardware bug found via code review -- this used to
+// write(fd, ...) with no synchronization at all, while it's genuinely
+// called from two different threads: run()'s own reader thread (the
+// CMD 0x88 keepalive probe, every 5s) and the LVGL/main thread
+// (sync_setting()/sync_audio_route()/sync_video_relay(), fired whenever
+// a setting toggles or a gear/screen transition happens). Two
+// concurrent write() calls on the same fd can interleave their bytes on
+// the wire -- the MCU would see a corrupt/merged frame, fail its
+// checksum, and silently drop the command. A single file-local mutex
+// (this function has no other callers outside this translation unit)
+// makes each frame's bytes atomic on the wire relative to every other
+// sender.
+std::mutex & mcu_write_mutex() {
+    static std::mutex m;
+    return m;
+}
+
 // Matches send_mcu_frame() in mcu-handshake.c exactly.
 void send_mcu_frame(int fd, unsigned char cmd, const unsigned char * payload, int payload_len) {
     unsigned char frame[256];
@@ -117,6 +144,7 @@ void send_mcu_frame(int fd, unsigned char cmd, const unsigned char * payload, in
     idx += payload_len;
     frame[idx++] = chk;
 
+    std::lock_guard<std::mutex> lock(mcu_write_mutex());
     if (write(fd, frame, idx) < 0) {
         perror("hal::McuInputHal: write (send_mcu_frame)");
     }
@@ -190,6 +218,19 @@ void reset_mcu_frame_parser() {
 // fatal I/O error/EOF, unchanged.
 int read_mcu_frame(int fd, unsigned char * out_cmd, unsigned char * out_payload,
                     unsigned char * out_len, int timeout_ms) {
+    // 2026-09-05: real hardware bug found via code review -- run()
+    // calls this every loop iteration with fd_ (an atomic<int> that a
+    // failed reconnect() leaves at -1), with no guard here at all.
+    // FD_SET(-1, &rfds) is undefined behavior (glibc's __FD_ELT()
+    // computes a negative bit-array index from a negative fd, a real
+    // out-of-bounds write on the stack-allocated rfds below), and
+    // select(fd+1, ...) with fd=-1 becomes select(0, ...), which
+    // returns immediately -- so a failed reconnect on a still-unplugged/
+    // busy port led straight into UB on every subsequent call, not just
+    // a benign no-op. Fail fast and cleanly instead.
+    if (fd < 0) {
+        return -1;
+    }
     while (true) {
         // 1. Hunt for 0x2E synchronization byte at start of buffer
         while (ring_len > 0 && ring_buf[0] != 0x2E) {
@@ -393,10 +434,24 @@ void McuInputHal::run() {
         if (new_fd < 0) {
             std::fprintf(stderr, "%s [HAL:MCU] Reopen of %s failed: %s -- will keep retrying\n",
                          core::log_timestamp().c_str(), port_.c_str(), std::strerror(errno));
+            // 2026-09-05: real hardware bug found via code review -- a
+            // failed reopen used to return here immediately, leaving
+            // fd_ at -1. The very next loop iteration calls
+            // read_mcu_frame(fd_, ...) again right away (now fails fast
+            // per that function's own new fd<0 guard, but returns -1
+            // instantly rather than blocking), which lands right back
+            // in run()'s r==-1 branch -> reconnect() -> open() fails
+            // again -> repeat, with ZERO delay -- a tight, 100%-CPU
+            // spin for as long as the port stays unavailable (e.g.
+            // genuinely unplugged). A short sleep here is enough: it's
+            // on this same background reader thread, not the LVGL
+            // thread, so it never affects UI responsiveness.
+            std::this_thread::sleep_for(std::chrono::seconds(1));
             return;
         }
         if (!set_interface_attribs(new_fd)) {
             close(new_fd);
+            std::this_thread::sleep_for(std::chrono::seconds(1));
             return;
         }
         send_startup_sequence(new_fd);
@@ -631,8 +686,13 @@ void McuInputHal::run() {
             int32_t x = (static_cast<int32_t>(b4) << 8) | b3;
             int32_t y = (static_cast<int32_t>(b6) << 8) | b5;
 
-            x_.store(x, std::memory_order_relaxed);
-            y_.store(y, std::memory_order_relaxed);
+            // 2026-09-05: see touch_coords_'s own header comment -- x
+            // and y are packed into ONE atomic word and published with
+            // a single store, so a concurrent reader can never observe
+            // a torn (new-x, old-y) pair.
+            uint64_t packed = (static_cast<uint64_t>(static_cast<uint32_t>(x)) << 32) |
+                               static_cast<uint32_t>(y);
+            touch_coords_.store(packed, std::memory_order_relaxed);
             touch_pressed_.store(true, std::memory_order_release);
             auto now = std::chrono::steady_clock::now();
             uint64_t ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
@@ -646,34 +706,60 @@ void McuInputHal::run() {
             } else if (b3 == kKnobCounterClockwise && b4 == 1) {
                 knob_ticks_.fetch_sub(1, std::memory_order_relaxed);
             } else if (b3 == kKnobPush) {
+                if (b4 == 1) {
+                    // 2026-09-05: see knob_press_events_'s own header
+                    // comment -- recorded here, at the real source
+                    // event, so a fast press+release cycle that
+                    // completes entirely between two of knob.cpp's own
+                    // ~30ms polls can never be silently dropped.
+                    knob_press_events_.fetch_add(1, std::memory_order_relaxed);
+                }
                 knob_pressed_.store(b4 == 1, std::memory_order_release);
             } else if (b3 == kBtnHome) {
                 if (b4 == 1) {
-                    static bool s_drawer_open = false;
-                    static auto s_last_press_time = std::chrono::steady_clock::now();
-                    auto now = std::chrono::steady_clock::now();
-                    auto elapsed_s = std::chrono::duration_cast<std::chrono::seconds>(now - s_last_press_time).count();
-                    s_last_press_time = now;
-                    if (elapsed_s > 10) {
-                        s_drawer_open = false;
-                    }
-
-                    // 2026-09-04: async -- see mcu_aa_forward_worker()'s
-                    // header comment. Must never block this thread.
-                    if (!s_drawer_open) {
-                        std::printf("%s [HAL:MCU] Button: HOME -> Open App Launcher (KEYCODE_HOME=3)\n", core::log_timestamp().c_str());
-                        mcu_aa_forward_worker().enqueue([]() {
-                            AndroidAutoClient client;
-                            client.sendKey(3 /* KEYCODE_HOME */);
-                        });
-                        s_drawer_open = true;
+                    // 2026-09-05: real hardware bug found via code
+                    // review -- HOME used to forward to AndroidAutoClient
+                    // unconditionally, even when Android Auto isn't the
+                    // active screen (LVGL Home/Settings/Bluetooth
+                    // screens), where it did nothing at all. Now only
+                    // forwards to AA while that screen is genuinely
+                    // active; otherwise sets a flag main.cpp's own event
+                    // loop consumes to navigate the local LVGL UI home --
+                    // same pattern as hal::consume_aa_navigate_request()
+                    // in bluetooth.cpp (see this flag's own declaration
+                    // in mcu_input.h for why this file itself never needs
+                    // to depend on any ui:: header).
+                    if (!androidauto_screen_active().load(std::memory_order_acquire)) {
+                        std::printf("%s [HAL:MCU] Button: HOME -> local LVGL navigation (AA not active)\n",
+                                    core::log_timestamp().c_str());
+                        g_homeNavigatePending.store(true, std::memory_order_release);
                     } else {
-                        std::printf("%s [HAL:MCU] Button: HOME -> Return to Navigation/Map (KEYCODE_NAVIGATION=65538)\n", core::log_timestamp().c_str());
-                        mcu_aa_forward_worker().enqueue([]() {
-                            AndroidAutoClient client;
-                            client.sendKey(65538 /* KEYCODE_NAVIGATION */);
-                        });
-                        s_drawer_open = false;
+                        static bool s_drawer_open = false;
+                        static auto s_last_press_time = std::chrono::steady_clock::now();
+                        auto now = std::chrono::steady_clock::now();
+                        auto elapsed_s = std::chrono::duration_cast<std::chrono::seconds>(now - s_last_press_time).count();
+                        s_last_press_time = now;
+                        if (elapsed_s > 10) {
+                            s_drawer_open = false;
+                        }
+
+                        // 2026-09-04: async -- see mcu_aa_forward_worker()'s
+                        // header comment. Must never block this thread.
+                        if (!s_drawer_open) {
+                            std::printf("%s [HAL:MCU] Button: HOME -> Open App Launcher (KEYCODE_HOME=3)\n", core::log_timestamp().c_str());
+                            mcu_aa_forward_worker().enqueue([]() {
+                                AndroidAutoClient client;
+                                client.sendKey(3 /* KEYCODE_HOME */);
+                            });
+                            s_drawer_open = true;
+                        } else {
+                            std::printf("%s [HAL:MCU] Button: HOME -> Return to Navigation/Map (KEYCODE_NAVIGATION=65538)\n", core::log_timestamp().c_str());
+                            mcu_aa_forward_worker().enqueue([]() {
+                                AndroidAutoClient client;
+                                client.sendKey(65538 /* KEYCODE_NAVIGATION */);
+                            });
+                            s_drawer_open = false;
+                        }
                     }
                 }
             } else if (b3 == kBtnNextTrack) {
@@ -684,21 +770,42 @@ void McuInputHal::run() {
                 // -- this branch (and the 3 below it) fired on BOTH,
                 // sending the keycode twice per tap (e.g. skipping two
                 // tracks instead of one).
+                //
+                // Also (same review pass): unconditionally forwarded to
+                // AndroidAutoClient even when AA isn't active, sending
+                // keys to an idle/closed socket instead of controlling
+                // local Bluetooth media playback -- now routes to
+                // hal::media_next_track() in that case, same real
+                // function the Home Dashboard's own media button uses.
                 if (b4 == 1) {
-                    std::printf("%s [HAL:MCU] Button: NEXT_TRACK (b3=3 b4=%u)\n", core::log_timestamp().c_str(), b4);
-                    // 2026-09-04: async -- see mcu_aa_forward_worker()'s header comment.
-                    mcu_aa_forward_worker().enqueue([]() {
-                        AndroidAutoClient client;
-                        client.sendKey(87 /* KEYCODE_MEDIA_NEXT */);
-                    });
+                    if (androidauto_screen_active().load(std::memory_order_acquire)) {
+                        std::printf("%s [HAL:MCU] Button: NEXT_TRACK (b3=3 b4=%u) -> AA\n", core::log_timestamp().c_str(), b4);
+                        // 2026-09-04: async -- see mcu_aa_forward_worker()'s header comment.
+                        mcu_aa_forward_worker().enqueue([]() {
+                            AndroidAutoClient client;
+                            client.sendKey(87 /* KEYCODE_MEDIA_NEXT */);
+                        });
+                    } else {
+                        std::printf("%s [HAL:MCU] Button: NEXT_TRACK (b3=3 b4=%u) -> local Bluetooth media\n", core::log_timestamp().c_str(), b4);
+                        mcu_aa_forward_worker().enqueue([]() {
+                            media_next_track(shared_handle());
+                        });
+                    }
                 }
             } else if (b3 == kBtnPrevTrack) {
                 if (b4 == 1) {
-                    std::printf("%s [HAL:MCU] Button: PREV_TRACK (b3=4 b4=%u)\n", core::log_timestamp().c_str(), b4);
-                    mcu_aa_forward_worker().enqueue([]() {
-                        AndroidAutoClient client;
-                        client.sendKey(88 /* KEYCODE_MEDIA_PREVIOUS */);
-                    });
+                    if (androidauto_screen_active().load(std::memory_order_acquire)) {
+                        std::printf("%s [HAL:MCU] Button: PREV_TRACK (b3=4 b4=%u) -> AA\n", core::log_timestamp().c_str(), b4);
+                        mcu_aa_forward_worker().enqueue([]() {
+                            AndroidAutoClient client;
+                            client.sendKey(88 /* KEYCODE_MEDIA_PREVIOUS */);
+                        });
+                    } else {
+                        std::printf("%s [HAL:MCU] Button: PREV_TRACK (b3=4 b4=%u) -> local Bluetooth media\n", core::log_timestamp().c_str(), b4);
+                        mcu_aa_forward_worker().enqueue([]() {
+                            media_prev_track(shared_handle());
+                        });
+                    }
                 }
             } else if (b3 == kBtnAnswer) {
                 if (b4 == 1) {
@@ -758,8 +865,9 @@ McuTouchState McuInputHal::get_touch_state() const {
         }
     }
     s.pressed = pressed;
-    s.x = x_.load(std::memory_order_relaxed);
-    s.y = y_.load(std::memory_order_relaxed);
+    uint64_t packed = touch_coords_.load(std::memory_order_relaxed);
+    s.x = static_cast<int32_t>(static_cast<uint32_t>(packed >> 32));
+    s.y = static_cast<int32_t>(static_cast<uint32_t>(packed & 0xFFFFFFFFu));
     return s;
 }
 
@@ -769,6 +877,10 @@ int32_t McuInputHal::consume_knob_ticks() {
 
 bool McuInputHal::get_knob_pressed() const {
     return knob_pressed_.load(std::memory_order_acquire);
+}
+
+uint32_t McuInputHal::consume_knob_press_events() {
+    return knob_press_events_.exchange(0, std::memory_order_relaxed);
 }
 
 bool McuInputHal::get_night_mode() const {
@@ -1026,6 +1138,10 @@ float get_mcu_battery_voltage() {
         return g_mcu_instance->get_battery_voltage();
     }
     return 0.0f;
+}
+
+bool consume_home_navigate_request() {
+    return g_homeNavigatePending.exchange(false, std::memory_order_acq_rel);
 }
 
 std::vector<std::string> get_mcu_recent_frames() {

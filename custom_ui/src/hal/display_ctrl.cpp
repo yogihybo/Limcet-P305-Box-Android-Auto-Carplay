@@ -4,6 +4,7 @@
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
+#include <string>
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
@@ -79,6 +80,54 @@ void close_display_ctrl(DisplayCtrlHandle & h) {
     }
 }
 
+namespace {
+
+// 2026-09-05: real hardware bug found via code review -- set/get below
+// used to write/read the raw 0-100 percent value straight to/from the
+// kernel's own "brightness" sysfs node, but the Linux backlight class
+// convention (confirmed applicable here: drivers/video/backlight/
+// pwm_bl.c IS built for this kernel per CONFIG_BACKLIGHT_PWM=y, and
+// docs/logs/directfb_strace.txt shows a real userspace process walking
+// /sys/class/backlight/backlight/ using the standard sysfs class
+// enumeration -- a real, active backlight class device on this
+// hardware, not a vendor-custom path) scales "brightness" against a
+// SEPARATE, driver-reported "max_brightness" sibling file, not a fixed
+// 0-100 range. If that max is ever anything other than 100 (e.g. 255,
+// common for an 8-bit PWM duty-cycle table), writing a raw percent
+// under-drives the backlight and the getter returns a value sliders
+// misread as "over 100%".
+//
+// Rather than hardcode an assumed max (this device's own real value
+// couldn't be confirmed from available logs/DT -- the DTS's own
+// lcdcon-backlight/backlight-value properties turned out to belong to
+// the display controller node, not a standard pwm-backlight binding,
+// so guessing wrong here risked making things WORSE, not better), this
+// reads the real max_brightness from the same sysfs directory at
+// runtime and scales against THAT. Self-correcting regardless of what
+// the real value is: if it's genuinely 100, this is a no-op-equivalent
+// to the old behavior; if it's 255 (or anything else), it's now
+// actually correct.
+int read_max_brightness(const char * brightness_path) {
+    // brightness_path is ".../brightness"; max_brightness is always
+    // the sibling file in the same directory, per the Linux backlight
+    // class's own sysfs layout.
+    std::string path(brightness_path);
+    size_t slash = path.find_last_of('/');
+    if (slash == std::string::npos) return 100;
+    std::string max_path = path.substr(0, slash + 1) + "max_brightness";
+
+    FILE * f = fopen(max_path.c_str(), "r");
+    if (!f) return 100;  // no sibling file -- assume this node is already 0-100
+    int max_val = 100;
+    if (fscanf(f, "%d", &max_val) != 1 || max_val <= 0) {
+        max_val = 100;
+    }
+    fclose(f);
+    return max_val;
+}
+
+}  // namespace
+
 bool set_backlight_brightness(int percent) {
     if (percent < 0) percent = 0;
     if (percent > 100) percent = 100;
@@ -90,7 +139,9 @@ bool set_backlight_brightness(int percent) {
     for (const char * path : paths) {
         FILE * f = fopen(path, "w");
         if (f) {
-            fprintf(f, "%d\n", percent);
+            int max_val = read_max_brightness(path);
+            int raw = (percent * max_val) / 100;
+            fprintf(f, "%d\n", raw);
             fclose(f);
             return true;
         }
@@ -110,7 +161,12 @@ int get_backlight_brightness() {
             int val = 100;
             if (fscanf(f, "%d", &val) == 1) {
                 fclose(f);
-                return val;
+                int max_val = read_max_brightness(path);
+                if (max_val <= 0) max_val = 100;
+                int percent = (val * 100) / max_val;
+                if (percent < 0) percent = 0;
+                if (percent > 100) percent = 100;
+                return percent;
             }
             fclose(f);
         }

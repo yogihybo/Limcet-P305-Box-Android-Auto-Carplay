@@ -29,6 +29,7 @@
 #include "hal/ssh_access.h"
 #include "hal/touch.h"
 #include "hal/timezone.h"
+#include "core/async_worker.h"
 #include "core/config_store.h"
 #include "core/log_timing.h"
 #include "core/navigation.h"
@@ -42,6 +43,26 @@
 #include "ui/staging/nav_rail.h"
 
 namespace {
+
+// 2026-09-05: real hardware bug found via code review -- the
+// reverseChanged block below used to spawn a fresh, independently
+// detached std::thread for every single gear transition, with zero
+// serialization between successive spawns. apply_reversing_volume_cut()
+// does two sequential set_stream_volume() calls (~20-50ms of amixer
+// shelling-out each); a rapid gear flip (e.g. R->D->R) could start a
+// SECOND thread for the newer transition before the FIRST thread (the
+// now-stale, earlier transition) finished -- and since nothing ordered
+// them, the thread that happened to finish LAST (not the one issued
+// last) determined the final volume state, potentially leaving it stuck
+// cut indefinitely on a false "still reversing" read. Routed through a
+// single dedicated AsyncWorker instead (same pattern hal/knob.cpp and
+// hal/touch.cpp already use for this exact reason) -- its one worker
+// thread drains jobs strictly in enqueue order, so the real-world
+// gear-transition order is always what ends up applied last.
+core::AsyncWorker & reversing_volume_worker() {
+    static core::AsyncWorker worker;
+    return worker;
+}
 
 // 2026-08-20: DEAD CODE as of this project's BlueZ migration -- this
 // class's entire trigger (on_broadcast(), below) depends on
@@ -719,10 +740,15 @@ int main() {
             // the LVGL main thread indefinitely, not just briefly. This
             // ran BEFORE requestResumeVideo() in the old code, so it's
             // a real, unbounded freeze candidate independent of that
-            // fix. Same treatment: move off the main thread.
-            std::thread([reverseEngaged]() {
+            // fix. Same treatment: move off the main thread -- but via
+            // reversing_volume_worker() (a serialized FIFO queue, see
+            // its own comment above), not an independent detached
+            // thread per call, since a rapid gear flip previously had
+            // no guarantee the LAST-ISSUED transition would also be the
+            // last one APPLIED.
+            reversing_volume_worker().enqueue([reverseEngaged]() {
                 hal::apply_reversing_volume_cut(reverseEngaged);
-            }).detach();
+            });
             // 2026-09-05: default flipped to true (Factory/OEM mode) --
             // see the boot-time sync call's own comment above.
             bool factoryCamera = core::default_store().get_bool("OriginalCarCamera", true, "General");

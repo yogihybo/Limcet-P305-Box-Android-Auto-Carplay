@@ -225,6 +225,63 @@ private:
 
     std::mutex mutex_;
     int fd_ = -1;
+    // 2026-09-05: real hardware bug found via code review -- sendCommand()
+    // used to read into a purely LOCAL buffer and discard everything
+    // past the first newline on every call. If a single read() ever
+    // returned more than one line's worth of bytes (e.g. the sidecar's
+    // reply and some later bytes coalescing into one kernel-buffered
+    // read), the leftover bytes were silently thrown away instead of
+    // being the start of the NEXT command's actual reply -- the next
+    // sendCommand() call would then block waiting for data that had
+    // already arrived and been discarded, surfacing as a spurious
+    // timeout/disconnect. This member persists any such leftover bytes
+    // across calls so they're never lost, same as any line-buffered
+    // socket reader should. Cleared on disconnect() -- a stale
+    // connection's leftover bytes must never be reused as though they
+    // belong to a fresh one.
+    std::string readBuffer_;
 };
+
+// 2026-09-05: real hardware bug found via code review -- ui/status_bar.cpp,
+// ui/staging/home_dashboard.cpp, and ui/android_auto_screen.cpp each
+// used to maintain their OWN independent AndroidAutoClient instance,
+// dedicated Unix-domain socket, and background polling thread, all
+// three separately issuing STATUS (and one of them videoFocusNative())
+// to the sidecar every 500-1000ms -- 3 sockets, 3 threads, and up to
+// 3x the real request traffic to the sidecar for the exact same piece
+// of information on a 173MB-RAM, single-core device, purely because
+// each was fixed independently (moving a blocking statusLine() call
+// off the LVGL thread) without a shared place to land the result.
+//
+// This is that shared place: ONE background poller (started lazily on
+// first use, matching every other process-lifetime-singleton
+// convention in this codebase), ONE AndroidAutoClient/socket, whose
+// result every caller reads via cached_android_auto_status() instead
+// of running its own poll loop.
+struct AndroidAutoStatusSnapshot {
+    std::string status_line{"STATE Idle"};
+    bool native_focus = false;
+};
+
+// Thread-safe snapshot of the shared poller's current result --
+// callers replace their own PollCache-style mutex/atomic reads with
+// this. Never blocks: the actual socket I/O happens on the shared
+// poller's own background thread, this just copies out its last
+// result (up to ~500ms stale, same freshness every one of the 3
+// original per-file pollers already had).
+AndroidAutoStatusSnapshot cached_android_auto_status();
+
+// 2026-09-05: the 3 original pollers didn't all use the same
+// allow_spawn semantics -- status_bar.cpp/home_dashboard.cpp
+// deliberately never spawn the sidecar just because a status glyph is
+// on screen (see AndroidAutoClient::statusLine()'s own comment on why
+// that would make it a de-facto always-on service), while
+// android_auto_screen.cpp's own "opening this screen IS Android Auto
+// mode" reasoning means it should. The shared poller preserves both:
+// it defaults to allow_spawn=false, and android_auto_screen.cpp calls
+// this with true/false as it becomes/stops being the active screen
+// (same enable-while-active/disable-on-leave lifecycle already used
+// for hal::androidauto_screen_active() in hal/knob.h).
+void set_android_auto_status_poll_allow_spawn(bool allow);
 
 }  // namespace hal

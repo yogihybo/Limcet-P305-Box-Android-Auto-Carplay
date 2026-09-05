@@ -162,6 +162,11 @@ int main(void) {
     /* Start Watchdog */
     iwdg_init();
 
+    /* Broadcast initial status announcements to SoC (matches real firmware boot sequence) */
+    uart_send_version_report();
+    uart_send_reverse_state(false);
+    uart_send_lcd_source(MCU_LCD_SOURCE_AFTERMARKET);
+
     /* Main Event Loop */
     while (1) {
         /* Service Watchdog */

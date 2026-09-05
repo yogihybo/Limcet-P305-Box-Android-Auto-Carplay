@@ -137,11 +137,36 @@ void uart_send_key_event(uint8_t key_code, bool pressed) {
     uart_send_packet(MCU_CMD_INPUT_EVENT, payload, 2);
 }
 
+static uint8_t g_vehicle_status_byte = MCU_STATUS_BASE_FLAGS; /* 0x11 resting state */
+
 void uart_send_reverse_state(bool reverse_active) {
-    uint8_t payload[2];
-    payload[0] = reverse_active ? 0x01 : 0x00;
-    payload[1] = 0x00;
-    uart_send_packet(MCU_CMD_REVERSE_GEAR, payload, 2);
+    if (reverse_active) {
+        g_vehicle_status_byte |= MCU_STATUS_BIT_REVERSE; /* Bit 2 -> 0x15 (reversing) */
+    } else {
+        g_vehicle_status_byte &= ~MCU_STATUS_BIT_REVERSE; /* Clear Bit 2 -> 0x11 */
+    }
+    uint8_t payload[6] = { g_vehicle_status_byte, 0x00, 0x00, 0x00, 0x00, 0x00 };
+    uart_send_packet(MCU_CMD_ILLUMINATION_STATUS, payload, 6);
+}
+
+void uart_send_headlights_state(bool lights_on) {
+    if (lights_on) {
+        g_vehicle_status_byte |= MCU_STATUS_BIT_ILLUM; /* Bit 1 -> 0x13 (headlights ON) */
+    } else {
+        g_vehicle_status_byte &= ~MCU_STATUS_BIT_ILLUM; /* Clear Bit 1 -> 0x11 */
+    }
+    uint8_t payload[6] = { g_vehicle_status_byte, 0x00, 0x00, 0x00, 0x00, 0x00 };
+    uart_send_packet(MCU_CMD_ILLUMINATION_STATUS, payload, 6);
+}
+
+void uart_send_lcd_source(uint8_t mode) {
+    uint8_t payload[3] = { mode, 0x04, 0x00 };
+    uart_send_packet(MCU_CMD_LCD_SOURCE_REPORT, payload, 3);
+}
+
+void uart_send_version_report(void) {
+    static const uint8_t kMcuVersion[28] = "DCn32-VOLVO-V2.10-20240909  ";
+    uart_send_packet(MCU_CMD_VERSION_REPORT, kMcuVersion, 28);
 }
 
 void uart_send_steering_angle(int16_t angle_deci_degrees) {
@@ -176,28 +201,35 @@ void uart_trigger_bootloader_reset(void) {
 /* Inbound Command Handlers */
 static void handle_init_handshake(const UartPacket *p) {
     (void)p;
-    /* 1. Send MCU Firmware Version Report (Matches stock 2E 01 06 130000000000 E5 -> Limcet-V1.0-1302) */
-    uint8_t ver_payload[6] = { 0x13, 0x00, 0x00, 0x00, 0x00, 0x00 };
-    uart_send_packet(MCU_CMD_HANDSHAKE_VER, ver_payload, 6);
+    /* On init handshake (CMD 0x81), broadcast current vehicle status, LCD source, and version */
+    uint8_t status_payload[6] = { g_vehicle_status_byte, 0x00, 0x00, 0x00, 0x00, 0x00 };
+    uart_send_packet(MCU_CMD_ILLUMINATION_STATUS, status_payload, 6);
 
-    /* 2. Send Vehicle Profile & DIP Switch Report (Matches stock 2E 12 03 010400 E5 -> Toyota Prado 150 Mode) */
-    uint8_t dip_payload[3] = { 0x01, 0x04, 0x00 };
-    uart_send_packet(MCU_CMD_DIP_PROFILE, dip_payload, 3);
+    uint8_t lcd_payload[3] = { MCU_LCD_SOURCE_AFTERMARKET, 0x04, 0x00 };
+    uart_send_packet(MCU_CMD_LCD_SOURCE_REPORT, lcd_payload, 3);
+
+    uart_send_version_report();
 }
 
 static void handle_app_state(const UartPacket *p) {
-    /* 0x82: App mode change (e.g. CarPlay active vs OEM head unit active) */
-    if (p->len >= 3) {
-        uint8_t mode = p->payload[2];
-        if (mode == 0x01) {
-            /* Switch relays to CarPlay / Android Auto */
-            GPIOB->BSRR = (1UL << 0); /* PB0 TOUCH_SEL -> SoC */
-            GPIOB->BSRR = (1UL << 6); /* PB6 MIC_SEL   -> SoC */
-        } else if (mode == 0x00) {
-            /* Bypass relays back to OEM Factory Radio */
-            GPIOB->BRR = (1UL << 0);  /* PB0 TOUCH_SEL -> OEM */
-            GPIOB->BRR = (1UL << 6);  /* PB6 MIC_SEL   -> OEM */
-        }
+    /* 0x82: App mode change (e.g. CarPlay/Android Auto active vs OEM head unit active).
+     * In real firmware (0x08008BD4), payload[0] == 1 selects mode=4, else mode=1.
+     * Check payload[0] when len >= 1; fallback to payload[2] if sent with legacy 3-byte framing. */
+    if (p->len < 1) {
+        return;
+    }
+    uint8_t mode = p->payload[0];
+    if (mode == 0 && p->len >= 3 && p->payload[2] != 0) {
+        mode = p->payload[2];
+    }
+    if (mode == 0x01) {
+        /* Switch relays to CarPlay / Android Auto */
+        GPIOB->BSRR = (1UL << 0); /* PB0 TOUCH_SEL -> SoC */
+        GPIOB->BSRR = (1UL << 6); /* PB6 MIC_SEL   -> SoC */
+    } else if (mode == 0x00) {
+        /* Bypass relays back to OEM Factory Radio */
+        GPIOB->BRR = (1UL << 0);  /* PB0 TOUCH_SEL -> OEM */
+        GPIOB->BRR = (1UL << 6);  /* PB6 MIC_SEL   -> OEM */
     }
 }
 
@@ -269,7 +301,9 @@ static void handle_audio_route(const UartPacket *p) {
     if (p->len < 1) {
         return;
     }
-    uint8_t value = p->payload[0] & 0x0F;
+    /* Real firmware reads payload[1] (offset +3 in frame buffer).
+     * Support both 2-byte payloads (value at payload[1]) and 1-byte payloads (value at payload[0]). */
+    uint8_t value = (p->len >= 2) ? (p->payload[1] & 0x0F) : (p->payload[0] & 0x0F);
     if (value >= 6) {
         return;
     }
@@ -603,9 +637,8 @@ static void handle_system_reset(const UartPacket *p) {
     if (p->len < 1 || p->payload[0] != 0x7F) {
         return;
     }
+    /* Sub-ID 0x7F resets CAN rx ring/buffers. Real firmware returns no UART ACK frame. */
     can_reset_rx_ring();
-    uint8_t ack = 0x7F;
-    uart_send_packet(SOC_CMD_SYSTEM_RESET, &ack, 1);
 }
 
 static const UartCmdDispatchEntry g_uart_cmd_table[] = {

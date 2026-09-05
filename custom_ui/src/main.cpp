@@ -527,7 +527,11 @@ int main() {
 
     // Sync saved camera and microphone mode settings to MCU
     {
-        bool factoryCam = core::default_store().get_bool("OriginalCarCamera", false, "General");
+        // 2026-09-05: default flipped to true (Factory/OEM mode) per
+        // explicit request -- see the settings-screen toggle's own
+        // invert_stored_value comment for the full "Aftermarket Reverse
+        // Camera" label/storage fix this default is part of.
+        bool factoryCam = core::default_store().get_bool("OriginalCarCamera", true, "General");
         // 2026-09-02: routed through hal::send_mcu_video_relay() (same
         // function the Settings toggle uses) rather than a raw id=0x11
         // send here -- see that function's own comment for why both
@@ -691,7 +695,9 @@ int main() {
             std::thread([reverseEngaged]() {
                 hal::apply_reversing_volume_cut(reverseEngaged);
             }).detach();
-            bool factoryCamera = core::default_store().get_bool("OriginalCarCamera", false, "General");
+            // 2026-09-05: default flipped to true (Factory/OEM mode) --
+            // see the boot-time sync call's own comment above.
+            bool factoryCamera = core::default_store().get_bool("OriginalCarCamera", true, "General");
             /* REMOVED (2026-08-31, real user report + disassembly-confirmed
              * root cause -- see docs/MCU_COMMAND_REFERENCE.md's CMD 0xA0
              * id=0x11 section for the full trace): this used to resend

@@ -438,8 +438,13 @@ lv_obj_t * create_settings_screen() {
     // comment. onChange now receives `aftermarket` (the switch's
     // natural checked state, matching the label) instead of the old
     // `oem` naming, which was really just the raw on-disk value.
+    // def_val=true (on-disk-key polarity, per explicit request) -- a
+    // fresh/unconfigured device now defaults to Factory/OEM mode, so
+    // this switch shows UNCHECKED by default (invert_stored_value maps
+    // that true -> displayed false), matching main.cpp's own
+    // factoryCam/factoryCamera defaults above.
     create_toggle_row(card, &ui::icons::icon_nav_camera, "Aftermarket Reverse Camera",
-                       "OriginalCarCamera", "General", false, [](bool aftermarket) {
+                       "OriginalCarCamera", "General", true, [](bool aftermarket) {
                            bool oem = !aftermarket;
                            std::printf("%s [HAL:REVCAM] Video/audio multiplexer set to %s\n",
                                        core::log_timestamp().c_str(),

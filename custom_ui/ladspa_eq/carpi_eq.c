@@ -197,11 +197,34 @@ static int read_params(carpi_eq_params_t *out) {
     return 1;
 }
 
+/* 2026-09-05: real hardware concern raised via code review -- this used
+ * to call read_params() (open+read+close of a tmpfs file) on EVERY
+ * run() call, i.e. every single audio period (~10-20ms, 50-100x/sec
+ * whenever any audio is active). That's a real syscall/VFS-lookup cost
+ * paid unconditionally inside an ALSA real-time audio callback, on a
+ * single-core Cortex-A5 -- plausible contributor to scheduling
+ * pressure/XRUNs under load, though not confirmed as an actual cause
+ * of any observed glitch on this hardware (this whole plugin remains
+ * self-documented above as not yet hardware-tested).
+ *
+ * Throttled via the poll_counter field (already declared in the
+ * struct, previously unused) instead of a wall-clock check --
+ * clock_gettime() is its own syscall-ish cost to pay every period just
+ * to decide whether to skip a check; a plain call counter is free and
+ * exact enough given run() is invoked once per period regardless of
+ * sample_count. kPollEveryNCalls=5 -> checks every ~50-100ms (10-20x/
+ * sec) instead of every ~10-20ms (50-100x/sec) -- a 5x reduction in
+ * open/read/close calls, still comfortably faster than a human can
+ * perceive as a delay on a settings-screen slider. */
+#define CARPI_EQ_POLL_EVERY_N_CALLS 5
+
 static void maybe_update_coeffs(carpi_eq_t *p) {
-    /* Poll once per run() call (one audio period, ~10-20ms at this
-     * device's real buffer sizes -- see asound.conf) -- cheap (one
-     * open+read+close of a 20-byte tmpfs file) and gives near-instant
-     * responsiveness without needing inotify/shm/locking machinery. */
+    if (p->poll_counter > 0) {
+        p->poll_counter--;
+        return;
+    }
+    p->poll_counter = CARPI_EQ_POLL_EVERY_N_CALLS - 1;
+
     carpi_eq_params_t params;
     if (!read_params(&params)) return;
 
@@ -261,6 +284,11 @@ static void activate(LADSPA_Handle instance) {
     memset(p->loud_bass, 0, sizeof(p->loud_bass));
     memset(p->loud_treble, 0, sizeof(p->loud_treble));
     p->have_params = 0;
+    // Force an immediate params check on the first run() call after
+    // (re)activation, rather than skipping the first
+    // CARPI_EQ_POLL_EVERY_N_CALLS-1 calls -- matches have_params=0's
+    // own "start from a known, fresh state" intent above.
+    p->poll_counter = 0;
 }
 
 static void run(LADSPA_Handle instance, unsigned long sample_count) {

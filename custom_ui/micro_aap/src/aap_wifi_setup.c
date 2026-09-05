@@ -7,6 +7,7 @@
 #include <errno.h>
 #include <sys/socket.h>
 #include <sys/select.h>
+#include <sys/time.h>
 #include <arpa/inet.h>
 
 #include <pb_encode.h>
@@ -137,6 +138,25 @@ bool aap_wifi_setup_handshake(int rfcomm_fd, const char *ap_ip, uint16_t ap_port
                               const char *ssid, const char *password, const char *bssid,
                               int security_mode) {
     printf("aap_wifi_setup: starting WPP handshake on rfcomm_fd=%d\n", rfcomm_fd);
+
+    /* 2026-09-05: real hardware bug found via code review -- recv_wpp_frame()'s
+     * select() only bounds waiting for the FIRST byte of a frame; once
+     * data starts arriving, read_fully()'s own read() loop has no
+     * per-call timeout at all. If the phone sends the 4-byte header
+     * then stalls/drops the Bluetooth link before the payload arrives,
+     * read_fully() blocks in read() forever -- this whole handshake
+     * runs on a detached thread (main.c's wifi_setup_thread) with no
+     * cancellation mechanism, so that thread (and the fd/resources it
+     * holds) would leak for the rest of the process's life. SO_RCVTIMEO
+     * bounds every read() on this fd transparently, including inside
+     * read_fully()'s loop, without needing to touch its logic at all --
+     * a timed-out read() returns -1/EAGAIN, which read_fully()'s
+     * existing `if (errno == EINTR) continue; return false;` already
+     * treats as a real failure (not endless-retried). 10s matches the
+     * select() timeout already used at every recv_wpp_frame() call site
+     * in this handshake. */
+    struct timeval rcv_timeout = {.tv_sec = 10, .tv_usec = 0};
+    setsockopt(rfcomm_fd, SOL_SOCKET, SO_RCVTIMEO, &rcv_timeout, sizeof(rcv_timeout));
 
     /* 1. Send WIFI_VERSION_REQUEST (type 4) */
     if (!send_wpp_frame(rfcomm_fd, WPP_MSG_VERSION_REQUEST, kWifiVersionRequestPayload, sizeof(kWifiVersionRequestPayload))) {

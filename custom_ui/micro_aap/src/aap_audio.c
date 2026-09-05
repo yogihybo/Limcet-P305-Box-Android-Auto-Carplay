@@ -40,6 +40,23 @@ struct aap_audio_sink {
     pthread_mutex_t mutex;
     pthread_cond_t  cond;
 
+    /* 2026-09-05: real hardware bug found via code review -- snd_pcm_t
+     * is not thread-safe for concurrent state-changing calls, but
+     * snd_pcm_prepare() (called from the main session thread on
+     * channel (re)start) and snd_pcm_writei()/snd_pcm_recover()
+     * (called from audio_writer_thread below) both operated on
+     * pcm_handle with no shared lock at all. This is deliberately a
+     * SEPARATE mutex from `mutex` above (which guards the ring-buffer
+     * producer/consumer state, e.g. aap_audio_sink_write() on the main
+     * thread) rather than reusing it -- audio_writer_thread's actual
+     * snd_pcm_writei() call can legitimately block for real time
+     * (device busy, XRUN recovery's own backoff sleep), and holding
+     * the ring-buffer mutex across that would stall
+     * aap_audio_sink_write() on the main thread for just as long,
+     * reintroducing the exact "blocks the main thread on real-time I/O"
+     * problem this ring-buffer design exists to avoid. */
+    pthread_mutex_t pcm_mutex;
+
     audio_slot_t slots[AAP_AUDIO_SLOTS];
     size_t read_idx;
     size_t write_idx;
@@ -173,6 +190,14 @@ static void *audio_writer_thread(void *arg) {
         const uint8_t *cursor = slot.data;
 
         int recovery_attempts = 0;
+        /* 2026-09-05: see this file's own comment on pcm_mutex --
+         * guards every snd_pcm_t state-changing call against
+         * aap_audio_sink_prepare() (main thread), which is the ONLY
+         * other place pcm_handle is touched outside this thread.
+         * Locked for the whole per-slot write loop, not per-call, so a
+         * prepare() can never land in the middle of writing one
+         * contiguous slot's worth of frames. */
+        pthread_mutex_lock(&sink->pcm_mutex);
         while (frames_left > 0 && !sink->stop_flag) {
             snd_pcm_sframes_t written = snd_pcm_writei(sink->pcm_handle, cursor, frames_left);
             if (written < 0) {
@@ -196,6 +221,7 @@ static void *audio_writer_thread(void *arg) {
             cursor += (size_t)written * bytes_per_frame;
             frames_left -= (snd_pcm_uframes_t)written;
         }
+        pthread_mutex_unlock(&sink->pcm_mutex);
     }
 
     return NULL;
@@ -212,6 +238,7 @@ aap_audio_sink_t *aap_audio_sink_create(const char *device_name, uint32_t sample
     pthread_mutex_init(&sink->mutex, NULL);
     pthread_cond_init(&sink->cond, NULL);
     pthread_mutex_init(&sink->eq_mutex, NULL);
+    pthread_mutex_init(&sink->pcm_mutex, NULL);
 
     return sink;
 }
@@ -222,6 +249,7 @@ void aap_audio_sink_destroy(aap_audio_sink_t *sink) {
     pthread_mutex_destroy(&sink->mutex);
     pthread_cond_destroy(&sink->cond);
     pthread_mutex_destroy(&sink->eq_mutex);
+    pthread_mutex_destroy(&sink->pcm_mutex);
     free(sink);
 }
 
@@ -313,7 +341,25 @@ void aap_audio_sink_flush(aap_audio_sink_t *sink) {
 
 void aap_audio_sink_prepare(aap_audio_sink_t *sink) {
     if (!sink || !sink->pcm_handle) return;
+    /* 2026-09-05: real hardware bug found via code review -- this
+     * called snd_pcm_prepare() with zero locking, while
+     * audio_writer_thread calls snd_pcm_writei()/snd_pcm_recover() on
+     * the SAME snd_pcm_t. snd_pcm_t is not thread-safe for concurrent
+     * state-changing calls from different threads -- on a fresh
+     * channel open this was harmless (the writer thread has nothing
+     * queued yet, parked in pthread_cond_wait when this runs), but a
+     * channel can legitimately receive a SECOND MEDIA_MESSAGE_START
+     * while already open and actively writing (aap_audio_sink_open()
+     * itself already handles this -- a no-op if pcm_handle is set --
+     * but this call was never guarded the same way), which could race
+     * a real in-flight snd_pcm_writei()/snd_pcm_recover() call. Uses
+     * pcm_mutex (see this file's own struct-field comment) rather than
+     * the ring-buffer `mutex` -- that one is briefly held by
+     * aap_audio_sink_write() on the main thread just to enqueue, and
+     * must never be held across a real ALSA I/O call. */
+    pthread_mutex_lock(&sink->pcm_mutex);
     snd_pcm_prepare(sink->pcm_handle);
+    pthread_mutex_unlock(&sink->pcm_mutex);
 }
 
 bool aap_audio_sink_write(aap_audio_sink_t *sink, const uint8_t *pcm_data, size_t pcm_len) {

@@ -1,9 +1,6 @@
 #include "hal/knob.h"
 
-#include <cstdio>
-
 #include "core/async_worker.h"
-#include "core/log_timing.h"
 #include "hal/androidauto_client.h"
 
 namespace hal {

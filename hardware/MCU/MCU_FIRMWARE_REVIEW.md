@@ -149,6 +149,26 @@ assumption) is exactly right — not inferred from the SoC side alone. The
 structural detail: completed frames queue up to 8 deep before whatever
 processes them (see below) has to catch up.
 
+### 3.1b Auxiliary UART protocols (USART3, UART4, UART5)
+
+Direct disassembly of the remaining UART handlers revealed the exact protocols and roles of the other serial interfaces:
+
+- **USART3 (`0x0800755c`, PB10 TX / PB11 RX, 9600 baud)**:
+  - Dedicated link to the onboard Bluetooth module (Feasycom / Blueware).
+  - Handles ASCII newline-terminated AT commands: `"AT+AUDROUTE=1\r\n"` / `"AT+AUDROUTE=2\r\n"` triggered on audio routing switches, and `"AT+UPGRADE\r\n"` on camera update events.
+  - Serves as the verbatim bidirectional relay for SoC `CMD 0x87`. Inbound bytes on `USART3_IRQHandler` (`0x08006ed3`) are packaged into `0x2E` packets and forwarded to the SoC.
+
+- **UART4 (`0x08007780`, PC10 TX / PC11 RX, 9600 baud) & UART5 (`0x08007a9c`, PC12 TX / PD2 RX, 9600 baud)**:
+  - Both peripherals are clocked via `RCC->APB1ENR` bits 19/20 and operate at 9600 baud 8N1 (`0x0800771c`, `0x080079b8`: `mov.w r0, #9600`).
+  - Share a common SRAM structure at `0x20001365` running a clocked state machine:
+    - **Framing**: Sync byte `0x55` followed by a Command byte.
+    - **`0x20` (Outbound Dynamic Vehicle / SWC Status, 5 bytes)**: Byte 0 sent immediately; bytes 1–4 are clocked out one by one as the peer sends subsequent bytes. Backed by `struct + 0x21` (`0x20001386`), dynamically refreshed by `0x0800B8A0` using CAN key/alert data from `struct + 4` and `struct + 8`.
+    - **`0x32` (Outbound Hardware Identity, 9 bytes)**: Byte 0 sent immediately; bytes 1–8 clocked out. Emits literal flash string `"   cD31\0\x93"` from `0x0800BBCD`.
+    - **`0x50` (Inbound Buffer, 3 bytes)**: Safely bounded write into `struct + 0x4E`.
+    - **`0xD3` (Inbound Buffer, 9 bytes)**: Safely bounded write into `struct + 0x3F`.
+    - **`0xD6` (Inbound Buffer, 9 bytes)**: Safely bounded write into `struct + 0x5D`.
+  - **UART4 $\leftrightarrow$ UART5 Bridging**: UART5 acts as a complementary relay to UART4 (`0x08007b00`–`0x08007c80`), re-transmitting data received on UART4 (`0xD3`/`0x50`/`0xD6`) outbound over UART5, and vice versa.
+
 ### 3.1c Command dispatch table — found, complete, 9 real commands
 
 **Found via a different route than Ghidra's CFG.** Tracing `main()` forward

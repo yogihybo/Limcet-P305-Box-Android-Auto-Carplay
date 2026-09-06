@@ -3358,3 +3358,96 @@ nothing in this library sends anything on this product, because nothing in this 
 runs on this product. Any future search for these commands' real senders should look
 elsewhere (other libraries not yet opened, or accept the "genuinely not sent by any code on
 this product's real config" conclusion already reached for `CMD 0x84`/`0x85`).
+
+## Exhaustive Disassembly & Multi-Port Protocol Analysis (2026-09-05/2026-09-06)
+
+Following deeper investigation into companion MCU peripheral behavior, memory dumping capabilities, and auxiliary communication ports, direct disassembly of `hardware/MCU/can_app.bin` (base `0x08004000`) and cross-referencing against the STM32F105xx Connectivity Line reference manual (RM0008) resolved several open architectural questions.
+
+---
+
+### 1. STM32F105 Connectivity Line Clock Init & PLL Lock Fix
+
+- **The Issue**: On STM32F105 Connectivity Line microcontrollers, the RCC clock architecture differs fundamentally from standard STM32F103 devices. The `RCC->CFGR` register bit 16 (`PLLSRC`) selects the PLL entry clock source:
+  - On STM32F103: `PLLSRC=0` selects HSI/2, `PLLSRC=1` selects HSE (optionally divided by 2).
+  - On STM32F105: `PLLSRC=0` selects the output of `PREDIV1` (configured via `RCC->CFGR2`). `PLLSRC=1` selects `PREDIV1` driven by `PLL2` (which requires configuring and enabling PLL2 first).
+- **The Failure Mode**: Initializing RCC with bit 16 set (`PLLSRC = 1`) without running PLL2 causes the main PLL to stall indefinitely, hanging the MCU during bootloader/firmware clock configuration.
+- **The Verified Fix**:
+  - Explicitly initialize `RCC->CFGR2 = 0x00000000;` (`PREDIV1SRC=0` selects HSE 8 MHz; `PREDIV1=0` selects no division).
+  - Clear bit 16 of `RCC->CFGR` (`PLLSRC = 0`), which on the F105 routes `PREDIV1` (the 8 MHz HSE crystal) directly into the PLL.
+  - With `PLLMUL = 9` (`RCC->CFGR |= (7UL << 18)`), the PLL achieves a rock-solid 72 MHz system clock lock. Cleanly incorporated into `hardware/MCU/source/src/main.c`.
+
+---
+
+### 2. Exhaustive USART2 Dispatch Analysis & Absence of Native Memory Reading Commands
+
+- **Exhaustive Disassembly of Command Dispatcher (`0x080045fa`)**:
+  - The main inbound command dispatch loop over USART2 (`PA2`/`PA3`, 38,400 baud) loads the opcode count and bounds-checks it with `cmp r4, #9`.
+  - Exactly 9 opcodes are supported in the stock firmware:
+    1. `0x81` (Keepalive / Heartbeat)
+    2. `0x82` (Audio Routing Control)
+    3. `0xA0` (Configuration Settings / Audio Mute & Volume)
+    4. `0xFF` (Query Version / Status)
+    5. `0xE1` (MCU Firmware Update Handshake / Bootloader Entry)
+    6. `0x85` (Vehicle Profile / Protocol Select)
+    7. `0x84` (Video & Audio Route Relay)
+    8. `0x87` (Bluetooth AT Command Passthrough to USART3)
+    9. `0x88` (Anti-clone / Identity Challenge)
+  - This 9-command limit was cross-verified against all 5 stock firmware dumps in the archive (`can_app.bin`, `can_app_dcn32.bin`, etc.).
+- **Jump Table Enumeration**:
+  - Every `tbb` (Table Branch Byte) instruction in `can_app.bin` was located and walked:
+    - `0x080046e4`: `CMD 0xA0` sub-command jump table (18 branches).
+    - `0x08004fde`: Main protocol packet dispatcher.
+    - `0x080065ee`: CAN ID filter / mode handler.
+    - `0x080088f8`: Relay event / status handler.
+    - `0x080089e2`: Relay state machine branch table.
+  - None of these jump tables or any unreachable code blocks perform arbitrary memory reads or memory dumping.
+- **Clarification on Diagnostic Memory Read Command (`0x90`)**:
+  - `SOC_CMD_DIAG_READ_MEM` (`0x90`, accepting `[Addr_B3..B0, Length]` and echoing raw memory bytes) was an experimental diagnostic command written into our clean-room firmware in commit `3921b909` and later removed in commit `d0ebaa8d` to mirror stock behavior. It never existed in the stock factory binary.
+
+---
+
+### 3. Auxiliary Serial Ports Protocol Architecture (UART4, UART5, USART3)
+
+#### Peripheral Hardware & Pinout Verification
+
+| Peripheral | Base Address | Pins | Alternate Function | Baud Rate | Associated Peer / Function |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **USART2** | `0x40004400` | `PA2` (TX), `PA3` (RX) | Default | 38,400 baud | ArkMicro SoC `/dev/ttyHS0` (`ark-hsuart0`) |
+| **USART3** | `0x40004800` | `PB10` (TX), `PB11` (RX) | Default | 9,600 baud | Feasycom / Blueware Bluetooth Module |
+| **UART4** | `0x40004C00` | `PC10` (TX), `PC11` (RX) | Default | 9,600 baud | Accessory / External Bus (or SoC `/dev/ttyS2`) |
+| **UART5** | `0x40005000` | `PC12` (TX), `PD2` (RX) | Default | 9,600 baud | Auxiliary Inter-Module Bridge |
+
+#### A. USART3 (Bluetooth AT Command Relay)
+- Configured at `PB10` (TX AF-PP 50 MHz) and `PB11` (RX Input Floating/PU) at 9600 baud (BRR = `0x0EA6` with 36 MHz APB1 clock).
+- Handled via `CMD 0x87` passthrough from SoC (`0x080087a0`) and autonomous firmware triggers:
+  - `"AT+AUDROUTE=1\r\n"` and `"AT+AUDROUTE=2\r\n"` sent when audio routing changes.
+  - `"AT+UPGRADE\r\n"` sent on reversing camera firmware update pin events.
+  - Asynchronous responses on `USART3_IRQHandler` (`0x08006ed3`) are forwarded back to the SoC wrapped in `0x2E` packets.
+
+#### B. UART4 & UART5 Protocol Specification
+Both UART4 and UART5 are clocked via `RCC->APB1ENR` bits 19 and 20, initialized to **9600 baud, 8N1** (`0x0800771c`, `0x080079b8`: `mov.w r0, #9600`), and operate against a shared SRAM struct at `0x20001365`.
+
+- **Framing & State Machine**:
+  - Idle state waits for sync byte `0x55`.
+  - Next byte received is the Command / Type byte (`0x20`, `0x32`, `0x50`, `0xD3`, `0xD6`).
+- **Exchange Mechanics (Clocked 1-in / 1-out)**:
+  - For outbound commands (`0x20` and `0x32`), byte 0 is transmitted immediately upon processing the type byte.
+  - Subsequent bytes are clocked out strictly on arrival of each subsequent dummy byte received over RX (interrupt `RXNE` drives next byte transmission from struct offset `+123`).
+- **Command Set**:
+  - **`0x20` (Outbound Vehicle / SWC Status, 5 bytes)**:
+    - Reads 5 bytes starting at struct offset `+0x21` (`0x20001386`).
+    - Dynamic update verified at `0x0800B8A0`: external routine decodes vehicle status from CAN (checking masks `0x10`, `0x02`, `0x04`, `0x20`, `0x40`, `0x80`, `0x01` at offset `+5` for SWC key events `0x4101`/`0x4001`) and copies 4 bytes from `struct + 4` and 1 byte from `struct + 8` into `struct + 0x21`.
+  - **`0x32` (Outbound Hardware Identity, 9 bytes)**:
+    - Reads 9 bytes starting at struct offset `+0x30` (`0x20001395`).
+    - Initialized at boot from flash constants at `0x0800BBCD`: `"   cD31\0\x93"` (three spaces, `cD31`, NUL, and `0x93` trailer).
+  - **`0x50` (Inbound Parameter Buffer, 3 bytes)**:
+    - Receives 3 bytes into struct offset `+0x4E` (`0x200013B3`).
+  - **`0xD3` (Inbound Parameter Buffer, 9 bytes)**:
+    - Receives 9 bytes into struct offset `+0x3F` (`0x200013A4`).
+  - **`0xD6` (Inbound Parameter Buffer, 9 bytes)**:
+    - Receives 9 bytes into struct offset `+0x5D` (`0x200013C2`).
+- **UART4 $\leftrightarrow$ UART5 Bridging**:
+  - The routine at `0x08007b00`–`0x08007c80` demonstrates that UART5 mirrors the UART4 protocol and acts as an inter-peripheral bridge:
+    - Inbound bytes stored into `+0x3F` (`0xD3`), `+0x4E` (`0x50`), and `+0x5D` (`0xD6`) from UART4 are transmitted out over UART5 when polled.
+    - Incoming packets on UART5 update the identity and status buffers.
+  - All write operations enforce strict, hard-coded bounds checks (`cmp r0, #3` or `cmp r0, #9`) before advancing, completely preventing any buffer overflow.

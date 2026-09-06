@@ -605,6 +605,11 @@ int main() {
     if (knob) {
         screens.set_indev(knob);
     }
+    // See screen_manager.h's own comment on set_group_rebind_hook() --
+    // closes the real gap where pop() restores a previous screen
+    // without ever re-running its factory()/create_nav_rail(), so
+    // nothing else would re-attach the shared nav-rail buttons to it.
+    screens.set_group_rebind_hook(&staging_ui::attach_nav_rail_to_group);
 
     screens.push(staging_ui::create_home_dashboard);
     std::printf("%s [UI] Home dashboard active\n", core::log_timestamp().c_str());

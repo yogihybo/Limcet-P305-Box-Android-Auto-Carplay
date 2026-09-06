@@ -3,6 +3,7 @@
 #include <atomic>
 #include <cerrno>
 #include <chrono>
+#include <condition_variable>
 #include <cstdlib>
 #include <cstring>
 #include <mutex>
@@ -496,7 +497,12 @@ namespace {
 // exists -- one shared poller instead of 3 independent ones.
 struct SharedStatusCache {
     std::mutex mtx;
+    std::condition_variable cv;
     AndroidAutoStatusSnapshot snapshot;
+    // 2026-09-06: see notify_android_auto_resumed()'s own header
+    // comment -- lets a caller wake status_poll_loop() early instead of
+    // waiting out however much of its own sleep interval remains.
+    bool wake_requested = false;
 };
 
 SharedStatusCache & shared_status_cache() {
@@ -506,6 +512,17 @@ SharedStatusCache & shared_status_cache() {
 
 std::atomic<bool> g_statusPollAllowSpawn{false};
 std::atomic<bool> g_statusPollStarted{false};
+
+// 2026-09-06: real UX report -- halved from 500ms to 250ms so a phone-
+// side native-focus change (e.g. after tapping Resume) shows up in
+// android_auto_screen.cpp within, on average, half the time as before.
+// This is a plain socket round-trip to the local sidecar over a unix
+// socket (sub-millisecond in the healthy case -- see
+// AndroidAutoClient::statusLine()/videoFocusNative()), not a network
+// call, so doubling its frequency is a real but small cost on this
+// 173MB/single-core device, same tradeoff already made for the touch/
+// knob indev poll intervals.
+constexpr auto kStatusPollInterval = std::chrono::milliseconds(250);
 
 void status_poll_loop() {
     // Dedicated instance/socket, separate from any UI-owned
@@ -519,12 +536,15 @@ void status_poll_loop() {
         if (line.rfind("STATE Connected", 0) == 0) {
             native = client.videoFocusNative();
         }
-        {
-            std::lock_guard<std::mutex> lock(shared_status_cache().mtx);
-            shared_status_cache().snapshot.status_line = std::move(line);
-            shared_status_cache().snapshot.native_focus = native;
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        std::unique_lock<std::mutex> lock(shared_status_cache().mtx);
+        shared_status_cache().snapshot.status_line = std::move(line);
+        shared_status_cache().snapshot.native_focus = native;
+        // Sleeps for the interval UNLESS notify_android_auto_resumed()
+        // wakes it early -- either way this loop always re-checks
+        // real state next, never asserts one itself.
+        shared_status_cache().cv.wait_for(lock, kStatusPollInterval,
+                                          [] { return shared_status_cache().wake_requested; });
+        shared_status_cache().wake_requested = false;
     }
 }
 
@@ -540,6 +560,14 @@ AndroidAutoStatusSnapshot cached_android_auto_status() {
 
 void set_android_auto_status_poll_allow_spawn(bool allow) {
     g_statusPollAllowSpawn.store(allow, std::memory_order_release);
+}
+
+void notify_android_auto_resumed() {
+    {
+        std::lock_guard<std::mutex> lock(shared_status_cache().mtx);
+        shared_status_cache().wake_requested = true;
+    }
+    shared_status_cache().cv.notify_one();
 }
 
 }  // namespace hal

@@ -48,6 +48,26 @@ public:
     // first push(), so that first real screen gets a real binding.
     void set_indev(lv_indev_t * indev) { indev_ = indev; }
 
+    // 2026-09-06: real hardware bug found via code review -- the
+    // persistent nav-rail buttons (ui/staging/nav_rail.cpp, shared
+    // lv_obj_t*s living on lv_layer_top(), reused across every screen)
+    // only ever got (re-)added to a screen's group from INSIDE that
+    // screen's own factory() call (create_nav_rail()). pop() restores a
+    // PREVIOUS screen without ever re-running its factory() -- so if
+    // any other screen was created in the meantime (moving the shared
+    // buttons into ITS group, since an LVGL object can only belong to
+    // one group at a time), the restored screen's own group would stay
+    // missing them with nothing left to fix it. This hook -- set once
+    // from main.cpp to ui::staging::attach_nav_rail_to_group, kept as a
+    // plain function pointer rather than a #include on ui/staging/
+    // here, to not invert this class's own core/-has-no-ui/-dependency
+    // convention -- is invoked with the now-active group on every
+    // push()/replace()/pop(), so it's a real no-op wherever
+    // create_nav_rail() already handled it and the one real fix where
+    // nothing else would have.
+    using GroupRebindHook = void (*)(lv_group_t *);
+    void set_group_rebind_hook(GroupRebindHook hook) { rebind_hook_ = hook; }
+
     // Creates the screen via factory, loads it, and pushes it onto the
     // stack. The very first push() becomes the root screen -- pop()
     // will never remove it.
@@ -84,6 +104,7 @@ private:
     std::vector<StackEntry> stack_;
     lv_indev_t * indev_ = nullptr;
     lv_group_t * pending_group_ = nullptr;
+    GroupRebindHook rebind_hook_ = nullptr;
 };
 
 // Shared transition timing -- one place to retune both directions at

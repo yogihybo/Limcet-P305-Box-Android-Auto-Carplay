@@ -112,23 +112,6 @@ void bluetooth_btn_cb(lv_event_t *) {
     staging_ui::navigate_to(staging_ui::NavDestination::Bluetooth);
 }
 
-// 2026-08-19: real gap found on hardware -- once a session backgrounds
-// itself (phone's own in-app exit/back control, see
-// video_channel.cpp's onVideoFocusRequest() comment), this screen's
-// content card comes back per poll_timer_cb()'s own showingVideo logic
-// below, but it always showed the NOT-YET-CONNECTED copy ("Ready to
-// connect" / "Connect (Wireless)") -- tapping Connect while already
-// Connected is at best a confusing no-op (requestConnect() just
-// restarts the whole handshake) and at worst disruptive. This sends
-// "RESUME" instead, asking the phone to grant PROJECTED focus back --
-// see AndroidAutoClient::requestResumeVideo()'s own comment.
-void resume_btn_cb(lv_event_t *) {
-    // 2026-09-04: async, same reasoning as connect_btn_cb() above.
-    core::SizedThread(core::kDefaultThreadStackSize, []() {
-        client().requestResumeVideo();
-    }).detach();
-}
-
 struct Widgets {
     // The whole instructions/status card -- see poll_timer_cb()'s
     // comment on why this gets hidden entirely (not just its
@@ -154,6 +137,41 @@ struct Widgets {
     // handling of hal::has_pending_aa_connection() below.
     bool showing_pending_ready = false;
 };
+
+// 2026-08-19: real gap found on hardware -- once a session backgrounds
+// itself (phone's own in-app exit/back control, see
+// video_channel.cpp's onVideoFocusRequest() comment), this screen's
+// content card comes back per poll_timer_cb()'s own showingVideo logic
+// below, but it always showed the NOT-YET-CONNECTED copy ("Ready to
+// connect" / "Connect (Wireless)") -- tapping Connect while already
+// Connected is at best a confusing no-op (requestConnect() just
+// restarts the whole handshake) and at worst disruptive. This sends
+// "RESUME" instead, asking the phone to grant PROJECTED focus back --
+// see AndroidAutoClient::requestResumeVideo()'s own comment.
+void resume_btn_cb(lv_event_t * e) {
+    // 2026-09-06: real UX report -- nothing changed on screen between
+    // tapping this and poll_timer_cb() noticing the phone's own
+    // response (up to a full poll interval away, see
+    // hal::cached_android_auto_status()'s own comment). Cosmetic-only,
+    // synchronous (this callback already runs on the LVGL thread) --
+    // does not assert anything about the real native_focus state, just
+    // acknowledges the tap.
+    auto * w = static_cast<Widgets *>(lv_event_get_user_data(e));
+    if (w && w->cta_label) {
+        lv_label_set_text(w->cta_label, "Resuming...");
+    }
+    // 2026-09-04: async, same reasoning as connect_btn_cb() above.
+    core::SizedThread(core::kDefaultThreadStackSize, []() {
+        client().requestResumeVideo();
+        // 2026-09-06: see hal::notify_android_auto_resumed()'s own
+        // comment -- wakes the shared poller to re-check real state
+        // sooner than its own interval would, now that the sidecar has
+        // actually processed this request (requestResumeVideo() is a
+        // blocking round-trip -- see AndroidAutoClient::sendCommand()
+        // -- so this fires only once that round-trip really finished).
+        hal::notify_android_auto_resumed();
+    }).detach();
+}
 
 // Polls the sidecar and refreshes the status widgets -- created
 // against this screen, deleted alongside it (LV_EVENT_DELETE below) so
@@ -230,7 +248,7 @@ void poll_timer_cb(lv_timer_t * timer) {
         lv_label_set_text(w->subtitle, "The phone switched away from the projected view. Tap Resume to bring it back to the screen.");
         lv_label_set_text(w->cta_label, "Resume");
         lv_obj_remove_event_cb(w->cta_btn, connect_btn_cb);
-        lv_obj_add_event_cb(w->cta_btn, resume_btn_cb, LV_EVENT_CLICKED, nullptr);
+        lv_obj_add_event_cb(w->cta_btn, resume_btn_cb, LV_EVENT_CLICKED, w);
         w->showing_resume = true;
     } else if (!nativeFocus && w->showing_resume) {
         lv_label_set_text(w->title, "Ready to connect");
@@ -354,6 +372,17 @@ lv_obj_t * create_android_auto_screen() {
 
     if (core::navigation::focus_group()) {
         lv_group_add_obj(core::navigation::focus_group(), connect_btn);
+        // 2026-09-06: needed now that this screen's group actually
+        // holds the nav-rail buttons too (see nav_rail.h's own
+        // attach_nav_rail_to_group() comment) -- create_nav_rail()
+        // above already added those 5 first, so without this,
+        // LVGL's own "auto-focus the first object added to an empty
+        // group" behavior would leave one of THEM focused instead of
+        // this screen's own action button, which is what a user
+        // opening this screen actually wants selected first (instant
+        // rotary click = Connect/Resume; turning it moves to the rail
+        // from there).
+        lv_group_focus_obj(connect_btn);
     }
 
     // Status Row

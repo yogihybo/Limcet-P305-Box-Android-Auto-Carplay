@@ -45,6 +45,9 @@ void ScreenManager::push(ScreenFactory factory) {
     if (indev_) {
         lv_indev_set_group(indev_, group);
     }
+    if (rebind_hook_) {
+        rebind_hook_(group);
+    }
 }
 
 void ScreenManager::replace(ScreenFactory factory) {
@@ -70,6 +73,9 @@ void ScreenManager::replace(ScreenFactory factory) {
     if (indev_) {
         lv_indev_set_group(indev_, group);
     }
+    if (rebind_hook_) {
+        rebind_hook_(group);
+    }
 }
 
 void ScreenManager::pop() {
@@ -93,6 +99,13 @@ void ScreenManager::pop() {
                          /*auto_del=*/true);
     if (indev_) {
         lv_indev_set_group(indev_, stack_.back().group);
+    }
+    // See set_group_rebind_hook()'s own header comment -- this is the
+    // one case where nothing else (no factory()/create_nav_rail() call)
+    // would ever re-attach the shared nav-rail buttons to the screen
+    // being restored here.
+    if (rebind_hook_) {
+        rebind_hook_(stack_.back().group);
     }
 }
 

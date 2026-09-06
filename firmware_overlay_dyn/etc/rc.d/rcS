@@ -58,10 +58,42 @@ ln -sf /dev/dvr /tmp/dev/dvr
 mkdir -p /data
 ROOTDEV=$(cat /proc/cmdline | sed -n 's/.*root=\([^ ]*\).*/\1/p')
 USERDATADEV="${ROOTDEV%?}3"
+
+# 2026-09-06: real fsck before mount, now that a real one exists on
+# this rootfs at all (tools/e2fsprogs-static -- Buildroot's own
+# defconfig never selects e2fsprogs, and busybox's own applets don't
+# implement real ext2/3/4 checking). -p (preen) auto-fixes anything
+# safe to fix without a prompt; e2fsck's own documented exit-code
+# convention is >=4 for damage it couldn't safely auto-fix, at which
+# point -y (fix everything, no prompts, more aggressive) gets one more
+# try before the mount attempt below is allowed to just fail outright.
+# This is the ONE case rcS is allowed to write to a block device before
+# root's own read-only mount matters -- p3 is its own separate,
+# always-read-write partition (see the ro-root work's own commit for
+# why p2 itself never needs this).
+/usr/bin/e2fsck -p "$USERDATADEV" >/dev/null 2>&1
+if [ $? -ge 4 ]; then
+	/usr/bin/e2fsck -y "$USERDATADEV" >/dev/null 2>&1
+fi
+
 if mount -o sync -t ext4 "$USERDATADEV" /data 2>/dev/null; then
 	echo "userdata: ext4 ($USERDATADEV)"
 else
-	echo "userdata: mount failed ($USERDATADEV) -- not yet ported the NAND UBI/yaffs2 fallback chain from stock rcS, ext4-only for this rootfs so far"
+	# Self-healing fallback: e2fsck couldn't recover it (a severe
+	# power-cut-mid-write case is exactly the scenario this whole
+	# ro-root effort exists to reduce, but p3 itself is still real rw
+	# flash and can't be made immune the same way p2 was) -- reformat
+	# rather than leave the unit permanently stuck with no /data at
+	# all. Same -O flags build_bootable_sdcard_dyn.sh's own initial
+	# format uses, so a reformatted p3 stays consistent with whatever
+	# this rootfs's own mkfs.ext4/kernel pairing already assumes.
+	echo "userdata: mount failed ($USERDATADEV) -- unrecoverable, reformatting"
+	/usr/bin/mkfs.ext4 -F -O ^64bit,^metadata_csum -L userdata "$USERDATADEV" >/dev/null 2>&1
+	if mount -o sync -t ext4 "$USERDATADEV" /data 2>/dev/null; then
+		echo "userdata: ext4 ($USERDATADEV) -- reformatted after unrecoverable corruption, defaults will be regenerated"
+	else
+		echo "userdata: mount failed ($USERDATADEV) even after reformat -- not yet ported the NAND UBI/yaffs2 fallback chain from stock rcS, ext4-only for this rootfs so far"
+	fi
 fi
 
 # 2026-09-06: real rootfs writes REMOVED from here -- root is meant to
@@ -222,6 +254,26 @@ modprobe rtl8811cu rtw_drv_log_level=2 rtw_country_code=US
 # --- BlueZ (runs in background so it does not block UI) ---
 (
 	mkdir -p /var/run/dbus
+
+	# 2026-09-06: real gap found via code review -- bluetoothd runs
+	# with no --configdir override, so it uses its compiled-in default
+	# storage path (/var/lib/bluetooth for pairing/link keys). /var is
+	# ramfs (mounted near the top of this script) -- every single
+	# reboot was silently wiping every BT pairing, forcing a full
+	# re-pair every time the unit power-cycled, with no error anywhere
+	# to suggest why. Symlinking the default path onto /data (p3, the
+	# one real persistent partition, already mounted by this point --
+	# see the userdata mount block above) makes pairing survive a
+	# reboot the same way any other real BlueZ install's /var/lib/
+	# bluetooth would, without bluetoothd itself needing to know its
+	# storage is redirected. mkdir -p on the REAL (/data) side first,
+	# not the symlink's own apparent path -- ln -sf would otherwise
+	# create /var/lib/bluetooth as a symlink to a target that doesn't
+	# exist yet, which bluetoothd would then fail to write into.
+	mkdir -p /data/bluetooth
+	mkdir -p /var/lib
+	ln -sf /data/bluetooth /var/lib/bluetooth
+
 	/usr/bin/dbus-daemon --system --fork
 	export DBUS_SYSTEM_BUS_ADDRESS=unix:path=/var/run/dbus/system_bus_socket
 

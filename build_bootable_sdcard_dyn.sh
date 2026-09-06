@@ -303,8 +303,20 @@ UENV_OUT="$OUTPUT_DIR/uEnv.txt"
 if $DRY_RUN; then
     echo -e "${DIM}  [dry-run] write $UENV_OUT${RESET}"
 else
+    # 2026-09-06: root flipped rw -> ro -- USB/SD flash controllers can
+    # corrupt an in-flight write on an ignition-off power cut (simpler
+    # wear-leveling/write-buffering than onboard eMMC/NAND); a
+    # read-only root is immune to that class of corruption by
+    # construction, since the kernel will never issue a single write to
+    # p2. Only safe now because rcS's own two rootfs writes (ssh host
+    # key chmod, root's shadow password) were moved to build time --
+    # see this script's own shadow-sed step below and its commit
+    # message (a257ab4) for the full rootfs-write sweep confirming
+    # these were the only two. p3 (/data, userdata) is unaffected --
+    # still mounted rw at runtime by rcS, that's the one partition
+    # that's actually supposed to take writes.
     cat > "$UENV_OUT" <<EOF
-bootargs=console=ttyS0,115200n8 mem=180M earlyprintk=serial root=/dev/mmcblk0p2 rootfstype=ext4 rootwait rw screen=0 user_debug=8
+bootargs=console=ttyS0,115200n8 mem=180M earlyprintk=serial root=/dev/mmcblk0p2 rootfstype=ext4 rootwait ro screen=0 user_debug=8
 bootcmd=fatload mmc 0:1 0x1000000 zImage; fatload mmc 0:1 0x2000000 ark1668_limcet_p305.dtb; bootz 0x1000000 - 0x2000000
 EOF
 fi

@@ -42,6 +42,7 @@ boot/crash problem elsewhere in the system.
 | `ark1680-ts-test` | ARK1680 resistive-ADC touchscreen driver diagnostic — register dump + evdev event watcher |
 | `mcu-handshake` | Native C reimplementation of the MCU UART handshake protocol |
 | `dmesg` | Static util-linux `dmesg` — timestamps/facility-decoding/color that BusyBox's built-in applet lacks |
+| `e2fsprogs-static` | Static `e2fsck`/`mke2fs` (+ `fsck.ext4`/`mkfs.ext4` symlinks) — real ext2/3/4 fsck/format, absent from both Buildroot's defconfig and BusyBox's own applets; backs the `/data` (p3) resilience plan |
 | `strace` | Upstream syscall tracer (static build) |
 | `audio-test` / `touch-selftest` / `uart-test` / `bt-test` / `usb-test` / `mmc-test` | Automated pass/fail wrapper scripts, one per subsystem |
 | `rtk-hciattach-test` | One-shot manual diagnostic (not auto-run, not a stack switcher): attempts kernel-HCI `hci0` bring-up against the real Bluetooth module via `rtk_hciattach`, as an alternative to stock `blueware` — see its own `README.md` |

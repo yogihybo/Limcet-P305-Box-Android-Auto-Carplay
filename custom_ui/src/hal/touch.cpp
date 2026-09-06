@@ -97,6 +97,10 @@ lv_indev_t * init_touch(McuInputHal & mcu) {
     lv_indev_set_type(indev, LV_INDEV_TYPE_POINTER);
     lv_indev_set_read_cb(indev, mcu_touch_read_cb);
     lv_indev_set_driver_data(indev, &mcu);
+    lv_timer_t * timer = lv_indev_get_read_timer(indev);
+    if (timer) {
+        lv_timer_set_period(timer, 10);
+    }
     return indev;
 }
 

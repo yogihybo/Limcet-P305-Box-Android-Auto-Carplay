@@ -192,11 +192,11 @@ static void process_single_command(aap_session_t *session, const char *cmd, int 
     } else if (strncmp(cmd, "KEY ", 4) == 0) {
         uint32_t code = (uint32_t)strtoul(cmd + 4, NULL, 10);
         if (session) aap_session_send_key(session, code);
-        reply = "OK\n";
+        reply = NULL;
     } else if (strncmp(cmd, "ROTARY ", 7) == 0) {
         int ticks = (int)strtol(cmd + 7, NULL, 10);
         if (session) aap_session_send_rotary(session, ticks);
-        reply = "OK\n";
+        reply = NULL;
     } else if (strncmp(cmd, "TOUCH ", 6) == 0) {
         unsigned int x = 0, y = 0;
         char act[16] = {0};
@@ -206,7 +206,7 @@ static void process_single_command(aap_session_t *session, const char *cmd, int 
             else if (strcmp(act, "UP") == 0) action_code = 2;
             aap_session_send_touch(session, x, y, action_code);
         }
-        reply = "OK\n";
+        reply = NULL;
     } else if (strncmp(cmd, "NIGHT ", 6) == 0) {
         if (session) aap_session_send_night_mode(session, cmd[6] == '1');
         reply = "OK\n";
@@ -231,7 +231,7 @@ static void process_single_command(aap_session_t *session, const char *cmd, int 
         reply = "OK\n";
     }
 
-    if (client_fd >= 0) {
+    if (client_fd >= 0 && reply != NULL) {
         ssize_t w = write(client_fd, reply, strlen(reply));
         (void)w;
     }

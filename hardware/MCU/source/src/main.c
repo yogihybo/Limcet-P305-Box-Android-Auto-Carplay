@@ -12,8 +12,12 @@ static void clock_init(void) {
     /* FLASH Latency = 2 wait states for 72MHz */
     *((volatile uint32_t *)0x40022000UL) = 0x02; /* FLASH_ACR: 2WS */
 
+    /* Configure PREDIV1: HSE not divided (8 MHz into PLL) - STM32F105 Connectivity Line */
+    RCC->CFGR2 = 0x00000000; /* PREDIV1SRC = HSE, PREDIV1 = /1 */
+
     /* HPRE = 0 (SYSCLK / 1), PPRE1 = 4 (HCLK / 2 = 36 MHz), PPRE2 = 0 (HCLK / 1 = 72 MHz) */
-    RCC->CFGR = (0UL << 4) | (4UL << 8) | (0UL << 11) | (1UL << 16) | (7UL << 18); /* PLLSRC=HSE, PLLMUL=9 */
+    /* On STM32F105 Connectivity Line, PLLSRC (bit 16) = 0 selects PREDIV1 (HSE); bit 16 = 1 would select PLL2 */
+    RCC->CFGR = (0UL << 4) | (4UL << 8) | (0UL << 11) | (0UL << 16) | (7UL << 18); /* PLLSRC=PREDIV1, PLLMUL=9 */
 
     /* Enable PLL */
     RCC->CR |= (1UL << 24); /* PLLON */

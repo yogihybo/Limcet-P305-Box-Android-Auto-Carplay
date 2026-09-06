@@ -97,9 +97,22 @@ lv_indev_t * init_touch(McuInputHal & mcu) {
     lv_indev_set_type(indev, LV_INDEV_TYPE_POINTER);
     lv_indev_set_read_cb(indev, mcu_touch_read_cb);
     lv_indev_set_driver_data(indev, &mcu);
+    // 2026-09-06: real user report -- AA touch still felt less
+    // responsive than the local LVGL UI even after 15d9ddf cut this
+    // from LVGL's 33ms default down to 10ms. There's genuine headroom
+    // below 10ms specifically for touch (unlike the knob's own 10ms,
+    // which is now load-bearing for its hold-and-turn gesture timing
+    // constants -- see hal/knob.cpp's is_held window comments -- so
+    // left untouched here): McuInputHal::run()'s own UART reader thread
+    // is select()-driven, not polled, so a touch frame updates
+    // touch_coords_/touch_pressed_ within microseconds of arriving at
+    // 38400 baud regardless of this timer; this value is purely "how
+    // stale can this read callback's view of those atomics be," with
+    // no other real cost per poll (a few atomic loads, no syscalls in
+    // the common case). Halved to 5ms.
     lv_timer_t * timer = lv_indev_get_read_timer(indev);
     if (timer) {
-        lv_timer_set_period(timer, 10);
+        lv_timer_set_period(timer, 5);
     }
     return indev;
 }

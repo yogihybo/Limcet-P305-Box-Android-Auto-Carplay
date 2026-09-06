@@ -127,14 +127,19 @@ static void ap_state_note_ap_up(void) {
     pthread_mutex_unlock(&g_ap_state_mutex);
 }
 
-/* Called from the main poll loop whenever an active aap_session_t
- * transitions to gone (disconnected/error/I-O failure). Only arms the
- * countdown -- the actual teardown is polled from the main loop below,
- * so it always runs on that thread even though this can be called from
- * more than one call site. */
+/* Called from the main poll loop whenever there's no actively-
+ * projected session -- either the aap_session_t is gone entirely
+ * (disconnected/error/I-O failure) OR it's still alive but
+ * backgrounded (is_video_focus_native). Only arms the countdown on the
+ * FIRST such call (idempotent while the condition persists) -- the
+ * actual teardown is polled from the main loop below, so it always
+ * runs on that thread even though this itself can be called from more
+ * than one call site, and every poll-loop tick while backgrounded (see
+ * that call site's own comment on why it must be safe to call
+ * repeatedly, not just on a transition edge). */
 static void ap_state_note_session_ended(void) {
     pthread_mutex_lock(&g_ap_state_mutex);
-    if (g_ap_is_up) {
+    if (g_ap_is_up && g_session_ended_at == 0) {
         g_session_ended_at = time(NULL);
     }
     pthread_mutex_unlock(&g_ap_state_mutex);
@@ -421,6 +426,28 @@ int main(int argc, char **argv) {
                 session = NULL;
                 close_and_clear_active_rfcomm_fd();
                 ap_state_note_session_ended();
+            } else if (aap_session_is_video_focus_native(session)) {
+                /* 2026-09-06: real gap found -- the ONLY case this was
+                 * originally armed for was the aap_session_t itself
+                 * being destroyed (a real TCP/protocol-level
+                 * disconnect). But the actual real-world complaint this
+                 * feature exists for is the phone staying WiFi-
+                 * connected with a perfectly alive TCP session, just
+                 * backgrounded (native focus) -- "phone stays connected
+                 * but AA session is inactive." That case never touched
+                 * either teardown-arming call site at all, since
+                 * `session` never becomes NULL for it. Same grace-
+                 * countdown, same reasoning -- ap_state_note_session_ended()
+                 * is safe to call every tick here (it only arms once,
+                 * see its own comment) for as long as this stays true. */
+                ap_state_note_session_ended();
+            } else {
+                /* Actively projected -- cancel a countdown that might
+                 * still be running from an earlier, briefer
+                 * backgrounding (e.g. the user tapped Resume and the
+                 * phone granted it back before the grace period
+                 * elapsed). */
+                ap_state_cancel_pending_teardown();
             }
         }
         ap_state_poll_teardown();

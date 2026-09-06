@@ -132,7 +132,7 @@ void mcu_knob_read_cb(lv_indev_t * indev, lv_indev_data_t * data) {
         // 2. press happened within the last 400ms (even if micro-released during detent), OR
         // 3. continuation of an active hold-rotation sequence within 400ms.
         bool is_held = raw_pressed ||
-                       (now_ms - last_press_time_ms() < 400 && now_ms - last_release_time_ms() < 350) ||
+                       (now_ms - last_press_time_ms() < 400 && now_ms - last_release_time_ms() < 150) ||
                        (now_ms - last_held_rotation_time_ms() < 400);
 
         if (ticks != 0) {
@@ -140,9 +140,6 @@ void mcu_knob_read_cb(lv_indev_t * indev, lv_indev_data_t * data) {
                 rotated_while_held() = true;
                 last_held_rotation_time_ms() = now_ms;
             }
-
-            std::printf("%s [HAL:KNOB] AA active, ticks=%d, held=%d\n",
-                        core::log_timestamp().c_str(), ticks, is_held ? 1 : 0);
 
             if (is_held) {
                 /* Held while rotating -> card nudge (DPAD_RIGHT / DPAD_LEFT) */
@@ -192,6 +189,13 @@ lv_indev_t * init_knob(McuInputHal & mcu) {
     lv_indev_set_type(indev, LV_INDEV_TYPE_ENCODER);
     lv_indev_set_read_cb(indev, mcu_knob_read_cb);
     lv_indev_set_driver_data(indev, &mcu);
+    // 2026-09-06: LVGL indev defaults to LV_DEF_REFR_PERIOD (33ms) polling.
+    // Cut the read timer period to 10ms so MCU UART knob ticks register with
+    // sub-10ms latency instead of waiting up to 33ms.
+    lv_timer_t * timer = lv_indev_get_read_timer(indev);
+    if (timer) {
+        lv_timer_set_period(timer, 10);
+    }
     return indev;
 }
 

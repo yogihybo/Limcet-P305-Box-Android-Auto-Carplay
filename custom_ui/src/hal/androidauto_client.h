@@ -223,6 +223,11 @@ private:
     // same as "sidecar unreachable".
     bool sendCommand(const std::string & line, std::string & reply);
 
+    // Sends `line` (a bare command, no trailing newline needed) without
+    // waiting for a reply. Used for high-frequency input streams (KEY,
+    // ROTARY, TOUCH) to eliminate round-trip latency and blocking reads.
+    bool sendInput(const std::string & line);
+
     std::mutex mutex_;
     int fd_ = -1;
     // 2026-09-05: real hardware bug found via code review -- sendCommand()

@@ -336,6 +336,15 @@ bool AndroidAutoClient::sendCommand(const std::string & line, std::string & repl
     return true;
 }
 
+bool AndroidAutoClient::sendInput(const std::string & line) {
+    std::string withNewline = line + "\n";
+    if (write(fd_, withNewline.data(), withNewline.size()) !=
+        static_cast<ssize_t>(withNewline.size())) {
+        return false;
+    }
+    return true;
+}
+
 bool AndroidAutoClient::requestConnect() {
     std::lock_guard<std::mutex> lock(mutex_);
     std::string reply;
@@ -406,10 +415,9 @@ bool AndroidAutoClient::requestResumeVideo() {
 
 bool AndroidAutoClient::sendKey(std::uint32_t keycode) {
     std::lock_guard<std::mutex> lock(mutex_);
-    std::string reply;
     std::string cmd = "KEY " + std::to_string(keycode);
     for (int attempt = 0; attempt < 2; ++attempt) {
-        if (ensureConnected(/*allow_spawn=*/false) && sendCommand(cmd, reply)) {
+        if (ensureConnected(/*allow_spawn=*/false) && sendInput(cmd)) {
             return true;
         }
         disconnect();
@@ -419,10 +427,9 @@ bool AndroidAutoClient::sendKey(std::uint32_t keycode) {
 
 bool AndroidAutoClient::sendRotary(int ticks) {
     std::lock_guard<std::mutex> lock(mutex_);
-    std::string reply;
     std::string cmd = "ROTARY " + std::to_string(ticks);
     for (int attempt = 0; attempt < 2; ++attempt) {
-        if (ensureConnected(/*allow_spawn=*/false) && sendCommand(cmd, reply)) {
+        if (ensureConnected(/*allow_spawn=*/false) && sendInput(cmd)) {
             return true;
         }
         disconnect();
@@ -433,10 +440,9 @@ bool AndroidAutoClient::sendRotary(int ticks) {
 bool AndroidAutoClient::sendTouch(std::uint32_t x, std::uint32_t y, TouchAction action) {
     const char * actionStr = action == TouchAction::Down ? "DOWN" : action == TouchAction::Move ? "MOVE" : "UP";
     std::lock_guard<std::mutex> lock(mutex_);
-    std::string reply;
     std::string cmd = "TOUCH " + std::to_string(x) + " " + std::to_string(y) + " " + actionStr;
     for (int attempt = 0; attempt < 2; ++attempt) {
-        if (ensureConnected(/*allow_spawn=*/false) && sendCommand(cmd, reply)) {
+        if (ensureConnected(/*allow_spawn=*/false) && sendInput(cmd)) {
             return true;
         }
         disconnect();

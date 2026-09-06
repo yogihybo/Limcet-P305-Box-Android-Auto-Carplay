@@ -1481,8 +1481,6 @@ void aap_session_send_rotary(aap_session_t *s, int32_t delta) {
     send_channel_msg(s, AAP_CHANNEL_INPUT,
                      aap_protobuf_service_inputsource_InputMessageId_INPUT_MESSAGE_INPUT_REPORT,
                      pb_buf, ostream.bytes_written, true);
-
-    printf("[AA] sent rotary controller (delta=%d)\n", delta);
 }
 
 void aap_session_send_touch(aap_session_t *s, uint32_t x, uint32_t y, uint32_t action) {

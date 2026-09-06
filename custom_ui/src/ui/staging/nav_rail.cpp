@@ -83,16 +83,23 @@ lv_obj_t * ensure_persistent_rail() {
         lv_obj_t * icon = ui::icons::create_icon(btn, inst.icon_dscs[i], theme::text_primary());
         inst.icons[i] = icon;
         lv_obj_center(icon);
-
-        if (core::navigation::focus_group()) {
-            lv_group_add_obj(core::navigation::focus_group(), btn);
-        }
     }
 
     return inst.rail;
 }
 
 } // namespace
+
+void attach_nav_rail_to_group(lv_group_t * group) {
+    if (!group) return;
+    auto & inst = rail_instance();
+    if (!inst.rail || !lv_obj_is_valid(inst.rail)) return;
+    for (int i = 0; i < 5; ++i) {
+        if (inst.buttons[i]) {
+            lv_group_add_obj(group, inst.buttons[i]);
+        }
+    }
+}
 
 void navigate_to(NavDestination dest) {
     update_active_button(dest);
@@ -131,6 +138,11 @@ lv_obj_t * create_nav_rail(lv_obj_t * /*parent*/, NavDestination active_dest, Na
     auto & inst = rail_instance();
     inst.custom_callback = std::move(cb);
     update_active_button(active_dest);
+    // See attach_nav_rail_to_group()'s own header comment -- runs on
+    // every screen creation (push()/replace()), not just the rail's
+    // own first-ever creation, so each screen's own dedicated group
+    // actually gets these 5 shared buttons.
+    attach_nav_rail_to_group(core::navigation::focus_group());
     return rail;
 }
 

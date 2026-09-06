@@ -289,4 +289,18 @@ AndroidAutoStatusSnapshot cached_android_auto_status();
 // for hal::androidauto_screen_active() in hal/knob.h).
 void set_android_auto_status_poll_allow_spawn(bool allow);
 
+// 2026-09-06: real UX gap found via code review -- after
+// resume_btn_cb() (android_auto_screen.cpp) asks the phone to give up
+// native focus, cached_android_auto_status() kept reporting the OLD
+// native_focus value for up to a full poll interval, so the CTA/video
+// visibility lagged behind what the phone had already actually done.
+// Rather than optimistically asserting native_focus=false here (which
+// would risk hal::hide_display() blanking the LCD in anticipation of
+// video that isn't actually resuming yet, if the phone hasn't complied
+// as fast as hoped), this just wakes the shared poller's own sleep
+// early so it re-checks the REAL state sooner instead of asserting one
+// -- see status_poll_loop()'s own comment. Safe to call any time, not
+// just after a resume request; it's a plain "check again now" nudge.
+void notify_android_auto_resumed();
+
 }  // namespace hal

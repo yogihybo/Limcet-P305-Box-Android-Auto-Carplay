@@ -12,6 +12,7 @@
 #include <sys/un.h>
 #include <netinet/in.h>
 #include <poll.h>
+#include <time.h>
 
 #include <netinet/tcp.h>
 
@@ -86,10 +87,83 @@ static void replace_active_rfcomm_fd(int new_fd) {
     pthread_mutex_unlock(&g_rfcomm_fd_mutex);
 }
 
+/* 2026-09-06: user-requested reconnect-forcing behavior -- an AA
+ * session that ends (phone hangs up, backgrounds badly, a transient
+ * WiFi/BT glitch, etc.) used to leave the WiFi AP itself running
+ * indefinitely. The phone's own WiFi client then stays associated to
+ * custom_ui_wifi with nothing on the other end -- from the phone's own
+ * point of view it's still "connected" to a network, so pressing
+ * Connect again on the head unit has nothing to actually force a retry
+ * against (Android Auto's wireless flow doesn't automatically retry a
+ * dead TCP session just because the head unit asked to). Tearing the
+ * AP down after a short grace period makes the phone see a real WiFi
+ * disconnect, so it's in a clean state the next time a connection is
+ * actually requested -- which is what makes pressing Connect again
+ * actually do something.
+ *
+ * Grace period (not immediate) because a brief link hiccup that
+ * recovers on its own shouldn't force a full re-association + WPP
+ * handshake + new AAP session for no reason.
+ */
+#define AP_TEARDOWN_GRACE_SECONDS 10
+
+static pthread_mutex_t g_ap_state_mutex = PTHREAD_MUTEX_INITIALIZER;
+static bool g_ap_is_up = false;
+static time_t g_session_ended_at = 0; /* 0 == no pending teardown armed */
+
+/* Cancels any pending teardown -- called whenever a new connection
+ * attempt or a new live session starts, since the AP is needed again
+ * regardless of how long it's been sitting idle. */
+static void ap_state_cancel_pending_teardown(void) {
+    pthread_mutex_lock(&g_ap_state_mutex);
+    g_session_ended_at = 0;
+    pthread_mutex_unlock(&g_ap_state_mutex);
+}
+
+static void ap_state_note_ap_up(void) {
+    pthread_mutex_lock(&g_ap_state_mutex);
+    g_ap_is_up = true;
+    g_session_ended_at = 0;
+    pthread_mutex_unlock(&g_ap_state_mutex);
+}
+
+/* Called from the main poll loop whenever an active aap_session_t
+ * transitions to gone (disconnected/error/I-O failure). Only arms the
+ * countdown -- the actual teardown is polled from the main loop below,
+ * so it always runs on that thread even though this can be called from
+ * more than one call site. */
+static void ap_state_note_session_ended(void) {
+    pthread_mutex_lock(&g_ap_state_mutex);
+    if (g_ap_is_up) {
+        g_session_ended_at = time(NULL);
+    }
+    pthread_mutex_unlock(&g_ap_state_mutex);
+}
+
+/* Polled every main-loop iteration (~100ms, bounded by poll()'s own
+ * timeout below). Tears the AP down once the grace period elapses with
+ * nothing having cancelled it in the meantime. */
+static void ap_state_poll_teardown(void) {
+    pthread_mutex_lock(&g_ap_state_mutex);
+    bool should_teardown = g_ap_is_up && g_session_ended_at != 0 &&
+                            (time(NULL) - g_session_ended_at) >= AP_TEARDOWN_GRACE_SECONDS;
+    if (should_teardown) {
+        g_ap_is_up = false;
+        g_session_ended_at = 0;
+    }
+    pthread_mutex_unlock(&g_ap_state_mutex);
+    if (should_teardown) {
+        printf("[AA] no active session for %ds -- tearing down WiFi AP\n", AP_TEARDOWN_GRACE_SECONDS);
+        aap_wifi_teardown_ap();
+    }
+}
+
 static void *wifi_setup_thread(void *arg) {
     wifi_worker_args_t *args = (wifi_worker_args_t *)arg;
     int fd = args->rfcomm_fd;
     free(args);
+
+    ap_state_cancel_pending_teardown();
 
     printf("[AA] starting WiFi AP and RFCOMM WPP handshake for fd=%d\n", fd);
     if (!aap_wifi_ensure_ap_up()) {
@@ -98,6 +172,7 @@ static void *wifi_setup_thread(void *arg) {
         clear_active_rfcomm_fd_if_matches(fd);
         return NULL;
     }
+    ap_state_note_ap_up();
 
     char bssid[32] = {0};
     aap_wifi_get_bssid(bssid, sizeof(bssid));
@@ -345,8 +420,10 @@ int main(int argc, char **argv) {
                 aap_session_destroy(session);
                 session = NULL;
                 close_and_clear_active_rfcomm_fd();
+                ap_state_note_session_ended();
             }
         }
+        ap_state_poll_teardown();
 
         if (ret == 0) continue;
 
@@ -410,6 +487,11 @@ int main(int argc, char **argv) {
                     aap_session_destroy(session);
                 }
                 session = aap_session_create(new_tcp);
+                /* A live session is forming right now -- cancel any
+                 * pending AP teardown left armed from a previous
+                 * session's end (see ap_state_poll_teardown()'s own
+                 * comment). */
+                ap_state_cancel_pending_teardown();
             }
         }
 
@@ -420,6 +502,7 @@ int main(int argc, char **argv) {
                 aap_session_destroy(session);
                 session = NULL;
                 close_and_clear_active_rfcomm_fd();
+                ap_state_note_session_ended();
             }
         }
 

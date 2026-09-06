@@ -1027,7 +1027,34 @@ static void handle_media_channel(aap_session_t *s, uint8_t channel_id, const uin
             aap_protobuf_service_media_video_message_VideoFocusNotification focus_notif =
                 aap_protobuf_service_media_video_message_VideoFocusNotification_init_default;
             focus_notif.has_focus = true;
-            focus_notif.focus = req.has_mode ? req.mode : aap_protobuf_service_media_video_message_VideoFocusMode_VIDEO_FOCUS_PROJECTED;
+            /* 2026-09-06: real hardware bug found via code review -- a
+             * request to hand focus back to the phone's own native
+             * launcher (the user backing out of AA, or the phone
+             * screen turning off) is sent with has_reason=true,
+             * reason=LAUNCH_NATIVE/PHONE_SCREEN_OFF, but Google's own
+             * AA app leaves has_mode UNSET for this specific request --
+             * only checking has_mode fell through to the
+             * VIDEO_FOCUS_PROJECTED default below, so this sidecar kept
+             * reporting itself as projected/foreground even after the
+             * phone had already backed out. android_auto_screen.cpp's
+             * poll loop reads that stale PROJECTED state and never
+             * clears hal::androidauto_screen_active(), which is the
+             * flag hal/touch.cpp and hal/knob.cpp check to decide
+             * whether to forward input to AA instead of the local LVGL
+             * UI -- so every touch/knob input silently vanished (routed
+             * into a now-backgrounded AA session that was no longer
+             * listening) instead of driving the car UI, a total input
+             * freeze with no error anywhere. */
+            bool reason_wants_native = req.has_reason &&
+                (req.reason == aap_protobuf_service_media_video_message_VideoFocusReason_LAUNCH_NATIVE ||
+                 req.reason == aap_protobuf_service_media_video_message_VideoFocusReason_PHONE_SCREEN_OFF);
+            if (req.has_mode) {
+                focus_notif.focus = req.mode;
+            } else if (reason_wants_native) {
+                focus_notif.focus = aap_protobuf_service_media_video_message_VideoFocusMode_VIDEO_FOCUS_NATIVE;
+            } else {
+                focus_notif.focus = aap_protobuf_service_media_video_message_VideoFocusMode_VIDEO_FOCUS_PROJECTED;
+            }
             focus_notif.has_unsolicited = true;
             focus_notif.unsolicited = false;
 
@@ -1041,8 +1068,36 @@ static void handle_media_channel(aap_session_t *s, uint8_t channel_id, const uin
             send_channel_msg(s, AAP_CHANNEL_MEDIA_SINK_VIDEO,
                              aap_protobuf_service_media_sink_MediaMessageId_MEDIA_MESSAGE_VIDEO_FOCUS_NOTIFICATION,
                              pb_buf, ostream.bytes_written, true);
-            printf("[AA] video focus indication sent (unsolicited=0, mode=%d, native=%d)\n",
-                   focus_notif.focus, s->is_video_focus_native);
+            printf("[AA] video focus indication sent (unsolicited=0, mode=%d, reason=%d, native=%d)\n",
+                   (int)focus_notif.focus, req.has_reason ? (int)req.reason : -1, s->is_video_focus_native);
+            break;
+        }
+
+        /* 2026-09-06: real gap found via code review -- this message ID
+         * (32776) was never handled on the RECEIVE side at all, only
+         * ever sent (above, and in the SETUP handler's own unsolicited
+         * notification). Google's AA app can push this unsolicited too
+         * -- not just as our own reply to a REQUEST -- e.g. the phone
+         * proactively telling us it's taking native focus without
+         * necessarily framing it as a REQUEST first. Falling into the
+         * generic `default:` case below meant that state change was
+         * silently dropped, same freeze class as the has_mode-only bug
+         * fixed above just from the opposite direction (phone-initiated
+         * instead of phone-answering-a-request). */
+        case aap_protobuf_service_media_sink_MediaMessageId_MEDIA_MESSAGE_VIDEO_FOCUS_NOTIFICATION: {
+            aap_protobuf_service_media_video_message_VideoFocusNotification notif =
+                aap_protobuf_service_media_video_message_VideoFocusNotification_init_default;
+            if (pb_len > 0) {
+                pb_istream_t istream = pb_istream_from_buffer(pb_data, pb_len);
+                pb_decode(&istream, aap_protobuf_service_media_video_message_VideoFocusNotification_fields, &notif);
+            }
+            if (notif.has_focus) {
+                s->is_video_focus_native = (notif.focus == aap_protobuf_service_media_video_message_VideoFocusMode_VIDEO_FOCUS_NATIVE ||
+                                            notif.focus == aap_protobuf_service_media_video_message_VideoFocusMode_VIDEO_FOCUS_NATIVE_TRANSIENT);
+                aap_video_sink_set_visible(s->video_sink, !s->is_video_focus_native);
+            }
+            printf("[AA] video focus notification received from phone (has_focus=%d, mode=%d, native=%d)\n",
+                   notif.has_focus, notif.has_focus ? (int)notif.focus : -1, s->is_video_focus_native);
             break;
         }
 

@@ -102,6 +102,10 @@ bool aap_wifi_ensure_ap_up(void) {
     return (rc == 0);
 }
 
+void aap_wifi_teardown_ap(void) {
+    system("/etc/wifi_ap_down.sh");
+}
+
 bool aap_wifi_get_bssid(char *out_bssid, size_t max_len) {
     if (!out_bssid || max_len < 18) return false;
 

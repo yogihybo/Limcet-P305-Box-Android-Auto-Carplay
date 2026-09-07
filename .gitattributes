@@ -24,3 +24,4 @@ firmware_dumps/**/*.rar filter=lfs diff=lfs merge=lfs -text
 firmware_dumps/**/*.tar.gz filter=lfs diff=lfs merge=lfs -text
 firmware_dumps/**/*.img filter=lfs diff=lfs merge=lfs -text
 firmware_dumps/**/*.bin filter=lfs diff=lfs merge=lfs -text
+*.BIN filter=lfs diff=lfs merge=lfs -text

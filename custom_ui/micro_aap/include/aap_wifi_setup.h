@@ -9,6 +9,9 @@
 extern "C" {
 #endif
 
+/* Check if WiFi AP is currently running (hostapd active) */
+bool aap_wifi_is_ap_up(void);
+
 /* Start WiFi AP if not running */
 bool aap_wifi_ensure_ap_up(void);
 

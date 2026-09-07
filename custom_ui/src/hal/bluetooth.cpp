@@ -1348,14 +1348,36 @@ bool dial_number(BluetoothHandle & /*h*/, const std::string & number) {
 }
 
 bool media_play_pause(BluetoothHandle & /*h*/) {
-    return run_command_simple("bluetoothctl player.play >/dev/null 2>&1 || bluetoothctl player.pause >/dev/null 2>&1");
+    bool is_playing = false;
+    {
+        std::lock_guard<std::mutex> lock(g_telemetry_mtx);
+        is_playing = (g_telemetry.play_status == 1);
+        // Optimistically flip the play_status so UI updates immediately
+        g_telemetry.play_status = is_playing ? 2 : 1;
+    }
+
+    // Forward to Android Auto sidecar if connected
+    // KEYCODE_MEDIA_PAUSE = 127, KEYCODE_MEDIA_PLAY = 126
+    send_android_auto_key(is_playing ? 127 : 126);
+
+    // Forward to BlueZ AVRCP player
+    // Note: NEVER use "player.play || player.pause" -- in BlueZ, player.play
+    // succeeds (exit code 0) even when already playing, so player.pause was
+    // never reached.
+    if (is_playing) {
+        return run_command_simple("bluetoothctl player.pause >/dev/null 2>&1");
+    } else {
+        return run_command_simple("bluetoothctl player.play >/dev/null 2>&1");
+    }
 }
 
 bool media_next_track(BluetoothHandle & /*h*/) {
+    send_android_auto_key(87 /* KEYCODE_MEDIA_NEXT */);
     return run_command_simple("bluetoothctl player.next >/dev/null 2>&1");
 }
 
 bool media_prev_track(BluetoothHandle & /*h*/) {
+    send_android_auto_key(88 /* KEYCODE_MEDIA_PREVIOUS */);
     return run_command_simple("bluetoothctl player.previous >/dev/null 2>&1");
 }
 

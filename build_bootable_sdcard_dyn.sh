@@ -318,6 +318,7 @@ else
     cat > "$UENV_OUT" <<EOF
 bootargs=console=ttyS0,115200n8 mem=180M earlyprintk=serial root=/dev/mmcblk0p2 rootfstype=ext4 rootwait ro screen=0 user_debug=8
 bootcmd=fatload mmc 0:1 0x1000000 zImage; fatload mmc 0:1 0x2000000 ark1668_limcet_p305.dtb; bootz 0x1000000 - 0x2000000
+uenvcmd=run bootcmd
 EOF
 fi
 success "U-Boot: $UBOOT_BIN, uEnv.txt: $UENV_OUT"

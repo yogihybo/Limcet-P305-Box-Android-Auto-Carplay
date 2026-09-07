@@ -583,11 +583,14 @@ int main() {
         hal::send_mcu_video_relay(factoryCam);
 
         bool oemMic = core::default_store().get_bool("OEMMicrophone", false, "Audio");
-        hal::send_mcu_setting(0x09, oemMic ? 1 : 0);
-        std::printf("%s [HAL:MCU] Synced hardware settings to MCU (Camera: %s, Mic: %s)\n",
+        // Vendor stock protocol (libMcuCenter.so / MCUAdapter_BoxP300):
+        // CMD 0xA0 id=0x11 (Microphone): 0=OEM Microphone, 1=AfterMarket Microphone.
+        hal::send_mcu_setting(0x11, oemMic ? 0 : 1);
+        std::printf("%s [HAL:MCU] Synced hardware settings to MCU (Camera: %s, Mic: %s [0x11, %d])\n",
                     core::log_timestamp().c_str(),
                     factoryCam ? "OEM Factory" : "Aftermarket",
-                    oemMic ? "OEM Factory Roof" : "Aftermarket 3.5mm");
+                    oemMic ? "OEM Factory Roof" : "Aftermarket 3.5mm",
+                    oemMic ? 0 : 1);
     }
 
     // Apply the persisted SSH-access toggle -- rcS no longer starts sshd

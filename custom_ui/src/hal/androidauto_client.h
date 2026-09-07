@@ -303,4 +303,8 @@ void set_android_auto_status_poll_allow_spawn(bool allow);
 // just after a resume request; it's a plain "check again now" nudge.
 void notify_android_auto_resumed();
 
+// Sends a keycode to the Android Auto sidecar if connected.
+// Non-blocking, best-effort, never spawns the sidecar if not running.
+bool send_android_auto_key(std::uint32_t keycode);
+
 }  // namespace hal

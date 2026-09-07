@@ -33,8 +33,8 @@ void style_nav_rail(lv_obj_t * obj) {
     lv_obj_set_style_border_side(obj, LV_BORDER_SIDE_RIGHT, 0);
     lv_obj_set_style_border_width(obj, 1, 0);
     lv_obj_set_style_border_color(obj, surface_border(), 0);
-    lv_obj_set_style_pad_ver(obj, 12, 0);
-    lv_obj_set_style_pad_hor(obj, 8, 0);
+    lv_obj_set_style_pad_ver(obj, 8, 0);
+    lv_obj_set_style_pad_hor(obj, 6, 0);
     lv_obj_set_style_clip_corner(obj, false, 0);
     lv_obj_set_flex_flow(obj, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(obj, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
@@ -42,8 +42,9 @@ void style_nav_rail(lv_obj_t * obj) {
 }
 
 void style_nav_button(lv_obj_t * btn, bool active) {
-    lv_obj_set_size(btn, 56, 42);
+    lv_obj_set_size(btn, 60, 56);
     lv_obj_set_style_radius(btn, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_ext_click_area(btn, 18);
     if (active) {
         lv_obj_set_style_bg_color(btn, accent_primary(), 0);
         lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);

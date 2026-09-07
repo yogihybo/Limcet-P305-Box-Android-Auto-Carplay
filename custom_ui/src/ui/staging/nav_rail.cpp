@@ -81,6 +81,7 @@ lv_obj_t * ensure_persistent_rail() {
         lv_obj_add_event_cb(btn, nav_btn_cb, LV_EVENT_CLICKED, reinterpret_cast<void *>(static_cast<uintptr_t>(dest)));
 
         lv_obj_t * icon = ui::icons::create_icon(btn, inst.icon_dscs[i], theme::text_primary());
+        lv_obj_clear_flag(icon, LV_OBJ_FLAG_CLICKABLE);
         inst.icons[i] = icon;
         lv_obj_center(icon);
     }

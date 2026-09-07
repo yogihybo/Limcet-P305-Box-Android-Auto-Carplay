@@ -106,10 +106,17 @@ static void replace_active_rfcomm_fd(int new_fd) {
  * handshake + new AAP session for no reason.
  */
 #define AP_TEARDOWN_GRACE_SECONDS 10
+#define AP_HANDSHAKE_TIMEOUT_SECONDS 30
+
+static time_t monotonic_seconds(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return ts.tv_sec;
+}
 
 static pthread_mutex_t g_ap_state_mutex = PTHREAD_MUTEX_INITIALIZER;
-static bool g_ap_is_up = false;
-static time_t g_session_ended_at = 0; /* 0 == no pending teardown armed */
+static time_t g_session_ended_at = 0;      /* 0 == no pending teardown armed */
+static time_t g_handshake_started_at = 0;  /* 0 == no handshake in progress */
 
 /* Cancels any pending teardown -- called whenever a new connection
  * attempt or a new live session starts, since the AP is needed again
@@ -117,46 +124,67 @@ static time_t g_session_ended_at = 0; /* 0 == no pending teardown armed */
 static void ap_state_cancel_pending_teardown(void) {
     pthread_mutex_lock(&g_ap_state_mutex);
     g_session_ended_at = 0;
+    g_handshake_started_at = 0;
     pthread_mutex_unlock(&g_ap_state_mutex);
 }
 
-static void ap_state_note_ap_up(void) {
+static void ap_state_note_handshake_started(void) {
     pthread_mutex_lock(&g_ap_state_mutex);
-    g_ap_is_up = true;
+    g_handshake_started_at = monotonic_seconds();
     g_session_ended_at = 0;
     pthread_mutex_unlock(&g_ap_state_mutex);
 }
 
-/* Called from the main poll loop whenever there's no actively-
- * projected session -- either the aap_session_t is gone entirely
- * (disconnected/error/I-O failure) OR it's still alive but
- * backgrounded (is_video_focus_native). Only arms the countdown on the
- * FIRST such call (idempotent while the condition persists) -- the
- * actual teardown is polled from the main loop below, so it always
- * runs on that thread even though this itself can be called from more
- * than one call site, and every poll-loop tick while backgrounded (see
- * that call site's own comment on why it must be safe to call
- * repeatedly, not just on a transition edge). */
+/* Called from the main poll loop whenever an active aap_session_t is
+ * destroyed (disconnected/error/I-O failure). Arms the countdown using
+ * monotonic seconds to be immune to system clock adjustments. */
 static void ap_state_note_session_ended(void) {
     pthread_mutex_lock(&g_ap_state_mutex);
-    if (g_ap_is_up && g_session_ended_at == 0) {
-        g_session_ended_at = time(NULL);
+    if (g_session_ended_at == 0) {
+        g_session_ended_at = monotonic_seconds();
     }
     pthread_mutex_unlock(&g_ap_state_mutex);
 }
 
 /* Polled every main-loop iteration (~100ms, bounded by poll()'s own
  * timeout below). Tears the AP down once the grace period elapses with
- * nothing having cancelled it in the meantime. */
-static void ap_state_poll_teardown(void) {
+ * no active session and no pending handshake. */
+static void ap_state_poll_teardown(bool has_active_session) {
+    bool should_teardown = false;
+    time_t now = monotonic_seconds();
+
     pthread_mutex_lock(&g_ap_state_mutex);
-    bool should_teardown = g_ap_is_up && g_session_ended_at != 0 &&
-                            (time(NULL) - g_session_ended_at) >= AP_TEARDOWN_GRACE_SECONDS;
-    if (should_teardown) {
-        g_ap_is_up = false;
+    if (has_active_session) {
+        /* Active AAP session (projected or backgrounded) -- cancel any teardown */
         g_session_ended_at = 0;
+        g_handshake_started_at = 0;
+    } else if (aap_wifi_is_ap_up()) {
+        if (g_handshake_started_at != 0) {
+            /* Handshake started; allow up to 30s for phone to associate WiFi + connect TCP */
+            if (now - g_handshake_started_at >= AP_HANDSHAKE_TIMEOUT_SECONDS) {
+                printf("[AA] WiFi connection timed out after %ds without TCP session\n", AP_HANDSHAKE_TIMEOUT_SECONDS);
+                g_handshake_started_at = 0;
+                if (g_session_ended_at == 0) {
+                    g_session_ended_at = now;
+                }
+            }
+        } else if (g_session_ended_at == 0) {
+            /* AP is up but no session and no handshake in progress -- arm teardown */
+            g_session_ended_at = now;
+        }
+
+        if (g_session_ended_at != 0 && (now - g_session_ended_at) >= AP_TEARDOWN_GRACE_SECONDS) {
+            should_teardown = true;
+            g_session_ended_at = 0;
+            g_handshake_started_at = 0;
+        }
+    } else {
+        /* AP is already down */
+        g_session_ended_at = 0;
+        g_handshake_started_at = 0;
     }
     pthread_mutex_unlock(&g_ap_state_mutex);
+
     if (should_teardown) {
         printf("[AA] no active session for %ds -- tearing down WiFi AP\n", AP_TEARDOWN_GRACE_SECONDS);
         aap_wifi_teardown_ap();
@@ -168,16 +196,16 @@ static void *wifi_setup_thread(void *arg) {
     int fd = args->rfcomm_fd;
     free(args);
 
-    ap_state_cancel_pending_teardown();
+    ap_state_note_handshake_started();
 
     printf("[AA] starting WiFi AP and RFCOMM WPP handshake for fd=%d\n", fd);
     if (!aap_wifi_ensure_ap_up()) {
         fprintf(stderr, "[AA] failed to ensure WiFi AP is running\n");
         close(fd);
         clear_active_rfcomm_fd_if_matches(fd);
+        ap_state_note_session_ended();
         return NULL;
     }
-    ap_state_note_ap_up();
 
     char bssid[32] = {0};
     aap_wifi_get_bssid(bssid, sizeof(bssid));
@@ -189,6 +217,7 @@ static void *wifi_setup_thread(void *arg) {
         fprintf(stderr, "[AA] WPP handshake failed\n");
         close(fd);
         clear_active_rfcomm_fd_if_matches(fd);
+        ap_state_note_session_ended();
         return NULL;
     }
 
@@ -426,31 +455,9 @@ int main(int argc, char **argv) {
                 session = NULL;
                 close_and_clear_active_rfcomm_fd();
                 ap_state_note_session_ended();
-            } else if (aap_session_is_video_focus_native(session)) {
-                /* 2026-09-06: real gap found -- the ONLY case this was
-                 * originally armed for was the aap_session_t itself
-                 * being destroyed (a real TCP/protocol-level
-                 * disconnect). But the actual real-world complaint this
-                 * feature exists for is the phone staying WiFi-
-                 * connected with a perfectly alive TCP session, just
-                 * backgrounded (native focus) -- "phone stays connected
-                 * but AA session is inactive." That case never touched
-                 * either teardown-arming call site at all, since
-                 * `session` never becomes NULL for it. Same grace-
-                 * countdown, same reasoning -- ap_state_note_session_ended()
-                 * is safe to call every tick here (it only arms once,
-                 * see its own comment) for as long as this stays true. */
-                ap_state_note_session_ended();
-            } else {
-                /* Actively projected -- cancel a countdown that might
-                 * still be running from an earlier, briefer
-                 * backgrounding (e.g. the user tapped Resume and the
-                 * phone granted it back before the grace period
-                 * elapsed). */
-                ap_state_cancel_pending_teardown();
             }
         }
-        ap_state_poll_teardown();
+        ap_state_poll_teardown(session != NULL);
 
         if (ret == 0) continue;
 
@@ -536,45 +543,52 @@ int main(int argc, char **argv) {
         /* Handle IPC commands */
         for (int i = 0; i < MAX_IPC_CLIENTS; i++) {
             if (idx_ipc_clients[i] >= 0 && (fds[idx_ipc_clients[i]].revents & (POLLIN | POLLHUP | POLLERR))) {
-                if (fds[idx_ipc_clients[i]].revents & (POLLHUP | POLLERR)) {
-                    close(client_ipc_fds[i]);
-                    client_ipc_fds[i] = -1;
-                    continue;
-                }
+                short revents = fds[idx_ipc_clients[i]].revents;
 
-                char cmd_buf[1024] = {0};
-                int recvd_fd = -1;
-                ssize_t n = recv_ancillary_fd(client_ipc_fds[i], cmd_buf, sizeof(cmd_buf) - 1, &recvd_fd);
-                if (n <= 0) {
-                    close(client_ipc_fds[i]);
-                    client_ipc_fds[i] = -1;
-                    continue;
-                }
+                /* If data is available to read, process it first even if POLLHUP is also signaled
+                 * (e.g. client sent a key command and closed its socket immediately). */
+                if (revents & POLLIN) {
+                    char cmd_buf[1024] = {0};
+                    int recvd_fd = -1;
+                    ssize_t n = recv_ancillary_fd(client_ipc_fds[i], cmd_buf, sizeof(cmd_buf) - 1, &recvd_fd);
+                    if (n > 0) {
+                        if (recvd_fd >= 0) {
+                            printf("[AA] received CONNECT_FD ancillary fd=%d\n", recvd_fd);
+                            replace_active_rfcomm_fd(recvd_fd);
 
-                if (recvd_fd >= 0) {
-                    printf("[AA] received CONNECT_FD ancillary fd=%d\n", recvd_fd);
-                    replace_active_rfcomm_fd(recvd_fd);
+                            wifi_worker_args_t *wargs = (wifi_worker_args_t *)malloc(sizeof(wifi_worker_args_t));
+                            wargs->rfcomm_fd = recvd_fd;
 
-                    wifi_worker_args_t *wargs = (wifi_worker_args_t *)malloc(sizeof(wifi_worker_args_t));
-                    wargs->rfcomm_fd = recvd_fd;
+                            pthread_t wthread;
+                            pthread_attr_t attr;
+                            pthread_attr_init(&attr);
+                            pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+                            pthread_create(&wthread, &attr, wifi_setup_thread, wargs);
+                            pthread_attr_destroy(&attr);
+                        }
 
-                    pthread_t wthread;
-                    pthread_attr_t attr;
-                    pthread_attr_init(&attr);
-                    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-                    pthread_create(&wthread, &attr, wifi_setup_thread, wargs);
-                    pthread_attr_destroy(&attr);
-                }
-
-                /* Process each newline-delimited command in cmd_buf */
-                char *saveptr = NULL;
-                char *line = strtok_r(cmd_buf, "\r\n", &saveptr);
-                while (line != NULL) {
-                    while (*line == ' ') line++;
-                    if (*line != '\0') {
-                        process_single_command(session, line, client_ipc_fds[i]);
+                        /* Process each newline-delimited command in cmd_buf */
+                        char *saveptr = NULL;
+                        char *line = strtok_r(cmd_buf, "\r\n", &saveptr);
+                        while (line != NULL) {
+                            while (*line == ' ') line++;
+                            if (*line != '\0') {
+                                process_single_command(session, line, client_ipc_fds[i]);
+                            }
+                            line = strtok_r(NULL, "\r\n", &saveptr);
+                        }
+                    } else {
+                        /* Read error or clean EOF from client */
+                        close(client_ipc_fds[i]);
+                        client_ipc_fds[i] = -1;
+                        continue;
                     }
-                    line = strtok_r(NULL, "\r\n", &saveptr);
+                }
+
+                /* If POLLHUP or POLLERR was signaled, or POLLIN was not set, close the disconnected client */
+                if (client_ipc_fds[i] >= 0 && ((revents & (POLLHUP | POLLERR)) || !(revents & POLLIN))) {
+                    close(client_ipc_fds[i]);
+                    client_ipc_fds[i] = -1;
                 }
             }
         }

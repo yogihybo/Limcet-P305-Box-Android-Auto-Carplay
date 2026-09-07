@@ -89,8 +89,12 @@ static bool recv_wpp_frame(int fd, uint16_t *out_type, uint8_t *out_payload, siz
     return true;
 }
 
+bool aap_wifi_is_ap_up(void) {
+    return (system("pidof hostapd >/dev/null 2>&1") == 0);
+}
+
 bool aap_wifi_ensure_ap_up(void) {
-    if (system("pidof hostapd >/dev/null 2>&1") == 0) {
+    if (aap_wifi_is_ap_up()) {
         if (system("pidof udhcpd >/dev/null 2>&1") != 0) {
             system("ifconfig wlan0 192.168.43.1 netmask 255.255.255.0 2>/dev/null");
             system("mkdir -p /var/lib/misc; touch /data/udhcpd.leases; udhcpd /etc/udhcpd.conf >/dev/null 2>&1 &");
@@ -103,7 +107,10 @@ bool aap_wifi_ensure_ap_up(void) {
 }
 
 void aap_wifi_teardown_ap(void) {
-    system("/etc/wifi_ap_down.sh");
+    printf("[AA] tearing down WiFi AP (stopping hostapd, udhcpd, wlan0)\n");
+    /* Run script if present on rootfs, plus direct kill fallback to guarantee teardown */
+    system("/etc/wifi_ap_down.sh 2>/dev/null || true");
+    system("killall hostapd 2>/dev/null; killall udhcpd 2>/dev/null; ifconfig wlan0 down 2>/dev/null");
 }
 
 bool aap_wifi_get_bssid(char *out_bssid, size_t max_len) {

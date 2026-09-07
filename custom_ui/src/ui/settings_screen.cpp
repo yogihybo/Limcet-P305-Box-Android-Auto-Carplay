@@ -18,6 +18,66 @@ namespace ui {
 
 namespace {
 
+struct SystemStats {
+    uint32_t total_ram_mb = 0;
+    uint32_t free_ram_mb = 0;
+    uint32_t avail_ram_mb = 0;
+    float cpu_pct = 0.0f;
+};
+
+static void read_system_stats(SystemStats &stats) {
+    // 1. Memory stats from /proc/meminfo
+    FILE *mfp = std::fopen("/proc/meminfo", "r");
+    if (mfp) {
+        char line[128];
+        uint32_t total_kb = 0, free_kb = 0, avail_kb = 0;
+        while (std::fgets(line, sizeof(line), mfp)) {
+            if (std::sscanf(line, "MemTotal: %u kB", &total_kb) == 1) continue;
+            if (std::sscanf(line, "MemFree: %u kB", &free_kb) == 1) continue;
+            if (std::sscanf(line, "MemAvailable: %u kB", &avail_kb) == 1) continue;
+        }
+        std::fclose(mfp);
+        stats.total_ram_mb = (total_kb + 512) / 1024;
+        stats.free_ram_mb = (free_kb + 512) / 1024;
+        stats.avail_ram_mb = (avail_kb > 0) ? ((avail_kb + 512) / 1024) : stats.free_ram_mb;
+    }
+
+    // 2. CPU usage from /proc/stat
+    static unsigned long long prev_idle = 0;
+    static unsigned long long prev_total = 0;
+    FILE *sfp = std::fopen("/proc/stat", "r");
+    if (sfp) {
+        unsigned long long u = 0, n = 0, s = 0, idle = 0, io = 0, irq = 0, sirq = 0, steal = 0;
+        int res = std::fscanf(sfp, "cpu %llu %llu %llu %llu %llu %llu %llu %llu",
+                              &u, &n, &s, &idle, &io, &irq, &sirq, &steal);
+        std::fclose(sfp);
+        if (res >= 4) {
+            unsigned long long idle_all = idle + io;
+            unsigned long long total = idle_all + u + n + s + irq + sirq + steal;
+            if (prev_total > 0 && total > prev_total) {
+                unsigned long long total_diff = total - prev_total;
+                unsigned long long idle_diff = idle_all - prev_idle;
+                if (total_diff >= idle_diff) {
+                    stats.cpu_pct = ((float)(total_diff - idle_diff) / (float)total_diff) * 100.0f;
+                }
+            } else {
+                // Fallback on initial read: estimate from /proc/loadavg
+                double load = 0.0;
+                FILE *lfp = std::fopen("/proc/loadavg", "r");
+                if (lfp) {
+                    if (std::fscanf(lfp, "%lf", &load) == 1) {
+                        stats.cpu_pct = static_cast<float>(load * 100.0);
+                        if (stats.cpu_pct > 100.0f) stats.cpu_pct = 100.0f;
+                    }
+                    std::fclose(lfp);
+                }
+            }
+            prev_idle = idle_all;
+            prev_total = total;
+        }
+    }
+}
+
 // Opened once, process-lifetime -- matches core::default_store()'s own
 // lazy-singleton pattern and this app's general "no shutdown path"
 // design (see core/reverse_gear_watcher.cpp's destructor comment).
@@ -413,12 +473,12 @@ void show_system_info_modal(lv_obj_t * parent_screen) {
     // Modal Card
     lv_obj_t * modal = lv_obj_create(overlay);
     theme::style_card(modal);
-    lv_obj_set_size(modal, 640, 360);
+    lv_obj_set_size(modal, 640, 390);
     lv_obj_center(modal);
     lv_obj_set_flex_flow(modal, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(modal, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_all(modal, 16, 0);
-    lv_obj_set_style_pad_row(modal, 8, 0);
+    lv_obj_set_style_pad_row(modal, 6, 0);
 
     // Title
     lv_obj_t * title = lv_label_create(modal);
@@ -433,16 +493,8 @@ void show_system_info_modal(lv_obj_t * parent_screen) {
     if (mcu_ver.empty() || mcu_ver == "Unknown" || mcu_ver == "Unknown (Standalone)") {
         mcu_ver = "Limcet-V1.0-1302 (STM32F105)";
     }
-    
-    float vbat = hal::get_mcu_battery_voltage();
-    char vbat_buf[32];
-    if (vbat > 0.0f) {
-        std::snprintf(vbat_buf, sizeof(vbat_buf), "%.2f V (DC Input)", vbat);
-    } else {
-        std::snprintf(vbat_buf, sizeof(vbat_buf), "12.60 V (Nominal)");
-    }
 
-    auto add_info_row = [](lv_obj_t * parent, const char * label, const std::string & value) {
+    auto add_info_row = [](lv_obj_t * parent, const char * label, const std::string & value) -> lv_obj_t * {
         lv_obj_t * row = lv_obj_create(parent);
         lv_obj_remove_style_all(row);
         lv_obj_set_width(row, LV_PCT(100));
@@ -458,15 +510,69 @@ void show_system_info_modal(lv_obj_t * parent_screen) {
         lv_obj_t * v = lv_label_create(row);
         lv_label_set_text(v, value.c_str());
         lv_obj_set_style_text_color(v, theme::text_primary(), 0);
+        return v;
     };
+
+    SystemStats init_stats;
+    read_system_stats(init_stats);
+
+    char cpu_buf[32];
+    std::snprintf(cpu_buf, sizeof(cpu_buf), "%.1f%%", init_stats.cpu_pct);
+
+    char mem_buf[64];
+    if (init_stats.total_ram_mb > 0) {
+        uint32_t pct = (init_stats.avail_ram_mb * 100) / init_stats.total_ram_mb;
+        std::snprintf(mem_buf, sizeof(mem_buf), "%u MB Free / %u MB (%u%%)",
+                      init_stats.avail_ram_mb, init_stats.total_ram_mb, pct);
+    } else {
+        std::snprintf(mem_buf, sizeof(mem_buf), "N/A");
+    }
 
     add_info_row(modal, "Software Version", "Prado-Reconstruction v1.4.0");
     add_info_row(modal, "Kernel Version", kernel_ver);
     add_info_row(modal, "MCU Firmware", mcu_ver);
     add_info_row(modal, "Bluetooth Subsystem", hal::get_bluetooth_hardware_info());
     add_info_row(modal, "Main Processor", "ArkMicro ARK1668 (ARM Cortex-A7 @ 800MHz)");
+    lv_obj_t * cpu_val_lbl = add_info_row(modal, "CPU Usage", cpu_buf);
+    lv_obj_t * mem_val_lbl = add_info_row(modal, "Free Memory (RAM)", mem_buf);
     add_info_row(modal, "Display & UI", "LVGL 9.2.2 (800x480 RGB888 / Framebuffer)");
-    add_info_row(modal, "Vehicle Telemetry", vbat_buf);
+
+    struct SysInfoTimerData {
+        lv_obj_t * cpu_lbl = nullptr;
+        lv_obj_t * mem_lbl = nullptr;
+        lv_timer_t * timer = nullptr;
+    };
+
+    auto * timer_data = new SysInfoTimerData{cpu_val_lbl, mem_val_lbl, nullptr};
+    timer_data->timer = lv_timer_create([](lv_timer_t * t) {
+        auto * d = static_cast<SysInfoTimerData *>(lv_timer_get_user_data(t));
+        if (!d || !d->cpu_lbl || !d->mem_lbl) return;
+        SystemStats s;
+        read_system_stats(s);
+        char c_buf[32];
+        std::snprintf(c_buf, sizeof(c_buf), "%.1f%%", s.cpu_pct);
+        lv_label_set_text(d->cpu_lbl, c_buf);
+        char m_buf[64];
+        if (s.total_ram_mb > 0) {
+            uint32_t pct = (s.avail_ram_mb * 100) / s.total_ram_mb;
+            std::snprintf(m_buf, sizeof(m_buf), "%u MB Free / %u MB (%u%%)",
+                          s.avail_ram_mb, s.total_ram_mb, pct);
+        } else {
+            std::snprintf(m_buf, sizeof(m_buf), "N/A");
+        }
+        lv_label_set_text(d->mem_lbl, m_buf);
+    }, 1000, timer_data);
+
+    lv_obj_add_event_cb(overlay, [](lv_event_t * ev) {
+        auto * d = static_cast<SysInfoTimerData *>(lv_event_get_user_data(ev));
+        if (d) {
+            if (d->timer) {
+                lv_timer_delete(d->timer);
+                d->timer = nullptr;
+            }
+            delete d;
+        }
+    }, LV_EVENT_DELETE, timer_data);
 
     // Close Button
     lv_obj_t * close_btn = lv_button_create(modal);

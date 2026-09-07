@@ -47,12 +47,20 @@ std::atomic<bool> g_homeNavigatePending{false};
 // through a dedicated core::AsyncWorker so this thread only ever
 // enqueues a job and returns immediately -- never blocks on the
 // sidecar socket. A SEPARATE worker instance from touch/knob's own
-// (each of those lives in its own translation unit) -- fine, since
-// AndroidAutoClient's underlying socket connection is per-instance,
-// not shared state these workers would need to coordinate over.
+// (each of those lives in its own translation unit) -- routed through
+// a dedicated persistent AndroidAutoClient instance (mcu_aa_client() below),
+// matching hal/knob.cpp and hal/touch.cpp. Keeping the socket connection open
+// avoids per-event connect latency and prevents socket closure races with the sidecar.
 core::AsyncWorker & mcu_aa_forward_worker() {
     static core::AsyncWorker worker;
     return worker;
+}
+
+// Persistent AndroidAutoClient instance dedicated to MCU-driven AA inputs (HOME/NEXT/PREV/
+// ANSWER/HANGUP keycodes and CMD 0x12 AUDIOFOCUS).
+AndroidAutoClient & mcu_aa_client() {
+    static AndroidAutoClient client;
+    return client;
 }
 
 // MCUAdapter_BoxP300::getPortSettings() (libMcuCenter.so) -- confirmed
@@ -654,8 +662,7 @@ void McuInputHal::run() {
                     // 2026-09-04: async -- see mcu_aa_forward_worker()'s
                     // header comment. Must never block this thread.
                     mcu_aa_forward_worker().enqueue([aftermarket]() {
-                        AndroidAutoClient client;
-                        client.requestAudioFocus(aftermarket);
+                        mcu_aa_client().requestAudioFocus(aftermarket);
                     });
                 }
                 s_lastLcdMode = dir;
@@ -748,15 +755,13 @@ void McuInputHal::run() {
                         if (!s_drawer_open) {
                             std::printf("%s [HAL:MCU] Button: HOME -> Open App Launcher (KEYCODE_HOME=3)\n", core::log_timestamp().c_str());
                             mcu_aa_forward_worker().enqueue([]() {
-                                AndroidAutoClient client;
-                                client.sendKey(3 /* KEYCODE_HOME */);
+                                mcu_aa_client().sendKey(3 /* KEYCODE_HOME */);
                             });
                             s_drawer_open = true;
                         } else {
                             std::printf("%s [HAL:MCU] Button: HOME -> Return to Navigation/Map (KEYCODE_NAVIGATION=65538)\n", core::log_timestamp().c_str());
                             mcu_aa_forward_worker().enqueue([]() {
-                                AndroidAutoClient client;
-                                client.sendKey(65538 /* KEYCODE_NAVIGATION */);
+                                mcu_aa_client().sendKey(65538 /* KEYCODE_NAVIGATION */);
                             });
                             s_drawer_open = false;
                         }
@@ -782,8 +787,7 @@ void McuInputHal::run() {
                         std::printf("%s [HAL:MCU] Button: NEXT_TRACK (b3=3 b4=%u) -> AA\n", core::log_timestamp().c_str(), b4);
                         // 2026-09-04: async -- see mcu_aa_forward_worker()'s header comment.
                         mcu_aa_forward_worker().enqueue([]() {
-                            AndroidAutoClient client;
-                            client.sendKey(87 /* KEYCODE_MEDIA_NEXT */);
+                            mcu_aa_client().sendKey(87 /* KEYCODE_MEDIA_NEXT */);
                         });
                     } else {
                         std::printf("%s [HAL:MCU] Button: NEXT_TRACK (b3=3 b4=%u) -> local Bluetooth media\n", core::log_timestamp().c_str(), b4);
@@ -797,8 +801,7 @@ void McuInputHal::run() {
                     if (androidauto_screen_active().load(std::memory_order_acquire)) {
                         std::printf("%s [HAL:MCU] Button: PREV_TRACK (b3=4 b4=%u) -> AA\n", core::log_timestamp().c_str(), b4);
                         mcu_aa_forward_worker().enqueue([]() {
-                            AndroidAutoClient client;
-                            client.sendKey(88 /* KEYCODE_MEDIA_PREVIOUS */);
+                            mcu_aa_client().sendKey(88 /* KEYCODE_MEDIA_PREVIOUS */);
                         });
                     } else {
                         std::printf("%s [HAL:MCU] Button: PREV_TRACK (b3=4 b4=%u) -> local Bluetooth media\n", core::log_timestamp().c_str(), b4);
@@ -811,16 +814,14 @@ void McuInputHal::run() {
                 if (b4 == 1) {
                     std::printf("%s [HAL:MCU] Button: ANSWER_CALL (b3=8 b4=%u)\n", core::log_timestamp().c_str(), b4);
                     mcu_aa_forward_worker().enqueue([]() {
-                        AndroidAutoClient client;
-                        client.sendKey(5 /* KEYCODE_CALL */);
+                        mcu_aa_client().sendKey(5 /* KEYCODE_CALL */);
                     });
                 }
             } else if (b3 == kBtnHangup) {
                 if (b4 == 1) {
                     std::printf("%s [HAL:MCU] Button: HANGUP_CALL (b3=9 b4=%u)\n", core::log_timestamp().c_str(), b4);
                     mcu_aa_forward_worker().enqueue([]() {
-                        AndroidAutoClient client;
-                        client.sendKey(6 /* KEYCODE_ENDCALL */);
+                        mcu_aa_client().sendKey(6 /* KEYCODE_ENDCALL */);
                     });
                 }
             } else {
@@ -1042,11 +1043,12 @@ void McuInputHal::sync_video_relay(bool oem) {
      * "RETRACTION" section). The stock app sends CMD 0xA0 id=0x01: value
      * 0 = AfterMarket Camera, value 1 = Factory (OEM) Camera -- but per
      * the correction above, id=0x01 doesn't do anything on this
-     * firmware, so this function now sends id=0x11 instead. */
-    unsigned char payload[2] = {0x11, static_cast<unsigned char>(oem ? 0x01 : 0x00)};
-    send_mcu_frame(fd_, 0xA0, payload, 2);
-    std::printf("%s [HAL:MCU] Synced Camera Type to MCU via CMD 0xA0 (id=0x11, val=0x%02X, %s)\n",
-                core::log_timestamp().c_str(), payload[1], oem ? "Factory/OEM" : "AfterMarket");
+     * firmware, so this function now sends id=0x00 instead. */
+    // 2026-09-06: id=0x11 was previously sent here under the mistaken belief it was
+    // camera relay. Reverse engineering of libMcuCenter.so (MCUAdapter_BoxP300) confirmed
+    // id=0x11 is actually "Microphone" (0=OEM, 1=AfterMarket). The real camera relay
+    // controls are CMD 0x84 and CMD 0xA0 id=0x00 below. Removed id=0x11 from here so
+    // it no longer stomps on the user's OEMMicrophone setting.
 
     /* Added (2026-09-02, real hardware bug report): "OEM camera stuck
      * after a settings change, SoC reboot doesn't fix it, but booting

@@ -82,36 +82,6 @@ lv_color_t color_for_state_name(const std::string & name) {
 // hal::set_android_auto_status_poll_allow_spawn() below, on create and
 // on delete.
 
-// 2026-08-20: no longer sends "CONNECT" to the sidecar (a no-op there
-// now -- see sidecars/androidauto/main.cpp's own protocol comment).
-// Bluetooth connectivity is custom_ui's own job (hal::bluetooth.cpp's
-// aa_profile_server_loop()) -- when "Auto-start phone projection"
-// (AutoStartCarLink) is off, a connected phone's fd sits stashed there
-// waiting for exactly this tap. hal::start_pending_aa_connection() is
-// always safe to call: it's a no-op (returns false) if no phone has
-// connected over the AA Bluetooth profile yet, same as the old
-// requestConnect() was a no-op if the sidecar was unreachable.
-// 2026-09-04: both start_pending_aa_connection() (a blocking
-// sendmsg()/SCM_RIGHTS socket send) and auto_reconnect_paired_device()
-// (dbus-send via connect_device()) can block for real time -- moved
-// off the LVGL thread so tapping Connect doesn't freeze the UI. Fire-
-// and-forget: the shared status poller (hal::cached_android_auto_status(),
-// see this file's own header comment) picks up the resulting connection
-// state on its own next cycle, same eventual-consistency model
-// bt_load_worker already uses.
-void connect_btn_cb(lv_event_t *) {
-    core::SizedThread(core::kDefaultThreadStackSize, []() {
-        if (!hal::start_pending_aa_connection()) {
-            hal::BluetoothHandle & h = hal::shared_handle();
-            hal::auto_reconnect_paired_device(h);
-        }
-    }).detach();
-}
-
-void bluetooth_btn_cb(lv_event_t *) {
-    staging_ui::navigate_to(staging_ui::NavDestination::Bluetooth);
-}
-
 struct Widgets {
     // The whole instructions/status card -- see poll_timer_cb()'s
     // comment on why this gets hidden entirely (not just its
@@ -137,6 +107,42 @@ struct Widgets {
     // handling of hal::has_pending_aa_connection() below.
     bool showing_pending_ready = false;
 };
+
+// 2026-08-20: no longer sends "CONNECT" to the sidecar (a no-op there
+// now -- see sidecars/androidauto/main.cpp's own protocol comment).
+// Bluetooth connectivity is custom_ui's own job (hal::bluetooth.cpp's
+// aa_profile_server_loop()) -- when "Auto-start phone projection"
+// (AutoStartCarLink) is off, a connected phone's fd sits stashed there
+// waiting for exactly this tap. hal::start_pending_aa_connection() is
+// always safe to call: it's a no-op (returns false) if no phone has
+// connected over the AA Bluetooth profile yet, same as the old
+// requestConnect() was a no-op if the sidecar was unreachable.
+// 2026-09-04: both start_pending_aa_connection() (a blocking
+// sendmsg()/SCM_RIGHTS socket send) and auto_reconnect_paired_device()
+// (dbus-send via connect_device()) can block for real time -- moved
+// off the LVGL thread so tapping Connect doesn't freeze the UI. Fire-
+// and-forget: the shared status poller (hal::cached_android_auto_status(),
+// see this file's own header comment) picks up the resulting connection
+// state on its own next cycle, same eventual-consistency model
+// bt_load_worker already uses.
+void connect_btn_cb(lv_event_t * e) {
+    auto * w = static_cast<Widgets *>(lv_event_get_user_data(e));
+    if (w && w->cta_label) {
+        lv_label_set_text(w->cta_label, "Connecting...");
+    }
+    if (w && w->title) {
+        lv_label_set_text(w->title, "Connecting to phone...");
+    }
+    if (w && w->subtitle) {
+        lv_label_set_text(w->subtitle, "Establishing wireless Android Auto session...");
+    }
+    core::SizedThread(core::kDefaultThreadStackSize, []() {
+        if (!hal::start_pending_aa_connection()) {
+            hal::BluetoothHandle & h = hal::shared_handle();
+            hal::auto_reconnect_paired_device(h);
+        }
+    }).detach();
+}
 
 // 2026-08-19: real gap found on hardware -- once a session backgrounds
 // itself (phone's own in-app exit/back control, see
@@ -255,7 +261,7 @@ void poll_timer_cb(lv_timer_t * timer) {
         lv_label_set_text(w->subtitle, "Pair phone via Bluetooth to begin wireless session.");
         lv_label_set_text(w->cta_label, "Connect (Wireless)");
         lv_obj_remove_event_cb(w->cta_btn, resume_btn_cb);
-        lv_obj_add_event_cb(w->cta_btn, connect_btn_cb, LV_EVENT_CLICKED, nullptr);
+        lv_obj_add_event_cb(w->cta_btn, connect_btn_cb, LV_EVENT_CLICKED, w);
         w->showing_resume = false;
         w->showing_pending_ready = false;  // re-evaluated by the block below on the next tick
     }
@@ -274,13 +280,20 @@ void poll_timer_cb(lv_timer_t * timer) {
     // call lv_label_set_text() every 500ms tick when nothing changed.
     if (!connected && !nativeFocus) {
         bool pendingReady = hal::has_pending_aa_connection();
-        if (pendingReady && !w->showing_pending_ready) {
+        if (status.name == "Connecting") {
+            lv_label_set_text(w->title, "Connecting to phone...");
+            lv_label_set_text(w->subtitle, "Establishing wireless Android Auto session...");
+            lv_label_set_text(w->cta_label, "Connecting...");
+            w->showing_pending_ready = false;
+        } else if (pendingReady && !w->showing_pending_ready) {
             lv_label_set_text(w->title, "Phone connected");
             lv_label_set_text(w->subtitle, "Android Auto is ready -- tap Connect to start.");
+            lv_label_set_text(w->cta_label, "Connect (Wireless)");
             w->showing_pending_ready = true;
         } else if (!pendingReady && w->showing_pending_ready) {
             lv_label_set_text(w->title, "Ready to connect");
             lv_label_set_text(w->subtitle, "Pair phone via Bluetooth to begin wireless session.");
+            lv_label_set_text(w->cta_label, "Connect (Wireless)");
             w->showing_pending_ready = false;
         }
     }
@@ -362,7 +375,6 @@ lv_obj_t * create_android_auto_screen() {
     lv_obj_set_style_bg_opa(connect_btn, LV_OPA_COVER, 0);
     lv_obj_set_style_bg_color(connect_btn, lv_color_hex(0x6b9be8), LV_STATE_PRESSED);
     staging_ui::theme::style_focusable(connect_btn);
-    lv_obj_add_event_cb(connect_btn, connect_btn_cb, LV_EVENT_CLICKED, nullptr);
 
     lv_obj_t * connect_label = lv_label_create(connect_btn);
     lv_label_set_text(connect_label, "Connect (Wireless)");
@@ -410,6 +422,7 @@ lv_obj_t * create_android_auto_screen() {
     lv_obj_set_style_text_color(detail_body, staging_ui::theme::text_secondary(), 0);
 
     auto * widgets = new Widgets{content, state_body, detail_body, title, subtitle, connect_btn, connect_label};
+    lv_obj_add_event_cb(connect_btn, connect_btn_cb, LV_EVENT_CLICKED, widgets);
 
     lv_timer_t * timer = lv_timer_create(poll_timer_cb, 500, widgets);
     auto * ctx = new ScreenCtx{timer, widgets};

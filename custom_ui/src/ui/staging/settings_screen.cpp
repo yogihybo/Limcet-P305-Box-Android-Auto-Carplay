@@ -9,17 +9,77 @@
 #include "hal/display_ctrl.h"
 #include "hal/mcu_input.h"
 #include "hal/ssh_access.h"
-#include "hal/timezone.h"
 #include "hal/bluetooth.h"
 #include "core/log_timing.h"
 #include "core/sized_thread.h"
 #include <functional>
 #include <memory>
 #include <sys/utsname.h>
+#include <cstdio>
 
 namespace staging_ui {
 
 namespace {
+
+struct SystemStats {
+    uint32_t total_ram_mb = 0;
+    uint32_t free_ram_mb = 0;
+    uint32_t avail_ram_mb = 0;
+    float cpu_pct = 0.0f;
+};
+
+static void read_system_stats(SystemStats &stats) {
+    // 1. Memory stats from /proc/meminfo
+    FILE *mfp = std::fopen("/proc/meminfo", "r");
+    if (mfp) {
+        char line[128];
+        uint32_t total_kb = 0, free_kb = 0, avail_kb = 0;
+        while (std::fgets(line, sizeof(line), mfp)) {
+            if (std::sscanf(line, "MemTotal: %u kB", &total_kb) == 1) continue;
+            if (std::sscanf(line, "MemFree: %u kB", &free_kb) == 1) continue;
+            if (std::sscanf(line, "MemAvailable: %u kB", &avail_kb) == 1) continue;
+        }
+        std::fclose(mfp);
+        stats.total_ram_mb = (total_kb + 512) / 1024;
+        stats.free_ram_mb = (free_kb + 512) / 1024;
+        stats.avail_ram_mb = (avail_kb > 0) ? ((avail_kb + 512) / 1024) : stats.free_ram_mb;
+    }
+
+    // 2. CPU usage from /proc/stat
+    static unsigned long long prev_idle = 0;
+    static unsigned long long prev_total = 0;
+    FILE *sfp = std::fopen("/proc/stat", "r");
+    if (sfp) {
+        unsigned long long u = 0, n = 0, s = 0, idle = 0, io = 0, irq = 0, sirq = 0, steal = 0;
+        int res = std::fscanf(sfp, "cpu %llu %llu %llu %llu %llu %llu %llu %llu",
+                              &u, &n, &s, &idle, &io, &irq, &sirq, &steal);
+        std::fclose(sfp);
+        if (res >= 4) {
+            unsigned long long idle_all = idle + io;
+            unsigned long long total = idle_all + u + n + s + irq + sirq + steal;
+            if (prev_total > 0 && total > prev_total) {
+                unsigned long long total_diff = total - prev_total;
+                unsigned long long idle_diff = idle_all - prev_idle;
+                if (total_diff >= idle_diff) {
+                    stats.cpu_pct = ((float)(total_diff - idle_diff) / (float)total_diff) * 100.0f;
+                }
+            } else {
+                // Fallback on initial read: estimate from /proc/loadavg
+                double load = 0.0;
+                FILE *lfp = std::fopen("/proc/loadavg", "r");
+                if (lfp) {
+                    if (std::fscanf(lfp, "%lf", &load) == 1) {
+                        stats.cpu_pct = static_cast<float>(load * 100.0);
+                        if (stats.cpu_pct > 100.0f) stats.cpu_pct = 100.0f;
+                    }
+                    std::fclose(lfp);
+                }
+            }
+            prev_idle = idle_all;
+            prev_total = total;
+        }
+    }
+}
 
 hal::DisplayCtrlHandle & display_handle() {
     static hal::DisplayCtrlHandle handle;
@@ -99,6 +159,7 @@ lv_obj_t * create_section_header(lv_obj_t * parent, const char * title) {
     lv_obj_set_style_pad_top(row, 8, 0);
     lv_obj_set_style_pad_bottom(row, 4, 0);
     lv_obj_set_style_pad_hor(row, 16, 0);
+    lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t * lbl = lv_label_create(row);
     lv_label_set_text(lbl, title);
@@ -118,6 +179,7 @@ lv_obj_t * create_stepper_row(lv_obj_t * parent, const lv_image_dsc_t * icon_dsc
     lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_hor(row, 16, 0);
+    lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
 
     // Left Icon + Label
     lv_obj_t * left_box = lv_obj_create(row);
@@ -126,6 +188,7 @@ lv_obj_t * create_stepper_row(lv_obj_t * parent, const lv_image_dsc_t * icon_dsc
     lv_obj_set_flex_flow(left_box, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(left_box, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_column(left_box, 14, 0);
+    lv_obj_clear_flag(left_box, LV_OBJ_FLAG_SCROLLABLE);
 
     if (icon_dsc) {
         lv_obj_t * icon = ui::icons::create_icon(left_box, icon_dsc, theme::text_secondary());
@@ -155,6 +218,7 @@ lv_obj_t * create_stepper_row(lv_obj_t * parent, const lv_image_dsc_t * icon_dsc
     lv_obj_set_style_pad_column(right_box, 16, 0);
     lv_obj_set_style_pad_all(right_box, 6, 0);
     lv_obj_set_style_clip_corner(right_box, false, 0);
+    lv_obj_clear_flag(right_box, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t * val_lbl = lv_label_create(right_box);
     lv_label_set_text_fmt(val_lbl, "%d", initial);
@@ -174,6 +238,7 @@ lv_obj_t * create_stepper_row(lv_obj_t * parent, const lv_image_dsc_t * icon_dsc
     // Minus Button
     lv_obj_t * minus_btn = lv_button_create(right_box);
     theme::style_stepper_button(minus_btn);
+    lv_obj_remove_flag(minus_btn, LV_OBJ_FLAG_SCROLL_ON_FOCUS);
     auto * minus_ctx = new StepperBtnCtx{ctx, -1};
     lv_obj_add_event_cb(minus_btn, destroy_btn_ctx, LV_EVENT_DELETE, minus_ctx);
     lv_obj_add_event_cb(minus_btn, stepper_click_cb, LV_EVENT_CLICKED, minus_ctx);
@@ -184,6 +249,7 @@ lv_obj_t * create_stepper_row(lv_obj_t * parent, const lv_image_dsc_t * icon_dsc
     // Plus Button
     lv_obj_t * plus_btn = lv_button_create(right_box);
     theme::style_stepper_button(plus_btn);
+    lv_obj_remove_flag(plus_btn, LV_OBJ_FLAG_SCROLL_ON_FOCUS);
     auto * plus_ctx = new StepperBtnCtx{ctx, 1};
     lv_obj_add_event_cb(plus_btn, destroy_btn_ctx, LV_EVENT_DELETE, plus_ctx);
     lv_obj_add_event_cb(plus_btn, stepper_click_cb, LV_EVENT_CLICKED, plus_ctx);
@@ -251,6 +317,7 @@ lv_obj_t * create_toggle_row(lv_obj_t * parent, const lv_image_dsc_t * icon_dsc,
     lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_hor(row, 16, 0);
+    lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t * left_box = lv_obj_create(row);
     lv_obj_remove_style_all(left_box);
@@ -258,6 +325,7 @@ lv_obj_t * create_toggle_row(lv_obj_t * parent, const lv_image_dsc_t * icon_dsc,
     lv_obj_set_flex_flow(left_box, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(left_box, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_column(left_box, 14, 0);
+    lv_obj_clear_flag(left_box, LV_OBJ_FLAG_SCROLLABLE);
 
     if (icon_dsc) {
         lv_obj_t * icon = ui::icons::create_icon(left_box, icon_dsc, theme::text_secondary());
@@ -270,6 +338,7 @@ lv_obj_t * create_toggle_row(lv_obj_t * parent, const lv_image_dsc_t * icon_dsc,
     lv_obj_set_style_text_color(label, theme::text_primary(), 0);
 
     lv_obj_t * sw = lv_switch_create(row);
+    lv_obj_remove_flag(sw, LV_OBJ_FLAG_SCROLL_ON_FOCUS);
     // def_val (like the on-disk value itself) is always expressed in
     // the KEY's own polarity, unaffected by invert_stored_value -- only
     // the switch's displayed checked state gets inverted, below.
@@ -346,6 +415,8 @@ lv_obj_t * create_settings_screen() {
     lv_obj_set_style_pad_row(card, 8, 0);
     lv_obj_set_style_clip_corner(card, false, 0);
     lv_obj_add_flag(card, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_remove_flag(card, LV_OBJ_FLAG_SCROLL_MOMENTUM);
+    lv_obj_remove_flag(card, LV_OBJ_FLAG_SCROLL_ELASTIC);
     lv_obj_set_scroll_dir(card, LV_DIR_VER);
     lv_obj_set_scrollbar_mode(card, LV_SCROLLBAR_MODE_AUTO);
 
@@ -383,11 +454,14 @@ lv_obj_t * create_settings_screen() {
     create_toggle_row(card, &ui::icons::icon_volume, "OEM Factory Microphone",
                       "OEMMicrophone", "Audio", false,
                       [](bool oem) {
-                          std::printf("%s [HAL:AUDIO] Microphone input source set to %s (CMD 0xA0 [0x09, %d])\n",
+                          // Vendor stock protocol (libMcuCenter.so / MCUAdapter_BoxP300):
+                          // CMD 0xA0 id=0x11 (Microphone): 0=OEM Microphone, 1=AfterMarket Microphone.
+                          // (id=0x09 was a historical repo error: 0x09 is actually Reversing Mode / Trajectory).
+                          std::printf("%s [HAL:AUDIO] Microphone input source set to %s (CMD 0xA0 [0x11, %d])\n",
                                       core::log_timestamp().c_str(),
                                       oem ? "OEM Factory Roof Mic" : "Aftermarket 3.5mm Mic",
-                                      oem ? 1 : 0);
-                          hal::send_mcu_setting(0x09, oem ? 1 : 0);
+                                      oem ? 0 : 1);
+                          hal::send_mcu_setting(0x11, oem ? 0 : 1);
                       });
     /* REMOVED (2026-09-02, real hardware CONFIRMED, not the earlier
      * candidate/unconfirmed framing): this standalone "Microphone
@@ -454,116 +528,7 @@ lv_obj_t * create_settings_screen() {
     create_stepper_row(card, &ui::icons::icon_volume, "Reverse Vol. Cut (%)", 0, 100, 5,
                        "ReversingVolumeCut", "General");
 
-    // --- Section 4: Date & Time ---
-    create_section_header(card, "DATE & TIME");
-    {
-        lv_obj_t * row = lv_obj_create(card);
-        lv_obj_remove_style_all(row);
-        lv_obj_set_width(row, LV_PCT(100));
-        lv_obj_set_height(row, 64);
-        lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
-        lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-        lv_obj_set_style_pad_hor(row, 16, 0);
-
-        lv_obj_t * left_box = lv_obj_create(row);
-        lv_obj_remove_style_all(left_box);
-        lv_obj_set_size(left_box, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-        lv_obj_set_flex_flow(left_box, LV_FLEX_FLOW_ROW);
-        lv_obj_set_flex_align(left_box, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-        lv_obj_set_style_pad_column(left_box, 14, 0);
-
-        lv_obj_t * icon = ui::icons::create_icon(left_box, &ui::icons::icon_nav_settings, theme::text_secondary());
-        (void)icon;
-
-        lv_obj_t * label = lv_label_create(left_box);
-        lv_label_set_text(label, "Timezone");
-        lv_obj_set_style_text_font(label, &lv_font_roboto_20, 0);
-        lv_obj_set_style_text_color(label, theme::text_primary(), 0);
-
-        // Right Controls: [ < ] [ Timezone Label ] [ > ]
-        lv_obj_t * right_box = lv_obj_create(row);
-        lv_obj_remove_style_all(right_box);
-        lv_obj_set_size(right_box, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-        lv_obj_set_flex_flow(right_box, LV_FLEX_FLOW_ROW);
-        lv_obj_set_flex_align(right_box, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-        lv_obj_set_style_pad_column(right_box, 8, 0);
-
-        const auto & tzs = hal::get_timezones();
-        int current_idx = hal::get_current_timezone_index();
-
-        struct TimezoneCtx {
-            int index;
-            lv_obj_t * lbl;
-        };
-        auto * ctx = new TimezoneCtx{current_idx, nullptr};
-        lv_obj_add_event_cb(row, [](lv_event_t * e) {
-            delete static_cast<TimezoneCtx *>(lv_event_get_user_data(e));
-        }, LV_EVENT_DELETE, ctx);
-
-        // Prev Button (<)
-        lv_obj_t * prev_btn = lv_button_create(right_box);
-        lv_obj_remove_style_all(prev_btn);
-        lv_obj_set_size(prev_btn, 36, 36);
-        lv_obj_set_style_radius(prev_btn, LV_RADIUS_CIRCLE, 0);
-        lv_obj_set_style_bg_color(prev_btn, theme::surface_container_high(), 0);
-        lv_obj_set_style_bg_opa(prev_btn, LV_OPA_COVER, 0);
-        theme::style_focusable(prev_btn);
-
-        lv_obj_t * prev_lbl = lv_label_create(prev_btn);
-        lv_label_set_text(prev_lbl, "<");
-        lv_obj_set_style_text_font(prev_lbl, &lv_font_roboto_14, 0);
-        lv_obj_set_style_text_color(prev_lbl, theme::text_primary(), 0);
-        lv_obj_center(prev_lbl);
-
-        // Timezone Label
-        lv_obj_t * tz_lbl = lv_label_create(right_box);
-        lv_obj_set_width(tz_lbl, 270);
-        lv_label_set_text(tz_lbl, tzs[current_idx].label);
-        lv_obj_set_style_text_font(tz_lbl, &lv_font_roboto_14, 0);
-        lv_obj_set_style_text_color(tz_lbl, theme::text_primary(), 0);
-        lv_obj_set_style_text_align(tz_lbl, LV_TEXT_ALIGN_CENTER, 0);
-        ctx->lbl = tz_lbl;
-
-        // Next Button (>)
-        lv_obj_t * next_btn = lv_button_create(right_box);
-        lv_obj_remove_style_all(next_btn);
-        lv_obj_set_size(next_btn, 36, 36);
-        lv_obj_set_style_radius(next_btn, LV_RADIUS_CIRCLE, 0);
-        lv_obj_set_style_bg_color(next_btn, theme::surface_container_high(), 0);
-        lv_obj_set_style_bg_opa(next_btn, LV_OPA_COVER, 0);
-        theme::style_focusable(next_btn);
-
-        lv_obj_t * next_lbl = lv_label_create(next_btn);
-        lv_label_set_text(next_lbl, ">");
-        lv_obj_set_style_text_font(next_lbl, &lv_font_roboto_14, 0);
-        lv_obj_set_style_text_color(next_lbl, theme::text_primary(), 0);
-        lv_obj_center(next_lbl);
-
-        lv_obj_add_event_cb(prev_btn, [](lv_event_t * e) {
-            auto * ctx = static_cast<TimezoneCtx *>(lv_event_get_user_data(e));
-            const auto & timezones = hal::get_timezones();
-            int count = static_cast<int>(timezones.size());
-            ctx->index = (ctx->index - 1 + count) % count;
-            hal::apply_timezone(ctx->index);
-            lv_label_set_text(ctx->lbl, timezones[ctx->index].label);
-        }, LV_EVENT_CLICKED, ctx);
-
-        lv_obj_add_event_cb(next_btn, [](lv_event_t * e) {
-            auto * ctx = static_cast<TimezoneCtx *>(lv_event_get_user_data(e));
-            const auto & timezones = hal::get_timezones();
-            int count = static_cast<int>(timezones.size());
-            ctx->index = (ctx->index + 1) % count;
-            hal::apply_timezone(ctx->index);
-            lv_label_set_text(ctx->lbl, timezones[ctx->index].label);
-        }, LV_EVENT_CLICKED, ctx);
-
-        if (core::navigation::focus_group()) {
-            lv_group_add_obj(core::navigation::focus_group(), prev_btn);
-            lv_group_add_obj(core::navigation::focus_group(), next_btn);
-        }
-    }
-
-    // --- Section 5: System ---
+    // --- Section 4: System ---
     create_section_header(card, "SYSTEM");
     create_toggle_row(card, &ui::icons::icon_smartphone, "Auto-Start CarLink",
                       "AutoStartCarLink", "General", true);
@@ -578,6 +543,7 @@ lv_obj_t * create_settings_screen() {
         lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
         lv_obj_set_style_pad_hor(row, 16, 0);
         lv_obj_set_style_pad_ver(row, 4, 0);
+        lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
 
         lv_obj_t * left_box = lv_obj_create(row);
         lv_obj_remove_style_all(left_box);
@@ -585,6 +551,7 @@ lv_obj_t * create_settings_screen() {
         lv_obj_set_flex_flow(left_box, LV_FLEX_FLOW_ROW);
         lv_obj_set_flex_align(left_box, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
         lv_obj_set_style_pad_column(left_box, 14, 0);
+        lv_obj_clear_flag(left_box, LV_OBJ_FLAG_SCROLLABLE);
 
         lv_obj_t * icon = ui::icons::create_icon(left_box, &ui::icons::icon_smartphone, theme::text_secondary());
         (void)icon;
@@ -602,6 +569,7 @@ lv_obj_t * create_settings_screen() {
         lv_obj_set_flex_align(btn_box, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
         lv_obj_set_style_pad_column(btn_box, 10, 0);
         lv_obj_set_style_pad_all(btn_box, 6, 0);
+        lv_obj_clear_flag(btn_box, LV_OBJ_FLAG_SCROLLABLE);
 
         std::string current_mode = core::default_store().get_string("ProjectionType", "AndroidAuto", "General");
         bool is_carplay = (current_mode == "CarPlay");
@@ -610,12 +578,14 @@ lv_obj_t * create_settings_screen() {
         lv_obj_remove_style_all(aa_btn);
         lv_obj_set_size(aa_btn, 120, 38);
         lv_obj_set_style_radius(aa_btn, theme::kPillRadius, 0);
+        lv_obj_remove_flag(aa_btn, LV_OBJ_FLAG_SCROLL_ON_FOCUS);
         theme::style_focusable(aa_btn);
 
         lv_obj_t * cp_btn = lv_button_create(btn_box);
         lv_obj_remove_style_all(cp_btn);
         lv_obj_set_size(cp_btn, 120, 38);
         lv_obj_set_style_radius(cp_btn, theme::kPillRadius, 0);
+        lv_obj_remove_flag(cp_btn, LV_OBJ_FLAG_SCROLL_ON_FOCUS);
         theme::style_focusable(cp_btn);
 
         auto update_btn_styles = [aa_btn, cp_btn](bool carplay_active) {
@@ -716,6 +686,7 @@ lv_obj_t * create_settings_screen() {
         lv_obj_set_style_pad_hor(row, 16, 0);
         lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
         lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
 
         lv_obj_t * left_box = lv_obj_create(row);
         lv_obj_remove_style_all(left_box);
@@ -723,6 +694,7 @@ lv_obj_t * create_settings_screen() {
         lv_obj_set_flex_flow(left_box, LV_FLEX_FLOW_ROW);
         lv_obj_set_flex_align(left_box, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
         lv_obj_set_style_pad_column(left_box, 12, 0);
+        lv_obj_clear_flag(left_box, LV_OBJ_FLAG_SCROLLABLE);
 
         lv_obj_t * icon_img = lv_image_create(left_box);
         lv_image_set_src(icon_img, &icons::icon_nav_settings);
@@ -731,6 +703,7 @@ lv_obj_t * create_settings_screen() {
         lv_obj_remove_style_all(text_box);
         lv_obj_set_size(text_box, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
         lv_obj_set_flex_flow(text_box, LV_FLEX_FLOW_COLUMN);
+        lv_obj_clear_flag(text_box, LV_OBJ_FLAG_SCROLLABLE);
 
         lv_obj_t * lbl = lv_label_create(text_box);
         lv_label_set_text(lbl, "System Information");
@@ -748,6 +721,7 @@ lv_obj_t * create_settings_screen() {
         lv_obj_set_style_radius(btn, theme::kPillRadius, 0);
         lv_obj_set_style_bg_color(btn, theme::accent_primary(), 0);
         lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
+        lv_obj_remove_flag(btn, LV_OBJ_FLAG_SCROLL_ON_FOCUS);
         theme::style_focusable(btn);
 
         lv_obj_t * btn_lbl = lv_label_create(btn);
@@ -788,12 +762,12 @@ lv_obj_t * create_settings_screen() {
             lv_obj_t * modal = lv_obj_create(overlay);
             lv_obj_remove_style_all(modal);
             theme::style_card(modal);
-            lv_obj_set_size(modal, 600, 370);
+            lv_obj_set_size(modal, 600, 390);
             lv_obj_center(modal);
             lv_obj_set_flex_flow(modal, LV_FLEX_FLOW_COLUMN);
             lv_obj_set_flex_align(modal, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
             lv_obj_set_style_pad_all(modal, 18, 0);
-            lv_obj_set_style_pad_row(modal, 8, 0);
+            lv_obj_set_style_pad_row(modal, 6, 0);
 
             // Title
             lv_obj_t * title = lv_label_create(modal);
@@ -809,16 +783,8 @@ lv_obj_t * create_settings_screen() {
             if (mcu_ver.empty() || mcu_ver == "Unknown" || mcu_ver == "Unknown (Standalone)") {
                 mcu_ver = "Limcet-V1.0-1302 (STM32F105)";
             }
-            
-            float vbat = hal::get_mcu_battery_voltage();
-            char vbat_buf[32];
-            if (vbat > 0.0f) {
-                std::snprintf(vbat_buf, sizeof(vbat_buf), "%.2f V (DC Input)", vbat);
-            } else {
-                std::snprintf(vbat_buf, sizeof(vbat_buf), "12.60 V (Nominal)");
-            }
 
-            auto add_info_row = [](lv_obj_t * parent, const char * label, const std::string & value) {
+            auto add_info_row = [](lv_obj_t * parent, const char * label, const std::string & value) -> lv_obj_t * {
                 lv_obj_t * i_row = lv_obj_create(parent);
                 lv_obj_remove_style_all(i_row);
                 lv_obj_set_width(i_row, LV_PCT(100));
@@ -836,15 +802,69 @@ lv_obj_t * create_settings_screen() {
                 lv_label_set_text(v, value.c_str());
                 lv_obj_set_style_text_font(v, &lv_font_roboto_14, 0);
                 lv_obj_set_style_text_color(v, theme::text_primary(), 0);
+                return v;
             };
+
+            SystemStats init_stats;
+            read_system_stats(init_stats);
+
+            char cpu_buf[32];
+            std::snprintf(cpu_buf, sizeof(cpu_buf), "%.1f%%", init_stats.cpu_pct);
+
+            char mem_buf[64];
+            if (init_stats.total_ram_mb > 0) {
+                uint32_t pct = (init_stats.avail_ram_mb * 100) / init_stats.total_ram_mb;
+                std::snprintf(mem_buf, sizeof(mem_buf), "%u MB Free / %u MB (%u%%)",
+                              init_stats.avail_ram_mb, init_stats.total_ram_mb, pct);
+            } else {
+                std::snprintf(mem_buf, sizeof(mem_buf), "N/A");
+            }
 
             add_info_row(modal, "Software Version", "Prado-Reconstruction v1.4.0");
             add_info_row(modal, "Kernel Version", kernel_ver);
             add_info_row(modal, "MCU Firmware", mcu_ver);
             add_info_row(modal, "Bluetooth Subsystem", hal::get_bluetooth_hardware_info());
             add_info_row(modal, "Main Processor", "ArkMicro ARK1668 (ARM Cortex-A7 @ 800MHz)");
+            lv_obj_t * cpu_val_lbl = add_info_row(modal, "CPU Usage", cpu_buf);
+            lv_obj_t * mem_val_lbl = add_info_row(modal, "Free Memory (RAM)", mem_buf);
             add_info_row(modal, "Display & UI", "LVGL 9.2.2 (800x480 RGB888 / Framebuffer)");
-            add_info_row(modal, "Vehicle Telemetry", vbat_buf);
+
+            struct SysInfoTimerData {
+                lv_obj_t * cpu_lbl = nullptr;
+                lv_obj_t * mem_lbl = nullptr;
+                lv_timer_t * timer = nullptr;
+            };
+
+            auto * timer_data = new SysInfoTimerData{cpu_val_lbl, mem_val_lbl, nullptr};
+            timer_data->timer = lv_timer_create([](lv_timer_t * t) {
+                auto * d = static_cast<SysInfoTimerData *>(lv_timer_get_user_data(t));
+                if (!d || !d->cpu_lbl || !d->mem_lbl) return;
+                SystemStats s;
+                read_system_stats(s);
+                char c_buf[32];
+                std::snprintf(c_buf, sizeof(c_buf), "%.1f%%", s.cpu_pct);
+                lv_label_set_text(d->cpu_lbl, c_buf);
+                char m_buf[64];
+                if (s.total_ram_mb > 0) {
+                    uint32_t pct = (s.avail_ram_mb * 100) / s.total_ram_mb;
+                    std::snprintf(m_buf, sizeof(m_buf), "%u MB Free / %u MB (%u%%)",
+                                  s.avail_ram_mb, s.total_ram_mb, pct);
+                } else {
+                    std::snprintf(m_buf, sizeof(m_buf), "N/A");
+                }
+                lv_label_set_text(d->mem_lbl, m_buf);
+            }, 1000, timer_data);
+
+            lv_obj_add_event_cb(overlay, [](lv_event_t * ev) {
+                auto * d = static_cast<SysInfoTimerData *>(lv_event_get_user_data(ev));
+                if (d) {
+                    if (d->timer) {
+                        lv_timer_delete(d->timer);
+                        d->timer = nullptr;
+                    }
+                    delete d;
+                }
+            }, LV_EVENT_DELETE, timer_data);
 
             // Close Button
             lv_obj_t * close_btn = lv_button_create(modal);
@@ -923,6 +943,7 @@ lv_obj_t * create_settings_screen() {
         lv_obj_set_style_pad_hor(row, 16, 0);
         lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
         lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
 
         lv_obj_t * left_box = lv_obj_create(row);
         lv_obj_remove_style_all(left_box);
@@ -930,6 +951,7 @@ lv_obj_t * create_settings_screen() {
         lv_obj_set_flex_flow(left_box, LV_FLEX_FLOW_ROW);
         lv_obj_set_flex_align(left_box, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
         lv_obj_set_style_pad_column(left_box, 12, 0);
+        lv_obj_clear_flag(left_box, LV_OBJ_FLAG_SCROLLABLE);
 
         lv_obj_t * icon_img = lv_image_create(left_box);
         lv_image_set_src(icon_img, &icons::icon_nav_settings);
@@ -938,6 +960,7 @@ lv_obj_t * create_settings_screen() {
         lv_obj_remove_style_all(text_box);
         lv_obj_set_size(text_box, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
         lv_obj_set_flex_flow(text_box, LV_FLEX_FLOW_COLUMN);
+        lv_obj_clear_flag(text_box, LV_OBJ_FLAG_SCROLLABLE);
 
         lv_obj_t * lbl = lv_label_create(text_box);
         lv_label_set_text(lbl, "MCU Live Log");
@@ -955,6 +978,7 @@ lv_obj_t * create_settings_screen() {
         lv_obj_set_style_radius(btn, theme::kPillRadius, 0);
         lv_obj_set_style_bg_color(btn, theme::accent_primary(), 0);
         lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
+        lv_obj_remove_flag(btn, LV_OBJ_FLAG_SCROLL_ON_FOCUS);
         theme::style_focusable(btn);
 
         lv_obj_t * btn_lbl = lv_label_create(btn);
@@ -992,6 +1016,7 @@ lv_obj_t * create_settings_screen() {
             lv_obj_set_pos(overlay, theme::kRailWidth, 0);
             lv_obj_set_style_bg_color(overlay, lv_color_black(), 0);
             lv_obj_set_style_bg_opa(overlay, LV_OPA_70, 0);
+            lv_obj_clear_flag(overlay, LV_OBJ_FLAG_SCROLLABLE);
 
             // Modal card -- centers within the (rail-excluded) overlay above
             lv_obj_t * modal = lv_obj_create(overlay);
@@ -1003,11 +1028,25 @@ lv_obj_t * create_settings_screen() {
             lv_obj_set_flex_align(modal, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
             lv_obj_set_style_pad_all(modal, 18, 0);
             lv_obj_set_style_pad_row(modal, 8, 0);
+            lv_obj_clear_flag(modal, LV_OBJ_FLAG_SCROLLABLE);
 
-            lv_obj_t * title = lv_label_create(modal);
+            lv_obj_t * header_row = lv_obj_create(modal);
+            lv_obj_remove_style_all(header_row);
+            lv_obj_set_width(header_row, LV_PCT(100));
+            lv_obj_set_height(header_row, LV_SIZE_CONTENT);
+            lv_obj_set_flex_flow(header_row, LV_FLEX_FLOW_ROW);
+            lv_obj_set_flex_align(header_row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+            lv_obj_clear_flag(header_row, LV_OBJ_FLAG_SCROLLABLE);
+
+            lv_obj_t * title = lv_label_create(header_row);
             lv_label_set_text(title, "MCU Live Log");
             lv_obj_set_style_text_font(title, &lv_font_roboto_20, 0);
             lv_obj_set_style_text_color(title, theme::accent_primary(), 0);
+
+            lv_obj_t * scroll_status = lv_label_create(header_row);
+            lv_label_set_text(scroll_status, "Tracking Live");
+            lv_obj_set_style_text_font(scroll_status, &lv_font_roboto_14, 0);
+            lv_obj_set_style_text_color(scroll_status, theme::success(), 0);
 
             // Scrollable log body -- the timer below keeps this in sync
             // with hal::get_mcu_recent_frames() while the modal is open.
@@ -1021,6 +1060,9 @@ lv_obj_t * create_settings_screen() {
             lv_obj_set_style_pad_all(log_box, 8, 0);
             lv_obj_set_scroll_dir(log_box, LV_DIR_VER);
             lv_obj_add_flag(log_box, LV_OBJ_FLAG_SCROLLABLE);
+            lv_obj_remove_flag(log_box, LV_OBJ_FLAG_SCROLL_MOMENTUM);
+            lv_obj_remove_flag(log_box, LV_OBJ_FLAG_SCROLL_ELASTIC);
+            lv_obj_set_scrollbar_mode(log_box, LV_SCROLLBAR_MODE_AUTO);
 
             lv_obj_t * log_lbl = lv_label_create(log_box);
             lv_label_set_long_mode(log_lbl, LV_LABEL_LONG_WRAP);
@@ -1046,7 +1088,8 @@ lv_obj_t * create_settings_screen() {
             lv_obj_set_height(touch_filter_row, LV_SIZE_CONTENT);
             lv_obj_set_flex_flow(touch_filter_row, LV_FLEX_FLOW_ROW);
             lv_obj_set_flex_align(touch_filter_row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-            lv_obj_set_style_pad_top(touch_filter_row, 6, 0);
+            lv_obj_set_style_pad_top(touch_filter_row, 4, 0);
+            lv_obj_clear_flag(touch_filter_row, LV_OBJ_FLAG_SCROLLABLE);
 
             lv_obj_t * touch_filter_label = lv_label_create(touch_filter_row);
             lv_label_set_text(touch_filter_label, "Show touch events (CMD 0x20)");
@@ -1060,19 +1103,73 @@ lv_obj_t * create_settings_screen() {
 
             struct LogViewCtx {
                 lv_obj_t * label;
+                lv_obj_t * status_label;
                 lv_obj_t * touch_filter_cb;
+                std::string last_text;
+                bool auto_scroll = true;
             };
-            auto * log_ctx = new LogViewCtx{log_lbl, touch_filter_cb};
+            auto * log_ctx = new LogViewCtx{log_lbl, scroll_status, touch_filter_cb, "", true};
 
-            // Refresh timer: pulls the last ~30 (post-filter) frames every
-            // 300ms and auto-scrolls to the newest. Deleted in the Close
-            // handler below -- must not outlive log_lbl/log_box/log_ctx.
-            lv_timer_t * refresh_timer = lv_timer_create([](lv_timer_t * t) {
-                auto * ctx = static_cast<LogViewCtx *>(lv_timer_get_user_data(t));
+            // Detect user drag scrolling: if user scrolls back into history, pause auto-scroll
+            // so there is zero snapback; resume tracking when scrolled back to bottom.
+            lv_obj_add_event_cb(log_box, [](lv_event_t * e) {
+                auto * ctx = static_cast<LogViewCtx *>(lv_event_get_user_data(e));
+                lv_obj_t * box = static_cast<lv_obj_t *>(lv_event_get_target(e));
+                int32_t sb = lv_obj_get_scroll_bottom(box);
+                if (sb <= 20) {
+                    if (!ctx->auto_scroll) {
+                        ctx->auto_scroll = true;
+                        if (ctx->status_label) {
+                            lv_label_set_text(ctx->status_label, "Tracking Live");
+                            lv_obj_set_style_text_color(ctx->status_label, theme::success(), 0);
+                        }
+                    }
+                } else {
+                    if (ctx->auto_scroll) {
+                        ctx->auto_scroll = false;
+                        if (ctx->status_label) {
+                            lv_label_set_text(ctx->status_label, "History (tap Live to track)");
+                            lv_obj_set_style_text_color(ctx->status_label, theme::text_secondary(), 0);
+                        }
+                    }
+                }
+            }, LV_EVENT_SCROLL, log_ctx);
+
+            // Rotary knob navigation: turning tuning knob scrolls through log history
+            lv_obj_add_event_cb(log_box, [](lv_event_t * e) {
+                auto * ctx = static_cast<LogViewCtx *>(lv_event_get_user_data(e));
+                uint32_t key = lv_event_get_key(e);
+                lv_obj_t * box = static_cast<lv_obj_t *>(lv_event_get_target(e));
+                if (key == LV_KEY_UP || key == LV_KEY_PREV) {
+                    ctx->auto_scroll = false;
+                    if (ctx->status_label) {
+                        lv_label_set_text(ctx->status_label, "History (tap Live to track)");
+                        lv_obj_set_style_text_color(ctx->status_label, theme::text_secondary(), 0);
+                    }
+                    lv_obj_scroll_by_bounded(box, 0, 60, LV_ANIM_OFF);
+                } else if (key == LV_KEY_DOWN || key == LV_KEY_NEXT) {
+                    lv_obj_scroll_by_bounded(box, 0, -60, LV_ANIM_OFF);
+                    if (lv_obj_get_scroll_bottom(box) <= 20) {
+                        ctx->auto_scroll = true;
+                        if (ctx->status_label) {
+                            lv_label_set_text(ctx->status_label, "Tracking Live");
+                            lv_obj_set_style_text_color(ctx->status_label, theme::success(), 0);
+                        }
+                    }
+                }
+            }, LV_EVENT_KEY, log_ctx);
+
+            auto resume_live_tracking = [](LogViewCtx * ctx) {
+                ctx->auto_scroll = true;
+                ctx->last_text.clear();
+                if (ctx->status_label) {
+                    lv_label_set_text(ctx->status_label, "Tracking Live");
+                    lv_obj_set_style_text_color(ctx->status_label, theme::success(), 0);
+                }
                 bool show_touch = lv_obj_has_state(ctx->touch_filter_cb, LV_STATE_CHECKED);
                 auto frames = hal::get_mcu_recent_frames();
                 std::string text;
-                constexpr size_t kShowLast = 30;
+                constexpr size_t kShowLast = 150;
                 size_t shown = 0;
                 for (auto it = frames.rbegin(); it != frames.rend() && shown < kShowLast; ++it) {
                     if (!show_touch && it->find("cmd=0x20 ") != std::string::npos) {
@@ -1084,25 +1181,211 @@ lv_obj_t * create_settings_screen() {
                 if (text.empty()) {
                     text = "(waiting for MCU frames...)";
                 }
+                ctx->last_text = text;
                 lv_label_set_text(ctx->label, text.c_str());
                 lv_obj_t * box = lv_obj_get_parent(ctx->label);
                 lv_obj_scroll_to_y(box, LV_COORD_MAX, LV_ANIM_OFF);
+            };
+
+            // Tapping status badge resumes live tracking immediately
+            lv_obj_add_flag(scroll_status, LV_OBJ_FLAG_CLICKABLE);
+            lv_obj_add_event_cb(scroll_status, [](lv_event_t * e) {
+                auto * ctx = static_cast<LogViewCtx *>(lv_event_get_user_data(e));
+                auto * resume_fn = static_cast<decltype(resume_live_tracking)*>(lv_event_get_param(e));
+                (void)resume_fn;
+                ctx->auto_scroll = true;
+                ctx->last_text.clear();
+                if (ctx->status_label) {
+                    lv_label_set_text(ctx->status_label, "Tracking Live");
+                    lv_obj_set_style_text_color(ctx->status_label, theme::success(), 0);
+                }
+                lv_obj_t * box = lv_obj_get_parent(ctx->label);
+                lv_obj_scroll_to_y(box, LV_COORD_MAX, LV_ANIM_OFF);
+            }, LV_EVENT_CLICKED, log_ctx);
+
+            lv_obj_add_event_cb(touch_filter_cb, [](lv_event_t * e) {
+                auto * ctx = static_cast<LogViewCtx *>(lv_event_get_user_data(e));
+                ctx->auto_scroll = true;
+                ctx->last_text.clear();
+                if (ctx->status_label) {
+                    lv_label_set_text(ctx->status_label, "Tracking Live");
+                    lv_obj_set_style_text_color(ctx->status_label, theme::success(), 0);
+                }
+                lv_obj_t * box = lv_obj_get_parent(ctx->label);
+                lv_obj_scroll_to_y(box, LV_COORD_MAX, LV_ANIM_OFF);
+            }, LV_EVENT_VALUE_CHANGED, log_ctx);
+
+            // Refresh timer: pulls recent frames every 300ms.
+            // When auto_scroll is enabled, auto-scrolls to the newest frame.
+            // When reviewing earlier logs (auto_scroll == false), completely pauses label updates
+            // so text position and layout remain 100% rock-solid without any snapback.
+            lv_timer_t * refresh_timer = lv_timer_create([](lv_timer_t * t) {
+                auto * ctx = static_cast<LogViewCtx *>(lv_timer_get_user_data(t));
+                if (!ctx->auto_scroll) {
+                    return;
+                }
+                lv_obj_t * box = lv_obj_get_parent(ctx->label);
+                bool show_touch = lv_obj_has_state(ctx->touch_filter_cb, LV_STATE_CHECKED);
+                auto frames = hal::get_mcu_recent_frames();
+                std::string text;
+                constexpr size_t kShowLast = 150;
+                size_t shown = 0;
+                for (auto it = frames.rbegin(); it != frames.rend() && shown < kShowLast; ++it) {
+                    if (!show_touch && it->find("cmd=0x20 ") != std::string::npos) {
+                        continue;
+                    }
+                    text = *it + "\n" + text;
+                    ++shown;
+                }
+                if (text.empty()) {
+                    text = "(waiting for MCU frames...)";
+                }
+
+                if (text != ctx->last_text) {
+                    ctx->last_text = text;
+                    lv_label_set_text(ctx->label, text.c_str());
+                    if (!lv_obj_is_scrolling(box)) {
+                        lv_obj_scroll_to_y(box, LV_COORD_MAX, LV_ANIM_OFF);
+                    }
+                }
             }, 300, log_ctx);
 
-            lv_obj_t * close_btn = lv_button_create(modal);
+            // Bottom action bar: Close button on left, Earlier/Later/Live scroll controls on right
+            lv_obj_t * footer_row = lv_obj_create(modal);
+            lv_obj_remove_style_all(footer_row);
+            lv_obj_set_width(footer_row, LV_PCT(100));
+            lv_obj_set_height(footer_row, LV_SIZE_CONTENT);
+            lv_obj_set_flex_flow(footer_row, LV_FLEX_FLOW_ROW);
+            lv_obj_set_flex_align(footer_row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+            lv_obj_set_style_pad_top(footer_row, 4, 0);
+            lv_obj_clear_flag(footer_row, LV_OBJ_FLAG_SCROLLABLE);
+
+            lv_obj_t * close_btn = lv_button_create(footer_row);
             lv_obj_remove_style_all(close_btn);
-            lv_obj_set_size(close_btn, 140, 36);
+            lv_obj_set_size(close_btn, 110, 36);
             lv_obj_set_style_radius(close_btn, theme::kPillRadius, 0);
-            lv_obj_set_style_bg_color(close_btn, theme::accent_primary(), 0);
+            lv_obj_set_style_bg_color(close_btn, theme::surface_container_high(), 0);
             lv_obj_set_style_bg_opa(close_btn, LV_OPA_COVER, 0);
-            lv_obj_set_style_margin_top(close_btn, 8, 0);
+            lv_obj_set_style_border_width(close_btn, 1, 0);
+            lv_obj_set_style_border_color(close_btn, theme::surface_border(), 0);
             theme::style_focusable(close_btn);
 
             lv_obj_t * close_label = lv_label_create(close_btn);
             lv_label_set_text(close_label, "Close");
             lv_obj_set_style_text_font(close_label, &lv_font_roboto_14, 0);
-            lv_obj_set_style_text_color(close_label, theme::text_on_accent(), 0);
+            lv_obj_set_style_text_color(close_label, theme::text_primary(), 0);
             lv_obj_center(close_label);
+
+            lv_obj_t * nav_btns = lv_obj_create(footer_row);
+            lv_obj_remove_style_all(nav_btns);
+            lv_obj_set_size(nav_btns, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+            lv_obj_set_flex_flow(nav_btns, LV_FLEX_FLOW_ROW);
+            lv_obj_set_flex_align(nav_btns, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+            lv_obj_set_style_pad_column(nav_btns, 8, 0);
+            lv_obj_clear_flag(nav_btns, LV_OBJ_FLAG_SCROLLABLE);
+
+            // Earlier (Scroll Up) Button
+            lv_obj_t * earlier_btn = lv_button_create(nav_btns);
+            lv_obj_remove_style_all(earlier_btn);
+            lv_obj_set_size(earlier_btn, 104, 36);
+            lv_obj_set_style_radius(earlier_btn, theme::kPillRadius, 0);
+            lv_obj_set_style_bg_color(earlier_btn, theme::surface_container_high(), 0);
+            lv_obj_set_style_bg_opa(earlier_btn, LV_OPA_COVER, 0);
+            lv_obj_set_style_border_width(earlier_btn, 1, 0);
+            lv_obj_set_style_border_color(earlier_btn, theme::surface_border(), 0);
+            theme::style_focusable(earlier_btn);
+
+            lv_obj_t * earlier_lbl = lv_label_create(earlier_btn);
+            lv_label_set_text(earlier_lbl, "Earlier");
+            lv_obj_set_style_text_font(earlier_lbl, &lv_font_roboto_14, 0);
+            lv_obj_set_style_text_color(earlier_lbl, theme::text_primary(), 0);
+            lv_obj_center(earlier_lbl);
+
+            lv_obj_add_event_cb(earlier_btn, [](lv_event_t * e) {
+                auto * ctx = static_cast<LogViewCtx *>(lv_event_get_user_data(e));
+                ctx->auto_scroll = false;
+                if (ctx->status_label) {
+                    lv_label_set_text(ctx->status_label, "History (tap Live to track)");
+                    lv_obj_set_style_text_color(ctx->status_label, theme::text_secondary(), 0);
+                }
+                lv_obj_t * box = lv_obj_get_parent(ctx->label);
+                lv_obj_scroll_by_bounded(box, 0, 180, LV_ANIM_OFF);
+            }, LV_EVENT_CLICKED, log_ctx);
+
+            // Later (Scroll Down) Button
+            lv_obj_t * later_btn = lv_button_create(nav_btns);
+            lv_obj_remove_style_all(later_btn);
+            lv_obj_set_size(later_btn, 96, 36);
+            lv_obj_set_style_radius(later_btn, theme::kPillRadius, 0);
+            lv_obj_set_style_bg_color(later_btn, theme::surface_container_high(), 0);
+            lv_obj_set_style_bg_opa(later_btn, LV_OPA_COVER, 0);
+            lv_obj_set_style_border_width(later_btn, 1, 0);
+            lv_obj_set_style_border_color(later_btn, theme::surface_border(), 0);
+            theme::style_focusable(later_btn);
+
+            lv_obj_t * later_lbl = lv_label_create(later_btn);
+            lv_label_set_text(later_lbl, "Later");
+            lv_obj_set_style_text_font(later_lbl, &lv_font_roboto_14, 0);
+            lv_obj_set_style_text_color(later_lbl, theme::text_primary(), 0);
+            lv_obj_center(later_lbl);
+
+            lv_obj_add_event_cb(later_btn, [](lv_event_t * e) {
+                auto * ctx = static_cast<LogViewCtx *>(lv_event_get_user_data(e));
+                lv_obj_t * box = lv_obj_get_parent(ctx->label);
+                lv_obj_scroll_by_bounded(box, 0, -180, LV_ANIM_OFF);
+                int32_t sb = lv_obj_get_scroll_bottom(box);
+                if (sb <= 20) {
+                    ctx->auto_scroll = true;
+                    if (ctx->status_label) {
+                        lv_label_set_text(ctx->status_label, "Tracking Live");
+                        lv_obj_set_style_text_color(ctx->status_label, theme::success(), 0);
+                    }
+                }
+            }, LV_EVENT_CLICKED, log_ctx);
+
+            // Live (Scroll to Bottom & Resume Track) Button
+            lv_obj_t * live_btn = lv_button_create(nav_btns);
+            lv_obj_remove_style_all(live_btn);
+            lv_obj_set_size(live_btn, 90, 36);
+            lv_obj_set_style_radius(live_btn, theme::kPillRadius, 0);
+            lv_obj_set_style_bg_color(live_btn, theme::accent_primary(), 0);
+            lv_obj_set_style_bg_opa(live_btn, LV_OPA_COVER, 0);
+            theme::style_focusable(live_btn);
+
+            lv_obj_t * live_lbl = lv_label_create(live_btn);
+            lv_label_set_text(live_lbl, "Live");
+            lv_obj_set_style_text_font(live_lbl, &lv_font_roboto_14, 0);
+            lv_obj_set_style_text_color(live_lbl, theme::text_on_accent(), 0);
+            lv_obj_center(live_lbl);
+
+            lv_obj_add_event_cb(live_btn, [](lv_event_t * e) {
+                auto * ctx = static_cast<LogViewCtx *>(lv_event_get_user_data(e));
+                ctx->auto_scroll = true;
+                ctx->last_text.clear();
+                if (ctx->status_label) {
+                    lv_label_set_text(ctx->status_label, "Tracking Live");
+                    lv_obj_set_style_text_color(ctx->status_label, theme::success(), 0);
+                }
+                bool show_touch = lv_obj_has_state(ctx->touch_filter_cb, LV_STATE_CHECKED);
+                auto frames = hal::get_mcu_recent_frames();
+                std::string text;
+                constexpr size_t kShowLast = 150;
+                size_t shown = 0;
+                for (auto it = frames.rbegin(); it != frames.rend() && shown < kShowLast; ++it) {
+                    if (!show_touch && it->find("cmd=0x20 ") != std::string::npos) {
+                        continue;
+                    }
+                    text = *it + "\n" + text;
+                    ++shown;
+                }
+                if (text.empty()) {
+                    text = "(waiting for MCU frames...)";
+                }
+                ctx->last_text = text;
+                lv_label_set_text(ctx->label, text.c_str());
+                lv_obj_t * box = lv_obj_get_parent(ctx->label);
+                lv_obj_scroll_to_y(box, LV_COORD_MAX, LV_ANIM_OFF);
+            }, LV_EVENT_CLICKED, log_ctx);
 
             // 2026-09-05: real hardware bug found via code review --
             // same issue as the System Information modal above, worse
@@ -1137,6 +1420,9 @@ lv_obj_t * create_settings_screen() {
 
             if (core::navigation::focus_group()) {
                 lv_group_add_obj(core::navigation::focus_group(), close_btn);
+                lv_group_add_obj(core::navigation::focus_group(), earlier_btn);
+                lv_group_add_obj(core::navigation::focus_group(), later_btn);
+                lv_group_add_obj(core::navigation::focus_group(), live_btn);
             }
 
             auto * scr_close_ctx = new CloseCtx{overlay, refresh_timer, log_ctx, closed};

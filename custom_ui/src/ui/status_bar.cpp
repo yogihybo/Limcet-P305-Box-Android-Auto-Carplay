@@ -25,7 +25,6 @@ bool is_aa_connected(const std::string & line) {
 }
 
 struct Widgets {
-    lv_obj_t * clock_label;
     lv_obj_t * bt_icon;
     lv_obj_t * aa_icon;
 };
@@ -42,13 +41,6 @@ struct Widgets {
 // here anymore at all.
 void poll_timer_cb(lv_timer_t * timer) {
     auto * w = static_cast<Widgets *>(lv_timer_get_user_data(timer));
-
-    std::time_t now = std::time(nullptr);
-    std::tm local {};
-    localtime_r(&now, &local);
-    char buf[8];
-    std::snprintf(buf, sizeof(buf), "%02d:%02d", local.tm_hour, local.tm_min);
-    lv_label_set_text(w->clock_label, buf);
 
     // Bluetooth: live connection status from BluetoothTelemetry
     auto telem = hal::get_telemetry();
@@ -86,17 +78,9 @@ void create(lv_obj_t * scr) {
     lv_obj_set_style_pad_hor(bar, 16, 0);
     lv_obj_set_style_pad_ver(bar, 0, 0);
     lv_obj_set_flex_flow(bar, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(bar, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_flex_align(bar, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_clear_flag(bar, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_clear_flag(bar, LV_OBJ_FLAG_CLICKABLE);
-
-    // montserrat_20, not _14 -- the whole point of doubling kHeight was
-    // to make this bar's content actually legible at a glance, not
-    // just occupy more empty space.
-    lv_obj_t * clock_label = lv_label_create(bar);
-    lv_label_set_text(clock_label, "--:--");
-    lv_obj_set_style_text_color(clock_label, theme::text_primary(), 0);
-    lv_obj_set_style_text_font(clock_label, &lv_font_montserrat_20, 0);
 
     lv_obj_t * icons = lv_obj_create(bar);
     lv_obj_remove_style_all(icons);
@@ -116,12 +100,10 @@ void create(lv_obj_t * scr) {
     lv_obj_set_style_text_font(bt_icon, &lv_font_montserrat_20, 0);
     lv_obj_set_style_text_color(bt_icon, theme::text_secondary(), 0);
 
-    auto * widgets = new Widgets{clock_label, bt_icon, aa_icon};
+    auto * widgets = new Widgets{bt_icon, aa_icon};
     lv_obj_add_event_cb(bar, widgets_delete_cb, LV_EVENT_DELETE, widgets);
 
-    // Runs immediately once (not just on the first 1s tick) so the bar
-    // never shows the "--:--" placeholder for a full second after a
-    // screen loads.
+    // Runs immediately once so the bar has accurate state right away
     lv_timer_t * timer = lv_timer_create(poll_timer_cb, 1000, widgets);
     lv_obj_add_event_cb(scr, screen_delete_cb, LV_EVENT_DELETE, timer);
     poll_timer_cb(timer);

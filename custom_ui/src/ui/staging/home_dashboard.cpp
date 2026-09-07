@@ -27,7 +27,6 @@ hal::AndroidAutoClient & client() {
 }
 
 struct DashboardWidgets {
-    lv_obj_t * clock_lbl = nullptr;
     lv_obj_t * aa_title_lbl = nullptr;
     lv_obj_t * aa_status_lbl = nullptr;
     lv_obj_t * connect_lbl = nullptr;
@@ -37,20 +36,8 @@ struct DashboardWidgets {
     lv_timer_t * poll_timer = nullptr;
 };
 
-void update_clock(DashboardWidgets * w) {
-    if (!w || !w->clock_lbl) return;
-    std::time_t now = std::time(nullptr);
-    std::tm local {};
-    localtime_r(&now, &local);
-    char buf[32];
-    std::strftime(buf, sizeof(buf), "%I:%M %p", &local);
-    const char * formatted = (buf[0] == '0') ? &buf[1] : buf;
-    lv_label_set_text(w->clock_lbl, formatted);
-}
-
 void update_dashboard_status(DashboardWidgets * w) {
     if (!w) return;
-    update_clock(w);
 
     std::string proj = core::default_store().get_string("ProjectionType", "AndroidAuto", "General");
     bool is_carplay = (proj == "CarPlay");
@@ -111,18 +98,18 @@ void poll_timer_cb(lv_timer_t * timer) {
     update_dashboard_status(w);
 }
 
-void quick_connect_clicked_cb(lv_event_t * /*e*/) {
+void quick_connect_clicked_cb(lv_event_t * e) {
+    auto * w = static_cast<DashboardWidgets *>(lv_event_get_user_data(e));
     std::string proj = core::default_store().get_string("ProjectionType", "AndroidAuto", "General");
     if (proj == "CarPlay") {
         core::navigation::push(ui::create_carplay_screen);
     } else {
-        // 2026-09-05: uses the shared cached status (up to ~500ms stale,
-        // same as the label this button sits next to) instead of a
-        // fresh blocking statusLine() call; requestConnect() itself
-        // stays a one-off detached-thread action -- it's a real
-        // connect-now command, not part of the shared poll cache.
-        // android_auto_screen.cpp's own lifecycle picks up the real
-        // connection state once it lands.
+        if (w && w->connect_lbl) {
+            lv_label_set_text(w->connect_lbl, "Connecting...");
+        }
+        if (w && w->aa_status_lbl) {
+            lv_label_set_text(w->aa_status_lbl, "Connection: Connecting...");
+        }
         std::string line = hal::cached_android_auto_status().status_line;
         if (line.rfind("STATE Connected", 0) != 0) {
             core::SizedThread(core::kDefaultThreadStackSize, []() {
@@ -149,11 +136,15 @@ void media_prev_clicked_cb(lv_event_t * /*e*/) {
 }
 
 void media_play_pause_clicked_cb(lv_event_t * e) {
+    auto * w = static_cast<DashboardWidgets *>(lv_event_get_user_data(e));
+    if (w && w->playpause_icon) {
+        auto telem = hal::get_telemetry();
+        bool will_play = (telem.play_status != 1);
+        lv_image_set_src(w->playpause_icon, will_play ? &ui::icons::icon_pause : &ui::icons::icon_play);
+    }
     core::SizedThread(core::kDefaultThreadStackSize, []() {
         hal::media_play_pause(hal::shared_handle());
     }).detach();
-    auto * w = static_cast<DashboardWidgets *>(lv_event_get_user_data(e));
-    update_dashboard_status(w);
 }
 
 void media_next_clicked_cb(lv_event_t * /*e*/) {
@@ -217,25 +208,11 @@ lv_obj_t * create_home_dashboard() {
     // 2. Main Dashboard Area
     lv_obj_t * main_area = lv_obj_create(scr);
     lv_obj_remove_style_all(main_area);
-    lv_obj_set_pos(main_area, theme::kRailWidth + 16, 8);
-    lv_obj_set_size(main_area, 800 - (theme::kRailWidth + 32), 464);
+    lv_obj_set_pos(main_area, theme::kRailWidth + 16, 16);
+    lv_obj_set_size(main_area, 800 - (theme::kRailWidth + 32), 448);
     lv_obj_set_flex_flow(main_area, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_style_pad_row(main_area, 8, 0);
+    lv_obj_set_style_pad_row(main_area, 0, 0);
     lv_obj_clear_flag(main_area, LV_OBJ_FLAG_SCROLLABLE);
-
-    // Top Status Header (Time Centered)
-    lv_obj_t * header = lv_obj_create(main_area);
-    lv_obj_remove_style_all(header);
-    lv_obj_set_width(header, LV_PCT(100));
-    lv_obj_set_height(header, 34);
-    lv_obj_set_flex_flow(header, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(header, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-
-    lv_obj_t * clock_lbl = lv_label_create(header);
-    lv_obj_set_style_text_font(clock_lbl, &lv_font_roboto_28, 0);
-    lv_obj_set_style_text_color(clock_lbl, theme::text_primary(), 0);
-    widgets->clock_lbl = clock_lbl;
-    update_clock(widgets);
 
     // Dual-Card Container
     lv_obj_t * cards_row = lv_obj_create(main_area);
@@ -306,6 +283,7 @@ lv_obj_t * create_home_dashboard() {
     lv_obj_set_flex_flow(card_audio, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(card_audio, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_all(card_audio, 24, 0);
+    lv_obj_clear_flag(card_audio, LV_OBJ_FLAG_SCROLLABLE);
 
     // Title (No icon in front of title to match mockup)
     lv_obj_t * audio_title = lv_label_create(card_audio);
@@ -353,6 +331,9 @@ lv_obj_t * create_home_dashboard() {
     lv_obj_set_flex_flow(ctrl_row, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(ctrl_row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_column(ctrl_row, 16, 0);
+    lv_obj_set_style_pad_ver(ctrl_row, 8, 0);
+    lv_obj_set_style_pad_hor(ctrl_row, 8, 0);
+    lv_obj_clear_flag(ctrl_row, LV_OBJ_FLAG_SCROLLABLE);
 
     auto make_ctrl_btn = [ctrl_row, widgets](const lv_image_dsc_t * dsc, lv_event_cb_t click_cb) -> lv_obj_t * {
         lv_obj_t * btn = lv_button_create(ctrl_row);
@@ -363,6 +344,7 @@ lv_obj_t * create_home_dashboard() {
         lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
         lv_obj_set_style_bg_color(btn, theme::surface_pressed(), LV_STATE_PRESSED);
         theme::style_focusable(btn);
+        lv_obj_clear_flag(btn, LV_OBJ_FLAG_SCROLLABLE);
         lv_obj_add_event_cb(btn, click_cb, LV_EVENT_CLICKED, widgets);
 
         lv_obj_t * icon = ui::icons::create_icon(btn, dsc, theme::text_primary());

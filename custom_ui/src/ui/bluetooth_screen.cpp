@@ -41,6 +41,7 @@ struct BtLoadState {
 
 struct BtScreenWidgets {
     lv_obj_t * addr_label = nullptr;
+    lv_obj_t * conn_status_label = nullptr;
     lv_obj_t * list = nullptr;
     lv_obj_t * status_label = nullptr;
     lv_obj_t * refresh_btn = nullptr;
@@ -162,6 +163,35 @@ void remove_device_clicked_cb(lv_event_t * e) {
     }).detach();
 }
 
+void disconnect_device_clicked_cb(lv_event_t * e) {
+    auto * w = static_cast<BtScreenWidgets *>(lv_event_get_user_data(e));
+    status_label_set(w->status_label, "Disconnecting...");
+
+    auto * ready = new std::atomic<bool>(false);
+    auto * poll_ctx = new std::pair<BtScreenWidgets *, std::atomic<bool> *>(w, ready);
+    if (w->poll_timer) {
+        lv_timer_delete(w->poll_timer);
+    }
+    w->poll_timer = lv_timer_create(
+        [](lv_timer_t * timer) {
+            auto * ctx = static_cast<std::pair<BtScreenWidgets *, std::atomic<bool> *> *>(
+                lv_timer_get_user_data(timer));
+            if (!ctx->second->load(std::memory_order_acquire)) return;
+            BtScreenWidgets * w2 = ctx->first;
+            w2->poll_timer = nullptr;
+            lv_timer_delete(timer);
+            delete ctx->second;
+            delete ctx;
+            start_bt_load(w2);
+        },
+        100, poll_ctx);
+    core::SizedThread(core::kDefaultThreadStackSize, [ready]() {
+        hal::BluetoothHandle & h = hal::shared_handle();
+        hal::disconnect_device(h);
+        ready->store(true, std::memory_order_release);
+    }).detach();
+}
+
 void populate_device_list(BtScreenWidgets * w, bool hw_present, bool devices_ok,
                            const std::vector<std::string> & devices) {
     lv_obj_clean(w->list);
@@ -188,11 +218,15 @@ void populate_device_list(BtScreenWidgets * w, bool hw_present, bool devices_ok,
         status_label_set(w->status_label, "Ready to pair new device");
         return;
     }
+
+    std::string connected_mac = hal::get_connected_device_mac();
+
     for (size_t i = 0; i < valid_devices.size(); ++i) {
         std::string mac, name;
         std::string label = hal::split_plist_entry(valid_devices[i], mac, name) && !name.empty()
                                  ? name
                                  : valid_devices[i];
+        bool is_connected = !connected_mac.empty() && (connected_mac == mac);
 
         lv_obj_t * row = lv_obj_create(w->list);
         lv_obj_remove_style_all(row);
@@ -201,75 +235,102 @@ void populate_device_list(BtScreenWidgets * w, bool hw_present, bool devices_ok,
         lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
         lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
         lv_obj_set_style_pad_hor(row, 8, 0);
+        lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
 
+        // Left Container (Icon + Device Name)
         lv_obj_t * left_box = lv_obj_create(row);
         lv_obj_remove_style_all(left_box);
-        lv_obj_set_size(left_box, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+        lv_obj_set_flex_grow(left_box, 1);
+        lv_obj_set_height(left_box, LV_SIZE_CONTENT);
         lv_obj_set_flex_flow(left_box, LV_FLEX_FLOW_ROW);
         lv_obj_set_flex_align(left_box, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-        lv_obj_set_style_pad_column(left_box, 10, 0);
+        lv_obj_set_style_pad_column(left_box, 8, 0);
+        lv_obj_clear_flag(left_box, LV_OBJ_FLAG_SCROLLABLE);
 
-        lv_obj_t * icon = ui::icons::create_icon(left_box, &ui::icons::icon_smartphone, staging_ui::theme::accent_primary());
+        lv_obj_t * icon = ui::icons::create_icon(left_box, &ui::icons::icon_smartphone,
+            is_connected ? staging_ui::theme::accent_primary() : staging_ui::theme::text_secondary());
         (void)icon;
 
         lv_obj_t * dev_name = lv_label_create(left_box);
         lv_label_set_text(dev_name, label.c_str());
-        lv_obj_set_style_text_font(dev_name, &lv_font_roboto_20, 0);
+        lv_obj_set_style_text_font(dev_name, &lv_font_roboto_14, 0);
         lv_obj_set_style_text_color(dev_name, staging_ui::theme::text_primary(), 0);
+        lv_obj_set_flex_grow(dev_name, 1);
+        lv_label_set_long_mode(dev_name, LV_LABEL_LONG_DOT);
 
-        // Right Controls Container (Connect + Remove)
+        // Right Controls Container (Connect/Disconnect + Remove)
         lv_obj_t * right_box = lv_obj_create(row);
         lv_obj_remove_style_all(right_box);
         lv_obj_set_size(right_box, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
         lv_obj_set_flex_flow(right_box, LV_FLEX_FLOW_ROW);
         lv_obj_set_flex_align(right_box, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
         lv_obj_set_style_pad_column(right_box, 8, 0);
+        lv_obj_clear_flag(right_box, LV_OBJ_FLAG_SCROLLABLE);
 
-        // Connect Button
-        lv_obj_t * btn = lv_button_create(right_box);
-        lv_obj_remove_style_all(btn);
-        lv_obj_set_size(btn, 76, 34);
-        lv_obj_set_style_radius(btn, staging_ui::theme::kPillRadius, 0);
-        lv_obj_set_style_bg_color(btn, staging_ui::theme::accent_primary(), 0);
-        lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
-        staging_ui::theme::style_focusable(btn);
-        lv_obj_set_user_data(btn, reinterpret_cast<void *>(static_cast<uintptr_t>(i)));
-        lv_obj_add_event_cb(btn, device_row_clicked_cb, LV_EVENT_CLICKED, w);
+        // Contextual Primary Action: Disconnect if connected, Connect if disconnected
+        if (is_connected) {
+            lv_obj_t * disc_btn = lv_button_create(right_box);
+            lv_obj_remove_style_all(disc_btn);
+            lv_obj_set_size(disc_btn, 82, 34);
+            lv_obj_set_style_radius(disc_btn, staging_ui::theme::kPillRadius, 0);
+            lv_obj_set_style_bg_color(disc_btn, staging_ui::theme::surface_container_high(), 0);
+            lv_obj_set_style_bg_opa(disc_btn, LV_OPA_COVER, 0);
+            staging_ui::theme::style_focusable(disc_btn);
+            lv_obj_add_event_cb(disc_btn, disconnect_device_clicked_cb, LV_EVENT_CLICKED, w);
 
-        lv_obj_t * btn_lbl = lv_label_create(btn);
-        lv_label_set_text(btn_lbl, "Connect");
-        lv_obj_set_style_text_font(btn_lbl, &lv_font_roboto_14, 0);
-        lv_obj_set_style_text_color(btn_lbl, staging_ui::theme::text_on_accent(), 0);
-        lv_obj_center(btn_lbl);
+            lv_obj_t * disc_lbl = lv_label_create(disc_btn);
+            lv_label_set_text(disc_lbl, "Disconnect");
+            lv_obj_set_style_text_font(disc_lbl, &lv_font_roboto_14, 0);
+            lv_obj_set_style_text_color(disc_lbl, lv_color_hex(0xf28b82), 0);
+            lv_obj_center(disc_lbl);
 
-        // Remove Button
+            if (core::navigation::focus_group()) {
+                lv_group_add_obj(core::navigation::focus_group(), disc_btn);
+            }
+        } else {
+            lv_obj_t * conn_btn = lv_button_create(right_box);
+            lv_obj_remove_style_all(conn_btn);
+            lv_obj_set_size(conn_btn, 72, 34);
+            lv_obj_set_style_radius(conn_btn, staging_ui::theme::kPillRadius, 0);
+            lv_obj_set_style_bg_color(conn_btn, staging_ui::theme::accent_primary(), 0);
+            lv_obj_set_style_bg_opa(conn_btn, LV_OPA_COVER, 0);
+            staging_ui::theme::style_focusable(conn_btn);
+            lv_obj_set_user_data(conn_btn, reinterpret_cast<void *>(static_cast<uintptr_t>(i)));
+            lv_obj_add_event_cb(conn_btn, device_row_clicked_cb, LV_EVENT_CLICKED, w);
+
+            lv_obj_t * conn_lbl = lv_label_create(conn_btn);
+            lv_label_set_text(conn_lbl, "Connect");
+            lv_obj_set_style_text_font(conn_lbl, &lv_font_roboto_14, 0);
+            lv_obj_set_style_text_color(conn_lbl, staging_ui::theme::text_on_accent(), 0);
+            lv_obj_center(conn_lbl);
+
+            if (core::navigation::focus_group()) {
+                lv_group_add_obj(core::navigation::focus_group(), conn_btn);
+            }
+        }
+
+        // Compact circular Unpair/Remove Button (34x34)
         lv_obj_t * rem_btn = lv_button_create(right_box);
         lv_obj_remove_style_all(rem_btn);
-        lv_obj_set_size(rem_btn, 68, 34);
-        lv_obj_set_style_radius(rem_btn, staging_ui::theme::kPillRadius, 0);
+        lv_obj_set_size(rem_btn, 34, 34);
+        lv_obj_set_style_radius(rem_btn, LV_RADIUS_CIRCLE, 0);
         lv_obj_set_style_bg_color(rem_btn, staging_ui::theme::surface_container_high(), 0);
         lv_obj_set_style_bg_opa(rem_btn, LV_OPA_COVER, 0);
         staging_ui::theme::style_focusable(rem_btn);
         lv_obj_set_user_data(rem_btn, reinterpret_cast<void *>(static_cast<uintptr_t>(i)));
         lv_obj_add_event_cb(rem_btn, remove_device_clicked_cb, LV_EVENT_CLICKED, w);
 
-        lv_obj_t * rem_lbl = lv_label_create(rem_btn);
-        // "Disconnect", not "Remove" -- see hal::disconnect_device()'s
-        // own comment: no AT command exists to actually unpair/forget
-        // a device on this hardware, only to disconnect the active
-        // link. A button labeled "Remove" that doesn't remove anything
-        // would be a real, user-visible lie about what it does.
-        lv_label_set_text(rem_lbl, "Disconnect");
-        lv_obj_set_style_text_font(rem_lbl, &lv_font_roboto_14, 0);
-        lv_obj_set_style_text_color(rem_lbl, lv_color_hex(0xf28b82), 0);
-        lv_obj_center(rem_lbl);
+        lv_obj_t * rem_icon = lv_label_create(rem_btn);
+        lv_label_set_text(rem_icon, LV_SYMBOL_TRASH);
+        lv_obj_set_style_text_font(rem_icon, &lv_font_montserrat_14, 0);
+        lv_obj_set_style_text_color(rem_icon, staging_ui::theme::text_secondary(), 0);
+        lv_obj_center(rem_icon);
 
         if (core::navigation::focus_group()) {
-            lv_group_add_obj(core::navigation::focus_group(), btn);
             lv_group_add_obj(core::navigation::focus_group(), rem_btn);
         }
     }
-    status_label_set(w->status_label, "Tap Connect to link, Remove to unpair");
+    status_label_set(w->status_label, "Select device to connect or unpair");
 }
 
 void bt_load_poll_cb(lv_timer_t * timer) {
@@ -294,10 +355,29 @@ void bt_load_poll_cb(lv_timer_t * timer) {
         devices = state->devices;
     }
 
-    if (address_ok) {
-        lv_label_set_text(w->addr_label, ("PIN: 0000  (" + address + ")").c_str());
-    } else {
-        lv_label_set_text(w->addr_label, "PIN: 0000");
+    if (w->addr_label) {
+        if (address_ok && !address.empty()) {
+            lv_label_set_text(w->addr_label, address.c_str());
+        } else {
+            lv_label_set_text(w->addr_label, "Not available");
+        }
+    }
+
+    if (w->conn_status_label) {
+        auto telem = hal::get_telemetry();
+        if (hw_present && telem.connected) {
+            std::string name = telem.connected_device_name;
+            if (name.empty()) name = hal::get_connected_device_mac();
+            if (!name.empty()) {
+                lv_label_set_text(w->conn_status_label, ("Connected: " + name).c_str());
+            } else {
+                lv_label_set_text(w->conn_status_label, "Connected");
+            }
+            lv_obj_set_style_text_color(w->conn_status_label, staging_ui::theme::accent_primary(), 0);
+        } else {
+            lv_label_set_text(w->conn_status_label, "Disconnected");
+            lv_obj_set_style_text_color(w->conn_status_label, staging_ui::theme::text_secondary(), 0);
+        }
     }
 
     w->poll_timer = nullptr;
@@ -430,22 +510,39 @@ lv_obj_t * create_bluetooth_screen() {
     lv_obj_set_style_text_font(name_val, &lv_font_roboto_20, 0);
     lv_obj_set_style_text_color(name_val, staging_ui::theme::text_primary(), 0);
 
-    // PIN / Address
-    lv_obj_t * pin_box = lv_obj_create(card_info);
-    lv_obj_remove_style_all(pin_box);
-    lv_obj_set_size(pin_box, LV_PCT(100), LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(pin_box, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_style_pad_row(pin_box, 4, 0);
+    // Bluetooth Address
+    lv_obj_t * addr_box = lv_obj_create(card_info);
+    lv_obj_remove_style_all(addr_box);
+    lv_obj_set_size(addr_box, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(addr_box, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(addr_box, 4, 0);
 
-    lv_obj_t * pin_lbl = lv_label_create(pin_box);
-    lv_label_set_text(pin_lbl, "PIN");
-    lv_obj_set_style_text_font(pin_lbl, &lv_font_roboto_14, 0);
-    lv_obj_set_style_text_color(pin_lbl, staging_ui::theme::text_secondary(), 0);
+    lv_obj_t * addr_lbl = lv_label_create(addr_box);
+    lv_label_set_text(addr_lbl, "Bluetooth Address");
+    lv_obj_set_style_text_font(addr_lbl, &lv_font_roboto_14, 0);
+    lv_obj_set_style_text_color(addr_lbl, staging_ui::theme::text_secondary(), 0);
 
-    lv_obj_t * addr_label = lv_label_create(pin_box);
-    lv_label_set_text(addr_label, "0000");
+    lv_obj_t * addr_label = lv_label_create(addr_box);
+    lv_label_set_text(addr_label, "--:--:--:--:--:--");
     lv_obj_set_style_text_font(addr_label, &lv_font_roboto_20, 0);
     lv_obj_set_style_text_color(addr_label, staging_ui::theme::text_primary(), 0);
+
+    // Connection Status
+    lv_obj_t * conn_box = lv_obj_create(card_info);
+    lv_obj_remove_style_all(conn_box);
+    lv_obj_set_size(conn_box, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(conn_box, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(conn_box, 4, 0);
+
+    lv_obj_t * conn_lbl = lv_label_create(conn_box);
+    lv_label_set_text(conn_lbl, "Connection Status");
+    lv_obj_set_style_text_font(conn_lbl, &lv_font_roboto_14, 0);
+    lv_obj_set_style_text_color(conn_lbl, staging_ui::theme::text_secondary(), 0);
+
+    lv_obj_t * conn_status_label = lv_label_create(conn_box);
+    lv_label_set_text(conn_status_label, "Checking...");
+    lv_obj_set_style_text_font(conn_status_label, &lv_font_roboto_20, 0);
+    lv_obj_set_style_text_color(conn_status_label, staging_ui::theme::text_secondary(), 0);
 
     // Discoverable Switch
     lv_obj_t * disc_row = lv_obj_create(card_info);
@@ -514,7 +611,12 @@ lv_obj_t * create_bluetooth_screen() {
     lv_obj_set_style_text_font(status_label, &lv_font_roboto_14, 0);
     lv_obj_set_style_text_color(status_label, staging_ui::theme::text_secondary(), 0);
 
-    auto * widgets = new BtScreenWidgets{addr_label, list, status_label, refresh_btn, nullptr, {}};
+    auto * widgets = new BtScreenWidgets();
+    widgets->addr_label = addr_label;
+    widgets->conn_status_label = conn_status_label;
+    widgets->list = list;
+    widgets->status_label = status_label;
+    widgets->refresh_btn = refresh_btn;
     lv_obj_add_event_cb(scr, widgets_delete_cb, LV_EVENT_DELETE, widgets);
     lv_obj_add_event_cb(refresh_btn, refresh_btn_cb, LV_EVENT_CLICKED, widgets);
 

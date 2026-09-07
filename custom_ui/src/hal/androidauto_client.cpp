@@ -570,4 +570,9 @@ void notify_android_auto_resumed() {
     shared_status_cache().cv.notify_one();
 }
 
+bool send_android_auto_key(std::uint32_t keycode) {
+    static AndroidAutoClient s_client;
+    return s_client.sendKey(keycode);
+}
+
 }  // namespace hal

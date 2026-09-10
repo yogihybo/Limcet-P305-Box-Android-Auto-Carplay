@@ -52,7 +52,7 @@ std::atomic<bool> g_homeNavigatePending{false};
 // matching hal/knob.cpp and hal/touch.cpp. Keeping the socket connection open
 // avoids per-event connect latency and prevents socket closure races with the sidecar.
 core::AsyncWorker & mcu_aa_forward_worker() {
-    static core::AsyncWorker worker;
+    static core::AsyncWorker worker(32);
     return worker;
 }
 
@@ -423,9 +423,9 @@ void McuInputHal::run() {
     // last_frame_time/last_frame_epoch_ms_ tracking (is_link_alive()
     // stays purely informational, see its own header comment) -- ONLY
     // a real read() error/EOF (below) triggers reconnect() now, same
-    // as before this whole keepalive feature existed.
-    constexpr auto kProbeInterval = std::chrono::seconds(5);
-    auto last_probe_sent = run_start;
+    // 2026-09-09: REMOVED CMD 0x88 keepalive probe. Real hardware captures
+    // confirmed the MCU never answers CMD 0x88/0x60, and transmitting it every
+    // 5 seconds introduces unnecessary UART traffic on /dev/ttyHS0.
     auto last_frame_time = run_start;
 
     auto reconnect = [&]() {
@@ -471,30 +471,12 @@ void McuInputHal::run() {
         run_start = std::chrono::steady_clock::now();
         first_light = true;
         first_reverse = true;
-        last_probe_sent = run_start;
         last_frame_time = run_start;
         std::fprintf(stderr, "%s [HAL:MCU] Reconnected to %s\n",
                      core::log_timestamp().c_str(), port_.c_str());
     };
 
     while (running_.load(std::memory_order_acquire)) {
-        auto now = std::chrono::steady_clock::now();
-        if (now - last_probe_sent >= kProbeInterval) {
-            static const unsigned char kKeepaliveProbe[8] = {0, 0, 0, 0, 0, 0, 0, 0};
-            int cur_fd = fd_.load(std::memory_order_acquire);
-            if (cur_fd >= 0) {
-                // 2026-09-04: real hardware capture showed repeated
-                // "Link stale/dead" reconnects during genuine idle
-                // periods with zero CMD 0x88/0x60 reply frames ever
-                // observed -- this line exists to answer the first,
-                // most basic question that capture couldn't: is the
-                // probe actually being transmitted on schedule at all.
-                std::printf("%s [HAL:MCU] Sending CMD 0x88 keepalive probe\n",
-                            core::log_timestamp().c_str());
-                send_mcu_frame(cur_fd, 0x88, kKeepaliveProbe, 8);
-            }
-            last_probe_sent = now;
-        }
         // 2026-09-04: REMOVED the "no frame for kLinkStaleTimeout ->
         // reconnect" branch that used to live here. Real hardware
         // capture (two consecutive tests) proved the premise wrong:
@@ -1100,13 +1082,9 @@ void McuInputHal::sync_video_relay(bool oem) {
      * this doc's own MCU-side disassembly independently confirms has a
      * real GPIOC13/PC2 effect under its own gate condition) -- adding
      * id=0x00 here rather than replacing anything, since this is the
-     * confirmed-working signal, not a guess. Real MCU-side handler for
-     * id=0x00 (hardware/MCU/source/src/uart_protocol.c) drives GPIOB
-     * Pin 1: value 1 = HIGH, value 0/3 = LOW -- inverted polarity from
-     * id=0x11 (0=AfterMarket/1=Factory there), matching the polarity
-     * this project's own now-removed standalone toggle already used
-     * (oem ? 0x00 : 0x01). */
-    unsigned char id0_payload[2] = {0x00, static_cast<unsigned char>(oem ? 0x00 : 0x01)};
+     * confirmed-working signal, not a guess. Per MCU specification (CMD 0xA0 id=0x00):
+     * 0x00 = AfterMarket Camera, 0x01 = Factory (OEM) Camera. */
+    unsigned char id0_payload[2] = {0x00, static_cast<unsigned char>(oem ? 0x01 : 0x00)};
     send_mcu_frame(fd_, 0xA0, id0_payload, 2);
     std::printf("%s [HAL:MCU] Synced Camera Type to MCU via CMD 0xA0 (id=0x00, val=0x%02X, %s) -- confirmed-working lever\n",
                 core::log_timestamp().c_str(), id0_payload[1], oem ? "Factory/OEM" : "AfterMarket");

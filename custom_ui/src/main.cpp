@@ -28,7 +28,6 @@
 #include "hal/mcu_input.h"
 #include "hal/ssh_access.h"
 #include "hal/touch.h"
-#include "hal/timezone.h"
 #include "core/async_worker.h"
 #include "core/config_store.h"
 #include "core/log_timing.h"
@@ -437,21 +436,17 @@ int main() {
     // /bin/sh + amixer process), synchronously, before this function
     // ever reaches the LVGL loop below -- delaying the very first
     // rendered frame by however long 8 shell forks take on this
-    // single-core Cortex-A5 (real, if one-time, cost). Nothing after
-    // this point depends on it having completed first (apply_timezone()
-    // below is unrelated; ensure_bluetooth_daemon_running() right below
-    // that is ALREADY backgrounded the same way) -- matches this
-    // project's own established boot-speed priority (rcS's own comment:
-    // "Launch custom_ui immediately so LVGL display initializes in <1
-    // second"). Note: set_stream_volume()'s own std::system("amixer
-    // ...") calls (the ones actually triggered by settings-screen
-    // taps/steppers) were already fixed the same way in an earlier pass
-    // this session -- this is the one remaining synchronous amixer call
-    // site, at boot only.
+    // single-core Cortex-A5 (real, if one-time, cost).
+    // ensure_bluetooth_daemon_running() right below is ALREADY backgrounded
+    // the same way -- matches this project's own established boot-speed priority
+    // (rcS's own comment: "Launch custom_ui immediately so LVGL display initializes
+    // in <1 second"). Note: set_stream_volume()'s own std::system("amixer ...")
+    // calls (the ones actually triggered by settings-screen taps/steppers) were
+    // already fixed the same way in an earlier pass this session -- this is the one
+    // remaining synchronous amixer call site, at boot only.
     core::SizedThread(core::kDefaultThreadStackSize, []() {
         hal::init_audio_mixer();
     }).detach();
-    hal::apply_timezone(hal::get_current_timezone_index());
 
     core::SizedThread(core::kDefaultThreadStackSize, []() {
         // Starts BlueZ 5.66 subsystem and sidecar in parallel with UI rendering
@@ -903,9 +898,16 @@ int main() {
             static hal::AndroidAutoClient nightModeClient;
             static bool lastNightMode = false;
             static bool nightModeInitialized = false;
+            static auto lastNightModeSync = std::chrono::steady_clock::now();
             bool nightMode = mcu_input.get_night_mode();
-            if (!nightModeInitialized || nightMode != lastNightMode) {
-                apply_night_mode_brightness(nightMode);
+            auto now = std::chrono::steady_clock::now();
+            bool force_resync = (now - lastNightModeSync) >= std::chrono::seconds(3);
+
+            if (!nightModeInitialized || nightMode != lastNightMode || force_resync) {
+                if (!nightModeInitialized || nightMode != lastNightMode) {
+                    apply_night_mode_brightness(nightMode);
+                }
+                lastNightModeSync = now;
                 // 2026-09-05: real hardware bug found via code review --
                 // sendNightMode() is a synchronous AF_UNIX socket call
                 // (up to 2 attempts, ~1-2s timeout each), called inline
@@ -917,6 +919,10 @@ int main() {
                 // with an internal mutex, so calling it from a detached
                 // thread is safe even if another event touches a
                 // DIFFERENT AndroidAutoClient instance concurrently.
+                // Periodic re-syncing every ~3s ensures that when the
+                // sidecar starts or a phone connects after boot, it always
+                // receives the authoritative headlight state even if headlights
+                // were already on before Android Auto loaded.
                 std::thread([nightMode]() {
                     nightModeClient.sendNightMode(nightMode);
                 }).detach();

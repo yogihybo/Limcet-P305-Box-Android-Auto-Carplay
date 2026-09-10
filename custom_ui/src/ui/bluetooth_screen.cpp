@@ -231,10 +231,12 @@ void populate_device_list(BtScreenWidgets * w, bool hw_present, bool devices_ok,
         lv_obj_t * row = lv_obj_create(w->list);
         lv_obj_remove_style_all(row);
         lv_obj_set_width(row, LV_PCT(100));
-        lv_obj_set_height(row, 48);
+        lv_obj_set_height(row, 52);
         lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
         lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
         lv_obj_set_style_pad_hor(row, 8, 0);
+        lv_obj_set_style_pad_ver(row, 2, 0);
+        lv_obj_set_style_clip_corner(row, false, 0);
         lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
 
         // Left Container (Icon + Device Name)
@@ -264,7 +266,9 @@ void populate_device_list(BtScreenWidgets * w, bool hw_present, bool devices_ok,
         lv_obj_set_size(right_box, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
         lv_obj_set_flex_flow(right_box, LV_FLEX_FLOW_ROW);
         lv_obj_set_flex_align(right_box, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        lv_obj_set_style_pad_all(right_box, 6, 0);
         lv_obj_set_style_pad_column(right_box, 8, 0);
+        lv_obj_set_style_clip_corner(right_box, false, 0);
         lv_obj_clear_flag(right_box, LV_OBJ_FLAG_SCROLLABLE);
 
         // Contextual Primary Action: Disconnect if connected, Connect if disconnected
@@ -579,6 +583,8 @@ lv_obj_t * create_bluetooth_screen() {
     lv_obj_set_height(dev_header_row, LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(dev_header_row, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(dev_header_row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_all(dev_header_row, 4, 0);
+    lv_obj_set_style_clip_corner(dev_header_row, false, 0);
 
     lv_obj_t * dev_title = lv_label_create(dev_header_row);
     lv_label_set_text(dev_title, "Paired Devices");
@@ -605,6 +611,8 @@ lv_obj_t * create_bluetooth_screen() {
     lv_obj_set_flex_grow(list, 1);
     lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_row(list, 8, 0);
+    lv_obj_set_style_pad_hor(list, 4, 0);
+    lv_obj_set_style_clip_corner(list, false, 0);
 
     lv_obj_t * status_label = lv_label_create(card_devices);
     lv_label_set_text(status_label, "");

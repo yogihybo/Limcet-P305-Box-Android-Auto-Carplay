@@ -20,7 +20,9 @@
 
 namespace core {
 
-#define CARPI_EQ_PARAMS_PATH "/tmp/carpi_eq_params.bin"
+#define CARPI_EQ_PARAMS_PRIMARY_PATH "/data/carpi_eq_params.bin"
+#define CARPI_EQ_PARAMS_FALLBACK_PATH "/tmp/carpi_eq_params.bin"
+#define CARPI_EQ_PARAMS_PATH CARPI_EQ_PARAMS_PRIMARY_PATH
 constexpr uint32_t kCarpiEqMagic = 0x43457131u;  // "CEq1"
 
 struct CarpiEqParams {

@@ -11,6 +11,7 @@ void set_ssh_enabled(bool enabled) {
     bool running = (std::system("pidof sshd >/dev/null 2>&1") == 0);
 
     if (enabled) {
+        std::system("touch /tmp/ssh_enabled");
         // Ensure WiFi Access Point is running so client devices can associate
         // and reach 192.168.43.1 via SSH.
         bool ap_running = (std::system("pidof hostapd >/dev/null 2>&1") == 0);
@@ -42,9 +43,12 @@ void set_ssh_enabled(bool enabled) {
             std::system("/usr/sbin/sshd -f /etc/ssh/sshd_config >/dev/null 2>&1 &");
             std::printf("%s [HAL:SSH] SSH access enabled (sshd started)\n", core::log_timestamp().c_str());
         }
-    } else if (!enabled && running) {
-        std::system("killall sshd 2>/dev/null");
-        std::printf("%s [HAL:SSH] SSH access disabled (sshd stopped)\n", core::log_timestamp().c_str());
+    } else if (!enabled) {
+        std::system("rm -f /tmp/ssh_enabled");
+        if (running) {
+            std::system("killall sshd 2>/dev/null");
+            std::printf("%s [HAL:SSH] SSH access disabled (sshd stopped)\n", core::log_timestamp().c_str());
+        }
         // Note: hostapd is intentionally left running when disabling SSH so
         // active wireless Android Auto or CarPlay projection sessions are not disrupted.
     }

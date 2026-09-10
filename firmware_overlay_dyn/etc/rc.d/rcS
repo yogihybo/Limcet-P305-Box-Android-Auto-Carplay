@@ -110,6 +110,37 @@ fi
 mkdir -p /var/run/sshd /var/empty
 chmod 755 /var/empty
 
+# -------------------------------------------------------------------------
+# BlueZ / persistent storage symlinks (must exist before rootfs goes ro)
+# bluetoothd was compiled with --prefix=/usr and localstatedir=/usr/var.
+# Its hardcoded storage path is /usr/var/lib/bluetooth.
+# Ensure /usr/var points to /var, and /var/lib/bluetooth points to
+# persistent ext4 /data/bluetooth so pairing keys survive reboots.
+# -------------------------------------------------------------------------
+if [ ! -L /usr/var ]; then
+	rm -rf /usr/var 2>/dev/null
+	ln -sfn /var /usr/var
+fi
+if [ ! -e /etc/bluetooth ]; then
+	ln -sfn /usr/etc/bluetooth /etc/bluetooth
+fi
+mkdir -p /usr/lib/bluetooth/plugins 2>/dev/null || true
+mkdir -p /data/bluetooth
+chmod 700 /data/bluetooth
+mkdir -p /var/lib
+ln -sfn /data/bluetooth /var/lib/bluetooth
+
+# Ensure persistent audio EQ parameters exist on /data (partition 3)
+touch /data/carpi_eq_params.bin 2>/dev/null || true
+chmod 644 /data/carpi_eq_params.bin 2>/dev/null || true
+ln -sfn /data/carpi_eq_params.bin /tmp/carpi_eq_params.bin
+
+# -------------------------------------------------------------------------
+# Remount rootfs read-only to protect against sudden power-cut corruption
+# (covers USB boot or stock U-Boot passing rw without uEnv.txt access)
+# -------------------------------------------------------------------------
+mount -o remount,ro / && echo "rootfs: remounted read-only (protected from power cuts)"
+
 # sshd itself is not started here unconditionally -- it's gated by the
 # "SSH Access" toggle in custom_ui's Settings screen (persisted,
 # applied at custom_ui startup, see main.cpp and hal/ssh_access.h).
@@ -289,7 +320,7 @@ modprobe rtl8811cu rtw_drv_log_level=2 rtw_country_code=US
 		cat /tmp/hci-updown.err 2>/dev/null
 	fi
 
-	/usr/sbin/bluetoothd -n &
+	/usr/sbin/bluetoothd -n >/tmp/bluetoothd.log 2>&1 &
 	echo "custom_ui rootfs: BlueZ bring-up complete."
 ) &
 

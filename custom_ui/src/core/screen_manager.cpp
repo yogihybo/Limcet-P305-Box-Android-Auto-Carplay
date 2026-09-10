@@ -29,6 +29,8 @@ void ScreenManager::push(ScreenFactory factory) {
     // for the duration of factory()'s own synchronous call, before
     // it's pushed onto stack_ below.
     lv_group_t * group = lv_group_create();
+    lv_group_set_wrap(group, false);
+    lv_group_set_refocus_policy(group, LV_GROUP_REFOCUS_POLICY_NEXT);
     pending_group_ = group;
     lv_obj_t * screen = factory();
     pending_group_ = nullptr;
@@ -56,6 +58,8 @@ void ScreenManager::replace(ScreenFactory factory) {
         return;
     }
     lv_group_t * group = lv_group_create();
+    lv_group_set_wrap(group, false);
+    lv_group_set_refocus_policy(group, LV_GROUP_REFOCUS_POLICY_NEXT);
     pending_group_ = group;
     lv_obj_t * screen = factory();
     pending_group_ = nullptr;

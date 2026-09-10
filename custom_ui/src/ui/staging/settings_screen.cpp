@@ -171,7 +171,8 @@ lv_obj_t * create_section_header(lv_obj_t * parent, const char * title) {
 lv_obj_t * create_stepper_row(lv_obj_t * parent, const lv_image_dsc_t * icon_dsc, const char * label_text,
                              int min, int max, int step, const std::string & key,
                              const std::string & section,
-                             std::function<void(int)> extra_apply = nullptr) {
+                             std::function<void(int)> extra_apply = nullptr,
+                             lv_obj_t ** out_minus_btn = nullptr) {
     lv_obj_t * row = lv_obj_create(parent);
     lv_obj_remove_style_all(row);
     lv_obj_set_width(row, LV_PCT(100));
@@ -238,18 +239,19 @@ lv_obj_t * create_stepper_row(lv_obj_t * parent, const lv_image_dsc_t * icon_dsc
     // Minus Button
     lv_obj_t * minus_btn = lv_button_create(right_box);
     theme::style_stepper_button(minus_btn);
-    lv_obj_remove_flag(minus_btn, LV_OBJ_FLAG_SCROLL_ON_FOCUS);
     auto * minus_ctx = new StepperBtnCtx{ctx, -1};
     lv_obj_add_event_cb(minus_btn, destroy_btn_ctx, LV_EVENT_DELETE, minus_ctx);
     lv_obj_add_event_cb(minus_btn, stepper_click_cb, LV_EVENT_CLICKED, minus_ctx);
     lv_obj_t * minus_icon = ui::icons::create_icon(minus_btn, &ui::icons::icon_minus, theme::text_primary());
     lv_obj_set_style_image_recolor(minus_icon, theme::text_on_accent(), LV_STATE_FOCUSED);
     lv_obj_center(minus_icon);
+    if (out_minus_btn) {
+        *out_minus_btn = minus_btn;
+    }
 
     // Plus Button
     lv_obj_t * plus_btn = lv_button_create(right_box);
     theme::style_stepper_button(plus_btn);
-    lv_obj_remove_flag(plus_btn, LV_OBJ_FLAG_SCROLL_ON_FOCUS);
     auto * plus_ctx = new StepperBtnCtx{ctx, 1};
     lv_obj_add_event_cb(plus_btn, destroy_btn_ctx, LV_EVENT_DELETE, plus_ctx);
     lv_obj_add_event_cb(plus_btn, stepper_click_cb, LV_EVENT_CLICKED, plus_ctx);
@@ -338,7 +340,6 @@ lv_obj_t * create_toggle_row(lv_obj_t * parent, const lv_image_dsc_t * icon_dsc,
     lv_obj_set_style_text_color(label, theme::text_primary(), 0);
 
     lv_obj_t * sw = lv_switch_create(row);
-    lv_obj_remove_flag(sw, LV_OBJ_FLAG_SCROLL_ON_FOCUS);
     // def_val (like the on-disk value itself) is always expressed in
     // the KEY's own polarity, unaffected by invert_stored_value -- only
     // the switch's displayed checked state gets inverted, below.
@@ -422,9 +423,11 @@ lv_obj_t * create_settings_screen() {
 
     // --- Section 1: Display ---
     create_section_header(card, "DISPLAY");
+    lv_obj_t * first_ctrl = nullptr;
     create_stepper_row(card, &ui::icons::icon_brightness, "Backlight", 0, 100, 5,
                        "Backlight", "General",
-                       [](int v) { hal::set_backlight_brightness(v); });
+                       [](int v) { hal::set_backlight_brightness(v); },
+                       &first_ctrl);
 
     // --- Section 2: Audio ---
     create_section_header(card, "AUDIO");
@@ -578,14 +581,12 @@ lv_obj_t * create_settings_screen() {
         lv_obj_remove_style_all(aa_btn);
         lv_obj_set_size(aa_btn, 120, 38);
         lv_obj_set_style_radius(aa_btn, theme::kPillRadius, 0);
-        lv_obj_remove_flag(aa_btn, LV_OBJ_FLAG_SCROLL_ON_FOCUS);
         theme::style_focusable(aa_btn);
 
         lv_obj_t * cp_btn = lv_button_create(btn_box);
         lv_obj_remove_style_all(cp_btn);
         lv_obj_set_size(cp_btn, 120, 38);
         lv_obj_set_style_radius(cp_btn, theme::kPillRadius, 0);
-        lv_obj_remove_flag(cp_btn, LV_OBJ_FLAG_SCROLL_ON_FOCUS);
         theme::style_focusable(cp_btn);
 
         auto update_btn_styles = [aa_btn, cp_btn](bool carplay_active) {
@@ -721,7 +722,6 @@ lv_obj_t * create_settings_screen() {
         lv_obj_set_style_radius(btn, theme::kPillRadius, 0);
         lv_obj_set_style_bg_color(btn, theme::accent_primary(), 0);
         lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
-        lv_obj_remove_flag(btn, LV_OBJ_FLAG_SCROLL_ON_FOCUS);
         theme::style_focusable(btn);
 
         lv_obj_t * btn_lbl = lv_label_create(btn);
@@ -978,7 +978,6 @@ lv_obj_t * create_settings_screen() {
         lv_obj_set_style_radius(btn, theme::kPillRadius, 0);
         lv_obj_set_style_bg_color(btn, theme::accent_primary(), 0);
         lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
-        lv_obj_remove_flag(btn, LV_OBJ_FLAG_SCROLL_ON_FOCUS);
         theme::style_focusable(btn);
 
         lv_obj_t * btn_lbl = lv_label_create(btn);
@@ -1088,7 +1087,8 @@ lv_obj_t * create_settings_screen() {
             lv_obj_set_height(touch_filter_row, LV_SIZE_CONTENT);
             lv_obj_set_flex_flow(touch_filter_row, LV_FLEX_FLOW_ROW);
             lv_obj_set_flex_align(touch_filter_row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-            lv_obj_set_style_pad_top(touch_filter_row, 4, 0);
+            lv_obj_set_style_pad_all(touch_filter_row, 4, 0);
+            lv_obj_set_style_clip_corner(touch_filter_row, false, 0);
             lv_obj_clear_flag(touch_filter_row, LV_OBJ_FLAG_SCROLLABLE);
 
             lv_obj_t * touch_filter_label = lv_label_create(touch_filter_row);
@@ -1257,7 +1257,8 @@ lv_obj_t * create_settings_screen() {
             lv_obj_set_height(footer_row, LV_SIZE_CONTENT);
             lv_obj_set_flex_flow(footer_row, LV_FLEX_FLOW_ROW);
             lv_obj_set_flex_align(footer_row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-            lv_obj_set_style_pad_top(footer_row, 4, 0);
+            lv_obj_set_style_pad_all(footer_row, 4, 0);
+            lv_obj_set_style_clip_corner(footer_row, false, 0);
             lv_obj_clear_flag(footer_row, LV_OBJ_FLAG_SCROLLABLE);
 
             lv_obj_t * close_btn = lv_button_create(footer_row);
@@ -1281,6 +1282,8 @@ lv_obj_t * create_settings_screen() {
             lv_obj_set_size(nav_btns, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
             lv_obj_set_flex_flow(nav_btns, LV_FLEX_FLOW_ROW);
             lv_obj_set_flex_align(nav_btns, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+            lv_obj_set_style_pad_all(nav_btns, 4, 0);
+            lv_obj_set_style_clip_corner(nav_btns, false, 0);
             lv_obj_set_style_pad_column(nav_btns, 8, 0);
             lv_obj_clear_flag(nav_btns, LV_OBJ_FLAG_SCROLLABLE);
 
@@ -1442,6 +1445,26 @@ lv_obj_t * create_settings_screen() {
             lv_group_add_obj(core::navigation::focus_group(), btn);
         }
     }
+
+    if (first_ctrl && core::navigation::focus_group()) {
+        lv_group_focus_obj(first_ctrl);
+    }
+    lv_obj_scroll_to_y(card, 0, LV_ANIM_OFF);
+
+    // Ensure the settings card is pinned to the top when the screen is loaded
+    lv_obj_add_event_cb(scr, [](lv_event_t * e) {
+        auto * c = static_cast<lv_obj_t *>(lv_event_get_user_data(e));
+        if (c && lv_obj_is_valid(c)) {
+            lv_obj_scroll_to_y(c, 0, LV_ANIM_OFF);
+        }
+    }, LV_EVENT_SCREEN_LOAD_START, card);
+
+    lv_obj_add_event_cb(scr, [](lv_event_t * e) {
+        auto * c = static_cast<lv_obj_t *>(lv_event_get_user_data(e));
+        if (c && lv_obj_is_valid(c)) {
+            lv_obj_scroll_to_y(c, 0, LV_ANIM_OFF);
+        }
+    }, LV_EVENT_SCREEN_LOADED, card);
 
     return scr;
 }

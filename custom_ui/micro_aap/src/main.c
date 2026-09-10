@@ -18,6 +18,7 @@
 
 #include "aap_session.h"
 #include "aap_wifi_setup.h"
+#include "aap_protobuf/service/inputsource/message/PointerAction.pb.h"
 
 #define SIDECAR_SOCK_PATH "/tmp/androidauto-sidecar.sock"
 #define SIDECAR_LOCK_PATH "/tmp/androidauto-sidecar.lock"
@@ -146,6 +147,27 @@ static void ap_state_note_session_ended(void) {
     pthread_mutex_unlock(&g_ap_state_mutex);
 }
 
+static bool is_ssh_active(void) {
+    if (access("/tmp/ssh_enabled", F_OK) == 0) {
+        return true;
+    }
+    FILE *f = fopen("/var/run/sshd.pid", "r");
+    if (f) {
+        int pid = 0;
+        if (fscanf(f, "%d", &pid) == 1 && pid > 0) {
+            fclose(f);
+            if (kill(pid, 0) == 0) {
+                return true;
+            }
+        } else {
+            fclose(f);
+        }
+    }
+    return false;
+}
+
+static bool g_current_night_mode = false;
+
 /* Polled every main-loop iteration (~100ms, bounded by poll()'s own
  * timeout below). Tears the AP down once the grace period elapses with
  * no active session and no pending handshake. */
@@ -154,8 +176,8 @@ static void ap_state_poll_teardown(bool has_active_session) {
     time_t now = monotonic_seconds();
 
     pthread_mutex_lock(&g_ap_state_mutex);
-    if (has_active_session) {
-        /* Active AAP session (projected or backgrounded) -- cancel any teardown */
+    if (has_active_session || is_ssh_active()) {
+        /* Active AAP session or SSH enabled -- cancel any teardown */
         g_session_ended_at = 0;
         g_handshake_started_at = 0;
     } else if (aap_wifi_is_ap_up()) {
@@ -310,14 +332,18 @@ static void process_single_command(aap_session_t *session, const char *cmd, int 
         unsigned int x = 0, y = 0;
         char act[16] = {0};
         if (sscanf(cmd + 6, "%u %u %15s", &x, &y, act) == 3 && session) {
-            uint32_t action_code = 0; /* DOWN */
-            if (strcmp(act, "MOVE") == 0) action_code = 1;
-            else if (strcmp(act, "UP") == 0) action_code = 2;
+            uint32_t action_code = (uint32_t)aap_protobuf_service_inputsource_message_PointerAction_ACTION_DOWN;
+            if (strcmp(act, "MOVE") == 0) {
+                action_code = (uint32_t)aap_protobuf_service_inputsource_message_PointerAction_ACTION_MOVED;
+            } else if (strcmp(act, "UP") == 0) {
+                action_code = (uint32_t)aap_protobuf_service_inputsource_message_PointerAction_ACTION_UP;
+            }
             aap_session_send_touch(session, x, y, action_code);
         }
         reply = NULL;
     } else if (strncmp(cmd, "NIGHT ", 6) == 0) {
-        if (session) aap_session_send_night_mode(session, cmd[6] == '1');
+        g_current_night_mode = (cmd[6] == '1');
+        if (session) aap_session_send_night_mode(session, g_current_night_mode);
         reply = "OK\n";
     } else if (strncmp(cmd, "AUDIOFOCUS ", 11) == 0) {
         /* 2026-09-04: real hardware need -- pause/resume the phone's
@@ -401,7 +427,13 @@ int main(int argc, char **argv) {
 
     aap_session_t *session = NULL;
     int client_ipc_fds[MAX_IPC_CLIENTS];
-    for (int i = 0; i < MAX_IPC_CLIENTS; i++) client_ipc_fds[i] = -1;
+    char client_ipc_buf[MAX_IPC_CLIENTS][1024];
+    size_t client_ipc_len[MAX_IPC_CLIENTS];
+    for (int i = 0; i < MAX_IPC_CLIENTS; i++) {
+        client_ipc_fds[i] = -1;
+        client_ipc_len[i] = 0;
+        client_ipc_buf[i][0] = '\0';
+    }
 
     while (1) {
         struct pollfd fds[MAX_POLL_FDS];
@@ -469,6 +501,8 @@ int main(int argc, char **argv) {
                 for (int i = 0; i < MAX_IPC_CLIENTS; i++) {
                     if (client_ipc_fds[i] < 0) {
                         client_ipc_fds[i] = new_client;
+                        client_ipc_len[i] = 0;
+                        client_ipc_buf[i][0] = '\0';
                         placed = 1;
                         break;
                     }
@@ -476,6 +510,8 @@ int main(int argc, char **argv) {
                 if (!placed) {
                     close(client_ipc_fds[0]);
                     client_ipc_fds[0] = new_client;
+                    client_ipc_len[0] = 0;
+                    client_ipc_buf[0][0] = '\0';
                 }
             }
         }
@@ -521,6 +557,9 @@ int main(int argc, char **argv) {
                     aap_session_destroy(session);
                 }
                 session = aap_session_create(new_tcp);
+                if (session) {
+                    aap_session_set_night_mode(session, g_current_night_mode);
+                }
                 /* A live session is forming right now -- cancel any
                  * pending AP teardown left armed from a previous
                  * session's end (see ap_state_poll_teardown()'s own
@@ -548,9 +587,9 @@ int main(int argc, char **argv) {
                 /* If data is available to read, process it first even if POLLHUP is also signaled
                  * (e.g. client sent a key command and closed its socket immediately). */
                 if (revents & POLLIN) {
-                    char cmd_buf[1024] = {0};
+                    char temp_buf[512] = {0};
                     int recvd_fd = -1;
-                    ssize_t n = recv_ancillary_fd(client_ipc_fds[i], cmd_buf, sizeof(cmd_buf) - 1, &recvd_fd);
+                    ssize_t n = recv_ancillary_fd(client_ipc_fds[i], temp_buf, sizeof(temp_buf) - 1, &recvd_fd);
                     if (n > 0) {
                         if (recvd_fd >= 0) {
                             printf("[AA] received CONNECT_FD ancillary fd=%d\n", recvd_fd);
@@ -567,20 +606,43 @@ int main(int argc, char **argv) {
                             pthread_attr_destroy(&attr);
                         }
 
-                        /* Process each newline-delimited command in cmd_buf */
-                        char *saveptr = NULL;
-                        char *line = strtok_r(cmd_buf, "\r\n", &saveptr);
-                        while (line != NULL) {
+                        temp_buf[n] = '\0';
+                        if (client_ipc_len[i] + (size_t)n < sizeof(client_ipc_buf[i])) {
+                            memcpy(client_ipc_buf[i] + client_ipc_len[i], temp_buf, (size_t)n);
+                            client_ipc_len[i] += (size_t)n;
+                            client_ipc_buf[i][client_ipc_len[i]] = '\0';
+                        } else {
+                            /* Buffer overflow protection -- reset corrupted/stalled buffer */
+                            client_ipc_len[i] = 0;
+                            client_ipc_buf[i][0] = '\0';
+                        }
+
+                        /* Process all complete newline-delimited commands in client_ipc_buf[i] */
+                        char *eol;
+                        while ((eol = strchr(client_ipc_buf[i], '\n')) != NULL) {
+                            *eol = '\0';
+                            char *line = client_ipc_buf[i];
+                            if (eol > line && *(eol - 1) == '\r') {
+                                *(eol - 1) = '\0';
+                            }
                             while (*line == ' ') line++;
                             if (*line != '\0') {
                                 process_single_command(session, line, client_ipc_fds[i]);
                             }
-                            line = strtok_r(NULL, "\r\n", &saveptr);
+                            size_t consumed = (size_t)(eol - client_ipc_buf[i]) + 1;
+                            size_t remaining = client_ipc_len[i] - consumed;
+                            if (remaining > 0) {
+                                memmove(client_ipc_buf[i], eol + 1, remaining);
+                            }
+                            client_ipc_len[i] = remaining;
+                            client_ipc_buf[i][client_ipc_len[i]] = '\0';
                         }
                     } else {
                         /* Read error or clean EOF from client */
                         close(client_ipc_fds[i]);
                         client_ipc_fds[i] = -1;
+                        client_ipc_len[i] = 0;
+                        client_ipc_buf[i][0] = '\0';
                         continue;
                     }
                 }
@@ -589,6 +651,8 @@ int main(int argc, char **argv) {
                 if (client_ipc_fds[i] >= 0 && ((revents & (POLLHUP | POLLERR)) || !(revents & POLLIN))) {
                     close(client_ipc_fds[i]);
                     client_ipc_fds[i] = -1;
+                    client_ipc_len[i] = 0;
+                    client_ipc_buf[i][0] = '\0';
                 }
             }
         }

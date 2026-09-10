@@ -31,17 +31,28 @@ AndroidAutoClient & androidauto_client() {
 // core/async_worker.h's own header comment for why per-call detached
 // threads aren't safe here).
 core::AsyncWorker & touch_forward_worker() {
-    static core::AsyncWorker worker;
+    static core::AsyncWorker worker(32);
     return worker;
 }
 
 // Edge-detects DOWN/MOVE/UP from get_touch_state()'s level/state
 // pressed flag -- same reasoning as knob.cpp's knob_was_pressed(),
-// just three states instead of a single press edge (a touch panel
-// needs MOVE reported every sample while held, not just once).
+// just three states instead of a single press edge.
 bool & touch_was_pressed() {
     static bool was_pressed = false;
     return was_pressed;
+}
+
+// Tracks the last forwarded coordinates so static hold does not flood
+// redundant MOVE events at 200 Hz.
+std::int32_t & touch_last_sent_x() {
+    static std::int32_t last_x = -1;
+    return last_x;
+}
+
+std::int32_t & touch_last_sent_y() {
+    static std::int32_t last_y = -1;
+    return last_y;
 }
 
 void mcu_touch_read_cb(lv_indev_t * indev, lv_indev_data_t * data) {
@@ -62,16 +73,25 @@ void mcu_touch_read_cb(lv_indev_t * indev, lv_indev_data_t * data) {
         bool was_pressed = touch_was_pressed();
         if (state.pressed && !was_pressed) {
             std::uint32_t x = state.x, y = state.y;
+            touch_last_sent_x() = state.x;
+            touch_last_sent_y() = state.y;
             touch_forward_worker().enqueue([x, y]() {
                 androidauto_client().sendTouch(x, y, TouchAction::Down);
             });
         } else if (state.pressed && was_pressed) {
-            std::uint32_t x = state.x, y = state.y;
-            touch_forward_worker().enqueue([x, y]() {
-                androidauto_client().sendTouch(x, y, TouchAction::Move);
-            });
+            // Deduplicate stationary holds: only forward Move when coordinates change
+            if (state.x != touch_last_sent_x() || state.y != touch_last_sent_y()) {
+                std::uint32_t x = state.x, y = state.y;
+                touch_last_sent_x() = state.x;
+                touch_last_sent_y() = state.y;
+                touch_forward_worker().enqueue([x, y]() {
+                    androidauto_client().sendTouch(x, y, TouchAction::Move);
+                });
+            }
         } else if (!state.pressed && was_pressed) {
             std::uint32_t x = state.x, y = state.y;
+            touch_last_sent_x() = -1;
+            touch_last_sent_y() = -1;
             touch_forward_worker().enqueue([x, y]() {
                 androidauto_client().sendTouch(x, y, TouchAction::Up);
             });

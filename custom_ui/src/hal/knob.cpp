@@ -31,7 +31,7 @@ AndroidAutoClient & androidauto_client() {
 // through the same ordered-async-queue pattern rather than blocking the
 // whole UI on a wedged sidecar for every knob tick/click.
 core::AsyncWorker & knob_forward_worker() {
-    static core::AsyncWorker worker;
+    static core::AsyncWorker worker(32);
     return worker;
 }
 

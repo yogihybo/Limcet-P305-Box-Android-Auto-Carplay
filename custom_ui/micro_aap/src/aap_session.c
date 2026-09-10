@@ -168,6 +168,7 @@ struct aap_session {
     bool pending_key_up;
     uint32_t pending_key_up_code;
     uint64_t pending_key_up_due_us;
+    bool current_night_mode;
 };
 
 /* See the struct comment on last_ping_time/last_rx_time above for why
@@ -784,7 +785,7 @@ static void handle_sensor_channel(aap_session_t *s, const uint8_t *payload, size
         } else if (req.type == aap_protobuf_service_sensorsource_message_SensorType_SENSOR_NIGHT_MODE) {
             batch.night_mode_data_count = 1;
             batch.night_mode_data[0].has_night_mode = true;
-            batch.night_mode_data[0].night_mode = false;
+            batch.night_mode_data[0].night_mode = s->current_night_mode;
         }
 
         ostream = pb_ostream_from_buffer(pb_buf, sizeof(pb_buf));
@@ -1534,7 +1535,9 @@ void aap_session_send_touch(aap_session_t *s, uint32_t x, uint32_t y, uint32_t a
 }
 
 void aap_session_send_night_mode(aap_session_t *s, bool night_mode) {
-    if (!s || s->state != AAP_SESSION_STATE_RUNNING) return;
+    if (!s) return;
+    s->current_night_mode = night_mode;
+    if (s->state != AAP_SESSION_STATE_RUNNING) return;
 
     aap_protobuf_service_sensorsource_message_SensorBatch batch =
         aap_protobuf_service_sensorsource_message_SensorBatch_init_default;
@@ -1549,6 +1552,14 @@ void aap_session_send_night_mode(aap_session_t *s, bool night_mode) {
     send_channel_msg(s, AAP_CHANNEL_SENSOR,
                      aap_protobuf_service_sensorsource_SensorMessageId_SENSOR_MESSAGE_BATCH,
                      pb_buf, ostream.bytes_written, true);
+}
+
+void aap_session_set_night_mode(aap_session_t *s, bool night_mode) {
+    if (!s) return;
+    s->current_night_mode = night_mode;
+    if (s->state == AAP_SESSION_STATE_RUNNING) {
+        aap_session_send_night_mode(s, night_mode);
+    }
 }
 
 /* 2026-09-04: see this function's own header comment (aap_session.h)

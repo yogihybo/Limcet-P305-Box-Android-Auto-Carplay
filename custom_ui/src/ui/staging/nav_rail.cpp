@@ -96,7 +96,7 @@ void attach_nav_rail_to_group(lv_group_t * group) {
     auto & inst = rail_instance();
     if (!inst.rail || !lv_obj_is_valid(inst.rail)) return;
     for (int i = 0; i < 5; ++i) {
-        if (inst.buttons[i]) {
+        if (inst.buttons[i] && lv_obj_get_group(inst.buttons[i]) != group) {
             lv_group_add_obj(group, inst.buttons[i]);
         }
     }

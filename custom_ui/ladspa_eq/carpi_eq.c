@@ -71,7 +71,8 @@
  * the same "no shared header across a process/plugin boundary that has
  * to survive independent redeploys" reasoning already used elsewhere in
  * this project for the MCU wire-protocol framing. */
-#define CARPI_EQ_PARAMS_PATH "/tmp/carpi_eq_params.bin"
+#define CARPI_EQ_PARAMS_PRIMARY_PATH "/data/carpi_eq_params.bin"
+#define CARPI_EQ_PARAMS_FALLBACK_PATH "/tmp/carpi_eq_params.bin"
 #define CARPI_EQ_MAGIC 0x43457131u /* "CEq1" */
 
 typedef struct {
@@ -129,7 +130,7 @@ static void init_low_shelf(biquad_t *f, float f0, float gain_db, float fs) {
     f->b1 = (2.0f * A * ((A - 1.0f) - (A + 1.0f) * cos_w)) / a0;
     f->b2 = (A * ((A + 1.0f) - (A - 1.0f) * cos_w - 2.0f * sqrtf(A) * alpha)) / a0;
     f->a1 = (-2.0f * ((A - 1.0f) + (A + 1.0f) * cos_w)) / a0;
-    f->a2 = ((A + 1.0f) + (A - 1.0f) * cos_w - 2.0f * sqrtf(A) * alpha) / a0;
+    f->a2 = ((A + 1.0f) - (A - 1.0f) * cos_w - 2.0f * sqrtf(A) * alpha) / a0;
     f->active = 1;
 }
 
@@ -169,7 +170,7 @@ static void init_high_shelf(biquad_t *f, float f0, float gain_db, float fs) {
     float a0 = (A + 1.0f) - (A - 1.0f) * cos_w + 2.0f * sqrtf(A) * alpha;
     f->b0 = (A * ((A + 1.0f) + (A - 1.0f) * cos_w + 2.0f * sqrtf(A) * alpha)) / a0;
     f->b1 = (-2.0f * A * ((A - 1.0f) + (A + 1.0f) * cos_w)) / a0;
-    f->b2 = (A * ((A + 1.0f) + (A - 1.0f) * cos_w - 2.0f * sqrtf(A) * alpha)) / a0;
+    f->b2 = (A * ((A + 1.0f) - (A - 1.0f) * cos_w - 2.0f * sqrtf(A) * alpha)) / a0;
     f->a1 = (2.0f * ((A - 1.0f) - (A + 1.0f) * cos_w)) / a0;
     f->a2 = ((A + 1.0f) - (A - 1.0f) * cos_w - 2.0f * sqrtf(A) * alpha) / a0;
     f->active = 1;
@@ -183,12 +184,15 @@ static inline float process(biquad_t *f, float in) {
     return out;
 }
 
-/* Reads the live params file. Deliberately tolerant: a missing file, a
- * short/torn read, or a bad magic number all just mean "no change" --
- * the plugin keeps whatever coefficients it already had rather than
- * ever going silent or crashing on a transient write race. */
+/* Reads the live params file from persistent storage (/data) with fallback to /tmp.
+ * Deliberately tolerant: a missing file, a short/torn read, or a bad magic number all
+ * just mean "no change" -- the plugin keeps whatever coefficients it already had
+ * rather than ever going silent or crashing on a transient write race. */
 static int read_params(carpi_eq_params_t *out) {
-    int fd = open(CARPI_EQ_PARAMS_PATH, O_RDONLY);
+    int fd = open(CARPI_EQ_PARAMS_PRIMARY_PATH, O_RDONLY);
+    if (fd < 0) {
+        fd = open(CARPI_EQ_PARAMS_FALLBACK_PATH, O_RDONLY);
+    }
     if (fd < 0) return 0;
     ssize_t n = read(fd, out, sizeof(*out));
     close(fd);

@@ -13,7 +13,7 @@
 
 | File | Memory Range | Size | SHA-256 | Description |
 | :--- | :---: | :---: | :--- | :--- |
-| [`live_bootloader.bin`](file:///home/osboxes/Downloads/prado-firmware-reconstruction/hardware/MCU/live_dumps/live_bootloader.bin) | `0x08000000` – `0x08003FFF` | 16 KB (16,384 B) | `6d32a969d0e4bd1b5a7dedbde0a8360b4c7dca1de727935ef00106ad6b36aa35` | Factory IAP Bootloader (USB OTG + USART update engine) |
+| [`live_bootloader.bin`](file:///home/osboxes/Downloads/prado-firmware-reconstruction/hardware/MCU/live_dumps/live_bootloader.bin) | `0x08000000` – `0x08002FFF` (12K real bootloader; `0x08003000`+ is application) | 16 KB (16,384 B) | `6d32a969d0e4bd1b5a7dedbde0a8360b4c7dca1de727935ef00106ad6b36aa35` | Factory IAP Bootloader. **Correction (2026-09-12)**: "USB OTG + USART update engine" below was an unverified label — disassembly found the bootloader's own vector table has USART1/2/3 and OTG_FS/OTG_FS_WKUP all pointing at the same Default_Handler (no interrupt-driven I/O), and an exhaustive sweep of every USART2 register access found no bulk-transfer receive loop at all. See `docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md` section 11. |
 | [`live_app_1302.bin`](file:///home/osboxes/Downloads/prado-firmware-reconstruction/hardware/MCU/live_dumps/live_app_1302.bin) | `0x08004000` – `0x0800FFFF` | 48 KB (49,152 B) | `381855df8ca4e9b2071cce02ae3a72bc03be4ecd0d474642417b69075a859b4d` | Authentic native **Limcet-V1.0-1302** Toyota Prado companion firmware |
 
 ---

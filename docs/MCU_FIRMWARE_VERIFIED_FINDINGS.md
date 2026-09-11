@@ -3451,3 +3451,26 @@ Both UART4 and UART5 are clocked via `RCC->APB1ENR` bits 19 and 20, initialized 
     - Inbound bytes stored into `+0x3F` (`0xD3`), `+0x4E` (`0x50`), and `+0x5D` (`0xD6`) from UART4 are transmitted out over UART5 when polled.
     - Incoming packets on UART5 update the identity and status buffers.
   - All write operations enforce strict, hard-coded bounds checks (`cmp r0, #3` or `cmp r0, #9`) before advancing, completely preventing any buffer overflow.
+
+---
+
+### 4. SWD Debugging, Reset Mechanics, & Debug Probe Analysis (ST-Link HLA vs. Raspberry Pi Pico)
+
+A dedicated, comprehensive hardware and protocol guide has been compiled in:
+👉 **[`docs/MCU_SWD_DEBUGPROBE_AND_RDP_EXPLOIT_GUIDE.md`](file:///home/osboxes/Downloads/prado-firmware-reconstruction/docs/MCU_SWD_DEBUGPROBE_AND_RDP_EXPLOIT_GUIDE.md)**
+
+#### Key Takeaways for Future Sessions:
+1. **Root Cause of ST-Link / OpenOCD Failures**:
+   - The Prado board exposes a 4-pin SWD header (`SWDIO`, `SWCLK`, `GND`, `VCC`) with **no physical `NRST` trace** (`reset_config none`).
+   - ST-Link uses High-Level Adapter firmware (`hla_swd`) which blocks raw DAP register manipulation, preventing `cortex_m maskisr off` from executing (required for Zapb's CVE-2020-8004 exception exploit).
+   - Under RDP Level 1, issuing `reset halt` or soft-reset (`SYSRESETREQ`) causes the core to BusFault (`CFSR=0x00008200`, `BFAR=0x080004D4`) on its first flash literal read at `0x080004AC`, permanently locking into `HardFault_Handler`.
+2. **Raspberry Pi Pico (RP2040) Capabilities**:
+   - **As CMSIS-DAP (`debugprobe`)**: Gives OpenOCD direct, raw access to DAP registers (`DHCSR`, `DEMCR`), enabling `cortex_m maskisr off` and custom reset configs (`vectreset`).
+   - **As Standalone PIO Exploit Engine**: Enables hardware race condition attacks:
+     - `CTXz/stm32f1-picopwner`: Uses CoreDebug FPB breakpoint persistence across reset to hijack execution before RDP asserts. Requires soldering a wire to **STM32 Pin 7 (`NRST`)**.
+     - `racerxdl/stm32f0-pico-dump`: Glitches power rails to extract flash words over SWD during the transient window before option-byte verification latches.
+3. **Current Operational Position**:
+   - The application firmware `can_app.bin` is already completely dumped and decompiled.
+   - The factory bootloader is fully reconstructed in `hardware/MCU/bootloader/`.
+   - Experimental code can be executed cleanly in SRAM (`0x20000000`) via SWD without triggering RDP1 flash faults (`docs/MCU_SRAM_TEST_EXECUTION_PLAN.md`).
+

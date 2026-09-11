@@ -162,16 +162,17 @@ def determine_num_ext_interrupts(openocd):
     return 68
 
 def calculate_vtor_exc(address, num_exceptions):
-    # For Cortex-M3 (ARMv7-M), vector table alignment must be the power of 2
-    # covering the number of exceptions (for 84 exceptions, 128 words = 512 bytes = 0x200).
-    table_size = 128
+    # For Cortex-M3 on STM32F105 (84 exceptions), using table_size = 64 (256 bytes)
+    # allows 100% coverage: all 64 words per block are directly accessible or
+    # wrap around to external interrupts 64..83 (< 84).
+    table_size = 64
     vtor_address = align(address, table_size * WORD_SIZE)
     exception_number = (address - vtor_address) // WORD_SIZE
 
     if exception_number not in INACCESSIBLE_EXC_NUMBERS:
         return (vtor_address, exception_number)
 
-    # Use wrap-around for inaccessible exception numbers if target address is in lower half
+    # Use wrap-around for inaccessible exception numbers if target address is in unaligned block
     if (vtor_address % (table_size * 2 * WORD_SIZE)) != 0 \
             and (exception_number + table_size) < num_exceptions:
         exception_number += table_size
@@ -237,12 +238,12 @@ if __name__ == '__main__':
         (vtor_address, exception_number) = calculate_vtor_exc(
             address, num_exceptions)
 
-        if (address % 0x200) == 0x00:
+        if address == 0x08000000 or address == 0x00000000:
             # Vector table base: SP
             oocd.send('reset halt')
             oocd.write_memory(VTOR_ADDR, [vtor_address])
             recovered_value = oocd.read_register(Register.SP)
-        elif (address % 0x200) == 0x04:
+        elif address == 0x08000004 or address == 0x00000004:
             # Vector table entry 1: Reset vector
             oocd.send('reset halt')
             oocd.write_memory(VTOR_ADDR, [vtor_address])

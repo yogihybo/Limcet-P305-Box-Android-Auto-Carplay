@@ -1,9 +1,13 @@
-/* Linker script for STM32F105 Resident IAP Bootloader (16 KB) */
+/* Linker script for STM32F105 Resident IAP Bootloader (12 KB) */
 ENTRY(Reset_Handler)
 
 MEMORY
 {
-    FLASH (rx)  : ORIGIN = 0x08000000, LENGTH = 16K
+    /* Real factory bootloader occupies 0x08000000-0x08002FFF (12K);
+     * 0x08003000 is the real application vector table base -- confirmed
+     * via disassembly, see docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md
+     * sections 5 and 6. */
+    FLASH (rx)  : ORIGIN = 0x08000000, LENGTH = 12K
     RAM   (xrw) : ORIGIN = 0x20000000, LENGTH = 64K
 }
 

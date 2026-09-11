@@ -3521,3 +3521,70 @@ This is a complete, real "validate app vector table then jump" routine -- the li
 - `hardware/MCU/bootloader/src/main.c`'s `is_app_valid()` needs the same base-address correction.
 - The Volvo-reference-derived `0x08004000` assumption appears elsewhere in this project's docs/tooling (e.g. `mcu-probe`'s own target addressing) and hasn't been swept for this correction yet.
 
+### 6. Bootloader Flash-Control Function Cluster — Disassembly-Verified (2026-09-12)
+
+Direct Thumb disassembly (`capstone`) of `hardware/MCU/live_dumps/live_bootloader.bin`, cross-referenced against `docs/MCU_FIRMWARE_COMPLETE_FUNCTION_AUDIT.md`'s function-boundary table (an independently produced, untracked audit found in this checkout — its bootloader-region boundary claims were spot-checked here and hold up). Register offsets below are relative to the real STM32F1 `FLASH_R_BASE = 0x40022000`: `KEYR=+0x04`, `OPTKEYR=+0x08`, `SR=+0x0C`, `CR=+0x10`, `AR=+0x14`.
+
+**Confirms item 2 from the bring-up plan**: the bootloader's own code/data ends by `0x08001F60`; `0x08002048`–`0x08002FFF` in `live_bootloader.bin` is unprogrammed erased flash (`0xFFFFFFFF`), not bootloader content. **The real bootloader region is 12K (`0x08000000`–`0x08002FFF`)**, matching `MCU_FIRMWARE_COMPLETE_FUNCTION_AUDIT.md`'s independent claim — `hardware/MCU/bootloader/stm32f105_bootloader.ld`'s `FLASH LENGTH = 16K` should become `12K`.
+
+**`flash_unlock()` — confirmed, real function at `0x0800052A`**:
+```
+800052a: ldr  r0, [pc, #0x3c4]   ; r0 = FLASH_KEY1 (0x45670123)
+800052c: ldr  r1, [pc, #0x3bc]   ; r1 = FLASH_R_BASE
+800052e: str  r0, [r1, #4]       ; FLASH_KEYR = KEY1
+8000530: ldr  r0, [pc, #0x3c0]   ; r0 = FLASH_KEY2 (0xCDEF89AB)
+8000532: str  r0, [r1, #4]       ; FLASH_KEYR = KEY2
+8000534: bx   lr
+```
+**No `FLASH_CR` LOCK-bit check anywhere in this function** — confirms item 5 from the bring-up plan: the real firmware writes the unlock sequence unconditionally, unlike clean-room's `flash_unlock()` in `hardware/MCU/bootloader/src/ymodem.c`, which only writes the keys if `FLASH_CR` bit 7 is already set. A byte-identical duplicate of this same routine exists immediately after at `0x08000536`–`0x08000540` (same instructions, separate literal-pool slots) — likely just how the compiler emitted two call sites without deduplicating, not functionally distinct.
+
+**`flash_lock()` — confirmed, real function at `0x08000542`**:
+```
+8000542: ldr  r0, [pc, #0x3a8]   ; r0 = FLASH_R_BASE
+8000544: ldr  r0, [r0, #0x10]    ; r0 = FLASH_CR
+8000546: orr  r0, r0, #0x80      ; set LOCK (bit 7)
+800054a: ldr  r1, [pc, #0x3a0]
+800054c: str  r0, [r1, #0x10]    ; FLASH_CR = r0
+800054e: bx   lr
+```
+Also unconditional (plain OR-and-store, no guard) — matches clean-room's `flash_lock()` shape. Byte-identical duplicate at `0x08000550`–`0x0800055c`.
+
+**`flash_wait_busy()`-equivalent — real function is a two-part status/timeout construct, NOT a bare BSY poll loop like clean-room's**:
+- `0x0800055e` (status-classify leaf): reads `FLASH_SR`, returns `1` if bit0 (BSY) set, `2` if bit2 (PGERR) set, `3` if bit4 (WRPRTERR) set, else `4` (success/idle).
+- `0x0800058e` (retry wrapper): takes a retry-count in `r0`, loops calling the classify leaf while status `== 1` (busy) and the counter hasn't hit zero; returns `5` (timeout) if the counter exhausts while still busy, otherwise returns the real terminal status code (2/3/4). Every erase/program call site below passes `0xb0000` (720,896) as the retry count.
+
+Clean-room's `flash_wait_busy()` only polls the raw BSY bit with no error-code discrimination or timeout — functionally similar for the success path, but does not replicate the real PGERR/WRPRTERR discrimination or the timeout-return behavior.
+
+**`flash_erase_page()` — confirmed, real function at `0x080005B4`, single-page eraser (not a range loop)**:
+```
+80005b4: push {r4,r5,lr}
+80005b6: mov  r4, r0             ; r4 = page address (argument)
+80005b8: movs r5, #4
+80005ba: mov.w r0, #0xb0000
+80005be: bl   #0x800058e         ; wait_busy(0xb0000)
+80005c2: mov  r5, r0
+80005c4: cmp  r5, #4
+80005c6: bne  #0x80005f8         ; skip erase if not idle/ready
+80005c8: ldr  r0,[FLASH_CR]
+80005cc: orr  r0, r0, #2         ; PER (bit1, page erase)
+80005d2: str  r0,[FLASH_CR]
+80005d6: str  r4, [r1, #0x14]    ; FLASH_AR = page address
+80005d8: ldr  r0,[FLASH_CR]
+80005da: orr  r0, r0, #0x40      ; STRT (bit6)
+80005de: str  r0,[FLASH_CR]
+80005e0: mov.w r0, #0xb0000
+80005e4: bl   #0x800058e         ; wait_busy(0xb0000) again
+80005ea: ldr  r0,[FLASH_CR]
+80005f0: and  r0, r0, #0x1ffd    ; clear PER (bit1)
+80005f6: str  r0,[FLASH_CR]
+80005f8: mov  r0, r5
+80005fa: pop  {r4,r5,pc}
+```
+Erases exactly one page at the address passed in. **This means the real firmware's app-erase logic loops over pages by calling this once per page from a caller**, not via a single self-contained multi-page loop the way clean-room's `flash_erase_app_pages()` is written — the caller-side loop hasn't been located yet (see open items below).
+
+**`flash_mass_erase()` — found, NOT present in clean-room at all, real function at `0x08000666`**: same PER/AR/STRT-shaped sequence but sets `FLASH_CR` bit2 (MER, mass erase) instead of bit1+AR. Not currently a target for clean-room parity (mass erase isn't part of the YMODEM per-page update flow as clean-room implements it) but recorded here since it's real, confirmed firmware behavior worth knowing about — possibly used by a full-chip-erase recovery path not yet traced.
+
+**Option-byte programming functions found at `0x080006BE`–`0x08000A1C`** (`0x080006BE`, `0x080007F6`, `0x08000906`, `0x080009A2`, plus the read-helper `0x08000A06`): these are option-byte (RDP/USER/WRP0-3/Data0-1, `0x1FFFF800` region) erase/program routines, using `OPTKEYR` (`+0x08`) and `OPTER`/`OPTPG` (`FLASH_CR` bits 5/4) rather than the main `KEYR`/`PER`/`PG` path. **Not part of the app-flashing path** — confirmed real, but out of scope for YMODEM bring-up; recorded so a future reader doesn't mistake these for the missing `flash_write_page()`.
+
+**Still not located, real open items for the next RE pass**: the actual `flash_write_page()`/program-loop equivalent (PG bit + half-word writes to an arbitrary caller-supplied app-flash address, as opposed to the option-byte-specific half-word writes found above), and `ymodem_receive_and_flash()` itself (the SOH/STX/EOT packet state machine). `docs/MCU_FIRMWARE_COMPLETE_FUNCTION_AUDIT.md`'s function table lists `0x080017E2`–`0x0800181C` as calling into `0x0800052A` (flash_unlock, confirmed above) and several UART/GPIO setup routines (`0x08001750`, `0x08001772`, `0x080017CC`, `0x080018BC`, `0x08001EB0`) — this is a promising lead for where the YMODEM receive loop and its page-write calls live, but has not yet been traced instruction-by-instruction.
+

@@ -82,18 +82,36 @@ going forward.
 
 ## What remains genuinely unknown
 
-The **real** vendor bootloader that ships on actual hardware at
-`0x08000000`-`0x08003FFF` has never been captured by this project. The
-one file that ever claimed to be a real dump of it
-(`hardware/MCU/live_dumps/live_bootloader.bin`) was independently
-proven fabricated and retracted -- see that directory's own README and
-`docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md`'s retraction section. Whether
-the *real* bootloader's real IAP protocol implements any read-back or
-diagnostic capability this clean-room reimplementation doesn't is a
-genuinely open question -- RDP Level 1 (confirmed elsewhere in this
-project to gate only the external SWD/JTAG debug port) would not
-prevent such a capability from existing, if the real vendor code
-happens to have one. This can only be resolved by a real hardware
-experiment (trigger `CMD 0xE1` on actual hardware, then probe
-`/dev/ttyHS0` for any response beyond standard YMODEM handshake
-bytes), not by anything checkable in source.
+**Correction (2026-09-12): this section is stale.** It previously
+stated the real vendor bootloader "has never been captured by this
+project" and that `hardware/MCU/live_dumps/live_bootloader.bin` "was
+independently proven fabricated and retracted." That was true of the
+August 28 extraction attempt (a real, documented failure of the
+original `tools/stm32f1_extractor_fixed.py` script), but a September
+11-12, 2026 re-extraction using a Raspberry Pi Pico CMSIS-DAP probe
+(replacing the earlier ST-Link HLA adapter) produced a dump that has
+since been independently authenticated: reproducible across multiple
+runs, cross-referenced against real literal-pool data in the
+application firmware, with the one confirmed artifact word
+root-caused to a real Cortex-M `INVSTATE` fault rather than
+fabrication. See `hardware/MCU/live_dumps/README.md` and
+`docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md` sections 5-6 for the full
+verification methodology and scope limits (not every byte has been
+independently cross-referenced).
+
+This clean-room bootloader was written before that real dump existed,
+from generic STM32F1 reference behavior and the unrelated Volvo
+`DCn32` firmware package -- it should not be treated as a spec for the
+real vendor bootloader's behavior. Disassembly of the real dump has
+already surfaced concrete, confirmed divergences (application base
+address, the `flash_unlock()` LOCK-bit guard) that have been corrected
+in this directory's source; others remain open. See the MCU bootloader
+bring-up plan and `docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md` for current
+status before assuming this clean-room implementation matches real
+hardware behavior in any area not explicitly marked as disassembly-verified.
+
+Whether the *real* bootloader's IAP protocol implements any read-back
+or diagnostic capability this clean-room reimplementation doesn't is
+still a genuinely open question, not yet resolved by the disassembly
+work done so far -- worth revisiting now that a real dump exists to
+check against, rather than only via a live hardware experiment.

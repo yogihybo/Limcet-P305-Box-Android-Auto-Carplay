@@ -3,7 +3,11 @@
 
 #include "stm32f105.h"
 
-#define APP_FLASH_BASE          0x08004000UL
+/* Confirmed via disassembly of the real factory bootloader's app-validation
+ * routine (0x08001844) -- see docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md
+ * sections 5 and 6. Not 0x08004000 (inherited from the unrelated Volvo
+ * DCn32 reference firmware). */
+#define APP_FLASH_BASE          0x08003000UL
 #define APP_FLASH_END           0x0801FFFFUL
 #define FLASH_PAGE_SIZE         2048UL
 

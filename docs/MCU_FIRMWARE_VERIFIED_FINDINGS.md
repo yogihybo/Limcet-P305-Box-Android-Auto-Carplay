@@ -3588,3 +3588,36 @@ Erases exactly one page at the address passed in. **This means the real firmware
 
 **Still not located, real open items for the next RE pass**: the actual `flash_write_page()`/program-loop equivalent (PG bit + half-word writes to an arbitrary caller-supplied app-flash address, as opposed to the option-byte-specific half-word writes found above), and `ymodem_receive_and_flash()` itself (the SOH/STX/EOT packet state machine). `docs/MCU_FIRMWARE_COMPLETE_FUNCTION_AUDIT.md`'s function table lists `0x080017E2`–`0x0800181C` as calling into `0x0800052A` (flash_unlock, confirmed above) and several UART/GPIO setup routines (`0x08001750`, `0x08001772`, `0x080017CC`, `0x080018BC`, `0x08001EB0`) — this is a promising lead for where the YMODEM receive loop and its page-write calls live, but has not yet been traced instruction-by-instruction.
 
+### 7. Real `SystemInit()`-equivalent found and confirmed — item 4 resolved (2026-09-12)
+
+`Reset_Handler` (`0x080004AC`) resolves its two literal-pool call targets to `0x08000338` (called first, via `blx`) and `0x08000150` (tail-jumped to via `bx`, the C-runtime data/bss-copy routine that eventually calls `main`) — confirmed by direct literal-pool read, not inferred from context. **The real firmware calls a `SystemInit()`-equivalent BEFORE the data/bss copy, in the opposite order from clean-room's `startup_stm32f105.c`, which had no such call at all.**
+
+Disassembly of `0x08000338`, with every mask/constant literal resolved directly against the binary (not assumed from a generic CMSIS template):
+```
+8000338: ldr r0,[RCC_BASE]; ldr r0,[r0]; orr r0,r0,#1; str r0,[RCC->CR]      ; HSION
+8000348: ldr r0,[RCC->CFGR]; ands r0, 0xf0ff0000; str r0,[RCC->CFGR]         ; confirmed mask literal
+8000354: ldr r0,[RCC->CR]; ands r0, 0xfef6ffff; str r0,[RCC->CR]             ; confirmed mask literal
+8000360: ldr r0,[RCC->CR]; bic r0,r0,#0x40000; str r0,[RCC->CR]              ; clear HSEBYP (bit18)
+800036a: ldr r0,[RCC->CFGR]; bic r0,r0,#0x7f0000; str r0,[RCC->CFGR]         ; clear PLLSRC/PLLXTPRE/PLLMUL/USBPRE
+8000374: ldr r0,[RCC->CR]; bic r0,r0,#0x14000000; str r0,[RCC->CR]           ; clear PLL2ON(26)/PLL3ON(28)
+800037c: mov.w r0,#0xff0000; str r0,[RCC->CIR]                               ; disable+clear all RCC IT flags
+8000382: movs r0,#0; str r0,[RCC->CFGR2]                                     ; reset PREDIV1/2, PLL2MUL/PLL3MUL
+800038a: mov.w r0,#0x8000000; ldr r1,[SCB_VTOR_ADDR]; str r0,[r1]            ; SCB->VTOR = FLASH_BASE
+```
+RCC base confirmed `0x40021000`, FLASH_R_BASE confirmed `0x40022000` via direct literal-pool reads (same values clean-room already uses). This is a standard ST-published SystemInit() shape for STM32F105/107 Connectivity Line devices, not a project-specific oddity.
+
+**Fixed**: added a `SystemInit()` static function to `hardware/MCU/bootloader/src/startup_stm32f105.c`, called at the very start of `Reset_Handler` (matching the real call order), using the exact mask constants above (`0xF0FF0000`, `0xFEF6FFFF`) rather than a remembered/generic template value.
+
+**Also fixed, small and low-risk**: `clock_init()` in `main.c` set `FLASH_ACR = 0x02` (LATENCY=2 only). The real `clock_init()`-equivalent (`0x08000224`) sets `FLASH_ACR |= 0x10` (PRFTBE, prefetch buffer enable) in addition to LATENCY=2 — confirmed via disassembly. Clean-room now sets `0x12` to match.
+
+### 8. Real PLL/CFGR2 configuration found — surprising result, FLAGGED NOT APPLIED (2026-09-12)
+
+Disassembly of the real `clock_init()`-equivalent (`0x08000224`-`0x0800032E`) found that, after enabling HSE and waiting for `HSERDY`, the real firmware configures `RCC->CFGR2` (PREDIV1/PREDIV2/PLL2MUL/PLL3MUL, all literals resolved directly against the binary, not assumed):
+
+```
+CFGR2 = (CFGR2 & 0xfffef000) | 0x00010644
+```
+Decoded: `PREDIV1=4` (÷5), `PREDIV2=4` (÷5), `PLL2MUL=6` (×8), `PREDIV1SRC=1` (PREDIV1 fed from PLL2's output, not HSE directly). The main PLL is then configured with `PLLSRC=1` (PREDIV1 output selected) and `PLLMUL=7` (×9) — matching clean-room's assumed ×9 multiplier — but if `PREDIV1SRC` really does route PLL2's output into the main SYSCLK path here, the arithmetic works out to approximately **HSE(8MHz) → PREDIV2(÷5)=1.6MHz → PLL2(×8)=12.8MHz → PREDIV1(÷5)=2.56MHz → mainPLL(×9)≈23.04MHz**, not the 72MHz clean-room's `clock_init()` comment assumes.
+
+**This is flagged, NOT applied to clean-room source.** Reasons: (1) the resulting ~23MHz figure is an unusually specific, non-round number that doesn't obviously match any documented reference clock target, raising the possibility of a bitfield-encoding misread on this pass rather than genuinely unusual real firmware behavior; (2) misconfiguring RCC/PLL registers on real silicon can hang a board requiring a full reset/reflash to recover, so this needs real hardware confirmation (e.g. toggling a GPIO at a known rate and measuring with a scope/logic analyzer, per the bring-up plan's Phase E) before being trusted enough to change working, build-verified clean-room code. **Do not implement this CFGR2/PLL2 sequence in clean-room's `clock_init()` without independent verification** — either a second disassembly pass double-checking the RM0008 CFGR2 bitfield semantics, or a real measured clock-rate confirmation on hardware.
+

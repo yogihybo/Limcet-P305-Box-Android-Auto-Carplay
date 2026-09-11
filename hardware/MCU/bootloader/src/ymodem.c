@@ -4,10 +4,11 @@
 #define FLASH_KEY2 0xCDEF89ABUL
 
 void flash_unlock(void) {
-    if (*((volatile uint32_t *)0x40022010UL) & (1UL << 7)) { /* FLASH_CR LOCK */
-        *((volatile uint32_t *)0x40022004UL) = FLASH_KEY1;  /* FLASH_KEYR */
-        *((volatile uint32_t *)0x40022004UL) = FLASH_KEY2;
-    }
+    /* Real factory bootloader (0x0800052A) writes the unlock sequence
+     * unconditionally, with no LOCK-bit guard -- see
+     * docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md section 6. */
+    *((volatile uint32_t *)0x40022004UL) = FLASH_KEY1;  /* FLASH_KEYR */
+    *((volatile uint32_t *)0x40022004UL) = FLASH_KEY2;
 }
 
 void flash_lock(void) {

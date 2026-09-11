@@ -3,7 +3,11 @@ ENTRY(Reset_Handler)
 
 MEMORY
 {
-    FLASH (rx)      : ORIGIN = 0x08004000, LENGTH = 112K
+    /* Real factory bootloader's app-validation routine (0x08001844) confirms
+     * the real application vector table base is 0x08003000, not 0x08004000 --
+     * see docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md sections 5 and 6.
+     * 128K total flash - 12K bootloader = 116K available to the application. */
+    FLASH (rx)      : ORIGIN = 0x08003000, LENGTH = 116K
     RAM   (xrw)     : ORIGIN = 0x20000000, LENGTH = 64K
 }
 

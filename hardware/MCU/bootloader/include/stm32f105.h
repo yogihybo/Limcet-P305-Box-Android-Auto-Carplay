@@ -8,7 +8,11 @@
 
 /* Base Addresses */
 #define FLASH_BASE            0x08000000UL
-#define FLASH_APP_BASE        0x08004000UL
+/* Confirmed via disassembly of the real factory bootloader's app-validation
+ * routine (0x08001844) -- see docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md
+ * sections 5 and 6. Not 0x08004000 (that value was inherited from the
+ * unrelated Volvo DCn32 reference firmware). */
+#define FLASH_APP_BASE        0x08003000UL
 #define SRAM_BASE             0x20000000UL
 #define PERIPH_BASE           0x40000000UL
 

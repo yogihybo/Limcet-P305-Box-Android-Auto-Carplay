@@ -66,7 +66,7 @@ bool is_app_valid(void) {
     uint32_t app_sp = *((volatile uint32_t *)APP_FLASH_BASE);
     uint32_t app_reset = *((volatile uint32_t *)(APP_FLASH_BASE + 4));
 
-    /* Valid Stack Pointer (0x20000000..0x20010000) and Valid Code Pointer (0x08004000..0x0801FFFF) */
+    /* Valid Stack Pointer (0x20000000..0x20010000) and Valid Code Pointer (APP_FLASH_BASE..APP_FLASH_END) */
     if (app_sp >= 0x20000000UL && app_sp <= 0x20010000UL &&
         app_reset >= APP_FLASH_BASE && app_reset <= APP_FLASH_END &&
         (app_reset & 1) == 1) {

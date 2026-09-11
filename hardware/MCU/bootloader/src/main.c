@@ -5,8 +5,10 @@ static void clock_init(void) {
     RCC->CR |= (1UL << 16);
     while ((RCC->CR & (1UL << 17)) == 0) {}
 
-    /* FLASH Latency = 2 wait states for 72MHz */
-    *((volatile uint32_t *)0x40022000UL) = 0x02;
+    /* FLASH Latency = 2 wait states for 72MHz, plus PRFTBE (prefetch
+     * buffer enable) -- real bootloader (0x08000224) sets both, see
+     * docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md section 6. */
+    *((volatile uint32_t *)0x40022000UL) = 0x12;
 
     /* PLL = HSE * 9 = 72 MHz */
     RCC->CFGR = (0UL << 4) | (4UL << 8) | (0UL << 11) | (1UL << 16) | (7UL << 18);

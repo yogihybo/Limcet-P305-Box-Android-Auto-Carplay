@@ -3621,3 +3621,29 @@ Decoded: `PREDIV1=4` (÷5), `PREDIV2=4` (÷5), `PLL2MUL=6` (×8), `PREDIV1SRC=1`
 
 **This is flagged, NOT applied to clean-room source.** Reasons: (1) the resulting ~23MHz figure is an unusually specific, non-round number that doesn't obviously match any documented reference clock target, raising the possibility of a bitfield-encoding misread on this pass rather than genuinely unusual real firmware behavior; (2) misconfiguring RCC/PLL registers on real silicon can hang a board requiring a full reset/reflash to recover, so this needs real hardware confirmation (e.g. toggling a GPIO at a known rate and measuring with a scope/logic analyzer, per the bring-up plan's Phase E) before being trusted enough to change working, build-verified clean-room code. **Do not implement this CFGR2/PLL2 sequence in clean-room's `clock_init()` without independent verification** — either a second disassembly pass double-checking the RM0008 CFGR2 bitfield semantics, or a real measured clock-rate confirmation on hardware.
 
+### 9. `flash_erase_app_pages()` located and confirmed — item 7 partially resolved (2026-09-12)
+
+Real function at `0x08001B82` (traced from the `0x080017E2` dispatcher's call graph, per `docs/MCU_FIRMWARE_COMPLETE_FUNCTION_AUDIT.md`'s call list):
+```
+8001b82: push {r4,lr}
+8001b84: movs r4, #0
+8001b86: movs r0, #0x34
+8001b88: bl   #0x8000a60          ; option-byte read helper (unrelated to erase itself)
+8001b90: ldr  r1, [pc, ...]       ; r1 = page_size<<16 | APP base-ish literal (page stride encoded in upper halfword)
+8001b92: asrs r2, r1, #0x10       ; r2 = page size (FLASH_PAGE_SIZE = 2048, confirmed by the loop trip count below)
+8001b94: mla  r0, r2, r4, r1      ; r0 = base + page_size * r4
+8001b98: bl   #0x80005b4          ; flash_erase_page(r0)  -- confirmed function from section 6
+8001b9c: adds r0, r4, #1
+8001b9e: uxtb r4, r0
+8001ba0: cmp  r4, #0x3a           ; loop while r4 < 58
+8001ba2: blt  #0x8001b90
+8001ba4: movw r1, #0x5aa5         ; option-byte program call afterward, magic value 0x5aa5
+8001ba8: ldr  r0, [pc, ...]
+8001baa: subs r0, r0, #2
+8001bac: bl   #0x80007ba          ; option-byte program function (confirmed from section 6)
+8001bb0: pop  {r4, pc}
+```
+**58 iterations × 2048-byte pages = 118,784 bytes ≈ 116K** — this independently cross-confirms the app-region size computed in section 6 (`128K total - 12K bootloader = 116K app region`), from a completely different disassembly path than the one used to derive it there. Real firmware implements per-page erase as a loop calling the single-page `flash_erase_page()` (`0x080005B4`) once per page, exactly the structure inferred (but not yet confirmed) in section 6 — clean-room's `flash_erase_app_pages()` already loops correctly over the (now base/size-corrected) address range with an inline PER/AR/STRT sequence, so this is a structural confirmation rather than a required code change.
+
+**One real, unexplained detail NOT replicated in clean-room**: after the erase loop, the real firmware calls the option-byte-program function (`0x080007BA`, confirmed in section 6) with a magic value `0x5AA5`. Purpose not yet determined (candidates: a completion/status flag written to a spare option byte, or an RDP-level toggle) — **flagged as a real open item, not implemented**, since option-byte programming is inherently higher-risk (can affect RDP level / permanently affect the chip's protection state) and its purpose isn't understood yet. Do not replicate this write until its purpose is confirmed by further disassembly of what reads that particular option byte back.
+

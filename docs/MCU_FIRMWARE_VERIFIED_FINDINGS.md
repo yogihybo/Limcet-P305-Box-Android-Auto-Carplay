@@ -3474,3 +3474,50 @@ A dedicated, comprehensive hardware and protocol guide has been compiled in:
    - The factory bootloader is fully reconstructed in `hardware/MCU/bootloader/`.
    - Experimental code can be executed cleanly in SRAM (`0x20000000`) via SWD without triggering RDP1 flash faults (`docs/MCU_SRAM_TEST_EXECUTION_PLAN.md`).
 
+---
+
+### 5. Authenticity Verification & Correction to "0% Artifacts" Claim (2026-09-12)
+
+`hardware/MCU/live_dumps/live_bootloader.bin` and `live_app_1302.bin` (introduced in `118a730`) were independently cross-checked byte-by-byte and disassembly-verified before being trusted, given this project's own prior history of a retracted fake dump under these exact filenames (`aba08e68`, same address range and size). Recorded here so the verification method and its real result are on record, not just the "authentic" claim.
+
+#### 5.1 The dump is real, but the commit's "0% artifacts" claim was wrong
+
+The bootloader's vector table (`0x08000000`-`0x080000FC`) was confirmed reproducible across two independent extraction runs performed live during this verification. Separately, cross-referencing every genuine literal-pool word (found via actual disassembly of `ldr rX, [pc, #N]` instructions, not a blind byte scan) against the corresponding word in `live_app_1302.bin` — using the two regions where the two binaries' compiled Standard Peripheral Library code correlates (bootloader `0x0E38`-`0x1752` maps to app `0x080059B4`-`0x080059CE`-ish region at a constant `+0x77C` offset, ~89.8% byte match; a second region at `0x04EC`-`0x0E00` correlates at `+0x378`) — found exactly one real artifact:
+
+- **`0x08001234`** (a literal referenced by `RCC_DeInit()`-shaped code at `0x08000E44`, confirmed via disassembly) contains **`0x802CF8D8`** instead of the expected `0x40021000` (`RCC_BASE`, confirmed present at the correlating literal in `live_app_1302.bin`, and confirmed as the correct value from the surrounding, otherwise-identical literal pool -- 12 of the other 13 words in this exact pool match the app byte-for-byte: `0xF0FF0000`, `0xFEF6FFFF`, `0x42420000`, `0x424205C4`, `0x42420480`, the HSE frequency constants, etc.).
+- **Root cause, confirmed via the ARM architecture itself, not speculation**: `0x40021000` has bit 0 = 0. Cortex-M cores only support Thumb state -- a hardware exception vector fetch of a value with bit 0 = 0 triggers a genuine `INVSTATE` UsageFault instead of a normal branch. The extraction technique (CVE-2020-8004, relocating VTOR to read protected flash words back via recovered exception PCs) hit exactly this case for this one word, and `recover_pc()` captured pipeline/adjacent-instruction state instead of the intended vector value. This is corroborated directly: `0x802CF8D8` shares its low halfword (`0xF8D8`) with the two real neighboring instruction words at `0x08001200` and `0x08001210` (`0x8004F8D8`, an `ldr.w r8, [r8, #4]` encoding) -- a fabricated/spliced file would have no reason to produce a value that happens to match adjacent real code bytes this specifically.
+
+A second candidate mismatch (`0x08000AA4` = `0x1FFFF800`) was checked and is **not** an artifact -- it's the real STM32F1 Option Bytes base address, sitting immediately after a textbook `FLASH_KEYR` unlock sequence (`0x40022000` FLASH base, `0x45670123`/`0xCDEF89AB` -- the real, ST-documented KEY1/KEY2 unlock values) that the application simply has no equivalent code path for, so there's nothing to correlate against there. Confirmed via its own neighbor check: no match to any nearby instruction word, unlike the genuine `0x08001234` artifact.
+
+**Verdict**: real hardware dump, one confirmed, root-caused, non-fabrication artifact word in the ~5,700 bytes checked against a cross-reference. The remaining ~10.6KB of the bootloader has no independent reference to check the same way and has not been verified word-by-word -- flagged as a real, open scope gap, not assumed clean by extension.
+
+#### 5.2 Real correction: application base is `0x08003000`, not `0x08004000`
+
+Independently confirmed via direct disassembly of the bootloader's own app-validation routine at `0x08001844`-`0x0800187A`:
+
+```
+8001844: ldr  r0, [pc, #96]  @ (0x80018a8)   ; r0 = 0x20141003
+8001846: ldr  r1, [pc, #100] @ (0x80018ac)   ; r1 = 0x20004000
+8001848: str  r0, [r1, #0]                    ; *(0x20004000) = 0x20141003
+800184a: ldr  r0, [pc, #76]  @ (0x8001898)   ; r0 = 0x08002ffe  (literal value, confirmed)
+800184c: adds r0, r0, #2                      ; r0 = 0x08003000
+800184e: ldr  r0, [r0, #0]                    ; r0 = *(0x08003000)         <- MSP candidate
+8001850: ldr  r1, [pc, #92]  @ (0x80018b0)   ; r1 = 0x2ffe0000 (literal value, confirmed)
+8001852: ands r0, r1
+8001854: cmp.w r0, #0x20000000
+8001858: bne.n 0x800187e                      ; invalid -> error/IAP path
+800185a: ldr  r0, [pc, #60]  @ (0x8001898)   ; r0 = 0x08002ffe again
+800185c: adds r0, r0, #2                      ; r0 = 0x08003000
+800185e: ldr  r0, [r0, #4]                    ; r0 = *(0x08003004)         <- Reset vector candidate
+...
+800187a: blx  r0                              ; jump into the application
+```
+
+This is a complete, real "validate app vector table then jump" routine -- the literal at `0x08001898` (confirmed by direct read: value `0x08002ffe`) plus `adds r0,r0,#2` resolves to `0x08003000`, and the `& 0x2FFE0000 == 0x20000000` mask/compare is the same MSP-plausibility check the clean-room bootloader's own `is_app_valid()` already implements -- just at the wrong base address. **The real factory bootloader's application region starts at `0x08003000`, not `0x08004000`** (the assumption this whole project inherited from the generic `DCn32-VOLVO` reference `can_app.bin`).
+
+**Not yet done, flagged as real follow-up work, not assumed automatic**:
+- `hardware/MCU/bootloader/stm32f105_bootloader.ld`: `FLASH LENGTH` should be `12K` (bootloader ends at `0x08002FFF`), not `16K`.
+- `hardware/MCU/source/stm32f105_app.ld`: `FLASH ORIGIN` should be `0x08003000`, not `0x08004000`.
+- `hardware/MCU/bootloader/src/main.c`'s `is_app_valid()` needs the same base-address correction.
+- The Volvo-reference-derived `0x08004000` assumption appears elsewhere in this project's docs/tooling (e.g. `mcu-probe`'s own target addressing) and hasn't been swept for this correction yet.
+

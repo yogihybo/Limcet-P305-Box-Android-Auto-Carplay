@@ -21,11 +21,14 @@ static uint8_t calc_checksum(uint8_t cmd, uint8_t len, const uint8_t *payload) {
 }
 
 void USART2_IRQHandler(void) {
-    /* Check RXNE */
-    if (USART2->SR & (1UL << 5)) {
+    uint32_t sr = USART2->SR;
+    /* Check RXNE or ORE: read SR followed by DR clears ORE cleanly */
+    if (sr & ((1UL << 5) | (1UL << 3))) {
         uint8_t byte = (uint8_t)(USART2->DR & 0xFF);
         
-        switch (g_rx_state) {
+        /* Only process payload byte if RXNE is set (data is valid) */
+        if (sr & (1UL << 5)) {
+            switch (g_rx_state) {
             case 0: /* Wait for header 0x2E */
                 if (byte == UART_HEADER_SIG) {
                     g_rx_state = 1;
@@ -75,6 +78,7 @@ void USART2_IRQHandler(void) {
             default:
                 g_rx_state = 0;
                 break;
+        }
         }
     }
 }
@@ -386,14 +390,17 @@ static uint8_t g_usart3_rx_buf[UART_MAX_PAYLOAD];
 static uint8_t g_usart3_rx_idx = 0;
 
 void USART3_IRQHandler(void) {
-    if (USART3->SR & (1UL << 5)) { /* RXNE */
+    uint32_t sr = USART3->SR;
+    if (sr & ((1UL << 5) | (1UL << 3))) { /* RXNE or ORE */
         uint8_t byte = (uint8_t)(USART3->DR & 0xFF);
-        if (g_usart3_rx_idx < UART_MAX_PAYLOAD) {
-            g_usart3_rx_buf[g_usart3_rx_idx++] = byte;
-        }
-        if (byte == '\n' || g_usart3_rx_idx >= UART_MAX_PAYLOAD) {
-            uart_send_packet(SOC_CMD_BT_AT_RELAY, g_usart3_rx_buf, g_usart3_rx_idx);
-            g_usart3_rx_idx = 0;
+        if (sr & (1UL << 5)) {
+            if (g_usart3_rx_idx < UART_MAX_PAYLOAD) {
+                g_usart3_rx_buf[g_usart3_rx_idx++] = byte;
+            }
+            if (byte == '\n' || g_usart3_rx_idx >= UART_MAX_PAYLOAD) {
+                uart_send_packet(SOC_CMD_BT_AT_RELAY, g_usart3_rx_buf, g_usart3_rx_idx);
+                g_usart3_rx_idx = 0;
+            }
         }
     }
 }

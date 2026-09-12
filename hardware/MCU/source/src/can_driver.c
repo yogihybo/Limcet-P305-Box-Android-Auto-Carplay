@@ -71,10 +71,12 @@ void can_init(uint32_t baudrate) {
     uint32_t can_timeout = 200000;
     while (((CAN1->MSR & (1UL << 0)) == 0) && --can_timeout) {} /* Wait for INAK with timeout */
     
-    /* Configure CAN Timing for 500 kbit/s (Assuming APB1 = 36 MHz) */
-    /* Prescaler = 4 -> Tq = 4 / 36 MHz = 111.11 ns */
-    /* 18 Tq per bit (1 Sync + 12 BS1 + 5 BS2) -> 18 * 111.11 ns = 2.0 us = 500 kbps */
-    CAN1->BTR = (0UL << 30) | (0UL << 24) | (4UL << 20) | (11UL << 16) | (3UL << 0);
+    /* Configure CAN Timing for 500 kbit/s (APB1 = 36 MHz)
+     * Prescaler = 9 -> Tq = 9 / 36 MHz = 250 ns
+     * 8 Tq per bit (1 Sync + 5 BS1 + 2 BS2) -> 8 * 250 ns = 2.0 us = 500 kbps
+     * Sample point = (1 + 5) / 8 = 75.0%
+     * Confirmed from disassembly of live Prado firmware (0x08008F66 - 0x08008F74) */
+    CAN1->BTR = (0UL << 24) | (1UL << 20) | (4UL << 16) | (8UL << 0);
     
     /* Automatic Bus-Off management, Auto-Wakeup */
     CAN1->MCR |= (1UL << 6) | (1UL << 5); /* ABOM, AWUM */

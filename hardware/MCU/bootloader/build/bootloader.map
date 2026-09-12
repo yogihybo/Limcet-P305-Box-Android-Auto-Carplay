@@ -34,7 +34,7 @@ LOAD build/ymodem.o
                 0x08000000                g_pfnVectors
                 0x08000040                        . = ALIGN (0x4)
 
-.text           0x08000040      0x498
+.text           0x08000040      0x508
                 0x08000040                        . = ALIGN (0x4)
  *(.text)
  *(.text*)
@@ -70,50 +70,50 @@ LOAD build/ymodem.o
                 0x08000188       0x20 build/main.o
                 0x08000188                jump_to_application
  .text.startup.main
-                0x080001a8       0x9c build/main.o
+                0x080001a8      0x10c build/main.o
                 0x080001a8                main
  .text.flash_wait_busy
-                0x08000244       0x10 build/ymodem.o
+                0x080002b4       0x10 build/ymodem.o
  .text.flash_unlock
-                0x08000254       0x18 build/ymodem.o
-                0x08000254                flash_unlock
+                0x080002c4       0x18 build/ymodem.o
+                0x080002c4                flash_unlock
  .text.flash_lock
-                0x0800026c       0x10 build/ymodem.o
-                0x0800026c                flash_lock
+                0x080002dc       0x10 build/ymodem.o
+                0x080002dc                flash_lock
  .text.flash_erase_app_pages
-                0x0800027c       0x4c build/ymodem.o
-                0x0800027c                flash_erase_app_pages
+                0x080002ec       0x4c build/ymodem.o
+                0x080002ec                flash_erase_app_pages
  .text.flash_write_page
-                0x080002c8       0x48 build/ymodem.o
-                0x080002c8                flash_write_page
+                0x08000338       0x48 build/ymodem.o
+                0x08000338                flash_write_page
  .text.ymodem_receive_and_flash
-                0x08000310      0x1c8 build/ymodem.o
-                0x08000310                ymodem_receive_and_flash
+                0x08000380      0x1c8 build/ymodem.o
+                0x08000380                ymodem_receive_and_flash
  *(.rodata)
  *(.rodata*)
-                0x080004d8                        . = ALIGN (0x4)
-                0x080004d8                        _etext = .
-                0x080004d8                        _sidata = LOADADDR (.data)
+                0x08000548                        . = ALIGN (0x4)
+                0x08000548                        _etext = .
+                0x08000548                        _sidata = LOADADDR (.data)
 
-.glue_7         0x080004d8        0x0
- .glue_7        0x080004d8        0x0 linker stubs
+.glue_7         0x08000548        0x0
+ .glue_7        0x08000548        0x0 linker stubs
 
-.glue_7t        0x080004d8        0x0
- .glue_7t       0x080004d8        0x0 linker stubs
+.glue_7t        0x08000548        0x0
+ .glue_7t       0x08000548        0x0 linker stubs
 
-.vfp11_veneer   0x080004d8        0x0
- .vfp11_veneer  0x080004d8        0x0 linker stubs
+.vfp11_veneer   0x08000548        0x0
+ .vfp11_veneer  0x08000548        0x0 linker stubs
 
-.v4_bx          0x080004d8        0x0
- .v4_bx         0x080004d8        0x0 linker stubs
+.v4_bx          0x08000548        0x0
+ .v4_bx         0x08000548        0x0 linker stubs
 
-.iplt           0x080004d8        0x0
- .iplt          0x080004d8        0x0 build/startup_stm32f105.o
+.iplt           0x08000548        0x0
+ .iplt          0x08000548        0x0 build/startup_stm32f105.o
 
-.rel.dyn        0x080004d8        0x0
- .rel.iplt      0x080004d8        0x0 build/startup_stm32f105.o
+.rel.dyn        0x08000548        0x0
+ .rel.iplt      0x08000548        0x0 build/startup_stm32f105.o
 
-.data           0x20000000        0x0 load address 0x080004d8
+.data           0x20000000        0x0 load address 0x08000548
                 0x20000000                        . = ALIGN (0x4)
                 0x20000000                        _sdata = .
  *(.data)
@@ -121,10 +121,10 @@ LOAD build/ymodem.o
                 0x20000000                        . = ALIGN (0x4)
                 0x20000000                        _edata = .
 
-.igot.plt       0x20000000        0x0 load address 0x080004d8
+.igot.plt       0x20000000        0x0 load address 0x08000548
  .igot.plt      0x20000000        0x0 build/startup_stm32f105.o
 
-.bss            0x20000000        0x0 load address 0x080004d8
+.bss            0x20000000        0x0 load address 0x08000548
                 0x20000000                        . = ALIGN (0x4)
                 0x20000000                        _sbss = .
  *(.bss)

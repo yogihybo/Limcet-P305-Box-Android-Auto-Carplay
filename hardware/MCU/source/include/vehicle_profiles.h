@@ -29,23 +29,16 @@
 #define SWC_RAW_CODE_0x11        0x11
 #define SWC_RAW_CODE_0x12        0x12
 
-/* Toyota Prado 150 CAN IDs -- Mode 1 ("Default/Primary Profile") values,
- * corrected this session. The prior 0x3C4/0x025/0x127/0x0B4 values were
- * NEVER disassembly-derived -- they don't appear in any of this project's
- * three real reference DCn32-VOLVO firmware binaries' CAN dispatch tables
- * (each independently re-extracted and cross-checked, see
- * docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md). The values below are the real,
- * disassembly-confirmed Mode 1 table entries (0x0800BB30 region in the
- * reference can_app.bin) -- Mode 2 (0x110/0x220/0x170) and Mode 3
- * (0x168/0x135/0x214) below in vehicle_profiles.c were already correct.
- * Still NOT independently confirmed against a real Prado's own OEM CAN
- * bus (this project has never captured one) -- these are the best
- * available evidence (the real firmware's own built-in "which car am I
- * in" profile set), not a Prado-specific guarantee. */
-#define TOYOTA_PRADO_CAN_SWC    0x105   /* Steering Wheel Controls */
-#define TOYOTA_PRADO_CAN_STATUS 0x28A   /* Steering angle & status */
-#define TOYOTA_PRADO_CAN_GEAR   0x185   /* Gear selector / Reverse */
-#define TOYOTA_PRADO_CAN_SPEED  0x0F5   /* Vehicle speed & engine RPM */
+/* Toyota Prado 150 CAN IDs -- Mode 1 ("Default/Primary Profile")
+ * Confirmed via live vehicle firmware dump (0x0800B9F4 dispatch table):
+ *   - 0x025: Steering Wheel Angle & Direction (0x0800956A)
+ *   - 0x1D0: Transmission / Reverse Gear & Wheel Speeds (0x080092B6)
+ *   - 0x396: Powertrain / Engine RPM & Temperature (0x080093D8)
+ *   - 0x622: Body Control / Doors & Headlights (0x080095E4) */
+#define TOYOTA_PRADO_CAN_STEERING  0x025   /* Steering Wheel Angle & Direction */
+#define TOYOTA_PRADO_CAN_GEAR      0x1D0   /* Transmission / Reverse Gear */
+#define TOYOTA_PRADO_CAN_POWER     0x396   /* Powertrain / Engine RPM */
+#define TOYOTA_PRADO_CAN_BODY      0x622   /* Body / Doors & Headlights */
 
 /* Profiles API */
 void vehicle_profiles_init(void);

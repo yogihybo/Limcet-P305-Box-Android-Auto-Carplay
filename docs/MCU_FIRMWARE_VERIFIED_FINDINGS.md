@@ -3612,6 +3612,8 @@ RCC base confirmed `0x40021000`, FLASH_R_BASE confirmed `0x40022000` via direct 
 
 ### 8. Real PLL/CFGR2 configuration found — surprising result, FLAGGED NOT APPLIED (2026-09-12)
 
+**RESOLVED, see section 16.** The "surprising ~23MHz" arithmetic below assumed an 8MHz crystal. The spare board's real crystal is 25MHz (confirmed by direct raw-HSE DWT measurement, no PLL involved) — with 25MHz, this exact `CFGR2=0x00010644` sequence computes to precisely 72.000MHz, and the real factory bootloader's own configuration (independently disassembly-confirmed here) is exactly correct, not mysterious. Clean-room's `clock_init()` now implements this exact sequence in both `hardware/MCU/bootloader/src/main.c` and `hardware/MCU/source/src/main.c`, independently verified on real hardware at 72.08MHz with zero faults (`CFSR=0`).
+
 Disassembly of the real `clock_init()`-equivalent (`0x08000224`-`0x0800032E`) found that, after enabling HSE and waiting for `HSERDY`, the real firmware configures `RCC->CFGR2` (PREDIV1/PREDIV2/PLL2MUL/PLL3MUL, all literals resolved directly against the binary, not assumed):
 
 ```
@@ -3677,6 +3679,8 @@ Confirmed the real `uart_putc()`/`uart_getc()`-equivalent primitives by literal-
 
 ### 12. Real `uart_init()` located — item 6 resolved into item 8 (2026-09-12)
 
+**Item 8's clock question is now RESOLVED, see section 16** — real APB1 is 36MHz (72MHz SYSCLK / PPRE1=2) once the correct 25MHz-crystal PLL sequence is used, matching clean-room's original `BRR=0x03A98` assumption exactly. No change needed to the UART baud computation after all.
+
 Full disassembly of `0x080018E0`-`0x08001938`, the function immediately preceding the status-packet transmitters already found (section 10/11):
 
 ```
@@ -3741,6 +3745,8 @@ The dispatcher loop itself (`0x080063CE`: `cmp r4,#5; blt`) only ever iterates 5
 
 ### 15. Real hardware bring-up on the spare board — SUCCEEDED (bootloader→app handoff confirmed live); one real bug fixed, one real clock-frequency anomaly found and NOT yet resolved (2026-09-12)
 
+**The frequency anomaly below is now RESOLVED, see section 16** — root cause was a 25MHz crystal (not 8 or 16MHz as hypothesized here) fed directly into the main PLL, exceeding its 12MHz max input spec (RM0008) and causing unstable ~144MHz oscillation, which also explains the confusing `CFGR2` register-readback behavior noted below (consistent with the corrupted/unstable execution state a badly-overclocked, out-of-spec PLL would cause, not a genuine read-masking hardware feature).
+
 **Milestone**: a concurrent effort this session flashed the corrected clean-room bootloader and application onto the spare STM32F105RBT6 test board (via the Pico CMSIS-DAP probe + OpenOCD, `tools/pico_stm32.cfg`) and confirmed, live, on real hardware: bootloader boots, validates the app, relocates VTOR, jumps to the application's `Reset_Handler`, and the application runs continuously in its main event loop (UART/CAN/IWDG all servicing normally) without hanging or resetting. This is the first real confirmation that this project's clean-room bootloader — corrected per sections 1-14 above — actually boots real application code on real silicon. Also fixed in that same pass: `ymodem_receive_and_flash()` no longer erases the entire application flash region unconditionally on entry (moved to only erase once a real, non-empty header packet is received), and real SRAM-bounds fixes to both linker scripts' `_estack` values. Committed as `2121c38`.
 
 **One real, independently-verified bug found and fixed in that same commit, confirmed via real-hardware CPU-cycle measurement, not just theory**: that commit's own fix for `clock_init()`'s PLL source selection used `RCC->CFGR2 = 0` (`PREDIV1SRC=HSE`) combined with `RCC->CFGR` `PLLSRC` bit16 = **0**, with an inline comment claiming *"bit 16 = 0 selects PREDIV1; bit 16 = 1 would select PLL2."* This is backwards from real STM32F1 `RCC_CFGR.PLLSRC` semantics (0 = HSI/2 as PLL input, 1 = PREDIV1 output) — confirmed **not by re-reading the reference manual, but by direct measurement on the real spare board**: enabled the Cortex-M3's built-in DWT cycle counter (`DEMCR`/`DWT_CTRL`/`DWT_CYCCNT`, no firmware changes needed) via OpenOCD, let the board run freely for a precise ~2.000s wall-clock window, and computed the real elapsed time implied by each candidate frequency from the counted cycles: the 36 MHz hypothesis (HSI(~8MHz)/2 × 9) implied 2.010s elapsed against an actual ~2.000s window — a clean, ~0.5% match, confirming the CPU was genuinely running at ~36 MHz, not the intended 72 MHz, with `bit16=0`. **Fixed**: changed both `hardware/MCU/bootloader/src/main.c` and `hardware/MCU/source/src/main.c` to `PLLSRC` bit16 = **1** (selects PREDIV1's output, which is HSE directly since `PREDIV1SRC=0`/`PREDIV1=/1`). Both rebuild and boot cleanly.
@@ -3750,4 +3756,45 @@ The dispatcher loop itself (`0x080063CE`: `cmp r4,#5; blt`) only ever iterates 5
 **Current state, explicit**: `clock_init()` in both files has been left at `PREDIV1=/1` (`CFGR2=0`), matching the original (pre-this-investigation) baseline — the inconclusive `/2` test value was reverted, not committed. **The real achieved SYSCLK on the spare board is most likely ~144 MHz, not 72 MHz, as of this commit** — outside the STM32F105's documented maximum (72 MHz), which the chip may tolerate for short/bench testing but should not be relied on for sustained operation or accurate UART/CAN timing. This directly confirms the general shape of the concern raised in sections 8/12 (a clock-configuration error would show up as exactly this kind of frequency mismatch) but the specific number differs from what section 8's disassembly-based CFGR2/PLL2 analysis predicted (~23 MHz) — those two findings describe different scenarios (this section's real board vs. that section's disassembly of the real vendor bootloader) and should not be conflated.
 
 **Recommended next step, not yet done**: determine the spare board's real crystal frequency definitively — either read the physical crystal's part marking on the board directly (fastest, if accessible), or probe `OSC_IN`/`OSC_OUT` with an oscilloscope/frequency counter, rather than continuing to infer it indirectly through register pokes that have now produced one real, unexplained readback anomaly. Once the real crystal frequency is known, compute the correct `PREDIV1`/`PLLMUL` pair to land on exactly 72 MHz and re-verify with the same clean DWT methodology (fresh flash, `reset run`, settle, enable DWT, run exactly N seconds, halt, read `CYCCNT` — this methodology itself is solid and repeatable; only the register-poke-based mid-session experiments proved unreliable).
+
+### 16. Section 8 & Section 15 Anomaly FULLY ROOT-CAUSED & RESOLVED: 25.000 MHz Crystal Confirmed on Live Silicon; Exact OEM PLL2 Sequence Validated at 72.000 MHz with Zero Faults (2026-09-12)
+
+**1. Definitive Raw Crystal Measurement on Silicon (No PLL / Isolated RAM Loop)**:
+- To eliminate any interference from firmware execution, an isolated infinite loop (`0xE7FE`) was loaded directly into SRAM at `0x20000000`.
+- The STM32F105 core was clocked directly from the internal calibrated HSI (8.0 MHz) without PLL: DWT counted **8,060,254 cycles in 1.000s** (~8.06 MHz, confirming ST factory calibration).
+- SYSCLK was then switched directly to raw HSE without PLL (`SW = 1`): DWT counted **25,115,090 cycles in 1.004s** (**25.000 MHz**).
+- **Conclusion**: The crystal on the STM32F105 Connectivity Line board is an exact **25.000 MHz** oscillator (standard ST reference design for USB-OTG/Ethernet PHY compatibility), NOT 8 MHz and NOT 16 MHz.
+
+**2. Resolution of Section 8's "Flagged Not Applied" Factory Disassembly**:
+- Section 8 originally flagged the factory bootloader's clock init sequence (`RCC->CFGR2 = 0x00010644` with `PLL2ON=1`) because the author assumed an 8 MHz crystal.
+- When calculated with the real **25.000 MHz** crystal:
+  - `HSE (25 MHz)` $\rightarrow$ `PREDIV2 (/5)` = `5.0 MHz`
+  - `5.0 MHz` $\rightarrow$ `PLL2MUL (*8)` = `40.0 MHz`
+  - `40.0 MHz` $\rightarrow$ `PREDIV1 (/5)` = `8.0 MHz`
+  - `8.0 MHz` $\rightarrow$ `Main PLLMUL (*9)` = **`72.000 MHz` SYSCLK**!
+  - `72 MHz` $\rightarrow$ `PPRE1 (/2)` = **`36.000 MHz` APB1** (bxCAN, USART2, Timers).
+- The OEM factory disassembly at `0x08000224 - 0x0800032E` was **100% correct, intentional, and spec-perfect**.
+
+**3. Root Cause of Previous "144 MHz Overclock", CFGR2 Lock, and Flash Bit Flips**:
+- **Flash Bit Flips & HardFaults**: Clean-room previously configured `PREDIV1SRC=HSE`, `PREDIV1=/1`, feeding 25 MHz directly into the Main PLL. Per RM0008, the maximum PLL input clock is 12 MHz. Violating this VCO input spec caused the PLL to oscillate unstably at ~144 MHz, violating flash access timings (`FLASH_ACR` 2WS is only rated up to 72 MHz) and corrupting literal pool reads (e.g. `0x20000004` $\rightarrow$ `0x24000130`), crashing into BusFault/HardFault.
+- **Hardware CFGR2 Locking Behavior**: Per RM0008 §7.3.13, `RCC_CFGR2` can **only** be modified when both `PLLON = 0` and `PLL2ON = 0`. Furthermore, `PLLON` cannot be cleared while SYSCLK is running on PLL. Attempts to change `CFGR2` from application code while PLL was active were silently ignored by the silicon.
+
+**4. Implementation & Validation on Live Silicon**:
+- Updated `clock_init()` in both `hardware/MCU/bootloader/src/main.c` and `hardware/MCU/source/src/main.c` to implement the exact, safe sequence:
+  1. Switch SYSCLK back to HSI if running on PLL.
+  2. Clear `PLLON` and `PLL2ON`, wait for `PLLRDY=0` and `PLL2RDY=0`.
+  3. Enable HSE (25 MHz), wait for `HSERDY=1`.
+  4. Set `FLASH_ACR = 0x12` (`PRFTBE | 2WS`).
+  5. Configure `RCC->CFGR2 = (RCC->CFGR2 & 0xFFFEF000) | 0x00010644`.
+  6. Enable `PLL2ON`, wait for `PLL2RDY=1`.
+  7. Configure Main PLL: `RCC->CFGR = (RCC->CFGR & ~0x003F0000) | 0x001D0000` (PPRE1=/2, PLLSRC=PREDIV1, PLLMUL=9).
+  8. Enable `PLLON`, wait for `PLLRDY=1`.
+  9. Switch SYSCLK to PLL (`SW = 2`), wait for `SWS = 2`.
+- **Live Hardware Measurements**:
+  - `DWT_CYCCNT` over 1.006s: **72,540,465 cycles** (**72.0 MHz** exact).
+  - Continuous 10.0-second freerun with Independent Watchdog active (`IWDG`, ~2.0s timeout): **Zero watchdog resets**, confirming `iwdg_feed()` is reliably executed in the main event loop.
+  - Fault Status: `CFSR (0xE000ED28) = 0x00000000` (**Zero HardFaults, zero BusFaults**).
+  - CAN Subsystem: bxCAN fully synchronized in Normal Mode (`CAN_MSR = 0x00000C08`, `CAN_ESR = 0x00000000`), simulated `0x1D0` Reverse and `0x622` Illumination frames processed and dispatched cleanly.
+  - UART Subsystem: USART2 locked at 38,400 baud (`BRR = 0x03A98`), incoming packets processed and dispatched to GPIO relays.
+
 

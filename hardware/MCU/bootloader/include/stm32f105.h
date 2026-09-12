@@ -66,6 +66,7 @@
 #define SCS_BASE              0xE000E000UL
 #define NVIC_BASE             (SCS_BASE + 0x0100UL)
 #define SCB_BASE              (SCS_BASE + 0x0D00UL)
+#define DBGMCU_BASE           0xE0042000UL
 
 /* Peripheral Structs */
 typedef struct {
@@ -193,6 +194,11 @@ typedef struct {
     __IO uint32_t SR;
 } IWDG_TypeDef;
 
+typedef struct {
+    __IO uint32_t IDCODE;
+    __IO uint32_t CR;
+} DBGMCU_TypeDef;
+
 /* Peripheral Pointers */
 #define GPIOA               ((GPIO_TypeDef *) GPIOA_BASE)
 #define GPIOB               ((GPIO_TypeDef *) GPIOB_BASE)
@@ -210,6 +216,7 @@ typedef struct {
 #define NVIC                ((NVIC_TypeDef *) NVIC_BASE)
 #define SCB                 ((SCB_TypeDef *) SCB_BASE)
 #define IWDG                ((IWDG_TypeDef *) IWDG_BASE)
+#define DBGMCU              ((DBGMCU_TypeDef *) DBGMCU_BASE)
 
 /* Magic location for Bootloader Handoff */
 #define BOOTLOADER_MAGIC_ADDR   ((volatile uint32_t *)0x20004004UL)

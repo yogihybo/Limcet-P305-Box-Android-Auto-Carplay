@@ -10,12 +10,17 @@ static void clock_init(void) {
      * docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md section 6. */
     *((volatile uint32_t *)0x40022000UL) = 0x12;
 
-    /* On STM32F105 Connectivity Line: PREDIV1SRC = HSE, PREDIV1 = /1 */
+    /* PREDIV1SRC = HSE (CFGR2 bit16=0), PREDIV1 = /1 (CFGR2 bits3:0=0000) */
     RCC->CFGR2 = 0x00000000;
 
-    /* PLL = PREDIV1 (HSE 8MHz) * 9 = 72 MHz
-     * PLLSRC (bit 16) = 0 selects PREDIV1; bit 16 = 1 would select PLL2 */
-    RCC->CFGR = (0UL << 4) | (4UL << 8) | (0UL << 11) | (0UL << 16) | (7UL << 18);
+    /* PLL = PREDIV1 output (HSE 8MHz / 1) * 9 = 72 MHz.
+     * CORRECTED (2026-09-12, real-hardware DWT-cycle-counter measurement):
+     * RCC_CFGR bit16 is PLLSRC -- per RM0008, 0 selects HSI/2 as the PLL
+     * input, 1 selects PREDIV1's output. The previous (0UL << 16) here
+     * measured as a real 36 MHz SYSCLK on the spare board (HSI(~8MHz)/2*9),
+     * not 72 MHz -- HSE was enabled+ready but never actually fed the PLL.
+     * See docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md section 15. */
+    RCC->CFGR = (0UL << 4) | (4UL << 8) | (0UL << 11) | (1UL << 16) | (7UL << 18);
 
     /* Enable PLL */
     RCC->CR |= (1UL << 24);

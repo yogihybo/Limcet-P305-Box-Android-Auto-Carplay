@@ -3705,3 +3705,37 @@ Full disassembly of `0x080018E0`-`0x08001938`, the function immediately precedin
 
 User decision: match stock vendor behavior exactly rather than keep clean-room's stricter validation. `hardware/MCU/bootloader/src/main.c`'s `is_app_valid()` changed from checking both the stack pointer (range check) and the reset vector (range + Thumb-bit check) to only the masked stack-pointer comparison the real bootloader actually performs (`(app_sp & 0x2FFE0000) == 0x20000000`, confirmed at `0x08001850`-`0x08001858` in section 5.2). The reset-vector check clean-room previously had is removed — matches real firmware's own (weaker) validation exactly, including that weakness. Build-verified: `hardware/MCU/bootloader/` still compiles cleanly (1304 bytes, well within the 12K region).
 
+### 14. CMD 0xE1 unauthenticated bootloader-entry — CONFIRMED on real hardware (2026-09-12)
+
+Prior to this section, `CMD 0xE1` = "Enter bootloader for update" was documented in `docs/MCU_COMMAND_REFERENCE.md` **based on disassembly of the generic Volvo reference firmware (`can_app.bin`) and `MsnCoreApp`'s host-side call sites** — never independently checked against the real, hardware-extracted Toyota Prado application (`live_app_1302.bin`). This section closes that gap with a full, direct trace against the real dump.
+
+**Step 0 — established the real dump's file-to-flash address mapping empirically, not by trusting either existing doc.** `hardware/MCU/live_dumps/README.md`'s own inventory table claims `live_app_1302.bin` covers `0x08004000`-`0x0800FFFF`, while `docs/MCU_FIRMWARE_COMPLETE_FUNCTION_AUDIT.md`'s partition table describes vector-table content starting at `0x08003000` — an unresolved contradiction. Resolved by brute-force mnemonic-sequence matching: scanned the entire file (treating file offset 0 as address 0) for the *exact* 6-instruction prologue sequence documented for "Task 0" in the audit doc (`push{r3,r4,r5,lr}; movs r0,#0; str r0,[sp]; movs r4,#0; mov r2,sp; movs r1,#0`) — exactly one match, at file offset `0x23AC`. Since the audit doc places this function at `0x080063AC`, **file offset 0 = flash address `0x08004000`, confirmed** (matches `live_dumps/README.md`'s table, not the audit doc's `0x08003000` framing — the audit doc's own vector-table content claims appear to describe memory outside what this specific file actually contains, a discrepancy not otherwise resolved here).
+
+**Step 1 — located and confirmed the real bootloader-entry trigger function**, by searching for literal-pool references to the already-known bootloader magic cookie (`BOOTLOADER_MAGIC_ADDR = 0x20004004`, `BOOTLOADER_MAGIC_VAL = 0x5555AAAA`, confirmed real values per section 1). Exactly one reference to each, both at `0x0800B870`/`0x0800B874`. The consuming function, `0x0800B842`:
+```
+800b842: ldr r0, [pc, #0x2c]   ; r0 = 0x5555AAAA
+800b844: ldr r1, [pc, #0x2c]   ; r1 = 0x20004004
+800b846: str r0, [r1]          ; *(0x20004004) = 0x5555AAAA
+800b848: nop
+800b84a: b   #0x800b84a        ; infinite loop -- relies on IWDG watchdog to force the actual reset
+```
+This is the real application's own equivalent of the bootloader-entry trigger, confirmed real and independent of the Volvo reference this session started from.
+
+**Step 2 — traced the real command dispatch table to find what actually calls it.** The only caller of `0x0800B842` is a tiny wrapper at `0x0800665C` (`push{r4,lr}; bl 0x800b842; pop{r4,pc}`). Located the dispatch table referencing this wrapper's address by literal-pool search, then precisely resolved its real layout (8-byte stride: 1-byte command ID padded to a 4-byte word, followed by a 4-byte handler pointer — confirmed directly from the dispatcher's own disassembly at `0x080063CE`-`0x080063EE`, not guessed from a raw hex dump, which is misleading at a glance because of the padding). Table base resolved via literal pool at `0x0800B98C`:
+
+| Index | Address | `cmd` | Handler |
+|---|---|---|---|
+| 0 | `0x0800B98C` | `0x81` | `0x0800643D` |
+| 1 | `0x0800B994` | `0x82` | `0x080065D9` |
+| 2 | `0x0800B99C` | `0xA0` | `0x08006469` |
+| 3 | `0x0800B9A4` | `0xFF` | `0x0800660F` |
+| 4 | `0x0800B9AC` | **`0xE1`** | **`0x0800665D`** ← the confirmed bootloader-entry wrapper |
+
+The dispatcher loop itself (`0x080063CE`: `cmp r4,#5; blt`) only ever iterates 5 entries — this is the complete, exhaustive SoC→MCU command table for this real firmware (a 6th entry immediately after in memory, `cmd=0x65`, is unreachable dead data past the real table's end, not a 6th live command).
+
+**The frame's own integrity check (`0x08006368`, called from the Task 0 dispatcher at `0x080063AC` right before the table lookup) is a simple additive checksum, not a cryptographic MAC** — computed over the frame bytes and compared against a single received checksum byte. No challenge-response, no session/sequence state, nothing that distinguishes a legitimately-sourced command from any other byte stream on the same wire.
+
+**Conclusion, CONFIRMED not inferred: this real Toyota Prado MCU firmware has a genuine, unauthenticated sideloading path.** Any device capable of sending a correctly-checksummed frame on the UART link the head-unit SoC uses to talk to the MCU (`/dev/ttyHS0`, per this project's own prior documentation) can send `CMD 0xE1` to unconditionally force the MCU into IAP/bootloader mode — no authentication, no gating condition, no confirmation step. Combined with this session's earlier findings (sections 5.1/6): once in bootloader mode, `flash_unlock()` writes the well-known standard ST `FLASH_KEYR` values unconditionally, with no additional protection. The full chain from "attacker-controlled byte stream on the MCU UART" to "flash erase/reprogram capability" has no authentication anywhere in it, on the real, hardware-confirmed firmware — not merely inferred from the generic Volvo reference.
+
+**Practical/safety note, consistent with this project's own existing tooling posture**: this is exactly the risk `tools/mcu-probe --reboot-probe` already gates behind `--confirm-erase-risk` (real erase risk: the resident bootloader erases flash before waiting for the first YMODEM byte, with no recovery if nothing follows) — this section provides the hardware-confirmed justification for treating that risk as real on this exact vehicle, not just a documented Volvo-reference behavior.
+

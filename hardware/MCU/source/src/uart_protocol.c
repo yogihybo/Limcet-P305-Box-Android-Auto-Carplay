@@ -209,6 +209,128 @@ void uart_send_radar_levels(uint8_t left, uint8_t mid_left, uint8_t mid_right, u
     uart_send_packet(MCU_CMD_RADAR_LEVEL, payload, 4);
 }
 
+/* Vehicle Telemetry State (matching factory McuSettings 0x200001BC layout) */
+static uint8_t g_steering_sign = 0;
+static uint8_t g_steering_mag = 0;
+static uint8_t g_gear_field = 0;
+static uint8_t g_front_radar[4] = { 12, 12, 12, 12 };
+static uint8_t g_rear_radar[4] = { 12, 12, 12, 12 };
+static bool    g_door_open = false;
+
+void uart_update_steering_telemetry(uint8_t sign, uint8_t angle_raw) {
+    g_steering_sign = sign;
+    g_steering_mag = angle_raw;
+}
+
+void uart_update_transmission_telemetry(uint8_t gear_field) {
+    g_gear_field = gear_field;
+}
+
+void uart_update_door_state(bool door_open) {
+    g_door_open = door_open;
+}
+
+void uart_send_radar_telemetry(uint8_t subtype, const uint8_t levels[4]) {
+    /* CMD 0x04 for rear radar, CMD 0x05 for front radar matching factory routines */
+    uint8_t cmd = (subtype == 0) ? MCU_CMD_RADAR_LEVEL : MCU_CMD_FRONT_RADAR;
+    uart_send_packet(cmd, levels, 4);
+}
+
+void uart_update_radar_telemetry(bool is_front, const uint8_t raw_levels[4]) {
+    bool changed = false;
+    uint8_t *target = is_front ? g_front_radar : g_rear_radar;
+    for (uint8_t i = 0; i < 4; i++) {
+        if (target[i] != raw_levels[i]) {
+            target[i] = raw_levels[i];
+            changed = true;
+        }
+    }
+    if (changed) {
+        uart_send_radar_telemetry(is_front ? 1 : 0, raw_levels);
+        uart_send_composite_vehicle_status();
+    }
+}
+
+void uart_send_composite_vehicle_status(void) {
+    uint8_t payload[8];
+    /* byte 0: status bits: base 0x03, bit 4 if door open (0x0800A834 - 0x0800A850) */
+    payload[0] = 0x03;
+    if (g_door_open) {
+        payload[0] |= 0x10;
+    }
+    
+    /* byte 1: gear flags: bit 0 = Drive/Neut, bit 1 = Reverse, bit 2 = Park (0x0800A858 - 0x0800A884) */
+    payload[1] = 0x00;
+    if ((g_gear_field & 0x38) == 0x10) payload[1] |= 0x01; /* Neutral / Drive */
+    if ((g_gear_field & 0x38) == 0x20) payload[1] |= 0x02; /* Reverse */
+    if ((g_gear_field & 0x38) == 0x38) payload[1] |= 0x04; /* Park */
+    
+    /* byte 2: speed / moving indicator (0x0800A888) */
+    payload[2] = 0x00;
+    
+    /* byte 3: steering angle centered at 0x80 (0x0800A890 - 0x0800A8C8) */
+    if (g_steering_sign != 0) {
+        /* Turning right */
+        if (g_steering_mag <= 127) {
+            payload[3] = (uint8_t)(128 + g_steering_mag);
+        } else {
+            payload[3] = 255;
+        }
+    } else {
+        /* Turning left */
+        if (g_steering_mag <= 128) {
+            payload[3] = (uint8_t)(128 - g_steering_mag);
+        } else {
+            payload[3] = 0;
+        }
+    }
+    
+    /* byte 4: front radar packed levels (0x0800A8D2 - 0x0800A9B6)
+     * Channels: FL (g_front_radar[0]), FML (g_front_radar[1]), FR (g_front_radar[3]), FMR (g_front_radar[2]) */
+    payload[4] = 0;
+    if (g_front_radar[0] < 5) payload[4] |= 0x03;
+    else if (g_front_radar[0] < 8) payload[4] |= 0x02;
+    else if (g_front_radar[0] < 12) payload[4] |= 0x01;
+    
+    if (g_front_radar[1] < 5) payload[4] |= 0x0C;
+    else if (g_front_radar[1] < 8) payload[4] |= 0x08;
+    else if (g_front_radar[1] < 12) payload[4] |= 0x04;
+    
+    if (g_front_radar[3] < 5) payload[4] |= 0x30;
+    else if (g_front_radar[3] < 8) payload[4] |= 0x20;
+    else if (g_front_radar[3] < 12) payload[4] |= 0x10;
+    
+    if (g_front_radar[2] < 5) payload[4] |= 0xC0;
+    else if (g_front_radar[2] < 8) payload[4] |= 0x80;
+    else if (g_front_radar[2] < 12) payload[4] |= 0x40;
+    
+    /* byte 5: rear radar packed levels (0x0800A9C0 - 0x0800AA9C)
+     * Channels: RL (g_rear_radar[0]), RML (g_rear_radar[1]), RR (g_rear_radar[3]), RMR (g_rear_radar[2]) */
+    payload[5] = 0;
+    if (g_rear_radar[0] < 5) payload[5] |= 0x03;
+    else if (g_rear_radar[0] < 8) payload[5] |= 0x02;
+    else if (g_rear_radar[0] < 12) payload[5] |= 0x01;
+    
+    if (g_rear_radar[1] < 5) payload[5] |= 0x0C;
+    else if (g_rear_radar[1] < 8) payload[5] |= 0x08;
+    else if (g_rear_radar[1] < 12) payload[5] |= 0x04;
+    
+    if (g_rear_radar[3] < 5) payload[5] |= 0x30;
+    else if (g_rear_radar[3] < 8) payload[5] |= 0x20;
+    else if (g_rear_radar[3] < 12) payload[5] |= 0x10;
+    
+    if (g_rear_radar[2] < 5) payload[5] |= 0xC0;
+    else if (g_rear_radar[2] < 8) payload[5] |= 0x80;
+    else if (g_rear_radar[2] < 12) payload[5] |= 0x40;
+    
+    /* byte 6: vehicle setting / status (0x0800AAA0) */
+    payload[6] = 0x00;
+    /* byte 7: padding (0x0800AAA8) */
+    payload[7] = 0x00;
+    
+    uart_send_packet(MCU_CMD_HVAC_STATUS, payload, 8);
+}
+
 void uart_trigger_bootloader_reset(void) {
     /* Set bootloader update magic in RAM */
     *BOOTLOADER_MAGIC_ADDR = BOOTLOADER_MAGIC_VAL;

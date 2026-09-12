@@ -10,8 +10,12 @@ static void clock_init(void) {
      * docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md section 6. */
     *((volatile uint32_t *)0x40022000UL) = 0x12;
 
-    /* PLL = HSE * 9 = 72 MHz */
-    RCC->CFGR = (0UL << 4) | (4UL << 8) | (0UL << 11) | (1UL << 16) | (7UL << 18);
+    /* On STM32F105 Connectivity Line: PREDIV1SRC = HSE, PREDIV1 = /1 */
+    RCC->CFGR2 = 0x00000000;
+
+    /* PLL = PREDIV1 (HSE 8MHz) * 9 = 72 MHz
+     * PLLSRC (bit 16) = 0 selects PREDIV1; bit 16 = 1 would select PLL2 */
+    RCC->CFGR = (0UL << 4) | (4UL << 8) | (0UL << 11) | (0UL << 16) | (7UL << 18);
 
     /* Enable PLL */
     RCC->CR |= (1UL << 24);

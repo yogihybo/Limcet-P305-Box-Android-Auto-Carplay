@@ -68,7 +68,8 @@ void can_init(uint32_t baudrate) {
     /* Exit Sleep Mode & Enter Initialization Mode */
     CAN1->MCR &= ~(1UL << 1); /* Clear SLEEP */
     CAN1->MCR |=  (1UL << 0); /* Set INRQ */
-    while ((CAN1->MSR & (1UL << 0)) == 0) {} /* Wait for INAK */
+    uint32_t can_timeout = 200000;
+    while (((CAN1->MSR & (1UL << 0)) == 0) && --can_timeout) {} /* Wait for INAK with timeout */
     
     /* Configure CAN Timing for 500 kbit/s (Assuming APB1 = 36 MHz) */
     /* Prescaler = 4 -> Tq = 4 / 36 MHz = 111.11 ns */
@@ -94,7 +95,8 @@ void can_init(uint32_t baudrate) {
     
     /* Enter Normal Operating Mode */
     CAN1->MCR &= ~(1UL << 0); /* Clear INRQ */
-    while ((CAN1->MSR & (1UL << 0)) != 0) {} /* Wait for normal mode */
+    can_timeout = 200000;
+    while (((CAN1->MSR & (1UL << 0)) != 0) && --can_timeout) {} /* Wait for normal mode with timeout */
     
     /* Enable NVIC IRQ 20 (CAN1_RX0) */
     nvic_enable_irq(20);

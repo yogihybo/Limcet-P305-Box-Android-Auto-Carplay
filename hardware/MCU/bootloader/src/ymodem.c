@@ -72,8 +72,6 @@ bool ymodem_receive_and_flash(void) {
     uint8_t expected_pkt_num = 0;
     bool session_started = false;
 
-    flash_erase_app_pages();
-
     for (int retry = 0; retry < 30; retry++) {
         uart_putc(CRC16); /* Send 'C' to start YMODEM-CRC */
 
@@ -145,6 +143,12 @@ bool ymodem_receive_and_flash(void) {
 
             /* Packet 0: File Header Metadata */
             if (pkt_num == 0 && !session_started) {
+                if (pkt_buf[0] == 0) {
+                    /* Null header: End of transmission */
+                    uart_putc(ACK);
+                    return true;
+                }
+                flash_erase_app_pages();
                 session_started = true;
                 expected_pkt_num = 1;
                 uart_putc(ACK);

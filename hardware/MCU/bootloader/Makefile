@@ -19,8 +19,8 @@ endif
 # Flags
 MCU_FLAGS = -mcpu=cortex-m3 -mthumb -mfloat-abi=soft
 INCLUDES  = -Iinclude
-CFLAGS    = $(MCU_FLAGS) $(INCLUDES) -Os -Wall -Wextra -ffreestanding -nostdlib -fdata-sections -ffunction-sections -fno-builtin
-LDFLAGS   = $(MCU_FLAGS) -Tstm32f105_bootloader.ld -nostdlib -static -Wl,--build-id=none -Wl,--gc-sections -Wl,-Map=$(BUILD_DIR)/$(TARGET).map
+CFLAGS    = $(MCU_FLAGS) $(INCLUDES) -Os -Wall -Wextra -ffreestanding -nostdlib -fdata-sections -ffunction-sections -fno-builtin -fno-pic -fno-pie
+LDFLAGS   = $(MCU_FLAGS) -Tstm32f105_bootloader.ld -nostdlib -static -no-pie -Wl,--build-id=none -Wl,--gc-sections -Wl,-Map=$(BUILD_DIR)/$(TARGET).map
 
 SRCS = src/startup_stm32f105.c \
        src/main.c \

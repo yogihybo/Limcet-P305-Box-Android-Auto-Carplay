@@ -55,7 +55,7 @@ Disassembly of section .text:
  80000aa:	2100      	movs	r1, #0
  80000ac:	4293      	cmp	r3, r2
  80000ae:	d307      	bcc.n	80000c0 <Reset_Handler+0x7c>
- 80000b0:	f000 f88c 	bl	80001cc <main>
+ 80000b0:	f000 f884 	bl	80001bc <main>
  80000b4:	e7fe      	b.n	80000b4 <Reset_Handler+0x70>
  80000b6:	f851 4b04 	ldr.w	r4, [r1], #4
  80000ba:	f843 4b04 	str.w	r4, [r3], #4
@@ -137,354 +137,350 @@ Disassembly of section .text:
  800017c:	40004400 	.word	0x40004400
 
 08000180 <is_app_valid>:
- 8000180:	4a09      	ldr	r2, [pc, #36]	@ (80001a8 <is_app_valid+0x28>)
- 8000182:	6813      	ldr	r3, [r2, #0]
- 8000184:	6850      	ldr	r0, [r2, #4]
- 8000186:	f103 4360 	add.w	r3, r3, #3758096384	@ 0xe0000000
- 800018a:	f5b3 3f80 	cmp.w	r3, #65536	@ 0x10000
- 800018e:	d809      	bhi.n	80001a4 <is_app_valid+0x24>
- 8000190:	f100 4378 	add.w	r3, r0, #4160749568	@ 0xf8000000
- 8000194:	f5a3 5340 	sub.w	r3, r3, #12288	@ 0x3000
- 8000198:	f5b3 3fe8 	cmp.w	r3, #118784	@ 0x1d000
- 800019c:	d202      	bcs.n	80001a4 <is_app_valid+0x24>
- 800019e:	f000 0001 	and.w	r0, r0, #1
- 80001a2:	4770      	bx	lr
- 80001a4:	2000      	movs	r0, #0
- 80001a6:	4770      	bx	lr
- 80001a8:	08003000 	.word	0x08003000
+ 8000180:	4b04      	ldr	r3, [pc, #16]	@ (8000194 <is_app_valid+0x14>)
+ 8000182:	4805      	ldr	r0, [pc, #20]	@ (8000198 <is_app_valid+0x18>)
+ 8000184:	681b      	ldr	r3, [r3, #0]
+ 8000186:	4018      	ands	r0, r3
+ 8000188:	f100 4360 	add.w	r3, r0, #3758096384	@ 0xe0000000
+ 800018c:	4258      	negs	r0, r3
+ 800018e:	4158      	adcs	r0, r3
+ 8000190:	4770      	bx	lr
+ 8000192:	bf00      	nop
+ 8000194:	08003000 	.word	0x08003000
+ 8000198:	2ffe0000 	.word	0x2ffe0000
 
-080001ac <jump_to_application>:
- 80001ac:	b508      	push	{r3, lr}
- 80001ae:	4b05      	ldr	r3, [pc, #20]	@ (80001c4 <jump_to_application+0x18>)
- 80001b0:	6819      	ldr	r1, [r3, #0]
- 80001b2:	685a      	ldr	r2, [r3, #4]
- 80001b4:	b672      	cpsid	i
- 80001b6:	4804      	ldr	r0, [pc, #16]	@ (80001c8 <jump_to_application+0x1c>)
- 80001b8:	6083      	str	r3, [r0, #8]
- 80001ba:	f381 8808 	msr	MSP, r1
- 80001be:	b662      	cpsie	i
- 80001c0:	4790      	blx	r2
- 80001c2:	e7fe      	b.n	80001c2 <jump_to_application+0x16>
- 80001c4:	08003000 	.word	0x08003000
- 80001c8:	e000ed00 	.word	0xe000ed00
+0800019c <jump_to_application>:
+ 800019c:	b508      	push	{r3, lr}
+ 800019e:	4b05      	ldr	r3, [pc, #20]	@ (80001b4 <jump_to_application+0x18>)
+ 80001a0:	6819      	ldr	r1, [r3, #0]
+ 80001a2:	685a      	ldr	r2, [r3, #4]
+ 80001a4:	b672      	cpsid	i
+ 80001a6:	4804      	ldr	r0, [pc, #16]	@ (80001b8 <jump_to_application+0x1c>)
+ 80001a8:	6083      	str	r3, [r0, #8]
+ 80001aa:	f381 8808 	msr	MSP, r1
+ 80001ae:	b662      	cpsie	i
+ 80001b0:	4790      	blx	r2
+ 80001b2:	e7fe      	b.n	80001b2 <jump_to_application+0x16>
+ 80001b4:	08003000 	.word	0x08003000
+ 80001b8:	e000ed00 	.word	0xe000ed00
 
-080001cc <main>:
- 80001cc:	b508      	push	{r3, lr}
- 80001ce:	4b1e      	ldr	r3, [pc, #120]	@ (8000248 <main+0x7c>)
- 80001d0:	681a      	ldr	r2, [r3, #0]
- 80001d2:	f442 3280 	orr.w	r2, r2, #65536	@ 0x10000
- 80001d6:	601a      	str	r2, [r3, #0]
+080001bc <main>:
+ 80001bc:	b508      	push	{r3, lr}
+ 80001be:	4b1e      	ldr	r3, [pc, #120]	@ (8000238 <main+0x7c>)
+ 80001c0:	681a      	ldr	r2, [r3, #0]
+ 80001c2:	f442 3280 	orr.w	r2, r2, #65536	@ 0x10000
+ 80001c6:	601a      	str	r2, [r3, #0]
+ 80001c8:	681a      	ldr	r2, [r3, #0]
+ 80001ca:	0391      	lsls	r1, r2, #14
+ 80001cc:	d5fc      	bpl.n	80001c8 <main+0xc>
+ 80001ce:	2112      	movs	r1, #18
+ 80001d0:	4a1a      	ldr	r2, [pc, #104]	@ (800023c <main+0x80>)
+ 80001d2:	6011      	str	r1, [r2, #0]
+ 80001d4:	4a1a      	ldr	r2, [pc, #104]	@ (8000240 <main+0x84>)
+ 80001d6:	605a      	str	r2, [r3, #4]
  80001d8:	681a      	ldr	r2, [r3, #0]
- 80001da:	0391      	lsls	r1, r2, #14
- 80001dc:	d5fc      	bpl.n	80001d8 <main+0xc>
- 80001de:	2112      	movs	r1, #18
- 80001e0:	4a1a      	ldr	r2, [pc, #104]	@ (800024c <main+0x80>)
- 80001e2:	6011      	str	r1, [r2, #0]
- 80001e4:	4a1a      	ldr	r2, [pc, #104]	@ (8000250 <main+0x84>)
- 80001e6:	605a      	str	r2, [r3, #4]
- 80001e8:	681a      	ldr	r2, [r3, #0]
- 80001ea:	f042 7280 	orr.w	r2, r2, #16777216	@ 0x1000000
- 80001ee:	601a      	str	r2, [r3, #0]
- 80001f0:	681a      	ldr	r2, [r3, #0]
- 80001f2:	0192      	lsls	r2, r2, #6
- 80001f4:	d5fc      	bpl.n	80001f0 <main+0x24>
+ 80001da:	f042 7280 	orr.w	r2, r2, #16777216	@ 0x1000000
+ 80001de:	601a      	str	r2, [r3, #0]
+ 80001e0:	681a      	ldr	r2, [r3, #0]
+ 80001e2:	0192      	lsls	r2, r2, #6
+ 80001e4:	d5fc      	bpl.n	80001e0 <main+0x24>
+ 80001e6:	685a      	ldr	r2, [r3, #4]
+ 80001e8:	f022 0203 	bic.w	r2, r2, #3
+ 80001ec:	605a      	str	r2, [r3, #4]
+ 80001ee:	685a      	ldr	r2, [r3, #4]
+ 80001f0:	f042 0202 	orr.w	r2, r2, #2
+ 80001f4:	605a      	str	r2, [r3, #4]
  80001f6:	685a      	ldr	r2, [r3, #4]
- 80001f8:	f022 0203 	bic.w	r2, r2, #3
- 80001fc:	605a      	str	r2, [r3, #4]
- 80001fe:	685a      	ldr	r2, [r3, #4]
- 8000200:	f042 0202 	orr.w	r2, r2, #2
- 8000204:	605a      	str	r2, [r3, #4]
- 8000206:	685a      	ldr	r2, [r3, #4]
- 8000208:	f002 020c 	and.w	r2, r2, #12
- 800020c:	2a08      	cmp	r2, #8
- 800020e:	d1fa      	bne.n	8000206 <main+0x3a>
- 8000210:	2100      	movs	r1, #0
- 8000212:	4b10      	ldr	r3, [pc, #64]	@ (8000254 <main+0x88>)
- 8000214:	685a      	ldr	r2, [r3, #4]
- 8000216:	6059      	str	r1, [r3, #4]
- 8000218:	4b0f      	ldr	r3, [pc, #60]	@ (8000258 <main+0x8c>)
- 800021a:	429a      	cmp	r2, r3
- 800021c:	d004      	beq.n	8000228 <main+0x5c>
- 800021e:	f7ff ffaf 	bl	8000180 <is_app_valid>
- 8000222:	b108      	cbz	r0, 8000228 <main+0x5c>
- 8000224:	f7ff ffc2 	bl	80001ac <jump_to_application>
- 8000228:	f44f 4016 	mov.w	r0, #38400	@ 0x9600
- 800022c:	f7ff ff5e 	bl	80000ec <uart_init>
- 8000230:	f000 f87e 	bl	8000330 <ymodem_receive_and_flash>
- 8000234:	b118      	cbz	r0, 800023e <main+0x72>
- 8000236:	f7ff ffa3 	bl	8000180 <is_app_valid>
- 800023a:	2800      	cmp	r0, #0
- 800023c:	d1f2      	bne.n	8000224 <main+0x58>
- 800023e:	4b07      	ldr	r3, [pc, #28]	@ (800025c <main+0x90>)
- 8000240:	4a07      	ldr	r2, [pc, #28]	@ (8000260 <main+0x94>)
- 8000242:	60da      	str	r2, [r3, #12]
- 8000244:	e7fe      	b.n	8000244 <main+0x78>
- 8000246:	bf00      	nop
- 8000248:	40021000 	.word	0x40021000
- 800024c:	40022000 	.word	0x40022000
- 8000250:	001d0400 	.word	0x001d0400
- 8000254:	20004000 	.word	0x20004000
- 8000258:	5555aaaa 	.word	0x5555aaaa
- 800025c:	e000ed00 	.word	0xe000ed00
- 8000260:	05fa0004 	.word	0x05fa0004
+ 80001f8:	f002 020c 	and.w	r2, r2, #12
+ 80001fc:	2a08      	cmp	r2, #8
+ 80001fe:	d1fa      	bne.n	80001f6 <main+0x3a>
+ 8000200:	2100      	movs	r1, #0
+ 8000202:	4b10      	ldr	r3, [pc, #64]	@ (8000244 <main+0x88>)
+ 8000204:	685a      	ldr	r2, [r3, #4]
+ 8000206:	6059      	str	r1, [r3, #4]
+ 8000208:	4b0f      	ldr	r3, [pc, #60]	@ (8000248 <main+0x8c>)
+ 800020a:	429a      	cmp	r2, r3
+ 800020c:	d004      	beq.n	8000218 <main+0x5c>
+ 800020e:	f7ff ffb7 	bl	8000180 <is_app_valid>
+ 8000212:	b108      	cbz	r0, 8000218 <main+0x5c>
+ 8000214:	f7ff ffc2 	bl	800019c <jump_to_application>
+ 8000218:	f44f 4016 	mov.w	r0, #38400	@ 0x9600
+ 800021c:	f7ff ff66 	bl	80000ec <uart_init>
+ 8000220:	f000 f87e 	bl	8000320 <ymodem_receive_and_flash>
+ 8000224:	b118      	cbz	r0, 800022e <main+0x72>
+ 8000226:	f7ff ffab 	bl	8000180 <is_app_valid>
+ 800022a:	2800      	cmp	r0, #0
+ 800022c:	d1f2      	bne.n	8000214 <main+0x58>
+ 800022e:	4b07      	ldr	r3, [pc, #28]	@ (800024c <main+0x90>)
+ 8000230:	4a07      	ldr	r2, [pc, #28]	@ (8000250 <main+0x94>)
+ 8000232:	60da      	str	r2, [r3, #12]
+ 8000234:	e7fe      	b.n	8000234 <main+0x78>
+ 8000236:	bf00      	nop
+ 8000238:	40021000 	.word	0x40021000
+ 800023c:	40022000 	.word	0x40022000
+ 8000240:	001d0400 	.word	0x001d0400
+ 8000244:	20004000 	.word	0x20004000
+ 8000248:	5555aaaa 	.word	0x5555aaaa
+ 800024c:	e000ed00 	.word	0xe000ed00
+ 8000250:	05fa0004 	.word	0x05fa0004
 
-08000264 <flash_wait_busy>:
- 8000264:	4a02      	ldr	r2, [pc, #8]	@ (8000270 <flash_wait_busy+0xc>)
- 8000266:	68d3      	ldr	r3, [r2, #12]
- 8000268:	07db      	lsls	r3, r3, #31
- 800026a:	d4fc      	bmi.n	8000266 <flash_wait_busy+0x2>
- 800026c:	4770      	bx	lr
- 800026e:	bf00      	nop
- 8000270:	40022000 	.word	0x40022000
+08000254 <flash_wait_busy>:
+ 8000254:	4a02      	ldr	r2, [pc, #8]	@ (8000260 <flash_wait_busy+0xc>)
+ 8000256:	68d3      	ldr	r3, [r2, #12]
+ 8000258:	07db      	lsls	r3, r3, #31
+ 800025a:	d4fc      	bmi.n	8000256 <flash_wait_busy+0x2>
+ 800025c:	4770      	bx	lr
+ 800025e:	bf00      	nop
+ 8000260:	40022000 	.word	0x40022000
 
-08000274 <flash_unlock>:
- 8000274:	4b03      	ldr	r3, [pc, #12]	@ (8000284 <flash_unlock+0x10>)
- 8000276:	4a04      	ldr	r2, [pc, #16]	@ (8000288 <flash_unlock+0x14>)
- 8000278:	605a      	str	r2, [r3, #4]
- 800027a:	f102 3288 	add.w	r2, r2, #2290649224	@ 0x88888888
- 800027e:	605a      	str	r2, [r3, #4]
- 8000280:	4770      	bx	lr
- 8000282:	bf00      	nop
- 8000284:	40022000 	.word	0x40022000
- 8000288:	45670123 	.word	0x45670123
+08000264 <flash_unlock>:
+ 8000264:	4b03      	ldr	r3, [pc, #12]	@ (8000274 <flash_unlock+0x10>)
+ 8000266:	4a04      	ldr	r2, [pc, #16]	@ (8000278 <flash_unlock+0x14>)
+ 8000268:	605a      	str	r2, [r3, #4]
+ 800026a:	f102 3288 	add.w	r2, r2, #2290649224	@ 0x88888888
+ 800026e:	605a      	str	r2, [r3, #4]
+ 8000270:	4770      	bx	lr
+ 8000272:	bf00      	nop
+ 8000274:	40022000 	.word	0x40022000
+ 8000278:	45670123 	.word	0x45670123
 
-0800028c <flash_lock>:
- 800028c:	4a02      	ldr	r2, [pc, #8]	@ (8000298 <flash_lock+0xc>)
- 800028e:	6913      	ldr	r3, [r2, #16]
- 8000290:	f043 0380 	orr.w	r3, r3, #128	@ 0x80
- 8000294:	6113      	str	r3, [r2, #16]
- 8000296:	4770      	bx	lr
- 8000298:	40022000 	.word	0x40022000
+0800027c <flash_lock>:
+ 800027c:	4a02      	ldr	r2, [pc, #8]	@ (8000288 <flash_lock+0xc>)
+ 800027e:	6913      	ldr	r3, [r2, #16]
+ 8000280:	f043 0380 	orr.w	r3, r3, #128	@ 0x80
+ 8000284:	6113      	str	r3, [r2, #16]
+ 8000286:	4770      	bx	lr
+ 8000288:	40022000 	.word	0x40022000
 
-0800029c <flash_erase_app_pages>:
- 800029c:	b510      	push	{r4, lr}
- 800029e:	f7ff ffe9 	bl	8000274 <flash_unlock>
- 80002a2:	480e      	ldr	r0, [pc, #56]	@ (80002dc <flash_erase_app_pages+0x40>)
- 80002a4:	490e      	ldr	r1, [pc, #56]	@ (80002e0 <flash_erase_app_pages+0x44>)
- 80002a6:	4c0f      	ldr	r4, [pc, #60]	@ (80002e4 <flash_erase_app_pages+0x48>)
- 80002a8:	f7ff ffdc 	bl	8000264 <flash_wait_busy>
- 80002ac:	690b      	ldr	r3, [r1, #16]
- 80002ae:	f043 0302 	orr.w	r3, r3, #2
- 80002b2:	610b      	str	r3, [r1, #16]
- 80002b4:	6148      	str	r0, [r1, #20]
+0800028c <flash_erase_app_pages>:
+ 800028c:	b510      	push	{r4, lr}
+ 800028e:	f7ff ffe9 	bl	8000264 <flash_unlock>
+ 8000292:	480e      	ldr	r0, [pc, #56]	@ (80002cc <flash_erase_app_pages+0x40>)
+ 8000294:	490e      	ldr	r1, [pc, #56]	@ (80002d0 <flash_erase_app_pages+0x44>)
+ 8000296:	4c0f      	ldr	r4, [pc, #60]	@ (80002d4 <flash_erase_app_pages+0x48>)
+ 8000298:	f7ff ffdc 	bl	8000254 <flash_wait_busy>
+ 800029c:	690b      	ldr	r3, [r1, #16]
+ 800029e:	f043 0302 	orr.w	r3, r3, #2
+ 80002a2:	610b      	str	r3, [r1, #16]
+ 80002a4:	6148      	str	r0, [r1, #20]
+ 80002a6:	690b      	ldr	r3, [r1, #16]
+ 80002a8:	f500 6000 	add.w	r0, r0, #2048	@ 0x800
+ 80002ac:	f043 0340 	orr.w	r3, r3, #64	@ 0x40
+ 80002b0:	610b      	str	r3, [r1, #16]
+ 80002b2:	f7ff ffcf 	bl	8000254 <flash_wait_busy>
  80002b6:	690b      	ldr	r3, [r1, #16]
- 80002b8:	f500 6000 	add.w	r0, r0, #2048	@ 0x800
- 80002bc:	f043 0340 	orr.w	r3, r3, #64	@ 0x40
- 80002c0:	610b      	str	r3, [r1, #16]
- 80002c2:	f7ff ffcf 	bl	8000264 <flash_wait_busy>
- 80002c6:	690b      	ldr	r3, [r1, #16]
- 80002c8:	42a0      	cmp	r0, r4
- 80002ca:	f023 0302 	bic.w	r3, r3, #2
- 80002ce:	610b      	str	r3, [r1, #16]
- 80002d0:	d1ea      	bne.n	80002a8 <flash_erase_app_pages+0xc>
- 80002d2:	f7ff ffdb 	bl	800028c <flash_lock>
- 80002d6:	2001      	movs	r0, #1
- 80002d8:	bd10      	pop	{r4, pc}
- 80002da:	bf00      	nop
- 80002dc:	08003000 	.word	0x08003000
- 80002e0:	40022000 	.word	0x40022000
- 80002e4:	08020000 	.word	0x08020000
+ 80002b8:	42a0      	cmp	r0, r4
+ 80002ba:	f023 0302 	bic.w	r3, r3, #2
+ 80002be:	610b      	str	r3, [r1, #16]
+ 80002c0:	d1ea      	bne.n	8000298 <flash_erase_app_pages+0xc>
+ 80002c2:	f7ff ffdb 	bl	800027c <flash_lock>
+ 80002c6:	2001      	movs	r0, #1
+ 80002c8:	bd10      	pop	{r4, pc}
+ 80002ca:	bf00      	nop
+ 80002cc:	08003000 	.word	0x08003000
+ 80002d0:	40022000 	.word	0x40022000
+ 80002d4:	08020000 	.word	0x08020000
 
-080002e8 <flash_write_page>:
- 80002e8:	b538      	push	{r3, r4, r5, lr}
- 80002ea:	4614      	mov	r4, r2
- 80002ec:	f7ff ffc2 	bl	8000274 <flash_unlock>
- 80002f0:	3401      	adds	r4, #1
- 80002f2:	f024 0401 	bic.w	r4, r4, #1
- 80002f6:	4d0d      	ldr	r5, [pc, #52]	@ (800032c <flash_write_page+0x44>)
- 80002f8:	440c      	add	r4, r1
- 80002fa:	1a40      	subs	r0, r0, r1
- 80002fc:	42a1      	cmp	r1, r4
- 80002fe:	d103      	bne.n	8000308 <flash_write_page+0x20>
- 8000300:	f7ff ffc4 	bl	800028c <flash_lock>
- 8000304:	2001      	movs	r0, #1
- 8000306:	bd38      	pop	{r3, r4, r5, pc}
- 8000308:	f7ff ffac 	bl	8000264 <flash_wait_busy>
- 800030c:	692b      	ldr	r3, [r5, #16]
- 800030e:	f043 0301 	orr.w	r3, r3, #1
- 8000312:	612b      	str	r3, [r5, #16]
- 8000314:	1843      	adds	r3, r0, r1
- 8000316:	f831 2b02 	ldrh.w	r2, [r1], #2
- 800031a:	801a      	strh	r2, [r3, #0]
- 800031c:	f7ff ffa2 	bl	8000264 <flash_wait_busy>
- 8000320:	692b      	ldr	r3, [r5, #16]
- 8000322:	f023 0301 	bic.w	r3, r3, #1
- 8000326:	612b      	str	r3, [r5, #16]
- 8000328:	e7e8      	b.n	80002fc <flash_write_page+0x14>
- 800032a:	bf00      	nop
- 800032c:	40022000 	.word	0x40022000
+080002d8 <flash_write_page>:
+ 80002d8:	b538      	push	{r3, r4, r5, lr}
+ 80002da:	4614      	mov	r4, r2
+ 80002dc:	f7ff ffc2 	bl	8000264 <flash_unlock>
+ 80002e0:	3401      	adds	r4, #1
+ 80002e2:	f024 0401 	bic.w	r4, r4, #1
+ 80002e6:	4d0d      	ldr	r5, [pc, #52]	@ (800031c <flash_write_page+0x44>)
+ 80002e8:	440c      	add	r4, r1
+ 80002ea:	1a40      	subs	r0, r0, r1
+ 80002ec:	42a1      	cmp	r1, r4
+ 80002ee:	d103      	bne.n	80002f8 <flash_write_page+0x20>
+ 80002f0:	f7ff ffc4 	bl	800027c <flash_lock>
+ 80002f4:	2001      	movs	r0, #1
+ 80002f6:	bd38      	pop	{r3, r4, r5, pc}
+ 80002f8:	f7ff ffac 	bl	8000254 <flash_wait_busy>
+ 80002fc:	692b      	ldr	r3, [r5, #16]
+ 80002fe:	f043 0301 	orr.w	r3, r3, #1
+ 8000302:	612b      	str	r3, [r5, #16]
+ 8000304:	1843      	adds	r3, r0, r1
+ 8000306:	f831 2b02 	ldrh.w	r2, [r1], #2
+ 800030a:	801a      	strh	r2, [r3, #0]
+ 800030c:	f7ff ffa2 	bl	8000254 <flash_wait_busy>
+ 8000310:	692b      	ldr	r3, [r5, #16]
+ 8000312:	f023 0301 	bic.w	r3, r3, #1
+ 8000316:	612b      	str	r3, [r5, #16]
+ 8000318:	e7e8      	b.n	80002ec <flash_write_page+0x14>
+ 800031a:	bf00      	nop
+ 800031c:	40022000 	.word	0x40022000
 
-08000330 <ymodem_receive_and_flash>:
- 8000330:	e92d 4ff0 	stmdb	sp!, {r4, r5, r6, r7, r8, r9, sl, fp, lr}
- 8000334:	f04f 0b00 	mov.w	fp, #0
- 8000338:	f04f 081e 	mov.w	r8, #30
- 800033c:	465e      	mov	r6, fp
- 800033e:	f2ad 4d2c 	subw	sp, sp, #1068	@ 0x42c
- 8000342:	f7ff ffab 	bl	800029c <flash_erase_app_pages>
- 8000346:	4b6e      	ldr	r3, [pc, #440]	@ (8000500 <ymodem_receive_and_flash+0x1d0>)
- 8000348:	9301      	str	r3, [sp, #4]
- 800034a:	2043      	movs	r0, #67	@ 0x43
- 800034c:	f7ff fefe 	bl	800014c <uart_putc>
- 8000350:	f10d 031b 	add.w	r3, sp, #27
- 8000354:	f44f 717a 	mov.w	r1, #1000	@ 0x3e8
- 8000358:	4618      	mov	r0, r3
- 800035a:	9302      	str	r3, [sp, #8]
- 800035c:	f7ff fefe 	bl	800015c <uart_getc_timeout>
- 8000360:	4605      	mov	r5, r0
- 8000362:	2800      	cmp	r0, #0
- 8000364:	d044      	beq.n	80003f0 <ymodem_receive_and_flash+0xc0>
- 8000366:	9b02      	ldr	r3, [sp, #8]
- 8000368:	781b      	ldrb	r3, [r3, #0]
- 800036a:	2b01      	cmp	r3, #1
- 800036c:	d033      	beq.n	80003d6 <ymodem_receive_and_flash+0xa6>
- 800036e:	2b02      	cmp	r3, #2
- 8000370:	d043      	beq.n	80003fa <ymodem_receive_and_flash+0xca>
- 8000372:	2b04      	cmp	r3, #4
- 8000374:	d12b      	bne.n	80003ce <ymodem_receive_and_flash+0x9e>
- 8000376:	2015      	movs	r0, #21
- 8000378:	f7ff fee8 	bl	800014c <uart_putc>
- 800037c:	f44f 71fa 	mov.w	r1, #500	@ 0x1f4
- 8000380:	f10d 001d 	add.w	r0, sp, #29
- 8000384:	f7ff feea 	bl	800015c <uart_getc_timeout>
- 8000388:	2006      	movs	r0, #6
- 800038a:	f7ff fedf 	bl	800014c <uart_putc>
- 800038e:	f10d 041e 	add.w	r4, sp, #30
- 8000392:	2043      	movs	r0, #67	@ 0x43
- 8000394:	f7ff feda 	bl	800014c <uart_putc>
- 8000398:	f44f 717a 	mov.w	r1, #1000	@ 0x3e8
- 800039c:	4620      	mov	r0, r4
- 800039e:	f7ff fedd 	bl	800015c <uart_getc_timeout>
- 80003a2:	b178      	cbz	r0, 80003c4 <ymodem_receive_and_flash+0x94>
- 80003a4:	f89d 301e 	ldrb.w	r3, [sp, #30]
- 80003a8:	2b01      	cmp	r3, #1
- 80003aa:	d10b      	bne.n	80003c4 <ymodem_receive_and_flash+0x94>
- 80003ac:	2484      	movs	r4, #132	@ 0x84
- 80003ae:	f10d 061f 	add.w	r6, sp, #31
- 80003b2:	2132      	movs	r1, #50	@ 0x32
- 80003b4:	4630      	mov	r0, r6
- 80003b6:	f7ff fed1 	bl	800015c <uart_getc_timeout>
- 80003ba:	3c01      	subs	r4, #1
- 80003bc:	d1f9      	bne.n	80003b2 <ymodem_receive_and_flash+0x82>
- 80003be:	2006      	movs	r0, #6
- 80003c0:	f7ff fec4 	bl	800014c <uart_putc>
- 80003c4:	4628      	mov	r0, r5
- 80003c6:	f20d 4d2c 	addw	sp, sp, #1068	@ 0x42c
- 80003ca:	e8bd 8ff0 	ldmia.w	sp!, {r4, r5, r6, r7, r8, r9, sl, fp, pc}
- 80003ce:	2b18      	cmp	r3, #24
- 80003d0:	d10e      	bne.n	80003f0 <ymodem_receive_and_flash+0xc0>
- 80003d2:	2500      	movs	r5, #0
- 80003d4:	e7f6      	b.n	80003c4 <ymodem_receive_and_flash+0x94>
- 80003d6:	f04f 0980 	mov.w	r9, #128	@ 0x80
- 80003da:	f10d 0a1c 	add.w	sl, sp, #28
- 80003de:	f44f 71fa 	mov.w	r1, #500	@ 0x1f4
- 80003e2:	4650      	mov	r0, sl
- 80003e4:	f7ff feba 	bl	800015c <uart_getc_timeout>
- 80003e8:	b950      	cbnz	r0, 8000400 <ymodem_receive_and_flash+0xd0>
- 80003ea:	2015      	movs	r0, #21
- 80003ec:	f7ff feae 	bl	800014c <uart_putc>
- 80003f0:	f1b8 0801 	subs.w	r8, r8, #1
- 80003f4:	d1a9      	bne.n	800034a <ymodem_receive_and_flash+0x1a>
- 80003f6:	4645      	mov	r5, r8
- 80003f8:	e7e4      	b.n	80003c4 <ymodem_receive_and_flash+0x94>
- 80003fa:	f44f 6980 	mov.w	r9, #1024	@ 0x400
- 80003fe:	e7ec      	b.n	80003da <ymodem_receive_and_flash+0xaa>
- 8000400:	f10d 041d 	add.w	r4, sp, #29
- 8000404:	f44f 71fa 	mov.w	r1, #500	@ 0x1f4
- 8000408:	4620      	mov	r0, r4
- 800040a:	f7ff fea7 	bl	800015c <uart_getc_timeout>
- 800040e:	2800      	cmp	r0, #0
- 8000410:	d0eb      	beq.n	80003ea <ymodem_receive_and_flash+0xba>
- 8000412:	f89a 3000 	ldrb.w	r3, [sl]
- 8000416:	f89d 201d 	ldrb.w	r2, [sp, #29]
- 800041a:	4053      	eors	r3, r2
- 800041c:	2bff      	cmp	r3, #255	@ 0xff
- 800041e:	d1e4      	bne.n	80003ea <ymodem_receive_and_flash+0xba>
- 8000420:	2300      	movs	r3, #0
- 8000422:	461c      	mov	r4, r3
- 8000424:	af08      	add	r7, sp, #32
- 8000426:	9703      	str	r7, [sp, #12]
- 8000428:	21c8      	movs	r1, #200	@ 0xc8
- 800042a:	4638      	mov	r0, r7
- 800042c:	9305      	str	r3, [sp, #20]
- 800042e:	9704      	str	r7, [sp, #16]
- 8000430:	f7ff fe94 	bl	800015c <uart_getc_timeout>
- 8000434:	e9dd 2304 	ldrd	r2, r3, [sp, #16]
- 8000438:	2800      	cmp	r0, #0
- 800043a:	d133      	bne.n	80004a4 <ymodem_receive_and_flash+0x174>
- 800043c:	2015      	movs	r0, #21
- 800043e:	f7ff fe85 	bl	800014c <uart_putc>
- 8000442:	f10d 071e 	add.w	r7, sp, #30
+08000320 <ymodem_receive_and_flash>:
+ 8000320:	e92d 4ff0 	stmdb	sp!, {r4, r5, r6, r7, r8, r9, sl, fp, lr}
+ 8000324:	f04f 0b00 	mov.w	fp, #0
+ 8000328:	f04f 081e 	mov.w	r8, #30
+ 800032c:	465e      	mov	r6, fp
+ 800032e:	f2ad 4d2c 	subw	sp, sp, #1068	@ 0x42c
+ 8000332:	f7ff ffab 	bl	800028c <flash_erase_app_pages>
+ 8000336:	4b6e      	ldr	r3, [pc, #440]	@ (80004f0 <ymodem_receive_and_flash+0x1d0>)
+ 8000338:	9301      	str	r3, [sp, #4]
+ 800033a:	2043      	movs	r0, #67	@ 0x43
+ 800033c:	f7ff ff06 	bl	800014c <uart_putc>
+ 8000340:	f10d 031b 	add.w	r3, sp, #27
+ 8000344:	f44f 717a 	mov.w	r1, #1000	@ 0x3e8
+ 8000348:	4618      	mov	r0, r3
+ 800034a:	9302      	str	r3, [sp, #8]
+ 800034c:	f7ff ff06 	bl	800015c <uart_getc_timeout>
+ 8000350:	4605      	mov	r5, r0
+ 8000352:	2800      	cmp	r0, #0
+ 8000354:	d044      	beq.n	80003e0 <ymodem_receive_and_flash+0xc0>
+ 8000356:	9b02      	ldr	r3, [sp, #8]
+ 8000358:	781b      	ldrb	r3, [r3, #0]
+ 800035a:	2b01      	cmp	r3, #1
+ 800035c:	d033      	beq.n	80003c6 <ymodem_receive_and_flash+0xa6>
+ 800035e:	2b02      	cmp	r3, #2
+ 8000360:	d043      	beq.n	80003ea <ymodem_receive_and_flash+0xca>
+ 8000362:	2b04      	cmp	r3, #4
+ 8000364:	d12b      	bne.n	80003be <ymodem_receive_and_flash+0x9e>
+ 8000366:	2015      	movs	r0, #21
+ 8000368:	f7ff fef0 	bl	800014c <uart_putc>
+ 800036c:	f44f 71fa 	mov.w	r1, #500	@ 0x1f4
+ 8000370:	f10d 001d 	add.w	r0, sp, #29
+ 8000374:	f7ff fef2 	bl	800015c <uart_getc_timeout>
+ 8000378:	2006      	movs	r0, #6
+ 800037a:	f7ff fee7 	bl	800014c <uart_putc>
+ 800037e:	f10d 041e 	add.w	r4, sp, #30
+ 8000382:	2043      	movs	r0, #67	@ 0x43
+ 8000384:	f7ff fee2 	bl	800014c <uart_putc>
+ 8000388:	f44f 717a 	mov.w	r1, #1000	@ 0x3e8
+ 800038c:	4620      	mov	r0, r4
+ 800038e:	f7ff fee5 	bl	800015c <uart_getc_timeout>
+ 8000392:	b178      	cbz	r0, 80003b4 <ymodem_receive_and_flash+0x94>
+ 8000394:	f89d 301e 	ldrb.w	r3, [sp, #30]
+ 8000398:	2b01      	cmp	r3, #1
+ 800039a:	d10b      	bne.n	80003b4 <ymodem_receive_and_flash+0x94>
+ 800039c:	2484      	movs	r4, #132	@ 0x84
+ 800039e:	f10d 061f 	add.w	r6, sp, #31
+ 80003a2:	2132      	movs	r1, #50	@ 0x32
+ 80003a4:	4630      	mov	r0, r6
+ 80003a6:	f7ff fed9 	bl	800015c <uart_getc_timeout>
+ 80003aa:	3c01      	subs	r4, #1
+ 80003ac:	d1f9      	bne.n	80003a2 <ymodem_receive_and_flash+0x82>
+ 80003ae:	2006      	movs	r0, #6
+ 80003b0:	f7ff fecc 	bl	800014c <uart_putc>
+ 80003b4:	4628      	mov	r0, r5
+ 80003b6:	f20d 4d2c 	addw	sp, sp, #1068	@ 0x42c
+ 80003ba:	e8bd 8ff0 	ldmia.w	sp!, {r4, r5, r6, r7, r8, r9, sl, fp, pc}
+ 80003be:	2b18      	cmp	r3, #24
+ 80003c0:	d10e      	bne.n	80003e0 <ymodem_receive_and_flash+0xc0>
+ 80003c2:	2500      	movs	r5, #0
+ 80003c4:	e7f6      	b.n	80003b4 <ymodem_receive_and_flash+0x94>
+ 80003c6:	f04f 0980 	mov.w	r9, #128	@ 0x80
+ 80003ca:	f10d 0a1c 	add.w	sl, sp, #28
+ 80003ce:	f44f 71fa 	mov.w	r1, #500	@ 0x1f4
+ 80003d2:	4650      	mov	r0, sl
+ 80003d4:	f7ff fec2 	bl	800015c <uart_getc_timeout>
+ 80003d8:	b950      	cbnz	r0, 80003f0 <ymodem_receive_and_flash+0xd0>
+ 80003da:	2015      	movs	r0, #21
+ 80003dc:	f7ff feb6 	bl	800014c <uart_putc>
+ 80003e0:	f1b8 0801 	subs.w	r8, r8, #1
+ 80003e4:	d1a9      	bne.n	800033a <ymodem_receive_and_flash+0x1a>
+ 80003e6:	4645      	mov	r5, r8
+ 80003e8:	e7e4      	b.n	80003b4 <ymodem_receive_and_flash+0x94>
+ 80003ea:	f44f 6980 	mov.w	r9, #1024	@ 0x400
+ 80003ee:	e7ec      	b.n	80003ca <ymodem_receive_and_flash+0xaa>
+ 80003f0:	f10d 041d 	add.w	r4, sp, #29
+ 80003f4:	f44f 71fa 	mov.w	r1, #500	@ 0x1f4
+ 80003f8:	4620      	mov	r0, r4
+ 80003fa:	f7ff feaf 	bl	800015c <uart_getc_timeout>
+ 80003fe:	2800      	cmp	r0, #0
+ 8000400:	d0eb      	beq.n	80003da <ymodem_receive_and_flash+0xba>
+ 8000402:	f89a 3000 	ldrb.w	r3, [sl]
+ 8000406:	f89d 201d 	ldrb.w	r2, [sp, #29]
+ 800040a:	4053      	eors	r3, r2
+ 800040c:	2bff      	cmp	r3, #255	@ 0xff
+ 800040e:	d1e4      	bne.n	80003da <ymodem_receive_and_flash+0xba>
+ 8000410:	2300      	movs	r3, #0
+ 8000412:	461c      	mov	r4, r3
+ 8000414:	af08      	add	r7, sp, #32
+ 8000416:	9703      	str	r7, [sp, #12]
+ 8000418:	21c8      	movs	r1, #200	@ 0xc8
+ 800041a:	4638      	mov	r0, r7
+ 800041c:	9305      	str	r3, [sp, #20]
+ 800041e:	9704      	str	r7, [sp, #16]
+ 8000420:	f7ff fe9c 	bl	800015c <uart_getc_timeout>
+ 8000424:	e9dd 2304 	ldrd	r2, r3, [sp, #16]
+ 8000428:	2800      	cmp	r0, #0
+ 800042a:	d133      	bne.n	8000494 <ymodem_receive_and_flash+0x174>
+ 800042c:	2015      	movs	r0, #21
+ 800042e:	f7ff fe8d 	bl	800014c <uart_putc>
+ 8000432:	f10d 071e 	add.w	r7, sp, #30
+ 8000436:	21c8      	movs	r1, #200	@ 0xc8
+ 8000438:	4638      	mov	r0, r7
+ 800043a:	f7ff fe8f 	bl	800015c <uart_getc_timeout>
+ 800043e:	2800      	cmp	r0, #0
+ 8000440:	d0cb      	beq.n	80003da <ymodem_receive_and_flash+0xba>
+ 8000442:	f10d 031f 	add.w	r3, sp, #31
  8000446:	21c8      	movs	r1, #200	@ 0xc8
- 8000448:	4638      	mov	r0, r7
- 800044a:	f7ff fe87 	bl	800015c <uart_getc_timeout>
- 800044e:	2800      	cmp	r0, #0
- 8000450:	d0cb      	beq.n	80003ea <ymodem_receive_and_flash+0xba>
- 8000452:	f10d 031f 	add.w	r3, sp, #31
- 8000456:	21c8      	movs	r1, #200	@ 0xc8
- 8000458:	4618      	mov	r0, r3
- 800045a:	9304      	str	r3, [sp, #16]
- 800045c:	f7ff fe7e 	bl	800015c <uart_getc_timeout>
- 8000460:	2800      	cmp	r0, #0
- 8000462:	d0c2      	beq.n	80003ea <ymodem_receive_and_flash+0xba>
- 8000464:	9b04      	ldr	r3, [sp, #16]
- 8000466:	7839      	ldrb	r1, [r7, #0]
- 8000468:	781b      	ldrb	r3, [r3, #0]
- 800046a:	ea43 2301 	orr.w	r3, r3, r1, lsl #8
- 800046e:	429c      	cmp	r4, r3
- 8000470:	d1bb      	bne.n	80003ea <ymodem_receive_and_flash+0xba>
- 8000472:	f89a 3000 	ldrb.w	r3, [sl]
- 8000476:	bb73      	cbnz	r3, 80004d6 <ymodem_receive_and_flash+0x1a6>
- 8000478:	f1bb 0f00 	cmp.w	fp, #0
- 800047c:	d12b      	bne.n	80004d6 <ymodem_receive_and_flash+0x1a6>
- 800047e:	9003      	str	r0, [sp, #12]
- 8000480:	2006      	movs	r0, #6
- 8000482:	f7ff fe63 	bl	800014c <uart_putc>
- 8000486:	2043      	movs	r0, #67	@ 0x43
- 8000488:	f7ff fe60 	bl	800014c <uart_putc>
- 800048c:	9a03      	ldr	r2, [sp, #12]
- 800048e:	2601      	movs	r6, #1
- 8000490:	4693      	mov	fp, r2
- 8000492:	f44f 61fa 	mov.w	r1, #2000	@ 0x7d0
- 8000496:	9802      	ldr	r0, [sp, #8]
- 8000498:	f7ff fe60 	bl	800015c <uart_getc_timeout>
- 800049c:	2800      	cmp	r0, #0
- 800049e:	f47f af62 	bne.w	8000366 <ymodem_receive_and_flash+0x36>
- 80004a2:	e7a5      	b.n	80003f0 <ymodem_receive_and_flash+0xc0>
- 80004a4:	7812      	ldrb	r2, [r2, #0]
- 80004a6:	3701      	adds	r7, #1
- 80004a8:	ea84 2402 	eor.w	r4, r4, r2, lsl #8
- 80004ac:	2208      	movs	r2, #8
- 80004ae:	f414 4f00 	tst.w	r4, #32768	@ 0x8000
- 80004b2:	ea4f 0444 	mov.w	r4, r4, lsl #1
- 80004b6:	bf18      	it	ne
- 80004b8:	f484 5481 	eorne.w	r4, r4, #4128	@ 0x1020
- 80004bc:	f102 32ff 	add.w	r2, r2, #4294967295	@ 0xffffffff
- 80004c0:	bf18      	it	ne
- 80004c2:	f084 0401 	eorne.w	r4, r4, #1
- 80004c6:	f012 02ff 	ands.w	r2, r2, #255	@ 0xff
- 80004ca:	b2a4      	uxth	r4, r4
- 80004cc:	d1ef      	bne.n	80004ae <ymodem_receive_and_flash+0x17e>
- 80004ce:	3301      	adds	r3, #1
- 80004d0:	4599      	cmp	r9, r3
- 80004d2:	d1a9      	bne.n	8000428 <ymodem_receive_and_flash+0xf8>
- 80004d4:	e7b5      	b.n	8000442 <ymodem_receive_and_flash+0x112>
- 80004d6:	42b3      	cmp	r3, r6
- 80004d8:	d10d      	bne.n	80004f6 <ymodem_receive_and_flash+0x1c6>
- 80004da:	9b01      	ldr	r3, [sp, #4]
- 80004dc:	eb03 0409 	add.w	r4, r3, r9
- 80004e0:	4b08      	ldr	r3, [pc, #32]	@ (8000504 <ymodem_receive_and_flash+0x1d4>)
- 80004e2:	429c      	cmp	r4, r3
- 80004e4:	d805      	bhi.n	80004f2 <ymodem_receive_and_flash+0x1c2>
- 80004e6:	464a      	mov	r2, r9
- 80004e8:	9903      	ldr	r1, [sp, #12]
- 80004ea:	9801      	ldr	r0, [sp, #4]
- 80004ec:	f7ff fefc 	bl	80002e8 <flash_write_page>
- 80004f0:	9401      	str	r4, [sp, #4]
- 80004f2:	3601      	adds	r6, #1
- 80004f4:	b2f6      	uxtb	r6, r6
- 80004f6:	2006      	movs	r0, #6
- 80004f8:	f7ff fe28 	bl	800014c <uart_putc>
- 80004fc:	e7c9      	b.n	8000492 <ymodem_receive_and_flash+0x162>
- 80004fe:	bf00      	nop
- 8000500:	08003000 	.word	0x08003000
- 8000504:	0801ffff 	.word	0x0801ffff
+ 8000448:	4618      	mov	r0, r3
+ 800044a:	9304      	str	r3, [sp, #16]
+ 800044c:	f7ff fe86 	bl	800015c <uart_getc_timeout>
+ 8000450:	2800      	cmp	r0, #0
+ 8000452:	d0c2      	beq.n	80003da <ymodem_receive_and_flash+0xba>
+ 8000454:	9b04      	ldr	r3, [sp, #16]
+ 8000456:	7839      	ldrb	r1, [r7, #0]
+ 8000458:	781b      	ldrb	r3, [r3, #0]
+ 800045a:	ea43 2301 	orr.w	r3, r3, r1, lsl #8
+ 800045e:	429c      	cmp	r4, r3
+ 8000460:	d1bb      	bne.n	80003da <ymodem_receive_and_flash+0xba>
+ 8000462:	f89a 3000 	ldrb.w	r3, [sl]
+ 8000466:	bb73      	cbnz	r3, 80004c6 <ymodem_receive_and_flash+0x1a6>
+ 8000468:	f1bb 0f00 	cmp.w	fp, #0
+ 800046c:	d12b      	bne.n	80004c6 <ymodem_receive_and_flash+0x1a6>
+ 800046e:	9003      	str	r0, [sp, #12]
+ 8000470:	2006      	movs	r0, #6
+ 8000472:	f7ff fe6b 	bl	800014c <uart_putc>
+ 8000476:	2043      	movs	r0, #67	@ 0x43
+ 8000478:	f7ff fe68 	bl	800014c <uart_putc>
+ 800047c:	9a03      	ldr	r2, [sp, #12]
+ 800047e:	2601      	movs	r6, #1
+ 8000480:	4693      	mov	fp, r2
+ 8000482:	f44f 61fa 	mov.w	r1, #2000	@ 0x7d0
+ 8000486:	9802      	ldr	r0, [sp, #8]
+ 8000488:	f7ff fe68 	bl	800015c <uart_getc_timeout>
+ 800048c:	2800      	cmp	r0, #0
+ 800048e:	f47f af62 	bne.w	8000356 <ymodem_receive_and_flash+0x36>
+ 8000492:	e7a5      	b.n	80003e0 <ymodem_receive_and_flash+0xc0>
+ 8000494:	7812      	ldrb	r2, [r2, #0]
+ 8000496:	3701      	adds	r7, #1
+ 8000498:	ea84 2402 	eor.w	r4, r4, r2, lsl #8
+ 800049c:	2208      	movs	r2, #8
+ 800049e:	f414 4f00 	tst.w	r4, #32768	@ 0x8000
+ 80004a2:	ea4f 0444 	mov.w	r4, r4, lsl #1
+ 80004a6:	bf18      	it	ne
+ 80004a8:	f484 5481 	eorne.w	r4, r4, #4128	@ 0x1020
+ 80004ac:	f102 32ff 	add.w	r2, r2, #4294967295	@ 0xffffffff
+ 80004b0:	bf18      	it	ne
+ 80004b2:	f084 0401 	eorne.w	r4, r4, #1
+ 80004b6:	f012 02ff 	ands.w	r2, r2, #255	@ 0xff
+ 80004ba:	b2a4      	uxth	r4, r4
+ 80004bc:	d1ef      	bne.n	800049e <ymodem_receive_and_flash+0x17e>
+ 80004be:	3301      	adds	r3, #1
+ 80004c0:	4599      	cmp	r9, r3
+ 80004c2:	d1a9      	bne.n	8000418 <ymodem_receive_and_flash+0xf8>
+ 80004c4:	e7b5      	b.n	8000432 <ymodem_receive_and_flash+0x112>
+ 80004c6:	42b3      	cmp	r3, r6
+ 80004c8:	d10d      	bne.n	80004e6 <ymodem_receive_and_flash+0x1c6>
+ 80004ca:	9b01      	ldr	r3, [sp, #4]
+ 80004cc:	eb03 0409 	add.w	r4, r3, r9
+ 80004d0:	4b08      	ldr	r3, [pc, #32]	@ (80004f4 <ymodem_receive_and_flash+0x1d4>)
+ 80004d2:	429c      	cmp	r4, r3
+ 80004d4:	d805      	bhi.n	80004e2 <ymodem_receive_and_flash+0x1c2>
+ 80004d6:	464a      	mov	r2, r9
+ 80004d8:	9903      	ldr	r1, [sp, #12]
+ 80004da:	9801      	ldr	r0, [sp, #4]
+ 80004dc:	f7ff fefc 	bl	80002d8 <flash_write_page>
+ 80004e0:	9401      	str	r4, [sp, #4]
+ 80004e2:	3601      	adds	r6, #1
+ 80004e4:	b2f6      	uxtb	r6, r6
+ 80004e6:	2006      	movs	r0, #6
+ 80004e8:	f7ff fe30 	bl	800014c <uart_putc>
+ 80004ec:	e7c9      	b.n	8000482 <ymodem_receive_and_flash+0x162>
+ 80004ee:	bf00      	nop
+ 80004f0:	08003000 	.word	0x08003000
+ 80004f4:	0801ffff 	.word	0x0801ffff

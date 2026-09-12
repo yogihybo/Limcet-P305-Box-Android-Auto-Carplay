@@ -66,12 +66,13 @@ bool uart_getc_timeout(uint8_t *out_char, uint32_t timeout_ms) {
 
 bool is_app_valid(void) {
     uint32_t app_sp = *((volatile uint32_t *)APP_FLASH_BASE);
-    uint32_t app_reset = *((volatile uint32_t *)(APP_FLASH_BASE + 4));
 
-    /* Valid Stack Pointer (0x20000000..0x20010000) and Valid Code Pointer (APP_FLASH_BASE..APP_FLASH_END) */
-    if (app_sp >= 0x20000000UL && app_sp <= 0x20010000UL &&
-        app_reset >= APP_FLASH_BASE && app_reset <= APP_FLASH_END &&
-        (app_reset & 1) == 1) {
+    /* Matches the real factory bootloader's own check exactly (disassembled
+     * at 0x08001844-0x08001858) -- masked comparison of the stack pointer
+     * only. The real bootloader does NOT separately validate the reset
+     * vector's range or Thumb-bit before jumping. See
+     * docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md sections 5.2 and 6. */
+    if ((app_sp & 0x2FFE0000UL) == 0x20000000UL) {
         return true;
     }
     return false;

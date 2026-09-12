@@ -705,6 +705,29 @@ void ensure_bluetooth_daemon_running() {
     // to just skip the daemon-bringup block below instead of the
     // whole function.
     bool blueZAlreadyActive = is_bluez_active();
+    if (!blueZAlreadyActive) {
+        // 2026-09-12: real boot-time race, occasionally reproducible on
+        // hardware ("Bluetooth doesn't launch at startup but is fine after
+        // a reboot"). rcS starts its own rtk_hciattach/dbus-daemon/
+        // bluetoothd in a background subshell at roughly the same time
+        // this thread's very first is_bluez_active() check runs -- on a
+        // slow boot this check can lose that race and see nothing up yet,
+        // causing THIS function to start a second, parallel bring-up
+        // (duplicate rtk_hciattach fighting over the same UART, duplicate
+        // dbus-daemon/bluetoothd). The 30s watchdog below eventually heals
+        // it, which is exactly why a manual reboot "fixes" it -- but the
+        // real, less disruptive fix is to give rcS's own bring-up a real
+        // chance to win first. Poll for up to 3s before concluding BlueZ
+        // genuinely isn't up.
+        for (int i = 0; i < 15 && !blueZAlreadyActive; ++i) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+            blueZAlreadyActive = is_bluez_active();
+        }
+        if (blueZAlreadyActive) {
+            std::printf("%s [BT] BlueZ became active while waiting -- rcS bring-up won the race, skipping duplicate bring-up\n",
+                        core::log_timestamp().c_str());
+        }
+    }
     if (blueZAlreadyActive) {
         std::printf("%s [BT] BlueZ (bluetoothd) already running\n", core::log_timestamp().c_str());
     }
@@ -740,7 +763,16 @@ void ensure_bluetooth_daemon_running() {
 
     if (std::system("pidof dbus-daemon >/dev/null 2>&1") != 0) {
         std::system("mkdir -p /var/run/dbus && dbus-daemon --system --fork >/dev/null 2>&1");
-        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        // Poll for the real system bus socket instead of a fixed sleep --
+        // matches the rtk_hciattach/bluetoothd waits right below/above
+        // this one, which were already fixed this way for the same reason
+        // (a fixed sleep either wastes time on a fast boot or isn't long
+        // enough on a slow one).
+        for (int i = 0; i < 20; ++i) {
+            struct stat st {};
+            if (stat("/var/run/dbus/system_bus_socket", &st) == 0) break;
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
     }
 
     if (std::system("pidof bluetoothd >/dev/null 2>&1") != 0) {

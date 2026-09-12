@@ -924,6 +924,158 @@ lv_obj_t * create_settings_screen() {
         }
     }
 
+    {
+        // Reboot row -- same row/button pattern as "System Information"
+        // above, but destructive, so the button itself opens a confirm
+        // dialog rather than acting immediately.
+        lv_obj_t * row = lv_obj_create(card);
+        lv_obj_remove_style_all(row);
+        lv_obj_set_width(row, LV_PCT(100));
+        lv_obj_set_height(row, 56);
+        lv_obj_set_style_bg_color(row, theme::surface_container_high(), 0);
+        lv_obj_set_style_bg_opa(row, LV_OPA_COVER, 0);
+        lv_obj_set_style_radius(row, theme::kCardRadius, 0);
+        lv_obj_set_style_pad_hor(row, 16, 0);
+        lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+        lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+
+        lv_obj_t * left_box = lv_obj_create(row);
+        lv_obj_remove_style_all(left_box);
+        lv_obj_set_size(left_box, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+        lv_obj_set_flex_flow(left_box, LV_FLEX_FLOW_ROW);
+        lv_obj_set_flex_align(left_box, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        lv_obj_set_style_pad_column(left_box, 12, 0);
+        lv_obj_clear_flag(left_box, LV_OBJ_FLAG_SCROLLABLE);
+
+        lv_obj_t * icon_img = lv_image_create(left_box);
+        lv_image_set_src(icon_img, &icons::icon_nav_settings);
+
+        lv_obj_t * text_box = lv_obj_create(left_box);
+        lv_obj_remove_style_all(text_box);
+        lv_obj_set_size(text_box, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+        lv_obj_set_flex_flow(text_box, LV_FLEX_FLOW_COLUMN);
+        lv_obj_clear_flag(text_box, LV_OBJ_FLAG_SCROLLABLE);
+
+        lv_obj_t * lbl = lv_label_create(text_box);
+        lv_label_set_text(lbl, "Reboot");
+        lv_obj_set_style_text_font(lbl, &lv_font_roboto_14, 0);
+        lv_obj_set_style_text_color(lbl, theme::text_primary(), 0);
+
+        lv_obj_t * sub_lbl = lv_label_create(text_box);
+        lv_label_set_text(sub_lbl, "Restart the head unit");
+        lv_obj_set_style_text_font(sub_lbl, &lv_font_roboto_14, 0);
+        lv_obj_set_style_text_color(sub_lbl, theme::text_secondary(), 0);
+
+        lv_obj_t * btn = lv_button_create(row);
+        lv_obj_remove_style_all(btn);
+        lv_obj_set_size(btn, 110, 36);
+        lv_obj_set_style_radius(btn, theme::kPillRadius, 0);
+        lv_obj_set_style_bg_color(btn, theme::danger(), 0);
+        lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
+        theme::style_focusable(btn);
+
+        lv_obj_t * btn_lbl = lv_label_create(btn);
+        lv_label_set_text(btn_lbl, "Reboot");
+        lv_obj_set_style_text_font(btn_lbl, &lv_font_roboto_14, 0);
+        lv_obj_set_style_text_color(btn_lbl, theme::text_primary(), 0);
+        lv_obj_center(btn_lbl);
+
+        lv_obj_add_event_cb(btn, [](lv_event_t * e) {
+            (void)e;
+            // Confirm dialog, parented to lv_layer_sys() -- see the
+            // "View Info" button above for why (nav rail lives on
+            // lv_layer_top(), an overlay parented to the screen itself
+            // would render beneath it).
+            lv_obj_t * overlay = lv_obj_create(lv_layer_sys());
+            lv_obj_remove_style_all(overlay);
+            lv_obj_set_size(overlay, LV_PCT(100), LV_PCT(100));
+            lv_obj_set_style_bg_color(overlay, lv_color_black(), 0);
+            lv_obj_set_style_bg_opa(overlay, LV_OPA_60, 0);
+            lv_obj_clear_flag(overlay, LV_OBJ_FLAG_SCROLLABLE);
+
+            lv_obj_t * box = lv_obj_create(overlay);
+            lv_obj_set_size(box, 360, 180);
+            lv_obj_center(box);
+            lv_obj_set_style_bg_color(box, theme::surface_container_high(), 0);
+            lv_obj_set_style_bg_opa(box, LV_OPA_COVER, 0);
+            lv_obj_set_style_radius(box, theme::kCardRadius, 0);
+            lv_obj_set_flex_flow(box, LV_FLEX_FLOW_COLUMN);
+            lv_obj_set_flex_align(box, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+            lv_obj_set_style_pad_all(box, 20, 0);
+            lv_obj_set_style_pad_row(box, 16, 0);
+            lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
+
+            lv_obj_t * title = lv_label_create(box);
+            lv_label_set_text(title, "Reboot the head unit?");
+            lv_obj_set_style_text_font(title, &lv_font_roboto_14, 0);
+            lv_obj_set_style_text_color(title, theme::text_primary(), 0);
+
+            lv_obj_t * body = lv_label_create(box);
+            lv_label_set_text(body, "Android Auto, Bluetooth, and the reverse\ncamera will be unavailable until it restarts.");
+            lv_obj_set_style_text_font(body, &lv_font_roboto_14, 0);
+            lv_obj_set_style_text_color(body, theme::text_secondary(), 0);
+            lv_obj_set_style_text_align(body, LV_TEXT_ALIGN_CENTER, 0);
+
+            lv_obj_t * btn_row = lv_obj_create(box);
+            lv_obj_remove_style_all(btn_row);
+            lv_obj_set_size(btn_row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+            lv_obj_set_flex_flow(btn_row, LV_FLEX_FLOW_ROW);
+            lv_obj_set_style_pad_column(btn_row, 12, 0);
+            lv_obj_clear_flag(btn_row, LV_OBJ_FLAG_SCROLLABLE);
+
+            lv_obj_t * cancel_btn = lv_button_create(btn_row);
+            lv_obj_remove_style_all(cancel_btn);
+            lv_obj_set_size(cancel_btn, 110, 40);
+            lv_obj_set_style_radius(cancel_btn, theme::kPillRadius, 0);
+            lv_obj_set_style_bg_color(cancel_btn, theme::surface_container_high(), 0);
+            lv_obj_set_style_bg_opa(cancel_btn, LV_OPA_COVER, 0);
+            lv_obj_set_style_border_width(cancel_btn, 1, 0);
+            lv_obj_set_style_border_color(cancel_btn, theme::text_secondary(), 0);
+            theme::style_focusable(cancel_btn);
+            lv_obj_t * cancel_lbl = lv_label_create(cancel_btn);
+            lv_label_set_text(cancel_lbl, "Cancel");
+            lv_obj_set_style_text_font(cancel_lbl, &lv_font_roboto_14, 0);
+            lv_obj_set_style_text_color(cancel_lbl, theme::text_primary(), 0);
+            lv_obj_center(cancel_lbl);
+            lv_obj_add_event_cb(cancel_btn, [](lv_event_t * ev) {
+                lv_obj_t * ov = static_cast<lv_obj_t *>(lv_event_get_user_data(ev));
+                lv_obj_delete(ov);
+            }, LV_EVENT_CLICKED, overlay);
+
+            lv_obj_t * confirm_btn = lv_button_create(btn_row);
+            lv_obj_remove_style_all(confirm_btn);
+            lv_obj_set_size(confirm_btn, 110, 40);
+            lv_obj_set_style_radius(confirm_btn, theme::kPillRadius, 0);
+            lv_obj_set_style_bg_color(confirm_btn, theme::danger(), 0);
+            lv_obj_set_style_bg_opa(confirm_btn, LV_OPA_COVER, 0);
+            theme::style_focusable(confirm_btn);
+            lv_obj_t * confirm_lbl = lv_label_create(confirm_btn);
+            lv_label_set_text(confirm_lbl, "Reboot Now");
+            lv_obj_set_style_text_font(confirm_lbl, &lv_font_roboto_14, 0);
+            lv_obj_set_style_text_color(confirm_lbl, theme::text_primary(), 0);
+            lv_obj_center(confirm_lbl);
+            lv_obj_add_event_cb(confirm_btn, [](lv_event_t * ev) {
+                (void)ev;
+                // Fire-and-forget on a detached thread -- same reasoning
+                // as every other std::system() call in this file (SSH
+                // toggle, volume steppers): never block the LVGL thread.
+                core::SizedThread(core::kDefaultThreadStackSize, []() {
+                    std::system("sync && reboot");
+                }).detach();
+            }, LV_EVENT_CLICKED, nullptr);
+
+            if (core::navigation::focus_group()) {
+                lv_group_add_obj(core::navigation::focus_group(), cancel_btn);
+                lv_group_add_obj(core::navigation::focus_group(), confirm_btn);
+            }
+        }, LV_EVENT_CLICKED, nullptr);
+
+        if (core::navigation::focus_group()) {
+            lv_group_add_obj(core::navigation::focus_group(), btn);
+        }
+    }
+
     // 13. MCU LIVE LOG (2026-08-31) -- live view of real, decoded MCU UART
     // traffic (every frame, any cmd), so protocol questions can be
     // resolved by watching custom_ui's own settings toggles/knob input/

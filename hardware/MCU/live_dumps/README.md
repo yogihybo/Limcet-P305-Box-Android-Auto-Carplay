@@ -11,10 +11,18 @@
 
 ## Dump Inventory
 
-| File | Memory Range | Size | SHA-256 | Description |
+### 1. Properly Aligned Flash Partitions (Recommended for Analysis & Flashing)
+| File | Flash Memory Range | Size | SHA-256 | Description |
 | :--- | :---: | :---: | :--- | :--- |
-| [`live_bootloader.bin`](file:///home/osboxes/Downloads/prado-firmware-reconstruction/hardware/MCU/live_dumps/live_bootloader.bin) | `0x08000000` – `0x08002FFF` (12K real bootloader; `0x08003000`+ is application) | 16 KB (16,384 B) | `6d32a969d0e4bd1b5a7dedbde0a8360b4c7dca1de727935ef00106ad6b36aa35` | Factory IAP Bootloader. **Correction (2026-09-12)**: "USB OTG + USART update engine" below was an unverified label — disassembly found the bootloader's own vector table has USART1/2/3 and OTG_FS/OTG_FS_WKUP all pointing at the same Default_Handler (no interrupt-driven I/O), and an exhaustive sweep of every USART2 register access found no bulk-transfer receive loop at all. See `docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md` section 11. |
-| [`live_app_1302.bin`](file:///home/osboxes/Downloads/prado-firmware-reconstruction/hardware/MCU/live_dumps/live_app_1302.bin) | `0x08004000` – `0x0800FFFF` | 48 KB (49,152 B) | `381855df8ca4e9b2071cce02ae3a72bc03be4ecd0d474642417b69075a859b4d` | Authentic native **Limcet-V1.0-1302** Toyota Prado companion firmware |
+| [`factory_bootloader_12k.bin`](file:///home/osboxes/Downloads/prado-firmware-reconstruction/hardware/MCU/live_dumps/factory_bootloader_12k.bin) | `0x08000000` – `0x08002FFF` | 12 KB (12,288 B) | `322827aa0305d540591ddefc821bf6156f7c24dada9bc1e90e7c0a403dcb9db1` | Authentic Factory IAP Bootloader (pure 12 KB partition). |
+| [`factory_app_1302_52k.bin`](file:///home/osboxes/Downloads/prado-firmware-reconstruction/hardware/MCU/live_dumps/factory_app_1302_52k.bin) | `0x08003000` – `0x0800FFFF` | 52 KB (53,248 B) | `577f976fa96dd738ba65e597b06416cd4872ec38cbec3125ba736d0cfa3258b8` | Complete Native **Limcet-V1.0-1302** Application (including Vector Table & Startup). |
+| [`factory_full_64k.bin`](file:///home/osboxes/Downloads/prado-firmware-reconstruction/hardware/MCU/live_dumps/factory_full_64k.bin) | `0x08000000` – `0x0800FFFF` | 64 KB (65,536 B) | `81aa106c7452498b82f86621e12bc3930c9017ed9cd84c989b00db6cafa8968c` | Complete, continuous 64 KB Flash Dump of the entire MCU. |
+
+### 2. Original Raw Extractions (Preserved for Provenance)
+| File | Extraction Window | Size | SHA-256 | Description |
+| :--- | :---: | :---: | :--- | :--- |
+| [`live_bootloader.bin`](file:///home/osboxes/Downloads/prado-firmware-reconstruction/hardware/MCU/live_dumps/live_bootloader.bin) | `0x08000000` – `0x08003FFF` | 16 KB (16,384 B) | `6d32a969d0e4bd1b5a7dedbde0a8360b4c7dca1de727935ef00106ad6b36aa35` | Raw 16K extraction (contains 12K bootloader + first 4K of application `0x08003000`–`0x08003FFF`). |
+| [`live_app_1302.bin`](file:///home/osboxes/Downloads/prado-firmware-reconstruction/hardware/MCU/live_dumps/live_app_1302.bin) | `0x08004000` – `0x0800FFFF` | 48 KB (49,152 B) | `381855df8ca4e9b2071cce02ae3a72bc03be4ecd0d474642417b69075a859b4d` | Raw 48K extraction (second half of application, starting at `0x08004000`). |
 
 ---
 

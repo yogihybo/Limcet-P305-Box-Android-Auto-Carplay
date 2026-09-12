@@ -3938,3 +3938,26 @@ Reviewed the new hardware-in-the-loop test tool, which drives the spare board pu
 
 **No bugs found — approved as-is.** This is a real, useful, correctly-targeted regression-test asset for this project going forward: any future change to the CAN decoders, power manager, or CAN1/CAN2 init can now be checked against this suite before hardware-testing manually.
 
+### 25. Real-vehicle bug report: touch input stops until a soft reset — I2C bus-lockup fix (2026-09-13)
+
+User-reported symptom on the live device: touch input occasionally stops registering and never recovers on its own; a soft reset of the head unit restores it. The knob (rotary encoder) keeps working throughout.
+
+**Root-caused in `hardware/MCU/source/src/touch_driver.c`, matching the symptom exactly.** The knob is plain GPIO polling (`touch_process_knob()`, no shared failure path), while touch goes through `I2C1` to a Goodix GT911 — exactly the asymmetry the report describes. `i2c1_read_bytes()`/`i2c1_write_byte()`'s error path only ever wrote `STOP` to `I2C1->CR1` on timeout:
+```c
+err:
+    I2C1->CR1 |= (1UL << 9);  /* Generate STOP */
+    I2C1->CR1 |= (1UL << 10); /* Re-enable ACK */
+    return false;
+```
+This is a register write to the *peripheral*, not an electrical fix to the *bus*. If a GT911 (or any I2C slave) glitches and holds SDA low mid-transaction — a well-documented real Goodix failure mode — the STM32 I2C1 peripheral's own state machine is physically wedged waiting for a bus condition that can never occur; setting `STOP` does nothing in that state. Every subsequent poll (`touch_process_digitizer()`, called every ~25ms) would then re-attempt the same transaction, hit the same wedged bus, and silently time out forever — never recovering without an external reset re-toggling the physical GPIO lines and re-running `i2c1_hardware_init()` from scratch. This is a textbook, well-known I2C failure class with no bus-level recovery previously implemented.
+
+**Fix**: added `i2c1_bus_recovery()`, the standard real I2C bus-recovery procedure (NXP UM10204 §3.1.16) — temporarily drive `SCL` as plain GPIO and manually clock it up to 9 times while watching `SDA` (enough bits for a slave stuck mid-byte to finish and release the bus), force a manual `STOP` condition electrically (`SDA` low-to-high while `SCL` is high), then fully re-run `i2c1_hardware_init()` (including its existing `SWRST` peripheral reset, which was already correct at boot but never repeated after a real failure). Wired into `touch_process_digitizer()`: triggers automatically after `I2C_FAIL_RECOVERY_THRESHOLD` (3) consecutive failures — not on the first one, since a single missed poll is normal/harmless — so the driver self-heals instead of requiring a manual reset.
+
+**Cannot be tested against a real stuck-bus scenario on the spare board** (no GT911 is wired to it, so there's no real slave to glitch), but this let me exercise the recovery path constantly instead (every read on this board fails, triggering recovery every ~75ms) as an incidental stress test: build clean (zero warnings), reflashed, `CFSR=0`, and the 23-point HIL suite (section 24) still passed 22/23 — the one failure (`Test 05`, a short-window `SysTick` linearity check) was investigated and confirmed **not** a regression from this fix:
+
+- Direct re-measurement via a single persistent OpenOCD session (not the test script's own two-separate-subprocess-per-read architecture) showed `SysTick` advancing `1011ms` for a nominal `1000ms` window — accurate to within 1%, confirming timing is genuinely fine.
+- The test script's own `Test 05` launches a fresh `openocd` subprocess for each of its two reads; that subprocess's own USB/SWD reconnection overhead gets counted as part of "elapsed" wall-clock time on the host side, while the device's own tick counter only reflects real on-chip elapsed time — a real, pre-existing fragility in `tools/test_mcu_rigorous.py`'s own measurement methodology, unrelated to this fix, and worth fixing there separately (use one persistent session for both reads) rather than a reason to doubt the firmware change.
+- Also directly confirmed via `RCC->CSR` that no new watchdog reset occurred, and that a "PC frozen across a 200ms sample" observation during investigation was the *already-existing*, intentional `enter_low_power_sleep()` WFI loop in `power_manager.c` (the board reaching real standby after enough idle time on this bench setup with no ACC signal wired) — not a hang, and not something introduced by this fix.
+
+Build- and hardware-verified: clean build, zero warnings, `CFSR=0`, 22/23 HIL tests pass with the one failure independently explained and ruled out as unrelated test-harness flakiness.
+

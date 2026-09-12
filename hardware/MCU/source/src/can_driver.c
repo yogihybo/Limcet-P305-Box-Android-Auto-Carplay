@@ -124,6 +124,45 @@ void can_init(uint32_t baudrate) {
     can_timeout = 200000;
     while (((CAN1->MSR & (1UL << 0)) != 0) && --can_timeout) {} /* Wait for normal mode with timeout */
     
+    /* CAN2 was left completely uninitialized here -- clock/GPIO/NVIC route were
+     * configured above, but the peripheral itself was never taken out of its
+     * post-reset Sleep mode (confirmed on real hardware: CAN2->MCR read back
+     * 0x00010002 -- SLEEP bit still set -- and CAN2->IER read 0, so even if a
+     * frame had arrived, FMPIE0 was never enabled to raise the interrupt).
+     * Fixed by mirroring CAN1's own init sequence. Real disassembly at
+     * 0x08008F1A-0x08008FE4 confirms CAN2 uses the exact same real timing as
+     * CAN1 (Prescaler=9, BS1=5tq, BS2=2tq -- the same 500kbps/75% config),
+     * so CAN1->BTR's value is reused here on real evidence, not assumed. */
+    CAN2->MCR &= ~(1UL << 1); /* Clear SLEEP */
+    CAN2->MCR |=  (1UL << 0); /* Set INRQ */
+    can_timeout = 200000;
+    while (((CAN2->MSR & (1UL << 0)) == 0) && --can_timeout) {} /* Wait for INAK with timeout */
+
+    CAN2->BTR = CAN1->BTR; /* Same real 500kbps/75% timing, confirmed above */
+    CAN2->MCR |= (1UL << 6) | (1UL << 5); /* ABOM, AWUM */
+
+    /* CAN2's filter banks are physically implemented inside CAN1's own
+     * register block (a real STM32 dual-CAN quirk) -- filter master control
+     * (FMR/FA1R/etc.) is always accessed via CAN1, never CAN2, and CAN2's
+     * banks start at CAN1->FMR's CAN2SB field, which defaults to 14 (the
+     * standard 14/14 split of the 28 total banks) and is left at that
+     * default here rather than reconfigured. */
+    CAN1->FMR |= (1UL << 0); /* FINIT */
+    CAN1->FA1R &= ~(1UL << 14); /* Deactivate filter 14 (first CAN2 bank) */
+    CAN1->FS1R |=  (1UL << 14); /* 32-bit scale */
+    CAN1->FM1R &= ~(1UL << 14); /* Identifier Mask mode */
+    CAN1->FFA1R &= ~(1UL << 14); /* Assign to FIFO 0 */
+    CAN1->sFilterRegister[14].FR1 = 0x00000000;
+    CAN1->sFilterRegister[14].FR2 = 0x00000000;
+    CAN1->FA1R |=  (1UL << 14); /* Activate filter 14 */
+    CAN1->FMR &= ~(1UL << 0); /* Exit Filter Init */
+
+    CAN2->IER |= (1UL << 1); /* FMPIE0 */
+
+    CAN2->MCR &= ~(1UL << 0); /* Clear INRQ -> Normal Operating Mode */
+    can_timeout = 200000;
+    while (((CAN2->MSR & (1UL << 0)) != 0) && --can_timeout) {} /* Wait for normal mode with timeout */
+
     /* Enable NVIC IRQ 20 (CAN1_RX0) and IRQ 64 (CAN2_RX0, matches dump 0x080089AC) */
     nvic_enable_irq(20);
     nvic_enable_irq(64);

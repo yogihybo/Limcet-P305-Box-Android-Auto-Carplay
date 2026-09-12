@@ -18,6 +18,70 @@ static int8_t   g_rotary_accum = 0;
 /* Timeout for I2C bus transactions (prevents lockup if hardware is absent) */
 #define I2C_TIMEOUT_CYCLES  5000
 
+static void i2c1_hardware_init(void);
+
+/* Real-world bug this addresses: a GT911 (or any I2C slave) that glitches
+ * mid-transaction can hold SDA low indefinitely -- a well-documented Goodix
+ * failure mode. When that happens, the STM32 I2C1 peripheral's own state
+ * machine is physically wedged waiting for a bus condition that will never
+ * occur; writing STOP to CR1 (the previous error-path recovery here) is a
+ * register write to the peripheral, not an electrical fix to the bus, so it
+ * does nothing. Every subsequent transaction attempt just re-times-out
+ * silently, forever -- matching the real reported symptom exactly: "touch
+ * stops registering, only a soft reset of the whole head unit brings it
+ * back" (a soft reset re-toggles the physical GPIO lines and re-runs
+ * i2c1_hardware_init() from scratch, which is why it "fixes" it). After
+ * enough consecutive failures, i2c1_bus_recovery() performs the standard
+ * real I2C bus-recovery procedure instead of waiting for an external reset:
+ * temporarily drive SCL as a plain GPIO and clock it up to 9 times (the
+ * maximum bits a stuck slave could still be holding the bus for) while
+ * watching SDA, force a manual STOP condition electrically, then fully
+ * re-initialize the I2C1 peripheral (including its SWRST reset). */
+#define I2C_FAIL_RECOVERY_THRESHOLD 3
+static uint8_t s_i2c_consec_failures = 0;
+
+static void i2c1_bus_recovery(void) {
+    /* Release I2C1 from the peripheral so SCL/SDA can be driven as plain
+     * GPIO for manual bus recovery. */
+    I2C1->CR1 &= ~(1UL << 0); /* PE = 0 */
+
+    /* PB6 (SCL): General purpose open-drain output, 2MHz (Mode=10, CNF=01 -> 0x06) */
+    GPIOB->CRL &= ~(0x0FUL << 24);
+    GPIOB->CRL |=  (0x06UL << 24);
+    GPIOB->BSRR = (1UL << 6); /* Idle high */
+
+    /* PB7 (SDA): Input, so we can see whether a stuck slave releases it */
+    GPIOB->CRL &= ~(0x0FUL << 28);
+    GPIOB->CRL |=  (0x08UL << 28); /* Input pull-up (CNF=10, MODE=00) */
+    GPIOB->BSRR = (1UL << 7);
+
+    /* Clock SCL up to 9 times -- enough bits for a slave stuck mid-byte to
+     * finish clocking out whatever it's holding and release SDA, per the
+     * standard I2C bus-recovery procedure (NXP UM10204 3.1.16). */
+    for (int i = 0; i < 9; i++) {
+        GPIOB->BRR = (1UL << 6);
+        for (volatile int d = 0; d < 50; d++) {}
+        GPIOB->BSRR = (1UL << 6);
+        for (volatile int d = 0; d < 50; d++) {}
+        if (GPIOB->IDR & (1UL << 7)) break; /* SDA released early */
+    }
+
+    /* Force a manual STOP condition: SDA low-to-high while SCL is high. */
+    GPIOB->CRL &= ~(0x0FUL << 28);
+    GPIOB->CRL |=  (0x06UL << 28); /* PB7 as open-drain output */
+    GPIOB->BRR = (1UL << 7);
+    for (volatile int d = 0; d < 50; d++) {}
+    GPIOB->BSRR = (1UL << 6);
+    for (volatile int d = 0; d < 50; d++) {}
+    GPIOB->BSRR = (1UL << 7);
+    for (volatile int d = 0; d < 50; d++) {}
+
+    /* Full peripheral re-init, including the SWRST this driver already
+     * correctly does at boot -- but never repeated after a real failure
+     * until now. */
+    i2c1_hardware_init();
+}
+
 static void i2c1_hardware_init(void) {
     /* 1. Enable GPIOB and I2C1 clocks */
     RCC->APB2ENR |= (1UL << 3);  /* GPIOB */
@@ -257,8 +321,24 @@ void touch_process_digitizer(void) {
 
     /* Read Goodix GT911 touch point status at register 0x814E */
     if (!i2c1_read_bytes(GOODIX_I2C_ADDR, 0x814E, &status, 1)) {
+        /* Real hardware bug fix: previously this just returned on every
+         * failure with no recovery attempt, so a genuinely stuck bus (the
+         * GT911 or any I2C slave holding SDA low) meant touch silently
+         * stopped forever until a full head-unit reset re-initialized the
+         * peripheral from scratch. After a few consecutive failures --
+         * not on the first one, since a single missed poll is normal and
+         * harmless -- run the real bus-recovery procedure instead of
+         * waiting for an external reset. */
+        if (s_i2c_consec_failures < 255) {
+            s_i2c_consec_failures++;
+        }
+        if (s_i2c_consec_failures >= I2C_FAIL_RECOVERY_THRESHOLD) {
+            i2c1_bus_recovery();
+            s_i2c_consec_failures = 0;
+        }
         return; /* No device or I2C bus error */
     }
+    s_i2c_consec_failures = 0;
 
     /* Bit 7: Buffer status (1 = coordinates ready), Bits [3:0]: point count */
     if ((status & 0x80) != 0) {

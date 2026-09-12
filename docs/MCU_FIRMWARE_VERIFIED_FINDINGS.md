@@ -3807,4 +3807,6 @@ Continued hardware testing on the spare board (now running the 72MHz-corrected, 
 
 **Practical significance**: this is the first real-hardware confirmation that triggering firmware-update mode without following through (accidental trigger, cable unplugged mid-attempt, host tool crash before sending anything) is safely recoverable on this exact clean-room bootloader build — it does not require a debugger/SWD recovery, does not brick the device, and does not require the host to ever successfully connect. This was previously only an inference from reading the source; it's now an observed, timed, hardware-confirmed behavior.
 
+**Also checked in this pass**: `gpio_hardware_init()`'s full post-boot GPIO state, read directly from `GPIOA/B/C_ODR` after a completed boot. Every pin matched its documented expected value exactly: `PA1` (audio mute) LOW/unmuted, `PB0` (touch relay) HIGH, `PB6` (mic mux) HIGH, `PB1`/`PB8`/`PB9`/`PC13` (settings-sync targets) LOW/default, and — most importantly — **`PB14` (the real ARK1668 SoC hardware-reset line) reads HIGH, confirming the hold-then-release reset cycle for the actual head-unit SoC completed correctly** on real silicon, not just in source-reading.
+
 

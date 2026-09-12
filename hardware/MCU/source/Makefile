@@ -19,7 +19,9 @@ C_SOURCES = \
     src/can_driver.c \
     src/uart_protocol.c \
     src/vehicle_profiles.c \
-    src/tea_crypto.c
+    src/tea_crypto.c \
+    src/swc_driver.c \
+    src/touch_driver.c
 
 # Includes
 INCLUDES = -Iinclude

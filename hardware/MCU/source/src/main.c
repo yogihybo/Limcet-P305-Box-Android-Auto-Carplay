@@ -2,6 +2,8 @@
 #include "can_driver.h"
 #include "uart_protocol.h"
 #include "vehicle_profiles.h"
+#include "swc_driver.h"
+#include "touch_driver.h"
 
 static void clock_init(void) {
     /* If SYSCLK is currently driven by PLL, switch back to HSI first */
@@ -171,12 +173,39 @@ static void gpio_hardware_init(void) {
     GPIOC->BRR  =  (1UL << 13);
 }
 
+static volatile uint32_t g_system_ticks_ms = 0;
+
+void SysTick_Handler(void) {
+    g_system_ticks_ms++;
+}
+
+static void systick_init(void) {
+    /* 72 MHz SYSCLK / 1000 = 72000 cycles per millisecond */
+    SysTick->LOAD = (72000000UL / 1000UL) - 1UL;
+    SysTick->VAL  = 0;
+    /* Enable SysTick, enable SysTick interrupt, use processor clock (bits [2:0] = 111) */
+    SysTick->CTRL = (1UL << 2) | (1UL << 1) | (1UL << 0);
+}
+
+static inline uint32_t millis(void) {
+    return g_system_ticks_ms;
+}
+
 int main(void) {
     /* Initialize System Clocks (72 MHz) */
     clock_init();
 
+    /* Initialize 1 ms SysTick Timer */
+    systick_init();
+
     /* Initialize Hardware GPIOs & Sequence ARK1668 Power-On Reset */
     gpio_hardware_init();
+
+    /* Initialize Steering Wheel Controls ADC & DMA Driver (Task 2) */
+    swc_init();
+
+    /* Initialize Touchscreen Digitizer & Rotary Encoder Driver (Tasks 8 & 11) */
+    touch_init();
 
     /* Initialize Vehicle Profiles (Toyota Prado 150 CAN Matrix) */
     vehicle_profiles_init();
@@ -195,8 +224,14 @@ int main(void) {
     uart_send_reverse_state(false);
     uart_send_lcd_source(MCU_LCD_SOURCE_AFTERMARKET);
 
+    uint32_t last_knob_tick = 0;
+    uint32_t last_swc_tick = 0;
+    uint32_t last_touch_tick = 0;
+
     /* Main Event Loop */
     while (1) {
+        uint32_t now = millis();
+
         /* Service Watchdog */
         iwdg_feed();
 
@@ -205,6 +240,24 @@ int main(void) {
 
         /* Process Inbound CAN Messages & Dispatch Vehicle Events */
         can_dispatch_process();
+
+        /* Task 11: Rotary Encoder Knob Processing (5 ms interval) */
+        if ((now - last_knob_tick) >= TOUCH_KNOB_INTERVAL_MS) {
+            last_knob_tick = now;
+            touch_process_knob();
+        }
+
+        /* Task 2: Analog Steering Wheel Controls Resistor Ladder (25 ms interval) */
+        if ((now - last_swc_tick) >= SWC_POLL_INTERVAL_MS) {
+            last_swc_tick = now;
+            swc_process();
+        }
+
+        /* Task 8: Capacitive / Digitizer Touchscreen Processing (25 ms interval) */
+        if ((now - last_touch_tick) >= TOUCH_DIGI_INTERVAL_MS) {
+            last_touch_tick = now;
+            touch_process_digitizer();
+        }
     }
 
     return 0;

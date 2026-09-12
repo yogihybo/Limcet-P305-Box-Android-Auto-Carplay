@@ -5,6 +5,7 @@
 #include <stdbool.h>
 
 #define __IO volatile
+#define __I  volatile const
 
 /* Base Addresses */
 #define FLASH_BASE            0x08000000UL
@@ -57,6 +58,13 @@
 
 /* AHB Peripherals */
 #define DMA1_BASE             (AHBPERIPH_BASE + 0x0000UL)
+#define DMA1_Channel1_BASE    (DMA1_BASE + 0x0008UL)
+#define DMA1_Channel2_BASE    (DMA1_BASE + 0x001CUL)
+#define DMA1_Channel3_BASE    (DMA1_BASE + 0x0030UL)
+#define DMA1_Channel4_BASE    (DMA1_BASE + 0x0044UL)
+#define DMA1_Channel5_BASE    (DMA1_BASE + 0x0058UL)
+#define DMA1_Channel6_BASE    (DMA1_BASE + 0x006CUL)
+#define DMA1_Channel7_BASE    (DMA1_BASE + 0x0080UL)
 #define DMA2_BASE             (AHBPERIPH_BASE + 0x0400UL)
 #define RCC_BASE              (AHBPERIPH_BASE + 0x1000UL)
 #define FLASH_R_BASE          (AHBPERIPH_BASE + 0x2000UL)
@@ -64,9 +72,17 @@
 
 /* Core System Controls */
 #define SCS_BASE              0xE000E000UL
+#define SysTick_BASE          (SCS_BASE + 0x0010UL)
 #define NVIC_BASE             (SCS_BASE + 0x0100UL)
 #define SCB_BASE              (SCS_BASE + 0x0D00UL)
 #define DBGMCU_BASE           0xE0042000UL
+
+typedef struct {
+    __IO uint32_t CTRL;
+    __IO uint32_t LOAD;
+    __IO uint32_t VAL;
+    __I  uint32_t CALIB;
+} SysTick_TypeDef;
 
 /* Peripheral Structs */
 typedef struct {
@@ -199,6 +215,62 @@ typedef struct {
     __IO uint32_t CR;
 } DBGMCU_TypeDef;
 
+typedef struct {
+    __IO uint32_t SR;
+    __IO uint32_t CR1;
+    __IO uint32_t CR2;
+    __IO uint32_t SMPR1;
+    __IO uint32_t SMPR2;
+    __IO uint32_t JOFR1;
+    __IO uint32_t JOFR2;
+    __IO uint32_t JOFR3;
+    __IO uint32_t JOFR4;
+    __IO uint32_t HTR;
+    __IO uint32_t LTR;
+    __IO uint32_t SQR1;
+    __IO uint32_t SQR2;
+    __IO uint32_t SQR3;
+    __IO uint32_t JSQR;
+    __IO uint32_t JDR1;
+    __IO uint32_t JDR2;
+    __IO uint32_t JDR3;
+    __IO uint32_t JDR4;
+    __IO uint32_t DR;
+} ADC_TypeDef;
+
+typedef struct {
+    __IO uint32_t CCR;
+    __IO uint32_t CNDTR;
+    __IO uint32_t CPAR;
+    __IO uint32_t CMAR;
+} DMA_Channel_TypeDef;
+
+typedef struct {
+    __IO uint32_t ISR;
+    __IO uint32_t IFCR;
+} DMA_TypeDef;
+
+typedef struct {
+    __IO uint32_t CR1;
+    __IO uint32_t CR2;
+    __IO uint32_t OAR1;
+    __IO uint32_t OAR2;
+    __IO uint32_t DR;
+    __IO uint32_t SR1;
+    __IO uint32_t SR2;
+    __IO uint32_t CCR;
+    __IO uint32_t TRISE;
+} I2C_TypeDef;
+
+typedef struct {
+    __IO uint32_t IMR;
+    __IO uint32_t EMR;
+    __IO uint32_t RTSR;
+    __IO uint32_t FTSR;
+    __IO uint32_t SWIER;
+    __IO uint32_t PR;
+} EXTI_TypeDef;
+
 /* Peripheral Pointers */
 #define GPIOA               ((GPIO_TypeDef *) GPIOA_BASE)
 #define GPIOB               ((GPIO_TypeDef *) GPIOB_BASE)
@@ -213,6 +285,20 @@ typedef struct {
 #define UART5               ((USART_TypeDef *) UART5_BASE)
 #define CAN1                ((CAN_TypeDef *) CAN1_BASE)
 #define CAN2                ((CAN_TypeDef *) CAN2_BASE)
+#define ADC1                ((ADC_TypeDef *) ADC1_BASE)
+#define ADC2                ((ADC_TypeDef *) ADC2_BASE)
+#define DMA1                ((DMA_TypeDef *) DMA1_BASE)
+#define DMA1_Channel1       ((DMA_Channel_TypeDef *) DMA1_Channel1_BASE)
+#define DMA1_Channel2       ((DMA_Channel_TypeDef *) DMA1_Channel2_BASE)
+#define DMA1_Channel3       ((DMA_Channel_TypeDef *) DMA1_Channel3_BASE)
+#define DMA1_Channel4       ((DMA_Channel_TypeDef *) DMA1_Channel4_BASE)
+#define DMA1_Channel5       ((DMA_Channel_TypeDef *) DMA1_Channel5_BASE)
+#define DMA1_Channel6       ((DMA_Channel_TypeDef *) DMA1_Channel6_BASE)
+#define DMA1_Channel7       ((DMA_Channel_TypeDef *) DMA1_Channel7_BASE)
+#define I2C1                ((I2C_TypeDef *) I2C1_BASE)
+#define I2C2                ((I2C_TypeDef *) I2C2_BASE)
+#define EXTI                ((EXTI_TypeDef *) EXTI_BASE)
+#define SysTick             ((SysTick_TypeDef *) SysTick_BASE)
 #define NVIC                ((NVIC_TypeDef *) NVIC_BASE)
 #define SCB                 ((SCB_TypeDef *) SCB_BASE)
 #define IWDG                ((IWDG_TypeDef *) IWDG_BASE)

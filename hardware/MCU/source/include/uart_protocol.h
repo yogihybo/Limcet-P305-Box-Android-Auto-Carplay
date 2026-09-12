@@ -194,7 +194,8 @@ typedef struct {
 /* Driver API */
 void uart_protocol_init(uint32_t baudrate);
 void uart_send_packet(uint8_t cmd, const uint8_t *payload, uint8_t len);
-void uart_send_key_event(uint8_t key_code, bool pressed);
+void uart_send_key_event(uint8_t key_code, uint8_t state);
+void uart_send_touch_coordinates(uint16_t x, uint16_t y, uint8_t state);
 void uart_send_reverse_state(bool reverse_active);
 void uart_send_headlights_state(bool lights_on);
 void uart_send_lcd_source(uint8_t mode);

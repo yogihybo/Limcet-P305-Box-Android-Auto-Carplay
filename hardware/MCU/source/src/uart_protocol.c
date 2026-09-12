@@ -134,11 +134,28 @@ void uart_send_packet(uint8_t cmd, const uint8_t *payload, uint8_t len) {
     uart_send_byte(calc_checksum(cmd, len, payload));
 }
 
-void uart_send_key_event(uint8_t key_code, bool pressed) {
+void uart_send_key_event(uint8_t key_code, uint8_t state) {
     uint8_t payload[2];
     payload[0] = key_code;
-    payload[1] = pressed ? 0x01 : 0x00;
+    payload[1] = state;
     uart_send_packet(MCU_CMD_INPUT_EVENT, payload, 2);
+}
+
+void uart_send_touch_coordinates(uint16_t x, uint16_t y, uint8_t state) {
+    /* 5-byte payload matching OEM disassembly 0x08006A98:
+     * payload[0] = X & 0xFF
+     * payload[1] = X >> 8
+     * payload[2] = Y & 0xFF
+     * payload[3] = Y >> 8
+     * payload[4] = state (0=release, 1=press)
+     */
+    uint8_t payload[5];
+    payload[0] = (uint8_t)(x & 0xFF);
+    payload[1] = (uint8_t)((x >> 8) & 0xFF);
+    payload[2] = (uint8_t)(y & 0xFF);
+    payload[3] = (uint8_t)((y >> 8) & 0xFF);
+    payload[4] = state;
+    uart_send_packet(MCU_CMD_STATUS_QUERY, payload, 5);
 }
 
 static uint8_t g_vehicle_status_byte = MCU_STATUS_BASE_FLAGS; /* 0x11 resting state */

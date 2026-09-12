@@ -21,7 +21,9 @@ C_SOURCES = \
     src/vehicle_profiles.c \
     src/tea_crypto.c \
     src/swc_driver.c \
-    src/touch_driver.c
+    src/touch_driver.c \
+    src/gpio_driver.c \
+    src/power_manager.c
 
 # Includes
 INCLUDES = -Iinclude

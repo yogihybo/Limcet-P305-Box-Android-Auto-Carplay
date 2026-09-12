@@ -1,11 +1,15 @@
 #include "can_driver.h"
 #include "vehicle_profiles.h"
 #include "uart_protocol.h"
+#include "power_manager.h"
 
 static CanRingBuffer g_can_rx_ring;
 static uint8_t g_active_mode = 1;
 
 void CAN1_RX0_IRQHandler(void) {
+    /* Notify power manager of bus activity */
+    power_manager_notify_can_activity();
+
     /* Check if FIFO0 has pending messages (FMP0 > 0) */
     if ((CAN1->RF0R & 0x03) != 0) {
         uint8_t next_head = (g_can_rx_ring.head + 1) % CAN_RX_RING_SIZE;
@@ -45,14 +49,24 @@ void CAN1_RX0_IRQHandler(void) {
     }
 }
 
+void CAN2_RX0_IRQHandler(void) {
+    /* Notify power manager of secondary bus activity */
+    power_manager_notify_can_activity();
+
+    if ((CAN2->RF0R & 0x03) != 0) {
+        /* Release FIFO0 output mailbox */
+        CAN2->RF0R |= (1UL << 5); /* RFOM0 */
+    }
+}
+
 void can_init(uint32_t baudrate) {
     (void)baudrate;
     
     g_can_rx_ring.head = 0;
     g_can_rx_ring.tail = 0;
     
-    /* Enable Clocks: CAN1, GPIOA, GPIOB, AFIO */
-    RCC->APB1ENR |= (1UL << 25); /* CAN1EN */
+    /* Enable Clocks: CAN1, CAN2, GPIOA, GPIOB, AFIO (matches factory dump 0x08008ECE: 0x06000000) */
+    RCC->APB1ENR |= (1UL << 25) | (1UL << 26); /* CAN1EN, CAN2EN */
     RCC->APB2ENR |= (1UL << 2) | (1UL << 3) | (1UL << 0); /* IOPAEN, IOPBEN, AFIOEN */
     
     /* Configure CAN1 pins (Default: PA11 RX, PA12 TX) */
@@ -64,6 +78,16 @@ void can_init(uint32_t baudrate) {
     /* PA12: Alternate function push-pull 50MHz (Mode 11, CNF 10) */
     GPIOA->CRH &= ~(0x0FUL << 16);
     GPIOA->CRH |=  (0x0BUL << 16);
+
+    /* Configure CAN2 pins (Default: PB12 RX, PB13 TX - matches factory dump 0x08008F04 - 0x08008F1A) */
+    /* PB12: Input pull-up (Mode 00, CNF 10 -> 0x08) */
+    GPIOB->CRH &= ~(0x0FUL << 16);
+    GPIOB->CRH |=  (0x08UL << 16);
+    GPIOB->BSRR =  (1UL << 12);
+
+    /* PB13: Alternate function push-pull 50MHz (Mode 11, CNF 10 -> 0x0B) */
+    GPIOB->CRH &= ~(0x0FUL << 20);
+    GPIOB->CRH |=  (0x0BUL << 20);
     
     /* Exit Sleep Mode & Enter Initialization Mode */
     CAN1->MCR &= ~(1UL << 1); /* Clear SLEEP */
@@ -100,8 +124,9 @@ void can_init(uint32_t baudrate) {
     can_timeout = 200000;
     while (((CAN1->MSR & (1UL << 0)) != 0) && --can_timeout) {} /* Wait for normal mode with timeout */
     
-    /* Enable NVIC IRQ 20 (CAN1_RX0) */
+    /* Enable NVIC IRQ 20 (CAN1_RX0) and IRQ 64 (CAN2_RX0, matches dump 0x080089AC) */
     nvic_enable_irq(20);
+    nvic_enable_irq(64);
 }
 
 bool can_transmit(const CanFrame *frame) {

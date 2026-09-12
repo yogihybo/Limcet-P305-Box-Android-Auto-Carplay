@@ -271,6 +271,11 @@ typedef struct {
     __IO uint32_t PR;
 } EXTI_TypeDef;
 
+typedef struct {
+    __IO uint32_t CR;
+    __IO uint32_t CSR;
+} PWR_TypeDef;
+
 /* Peripheral Pointers */
 #define GPIOA               ((GPIO_TypeDef *) GPIOA_BASE)
 #define GPIOB               ((GPIO_TypeDef *) GPIOB_BASE)
@@ -298,6 +303,7 @@ typedef struct {
 #define I2C1                ((I2C_TypeDef *) I2C1_BASE)
 #define I2C2                ((I2C_TypeDef *) I2C2_BASE)
 #define EXTI                ((EXTI_TypeDef *) EXTI_BASE)
+#define PWR                 ((PWR_TypeDef *) PWR_BASE)
 #define SysTick             ((SysTick_TypeDef *) SysTick_BASE)
 #define NVIC                ((NVIC_TypeDef *) NVIC_BASE)
 #define SCB                 ((SCB_TypeDef *) SCB_BASE)

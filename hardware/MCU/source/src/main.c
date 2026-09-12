@@ -4,38 +4,56 @@
 #include "vehicle_profiles.h"
 
 static void clock_init(void) {
-    /* Enable HSE (High-Speed External Oscillator, typically 8 MHz) */
+    /* If SYSCLK is currently driven by PLL, switch back to HSI first */
+    if ((RCC->CFGR & (3UL << 2)) == (2UL << 2)) {
+        RCC->CR |= (1UL << 0); /* HSION */
+        while ((RCC->CR & (1UL << 1)) == 0) {} /* Wait for HSIRDY */
+        RCC->CFGR &= ~(3UL << 0); /* SW = HSI */
+        while ((RCC->CFGR & (3UL << 2)) != (0UL << 2)) {} /* Wait for SWS = HSI */
+    }
+
+    /* Disable PLL and PLL2 before configuring RCC_CFGR2 (RM0008 §7.3.13) */
+    RCC->CR &= ~((1UL << 24) | (1UL << 26)); /* PLLON = 0, PLL2ON = 0 */
+    while ((RCC->CR & ((1UL << 25) | (1UL << 27))) != 0) {} /* Wait for PLLRDY=0, PLL2RDY=0 */
+
+    /* Enable HSE (25.000 MHz crystal on STM32F105 Connectivity Line board) */
     RCC->CR |= (1UL << 16); /* HSEON */
     while ((RCC->CR & (1UL << 17)) == 0) {} /* Wait for HSERDY */
 
-    /* Configure PLL: HSE * 9 = 72 MHz (SYSCLK = 72MHz, APB1 = 36MHz, APB2 = 72MHz) */
-    /* FLASH Latency = 2 wait states for 72MHz */
-    *((volatile uint32_t *)0x40022000UL) = 0x02; /* FLASH_ACR: 2WS */
+    /* FLASH Latency = 2 wait states + PRFTBE (prefetch buffer enable) for 72MHz (RM0008 §3.2.3) */
+    *((volatile uint32_t *)0x40022000UL) = 0x12; /* FLASH_ACR: PRFTBE | 2WS */
 
-    /* Configure PREDIV1: HSE not divided (8 MHz into PLL) - STM32F105 Connectivity Line */
-    RCC->CFGR2 = 0x00000000; /* PREDIV1SRC = HSE, PREDIV1 = /1 */
+    /* APB1 = HCLK / 2 = 36 MHz (PPRE1 = 4, matches OEM 0x080002A6) */
+    RCC->CFGR |= (4UL << 8);
 
-    /* HPRE = 0 (SYSCLK / 1), PPRE1 = 4 (HCLK / 2 = 36 MHz), PPRE2 = 0 (HCLK / 1 = 72 MHz)
-     * CORRECTED (2026-09-12, real-hardware DWT-cycle-counter measurement):
-     * RCC_CFGR bit16 is PLLSRC -- per RM0008, 0 selects HSI/2 as the PLL
-     * input, 1 selects PREDIV1's output (HSE, since PREDIV1SRC=0 above).
-     * The previous (0UL << 16) measured as a real 36 MHz SYSCLK on the
-     * spare board (HSI/2*9), not 72 MHz -- HSE was enabled+ready but never
-     * actually fed the PLL. See docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md
-     * section 15. */
-    RCC->CFGR = (0UL << 4) | (4UL << 8) | (0UL << 11) | (1UL << 16) | (7UL << 18); /* PLLSRC=PREDIV1(HSE), PLLMUL=9 */
+    /* Configure CFGR2 for 25 MHz HSE:
+     * HSE (25 MHz) -> PREDIV2 (/5) = 5 MHz -> PLL2 (*8) = 40 MHz -> PREDIV1 (/5) = 8 MHz
+     * Exact OEM register value disassembled at 0x080002AE: 0x00010644 */
+    RCC->CFGR2 = (RCC->CFGR2 & 0xFFFEF000UL) | 0x00010644UL;
 
-    /* Enable PLL */
+    /* Enable PLL2 and wait for lock */
+    RCC->CR |= (1UL << 26); /* PLL2ON */
+    while ((RCC->CR & (1UL << 27)) == 0) {} /* Wait for PLL2RDY */
+
+    /* Configure Main PLL:
+     * PLLSRC = 1 (PREDIV1 output = 8 MHz)
+     * PLLMUL = 7 (x9) -> 8 MHz * 9 = 72 MHz SYSCLK
+     * Matches OEM 0x080002EC */
+    RCC->CFGR = (RCC->CFGR & ~0x003F0000UL) | 0x001D0000UL;
+
+    /* Enable Main PLL and wait for lock */
     RCC->CR |= (1UL << 24); /* PLLON */
     while ((RCC->CR & (1UL << 25)) == 0) {} /* Wait for PLLRDY */
 
-    /* Select PLL as System Clock */
-    RCC->CFGR &= ~(3UL << 0);
-    RCC->CFGR |=  (2UL << 0); /* SW = PLL */
+    /* Switch SYSCLK to Main PLL */
+    RCC->CFGR = (RCC->CFGR & ~3UL) | 2UL; /* SW = PLL */
     while ((RCC->CFGR & (3UL << 2)) != (2UL << 2)) {} /* Wait for SWS = PLL */
 }
 
 static void iwdg_init(void) {
+    /* Freeze watchdog when core is halted during SWD debugging (RM0008 DBGMCU_CR) */
+    DBGMCU->CR |= (1UL << 8) | (1UL << 9); /* DBG_IWDG_STOP | DBG_WWDG_STOP */
+
     /* Start Independent Watchdog (IWDG) with ~2 second timeout */
     IWDG->KR = 0x5555; /* Enable register access */
     IWDG->PR = 0x06;   /* Prescaler = 256 -> 40kHz / 256 = 156.25 Hz */
@@ -169,7 +187,7 @@ int main(void) {
     /* Initialize CAN Bus (500 kbit/s ISO 11898-2) */
     can_init(500000);
 
-    /* Start Watchdog */
+    /* Start Independent Watchdog (~2 second timeout, serviced in main loop) */
     iwdg_init();
 
     /* Broadcast initial status announcements to SoC (matches real firmware boot sequence) */

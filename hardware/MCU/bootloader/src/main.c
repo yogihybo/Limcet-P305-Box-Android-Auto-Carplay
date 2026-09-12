@@ -1,34 +1,49 @@
 #include "bootloader.h"
 
 static void clock_init(void) {
-    /* Enable HSE (8 MHz) */
+    /* If SYSCLK is currently driven by PLL, switch back to HSI first */
+    if ((RCC->CFGR & (3UL << 2)) == (2UL << 2)) {
+        RCC->CR |= (1UL << 0);
+        while ((RCC->CR & (1UL << 1)) == 0) {}
+        RCC->CFGR &= ~(3UL << 0);
+        while ((RCC->CFGR & (3UL << 2)) != (0UL << 2)) {}
+    }
+
+    /* Disable PLL and PLL2 before configuring RCC_CFGR2 */
+    RCC->CR &= ~((1UL << 24) | (1UL << 26));
+    while ((RCC->CR & ((1UL << 25) | (1UL << 27))) != 0) {}
+
+    /* Enable HSE (25.000 MHz crystal on STM32F105 Connectivity Line board) */
     RCC->CR |= (1UL << 16);
     while ((RCC->CR & (1UL << 17)) == 0) {}
 
-    /* FLASH Latency = 2 wait states for 72MHz, plus PRFTBE (prefetch
-     * buffer enable) -- real bootloader (0x08000224) sets both, see
-     * docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md section 6. */
+    /* FLASH Latency = 2 wait states + PRFTBE for 72MHz (RM0008 §3.2.3, matches 0x08000274) */
     *((volatile uint32_t *)0x40022000UL) = 0x12;
 
-    /* PREDIV1SRC = HSE (CFGR2 bit16=0), PREDIV1 = /1 (CFGR2 bits3:0=0000) */
-    RCC->CFGR2 = 0x00000000;
+    /* APB1 = HCLK / 2 = 36 MHz (PPRE1 = 4, matches 0x080002A6) */
+    RCC->CFGR |= (4UL << 8);
 
-    /* PLL = PREDIV1 output (HSE 8MHz / 1) * 9 = 72 MHz.
-     * CORRECTED (2026-09-12, real-hardware DWT-cycle-counter measurement):
-     * RCC_CFGR bit16 is PLLSRC -- per RM0008, 0 selects HSI/2 as the PLL
-     * input, 1 selects PREDIV1's output. The previous (0UL << 16) here
-     * measured as a real 36 MHz SYSCLK on the spare board (HSI(~8MHz)/2*9),
-     * not 72 MHz -- HSE was enabled+ready but never actually fed the PLL.
-     * See docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md section 15. */
-    RCC->CFGR = (0UL << 4) | (4UL << 8) | (0UL << 11) | (1UL << 16) | (7UL << 18);
+    /* Configure CFGR2 for 25 MHz HSE:
+     * HSE (25 MHz) -> PREDIV2 (/5) = 5 MHz -> PLL2 (*8) = 40 MHz -> PREDIV1 (/5) = 8 MHz
+     * Exact OEM register value disassembled at 0x080002AE: 0x00010644 */
+    RCC->CFGR2 = (RCC->CFGR2 & 0xFFFEF000UL) | 0x00010644UL;
 
-    /* Enable PLL */
+    /* Enable PLL2 and wait for lock */
+    RCC->CR |= (1UL << 26);
+    while ((RCC->CR & (1UL << 27)) == 0) {}
+
+    /* Configure Main PLL:
+     * PLLSRC = 1 (PREDIV1 output = 8 MHz)
+     * PLLMUL = 7 (x9) -> 8 MHz * 9 = 72 MHz SYSCLK
+     * Matches OEM 0x080002EC */
+    RCC->CFGR = (RCC->CFGR & ~0x003F0000UL) | 0x001D0000UL;
+
+    /* Enable Main PLL and wait for lock */
     RCC->CR |= (1UL << 24);
     while ((RCC->CR & (1UL << 25)) == 0) {}
 
-    /* Switch to PLL */
-    RCC->CFGR &= ~(3UL << 0);
-    RCC->CFGR |=  (2UL << 0);
+    /* Switch SYSCLK to Main PLL */
+    RCC->CFGR = (RCC->CFGR & ~3UL) | 2UL;
     while ((RCC->CFGR & (3UL << 2)) != (2UL << 2)) {}
 }
 
@@ -109,7 +124,12 @@ void jump_to_application(void) {
 }
 
 int main(void) {
+    /* Reload IWDG in case it was active prior to soft reset */
+    IWDG->KR = 0xAAAA;
+
     clock_init();
+
+    IWDG->KR = 0xAAAA;
 
     /* Check if application requested Bootloader Update Mode */
     bool force_bootloader = (*BOOTLOADER_MAGIC_ADDR == BOOTLOADER_MAGIC_VAL);

@@ -65,34 +65,35 @@ static void handle_toyota_prado_swc(const CanFrame *f) {
     g_last_swc_field2 = field2;
 }
 
-/* Real firmware's steering-angle handler (0x0800A681) turned out to be a
- * genuinely more complex multi-field bit-packing scheme spanning 2 bytes
- * (struct offsets 0x10/0x11) combined with lookup/transform function calls
- * (0x8004fa8, 0x8004f7c) -- not a simple contiguous 16-bit value. That
- * transform was NOT fully cracked this session (real risk of a confidently
- * wrong reimplementation outweighed the value of a partial guess). CAN ID
- * corrected to the real 0x28A; decode logic below is UNCHANGED from before
- * (the old, simpler 16-bit-signed/0.1-deg assumption) and should be treated
- * as unverified pending either a real capture or further disassembly. */
-static void handle_toyota_prado_status(const CanFrame *f) {
-    if (f->dlc < 4) return;
+/* Real firmware's steering-angle handler (0x0800956A) on CAN ID 0x025:
+ * Bytes 0-1 represent the 16-bit steering angle sensor value. */
+static void handle_toyota_prado_steering(const CanFrame *f) {
+    if (f->dlc < 2) return;
 
     int16_t angle = (int16_t)(((uint16_t)f->data[0] << 8) | f->data[1]);
     uart_send_steering_angle(angle);
 }
 
-/* Real firmware's reverse handler (0x0800A8E5) reads the SAME struct offset
- * (0xc) as the SWC handler's first two conditions above, bit 0x40 --
- * genuinely simple, debounced boolean. Real, not approximated beyond the
- * same data[0] wire-byte placement uncertainty noted in handle_toyota_prado_swc(). */
+/* Real firmware's reverse handler (0x080092B6) in live_app_1302.bin:
+ * Reads CAN ID 0x1D0 data byte 1:
+ * Checks if data[1] == 0x02 (Reverse gear engaged on Toyota Prado 150). */
 static void handle_toyota_prado_reverse(const CanFrame *f) {
-    if (f->dlc < 1) return;
+    if (f->dlc < 2) return;
 
-    bool reverse = (f->data[0] & 0x40) != 0;
+    bool reverse = (f->data[1] == 0x02);
     if (reverse != g_last_reverse_state) {
         g_last_reverse_state = reverse;
         uart_send_reverse_state(reverse);
     }
+}
+
+/* Real firmware's body controller handler (0x080095E4) on CAN ID 0x622:
+ * Byte 2 bit 4 (0x10) reports headlamps / illumination status. */
+static void handle_toyota_prado_body(const CanFrame *f) {
+    if (f->dlc < 3) return;
+
+    bool lights_on = (f->data[2] & 0x10) != 0;
+    uart_send_headlights_state(lights_on);
 }
 
 /* Generic Fallback Handlers */
@@ -100,41 +101,30 @@ static void handle_generic_speed(const CanFrame *f) {
     (void)f;
 }
 
-static void handle_generic_door(const CanFrame *f) {
-    (void)f;
-}
-
-static void handle_generic_hvac(const CanFrame *f) {
-    (void)f;
-}
-
 /* ========================================================================== */
 /* Mode Tables                                                                */
 /* ========================================================================== */
 
-/* Mode 1: "Default/Primary Profile" per the real firmware's own dispatch
- * table (0x0800BB30 region, this project's 3 real reference binaries all
- * agree on these IDs -- see vehicle_profiles.h). */
+/* Mode 1: Toyota Prado 150 Primary Profile
+ * Confirmed via live vehicle firmware dump (0x0800B9F4 dispatch table) */
 static const CanDispatchEntry g_mode1_table[] = {
-    { TOYOTA_PRADO_CAN_SWC,    handle_toyota_prado_swc },     /* 0x105 */
-    { TOYOTA_PRADO_CAN_STATUS, handle_toyota_prado_status },  /* 0x28A */
-    { TOYOTA_PRADO_CAN_GEAR,   handle_toyota_prado_reverse }, /* 0x185 */
-    { TOYOTA_PRADO_CAN_SPEED,  handle_generic_speed },        /* 0x0F5 */
-    { 0x215,                   handle_generic_door },
-    { 0x245,                   handle_generic_hvac }
+    { TOYOTA_PRADO_CAN_STEERING, handle_toyota_prado_steering }, /* 0x025 */
+    { TOYOTA_PRADO_CAN_GEAR,     handle_toyota_prado_reverse },  /* 0x1D0 */
+    { TOYOTA_PRADO_CAN_POWER,    handle_generic_speed },         /* 0x396 */
+    { TOYOTA_PRADO_CAN_BODY,     handle_toyota_prado_body },     /* 0x622 */
 };
 
 /* Mode 2: Profile 2 (real IDs, already correct before this session's fix) */
 static const CanDispatchEntry g_mode2_table[] = {
     { 0x110, handle_toyota_prado_swc },
-    { 0x220, handle_toyota_prado_status },
+    { 0x220, handle_toyota_prado_steering },
     { 0x170, handle_toyota_prado_reverse }
 };
 
 /* Mode 3: Profile 3 (real IDs, already correct before this session's fix) */
 static const CanDispatchEntry g_mode3_table[] = {
     { 0x168, handle_toyota_prado_swc },
-    { 0x135, handle_toyota_prado_status },
+    { 0x135, handle_toyota_prado_steering },
     { 0x214, handle_toyota_prado_reverse }
 };
 

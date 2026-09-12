@@ -26,6 +26,8 @@ void SVC_Handler(void)        __attribute__((weak, alias("Default_Handler")));
 void DebugMon_Handler(void)   __attribute__((weak, alias("Default_Handler")));
 void PendSV_Handler(void)     __attribute__((weak, alias("Default_Handler")));
 void SysTick_Handler(void)    __attribute__((weak, alias("Default_Handler")));
+void EXTI9_5_IRQHandler(void) __attribute__((weak, alias("Default_Handler")));
+void CAN2_RX0_IRQHandler(void) __attribute__((weak, alias("Default_Handler")));
 
 /* Vector Table */
 __attribute__((section(".isr_vector"), used))
@@ -68,7 +70,7 @@ void (* const g_pfnVectors[])(void) = {
     CAN1_RX0_IRQHandler,                    /* IRQ 20: CAN1_RX0 */
     Default_Handler,                        /* IRQ 21: CAN1_RX1 */
     Default_Handler,                        /* IRQ 22: CAN1_SCE */
-    Default_Handler,                        /* IRQ 23: EXTI9_5 */
+    EXTI9_5_IRQHandler,                     /* IRQ 23: EXTI9_5 */
     Default_Handler,                        /* IRQ 24: TIM1_BRK */
     Default_Handler,                        /* IRQ 25: TIM1_UP */
     Default_Handler,                        /* IRQ 26: TIM1_TRG_COM */
@@ -103,7 +105,7 @@ void (* const g_pfnVectors[])(void) = {
     Default_Handler,                        /* IRQ 61: ETH */
     Default_Handler,                        /* IRQ 62: ETH_WKUP */
     Default_Handler,                        /* IRQ 63: CAN2_TX */
-    Default_Handler,                        /* IRQ 64: CAN2_RX0 */
+    CAN2_RX0_IRQHandler,                    /* IRQ 64: CAN2_RX0 */
     Default_Handler,                        /* IRQ 65: CAN2_RX1 */
     Default_Handler,                        /* IRQ 66: CAN2_SCE */
     Default_Handler                         /* IRQ 67: OTG_FS */

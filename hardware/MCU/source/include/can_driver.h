@@ -37,5 +37,6 @@ void can_set_active_mode(uint8_t mode);
 uint8_t can_get_active_mode(void);
 void can_dispatch_process(void);
 void can_reset_rx_ring(void);
+void CAN2_RX0_IRQHandler(void);
 
 #endif /* CAN_DRIVER_H */

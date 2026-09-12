@@ -4,6 +4,8 @@
 #include "vehicle_profiles.h"
 #include "swc_driver.h"
 #include "touch_driver.h"
+#include "gpio_driver.h"
+#include "power_manager.h"
 
 static void clock_init(void) {
     /* If SYSCLK is currently driven by PLL, switch back to HSI first */
@@ -200,6 +202,10 @@ int main(void) {
 
     /* Initialize Hardware GPIOs & Sequence ARK1668 Power-On Reset */
     gpio_hardware_init();
+    gpio_driver_init();
+
+    /* Initialize MCU Power Management & Standby State Machine (Task 4) */
+    power_manager_init();
 
     /* Initialize Steering Wheel Controls ADC & DMA Driver (Task 2) */
     swc_init();
@@ -227,6 +233,8 @@ int main(void) {
     uint32_t last_knob_tick = 0;
     uint32_t last_swc_tick = 0;
     uint32_t last_touch_tick = 0;
+    uint32_t last_gpio_tick = 0;
+    uint32_t last_power_tick = 0;
 
     /* Main Event Loop */
     while (1) {
@@ -257,6 +265,18 @@ int main(void) {
         if ((now - last_touch_tick) >= TOUCH_DIGI_INTERVAL_MS) {
             last_touch_tick = now;
             touch_process_digitizer();
+        }
+
+        /* Task 5: Discrete Hardware Input Polling & Debounce (50 ms interval, matches 0x0800700C) */
+        if ((now - last_gpio_tick) >= GPIO_POLL_INTERVAL_MS) {
+            last_gpio_tick = now;
+            gpio_poll_senses();
+        }
+
+        /* Task 4: MCU Power Management & Sleep Executive (100 ms interval, matches 0x08007C2C) */
+        if ((now - last_power_tick) >= POWER_TASK_INTERVAL_MS) {
+            last_power_tick = now;
+            power_manager_task();
         }
     }
 

@@ -3961,3 +3961,15 @@ This is a register write to the *peripheral*, not an electrical fix to the *bus*
 
 Build- and hardware-verified: clean build, zero warnings, `CFSR=0`, 22/23 HIL tests pass with the one failure independently explained and ruled out as unrelated test-harness flakiness.
 
+### 26. Does the real factory firmware have the same touch-lockup bug? — traced in the dump: yes, and its own fix is real but weaker than ours (2026-09-13)
+
+Directly asked and traced: does `live_app_1302.bin`'s own touch-polling path have the same I2C-lockup vulnerability section 25 fixed, or does the real vendor firmware handle this better?
+
+**Located the real touch-polling call chain**: `0x08009F14` (the real digitizer-poll function — confirmed via the literal `0xBA`, the exact GT911 I2C address, matching this project's own `GOODIX_I2C_ADDR`) calls a low-level I2C transaction helper at `0x080099BA`. Its wait/status-check logic (`0x080097D8`) is a bounded software poll (`0x7D0` = 2000 iterations checking a status flag via a sub-call, then giving up) — structurally the same class of blocking-timeout-with-no-bus-recovery our own code had *before* section 25's fix.
+
+**But the real firmware does have a recovery path the clean-room's original code lacked**: every I2C transaction helper shares a common error exit (`0x08009B50`) that, on any real failure (`r7 != 0`), calls a dedicated recovery function at `0x08009790`. Traced and confirmed: this function reconfigures `PB6`/`PB7` (literal-pool-confirmed as real `GPIOB_BASE`, `0x40010C00`, matching this project's own `I2C1` `SCL`/`SDA` pin assignment) as plain GPIO, drives `SCL` high, delays, drives `SDA` high, then calls the full I2C1 hardware re-init routine (`0x080096D8`) — the same GPIO-toggle-then-reinit *strategy* section 25's fix uses.
+
+**The real, meaningful gap in the vendor's own fix**: it performs exactly **one** `SCL` pulse, with no loop to retry clocking if the bus doesn't release after the first attempt. The correct, standard bus-recovery procedure (NXP UM10204 §3.1.16, what section 25's fix implements) clocks up to 9 times, because a slave stuck mid-byte can hold `SDA` low for more than one bit period — a single pulse only reliably recovers the specific case where exactly one more clock was needed. This is a real, documented limitation of a single-pulse recovery attempt, not a nitpick.
+
+**Conclusion — this directly answers the user's question**: the reported real-vehicle symptom (touch stops working, only a soft reset restores it) is **not something introduced by this project's clean-room work** — the real factory firmware has the exact same class of vulnerability, and while it does attempt a real recovery (confirmed via disassembly, not assumed), that attempt is architecturally weaker than the fix now in this project's own `touch_driver.c`. This gives real, dump-verified confidence that section 25's fix is a genuine improvement over the original vendor firmware's own behavior, not just a plausible-sounding guess — and a plausible explanation for why the real vehicle's bug exists at all despite the vendor clearly having anticipated and partially addressed this exact failure class.
+

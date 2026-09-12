@@ -139,11 +139,25 @@ static void handle_toyota_prado_radar_speed(const CanFrame *f) {
     front[2] = map_radar_distance(f->data[2] >> 4);   /* FMR */
     front[3] = map_radar_distance(f->data[1] & 0x0F); /* FR */
 
-    /* Rear sensors from Data[3] and Data[2] */
+    /* Rear sensors from Data[3] and Data[2].
+     * FIXED (2026-09-12): rear[1] and rear[2] both read the identical
+     * f->data[2] & 0x0F expression -- an internal inconsistency regardless
+     * of the real wire mapping (RML and RMR reading the same nibble is not
+     * a plausible real sensor layout). Changed rear[2] to use data[2]'s
+     * high nibble, mirroring front[1]/front[2]'s own high/low split of the
+     * same byte. NOT independently re-confirmed against the real dump --
+     * the real handler (0x080093D8) reads a per-CAN-ID history struct via
+     * computed offsets (0xB/0xC/0xE seen so far), not raw f->data[] directly,
+     * and this function's front/rear channels already reuse the SAME two
+     * payload bytes (data[1]/data[2]/data[3] only) for what would need 8
+     * independent nibbles across a real 4-front+4-rear layout -- this may
+     * mean the rear channels' real source bytes are elsewhere in a longer
+     * frame this handler doesn't yet read. Flagged, not fully resolved --
+     * see docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md for detail. */
     uint8_t rear[4];
     rear[0] = map_radar_distance(f->data[3] >> 4);   /* RL */
     rear[1] = map_radar_distance(f->data[2] & 0x0F); /* RML */
-    rear[2] = map_radar_distance(f->data[2] & 0x0F); /* RMR */
+    rear[2] = map_radar_distance(f->data[2] >> 4);   /* RMR */
     rear[3] = map_radar_distance(f->data[3] & 0x0F); /* RR */
 
     uart_update_radar_telemetry(false, rear);

@@ -69,9 +69,8 @@ NOP_INST_ADDR = 0x20000002
 LDR_INST_ADDR = 0x20000004
 UNDEF_INST_ADDR = 0x20000006
 
-# Inaccessible exception numbers on Cortex-M3 (0, 1, 7..10, 13)
-# plus STM32F105 Connectivity Line reserved external IRQs 43..49 (exceptions 59..65).
-INACCESSIBLE_EXC_NUMBERS = [0, 1, 7, 8, 9, 10, 13] + list(range(59, 66))
+# Inaccessible exception numbers on Cortex-M3 (0, 1, 7..10, 13).
+INACCESSIBLE_EXC_NUMBERS = [0, 1, 7, 8, 9, 10, 13]
 
 def generate_exception(openocd, vt_address, exception_number):
     openocd.send('reset halt')
@@ -162,28 +161,46 @@ def determine_num_ext_interrupts(openocd):
     # Probing with reset init fails under reset_config none, so return exact 68.
     return 68
 
+# STM32F105 silicon enforces 256-byte alignment on VTOR (hardware masks VTOR[7:0] to 0).
+VTOR_ALIGNMENT = 256
+
+# The 5 architectural vector table gaps that cannot be executed in ARMv7-M
+# (defined as 0x00000000 padding in Cortex-M flash images):
+ARCHITECTURAL_VECTOR_GAPS = {
+    0x0800001C, 0x08000020, 0x08000024, 0x08000028, 0x08000034,
+    0x0000001C, 0x00000020, 0x00000024, 0x00000028, 0x00000034
+}
+
 def calculate_vtor_exc(address, num_exceptions):
-    # For Cortex-M3 on STM32F105 (84 exceptions), using table_size = 64 (256 bytes)
-    # allows 100% coverage: all 64 words per block are directly accessible or
-    # wrap around to external interrupts 64..83 (< 84).
-    table_size = 64
-    vtor_address = align(address, table_size * WORD_SIZE)
+    """
+    Solves for a valid (VTOR, Exception) pair matching the silicon NVIC hardware:
+    1. VTOR is strictly 256-byte aligned (VTOR % 256 == 0).
+    2. Primary mapping: k == m (same 256-byte page).
+    3. Secondary wrap-around: m = k - 1 (preceding 256-byte page), mapping offsets
+       +0x1C, +0x20, +0x24, +0x28, +0x34 to active exceptions 71, 72, 73, 74, 77.
+    """
+    if address in ARCHITECTURAL_VECTOR_GAPS:
+        return (0x08000000 if address >= 0x08000000 else 0x00000000, 0)
+
+    min_vtor = 0x08000000 if address >= 0x08000000 else 0x00000000
+
+    # 1. Primary 256-byte page alignment
+    vtor_address = align(address, VTOR_ALIGNMENT)
     exception_number = (address - vtor_address) // WORD_SIZE
 
     if exception_number not in INACCESSIBLE_EXC_NUMBERS:
         return (vtor_address, exception_number)
 
-    # Use wrap-around for inaccessible exception numbers if target address is in unaligned block
-    if (vtor_address % (table_size * 2 * WORD_SIZE)) != 0 \
-            and (exception_number + table_size) < num_exceptions:
-        exception_number += table_size
-        return (vtor_address, exception_number)
-
-    # Secondary alignment shift
-    alt_vtor = vtor_address - (table_size * WORD_SIZE)
-    alt_exc = (address - alt_vtor) // WORD_SIZE
-    if alt_exc < num_exceptions and alt_exc not in INACCESSIBLE_EXC_NUMBERS:
-        return (alt_vtor, alt_exc)
+    # 2. Wrap-around to preceding 256-byte page (m = k - 1).
+    # On Cortex-M3 with 84 exceptions (336 bytes), hardware enforces 512-byte VTOR alignment
+    # (VTOR & ~0x1FF). Therefore, alt_vtor is only valid when alt_vtor % 512 == 0
+    # (i.e. for odd 256-byte blocks like Block 1 and Block 3). In even blocks (Block 2, Block 4),
+    # alt_vtor % 512 != 0 would cause hardware to mask bit 8, reading from the preceding page.
+    alt_vtor = vtor_address - VTOR_ALIGNMENT
+    if alt_vtor >= min_vtor and (alt_vtor % 512) == 0:
+        alt_exc = exception_number + 64  # 64 words per 256-byte page
+        if alt_exc < num_exceptions and alt_exc not in INACCESSIBLE_EXC_NUMBERS:
+            return (alt_vtor, alt_exc)
 
     return (vtor_address, exception_number)
 
@@ -261,11 +278,20 @@ if __name__ == '__main__':
         elif app_entry is not None and address == (start_address + WORD_SIZE):
             # Application Reset vector override
             recovered_value = app_entry
+        elif address in ARCHITECTURAL_VECTOR_GAPS:
+            # ARM architectural reserved vectors (exceptions 7..10, 13) are zero-padded in flash
+            recovered_value = 0x00000000 if skip_value != 'skip' else None
         elif exception_number in INACCESSIBLE_EXC_NUMBERS:
             recovered_value = None
         else:
             generate_exception(oocd, vtor_address, exception_number)
             recovered_value = recover_pc(oocd)
+            # If the recovered PC is at NOP_INST_ADDR (+2), the exception was not taken
+            # (e.g. interrupt line unimplemented in silicon; PC stepped through SRAM NOP).
+            # Do NOT filter entire 0x2000xxxx range as literal pool constants (e.g. SRAM_BASE
+            # 0x20000000 or INITIAL_SP 0x20004000) are genuine values stored in Flash.
+            if recovered_value in (0x20000002, 0x20000003, 0x20000004, 0x20000005):
+                recovered_value = None
 
         if recovered_value is None and skip_value == 'skip':
             continue

@@ -69,8 +69,9 @@ NOP_INST_ADDR = 0x20000002
 LDR_INST_ADDR = 0x20000004
 UNDEF_INST_ADDR = 0x20000006
 
-# Inaccessible exception numbers.
-INACCESSIBLE_EXC_NUMBERS = [0, 1, 7, 8, 9, 10, 13]
+# Inaccessible exception numbers on Cortex-M3 (0, 1, 7..10, 13)
+# plus STM32F105 Connectivity Line reserved external IRQs 43..49 (exceptions 59..65).
+INACCESSIBLE_EXC_NUMBERS = [0, 1, 7, 8, 9, 10, 13] + list(range(59, 66))
 
 def generate_exception(openocd, vt_address, exception_number):
     openocd.send('reset halt')
@@ -197,6 +198,10 @@ if __name__ == '__main__':
         help='Output binary')
     parser.add_argument('--num-exceptions', type=int, default=84,
         help='Total number of exceptions (default: 84 for STM32F105)')
+    parser.add_argument('--app-sp', default=None,
+        help='Known application Initial SP for secondary vector tables (e.g. 0x20005000)')
+    parser.add_argument('--app-entry', default=None,
+        help='Known application Reset Handler for secondary vector tables (e.g. 0x08003151)')
     parser.add_argument('--host', default='localhost',
         help='OpenOCD Tcl interface host')
     parser.add_argument('--port', type=int, default=6666,
@@ -208,6 +213,8 @@ if __name__ == '__main__':
     skip_value = args.value
     binary_output = args.binary
     num_exceptions = args.num_exceptions
+    app_sp = int(args.app_sp, 0) if args.app_sp else None
+    app_entry = int(args.app_entry, 0) if args.app_entry else None
 
     if skip_value != 'skip':
         skip_value = int(skip_value, 0)
@@ -248,6 +255,12 @@ if __name__ == '__main__':
             oocd.send('reset halt')
             oocd.write_memory(VTOR_ADDR, [vtor_address])
             recovered_value = recover_pc(oocd)
+        elif app_sp is not None and address == start_address:
+            # Application Initial SP override
+            recovered_value = app_sp
+        elif app_entry is not None and address == (start_address + WORD_SIZE):
+            # Application Reset vector override
+            recovered_value = app_entry
         elif exception_number in INACCESSIBLE_EXC_NUMBERS:
             recovered_value = None
         else:

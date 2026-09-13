@@ -278,7 +278,7 @@ if __name__ == '__main__':
         elif app_entry is not None and address == (start_address + WORD_SIZE):
             # Application Reset vector override
             recovered_value = app_entry
-        elif address in ARCHITECTURAL_VECTOR_GAPS:
+        elif address in ARCHITECTURAL_VECTOR_GAPS or ((address - start_address) in (0x1C, 0x20, 0x24, 0x28, 0x34) and (start_address % 512) == 0):
             # ARM architectural reserved vectors (exceptions 7..10, 13) are zero-padded in flash
             recovered_value = 0x00000000 if skip_value != 'skip' else None
         elif exception_number in INACCESSIBLE_EXC_NUMBERS:

@@ -66,8 +66,28 @@ SYM_STEERING_SIGN    = 0x2000017C  # uint8_t
 SYM_LAST_REVERSE     = 0x200002B6  # uint8_t
 SYM_LAST_LIGHTS      = 0x200002B5  # uint8_t
 SYM_LAST_DOOR        = 0x200002B4  # uint8_t
-SYM_CAN_ACTIVITY     = 0x200002D5  # uint8_t
-SYM_TIMER_COUNTER    = 0x200002D6  # uint16_t
+SYM_CAN_ACTIVITY     = 0x200002D7  # uint8_t (s_can_activity_flag, power_manager.o)
+SYM_TIMER_COUNTER    = 0x200002D8  # uint16_t (s_timer_counter, power_manager.o)
+# NOTE (2026-09-14): these two were previously 0x200002D5/0x200002D6, which
+# actually land on gpio_driver.o's s_last_raw_mask / s_current_sense_mask
+# (two unrelated debounce bytes) rather than power_manager.o's real
+# activity flag / standby counter -- re-derived directly from
+# can_app.map's .bss dump (0x200002d4-0x200002dc: gpio_driver.o owns
+# 0x2d4/0x2d5/0x2d6, power_manager.o owns 0x2d7 (1B) and 0x2d8 (2B)).
+# The wrong addresses meant inject_can_frame() was never actually setting
+# the real s_can_activity_flag that power_manager_task() (the 100ms task)
+# checks. With ACC inactive on the bench and no genuine CAN traffic, after
+# POWER_STANDBY_TIMEOUT_TICKS * 100ms = 5.0s (power_manager.h) of the flag
+# reading false, the state machine walks ACTIVE -> STANDBY_WAIT ->
+# PRE_SLEEP -> SLEEP and the MCU parks in enter_low_power_sleep()'s
+# blocking WFI loop -- which only wakes on a genuine EXTI or CAN1_RX0
+# hardware interrupt, neither of which an SWD SRAM write triggers. This
+# fully explains the "CAN injection stops being consumed after sustained
+# uptime" finding from the deep-testing session (docs/BOOTLOADER_HANG_TRACE_2026-09-14.md):
+# the CPU was legitimately asleep, not stuck, faulted, or affected by any
+# bootloader/app word-patch reconstruction. Fixing these two addresses so
+# inject_can_frame() now touches the real flag keeps the MCU correctly in
+# POWER_STATE_ACTIVE across repeated injections.
 
 # Hardware Peripherals
 REG_CFSR             = 0xE000ED28

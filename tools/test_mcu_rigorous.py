@@ -8,8 +8,80 @@ import sys
 import time
 import subprocess
 import struct
+import shutil
+import re
 
 CFG_FILE = "tools/pico_stm32.cfg"
+ELF_FILE = "hardware/MCU/source/build/can_app.elf"
+
+# ----------------------------------------------------------------------------
+# Symbol resolution: every SRAM address below is derived from the CURRENTLY
+# BUILT ELF (via `nm -S`), not hardcoded. Hardcoded addresses have broken
+# repeatedly this project (three separate times in one session: a wrong
+# manual guess, a two-byte confusion between adjacent .bss variables, and
+# every single one shifting after any unrelated source edit added/removed a
+# global -- .bss/.data layout is purely sequential, so ANY change anywhere
+# in the firmware source can silently invalidate every hardcoded address in
+# this file). Resolving from the real build eliminates that whole class of
+# bug. Falls back to the last-known-good table below (documented as of the
+# 2026-09-14 mic-mux-fix build) only if the toolchain's `nm` isn't available
+# and the symbol truly can't be resolved -- with a loud warning, since a
+# fallback address is exactly as fragile as the old hardcoded scheme.
+_FALLBACK_SYMBOLS = {
+    "g_active_mode": 0x20000000, "g_rear_radar": 0x20000001,
+    "g_front_radar": 0x20000005, "g_vehicle_status_byte": 0x20000009,
+    "s_power_state": 0x2000000A, "g_system_ticks_ms": 0x2000000C,
+    "g_can_rx_ring": 0x20000010, "g_door_open": 0x20000177,
+    "g_gear_field": 0x20000178, "g_steering_mag": 0x20000179,
+    "g_steering_sign": 0x2000017A, "g_rx_tail": 0x2000017B,
+    "g_rx_head": 0x2000017C, "g_rx_ring": 0x2000017D,
+    "g_last_door_state": 0x200002B2, "g_last_lights_state": 0x200002B3,
+    "g_last_reverse_state": 0x200002B4, "s_can_activity_flag": 0x200002D5,
+    "s_timer_counter": 0x200002D6,
+}
+
+def _find_nm():
+    for name in ("arm-none-eabi-nm",):
+        p = shutil.which(name)
+        if p:
+            return p
+    return None
+
+def _resolve_symbols():
+    """Returns {name: (address, size)} parsed from `nm -S` on the current
+    ELF build. Falls back to _FALLBACK_SYMBOLS (size unknown -> 1) with a
+    warning if the toolchain or ELF isn't available."""
+    nm = _find_nm()
+    import os
+    if nm and os.path.isfile(ELF_FILE):
+        out = subprocess.run([nm, "-S", ELF_FILE], capture_output=True, text=True)
+        if out.returncode == 0:
+            syms = {}
+            for line in out.stdout.splitlines():
+                m = re.match(r"^([0-9a-fA-F]{8})\s+([0-9a-fA-F]{8})\s+\S\s+(\S+)$", line.strip())
+                if m:
+                    addr, size, name = m.groups()
+                    syms[name] = (int(addr, 16), int(size, 16))
+            missing = [k for k in _FALLBACK_SYMBOLS if k not in syms]
+            if not missing:
+                return syms
+            print(f"WARNING: nm resolved but missing symbols {missing}, using fallback for those", file=sys.stderr)
+            for k in missing:
+                syms[k] = (_FALLBACK_SYMBOLS[k], 1)
+            return syms
+    print(f"WARNING: could not resolve symbols via nm ({ELF_FILE!r}, toolchain={nm!r}) "
+          f"-- using hardcoded fallback addresses. Run `make` in hardware/MCU/source/ "
+          f"first, and ensure arm-none-eabi-nm is on PATH, for accurate addresses.",
+          file=sys.stderr)
+    return {k: (v, 1) for k, v in _FALLBACK_SYMBOLS.items()}
+
+_SYMS = _resolve_symbols()
+
+def _addr(name):
+    return _SYMS[name][0]
+
+def _size(name):
+    return _SYMS[name][1]
 
 def run_ocd_commands(cmds):
     """Executes a batch of OpenOCD commands and returns the stdout."""
@@ -49,45 +121,41 @@ def read_mem_bytes(addr, count):
                 bytes_out.append(int(p, 16))
     return bytes_out
 
-# Memory Map Constants from can_app.map
-SYM_ACTIVE_MODE      = 0x20000000
-SYM_REAR_RADAR       = 0x20000001  # 4 bytes [RL, RML, RMR, RR]
-SYM_FRONT_RADAR      = 0x20000005  # 4 bytes [FL, FML, FMR, FR]
-SYM_VEHICLE_STATUS   = 0x20000009  # 1 byte
-SYM_POWER_STATE      = 0x2000000C  # 4 bytes uint32
-SYM_SYSTEM_TICKS     = 0x20000010  # 4 bytes uint32
-SYM_CAN_RING         = 0x20000014  # CanRingBuffer
-SYM_CAN_HEAD         = 0x20000140  # uint8_t
-SYM_CAN_TAIL         = 0x20000141  # uint8_t
-SYM_DOOR_OPEN        = 0x20000179  # uint8_t
-SYM_GEAR_FIELD       = 0x2000017A  # uint8_t
-SYM_STEERING_MAG     = 0x2000017B  # uint8_t
-SYM_STEERING_SIGN    = 0x2000017C  # uint8_t
-SYM_LAST_REVERSE     = 0x200002B6  # uint8_t
-SYM_LAST_LIGHTS      = 0x200002B5  # uint8_t
-SYM_LAST_DOOR        = 0x200002B4  # uint8_t
-SYM_CAN_ACTIVITY     = 0x200002D7  # uint8_t (s_can_activity_flag, power_manager.o)
-SYM_TIMER_COUNTER    = 0x200002D8  # uint16_t (s_timer_counter, power_manager.o)
-# NOTE (2026-09-14): these two were previously 0x200002D5/0x200002D6, which
-# actually land on gpio_driver.o's s_last_raw_mask / s_current_sense_mask
-# (two unrelated debounce bytes) rather than power_manager.o's real
-# activity flag / standby counter -- re-derived directly from
-# can_app.map's .bss dump (0x200002d4-0x200002dc: gpio_driver.o owns
-# 0x2d4/0x2d5/0x2d6, power_manager.o owns 0x2d7 (1B) and 0x2d8 (2B)).
-# The wrong addresses meant inject_can_frame() was never actually setting
-# the real s_can_activity_flag that power_manager_task() (the 100ms task)
-# checks. With ACC inactive on the bench and no genuine CAN traffic, after
-# POWER_STANDBY_TIMEOUT_TICKS * 100ms = 5.0s (power_manager.h) of the flag
-# reading false, the state machine walks ACTIVE -> STANDBY_WAIT ->
-# PRE_SLEEP -> SLEEP and the MCU parks in enter_low_power_sleep()'s
-# blocking WFI loop -- which only wakes on a genuine EXTI or CAN1_RX0
-# hardware interrupt, neither of which an SWD SRAM write triggers. This
-# fully explains the "CAN injection stops being consumed after sustained
-# uptime" finding from the deep-testing session (docs/BOOTLOADER_HANG_TRACE_2026-09-14.md):
-# the CPU was legitimately asleep, not stuck, faulted, or affected by any
-# bootloader/app word-patch reconstruction. Fixing these two addresses so
-# inject_can_frame() now touches the real flag keeps the MCU correctly in
-# POWER_STATE_ACTIVE across repeated injections.
+# Memory Map Constants -- resolved from the current build via nm (see
+# _resolve_symbols() above), not hardcoded. g_can_rx_ring's head/tail
+# fields are struct members (not standalone symbols), computed as an
+# offset from the struct's own real, resolved base address: CanRingBuffer
+# = CanFrame frames[15] (20 bytes each = 300 = 0x12C) + head(1) + tail(1),
+# per can_driver.h -- offsets 0x12C/0x12D are struct layout, not a
+# separately-fragile address.
+SYM_ACTIVE_MODE      = _addr("g_active_mode")
+SYM_REAR_RADAR       = _addr("g_rear_radar")       # 4 bytes [RL, RML, RMR, RR]
+SYM_FRONT_RADAR      = _addr("g_front_radar")      # 4 bytes [FL, FML, FMR, FR]
+SYM_VEHICLE_STATUS   = _addr("g_vehicle_status_byte")  # 1 byte
+SYM_POWER_STATE      = _addr("s_power_state")      # power_state_t; size is
+                                                    # TOOLCHAIN-DEPENDENT (an
+                                                    # enum with only 6 values
+                                                    # may be sized 1 or 4
+                                                    # bytes depending on the
+                                                    # compiler) -- always
+                                                    # read/write this one via
+                                                    # the byte-sized helpers
+                                                    # (read_mem_bytes/mwb),
+                                                    # never mdw/mww, to stay
+                                                    # correct either way.
+SYM_SYSTEM_TICKS     = _addr("g_system_ticks_ms")  # 4 bytes uint32
+SYM_CAN_RING         = _addr("g_can_rx_ring")      # CanRingBuffer
+SYM_CAN_HEAD         = SYM_CAN_RING + 0x12C        # uint8_t (struct offset)
+SYM_CAN_TAIL         = SYM_CAN_RING + 0x12D        # uint8_t (struct offset)
+SYM_DOOR_OPEN        = _addr("g_door_open")        # uint8_t
+SYM_GEAR_FIELD       = _addr("g_gear_field")       # uint8_t
+SYM_STEERING_MAG     = _addr("g_steering_mag")     # uint8_t
+SYM_STEERING_SIGN    = _addr("g_steering_sign")    # uint8_t
+SYM_LAST_REVERSE     = _addr("g_last_reverse_state")  # uint8_t
+SYM_LAST_LIGHTS      = _addr("g_last_lights_state")   # uint8_t
+SYM_LAST_DOOR        = _addr("g_last_door_state")     # uint8_t
+SYM_CAN_ACTIVITY     = _addr("s_can_activity_flag")   # uint8_t (power_manager.o)
+SYM_TIMER_COUNTER    = _addr("s_timer_counter")       # uint16_t (power_manager.o)
 
 # Hardware Peripherals
 REG_CFSR             = 0xE000ED28
@@ -130,7 +198,7 @@ def inject_can_frame(can_id, data_bytes):
         cmds.append(f"mwb {slot_addr + idx:#x} {byte:#x}")
     cmds.append(f"mwb {SYM_CAN_HEAD:#x} 1")
     cmds.append(f"mwb {SYM_CAN_ACTIVITY:#x} 1")
-    cmds.append(f"mww {SYM_POWER_STATE:#x} 1")
+    cmds.append(f"mwb {SYM_POWER_STATE:#x} 1")  # byte write -- see SYM_POWER_STATE's own comment
     cmds.append(f"mwh {SYM_TIMER_COUNTER:#x} 0")
     cmds.append("resume")
     run_ocd_commands(cmds)
@@ -212,7 +280,7 @@ def main():
     swj_cfg = (mapr >> 24) & 0x07
     assert_test(swj_cfg == 0x02, "SWJ_CFG Remapped (JTAG Disabled, SW-DP Enabled for PB3/PB4)", f"MAPR=0x{mapr:08X}")
     
-    pwr_state = read_mem_words(SYM_POWER_STATE, 1)[0]
+    pwr_state = read_mem_bytes(SYM_POWER_STATE, 1)[0]
     assert_test(pwr_state in (1, 2), f"MCU Power Management State is ACTIVE or STANDBY_WAIT (State {pwr_state})")
 
     # TEST 6: CAN Steering Wheel Angle (0x025) Decoding

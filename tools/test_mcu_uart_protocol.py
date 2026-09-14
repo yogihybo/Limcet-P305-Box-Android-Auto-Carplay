@@ -37,11 +37,13 @@ import time
 import struct
 
 sys.path.insert(0, "tools")
-from test_mcu_rigorous import run_ocd_commands, read_mem_words, read_mem_bytes, REG_CFSR, REG_HFSR
+from test_mcu_rigorous import run_ocd_commands, read_mem_words, read_mem_bytes, REG_CFSR, REG_HFSR, _addr
 
-SYM_RX_TAIL = 0x2000017D
-SYM_RX_HEAD = 0x2000017E
-SYM_RX_RING = 0x2000017F
+# Resolved from the current build (see test_mcu_rigorous.py's _resolve_symbols())
+# rather than hardcoded -- .bss layout shifts on any unrelated source change.
+SYM_RX_TAIL = _addr("g_rx_tail")
+SYM_RX_HEAD = _addr("g_rx_head")
+SYM_RX_RING = _addr("g_rx_ring")
 UART_PACKET_SIZE = 34
 UART_RX_RING_SIZE = 8
 
@@ -136,42 +138,35 @@ def main():
     cfsr, hfsr = read_faults()
     check(cfsr == 0 and hfsr == 0, f"Init handshake processed without fault: CFSR={cfsr:#010x} HFSR={hfsr:#010x}")
 
-    # ---- 2. App state switch (0x82): CarPlay/AA relay vs OEM bypass ----
+    # ---- 2. App state switch (0x82) ----
+    # CORRECTED (2026-09-14): an earlier version of this handler drove
+    # GPIOB Pin 0 (TOUCH_SEL) and Pin 6 ("MIC_SEL") directly, which was
+    # never real -- direct disassembly of the real handler (0x08008bd4,
+    # docs/MCU_COMMAND_REFERENCE.md's "CMD 0x82 real MCU-side trace") shows
+    # it only writes an internal struct (0x20000282) feeding a CAN-bus
+    # mode announcement, never a GPIO output. That earlier version is also
+    # what caused the "PB6 pin conflict" this project found and reported
+    # (PB6 doubles as I2C1 SCL for the touchscreen, confirmed real in both
+    # the clean-room and the real dump -- see gpio_driver.h's
+    # GPIO_PIN_MIC_SENSE comment and docs/BOOTLOADER_HANG_TRACE_2026-09-14.md
+    # section 28). Now that handle_app_state() matches the real firmware
+    # (state tracked internally, no GPIO write), this section just confirms
+    # it processes cleanly with no fault and no unintended GPIO side effect
+    # -- not a specific PB0/PB6 value, since neither is meant to change as
+    # a *direct result* of this command any more (PB0 is driven entirely
+    # autonomously elsewhere, by touch_driver.c's real PA0/PC4 sensing).
     print("\n>>> 2. App State / Relay Switch (CMD 0x82)")
-    inject_uart_cmd(SOC_CMD_APP_STATE, bytes([0x01]))  # -> SoC (CarPlay/AA)
-    odr_b = read_gpio_odr(GPIOB_ODR)
-    check((odr_b & (1 << 0)) != 0 and (odr_b & (1 << 6)) != 0,
-          f"mode=1 routes TOUCH_SEL(PB0) and MIC_SEL(PB6) to SoC: GPIOB->ODR={odr_b:#06x}")
-    inject_uart_cmd(SOC_CMD_APP_STATE, bytes([0x00]))  # -> OEM bypass
-    odr_b = read_gpio_odr(GPIOB_ODR)
-    # REAL FINDING (2026-09-14, confirmed via disassembly + live register
-    # trace, not a test artifact): PB6 is claimed by TWO conflicting
-    # drivers. main.c's gpio_hardware_init() (called first, from main())
-    # configures PB6 as plain GPIO push-pull for "MIC_SEL". But
-    # touch_driver.c's touch_init() runs immediately afterward and calls
-    # i2c1_hardware_init(), which reconfigures PB6 to Alternate-Function
-    # Open-Drain for I2C1 SCL (the touchscreen bus) -- confirmed live via
-    # GPIOB->CRL reading 0xee422202 (PB6 field = 0xE = AF-OD) after boot,
-    # not 0x2/0x3 (plain GPIO). I2C1's SCL/SDA are FIXED to PB6/PB7 on this
-    # part (no remap option), so this isn't a simple "pick a different
-    # pin" fix -- one of the two "confirmed via disassembly" PB6 claims in
-    # this codebase (main.c's MIC_SEL vs touch_driver.c's I2C1 SCL) is
-    # very likely simply wrong about which physical pin it is. Real-world
-    # consequence: any command that tries to drive PB6 LOW (mic-mux to
-    # OEM, app-state mode=0) gets silently overridden back HIGH by the
-    # touchscreen's I2C bus idling/polling within milliseconds, so that
-    # control path cannot be relied on while the touch driver is active.
-    # This needs a dedicated RE pass (confirm the real MIC_SEL pin from
-    # fresh disassembly) before flashing to real hardware if mic routing
-    # matters -- flagging here rather than silently asserting a value the
-    # real firmware doesn't actually deliver. TOUCH_SEL (PB0) itself is
-    # NOT affected -- it correctly cleared.
-    check((odr_b & (1 << 0)) == 0,
-          f"mode=0 routes TOUCH_SEL(PB0) back to OEM: GPIOB->ODR={odr_b:#06x}")
-    print(f"   [KNOWN CONFLICT, not a test bug] MIC_SEL(PB6) does NOT durably clear on "
-          f"mode=0 -- touch_driver.c's I2C1 SCL claim on the same pin overrides it within "
-          f"ms (GPIOB->ODR={odr_b:#06x}, bit6 stays set). Not counted as pass/fail -- see "
-          f"comment above and docs/BOOTLOADER_HANG_TRACE_2026-09-14.md section 28.")
+    odr_b_before = read_gpio_odr(GPIOB_ODR)
+    inject_uart_cmd(SOC_CMD_APP_STATE, bytes([0x01]))
+    odr_b_after_1 = read_gpio_odr(GPIOB_ODR)
+    inject_uart_cmd(SOC_CMD_APP_STATE, bytes([0x00]))
+    odr_b_after_0 = read_gpio_odr(GPIOB_ODR)
+    cfsr, hfsr = read_faults()
+    check(cfsr == 0 and hfsr == 0, f"CMD 0x82 (mode=1 then mode=0) processed without fault: CFSR={cfsr:#010x} HFSR={hfsr:#010x}")
+    check(odr_b_before == odr_b_after_1 == odr_b_after_0,
+          f"CMD 0x82 has no direct GPIOB side effect (matches real firmware, which only "
+          f"updates internal state): GPIOB->ODR unchanged across mode=1/mode=0 "
+          f"({odr_b_before:#06x} -> {odr_b_after_1:#06x} -> {odr_b_after_0:#06x})")
 
     # ---- 3. UI settings sync (0xA0): several real, pin-confirmed sub-ids ----
     print("\n>>> 3. UI Settings Sync (CMD 0xA0)")
@@ -182,15 +177,32 @@ def main():
     odr_b = read_gpio_odr(GPIOB_ODR)
     check((odr_b & (1 << 1)) == 0, f"id=0x00 val=0 drives PB1 LOW: GPIOB->ODR={odr_b:#06x}")
 
-    inject_uart_cmd(SOC_CMD_SYNC_SETTINGS, bytes([0x09, 0x01]))  # mic mux -> SoC
-    odr_b = read_gpio_odr(GPIOB_ODR)
-    check((odr_b & (1 << 6)) != 0, f"id=0x09 (mic mux) val!=0 drives PB6 HIGH: GPIOB->ODR={odr_b:#06x}")
-    inject_uart_cmd(SOC_CMD_SYNC_SETTINGS, bytes([0x09, 0x00]))  # mic mux -> OEM
-    odr_b = read_gpio_odr(GPIOB_ODR)
-    # Same real PB6 conflict as CMD 0x82's mode=0 case above (see that
-    # comment) -- not asserted pass/fail here either, just documented.
-    print(f"   [KNOWN CONFLICT, not a test bug] id=0x09 (mic mux) val=0 does NOT durably "
-          f"clear PB6 -- same PB6/I2C1-SCL conflict as CMD 0x82 above: GPIOB->ODR={odr_b:#06x}")
+    # id=0x09 (mic-mux setting). CORRECTED (2026-09-14): this used to drive
+    # GPIOB Pin 6 directly here -- the real bug behind the PB6/I2C1-SCL
+    # conflict this project found and reported. The real apply chain
+    # (0x08006B28 -> 0x080085F0 -> 0x0800598C, traced from
+    # hardware/MCU/can_app.bin) only ever READS GPIOC Pin 0 and forwards a
+    # notification; it never drives a GPIO output. Now that
+    # handle_sync_settings() case 0x09 matches (plain struct write, no
+    # GPIO write), this just confirms the setting is processed cleanly with
+    # no fault and no more unintended PB6 side effect. The real read+notify
+    # behavior (uart_protocol_poll_mic_sense(), gated on this same setting)
+    # can't be meaningfully exercised on this bench: GPIOC Pin 0 is a
+    # floating sense input with nothing connected, and GPIOx_IDR isn't
+    # writable via SWD (it's a live hardware sample of the pin voltage, not
+    # a storage register) -- the same class of bench limitation already
+    # documented for GPIO_PIN_ACC_SENSE elsewhere in this project.
+    odr_b_before = read_gpio_odr(GPIOB_ODR)
+    inject_uart_cmd(SOC_CMD_SYNC_SETTINGS, bytes([0x09, 0x01]))
+    odr_b_after_1 = read_gpio_odr(GPIOB_ODR)
+    inject_uart_cmd(SOC_CMD_SYNC_SETTINGS, bytes([0x09, 0x00]))
+    odr_b_after_0 = read_gpio_odr(GPIOB_ODR)
+    cfsr, hfsr = read_faults()
+    check(cfsr == 0 and hfsr == 0, f"id=0x09 (val=1 then val=0) processed without fault: CFSR={cfsr:#010x} HFSR={hfsr:#010x}")
+    check(odr_b_before == odr_b_after_1 == odr_b_after_0,
+          f"id=0x09 has no direct GPIOB side effect (matches real firmware's read-only "
+          f"apply chain): GPIOB->ODR unchanged across val=1/val=0 "
+          f"({odr_b_before:#06x} -> {odr_b_after_1:#06x} -> {odr_b_after_0:#06x})")
 
     inject_uart_cmd(SOC_CMD_SYNC_SETTINGS, bytes([0x0B, 0x00]))  # group -> enable (val==0)
     odr_a = read_gpio_odr(GPIOA_ODR)

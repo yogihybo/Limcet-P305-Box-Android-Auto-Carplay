@@ -1367,3 +1367,90 @@ cleanly, TOUCH_SEL (PB0), the settings-sync pins (PB1, PA15/PB8/PB9),
 the audio-route relay pair (PC2/PC13), and the TEA cipher all confirmed
 working exactly as the source intends. Board left in clean idle state
 afterward.
+
+## 29. Fixed the PB6 conflict at the source -- and a deeper correction along the way
+
+Follow-up to section 28: asked to investigate whether the PB6 conflict
+explained a real-world report that the OEM microphone has never worked,
+even on genuinely stock (unmodified) units. Digging into the real
+firmware's own disassembly (`hardware/MCU/can_app.bin`, the actual
+DCn32-VOLVO-V2.10-20240909 dump this project's own `kMcuVersion` string
+matches) revealed the clean-room's PB6 usage was never real at all:
+
+- **`CMD 0x82`'s real handler (`0x08008bd4`)** never touches GPIO --
+  `docs/MCU_COMMAND_REFERENCE.md`'s existing trace shows it only writes
+  an internal struct (`0x20000282`) feeding a CAN-bus mode announcement.
+  The clean-room's `handle_app_state()` driving `GPIOB` Pins 0/6 directly
+  was never matched to the real firmware.
+- **`CMD 0xA0 id=0x09` (mic-mux)'s real apply chain**, traced fresh this
+  session (`0x08006B28` -> `0x080085F0` -> `0x0800598C`), only ever
+  *reads* `GPIOC Pin 0` and forwards a notification on a debounced
+  change -- it never drives any GPIO output. The clean-room's
+  `handle_sync_settings()` case `0x09` driving `GPIOB` Pin 6 as an
+  output was the actual bug behind section 28's finding.
+
+**Fixed in the clean-room source** (`hardware/MCU/source/`):
+- `gpio_driver.h`/`gpio_driver.c`: added `GPIO_PIN_MIC_SENSE` (`GPIOC`
+  Pin 0, floating input -- polarity not confirmed from disassembly, so
+  not guessed) and `gpio_get_mic_sense()`.
+- `uart_protocol.c`: `handle_app_state()` (CMD `0x82`) no longer drives
+  any GPIO -- tracks the mode locally, matching the real handler's
+  struct-only write. `handle_sync_settings()` case `0x09` no longer
+  drives `GPIOB` Pin 6 -- just stores the setting. Added
+  `uart_protocol_poll_mic_sense()`, mirroring the real firmware's own
+  `0x08006B28` poll site: while the setting is enabled, periodically
+  reads `GPIOC0`, debounces, and on a confirmed change re-broadcasts the
+  composite vehicle status (the real notify payload's exact content
+  wasn't byte-mapped in this project's disassembly work, so an existing,
+  real status packet is used rather than inventing one).
+- `main.c`: wired the new poll into the existing 50ms discrete-input
+  task, the same cadence class as the real poll site.
+
+**Build-verified**: installed a portable ARM GCC toolchain (xPack
+`arm-none-eabi-gcc` 13.2.1) into this environment specifically to
+compile-check this fix rather than eyeball it -- `make` in
+`hardware/MCU/source/` completes with zero warnings (`-Wall -Wextra`)
+and zero errors.
+
+**Discovered, and fixed, a second-order problem while verifying on
+hardware**: adding new globals shifted the entire `.bss`/`.data` layout
+(purely sequential, so any source change anywhere can silently
+invalidate hardcoded SRAM addresses), and this build's toolchain sizes
+`power_state_t` as 1 byte where the previously-built binary's toolchain
+had sized it 4 -- both are legal C, the enum has only 6 values. Together
+these broke every hardcoded `SYM_*` address across all four test files
+(`test_mcu_rigorous.py`, `test_mcu_deep_extended.py`,
+`test_mcu_extreme_vehicle_sim.py`, `test_mcu_uart_protocol.py`) -- the
+third time hardcoded addresses have silently broken this exact way this
+session (see sections 26 and 28's own address bugs). Fixed properly
+this time instead of patching individual addresses again:
+`test_mcu_rigorous.py` now resolves every `SYM_*` from the *current*
+build's ELF via `nm -S` at import time (falling back to a documented,
+loudly-warned hardcoded table only if the toolchain/ELF isn't
+available), and `SYM_POWER_STATE` is always read/written via the
+byte-sized SWD commands (`mdb`/`mwb`), never word-sized, so its value is
+read correctly regardless of which toolchain compiled it. This
+eliminates the whole recurring bug class rather than re-fixing the
+symptom a fourth time.
+
+**Full regression, hardware-verified against the corrected build**:
+`test_mcu_rigorous.py` 23/23, `test_mcu_deep_extended.py` 12/12,
+`test_mcu_extreme_vehicle_sim.py` 23/23 (including the full 60s soak and
+5 sleep/wake cycles), and `test_mcu_uart_protocol.py` -- rewritten to
+assert the *corrected* behavior (CMD `0x82` and id=`0x09` now provably
+have zero direct GPIO side effect, matching the real firmware) -- 20/20.
+**78/78 total, zero regressions.** The PB6 conflict is confirmed gone:
+`GPIOB->ODR` is now provably unchanged by either command across repeated
+injections.
+
+**Does this explain the "OEM mic never worked in stock config" report?
+No** -- the real firmware's own mic-mux mechanism, per this trace, never
+drives a GPIO output to switch mic audio in the first place; it only
+reads a sense pin and reports status. If that is the entire mechanism,
+a stock unit's mic-mux setting was likely never capable of physically
+switching anything at the MCU level, independent of any bug. What
+actually switches the OEM mic audio path (if anything at the MCU level
+does) remains open -- candidates are that it's hardwired/analog, that
+the SoC/audio codec controls it directly, or a mechanism this trace
+hasn't located. Answering that needs schematic-level investigation, not
+further firmware archaeology. Board left in clean idle state afterward.

@@ -51,7 +51,10 @@ def check(cond, desc, extra=""):
     return cond
 
 def read_power_state():
-    return read_mem_words(SYM_POWER_STATE, 1)[0]
+    # Byte read, not word: power_state_t's size is toolchain-dependent (see
+    # tools/test_mcu_rigorous.py's SYM_POWER_STATE comment) -- a word read
+    # would pull in adjacent bytes on a toolchain that sizes it as 1 byte.
+    return read_mem_bytes(SYM_POWER_STATE, 1)[0]
 
 def read_ticks():
     return read_mem_words(SYM_SYSTEM_TICKS, 1)[0]
@@ -117,7 +120,7 @@ def flood_ring_buffer(frames):
             cmds.append(f"mwb {base + idx:#x} {b:#x}")
     cmds.append(f"mwb {SYM_CAN_HEAD:#x} {n:#x}")
     cmds.append(f"mwb {SYM_CAN_ACTIVITY:#x} 1")
-    cmds.append(f"mww {SYM_POWER_STATE:#x} 1")
+    cmds.append(f"mwb {SYM_POWER_STATE:#x} 1")
     cmds.append("resume")
     run_ocd_commands(cmds)
 
@@ -287,7 +290,7 @@ def main():
     cmds = ["init", "halt", f"mwb {SYM_CAN_TAIL:#x} 0", f"mwb {SYM_CAN_HEAD:#x} 0"]
     for idx, b in enumerate(payload):
         cmds.append(f"mwb {SYM_CAN_RING + idx:#x} {b:#x}")
-    cmds += [f"mwb {SYM_CAN_HEAD:#x} 1", f"mwb {SYM_CAN_ACTIVITY:#x} 1", f"mww {SYM_POWER_STATE:#x} 1", "resume"]
+    cmds += [f"mwb {SYM_CAN_HEAD:#x} 1", f"mwb {SYM_CAN_ACTIVITY:#x} 1", f"mwb {SYM_POWER_STATE:#x} 1", "resume"]
     run_ocd_commands(cmds)
     time.sleep(0.2)
     after = decoded_state()
@@ -316,7 +319,7 @@ def main():
     cmds = ["init", "halt", f"mwb {SYM_CAN_TAIL:#x} 0", f"mwb {SYM_CAN_HEAD:#x} 0"]
     for idx, b in enumerate(payload):
         cmds.append(f"mwb {SYM_CAN_RING + idx:#x} {b:#x}")
-    cmds += [f"mwb {SYM_CAN_HEAD:#x} 1", f"mwb {SYM_CAN_ACTIVITY:#x} 1", f"mww {SYM_POWER_STATE:#x} 1", "resume"]
+    cmds += [f"mwb {SYM_CAN_HEAD:#x} 1", f"mwb {SYM_CAN_ACTIVITY:#x} 1", f"mwb {SYM_POWER_STATE:#x} 1", "resume"]
     run_ocd_commands(cmds)
     time.sleep(0.2)
     cfsr, hfsr = read_faults()

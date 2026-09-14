@@ -13,6 +13,18 @@
 #define GPIO_PIN_VID_DET0           11  /* GPIOC Pin 11: Video source detect bit 0 (0x08006EC6) */
 #define GPIO_PIN_VID_DET1           10  /* GPIOA Pin 10: Video source detect bit 1 (0x08006ED4) */
 #define GPIO_PIN_WAKEUP_SENSE       2   /* GPIOD Pin 2: External Wakeup line (0x08006EAC) */
+#define GPIO_PIN_MIC_SENSE          0   /* GPIOC Pin 0: mic-mux (CMD 0xA0 id=0x09) sense input.
+                                          * Real firmware's own apply chain for this setting
+                                          * (0x08006B28 -> 0x080085F0 -> 0x0800598C, traced from
+                                          * hardware/MCU/can_app.bin) READS this pin -- it never
+                                          * writes a GPIO output to switch mic audio. This
+                                          * corrects an earlier clean-room implementation that
+                                          * wrongly drove GPIOB Pin 6 as an output here (which
+                                          * also collided with touch_driver.c's I2C1 SCL use of
+                                          * that same pin -- see docs/BOOTLOADER_HANG_TRACE_2026-09-14.md
+                                          * section 28). Pin polarity not independently confirmed
+                                          * from disassembly alone; configured floating rather
+                                          * than guessing a pull direction. */
 
 /* ==============================================================================
  * Discrete Output / Relay Control Pins (Reversed from factory dump 0x08006C1A - 0x08006CDE)
@@ -38,6 +50,7 @@ void gpio_set_relay(gpio_relay_id_t relay_id, bool active);
 bool gpio_get_acc_status(void);
 bool gpio_get_reverse_status(void);
 bool gpio_get_sync_status(void);
+bool gpio_get_mic_sense(void);
 uint8_t gpio_get_composite_sense_mask(void);
 void gpio_poll_senses(void);
 

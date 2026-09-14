@@ -271,6 +271,11 @@ int main(void) {
         if ((now - last_gpio_tick) >= GPIO_POLL_INTERVAL_MS) {
             last_gpio_tick = now;
             gpio_poll_senses();
+            /* Mic-mux sense poll (real firmware's own 0x08006B28 poll site,
+             * same cadence class) -- see uart_protocol.c's
+             * uart_protocol_poll_mic_sense() for the correction this
+             * replaces (CMD 0xA0 id=0x09 no longer drives a GPIO output). */
+            uart_protocol_poll_mic_sense();
         }
 
         /* Task 4: MCU Power Management & Sleep Executive (100 ms interval, matches 0x08007C2C) */

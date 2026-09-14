@@ -209,6 +209,7 @@ void uart_update_transmission_telemetry(uint8_t gear_field);
 void uart_update_radar_telemetry(bool is_front, const uint8_t raw_levels[4]);
 void uart_update_door_state(bool door_open);
 void uart_process_rx(void);
+void uart_protocol_poll_mic_sense(void);
 void uart_trigger_bootloader_reset(void);
 const McuSettings *mcu_settings_get(void);
 

@@ -56,6 +56,12 @@ void gpio_driver_init(void) {
     configure_pin_mode(GPIOD, GPIO_PIN_WAKEUP_SENSE, 0x08);
     GPIOD->BSRR = (1UL << GPIO_PIN_WAKEUP_SENSE);
 
+    /* PC0: Mic-mux sense input (Floating: CNF=01, MODE=00 -> 0x04). Real
+     * firmware only reads this pin (see gpio_driver.h's GPIO_PIN_MIC_SENSE
+     * comment) -- no confirmed pull direction from disassembly, so left
+     * floating rather than guessing pull-up/down. */
+    configure_pin_mode(GPIOC, GPIO_PIN_MIC_SENSE, 0x04);
+
     /* 4. Configure Output Pins (General Purpose Output Push-Pull 2MHz -> 0x02) */
     /* PB2: Video Relay Mux */
     configure_pin_mode(GPIOB, 2, 0x02);
@@ -138,6 +144,10 @@ bool gpio_get_reverse_status(void) {
 
 bool gpio_get_sync_status(void) {
     return (GPIOC->IDR & (1UL << GPIO_PIN_SYNC_SENSE)) != 0;
+}
+
+bool gpio_get_mic_sense(void) {
+    return (GPIOC->IDR & (1UL << GPIO_PIN_MIC_SENSE)) != 0;
 }
 
 uint8_t gpio_get_composite_sense_mask(void) {

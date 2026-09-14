@@ -1,6 +1,7 @@
 #include "uart_protocol.h"
 #include "can_driver.h"
 #include "tea_crypto.h"
+#include "gpio_driver.h"
 
 static uint8_t g_rx_state = 0;
 static uint8_t g_rx_cmd = 0;
@@ -354,10 +355,25 @@ static void handle_init_handshake(const UartPacket *p) {
     uart_send_version_report();
 }
 
+/* 0x82: App mode change (e.g. CarPlay/Android Auto active vs OEM head unit
+ * active). CORRECTED (2026-09-14): an earlier version of this handler drove
+ * GPIOB->BSRR/BRR on pins 0 and 6 directly ("TOUCH_SEL"/"MIC_SEL" relays).
+ * That was never actually in the real firmware -- direct disassembly of the
+ * real handler (0x08008bd4, docs/MCU_COMMAND_REFERENCE.md's "CMD 0x82 real
+ * MCU-side trace") shows it only writes an internal struct (0x20000282:
+ * payload[0]==1 -> {1,4}, else -> {2,1}) that feeds a CAN-bus mode-
+ * announcement / MCU->SoC status message -- it never drives any GPIO
+ * output. GPIOB Pin 0 (TOUCH_SEL) is driven entirely autonomously elsewhere
+ * (touch_driver.c's touch_process_digitizer(), based on real PA0/PC4
+ * sensing), and GPIOB Pin 6 was never a real output at all -- see
+ * gpio_driver.h's GPIO_PIN_MIC_SENSE comment and
+ * docs/BOOTLOADER_HANG_TRACE_2026-09-14.md section 28. Reimplemented here
+ * to match: track the mode locally (so mcu_settings_get()-style future
+ * consumers have it available) with no direct hardware side effect,
+ * consistent with what the real firmware actually does. */
+static uint8_t g_app_mode = 0;
+
 static void handle_app_state(const UartPacket *p) {
-    /* 0x82: App mode change (e.g. CarPlay/Android Auto active vs OEM head unit active).
-     * In real firmware (0x08008BD4), payload[0] == 1 selects mode=4, else mode=1.
-     * Check payload[0] when len >= 1; fallback to payload[2] if sent with legacy 3-byte framing. */
     if (p->len < 1) {
         return;
     }
@@ -365,15 +381,7 @@ static void handle_app_state(const UartPacket *p) {
     if (mode == 0 && p->len >= 3 && p->payload[2] != 0) {
         mode = p->payload[2];
     }
-    if (mode == 0x01) {
-        /* Switch relays to CarPlay / Android Auto */
-        GPIOB->BSRR = (1UL << 0); /* PB0 TOUCH_SEL -> SoC */
-        GPIOB->BSRR = (1UL << 6); /* PB6 MIC_SEL   -> SoC */
-    } else if (mode == 0x00) {
-        /* Bypass relays back to OEM Factory Radio */
-        GPIOB->BRR = (1UL << 0);  /* PB0 TOUCH_SEL -> OEM */
-        GPIOB->BRR = (1UL << 6);  /* PB6 MIC_SEL   -> OEM */
-    }
+    g_app_mode = mode;
 }
 
 /* Real firmware's shared 4-state dispatcher (0x080058A4), disassembled this
@@ -655,13 +663,22 @@ static void handle_sync_settings(const UartPacket *p) {
             g_settings.flag_39 = value;
             break;
 
-        case 0x09: /* mic/audio input mux -- real, already-shipped custom_ui feature */
+        case 0x09: /* mic-mux setting. CORRECTED (2026-09-14): this used to
+                    * drive GPIOB Pin 6 as an output directly here, which was
+                    * never real -- direct disassembly of the real apply
+                    * chain (0x08006B28 -> 0x080085F0 -> 0x0800598C, traced
+                    * from hardware/MCU/can_app.bin) shows it only ever
+                    * READS GPIOC Pin 0 and, on a debounced change, forwards
+                    * a notification -- it never writes a GPIO output. The
+                    * real read+notify behavior now lives in
+                    * uart_protocol_poll_mic_sense() below, called
+                    * periodically from main.c's loop exactly like the real
+                    * firmware's own poll site. This handler just stores the
+                    * setting, matching the real CMD 0xA0 id=0x09 handler
+                    * (which is a plain struct write, nothing else). See
+                    * gpio_driver.h's GPIO_PIN_MIC_SENSE comment and
+                    * docs/BOOTLOADER_HANG_TRACE_2026-09-14.md section 28. */
             g_settings.mic_mux_38 = value;
-            if (value != 0) {
-                GPIOB->BSRR = (1UL << 6); /* PB6 -> SoC */
-            } else {
-                GPIOB->BRR = (1UL << 6);  /* PB6 -> OEM */
-            }
             break;
 
         case 0x0a:
@@ -785,6 +802,39 @@ static void handle_system_reset(const UartPacket *p) {
     }
     /* Sub-ID 0x7F resets CAN rx ring/buffers. Real firmware returns no UART ACK frame. */
     can_reset_rx_ring();
+}
+
+/* Mic-mux sense polling. Mirrors the real firmware's own poll site
+ * (0x08006B28, traced from hardware/MCU/can_app.bin): only samples
+ * GPIOC Pin 0 while the mic-mux setting (CMD 0xA0 id=0x09) is enabled
+ * (== 1), debounces the reading, and on a confirmed change notifies the
+ * SoC. The real notify content (its own internal event-queue call,
+ * 0x08006228) was not byte-mapped to a specific outbound UART/CAN
+ * payload in this project's disassembly work -- approximated here by
+ * re-broadcasting the composite vehicle status, a real, already-existing
+ * status packet, rather than inventing an unconfirmed dedicated frame.
+ * Called from main.c's loop at the same cadence class as the other
+ * discrete-input polling task (GPIO_POLL_INTERVAL_MS). */
+static uint8_t s_mic_sense_debounce = 0;
+static bool s_mic_sense_last_state = false;
+
+void uart_protocol_poll_mic_sense(void) {
+    if (g_settings.mic_mux_38 != 1) {
+        s_mic_sense_debounce = 0;
+        return;
+    }
+    bool raw = gpio_get_mic_sense();
+    if (raw == s_mic_sense_last_state) {
+        s_mic_sense_debounce = 0;
+        return;
+    }
+    if (s_mic_sense_debounce < 2) {
+        s_mic_sense_debounce++;
+        return;
+    }
+    s_mic_sense_debounce = 0;
+    s_mic_sense_last_state = raw;
+    uart_send_composite_vehicle_status();
 }
 
 static const UartCmdDispatchEntry g_uart_cmd_table[] = {

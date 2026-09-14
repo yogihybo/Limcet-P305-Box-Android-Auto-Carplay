@@ -395,16 +395,48 @@ void cmd_send_raw(int fd, int cmd, const unsigned char *payload, int len) {
  * design, not an edge case, so the real vendor bootloader plausibly
  * does the same. That means simply triggering this command and never
  * following up with a real YMODEM transfer could be enough to WIPE the
- * application region outright, with nothing to restore it: this
- * project holds NO confirmed dump of the firmware actually flashed on
- * a real physical unit's MCU -- only hardware/MCU/can_app.bin, the
+ * application region outright, with nothing to restore it.
+ *
+ * hardware/MCU/can_app.bin is NOT that restore image -- it's the
  * generic DCn32-VOLVO reference build, confirmed byte-identical to one
  * of the 4 other cross-vendor reference images this project holds (see
- * docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md's scope-clarification section)
- * -- NOT a backup of what's really on this unit, and not confirmed to
- * decode this vehicle's CAN bus correctly if written back. Do not run
- * this without first having a real answer to "what do I flash back if
- * this erases the chip" -- a generic Volvo image is not that answer. */
+ * docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md's scope-clarification section),
+ * and confirmed (2026-09-14) to be a DIFFERENT firmware build from this
+ * exact vehicle's own real application (different embedded version
+ * string entirely -- Limcet-V1.0-1302 vs this file's
+ * DCn32-VOLVO-V2.10-20240909; not confirmed to decode this vehicle's
+ * CAN bus correctly if written back).
+ *
+ * UPDATE (2026-09-14): this project DOES now hold a real, confirmed
+ * dump of this exact vehicle's own application firmware --
+ * hardware/MCU/live_dumps/vehicle_live_2026-09-14/live_factory_app_52k_reconstructed.bin,
+ * a 100%-word-reconstructed, hardware-verified live SWD extraction (see
+ * docs/BOOTLOADER_HANG_TRACE_2026-09-14.md). It was obtained via a
+ * completely different path than this tool's own UART/YMODEM interface
+ * (CVE-2020-8004 vector-table redirection over SWD against the SPARE
+ * TEST BOARD, never the live vehicle), and this project's standing
+ * policy remains: never write to the live vehicle unit under any
+ * circumstances, real dump in hand or not. Having a real image does not
+ * make triggering this command on the live vehicle a reasonable thing
+ * to do -- it only means "generic Volvo image is not the answer" is no
+ * longer the ONLY reason not to; do not run this against the live
+ * vehicle regardless of what backup exists.
+ *
+ * UPDATE (2026-09-15): disassembly of the real Limcet firmware (see
+ * docs/MCU_LIMCET_DISPATCH_RECHECK_2026-09-15.md) found evidence -- not
+ * yet hardware-confirmed -- that wire byte 0xE1 in the ACTUAL running
+ * firmware does a sub-id dispatch (matching the Volvo reference's own
+ * CMD 0xFF shape: mostly no-op, only sub-id 0x7F does anything real),
+ * NOT a direct bootloader-entry trigger. If that reading holds up,
+ * sending byte 0xE1 to the real vehicle would NOT trigger the erase
+ * risk described above at all. This does NOT loosen this comment's own
+ * warning: the finding is static-analysis-only, not hardware-verified,
+ * the real bootloader-entry trigger's actual wire command was not
+ * conclusively identified, and this project's standing policy against
+ * writing to the live vehicle is unaffected by any of it either way.
+ * Treat this as "the specific erase mechanism described above may not
+ * be the one CMD 0xE1 actually reaches on real hardware" -- not as
+ * permission to be less careful. */
 void cmd_reboot_probe(int fd, int window_secs) {
     printf("[*] CMD 0xE1 (reboot to bootloader) -- will send, then raw-capture "
            "%ds of whatever comes back on the SAME open fd (no re-open gap, "
@@ -647,11 +679,15 @@ int main(int argc, char **argv) {
                 "    application flash BEFORE waiting for any replacement image --\n"
                 "    if the real vendor bootloader does the same (likely -- standard\n"
                 "    IAP design), sending CMD 0xE1 and never following up with a real\n"
-                "    YMODEM transfer could wipe the MCU's application firmware. This\n"
-                "    project holds NO confirmed dump of what's actually flashed on a\n"
-                "    real unit -- hardware/MCU/can_app.bin is a generic DCn32-VOLVO\n"
-                "    reference build, not a backup of this device's own firmware. See\n"
-                "    cmd_reboot_probe()'s own source comment before passing this flag.\n");
+                "    YMODEM transfer could wipe the MCU's application firmware.\n"
+                "    hardware/MCU/can_app.bin is a generic DCn32-VOLVO reference build,\n"
+                "    NOT a backup of this device's own firmware (confirmed a different\n"
+                "    build entirely, 2026-09-14). A real, hardware-verified dump of this\n"
+                "    exact vehicle's own firmware does now exist (live_dumps/vehicle_live_2026-09-14/)\n"
+                "    but was obtained via SWD against the SPARE TEST BOARD, never this\n"
+                "    tool's UART path or the live vehicle -- do not run this against the\n"
+                "    live vehicle regardless. See cmd_reboot_probe()'s own source comment\n"
+                "    before passing this flag.\n");
             close(fd);
             return 1;
         }

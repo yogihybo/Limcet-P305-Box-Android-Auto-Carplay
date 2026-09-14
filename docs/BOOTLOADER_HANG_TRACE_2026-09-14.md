@@ -1454,3 +1454,35 @@ does) remains open -- candidates are that it's hardwired/analog, that
 the SoC/audio codec controls it directly, or a mechanism this trace
 hasn't located. Answering that needs schematic-level investigation, not
 further firmware archaeology. Board left in clean idle state afterward.
+
+## 30. Re-checking the SoC<->MCU command dispatch against the real Limcet firmware
+
+Follow-up (2026-09-15): every MCU command-handler finding this project
+holds (`docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md`,
+`docs/MCU_COMMAND_REFERENCE.md`) was derived from the generic
+`DCn32-VOLVO-V2.10-20240909` reference build
+(`hardware/MCU/can_app.bin`), not this vehicle's real firmware. Now that
+a real, 100%-word-reconstructed dump of the actual Limcet firmware
+exists (section 24 above), it was disassembled directly and cross-
+checked. Full detail, evidence, and confidence levels:
+`docs/MCU_LIMCET_DISPATCH_RECHECK_2026-09-15.md`.
+
+**Headline finding**: the real firmware's SoC->MCU dispatch table has
+only 5 entries (`0x81, 0x82, 0xA0, 0xFF, 0xE1`), not the Volvo
+reference's 9 -- no `0x84`/`0x85`/`0x87`/`0x88` handlers exist anywhere
+in the binary. This is independently corroborated by this project's own
+prior SoC-side research (`MCUAdapter_BoxP300`, the confirmed-active
+adapter class for this exact product, was already found to never send
+`0x84`/`0x85`/`0x87`/`0xFF`) and resolves a previously open mystery
+(why `CMD 0x88` never got a reply on real hardware -- the real firmware
+simply doesn't implement it).
+
+A further, static-analysis-only (not yet hardware-confirmed) finding:
+the surviving 5 command numbers may map to different handlers than the
+Volvo reference's same numbers do -- e.g. settings-sync-shaped code
+(confirmed via matching internal struct offsets to the mic-mux/mode
+settings this project already named) was found reachable via wire byte
+`0xFF` in the real firmware, not `0xA0`. Flagged clearly as needing
+hardware verification (the same SWD ring-buffer injection technique
+`tools/test_mcu_uart_protocol.py` already uses) before being trusted,
+not asserted as settled.

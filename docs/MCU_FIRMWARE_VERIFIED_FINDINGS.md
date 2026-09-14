@@ -18,10 +18,38 @@ byte-identical (same MD5, `bea19bfe...`) -- the same file, not two
 independent copies that happen to match. It's a USB update *payload*
 this project holds (`hardware/MCU/MCU_FIRMWARE_REVIEW.md` traces its
 real provenance and update mechanism in detail), not a live extraction
-from the running vehicle. The real firmware genuinely installed on the
-physical Prado unit has never been captured by this project -- see
-`hardware/MCU/live_dumps/README.md` for the one attempt that claimed to
-be exactly that, found fabricated, and retracted.
+from the running vehicle.
+
+**UPDATE (2026-09-14): the real firmware has since been captured.** At
+the time this scope clarification was written, the real firmware
+genuinely installed on the physical unit had never been captured by
+this project (the prior attempt referenced here as "found fabricated,
+and retracted" was a real, correctly-identified problem with an earlier
+claim). That has changed: a live SWD extraction (CVE-2020-8004
+vector-table redirection over the RDP1-locked chip) has since obtained
+the real application flash content and reconstructed it to 100% word
+coverage, hardware-verified running on the spare test board -- see
+`hardware/MCU/live_dumps/vehicle_live_2026-09-14/README.md` and
+`docs/BOOTLOADER_HANG_TRACE_2026-09-14.md` for the full trace. The real
+dump's own embedded version string, `Limcet-V1.0-1302`, confirms it is
+a genuinely different build from this doc's `can_app.bin`
+(`DCn32-VOLVO-V2.10-20240909`) -- not a relabeled copy, and not
+byte-identical (a naive base-address-corrected comparison shows the
+large majority of bytes differ). **Every finding in this document below
+was derived from the Volvo reference build, not the real Limcet dump,
+and has not all been individually re-verified against it** -- treat
+findings here as "confirmed for the DCn32 platform family," not
+"confirmed for this exact vehicle's real firmware," until cross-checked.
+See `docs/MCU_LIMCET_DISPATCH_RECHECK_2026-09-15.md` for the first such
+re-check (the SoC->MCU command dispatch): it found the real Limcet
+firmware's table has only 5 entries (`0x81, 0x82, 0xA0, 0xFF, 0xE1`, not
+this doc's 9), resolved a previously-open mystery elsewhere in this
+project (why `CMD 0x88` never got a reply on real hardware -- because
+the real firmware doesn't implement it at all), and found strong but
+not-yet-hardware-confirmed evidence that surviving command *numbers* may
+map to different handlers than this doc describes (e.g. settings-sync
+reachable via `0xFF`, not `0xA0`, in the real firmware). Read that doc
+before relying on this one's specifics for anything real-vehicle-relevant.
 
 **Why this doesn't invalidate the findings below.** Every real,
 disassembly-confirmed mechanism this doc documents -- UART wire

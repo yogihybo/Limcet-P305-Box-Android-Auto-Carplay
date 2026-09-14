@@ -1,15 +1,35 @@
 # MCU Firmware Review — `can_app.bin` (STM32F105RBT6)
 
 > ⚠️ **`can_app.bin` is NOT the firmware installed on the device.** It is a
-> **Volvo-profiled candidate** (`DCn32-VOLVO-V2.10-20240909`) that ships as a USB
-> update *payload* in this folder. The STM32 in the actual Prado unit runs the
-> **stock Toyota Prado MCU firmware**, which is **not in this repo** (it would
-> have to be dumped via SWD — there is no serial read-back, see §7). That Toyota
-> firmware is what correctly decodes the Prado's CAN (reverse, illumination, SWC).
-> **Do not flash `can_app.bin` onto the Prado** — it would overwrite the working
-> Toyota firmware with a Volvo profile. This document analyses the Volvo candidate
-> file; the *mechanisms* it describes (two-tier settings/profile, CAN TX/RX, the
-> update path) apply to the Toyota firmware too, since both are the same `DCn32`
+> **Volvo-profiled reference build** (`DCn32-VOLVO-V2.10-20240909`) that ships as
+> a USB update *payload* in this folder. The STM32 in the actual vehicle unit
+> runs a **different, Limcet-branded firmware** (`Limcet-V1.0-1302`).
+>
+> **UPDATE (2026-09-14): the real firmware has since been captured.** Contrary
+> to this doc's older claim that it would require an SWD dump and had never been
+> done, a live SWD extraction (CVE-2020-8004 vector-table redirection over the
+> RDP1-locked chip) has since obtained the actual application flash content and
+> reconstructed it to 100% word coverage, hardware-verified running on the spare
+> test board. See
+> [`live_dumps/vehicle_live_2026-09-14/README.md`](live_dumps/vehicle_live_2026-09-14/README.md)
+> for the real dump (`live_factory_app_52k_reconstructed.bin`, confirmed via its
+> own embedded `Limcet-V1.0-1302` version string — a genuinely different build
+> from this file, not a relabeled copy) and
+> [`docs/BOOTLOADER_HANG_TRACE_2026-09-14.md`](../../docs/BOOTLOADER_HANG_TRACE_2026-09-14.md)
+> for the full extraction/reconstruction trace. **This document (`can_app.bin`'s
+> own review) remains valid for what it is** — real analysis of a real,
+> confirmed-genuine DCn32-family reference firmware — but it is not, and was
+> never claimed to be after the 2026-08-30 scope clarification below, a dump of
+> this vehicle's own firmware. Any finding here not yet independently re-checked
+> against the real Limcet dump should be treated as "confirmed for the DCn32
+> platform family in general," not "confirmed for this exact vehicle," until
+> cross-verified.
+>
+> **Do not flash `can_app.bin` onto the real vehicle** — it would overwrite the
+> working Limcet firmware with an unrelated Volvo profile. This document
+> analyses the Volvo reference file; the *mechanisms* it describes (two-tier
+> settings/profile, CAN TX/RX, the update path) are expected to apply to the
+> Limcet firmware too, since both are believed to be the same `DCn32`
 > codebase with a different vehicle profile compiled in — only the CAN
 > tables/filters differ.
 

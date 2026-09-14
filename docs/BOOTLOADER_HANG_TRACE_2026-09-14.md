@@ -1486,3 +1486,33 @@ settings this project already named) was found reachable via wire byte
 hardware verification (the same SWD ring-buffer injection technique
 `tools/test_mcu_uart_protocol.py` already uses) before being trusted,
 not asserted as settled.
+
+## 31. The MCU has its own real BD37033 driver -- corrects an earlier SoC-only conclusion
+
+Follow-up (2026-09-15): directly checked whether the real MCU firmware
+sheds light on this project's long-running BD37033 (Rohm audio-codec IC)
+investigation, previously closed as "unpopulated/inactive" based entirely
+on a SoC-side I2C bus scan (`docs/1.6_BD37033.md` section 16). It didn't
+occur to that earlier scan to test the STM32 MCU's own I2C1 bus, since
+that investigation was scoped to the SoC's own drivers.
+
+**Directly confirmed, byte-for-byte, in the raw (un-reconstructed)
+silicon extraction** -- a genuine 19-register BD37033 power-on init
+table at flash `0x0800D250`, a real 19-iteration loop that walks it, a
+real I2C transmit wrapper using I2C1's real STM32F105 base address and
+BD37033's real I2C address, and a real dispatch mechanism wiring this
+into the firmware's general event/task-queue system (not dead/orphaned
+code). Also confirmed I2C1 is shared between this BD37033 driver and the
+touchscreen (GT911) driver -- standard I2C multi-drop bus sharing at
+different addresses, not a conflict. Full detail, addresses, and
+evidence: `docs/1.6_BD37033.md` section 17.
+
+**Corrects, doesn't just add to, the earlier "unpopulated" conclusion**:
+that conclusion was accurate for what it tested (the SoC's own I2C
+paths) but incomplete as a whole-system claim -- the MCU has a real,
+complete, architecturally-integrated BD37033 driver of its own. Whether
+it's actually exercised in normal operation, and whether a real BD37033
+chip is wired to the MCU's I2C1 pins on this board revision, is **not
+yet established** -- needs either further disassembly (what triggers the
+dispatch) or a direct hardware test on the spare board. Not done this
+pass.

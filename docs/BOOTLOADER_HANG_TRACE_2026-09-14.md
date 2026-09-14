@@ -1223,3 +1223,69 @@ left in any of the diagnostic/candidate states above. (Note: at the time
 this doc's section 24 resolution was written, the other agent had active,
 uninterrupted use of the probe for final verification -- no hardware
 actions were taken by this side of the session during that window.)
+
+## 27. Extreme live-vehicle stress simulation -- 23/23 on physical silicon, two false alarms along the way (both my own tooling mistakes)
+
+Built `tools/test_mcu_extreme_vehicle_sim.py` to simulate conditions an
+always-on vehicle installation would actually see, beyond the boundary
+cases in section 26: a 60s continuous soak with watchdog/fault monitoring,
+genuine (not forced) sleep entry followed by real CAN-driven wake, 5
+repeated sleep/wake cycles back to back, a 14-frame single-burst CAN
+ring-buffer flood (simulating a busy bus delivering many messages before
+the dispatcher gets a turn, rather than one at a time), adversarial/
+malformed frames (DLC=0, all-0xFF garbage, unexpected extended-ID flag,
+30 rapid alternating known/unknown IDs), and a full simulated drive cycle
+(ignition -> driving telemetry -> idle-to-sleep -> door-triggered wake).
+
+Two rounds of false failures came up while getting this suite reliable,
+both root-caused before trusting any result as a firmware finding:
+
+1. **Immediate HardFault (CFSR=0x00000400 IMPRECISERR, HFSR=0x40000000
+   FORCED) on plain reset** -- traced via direct `mdw`/`reg pc` probing to
+   PC executing in the gap between the bootloader and the app: my own
+   "restore known-good state" reflash command (leftover from memory of an
+   earlier base address) wrote `can_app.bin` to `0x08004000`, but the
+   source had already been corrected to `APP_FLASH_BASE = 0x08003000`
+   (`hardware/MCU/bootloader/include/bootloader.h`,
+   `hardware/MCU/source/stm32f105_app.ld`) by the time this session ran.
+   Not a firmware bug -- my own flash command used a stale offset.
+   Reflashed at the correct `0x08003000`; confirmed clean immediately
+   (CFSR/HFSR both 0, PC executing real app code) and reconfirmed with a
+   full 23/23 `test_mcu_rigorous.py` pass before proceeding.
+
+2. **6 of 23 extreme-suite tests failing on the first real run** -- all
+   six were flaws in the new test's own assertions/encodings, not
+   firmware bugs, confirmed by direct hardware investigation of each:
+   - Three "did it wake to ACTIVE" checks asserted `power_state == 1`
+     exactly; real, correct behavior is a single CAN activity pulse
+     legitimately falls back to `STANDBY_WAIT(2)` after just one more
+     100ms `power_manager_task()` tick without *sustained* traffic (a
+     lone blip shouldn't hold a parked vehicle awake indefinitely).
+     Fixed to accept state 1 or 2 (anything but `SLEEP(5)` proves genuine
+     wake).
+   - The body-controller (0x622) burst/drive-cycle door tests used the
+     wrong byte layout entirely -- real encoding is `data[3]&0x10` for
+     lights and `data[5]&0xF0==0x10` for door (requires `dlc>=6`), and
+     the door debounce (`vehicle_profiles.c`) requires 2 *consecutive*
+     open readings before it latches, not one. Fixed the encodings and
+     sent two consecutive door-open frames where a latch was expected.
+   - One steering-burst assertion had the expected decoded value simply
+     wrong (didn't account for `handle_toyota_prado_steering()`'s
+     sign-bit inversion). Recomputed by hand and fixed.
+   - The 14-frame burst test's post-flood wait (0.4s) was too short:
+     confirmed via direct SRAM polling that the ring was only partially
+     drained (`tail<head`) at 0.4s, fully drained by 1.0s+ -- draining 14
+     frames, several of which trigger blocking UART status broadcasts at
+     38400 baud, takes real, measurable time. Also confirmed that two
+     separate SWD readbacks (door, then debounce) are independent
+     snapshots in time, not one atomic read, and can legitimately land a
+     step apart mid-drain. Bumped the wait to 2.0s, which is fully
+     consistent on every rerun.
+
+**Final result, hardware-verified on the spare board**: 23/23 passing,
+including a genuine 60-second continuous soak with zero faults and
+monotonic SysTick progression (no watchdog resets), 5 clean sleep/wake
+cycles with no stuck states, correct FIFO drain-order semantics under a
+14-frame burst, and zero faults under every adversarial/malformed frame
+tried. Board left in clean idle state (`reset run`, CFSR/HFSR both 0)
+afterward, not deliberately asleep or mid-experiment.

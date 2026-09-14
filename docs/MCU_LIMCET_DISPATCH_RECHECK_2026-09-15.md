@@ -216,3 +216,80 @@ Two real gaps remain:
   to note a real dump now exists, while keeping the existing conservative
   warning (never assume a "backup exists" makes flashing the live
   vehicle acceptable).
+
+## Empirical hardware test (2026-09-15) -- real board, honest inconclusive result
+
+Following the recommended next step above, built
+`tools/test_mcu_limcet_dispatch_probe.py`: flashed the real
+`live_factory_app_52k_reconstructed.bin` (paired with this project's
+clean-room bootloader, which sets `SCB->VTOR` itself) onto the spare
+STM32F105RBT6, confirmed a clean boot (`CFSR`/`HFSR` both `0`, `VTOR ==
+0x08003000`, PC executing real app code), then injected all 5 real wire
+command bytes (`0x81, 0x82, 0xA0, 0xFF, 0xE1`) directly into the real
+firmware's own UART RX ring structure in SRAM -- located via disassembly
+of the real USART2 ISR (`0x08008062`): `g_rx_state` at `0x20000058`, a
+ring struct at `0x20000A21` (head index at offset `0`, 8 slots of 30
+bytes each -- `{cmd, len, payload[28]}` -- starting at offset `4`,
+stride confirmed via the ISR's own address-computation instructions and
+its `len<28` bound check). Both Volvo-app-state-shaped and
+Volvo-settings-sync-shaped payloads were tried for each command, plus
+Volvo's own historical shape for `0xFF`/`0xE1`, to directly test the
+"has the command semantics shifted" lead -- 11 injections total, each
+against a fresh reset.
+
+**A real methodology bug was caught and fixed before trusting any
+result**: the first run showed identical GPIOA/B changes after every
+single injection, regardless of command or payload -- a red flag.
+Directly measuring GPIO state at fixed intervals after a plain reset
+(no injection at all) confirmed this: the real firmware's own boot
+sequence causes GPIOA/B to keep settling for roughly 0.6s after reset,
+completely independent of any UART activity. The test was fixed to wait
+1.5s (with margin past the measured settling window) before capturing
+its "before" baseline.
+
+**With that fixed, the real result: all 11 injections produced zero GPIO
+change and zero fault.** Before treating that as "these commands are
+confirmed inert" (which would itself be a significant, useful finding)
+or "the byte-remapping theory is refuted," the ring-write technique's
+own reliability was checked -- and a real problem was found. The
+function this investigation had identified as "the ring consumer"
+(found via searching for code that loads the ring table's own base
+address as a literal) was disassembled fully and turns out to be
+something else: it indexes the same table with **stride 4** (treating it
+as a flat array of function pointers), not the confirmed **stride 8**
+`(handler_ptr, cmd_byte)` pair format the table itself actually has --
+and its own internal guard logic means it can only ever validly invoke
+index 0 (which happens to resolve to the `CMD 0x81` handler pointer,
+since that's the table's first 4 bytes). This is almost certainly an
+unrelated mechanism (most plausibly a startup-handshake retry -- it's
+reached from a periodic-message-queue helper, `bl` with an explicit
+"type" argument, the same shape as this project's already-documented
+81-byte-stride outbound descriptor table) that happens to share the same
+memory address as the real command table's base, not the genuine USART2
+RX ring consumer.
+
+**Honest conclusion: the empirical test is inconclusive, not negative.**
+The real consumer of the UART RX ring -- the function that actually
+walks the `(handler_ptr, cmd_byte)` table and dispatches based on a
+received frame -- was not reliably located in this pass. The
+ring-write-and-advance-head injection technique may simply not be
+reaching the real dispatch mechanism at all, which would fully explain
+the observed zero-effect result without it meaning anything about
+whether the command-byte-remapping lead from the static-analysis section
+above is correct. This should not be read as "the real firmware's
+`0xA0`/`0xFF` handlers don't do anything" -- only as "this specific
+attempt to trigger them via SWD ring injection didn't produce an
+observable effect, and there's a concrete, identified reason (wrong
+consumer function assumed) to distrust that null result rather than
+trust it."
+
+**Real next step, not yet done**: locate the genuine ring consumer by
+tracing forward from the ring's own write side more carefully (the ISR
+increments the head index and wraps it mod 8 -- find every place in the
+binary that reads that same head-index byte and compares it against
+something else, rather than searching for literal-pool references to the
+table's base address, which turned out to have an unrelated false
+match). `tools/test_mcu_limcet_dispatch_probe.py` is a reusable,
+board-verified injection harness once the real consumer (and, if
+different, the real "frame ready" signal it actually checks) is found --
+it does not need to be rewritten, only re-pointed.

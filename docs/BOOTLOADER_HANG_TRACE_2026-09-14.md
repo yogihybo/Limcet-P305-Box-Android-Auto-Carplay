@@ -1289,3 +1289,81 @@ cycles with no stuck states, correct FIFO drain-order semantics under a
 14-frame burst, and zero faults under every adversarial/malformed frame
 tried. Board left in clean idle state (`reset run`, CFSR/HFSR both 0)
 afterward, not deliberately asleep or mid-experiment.
+
+## 28. UART protocol (SoC<->MCU) coverage + a real PB6 pin-assignment conflict found
+
+Every test so far this session exercised the CAN side (vehicle bus ->
+MCU). Built `tools/test_mcu_uart_protocol.py` to cover the *other* major
+interface: the inbound command protocol from the head unit SoC to the MCU
+over USART2 (`uart_protocol.c`) -- if this side is broken, the SoC and
+MCU can't talk at all regardless of how well the CAN side works.
+Injection technique: writes a `UartPacket` directly into `g_rx_ring`
+slot 0 in SRAM (`g_rx_tail=0x2000017d`, `g_rx_head=0x2000017e`,
+`g_rx_ring=0x2000017f`, confirmed from `can_app.map`), bypassing the
+USART2 ISR's byte framing/checksum state machine to exercise the command
+*handlers* directly, the same way `test_mcu_rigorous.py`'s CAN ring
+injection works.
+
+Covered: init handshake (0x81), app-state/relay switch (0x82), UI
+settings sync (0xA0, several pin-confirmed sub-ids), audio route (0x84,
+the shared relay dispatcher), the TEA-cipher anti-clone challenge (0x88,
+cross-checked against an independent Python re-implementation of the
+cipher for 3 vectors including 0/0xFFFFFFFF edge cases), system reset
+(0xFF), 8 unknown/unmapped command codes, and 15 rapid back-to-back
+commands.
+
+**False start, my own tooling bug**: the first run showed 6 GPIO-effect
+tests failing across three different commands (0x82, 0xA0, 0x84) despite
+the CAN-side firmware being solid all session -- suspicious enough to
+investigate rather than assume a firmware regression. Root cause: my
+test script's `GPIOB_ODR`/`GPIOC_ODR` constants were each shifted a full
+GPIO bank too high (STM32F1 GPIO banks are spaced by `0x400`:
+GPIOA=`0x40010800`, GPIOB=`0x40010C00`, GPIOC=`0x40011000`; I had
+`GPIOB_ODR=0x4001100C`, which is actually GPIOC's ODR, and
+`GPIOC_ODR=0x4001180C`, actually GPIOD's). Confirmed via a hardware
+breakpoint at `handle_app_state` (hit exactly as expected) plus a full
+single-step trace showing the real `STR` instructions execute at exactly
+the addresses the C source implies -- the handler code was never the
+problem, my read addresses were. Fixed to `0x40010C0C`/`0x4001100C`.
+
+**Real finding, confirmed on hardware (not a test bug)**: two tests
+(`app_state` mode=0, and `CMD 0xA0` id=0x09 mic-mux val=0) still don't
+durably clear GPIOB Pin 6 after the fix. Traced to a genuine pin
+assignment conflict in the firmware itself:
+- `main.c`'s `gpio_hardware_init()` (called first, from `main()`)
+  configures PB6 as plain GPIO push-pull output for `MIC_SEL`
+  (microphone-source relay).
+- `touch_driver.c`'s `touch_init()` runs immediately afterward and calls
+  `i2c1_hardware_init()`, which reconfigures the *same pin* PB6 to
+  Alternate-Function Open-Drain for I2C1 SCL (the touchscreen bus) --
+  confirmed live via `GPIOB->CRL` reading `0xee422202` after boot (PB6's
+  4-bit field = `0xE` = AF-OD, not `0x2`/`0x3` for plain GPIO).
+- I2C1's SCL/SDA are hard-fixed to PB6/PB7 on the STM32F105 (no remap
+  option), so this isn't a "just pick a different I2C pin" situation --
+  one of the two "confirmed via disassembly" PB6 claims in this codebase
+  (`main.c`'s `MIC_SEL` vs `touch_driver.c`'s I2C1 SCL) is very likely
+  simply wrong about which physical pin it actually is.
+- Real-world consequence: any command that tries to drive PB6 LOW
+  (mic-mux to OEM, app-state mode=0/OEM-bypass) gets silently overridden
+  back HIGH by the touchscreen's I2C bus idling/polling within
+  milliseconds. That control path cannot be relied on while the touch
+  driver is active -- which, on real hardware, is continuously (25ms
+  poll interval).
+
+**Not resolved this session** -- fixing it correctly requires a fresh
+disassembly pass to determine which of the two claims is the real pin
+assignment (or whether MIC_SEL is a different pin entirely), which is
+out of scope for a testing pass. `tools/test_mcu_uart_protocol.py`
+documents this explicitly (prints a `[KNOWN CONFLICT, not a test bug]`
+line, not counted in the pass/fail total) rather than either asserting a
+value the real firmware doesn't deliver or silently hiding the
+discrepancy. **This is exactly the class of finding worth surfacing
+before ever flashing real hardware** -- mic-source switching for
+CarPlay/Android Auto would silently misbehave in the field. Flagging as
+an open item for a future dedicated RE pass on `MIC_SEL`'s real pin.
+
+**Final result**: 19/19 of everything actually assertable passed
+cleanly, TOUCH_SEL (PB0), the settings-sync pins (PB1, PA15/PB8/PB9),
+the audio-route relay pair (PC2/PC13), and the TEA cipher all confirmed
+working exactly as the source intends. Board left in clean idle state
+afterward.

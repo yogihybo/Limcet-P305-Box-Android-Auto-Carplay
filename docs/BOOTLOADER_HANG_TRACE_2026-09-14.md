@@ -1127,6 +1127,94 @@ evidence. The regenerated `live_factory_bootloader_12k_reconstructed.bin`
 reflects all of them. Application-side fixes are in
 `tools/patch_factory_app_live.py`.
 
+## 26. Deep-testing CAN-injection "reliability degradation" -- resolved, test harness bug, not firmware or word patches
+
+A later deep-testing pass (`tools/test_mcu_deep_extended.py`, built on top of
+`tools/test_mcu_rigorous.py`'s proven SWD CAN-ring-buffer injection
+technique) found that `inject_can_frame()` worked perfectly immediately
+after a fresh board reset but became unreliable -- SRAM writes verified
+byte-correct via direct readback, but the decoded application state
+sometimes failed to update -- after the board had been running for roughly
+5-10 seconds. General CPU fault, CPU hang, a global scheduler stall, and
+real CAN1 hardware bus noise were all ruled out with direct evidence
+(CFSR/HFSR stayed 0, single-step traces showed the CPU genuinely executing
+a live loop, SysTick kept ticking at ~1kHz, and CAN1's RF0R/RF1R/ESR all
+read 0 -- no real frames or bus errors accumulating). The user's own
+hypothesis at the time was that this might trace back to one of the
+reconstructed bootloader's patched gap words (`FACTORY_PATCH_MAP`).
+
+**It does not.** The firmware under test throughout this investigation was
+the clean-room bootloader + clean-room `can_app.bin` -- ordinary compiled C
+source (`hardware/MCU/source/src/*.c`), with no gap-word reconstruction
+involved at all. `FACTORY_PATCH_MAP` only applies to the *factory*
+bootloader/app images, which were not what was flashed during any of the
+failing CAN-injection tests.
+
+**Root cause, found by re-deriving every symbol address directly from
+`hardware/MCU/source/build/can_app.map`:** `tools/test_mcu_rigorous.py`'s
+`SYM_CAN_ACTIVITY` (was `0x200002D5`) and `SYM_TIMER_COUNTER` (was
+`0x200002D6`) were simply wrong -- those two addresses land on
+`gpio_driver.o`'s `s_last_raw_mask` / `s_current_sense_mask` (unrelated
+GPIO debounce bytes), not `power_manager.o`'s real `s_can_activity_flag`
+(`0x200002D7`) and `s_timer_counter` (`0x200002D8`). The `.bss` layout from
+the map:
+
+```
+.bss.s_last_raw_mask       0x200002d4  0x1  gpio_driver.o
+.bss.s_current_sense_mask  0x200002d5  0x1  gpio_driver.o  <- SYM_CAN_ACTIVITY (wrong)
+                            0x200002d6  0x1  gpio_driver.o  <- SYM_TIMER_COUNTER (wrong, and wrong size too)
+.bss.s_can_activity_flag   0x200002d7  0x1  power_manager.o  <- real flag
+.bss.s_timer_counter       0x200002d8  0x2  power_manager.o  <- real counter
+```
+
+Because of the two-byte offset, `inject_can_frame()`'s `mwb SYM_CAN_ACTIVITY
+1` was never actually setting the real activity flag that
+`power_manager_task()` (the 100ms cooperative task, `power_manager.c`)
+checks. On the test bench, `gpio_get_acc_status()` (PA8, ACC sense) reads
+false with no physical ignition signal wired up. With both `acc_active` and
+the (never-truly-set) `can_active` reading false, the power state machine
+walks `ACTIVE -> STANDBY_WAIT -> PRE_SLEEP -> SLEEP` after exactly
+`POWER_STANDBY_TIMEOUT_TICKS * 100ms = 5.0s` (`power_manager.h`), and the
+MCU parks in `enter_low_power_sleep()`'s blocking `wfi` loop --
+`main()`'s cooperative scheduler, including `can_dispatch_process()`, is
+never called again from inside that loop. It only exits on a genuine EXTI
+(ACC pin) or CAN1_RX0 hardware interrupt, neither of which an SWD SRAM
+write can trigger. The CPU wasn't stuck, faulted, or racing against
+halt/resume -- it was correctly, deliberately asleep per its own real power
+management logic, just fed a false "no activity" signal by a test tool that
+was writing to the wrong two bytes.
+
+(The other agent, working the same finding in parallel via a 7-phase HIL
+report, independently reached the same power-state-machine mechanism --
+correctly identifying `POWER_STANDBY_TIMEOUT_TICKS`/`enter_low_power_sleep()`
+as the proximate cause. This section adds the one further level of
+precision: *why* the test harness's own `s_can_activity_flag`/`s_power_state`
+writes weren't actually preventing the sleep transition -- the activity-flag
+address itself was wrong, not a race between SWD writes and the 100ms task.)
+
+**Fix**: corrected `SYM_CAN_ACTIVITY` and `SYM_TIMER_COUNTER` in
+`tools/test_mcu_rigorous.py` to `0x200002D7`/`0x200002D8`. No firmware
+changes needed -- `power_manager.c`'s state machine is correct, real vehicle
+behavior.
+
+**Hardware verification (2026-09-14)**:
+- `tools/test_mcu_rigorous.py` still passes 23/23 with the corrected
+  addresses (no regression).
+- Injected alternating left/right steering frames (CAN `0x025`) with ~21
+  seconds of cumulative elapsed time across the injection calls -- well
+  past the old 5-second failure window -- and every single injection was
+  consumed correctly and immediately, with `power_state` never advancing
+  past `STANDBY_WAIT` (never reaching `SLEEP`).
+- `tools/test_mcu_deep_extended.py` (whose earlier run had produced
+  misleading, untrustworthy FAIL results because of this same harness bug)
+  now passes 12/12 with the addresses fixed. One of its own test cases
+  (`Test 02`, steering clamp) also had an unrelated pre-existing bug in the
+  *test's own expected input* -- it used a raw magnitude that, after
+  `handle_toyota_prado_steering()`'s sign-bit inversion logic, correctly
+  decodes near dead-center rather than the clamp extreme; fixed to use the
+  raw value that actually exercises the clamp path (`sign_bit` set with
+  `raw=0`, which inverts to `0x0FFF`, the true extreme).
+
 ## Board state
 
 Restored to the known-good clean-room bootloader + application after every

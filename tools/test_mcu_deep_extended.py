@@ -11,40 +11,44 @@ must NOT trigger on a single transient reading.
 
 Does not modify or duplicate test_mcu_rigorous.py -- imports its helpers.
 
-=== KNOWN, UNRESOLVED ISSUE (2026-09-14) -- READ BEFORE TRUSTING RESULTS ===
-This suite is currently UNRELIABLE and its FAIL output should NOT be taken
-as confirmed firmware bugs. Investigation this session found:
+=== RESOLVED (2026-09-14): root cause was a wrong symbol address in the
+test harness, not a firmware or bootloader-patch bug ===
+Earlier same-day investigation found CAN-frame injection via
+inject_can_frame() working perfectly right after a fresh board reset but
+becoming unreliable/inconsistent after ~5-10s of board uptime, with SRAM
+writes to the ring buffer verified byte-correct yet the decoded state
+sometimes failing to update. General system fault, CAN1 hardware bus
+noise, and a global scheduler stall were all ruled out (CFSR/HFSR stayed
+0, RF0R/RF1R/ESR all read 0, SysTick kept ticking at ~1kHz, single-step
+traces showed the CPU genuinely executing a live loop).
 
-  - Immediately after a fresh board reset, single CAN-frame injection via
-    inject_can_frame() works perfectly and reliably (verified repeatedly).
-  - After the board has been running for some period (observed: reliably
-    broken well before this suite's later tests run; a fresh single-shot
-    injection at ~10s uptime showed a PARTIAL, inconsistent update rather
-    than a clean pass or a clean stuck value), further CAN injections stop
-    being consumed by the firmware -- SRAM writes to the ring buffer verified
-    byte-correct via direct readback, but the decoded state never updates.
-  - Ruled out: general system fault (CFSR/HFSR stayed 0 throughout), CAN1
-    hardware bus noise/errors (RF0R/RF1R/ESR all read 0, no real frames or
-    errors accumulating), and a global scheduler stall (SysTick continued
-    ticking at ~1kHz and single-stepping showed the CPU genuinely executing
-    a live idle/dispatch loop, not stuck).
-  - NOT ruled out / not yet understood: whether this is a genuine firmware
-    behavior under sustained uptime (a real bug worth knowing about for
-    always-on vehicle operation) or an artifact of this test methodology
-    itself -- e.g. many repeated external SWD halt/resume cycles across a
-    session perturbing timing-sensitive scheduler/power-manager state in a
-    way a real, undisturbed vehicle boot never would.
-  - tools/test_mcu_rigorous.py itself remains reliably 100% passing when
-    run as a single fresh process end-to-end; this doesn't call that
-    result into question. The issue is specific to ad-hoc/standalone
-    injection calls made well after boot, in a separate process, following
-    a long prior session of SWD activity.
+Root cause: tools/test_mcu_rigorous.py's SYM_CAN_ACTIVITY (was
+0x200002D5) and SYM_TIMER_COUNTER (was 0x200002D6) were off by two bytes
+-- those addresses actually land on gpio_driver.o's s_last_raw_mask /
+s_current_sense_mask, not power_manager.o's real s_can_activity_flag
+(0x200002D7) and s_timer_counter (0x200002D8), per can_app.map. Because
+of this, inject_can_frame() never actually set the real activity flag
+that power_manager_task() (the 100ms cooperative task) checks. With ACC
+inactive on the bench and no genuine CAN traffic, the power state machine
+walked ACTIVE -> STANDBY_WAIT -> PRE_SLEEP -> SLEEP after
+POWER_STANDBY_TIMEOUT_TICKS * 100ms = 5.0s (power_manager.h), at which
+point the MCU parked in enter_low_power_sleep()'s blocking WFI loop --
+which only wakes on a genuine EXTI or CAN1_RX0 hardware interrupt, never
+an SWD SRAM write. The CPU wasn't stuck or faulted; it was correctly
+asleep per its own (real, working) power-management logic, just woken by
+a test tool that thought it was asserting activity but was actually
+poking two unrelated GPIO-debounce bytes.
 
-Next step for whoever picks this up: reproduce with a clean, uninterrupted
-board (no prior SWD sessions this power-cycle) and binary-search the exact
-uptime/interaction threshold where injection stops being consumed, ideally
-correlating against a genuine internal firmware symbol (not just wall-clock
-guesses) to distinguish "real bug" from "test methodology artifact".
+This was NOT a bootloader/app word-patch reconstruction issue -- the
+firmware under test throughout was the clean-room bootloader + clean-room
+can_app.bin (ordinary compiled C, no gap-word reconstruction involved).
+
+Fix applied in tools/test_mcu_rigorous.py: corrected the two addresses.
+Hardware-reverified 2026-09-14: injected alternating left/right steering
+frames with ~21s of cumulative elapsed time between calls (well past the
+old 5s failure window) and every injection was consumed correctly and
+immediately, with power_state never reaching SLEEP. tools/test_mcu_rigorous.py
+itself still passes 23/23 with the corrected addresses.
 """
 
 import sys
@@ -85,12 +89,18 @@ def main():
     mag = read_mem_bytes(SYM_STEERING_MAG, 1)[0]
     check(sign == 1 and mag == 0x7F, f"Right turn at exact clamp boundary: sign={sign}, mag=0x{mag:02X}", "expected sign=1 mag=0x7F")
 
-    # raw magnitude that would exceed 0x7F pre-clamp (0x0FFF near max) -> must clamp to 0x7F
-    inject_can_frame(0x025, [0x0F, 0xFF, 0, 0, 0, 0, 0, 0])
+    # Left-turn (sign_bit set) encoding inverts raw as (0x0FFF - raw): a raw
+    # value of 0 with sign_bit set decodes to (0x0FFF-0)=0x0FFF, i.e. the
+    # extreme end -- this is what must clamp to 0x7F, not a raw value near
+    # 0x0FFF itself (that inverts to near-zero/center, correctly non-clamped
+    # -- confirmed against handle_toyota_prado_steering()'s real inversion
+    # logic in vehicle_profiles.c after this test's first version used the
+    # wrong raw value and produced a false failure).
+    inject_can_frame(0x025, [0x08, 0x00, 0, 0, 0, 0, 0, 0])
     time.sleep(0.15)
     sign = read_mem_bytes(SYM_STEERING_SIGN, 1)[0]
     mag = read_mem_bytes(SYM_STEERING_MAG, 1)[0]
-    check(mag == 0x7F, f"Over-range magnitude correctly clamped: sign={sign}, mag=0x{mag:02X}", "expected mag=0x7F (clamped, no wraparound/overflow)")
+    check(sign == 0 and mag == 0x7F, f"Over-range magnitude correctly clamped: sign={sign}, mag=0x{mag:02X}", "expected sign=0 mag=0x7F (clamped, no wraparound/overflow)")
 
     # zero magnitude (dead-center steering) -> sign bit clear, mag 0
     inject_can_frame(0x025, [0x00, 0x00, 0, 0, 0, 0, 0, 0])

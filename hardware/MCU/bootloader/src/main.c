@@ -109,6 +109,9 @@ void jump_to_application(void) {
     /* Disable interrupts before jump */
     __asm__ volatile("cpsid i");
 
+    /* Write factory bootloader authentication handshake signature (OEM 0x08001844-0x08001848) */
+    *((volatile uint32_t *)0x20004000UL) = 0x20141003UL;
+
     /* Relocate Vector Table */
     SCB->VTOR = APP_FLASH_BASE;
 

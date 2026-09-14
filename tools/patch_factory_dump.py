@@ -108,9 +108,9 @@ def main():
     cur_reset = struct.unpack_from("<I", app_data, 0x04)[0]
     print(f"[*] App vector table current: SP=0x{cur_sp:08X}, Reset=0x{cur_reset:08X}")
 
-    # Patch SP = 0x20005000 and Reset = 0x08003151
+    # Patch SP = 0x20005000 and Reset = 0x08003599 (Keil Reset_Handler calling SystemInit)
     struct.pack_into("<I", app_data, 0x00, 0x20005000)
-    struct.pack_into("<I", app_data, 0x04, 0x08003151)
+    struct.pack_into("<I", app_data, 0x04, 0x08003599)
     new_sp = struct.unpack_from("<I", app_data, 0x00)[0]
     new_reset = struct.unpack_from("<I", app_data, 0x04)[0]
     print(f"    Patched App vector table: SP=0x{new_sp:08X}, Reset=0x{new_reset:08X}")

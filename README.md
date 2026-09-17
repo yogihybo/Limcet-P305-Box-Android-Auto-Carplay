@@ -107,10 +107,12 @@ Hardware on the device has been identified by opening the device and reviewing t
 
 ```mermaid
 flowchart TD
-    subgraph VEH["Vehicle & Cabin Inputs"]
+    subgraph FACTORY["Factory Vehicle Interface -- existing car wiring & head unit"]
         PowerIn["12V Battery / GND"]
-        VehicleBus["CAN Bus (CAN H/L) & Discrete Signals (ACC / ILL / SWC)"]
-        MediaIn["Reversing Camera CVBS"]
+        CANBus["Vehicle CAN Bus (CAN H/L)"]
+        SWCKeys["Steering Wheel Controls (SWC)<br/>decoded from CAN traffic, not a separate wire"]
+        CamFactory["Factory Reversing Camera (CVBS)"]
+        LCDPanel["800x480 TFT LCD Panel + Resistive Touchscreen<br/>(factory head unit display)"]
     end
 
     subgraph MCUD["MCU Domain -- STM32F105 (Vehicle-Facing I/O)"]
@@ -120,38 +122,42 @@ flowchart TD
 
     subgraph SOCD["SoC Domain -- ARK1668/ARK1680 (Applications Processor)"]
         ARKBrain["ARK1668/ARK1680 SoC (ARM Cortex-A5)<br/>LCDC - Vivante GPU - Hantro VPU - Audio DAC/ADC"]
+        CamDec["Camera Video Decoder<br/>RN6752 CVBS to ITU-656"]
     end
 
     subgraph PERIPH["On-Board Storage & Wireless"]
         Memory["Storage & Memory<br/>128MB SLC NAND - DDR3 SDRAM"]
         Wireless["Wireless & External I/O<br/>RTL8811CU WiFi (USB1) - FSC-BT8251 BT (ttyHS1) - USB0"]
-        CamDec["Camera Video Decoder<br/>RN6752 CVBS to ITU-656"]
     end
 
-    subgraph OUT["Shared Cabin Endpoints -- both domains drive these"]
-        DisplayOut["800x480 TFT LCD Panel<br/>RGB888 Video Layer + Resistive Touch Layer"]
+    subgraph CABIN["Cabin Audio I/O"]
         AudioOut["Cabin Audio Pipeline<br/>BD37033FV DSP (MCU-controlled via I2C1) - Power Amp - Speakers"]
         MicIn["Microphone Input<br/>External 3.5mm jack + Factory 28-pin mic"]
     end
 
+    %% Factory Vehicle Interface -> whichever domain actually owns each signal
     PowerIn ==>|12V Power Feed| DCDC
+    CANBus ==>|CAN Frames| MCUHub
+    SWCKeys -.->|Decoded Key Events| MCUHub
+    CamFactory --->|CVBS Video| CamDec
+    LCDPanel -.->|Resistive Touch Sense| MCUHub
+
+    %% Power distribution
     DCDC ==>|Regulated Rails| ARKBrain
     DCDC ==>|Regulated Rails| MCUHub
 
-    VehicleBus ==>|CAN & Wire Signals| MCUHub
-    MediaIn --->|CVBS Video| CamDec
-
+    %% The single chokepoint: MCU <-> SoC
     MCUHub <==>|"UART /dev/ttyHS0 115200<br/>Touch XY - CAN/SWC Keys - Reverse Gear - Rotary Knob"| ARKBrain
 
+    %% SoC -> storage/wireless
     ARKBrain <-->|NAND & DDR3 Bus| Memory
     ARKBrain <-->|USB & High-Speed UART| Wireless
     CamDec ==>|ITU-656 Digital Video| ARKBrain
 
-    ARKBrain ==>|RGB888 Video Out| DisplayOut
+    %% SoC/MCU -> factory display & cabin audio/mic (the physical endpoints both domains drive)
+    ARKBrain ==>|RGB888 Video Out| LCDPanel
     ARKBrain --->|"I2S1 Digital Audio -- bypasses BD37033FV, direct to Power Amp"| AudioOut
     MicIn --->|Analog Voice Capture| ARKBrain
-
-    DisplayOut -.->|Resistive Touch Sense| MCUHub
     MCUHub -.->|I2C1 PB6/PB7 Register Control| AudioOut
     MCUHub -.->|GPIOB6 Mic-Source Mux Select| MicIn
 
@@ -159,40 +165,43 @@ flowchart TD
     classDef mcu fill:#cfe2ff,stroke:#0d6efd,color:#052c65
     classDef storage fill:#d1ecf1,stroke:#17a2b8,color:#0c5460
     classDef power fill:#fff3cd,stroke:#e0a800,color:#856404
+    classDef factory fill:#f8f9fa,stroke:#6c757d,color:#343a40
     classDef shared fill:#f8f9fa,stroke:#6c757d,color:#343a40
 
-    class ARKBrain soc
+    class ARKBrain,CamDec soc
     class MCUHub mcu
-    class Memory,Wireless,CamDec storage
-    class DCDC,PowerIn power
-    class DisplayOut,AudioOut,MicIn shared
+    class Memory,Wireless storage
+    class DCDC power
+    class PowerIn,CANBus,SWCKeys,CamFactory,LCDPanel factory
+    class AudioOut,MicIn shared
 ```
 
 Full teardown details and board photos are in `hardware/BOARD_ANALYSIS.md` (linked below).
 
 ### Software
 
-The device runs two distinct software stacks depending on which boot path is active (see [Choose Your Path](#choose-your-path) above): the stock 3.4-kernel firmware as shipped, and this project's own 4.19.192 port. Most of the userspace binaries/libraries are reused unmodified between the two — only the kernel, bootloader, and a handful of matched driver/library pairs actually differ.
+The device runs three distinct software stacks depending on which boot path is active (see [Choose Your Path](#choose-your-path) above): the stock 3.4-kernel firmware as shipped, this project's new-kernel port still running the stock Qt UI, and the same new-kernel port running [`custom_ui/`](custom_ui/README.md) instead. The bootloader/kernel/rootfs move together as one unit in the last two columns — the real fork in the stack is at the UI/application layer, where `custom_ui` replaces most driver libraries with its own HAL rather than reusing the stock `.so`s.
 
-| Component | Stock | This Project |
-|-----------|-------|---------------|
-| Product identity | `ProductId=Limcet-P306` (`MsnProductInfo.ini`) | unchanged |
-| Boot ROM | SoC mask ROM, fixed-function, not user-modifiable — loads `Nboot` from NAND `0x000000` | unchanged |
-| S-Loader — Nboot | `Nboot.bin`, 128 KB, NAND `0x000000` (MTD0) — proprietary, closed source | unchanged — **never flash via SD**, corruption bricks the board and requires JTAG to recover |
-| S-Loader — Stepldr | `Stepldr.bin` — proprietary, closed source; initializes DDR3, checks the SD card FAT32 partition (p1) for `UBOOT.BIN` before falling back to NAND `0x020000`, and validates a 96-byte ARK header (magic `0x12345678`) before accepting any U-Boot binary | unchanged — the same binary chainloads both stock and this project's custom U-Boot; the header is injected into the custom build via `build_tools/inject_ark_header.py` so Stepldr accepts it |
-| Bootloader | U-Boot 2012.10 — proprietary board port, closed source | U-Boot 2018.07 — `ark1668_limcet_p305` board port, built from `linux-arkmicro` source (§7.0) |
-| Kernel | Linux 3.4.0 | Linux 4.19.192, built from `linux-arkmicro` source |
-| Root filesystem | BusyBox 1.25.0-based | BusyBox 1.30.1, rebuilt from source (~390 applets, incl. `/sbin/init`) |
-| UI framework | Qt 4.7.4 (QWS + DirectFB/fbdev), closed-source `MsnCoreApp` | stock UI runs unmodified on the new kernel; optional replacement: [`custom_ui/`](custom_ui/README.md) (LVGL-based, open source) |
-| Main application | `MsnCoreApp` — head-unit UI, settings, USB auto-copy mechanism | unchanged (stock binary reused) |
-| GPU driver/lib | `galcore.ko` + `libGAL.so` (Vivante, vendor-shipped) | `galcore.ko` 6.2.4.p1.8 + matched `libGAL.so`, rebuilt for 4.19.192 — background: [§1.1](docs/1.1_HARDWARE_AND_SOC_REFERENCE.md), [§1.5](docs/1.5_AUDIO_SUBSYSTEM_INVESTIGATION.md) |
-| Video decode | `libmfc.so` (Hantro `hx170dec` userspace API) | unchanged — background: [§1.1](docs/1.1_HARDWARE_AND_SOC_REFERENCE.md) |
-| Audio control | `libMsnSound.so` (`Sound_BD37033`/`Sound_PT2312`/`Sound_MCU` backends, selected via `SoundType`) | unchanged — background: [§1.5](docs/1.5_AUDIO_SUBSYSTEM_INVESTIGATION.md), [§1.6](docs/1.6_BD37033.md) |
-| MCU protocol | `libMcuCenter.so` (`McuType=6`, `MCUAdapter_BoxP300`, over `/dev/ttyHS0`) | unchanged — background: [§1.3](docs/historical/1.3_MCU_ADAPTERS.md) |
-| CAN adapter SDK | `libCanBus.so` — multi-vendor CAN decoder-box SDK; unused on this device (`CanType=0`, decoding done by the MCU instead) | unchanged — background: [§1.2](docs/1.2_CANBUS.md) |
-| Bluetooth stack | `rtkbt` userspace stack (Realtek / Feasycom `blueware`), over `/dev/ttyHS1` | stock `blueware`/`rtkbt` stack runs with recovered firmware blobs (§1.4); optional open stack: upstream Linux **BlueZ 5.66** + kernel `hci0` (via `rtk_hciattach` 3-Wire H5 @ 1.5 Mbps, `bluetoothd`, A2DP/AVRCP/PAN, D-Bus `org.bluez`) — hardware-confirmed functional. Wireless Android Auto's RFCOMM pairing now runs on this BlueZ path in production (`custom_ui/src/hal/bluez_aa_profile.cpp`, `Profile1`/`NewConnection` fd-passing) — required rebuilding a real static `dbus-daemon` 1.14.10, since this device's stock `dbus-daemon` is D-Bus 1.0.2 and has no fd-passing support at all (`tools/bluetoothd-test/`). Background: [`docs/BLUEZ_AND_KERNEL_BLUETOOTH_HANDOFF.md`](docs/BLUEZ_AND_KERNEL_BLUETOOTH_HANDOFF.md), [§1.4](docs/1.4_WIRELESS_AND_INIT.md) |
-| WiFi AP | `hostapd` + `udhcpd`, SSID `carplay_wifi` | unchanged — background: [§1.4](docs/1.4_WIRELESS_AND_INIT.md) |
-| Remote access | none — serial console is receive-only once Linux boots | SSH (`/usr/bin/sshd`, OpenSSH 4.6p1) + USB CDC-NCM networking baked in; telnet available on stock too via the USB auto-copy payload (§3.0) |
+| Component | Stock | New U-Boot + Kernel, Stock UI | New U-Boot + Kernel, Custom UI |
+|-----------|-------|-------------------------------|----------------------------------|
+| Product identity | `ProductId=Limcet-P306` (`MsnProductInfo.ini`) | unchanged | unchanged |
+| Boot ROM | SoC mask ROM, fixed-function, not user-modifiable — loads `Nboot` from NAND `0x000000` | unchanged | unchanged |
+| S-Loader — Nboot | `Nboot.bin`, 128 KB, NAND `0x000000` (MTD0) — proprietary, closed source | unchanged — **never flash via SD**, corruption bricks the board and requires JTAG to recover | same as previous column |
+| S-Loader — Stepldr | `Stepldr.bin` — proprietary, closed source; initializes DDR3, checks the SD card FAT32 partition (p1) for `UBOOT.BIN` before falling back to NAND `0x020000`, and validates a 96-byte ARK header (magic `0x12345678`) before accepting any U-Boot binary | unchanged — the same binary chainloads both stock and this project's custom U-Boot; the header is injected into the custom build via `build_tools/inject_ark_header.py` so Stepldr accepts it | same as previous column |
+| Bootloader | U-Boot 2012.10 — proprietary board port, closed source | U-Boot 2018.07 — `ark1668_limcet_p305` board port, built from `linux-arkmicro` source (§7.0) | same as previous column |
+| Kernel | Linux 3.4.0 | Linux 4.19.192, built from `linux-arkmicro` source | same as previous column |
+| Root filesystem | BusyBox 1.25.0-based | BusyBox 1.30.1, rebuilt from source (~390 applets, incl. `/sbin/init`) — the "static" rootfs (`firmware_overlay/`) | **separate Buildroot-based rootfs** (`firmware_overlay_dyn/` + `build_bootable_sdcard_dyn.sh`) — not the static rootfs used by the other two columns |
+| UI framework | Qt 4.7.4 (QWS + DirectFB/fbdev), closed-source `MsnCoreApp` | unchanged — stock Qt UI runs unmodified on the new kernel | **LVGL v9** (C, open source) — CPU compositing direct to `/dev/fb0`, no DirectFB or GPU/EGL dependency |
+| Main application | `MsnCoreApp` — head-unit UI, settings, USB auto-copy mechanism | unchanged (stock binary reused) | replaced by [`custom_ui/`](custom_ui/README.md) (C++17) + sidecars: `androidauto-sidecar` (`micro_aap`, own from-scratch AAP implementation) and `carplay-sidecar` (talks to the vendor's `sink` binary over D-Bus, reusing its licensed MFi auth) |
+| GPU driver/lib | `galcore.ko` + `libGAL.so` (Vivante, vendor-shipped) | `galcore.ko` 6.2.4.p1.8 + matched `libGAL.so`, rebuilt for 4.19.192 — background: [§1.1](docs/1.1_HARDWARE_AND_SOC_REFERENCE.md), [§1.5](docs/1.5_AUDIO_SUBSYSTEM_INVESTIGATION.md) | **not used** — LVGL's CPU compositing has no GPU/DirectFB dependency at all |
+| Video decode | `libmfc.so` (Hantro `hx170dec` userspace API) | unchanged — background: [§1.1](docs/1.1_HARDWARE_AND_SOC_REFERENCE.md) | unchanged — still `libmfc.so`/`/dev/hx170dec`, reused via `custom_ui`'s own `hal/video_layer.cpp` wrapper rather than reimplemented |
+| Audio control | `libMsnSound.so` (`Sound_BD37033`/`Sound_PT2312`/`Sound_MCU` backends, selected via `SoundType`) | unchanged — background: [§1.5](docs/1.5_AUDIO_SUBSYSTEM_INVESTIGATION.md), [§1.6](docs/1.6_BD37033.md) | **not used** — own `hal/audio.cpp` drives ALSA directly (`amixer`/softmaster controls) plus a system-wide LADSPA EQ/loudness plugin (`ladspa_eq/`) |
+| MCU protocol | `libMcuCenter.so` (`McuType=6`, `MCUAdapter_BoxP300`, over `/dev/ttyHS0`) | unchanged — background: [§1.3](docs/historical/1.3_MCU_ADAPTERS.md) | **not used** — own `hal/mcu_input.cpp`/`knob.cpp`/`touch.cpp` reimplement the same reverse-engineered protocol directly against `/dev/ttyHS0`, hardware-confirmed responsive |
+| CAN adapter SDK | `libCanBus.so` — multi-vendor CAN decoder-box SDK; unused on this device (`CanType=0`, decoding done by the MCU instead) | unchanged — background: [§1.2](docs/1.2_CANBUS.md) | still unused — CAN decode stays on the MCU either way; SWC key events arrive over the same UART link the MCU-protocol row covers |
+| Bluetooth chip/stack | `rtkbt` userspace stack (Realtek / Feasycom `blueware`), over `/dev/ttyHS1` | unchanged — stock `blueware`/`rtkbt` stack runs with recovered firmware blobs (§1.4) | **BlueZ 5.66** + kernel `hci0` (via `rtk_hciattach` 3-Wire H5 @ 1.5 Mbps, `bluetoothd`, A2DP/AVRCP/PAN, D-Bus `org.bluez`) — hardware-confirmed functional and used **in production** for wireless Android Auto's RFCOMM pairing (`hal/bluez_aa_profile.cpp`, `Profile1`/`NewConnection` fd-passing), which required rebuilding a real static `dbus-daemon` 1.14.10 (stock's is D-Bus 1.0.2 with no fd-passing support at all — `tools/bluetoothd-test/`). Background: [`docs/BLUEZ_AND_KERNEL_BLUETOOTH_HANDOFF.md`](docs/BLUEZ_AND_KERNEL_BLUETOOTH_HANDOFF.md), [§1.4](docs/1.4_WIRELESS_AND_INIT.md) |
+| WiFi driver | Vendor `rtl8811cu.ko` blob, one of 5 legacy-named modules probed in order by `/etc/wifi_ap.sh` (see [WiFi module detection](#wifi-module-detection)) | **rebuilt from `linux-arkmicro` source for 4.19.192**, fixes a real regulatory bug: stock's driver defaulted to a `WORLDWIDE` channel plan that excludes 5GHz, patched via `rtw_country_code=US` — hardware-confirmed. Same driver/fix applies regardless of which UI runs on top | same as previous column |
+| WiFi AP | `hostapd` + `udhcpd`, SSID `carplay_wifi` | unchanged — background: [§1.4](docs/1.4_WIRELESS_AND_INIT.md) | same underlying `hostapd`/`udhcpd` AP, plus `custom_ui`'s own wireless-Android-Auto channel-plan orchestration (`micro_aap/src/aap_wifi_setup.c`) and SSID/password management surfaced in Settings |
+| Remote access | none — serial console is receive-only once Linux boots | SSH (`/usr/bin/sshd`, OpenSSH 4.6p1, always-on with stock's existing password hash) + USB CDC-NCM networking baked in; telnet available on stock too via the USB auto-copy payload (§3.0) | **separate, off-by-default** SSH on the dynamic rootfs (empty-password or key-based login, toggled live from Settings — see [SSH Access (dynamic/`custom_ui` rootfs)](#ssh-access-dynamiccustom_ui-rootfs) below) rather than always-on |
 
 #### MsnCoreApp & Userspace Architecture
 

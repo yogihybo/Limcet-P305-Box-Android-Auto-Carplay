@@ -12,9 +12,9 @@
 
 | Piece | Status |
 |---|---|
-| App-only update path exists, erases app region only (bootloader never touched) | **Hardware-confirmed** on spare board (findings doc §27-28) |
+| App-only update path exists, erases app region only (bootloader never touched) | **Partially hardware-confirmed**: the erase *primitive* (one arbitrary test page) and one block-write are hardware-confirmed (§27-28); the real mechanism's actual 58-page erase loop has never been executed end-to-end, and the bootloader's 12K region has never been read back before/after to directly confirm it's untouched. The "bootloader never touched" property currently rests on disassembly (counting 58×2048=116K in §27), not a hardware test — closing this is precondition #2 in section 3, not something already satisfied |
 | Exact byte de-obfuscation transform for flashed data | **Hardware-confirmed**, all tested bytes match formula |
-| `flash_erase_page()` / flash-write primitives | **Hardware-confirmed** working |
+| `flash_erase_page()` / flash-write primitives (in isolation, one page / one block) | **Hardware-confirmed** working |
 | UART wire framing (sync bytes, header layout, ACK/NAK bytes) | **Disassembly-only** (findings doc §29) — not hardware-tested, UART not yet wired |
 | Retry/NAK behavior on bad framing | **Disassembly-only**, partially understood (bounded retry loop before NAK) |
 | Meaning of the 2-byte accumulator field in the header (len? checksum?) | **Unknown** — flagged explicitly in §29 |
@@ -46,7 +46,7 @@ This section is written now, in advance, precisely so it is never being improvis
 - Lowest-risk failure mode. The app-only erase in the real mechanism only begins *after* the handshake ACK (§27 step 2 precedes step 3) — so a failed handshake means flash was never touched. Power-cycle the unit; the existing (working) firmware is untouched and should boot normally.
 
 **If the update starts (erase happens) but data transfer fails partway:**
-- The erase step (§27 step 3) wipes the full 116K application region up front, before any data is written — meaning a transfer that dies partway leaves the application region genuinely blank, not partially-correct. The **bootloader itself is never erased or touched by this mechanism** (confirmed §27/§28) — so the unit should still enter the bootloader's update-wait state on the next boot (it has no valid app to jump to, and `main()`'s own app-validity check, already confirmed in findings doc §13, would fail closed rather than jump into garbage).
+- The erase step (§27 step 3) wipes the full 116K application region up front, before any data is written — meaning a transfer that dies partway leaves the application region genuinely blank, not partially-correct. The **bootloader itself is never erased or touched by this mechanism** (disassembly-traced §27, erase *primitive* hardware-confirmed §28 — the full 58-page loop itself not yet hardware-exercised, see §2's status table) — so the unit should still enter the bootloader's update-wait state on the next boot (it has no valid app to jump to, and `main()`'s own app-validity check, already confirmed in findings doc §13, would fail closed rather than jump into garbage).
 - Recovery: re-run the same update procedure from scratch (the bootloader's own erase-then-receive flow does not require a working app to be present) sending the same known-good image, or the original raw-extraction backup (§1) reconstructed into a flashable, de-obfuscated form matching what the real mechanism expects.
 - **Open risk to close before relying on this**: confirm precisely what state the bootloader's own update-wait loop is in after a failed prior transfer — does it need a fresh magic-cookie+reset cycle, or does it just keep waiting? Not yet traced.
 

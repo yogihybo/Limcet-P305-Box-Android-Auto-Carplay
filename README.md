@@ -91,7 +91,7 @@ Hardware on the device has been identified by opening the device and reviewing t
 | WiFi chip | Realtek RTL8811CU | Onboard, over USB (`usb1`). Background: [§1.4](docs/1.4_WIRELESS_AND_INIT.md) |
 | Rear camera decoder | RN6752 | CVBS composite → ITU-656 digital video for the reversing camera feed. Background: [§1.1](docs/1.1_HARDWARE_AND_SOC_REFERENCE.md) |
 | Audio DAC/ADC | ARK1668 on-SoC sigma-delta DAC (`ark_sddac`) + ADC (`ark_sdadc`), I2S1 @ `0xe4000000` (DAC) / `0xe8200000` (ADC) | The real, confirmed-only playback/capture path (stock's own `aplay -l`: `card 0: ARKSDDAC [ARK-SDDAC]`). A 2026-07-16 theory that playback instead routed through an external Cirrus Logic CS4334 chip was investigated and reverted — `cs4334_*` disassembles to no-op stubs in stock's own kernel, i.e. a vestigial board-file dai-link with no real chip behind it, not a second physical DAC. Background: [§1.5](docs/1.5_AUDIO_SUBSYSTEM_INVESTIGATION.md) |
-| Audio IC | Rohm BD37033FV | 5.1-ch digital sound processor (volume/mixing/EQ) — **EMPIRICALLY CONFIRMED DORMANT/UNPOPULATED I2C BUS** via `tools/bd37033-test` (no ACK at `0x40`/`0x41` across `/dev/i2c-0`, `/dev/i2c-1`, direct bit-bang GPIO 9/121 and GPIO 3/2 under both GPIO 34=0 and 34=1). This explains why stock firmware shipped with `SoundType=0` (audio routes from on-SoC ARK-SDDAC directly to the analog preamp/power amplifier in bypass mode). Background: [§1.5](docs/1.5_AUDIO_SUBSYSTEM_INVESTIGATION.md), [§1.6](docs/1.6_BD37033.md) |
+| Audio IC | Rohm BD37033FV | 5.1-ch digital sound processor (volume/mixing/EQ) — **physically present on the real vehicle board**, but driven from the **STM32F105 companion MCU's own I2C1** (`PB6`/`PB7`), not the SoC: the SoC's own I2C pins/buses never get an ACK (`tools/bd37033-test`, no response at `0x40`/`0x41` on `/dev/i2c-0`, `/dev/i2c-1`, or direct bit-bang GPIO 9/121 / GPIO 3/2, any GPIO 34 state) — that's what stock's SoC-side `SoundType=0` bypass reflects. The MCU's own driver is separate and hardware-confirmed: gated by a strap on `PC11`+`PA10`, it fires ~40s after ACC goes active and writes a 19-register init table to the IC over I2C1, with retries and graceful NACK-handling if unpopulated (zero faults either way). Background: [§1.5](docs/1.5_AUDIO_SUBSYSTEM_INVESTIGATION.md), [§1.6](docs/1.6_BD37033.md) |
 | Display adapter | DC_FUJITSU_CON96P_REV_002 (interposer) | Adapts the main board's edge connector to the LCD panel's 96-pin Fujitsu FPC. Background: [§1.7](docs/1.7_DISPLAY_SUBSYSTEM.md) |
 | LCD Display | 800×480 RGB888 | Part of the factory head unit. Background: [§1.7](docs/1.7_DISPLAY_SUBSYSTEM.md) |
 | Touchscreen | ARK1668 on-SoC resistive ADC/TSC block (`ark_adc_mmio_base`, phys `0xe4500000`) | SoC ADC node `/dev/input/event0` (`ark1680_ts`) is unused/dormant on this board — vehicle touch panel events are read directly by the STM32F105 MCU and forwarded over `/dev/ttyHS0` (`libMcuCenter.so`). Background: [§1.3](docs/historical/1.3_MCU_ADAPTERS.md), [§1.8](docs/1.8_ARK1680_TS_REVERSE_ENGINEERING.md) |
@@ -107,64 +107,68 @@ Hardware on the device has been identified by opening the device and reviewing t
 
 ```mermaid
 flowchart TD
-    subgraph T1["01 Vehicle & External Inputs"]
+    subgraph VEH["Vehicle & Cabin Inputs"]
         PowerIn["12V Battery / GND"]
-        VehicleBus["CAN Bus (CAN H / L) & Signals (ACC / ILL / SWC)"]
+        VehicleBus["CAN Bus (CAN H/L) & Discrete Signals (ACC / ILL / SWC)"]
         MediaIn["AM/FM Antenna & Reversing Camera CVBS"]
     end
 
-    subgraph T2["02 Power & Vehicle Interface Hub"]
+    subgraph MCUD["MCU Domain -- STM32F105 (Vehicle-Facing I/O)"]
         DCDC["DC-DC Converter<br/>+5V / +3V3 / +9V rails"]
-        MCUHub["MCU (STM32F105) + CAN Trx (TJA1042)<br/>Vehicle Protocol & Power Bridge"]
+        MCUHub["STM32F105 MCU + CAN Trx (TJA1042)"]
         Tuner["AM/FM Radio Tuner"]
     end
 
-    subgraph T3["03 Applications Processor"]
-        ARKBrain["ARK1668 / ARK1680 SoC (ARM Cortex-A5)<br/>LCDC · Vivante GPU · Hantro VPU · Audio DAC/ADC"]
+    subgraph SOCD["SoC Domain -- ARK1668/ARK1680 (Applications Processor)"]
+        ARKBrain["ARK1668/ARK1680 SoC (ARM Cortex-A5)<br/>LCDC - Vivante GPU - Hantro VPU - Audio DAC/ADC"]
     end
 
-    subgraph T4["04 On-Board Storage & Peripherals"]
-        Memory["Storage & Memory<br/>128MB SLC NAND · DDR3 SDRAM"]
-        Wireless["Wireless & External I/O<br/>RTL8811CU WiFi (USB1) · FSC-BT8251 BT (ttyHS1) · USB0 Port"]
-        CamDec["Camera Video Decoder<br/>RN6752 CVBS to ITU-656 Video"]
+    subgraph PERIPH["On-Board Storage & Wireless"]
+        Memory["Storage & Memory<br/>128MB SLC NAND - DDR3 SDRAM"]
+        Wireless["Wireless & External I/O<br/>RTL8811CU WiFi (USB1) - FSC-BT8251 BT (ttyHS1) - USB0"]
+        CamDec["Camera Video Decoder<br/>RN6752 CVBS to ITU-656"]
     end
 
-    subgraph T5["05 Output & User Endpoints"]
-        DisplayOut["800×480 TFT LCD Panel<br/>RGB888 Video & Resistive Touch Layer"]
-        AudioOut["Cabin Audio Pipeline<br/>BD37033FV DSP · Power Amp · Speakers"]
-        MicIn["Microphone Input<br/>Cabin Mic → SoC sdadc"]
+    subgraph OUT["Shared Cabin Endpoints -- both domains drive these"]
+        DisplayOut["800x480 TFT LCD Panel<br/>RGB888 Video Layer + Resistive Touch Layer"]
+        AudioOut["Cabin Audio Pipeline<br/>BD37033FV DSP (MCU-controlled via I2C1) - Power Amp - Speakers"]
+        MicIn["Microphone Input<br/>External 3.5mm jack + Factory 28-pin mic"]
     end
 
-    %% Tier 1 -> Tier 2
     PowerIn ==>|12V Power Feed| DCDC
+    DCDC ==>|Regulated Rails| ARKBrain
+    DCDC ==>|Regulated Rails| MCUHub
+
     VehicleBus ==>|CAN & Wire Signals| MCUHub
     MediaIn --->|RF Antenna| Tuner
     MediaIn --->|CVBS Video| CamDec
-
-    %% Tier 2 -> Tier 3
-    DCDC ==>|Regulated Rails| ARKBrain
-    DCDC ==>|Regulated Rails| MCUHub
-    MCUHub <-->|UART /dev/ttyHS0 115200| ARKBrain
     Tuner -.->|Audio Stream| AudioOut
 
-    %% Tier 3 -> Tier 4
+    MCUHub <==>|"UART /dev/ttyHS0 115200<br/>Touch XY - CAN/SWC Keys - Reverse Gear - Rotary Knob"| ARKBrain
+
     ARKBrain <-->|NAND & DDR3 Bus| Memory
     ARKBrain <-->|USB & High-Speed UART| Wireless
     CamDec ==>|ITU-656 Digital Video| ARKBrain
 
-    %% Tier 3 & 4 -> Tier 5
-    ARKBrain ==>|RGB888 Display & Touch Sense| DisplayOut
-    ARKBrain --->|I2S1 Digital Audio| AudioOut
+    ARKBrain ==>|RGB888 Video Out| DisplayOut
+    ARKBrain --->|"I2S1 Digital Audio -- bypasses BD37033FV, direct to Power Amp"| AudioOut
     MicIn --->|Analog Voice Capture| ARKBrain
 
-    %% Styling
-    classDef core fill:#d4edda,stroke:#28a745,color:#155724
+    DisplayOut -.->|Resistive Touch Sense| MCUHub
+    MCUHub -.->|I2C1 PB6/PB7 Register Control| AudioOut
+    MCUHub -.->|GPIOB6 Mic-Source Mux Select| MicIn
+
+    classDef soc fill:#d4edda,stroke:#28a745,color:#155724
+    classDef mcu fill:#cfe2ff,stroke:#0d6efd,color:#052c65
     classDef storage fill:#d1ecf1,stroke:#17a2b8,color:#0c5460
     classDef power fill:#fff3cd,stroke:#e0a800,color:#856404
+    classDef shared fill:#f8f9fa,stroke:#6c757d,color:#343a40
 
-    class ARKBrain,MCUHub core
-    class Memory,Wireless storage
+    class ARKBrain soc
+    class MCUHub,Tuner mcu
+    class Memory,Wireless,CamDec storage
     class DCDC,PowerIn power
+    class DisplayOut,AudioOut,MicIn shared
 ```
 
 Full teardown details and board photos are in `hardware/BOARD_ANALYSIS.md` (linked below).
@@ -792,6 +796,11 @@ See [`docs/14.1_SOURCES.md`](docs/14.1_SOURCES.md) for full provenance of each f
 - [`1.3_MCU_ADAPTERS.md`](docs/historical/1.3_MCU_ADAPTERS.md) — MCU adapter types reverse-engineered from `libMcuCenter.so`
 - [`1.2_CANBUS.md`](docs/1.2_CANBUS.md) — CAN bus investigation for this board
   - [`1.2.1_REAR_DVD_CANBUS_INVESTIGATION.md`](docs/1.2.1_REAR_DVD_CANBUS_INVESTIGATION.md) — open investigation: controlling the factory rear DVD/RSE unit from the Limcet box via CAN bus
+- [`hardware/MCU/MCU_FIRMWARE_REVIEW.md`](hardware/MCU/MCU_FIRMWARE_REVIEW.md) — STM32F105 companion MCU firmware: clean-room reconstruction, real hardware bring-up, and this project's own bootloader/app builds
+  - [`MCU_FIRMWARE_VERIFIED_FINDINGS.md`](docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md) — running numbered findings log: real-vehicle touch I2C bus-lockup fix, the real factory bootloader's own app-only firmware-update mechanism (hardware-verified on the spare board), UART frontend framing trace, and more
+  - [`BOOTLOADER_HANG_TRACE_2026-09-14.md`](docs/BOOTLOADER_HANG_TRACE_2026-09-14.md) — full narrative of the real factory bootloader/app extraction and reconstruction from a hung unit
+  - [`MCU_LIVE_UPDATE_FAILSAFE_PLAN.md`](docs/MCU_LIVE_UPDATE_FAILSAFE_PLAN.md) — pre-flight safety checklist required before any live-vehicle MCU update is even considered (not yet satisfied as of this writing)
+  - [`LIVE_VEHICLE_FLASH_AND_RECOVERY_PROTOCOL.md`](docs/LIVE_VEHICLE_FLASH_AND_RECOVERY_PROTOCOL.md) — guarded procedure for a full RDP-unlock live MCU reflash (`tools/flash_live_vehicle.sh`), spare-board tested only
 - [`9.2_USERDATA_REVIEW.md`](docs/9.2_USERDATA_REVIEW.md) — userdata partition review
 
 *Build & update tooling*

@@ -110,13 +110,12 @@ flowchart TD
     subgraph VEH["Vehicle & Cabin Inputs"]
         PowerIn["12V Battery / GND"]
         VehicleBus["CAN Bus (CAN H/L) & Discrete Signals (ACC / ILL / SWC)"]
-        MediaIn["AM/FM Antenna & Reversing Camera CVBS"]
+        MediaIn["Reversing Camera CVBS"]
     end
 
     subgraph MCUD["MCU Domain -- STM32F105 (Vehicle-Facing I/O)"]
         DCDC["DC-DC Converter<br/>+5V / +3V3 / +9V rails"]
         MCUHub["STM32F105 MCU + CAN Trx (TJA1042)"]
-        Tuner["AM/FM Radio Tuner"]
     end
 
     subgraph SOCD["SoC Domain -- ARK1668/ARK1680 (Applications Processor)"]
@@ -140,9 +139,7 @@ flowchart TD
     DCDC ==>|Regulated Rails| MCUHub
 
     VehicleBus ==>|CAN & Wire Signals| MCUHub
-    MediaIn --->|RF Antenna| Tuner
     MediaIn --->|CVBS Video| CamDec
-    Tuner -.->|Audio Stream| AudioOut
 
     MCUHub <==>|"UART /dev/ttyHS0 115200<br/>Touch XY - CAN/SWC Keys - Reverse Gear - Rotary Knob"| ARKBrain
 
@@ -165,7 +162,7 @@ flowchart TD
     classDef shared fill:#f8f9fa,stroke:#6c757d,color:#343a40
 
     class ARKBrain soc
-    class MCUHub,Tuner mcu
+    class MCUHub mcu
     class Memory,Wireless,CamDec storage
     class DCDC,PowerIn power
     class DisplayOut,AudioOut,MicIn shared

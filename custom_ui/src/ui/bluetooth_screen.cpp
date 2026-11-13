@@ -603,6 +603,15 @@ lv_obj_t * create_bluetooth_screen() {
     widgets->tick_timer = lv_timer_create(bt_tick_cb, 250, widgets);
     start_bt_load(widgets);
 
+    // Reload when returning to this screen (e.g. back from the AA screen a
+    // row's Connect pushed): otherwise its status line kept saying
+    // "Connecting & Starting Android Auto..." after a connect that never
+    // changed the connection state, since only a state change reloads.
+    lv_obj_add_event_cb(scr, [](lv_event_t * e) {
+        auto * w = static_cast<BtScreenWidgets *>(lv_event_get_user_data(e));
+        if (!w->op) start_bt_load(w);
+    }, LV_EVENT_SCREEN_LOADED, widgets);
+
     return scr;
 }
 

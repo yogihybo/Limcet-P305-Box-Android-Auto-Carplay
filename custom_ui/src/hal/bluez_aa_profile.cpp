@@ -268,7 +268,12 @@ int BluezAaProfile::wait_for_connection(int timeoutSeconds) {
     }
     auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(timeoutSeconds);
     while (std::chrono::steady_clock::now() < deadline) {
-        dbus_connection_read_write_dispatch(impl_->conn, 200);
+        if (!impl_->conn || !dbus_connection_get_is_connected(impl_->conn)) {
+            return -2;
+        }
+        if (!dbus_connection_read_write_dispatch(impl_->conn, 200)) {
+            return -2;
+        }
         // Same reasoning as above -- exchange() rather than load()+a
         // separate store() (which the very next call's own entry used
         // to do), so a connection this call successfully picks up can

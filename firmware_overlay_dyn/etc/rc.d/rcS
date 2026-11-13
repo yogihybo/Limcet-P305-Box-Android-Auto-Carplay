@@ -308,6 +308,17 @@ modprobe rtl8811cu rtw_drv_log_level=2 rtw_country_code=US
 	/usr/bin/dbus-daemon --system --fork
 	export DBUS_SYSTEM_BUS_ADDRESS=unix:path=/var/run/dbus/system_bus_socket
 
+	# Hardware reset RTL8761BT (GPIO 91 active-low reset pulse)
+	# Ensures chip resets from 1.5 Mbps back to 115200 baud ROM state on warm boots
+	if [ ! -d /sys/class/gpio/gpio91 ]; then
+		echo 91 > /sys/class/gpio/export 2>/dev/null || true
+	fi
+	echo out > /sys/class/gpio/gpio91/direction 2>/dev/null || true
+	echo 0 > /sys/class/gpio/gpio91/value 2>/dev/null || true
+	usleep 100000 2>/dev/null || sleep 1
+	echo 1 > /sys/class/gpio/gpio91/value 2>/dev/null || true
+	usleep 200000 2>/dev/null || sleep 1
+
 	/usr/bin/rtk_hciattach -s 115200 /dev/ttyHS1 rtk_h5 &
 
 	HCI_UP=0

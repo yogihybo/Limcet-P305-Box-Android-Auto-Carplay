@@ -533,6 +533,14 @@ int main() {
                         std::this_thread::sleep_for(std::chrono::seconds(3));
                     }
                 }
+
+                // Persistent background reconnect: keep reconnecting at low frequency if phone wasn't present at boot
+                while (true) {
+                    std::this_thread::sleep_for(std::chrono::seconds(25));
+                    if (hal::get_connected_device_mac().empty()) {
+                        hal::auto_reconnect_paired_device(bt);
+                    }
+                }
             }).detach();
         }
     }).detach();

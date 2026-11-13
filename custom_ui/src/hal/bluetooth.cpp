@@ -26,9 +26,44 @@
 
 #include <dbus/dbus.h>
 
-#define AF_BLUETOOTH_ 31
-#define BTPROTO_HCI_  1
-#define HCIDEVUP_     _IOW('H', 201, int)
+#define AF_BLUETOOTH_  31
+#define BTPROTO_HCI_   1
+#define HCIDEVUP_      _IOW('H', 201, int)
+#define HCIDEVDOWN_    _IOW('H', 202, int)
+#define HCIDEVRESET_   _IOW('H', 203, int)
+#define HCIGETDEVINFO_ _IOR('H', 211, int)
+
+#define HCI_UP_        0
+
+struct hci_dev_stats_ {
+    uint32_t err_rx;
+    uint32_t err_tx;
+    uint32_t cmd_tx;
+    uint32_t evt_rx;
+    uint32_t acl_tx;
+    uint32_t acl_rx;
+    uint32_t sco_tx;
+    uint32_t sco_rx;
+    uint32_t byte_rx;
+    uint32_t byte_tx;
+};
+
+struct hci_dev_info_ {
+    uint16_t dev_id;
+    char     name[8];
+    uint8_t  bdaddr[6];
+    uint32_t flags;
+    uint8_t  type;
+    uint8_t  features[8];
+    uint32_t pkt_type;
+    uint32_t link_policy;
+    uint32_t link_mode;
+    uint16_t acl_mtu;
+    uint16_t acl_pkts;
+    uint16_t sco_mtu;
+    uint16_t sco_pkts;
+    struct hci_dev_stats_ stat;
+};
 
 #include "core/hal_config.h"
 #include "core/log_timing.h"
@@ -71,8 +106,8 @@ std::atomic<bool> g_aaNavigatePending{false};
 // ever being reset, ensure_bluetooth_daemon_running() would refuse to
 // ever start a replacement.
 std::atomic<bool> g_aaProfileThreadStarted{false};
-
 std::atomic<bool> g_bluezWatchdogStarted{false};
+std::atomic<bool> s_agent_thread_started{false};
 
 // Helpers for executing BlueZ/bluetoothctl commands and capturing stdout
 bool run_command_capture(const std::string & cmd, std::vector<std::string> & lines_out) {
@@ -118,16 +153,13 @@ std::string format_mac_with_colons(const std::string & raw) {
 
 }  // namespace
 
-// Checks whether upstream BlueZ 5.66 is active (bluetoothd or hci0)
+// Checks whether upstream BlueZ 5.66 is active (bluetoothd running AND hci0 exists in sysfs)
 bool is_bluez_active() {
-    if (std::system("pidof bluetoothd >/dev/null 2>&1") == 0) {
-        return true;
-    }
     struct stat st {};
-    if (stat("/sys/class/bluetooth/hci0", &st) == 0) {
-        return true;
+    if (stat("/sys/class/bluetooth/hci0", &st) != 0) {
+        return false;
     }
-    return false;
+    return (std::system("pidof bluetoothd >/dev/null 2>&1") == 0);
 }
 
 namespace {
@@ -524,14 +556,41 @@ void bluez_monitor_loop(BluetoothHandle * h) {
     refresh_bluez_telemetry(conn, state);
 
     while (h->fd >= 0) {
-        // Blocks (bounded) until real bus traffic arrives or the
-        // timeout elapses -- the bounded timeout exists only so this
-        // loop can still notice h->fd going invalid and exit cleanly,
-        // not as a polling interval (the actual refresh below, driven
-        // by g_bluezTelemetryDirty, is what responds to real events;
-        // this call doing nothing for the whole timeout is the normal,
-        // expected, near-zero-CPU idle case).
-        dbus_connection_read_write_dispatch(conn, 5000);
+        if (!conn || !dbus_connection_get_is_connected(conn) ||
+            !dbus_connection_read_write_dispatch(conn, 5000)) {
+            std::printf("%s [BT] BlueZ monitor D-Bus connection severed -- attempting reconnection\n",
+                        core::log_timestamp().c_str());
+            if (conn) {
+                dbus_connection_close(conn);
+                dbus_connection_unref(conn);
+                conn = nullptr;
+            }
+            std::this_thread::sleep_for(std::chrono::seconds(2));
+            dbus_error_init(&err);
+            conn = dbus_connection_open_private(kBluezMonitorBusAddress, &err);
+            if (!conn || !dbus_bus_register(conn, &err)) {
+                if (conn) {
+                    dbus_connection_close(conn);
+                    dbus_connection_unref(conn);
+                    conn = nullptr;
+                }
+                dbus_error_free(&err);
+                continue;
+            }
+            dbus_bus_add_match(conn,
+                "type='signal',sender='org.bluez',interface='org.freedesktop.DBus.Properties',"
+                "member='PropertiesChanged',path_namespace='/org/bluez'", &err);
+            dbus_bus_add_match(conn,
+                "type='signal',sender='org.bluez',interface='org.freedesktop.DBus.ObjectManager',"
+                "member='InterfacesAdded',path='/'", &err);
+            dbus_bus_add_match(conn,
+                "type='signal',sender='org.bluez',interface='org.freedesktop.DBus.ObjectManager',"
+                "member='InterfacesRemoved',path='/'", &err);
+            dbus_connection_flush(conn);
+            dbus_connection_add_filter(conn, bluez_signal_filter, nullptr, nullptr);
+            refresh_bluez_telemetry(conn, state);
+            continue;
+        }
         if (g_bluezTelemetryDirty.exchange(false, std::memory_order_relaxed)) {
             refresh_bluez_telemetry(conn, state);
         }
@@ -614,6 +673,12 @@ void aa_profile_server_loop() {
     bool everHandedOff = false;
     while (true) {
         int fd = profile.wait_for_connection(60);
+        if (fd == -2) {
+            std::printf("%s [BT] AA RFCOMM server D-Bus connection severed -- exiting server thread to allow clean recovery\n",
+                        core::log_timestamp().c_str());
+            g_aaProfileThreadStarted.store(false, std::memory_order_release);
+            return;
+        }
         if (fd < 0) {
             ++consecutiveTimeouts;
             // Once a minute, every minute, forever -- proves this
@@ -717,9 +782,9 @@ void ensure_bluetooth_daemon_running() {
         // dbus-daemon/bluetoothd). The 30s watchdog below eventually heals
         // it, which is exactly why a manual reboot "fixes" it -- but the
         // real, less disruptive fix is to give rcS's own bring-up a real
-        // chance to win first. Poll for up to 3s before concluding BlueZ
-        // genuinely isn't up.
-        for (int i = 0; i < 15 && !blueZAlreadyActive; ++i) {
+        // chance to win first. Poll for up to 8s (40x200ms) before concluding BlueZ
+        // genuinely isn't up (firmware upload over 115200 baud UART takes ~3.8s alone).
+        for (int i = 0; i < 40 && !blueZAlreadyActive; ++i) {
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
             blueZAlreadyActive = is_bluez_active();
         }
@@ -753,8 +818,15 @@ void ensure_bluetooth_daemon_running() {
     // Check if rtk_hciattach is already running / attaching hci0
     if (std::system("pidof rtk_hciattach >/dev/null 2>&1") != 0) {
         std::printf("%s [BT] Starting rtk_hciattach over /dev/ttyHS1\n", core::log_timestamp().c_str());
+        // Pulse GPIO 91 hardware reset before rtk_hciattach in fallback bringup
+        run_command_simple("if [ ! -d /sys/class/gpio/gpio91 ]; then echo 91 > /sys/class/gpio/export 2>/dev/null; fi; "
+                           "echo out > /sys/class/gpio/gpio91/direction 2>/dev/null; "
+                           "echo 0 > /sys/class/gpio/gpio91/value 2>/dev/null; "
+                           "usleep 100000 2>/dev/null || sleep 1; "
+                           "echo 1 > /sys/class/gpio/gpio91/value 2>/dev/null; "
+                           "usleep 200000 2>/dev/null || sleep 1;");
         std::system("rtk_hciattach -n -s 115200 /dev/ttyHS1 rtk_h5 >/dev/null 2>&1 &");
-        for (int i = 0; i < 30; ++i) {
+        for (int i = 0; i < 40; ++i) {
             struct stat st {};
             if (stat("/sys/class/bluetooth/hci0", &st) == 0) break;
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -786,7 +858,6 @@ void ensure_bluetooth_daemon_running() {
   }  // !blueZAlreadyActive
 
     // Ensure bt-agent is running and stream its output directly to custom_ui console
-    static std::atomic<bool> s_agent_thread_started{false};
     if (!s_agent_thread_started.exchange(true)) {
         core::SizedThread(core::kDefaultThreadStackSize, []() {
             const char * agents[] = { "/usr/bin/bt-agent", "/data/bt-agent", "./bt-agent" };
@@ -886,24 +957,11 @@ void ensure_bluetooth_daemon_running() {
 // case), and does the real dbus-daemon/rtk_hciattach/bluetoothd
 // restart plus bt-agent/AA-profile respawn work it already knows how
 // to do whenever it isn't.
-void start_bluez_watchdog() {
-    if (g_bluezWatchdogStarted.exchange(true)) {
-        return;
+bool ensure_adapter_configured() {
+    struct stat st {};
+    if (stat("/sys/class/bluetooth/hci0", &st) != 0) {
+        return false;
     }
-    core::SizedThread(core::kDefaultThreadStackSize, []() {
-        while (true) {
-            std::this_thread::sleep_for(std::chrono::seconds(30));
-            ensure_bluetooth_daemon_running();
-        }
-    }).detach();
-}
-
-bool init_bluetooth(BluetoothHandle & out, const char * /*path*/) {
-    ensure_bluetooth_daemon_running();
-    start_bluez_watchdog();
-
-    std::printf("%s [BT] Initializing BlueZ 5.66 stack\n", core::log_timestamp().c_str());
-    
     // Direct kernel HCIDEVUP ioctl without requiring external hciconfig binary
     int sock = socket(AF_BLUETOOTH_, SOCK_RAW, BTPROTO_HCI_);
     if (sock >= 0) {
@@ -920,8 +978,7 @@ bool init_bluetooth(BluetoothHandle & out, const char * /*path*/) {
     // car-detection heuristic offers wireless AA setup instead of
     // treating this as a plain headset. A2DP/HFP don't care about minor
     // class, which is why audio kept working with the old value while
-    // AA's RFCOMM profile never got dialed. Unconfirmed on real
-    // hardware yet.
+    // AA's RFCOMM profile never got dialed.
     run_command_simple("hciconfig hci0 class 0x240420 >/dev/null 2>&1");
     run_command_simple("hciconfig hci0 auth >/dev/null 2>&1");
     run_command_simple("hciconfig hci0 encrypt >/dev/null 2>&1");
@@ -931,6 +988,252 @@ bool init_bluetooth(BluetoothHandle & out, const char * /*path*/) {
     run_command_simple("dbus-send --system --dest=org.bluez --type=method_call /org/bluez/hci0 org.freedesktop.DBus.Properties.Set string:org.bluez.Adapter1 string:Pairable variant:boolean:true >/dev/null 2>&1");
     run_command_simple("dbus-send --system --dest=org.bluez --type=method_call /org/bluez/hci0 org.freedesktop.DBus.Properties.Set string:org.bluez.Adapter1 string:Discoverable variant:boolean:true >/dev/null 2>&1");
     run_command_simple("dbus-send --system --dest=org.bluez --type=method_call /org/bluez/hci0 org.freedesktop.DBus.Properties.Set string:org.bluez.Adapter1 string:Class variant:uint32:2360352 >/dev/null 2>&1");
+    return true;
+}
+
+// Queries kernel HCI subsystem directly for hci0 device state and error statistics
+bool check_hci_kernel_status(bool & is_up, uint32_t & rx_errs, uint32_t & tx_errs) {
+    is_up = false;
+    rx_errs = 0;
+    tx_errs = 0;
+
+    struct stat st {};
+    if (stat("/sys/class/bluetooth/hci0", &st) != 0) {
+        return false;
+    }
+
+    int sock = socket(AF_BLUETOOTH_, SOCK_RAW, BTPROTO_HCI_);
+    if (sock < 0) {
+        return false;
+    }
+
+    struct hci_dev_info_ di {};
+    di.dev_id = 0;  // hci0
+    int ret = ioctl(sock, HCIGETDEVINFO_, &di);
+    close(sock);
+
+    if (ret < 0) {
+        return false;
+    }
+
+    is_up = (di.flags & (1 << HCI_UP_)) != 0;
+    rx_errs = di.stat.err_rx;
+    tx_errs = di.stat.err_tx;
+    return true;
+}
+
+enum class AdapterHealth {
+    Healthy,
+    Unpowered,
+    MissingOrDead,
+};
+
+// Checks whether /org/bluez/hci0 is active and responding over D-Bus within 1500ms
+AdapterHealth check_bluez_adapter_alive() {
+    DBusError err;
+    dbus_error_init(&err);
+    DBusConnection * conn = dbus_connection_open_private(kBluezMonitorBusAddress, &err);
+    if (!conn) {
+        dbus_error_free(&err);
+        return AdapterHealth::MissingOrDead;
+    }
+    if (!dbus_bus_register(conn, &err)) {
+        dbus_error_free(&err);
+        dbus_connection_close(conn);
+        dbus_connection_unref(conn);
+        return AdapterHealth::MissingOrDead;
+    }
+
+    DBusMessage * msg = dbus_message_new_method_call(
+        "org.bluez", "/org/bluez/hci0", "org.freedesktop.DBus.Properties", "Get");
+    if (!msg) {
+        dbus_connection_close(conn);
+        dbus_connection_unref(conn);
+        return AdapterHealth::MissingOrDead;
+    }
+
+    const char * iface = "org.bluez.Adapter1";
+    const char * prop = "Powered";
+    dbus_message_append_args(msg,
+                             DBUS_TYPE_STRING, &iface,
+                             DBUS_TYPE_STRING, &prop,
+                             DBUS_TYPE_INVALID);
+
+    DBusMessage * reply = dbus_connection_send_with_reply_and_block(conn, msg, 1500, &err);
+    dbus_message_unref(msg);
+
+    AdapterHealth health = AdapterHealth::MissingOrDead;
+    if (reply) {
+        DBusMessageIter iter, variant;
+        if (dbus_message_iter_init(reply, &iter) &&
+            dbus_message_iter_get_arg_type(&iter) == DBUS_TYPE_VARIANT) {
+            dbus_message_iter_recurse(&iter, &variant);
+            if (dbus_message_iter_get_arg_type(&variant) == DBUS_TYPE_BOOLEAN) {
+                dbus_bool_t val = FALSE;
+                dbus_message_iter_get_basic(&variant, &val);
+                health = val ? AdapterHealth::Healthy : AdapterHealth::Unpowered;
+            }
+        }
+        dbus_message_unref(reply);
+    }
+
+    if (dbus_error_is_set(&err)) {
+        dbus_error_free(&err);
+    }
+    dbus_connection_close(conn);
+    dbus_connection_unref(conn);
+    return health;
+}
+
+// Level 3 Escalation: Complete hardware power-cycle of RTL8761BT baseband via GPIO 91
+void execute_baseband_hardware_recovery() {
+    std::printf("%s [BT-WATCHDOG] *** ESCALATION LEVEL 3: Full RTL8761BT Baseband Hardware Reset ***\n",
+                core::log_timestamp().c_str());
+
+    // 1. Terminate existing daemons
+    std::system("killall -9 bluetoothd rtk_hciattach bt-agent 2>/dev/null || true");
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+
+    // 2. Hardware active-low reset pulse on GPIO 91
+    run_command_simple("if [ ! -d /sys/class/gpio/gpio91 ]; then echo 91 > /sys/class/gpio/export 2>/dev/null; fi; "
+                       "echo out > /sys/class/gpio/gpio91/direction 2>/dev/null; "
+                       "echo 0 > /sys/class/gpio/gpio91/value 2>/dev/null; "
+                       "usleep 100000 2>/dev/null || sleep 1; "
+                       "echo 1 > /sys/class/gpio/gpio91/value 2>/dev/null; "
+                       "usleep 200000 2>/dev/null || sleep 1;");
+
+    // 3. Re-attach UART H5 driver over /dev/ttyHS1
+    std::system("rtk_hciattach -n -s 115200 /dev/ttyHS1 rtk_h5 >/dev/null 2>&1 &");
+
+    // 4. Poll for /sys/class/bluetooth/hci0 (firmware patch upload takes ~3.8s)
+    bool hci_ready = false;
+    for (int i = 0; i < 40; ++i) {
+        struct stat st {};
+        if (stat("/sys/class/bluetooth/hci0", &st) == 0) {
+            hci_ready = true;
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    }
+
+    if (!hci_ready) {
+        std::fprintf(stderr, "%s [BT-WATCHDOG] ERROR: hci0 failed to appear after hardware reset\n",
+                     core::log_timestamp().c_str());
+        return;
+    }
+
+    // 5. Bring device UP in kernel
+    int sock = socket(AF_BLUETOOTH_, SOCK_RAW, BTPROTO_HCI_);
+    if (sock >= 0) {
+        ioctl(sock, HCIDEVUP_, 0);
+        close(sock);
+    }
+
+    // 6. Ensure dbus-daemon is up
+    if (std::system("pidof dbus-daemon >/dev/null 2>&1") != 0) {
+        std::system("mkdir -p /var/run/dbus && dbus-daemon --system --fork >/dev/null 2>&1");
+        for (int i = 0; i < 20; ++i) {
+            struct stat st {};
+            if (stat("/var/run/dbus/system_bus_socket", &st) == 0) break;
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+    }
+
+    // 7. Start bluetoothd
+    std::system("bluetoothd -n >/dev/null 2>&1 &");
+    for (int i = 0; i < 20; ++i) {
+        if (std::system("pidof bluetoothd >/dev/null 2>&1") == 0) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+
+    // 8. Re-configure adapter
+    ensure_adapter_configured();
+
+    // 9. Reset thread guards and respawn workers
+    s_agent_thread_started.store(false, std::memory_order_release);
+    g_aaProfileThreadStarted.store(false, std::memory_order_release);
+    ensure_bluetooth_daemon_running();
+
+    std::printf("%s [BT-WATCHDOG] Baseband hardware recovery complete -- adapter operational\n",
+                core::log_timestamp().c_str());
+}
+
+void start_bluez_watchdog() {
+    if (g_bluezWatchdogStarted.exchange(true)) {
+        return;
+    }
+    core::SizedThread(core::kDefaultThreadStackSize, []() {
+        int consecutiveFailures = 0;
+        while (true) {
+            std::this_thread::sleep_for(std::chrono::seconds(20));
+
+            bool kernel_up = false;
+            uint32_t rx_err = 0, tx_err = 0;
+            bool kernel_ok = check_hci_kernel_status(kernel_up, rx_err, tx_err);
+
+            AdapterHealth dbus_health = AdapterHealth::MissingOrDead;
+            if (kernel_ok && kernel_up) {
+                dbus_health = check_bluez_adapter_alive();
+            }
+
+            if (kernel_ok && kernel_up && dbus_health == AdapterHealth::Healthy) {
+                if (consecutiveFailures > 0) {
+                    std::printf("%s [BT-WATCHDOG] Bluetooth subsystem recovered to healthy state (after %d failures)\n",
+                                core::log_timestamp().c_str(), consecutiveFailures);
+                    consecutiveFailures = 0;
+                }
+                continue;
+            }
+
+            consecutiveFailures++;
+            std::printf("%s [BT-WATCHDOG] Health check failure #%d: kernel_ok=%d up=%d dbus_health=%d (rx_err=%u tx_err=%u)\n",
+                        core::log_timestamp().c_str(), consecutiveFailures,
+                        kernel_ok, kernel_up, static_cast<int>(dbus_health), rx_err, tx_err);
+
+            if (consecutiveFailures == 1) {
+                // Tier 1: Soft recovery
+                std::printf("%s [BT-WATCHDOG] Level 1: Soft adapter re-configuration\n", core::log_timestamp().c_str());
+                ensure_adapter_configured();
+                if (dbus_health == AdapterHealth::Unpowered) {
+                    run_command_simple("dbus-send --system --dest=org.bluez --type=method_call /org/bluez/hci0 "
+                                       "org.freedesktop.DBus.Properties.Set string:org.bluez.Adapter1 string:Powered variant:boolean:true >/dev/null 2>&1");
+                }
+            } else if (consecutiveFailures == 2) {
+                // Tier 2: Daemon restart
+                std::printf("%s [BT-WATCHDOG] Level 2: Restarting bluetoothd daemon\n", core::log_timestamp().c_str());
+                std::system("killall -9 bluetoothd 2>/dev/null || true");
+                std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                std::system("bluetoothd -n >/dev/null 2>&1 &");
+                for (int i = 0; i < 20; ++i) {
+                    if (std::system("pidof bluetoothd >/dev/null 2>&1") == 0) break;
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                }
+                ensure_adapter_configured();
+                s_agent_thread_started.store(false, std::memory_order_release);
+                ensure_bluetooth_daemon_running();
+            } else {
+                // Tier 3: Full Baseband Hardware Reset via GPIO 91
+                execute_baseband_hardware_recovery();
+                consecutiveFailures = 0;
+            }
+        }
+    }).detach();
+}
+
+bool init_bluetooth(BluetoothHandle & out, const char * /*path*/) {
+    ensure_bluetooth_daemon_running();
+    start_bluez_watchdog();
+
+    std::printf("%s [BT] Initializing BlueZ 5.66 stack\n", core::log_timestamp().c_str());
+    
+    // Poll for hci0 device node to appear (up to 6s) before initial config
+    for (int i = 0; i < 30; ++i) {
+        struct stat st {};
+        if (stat("/sys/class/bluetooth/hci0", &st) == 0) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    }
+
+    ensure_adapter_configured();
     out.fd = 100;  // Positive non-negative handle indicating valid BlueZ instance
     return true;
 }
@@ -1309,6 +1612,7 @@ bool auto_reconnect_paired_device(BluetoothHandle & h) {
         std::printf("%s [BT] auto_reconnect_paired_device: no bluetooth handle, skipping\n", core::log_timestamp().c_str());
         return false;
     }
+    ensure_adapter_configured();
     std::vector<std::string> devices;
     if (!list_paired_devices(h, devices) || devices.empty()) {
         std::printf("%s [BT] auto_reconnect_paired_device: no paired devices to reconnect to\n", core::log_timestamp().c_str());

@@ -33,6 +33,7 @@ struct DashboardWidgets {
     lv_obj_t * track_title_lbl = nullptr;
     lv_obj_t * track_artist_lbl = nullptr;
     lv_obj_t * playpause_icon = nullptr;
+    lv_obj_t * media_btns[3] = {nullptr, nullptr, nullptr};  // prev / play-pause / next
     lv_timer_t * poll_timer = nullptr;
 };
 
@@ -90,6 +91,16 @@ void update_dashboard_status(DashboardWidgets * w) {
     }
     if (w->playpause_icon) {
         lv_image_set_src(w->playpause_icon, telem.play_status == 1 ? &ui::icons::icon_pause : &ui::icons::icon_play);
+    }
+    // Nothing to control without a connected phone -- disable (and dim)
+    // the transport buttons instead of letting taps silently do nothing.
+    for (lv_obj_t * btn : w->media_btns) {
+        if (!btn) continue;
+        if (telem.connected) {
+            lv_obj_clear_state(btn, LV_STATE_DISABLED);
+        } else {
+            lv_obj_add_state(btn, LV_STATE_DISABLED);
+        }
     }
 }
 
@@ -344,6 +355,7 @@ lv_obj_t * create_home_dashboard() {
         lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
         lv_obj_set_style_bg_color(btn, theme::surface_pressed(), LV_STATE_PRESSED);
         theme::style_focusable(btn);
+        lv_obj_set_style_opa(btn, LV_OPA_40, LV_STATE_DISABLED);
         lv_obj_clear_flag(btn, LV_OBJ_FLAG_SCROLLABLE);
         lv_obj_add_event_cb(btn, click_cb, LV_EVENT_CLICKED, widgets);
 
@@ -356,9 +368,10 @@ lv_obj_t * create_home_dashboard() {
         return icon;
     };
 
-    make_ctrl_btn(&ui::icons::icon_prev, media_prev_clicked_cb);
+    widgets->media_btns[0] = lv_obj_get_parent(make_ctrl_btn(&ui::icons::icon_prev, media_prev_clicked_cb));
     widgets->playpause_icon = make_ctrl_btn(&ui::icons::icon_play, media_play_pause_clicked_cb);
-    make_ctrl_btn(&ui::icons::icon_next, media_next_clicked_cb);
+    widgets->media_btns[1] = lv_obj_get_parent(widgets->playpause_icon);
+    widgets->media_btns[2] = lv_obj_get_parent(make_ctrl_btn(&ui::icons::icon_next, media_next_clicked_cb));
 
     // Initial Status Check & Periodic Poll
     update_dashboard_status(widgets);

@@ -36,7 +36,7 @@
 #include "core/screen_manager.h"
 #include "core/sized_thread.h"
 #include "ui/android_auto_screen.h"
-#include "ui/theme.h"
+#include "ui/staging/theme.h"
 #include "ui/staging/home_dashboard.h"
 #include "ui/staging/nav_rail.h"
 
@@ -180,8 +180,8 @@ int main() {
 
     // Dark/accent theme for every default-styled widget (buttons,
     // switches, sliders, dropdowns, tabview) -- must run before any
-    // screen is created, see ui/theme.h.
-    ui::theme::init(disp);
+    // screen is created, see ui/staging/theme.cpp.
+    staging_ui::theme::init(disp);
     std::printf("%s [UI] theme applied\n", core::log_timestamp().c_str());
 
     // Reset hardware VDE color matrix to neutral factory default (no hue/color distortion)

@@ -3,14 +3,24 @@
 
 namespace staging_ui::theme {
 
+// LVGL default theme for widgets the screens don't style themselves
+// (switches, spinner, scrollbars, labels without an explicit font). Must
+// run before any screen is created.
+//
+// 2026-11-14: now the only theme init -- the old ui/theme.{h,cpp} (whose
+// init main.cpp used to call) was removed. Default font is roboto_20, not
+// roboto_14: the old init used a 20px default (montserrat_20), and
+// unstyled labels (e.g. the Bluetooth screen's "(no paired devices)")
+// would otherwise shrink. Accent is this theme's own blue, so switches now
+// match the rest of the UI instead of the old 0x66aaff.
 void init(lv_display_t * disp) {
     if (!disp) return;
     lv_theme_t * th = lv_theme_default_init(
         disp,
         accent_primary(),
-        surface(),
+        surface_container_high(),
         true, // dark mode
-        &lv_font_roboto_14
+        &lv_font_roboto_20
     );
     lv_display_set_theme(disp, th);
 }

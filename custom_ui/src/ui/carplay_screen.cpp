@@ -10,7 +10,6 @@
 #include "core/navigation.h"
 #include "core/config_store.h"
 #include "ui/bluetooth_screen.h"
-#include "ui/theme.h"
 #include "ui/staging/nav_rail.h"
 #include "ui/staging/theme.h"
 #include "ui/staging/fonts.h"

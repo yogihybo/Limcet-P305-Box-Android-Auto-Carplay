@@ -542,19 +542,7 @@ lv_obj_t * create_settings_screen() {
                        [](int v) { hal::set_stream_volume(hal::AudioStream::System, v); });
 
     // 3-Band Parametric Equalizer & Dynamic Loudness
-    create_stepper_row(card, &ui::icons::icon_volume, "Equalizer: Bass (dB)", -6, 6, 1,
-                       "Bass", "Audio",
-                       [](int) { hal::sync_audio_eq(); });
-    create_stepper_row(card, &ui::icons::icon_volume, "Equalizer: Middle (dB)", -6, 6, 1,
-                       "Mid", "Audio",
-                       [](int) { hal::sync_audio_eq(); });
-    create_stepper_row(card, &ui::icons::icon_volume, "Equalizer: Treble (dB)", -6, 6, 1,
-                       "Treble", "Audio",
-                       [](int) { hal::sync_audio_eq(); });
-    create_toggle_row(card, &ui::icons::icon_volume, "Dynamic Loudness",
-                      "Loudness", "Audio", false,
-                      [](bool) { hal::sync_audio_eq(); });
-    create_toggle_row(card, &ui::icons::icon_volume, "OEM Factory Microphone",
+    create_toggle_row(card, &ui::icons::icon_phone, "OEM Factory Microphone",
                       "OEMMicrophone", "Audio", false,
                       [](bool oem) {
                           // Vendor stock protocol (libMcuCenter.so / MCUAdapter_BoxP300):
@@ -566,6 +554,22 @@ lv_obj_t * create_settings_screen() {
                                       oem ? 0 : 1);
                           hal::send_mcu_setting(0x11, oem ? 0 : 1);
                       });
+    // Own section, no icons -- there are no EQ icons, and repeating the
+    // speaker icon on every row made them indistinguishable from the
+    // volume rows above.
+    create_section_header(card, "EQUALIZER");
+    create_stepper_row(card, nullptr, "Bass (dB)", -6, 6, 1,
+                       "Bass", "Audio",
+                       [](int) { hal::sync_audio_eq(); });
+    create_stepper_row(card, nullptr, "Middle (dB)", -6, 6, 1,
+                       "Mid", "Audio",
+                       [](int) { hal::sync_audio_eq(); });
+    create_stepper_row(card, nullptr, "Treble (dB)", -6, 6, 1,
+                       "Treble", "Audio",
+                       [](int) { hal::sync_audio_eq(); });
+    create_toggle_row(card, nullptr, "Dynamic Loudness",
+                      "Loudness", "Audio", false,
+                      [](bool) { hal::sync_audio_eq(); });
     /* REMOVED (2026-09-02, real hardware CONFIRMED, not the earlier
      * candidate/unconfirmed framing): this standalone "Microphone
      * Source (OEM/AfterMarket)" toggle sent CMD 0xA0 id=0x00 -- real
@@ -628,12 +632,14 @@ lv_obj_t * create_settings_screen() {
                                        oem ? "OEM Factory feed" : "Aftermarket feed");
                            hal::send_mcu_video_relay(oem);
                        }, /*invert_stored_value=*/true);
-    create_stepper_row(card, &ui::icons::icon_volume, "Reverse Vol. Cut (%)", 0, 100, 5,
+    create_stepper_row(card, &ui::icons::icon_volume, "Volume Cut in Reverse (%)", 0, 100, 5,
                        "ReversingVolumeCut", "General");
 
     // --- Section 4: System ---
     create_section_header(card, "SYSTEM");
-    create_toggle_row(card, &ui::icons::icon_smartphone, "Auto-Start CarLink",
+    // "CarLink" was internal jargon; this is the AutoStartCarLink key --
+    // open the phone-projection screen automatically when a phone connects.
+    create_toggle_row(card, &ui::icons::icon_smartphone, "Auto-open Phone Projection",
                       "AutoStartCarLink", "General", true);
 
     // Phone Projection Mode: Android Auto vs Apple CarPlay

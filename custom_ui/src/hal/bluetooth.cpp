@@ -953,24 +953,8 @@ void ensure_bluetooth_daemon_running() {
     }
 }
 
-// 2026-09-05: real hardware bug found via code review -- the fixes
-// above make s_agent_thread_started/g_aaProfileThreadStarted correctly
-// resettable when bt-agent/aa_profile_server_loop exit, so
-// ensure_bluetooth_daemon_running() can genuinely respawn them on a
-// LATER call. But nothing in this codebase ever MADE a later call --
-// it was (and without this watchdog, still would be) invoked exactly
-// once, from init_bluetooth()'s own one-shot lazy-init below. rcS
-// itself doesn't supervise/respawn bluetoothd or rtk_hciattach either
-// (unlike custom_ui's own explicit while-loop respawn of itself and
-// androidauto-sidecar) -- if bluetoothd crashes or the BT chip is
-// reset, this device would otherwise stay Bluetooth-dead until the
-// whole process restarted, with no automatic recovery path at all.
-// This periodic call is what actually closes that gap: idempotent and
-// cheap when everything's healthy (ensure_bluetooth_daemon_running()'s
-// own is_bluez_active() check makes it a near-instant no-op in that
-// case), and does the real dbus-daemon/rtk_hciattach/bluetoothd
-// restart plus bt-agent/AA-profile respawn work it already knows how
-// to do whenever it isn't.
+// (Re)applies adapter settings: power, class, SSP/auth/encrypt, pairable,
+// and the discoverability policy.
 bool ensure_adapter_configured() {
     struct stat st {};
     if (stat("/sys/class/bluetooth/hci0", &st) != 0) {
@@ -1048,7 +1032,9 @@ enum class AdapterHealth {
     MissingOrDead,
 };
 
-// Checks whether /org/bluez/hci0 is active and responding over D-Bus within 1500ms
+// Checks whether /org/bluez/hci0 is active and responding over D-Bus within 3000ms
+// (was 1500ms -- tight enough on this single-core SoC that heavy load, e.g.
+// an AA session streaming, could time it out on a perfectly healthy daemon).
 AdapterHealth check_bluez_adapter_alive() {
     DBusError err;
     dbus_error_init(&err);
@@ -1079,7 +1065,7 @@ AdapterHealth check_bluez_adapter_alive() {
                              DBUS_TYPE_STRING, &prop,
                              DBUS_TYPE_INVALID);
 
-    DBusMessage * reply = dbus_connection_send_with_reply_and_block(conn, msg, 1500, &err);
+    DBusMessage * reply = dbus_connection_send_with_reply_and_block(conn, msg, 3000, &err);
     dbus_message_unref(msg);
 
     AdapterHealth health = AdapterHealth::MissingOrDead;
@@ -1178,6 +1164,24 @@ void execute_baseband_hardware_recovery() {
                 core::log_timestamp().c_str());
 }
 
+// 2026-09-05: real hardware bug found via code review -- the fixes
+// above make s_agent_thread_started/g_aaProfileThreadStarted correctly
+// resettable when bt-agent/aa_profile_server_loop exit, so
+// ensure_bluetooth_daemon_running() can genuinely respawn them on a
+// LATER call. But nothing in this codebase ever MADE a later call --
+// it was (and without this watchdog, still would be) invoked exactly
+// once, from init_bluetooth()'s own one-shot lazy-init below. rcS
+// itself doesn't supervise/respawn bluetoothd or rtk_hciattach either
+// (unlike custom_ui's own explicit while-loop respawn of itself and
+// androidauto-sidecar) -- if bluetoothd crashes or the BT chip is
+// reset, this device would otherwise stay Bluetooth-dead until the
+// whole process restarted, with no automatic recovery path at all.
+// This periodic call is what actually closes that gap: idempotent and
+// cheap when everything's healthy (ensure_bluetooth_daemon_running()'s
+// own is_bluez_active() check makes it a near-instant no-op in that
+// case), and does the real dbus-daemon/rtk_hciattach/bluetoothd
+// restart plus bt-agent/AA-profile respawn work it already knows how
+// to do whenever it isn't.
 void start_bluez_watchdog() {
     if (g_bluezWatchdogStarted.exchange(true)) {
         return;
@@ -1202,6 +1206,18 @@ void start_bluez_watchdog() {
                                 core::log_timestamp().c_str(), consecutiveFailures);
                     consecutiveFailures = 0;
                 }
+                // Respawn bt-agent / the AA RFCOMM profile server if either
+                // has exited. After a bluetoothd restart the AA profile
+                // thread only notices its severed D-Bus connection (and
+                // clears its flag) AFTER the restart tier's own
+                // ensure_bluetooth_daemon_running() call has already run --
+                // nothing else would ever start it again.
+                if (!s_agent_thread_started.load(std::memory_order_acquire) ||
+                    !g_aaProfileThreadStarted.load(std::memory_order_acquire)) {
+                    std::printf("%s [BT-WATCHDOG] bt-agent/AA profile worker not running -- respawning\n",
+                                core::log_timestamp().c_str());
+                    ensure_bluetooth_daemon_running();
+                }
                 continue;
             }
 
@@ -1210,6 +1226,13 @@ void start_bluez_watchdog() {
                         core::log_timestamp().c_str(), consecutiveFailures,
                         kernel_ok, kernel_up, static_cast<int>(dbus_health), rx_err, tx_err);
 
+            // Escalation is deliberately slow (checks are 20s apart): one
+            // failed check only re-applies adapter config; bluetoothd is
+            // restarted after 3 consecutive failures (~1 min) and the chip
+            // is hardware-reset only after 5 (~1.5 min). Restarting
+            // bluetoothd drops A2DP/HFP mid-drive, so a single slow reply
+            // must never trigger it. Failures 2 and 4 just give the
+            // previous tier time to take effect.
             if (consecutiveFailures == 1) {
                 // Tier 1: Soft recovery
                 std::printf("%s [BT-WATCHDOG] Level 1: Soft adapter re-configuration\n", core::log_timestamp().c_str());
@@ -1218,7 +1241,7 @@ void start_bluez_watchdog() {
                     run_command_simple("dbus-send --system --dest=org.bluez --type=method_call /org/bluez/hci0 "
                                        "org.freedesktop.DBus.Properties.Set string:org.bluez.Adapter1 string:Powered variant:boolean:true >/dev/null 2>&1");
                 }
-            } else if (consecutiveFailures == 2) {
+            } else if (consecutiveFailures == 3) {
                 // Tier 2: Daemon restart
                 std::printf("%s [BT-WATCHDOG] Level 2: Restarting bluetoothd daemon\n", core::log_timestamp().c_str());
                 std::system("killall -9 bluetoothd 2>/dev/null || true");
@@ -1231,7 +1254,7 @@ void start_bluez_watchdog() {
                 ensure_adapter_configured();
                 s_agent_thread_started.store(false, std::memory_order_release);
                 ensure_bluetooth_daemon_running();
-            } else {
+            } else if (consecutiveFailures >= 5) {
                 // Tier 3: Full Baseband Hardware Reset via GPIO 91
                 execute_baseband_hardware_recovery();
                 consecutiveFailures = 0;

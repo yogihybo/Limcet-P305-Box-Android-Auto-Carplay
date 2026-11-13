@@ -335,3 +335,17 @@ modprobe rtl8811cu rtw_drv_log_level=2 rtw_country_code=US
 	echo "custom_ui rootfs: BlueZ bring-up complete."
 ) &
 
+# 2026-11-13: boot confirmation for U-Boot's `bootcheck` (boot-loop
+# fallback). U-Boot counts consecutive boot attempts in a DRAM record at
+# 0x0EFFF000 (survives watchdog resets, not power-cycles -- see
+# do_bootcheck() in linux-arkmicro's u-boot ark1668_boot_cmds.c) and
+# falls back to stock nandboot after `bootlimit` (3) attempts that never
+# got here. Clear it once the system has been up for 30s with custom_ui
+# running. 0x0EFFF000 is outside the kernel's mem=180M, so /dev/mem
+# access to it is not restricted.
+(
+	sleep 30
+	if pidof custom_ui >/dev/null 2>&1; then
+		devmem 0x0EFFF000 32 0 && echo "rcS: boot confirmed (U-Boot bootcheck counter cleared)"
+	fi
+) &

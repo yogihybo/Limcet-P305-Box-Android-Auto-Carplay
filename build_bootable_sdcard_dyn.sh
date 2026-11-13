@@ -315,10 +315,23 @@ else
     # these were the only two. p3 (/data, userdata) is unaffected --
     # still mounted rw at runtime by rcS, that's the one partition
     # that's actually supposed to take writes.
+    #
+    # 2026-11-13: boot through U-Boot's own `bootmmc` behind `bootcheck`
+    # instead of a raw fatload+bootz. The raw path bypassed bootcheck's
+    # boot-loop fallback entirely (the kernel started from uenvcmd, before
+    # CONFIG_BOOTCOMMAND ever reached bootcheck), kept the handoff
+    # watchdog from running into the kernel, and never loaded
+    # reversingtrack.raw (guideline overlay). bootmmc builds bootargs as
+    # "root=${mmcroot} ${bootargs_common}", so the read-only root lives in
+    # bootargs_common here. If bootcheck reports too many unconfirmed
+    # boots, uenvcmd does nothing and CONFIG_BOOTCOMMAND falls back to
+    # nandboot (stock). rcS clears the counter once the system is up
+    # (firmware_overlay_dyn/etc/rc.d/rcS). Works with older U-Boot builds
+    # too (bootcheck/bootmmc both exist there).
     cat > "$UENV_OUT" <<EOF
-bootargs=console=ttyS0,115200n8 mem=180M earlyprintk=serial root=/dev/mmcblk0p2 rootfstype=ext4 rootwait ro screen=0 user_debug=8
-bootcmd=fatload mmc 0:1 0x1000000 zImage; fatload mmc 0:1 0x2000000 ark1668_limcet_p305.dtb; bootz 0x1000000 - 0x2000000
-uenvcmd=run bootcmd
+bootargs_common=console=ttyS0,115200n8 mem=180M earlyprintk=serial rootfstype=ext4 rootwait ro screen=0 user_debug=8
+mmcroot=/dev/mmcblk0p2
+uenvcmd=bootcheck && bootmmc
 EOF
 fi
 success "U-Boot: $UBOOT_BIN, uEnv.txt: $UENV_OUT"

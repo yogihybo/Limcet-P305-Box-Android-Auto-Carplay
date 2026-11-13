@@ -103,11 +103,60 @@ struct Widgets {
     // once-per-transition reasoning as display_hidden above -- see
     // poll_timer_cb()'s own comment.
     bool showing_resume = false;
-    // 2026-08-20: same once-per-transition reasoning, for the
-    // not-yet-connected state's own copy -- see poll_timer_cb()'s
-    // handling of hal::has_pending_aa_connection() below.
-    bool showing_pending_ready = false;
+
+    // 2026-11-13: not-yet-connected copy is now rendered from one computed
+    // IdleMode (render_idle_mode()) instead of piecemeal per-transition
+    // label updates -- those left "Connecting..." on screen forever after
+    // a Connect tap that didn't produce a session (nothing ever reset it
+    // unless has_pending_aa_connection() happened to flip).
+    int shown_idle_mode = -1;
+    uint32_t connect_tapped_ms = 0;  // lv_tick of the last Connect tap, 0 = none in flight
+    bool connect_failed = false;     // last tap timed out without a session
+    uint32_t resume_tapped_ms = 0;   // lv_tick of the last Resume tap, 0 = none
+    int lost_ticks = 0;              // consecutive "Unreachable" polls while connected
 };
+
+enum class IdleMode { Waiting, PendingReady, Connecting, Failed };
+
+// How long a Connect tap shows "Connecting..." with no sign of a session
+// before giving up and offering "Try again".
+constexpr uint32_t kConnectTimeoutMs = 20000;
+// How long "Resuming..." waits for the phone to grant projected focus.
+constexpr uint32_t kResumeTimeoutMs = 5000;
+
+void render_idle_mode(Widgets * w, IdleMode mode) {
+    if (static_cast<int>(mode) == w->shown_idle_mode) return;
+    w->shown_idle_mode = static_cast<int>(mode);
+    switch (mode) {
+        case IdleMode::Waiting:
+            lv_label_set_text(w->title, "Ready to connect");
+            lv_label_set_text(w->subtitle, "Waiting for your phone. Not paired yet? Pair it from the Bluetooth screen.");
+            lv_label_set_text(w->cta_label, "Connect (Wireless)");
+            break;
+        case IdleMode::PendingReady:
+            lv_label_set_text(w->title, "Phone connected");
+            lv_label_set_text(w->subtitle, "Android Auto is ready -- tap Connect to start.");
+            lv_label_set_text(w->cta_label, "Connect (Wireless)");
+            break;
+        case IdleMode::Connecting:
+            lv_label_set_text(w->title, "Connecting to phone...");
+            lv_label_set_text(w->subtitle, "Establishing wireless Android Auto session...");
+            lv_label_set_text(w->cta_label, "Connecting...");
+            break;
+        case IdleMode::Failed:
+            lv_label_set_text(w->title, "Couldn't connect");
+            lv_label_set_text(w->subtitle, "Check that Bluetooth, Wi-Fi and Android Auto are on on the phone, then try again.");
+            lv_label_set_text(w->cta_label, "Try again");
+            break;
+    }
+    // Disabled while connecting: repeated taps used to spawn another
+    // connect thread each time.
+    if (mode == IdleMode::Connecting) {
+        lv_obj_add_state(w->cta_btn, LV_STATE_DISABLED);
+    } else {
+        lv_obj_clear_state(w->cta_btn, LV_STATE_DISABLED);
+    }
+}
 
 // 2026-08-20: no longer sends "CONNECT" to the sidecar (a no-op there
 // now -- see sidecars/androidauto/main.cpp's own protocol comment).
@@ -128,14 +177,10 @@ struct Widgets {
 // bt_load_worker already uses.
 void connect_btn_cb(lv_event_t * e) {
     auto * w = static_cast<Widgets *>(lv_event_get_user_data(e));
-    if (w && w->cta_label) {
-        lv_label_set_text(w->cta_label, "Connecting...");
-    }
-    if (w && w->title) {
-        lv_label_set_text(w->title, "Connecting to phone...");
-    }
-    if (w && w->subtitle) {
-        lv_label_set_text(w->subtitle, "Establishing wireless Android Auto session...");
+    if (w) {
+        w->connect_tapped_ms = lv_tick_get() | 1u;  // never 0 ("none in flight")
+        w->connect_failed = false;
+        render_idle_mode(w, IdleMode::Connecting);
     }
     core::SizedThread(core::kDefaultThreadStackSize, []() {
         if (!hal::start_pending_aa_connection()) {
@@ -166,6 +211,7 @@ void resume_btn_cb(lv_event_t * e) {
     auto * w = static_cast<Widgets *>(lv_event_get_user_data(e));
     if (w && w->cta_label) {
         lv_label_set_text(w->cta_label, "Resuming...");
+        w->resume_tapped_ms = lv_tick_get() | 1u;
     }
     // 2026-09-04: async, same reasoning as connect_btn_cb() above.
     core::SizedThread(core::kDefaultThreadStackSize, []() {
@@ -195,6 +241,19 @@ void poll_timer_cb(lv_timer_t * timer) {
     lv_label_set_text(w->detail_label, status.detail.c_str());
 
     bool connected = status.name == "Connected";
+
+    // A single failed STATUS round-trip ("Unreachable" -- a socket error,
+    // not a state the sidecar reported) used to end the session view
+    // immediately and bounce the user to Home mid-drive. Require ~2s of
+    // consecutive unreachable polls first; any real state the sidecar
+    // reports (Idle etc.) still ends it straight away.
+    if (connected) {
+        w->lost_ticks = 0;
+        w->connect_tapped_ms = 0;
+        w->connect_failed = false;
+    } else if (w->was_connected && status.name == "Unreachable" && ++w->lost_ticks < 4) {
+        return;
+    }
 
     if (connected) {
         w->was_connected = true;
@@ -258,13 +317,19 @@ void poll_timer_cb(lv_timer_t * timer) {
         lv_obj_add_event_cb(w->cta_btn, resume_btn_cb, LV_EVENT_CLICKED, w);
         w->showing_resume = true;
     } else if (!nativeFocus && w->showing_resume) {
-        lv_label_set_text(w->title, "Ready to connect");
-        lv_label_set_text(w->subtitle, "Pair phone via Bluetooth to begin wireless session.");
-        lv_label_set_text(w->cta_label, "Connect (Wireless)");
         lv_obj_remove_event_cb(w->cta_btn, resume_btn_cb);
         lv_obj_add_event_cb(w->cta_btn, connect_btn_cb, LV_EVENT_CLICKED, w);
         w->showing_resume = false;
-        w->showing_pending_ready = false;  // re-evaluated by the block below on the next tick
+        w->resume_tapped_ms = 0;
+        w->shown_idle_mode = -1;  // force render_idle_mode() to redraw the not-connected copy
+    }
+
+    // "Resuming..." with no projected-focus grant after a few seconds:
+    // put the button back so the user can retry instead of a stuck label.
+    if (nativeFocus && w->resume_tapped_ms != 0 &&
+        lv_tick_elaps(w->resume_tapped_ms) > kResumeTimeoutMs) {
+        lv_label_set_text(w->cta_label, "Resume");
+        w->resume_tapped_ms = 0;
     }
 
     // 2026-08-20: while sitting in the plain not-yet-connected state
@@ -275,28 +340,28 @@ void poll_timer_cb(lv_timer_t * timer) {
     // off (see hal::has_pending_aa_connection()'s own header comment):
     // without this, the screen would look identical in both cases and
     // the user would have no idea a session is actually ready to start.
-    // Only touched on an actual transition, same reasoning as
-    // display_hidden/showing_resume above -- has_pending_aa_connection()
-    // is a cheap mutex-guarded bool check either way, but no reason to
-    // call lv_label_set_text() every 500ms tick when nothing changed.
-    if (!connected && !nativeFocus) {
+    // render_idle_mode() only touches labels when the mode changes. A
+    // Connect tap shows Connecting for up to kConnectTimeoutMs, then
+    // Failed ("Try again") if no session appeared.
+    if (!connected) {
         bool pendingReady = hal::has_pending_aa_connection();
+        IdleMode mode;
         if (status.name == "Connecting") {
-            lv_label_set_text(w->title, "Connecting to phone...");
-            lv_label_set_text(w->subtitle, "Establishing wireless Android Auto session...");
-            lv_label_set_text(w->cta_label, "Connecting...");
-            w->showing_pending_ready = false;
-        } else if (pendingReady && !w->showing_pending_ready) {
-            lv_label_set_text(w->title, "Phone connected");
-            lv_label_set_text(w->subtitle, "Android Auto is ready -- tap Connect to start.");
-            lv_label_set_text(w->cta_label, "Connect (Wireless)");
-            w->showing_pending_ready = true;
-        } else if (!pendingReady && w->showing_pending_ready) {
-            lv_label_set_text(w->title, "Ready to connect");
-            lv_label_set_text(w->subtitle, "Pair phone via Bluetooth to begin wireless session.");
-            lv_label_set_text(w->cta_label, "Connect (Wireless)");
-            w->showing_pending_ready = false;
+            mode = IdleMode::Connecting;
+        } else if (w->connect_tapped_ms != 0 && lv_tick_elaps(w->connect_tapped_ms) < kConnectTimeoutMs) {
+            // Tapped recently; the sidecar may not report Connecting yet.
+            mode = IdleMode::Connecting;
+        } else {
+            if (w->connect_tapped_ms != 0) {
+                // Timed out without a session ever showing up.
+                w->connect_tapped_ms = 0;
+                w->connect_failed = true;
+            }
+            mode = pendingReady ? IdleMode::PendingReady
+                 : w->connect_failed ? IdleMode::Failed
+                 : IdleMode::Waiting;
         }
+        render_idle_mode(w, mode);
     }
 }
 
@@ -387,7 +452,10 @@ lv_obj_t * create_android_auto_screen() {
     lv_obj_set_style_text_color(title, staging_ui::theme::text_primary(), 0);
 
     lv_obj_t * subtitle = lv_label_create(content);
-    lv_label_set_text(subtitle, "Pair phone via Bluetooth to begin wireless session.");
+    lv_label_set_text(subtitle, "Waiting for your phone. Not paired yet? Pair it from the Bluetooth screen.");
+    lv_label_set_long_mode(subtitle, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(subtitle, LV_PCT(100));
+    lv_obj_set_style_text_align(subtitle, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_font(subtitle, &lv_font_roboto_14, 0);
     lv_obj_set_style_text_color(subtitle, staging_ui::theme::text_secondary(), 0);
 
@@ -399,6 +467,7 @@ lv_obj_t * create_android_auto_screen() {
     lv_obj_set_style_bg_color(connect_btn, staging_ui::theme::accent_primary(), 0);
     lv_obj_set_style_bg_opa(connect_btn, LV_OPA_COVER, 0);
     lv_obj_set_style_bg_color(connect_btn, lv_color_hex(0x6b9be8), LV_STATE_PRESSED);
+    lv_obj_set_style_opa(connect_btn, LV_OPA_50, LV_STATE_DISABLED);  // while connecting
     staging_ui::theme::style_focusable(connect_btn);
 
     lv_obj_t * connect_label = lv_label_create(connect_btn);

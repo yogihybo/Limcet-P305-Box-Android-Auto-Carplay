@@ -1696,12 +1696,18 @@ bool auto_reconnect_paired_device(BluetoothHandle & h) {
         std::printf("%s [BT] auto_reconnect_paired_device: no bluetooth handle, skipping\n", core::log_timestamp().c_str());
         return false;
     }
-    // Only re-run the full (~8 shell command) adapter configuration when
-    // the adapter actually looks unhealthy -- this is called every 25s
-    // from main.cpp's background loop whenever no phone is connected.
-    if (check_bluez_adapter_alive() != AdapterHealth::Healthy) {
-        ensure_adapter_configured();
-    }
+    // Re-assert the full adapter configuration (HCI up, SSP, class, auth/
+    // encrypt, scan mode, Powered/Pairable) before every attempt -- the
+    // warm-boot fix from docs/1.4_WIRELESS_AND_INIT.md section 8.4.
+    // 2026-11-13: briefly gated behind check_bluez_adapter_alive() to save
+    // the ~8 shell commands per attempt; real report -- Bluetooth then
+    // didn't reconnect after a warm reboot. That check only reads
+    // Adapter1.Powered over D-Bus, which can be true while the HCI-level
+    // settings (scan mode, SSP, class) applied too early at boot were
+    // lost, which is exactly the case 8.4's per-attempt re-assert exists
+    // for. Restored unconditionally; the cost is only paid while no
+    // phone is connected.
+    ensure_adapter_configured();
     std::vector<std::string> devices;
     if (!list_paired_devices(h, devices) || devices.empty()) {
         std::printf("%s [BT] auto_reconnect_paired_device: no paired devices to reconnect to\n", core::log_timestamp().c_str());

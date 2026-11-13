@@ -1,10 +1,23 @@
 #pragma once
 
+#include "core/async_worker.h"
+
 namespace hal {
 
 // Initializes the ARK1680 DAC, BD37033 Power Amplifier (PA), and ALSA mixer
-// controls so audio output is unmuted and routed to the car speakers.
+// controls so audio output is unmuted and routed to the car speakers, then
+// applies the persisted Media/Guidance/System volumes (the unmute step sets
+// every softmaster to 100%; without the re-apply, saved volumes only took
+// effect once the Settings screen was opened).
 void init_audio_mixer();
+
+// Single ordered queue for every blocking mixer/EQ/backlight change
+// (amixer shells out with no timeout, so none of these may run on the LVGL
+// thread). One FIFO worker rather than a detached thread per call: rapid
+// volume taps, or a boot-time init racing a reverse-gear cut, previously
+// had no ordering guarantee, so the LAST one to finish -- not the last one
+// issued -- decided the final level.
+core::AsyncWorker & audio_control_worker();
 
 // The three Android Auto media-sink audio streams each route through their
 // OWN softvol ALSA PCM device, each with its own independent ALSA mixer

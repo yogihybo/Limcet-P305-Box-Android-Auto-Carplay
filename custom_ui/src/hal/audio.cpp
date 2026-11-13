@@ -36,6 +36,19 @@ void init_audio_mixer() {
     std::system("amixer sset 'softmaster3' 100% >/dev/null 2>&1 || true");
     std::system("amixer sset 'softmaster4' 100% >/dev/null 2>&1 || true");
     std::system("amixer sset 'softmaster5' 100% >/dev/null 2>&1 || true");
+
+    // 3. Re-apply the persisted per-stream levels on top of the 100% unmute.
+    // Defaults match etc/default_settings.conf and apply_reversing_volume_cut().
+    set_stream_volume(AudioStream::Media, core::default_store().get_int("MediaVolume", 80, "Audio"));
+    set_stream_volume(AudioStream::Guidance, core::default_store().get_int("GuidanceVolume", 80, "Audio"));
+    set_stream_volume(AudioStream::System, core::default_store().get_int("SystemVolume", 80, "Audio"));
+}
+
+core::AsyncWorker & audio_control_worker() {
+    // Deeper than the default 8: a burst of stepper taps should all apply
+    // in order; drop-oldest still bounds it if amixer ever wedges.
+    static core::AsyncWorker worker(32);
+    return worker;
 }
 
 bool set_stream_volume(AudioStream stream, int percent) {

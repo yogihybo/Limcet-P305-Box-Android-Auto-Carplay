@@ -59,8 +59,10 @@ namespace {
 // thread drains jobs strictly in enqueue order, so the real-world
 // gear-transition order is always what ends up applied last.
 core::AsyncWorker & reversing_volume_worker() {
-    static core::AsyncWorker worker;
-    return worker;
+    // 2026-11-13: now the shared hal::audio_control_worker() -- the
+    // settings-screen volume steppers and the boot-time mixer init go
+    // through the same FIFO, so all three are ordered against each other.
+    return hal::audio_control_worker();
 }
 
 // 2026-08-20: DEAD CODE as of this project's BlueZ migration -- this
@@ -444,9 +446,11 @@ int main() {
     // calls (the ones actually triggered by settings-screen taps/steppers) were
     // already fixed the same way in an earlier pass this session -- this is the one
     // remaining synchronous amixer call site, at boot only.
-    core::SizedThread(core::kDefaultThreadStackSize, []() {
+    // Queued (not a detached thread) so a reverse-gear cut enqueued later
+    // can never be overtaken by this boot-time restore of saved volumes.
+    reversing_volume_worker().enqueue([]() {
         hal::init_audio_mixer();
-    }).detach();
+    });
 
     core::SizedThread(core::kDefaultThreadStackSize, []() {
         // Starts BlueZ 5.66 subsystem and sidecar in parallel with UI rendering

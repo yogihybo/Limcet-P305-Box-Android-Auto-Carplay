@@ -146,7 +146,11 @@ void stepper_click_cb(lv_event_t * e) {
         // reverse-gear path -- see that fix's own comment. Moved off the
         // LVGL thread the same way: fire-and-forget on a detached thread,
         // since nothing here needs to wait for amixer to finish.
-        core::SizedThread(core::kDefaultThreadStackSize, ctx->extra_apply, ctx->value).detach();
+        //
+        // 2026-11-13: via hal::audio_control_worker() (one ordered FIFO)
+        // instead of a detached thread per tap -- rapid taps used to race,
+        // so the final mixer level could differ from the displayed value.
+        hal::audio_control_worker().enqueue([fn = ctx->extra_apply, v = ctx->value]() { fn(v); });
     }
     core::default_store().save();
 }
@@ -280,7 +284,7 @@ lv_obj_t * create_stepper_row(lv_obj_t * parent, const lv_image_dsc_t * icon_dsc
         // the persisted setting every time this screen opens, in case
         // something else changed it) is preserved, it just no longer
         // blocks rendering the screen itself.
-        core::SizedThread(core::kDefaultThreadStackSize, extra_apply, initial).detach();
+        hal::audio_control_worker().enqueue([extra_apply, initial]() { extra_apply(initial); });
     }
 
     return row;

@@ -20,6 +20,7 @@
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include <vector>
 
 namespace staging_ui {
 
@@ -83,6 +84,63 @@ static void read_system_stats(SystemStats &stats) {
             prev_total = total;
         }
     }
+}
+
+// --- MCU Live Log view state + helpers (shared by its event handlers) ---
+struct LogViewCtx {
+    lv_obj_t * label;
+    lv_obj_t * status_label;
+    lv_obj_t * touch_filter_cb;
+    std::string last_text;
+    bool auto_scroll = true;
+};
+
+// The newest kShowLast frames, oldest first, CMD 0x20 (touch) frames
+// filtered unless show_touch. Built by collecting then joining once --
+// the old per-line `text = line + "\n" + text` prepend was quadratic and
+// ran every 300ms while the dialog was open.
+std::string build_mcu_log_text(bool show_touch) {
+    constexpr size_t kShowLast = 150;
+    auto frames = hal::get_mcu_recent_frames();
+    std::vector<const std::string *> picked;
+    picked.reserve(kShowLast);
+    for (auto it = frames.rbegin(); it != frames.rend() && picked.size() < kShowLast; ++it) {
+        if (!show_touch && it->find("cmd=0x20 ") != std::string::npos) continue;
+        picked.push_back(&*it);
+    }
+    if (picked.empty()) return "(waiting for MCU frames...)";
+    std::string text;
+    for (auto it = picked.rbegin(); it != picked.rend(); ++it) {
+        text += **it;
+        text += '\n';
+    }
+    return text;
+}
+
+void log_set_live(LogViewCtx * ctx, bool live) {
+    if (ctx->auto_scroll == live) return;
+    ctx->auto_scroll = live;
+    lv_label_set_text(ctx->status_label, live ? "Tracking Live" : "History (tap Live to track)");
+    lv_obj_set_style_text_color(ctx->status_label, live ? theme::success() : theme::text_secondary(), 0);
+}
+
+// Re-reads frames now (if live) and scrolls to the newest one.
+void log_refresh(LogViewCtx * ctx, bool force) {
+    if (!ctx->auto_scroll) return;
+    std::string text = build_mcu_log_text(lv_obj_has_state(ctx->touch_filter_cb, LV_STATE_CHECKED));
+    if (!force && text == ctx->last_text) return;
+    ctx->last_text = std::move(text);
+    lv_label_set_text(ctx->label, ctx->last_text.c_str());
+    lv_obj_t * box = lv_obj_get_parent(ctx->label);
+    if (force || !lv_obj_is_scrolling(box)) {
+        lv_obj_scroll_to_y(box, LV_COORD_MAX, LV_ANIM_OFF);
+    }
+}
+
+// Jump back to live tracking (Live button, status badge, filter change).
+void log_go_live(LogViewCtx * ctx) {
+    log_set_live(ctx, true);
+    log_refresh(ctx, /*force=*/true);
 }
 
 // "<Hardware> -- <model name> xN" from /proc/cpuinfo (whichever parts the
@@ -1196,13 +1254,6 @@ lv_obj_t * create_settings_screen() {
 
             lv_obj_t * touch_filter_cb = lv_switch_create(touch_filter_row);
 
-            struct LogViewCtx {
-                lv_obj_t * label;
-                lv_obj_t * status_label;
-                lv_obj_t * touch_filter_cb;
-                std::string last_text;
-                bool auto_scroll = true;
-            };
             auto * log_ctx = new LogViewCtx{log_lbl, scroll_status, touch_filter_cb, "", true};
 
             // Detect user drag scrolling: if user scrolls back into history, pause auto-scroll
@@ -1210,139 +1261,28 @@ lv_obj_t * create_settings_screen() {
             lv_obj_add_event_cb(log_box, [](lv_event_t * e) {
                 auto * ctx = static_cast<LogViewCtx *>(lv_event_get_user_data(e));
                 lv_obj_t * box = static_cast<lv_obj_t *>(lv_event_get_target(e));
-                int32_t sb = lv_obj_get_scroll_bottom(box);
-                if (sb <= 20) {
-                    if (!ctx->auto_scroll) {
-                        ctx->auto_scroll = true;
-                        if (ctx->status_label) {
-                            lv_label_set_text(ctx->status_label, "Tracking Live");
-                            lv_obj_set_style_text_color(ctx->status_label, theme::success(), 0);
-                        }
-                    }
-                } else {
-                    if (ctx->auto_scroll) {
-                        ctx->auto_scroll = false;
-                        if (ctx->status_label) {
-                            lv_label_set_text(ctx->status_label, "History (tap Live to track)");
-                            lv_obj_set_style_text_color(ctx->status_label, theme::text_secondary(), 0);
-                        }
-                    }
-                }
+                log_set_live(ctx, lv_obj_get_scroll_bottom(box) <= 20);
             }, LV_EVENT_SCROLL, log_ctx);
 
-            // Rotary knob navigation: turning tuning knob scrolls through log history
-            lv_obj_add_event_cb(log_box, [](lv_event_t * e) {
-                auto * ctx = static_cast<LogViewCtx *>(lv_event_get_user_data(e));
-                uint32_t key = lv_event_get_key(e);
-                lv_obj_t * box = static_cast<lv_obj_t *>(lv_event_get_target(e));
-                if (key == LV_KEY_UP || key == LV_KEY_PREV) {
-                    ctx->auto_scroll = false;
-                    if (ctx->status_label) {
-                        lv_label_set_text(ctx->status_label, "History (tap Live to track)");
-                        lv_obj_set_style_text_color(ctx->status_label, theme::text_secondary(), 0);
-                    }
-                    lv_obj_scroll_by_bounded(box, 0, 60, LV_ANIM_OFF);
-                } else if (key == LV_KEY_DOWN || key == LV_KEY_NEXT) {
-                    lv_obj_scroll_by_bounded(box, 0, -60, LV_ANIM_OFF);
-                    if (lv_obj_get_scroll_bottom(box) <= 20) {
-                        ctx->auto_scroll = true;
-                        if (ctx->status_label) {
-                            lv_label_set_text(ctx->status_label, "Tracking Live");
-                            lv_obj_set_style_text_color(ctx->status_label, theme::success(), 0);
-                        }
-                    }
-                }
-            }, LV_EVENT_KEY, log_ctx);
-
-            auto resume_live_tracking = [](LogViewCtx * ctx) {
-                ctx->auto_scroll = true;
-                ctx->last_text.clear();
-                if (ctx->status_label) {
-                    lv_label_set_text(ctx->status_label, "Tracking Live");
-                    lv_obj_set_style_text_color(ctx->status_label, theme::success(), 0);
-                }
-                bool show_touch = lv_obj_has_state(ctx->touch_filter_cb, LV_STATE_CHECKED);
-                auto frames = hal::get_mcu_recent_frames();
-                std::string text;
-                constexpr size_t kShowLast = 150;
-                size_t shown = 0;
-                for (auto it = frames.rbegin(); it != frames.rend() && shown < kShowLast; ++it) {
-                    if (!show_touch && it->find("cmd=0x20 ") != std::string::npos) {
-                        continue;
-                    }
-                    text = *it + "\n" + text;
-                    ++shown;
-                }
-                if (text.empty()) {
-                    text = "(waiting for MCU frames...)";
-                }
-                ctx->last_text = text;
-                lv_label_set_text(ctx->label, text.c_str());
-                lv_obj_t * box = lv_obj_get_parent(ctx->label);
-                lv_obj_scroll_to_y(box, LV_COORD_MAX, LV_ANIM_OFF);
-            };
+            // (2026-11-13: removed an LV_EVENT_KEY knob-scroll handler on
+            // log_box -- log_box was never focusable, so it could never
+            // fire; the Earlier/Later buttons are the knob path.)
 
             // Tapping status badge resumes live tracking immediately
             lv_obj_add_flag(scroll_status, LV_OBJ_FLAG_CLICKABLE);
             lv_obj_add_event_cb(scroll_status, [](lv_event_t * e) {
-                auto * ctx = static_cast<LogViewCtx *>(lv_event_get_user_data(e));
-                auto * resume_fn = static_cast<decltype(resume_live_tracking)*>(lv_event_get_param(e));
-                (void)resume_fn;
-                ctx->auto_scroll = true;
-                ctx->last_text.clear();
-                if (ctx->status_label) {
-                    lv_label_set_text(ctx->status_label, "Tracking Live");
-                    lv_obj_set_style_text_color(ctx->status_label, theme::success(), 0);
-                }
-                lv_obj_t * box = lv_obj_get_parent(ctx->label);
-                lv_obj_scroll_to_y(box, LV_COORD_MAX, LV_ANIM_OFF);
+                log_go_live(static_cast<LogViewCtx *>(lv_event_get_user_data(e)));
             }, LV_EVENT_CLICKED, log_ctx);
 
             lv_obj_add_event_cb(touch_filter_cb, [](lv_event_t * e) {
-                auto * ctx = static_cast<LogViewCtx *>(lv_event_get_user_data(e));
-                ctx->auto_scroll = true;
-                ctx->last_text.clear();
-                if (ctx->status_label) {
-                    lv_label_set_text(ctx->status_label, "Tracking Live");
-                    lv_obj_set_style_text_color(ctx->status_label, theme::success(), 0);
-                }
-                lv_obj_t * box = lv_obj_get_parent(ctx->label);
-                lv_obj_scroll_to_y(box, LV_COORD_MAX, LV_ANIM_OFF);
+                log_go_live(static_cast<LogViewCtx *>(lv_event_get_user_data(e)));
             }, LV_EVENT_VALUE_CHANGED, log_ctx);
 
-            // Refresh timer: pulls recent frames every 300ms.
-            // When auto_scroll is enabled, auto-scrolls to the newest frame.
-            // When reviewing earlier logs (auto_scroll == false), completely pauses label updates
-            // so text position and layout remain 100% rock-solid without any snapback.
+            // Refresh timer: pulls recent frames every 300ms while live.
+            // When reviewing earlier logs (auto_scroll == false), label updates
+            // pause entirely so the text doesn't move under the user.
             lv_timer_t * refresh_timer = lv_timer_create([](lv_timer_t * t) {
-                auto * ctx = static_cast<LogViewCtx *>(lv_timer_get_user_data(t));
-                if (!ctx->auto_scroll) {
-                    return;
-                }
-                lv_obj_t * box = lv_obj_get_parent(ctx->label);
-                bool show_touch = lv_obj_has_state(ctx->touch_filter_cb, LV_STATE_CHECKED);
-                auto frames = hal::get_mcu_recent_frames();
-                std::string text;
-                constexpr size_t kShowLast = 150;
-                size_t shown = 0;
-                for (auto it = frames.rbegin(); it != frames.rend() && shown < kShowLast; ++it) {
-                    if (!show_touch && it->find("cmd=0x20 ") != std::string::npos) {
-                        continue;
-                    }
-                    text = *it + "\n" + text;
-                    ++shown;
-                }
-                if (text.empty()) {
-                    text = "(waiting for MCU frames...)";
-                }
-
-                if (text != ctx->last_text) {
-                    ctx->last_text = text;
-                    lv_label_set_text(ctx->label, text.c_str());
-                    if (!lv_obj_is_scrolling(box)) {
-                        lv_obj_scroll_to_y(box, LV_COORD_MAX, LV_ANIM_OFF);
-                    }
-                }
+                log_refresh(static_cast<LogViewCtx *>(lv_timer_get_user_data(t)), /*force=*/false);
             }, 300, log_ctx);
 
             // Bottom action bar: Close button on left, Earlier/Later/Live scroll controls on right
@@ -1401,11 +1341,7 @@ lv_obj_t * create_settings_screen() {
 
             lv_obj_add_event_cb(earlier_btn, [](lv_event_t * e) {
                 auto * ctx = static_cast<LogViewCtx *>(lv_event_get_user_data(e));
-                ctx->auto_scroll = false;
-                if (ctx->status_label) {
-                    lv_label_set_text(ctx->status_label, "History (tap Live to track)");
-                    lv_obj_set_style_text_color(ctx->status_label, theme::text_secondary(), 0);
-                }
+                log_set_live(ctx, false);
                 lv_obj_t * box = lv_obj_get_parent(ctx->label);
                 lv_obj_scroll_by_bounded(box, 0, 180, LV_ANIM_OFF);
             }, LV_EVENT_CLICKED, log_ctx);
@@ -1431,13 +1367,8 @@ lv_obj_t * create_settings_screen() {
                 auto * ctx = static_cast<LogViewCtx *>(lv_event_get_user_data(e));
                 lv_obj_t * box = lv_obj_get_parent(ctx->label);
                 lv_obj_scroll_by_bounded(box, 0, -180, LV_ANIM_OFF);
-                int32_t sb = lv_obj_get_scroll_bottom(box);
-                if (sb <= 20) {
-                    ctx->auto_scroll = true;
-                    if (ctx->status_label) {
-                        lv_label_set_text(ctx->status_label, "Tracking Live");
-                        lv_obj_set_style_text_color(ctx->status_label, theme::success(), 0);
-                    }
+                if (lv_obj_get_scroll_bottom(box) <= 20) {
+                    log_set_live(ctx, true);
                 }
             }, LV_EVENT_CLICKED, log_ctx);
 
@@ -1457,32 +1388,7 @@ lv_obj_t * create_settings_screen() {
             lv_obj_center(live_lbl);
 
             lv_obj_add_event_cb(live_btn, [](lv_event_t * e) {
-                auto * ctx = static_cast<LogViewCtx *>(lv_event_get_user_data(e));
-                ctx->auto_scroll = true;
-                ctx->last_text.clear();
-                if (ctx->status_label) {
-                    lv_label_set_text(ctx->status_label, "Tracking Live");
-                    lv_obj_set_style_text_color(ctx->status_label, theme::success(), 0);
-                }
-                bool show_touch = lv_obj_has_state(ctx->touch_filter_cb, LV_STATE_CHECKED);
-                auto frames = hal::get_mcu_recent_frames();
-                std::string text;
-                constexpr size_t kShowLast = 150;
-                size_t shown = 0;
-                for (auto it = frames.rbegin(); it != frames.rend() && shown < kShowLast; ++it) {
-                    if (!show_touch && it->find("cmd=0x20 ") != std::string::npos) {
-                        continue;
-                    }
-                    text = *it + "\n" + text;
-                    ++shown;
-                }
-                if (text.empty()) {
-                    text = "(waiting for MCU frames...)";
-                }
-                ctx->last_text = text;
-                lv_label_set_text(ctx->label, text.c_str());
-                lv_obj_t * box = lv_obj_get_parent(ctx->label);
-                lv_obj_scroll_to_y(box, LV_COORD_MAX, LV_ANIM_OFF);
+                log_go_live(static_cast<LogViewCtx *>(lv_event_get_user_data(e)));
             }, LV_EVENT_CLICKED, log_ctx);
 
             // 2026-11-13: one cleanup path -- deleting the overlay (Close,

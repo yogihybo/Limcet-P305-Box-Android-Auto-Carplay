@@ -16,7 +16,10 @@
 #include "core/sized_thread.h"
 #include <functional>
 #include <memory>
+#include <sys/reboot.h>
 #include <sys/utsname.h>
+#include <unistd.h>
+#include <cerrno>
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -1075,11 +1078,40 @@ lv_obj_t * create_settings_screen() {
                            "Reboot the head unit?",
                            "Android Auto, Bluetooth, and the reverse camera will be unavailable until it restarts.",
                            "Reboot Now", /*destructive=*/true, []() {
-                // Fire-and-forget on a detached thread -- same reasoning
-                // as every other std::system() call in this file (SSH
-                // toggle, volume steppers): never block the LVGL thread.
+                // 2026-11-13: real report -- "Reboot doesn't always work".
+                // `sync && reboot` only signals busybox init, which then
+                // runs a graceful shutdown (kill everything, `umount -a -r`)
+                // and can stall: init defers the request while rcS (its
+                // sysinit action) is still running, and any process stuck
+                // in uninterruptible I/O or a busy unmount holds it up --
+                // with nothing on screen to say whether the tap registered.
+                // Now: show "Restarting..." immediately, then sync() and the
+                // reboot() syscall directly (what `reboot -f` does), with no
+                // dependence on init. Safe here: the root is mounted
+                // read-only and /data is mounted -o sync, so there's no
+                // dirty filesystem state for a graceful shutdown to protect.
+                lv_obj_t * cover = lv_obj_create(lv_layer_sys());
+                lv_obj_remove_style_all(cover);
+                lv_obj_set_size(cover, LV_PCT(100), LV_PCT(100));
+                lv_obj_set_style_bg_color(cover, lv_color_black(), 0);
+                lv_obj_set_style_bg_opa(cover, LV_OPA_COVER, 0);
+                lv_obj_add_flag(cover, LV_OBJ_FLAG_CLICKABLE);  // swallow input
+                lv_obj_t * msg = lv_label_create(cover);
+                lv_label_set_text(msg, "Restarting...");
+                lv_obj_set_style_text_font(msg, &lv_font_roboto_28, 0);
+                lv_obj_set_style_text_color(msg, theme::text_primary(), 0);
+                lv_obj_center(msg);
+                lv_refr_now(nullptr);  // paint it before the system goes away
+
                 core::SizedThread(core::kDefaultThreadStackSize, []() {
-                    std::system("sync && reboot");
+                    std::printf("%s [UI] Reboot requested from Settings -- sync + reboot(2)\n",
+                                core::log_timestamp().c_str());
+                    ::sync();
+                    ::reboot(RB_AUTOBOOT);
+                    // Only reached if the syscall itself failed.
+                    std::fprintf(stderr, "%s [UI] reboot(2) failed: %s -- falling back to `reboot -f`\n",
+                                 core::log_timestamp().c_str(), std::strerror(errno));
+                    std::system("reboot -f");
                 }).detach();
             });
         }, LV_EVENT_CLICKED, scr);

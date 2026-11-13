@@ -304,7 +304,11 @@ int main() {
                     // Skipped after a user-initiated Disconnect (see
                     // hal::disconnect_device()) -- otherwise this loop
                     // silently undoes it within 25s.
-                    if (!hal::auto_reconnect_suppressed() && hal::get_connected_device_mac().empty()) {
+                    if (!hal::get_connected_device_mac().empty()) {
+                        // A phone is connected (whoever initiated it): any
+                        // earlier user Disconnect no longer applies.
+                        hal::clear_auto_reconnect_suppression();
+                    } else if (!hal::auto_reconnect_suppressed()) {
                         hal::auto_reconnect_paired_device(bt);
                     }
                 }

@@ -80,6 +80,13 @@ bool disconnect_device(BluetoothHandle & h);
 // auto_reconnect_paired_device().
 bool auto_reconnect_suppressed();
 
+// Lifts the suppression above. Called by the background reconnect loop
+// whenever it sees a device connected -- the phone reconnecting on its own
+// after a user Disconnect means the user wants the link again, and
+// otherwise (only connect_device() cleared it) a later drop-out would
+// never be auto-reconnected until restart.
+void clear_auto_reconnect_suppression();
+
 // Removes/unpairs a device from BlueZ
 bool remove_paired_device(BluetoothHandle & h, const std::string & mac);
 

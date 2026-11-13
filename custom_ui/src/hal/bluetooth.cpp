@@ -116,6 +116,14 @@ std::atomic<bool> s_agent_thread_started{false};
 // would kill a healthy agent). Only the newest thread may clear it.
 std::atomic<unsigned> s_agent_generation{0};
 std::atomic<bool> g_autoReconnectSuppressed{false};
+// steady_clock ms when the suppression was set -- see
+// clear_auto_reconnect_suppression().
+std::atomic<long long> g_autoReconnectSuppressedAtMs{0};
+
+long long steady_ms() {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
+}
 
 // Helpers for executing BlueZ/bluetoothctl commands and capturing stdout
 bool run_command_capture(const std::string & cmd, std::vector<std::string> & lines_out) {
@@ -1362,6 +1370,15 @@ bool set_discoverable(BluetoothHandle & /*h*/, bool discoverable) {
                 discoverable ? "piscan" : "pscan");
     run_command_simple(discoverable ? "hciconfig hci0 piscan >/dev/null 2>&1"
                                     : "hciconfig hci0 pscan >/dev/null 2>&1");
+    if (discoverable) {
+        // BlueZ ends discoverability after DiscoverableTimeout (180s by
+        // default; /etc/bluetooth/main.conf doesn't override it), which left
+        // the Bluetooth screen's switch showing "on" for an adapter that had
+        // quietly stopped being discoverable. 0 = until switched off.
+        run_command_simple("dbus-send --system --dest=org.bluez --type=method_call /org/bluez/hci0 "
+                           "org.freedesktop.DBus.Properties.Set string:org.bluez.Adapter1 "
+                           "string:DiscoverableTimeout variant:uint32:0 >/dev/null 2>&1");
+    }
     std::string cmd = "dbus-send --system --dest=org.bluez --type=method_call /org/bluez/hci0 org.freedesktop.DBus.Properties.Set string:org.bluez.Adapter1 string:Discoverable variant:boolean:" + val + " >/dev/null 2>&1";
     return run_command_simple(cmd);
 }
@@ -1466,6 +1483,7 @@ bool connect_device(BluetoothHandle & /*h*/, const std::string & mac) {
 bool disconnect_device(BluetoothHandle & /*h*/) {
     // Suppress first, so a background reconnect racing this call can't
     // slip in between the Disconnect and the flag being set.
+    g_autoReconnectSuppressedAtMs.store(steady_ms(), std::memory_order_release);
     g_autoReconnectSuppressed.store(true, std::memory_order_release);
     std::string mac = get_connected_device_mac();
     if (mac.empty()) {
@@ -1484,6 +1502,16 @@ bool disconnect_device(BluetoothHandle & /*h*/) {
 
 bool auto_reconnect_suppressed() {
     return g_autoReconnectSuppressed.load(std::memory_order_acquire);
+}
+
+void clear_auto_reconnect_suppression() {
+    // Ignore a suppression set in the last 30s: the loop can observe the
+    // phone still connected while the user's own Disconnect is in flight,
+    // which must not undo it.
+    if (steady_ms() - g_autoReconnectSuppressedAtMs.load(std::memory_order_acquire) < 30000) {
+        return;
+    }
+    g_autoReconnectSuppressed.store(false, std::memory_order_release);
 }
 
 bool remove_paired_device(BluetoothHandle & /*h*/, const std::string & mac) {

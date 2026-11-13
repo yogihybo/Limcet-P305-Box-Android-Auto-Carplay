@@ -364,6 +364,8 @@ attached to catch it early).
 
 ## Real, user-observed finding (2026-09-01): SWD-attached battery drain
 
+> **Correction (2026-11-14):** the "likely mechanism" below (an attached debugger preventing `WFI` sleep) can't apply -- the factory firmware never executes `WFI`/`WFE` or enters any Cortex-M low-power mode; its parked state is a 1 MHz busy loop. See section 31.2/31.3 for the actual power-down sequence and the more likely explanations (a halted core never powering the rails down, IWDG resets during a halt, probe draw).
+
 Two real, empirical observations from the user, on the actual vehicle, not
 inferred:
 
@@ -4149,3 +4151,71 @@ Factory-screen touch being dead too, and a factory head-unit reset fixing it, me
 **Project constraint**: the vehicle MCU is not being reflashed (limited recovery paths; see the live-update safety discussion in sections 27-29). No `CMD`-level SoC request found in this trace makes the factory firmware re-run touch init or a proper bus recovery. Within that constraint the available steps are: measure the bus as above; identify the touch controller part; log what precedes each lockup from the SoC side (custom_ui sees every MCU frame) to find the trigger; and keep custom_ui fully knob-operable so a touch lockup is not a dead end.
 
 **Clean-room source note** (`hardware/MCU/source`, not on the vehicle): its I2C bus recovery (section 25, commit `cd6f210`) is a real improvement in principle, but it is written against the assumed GT911 protocol, and its PB0 "touch relay" output does not match the vehicle firmware, which only ever *reads* PB0 (`0x08006FDC`, sampled bit-by-bit into a shift register at `0x0800ABBE` — purpose not traced).
+
+### 31. Power management in the factory firmware: scheduler timing, the ACC-off sequence, the "low-power" state, parked current, and RTC feasibility (2026-11-14, static disassembly of `live_factory_app_52k_reconstructed.bin` — NOT hardware-measured)
+
+#### 31.1 Scheduler and tick rate
+
+- `0x08005F7E` calls `SysTick_Config(SystemCoreClock / 1000)` (`0x08008A60`, reload written to `0xE000E014`) — a **1 ms tick** at the running core clock.
+- The SysTick handler (`0x08003204`) calls `0x08008ABA` → `0x080060D8`, the scheduler tick, which counts down each task's period.
+- Tasks are a 13-entry table at `0x080061C8`, registered by `add_task(fn, phase, period)` (`0x08005F8A`) in `0x08006044`. Relevant entries: **power state machine `0x08007C2C`, period 100 ticks**; **timer task `0x08008AC2` ("Task 6"), period 1 tick**; **touch task `0x0800A1BC`, period 25 ticks**.
+- The scheduler is cooperative: a due task runs from the main loop. If the loop is held up (blocking I2C/UART waits), runs are late or merged, so counters advanced by the timer task count **at most** one per millisecond.
+
+**Correction to `docs/1.6_BD37033.md`** ("Task 6 runs at ~100 Hz / 10 ms per tick"): nominally the tick is 1 ms, so its 4000-tick audio settle is nominally ~4 s. A ~100 Hz measured rate is plausible on the spare bench board, where every touch poll times out (no controller fitted) and slows the main loop, but it isn't the design rate. Section 30's millisecond figures (5 s ACC-off delay, 6 s touch hold-off, 20 ms touch poll) are nominal 1 ms-tick values.
+
+#### 31.2 The power state machine (`0x08007C2C`, every 100 ms)
+
+State byte `0x200007E8`, ms counter at `+2`, both advanced by the timer task (`0x08007D14`). Jump table at `0x08007C3A`:
+
+| State | Behavior |
+|---|---|
+| 0 | clear counter → 1 |
+| 1 | after > 50 ms → 2 |
+| 2 | after > 500 ms → 3 |
+| 3 | **running**; if ACC has not been on within the last 5 s (`0x08007C18`: `0x20000052 < 5000`) → 4 |
+| 4 | clear counter → 5 |
+| 5 | after ≥ 100 ms → **power-down sequence** (below) |
+| 6 | idle |
+
+`0x20000052` (ms since ACC was last seen on) is reset **only** by the ACC debounce (`0x080088BA`, reading **PD2** via `0x08006EAC`). Nothing CAN-related resets it or wakes the MCU — **correction to `docs/1.6_BD37033.md`**, which describes the power manager as also gated by "CAN keep-alive frames". So: ACC off → ~5 s → power-down.
+
+**Power-down (state 5):**
+1. `0x08007B2A(0)`:
+   - USART1 off (`0x08007DE0`) and **USART2 off — the SoC link** (`0x08008056`);
+   - `0x08006B5A`: drives PB14, PB15 and one more output high (`0x08006B1C(2)` → `0x08006E68`/`0x08006E86`/`0x08006EA4`) and sets `0x2000003C = 4`;
+   - `0x0800B5E4(3)`: audio state byte `0x200000A0 = 2`;
+   - `0x08006E08`: **mode byte `0x2000025A[0] = 2`** (the touch-polling gate, §30.4) and outputs PC14, PB4, PC12, PB3, PB5, PC13 low, PB2 high;
+   - clears the message queues (`0x08007AFE`).
+2. A short busy delay (`0x08008AFA`).
+3. `0x08007B70(0)`: **clock-down**. HSI on, SYSCLK switched to HSI, PLL off, **HSE off**, flash latency 0, AHB prescaler /8 (`0x90`). The core runs at ~**1 MHz** from the internal 8 MHz RC.
+4. `0x0800AE40(0)`: an EXTI line reconfigured (rising+falling), disabled.
+5. **Busy loop**: refresh the IWDG (`0xAAAA` → `0x40003000`), poll PD2, repeat until ACC is on.
+
+**Wake:** `0x0800AE40(1)`; clocks back up (`0x08007B70(1)`: HSE, PLL, latency 2); state → 1; delay; `0x08007B2A(1)` → GPIO re-init (`0x08006CE0`: PC14, PB4, PC12, PB3, PB5 high, PB2 high, PC13 low) and the rest of the bring-up.
+
+Outputs switched on at wake and off at power-down — PC14, PB4, PC12, PB3, PB5 — are very likely rail/peripheral enables (SoC, LCD, amplifier, ...). PB14 is the SoC reset line per this document's earlier finding. **The identity and polarity of each rail are inferred from the on/off pattern, not confirmed on hardware.** Two oddities:
+- `0x08006C1A` (PC15) never drives the pin high: its "set" branch loads GPIOC and branches straight to the return without calling `GPIO_SetBits`. Either a real firmware quirk or a reconstruction gap.
+- PC14 is driven as an output here, although the pin map records it as unconnected.
+
+**No sleep instruction, ever.** The firmware has no `WFI`/`WFE` and never touches `SCB_SCR`, `PWR`, `BKP`, `RTC` or `RCC_BDCR`. The Cortex-M3 never enters Sleep, Stop or Standby. The "low-power" state is the 1 MHz busy loop above.
+
+**CAN is not quiesced.** Neither the power-down nor the wake path touches the bxCAN registers. The controller stays configured while its clock source drops roughly 36×, so its bit timing no longer matches the bus. Whether a CAN transceiver standby pin is among the GPIOs switched above is unknown. If it isn't, a mis-clocked CAN node on a waking vehicle bus is worth ruling out.
+
+#### 31.3 Correction: the SWD-attached battery drain
+
+The section "Real, user-observed finding (2026-09-01): SWD-attached battery drain" attributes the drain to an attached debugger preventing the core's `WFI` sleep. **That mechanism can't apply**: the firmware never executes `WFI`/`WFE` (§31.2), so there is no sleep for a debugger to block. More likely, and still unverified:
+- **Halted core.** A core halted (or reset-halted) before reaching state 5 never runs the power-down, so the SoC/LCD/amplifier rails stay on and the whole box stays powered.
+- **IWDG resets while halted in the sleep loop.** The IWDG keeps counting during a debug halt unless `DBGMCU_CR.DBG_IWDG_STOP` is set. A halt there resets the MCU, which boots with rails on and needs another ~5 s to power down again.
+- **The probe's own consumption.**
+
+#### 31.4 Parked current
+
+With the car off, the MCU stays powered on the always-on rail, busy-looping at ~1 MHz from HSI with peripherals still clocked. That's probably a low single-digit mA at the MCU itself, plus regulator quiescent current, the CAN transceiver and anything else on the always-on rail. **Not measured.** If the car ever sits for weeks, measure the box's ignition-off current (more than 5 s after ACC off) before blaming other modules.
+
+#### 31.5 RTC feasibility (for a parked-time clock)
+
+- **Hardware**: no LSE (32.768 kHz) crystal; VBAT unconnected/floating (pin map, physical inspection 2026-08-31). ST requires VBAT tied to VDD when no battery is used.
+- **Clock sources**: HSE/128 would be crystal-accurate (~±4 s/day) **but stops at power-down** (HSE is switched off, §31.2), so it wouldn't count while the car is parked unless the firmware kept HSE running in that state (more current). LSI (~40 kHz RC, 30–60 kHz spread, temperature-dependent) keeps running but drifts by minutes a day without software calibration against phone-sourced time.
+- **Firmware**: the factory firmware never enables the RTC/backup domain and has no command to set or read time.
+
+A working MCU-side clock therefore needs an MCU firmware change: start the RTC, either keep HSE on in the parked loop or calibrate LSI, and add set/read commands. That means reflashing the MCU, which this project currently avoids.

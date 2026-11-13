@@ -91,12 +91,6 @@ lv_obj_t * add_back_button(lv_obj_t * scr, lv_event_cb_t cb);
 // Adds the screen title, top-center, in the shared header font/color.
 lv_obj_t * add_title(lv_obj_t * scr, const char * text);
 
-// Convenience: dark screen background + back button + title, the
-// combination every non-home screen used to hand-roll identically.
-// Returns the title label in case a caller wants to reposition it
-// (none currently do, but home_screen's own title differs enough --
-// left-aligned, with a subtitle -- that it still builds its own).
-lv_obj_t * create_screen_with_header(lv_obj_t ** out_scr, const char * title, lv_event_cb_t back_cb);
 
 // ---- reusable element styles -----------------------------------------
 

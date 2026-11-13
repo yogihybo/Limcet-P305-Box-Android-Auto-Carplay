@@ -1,7 +1,6 @@
 #include "ui/theme.h"
 
 #include "core/navigation.h"
-#include "ui/status_bar.h"
 
 namespace ui::theme {
 
@@ -208,20 +207,6 @@ lv_obj_t * add_title(lv_obj_t * scr, const char * text) {
     return title;
 }
 
-lv_obj_t * create_screen_with_header(lv_obj_t ** out_scr, const char * title, lv_event_cb_t back_cb) {
-    lv_obj_t * scr = lv_obj_create(nullptr);
-    lv_obj_set_style_bg_color(scr, bg(), 0);
-    *out_scr = scr;
-
-    // Status bar (see ui/status_bar.h -- the persistent AA-style bottom
-    // bar every screen but reverse_camera_screen.cpp gets); order
-    // relative to the back button/title below doesn't matter, both are
-    // absolutely positioned and don't overlap (bar is pinned to the
-    // bottom edge).
-    status_bar::create(scr);
-    add_back_button(scr, back_cb);
-    return add_title(scr, title);
-}
 
 void style_card(lv_obj_t * obj) {
     lv_obj_add_style(obj, &styles().card, 0);

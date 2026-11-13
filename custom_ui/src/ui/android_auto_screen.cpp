@@ -16,7 +16,6 @@
 #include "core/async_worker.h"
 #include "core/sized_thread.h"
 #include "ui/bluetooth_screen.h"
-#include "ui/status_bar.h"
 #include "ui/theme.h"
 #include "ui/staging/nav_rail.h"
 #include "ui/staging/theme.h"

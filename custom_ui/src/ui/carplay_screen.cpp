@@ -41,11 +41,16 @@ void carplay_poll_timer_cb(lv_timer_t * timer) {
 
     if (is_linked && !w->connected) {
         w->connected = true;
-        lv_label_set_text(w->title_lbl, "Apple CarPlay Active");
-        lv_label_set_text(w->subtitle_lbl, "Projection session running.");
+        lv_label_set_text(w->title_lbl, "iPhone connected");
+        // 2026-11-13: was "Resume CarPlay" -- but the button only ever
+        // opened Bluetooth pairing, and there is nothing to resume yet:
+        // carplay-sidecar (carplay/main.cpp) is still a placeholder, so
+        // custom_ui can't show the CarPlay picture. Say so, and hide the
+        // button rather than offer an action that doesn't do what it says.
+        lv_label_set_text(w->subtitle_lbl, "CarPlay is connected, but showing it inside this UI isn't supported yet.");
         lv_label_set_text(w->state_lbl, "Connected");
         lv_obj_set_style_text_color(w->state_lbl, staging_ui::theme::success(), 0);
-        lv_label_set_text(w->action_label, "Resume CarPlay");
+        lv_obj_add_flag(w->action_btn, LV_OBJ_FLAG_HIDDEN);
     } else if (!is_linked && w->connected) {
         w->connected = false;
         lv_label_set_text(w->title_lbl, "Apple CarPlay");
@@ -53,6 +58,7 @@ void carplay_poll_timer_cb(lv_timer_t * timer) {
         lv_label_set_text(w->state_lbl, "Ready to connect");
         lv_obj_set_style_text_color(w->state_lbl, staging_ui::theme::accent_primary(), 0);
         lv_label_set_text(w->action_label, "Pair iPhone (Bluetooth)");
+        lv_obj_clear_flag(w->action_btn, LV_OBJ_FLAG_HIDDEN);
     }
 }
 

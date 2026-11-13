@@ -697,6 +697,13 @@ int main() {
         }
 
         static bool s_wasInAaBeforeReverse = false;
+        // Screen the user was on when the aftermarket camera overlay
+        // took over, so disengage can return there. core::navigation::
+        // pop() can't do it: every nav-rail destination is reached via
+        // replace(), so the stack is usually just one screen deep and
+        // pop() (which never removes the root) was a silent no-op --
+        // stranding the user on the camera screen after leaving reverse.
+        static staging_ui::NavDestination s_destBeforeReverse = staging_ui::NavDestination::Home;
         // Separate client instance for the reverse-gear "resume AA video"
         // fix below -- same one-off-IPC-call pattern as nightModeClient
         // further down (AndroidAutoClient's constructor is a real no-op,
@@ -817,6 +824,13 @@ int main() {
                 } else {
                     std::printf("%s [HAL:REVCAM] Reverse gear engaged -- opening aftermarket camera overlay (was_in_aa=%d)\n",
                                 core::log_timestamp().c_str(), s_wasInAaBeforeReverse ? 1 : 0);
+                    if (!staging_ui::current_destination(s_destBeforeReverse) ||
+                        s_destBeforeReverse == staging_ui::NavDestination::Camera) {
+                        // Already on the camera preview (opened manually
+                        // from the rail) -- Home is the sensible place to
+                        // land afterwards, not back on the preview.
+                        s_destBeforeReverse = staging_ui::NavDestination::Home;
+                    }
                     staging_ui::navigate_to(staging_ui::NavDestination::Camera);
                 }
             } else {
@@ -896,7 +910,7 @@ int main() {
                         // See the comment on the matching call above.
                         std::thread(resume_video_with_retry).detach();
                     } else {
-                        core::navigation::pop();
+                        staging_ui::navigate_to(s_destBeforeReverse);
                     }
                 }
             }

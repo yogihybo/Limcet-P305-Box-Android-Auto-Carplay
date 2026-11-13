@@ -428,9 +428,12 @@ lv_obj_t * create_settings_screen() {
     // --- Section 1: Display ---
     create_section_header(card, "DISPLAY");
     lv_obj_t * first_ctrl = nullptr;
-    create_stepper_row(card, &ui::icons::icon_brightness, "Backlight", 0, 100, 5,
+    // Floor of hal::kMinUserBacklight (not 0): 0% blanks the panel with no
+    // way to see this screen to undo it. apply_user_backlight() also keeps
+    // night-mode dimming in effect instead of forcing the daytime level.
+    create_stepper_row(card, &ui::icons::icon_brightness, "Backlight", hal::kMinUserBacklight, 100, 5,
                        "Backlight", "General",
-                       [](int v) { hal::set_backlight_brightness(v); },
+                       [](int v) { hal::apply_user_backlight(v); },
                        &first_ctrl);
 
     // --- Section 2: Audio ---

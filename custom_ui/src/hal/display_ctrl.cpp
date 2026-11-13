@@ -1,5 +1,8 @@
 #include "hal/display_ctrl.h"
+#include "core/config_store.h"
 #include "core/log_timing.h"
+#include <algorithm>
+#include <atomic>
 
 #include <cerrno>
 #include <cstdio>
@@ -147,6 +150,23 @@ bool set_backlight_brightness(int percent) {
         }
     }
     return false;
+}
+
+namespace {
+std::atomic<bool> g_backlightNight{false};
+}  // namespace
+
+bool apply_user_backlight(int percent) {
+    percent = std::clamp(percent, kMinUserBacklight, 100);
+    int target = g_backlightNight.load(std::memory_order_acquire)
+                     ? std::max(15, (percent * 30) / 100)
+                     : percent;
+    return set_backlight_brightness(target);
+}
+
+bool set_backlight_night_mode(bool night) {
+    g_backlightNight.store(night, std::memory_order_release);
+    return apply_user_backlight(core::default_store().get_int("Backlight", 100, "General"));
 }
 
 int get_backlight_brightness() {

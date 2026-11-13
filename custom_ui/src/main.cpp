@@ -337,14 +337,13 @@ int acquireSingleInstanceLock() {
 // Only dims the physical LCD panel LED backlight intensity via PWM sysfs,
 // leaving the VDE color matrix / hue / contrast 100% untouched.
 void apply_night_mode_brightness(bool nightMode) {
-    int savedBacklight = core::default_store().get_int("Backlight", 100, "General");
-    int target = nightMode
-                     ? std::max(15, static_cast<int>(savedBacklight * 0.30))
-                     : savedBacklight;
-
-    if (hal::set_backlight_brightness(target)) {
-        std::printf("%s [HAL:DISP] Night mode %s -- physical backlight set to %d%% (saved=%d%%)\n",
-                    core::log_timestamp().c_str(), nightMode ? "ON" : "OFF", target, savedBacklight);
+    // Routed through hal::set_backlight_night_mode() so the Settings
+    // screen's Backlight stepper (hal::apply_user_backlight()) applies the
+    // same night scaling instead of overriding it with the daytime value.
+    if (hal::set_backlight_night_mode(nightMode)) {
+        std::printf("%s [HAL:DISP] Night mode %s -- physical backlight re-applied (saved=%d%%)\n",
+                    core::log_timestamp().c_str(), nightMode ? "ON" : "OFF",
+                    core::default_store().get_int("Backlight", 100, "General"));
     } else {
         std::fprintf(stderr, "%s [HAL:DISP] apply_night_mode_brightness: set_backlight_brightness failed\n",
                      core::log_timestamp().c_str());

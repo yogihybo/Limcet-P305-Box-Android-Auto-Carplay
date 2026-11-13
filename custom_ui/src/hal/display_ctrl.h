@@ -56,4 +56,20 @@ void close_display_ctrl(DisplayCtrlHandle & h);
 bool set_backlight_brightness(int percent);
 int get_backlight_brightness();
 
+// Lowest user backlight setting: 0% blanks the panel entirely, leaving no
+// way to see the Settings screen to undo it.
+constexpr int kMinUserBacklight = 10;
+
+// Applies a USER backlight level (the "Backlight" setting, clamped to
+// [kMinUserBacklight, 100]) through the current day/night state: at night
+// the panel gets max(15, 30% of the setting). Use this, not
+// set_backlight_brightness(), for anything driven by the setting -- the
+// Settings screen used to write the raw daytime value, overriding night
+// dimming until the next headlight change.
+bool apply_user_backlight(int percent);
+
+// Records the headlight-driven night-mode state (main.cpp, from the MCU)
+// and re-applies the persisted "Backlight" setting through it.
+bool set_backlight_night_mode(bool night);
+
 }  // namespace hal

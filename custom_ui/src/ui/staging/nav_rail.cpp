@@ -102,7 +102,21 @@ void attach_nav_rail_to_group(lv_group_t * group) {
     }
 }
 
+bool current_destination(NavDestination & out) {
+    lv_obj_t * scr = core::navigation::current();
+    if (!scr) return false;
+    auto tag = reinterpret_cast<uintptr_t>(lv_obj_get_user_data(scr));
+    if (tag == 0) return false;
+    out = static_cast<NavDestination>(tag - 1);
+    return true;
+}
+
 void navigate_to(NavDestination dest) {
+    NavDestination cur;
+    if (current_destination(cur) && cur == dest) {
+        update_active_button(dest);
+        return;
+    }
     update_active_button(dest);
 
     switch (dest) {
@@ -134,7 +148,12 @@ void navigate_to(NavDestination dest) {
     }
 }
 
-lv_obj_t * create_nav_rail(lv_obj_t * /*parent*/, NavDestination active_dest, NavCallback cb) {
+lv_obj_t * create_nav_rail(lv_obj_t * parent, NavDestination active_dest, NavCallback cb) {
+    // Tag the owning screen with its destination (+1 so 0 means
+    // "untagged") -- read back by current_destination().
+    if (parent) {
+        lv_obj_set_user_data(parent, reinterpret_cast<void *>(static_cast<uintptr_t>(active_dest) + 1));
+    }
     lv_obj_t * rail = ensure_persistent_rail();
     auto & inst = rail_instance();
     inst.custom_callback = std::move(cb);

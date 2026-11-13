@@ -45,6 +45,10 @@ size_t depth() {
     return g_manager->depth();
 }
 
+lv_obj_t * current() {
+    return g_manager ? g_manager->current() : nullptr;
+}
+
 lv_group_t * focus_group() {
     // 2026-09-05: see this function's own header comment -- delegates
     // to ScreenManager, which owns a real per-screen group now.

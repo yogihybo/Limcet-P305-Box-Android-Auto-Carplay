@@ -13,6 +13,7 @@
 #include "hal/knob.h"
 #include "core/log_timing.h"
 #include "core/navigation.h"
+#include "core/async_worker.h"
 #include "core/sized_thread.h"
 #include "ui/bluetooth_screen.h"
 #include "ui/status_bar.h"
@@ -304,20 +305,45 @@ struct ScreenCtx {
     Widgets * widgets;
 };
 
+// Number of Android Auto screens currently alive. Normally 0 or 1, but
+// briefly 2 whenever a new AA screen is loaded while an old one is still
+// animating out (replace()/pop() delete the outgoing screen only once
+// the load animation finishes, i.e. AFTER the new one's factory ran).
+// screen_delete_cb() only tears down the shared "AA mode" state when the
+// LAST one goes away -- otherwise the outgoing copy's HIDE / allow_spawn
+// =false / screen_active=false would clobber what the incoming copy just
+// set up, leaving the projected video hidden behind a hidden GUI layer
+// (a black screen) after e.g. a reverse-gear exit back to AA.
+int g_live_aa_screens = 0;
+
+// SHOW/HIDE must reach the sidecar in the order they were issued -- two
+// independent detached threads (one from the incoming screen's create,
+// one from the outgoing screen's delete) gave no such guarantee.
+core::AsyncWorker & visibility_worker() {
+    static core::AsyncWorker worker;
+    return worker;
+}
+
 void screen_delete_cb(lv_event_t * e) {
     auto * ctx = static_cast<ScreenCtx *>(lv_event_get_user_data(e));
     lv_timer_delete(ctx->timer);
+    // Unconditional even if another AA screen is still alive: that
+    // screen's own Widgets::display_hidden starts out false, so it would
+    // never call show_display() itself -- it re-hides on its next poll
+    // tick if video is actually showing.
     if (ctx->widgets->display_hidden) {
         hal::show_display();
     }
     delete ctx->widgets;
     delete ctx;
+
+    if (--g_live_aa_screens > 0) {
+        return;
+    }
     // 2026-09-04: async -- see connect_btn_cb()'s own comment. Nothing
     // downstream depends on this completing before navigation away
     // finishes; the sidecar just needs to eventually hear about it.
-    core::SizedThread(core::kDefaultThreadStackSize, []() {
-        client().setVisible(false);
-    }).detach();
+    visibility_worker().enqueue([]() { client().setVisible(false); });
     hal::androidauto_screen_active().store(false, std::memory_order_release);
     // This screen is the one caller that ever needs allow_spawn=true --
     // see this file's own header comment above poll_timer_cb(). Leaving
@@ -336,10 +362,9 @@ lv_obj_t * create_android_auto_screen() {
     // 1. Persistent 5-Icon Navigation Rail (Android Auto active)
     staging_ui::create_nav_rail(scr, staging_ui::NavDestination::AndroidAuto);
 
+    ++g_live_aa_screens;
     // 2026-09-04: async -- see screen_delete_cb()'s own comment.
-    core::SizedThread(core::kDefaultThreadStackSize, []() {
-        client().setVisible(true);
-    }).detach();
+    visibility_worker().enqueue([]() { client().setVisible(true); });
     hal::androidauto_screen_active().store(false, std::memory_order_release);
     // See this file's own header comment above poll_timer_cb() -- this
     // screen being open IS "AA mode active", the documented spawn

@@ -29,6 +29,10 @@ void push(ScreenManager::ScreenFactory factory);
 void replace(ScreenManager::ScreenFactory factory);
 void pop();
 size_t depth();
+// The screen currently on top of the stack (nullptr before init()/the
+// first push()). Updated synchronously by push()/replace()/pop(), so it
+// already names the incoming screen while its load animation is running.
+lv_obj_t * current();
 
 // 2026-09-05: real hardware bug found via code review -- this used to
 // return ONE process-wide lv_group_t every screen piled its own

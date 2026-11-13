@@ -20,8 +20,19 @@ using NavCallback = std::function<void(NavDestination)>;
 // If cb is null/empty, standard top-level navigation (navigate_to) is used.
 lv_obj_t * create_nav_rail(lv_obj_t * parent, NavDestination active_dest, NavCallback cb = nullptr);
 
-// Standard top-level navigation routing between the 5 destinations
+// Standard top-level navigation routing between the 5 destinations.
+// A no-op when `dest` is already the screen on top of the stack --
+// re-creating a screen on top of itself runs the outgoing copy's
+// LV_EVENT_DELETE cleanup AFTER the incoming copy's setup (the outgoing
+// screen is only deleted once the load animation finishes), which for
+// the Android Auto screen meant a stale "HIDE video" landing after the
+// new screen's "SHOW" -- see android_auto_screen.cpp's screen_delete_cb().
 void navigate_to(NavDestination dest);
+
+// The destination of the screen currently on top of the stack, as tagged
+// by create_nav_rail(). Returns false if the top screen has no tag (or
+// there is no screen yet).
+bool current_destination(NavDestination & out);
 
 // 2026-09-06: real hardware bug found via code review -- the 5 rail
 // buttons are created ONCE (on lv_layer_top(), shared across every

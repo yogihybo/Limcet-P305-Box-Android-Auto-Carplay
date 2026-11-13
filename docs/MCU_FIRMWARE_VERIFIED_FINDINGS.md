@@ -3968,6 +3968,8 @@ Reviewed the new hardware-in-the-loop test tool, which drives the spare board pu
 
 ### 25. Real-vehicle bug report: touch input stops until a soft reset — I2C bus-lockup fix (2026-09-13)
 
+> **Correction (2026-11-13):** see section 30 — the vehicle firmware's touch controller is not driven with the GT911 protocol, its bus-recovery routine generates no SCL clocks at all (not "one pulse"), and the real-vehicle lockup is shared with the factory head unit's own touch.
+
 User-reported symptom on the live device: touch input occasionally stops registering and never recovers on its own; a soft reset of the head unit restores it. The knob (rotary encoder) keeps working throughout.
 
 **Root-caused in `hardware/MCU/source/src/touch_driver.c`, matching the symptom exactly.** The knob is plain GPIO polling (`touch_process_knob()`, no shared failure path), while touch goes through `I2C1` to a Goodix GT911 — exactly the asymmetry the report describes. `i2c1_read_bytes()`/`i2c1_write_byte()`'s error path only ever wrote `STOP` to `I2C1->CR1` on timeout:
@@ -3990,6 +3992,8 @@ This is a register write to the *peripheral*, not an electrical fix to the *bus*
 Build- and hardware-verified: clean build, zero warnings, `CFSR=0`, 22/23 HIL tests pass with the one failure independently explained and ruled out as unrelated test-harness flakiness.
 
 ### 26. Does the real factory firmware have the same touch-lockup bug? — traced in the dump: yes, and its own fix is real but weaker than ours (2026-09-13)
+
+> **Correction (2026-11-13):** see section 30 — the vehicle firmware's touch controller is not driven with the GT911 protocol, its bus-recovery routine generates no SCL clocks at all (not "one pulse"), and the real-vehicle lockup is shared with the factory head unit's own touch.
 
 Directly asked and traced: does `live_app_1302.bin`'s own touch-polling path have the same I2C-lockup vulnerability section 25 fixed, or does the real vendor firmware handle this better?
 
@@ -4065,3 +4069,81 @@ State 5 (the terminus of path 1) and state 21 (the terminus of path 2) execute *
 
 **What remains open**: the exact meaning of the states-3/4 16-bit accumulator field (length vs. checksum-seed vs. something else) and its expected/validated value (state 5's own "reads a register, branches on zero/nonzero" check reads from a *peripheral-adjacent* address, not obviously the accumulator value itself — these may be two separate checks, not yet disentangled); the literal retry-limit constant; and — as with sections 27-28 — **none of this has been hardware-tested with real UART signaling**, since USART2 still is not physically wired on the bench. This is a disassembly-only trace, following the same "trust but verify" standard as the rest of this document: treat it as a strong, specific hypothesis to test against real wiring once the UART-USB adapter is connected, not as confirmed-on-silicon fact the way sections 27-28's backend now is.
 
+
+### 30. Real-vehicle touch lockup, re-traced in the factory firmware: the touch task, its gates, and why only a factory head-unit reset recovers it (2026-11-13, static disassembly of `live_factory_app_52k_reconstructed.bin` + live symptom reports — NOT hardware-measured yet)
+
+**Symptom, as reported from the vehicle (factory `Limcet-V1.0-1302` MCU firmware, never reflashed):** touch stops working and stays dead. While it is dead:
+- custom_ui's MCU Live Log shows **no `CMD 0x20` (touch) frames at all** when touching — the MCU is not reporting touch, so this is not a custom_ui-side input bug;
+- the rotary knob keeps working (separate GPIO path, same UART link);
+- **touch on the factory screen is dead too** (HOME long-press to the OEM UI, then touch);
+- restarting custom_ui is **not** needed; **resetting the factory head unit** restores touch.
+
+Together these place the fault in the touch controller / its I2C bus, which the evidence below indicates is shared between this MCU and the factory head unit — not in custom_ui, and not in either side's polling logic alone.
+
+#### 30.1 The factory touch task (`0x0800A1BC`)
+
+A 7-state machine (`tbb` at `0x0800A1DC`, state byte at `0x2000025A+0x12`, ms timer at `0x20000078`):
+
+| State | Behavior |
+|---|---|
+| 0 | clear timer, → 1 |
+| 1 | wait ≥200 ms, one poll (`0x08009F14`), → 2 |
+| 2 | wait ≥100 ms, → 3 |
+| 3 | wait ≥200 ms, → 4 |
+| 4 | **running**: every ≥20 ms, poll the controller variant selected by `0x200001BC+0x36` (1 or 3 → `0x08009F14`, 2 → `0x0800A188`) |
+| 5, 6 | advance / idle |
+
+Before the state switch, if `0x200001BC[0] == 0` the task resets everything — failure counter, state (back to 0), timer — and returns. **That is the only path back to state 0.**
+
+State 4 additionally requires **all** of:
+- `0x200001BC[0] != 0` (power state, §30.3),
+- `0x200001BC+0x14 == 0` (a hold-off timer, loaded with 6000 on power-up, §30.3),
+- **`0x2000025A[0] == 1`** — the "aftermarket screen active" mode byte (§30.4). In any other mode the MCU does not poll touch at all (the factory head unit handles it).
+
+#### 30.2 Two controller variants; neither is the GT911 protocol the clean-room source assumes
+
+Variant is chosen from board strap inputs read by `0x08008794` (5 GPIO inputs debounced into a code; bits [1:0] come from **PC11** and **PA10**), so it is fixed per board. Which variant this vehicle's board has is not yet known.
+
+- **Variants 1/3 — I2C address `0xBA`, 8-bit register addresses**: `0x08009F14` reads reg `0x08` (4 B → `0x20001003`), reg `0x20` (4 B → `0x20000FFF`), reg `0x2B` (1 B → `0x20001007`) via helper `0x080099BA` (I2C1, `0x40005400`). `0x08009DB4` builds 10-bit coordinates, `X = (b0<<2)|(b1&3)`, `Y = (b2<<2)|(b3&3)`, then applies a piecewise offset calibration (X −160/−120/−80/−60 by range, Y −260…), clamped to 800×480. `0xBA` is also the GT911's 8-bit address, but the register map is not GT911's 16-bit `0x8140+` map.
+- **Variant 2 — I2C address `0x98`, 16-bit register `0x2201`**: `0x0800A188` reads 8 B via helper `0x08009B66` into `0x20001008`; `0x08009F68` decodes status `[9]==2`, pen-down `[10] & 0x80`, and **8-bit** coordinates `X = [11]·25/8`, `Y = 480 − [12]·15/8`. Press/release edges are reported to the SoC as `CMD 0x20`.
+
+**Correction to sections 25/26 and to `hardware/MCU/source/src/touch_driver.c`**: the "Goodix GT911 at `0x814E`" model is the clean-room's assumption, not what the vehicle firmware does. Section 26 was right that `0xBA` appears, but the transaction pattern doesn't match a GT911.
+
+#### 30.3 Power-state gate: ACC on PD2 (`0x080088AC`)
+
+`0x08006EAC` reads **PD2** (GPIOD `0x40011400`, mask 4 — ACC sense, active low per `docs/1.6_BD37033.md`). Debounced:
+- ON (`0x200001BC[0]=1`) → OFF after 2 consecutive "off" reads; if the mode byte was 1 it is set to 2 (factory).
+- OFF → ON after 4 consecutive "on" reads, and loads `0x200001BC+0x14 = 6000` (a ~6 s hold-off before touch polling resumes).
+
+So the touch task only fully restarts on an ACC cycle.
+
+#### 30.4 The mode byte `0x2000025A[0]` — set by SoC `CMD 0x82`; gates touch polling
+
+The SoC→MCU command table at `0x0800B988` is `{cmd, handler}` pairs: `0x81 → 0x0800643C`, **`0x82 → 0x080065D8`**, `0xA0 → 0x08006468` (settings), `0xFF → 0x0800660E`, `0xE1 → 0x0800665C`.
+
+`CMD 0x82` handler: `payload[0] == 1` → mode = 1 ("aftermarket", touch polled), `[1] = 4`; anything else → mode = 2 ("factory"), `[1] = 1`; then posts an internal event (`0x080078E4(0,1,0)`). **Correction to `docs/MCU_COMMAND_REFERENCE.md`'s "CMD 0x82 real MCU-side trace"**, which concluded this handler "never drives any GPIO output" and only updates an internal struct: that's accurate as far as GPIO goes, but the struct byte it writes is exactly the one that enables or disables touch polling. custom_ui sends `CMD 0x82 {0x01}` once, in `send_startup_sequence()`.
+
+Other writers of the mode byte:
+- key handler (`0x08006780`): a **long-press (state 2) of key 12 (HOME) or key 9** toggles 1 ↔ 2 — the factory/custom_ui screen switch;
+- key 5 release (with a flag set) → 2;
+- ACC-off path (§30.3) → 2;
+- power-down path `0x08007B2A(r0=0)` → `0x08006E08`: mode = 2 plus default GPIO outputs, **with no outgoing message**; nothing on wake sets it back to 1.
+
+This was first suspected as the lockup cause (custom_ui keeps running, MCU mode silently goes to 2, polling stops). The vehicle reports rule it out as the primary cause: touch recovers without restarting custom_ui (so without a fresh `CMD 0x82`), and factory-screen touch is dead too.
+
+#### 30.5 No recovery from a persistent bus/controller fault while running
+
+- The poll keeps a **consecutive-failure counter at `0x20001010`** (`0x20000FFF+0x11`; incremented on failure at `0x08009F52`/`0x0800A1A6`, cleared on success and in the state-reset path). **Nothing ever reads it to act on it** — no threshold, no re-init. (Exhaustive scan: every load/store of that byte.)
+- Each failed transaction goes through the helpers' shared error exit (section 26) to `0x08009790`, which **reconfigures PB6/PB7 as push-pull outputs (GPIO mode `0x10`), sets PB6 (SCL) high, delays, sets PB7 (SDA) high**, then calls an I2C1 control function and fully re-inits I2C1 (`0x080096D8`). **Correction to section 26**: this does not generate even one SCL pulse — SCL is only ever driven high, never low — so it cannot clock a slave that is stuck mid-byte holding SDA low. It also drives SDA push-pull high against whatever may be pulling it low. If the factory head unit shares this bus and is mid-transaction when this runs, it would also corrupt that transfer (inference, not hardware-confirmed).
+- The only full restart is the ACC cycle (§30.3).
+
+#### 30.6 Diagnosis and constraints
+
+Factory-screen touch being dead too, and a factory head-unit reset fixing it, mean the shared element — the touch controller or its I2C lines — is what's wedged; the factory head unit appears to own the controller (its reset re-initializes or re-powers it and frees the bus). Two cases need telling apart, by **measuring SDA/SCL while touch is dead**:
+
+1. **Bus stuck** (SDA and/or SCL held near 0 V): a slave or master holding the line. A correct 9-clock recovery from the MCU would likely free it — but only via MCU firmware changes.
+2. **Bus idle** (both lines high) but the controller unresponsive: the controller itself is hung; only its reset/power (apparently controlled by the factory head unit) recovers it.
+
+**Project constraint**: the vehicle MCU is not being reflashed (limited recovery paths; see the live-update safety discussion in sections 27-29). No `CMD`-level SoC request found in this trace makes the factory firmware re-run touch init or a proper bus recovery. Within that constraint the available steps are: measure the bus as above; identify the touch controller part; log what precedes each lockup from the SoC side (custom_ui sees every MCU frame) to find the trigger; and keep custom_ui fully knob-operable so a touch lockup is not a dead end.
+
+**Clean-room source note** (`hardware/MCU/source`, not on the vehicle): its I2C bus recovery (section 25, commit `cd6f210`) is a real improvement in principle, but it is written against the assumed GT911 protocol, and its PB0 "touch relay" output does not match the vehicle firmware, which only ever *reads* PB0 (`0x08006FDC`, sampled bit-by-bit into a shift register at `0x0800ABBE` — purpose not traced).

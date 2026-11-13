@@ -1,6 +1,7 @@
 #include "hal/knob.h"
 
 #include <chrono>
+#include <cstdio>
 #include <cstdint>
 
 #include "core/async_worker.h"
@@ -142,6 +143,11 @@ void mcu_knob_read_cb(lv_indev_t * indev, lv_indev_data_t * data) {
                 /* Held while rotating -> card nudge (DPAD_RIGHT / DPAD_LEFT) */
                 std::uint32_t key = (ticks > 0) ? kKeycodeDpadRight : kKeycodeDpadLeft;
                 int32_t count = (ticks > 0) ? ticks : -ticks;
+                // Logged so a hardware test shows whether hold-and-turn is
+                // being recognised at all (vs. reaching AA as plain rotation).
+                std::printf("[HAL:KNOB] hold+turn -> %s x%d (raw_pressed=%d)\n",
+                            key == kKeycodeDpadRight ? "DPAD_RIGHT" : "DPAD_LEFT",
+                            static_cast<int>(count), raw_pressed ? 1 : 0);
                 for (int32_t i = 0; i < count; ++i) {
                     knob_forward_worker().enqueue([key]() { androidauto_client().sendKey(key); });
                 }

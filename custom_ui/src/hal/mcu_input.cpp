@@ -703,7 +703,16 @@ void McuInputHal::run() {
                     // ~30ms polls can never be silently dropped.
                     knob_press_events_.fetch_add(1, std::memory_order_relaxed);
                 }
-                knob_pressed_.store(b4 == 1, std::memory_order_release);
+                // 2026-11-14: b4 is 0 = release, 1 = press, 2 = held past the
+                // MCU's long-press threshold (~1.4s, confirmed for HOME; the
+                // factory firmware's key handler treats state 2 generically).
+                // Was `b4 == 1`, which read a state-2 frame as a RELEASE --
+                // breaking hold-and-turn (and firing a spurious select) once
+                // the knob had been held that long.
+                knob_pressed_.store(b4 != 0, std::memory_order_release);
+                if (b4 > 1) {
+                    std::printf("%s [HAL:MCU] Knob push b4=%u (held)\n", core::log_timestamp().c_str(), b4);
+                }
             } else if (b3 == kBtnHome) {
                 if (b4 == 1) {
                     // 2026-09-05: real hardware bug found via code

@@ -4194,7 +4194,7 @@ State byte `0x200007E8`, ms counter at `+2`, both advanced by the timer task (`0
 **Wake:** `0x0800AE40(1)`; clocks back up (`0x08007B70(1)`: HSE, PLL, latency 2); state → 1; delay; `0x08007B2A(1)` → GPIO re-init (`0x08006CE0`: PC14, PB4, PC12, PB3, PB5 high, PB2 high, PC13 low) and the rest of the bring-up.
 
 Outputs switched on at wake and off at power-down — PC14, PB4, PC12, PB3, PB5 — are very likely rail/peripheral enables (SoC, LCD, amplifier, ...). PB14 is the SoC reset line per this document's earlier finding. **The identity and polarity of each rail are inferred from the on/off pattern, not confirmed on hardware.** Two oddities:
-- `0x08006C1A` (PC15) never drives the pin high: its "set" branch loads GPIOC and branches straight to the return without calling `GPIO_SetBits`. Either a real firmware quirk or a reconstruction gap.
+- ~~`0x08006C1A` (PC15) never drives the pin high~~ -- **resolved as a reconstruction error, not firmware behavior** (section 32): the reconstructed `BL GPIO_SetBits` at `0x08006C26` had its first halfword byte-swapped. On the vehicle PC15 *is* driven high at wake (`0x08006CE0` passes 0 to it, so it's driven low there; power-down also drives it low).
 - PC14 is driven as an output here, although the pin map records it as unconnected.
 
 **No sleep instruction, ever.** The firmware has no `WFI`/`WFE` and never touches `SCB_SCR`, `PWR`, `BKP`, `RTC` or `RCC_BDCR`. The Cortex-M3 never enters Sleep, Stop or Standby. The "low-power" state is the 1 MHz busy loop above.
@@ -4219,3 +4219,19 @@ With the car off, the MCU stays powered on the always-on rail, busy-looping at ~
 - **Firmware**: the factory firmware never enables the RTC/backup domain and has no command to set or read time.
 
 A working MCU-side clock therefore needs an MCU firmware change: start the RTC, either keep HSE on in the parked loop or calibrate LSI, and add set/read commands. That means reflashing the MCU, which this project currently avoids.
+
+### 32. What runs on the bench board vs. the vehicle: one reconstruction error found and fixed (2026-11-14)
+
+**What the bench runs.** Both bench images, `combined_factory_boot_factory_app_64k.bin` and `combined_cleanroom_boot_factory_app_64k.bin`, contain an app region (`0x3000` onward) byte-identical to `live_factory_app_52k_reconstructed.bin` -- the file sections 30-31 were traced from. Only the bootloader half differs. `tools/test_factory_app_hil.py` doesn't flash anything; it tests whatever is on the board, and git doesn't record which combined image is currently flashed.
+
+**How much is real silicon.** The reconstruction differs from the raw SWD read in 2,247 bytes: the filled gaps, mostly at 256-byte boundaries. Checked against sections 30-31: the SysTick/scheduler setup, task table, power transition (`0x08007B2A`), ACC debounce, I2C recovery routine and SoC command table are entirely silicon-read. The power state machine's `tbb`, the clock switch, the GPIO setters, the touch task, and the tails of the CMD 0x82 and key handlers each contain filled bytes; their decoded logic is consistent with the surrounding silicon-read code.
+
+**The error.** Every reconstructed `BL` was cross-checked against the 241 call targets used from fully silicon-read code, trying first-halfword, second-halfword and both-halfword byte swaps. Exactly one mismatch: `0x08006C26` held `f7 fe 08 fa` instead of `fe f7 08 fa` -- a byte-swapped `BL 0x0800503A` (`GPIO_SetBits`). That's the same error class the bootloader reconstruction hit (`BOOTLOADER_HANG_TRACE_2026-09-14.md`). Effect: **on the bench, PC15 was never driven high; on the vehicle it is.** Fixed in `tools/patch_factory_app_live.py` (patch word for `0x08006C24`: `0xFEF748E5` -> `0xF7FE48E5`), the reconstruction regenerated (exactly two bytes changed; SHA-256 `8907395e...`), and both combined images re-spliced (bootloader halves unchanged). **Not yet re-flashed or re-verified on the spare board.** Other fill-error classes (non-`BL` instructions) can't be checked this generically; this scan only rules out further swapped calls.
+
+**Other bench-vs-vehicle differences that affect results:**
+- **No touch controller.** Every I2C touch read times out, slowing the cooperative main loop -- the likely source of the ~100 Hz "Task 6" rate (§31.1).
+- **No ACC input.** PD2 reads "off", so without the HIL suite's SRAM writes the board powers down ~5 s after boot. The suite's "CAN keep-alive" phase writes the power timer and ACC flag directly; it doesn't show that CAN traffic does so (§31.2).
+- **Watchdog frozen in debug.** The suite sets `DBGMCU_CR = 0x307`, which includes `DBG_IWDG_STOP`. A plain debug session on the vehicle doesn't, so a halt in the parked loop would let the IWDG reset the MCU (§31.3).
+- **No SoC on USART2.** No SoC-side traffic or CMD 0x82 from custom_ui.
+- **Crystal.** The spare board's 25 MHz crystal matches the factory bootloader's PLL configuration (§16); the vehicle board's crystal hasn't been physically checked.
+- **State labels.** The suite's header comment labels power state `0x02` as RUN and `0x04` as SLEEP; its own assertions (and §31.2) use 3 for running and 4/5 for power-down.

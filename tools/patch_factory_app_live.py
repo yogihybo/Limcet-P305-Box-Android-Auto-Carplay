@@ -360,7 +360,11 @@ FACTORY_APP_PATCH_MAP = {
     0x08006C04: (0x2120B124, "cbz r4, #0x8006c10 / movs r1, #0x20 (Branch reset / Pin 5 mask 0x20)"),
     0x08006C1C: (0xB12C4604, "mov r4, r0 / cbz r4, #0x8006c2c (PC15 controller r4 store & zero branch)"),
     0x08006C20: (0x4100F44F, "mov.w r1, #0x8000 (PC15 mask 0x8000)"),
-    0x08006C24: (0xFEF748E5, "ldr r0, [pc, #0x394] / bl #0x800503a hw1 (Load GPIOC & GPIO_SetBits hw1)"),
+    # 2026-11-14: was 0xFEF748E5 -- the BL's first halfword byte-swapped
+    # (bytes f7 fe instead of fe f7), so the call decoded as garbage and PC15
+    # was never set. Found by cross-checking every reconstructed BL against
+    # call targets used from silicon-read code (MCU_FIRMWARE_VERIFIED_FINDINGS.md sec. 32).
+    0x08006C24: (0xF7FE48E5, "ldr r0, [pc, #0x394] / bl #0x800503a hw1 (Load GPIOC & GPIO_SetBits hw1)"),
     0x08006C28: (0xE004FA08, "bl #0x800503a hw2 / b #0x8006c36 (GPIO_SetBits hw2 & exit branch)"),
     0x08006C34: (0xBD10FA04, "bl #0x800503e hw2 / pop {r4, pc} (GPIO_ResetBits hw2 & function return)"),
 

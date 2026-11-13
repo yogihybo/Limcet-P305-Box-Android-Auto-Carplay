@@ -524,6 +524,7 @@ int main() {
                         break;
                     }
 
+                    if (hal::auto_reconnect_suppressed()) break;
                     std::printf("%s [BT] Auto-reconnect attempt %d/15...\n",
                                 core::log_timestamp().c_str(), attempt);
                     if (hal::auto_reconnect_paired_device(bt)) {
@@ -537,7 +538,10 @@ int main() {
                 // Persistent background reconnect: keep reconnecting at low frequency if phone wasn't present at boot
                 while (true) {
                     std::this_thread::sleep_for(std::chrono::seconds(25));
-                    if (hal::get_connected_device_mac().empty()) {
+                    // Skipped after a user-initiated Disconnect (see
+                    // hal::disconnect_device()) -- otherwise this loop
+                    // silently undoes it within 25s.
+                    if (!hal::auto_reconnect_suppressed() && hal::get_connected_device_mac().empty()) {
                         hal::auto_reconnect_paired_device(bt);
                     }
                 }

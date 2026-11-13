@@ -51,11 +51,22 @@ bool get_adapter_address(BluetoothHandle & h, std::string & address);
 // Enumerates all paired devices
 bool list_paired_devices(BluetoothHandle & h, std::vector<std::string> & devices);
 
-// Connects to a paired Bluetooth device by MAC address
+// Connects to a paired Bluetooth device by MAC address. Also clears any
+// auto-reconnect suppression left by disconnect_device() -- connecting
+// is an explicit request for a link, so background reconnects may
+// resume keeping it up.
 bool connect_device(BluetoothHandle & h, const std::string & mac);
 
-// Disconnects currently active Bluetooth profiles
+// Disconnects the currently connected device (BlueZ Device1.Disconnect)
+// and suppresses background auto-reconnect until the next
+// connect_device() or process restart, so a deliberate user disconnect
+// isn't undone ~25s later by main.cpp's reconnect loop.
 bool disconnect_device(BluetoothHandle & h);
+
+// True after a user-initiated disconnect_device(), until the next
+// connect_device(). Background reconnect loops check this before calling
+// auto_reconnect_paired_device().
+bool auto_reconnect_suppressed();
 
 // Removes/unpairs a device from BlueZ
 bool remove_paired_device(BluetoothHandle & h, const std::string & mac);

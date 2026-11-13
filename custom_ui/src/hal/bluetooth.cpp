@@ -108,6 +108,7 @@ std::atomic<bool> g_aaNavigatePending{false};
 std::atomic<bool> g_aaProfileThreadStarted{false};
 std::atomic<bool> g_bluezWatchdogStarted{false};
 std::atomic<bool> s_agent_thread_started{false};
+std::atomic<bool> g_autoReconnectSuppressed{false};
 
 // Helpers for executing BlueZ/bluetoothctl commands and capturing stdout
 bool run_command_capture(const std::string & cmd, std::vector<std::string> & lines_out) {
@@ -1376,6 +1377,7 @@ bool list_paired_devices(BluetoothHandle & /*h*/, std::vector<std::string> & dev
 }
 
 bool connect_device(BluetoothHandle & /*h*/, const std::string & mac) {
+    g_autoReconnectSuppressed.store(false, std::memory_order_release);
     std::string dev_path = "/org/bluez/hci0/" + mac_to_dbus_path(mac);
     std::printf("%s [BT] Initiating connection to device MAC=%s (D-Bus path: %s)\n",
                 core::log_timestamp().c_str(), mac.c_str(), dev_path.c_str());
@@ -1398,8 +1400,26 @@ bool connect_device(BluetoothHandle & /*h*/, const std::string & mac) {
 }
 
 bool disconnect_device(BluetoothHandle & /*h*/) {
-    std::printf("%s [BT] Disconnecting active links\n", core::log_timestamp().c_str());
-    return true;
+    // Suppress first, so a background reconnect racing this call can't
+    // slip in between the Disconnect and the flag being set.
+    g_autoReconnectSuppressed.store(true, std::memory_order_release);
+    std::string mac = get_connected_device_mac();
+    if (mac.empty()) {
+        std::printf("%s [BT] disconnect_device: no connected device\n", core::log_timestamp().c_str());
+        return true;
+    }
+    std::string dev_path = "/org/bluez/hci0/" + mac_to_dbus_path(mac);
+    std::printf("%s [BT] Disconnecting device MAC=%s (D-Bus path: %s); auto-reconnect suppressed\n",
+                core::log_timestamp().c_str(), mac.c_str(), dev_path.c_str());
+    std::string cmd = "dbus-send --system --print-reply --dest=org.bluez --type=method_call " + dev_path +
+                      " org.bluez.Device1.Disconnect >/dev/null 2>&1";
+    bool ok = run_command_simple(cmd);
+    std::printf("%s [BT] Disconnect %s: %s\n", core::log_timestamp().c_str(), mac.c_str(), ok ? "OK" : "failed");
+    return ok;
+}
+
+bool auto_reconnect_suppressed() {
+    return g_autoReconnectSuppressed.load(std::memory_order_acquire);
 }
 
 bool remove_paired_device(BluetoothHandle & /*h*/, const std::string & mac) {

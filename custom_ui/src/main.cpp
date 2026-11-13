@@ -662,7 +662,7 @@ int main() {
                         // event) is safe. resume_video_with_retry()
                         // (declared above) adds a bounded retry on top
                         // of the one-shot call -- see its own comment.
-                        std::thread(resume_video_with_retry).detach();
+                        core::SizedThread(core::kDefaultThreadStackSize, resume_video_with_retry).detach();
                     }
                 } else {
                     std::printf("%s [HAL:REVCAM] Reverse gear disengaged -- returning to previous screen (was_in_aa=%d)\n",
@@ -670,7 +670,7 @@ int main() {
                     if (s_wasInAaBeforeReverse) {
                         staging_ui::navigate_to(staging_ui::NavDestination::AndroidAuto);
                         // See the comment on the matching call above.
-                        std::thread(resume_video_with_retry).detach();
+                        core::SizedThread(core::kDefaultThreadStackSize, resume_video_with_retry).detach();
                     } else {
                         staging_ui::navigate_to(s_destBeforeReverse);
                     }
@@ -707,9 +707,14 @@ int main() {
                 // sidecar starts or a phone connects after boot, it always
                 // receives the authoritative headlight state even if headlights
                 // were already on before Android Auto loaded.
-                std::thread([nightMode]() {
+                // 2026-11-13: one ordered worker instead of a new
+                // std::thread every 3s (default 8MB-stack threads, no
+                // ordering between overlapping sends). Depth 2 with
+                // drop-oldest: only the latest state matters.
+                static core::AsyncWorker nightModeWorker(2);
+                nightModeWorker.enqueue([nightMode]() {
                     nightModeClient.sendNightMode(nightMode);
-                }).detach();
+                });
                 lastNightMode = nightMode;
                 nightModeInitialized = true;
             }

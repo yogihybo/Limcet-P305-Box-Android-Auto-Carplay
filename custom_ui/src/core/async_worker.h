@@ -18,8 +18,9 @@
 // never blocks on I/O), a single dedicated worker thread drains it in
 // order. Bounded queue depth so a genuinely wedged sidecar can't grow
 // this without limit on a 173MB/no-swap device -- drops the OLDEST
-// pending job when full, so a recovering sidecar gets the most recent
-// input state rather than working through a stale backlog.
+// droppable pending job when full (see enqueue()), so a recovering
+// sidecar gets the most recent input state rather than working through
+// a stale backlog.
 
 #include "core/sized_thread.h"
 
@@ -48,13 +49,22 @@ public:
     AsyncWorker(const AsyncWorker &) = delete;
     AsyncWorker & operator=(const AsyncWorker &) = delete;
 
-    void enqueue(std::function<void()> job) {
+    // droppable=false marks a job that must survive queue overflow (e.g. a
+    // touch DOWN/UP edge: dropping one leaves the phone thinking a finger
+    // is still on the screen, or never down). When full, the OLDEST
+    // droppable job is discarded; only if none are droppable does the
+    // oldest job go regardless, so the queue stays bounded either way.
+    void enqueue(std::function<void()> job, bool droppable = true) {
         {
             std::lock_guard<std::mutex> lock(mtx_);
             if (queue_.size() >= max_queued_) {
-                queue_.pop_front();
+                auto victim = queue_.begin();
+                for (auto it = queue_.begin(); it != queue_.end(); ++it) {
+                    if (it->droppable) { victim = it; break; }
+                }
+                queue_.erase(victim);
             }
-            queue_.push_back(std::move(job));
+            queue_.push_back({std::move(job), droppable});
         }
         cv_.notify_one();
     }
@@ -70,7 +80,7 @@ private:
                     if (stopping_) return;
                     continue;
                 }
-                job = std::move(queue_.front());
+                job = std::move(queue_.front().fn);
                 queue_.pop_front();
             }
             job();
@@ -80,7 +90,11 @@ private:
     size_t max_queued_;
     std::mutex mtx_;
     std::condition_variable cv_;
-    std::deque<std::function<void()>> queue_;
+    struct Job {
+        std::function<void()> fn;
+        bool droppable;
+    };
+    std::deque<Job> queue_;
     bool stopping_ = false;
     SizedThread thread_;
 };

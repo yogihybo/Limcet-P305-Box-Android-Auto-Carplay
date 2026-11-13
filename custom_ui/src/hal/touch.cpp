@@ -77,7 +77,7 @@ void mcu_touch_read_cb(lv_indev_t * indev, lv_indev_data_t * data) {
             touch_last_sent_y() = state.y;
             touch_forward_worker().enqueue([x, y]() {
                 androidauto_client().sendTouch(x, y, TouchAction::Down);
-            });
+            }, /*droppable=*/false);
         } else if (state.pressed && was_pressed) {
             // Deduplicate stationary holds: only forward Move when coordinates change
             if (state.x != touch_last_sent_x() || state.y != touch_last_sent_y()) {
@@ -94,7 +94,7 @@ void mcu_touch_read_cb(lv_indev_t * indev, lv_indev_data_t * data) {
             touch_last_sent_y() = -1;
             touch_forward_worker().enqueue([x, y]() {
                 androidauto_client().sendTouch(x, y, TouchAction::Up);
-            });
+            }, /*droppable=*/false);
         }
         touch_was_pressed() = state.pressed;
 

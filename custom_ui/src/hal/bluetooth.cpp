@@ -108,6 +108,13 @@ std::atomic<bool> g_aaNavigatePending{false};
 std::atomic<bool> g_aaProfileThreadStarted{false};
 std::atomic<bool> g_bluezWatchdogStarted{false};
 std::atomic<bool> s_agent_thread_started{false};
+// Bumped for every bt-agent reader thread spawned. The watchdog's restart
+// tiers clear s_agent_thread_started to force a fresh agent; the new
+// thread then killall's the old bt-agent, whose reader thread wakes up on
+// EOF -- and must NOT clear the flag again (that would mark the live, new
+// agent as "not running", so the next ensure_bluetooth_daemon_running()
+// would kill a healthy agent). Only the newest thread may clear it.
+std::atomic<unsigned> s_agent_generation{0};
 std::atomic<bool> g_autoReconnectSuppressed{false};
 
 // Helpers for executing BlueZ/bluetoothctl commands and capturing stdout
@@ -860,7 +867,13 @@ void ensure_bluetooth_daemon_running() {
 
     // Ensure bt-agent is running and stream its output directly to custom_ui console
     if (!s_agent_thread_started.exchange(true)) {
-        core::SizedThread(core::kDefaultThreadStackSize, []() {
+        unsigned gen = s_agent_generation.fetch_add(1, std::memory_order_acq_rel) + 1;
+        auto release_if_current = [gen]() {
+            if (s_agent_generation.load(std::memory_order_acquire) == gen) {
+                s_agent_thread_started.store(false, std::memory_order_release);
+            }
+        };
+        core::SizedThread(core::kDefaultThreadStackSize, [release_if_current]() {
             const char * agents[] = { "/usr/bin/bt-agent", "/data/bt-agent", "./bt-agent" };
             std::string agent_bin;
             for (const char * a : agents) {
@@ -882,7 +895,7 @@ void ensure_bluetooth_daemon_running() {
             if (agent_bin.empty()) {
                 std::printf("%s [BT:AGENT] Notice: bt-agent not found in /usr/bin, /data, or ./\n",
                             core::log_timestamp().c_str());
-                s_agent_thread_started.store(false, std::memory_order_release);
+                release_if_current();
                 return;
             }
 
@@ -907,7 +920,7 @@ void ensure_bluetooth_daemon_running() {
             if (!fp) {
                 std::fprintf(stderr, "%s [BT:AGENT] ERROR: popen failed for %s\n",
                              core::log_timestamp().c_str(), cmd.c_str());
-                s_agent_thread_started.store(false, std::memory_order_release);
+                release_if_current();
                 return;
             }
 
@@ -931,7 +944,7 @@ void ensure_bluetooth_daemon_running() {
             // ensure_bluetooth_daemon_running() would never respawn
             // bt-agent again, permanently breaking PIN/SSP pairing and
             // agent authorization until the whole process restarted.
-            s_agent_thread_started.store(false, std::memory_order_release);
+            release_if_current();
         }).detach();
     }
 

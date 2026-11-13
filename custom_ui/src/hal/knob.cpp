@@ -1,5 +1,8 @@
 #include "hal/knob.h"
 
+#include <chrono>
+#include <cstdint>
+
 #include "core/async_worker.h"
 #include "hal/androidauto_client.h"
 
@@ -34,9 +37,6 @@ core::AsyncWorker & knob_forward_worker() {
     static core::AsyncWorker worker(32);
     return worker;
 }
-
-#include <chrono>
-#include <cstdint>
 
 // Edge-detects the push button (McuInputHal::get_knob_pressed() is a
 // level/state getter, not an event) so a held press sends exactly one

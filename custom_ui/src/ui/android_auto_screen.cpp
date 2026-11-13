@@ -314,6 +314,12 @@ void poll_timer_cb(lv_timer_t * timer) {
         lv_label_set_text(w->cta_label, "Resume");
         lv_obj_remove_event_cb(w->cta_btn, connect_btn_cb);
         lv_obj_add_event_cb(w->cta_btn, resume_btn_cb, LV_EVENT_CLICKED, w);
+        // 2026-11-13: real report -- Resume was greyed out. The button is
+        // disabled while "Connecting..." (render_idle_mode()), and that
+        // function isn't called again once connected, so a session that
+        // connected and then dropped to the background kept the disabled
+        // state. Resume must always be tappable.
+        lv_obj_clear_state(w->cta_btn, LV_STATE_DISABLED);
         w->showing_resume = true;
     } else if (!nativeFocus && w->showing_resume) {
         lv_obj_remove_event_cb(w->cta_btn, resume_btn_cb);

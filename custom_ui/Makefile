@@ -96,6 +96,21 @@ $(UI_TARGET): $(UI_OBJS) $(UI_C_OBJS) $(LVGL_OBJS)
 	$(CXX) $(LDFLAGS) -o $@ $^ $(DBUS_LIBS) $(LIBS)
 	@echo "Built $@"
 
+# Build revision for Settings -> System Information. build/git_rev.h is
+# rewritten only when the revision actually changes, so an unchanged tree
+# doesn't recompile/relink on every make.
+GIT_REV := $(shell git describe --always --dirty 2>/dev/null || echo unknown)
+
+$(BUILD_DIR)/git_rev.h: FORCE
+	@mkdir -p $(dir $@)
+	@echo '#define CUSTOM_UI_GIT_REV "$(GIT_REV)"' > $@.tmp
+	@cmp -s $@.tmp $@ || mv $@.tmp $@
+	@rm -f $@.tmp
+
+$(BUILD_DIR)/ui-obj/core/build_info.o: src/core/build_info.cpp $(BUILD_DIR)/git_rev.h
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) -I$(BUILD_DIR) -c -o $@ $<
+
 # Files requiring D-Bus client headers
 $(BUILD_DIR)/ui-obj/hal/bluez_aa_profile.o: src/hal/bluez_aa_profile.cpp
 	@mkdir -p $(dir $@)

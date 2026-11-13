@@ -11,12 +11,15 @@
 #include "hal/mcu_input.h"
 #include "hal/ssh_access.h"
 #include "hal/bluetooth.h"
+#include "core/build_info.h"
 #include "core/log_timing.h"
 #include "core/sized_thread.h"
 #include <functional>
 #include <memory>
 #include <sys/utsname.h>
 #include <cstdio>
+#include <cstring>
+#include <string>
 
 namespace staging_ui {
 
@@ -80,6 +83,37 @@ static void read_system_stats(SystemStats &stats) {
             prev_total = total;
         }
     }
+}
+
+// "<Hardware> -- <model name> xN" from /proc/cpuinfo (whichever parts the
+// kernel reports), instead of a hard-coded processor description.
+std::string read_cpu_description() {
+    FILE * f = std::fopen("/proc/cpuinfo", "r");
+    if (!f) return "Unknown";
+    std::string model, hardware;
+    int cores = 0;
+    char line[256];
+    auto value_of = [](const char * l) {
+        const char * c = std::strchr(l, ':');
+        std::string v = c ? c + 1 : "";
+        while (!v.empty() && (v.front() == ' ' || v.front() == '\t')) v.erase(0, 1);
+        while (!v.empty() && (v.back() == '\n' || v.back() == ' ')) v.pop_back();
+        return v;
+    };
+    while (std::fgets(line, sizeof(line), f)) {
+        if (std::strncmp(line, "processor", 9) == 0) {
+            ++cores;
+        } else if (model.empty() && std::strncmp(line, "model name", 10) == 0) {
+            model = value_of(line);
+        } else if (hardware.empty() && std::strncmp(line, "Hardware", 8) == 0) {
+            hardware = value_of(line);
+        }
+    }
+    std::fclose(f);
+    std::string out = hardware;
+    if (!model.empty()) out += (out.empty() ? "" : " -- ") + model;
+    if (cores > 1) out += " x" + std::to_string(cores);
+    return out.empty() ? "Unknown" : out;
 }
 
 hal::DisplayCtrlHandle & display_handle() {
@@ -783,12 +817,22 @@ lv_obj_t * create_settings_screen() {
 
             // Gather Live System Details
             struct utsname uts;
-            std::string kernel_ver = (uname(&uts) == 0) ? (std::string(uts.sysname) + " " + uts.release + " (" + uts.machine + ")") : "Linux 4.19.192";
-            
+            // 2026-11-13: fallbacks used to be made-up values (a fixed
+            // kernel version, a fixed MCU firmware string) that looked
+            // like real readings. Show "Unknown" instead.
+            std::string kernel_ver = (uname(&uts) == 0) ? (std::string(uts.sysname) + " " + uts.release + " (" + uts.machine + ")") : "Unknown";
+
             std::string mcu_ver = hal::get_mcu_version();
-            if (mcu_ver.empty() || mcu_ver == "Unknown" || mcu_ver == "Unknown (Standalone)") {
-                mcu_ver = "Limcet-V1.0-1302 (STM32F105)";
+            if (mcu_ver.empty() || mcu_ver == "Unknown (Standalone)") {
+                mcu_ver = "Unknown (not reported by MCU)";
             }
+
+            lv_display_t * disp = lv_display_get_default();
+            char ui_buf[64];
+            std::snprintf(ui_buf, sizeof(ui_buf), "LVGL %d.%d.%d, %dx%d framebuffer",
+                          LVGL_VERSION_MAJOR, LVGL_VERSION_MINOR, LVGL_VERSION_PATCH,
+                          disp ? static_cast<int>(lv_display_get_horizontal_resolution(disp)) : 0,
+                          disp ? static_cast<int>(lv_display_get_vertical_resolution(disp)) : 0);
 
             auto add_info_row = [](lv_obj_t * parent, const char * label, const std::string & value) -> lv_obj_t * {
                 lv_obj_t * i_row = lv_obj_create(parent);
@@ -826,14 +870,14 @@ lv_obj_t * create_settings_screen() {
                 std::snprintf(mem_buf, sizeof(mem_buf), "N/A");
             }
 
-            add_info_row(modal, "Software Version", "Prado-Reconstruction v1.4.0");
+            add_info_row(modal, "Software Version", std::string("custom_ui ") + core::build_git_rev());
             add_info_row(modal, "Kernel Version", kernel_ver);
             add_info_row(modal, "MCU Firmware", mcu_ver);
             add_info_row(modal, "Bluetooth Subsystem", hal::get_bluetooth_hardware_info());
-            add_info_row(modal, "Main Processor", "ArkMicro ARK1668 (ARM Cortex-A7 @ 800MHz)");
+            add_info_row(modal, "Main Processor", read_cpu_description());
             lv_obj_t * cpu_val_lbl = add_info_row(modal, "CPU Usage", cpu_buf);
             lv_obj_t * mem_val_lbl = add_info_row(modal, "Free Memory (RAM)", mem_buf);
-            add_info_row(modal, "Display & UI", "LVGL 9.2.2 (800x480 RGB888 / Framebuffer)");
+            add_info_row(modal, "Display & UI", ui_buf);
 
             struct SysInfoTimerData {
                 lv_obj_t * cpu_lbl = nullptr;

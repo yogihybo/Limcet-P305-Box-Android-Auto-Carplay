@@ -94,9 +94,15 @@ void update_dashboard_status(DashboardWidgets * w) {
     }
     // Nothing to control without a connected phone -- disable (and dim)
     // the transport buttons instead of letting taps silently do nothing.
+    // 2026-11-13: "connected" means Bluetooth OR an Android Auto session:
+    // the media_*() helpers send the key to AA as well as AVRCP, and an AA
+    // session can be playing while BlueZ telemetry reports no connection.
+    bool aa_connected =
+        hal::cached_android_auto_status().status_line.rfind("STATE Connected", 0) == 0;
+    bool controllable = telem.connected || aa_connected;
     for (lv_obj_t * btn : w->media_btns) {
         if (!btn) continue;
-        if (telem.connected) {
+        if (controllable) {
             lv_obj_clear_state(btn, LV_STATE_DISABLED);
         } else {
             lv_obj_add_state(btn, LV_STATE_DISABLED);

@@ -156,7 +156,15 @@ static void init_peaking(biquad_t *f, float f0, float gain_db, float Q, float fs
 }
 
 static void init_high_shelf(biquad_t *f, float f0, float gain_db, float fs) {
-    if (fabsf(gain_db) < 0.1f) {
+    /* 2026-11-13: a shelf at/above Nyquist can't be realized -- the RBJ
+     * formulas then put the poles on (f0 == fs/2) or outside (f0 > fs/2)
+     * the unit circle, i.e. a marginally stable / exploding filter. This
+     * plugin runs at each stream's own rate, and Android Auto's guidance
+     * and system streams are 16 kHz: the 8 kHz treble shelf sat exactly
+     * at Nyquist and the 10 kHz loudness shelf above it (|poles| = 1.68),
+     * so enabling Loudness made navigation prompts blow up. Skip any high
+     * shelf too close to Nyquist; there's no audible band left to boost. */
+    if (fabsf(gain_db) < 0.1f || f0 >= 0.45f * fs) {
         f->active = 0;
         biquad_reset_state(f);
         return;

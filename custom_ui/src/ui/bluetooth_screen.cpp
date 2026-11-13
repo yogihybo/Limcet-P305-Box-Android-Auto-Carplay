@@ -3,6 +3,7 @@
 #include <atomic>
 #include <cstdint>
 #include <cstdio>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -25,19 +26,25 @@ namespace ui {
 
 namespace {
 
-// Backing state for one background load (address + paired-device
-// list). Heap-allocated, one per load attempt (screen creation, or
-// each Refresh tap) -- see BtLoadWorker's own comment for why this
-// project's usual "leak it, no shutdown path" convention applies here
-// too rather than trying to cancel/join the thread.
-struct BtLoadState {
-    std::mutex mtx;
-    std::atomic<bool> ready{false};
+// 2026-11-13: every blocking BlueZ call on this screen (load, remove,
+// disconnect) now goes through run_async(): the work runs on a detached
+// thread, and its LVGL-side continuation runs from the screen's one
+// persistent tick timer once it's done. Replaces three hand-rolled
+// atomic-flag + one-shot-timer variants, which leaked their state
+// whenever a newer operation (or leaving the screen) cancelled the timer,
+// and which could add buttons to whatever screen was on top by then.
+struct PendingOp {
+    std::atomic<bool> done{false};
+    std::function<void()> then;  // runs on the LVGL thread
+};
+
+struct BtLoadResult {
     bool hw_present = false;
     bool address_ok = false;
     std::string address;
     bool devices_ok = false;
     std::vector<std::string> devices;
+    std::string connected_mac;
 };
 
 struct BtScreenWidgets {
@@ -46,38 +53,33 @@ struct BtScreenWidgets {
     lv_obj_t * list = nullptr;
     lv_obj_t * status_label = nullptr;
     lv_obj_t * refresh_btn = nullptr;
-    lv_obj_t * spinner = nullptr;
-    lv_timer_t * poll_timer = nullptr;
+    // This screen's own focus group -- device-row buttons are added here,
+    // not to core::navigation::focus_group(), which by the time a load
+    // finishes may belong to a different screen pushed on top of this one.
+    lv_group_t * group = nullptr;
+    lv_timer_t * tick_timer = nullptr;
+    std::shared_ptr<PendingOp> op;  // at most one in flight; replacing it cancels the old one
     std::vector<std::string> last_devices;
+    int last_connected = -1;  // telemetry.connected last seen by the tick timer (-1 = unknown)
 };
 
-// Forward-declared -- defined below, but remove_device_clicked_cb()
-// (added ahead of it in this file) needs to call it.
 void start_bt_load(BtScreenWidgets * w);
 
 void status_label_set(lv_obj_t * label, const char * text) {
     if (label) lv_label_set_text(label, text);
 }
 
-void bt_load_worker(BtLoadState * state) {
-    hal::BluetoothHandle & h = hal::shared_handle();
-    bool hw_present = h.fd >= 0;
-
-    std::string address;
-    bool address_ok = hw_present && hal::get_adapter_address(h, address);
-
-    std::vector<std::string> devices;
-    bool devices_ok = hw_present && hal::list_paired_devices(h, devices);
-
-    {
-        std::lock_guard<std::mutex> lock(state->mtx);
-        state->hw_present = hw_present;
-        state->address_ok = address_ok;
-        state->address = std::move(address);
-        state->devices_ok = devices_ok;
-        state->devices = std::move(devices);
-    }
-    state->ready.store(true, std::memory_order_release);
+// Runs `job` off the LVGL thread; `then` runs on the LVGL thread from
+// bt_tick_cb() once `job` returns -- unless another run_async() call or
+// the screen's deletion superseded it first.
+void run_async(BtScreenWidgets * w, std::function<void()> job, std::function<void()> then) {
+    auto op = std::make_shared<PendingOp>();
+    op->then = std::move(then);
+    w->op = op;
+    core::SizedThread(core::kDefaultThreadStackSize, [op, job = std::move(job)]() {
+        job();
+        op->done.store(true, std::memory_order_release);
+    }).detach();
 }
 
 // 2026-09-04: real hardware bug -- these three click/switch handlers
@@ -87,10 +89,9 @@ void bt_load_worker(BtLoadState * state) {
 // application-level timeout at all -- if the system bus hangs, the
 // WHOLE UI freezes indefinitely, not just this screen. Same bug class
 // as mcu_input.cpp's reader-thread freeze (see that file's header
-// comment) -- fixed the same way this file's own bt_load_worker()
-// already handles its (also blocking) BlueZ calls: a detached
-// core::SizedThread, fire-and-forget where nothing downstream needs to
-// wait for completion.
+// comment) -- now all off the LVGL thread, via run_async() above (or
+// a fire-and-forget core::SizedThread where nothing on this screen
+// needs to react to completion).
 void device_row_clicked_cb(lv_event_t * e) {
     lv_obj_t * btn = static_cast<lv_obj_t *>(lv_event_get_target(e));
     auto * w = static_cast<BtScreenWidgets *>(lv_event_get_user_data(e));
@@ -104,8 +105,19 @@ void device_row_clicked_cb(lv_event_t * e) {
     std::printf("%s [UI-BT] User clicked CONNECT for device: '%s' (MAC=%s, Name='%s')\n",
                 core::log_timestamp().c_str(), entry.c_str(), mac.c_str(), name.c_str());
 
-    status_label_set(w->status_label, "Connecting & Starting Android Auto...");
+    // 2026-11-13: only hand off to Android Auto when that's the selected
+    // projection type -- with CarPlay selected (or for a phone used just
+    // for calls/music), Connect used to jump to the AA screen regardless.
+    bool android_auto =
+        core::default_store().get_string("ProjectionType", "AndroidAuto", "General") != "CarPlay";
+    if (!android_auto) {
+        status_label_set(w->status_label, "Connecting...");
+        run_async(w, [connect_id]() { hal::connect_device(hal::shared_handle(), connect_id); },
+                  [w]() { start_bt_load(w); });
+        return;
+    }
 
+    status_label_set(w->status_label, "Connecting & Starting Android Auto...");
     std::printf("%s [UI-BT] Triggering Android Auto sidecar requestConnect() & switching screen\n",
                 core::log_timestamp().c_str());
     core::SizedThread(core::kDefaultThreadStackSize, [connect_id]() {
@@ -114,10 +126,8 @@ void device_row_clicked_cb(lv_event_t * e) {
         hal::AndroidAutoClient client;
         client.requestConnect();
     }).detach();
-    // Navigates immediately -- android_auto_screen.cpp's own
-    // poll_background_loop() picks up the real connection state as
-    // soon as it lands, same eventual-consistency model as everywhere
-    // else this bug class was fixed.
+    // Navigates immediately -- the AA screen picks up the real connection
+    // state from the shared status poller as soon as it lands.
     core::navigation::push(ui::create_android_auto_screen);
 }
 
@@ -126,36 +136,12 @@ void remove_device(BtScreenWidgets * w, const std::string & connect_id) {
                 core::log_timestamp().c_str(), connect_id.c_str());
 
     status_label_set(w->status_label, "Removing device...");
-    // start_bt_load() itself touches LVGL widgets, so it can only run
-    // on the LVGL thread -- kick it off via the SAME atomic-ready +
-    // lv_timer poll pattern bt_load_poll_cb() already uses, rather
-    // than calling it directly from the background thread below.
-    auto * ready = new std::atomic<bool>(false);
-    auto * poll_ctx = new std::pair<BtScreenWidgets *, std::atomic<bool> *>(w, ready);
-    if (w->poll_timer) {
-        lv_timer_delete(w->poll_timer);
-    }
-    w->poll_timer = lv_timer_create(
-        [](lv_timer_t * timer) {
-            auto * ctx = static_cast<std::pair<BtScreenWidgets *, std::atomic<bool> *> *>(
-                lv_timer_get_user_data(timer));
-            if (!ctx->second->load(std::memory_order_acquire)) return;
-            BtScreenWidgets * w2 = ctx->first;
-            w2->poll_timer = nullptr;
-            lv_timer_delete(timer);
-            delete ctx->second;
-            delete ctx;
-            start_bt_load(w2);
-        },
-        100, poll_ctx);
-    core::SizedThread(core::kDefaultThreadStackSize, [connect_id, ready]() {
-        hal::BluetoothHandle & h = hal::shared_handle();
-        hal::remove_paired_device(h, connect_id);
+    run_async(w, [connect_id]() {
+        hal::remove_paired_device(hal::shared_handle(), connect_id);
         // Removing the last paired phone makes the unit discoverable
         // again so a replacement can find it.
         hal::apply_discoverable_policy();
-        ready->store(true, std::memory_order_release);
-    }).detach();
+    }, [w]() { start_bt_load(w); });
 }
 
 // 2026-11-13: the trash button unpaired immediately on a single tap --
@@ -185,34 +171,12 @@ void remove_device_clicked_cb(lv_event_t * e) {
 void disconnect_device_clicked_cb(lv_event_t * e) {
     auto * w = static_cast<BtScreenWidgets *>(lv_event_get_user_data(e));
     status_label_set(w->status_label, "Disconnecting...");
-
-    auto * ready = new std::atomic<bool>(false);
-    auto * poll_ctx = new std::pair<BtScreenWidgets *, std::atomic<bool> *>(w, ready);
-    if (w->poll_timer) {
-        lv_timer_delete(w->poll_timer);
-    }
-    w->poll_timer = lv_timer_create(
-        [](lv_timer_t * timer) {
-            auto * ctx = static_cast<std::pair<BtScreenWidgets *, std::atomic<bool> *> *>(
-                lv_timer_get_user_data(timer));
-            if (!ctx->second->load(std::memory_order_acquire)) return;
-            BtScreenWidgets * w2 = ctx->first;
-            w2->poll_timer = nullptr;
-            lv_timer_delete(timer);
-            delete ctx->second;
-            delete ctx;
-            start_bt_load(w2);
-        },
-        100, poll_ctx);
-    core::SizedThread(core::kDefaultThreadStackSize, [ready]() {
-        hal::BluetoothHandle & h = hal::shared_handle();
-        hal::disconnect_device(h);
-        ready->store(true, std::memory_order_release);
-    }).detach();
+    run_async(w, []() { hal::disconnect_device(hal::shared_handle()); },
+              [w]() { start_bt_load(w); });
 }
 
 void populate_device_list(BtScreenWidgets * w, bool hw_present, bool devices_ok,
-                           const std::vector<std::string> & devices) {
+                           const std::vector<std::string> & devices, const std::string & connected_mac) {
     lv_obj_clean(w->list);
     w->last_devices.clear();
     if (!hw_present) {
@@ -237,8 +201,6 @@ void populate_device_list(BtScreenWidgets * w, bool hw_present, bool devices_ok,
         status_label_set(w->status_label, "Ready to pair new device");
         return;
     }
-
-    std::string connected_mac = hal::get_connected_device_mac();
 
     for (size_t i = 0; i < valid_devices.size(); ++i) {
         std::string mac, name;
@@ -307,8 +269,8 @@ void populate_device_list(BtScreenWidgets * w, bool hw_present, bool devices_ok,
             lv_obj_set_style_text_color(disc_lbl, lv_color_hex(0xf28b82), 0);
             lv_obj_center(disc_lbl);
 
-            if (core::navigation::focus_group()) {
-                lv_group_add_obj(core::navigation::focus_group(), disc_btn);
+            if (w->group) {
+                lv_group_add_obj(w->group, disc_btn);
             }
         } else {
             lv_obj_t * conn_btn = lv_button_create(right_box);
@@ -327,8 +289,8 @@ void populate_device_list(BtScreenWidgets * w, bool hw_present, bool devices_ok,
             lv_obj_set_style_text_color(conn_lbl, staging_ui::theme::text_on_accent(), 0);
             lv_obj_center(conn_lbl);
 
-            if (core::navigation::focus_group()) {
-                lv_group_add_obj(core::navigation::focus_group(), conn_btn);
+            if (w->group) {
+                lv_group_add_obj(w->group, conn_btn);
             }
         }
 
@@ -349,87 +311,69 @@ void populate_device_list(BtScreenWidgets * w, bool hw_present, bool devices_ok,
         lv_obj_set_style_text_color(rem_icon, staging_ui::theme::text_secondary(), 0);
         lv_obj_center(rem_icon);
 
-        if (core::navigation::focus_group()) {
-            lv_group_add_obj(core::navigation::focus_group(), rem_btn);
+        if (w->group) {
+            lv_group_add_obj(w->group, rem_btn);
         }
     }
     status_label_set(w->status_label, "Select device to connect or unpair");
 }
 
-void bt_load_poll_cb(lv_timer_t * timer) {
-    auto * ctx = static_cast<std::pair<BtScreenWidgets *, BtLoadState *> *>(
-        lv_timer_get_user_data(timer));
-    BtScreenWidgets * w = ctx->first;
-    BtLoadState * state = ctx->second;
-
-    if (!state->ready.load(std::memory_order_acquire)) {
-        return;
+void update_conn_status(BtScreenWidgets * w) {
+    auto telem = hal::get_telemetry();
+    if (telem.connected) {
+        std::string label = telem.connected_device_name.empty()
+                                ? std::string("Connected")
+                                : "Connected: " + telem.connected_device_name;
+        lv_label_set_text(w->conn_status_label, label.c_str());
+        lv_obj_set_style_text_color(w->conn_status_label, staging_ui::theme::accent_primary(), 0);
+    } else {
+        lv_label_set_text(w->conn_status_label, "Disconnected");
+        lv_obj_set_style_text_color(w->conn_status_label, staging_ui::theme::text_secondary(), 0);
     }
+}
 
-    bool hw_present, address_ok, devices_ok;
-    std::string address;
-    std::vector<std::string> devices;
-    {
-        std::lock_guard<std::mutex> lock(state->mtx);
-        hw_present = state->hw_present;
-        address_ok = state->address_ok;
-        address = state->address;
-        devices_ok = state->devices_ok;
-        devices = state->devices;
-    }
-
-    if (w->addr_label) {
-        if (address_ok && !address.empty()) {
-            lv_label_set_text(w->addr_label, address.c_str());
-        } else {
-            lv_label_set_text(w->addr_label, "Not available");
-        }
-    }
-
-    if (w->conn_status_label) {
-        auto telem = hal::get_telemetry();
-        if (hw_present && telem.connected) {
-            std::string name = telem.connected_device_name;
-            if (name.empty()) name = hal::get_connected_device_mac();
-            if (!name.empty()) {
-                lv_label_set_text(w->conn_status_label, ("Connected: " + name).c_str());
-            } else {
-                lv_label_set_text(w->conn_status_label, "Connected");
-            }
-            lv_obj_set_style_text_color(w->conn_status_label, staging_ui::theme::accent_primary(), 0);
-        } else {
-            lv_label_set_text(w->conn_status_label, "Disconnected");
-            lv_obj_set_style_text_color(w->conn_status_label, staging_ui::theme::text_secondary(), 0);
-        }
-    }
-
-    w->poll_timer = nullptr;
-    populate_device_list(w, hw_present, devices_ok, devices);
-    w->spinner = nullptr;
+void apply_bt_load(BtScreenWidgets * w, const BtLoadResult & r) {
+    lv_label_set_text(w->addr_label, r.address_ok && !r.address.empty() ? r.address.c_str() : "Not available");
+    populate_device_list(w, r.hw_present, r.devices_ok, r.devices, r.connected_mac);
     lv_obj_clear_state(w->refresh_btn, LV_STATE_DISABLED);
-
-    lv_timer_delete(timer);
-    delete state;
-    delete ctx;
 }
 
 void start_bt_load(BtScreenWidgets * w) {
-    if (w->poll_timer) {
-        lv_timer_delete(w->poll_timer);
-        w->poll_timer = nullptr;
-    }
     lv_obj_clean(w->list);
-    w->spinner = lv_spinner_create(w->list);
-    lv_obj_set_size(w->spinner, 40, 40);
-    lv_obj_center(w->spinner);
+    lv_obj_t * spinner = lv_spinner_create(w->list);
+    lv_obj_set_size(spinner, 40, 40);
+    lv_obj_center(spinner);
     status_label_set(w->status_label, "Loading paired devices...");
     lv_obj_add_state(w->refresh_btn, LV_STATE_DISABLED);
 
-    auto * state = new BtLoadState();
-    auto * ctx = new std::pair<BtScreenWidgets *, BtLoadState *>(w, state);
-    w->poll_timer = lv_timer_create(bt_load_poll_cb, 100, ctx);
+    auto result = std::make_shared<BtLoadResult>();
+    run_async(w, [result]() {
+        hal::BluetoothHandle & h = hal::shared_handle();
+        result->hw_present = h.fd >= 0;
+        result->address_ok = result->hw_present && hal::get_adapter_address(h, result->address);
+        result->devices_ok = result->hw_present && hal::list_paired_devices(h, result->devices);
+        // Was called from populate_device_list() on the LVGL thread -- a
+        // blocking D-Bus round-trip; now part of the background load.
+        if (result->hw_present) result->connected_mac = hal::get_connected_device_mac();
+    }, [w, result]() { apply_bt_load(w, *result); });
+}
 
-    core::SizedThread(core::kDefaultThreadStackSize, bt_load_worker, state).detach();
+// The screen's one persistent timer: finishes a completed run_async()
+// operation, keeps "Connection Status" live (it used to be set once per
+// load), and reloads the list when a phone connects or disconnects so
+// its Connect/Disconnect buttons stay right.
+void bt_tick_cb(lv_timer_t * timer) {
+    auto * w = static_cast<BtScreenWidgets *>(lv_timer_get_user_data(timer));
+    if (w->op && w->op->done.load(std::memory_order_acquire)) {
+        auto op = std::move(w->op);  // clear first: `then` may start a new op
+        if (op->then) op->then();
+    }
+    update_conn_status(w);
+    int connected = hal::get_telemetry().connected ? 1 : 0;
+    if (w->last_connected != -1 && connected != w->last_connected && !w->op) {
+        start_bt_load(w);
+    }
+    w->last_connected = connected;
 }
 
 void refresh_btn_cb(lv_event_t * e) {
@@ -455,11 +399,8 @@ void discoverable_switch_cb(lv_event_t * e) {
 void widgets_delete_cb(lv_event_t * e) {
     auto * w = static_cast<BtScreenWidgets *>(lv_event_get_user_data(e));
     if (w) {
-        if (w->poll_timer) {
-            lv_timer_delete(w->poll_timer);
-            w->poll_timer = nullptr;
-        }
-        delete w;
+        lv_timer_delete(w->tick_timer);
+        delete w;  // drops w->op; a still-running job just finishes into a discarded PendingOp
     }
 }
 
@@ -651,6 +592,7 @@ lv_obj_t * create_bluetooth_screen() {
     widgets->list = list;
     widgets->status_label = status_label;
     widgets->refresh_btn = refresh_btn;
+    widgets->group = core::navigation::focus_group();  // this screen's own group (see BtScreenWidgets)
     lv_obj_add_event_cb(scr, widgets_delete_cb, LV_EVENT_DELETE, widgets);
     lv_obj_add_event_cb(refresh_btn, refresh_btn_cb, LV_EVENT_CLICKED, widgets);
 
@@ -658,6 +600,7 @@ lv_obj_t * create_bluetooth_screen() {
         lv_group_add_obj(core::navigation::focus_group(), refresh_btn);
     }
 
+    widgets->tick_timer = lv_timer_create(bt_tick_cb, 250, widgets);
     start_bt_load(widgets);
 
     return scr;

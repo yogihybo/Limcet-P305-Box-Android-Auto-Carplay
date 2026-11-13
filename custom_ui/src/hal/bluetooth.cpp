@@ -983,12 +983,18 @@ bool ensure_adapter_configured() {
     run_command_simple("hciconfig hci0 class 0x240420 >/dev/null 2>&1");
     run_command_simple("hciconfig hci0 auth >/dev/null 2>&1");
     run_command_simple("hciconfig hci0 encrypt >/dev/null 2>&1");
-    run_command_simple("hciconfig hci0 piscan >/dev/null 2>&1");
+    // Scan mode (piscan vs pscan) is set by apply_discoverable_policy()
+    // below -- an unconditional piscan here made the adapter discoverable
+    // at the HCI level regardless of BlueZ's own Discoverable property.
 
     run_command_simple("dbus-send --system --dest=org.bluez --type=method_call /org/bluez/hci0 org.freedesktop.DBus.Properties.Set string:org.bluez.Adapter1 string:Powered variant:boolean:true >/dev/null 2>&1");
     run_command_simple("dbus-send --system --dest=org.bluez --type=method_call /org/bluez/hci0 org.freedesktop.DBus.Properties.Set string:org.bluez.Adapter1 string:Pairable variant:boolean:true >/dev/null 2>&1");
-    run_command_simple("dbus-send --system --dest=org.bluez --type=method_call /org/bluez/hci0 org.freedesktop.DBus.Properties.Set string:org.bluez.Adapter1 string:Discoverable variant:boolean:true >/dev/null 2>&1");
     run_command_simple("dbus-send --system --dest=org.bluez --type=method_call /org/bluez/hci0 org.freedesktop.DBus.Properties.Set string:org.bluez.Adapter1 string:Class variant:uint32:2360352 >/dev/null 2>&1");
+    // 2026-11-13: Discoverable used to be forced true here -- and this runs
+    // at boot, from the watchdog, and (until this change) on every 25s
+    // reconnect attempt, so the head unit was permanently discoverable and
+    // the Bluetooth screen's switch had no lasting effect.
+    apply_discoverable_policy();
     return true;
 }
 
@@ -1316,12 +1322,34 @@ bool set_adapter_enabled(BluetoothHandle & /*h*/, bool enabled) {
 
 bool set_discoverable(BluetoothHandle & /*h*/, bool discoverable) {
     std::string val = discoverable ? "true" : "false";
-    std::printf("%s [BT] Setting adapter Discoverable = %s (piscan)\n", core::log_timestamp().c_str(), val.c_str());
-    if (discoverable) {
-        run_command_simple("hciconfig hci0 piscan >/dev/null 2>&1");
-    }
+    std::printf("%s [BT] Setting adapter Discoverable = %s (%s)\n", core::log_timestamp().c_str(), val.c_str(),
+                discoverable ? "piscan" : "pscan");
+    run_command_simple(discoverable ? "hciconfig hci0 piscan >/dev/null 2>&1"
+                                    : "hciconfig hci0 pscan >/dev/null 2>&1");
     std::string cmd = "dbus-send --system --dest=org.bluez --type=method_call /org/bluez/hci0 org.freedesktop.DBus.Properties.Set string:org.bluez.Adapter1 string:Discoverable variant:boolean:" + val + " >/dev/null 2>&1";
     return run_command_simple(cmd);
+}
+
+bool discoverable_setting() {
+    return core::default_store().get_bool("Discoverable", false, "BlueTooth");
+}
+
+bool apply_discoverable_policy() {
+    BluetoothHandle h;  // unused by list_paired_devices()/set_discoverable()
+    bool want = discoverable_setting();
+    if (!want) {
+        std::vector<std::string> devices;
+        list_paired_devices(h, devices);
+        // list_paired_devices() also returns true (empty) when BlueZ isn't
+        // answering yet -- erring toward discoverable is the safe side for
+        // a first-time pairing; main.cpp re-applies once BlueZ settles.
+        want = devices.empty();
+        if (want) {
+            std::printf("%s [BT] No paired devices -- staying discoverable for first-time pairing\n",
+                        core::log_timestamp().c_str());
+        }
+    }
+    return set_discoverable(h, want);
 }
 
 bool list_paired_devices(BluetoothHandle & /*h*/, std::vector<std::string> & devices) {
@@ -1632,7 +1660,12 @@ bool auto_reconnect_paired_device(BluetoothHandle & h) {
         std::printf("%s [BT] auto_reconnect_paired_device: no bluetooth handle, skipping\n", core::log_timestamp().c_str());
         return false;
     }
-    ensure_adapter_configured();
+    // Only re-run the full (~8 shell command) adapter configuration when
+    // the adapter actually looks unhealthy -- this is called every 25s
+    // from main.cpp's background loop whenever no phone is connected.
+    if (check_bluez_adapter_alive() != AdapterHealth::Healthy) {
+        ensure_adapter_configured();
+    }
     std::vector<std::string> devices;
     if (!list_paired_devices(h, devices) || devices.empty()) {
         std::printf("%s [BT] auto_reconnect_paired_device: no paired devices to reconnect to\n", core::log_timestamp().c_str());

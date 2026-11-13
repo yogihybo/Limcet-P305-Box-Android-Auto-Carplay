@@ -517,6 +517,11 @@ int main() {
             core::SizedThread(core::kDefaultThreadStackSize, [&bt]() {
                 // Settle delay for BlueZ adapter & bt-agent registration
                 std::this_thread::sleep_for(std::chrono::seconds(2));
+                // BlueZ is answering by now, so the paired-device check in
+                // the discoverability policy is reliable (init_bluetooth()'s
+                // earlier pass may have run before bluetoothd was ready
+                // and erred toward discoverable).
+                hal::apply_discoverable_policy();
 
                 // Auto-reconnect retry loop: keep attempting to connect to paired phone on boot
                 for (int attempt = 1; attempt <= 15; ++attempt) {

@@ -159,6 +159,9 @@ void remove_device_clicked_cb(lv_event_t * e) {
     core::SizedThread(core::kDefaultThreadStackSize, [connect_id, ready]() {
         hal::BluetoothHandle & h = hal::shared_handle();
         hal::remove_paired_device(h, connect_id);
+        // Removing the last paired phone makes the unit discoverable
+        // again so a replacement can find it.
+        hal::apply_discoverable_policy();
         ready->store(true, std::memory_order_release);
     }).detach();
 }
@@ -421,6 +424,10 @@ void refresh_btn_cb(lv_event_t * e) {
 void discoverable_switch_cb(lv_event_t * e) {
     lv_obj_t * sw = static_cast<lv_obj_t *>(lv_event_get_target(e));
     bool checked = lv_obj_has_state(sw, LV_STATE_CHECKED);
+    // Persisted so adapter reconfiguration (boot, watchdog recovery)
+    // keeps the user's choice instead of forcing discoverable back on.
+    core::default_store().set_bool("Discoverable", checked, "BlueTooth");
+    core::default_store().save();
     // 2026-09-04: async -- see device_row_clicked_cb()'s own comment.
     // Fire-and-forget: the switch's own visual state already reflects
     // the user's intent immediately, nothing needs to wait for this.
@@ -562,6 +569,9 @@ lv_obj_t * create_bluetooth_screen() {
     lv_obj_set_style_text_color(disc_lbl, staging_ui::theme::text_primary(), 0);
 
     lv_obj_t * discoverable_sw = lv_switch_create(disc_row);
+    if (hal::discoverable_setting()) {
+        lv_obj_add_state(discoverable_sw, LV_STATE_CHECKED);
+    }
     lv_obj_add_event_cb(discoverable_sw, discoverable_switch_cb, LV_EVENT_VALUE_CHANGED, nullptr);
     if (core::navigation::focus_group()) {
         lv_group_add_obj(core::navigation::focus_group(), discoverable_sw);

@@ -36,8 +36,20 @@ bool split_mac_and_name(const std::string & entry, std::string & mac, std::strin
 // Adapter Power (bluetoothctl power on/off)
 bool set_adapter_enabled(BluetoothHandle & h, bool enabled);
 
-// Adapter Discoverability (bluetoothctl discoverable on/off)
+// Adapter Discoverability (BlueZ Adapter1.Discoverable, plus the matching
+// HCI scan mode: piscan when discoverable, pscan -- still connectable by
+// already-paired phones -- when not).
 bool set_discoverable(BluetoothHandle & h, bool discoverable);
+
+// The persisted "Discoverable" setting ([BlueTooth] section, default
+// false), as shown by the Bluetooth screen's switch.
+bool discoverable_setting();
+
+// Applies the discoverability policy: discoverable if the user turned it
+// on, OR if no device is paired yet (so a first-time phone can always
+// find the head unit without digging through menus). Called from adapter
+// (re)configuration and once after BlueZ settles at boot.
+bool apply_discoverable_policy();
 
 // Adapter Advertised Name (bluetoothctl system-alias)
 bool set_device_name(BluetoothHandle & h, const std::string & name);

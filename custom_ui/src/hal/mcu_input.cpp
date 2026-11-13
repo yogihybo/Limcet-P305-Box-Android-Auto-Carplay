@@ -724,38 +724,17 @@ void McuInputHal::run() {
                         g_homeNavigatePending.store(true, std::memory_order_release);
                     } else {
                         static bool s_drawer_open = false;
-                        // time_point{} (epoch), not now(): the very first
-                        // press must not look like the second half of a
-                        // double-press.
-                        static std::chrono::steady_clock::time_point s_last_press_time{};
+                        static auto s_last_press_time = std::chrono::steady_clock::now();
                         auto now = std::chrono::steady_clock::now();
-                        auto elapsed = now - s_last_press_time;
-                        auto elapsed_s = std::chrono::duration_cast<std::chrono::seconds>(elapsed).count();
+                        auto elapsed_s = std::chrono::duration_cast<std::chrono::seconds>(now - s_last_press_time).count();
                         s_last_press_time = now;
                         if (elapsed_s > 10) {
                             s_drawer_open = false;
                         }
 
-                        // 2026-11-13: double-press HOME leaves Android Auto
-                        // for the local LVGL Home screen (the AA session keeps
-                        // running in the background). Previously no physical
-                        // control could get back to the head unit's own menus
-                        // while AA was projected -- HOME always went to the
-                        // phone. Not a long-press: the MCU itself already uses
-                        // a ~1.4s HOME hold to switch the panel between the
-                        // factory screen and custom_ui (docs/
-                        // MCU_COMMAND_REFERENCE.md, CMD 0x02 b3=12 row). The
-                        // first press of the pair has already sent HOME to
-                        // the phone; harmless, since we're leaving AA anyway.
-                        if (elapsed < std::chrono::milliseconds(400)) {
-                            std::printf("%s [HAL:MCU] Button: HOME double-press -> leave Android Auto (local Home)\n",
-                                        core::log_timestamp().c_str());
-                            g_homeNavigatePending.store(true, std::memory_order_release);
-                            s_drawer_open = false;
-                            s_last_press_time = {};  // a third press starts a fresh pair
-                        } else if (!s_drawer_open) {
-                            // 2026-09-04: async -- see mcu_aa_forward_worker()'s
-                            // header comment. Must never block this thread.
+                        // 2026-09-04: async -- see mcu_aa_forward_worker()'s
+                        // header comment. Must never block this thread.
+                        if (!s_drawer_open) {
                             std::printf("%s [HAL:MCU] Button: HOME -> Open App Launcher (KEYCODE_HOME=3)\n", core::log_timestamp().c_str());
                             mcu_aa_forward_worker().enqueue([]() {
                                 mcu_aa_client().sendKey(3 /* KEYCODE_HOME */);

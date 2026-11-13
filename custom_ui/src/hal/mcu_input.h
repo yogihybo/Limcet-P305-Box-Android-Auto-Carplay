@@ -324,11 +324,6 @@ float get_mcu_battery_voltage();
 // hal:: and ui::) consumes it and navigates" pattern already established
 // by hal::consume_aa_navigate_request() in bluetooth.cpp, so this file
 // itself never needs to depend on any ui:: header.
-//
-// 2026-11-13: also set by a HOME double-press (two presses < 400ms) while
-// Android Auto IS active -- the one physical way back to the local UI
-// while AA is projected (a long-press is already taken by the MCU's own
-// factory/custom_ui panel switch).
 bool consume_home_navigate_request();
 
 }  // namespace hal

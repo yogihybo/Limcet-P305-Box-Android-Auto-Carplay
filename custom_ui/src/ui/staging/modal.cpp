@@ -124,6 +124,9 @@ void confirm_dialog(lv_obj_t * owner_screen, const char * title, const char * bo
 
     lv_obj_t * t = lv_label_create(box);
     lv_label_set_text(t, title);
+    lv_label_set_long_mode(t, LV_LABEL_LONG_WRAP);  // device names can be long
+    lv_obj_set_width(t, LV_PCT(100));
+    lv_obj_set_style_text_align(t, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_font(t, &lv_font_roboto_20, 0);
     lv_obj_set_style_text_color(t, theme::text_primary(), 0);
 

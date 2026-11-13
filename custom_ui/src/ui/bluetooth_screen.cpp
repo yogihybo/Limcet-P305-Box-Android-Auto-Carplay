@@ -19,6 +19,7 @@
 #include "ui/staging/theme.h"
 #include "ui/staging/fonts.h"
 #include "ui/staging/icons.h"
+#include "ui/staging/modal.h"
 
 namespace ui {
 
@@ -120,18 +121,9 @@ void device_row_clicked_cb(lv_event_t * e) {
     core::navigation::push(ui::create_android_auto_screen);
 }
 
-void remove_device_clicked_cb(lv_event_t * e) {
-    lv_obj_t * btn = static_cast<lv_obj_t *>(lv_event_get_target(e));
-    auto * w = static_cast<BtScreenWidgets *>(lv_event_get_user_data(e));
-
-    auto index = reinterpret_cast<uintptr_t>(lv_obj_get_user_data(btn));
-    if (index >= w->last_devices.size()) return;
-    const std::string & entry = w->last_devices[index];
-
-    std::string mac, name;
-    std::string connect_id = hal::split_plist_entry(entry, mac, name) ? mac : entry;
-    std::printf("%s [UI-BT] User clicked DISCONNECT/REMOVE for device: '%s' (MAC=%s)\n",
-                core::log_timestamp().c_str(), entry.c_str(), connect_id.c_str());
+void remove_device(BtScreenWidgets * w, const std::string & connect_id) {
+    std::printf("%s [UI-BT] Removing device MAC=%s (confirmed)\n",
+                core::log_timestamp().c_str(), connect_id.c_str());
 
     status_label_set(w->status_label, "Removing device...");
     // start_bt_load() itself touches LVGL widgets, so it can only run
@@ -164,6 +156,30 @@ void remove_device_clicked_cb(lv_event_t * e) {
         hal::apply_discoverable_policy();
         ready->store(true, std::memory_order_release);
     }).detach();
+}
+
+// 2026-11-13: the trash button unpaired immediately on a single tap --
+// easy to hit by accident in a moving car, and re-pairing means digging
+// out the phone. Now asks first (Cancel focused). The dialog closes with
+// this screen, so `w` is always still alive if the user confirms.
+void remove_device_clicked_cb(lv_event_t * e) {
+    lv_obj_t * btn = static_cast<lv_obj_t *>(lv_event_get_target(e));
+    auto * w = static_cast<BtScreenWidgets *>(lv_event_get_user_data(e));
+
+    auto index = reinterpret_cast<uintptr_t>(lv_obj_get_user_data(btn));
+    if (index >= w->last_devices.size()) return;
+    const std::string & entry = w->last_devices[index];
+
+    std::string mac, name;
+    std::string connect_id = hal::split_plist_entry(entry, mac, name) ? mac : entry;
+    std::printf("%s [UI-BT] User clicked REMOVE for device: '%s' (MAC=%s)\n",
+                core::log_timestamp().c_str(), entry.c_str(), connect_id.c_str());
+
+    std::string title = "Forget " + (name.empty() ? connect_id : name) + "?";
+    staging_ui::confirm_dialog(lv_obj_get_screen(btn), title.c_str(),
+                               "The phone will need to be paired again before it can connect.",
+                               "Forget", /*destructive=*/true,
+                               [w, connect_id]() { remove_device(w, connect_id); });
 }
 
 void disconnect_device_clicked_cb(lv_event_t * e) {

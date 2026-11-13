@@ -34,6 +34,10 @@ size_t depth();
 // already names the incoming screen while its load animation is running.
 lv_obj_t * current();
 
+// Points the rotary knob at a modal dialog's own focus group (nullptr
+// restores the current screen's group) -- see ui/staging/modal.h.
+void bind_input_group(lv_group_t * group);
+
 // 2026-09-05: real hardware bug found via code review -- this used to
 // return ONE process-wide lv_group_t every screen piled its own
 // widgets onto. push() never deletes the screen underneath (kept alive

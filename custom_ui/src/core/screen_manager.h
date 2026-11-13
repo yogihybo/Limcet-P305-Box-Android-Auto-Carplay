@@ -83,6 +83,14 @@ public:
     lv_obj_t * current() const;
     size_t depth() const { return stack_.size(); }
 
+    // Binds the knob indev to `group` -- a modal dialog's own group while
+    // it's open -- or, with nullptr, back to the current screen's group.
+    // The next push()/replace()/pop() rebinds to the new screen's group
+    // regardless.
+    void bind_input_group(lv_group_t * group) {
+        if (indev_) lv_indev_set_group(indev_, group ? group : current_group());
+    }
+
     // 2026-09-05: the lv_group_t belonging to whichever screen is
     // CURRENTLY on top -- or, while a factory() call is synchronously
     // in progress (push()/replace() below), the NEW screen's

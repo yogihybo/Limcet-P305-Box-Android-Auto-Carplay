@@ -49,6 +49,10 @@ lv_obj_t * current() {
     return g_manager ? g_manager->current() : nullptr;
 }
 
+void bind_input_group(lv_group_t * group) {
+    if (g_manager) g_manager->bind_input_group(group);
+}
+
 lv_group_t * focus_group() {
     // 2026-09-05: see this function's own header comment -- delegates
     // to ScreenManager, which owns a real per-screen group now.

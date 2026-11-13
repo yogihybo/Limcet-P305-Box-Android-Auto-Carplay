@@ -3,6 +3,7 @@
 #include "ui/staging/fonts.h"
 #include "ui/staging/nav_rail.h"
 #include "ui/staging/icons.h"
+#include "ui/staging/modal.h"
 #include "core/config_store.h"
 #include "core/navigation.h"
 #include "hal/audio.h"
@@ -758,12 +759,10 @@ lv_obj_t * create_settings_screen() {
             // the rail (not the full 800px screen) so the modal centers
             // in the actual available card area with zero overlap of the
             // rail, rather than just no longer being covered by it.
-            lv_obj_t * overlay = lv_obj_create(lv_layer_sys());
-            lv_obj_remove_style_all(overlay);
-            lv_obj_set_size(overlay, 800 - theme::kRailWidth, 480);
-            lv_obj_set_pos(overlay, theme::kRailWidth, 0);
-            lv_obj_set_style_bg_color(overlay, lv_color_black(), 0);
-            lv_obj_set_style_bg_opa(overlay, LV_OPA_70, 0);
+            //
+            // 2026-11-13: via open_modal() (ui/staging/modal.h) -- own knob
+            // focus group, auto-closed when `scr` is deleted.
+            lv_obj_t * overlay = open_modal(scr, /*cover_rail=*/false);
 
             // Modal Card -- centers within the (rail-excluded) overlay above
             lv_obj_t * modal = lv_obj_create(overlay);
@@ -889,41 +888,12 @@ lv_obj_t * create_settings_screen() {
             lv_obj_set_style_text_color(close_label, theme::text_on_accent(), 0);
             lv_obj_center(close_label);
 
-            // 2026-09-05: real hardware bug found via code review --
-            // `overlay` is parented to lv_layer_sys(), NOT to `scr`, so
-            // navigating away (which deletes `scr`) never cascades into
-            // deleting this modal -- it was left stuck on top of
-            // whatever screen the user navigated to, permanently
-            // blocking touch there, unless the user happened to press
-            // Close first. Fixed with a shared "closed" flag: whichever
-            // fires first (the Close button, or scr's own deletion on
-            // navigation) does the real cleanup and marks it done; the
-            // other becomes a safe no-op.
-            auto closed = std::make_shared<bool>(false);
-            using OverlayCloseCtx = std::pair<lv_obj_t *, std::shared_ptr<bool>>;
-
-            auto * close_btn_ctx = new OverlayCloseCtx(overlay, closed);
+            // Deleting the overlay frees timer_data (handler above); a
+            // screen change closes it via open_modal()'s owner hook.
             lv_obj_add_event_cb(close_btn, [](lv_event_t * ev) {
-                auto * ctx = static_cast<OverlayCloseCtx *>(lv_event_get_user_data(ev));
-                if (!*ctx->second) {
-                    lv_obj_delete(ctx->first);
-                    *ctx->second = true;
-                }
-                delete ctx;
-            }, LV_EVENT_CLICKED, close_btn_ctx);
-            if (core::navigation::focus_group()) {
-                lv_group_add_obj(core::navigation::focus_group(), close_btn);
-            }
-
-            auto * scr_close_ctx = new OverlayCloseCtx(overlay, closed);
-            lv_obj_add_event_cb(scr, [](lv_event_t * ev) {
-                auto * ctx = static_cast<OverlayCloseCtx *>(lv_event_get_user_data(ev));
-                if (!*ctx->second) {
-                    lv_obj_delete(ctx->first);
-                    *ctx->second = true;
-                }
-                delete ctx;
-            }, LV_EVENT_DELETE, scr_close_ctx);
+                close_modal(static_cast<lv_obj_t *>(lv_event_get_user_data(ev)));
+            }, LV_EVENT_CLICKED, overlay);
+            modal_add_focusable(overlay, close_btn, /*focus=*/true);
         }, LV_EVENT_CLICKED, scr);
 
         if (core::navigation::focus_group()) {
@@ -989,94 +959,22 @@ lv_obj_t * create_settings_screen() {
         lv_obj_center(btn_lbl);
 
         lv_obj_add_event_cb(btn, [](lv_event_t * e) {
-            (void)e;
-            // Confirm dialog, parented to lv_layer_sys() -- see the
-            // "View Info" button above for why (nav rail lives on
-            // lv_layer_top(), an overlay parented to the screen itself
-            // would render beneath it).
-            lv_obj_t * overlay = lv_obj_create(lv_layer_sys());
-            lv_obj_remove_style_all(overlay);
-            lv_obj_set_size(overlay, LV_PCT(100), LV_PCT(100));
-            lv_obj_set_style_bg_color(overlay, lv_color_black(), 0);
-            lv_obj_set_style_bg_opa(overlay, LV_OPA_60, 0);
-            lv_obj_clear_flag(overlay, LV_OBJ_FLAG_SCROLLABLE);
-
-            lv_obj_t * box = lv_obj_create(overlay);
-            lv_obj_set_size(box, 360, 180);
-            lv_obj_center(box);
-            lv_obj_set_style_bg_color(box, theme::surface_container_high(), 0);
-            lv_obj_set_style_bg_opa(box, LV_OPA_COVER, 0);
-            lv_obj_set_style_radius(box, theme::kCardRadius, 0);
-            lv_obj_set_flex_flow(box, LV_FLEX_FLOW_COLUMN);
-            lv_obj_set_flex_align(box, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-            lv_obj_set_style_pad_all(box, 20, 0);
-            lv_obj_set_style_pad_row(box, 16, 0);
-            lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
-
-            lv_obj_t * title = lv_label_create(box);
-            lv_label_set_text(title, "Reboot the head unit?");
-            lv_obj_set_style_text_font(title, &lv_font_roboto_14, 0);
-            lv_obj_set_style_text_color(title, theme::text_primary(), 0);
-
-            lv_obj_t * body = lv_label_create(box);
-            lv_label_set_text(body, "Android Auto, Bluetooth, and the reverse\ncamera will be unavailable until it restarts.");
-            lv_obj_set_style_text_font(body, &lv_font_roboto_14, 0);
-            lv_obj_set_style_text_color(body, theme::text_secondary(), 0);
-            lv_obj_set_style_text_align(body, LV_TEXT_ALIGN_CENTER, 0);
-
-            lv_obj_t * btn_row = lv_obj_create(box);
-            lv_obj_remove_style_all(btn_row);
-            lv_obj_set_size(btn_row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-            lv_obj_set_flex_flow(btn_row, LV_FLEX_FLOW_ROW);
-            lv_obj_set_style_pad_column(btn_row, 12, 0);
-            lv_obj_clear_flag(btn_row, LV_OBJ_FLAG_SCROLLABLE);
-
-            lv_obj_t * cancel_btn = lv_button_create(btn_row);
-            lv_obj_remove_style_all(cancel_btn);
-            lv_obj_set_size(cancel_btn, 110, 40);
-            lv_obj_set_style_radius(cancel_btn, theme::kPillRadius, 0);
-            lv_obj_set_style_bg_color(cancel_btn, theme::surface_container_high(), 0);
-            lv_obj_set_style_bg_opa(cancel_btn, LV_OPA_COVER, 0);
-            lv_obj_set_style_border_width(cancel_btn, 1, 0);
-            lv_obj_set_style_border_color(cancel_btn, theme::text_secondary(), 0);
-            theme::style_focusable(cancel_btn);
-            lv_obj_t * cancel_lbl = lv_label_create(cancel_btn);
-            lv_label_set_text(cancel_lbl, "Cancel");
-            lv_obj_set_style_text_font(cancel_lbl, &lv_font_roboto_14, 0);
-            lv_obj_set_style_text_color(cancel_lbl, theme::text_primary(), 0);
-            lv_obj_center(cancel_lbl);
-            lv_obj_add_event_cb(cancel_btn, [](lv_event_t * ev) {
-                lv_obj_t * ov = static_cast<lv_obj_t *>(lv_event_get_user_data(ev));
-                lv_obj_delete(ov);
-            }, LV_EVENT_CLICKED, overlay);
-
-            lv_obj_t * confirm_btn = lv_button_create(btn_row);
-            lv_obj_remove_style_all(confirm_btn);
-            lv_obj_set_size(confirm_btn, 110, 40);
-            lv_obj_set_style_radius(confirm_btn, theme::kPillRadius, 0);
-            lv_obj_set_style_bg_color(confirm_btn, theme::danger(), 0);
-            lv_obj_set_style_bg_opa(confirm_btn, LV_OPA_COVER, 0);
-            theme::style_focusable(confirm_btn);
-            lv_obj_t * confirm_lbl = lv_label_create(confirm_btn);
-            lv_label_set_text(confirm_lbl, "Reboot Now");
-            lv_obj_set_style_text_font(confirm_lbl, &lv_font_roboto_14, 0);
-            lv_obj_set_style_text_color(confirm_lbl, theme::text_primary(), 0);
-            lv_obj_center(confirm_lbl);
-            lv_obj_add_event_cb(confirm_btn, [](lv_event_t * ev) {
-                (void)ev;
+            // 2026-11-13: confirm_dialog() (ui/staging/modal.h) -- Cancel is
+            // focused for the knob and the dialog closes with the screen
+            // (previously it stayed on lv_layer_sys() over whatever came
+            // next, e.g. the reverse-camera overlay).
+            confirm_dialog(static_cast<lv_obj_t *>(lv_event_get_user_data(e)),
+                           "Reboot the head unit?",
+                           "Android Auto, Bluetooth, and the reverse camera will be unavailable until it restarts.",
+                           "Reboot Now", /*destructive=*/true, []() {
                 // Fire-and-forget on a detached thread -- same reasoning
                 // as every other std::system() call in this file (SSH
                 // toggle, volume steppers): never block the LVGL thread.
                 core::SizedThread(core::kDefaultThreadStackSize, []() {
                     std::system("sync && reboot");
                 }).detach();
-            }, LV_EVENT_CLICKED, nullptr);
-
-            if (core::navigation::focus_group()) {
-                lv_group_add_obj(core::navigation::focus_group(), cancel_btn);
-                lv_group_add_obj(core::navigation::focus_group(), confirm_btn);
-            }
-        }, LV_EVENT_CLICKED, nullptr);
+            });
+        }, LV_EVENT_CLICKED, scr);
 
         if (core::navigation::focus_group()) {
             lv_group_add_obj(core::navigation::focus_group(), btn);
@@ -1168,13 +1066,10 @@ lv_obj_t * create_settings_screen() {
             // narrowed 720->680 -- 720 left only 4px of margin inside the
             // 728px-wide (800 - kRailWidth) available area, too tight to
             // read comfortably as a real margin.
-            lv_obj_t * overlay = lv_obj_create(lv_layer_sys());
-            lv_obj_remove_style_all(overlay);
-            lv_obj_set_size(overlay, 800 - theme::kRailWidth, 480);
-            lv_obj_set_pos(overlay, theme::kRailWidth, 0);
-            lv_obj_set_style_bg_color(overlay, lv_color_black(), 0);
-            lv_obj_set_style_bg_opa(overlay, LV_OPA_70, 0);
-            lv_obj_clear_flag(overlay, LV_OBJ_FLAG_SCROLLABLE);
+            //
+            // 2026-11-13: via open_modal() (ui/staging/modal.h) -- own knob
+            // focus group, auto-closed when `scr` is deleted.
+            lv_obj_t * overlay = open_modal(scr, /*cover_rail=*/false);
 
             // Modal card -- centers within the (rail-excluded) overlay above
             lv_obj_t * modal = lv_obj_create(overlay);
@@ -1256,9 +1151,6 @@ lv_obj_t * create_settings_screen() {
             lv_obj_set_style_text_color(touch_filter_label, theme::text_secondary(), 0);
 
             lv_obj_t * touch_filter_cb = lv_switch_create(touch_filter_row);
-            if (core::navigation::focus_group()) {
-                lv_group_add_obj(core::navigation::focus_group(), touch_filter_cb);
-            }
 
             struct LogViewCtx {
                 lv_obj_t * label;
@@ -1549,55 +1441,30 @@ lv_obj_t * create_settings_screen() {
                 lv_obj_scroll_to_y(box, LV_COORD_MAX, LV_ANIM_OFF);
             }, LV_EVENT_CLICKED, log_ctx);
 
-            // 2026-09-05: real hardware bug found via code review --
-            // same issue as the System Information modal above, worse
-            // here since this one also has a 300ms refresh_timer:
-            // `overlay` lives on lv_layer_sys(), not as a child of
-            // `scr`, so navigating away without pressing Close left
-            // both the modal AND its timer running forever in the
-            // background -- permanently blocking touch on whatever
-            // screen the user navigated to, while leaking CPU. Same
-            // shared "closed" flag fix as that modal: whichever fires
-            // first (Close button or scr's own deletion) does the real
-            // cleanup, the other becomes a safe no-op.
-            struct CloseCtx {
-                lv_obj_t * overlay;
+            // 2026-11-13: one cleanup path -- deleting the overlay (Close,
+            // or open_modal()'s owner hook when `scr` is deleted) stops the
+            // refresh timer and frees log_ctx. Previously a shared "closed"
+            // flag coordinated two separate cleanup handlers.
+            struct LogCleanup {
                 lv_timer_t * timer;
                 LogViewCtx * log_ctx;
-                std::shared_ptr<bool> closed;
             };
-            auto closed = std::make_shared<bool>(false);
-            auto * close_ctx = new CloseCtx{overlay, refresh_timer, log_ctx, closed};
+            lv_obj_add_event_cb(overlay, [](lv_event_t * ev) {
+                auto * c = static_cast<LogCleanup *>(lv_event_get_user_data(ev));
+                lv_timer_delete(c->timer);
+                delete c->log_ctx;
+                delete c;
+            }, LV_EVENT_DELETE, new LogCleanup{refresh_timer, log_ctx});
 
             lv_obj_add_event_cb(close_btn, [](lv_event_t * ev) {
-                auto * ctx = static_cast<CloseCtx *>(lv_event_get_user_data(ev));
-                if (!*ctx->closed) {
-                    lv_timer_delete(ctx->timer);
-                    lv_obj_delete(ctx->overlay);
-                    delete ctx->log_ctx;
-                    *ctx->closed = true;
-                }
-                delete ctx;
-            }, LV_EVENT_CLICKED, close_ctx);
+                close_modal(static_cast<lv_obj_t *>(lv_event_get_user_data(ev)));
+            }, LV_EVENT_CLICKED, overlay);
 
-            if (core::navigation::focus_group()) {
-                lv_group_add_obj(core::navigation::focus_group(), close_btn);
-                lv_group_add_obj(core::navigation::focus_group(), earlier_btn);
-                lv_group_add_obj(core::navigation::focus_group(), later_btn);
-                lv_group_add_obj(core::navigation::focus_group(), live_btn);
-            }
-
-            auto * scr_close_ctx = new CloseCtx{overlay, refresh_timer, log_ctx, closed};
-            lv_obj_add_event_cb(scr, [](lv_event_t * ev) {
-                auto * ctx = static_cast<CloseCtx *>(lv_event_get_user_data(ev));
-                if (!*ctx->closed) {
-                    lv_timer_delete(ctx->timer);
-                    lv_obj_delete(ctx->overlay);
-                    delete ctx->log_ctx;
-                    *ctx->closed = true;
-                }
-                delete ctx;
-            }, LV_EVENT_DELETE, scr_close_ctx);
+            modal_add_focusable(overlay, close_btn, /*focus=*/true);
+            modal_add_focusable(overlay, earlier_btn);
+            modal_add_focusable(overlay, later_btn);
+            modal_add_focusable(overlay, live_btn);
+            modal_add_focusable(overlay, touch_filter_cb);
         }, LV_EVENT_CLICKED, scr);
 
         if (core::navigation::focus_group()) {

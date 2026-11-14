@@ -1877,8 +1877,8 @@ made confident, specific-looking claims (real-looking SHA-256 hashes, a
 detailed "hardware architecture" analysis) of a **successful** RDP
 bypass via `CVE-2020-8004` -- but the `.bin` files it describes don't
 exist in this checkout. Git history shows why: they were committed once
-(`d737472b`), then deliberately deleted one session later
-(`aba08e68`, "remove unreliable live SWD dump files") after being found
+(`8697dfbb`), then deliberately deleted one session later
+(`87a33362`, "remove unreliable live SWD dump files") after being found
 to disagree with the verified-correct `can_app.bin` on 99.7%+ of
 non-placeholder words, traced to a real bug in the extractor tool
 (`tools/stm32f1_extractor_fixed.py`'s broken `address % 0x200` shortcut
@@ -2761,7 +2761,7 @@ app-only.
 
 **A second, real thing surfaced while checking**: this repo already
 has its own `hardware/MCU/bootloader/` -- a clean-room STM32F105 IAP
-bootloader implementation (`git log`: commit `02b46048`, predates this
+bootloader implementation (`git log`: commit `d80ee6c0`, predates this
 session, 2026-08-28), independent of and not previously cross-linked
 to this session's own `CMD 0xE1` trace above. Worth checking closely
 given the exact coincidence: its `bootloader.h`/`stm32f105.h` already
@@ -2963,7 +2963,7 @@ just re-sending an already-armed value every time -- real,
 self-inflicted churn). The user reported, from direct real-world
 experience, that reverse-camera switching worked *better* before these
 sends existed at all. `main.cpp`'s reverse-gear handler no longer
-sends `id=0x11` reactively at all (`custom_ui` commit `a4211c2`); the
+sends `id=0x11` reactively at all (`custom_ui` commit `29cc190`); the
 preference is armed only at boot and immediately on every settings
 change. Real hardware retest (2026-09-01): multiple full engage/
 disengage cycles all worked correctly, zero regression -- confirmed
@@ -3510,7 +3510,7 @@ A dedicated, comprehensive hardware and protocol guide has been compiled in:
 
 ### 5. Authenticity Verification & Correction to "0% Artifacts" Claim (2026-09-12)
 
-`hardware/MCU/live_dumps/live_bootloader.bin` and `live_app_1302.bin` (introduced in `118a730`) were independently cross-checked byte-by-byte and disassembly-verified before being trusted, given this project's own prior history of a retracted fake dump under these exact filenames (`aba08e68`, same address range and size). Recorded here so the verification method and its real result are on record, not just the "authentic" claim.
+`hardware/MCU/live_dumps/live_bootloader.bin` and `live_app_1302.bin` (introduced in `ee50618`) were independently cross-checked byte-by-byte and disassembly-verified before being trusted, given this project's own prior history of a retracted fake dump under these exact filenames (`87a33362`, same address range and size). Recorded here so the verification method and its real result are on record, not just the "authentic" claim.
 
 #### 5.1 The dump is real, but the commit's "0% artifacts" claim was wrong
 
@@ -3779,7 +3779,7 @@ The dispatcher loop itself (`0x080063CE`: `cmp r4,#5; blt`) only ever iterates 5
 
 **The frequency anomaly below is now RESOLVED, see section 16** — root cause was a 25MHz crystal (not 8 or 16MHz as hypothesized here) fed directly into the main PLL, exceeding its 12MHz max input spec (RM0008) and causing unstable ~144MHz oscillation, which also explains the confusing `CFGR2` register-readback behavior noted below (consistent with the corrupted/unstable execution state a badly-overclocked, out-of-spec PLL would cause, not a genuine read-masking hardware feature).
 
-**Milestone**: a concurrent effort this session flashed the corrected clean-room bootloader and application onto the spare STM32F105RBT6 test board (via the Pico CMSIS-DAP probe + OpenOCD, `tools/pico_stm32.cfg`) and confirmed, live, on real hardware: bootloader boots, validates the app, relocates VTOR, jumps to the application's `Reset_Handler`, and the application runs continuously in its main event loop (UART/CAN/IWDG all servicing normally) without hanging or resetting. This is the first real confirmation that this project's clean-room bootloader — corrected per sections 1-14 above — actually boots real application code on real silicon. Also fixed in that same pass: `ymodem_receive_and_flash()` no longer erases the entire application flash region unconditionally on entry (moved to only erase once a real, non-empty header packet is received), and real SRAM-bounds fixes to both linker scripts' `_estack` values. Committed as `2121c38`.
+**Milestone**: a concurrent effort this session flashed the corrected clean-room bootloader and application onto the spare STM32F105RBT6 test board (via the Pico CMSIS-DAP probe + OpenOCD, `tools/pico_stm32.cfg`) and confirmed, live, on real hardware: bootloader boots, validates the app, relocates VTOR, jumps to the application's `Reset_Handler`, and the application runs continuously in its main event loop (UART/CAN/IWDG all servicing normally) without hanging or resetting. This is the first real confirmation that this project's clean-room bootloader — corrected per sections 1-14 above — actually boots real application code on real silicon. Also fixed in that same pass: `ymodem_receive_and_flash()` no longer erases the entire application flash region unconditionally on entry (moved to only erase once a real, non-empty header packet is received), and real SRAM-bounds fixes to both linker scripts' `_estack` values. Committed as `bf51a48`.
 
 **One real, independently-verified bug found and fixed in that same commit, confirmed via real-hardware CPU-cycle measurement, not just theory**: that commit's own fix for `clock_init()`'s PLL source selection used `RCC->CFGR2 = 0` (`PREDIV1SRC=HSE`) combined with `RCC->CFGR` `PLLSRC` bit16 = **0**, with an inline comment claiming *"bit 16 = 0 selects PREDIV1; bit 16 = 1 would select PLL2."* This is backwards from real STM32F1 `RCC_CFGR.PLLSRC` semantics (0 = HSI/2 as PLL input, 1 = PREDIV1 output) — confirmed **not by re-reading the reference manual, but by direct measurement on the real spare board**: enabled the Cortex-M3's built-in DWT cycle counter (`DEMCR`/`DWT_CTRL`/`DWT_CYCCNT`, no firmware changes needed) via OpenOCD, let the board run freely for a precise ~2.000s wall-clock window, and computed the real elapsed time implied by each candidate frequency from the counted cycles: the 36 MHz hypothesis (HSI(~8MHz)/2 × 9) implied 2.010s elapsed against an actual ~2.000s window — a clean, ~0.5% match, confirming the CPU was genuinely running at ~36 MHz, not the intended 72 MHz, with `bit16=0`. **Fixed**: changed both `hardware/MCU/bootloader/src/main.c` and `hardware/MCU/source/src/main.c` to `PLLSRC` bit16 = **1** (selects PREDIV1's output, which is HSE directly since `PREDIV1SRC=0`/`PREDIV1=/1`). Both rebuild and boot cleanly.
 
@@ -3862,7 +3862,7 @@ Prompted by a direct question about whether everything documented actually agree
 
 **Nothing else in this document's findings depends on this value** — `is_app_valid()`'s real behavior and the `0x08003000` app-base-address finding were both derived from disassembling the *bootloader's own code* (sections 5.2, 6), never from reading this address directly out of the dump, and this session's own live-hardware SWD reads of the currently-flashed clean-room build (sections 15-17) are a separate, independently-confirmed data source unaffected by this dump-specific gap.
 
-### 19. Review of the dump realignment work (`cb900dc`) — sound, two documentation-only corrections made (2026-09-12)
+### 19. Review of the dump realignment work (`eb881d0`) — sound, two documentation-only corrections made (2026-09-12)
 
 Reviewed the commit that produced `factory_bootloader_12k.bin`/`factory_app_1302_52k.bin`/`factory_full_64k.bin` from the original raw extractions, checking the actual realignment operation itself (not just the resulting files, already cross-checked in section 18).
 
@@ -3872,7 +3872,7 @@ Reviewed the commit that produced `factory_bootloader_12k.bin`/`factory_app_1302
 - `factory_full_64k.bin` was described as "the entire MCU" — the chip's real total flash is 128KB, and the application's own accessible region extends to `0x0801FFFF` (116KB past the bootloader, per section 9's independently-confirmed 58-page erase-loop trace); this dump only covers the first 64KB (`0x08000000`–`0x0800FFFF`). The upper 64KB (`0x08010000`–`0x0801FFFF`) was never captured by any file in this directory.
 - Checked whether that gap is likely to matter: real content in the application half of this dump ends cleanly at `0x0800D437`, followed by over 11KB of consistent, unbroken erased flash (`0xFF`) all the way to this dump's own `0x0800FFFF` boundary — a clean "real firmware genuinely ends here" pattern, not a suspicious mid-content truncation. This gives real confidence the captured 52KB holds the complete, real application image, but the never-captured upper 64KB remains genuinely unverified (not confirmed-empty, just never checked) — corrected the README to say this precisely rather than either overclaiming completeness or unnecessarily casting doubt on the part that was actually captured.
 
-### 20. Review of the Touchscreen/SWC driver commit (`ae53323`) — sound, one real flashing-procedure gotcha found (2026-09-12)
+### 20. Review of the Touchscreen/SWC driver commit (`d3f928c`) — sound, one real flashing-procedure gotcha found (2026-09-12)
 
 Reviewed `hardware/MCU/source/`'s new `swc_driver.c`/`touch_driver.c` (analog steering-wheel-control resistor ladder via `ADC1`+`DMA1`, capacitive touchscreen via `I2C1` Goodix GT911 protocol, quadrature rotary-encoder decoding) plus the `SysTick`-based millisecond scheduler wired into `main.c`.
 
@@ -3888,7 +3888,7 @@ Reviewed `hardware/MCU/source/`'s new `swc_driver.c`/`touch_driver.c` (analog st
 
 **Practical takeaway for future flashing sessions**: any build that enables a free-running periodic interrupt (SysTick, a timer, etc.) should be reflashed with `reset halt` before both `flash write_image` and `verify_image`, not a bare `halt` — this project's own earlier, interrupt-free builds never exposed this, so it's easy to carry forward the simpler habit and hit this exact class of false "corruption."
 
-### 21. Review of the GPIO/relay/power-management/CAN2 commit (`9c61012`) — mostly sound, one real bug found and fixed (2026-09-12)
+### 21. Review of the GPIO/relay/power-management/CAN2 commit (`39d2e62`) — mostly sound, one real bug found and fixed (2026-09-12)
 
 Reviewed `gpio_driver.c`/`power_manager.c` (Task 5 discrete-input polling and relay control, Task 4 power-state machine with `WFI`-based low-power sleep) and the `can_driver.c`/`startup_stm32f105.c` CAN2 integration.
 
@@ -3904,7 +3904,7 @@ Reviewed `gpio_driver.c`/`power_manager.c` (Task 5 discrete-input polling and re
 
 **Fix verified on real hardware, not just build-checked**: rebuilt (clean, zero warnings), reflashed (using `reset halt`, per section 20's own lesson), and confirmed live: `CAN2_MCR`/`CAN2_MSR` now read identically to `CAN1`'s (`0x00010060`/`0x00000c08` — awake, `ABOM`/`AWUM` set, normal operating mode), `CAN2_BTR` reads `0x00140008` matching `CAN1` exactly, `CAN2_IER` reads `0x00000002` (`FMPIE0` enabled). The application continues running cleanly after the fix (`CFSR=0` across two checks, PC genuinely progressing through app code) — the fix didn't introduce any regression.
 
-### 22. Review of the extended CAN matrix/telemetry commit (`e36d8e3`) — steering math confirmed precisely, one real bug fixed, one deeper issue flagged unresolved (2026-09-12)
+### 22. Review of the extended CAN matrix/telemetry commit (`ca1f169`) — steering math confirmed precisely, one real bug fixed, one deeper issue flagged unresolved (2026-09-12)
 
 Reviewed the new `handle_toyota_prado_*` CAN decoders and the `uart_send_composite_vehicle_status()`/radar-telemetry packet builders in `vehicle_profiles.c`/`uart_protocol.c`.
 
@@ -3958,7 +3958,7 @@ Traced `0x080093D8` through its exit at `0x08009568` to resolve the question rai
 
 **Independently re-verified, not taken on faith**: re-disassembled `0x08009480`-`0x08009568` directly and confirmed every claim above byte-for-byte — the rear write sequence (`0x080094EC`-`0x08009504`) genuinely reads `[sp+0x12]` twice (offsets `0x18`/`0x19` = McuSettings 24/25) while `0x17`/`0x1A` (23/26) get distinct values; the front sequence (`0x0800953A`-`0x08009558`) shows the identical pattern (`[sp+6]` duplicated into offsets `0x21`/`0x22` = 33/34); and both threshold-comparison loops (`0x080094C8`-`0x080094EA`, `0x08009510`-`0x08009538`) skip exactly the duplicated offset (25, 34) in their change-detection checks. Also confirmed the underlying `Data[N]` byte-offset claims (`+0xB` through `+0x12` for `Data[0..7]`) against the five actual payload-load instructions cited — all match exactly. This closes out section 22's open item with real confirmation: the code's `rear[]`/`front[]` array assignments (unchanged by this commit — only the explanatory comment was updated) were already correct as fixed in section 22, now backed by full evidence rather than a plausible guess. Build re-verified: identical binary size to the already hardware-tested build in section 22 (a comment-only change doesn't affect compiled output), so no re-flash was needed to confirm this.
 
-### 24. Review of `tools/test_mcu_rigorous.py` (`d369506`) — a genuine, working 23-point HIL suite, independently executed and confirmed (2026-09-13)
+### 24. Review of `tools/test_mcu_rigorous.py` (`ddbc216`) — a genuine, working 23-point HIL suite, independently executed and confirmed (2026-09-13)
 
 Reviewed the new hardware-in-the-loop test tool, which drives the spare board purely over SWD (no UART cable needed) by writing synthetic `CanFrame` entries directly into the ring buffer's SRAM and reading back decoded state.
 
@@ -4152,7 +4152,7 @@ Factory-screen touch being dead too, and a factory head-unit reset fixing it, me
 
 **Project constraint**: the vehicle MCU is not being reflashed (limited recovery paths; see the live-update safety discussion in sections 27-29). No `CMD`-level SoC request found in this trace makes the factory firmware re-run touch init or a proper bus recovery. Within that constraint the available steps are: measure the bus as above; identify the touch controller part; log what precedes each lockup from the SoC side (custom_ui sees every MCU frame) to find the trigger; and keep custom_ui fully knob-operable so a touch lockup is not a dead end.
 
-**Clean-room source note** (`hardware/MCU/source`, not on the vehicle): its I2C bus recovery (section 25, commit `cd6f210`) is a real improvement in principle, but it is written against the assumed GT911 protocol, and its PB0 "touch relay" output does not match the vehicle firmware, which only ever *reads* PB0 (`0x08006FDC`, sampled bit-by-bit into a shift register at `0x0800ABBE` — purpose not traced).
+**Clean-room source note** (`hardware/MCU/source`, not on the vehicle): its I2C bus recovery (section 25, commit `8214111`) is a real improvement in principle, but it is written against the assumed GT911 protocol, and its PB0 "touch relay" output does not match the vehicle firmware, which only ever *reads* PB0 (`0x08006FDC`, sampled bit-by-bit into a shift register at `0x0800ABBE` — purpose not traced).
 
 ### 31. Power management in the factory firmware: scheduler timing, the ACC-off sequence, the "low-power" state, parked current, and RTC feasibility (2026-11-14, static disassembly of `live_factory_app_52k_reconstructed.bin` — NOT hardware-measured)
 
@@ -4519,7 +4519,7 @@ The `mcu_rebuild.py`/`mcu_decompile.py` CAN-table tools only understand the DCn3
 
 ### 39. Clean-room power manager matched to the factory (section 31.2), bench-verified (2026-11-14)
 
-Commit `a0763b1` reimplemented `hardware/MCU/source/src/power_manager.c` and the run and power-down output sets in `gpio_driver.c` after section 31.2. It has two deliberate differences from the factory:
+Commit `26dc76c` reimplemented `hardware/MCU/source/src/power_manager.c` and the run and power-down output sets in `gpio_driver.c` after section 31.2. It has two deliberate differences from the factory:
 - **CAN** is held in initialization mode while parked.
 - **Wake** is a system reset, not an in-place re-init.
 

@@ -194,7 +194,7 @@ int main() {
         }
     }
 
-    // 2026-08-20: hal/audio.h was #included (commit a43df447, "Unmute
+    // 2026-08-20: hal/audio.h was #included (commit cdfcc3d0, "Unmute
     // DAC/PA on boot") but the actual hal::init_audio_mixer() call was
     // never added anywhere -- the commit only added the include and an
     // unrelated sidecar startup-order change, leaving the DAC/softmaster

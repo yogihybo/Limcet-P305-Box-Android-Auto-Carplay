@@ -1,7 +1,7 @@
 # Engineering Handoff: MCU Signals, Audio Pipeline & BD37033 Hardware I2C
 
 **Date**: August 27, 2026  
-**Status**: `master` branch up-to-date and verified on commit `ec8c2b19`
+**Status**: `master` branch up-to-date and verified on commit `57c94fb4`
 
 ---
 

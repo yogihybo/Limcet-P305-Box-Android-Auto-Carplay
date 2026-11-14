@@ -170,7 +170,7 @@ outside the confirmed dispatch table and is very unlikely to do anything real.
 
 | id | Vendor label | Values | Real MCU-side effect | `custom_ui` |
 |---|---|---|---|---|
-| `0x00` | Camera Type | `0`=AfterMarket / `1`=Factory / `2`=AfterMarket 360 / `3`=Factory 360 | `GPIOB Pin 1`. **Hardware-confirmed: controls the OEM camera relay.** (Value `2` is a distinct `AT+UPGRADE` trigger, not a camera value). **Real hardware test, 2026-09-04**: a `custom_ui` home-dashboard button was wired to call `sync_video_relay(true)` (this id plus `id=0x11` and `CMD 0x84` together) directly, with no reverse-gear transition happening -- it did NOT switch the display to Factory LCD. Confirms the arm-then-trigger model: sending this command alone only updates the stored preference, it doesn't force an immediate relay switch on its own -- the MCU's own real gear-transition edge is still required to actually apply it. The button was reverted (`4893de3`) since it had no real effect. No on-demand, software-only way to force a Factory LCD switch is currently known. | ✅ sent by `sync_video_relay()` |
+| `0x00` | Camera Type | `0`=AfterMarket / `1`=Factory / `2`=AfterMarket 360 / `3`=Factory 360 | `GPIOB Pin 1`. **Hardware-confirmed: controls the OEM camera relay.** (Value `2` is a distinct `AT+UPGRADE` trigger, not a camera value). **Real hardware test, 2026-09-04**: a `custom_ui` home-dashboard button was wired to call `sync_video_relay(true)` (this id plus `id=0x11` and `CMD 0x84` together) directly, with no reverse-gear transition happening -- it did NOT switch the display to Factory LCD. Confirms the arm-then-trigger model: sending this command alone only updates the stored preference, it doesn't force an immediate relay switch on its own -- the MCU's own real gear-transition edge is still required to actually apply it. The button was reverted (`e9c7bbf`) since it had no real effect. No on-demand, software-only way to force a Factory LCD switch is currently known. | ✅ sent by `sync_video_relay()` |
 | `0x01` | — (no real label) | — (no real values) | Dead no-op — shares the same handler as `0x02`–`0x06`/`0x0E` | not wired |
 | `0x02`–`0x06` | — | — | Dead no-op (same shared handler) | not wired |
 | `0x07` | "Radar" | — | **Re-confirmed (2026-09-02)**: write-only, no consumer. Writes struct offset `0x3a` (`0x8008a4a`/`0x8008a54`); a precise, code-only sweep of the entire binary for any real `ldrb`/`ldrb.w` *read* of that offset found zero hits | not wired |
@@ -269,7 +269,7 @@ directly (demoted to a logged-only cross-check, see its own row).
   which of two captured events was the real enter vs. exit).
 - **2026-09-02**: two real regressions hit on retest (exit flash-then-blank; boot-time false
   engage from the MCU's own startup burst) — both fixed (debounce + startup grace window,
-  `custom_ui` commits `fbdcc7b`/`4b7f230`). Then the bigger issue: `payload[0]==0x01`
+  `custom_ui` commits `3ff442a`/`d1531ae`). Then the bigger issue: `payload[0]==0x01`
   confirmed to fire from headlights alone (see the CRITICAL section below). Ultimately
   resolved for the OEM path by removing its dependency on this signal entirely rather than
   continuing to patch around it (see the "RESOLVED" architecture section further down).
@@ -734,7 +734,7 @@ engaged correctly with `custom_ui` completely killed, meaning zero software invo
 
 **Real architectural fix, not just documentation**: removed `hal::hide_display()`/
 `show_display()`/`lv_obj_invalidate()` entirely from both the engage and disengage branches
-of `main.cpp`'s OEM Factory Camera handling (`custom_ui` commit `de1b75d`). Every real bug
+of `main.cpp`'s OEM Factory Camera handling (`custom_ui` commit `0d0478b`). Every real bug
 this project hit today -- the stuck-in-reverse false trigger, the exit flash-then-blank, the
 boot-time false engage -- came from reactively driving this GUI-hide/show behavior off a
 live reverse-gear detection signal that turned out to be shared/unreliable (see the CRITICAL
@@ -757,7 +757,7 @@ testing has been on.
 
 **Real hardware retest (2026-09-02): confirmed working every time.** User confirmed OEM
 Factory Camera reverse-gear switching now works correctly on every cycle after the
-`de1b75d` fix above -- closes out the day's entire `CMD 0x12` investigation for the OEM
+`0d0478b` fix above -- closes out the day's entire `CMD 0x12` investigation for the OEM
 path. The architectural call (stop reacting to a signal proven unreliable, rather than
 continuing to try to make it reliable) was correct.
 
@@ -880,7 +880,7 @@ settings sync, which is the most likely reason booting into it fixed the stuck s
 `custom_ui` already had a real HAL wrapper for this exact command (`sync_audio_route()`/
 `send_mcu_audio_route()`) sitting completely unused -- now wired into `sync_video_relay()`
 so it fires alongside `id=0x11` on every sync (boot and settings-toggle both route through
-this one function now). Build-verified (`custom_ui` commit `f7f0442`), **pending hardware
+this one function now). Build-verified (`custom_ui` commit `6440091`), **pending hardware
 retest**.
 
 ## CONFIRMED (2026-09-02): `CMD 0xA0 id=0x00` independently controls the OEM camera relay -- the "Microphone Source" label was always wrong, exactly as flagged
@@ -917,7 +917,7 @@ coincidence.
 time, `id=0x11` toggled/tested instead) found `id=0x11` "didn't seem to do anything" on its
 own -- `id=0x00` is the confirmed-working lever, `id=0x11` an unconfirmed-if-load-bearing
 secondary at best. `sync_video_relay()` now sends `id=0x00` alongside the existing `id=0x11`
-and `CMD 0x84` sends (`custom_ui` commit `11128ca`) -- `id=0x11`'s send was kept rather than
+and `CMD 0x84` sends (`custom_ui` commit `f49ffaa`) -- `id=0x11`'s send was kept rather than
 removed (harmless per this same testing, and still the one signal with an independently
 disassembly-confirmed `GPIOC13`/`PC2` effect under its own gate condition), so this adds the
 confirmed-working signal rather than replacing anything not proven harmful to keep. The

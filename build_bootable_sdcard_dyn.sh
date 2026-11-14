@@ -311,7 +311,7 @@ else
     # p2. Only safe now because rcS's own two rootfs writes (ssh host
     # key chmod, root's shadow password) were moved to build time --
     # see this script's own shadow-sed step below and its commit
-    # message (a257ab4) for the full rootfs-write sweep confirming
+    # message (e2aeaaf) for the full rootfs-write sweep confirming
     # these were the only two. p3 (/data, userdata) is unaffected --
     # still mounted rw at runtime by rcS, that's the one partition
     # that's actually supposed to take writes.

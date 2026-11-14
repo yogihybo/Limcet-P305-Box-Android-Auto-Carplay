@@ -118,7 +118,7 @@ lv_indev_t * init_touch(McuInputHal & mcu) {
     lv_indev_set_read_cb(indev, mcu_touch_read_cb);
     lv_indev_set_driver_data(indev, &mcu);
     // 2026-09-06: real user report -- AA touch still felt less
-    // responsive than the local LVGL UI even after 15d9ddf cut this
+    // responsive than the local LVGL UI even after e283050 cut this
     // from LVGL's 33ms default down to 10ms. There's genuine headroom
     // below 10ms specifically for touch (unlike the knob's own 10ms,
     // which is now load-bearing for its hold-and-turn gesture timing

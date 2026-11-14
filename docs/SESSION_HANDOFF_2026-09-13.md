@@ -3,7 +3,7 @@
 **Date**: September 13, 2026  
 **Target Hardware**: STM32F105RBT6 (LQFP-64, Connectivity Line) Spare Development Board  
 **Debug Probe**: Raspberry Pi Pico running CMSIS-DAP v2 (`tools/pico_stm32.cfg`)  
-**Repository Branch**: `master` (Latest verified commit: `77e656a`)  
+**Repository Branch**: `master` (Latest verified commit: `e44827e`)  
 
 ---
 

@@ -5,7 +5,7 @@
 # Why this exists / history (see project docs for the full story):
 #   - Stock shipped a 1.25.0 binary whose original build config is
 #     unknown/unrecoverable. Rebuilt from 1.30.1 source 2026-07-27
-#     (commit dc777c5) for ipcs/ipcrm -- hardware-confirmed working,
+#     (commit e114c0f) for ipcs/ipcrm -- hardware-confirmed working,
 #     including as the /sbin/init replacement.
 #   - 1.30.1 predates CONFIG_FEATURE_MDEV_DAEMON entirely (added in
 #     1.31+, confirmed by grepping that version's own util-linux/mdev.c
@@ -14,11 +14,11 @@
 #     CONFIG_UEVENT_HELPER is compiled out; mdev -df's netlink listener
 #     is a separate mechanism that works regardless, gated only on
 #     CONFIG_NET).
-#   - First 1.33.0 rebuild attempt (2026-08-04, commit 198b721) was
+#   - First 1.33.0 rebuild attempt (2026-08-04, commit 16f022e) was
 #     dynamically linked against the HOST cross-toolchain's glibc 2.36.
 #     PANICKED THE BOARD ON BOOT ("Attempted to kill init!", GLIBC_2.29/
 #     2.34 not found) -- the device's own /lib/libc.so.6 is 2.27, far
-#     older. Reverted same day (a5021ec).
+#     older. Reverted same day (52f3d1f).
 #   - Linking against the device's own libc-2.27.so at build time (the
 #     tools/hx170-test recipe) does NOT generalize to a whole program
 #     like busybox: that old glibc only exports the __xstat-style
@@ -27,7 +27,7 @@
 #     a header/ABI mismatch, not just a missing symbol. Fails with
 #     undefined references to *64 functions used all over busybox's
 #     file-utility applets.
-#   - REAL FIX (commit 638505a): static link (no runtime libc dependency
+#   - REAL FIX (commit 147b114): static link (no runtime libc dependency
 #     at all) + this project's nss-stub pattern (see
 #     tools/nss-stub/README.md) for the handful of real glibc NSS/dlopen
 #     symbols busybox still references. Busybox's own

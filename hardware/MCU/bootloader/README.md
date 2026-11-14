@@ -83,7 +83,7 @@ mechanism, not guessed independently of it.
 ## Correction notice: this bootloader does NOT implement a "diagnostic memory read command (0x90)"
 
 The commit that introduced this directory
-(`02b46048`/`3921b909` -- same content, duplicated across this
+(`d80ee6c0`/`3921b909` -- same content, duplicated across this
 project's two-checkout history) is titled *"add cleanroom STM32F105
 IAP bootloader and diagnostic memory read command (0x90)"*. **That
 title does not match what the commit actually contains.** Its real

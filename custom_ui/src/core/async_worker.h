@@ -7,7 +7,7 @@
 // is active. Those are synchronous AF_UNIX socket round-trips bounded by
 // real ~1s SO_RCVTIMEO/SO_SNDTIMEO (see androidauto_client.cpp) -- same
 // class of blocking call as the two reverse-gear-triggered freezes fixed
-// in commits fdc5686/bcac5a1, just triggered by continuous input instead
+// in commits a18a9c8/b0ff225, just triggered by continuous input instead
 // of a discrete gear transition. A detached-thread-per-call fix (like
 // those two commits used) isn't safe here: touch DOWN/MOVE/UP and rotary
 // ticks must reach the sidecar in the same order they were generated, and

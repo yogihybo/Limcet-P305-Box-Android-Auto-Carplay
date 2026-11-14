@@ -17,7 +17,9 @@ Performs a full, realistic end-to-end rehearsal of an in-vehicle MCU firmware up
            Verify bootloader validates new vector table, sets handshake (0x20141003),
            relocates VTOR, and boots clean-room application.
   Phase 7: Rollback Rehearsal: Trigger CMD 0xE1 on clean-room application, enter IAP,
-           flash factory binary (hardware/MCU/can_app.bin), and verify factory app boots cleanly.
+           flash the reconstructed factory app (live_factory_app_52k_reconstructed.bin -- not
+           hardware/MCU/can_app.bin, which is the DCn32-VOLVO reference image linked at
+           0x08004000 for another product), and verify it boots cleanly.
 """
 
 import os
@@ -28,6 +30,9 @@ import struct
 import hashlib
 import threading
 import subprocess
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "mcu_builder"))
+from check_app_image import problems as app_image_problems  # noqa: E402
 
 # 128-byte lookup table T from factory bootloader at 0x08001F72
 DEOBF_TABLE = bytes([
@@ -134,7 +139,16 @@ class VirtualSTM32(threading.Thread):
                 sp_valid = (sp & 0x2FFE0000) == 0x20000000
                 reset_valid = (0x08003000 <= reset_vec <= 0x0801FFFF) and (reset_vec & 1) == 1
 
-                if sp_valid and reset_valid:
+                # The real bootloader only checks the SP and jumps; an image linked
+                # for another base (e.g. a DCn32 reference image at 0x08004000)
+                # then runs garbage. Model that as a fault, not a clean boot.
+                region = bytes(self.flash[self.flash_offset(0x08003000):self.flash_offset(0x08003000) + 0x1D000])
+                misslinked = sp_valid and reset_valid and app_image_problems(region)
+                if misslinked:
+                    self.mode = "FAULT"
+                    print(f"[Virtual MCU] System Reset -> App Jump @ 0x{reset_vec:08X} -> HardFault "
+                          f"(image not linked for 0x08003000: {misslinked[0]})")
+                elif sp_valid and reset_valid:
                     self.mode = "APP"
                     self.vtor = 0x08003000
                     self.handshake = 0x20141003
@@ -367,8 +381,11 @@ def run_dry_run():
     print("\n" + "=" * 76)
     print(" PHASE E: In-Vehicle Rollback Rehearsal (Clean-Room -> Stock Firmware)")
     print("=" * 76)
-    # Package stock binary
-    stock_bin = os.path.join(ROOT, "hardware/MCU/can_app.bin")
+    # Package the reconstructed factory application -- this unit's real stock
+    # firmware. (hardware/MCU/can_app.bin is the DCn32-VOLVO reference image,
+    # linked at 0x08004000; the packager refuses it.)
+    stock_bin = os.path.join(ROOT, "hardware/MCU/live_dumps/vehicle_live_2026-09-14/"
+                                   "live_factory_app_52k_reconstructed.bin")
     cmd_pack_stock = [builder_script, "-d", "-i", stock_bin]
     res_pack_stock = subprocess.run(cmd_pack_stock, capture_output=True, text=True)
     assert res_pack_stock.returncode == 0
@@ -389,7 +406,10 @@ def run_dry_run():
 
     time.sleep(0.3)
     assert mcu.mode == "APP", "MCU failed to reboot into application after rollback"
-    print("[+] Rollback successfully completed: Stock application restored and running.")
+    stock_raw = open(stock_bin, "rb").read()
+    restored = mcu.flash[mcu.flash_offset(0x08003000):mcu.flash_offset(0x08003000) + len(stock_raw)]
+    assert restored == stock_raw, "Rollback flash mismatch against the factory application"
+    print("[+] Rollback successfully completed: factory application restored bit-for-bit and running.")
 
     print("\n" + "=" * 76)
     print(" IN-PLACE UPGRADE DRY RUN: 100% SUCCESSFUL!")

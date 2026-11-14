@@ -7,7 +7,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
-STOCK_BIN="${REPO_ROOT}/hardware/MCU/can_app.bin"
+# No default input. hardware/MCU/can_app.bin is the DCn32-VOLVO reference image,
+# linked at 0x08004000 for a different product; it must never be packaged for this
+# unit. To restore the factory application use
+# hardware/MCU/live_dumps/vehicle_live_2026-09-14/live_factory_app_52k_reconstructed.bin
+STOCK_BIN=""
 OUTPUT_DIR="${SCRIPT_DIR}/output"
 PACKAGE_DIR="${OUTPUT_DIR}/usb_root"
 ZIP_OUTPUT="${OUTPUT_DIR}/mcu_update_package.zip"
@@ -24,7 +28,7 @@ Usage: $(basename "$0") [OPTIONS]
 Options:
   -c, --config FILE       Path to custom CAN JSON config file
   -p, --preset PRESET     Vehicle preset (e.g. toyota_prado_150)
-  -i, --input BINARY      Input application binary (default: hardware/MCU/can_app.bin)
+  -i, --input BINARY      Input application binary, linked at 0x08003000 (required)
   -o, --output-zip ZIP    Output zip file path
   -d, --direct            Direct packaging (pre-compiled binary, skip python CAN patcher)
   --no-obfuscate          Do not apply wire obfuscation (leave binary raw/plaintext)
@@ -75,6 +79,12 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+if [[ -z "${STOCK_BIN}" ]]; then
+    echo "[!] Error: no input image (-i). To restore the factory app:" >&2
+    echo "    -d -i hardware/MCU/live_dumps/vehicle_live_2026-09-14/live_factory_app_52k_reconstructed.bin" >&2
+    exit 1
+fi
 
 if [[ ! -f "${STOCK_BIN}" ]]; then
     echo "[!] Error: Binary not found at ${STOCK_BIN}" >&2
@@ -142,6 +152,10 @@ else
     fi
     "${REBUILD_ARGS[@]}"
 fi
+
+# Refuse anything that can't run at this unit's 0x08003000 application base
+# (e.g. the DCn32 reference images, linked at 0x08004000).
+python3 "${SCRIPT_DIR}/check_app_image.py" "${RAW_STAGING}"
 
 # Apply obfuscation if enabled
 if [[ ${DO_OBFUSCATE} -eq 1 ]]; then

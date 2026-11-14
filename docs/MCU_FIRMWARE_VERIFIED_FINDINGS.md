@@ -4412,6 +4412,7 @@ A full end-to-end dry-run simulation of an in-vehicle OTA/USB upgrade was conduc
    - Flash at `0x08003000` matched `hardware/MCU/source/build/can_app.bin` **bit-for-bit**.
    - Bootloader validated clean-room initial SP (`0x20005000`) and reset vector (`0x08003155`), relocated VTOR to `0x08003000`, asserted `0x20141003` handshake, and successfully jumped into the clean-room application.
 6. **Rollback Rehearsal**: Re-asserted `CMD 0xE1` on the clean-room application, re-entered IAP bootloader, flashed stock firmware (`hardware/MCU/can_app.bin`, 250 blocks), and verified that the stock application boots and runs cleanly. All phases passed with zero errors.
+   > **Correction (section 38.4):** `hardware/MCU/can_app.bin` is the DCn32-VOLVO reference image, linked at `0x08004000`, not this unit's stock firmware. On the real MCU it would have been accepted, programmed, and then crashed: the bootloader only checks the stack pointer. The rehearsal "passed" only because the simulator doesn't execute code. It now restores the reconstructed factory application, and the simulator faults on an image linked for another base.
 
 ### 37. Physical Silicon Milestone: End-to-End Over-the-Wire In-Place Upgrade from Authentic Factory Firmware (2026-11-14)
 
@@ -4495,3 +4496,21 @@ Fixed:
 - The `PA8` macro is renamed `GPIO_PIN_CFG_SENSE0`.
 
 **Still open in the app:** the EXTI wake source is still PA8. With WFI sleep, the SysTick interrupt wakes the loop and the PD2 check, so this works but isn't the factory's mechanism. The factory never sleeps: it runs a 1 MHz busy loop with the rails off (section 31). The clean-room power manager otherwise differs from section 31's sequence: the rails aren't switched off, and it uses WFI instead of the busy loop. That needs its own pass before the app goes anywhere near the car.
+
+#### 38.4 Restore image: the DCn32 reference is not this unit's firmware
+
+`hardware/MCU/can_app.bin`, now a link to `reference_vendor_images/can_app_volvo_dcn32.bin`, is linked at `0x08004000`. All five DCn32-family images, Volvo and Acura, have their reset vector at `0x08004239`.
+
+The Limcet bootloader starts the app at `0x08003000` and only checks the SP. So such an image passes, is programmed, and crashes. Despite that, it was:
+- the packager's default input;
+- the dry-run's "rollback to stock" target (§36.4).
+
+**Fixed:**
+- **New check, `tools/mcu_builder/check_app_image.py`.** It refuses an image when:
+  - it is larger than 116 KB;
+  - it fails the bootloader's SP test;
+  - its reset vector isn't a Thumb address inside the image's first 4 KB at `0x08003000`. The factory app (`0x08003599`) and the clean-room app (`0x08003155`) pass; every DCn32 image fails.
+- **Packager (`build_mcu_update.sh`).** It runs the check on its output, and has no default input.
+- **Dry-run.** It restores `live_factory_app_52k_reconstructed.bin` and compares the restored flash byte for byte. Its simulated MCU faults on a mis-linked image instead of "booting" it.
+
+The `mcu_rebuild.py`/`mcu_decompile.py` CAN-table tools only understand the DCn32 layout. Their output from the reference image is refused by the packager.

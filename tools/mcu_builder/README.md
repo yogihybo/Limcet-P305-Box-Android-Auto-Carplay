@@ -44,8 +44,18 @@ The output files are generated in `tools/mcu_builder/output/`:
 
 **⚠️ This flashes the companion STM32 MCU that drives CAN bus / steering-wheel
 controls. A bad image can leave that subsystem non-functional or misbehaving
-until re-flashed with a known-good binary — keep a copy of the original
-`hardware/MCU/can_app.bin` before deploying a patched one.**
+until re-flashed with a known-good binary.** The known-good image for this unit is the
+reconstructed factory application,
+`hardware/MCU/live_dumps/vehicle_live_2026-09-14/live_factory_app_52k_reconstructed.bin`:
+
+```bash
+./tools/mcu_builder/build_mcu_update.sh -d -i hardware/MCU/live_dumps/vehicle_live_2026-09-14/live_factory_app_52k_reconstructed.bin
+```
+
+**`hardware/MCU/can_app.bin` is not this unit's firmware** -- it is the DCn32-VOLVO
+reference image, linked at `0x08004000` for a different product. The packager now has
+no default input and refuses any image not linked for the `0x08003000` application base
+(`tools/mcu_builder/check_app_image.py`), so it can't be packaged by accident.
 
 1. Copy both `auto_upgrade.txt` and `can_app.bin` from `tools/mcu_builder/output/usb_root/` directly to the **ROOT directory** of a FAT32-formatted USB flash drive.
 2. Turn on the vehicle and wait for the CarPlay head unit to boot.
@@ -55,6 +65,10 @@ until re-flashed with a known-good binary — keep a copy of the original
 ---
 
 ## 4. Custom CAN Bus Configuration
+
+**These tools patch the DCn32 reference image's CAN dispatch tables.** That image can't
+run on this unit, so anything they produce from it is refused by the packager; they are
+kept for analysing the DCn32 tables only.
 
 To customize specific CAN IDs or map new vehicle signals, edit `can_config_template.json` or pass custom parameters:
 

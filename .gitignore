@@ -53,6 +53,7 @@ Holden firmware update/rootfs.img
 
 # MCU firmware build outputs
 hardware/MCU/source/build/
+hardware/MCU/source/build_bench/
 hardware/MCU/bootloader/build/*.o
 tools/mcu_builder/output/
 

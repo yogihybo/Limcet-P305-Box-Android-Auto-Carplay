@@ -8,7 +8,6 @@
 static power_state_t s_power_state = POWER_STATE_ACTIVE;
 static uint16_t s_timer_counter = 0;
 static volatile bool s_can_activity_flag = false;
-static volatile bool s_uart_activity_flag = false;
 
 void EXTI9_5_IRQHandler(void) {
     /* Check if EXTI Line 8 (PA8 ACC sense) triggered */
@@ -21,7 +20,6 @@ void power_manager_init(void) {
     s_power_state = POWER_STATE_ACTIVE;
     s_timer_counter = 0;
     s_can_activity_flag = false;
-    s_uart_activity_flag = false;
 
     /* Ensure PWR peripheral clock is enabled */
     RCC->APB1ENR |= (1UL << 28);
@@ -29,10 +27,6 @@ void power_manager_init(void) {
 
 void power_manager_notify_can_activity(void) {
     s_can_activity_flag = true;
-}
-
-void power_manager_notify_uart_activity(void) {
-    s_uart_activity_flag = true;
 }
 
 power_state_t power_manager_get_state(void) {
@@ -96,7 +90,7 @@ static void enter_low_power_sleep(void) {
         __asm__ volatile("wfi");
 
         /* Check again if wake condition met */
-        if (gpio_get_acc_status() || s_can_activity_flag || s_uart_activity_flag) {
+        if (gpio_get_acc_status() || s_can_activity_flag) {
             break;
         }
     }
@@ -109,14 +103,15 @@ static void enter_low_power_sleep(void) {
 void power_manager_task(void) {
     bool acc_active = gpio_get_acc_status();
     bool can_active = s_can_activity_flag;
-    bool uart_active = s_uart_activity_flag;
     s_can_activity_flag = false; /* Clear activity pulse */
-    s_uart_activity_flag = false;
 
     switch (s_power_state) {
         case POWER_STATE_ACTIVE:
-            if (!acc_active && !can_active && !uart_active) {
-                /* ACC dropped, CAN quiet, and UART quiet -> start standby countdown */
+            if (!acc_active && !can_active) {
+                /* ACC dropped and CAN is quiet -> start standby countdown.
+                 * (UART traffic deliberately does not count: on the car the SoC
+                 * keeps talking until the MCU cuts its power, so it would hold
+                 * the rails on and drain the battery.) */
                 s_power_state = POWER_STATE_STANDBY_WAIT;
                 s_timer_counter = 0;
             } else {
@@ -125,7 +120,7 @@ void power_manager_task(void) {
             break;
 
         case POWER_STATE_STANDBY_WAIT:
-            if (acc_active || can_active || uart_active) {
+            if (acc_active || can_active) {
                 /* Activity resumed -> return to Active */
                 s_power_state = POWER_STATE_ACTIVE;
                 s_timer_counter = 0;

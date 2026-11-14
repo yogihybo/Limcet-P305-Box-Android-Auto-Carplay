@@ -32,9 +32,9 @@ void gpio_driver_init(void) {
     AFIO->MAPR = (AFIO->MAPR & ~(7UL << 24)) | (2UL << 24);
 
     /* 3. Configure Input Pins with Pull-Up / Pull-Down (Mode: 00, CNF: 10 -> 0x08) */
-    /* PA8: ACC 12V Sense (Pull-down: ODR=0) */
-    configure_pin_mode(GPIOA, GPIO_PIN_ACC_SENSE, 0x08);
-    GPIOA->BRR = (1UL << GPIO_PIN_ACC_SENSE);
+    /* PA8: configuration sense input (Pull-down: ODR=0) */
+    configure_pin_mode(GPIOA, GPIO_PIN_CFG_SENSE0, 0x08);
+    GPIOA->BRR = (1UL << GPIO_PIN_CFG_SENSE0);
 
     /* PC9: Reverse 12V Camera Trigger (Pull-down: ODR=0) */
     configure_pin_mode(GPIOC, GPIO_PIN_REV_SENSE, 0x08);
@@ -52,9 +52,9 @@ void gpio_driver_init(void) {
     configure_pin_mode(GPIOA, GPIO_PIN_VID_DET1, 0x08);
     GPIOA->BSRR = (1UL << GPIO_PIN_VID_DET1);
 
-    /* PD2: External Wakeup Sense (Pull-up: ODR=1) */
-    configure_pin_mode(GPIOD, GPIO_PIN_WAKEUP_SENSE, 0x08);
-    GPIOD->BSRR = (1UL << GPIO_PIN_WAKEUP_SENSE);
+    /* PD2: ACC sense, active low (Pull-up: ODR=1, so a floating pin reads "off") */
+    configure_pin_mode(GPIOD, GPIO_PIN_ACC_SENSE, 0x08);
+    GPIOD->BSRR = (1UL << GPIO_PIN_ACC_SENSE);
 
     /* PC0: Mic-mux sense input (Floating: CNF=01, MODE=00 -> 0x04). Real
      * firmware only reads this pin (see gpio_driver.h's GPIO_PIN_MIC_SENSE
@@ -135,7 +135,14 @@ void gpio_set_relay(gpio_relay_id_t relay_id, bool active) {
 }
 
 bool gpio_get_acc_status(void) {
-    return (GPIOA->IDR & (1UL << GPIO_PIN_ACC_SENSE)) != 0;
+#ifdef BENCH_FORCE_ACC_ON
+    /* Bench build (make BENCH=1): nothing drives PD2 on a bench board, and its
+     * pull-up reads as "ignition off", which would park the MCU. */
+    return true;
+#else
+    /* PD2 low = ACC on, as the factory reads it (0x08007CD2, 0x080088B0). */
+    return (GPIOD->IDR & (1UL << GPIO_PIN_ACC_SENSE)) == 0;
+#endif
 }
 
 bool gpio_get_reverse_status(void) {
@@ -166,8 +173,8 @@ void gpio_poll_senses(void) {
     if (GPIOA->IDR & (1UL << GPIO_PIN_VID_DET1)) {
         raw |= (1 << 1);
     }
-    /* Bit 2: PA8 ACC 12V Sense */
-    if (GPIOA->IDR & (1UL << GPIO_PIN_ACC_SENSE)) {
+    /* Bit 2: PA8 configuration sense */
+    if (GPIOA->IDR & (1UL << GPIO_PIN_CFG_SENSE0)) {
         raw |= (1 << 2);
     }
     /* Bit 3: PC9 Reverse Camera 12V Trigger */

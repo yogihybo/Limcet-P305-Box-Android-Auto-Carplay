@@ -45,7 +45,8 @@ During physical silicon bringup, three critical hardware behaviors were identifi
 ### 3.3 Power Manager Standby Lockout
 * **Symptom**: Factory app and clean-room app disabled `USART2` (`UE = 0`) shortly after boot.
 * **Root Cause**: On bench power, `PA8` (`GPIO_PIN_ACC_SENSE`) is low (no 12V ignition). After 5.0 seconds, the power executive decides the car is parked and enters low-power sleep.
-* **Fix**: Added `power_manager_notify_uart_activity()` called directly from `USART2_IRQHandler` so inbound serial frames from the SoC keep the MCU awake and responsive.
+* **Correction (2026-11-14, `MCU_FIRMWARE_VERIFIED_FINDINGS.md` section 38):** the real cause was the wrong ACC pin. The factory reads ignition on **PD2, active low** (`0x08007CD2`, `0x080088B0`); PA8 is a configuration input. PD2 floats high on the bench, which reads as "ignition off". The UART keep-alive below was removed: on the car the SoC keeps talking until the MCU cuts its power, so it would have held the rails on. Bench builds now use `make BENCH=1` (ignition forced on, output in `build_bench/`).
+* **Original fix (superseded)**: Added `power_manager_notify_uart_activity()` called directly from `USART2_IRQHandler` so inbound serial frames from the SoC keep the MCU awake and responsive.
 
 ### 3.4 BOOT0 Latch to System ROM
 * **Symptom**: Software resets (`NVIC_SystemReset()`) caused the MCU to jump to ST System ROM (`PC = 0x1FFFE7AC`) instead of Flash (`0x08000000`).

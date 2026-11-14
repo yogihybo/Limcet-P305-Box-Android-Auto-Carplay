@@ -115,6 +115,12 @@ cd hardware/MCU/source
 make
 ```
 
+For the bench board, build with `make BENCH=1`. Nothing drives the ignition input
+(PD2, active low) on a bench board, and its pull-up reads as "ignition off", which parks
+the MCU after a few seconds; the bench build treats ignition as always on and writes to
+`build_bench/` instead. `build/can_app.bin` is always the vehicle build -- never put a
+bench build on the car, it would never power down.
+
 The build produces:
 - `build/can_app.bin`: Raw flash binary linked at `0x08004000`.
 - `build/can_app.elf`: ELF binary with symbols.

@@ -7,12 +7,15 @@
 /* ==============================================================================
  * Discrete Hardware Input Pins (Reversed from factory dump 0x08006EAC - 0x08007000)
  * ============================================================================== */
-#define GPIO_PIN_ACC_SENSE          8   /* GPIOA Pin 8: ACC / 12V Ignition Detect (0x08006EE2) */
+#define GPIO_PIN_CFG_SENSE0         8   /* GPIOA Pin 8: configuration input, with PC9 the debounced
+                                          * 2-bit value reported by CMD 0x30 (0x08006EE2). Not ACC. */
 #define GPIO_PIN_REV_SENSE          9   /* GPIOC Pin 9: 12V Reverse Camera Trigger (0x08006EF0) */
 #define GPIO_PIN_SYNC_SENSE         8   /* GPIOC Pin 8: Video Sync / Illumination Detect (0x08006EFE) */
 #define GPIO_PIN_VID_DET0           11  /* GPIOC Pin 11: Video source detect bit 0 (0x08006EC6) */
 #define GPIO_PIN_VID_DET1           10  /* GPIOA Pin 10: Video source detect bit 1 (0x08006ED4) */
-#define GPIO_PIN_WAKEUP_SENSE       2   /* GPIOD Pin 2: External Wakeup line (0x08006EAC) */
+#define GPIO_PIN_ACC_SENSE          2   /* GPIOD Pin 2: ACC / ignition, ACTIVE LOW (0x08006EAC). Read
+                                          * by the factory power state machine (0x08007CD2) and ACC
+                                          * gate (0x080088B0); MCU_FIRMWARE_VERIFIED_FINDINGS.md 30.3. */
 #define GPIO_PIN_MIC_SENSE          0   /* GPIOC Pin 0: mic-mux (CMD 0xA0 id=0x09) sense input.
                                           * Real firmware's own apply chain for this setting
                                           * (0x08006B28 -> 0x080085F0 -> 0x0800598C, traced from

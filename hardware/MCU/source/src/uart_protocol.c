@@ -27,7 +27,6 @@ void USART2_IRQHandler(void) {
     /* Check RXNE or ORE: read SR followed by DR clears ORE cleanly */
     if (sr & ((1UL << 5) | (1UL << 3))) {
         uint8_t byte = (uint8_t)(USART2->DR & 0xFF);
-        power_manager_notify_uart_activity();
         
         /* Only process payload byte if RXNE is set (data is valid) */
         if (sr & (1UL << 5)) {

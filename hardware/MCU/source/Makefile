@@ -12,6 +12,13 @@ SIZE    := $(shell which arm-none-eabi-size 2>/dev/null || which arm-linux-gnuea
 TARGET   = can_app
 BUILD_DIR = build
 
+# make BENCH=1: bench-board build that treats ignition (PD2) as always on,
+# written to build_bench/ so build/can_app.bin is always the vehicle build.
+ifeq ($(BENCH),1)
+BUILD_DIR = build_bench
+BENCH_DEFS = -DBENCH_FORCE_ACC_ON
+endif
+
 # Source Files
 C_SOURCES = \
     src/startup_stm32f105.c \
@@ -30,7 +37,7 @@ INCLUDES = -Iinclude
 
 # Compiler Flags
 MCU_FLAGS = -mcpu=cortex-m3 -mthumb -mfloat-abi=soft
-CFLAGS    = $(MCU_FLAGS) $(INCLUDES) -Os -Wall -Wextra -ffreestanding -nostdlib -fdata-sections -ffunction-sections -fno-builtin -fno-pic -fno-pie
+CFLAGS    = $(MCU_FLAGS) $(INCLUDES) -Os -Wall -Wextra -ffreestanding -nostdlib -fdata-sections -ffunction-sections -fno-builtin -fno-pic -fno-pie $(BENCH_DEFS)
 LDFLAGS   = $(MCU_FLAGS) -Tstm32f105_app.ld -nostdlib -static -no-pie -Wl,--build-id=none -Wl,--gc-sections -Wl,-Map=$(BUILD_DIR)/$(TARGET).map
 
 # Object Files

@@ -4370,6 +4370,8 @@ Tracing the update protocol for the clean-room bootloader (section 36) found mor
 
 With the wire protocol and factory bootloader update path fully resolved in sections 34 and 35, the clean-room bootloader (`hardware/MCU/bootloader/`) and builder tools were overhauled to achieve 100% functional parity with the factory implementation.
 
+> **Correction (section 38):** parity was not complete. The version described here had no recovery when the host went quiet: no re-request after a lost frame, a header wait of about 14 hours, and a give-up that re-entered update mode on every reset. Both gaps were confirmed on the bench and are fixed in section 38, along with the clean-room application's wrong ACC pin, which the UART keep-alive in section 37 was working around.
+
 #### 36.1 Clean-room bootloader protocol migration (`hardware/MCU/bootloader/src/update_protocol.c`)
 
 Standard YMODEM-CRC (`ymodem.c`) was removed and replaced with the authentic `0x2E`-framed protocol:
@@ -4437,3 +4439,59 @@ Following the collaboration and root-cause analysis by the team on `.data` initi
    - Clean-room application booted cleanly (`SCB->VTOR = 0x08003000`, `CFSR = 0`, `HFSR = 0`).
    - Responded to `CMD 0x81` telemetry inquiry with authentic Toyota Prado version string: `"Limcet-V1.0-1302"`.
 
+### 38. Update-mode recovery: factory behaviour measured on the bench, clean-room bootloader brought into line; clean-room app ACC pin corrected (2026-11-14)
+
+#### 38.1 Factory recovery behaviour, measured
+
+The reconstructed factory bootloader was on the bench board with USART2 wired through the Pico. Update mode was entered by writing the SRAM request over SWD and resetting. Test: `tools/test_mcu_update_recovery_ab.py`.
+
+| Situation | Factory bootloader (measured) |
+|---|---|
+| Header never arrives | Sends `2E E2 01 00 1C` every **7.0 s** (51 prompts). Gives up at **~358 s**: clears `0x20004004` and resets via the IWDG. The application booted at t=360.1 s. |
+| Transfer stalls before the first block is taken | Re-sends `E2 01` after **19.6 s** of silence, so the host restarts at block 0 |
+| Transfer stalls after a block was taken | Re-sends `E4 <last>` after 19.6 s, so the host resends the next block |
+
+The factory counts loop iterations for these; at ~1.2-1.3 µs per iteration, its budgets of `0x4FFFFF`, `0x00FFFFFF` and `0x0FFFFFFF` iterations give these times. The data-phase give-up, `0x0FFFFFFF` iterations of the same loop, works out to ~314 s. That one is derived, not measured. These times replace the instruction-count estimates of 3.6 s, 11.6 s and ~3 min from earlier sessions.
+
+#### 38.2 Clean-room bootloader: before and after
+
+Same bench, same scenarios, the bootloader half swapped:
+
+| Situation | Section 36 version (measured) | Now (measured) |
+|---|---|---|
+| Lost frame before the first block | Silent for 60 s; head unit and MCU both wait forever | `E2 01` at 19.6 s, then every 19.6 s |
+| Lost frame after the first block | (same code path: no re-request) | `E4 00 00` at 19.6 s, then every 19.6 s; `0x5AA5` flag set |
+| Header never arrives | Silent for 7 min and still in update mode. The loop "~5 s" was ~14 h, and expiry re-set the request, so update mode came back on every reset. | `E2 00` every 7.0 s; gave up and the application booted at t=360.1 s |
+| Reset with the request cleared but the flag set (simulating a power cut mid-update) | — | Stays in update mode (`E2 00` prompts) |
+| Full update of the 64-block bench app with `tools/mcu_update_sender.py` | — | Completed. Flash `0x08003000+` matches the image byte for byte, flag erased, request cleared, app booted and announced itself. |
+
+**Changes:**
+- **`src/update_protocol.c`:**
+  - prompt and give up in the header wait;
+  - idle re-request and give-up in the data phase;
+  - a corrupt frame gets no reply (it used to send `E2 00`, which makes the head unit abandon the update);
+  - a good frame for the wrong block is answered `E4 <last>`;
+  - block counts of 0 or above 928 (116 KB) are refused, and the wait goes on.
+- **`src/main.c`:**
+  - a give-up clears the request and resets via the IWDG, like the factory (`0x08001B56`, `0x08001EA4`);
+  - a millisecond time base from SysTick (polled, no interrupt);
+  - the baud rate and timeouts derive from the clock actually running, so the 8 MHz HSI fallback works (`BRR` `0xD0`, versus `0x3AA` at 36 MHz);
+  - receive errors no longer read `DR` twice.
+- **Deliberately not reproduced:** the factory's option-byte erase when the application pages are write-protected. Done wrong on an RDP1 part, it mass-erases the whole chip.
+- **Sender:** `tools/mcu_update_sender.py` waits 5 s, not 1 s, for block 0's reply, which follows the 58-page erase.
+
+#### 38.3 Clean-room application: ACC was read from the wrong pin
+
+`hardware/MCU/source` took **PA8** as ACC (citing `0x08006EE2`) and PD2 as a "wakeup" line. The factory power state machine (`0x08007CD2`) and ACC gate (`0x080088B0`) both read **PD2 via `0x08006EAC`, active low**: PD2 high counts towards "off", PD2 low wakes the parked loop. `0x08006EE2` (PA8) is only called from `0x080087AC`, the configuration-input sampler behind CMD `0x30` (section on CMD `0x30`). On the bench, PD2 floats high (pull-up, "ignition off") and PA8 reads low.
+
+Consequences:
+- **On the car**, the old app never saw the ignition and stayed up only while CAN traffic lasted.
+- **On the bench**, it parked after a few seconds. The section 37 UART keep-alive was added to work around that, but on the car it would keep the rails on for as long as the SoC talks, which is until the MCU cuts its power.
+
+Fixed:
+- `gpio_get_acc_status()` reads PD2, active low.
+- The UART keep-alive is removed.
+- `make BENCH=1` builds a bench variant with ignition forced on, written to `build_bench/`, so `build/can_app.bin` is always the vehicle build.
+- The `PA8` macro is renamed `GPIO_PIN_CFG_SENSE0`.
+
+**Still open in the app:** the EXTI wake source is still PA8. With WFI sleep, the SysTick interrupt wakes the loop and the PD2 check, so this works but isn't the factory's mechanism. The factory never sleeps: it runs a 1 MHz busy loop with the rails off (section 31). The clean-room power manager otherwise differs from section 31's sequence: the rails aren't switched off, and it uses WFI instead of the busy loop. That needs its own pass before the app goes anywhere near the car.

@@ -536,10 +536,12 @@ void usart3_relay_init(void) {
 }
 
 void usart3_relay_send(const uint8_t *data, uint8_t len) {
-    /* Disabled: on this unit PB10/PB11 are I2C2 and the factory firmware never
-     * enables USART3 (MCU_FIRMWARE_VERIFIED_FINDINGS.md section 42). The
-     * AT+AUDROUTE / AT+UPGRADE relay came from the DCn32 (Volvo) image; the
-     * Limcet handlers for these commands are still to be traced. */
+    /* Not a feature of this unit: the Prado's Limcet factory app contains no AT
+     * command strings at all and never enables USART3; PB10/PB11 are its I2C2
+     * (MCU_FIRMWARE_VERIFIED_FINDINGS.md section 42). The AT+AUDROUTE /
+     * AT+UPGRADE / BT-AT relay came from the DCn32 (Volvo) image, and these
+     * features never worked on the Prado in earlier testing. Kept as a no-op so
+     * the command handlers stay harmless. */
     (void)data;
     (void)len;
 }

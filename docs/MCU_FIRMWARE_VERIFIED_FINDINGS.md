@@ -4642,5 +4642,5 @@ The board was left on the factory image (`combined_factory_boot_factory_app_64k.
 **Still missing in the clean-room app** (factory functions with no clean-room equivalent):
 - **I2C2:** interrupt-driven, so probably the BD37033 audio processor (`docs/1.6_BD37033.md`). Without it the audio chip is never configured.
 - **USART1:** TX only; destination unknown.
-- **The factory CMD `0x84` and BT-AT handlers.** The clean-room versions were Volvo-derived and are disabled until the Limcet handlers are traced.
+- ~~**The factory CMD `0x84` and BT-AT handlers.**~~ **Not features of this unit.** The Prado's Limcet app contains no AT command strings (`AT+AUDROUTE`, `AT+UPGRADE` and even `AT+` all have 0 matches; the Volvo image has 7 `AT+` strings), and it never enables USART3. This matches earlier testing, where these features never worked on the Prado. The clean-room relay stays a no-op.
 - **The factory touch protocol** (section 30.2).

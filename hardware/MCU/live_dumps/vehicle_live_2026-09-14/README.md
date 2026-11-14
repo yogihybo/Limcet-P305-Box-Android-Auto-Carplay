@@ -49,7 +49,7 @@ working state, and what each of the 3 real bugs found along the way was.
 
 ### 3. Factory IAP Bootloader — Reconstructed, hardware-verified working
 - **File**: `live_factory_bootloader_12k_reconstructed.bin`
-- **SHA-256**: `e034a57911a7f724db4d71f1e1760713597ac82ffebb4f4fbd57921f1f579818`
+- **SHA-256**: `63a4c275e88431db1f415b474c3fc7fbb445c9338eccabc73e9068d3b9202ef2` (2026-11-14; was `e034a579...` -- 12 patch-map words corrected, see `MCU_FIRMWARE_VERIFIED_FINDINGS.md` section 33; not yet re-flashed)
 - **Reconstruction tool**: `tools/patch_factory_bootloader_live.py` (113/113 gap words patched)
 - **Real bugs found and fixed along the way** (all with hardware evidence,
   full detail in `docs/BOOTLOADER_HANG_TRACE_2026-09-14.md`):
@@ -70,7 +70,7 @@ working state, and what each of the 3 real bugs found along the way was.
 
 ### 4. Factory Application — Reconstructed, 100% complete, hardware-verified working
 - **File**: `live_factory_app_52k_reconstructed.bin`
-- **SHA-256**: `8907395e513acdb308671cfa6fe70c34c21c1b87f4be8169f3ffeabc7066cfb3` (2026-11-14; was `3ec2715d...` before the `0x08006C26` byte-order fix below)
+- **SHA-256**: `b01f8ace66f94d3ea7ff03e674a6679b596f38cc27199d6689794907408ed476` (2026-11-14; was `3ec2715d...` before the `0x08006C26` and `0x08005204` byte-order fixes, sections 32-33)
 - **2026-11-14 fix**: `0x08006C24`'s patch word had the `BL`'s first halfword byte-swapped (`f7 fe` instead of `fe f7`), so the PC15 `GPIO_SetBits` call decoded as garbage and PC15 was never driven high on the bench -- unlike the real vehicle. Corrected in the tool's patch map; exactly two bytes changed. See `docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md` section 32. **Not yet re-flashed / re-verified on the spare board.**
 - **Reconstruction tool**: `tools/patch_factory_app_live.py` (573/573 gap
   words patched — 0 unresolved words remaining in the active code/data range
@@ -94,8 +94,8 @@ working state, and what each of the 3 real bugs found along the way was.
 
 | File | Contents | Status |
 | :--- | :--- | :--- |
-| [`../combined_factory_boot_factory_app_64k.bin`](../combined_factory_boot_factory_app_64k.bin) (SHA-256 `ba5dbd77413d65ef69a3074d23413210e4fbfa22d6f7f00832db1723a186b161`, regenerated 2026-11-14 with the corrected app -- not yet re-flashed) | Reconstructed factory bootloader (#3 above) + reconstructed factory app (#4 above) | **Flagship deliverable.** Hardware-verified on the spare board: auth handshake passes, VTOR correctly relocated, zero faults, CAN1 active, watchdog serviced, scheduler running all 13 tasks. This is the fully-authentic factory firmware stack. |
-| [`../combined_cleanroom_boot_factory_app_64k.bin`](../combined_cleanroom_boot_factory_app_64k.bin) (SHA-256 `fc430efa63cf9ec9dfca4375a0b9e3d41194be0b4411d33f47fd05010c7b8bd3`, regenerated 2026-11-14 with the corrected app -- not yet re-flashed) | This project's own clean-room bootloader (`hardware/MCU/bootloader/`) + reconstructed factory app (#4 above) | Working alternative combo — the clean-room bootloader explicitly sets `SCB->VTOR` itself before jumping (see its `jump_to_application()`), so it doesn't depend on the app's `Reset_Handler` running correctly. **Re-flashed and independently hardware-verified on the spare board (2026-09-14, post vector-fix regeneration)**: handshake `*0x20004000 == 0x20141003` pass, `SCB->VTOR == 0x08003000` pass, `CFSR`/`HFSR` both `0` sustained across repeated samples, `MSP = 0x20001710` matching the factory-bootloader combo's own confirmed value, CAN1 active (`CAN1->MSR = 0x00000C00`, `CAN1->BTR = 0x00140008` — 500kbps, the clean-room bootloader's own timing config), `PC` genuinely advancing through app code with no stuck/trapped state observed. |
+| [`../combined_factory_boot_factory_app_64k.bin`](../combined_factory_boot_factory_app_64k.bin) (SHA-256 `c2b1f8f12eb132500a009485fb7e6ef3f900eba26f11f28b9dd69a5334fd3083`, regenerated 2026-11-14 with the corrected app -- not yet re-flashed) | Reconstructed factory bootloader (#3 above) + reconstructed factory app (#4 above) | **Flagship deliverable.** Hardware-verified on the spare board: auth handshake passes, VTOR correctly relocated, zero faults, CAN1 active, watchdog serviced, scheduler running all 13 tasks. This is the fully-authentic factory firmware stack. |
+| [`../combined_cleanroom_boot_factory_app_64k.bin`](../combined_cleanroom_boot_factory_app_64k.bin) (SHA-256 `4bd39bc3a0c47eef190aebdd61bf47410f95759626f5303b1978fd1dd42056f1`, regenerated 2026-11-14 with the corrected app -- not yet re-flashed) | This project's own clean-room bootloader (`hardware/MCU/bootloader/`) + reconstructed factory app (#4 above) | Working alternative combo — the clean-room bootloader explicitly sets `SCB->VTOR` itself before jumping (see its `jump_to_application()`), so it doesn't depend on the app's `Reset_Handler` running correctly. **Re-flashed and independently hardware-verified on the spare board (2026-09-14, post vector-fix regeneration)**: handshake `*0x20004000 == 0x20141003` pass, `SCB->VTOR == 0x08003000` pass, `CFSR`/`HFSR` both `0` sustained across repeated samples, `MSP = 0x20001710` matching the factory-bootloader combo's own confirmed value, CAN1 active (`CAN1->MSR = 0x00000C00`, `CAN1->BTR = 0x00140008` — 500kbps, the clean-room bootloader's own timing config), `PC` genuinely advancing through app code with no stuck/trapped state observed. |
 
 ---
 

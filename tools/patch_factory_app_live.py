@@ -213,7 +213,8 @@ FACTORY_APP_PATCH_MAP = {
     # BLOCK 17: I2C Speed & Duty Cycle Calculation (0x08005200 - 0x08005234)
     # =========================================================================
     0x08005200: (0x2804B280, "uxth r0, r0 / cmp r0, #4 (I2C standard mode speed limit check)"),
-    0x08005204: (0x460700D3, "blo 0x08005208 / mov r7, r0 (Preserve min CCR=4 or update result)"),
+    # 2026-11-14: corrected from the app's silicon-read copy of the same SPL code (MCU_FIRMWARE_VERIFIED_FINDINGS.md sec. 33); was 0x460700D3
+    0x08005204: (0x4607D300, "blo 0x08005208 / mov r7, r0 (Preserve min CCR=4 or update result)"),
     0x0800521C: (0xEB006828, "ldr r0, [r5] / add.w r0, r0, r0, lsl #1 hw1 (Duty 2: 3 * ClockSpeed)"),
     0x08005220: (0xFBB80040, "add.w hw2 / udiv r0, r8, r0 hw1 (Calculate CCR for Duty 2)"),
     0x08005224: (0xB287F0F0, "udiv hw2 / uxth r7, r0 (Truncate Duty 2 CCR result)"),

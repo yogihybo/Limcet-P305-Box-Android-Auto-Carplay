@@ -81,14 +81,20 @@ FACTORY_PATCH_MAP = {
     0x08000234: (0x3080F440, "orr.w r0, r0, #0x10000 (SystemInit RCC_CR_HSEON enable)"),
 
     # --- Block 2: SystemCoreClockUpdate STM32F10X_CL (0x08000400 - 0x08000434) ---
-    0x08000400: (0xF3C70400, "ubfx r4, r7, #16, #1 (Test RCC_CFGR2_PREDIV1SRC)"),
-    0x08000404: (0x07F00F07, "and r7, r7, #0xf (PREDIV1 factor mask)"),
-    0x0800041C: (0xCCF80070, "str.w r7, [ip] (Store SystemCoreClock HSE path)"),
-    0x08000420: (0xE016BF00, "b.n #0x800044C / nop (Skip PLL2 branch)"),
-    0x08000424: (0xF3C71504, "ubfx r5, r7, #4, #4 (Extract PREDIV2 factor)"),
-    0x08000428: (0x7A1C154F, "adds r5, r5, #1 / ldr r7, =HSE_VALUE"),
-    0x08000434: (0x7A1C234F, "adds r6, r7, #2 / ldr r7, =HSE_VALUE (PLL2MUL)"),
-
+    # 2026-11-14: corrected from the app's silicon-read copy of the same SPL code (MCU_FIRMWARE_VERIFIED_FINDINGS.md sec. 33); was 0xF3C70400
+    0x08000400: (0x3480F407, "and.w r4, r7, #0x10000 (PREDIV1SRC test)"),
+    # 2026-11-14: corrected from the app's silicon-read copy of the same SPL code (MCU_FIRMWARE_VERIFIED_FINDINGS.md sec. 33); was 0x07F00F07
+    0x08000404: (0x6AFF4F1D, "ldr r7, =RCC (0x0800047C) / ldr r7, [r7, #0x2c] (re-read CFGR2)"),
+    # 2026-11-14: corrected from the app's silicon-read copy of the same SPL code (MCU_FIRMWARE_VERIFIED_FINDINGS.md sec. 33); was 0xCCF80070
+    0x0800041C: (0x7000F8CC, "str.w r7, [ip] (Store SystemCoreClock HSE path)"),
+    # 2026-11-14: corrected from the app's silicon-read copy of the same SPL code (MCU_FIRMWARE_VERIFIED_FINDINGS.md sec. 33); was 0xE016BF00
+    0x08000420: (0x4F16E014, "b.n #0x800044C / ldr r7, =RCC (0x0800047C)"),
+    # 2026-11-14: corrected from the app's silicon-read copy of the same SPL code (MCU_FIRMWARE_VERIFIED_FINDINGS.md sec. 33); was 0xF3C71504
+    0x08000424: (0xF3C76AFF, "ldr r7, [r7, #0x2c] / ubfx hw1"),
+    # 2026-11-14: corrected from the app's silicon-read copy of the same SPL code (MCU_FIRMWARE_VERIFIED_FINDINGS.md sec. 33); was 0x7A1C154F
+    0x08000428: (0x1C7D1703, "ubfx r7, r7, #4, #4 hw2 / adds r5, r7, #1 (PREDIV2 factor)"),
+    # 2026-11-14: corrected from the app's silicon-read copy of the same SPL code (MCU_FIRMWARE_VERIFIED_FINDINGS.md sec. 33); was 0x7A1C234F
+    0x08000434: (0x4F1A1CBE, "adds r6, r7, #2 / ldr r7, =HSE_VALUE (0x080004A0)"),
     # --- Block 3: FLASH_EraseAllPages / FLASH_ErasePage (0x08000600 - 0x08000634) ---
     0x08000600: (0x2030F44F, "mov.w r0, #0xb0000 (EraseTimeout)"),
     0x08000604: (0xFFC3F7FF, "bl 0x0800058E (FLASH_WaitForLastOperation call)"),
@@ -100,13 +106,14 @@ FACTORY_PATCH_MAP = {
 
     # --- Block 4: FLASH_ProgramOptionByteData (0x08000800 - 0x08000834) ---
     0x08000800: (0xFEC5F7FF, "bl 0x0800058E (FLASH_WaitForLastOperation call)"),
-    0x08000804: (0x042C0446, "mov r4, r0 / cmp r4, #4 (Check FLASH_COMPLETE)"),
+    # 2026-11-14: corrected from the app's silicon-read copy of the same SPL code (MCU_FIRMWARE_VERIFIED_FINDINGS.md sec. 33); was 0x042C0446
+    0x08000804: (0x2C044604, "mov r4, r0 / cmp r4, #4 (Check FLASH_COMPLETE)"),
     0x0800081C: (0x802E6108, "str r0, [r1, #0x10] / strh r6, [r5] (Write option byte)"),
     0x08000820: (0xF7FF02E0, "lsls r0, r4, #11 / bl 0x0800058e hw1 (ProgramTimeout wait)"),
     0x08000824: (0x4604FEB4, "bl hw2 / mov r4, r0 (Save wait status)"),
     0x08000828: (0xD0062C05, "cmp r4, #5 / beq.n #0x800083a (Check timeout)"),
-    0x08000834: (0x492C0840, "ands r0, r1 / ldr r1, [pc, #0xb0] (Clear OPTPG)"),
-
+    # 2026-11-14: corrected from the app's silicon-read copy of the same SPL code (MCU_FIRMWARE_VERIFIED_FINDINGS.md sec. 33); was 0x492C0840
+    0x08000834: (0x492D4008, "ands r0, r1 / ldr r1, =FLASH (0x080008EC)"),
     # --- Block 5: FLASH Options & IT Configuration (0x08000A00 - 0x08000A34) ---
     0x08000A00: (0x48254770, "bx lr / ldr r0, [pc, #0x94] (FLASH_GetUserOptionByte return & WRPR load)"),
     0x08000A04: (0x47706A00, "ldr r0, [r0, #0x20] / bx lr (FLASH_GetWriteProtectionOptionByte return)"),
@@ -129,11 +136,13 @@ FACTORY_PATCH_MAP = {
     0x08000E00: (0x42200000, "AFIO_MAPR_MII_RMII_SEL bitband alias base address literal"),
     0x08000E04: (0x6008490E, "ldr r1, [pc, #0x38] / str r0, [r1] (IWDG_WriteAccessCmd)"),
     0x08000E1C: (0x47706008, "str r0, [r1] / bx lr (IWDG_ReloadCounter 0xAAAA)"),
-    0x08000E20: (0x5550F245, "movw r0, #0x5555 (IWDG_WriteAccessCmd key)"),
+    # 2026-11-14: corrected from the app's silicon-read copy of the same SPL code (MCU_FIRMWARE_VERIFIED_FINDINGS.md sec. 33); was 0x5550F245
+    0x08000E20: (0x40CCF64C, "movw r0, #0xcccc (IWDG_Enable key)"),
     0x08000E24: (0x60084906, "ldr r1, [pc, #0x18] / str r0, [r1]"),
-    0x08000E28: (0xF64C7047, "bx lr / movw r0, #0xcccc (IWDG_Enable key)"),
-    0x08000E34: (0x2001D001, "beq #0x8000e3a / movs r0, #1 (IWDG_GetFlagStatus)"),
-
+    # 2026-11-14: corrected from the app's silicon-read copy of the same SPL code (MCU_FIRMWARE_VERIFIED_FINDINGS.md sec. 33); was 0xF64C7047
+    0x08000E28: (0x46014770, "bx lr / mov r1, r0 (IWDG_GetFlagStatus entry)"),
+    # 2026-11-14: corrected from the app's silicon-read copy of the same SPL code (MCU_FIRMWARE_VERIFIED_FINDINGS.md sec. 33); was 0x2001D001
+    0x08000E34: (0x2001B10A, "cbz r2, ... / movs r0, #1 (IWDG_GetFlagStatus)"),
     # --- Block 8: stm32f10x_rcc.c Prescalers (0x08001000 - 0x08001034) ---
     0x08001000: (0x430800F0, "bic.w r0, #0xf0 completion / orrs r0, r1 (RCC_HCLKConfig)"),
     0x08001004: (0x47706050, "str r0, [r2, #4] / bx lr (RCC_HCLKConfig return)"),

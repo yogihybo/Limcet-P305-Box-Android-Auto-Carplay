@@ -53,8 +53,12 @@ void swc_init(void) {
      * - PA1: CRL bits [7:4]
      * - PB1: CRL bits [7:4]
      */
-    GPIOA->CRL &= ~(0x0FUL << 4);
-    GPIOB->CRL &= ~(0x0FUL << 4);
+    /* As the factory configures them (MCU_FIRMWARE_VERIFIED_FINDINGS.md section 42): input with pull-up, which the ADC
+     * still samples -- the internal pull-up is the top resistor of each ladder. */
+    GPIOA->CRL = (GPIOA->CRL & ~(0x0FUL << 4)) | (0x08UL << 4);
+    GPIOA->BSRR = (1UL << 1);
+    GPIOB->CRL = (GPIOB->CRL & ~(0x0FUL << 4)) | (0x08UL << 4);
+    GPIOB->BSRR = (1UL << 1);
 
     /* 3. Configure DMA1 Channel 1 (ADC1 regular channel DMA):
      * Peripheral address: ADC1->DR (0x4001244C)

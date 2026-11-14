@@ -117,10 +117,8 @@ void touch_init(void) {
     /* 1. Enable GPIOA, GPIOB, GPIOC clocks */
     RCC->APB2ENR |= (1UL << 2) | (1UL << 3) | (1UL << 4);
 
-    /* 2. Configure PB0: TOUCH_SEL relay output (General purpose output push-pull, 2MHz) */
-    GPIOB->CRL &= ~(0x0FUL << 0);
-    GPIOB->CRL |=  (0x02UL << 0);
-    touch_set_relay(true); /* Default to ArkMicro SoC mode */
+    /* 2. PB0 is a floating input in the factory firmware, not a touch-routing
+     *    relay output (MCU_FIRMWARE_VERIFIED_FINDINGS.md section 42); it is left to gpio_apply_factory_run_config(). */
 
     /* 3. Configure Rotary Encoder pins as Input with Pull-Up:
      * - PA0: Rotary Pin A (CNF=10, MODE=00 -> 0x08, ODR bit 0 = 1)
@@ -145,11 +143,9 @@ void touch_init(void) {
 }
 
 void touch_set_relay(bool soc_mode) {
-    if (soc_mode) {
-        GPIOB->BSRR = (1UL << 0); /* PB0 HIGH -> Route touch to SoC */
-    } else {
-        GPIOB->BRR  = (1UL << 0); /* PB0 LOW  -> Bypass touch to Factory OEM */
-    }
+    /* No-op: the "PB0 touch relay" came from the DCn32 (Volvo) image; on this
+     * unit PB0 is a floating input (MCU_FIRMWARE_VERIFIED_FINDINGS.md section 42). */
+    (void)soc_mode;
 }
 
 /* Quadrature Gray code transition table:

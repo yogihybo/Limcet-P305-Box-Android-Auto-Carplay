@@ -56,6 +56,7 @@ void gpio_driver_init(void);
 void gpio_set_relay(gpio_relay_id_t relay_id, bool active);
 void gpio_set_run_mode_outputs(void);
 void gpio_set_powerdown_outputs(void);
+void gpio_apply_factory_run_config(void);
 bool gpio_get_acc_status(void);
 bool gpio_get_reverse_status(void);
 bool gpio_get_sync_status(void);

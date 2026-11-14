@@ -96,28 +96,12 @@ static void gpio_hardware_init(void) {
      * measure regardless, since driving it HIGH-then-LOW during power-up
      * stabilization is a sensible precaution independent of its true real
      * function, but do not treat "Audio Amp Mute" as a confirmed label. */
-    GPIOA->CRL &= ~(0x0FUL << 4);
-    GPIOA->CRL |=  (0x02UL << 4);
-    GPIOA->BSRR =  (1UL << 1);
-
-    /* PB0: 4-Wire Resistive Touch Relay (General purpose output push-pull, 2MHz) */
-    /* Start HIGH (Touch mapped to ArkMicro CarPlay/Android Auto SoC) */
-    GPIOB->CRL &= ~(0x0FUL << 0);
-    GPIOB->CRL |=  (0x02UL << 0);
-    GPIOB->BSRR =  (1UL << 0);
-
-    /* PB6: Microphone Select Multiplexer (General purpose output push-pull, 2MHz) */
-    /* Start HIGH (OEM Roof Microphone routed to ArkMicro SoC) */
-    GPIOB->CRL &= ~(0x0FUL << 24);
-    GPIOB->CRL |=  (0x02UL << 24);
-    GPIOB->BSRR =  (1UL << 6);
-
-    /* PB1: CMD 0xA0 id=0x00 output (real target per MCU_FIRMWARE_VERIFIED_FINDINGS.md,
-     * driven HIGH when settingId 0x00's struct offset 0x3b == 1). Function unconfirmed
-     * beyond the pin identity itself -- default LOW until a sync_settings frame says otherwise. */
-    GPIOB->CRL &= ~(0x0FUL << 4);
-    GPIOB->CRL |=  (0x02UL << 4);
-    GPIOB->BRR  =  (1UL << 1);
+    /* PA1, PB0, PB1 and PB6 are NOT outputs on this unit (MCU_FIRMWARE_VERIFIED_FINDINGS.md section 42).
+     * Live capture of the factory firmware: PA1/PB1 are the steering-wheel ADC
+     * channels 1/9 as inputs with pull-up (the pull-up is the ladder's top
+     * resistor), PB0 is a floating input, PB6/PB7 are I2C1. The "amp mute",
+     * "touch relay", "mic select" and CMD 0xA0 id=0x00 outputs that used to be
+     * set up here came from the DCn32 (Volvo) image. */
 
     /* PA15, PB8, PB9: CMD 0xA0 id=0x0b's coordinated 3-pin enable group (real finding --
      * all three fire HIGH together when struct offset 0x3d is cleared to 0; more consistent
@@ -133,9 +117,7 @@ static void gpio_hardware_init(void) {
     GPIOB->CRH |=  (0x02UL << 0);
     GPIOB->BRR  =  (1UL << 8);
 
-    GPIOB->CRH &= ~(0x0FUL << 4);
-    GPIOB->CRH |=  (0x02UL << 4);
-    GPIOB->BRR  =  (1UL << 9);
+    /* PB9 is a floating input in the factory; only PA15/PB8 of this group are outputs. */
 
     /* GPIOB Pin 14: ArkMicro ARK1668 SoC Hardware Reset line -- CORRECTED this
      * session. This clean-room source previously (wrongly) used PC13 for this,
@@ -173,7 +155,6 @@ static void gpio_hardware_init(void) {
     for (volatile uint32_t i = 0; i < 1080000; i++) {
         __asm__ volatile("nop");
     }
-    GPIOA->BRR = (1UL << 1); /* PA1 = LOW (Unmuted) */
 
     /* PC13: CMD 0xA0 id=0x11's real target (GPIOC Pin 13) -- NOT the SoC
      * reset line (see above). Real firmware asserts this LOW as part of the
@@ -241,6 +222,10 @@ int main(void) {
 
     /* Initialize CAN Bus (500 kbit/s ISO 11898-2) */
     can_init(500000);
+
+    /* Every pin to the factory's running configuration (modes, pulls, levels),
+     * except the touch I2C pins the clean-room touch driver bit-bangs. */
+    gpio_apply_factory_run_config();
 
     /* Start Independent Watchdog (~2 second timeout, serviced in main loop) */
     iwdg_init();

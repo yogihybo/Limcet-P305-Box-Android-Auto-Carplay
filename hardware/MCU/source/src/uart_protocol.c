@@ -536,11 +536,12 @@ void usart3_relay_init(void) {
 }
 
 void usart3_relay_send(const uint8_t *data, uint8_t len) {
-    usart3_relay_init();
-    for (uint8_t i = 0; i < len; i++) {
-        while ((USART3->SR & (1UL << 7)) == 0) {} /* TXE */
-        USART3->DR = data[i];
-    }
+    /* Disabled: on this unit PB10/PB11 are I2C2 and the factory firmware never
+     * enables USART3 (MCU_FIRMWARE_VERIFIED_FINDINGS.md section 42). The
+     * AT+AUDROUTE / AT+UPGRADE relay came from the DCn32 (Volvo) image; the
+     * Limcet handlers for these commands are still to be traced. */
+    (void)data;
+    (void)len;
 }
 
 /* Bluetooth module responses come back asynchronously over USART3 RX; relay them
@@ -658,11 +659,8 @@ static void handle_sync_settings(const UartPacket *p) {
                 case 3: g_settings.mode_3b = 3; break;
                 default: g_settings.mode_3b = 0; break;
             }
-            if (g_settings.mode_3b == 1) {
-                GPIOB->BSRR = (1UL << 1);
-            } else {
-                GPIOB->BRR = (1UL << 1);
-            }
+            /* No GPIO: PB1 is steering-wheel ADC channel 9 on this unit (MCU_FIRMWARE_VERIFIED_FINDINGS.md section 42);
+             * driving it would change the ladder's pull-up. */
             break;
 
         case 0x01: case 0x02: case 0x03: case 0x04: case 0x05: case 0x06:
@@ -703,12 +701,10 @@ static void handle_sync_settings(const UartPacket *p) {
             g_settings.group_3d = value;
             if (value == 0) {
                 GPIOA->BSRR = (1UL << 15);
-                GPIOB->BSRR = (1UL << 8);
-                GPIOB->BSRR = (1UL << 9);
+                GPIOB->BSRR = (1UL << 8);   /* PB9 dropped: a floating input in the factory */
             } else {
                 GPIOA->BRR = (1UL << 15);
                 GPIOB->BRR = (1UL << 8);
-                GPIOB->BRR = (1UL << 9);
             }
             break;
 

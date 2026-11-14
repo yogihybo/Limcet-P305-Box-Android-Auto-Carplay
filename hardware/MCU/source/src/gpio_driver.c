@@ -107,6 +107,34 @@ void gpio_set_run_mode_outputs(void) {
     GPIOB->BRR  = (1UL << 14) | (1UL << 15);
 }
 
+/* Every pin to the factory firmware's steady running configuration, read live
+ * on the bench (MCU_FIRMWARE_VERIFIED_FINDINGS.md section 42): modes, pulls and
+ * output levels on ports A-D. Called once, after all drivers have initialised.
+ * Kept as the clean-room app has them:
+ *   - PB6/PB7: the touch driver's I2C1 (it bit-bangs and re-moods them);
+ * Deliberately not the factory's, because the clean-room app does not run the
+ * peripheral behind them and an unclocked alternate-function pin can sit low:
+ *   - PB10/PB11 (factory I2C2) and PA9 (factory USART1 TX): floating inputs,
+ *     so those lines are left to their external pull-ups. */
+void gpio_apply_factory_run_config(void) {
+    uint32_t keep_crl_b = GPIOB->CRL & 0xFF000000UL;      /* PB6/PB7 modes */
+    uint32_t keep_odr_b = GPIOB->ODR & 0x000000C0UL;      /* PB6/PB7 levels */
+
+    GPIOA->ODR = 0x00002802UL;
+    GPIOB->ODR = (0x000010FEUL & ~0x000000C0UL) | keep_odr_b;
+    GPIOC->ODR = 0x00005000UL;
+    GPIOD->ODR = 0x00000004UL;                             /* PD2 (ACC) pull-up */
+
+    GPIOA->CRL = 0x88444B88UL;
+    GPIOA->CRH = 0x388B8444UL;                             /* factory 0x388B84B4, PA9 -> input */
+    GPIOB->CRL = (0xFF333384UL & 0x00FFFFFFUL) | keep_crl_b;
+    GPIOB->CRH = 0x33B84443UL;                             /* factory 0x33B8FF43, PB10/PB11 -> input */
+    GPIOC->CRL = 0x44484444UL;
+    GPIOC->CRH = 0x33334344UL;
+    GPIOD->CRL = 0x44444844UL;
+    GPIOD->CRH = 0x44444444UL;
+}
+
 void gpio_set_powerdown_outputs(void) {
     /* Outputs at power-down (0x08006E08): PC14, PB4, PC12, PB3, PC13, PC15, PB5 low; PB2 high;
      * PB14 and PB15 go high (0x08006B5A) */

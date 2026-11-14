@@ -4604,3 +4604,43 @@ Fixed: `gpio_hardware_init()` now drives PB14/PB15 high for 50 ms, then low, and
 The four pins the clean-room app drives as outputs where the factory has inputs (PA1, PB0, PB1, PB9) can contend with whatever drives them on the car. They should become inputs like the factory's, or be proven to be outputs, before the app runs on the car. I2C2 and USART1 are factory functions the clean-room app doesn't implement at all; I2C2 may be the BD37033 audio processor (`docs/1.6_BD37033.md`).
 
 The board was left on the factory image (`combined_factory_boot_factory_app_64k.bin`, read back byte-identical).
+
+### 42. Running pin state matched to the factory; steering-wheel and knob inputs corrected; Volvo-derived outputs removed (2026-11-15)
+
+**Reference.** The factory firmware's steady running state (power state 3), read live on the bench with ignition held on:
+- **GPIO:** A `88444B88`/`388B84B4`/ODR `2802`; B `FF333384`/`33B8FF43`/`10FE`; C `44484444`/`33334344`/`5000`; D `44444844`/`44444444`/`0004`.
+- **Enabled peripherals** (`APB1ENR 0x06620000`, `APB2ENR 0x423D`, `AHBENR 0x15`): USART2, **I2C1**, **I2C2**, CAN1, CAN2, ADC1 + DMA1, **USART1** (TX-only, interrupt-driven). USART3, UART4/5 and TIM1-4 are off.
+- **NVIC:** EXTI0-3, EXTI9_5, CAN1 RX0, I2C2 event/error, USART1, USART2.
+- **ADC1:** continuous with DMA, 2 conversions (`SQR3 = 0x121`: channel 1 = PA1, channel 9 = PB1), 55.5-cycle sampling. It feeds the steering-wheel ladders.
+
+**What the clean-room app got wrong while running**, most of it inherited from the DCn32 (Volvo) image:
+
+| Pin | Factory | Clean-room before | Consequence |
+|---|---|---|---|
+| PA1, PB1 | **input with pull-up**; sampled by the ADC | analog (no pull). PA1 also set up as an "amp mute" output; PB1 driven for CMD `0xA0` id `0x00` | The internal pull-up is the top resistor of each steering-wheel ladder. Without it the ladders don't read properly, and writing those pins flips the pull. |
+| PA0, PC4 | input, **pull-down** | input, pull-up (rotary encoder A/B) | Knob read with the wrong idle level. Turn direction still needs checking on the car. |
+| PB0 | floating input | output ("touch relay") | Driving a pin the factory only reads |
+| PB9 | floating input | output (CMD `0xA0` id `0x0b` group) | Same |
+| PB10/PB11 | I2C2 | **USART3** (CMD `0x84` `AT+AUDROUTE`, `AT+UPGRADE`, BT AT relay) | Factory never enables USART3; these relays came from the Volvo image |
+| PC10 | output, low | input | — |
+| Outputs | 50 MHz | 2 MHz | Edge speed only |
+| PA3, PA6-8, PA10, PC8, PC9, PC11 | — | various | Pull direction or floating vs pulled |
+
+**Fixes** (`hardware/MCU/source`):
+- **`gpio_apply_factory_run_config()`** runs once after all drivers start and writes the factory running configuration above. It keeps the touch driver's PB6/PB7 (I2C1, bit-banged). Two deliberate differences: **PB10/PB11 and PA9 are floating inputs**, because the clean-room app doesn't run I2C2 or USART1, and an unclocked alternate-function pin could hold the line low.
+- **Volvo-derived writers removed:**
+  - PA1 "amp mute"; PB0 "touch relay" (`touch_set_relay()` is now a no-op); the PB1 write for CMD `0xA0` id `0x00`; PB9 in the id `0x0b` group;
+  - the PB6 "mic select" set-up in `main.c`;
+  - the USART3 relay (`usart3_relay_send()` is now a no-op).
+- **Steering-wheel pins:** `swc_driver.c` configures PA1/PB1 as input with pull-up, as the factory does.
+
+**Bench result** (vehicle build, factory bootloader):
+- **Running:** every pin matches the factory except the intended PA9 and PB10/PB11, and PB6/PB7 differ only in output speed. The ADC sequence is unchanged (`0x121`, DMA) and reads `0xF7A` unloaded (pull-up).
+- **Parked:** still identical to the factory on GPIOA-E (section 41). Wake works.
+- **Recovery:** a UART restore of the factory app *from this build* completed, and the board was read back byte-identical to `combined_factory_boot_factory_app_64k.bin`.
+
+**Still missing in the clean-room app** (factory functions with no clean-room equivalent):
+- **I2C2:** interrupt-driven, so probably the BD37033 audio processor (`docs/1.6_BD37033.md`). Without it the audio chip is never configured.
+- **USART1:** TX only; destination unknown.
+- **The factory CMD `0x84` and BT-AT handlers.** The clean-room versions were Volvo-derived and are disabled until the Limcet handlers are traced.
+- **The factory touch protocol** (section 30.2).

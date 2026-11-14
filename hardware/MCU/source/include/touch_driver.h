@@ -16,12 +16,10 @@
 #define ROTARY_EVENT_CW         0x40
 #define ROTARY_EVENT_CCW        0x41
 
-/* Goodix GT911 I2C Address (disassembly: 0xBA write, 0xBB read) */
-#define GOODIX_I2C_ADDR         0xBA
 
 /* Timing intervals */
 #define TOUCH_KNOB_INTERVAL_MS  5   /* Task 11 */
-#define TOUCH_DIGI_INTERVAL_MS  25  /* Task 8 */
+#define TOUCH_DIGI_INTERVAL_MS  5   /* touch task: called often, schedules itself (20 ms poll) */
 
 void touch_init(void);
 void touch_process_knob(void);

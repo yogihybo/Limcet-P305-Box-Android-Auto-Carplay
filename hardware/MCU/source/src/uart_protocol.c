@@ -398,6 +398,15 @@ static void handle_app_state(const UartPacket *p) {
     g_app_mode = mode;
 }
 
+/* Factory CMD 0x82 handler (0x080065D8): payload[0] == 1 -> mode 1 ("aftermarket",
+ * touch polled), anything else -> mode 2. 0 until the SoC has sent CMD 0x82. */
+uint8_t uart_get_app_mode(void) {
+    if (g_app_mode == 0) {
+        return 0;
+    }
+    return (g_app_mode == 1) ? 1 : 2;
+}
+
 /* Real firmware's shared 4-state dispatcher (0x080058A4), disassembled this
  * session -- drives GPIOC Pin 13 and GPIOC Pin 2 together, reached from BOTH
  * CMD 0xA0 id=0x11 (r0=2/3) and CMD 0x84's audio-route handler (r0=0/1).

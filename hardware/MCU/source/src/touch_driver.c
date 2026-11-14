@@ -1,15 +1,12 @@
 #include "touch_driver.h"
 #include "uart_protocol.h"
+#include "gpio_driver.h"
 
 /* State storage for touch coordinates matching disassembly at 0x2000025A:
  * +10: X coordinate (uint16_t, 0..800)
  * +12: Y coordinate (uint16_t, 0..480)
  * +14: Touch state  (uint8_t, 0=release, 1=press)
  */
-static uint16_t g_touch_x = 0;
-static uint16_t g_touch_y = 0;
-static uint8_t  g_touch_state = TOUCH_STATE_RELEASE;
-static uint8_t  g_touch_last_state = TOUCH_STATE_RELEASE;
 
 /* Rotary encoder quadrature state */
 static uint8_t  g_rotary_last_code = 0;
@@ -183,7 +180,7 @@ void touch_process_knob(void) {
     }
 }
 
-static bool i2c1_read_bytes(uint8_t dev_addr, uint16_t reg_addr, uint8_t *data, uint8_t len) {
+static bool i2c1_read_bytes(uint8_t dev_addr, uint16_t reg_addr, uint8_t reg_len, uint8_t *data, uint8_t len) {
     uint32_t timeout;
 
     /* Generate START */
@@ -201,12 +198,15 @@ static bool i2c1_read_bytes(uint8_t dev_addr, uint16_t reg_addr, uint8_t *data, 
     }
     (void)I2C1->SR2; /* Clear ADDR */
 
-    /* Send 2-byte register address */
-    timeout = I2C_TIMEOUT_CYCLES;
-    while (!(I2C1->SR1 & (1UL << 7))) { /* TXE */
-        if (--timeout == 0) goto err;
+    /* Register address: 1 byte (factory variants 1/3) or 2 bytes, MSB first
+     * (variant 2, factory helper 0x08009B66) */
+    if (reg_len == 2) {
+        timeout = I2C_TIMEOUT_CYCLES;
+        while (!(I2C1->SR1 & (1UL << 7))) { /* TXE */
+            if (--timeout == 0) goto err;
+        }
+        I2C1->DR = (uint8_t)(reg_addr >> 8);
     }
-    I2C1->DR = (uint8_t)(reg_addr >> 8);
 
     timeout = I2C_TIMEOUT_CYCLES;
     while (!(I2C1->SR1 & (1UL << 7))) { /* TXE */
@@ -266,129 +266,171 @@ err:
     return false;
 }
 
-static bool i2c1_write_byte(uint8_t dev_addr, uint16_t reg_addr, uint8_t val) {
-    uint32_t timeout;
 
-    I2C1->CR1 |= (1UL << 8); /* START */
-    timeout = I2C_TIMEOUT_CYCLES;
-    while (!(I2C1->SR1 & (1UL << 0))) {
-        if (--timeout == 0) goto err;
-    }
+/* ------------------------------------------------------------------------
+ * Touch, as the factory firmware does it (MCU_FIRMWARE_VERIFIED_FINDINGS.md
+ * sections 30.1, 30.2 and 43). The controller variant is fixed per board by
+ * the PC11/PA10 straps (0x08008794: variant = (PA10 << 1 | PC11) & 3):
+ *   1, 3: I2C address 0xBA, 8-bit registers 0x08 (4 B), 0x20 (4 B), 0x2B (1 B)
+ *   2:    I2C address 0x98, 16-bit register 0x2201 (8 B)
+ *   0:    no touch controller
+ * Polled only in "aftermarket" mode (CMD 0x82 payload 1), after the factory's
+ * start-up delays, every 20 ms. Reported to the SoC as CMD 0x20
+ * {X lo, X hi, Y lo, Y hi, state}, state 0 = up, 1 = down, 2 = held (repeated).
+ * Deliberately different from the factory: a failed read is not decoded (the
+ * factory decodes its stale buffer), and 3 failures in a row run a bus
+ * recovery (the factory has none -- the touch lockup, section 30.5). */
+extern uint32_t system_millis(void);
 
-    I2C1->DR = (dev_addr & 0xFE);
-    timeout = I2C_TIMEOUT_CYCLES;
-    while (!(I2C1->SR1 & (1UL << 1))) {
-        if (--timeout == 0) goto err;
-    }
-    (void)I2C1->SR2;
+#define TOUCH_HOLDOFF_MS        6000U   /* 0x200001BC+0x14, loaded at power-up */
+#define TOUCH_POLL_MS           20U     /* 0x0800A27C */
 
-    timeout = I2C_TIMEOUT_CYCLES;
-    while (!(I2C1->SR1 & (1UL << 7))) {
-        if (--timeout == 0) goto err;
-    }
-    I2C1->DR = (uint8_t)(reg_addr >> 8);
+static uint8_t  s_task_state;           /* 0x2000025A+0x12 */
+static uint32_t s_task_since;
+static uint8_t  s_pen_state;            /* 0x2000025A+0xE */
+static uint32_t s_pen_since;            /* 0x20000076 */
+static uint16_t s_x, s_y;               /* 0x2000025A+0xA / +0xC */
 
-    timeout = I2C_TIMEOUT_CYCLES;
-    while (!(I2C1->SR1 & (1UL << 7))) {
-        if (--timeout == 0) goto err;
-    }
-    I2C1->DR = (uint8_t)(reg_addr & 0xFF);
-
-    timeout = I2C_TIMEOUT_CYCLES;
-    while (!(I2C1->SR1 & (1UL << 7))) {
-        if (--timeout == 0) goto err;
-    }
-    I2C1->DR = val;
-
-    timeout = I2C_TIMEOUT_CYCLES;
-    while (!(I2C1->SR1 & (1UL << 2))) { /* BTF */
-        if (--timeout == 0) goto err;
-    }
-    I2C1->CR1 |= (1UL << 9); /* STOP */
-    return true;
-
-err:
-    I2C1->CR1 |= (1UL << 9);
-    return false;
+static void pen_report(uint8_t state, uint32_t now) {
+    s_pen_state = state;
+    s_pen_since = now;
+    uart_send_touch_coordinates(s_x, s_y, state);
 }
 
+static bool touch_read_failed(bool ok) {
+    if (ok) {
+        s_i2c_consec_failures = 0;
+        return false;
+    }
+    if (s_i2c_consec_failures < 255) {
+        s_i2c_consec_failures++;
+    }
+    if (s_i2c_consec_failures >= I2C_FAIL_RECOVERY_THRESHOLD) {
+        i2c1_bus_recovery();
+        s_i2c_consec_failures = 0;
+    }
+    return true;
+}
+
+/* 0x08009F14 + 0x08009DB4 */
+static void touch_poll_ba(uint32_t now) {
+    uint8_t r08[4], r20[4], r2b;
+    (void)i2c1_read_bytes(0xBA, 0x08, 1, r08, 4);
+    bool ok = i2c1_read_bytes(0xBA, 0x20, 1, r20, 4);
+    (void)i2c1_read_bytes(0xBA, 0x2B, 1, &r2b, 1);
+    if (touch_read_failed(ok)) {
+        return;
+    }
+
+    uint16_t x = (uint16_t)((r20[0] << 2) | (r20[1] & 3));
+    if (x != 0) {
+        if (x < 0xF0)       x = (uint16_t)(x - 160);
+        else if (x < 0x1E0) x = (uint16_t)(x - 120);
+        else if (x < 0x2D0) x = (uint16_t)(x - 80);
+        else                x = (uint16_t)(x - 60);
+    }
+    if (x >= TOUCH_MAX_X) x = TOUCH_MAX_X;     /* unsigned: values under 160 wrap and clamp */
+    s_x = x;
+
+    uint16_t y = (uint16_t)((r20[2] << 2) | (r20[3] & 3));
+    if (y != 0) {
+        y = (uint16_t)(y - 260);
+        y = (y == 0) ? 0 : (y >= TOUCH_MAX_Y) ? 0 : (uint16_t)(TOUCH_MAX_Y - y);
+    }
+    s_y = y;
+
+    if (r20[0] != 0) {
+        if (s_pen_state == 0) {
+            pen_report(1, now);
+        } else if (s_pen_state == 1 && (now - s_pen_since) >= 200) {
+            pen_report(2, now);
+        }
+        if (s_pen_state == 2 && (now - s_pen_since) >= 30) {
+            pen_report(2, now);
+        }
+    } else if (s_pen_state != 0) {
+        pen_report(0, now);
+    }
+}
+
+/* 0x0800A188 + 0x08009F68 */
+static void touch_poll_98(uint32_t now) {
+    uint8_t d[8];
+    if (touch_read_failed(i2c1_read_bytes(0x98, 0x2201, 2, d, 8))) {
+        return;
+    }
+    if (d[0] == 2) {
+        uint16_t x = (uint16_t)((d[2] * 25U) / 8U);
+        s_x = (x >= TOUCH_MAX_X) ? TOUCH_MAX_X : x;
+        uint16_t y = (uint16_t)((d[3] * 15U) / 8U);
+        s_y = (y == 0) ? 0 : (y >= TOUCH_MAX_Y) ? 0 : (uint16_t)(TOUCH_MAX_Y - y);
+        if (d[1] & 0x80) {
+            if (s_pen_state == 0) {
+                pen_report(1, now);
+            }
+        } else if (s_pen_state != 0) {
+            pen_report(0, now);
+        }
+    }
+    if (d[0] == 0xFF && (d[1] & 0x80)) {
+        if (s_pen_state == 1 && (now - s_pen_since) >= 100) {
+            pen_report(2, now);
+        }
+        if (s_pen_state == 2 && (now - s_pen_since) >= 30) {
+            pen_report(2, now);
+        }
+    }
+}
+
+static void touch_poll(uint32_t now) {
+    switch (gpio_get_composite_sense_mask() & 3) {
+        case 1: case 3: touch_poll_ba(now); break;
+        case 2:         touch_poll_98(now); break;
+        default:        break;
+    }
+}
+
+/* Touch task 0x0800A1BC; call at least every 20 ms. */
 void touch_process_digitizer(void) {
-    uint8_t status = 0;
+    uint32_t now = system_millis();
 
-    /* Read Goodix GT911 touch point status at register 0x814E */
-    if (!i2c1_read_bytes(GOODIX_I2C_ADDR, 0x814E, &status, 1)) {
-        /* Real hardware bug fix: previously this just returned on every
-         * failure with no recovery attempt, so a genuinely stuck bus (the
-         * GT911 or any I2C slave holding SDA low) meant touch silently
-         * stopped forever until a full head-unit reset re-initialized the
-         * peripheral from scratch. After a few consecutive failures --
-         * not on the first one, since a single missed poll is normal and
-         * harmless -- run the real bus-recovery procedure instead of
-         * waiting for an external reset. */
-        if (s_i2c_consec_failures < 255) {
-            s_i2c_consec_failures++;
-        }
-        if (s_i2c_consec_failures >= I2C_FAIL_RECOVERY_THRESHOLD) {
-            i2c1_bus_recovery();
-            s_i2c_consec_failures = 0;
-        }
-        return; /* No device or I2C bus error */
-    }
-    s_i2c_consec_failures = 0;
-
-    /* Bit 7: Buffer status (1 = coordinates ready), Bits [3:0]: point count */
-    if ((status & 0x80) != 0) {
-        uint8_t point_count = status & 0x0F;
-
-        if (point_count > 0) {
-            uint8_t raw_point[4];
-            /* Read Point 1: X_low (0x8150), X_high (0x8151), Y_low (0x8152), Y_high (0x8153) */
-            if (i2c1_read_bytes(GOODIX_I2C_ADDR, 0x8150, raw_point, 4)) {
-                uint16_t raw_x = (uint16_t)raw_point[0] | ((uint16_t)raw_point[1] << 8);
-                uint16_t raw_y = (uint16_t)raw_point[2] | ((uint16_t)raw_point[3] << 8);
-
-                /* Normalization math from OEM disassembly 0x08009F80 - 0x0800A000:
-                 * X = (25 * raw_x) / 8 -> 3.125 * raw_x
-                 * Y = (15 * raw_y) / 8 -> 1.875 * raw_y
-                 * Inverted Y for screen: Y = 480 - Y
-                 */
-                uint32_t calc_x = ((uint32_t)raw_x * 25UL) >> 3;
-                if (calc_x > TOUCH_MAX_X) calc_x = TOUCH_MAX_X;
-                g_touch_x = (uint16_t)calc_x;
-
-                uint32_t calc_y = ((uint32_t)raw_y * 15UL) >> 3;
-                if (calc_y > TOUCH_MAX_Y) calc_y = TOUCH_MAX_Y;
-                g_touch_y = (uint16_t)(TOUCH_MAX_Y - calc_y);
-
-                g_touch_state = TOUCH_STATE_PRESS;
-
-                /* Emit touch coordinate packet MCU_CMD_STATUS_QUERY (0x20) */
-                uart_send_touch_coordinates(g_touch_x, g_touch_y, g_touch_state);
+    /* Factory states 1-3: 200 ms, one poll, 100 ms, 200 ms; then running. */
+    switch (s_task_state) {
+        case 0:
+            s_task_since = now;
+            s_task_state = 1;
+            return;
+        case 1:
+            if ((now - s_task_since) >= 200) {
+                touch_poll(now);
+                s_task_since = now;
+                s_task_state = 2;
             }
-        } else {
-            /* Touch released */
-            if (g_touch_last_state == TOUCH_STATE_PRESS) {
-                g_touch_state = TOUCH_STATE_RELEASE;
-                uart_send_touch_coordinates(g_touch_x, g_touch_y, g_touch_state);
+            return;
+        case 2:
+        case 3:
+            if ((now - s_task_since) >= (s_task_state == 2 ? 100U : 200U)) {
+                s_task_since = now;
+                s_task_state++;
             }
-        }
-
-        /* Clear buffer ready bit in Goodix GT911 by writing 0 to 0x814E */
-        i2c1_write_byte(GOODIX_I2C_ADDR, 0x814E, 0x00);
-    } else {
-        /* No active touch */
-        if (g_touch_last_state == TOUCH_STATE_PRESS) {
-            g_touch_state = TOUCH_STATE_RELEASE;
-            uart_send_touch_coordinates(g_touch_x, g_touch_y, g_touch_state);
-        }
+            return;
+        default:
+            break;
     }
 
-    g_touch_last_state = g_touch_state;
+    /* Running: only in aftermarket mode, after the power-up hold-off. */
+    if (uart_get_app_mode() != 1 || now < TOUCH_HOLDOFF_MS) {
+        return;
+    }
+    if ((now - s_task_since) >= TOUCH_POLL_MS) {
+        s_task_since = now;
+        touch_poll(now);
+    }
 }
 
 bool touch_get_coordinates(uint16_t *x, uint16_t *y, uint8_t *state) {
-    if (x) *x = g_touch_x;
-    if (y) *y = g_touch_y;
-    if (state) *state = g_touch_state;
-    return (g_touch_state == TOUCH_STATE_PRESS);
+    if (x) *x = s_x;
+    if (y) *y = s_y;
+    if (state) *state = s_pen_state;
+    return s_pen_state != 0;
 }

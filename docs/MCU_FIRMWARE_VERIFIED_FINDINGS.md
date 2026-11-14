@@ -4640,7 +4640,54 @@ The board was left on the factory image (`combined_factory_boot_factory_app_64k.
 - **Recovery:** a UART restore of the factory app *from this build* completed, and the board was read back byte-identical to `combined_factory_boot_factory_app_64k.bin`.
 
 **Still missing in the clean-room app** (factory functions with no clean-room equivalent):
-- **I2C2:** interrupt-driven, so probably the BD37033 audio processor (`docs/1.6_BD37033.md`). Without it the audio chip is never configured.
+- ~~**I2C2:** interrupt-driven, so probably the BD37033 audio processor.~~ **Corrected (section 43):** I2C2 is a *slave* at `0xBA` that re-serves the touch controller's registers. The BD37033 driver is on I2C1, and it is deliberately not reproduced.
 - **USART1:** TX only; destination unknown.
 - ~~**The factory CMD `0x84` and BT-AT handlers.**~~ **Not features of this unit.** The Prado's Limcet app contains no AT command strings (`AT+AUDROUTE`, `AT+UPGRADE` and even `AT+` all have 0 matches; the Volvo image has 7 `AT+` strings), and it never enables USART3. This matches earlier testing, where these features never worked on the Prado. The clean-room relay stays a no-op.
-- **The factory touch protocol** (section 30.2).
+- ~~**The factory touch protocol** (section 30.2).~~ Implemented in section 43.
+
+### 43. Touch: the factory protocols implemented in the clean-room app; what I2C2 really is; BD37033 left out (2026-11-15)
+
+**Board variant.** `0x08008794` samples five strap inputs (PC11, PA10, PA8, PC9, PC8 into bits 0-4). It acts only when two successive samples agree, and stores `variant = (PA10 << 1 | PC11) & 3` at `0x200001F2`. The same variant selects the touch controller and the I2C2 slave behaviour, and on variant 3 the BD37033 audio init. The bench board reads 3. The vehicle board's straps are still unknown.
+
+**Factory touch path** (task `0x0800A1BC`; full detail in sections 30.1 and 30.2):
+- **Variants 1/3**, `0x08009F14` / `0x08009DB4`: I2C1 to `0xBA` with 8-bit registers. Reads `0x08` (4 B), `0x20` (4 B) and `0x2B` (1 B).
+  - X = `(r20[0] << 2) | (r20[1] & 3)`, then −160 below 240, −120 below 480, −80 below 720, otherwise −60. The arithmetic is unsigned 16-bit, then clamped to 800.
+  - Y = `(r20[2] << 2) | (r20[3] & 3)`, then −260, then inverted as 480 − Y (0 if the result is 0 or ≥ 480).
+  - Pen down when `r20[0] != 0`.
+- **Variant 2**, `0x0800A188` / `0x08009F68`: `0x98`, 16-bit register `0x2201` sent MSB first, 8 B.
+  - If `d[0] == 2`: X = `d[2]·25/8` (clamped to 800), Y = 480 − `d[3]·15/8`; pen from `d[1] & 0x80`.
+  - If `d[0] == 0xFF` with `d[1] & 0x80`, the pen is still held.
+- **Pen state machine** (`0x2000025A+0xE`, timer `0x20000076`):
+  - down → state 1, reported;
+  - 1 → 2 after 200 ms (100 ms on variant 2), reported;
+  - while in state 2, reported again every 30 ms;
+  - up → state 0, reported.
+- **Report**, `0x08006A98`: CMD `0x20` {X lo, X hi, Y lo, Y hi, state}. This is the frame `custom_ui` already parses; its all-zero release matches what the factory sends at pen-up.
+- **Gates:**
+  - start-up waits of 200 ms, one poll, 100 ms and 200 ms, then a poll every 20 ms;
+  - only in mode 1 (CMD `0x82` payload 1);
+  - only after the 6 s power-up hold-off.
+
+**Clean-room implementation** (`hardware/MCU/source/src/touch_driver.c`). The GT911 model is replaced by both factory variants, with the factory's decode, state machine, gates and timings. The variant comes from the existing debounced sense mask (bits 0/1 = PC11/PA10, the same bits as the factory). `uart_get_app_mode()` gives CMD `0x82` the factory's semantics.
+
+Two deliberate differences:
+- **A failed read is not decoded.** The factory decodes its stale buffer, which can keep reporting a held pen.
+- **Bus recovery after 3 failures in a row** is kept. The factory has none; that is the touch lockup in section 30.5.
+
+**Bench**, vehicle build, no touch panel fitted:
+- variant 3 selected; start-up sequence complete by 1.5 s;
+- no I2C traffic before CMD `0x82 {1}` and the 6 s hold-off, then polling;
+- with nothing answering, reads fail and the bus-recovery cycle runs;
+- no CMD `0x20` frames sent, no faults.
+
+**Not verified:** real touches (no panel on the bench), the vehicle's strap variant, and the knob/encoder direction after the pull change in section 42. Those need the car.
+
+**What I2C2 really is.** In steady running, the factory sets I2C2 to **slave address `0xBA`** (`OAR1 = 0x40BA`), fast mode, with interrupts. Its event handler (`0x080032C8`) dispatches by variant: `0x0800B212` for 1/3, `0x0800B324` for 2. It serves registers `0x08`, `0x20` and `0x2B` from shadow buffers (`0x200000AC`/`B0`/`B4`), so the MCU re-presents the touch controller to another I2C master.
+
+The SoC kernel declares `Goodix-TS` at `0x5D` (7-bit), which is `0xBA` 8-bit, on its I2C0 (`docs/1.1_HARDWARE_AND_SOC_REFERENCE.md`). That device "fails to ACK" on the project's kernel. It is very likely this MCU slave, not an unpopulated GT911.
+
+`custom_ui` takes touch from the MCU's CMD `0x20` frames over UART (`McuInputHal::get_touch_state()`), not from that kernel device, so the clean-room app does not implement the slave. It would only matter to the stock SoC software.
+
+**BD37033 audio processor: deliberately not reproduced.** The factory initialises it over I2C1 at `0x80` on variant 3 (`docs/1.6_BD37033.md` sections 17-21). On the Prado that path never worked in testing and caused problems with the screen colours, so the clean-room app does not touch it.
+
+**USART1.** The factory enables it TX-only (`CR1 = 0x2048`), interrupt-driven, on PA9 (`BRR = 0x1A1`). What it talks to is unknown, and the clean-room app leaves PA9 a floating input. Still open.

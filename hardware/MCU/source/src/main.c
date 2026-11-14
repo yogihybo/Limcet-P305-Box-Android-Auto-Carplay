@@ -194,6 +194,10 @@ static inline uint32_t millis(void) {
     return g_system_ticks_ms;
 }
 
+uint32_t system_millis(void) {
+    return g_system_ticks_ms;
+}
+
 int main(void) {
     /* Initialize System Clocks (72 MHz) */
     clock_init();

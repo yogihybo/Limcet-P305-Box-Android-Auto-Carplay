@@ -63,33 +63,54 @@ void gpio_driver_init(void) {
     configure_pin_mode(GPIOC, GPIO_PIN_MIC_SENSE, 0x04);
 
     /* 4. Configure Output Pins (General Purpose Output Push-Pull 2MHz -> 0x02) */
-    /* PB2: Video Relay Mux */
+    /* PB2: Video Relay Mux (0x08006C3A) */
     configure_pin_mode(GPIOB, 2, 0x02);
-    gpio_set_relay(RELAY_VIDEO_MUX, false);
 
-    /* PC13: AV Power / Relay */
+    /* PC13: AV Power / Relay (0x08006C52) */
     configure_pin_mode(GPIOC, 13, 0x02);
-    gpio_set_relay(RELAY_AV_POWER, false);
 
-    /* PB3: Aux Control 1 */
+    /* PB3: Aux Control 1 (0x08006C70) */
     configure_pin_mode(GPIOB, 3, 0x02);
-    gpio_set_relay(RELAY_AUX1, false);
 
-    /* PC12: Aux Relay 2 */
+    /* PC12: Aux Relay 2 (0x08006C8A) */
     configure_pin_mode(GPIOC, 12, 0x02);
-    gpio_set_relay(RELAY_AUX2, false);
 
-    /* PB4: Power Hold */
+    /* PB4: Power Hold (0x08006CA8) */
     configure_pin_mode(GPIOB, 4, 0x02);
-    gpio_set_relay(RELAY_POWER_HOLD, true); /* Assert power hold on startup */
 
-    /* PC14: SoC Reset Control */
+    /* PC14: SoC Reset Control (0x08006CC2) */
     configure_pin_mode(GPIOC, 14, 0x02);
-    gpio_set_relay(RELAY_SOC_RESET_C14, false);
 
-    /* PB14: ARK1668 Hardware Reset */
+    /* PB14: ARK1668 Hardware Reset (0x08005A18) */
     configure_pin_mode(GPIOB, 14, 0x02);
-    gpio_set_relay(RELAY_SOC_RESET_B14, true); /* Release SoC reset (active low) */
+
+    /* PB5: Subsystem Output (0x08006C00) */
+    configure_pin_mode(GPIOB, 5, 0x02);
+
+    /* PC15: Task 5 / Rail Output (0x08006C1A) */
+    configure_pin_mode(GPIOC, 15, 0x02);
+
+    /* PB15: Power-down State Pin (0x08006E86) */
+    configure_pin_mode(GPIOB, 15, 0x02);
+
+    /* Set default run-mode output state matching factory wake (0x08006CE0) */
+    gpio_set_run_mode_outputs();
+}
+
+void gpio_set_run_mode_outputs(void) {
+    /* Outputs at wake (0x08006CE0): PC14, PB4, PC12, PB3, PB2, PB5 high; PC13, PC15 low */
+    GPIOC->BSRR = (1UL << 14) | (1UL << 12);                /* PC14=1, PC12=1 */
+    GPIOB->BSRR = (1UL << 4) | (1UL << 3) | (1UL << 2) | (1UL << 5) | (1UL << 14); /* PB4=1, PB3=1, PB2=1, PB5=1, PB14=1 */
+    GPIOC->BRR  = (1UL << 13) | (1UL << 15);               /* PC13=0, PC15=0 */
+    GPIOB->BRR  = (1UL << 15);                              /* PB15=0 */
+}
+
+void gpio_set_powerdown_outputs(void) {
+    /* Outputs at power-down (0x08006E08): PC14, PB4, PC12, PB3, PC13, PC15, PB5 low; PB2 high;
+     * PB14 and PB15 go high (0x08006B5A) */
+    GPIOC->BRR  = (1UL << 14) | (1UL << 12) | (1UL << 13) | (1UL << 15); /* PC14=0, PC12=0, PC13=0, PC15=0 */
+    GPIOB->BRR  = (1UL << 4) | (1UL << 3) | (1UL << 5);                  /* PB4=0, PB3=0, PB5=0 */
+    GPIOB->BSRR = (1UL << 2) | (1UL << 14) | (1UL << 15);                /* PB2=1, PB14=1, PB15=1 */
 }
 
 void gpio_set_relay(gpio_relay_id_t relay_id, bool active) {
@@ -127,6 +148,21 @@ void gpio_set_relay(gpio_relay_id_t relay_id, bool active) {
         case RELAY_SOC_RESET_B14: /* PB14 */
             if (active) GPIOB->BSRR = (1UL << 14);
             else        GPIOB->BRR  = (1UL << 14);
+            break;
+
+        case RELAY_OUT_PB5: /* PB5 */
+            if (active) GPIOB->BSRR = (1UL << 5);
+            else        GPIOB->BRR  = (1UL << 5);
+            break;
+
+        case RELAY_OUT_PC15: /* PC15 */
+            if (active) GPIOC->BSRR = (1UL << 15);
+            else        GPIOC->BRR  = (1UL << 15);
+            break;
+
+        case RELAY_OUT_PB15: /* PB15 */
+            if (active) GPIOB->BSRR = (1UL << 15);
+            else        GPIOB->BRR  = (1UL << 15);
             break;
 
         default:

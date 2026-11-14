@@ -39,7 +39,10 @@ typedef enum {
     RELAY_AUX2          = 3,    /* GPIOC Pin 12: Aux Relay 2 (0x08006C8A) */
     RELAY_POWER_HOLD    = 4,    /* GPIOB Pin 4: Main System Power Hold (0x08006CA8) */
     RELAY_SOC_RESET_C14 = 5,    /* GPIOC Pin 14: SoC Hardware Reset Dispatcher (0x08006CC2) */
-    RELAY_SOC_RESET_B14 = 6     /* GPIOB Pin 14: Direct ARK1668 Hardware Reset (0x08005A18) */
+    RELAY_SOC_RESET_B14 = 6,    /* GPIOB Pin 14: Direct ARK1668 Hardware Reset (0x08005A18) */
+    RELAY_OUT_PB5       = 7,    /* GPIOB Pin 5: Output (0x08006C00) */
+    RELAY_OUT_PC15      = 8,    /* GPIOC Pin 15: Output (0x08006C1A) */
+    RELAY_OUT_PB15      = 9     /* GPIOB Pin 15: Output (0x08006E86) */
 } gpio_relay_id_t;
 
 /* Polling interval matching factory Task 5 */
@@ -50,6 +53,8 @@ typedef enum {
  * ============================================================================== */
 void gpio_driver_init(void);
 void gpio_set_relay(gpio_relay_id_t relay_id, bool active);
+void gpio_set_run_mode_outputs(void);
+void gpio_set_powerdown_outputs(void);
 bool gpio_get_acc_status(void);
 bool gpio_get_reverse_status(void);
 bool gpio_get_sync_status(void);

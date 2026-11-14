@@ -4187,7 +4187,7 @@ State byte `0x200007E8`, ms counter at `+2`, both advanced by the timer task (`0
    - `0x08006E08`: **mode byte `0x2000025A[0] = 2`** (the touch-polling gate, §30.4) and outputs PC14, PB4, PC12, PB3, PB5, PC13 low, PB2 high;
    - clears the message queues (`0x08007AFE`).
 2. A short busy delay (`0x08008AFA`).
-3. `0x08007B70(0)`: **clock-down**. HSI on, SYSCLK switched to HSI, PLL off, **HSE off**, flash latency 0, AHB prescaler /8 (`0x90`). The core runs at ~**1 MHz** from the internal 8 MHz RC.
+3. `0x08007B70(0)`: **clock-down**. HSI on, SYSCLK switched to HSI, PLL off, **HSE off**, flash latency 0, AHB prescaler /4 (`0x90`, RM0008 §7.3.2 HPRE[3:0]=1001b). The core runs at **2 MHz** from the internal 8 MHz RC.
 4. `0x0800AE40(0)`: an EXTI line reconfigured (rising+falling), disabled.
 5. **Busy loop**: refresh the IWDG (`0xAAAA` → `0x40003000`), poll PD2, repeat until ACC is on.
 
@@ -4197,7 +4197,7 @@ Outputs switched on at wake and off at power-down — PC14, PB4, PC12, PB3, PB5 
 - ~~`0x08006C1A` (PC15) never drives the pin high~~ -- **resolved as a reconstruction error, not firmware behavior** (section 32): the reconstructed `BL GPIO_SetBits` at `0x08006C26` had its first halfword byte-swapped. On the vehicle PC15 *is* driven high, by Task 5 (`0x0800700C`, 50 ms period: `0x08007014` passes 1, and four more call sites pass state-dependent values). The wake init (`0x08006CE0`) and power-down (`0x08006E08`) paths both drive it low. On the bench, Task 5's high drive was the part that silently did nothing. What PC15 controls is unconfirmed.
 - PC14 is driven as an output here, although the pin map records it as unconnected.
 
-**No sleep instruction, ever.** The firmware has no `WFI`/`WFE` and never touches `SCB_SCR`, `PWR`, `BKP`, `RTC` or `RCC_BDCR`. The Cortex-M3 never enters Sleep, Stop or Standby. The "low-power" state is the 1 MHz busy loop above.
+**No sleep instruction, ever.** The firmware has no `WFI`/`WFE` and never touches `SCB_SCR`, `PWR`, `BKP`, `RTC` or `RCC_BDCR`. The Cortex-M3 never enters Sleep, Stop or Standby. The "low-power" state is the 2 MHz busy loop above.
 
 **CAN is not quiesced.** Neither the power-down nor the wake path touches the bxCAN registers. The controller stays configured while its clock source drops roughly 36×, so its bit timing no longer matches the bus. Whether a CAN transceiver standby pin is among the GPIOs switched above is unknown. If it isn't, a mis-clocked CAN node on a waking vehicle bus is worth ruling out.
 

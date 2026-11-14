@@ -7,9 +7,6 @@ static CanRingBuffer g_can_rx_ring;
 static uint8_t g_active_mode = 1;
 
 void CAN1_RX0_IRQHandler(void) {
-    /* Notify power manager of bus activity */
-    power_manager_notify_can_activity();
-
     /* Check if FIFO0 has pending messages (FMP0 > 0) */
     if ((CAN1->RF0R & 0x03) != 0) {
         uint8_t next_head = (g_can_rx_ring.head + 1) % CAN_RX_RING_SIZE;
@@ -50,9 +47,6 @@ void CAN1_RX0_IRQHandler(void) {
 }
 
 void CAN2_RX0_IRQHandler(void) {
-    /* Notify power manager of secondary bus activity */
-    power_manager_notify_can_activity();
-
     if ((CAN2->RF0R & 0x03) != 0) {
         /* Release FIFO0 output mailbox */
         CAN2->RF0R |= (1UL << 5); /* RFOM0 */

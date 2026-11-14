@@ -4539,3 +4539,21 @@ Review fixes on top of it:
 **Not covered:**
 - The parked current. The bench board doesn't have the vehicle's rails, and the rail identities remain inferred (section 31.2).
 - On the car, whether PB15, PC15 and PB5 drive what section 31 suggests.
+
+### 40. End-to-end bench run: factory stack -> UART update to the clean-room app -> UART restore of the factory app (2026-11-15)
+
+**Setup:** bench board, Pico for SWD and USART2. Ignition was held "on" by switching PD2's input pull to pull-down over SWD every 3 s (`GPIOD_BRR = 4`). Without that, both apps power down 5 s after boot on the bench.
+
+| Step | Result |
+|---|---|
+| 1. Flash `combined_factory_boot_factory_app_64k.bin` (`84a57df2...`) over SWD | Verified. Factory app running: PC in app, VTOR `0x08003000`, CFSR/HFSR 0. CMD `0x81` answered with `Limcet-V1.0-1302` (16-byte form) plus frames `01`, `40`, `30`, `12`. |
+| 2. `tools/mcu_update_sender.py` with `build_bench/can_app.bin`. The head unit's sequence: `E1` to the factory app, which resets into the factory bootloader. | 65 blocks in 6 s, `E2 01 02` received. Read back over 128 KB: bootloader untouched, app = image byte for byte, rest of the app region `0xFF`. Flag and request clear, no faults. The clean-room app answers CMD `0x81`. |
+| 3. Sender with `live_factory_app_52k_reconstructed.bin`, triggered by the clean-room app's own CMD `0xE1` handler | 416 blocks in 21 s, `E2 01 02` received |
+| 4. Read back | First 64 KB byte-identical to `combined_factory_boot_factory_app_64k.bin`; `0x08010000`-`0x0801FFFF` erased. Flag and request clear, no faults. The CMD `0x81` reply is byte-identical to step 1's. |
+| 5. Ignition released | Factory app parks (state 5 at `0x200007E8`). PC in the parked loop (`0x08007CCA`-`0x08007CD6`); CFGR `0x4090` (HSI, AHB /4, 2 MHz); USART2 off. GPIOB ODR `0xD006`: PB2, PB14 and PB15 high, PB3, PB4 and PB5 low. GPIOC ODR 0. This matches the clean-room power-down levels (section 39) on every pin in the power-down table. |
+
+**Parity notes from this run:**
+- **Version string.** The factory sends it as a 16-byte string: CMD `0x7F`, length `0x10`, `"Limcet-V1.0-1302"`. The clean-room app pads it with spaces to 28 bytes (length `0x1C`).
+- **Other parked pins.** In the parked state, the clean-room app differs on pins outside the power-down table: PB0 high and PB1 low where the factory has PB0 low and PB1 high, PB6/PB7 high, and pull-ups on PC4/PC8/PC11 where the factory leaves PC8/PC11 floating. These come from the touch relay, the CMD `0xA0` id `0x00` output, I2C and input-pull configuration, not from the power manager.
+
+The board was left on the restored factory image, parked as it would be with the ignition off.

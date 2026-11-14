@@ -33,10 +33,12 @@ static void enter_power_down_and_park(void) {
     /* 2. Hold CAN in initialization mode while parked.
      * The factory leaves it running at the wrong clock rate on the car's bus.
      * Plain CAN sleep will not do because auto-wakeup is enabled on-chip.
-     * Request initialization mode (INRQ = 1) and wait for hardware ACK (INAK = 1). */
+     * Request initialization mode (INRQ = 1) and wait for hardware ACK (INAK = 1),
+     * but never indefinitely: if the controller doesn't acknowledge (no clock, or
+     * stuck mid-frame) carry on powering down rather than spin with the rails on. */
     CAN1->MCR |= (1UL << 0);
-    while ((CAN1->MSR & (1UL << 0)) == 0) {
-        power_manager_feed_watchdog();
+    for (uint32_t n = 0; n < 720000UL && (CAN1->MSR & (1UL << 0)) == 0; n++) {
+        power_manager_feed_watchdog();   /* bounded to ~0.1 s; INAK normally takes < 1 frame */
     }
 
     /* 3. Set power-down outputs matching factory 0x08006E08 & 0x08006B5A:

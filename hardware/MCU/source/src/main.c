@@ -189,8 +189,11 @@ void SysTick_Handler(void) {
 }
 
 static void systick_init(void) {
-    /* 72 MHz SYSCLK / 1000 = 72000 cycles per millisecond */
-    SysTick->LOAD = (72000000UL / 1000UL) - 1UL;
+    /* 1 ms at the clock actually running: 72 MHz on the PLL, or 8 MHz if
+     * clock_init() fell back to the HSI (no crystal) -- otherwise every
+     * millisecond timer, including the 5 s ACC-off timeout, runs 9x slow. */
+    uint32_t sysclk = (((RCC->CFGR >> 2) & 3UL) == 2UL) ? 72000000UL : 8000000UL;
+    SysTick->LOAD = (sysclk / 1000UL) - 1UL;
     SysTick->VAL  = 0;
     /* Enable SysTick, enable SysTick interrupt, use processor clock (bits [2:0] = 111) */
     SysTick->CTRL = (1UL << 2) | (1UL << 1) | (1UL << 0);

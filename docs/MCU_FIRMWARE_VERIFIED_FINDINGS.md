@@ -4514,3 +4514,28 @@ The Limcet bootloader starts the app at `0x08003000` and only checks the SP. So 
 - **Dry-run.** It restores `live_factory_app_52k_reconstructed.bin` and compares the restored flash byte for byte. Its simulated MCU faults on a mis-linked image instead of "booting" it.
 
 The `mcu_rebuild.py`/`mcu_decompile.py` CAN-table tools only understand the DCn32 layout. Their output from the reference image is refused by the packager.
+
+### 39. Clean-room power manager matched to the factory (section 31.2), bench-verified (2026-11-14)
+
+Commit `a0763b1` reimplemented `hardware/MCU/source/src/power_manager.c` and the run and power-down output sets in `gpio_driver.c` after section 31.2. It has two deliberate differences from the factory:
+- **CAN** is held in initialization mode while parked.
+- **Wake** is a system reset, not an in-place re-init.
+
+Review fixes on top of it:
+- **INAK wait bounded.** The wait for bxCAN's acknowledgement is now bounded to about 0.1 s. Unbounded, a controller that never acknowledged would have left the MCU spinning, rails on, with the watchdog fed.
+- **SysTick from the running clock.** The reload now comes from the clock actually running. It was fixed at 72 MHz, which made the 5 s ACC timeout about 45 s on the HSI fallback.
+
+**Bench test** with the vehicle build on the factory bootloader. PD2 floats high on the bench ("ignition off"). Over SWD, PD2's input pull was switched to pull-down (`GPIOD_BRR = 4`) to read "on", and back to pull-up to read "off". Registers were read without halting:
+
+| Check | Result |
+|---|---|
+| Running state | PLL from HSE, 72 MHz. GPIOB ODR `0x50FD`: PB2, PB3, PB4, PB5 and PB14 high, PB15 low. GPIOC ODR `0x5910`: PC12 and PC14 high, PC13 and PC15 low. USART2 on, CAN normal. These are the factory wake levels (`0x08006CE0`). |
+| Parks | 5.4 s after reset, which is the 0.55 s settle plus 5 s plus 0.1 s; 5.1 s after ACC is released |
+| Parked state | HSE and PLLs off; SYSCLK = HSI with AHB /4 (CFGR `0x001D0490`), so 2 MHz; flash latency 0. GPIOB ODR `0xD0C5`: PB2, PB14 and PB15 high, PB3, PB4 and PB5 low. GPIOC ODR `0x0910`: PC12-PC15 low. USART2 off, CAN in init mode (INAK). These are the factory power-down levels (`0x08006E08`, `0x08006B5A`). |
+| Wake | Within 1 s of PD2 reading low: reset back to the running state above |
+| ACC held on | Stays running (checked for about 10 s) |
+| `make BENCH=1` build | Never parks with PD2 high |
+
+**Not covered:**
+- The parked current. The bench board doesn't have the vehicle's rails, and the rail identities remain inferred (section 31.2).
+- On the car, whether PB15, PC15 and PB5 drive what section 31 suggests.

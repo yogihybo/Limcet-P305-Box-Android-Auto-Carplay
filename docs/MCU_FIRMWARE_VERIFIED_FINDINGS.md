@@ -4255,6 +4255,73 @@ Follow-up to section 32. Every gap-filled word in both images was checked two wa
 | Boot | `0x08000834` | `ands r0, r1` byte-swapped and `ldr r1` pointing one literal too early (`0x080008E8`, not the FLASH base) -- the following `str r0, [r1, #0x10]` wrote the wrong address instead of `FLASH->CR` | `08 40 2d 49` |
 | Boot | `0x08000E20`-`0x08000E35` | `IWDG_Enable` loaded `#0x5555` into `r5` instead of `#0xCCCC` into `r0`, its `bx lr` was byte-swapped (fell through into `IWDG_GetFlagStatus`), and that function's `cbz` was a guessed `beq` -- **the bench bootloader never started the IWDG** | `movw r0, #0xcccc; ...; bx lr; mov r1, r0; ...; cbz r2, ...` |
 
-**What changes on the bench after re-flashing.** The bootloader configures and starts the IWDG at `0x08001756`-`0x0800176C` (write access, prescaler, reload, refresh, enable) and refreshes it from its wait loops (`0x08001A00`, `0x08001D8E`, `0x08001EBE`). The vehicle's real bootloader therefore runs with the watchdog active from the start; the bench didn't, and now will. A debugger halt during the bootloader will now trigger a watchdog reset unless `DBGMCU_CR.DBG_IWDG_STOP` is set; the HIL suite sets it (`0x307`). The FLASH and `SystemCoreClockUpdate` fixes only matter on the paths that call them; earlier bench verification of the update block-write (§28) drove the primitives directly.
+**What changes on the bench after re-flashing.** The IWDG init routine is `0x08001750` (write access, prescaler /128, reload `0x270`, refresh, enable; about 2 s). **Correction (section 34):** it is called only on the update path and when the application is invalid, not on a normal boot. A normal boot leaves the IWDG off, and the application starts it itself with the same settings (`0x0800B804`). So the IWDG fix changes nothing on a normal bench boot. It matters in update mode, which now resets after about 2 s if the loop stalls, as on the vehicle. A debugger halt in update mode will then reset the MCU unless `DBGMCU_CR.DBG_IWDG_STOP` is set; the HIL suite sets it (`0x307`). The FLASH and `SystemCoreClockUpdate` fixes only matter on the paths that call them; earlier bench verification of the update block-write (§28) drove the primitives directly.
 
 **Files regenerated:** app and bootloader reconstructions, both 64 KB combined images (the clean-room combination only takes the app fix), README SHA-256s. `live_factory_bootloader_12k_reconstructed.bin` is kept read-only (`444`) and was rewritten deliberately. **Not yet re-flashed or re-verified on the spare board.** These checks only cover these two error classes in reconstructed bytes; the 94.5%/96.2% silicon-read bytes are authoritative as captured.
+
+### 34. Two more update-path errors in the reconstructed bootloader, and the clean-room bootloader compared with the factory one (2026-11-14)
+
+#### 34.1 Two more reconstruction errors (now fixed)
+
+The section 33 checker was extended with two checks. **The verifier** (`tools/verify_mcu_reconstruction.py`) now flags:
+- any reconstructed `BL` whose target no silicon-read code calls, if that target doesn't look like a function entry;
+- any silicon-called function whose preceding, reconstructed halfword doesn't end a function.
+
+Run on the section 33 images, it flagged exactly these two errors, both in the update-mode reply senders. Both are now fixed:
+
+| Address | Was (effect) | Now | Evidence |
+|---|---|---|---|
+| `0x08001C04` | `BL 0x080015B6`, mid-function. In update mode, the `CMD 0xE4` status sender (`0x08001BB2`) wrote garbage to `USART2_CR2` and never loaded `DR`, so it would wait forever for TC, until the IWDG reset the MCU. | `BL 0x080015C0` (`USART_SendData`) | The silicon-read copies of the same send loop call `0x080015C0` (`0x0800197E`, `0x08001C4E`). |
+| `0x08001C24`-`0x08001C2B` | `movs r0, #0x2e; ldr r1, =0x08003000; strb r0, [r1, #0xe]; nop`. Two effects: `0x08001BB2` had no `pop` and fell through, and the "update complete" sender's entry `0x08001C26` (called from `0x08001D62`) began mid-sequence with a store to flash. | `pop {r4-r6, pc}; push {r4, lr}; movs r4, #0; movs r0, #0x2e` | Same shape as the silicon-read sender at `0x08001956`. Its next instructions (`ldr r1, =0x20004008; strb r0, [r1, #0xe]`) are silicon-read at `0x08001C2C`. |
+
+Neither error affects a normal boot. Section 28's bench test called the block processor directly, so it never reached either one. The bootloader reconstruction and `combined_factory_boot_factory_app_64k.bin` were regenerated; hashes are in the dump README. **Not yet re-flashed.**
+
+#### 34.2 Corrected factory boot flow (`main` at `0x080017E2`)
+
+1. `Reset_Handler` (`0x080004AC`) calls `SystemInit` (`0x08000338`), which resets the RCC and calls `SetSysClockTo72` (`0x08000228`). `SetSysClockTo72` uses HSE 25 MHz → PREDIV2 /5 → PLL2 ×8 → PREDIV1 /5 → PLL ×9 = 72 MHz, with 2 flash wait states, prefetch on, and APB1 /2. The HSE start is bounded (`0x500` polls); on timeout it stays on the 8 MHz HSI. VTOR = `0x08000000`.
+2. **Update mode** is entered if SRAM `0x20004004 == 0x5555AAAA`, **or** if the flash halfword at `0x08002FFE == 0x5AA5` (`0x080017CC`). In update mode the bootloader, in order:
+   - drives PC14 and PB4 high and PC12 low (`0x08001772`). These are the power-state outputs from §31, so the SoC side stays powered for the update;
+   - sets up USART2 at 38400 8N1 on PA2/PA3 (`0x080018BC`);
+   - starts the IWDG (`0x08001750`);
+   - sends `2E E2 01 00 1C`;
+   - unlocks flash;
+   - runs the §27–29 protocol loop (`0x08001EB0`), refreshing the IWDG on each pass.
+
+   The first data block triggers the following steps:
+   - it erases the 58 application pages (`0x08003000`–`0x0801FFFF`), then **writes `0x5AA5` to `0x08002FFE`** (`0x08001BA4`);
+   - after the last block, it sends `CMD 0xE4`, erases the page holding the flag (`0x08002800`), and sends `2E E2 01 02 1A` (`0x08001C26`);
+   - it clears the SRAM magic and spins until the IWDG resets the MCU into a normal boot.
+
+   An interrupted update therefore re-enters update mode on every boot until it completes.
+3. **Normal boot**: a short busy-wait (count to `0xFF0E` in SRAM `0x20000028`), then the handshake `0x20141003` → `0x20004000`, then the SP check `(SP & 0x2FFE0000) == 0x20000000`. If the check passes, it sets MSP and jumps to the reset vector. VTOR is left to the app.
+4. **Invalid app**: it starts the IWDG, writes `0x5555AAAA` to `0x20004004` and spins, so the IWDG reset brings it back up in update mode.
+
+On the app side: the app starts the IWDG at init (`0x0800B804`, same /128, `0x270`). It then requires the `0x20141003` handshake (`0x0800B826`). Without it, the app stores the wrong value to `0x20004004` and spins until the IWDG resets the MCU.
+
+#### 34.3 Clean-room bootloader (`hardware/MCU/bootloader/`) vs the factory one
+
+Its build output, `build/bootloader.bin` (1,368 bytes), is byte-identical to the first 1,368 bytes of `combined_cleanroom_boot_factory_app_64k.bin`.
+
+**Matches the factory bootloader:**
+- the 72 MHz clock tree (same `CFGR2 = 0x00010644`, PLL ×9, latency 2 + prefetch, APB1 /2);
+- app base `0x08003000` and the SP-mask validity check;
+- the `0x20141003` handshake, which is why the factory app runs behind it;
+- the `0x5555AAAA` @ `0x20004004` update request;
+- USART2 at 38400 on PA2/PA3;
+- the unconditional flash unlock;
+- the 58-page erase range.
+
+**Differs:**
+
+| Area | Factory | Clean-room | Consequence |
+|---|---|---|---|
+| Update protocol | `0x2E`-framed: sync `2E E1 02 xx xx` or `"XINBAS"`, `E2`/`E4` replies, 128-byte blocks, additive checksum, each byte de-obfuscated through the table at `0x08001F72` before programming (§27–29) | Standard YMODEM-CRC, programmed as received | **Incompatible.** The stock head unit's updater can't update through the clean-room bootloader, and an image in the factory's obfuscated form would be written unconverted. |
+| Interrupted update | `0x5AA5` flag at `0x08002FFE` forces update mode until the update completes | No flag. Block 0 holds the vector table, so after a partial write the SP check passes. | The clean-room bootloader would jump into a half-written app. The factory's guard against bricking from an interrupted update is missing. |
+| Invalid app | IWDG on, set magic, reset into update mode | Straight into YMODEM: 30 × ~1 s attempts, then reset via `AIRCR` | Both eventually wait for an update; the clean-room bootloader does it without a watchdog. |
+| IWDG | Started in update mode and for an invalid app; off on a normal boot | Never started (only `KR = 0xAAAA` refreshes) | The normal path is equivalent, because the app starts the IWDG. A stall in clean-room update mode isn't recovered. |
+| Update-mode GPIO | PC14/PB4 high, PC12 low | None | On the vehicle, the SoC side may be unpowered while the clean-room bootloader waits for an update (rail identities inferred, §31). |
+| HSE failure | Bounded wait, runs on HSI | `while (!HSERDY)` forever, with no IWDG | It hangs if the crystal doesn't start. |
+| End of update | Sends `E2 ... 02` "done", resets via IWDG | Jumps straight to the app | Equivalent for the app (the handshake is written either way). |
+| Pre-jump delay | ~65k-iteration busy-wait | None | Probably settling time; no known dependency. |
+
+The clean-room bootloader is fine for the bench's normal boot path, but it isn't a drop-in replacement for the factory one wherever updates are involved. Note also that `hardware/MCU/bootloader/README.md`'s "What it actually does" section still says `0x08004000` and describes a LOCK-bit guard; the source itself already has `0x08003000` and the unconditional unlock.

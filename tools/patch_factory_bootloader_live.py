@@ -199,7 +199,11 @@ FACTORY_PATCH_MAP = {
 
     # --- Block 14: Serial Packet Transmit Loop (0x08001C00 - 0x08001C34) ---
     0x08001C00: (0xF7FF4839, "ldr r0, [pc, #0xe4] / bl 0x080015b6 hw1 (USART_SendData byte)"),
-    0x08001C04: (0xBF00FCD8, "bl hw2 / nop (USART_SendData return & alignment)"),
+    # 2026-11-14: BL target corrected to USART_SendData (0x080015C0), as the
+    # silicon-read copies of this same send loop call it (0x0800197E,
+    # 0x08001C4E); was 0xBF00FCD8 -> 0x080015B6, mid-function, which wrote
+    # garbage to USART2_CR2 and never loaded DR (MCU_FIRMWARE_VERIFIED_FINDINGS.md sec. 34)
+    0x08001C04: (0xBF00FCDD, "bl hw2 / nop (USART_SendData return & alignment)"),
     0x08001C1C: (0xB2ED3501, "adds r5, #1 / uxtb r5, r5 (Transmit loop index increment)"),
     # BUG FIX 2026-09-14: original value 0xDBFE2D06 decodes to a self-loop
     # (`blt #0x8001c1e`, branching to its own address) -- hardware-confirmed
@@ -209,8 +213,14 @@ FACTORY_PATCH_MAP = {
     # for that branch, placed right after this word, is 0xDBEA2D06. Verified
     # via Capstone round-trip.
     0x08001C20: (0xDBEA2D06, "cmp r5, #6 / blt.n #0x8001bfa (Transmit 6-byte packet loop)"),
-    0x08001C24: (0x4931202E, "movs r0, #0x2e / ldr r1, [pc, #0xc4] (Packet header 0x2E setup)"),
-    0x08001C28: (0xBF007388, "strb r0, [r1, #0xe] / nop (Store 0x2E header byte)"),
+    # 2026-11-14: 0x08001BB2's epilogue and 0x08001C26's prologue (0x08001C26
+    # is a BL target from 0x08001D62); body matches the silicon-read 0x08001956
+    # sender, whose next instructions (ldr r1 / strb r0, [r1, #0xe]) are
+    # silicon-read here at 0x08001C2C (sec. 34). Was 0x4931202E / 0xBF007388:
+    # 0x08001BB2 fell through without returning, and the old `ldr r1` loaded
+    # 0x08003000 so the `strb` targeted flash.
+    0x08001C24: (0xB510BD70, "pop {r4, r5, r6, pc} / push {r4, lr} (end of 0x08001BB2; start of 0x08001C26)"),
+    0x08001C28: (0x202E2400, "movs r4, #0 / movs r0, #0x2e (Packet header 0x2E setup)"),
     0x08001C34: (0x210173C1, "strb r1, [r0, #0xf] / movs r1, #1 (Store 0xE2 header byte & type 1)"),
 
     # --- Block 15: 128-Byte Payload Receiver & Checksum (0x08001E00 - 0x08001E34) ---

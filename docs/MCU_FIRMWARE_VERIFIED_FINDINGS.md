@@ -405,6 +405,8 @@ precise number.
 
 ## `GPIOB Pin 14` — real, verified ARK1668 SoC hardware reset control
 
+> **Polarity correction (2026-11-15, section 41):** on this unit (Limcet factory firmware), PB14 **HIGH holds the SoC in reset and LOW releases it**. The factory pulses PB14/PB15 high for 50 ms and then holds them low (`0x08009164`), which was read live on the bench. The "driven HIGH to release" reading below came from the DCn32 (Volvo) image. The pin identity stands; the polarity does not.
+
 Found while investigating the above. Real function at `0x08005A18`,
 same shape as every other verified `SetPin(bool)` wrapper this session
 (branches on the boolean parameter to the shared `BSRR`-set or
@@ -4557,3 +4559,48 @@ Review fixes on top of it:
 - **Other parked pins.** In the parked state, the clean-room app differs on pins outside the power-down table: PB0 high and PB1 low where the factory has PB0 low and PB1 high, PB6/PB7 high, and pull-ups on PC4/PC8/PC11 where the factory leaves PC8/PC11 floating. These come from the touch relay, the CMD `0xA0` id `0x00` output, I2C and input-pull configuration, not from the power manager.
 
 The board was left on the restored factory image, parked as it would be with the ignition off.
+
+### 41. Parked pin state matched to the factory pin for pin; SoC reset polarity on PB14 was inverted; version string (2026-11-15)
+
+**Reference capture.** The factory firmware ran on the bench (section 40) and was sampled over SWD without halting, parked and running. The capture covers GPIOA-E `CRL`/`CRH`/`ODR`, `AFIO_MAPR`, and the RCC clock and enable registers. Parked values:
+
+| Port | CRL | CRH | ODR |
+|---|---|---|---|
+| A | `0x88444B88` | `0x388B84B4` | `0x00002802` |
+| B | `0x44333384` | `0x33B8FF43` | `0x0000D006` |
+| C | `0x44484444` | `0x33334344` | `0x00000000` |
+| D | `0x44444844` | `0x44444444` | `0x00000004` |
+
+Between running and parked, the factory changes only the section 31.2 output table, PB14/PB15, and PB6/PB7. PB6/PB7 are I2C1 (`F`, AF open-drain) while running and become floating inputs (`4`) when parked. Every other pin keeps its mode.
+
+**Parked state, clean-room app.** `gpio_set_powerdown_outputs()` now writes this configuration in full, ODR first and then the modes, after the output table. Bench result with the vehicle build: **CRL/CRH/ODR on GPIOA-E are identical to the factory's parked capture**, at 2 MHz. Before this, PB0 (driven high), PB1 (driven low), PB6/PB7 (I2C1 still active) and the pulls on PC4/PC8/PC11 differed, so pins could be driving or pulling against the vehicle while parked.
+
+**PB14/PB15 polarity.** The factory's SoC sequencer `0x08009164` works on state byte `0x2000003C`, with a timer at `0x2000003E` decremented by the 1 ms task (`0x08006B04` from `0x08008AC2`):
+- state 0 drives PB14/PB15 **high** for 50 ms (`0x08006B1C(2)`);
+- state 1 drives them **low** (`0x08006B1C(0)`) and continues the bring-up;
+- power-down sets state 4, which drives them high again (`0x08006B5A`).
+
+Factory running state on the bench: PB14 = PB15 = 0; parked: 1. Undriven at reset, the SoC is held in reset (the earlier SWD-halt finding), which fits an external pull to the reset level.
+
+The clean-room app did the opposite: low for 50 ms, then **high while running**. On the car, that would have held the SoC in reset for as long as the clean-room app ran. With the SoC down there is no UART host either, so a car updated to that app could only have been recovered over SWD.
+
+Fixed: `gpio_hardware_init()` now drives PB14/PB15 high for 50 ms, then low, and the run-mode outputs keep them low. Bench, vehicle build: running GPIOB ODR `0x10FD` (PB14 = PB15 = 0).
+
+**Version string.** It is now sent exactly as the factory sends it: `2E 7F 10 "Limcet-V1.0-1302" 0D`, byte-identical on the bench. `custom_ui` accepts any length.
+
+**Still different while running (not power-related; follow-up for running parity).** Comparing against the factory's running capture, where the factory uses mode `3` the clean-room app uses `2`: both are push-pull outputs, at 50 MHz versus 2 MHz. That is harmless. The functional differences:
+
+| Pin | Factory | Clean-room |
+|---|---|---|
+| PA1 | input, pull-up | **output** low ("amp mute", label never confirmed) |
+| PB0 | input, floating | **output** high ("touch relay", from DCn32) |
+| PB1 | input, pull-up | **output** low (CMD `0xA0` id `0x00`, from DCn32) |
+| PB9 | input, floating | **output** low (CMD `0xA0` id `0x0b` group) |
+| PB10/PB11 | **I2C2** (AF open-drain) | unused input |
+| PA9 | **USART1 TX** (AF) | unused input |
+| PC10 | output low | input |
+| PA0, PA3, PA6-PA8, PA10, PC4, PC8, PC9, PC11 | — | different pull direction or floating vs pulled |
+
+The four pins the clean-room app drives as outputs where the factory has inputs (PA1, PB0, PB1, PB9) can contend with whatever drives them on the car. They should become inputs like the factory's, or be proven to be outputs, before the app runs on the car. I2C2 and USART1 are factory functions the clean-room app doesn't implement at all; I2C2 may be the BD37033 audio processor (`docs/1.6_BD37033.md`).
+
+The board was left on the factory image (`combined_factory_boot_factory_app_64k.bin`, read back byte-identical).

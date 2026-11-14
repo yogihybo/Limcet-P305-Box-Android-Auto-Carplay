@@ -146,18 +146,28 @@ static void gpio_hardware_init(void) {
      * release call runs, holding the whole SoC in reset -- see
      * docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md's "CRITICAL SAFETY FINDING")
      * both independently confirm GPIOB Pin 14 is the real reset-release pin,
-     * not GPIOC Pin 13. */
+     * not GPIOC Pin 13.
+     *
+     * POLARITY CORRECTED 2026-11-15 (MCU_FIRMWARE_VERIFIED_FINDINGS.md section 41):
+     * on this unit PB14 (and PB15 with it) HIGH holds the SoC in reset and LOW
+     * releases it. The factory's SoC sequencer (0x08009164, timer from the 1 ms
+     * task) drives both high for 50 ms then low, and they stay low while running
+     * (read live on the bench); power-down drives them high again. The old
+     * low-then-high order came from the DCn32 (Volvo) image and would have held
+     * the SoC in reset for as long as the MCU ran. */
     GPIOB->CRH &= ~(0x0FUL << 24);
     GPIOB->CRH |=  (0x02UL << 24);
+    GPIOB->CRH &= ~(0x0FUL << 28);   /* PB15: pulsed together with PB14 */
+    GPIOB->CRH |=  (0x02UL << 28);
 
-    /* Hold ArkMicro SoC in hardware reset for 50ms */
-    GPIOB->BRR = (1UL << 14);
+    /* Hold ArkMicro SoC in hardware reset for 50ms (factory 0x08009178: 0x08006B1C(2)) */
+    GPIOB->BSRR = (1UL << 14) | (1UL << 15);
     for (volatile uint32_t i = 0; i < 360000; i++) {
         __asm__ volatile("nop");
     }
 
-    /* Release ArkMicro SoC from hardware reset */
-    GPIOB->BSRR = (1UL << 14);
+    /* Release ArkMicro SoC from hardware reset (factory 0x08009198: 0x08006B1C(0)) */
+    GPIOB->BRR = (1UL << 14) | (1UL << 15);
 
     /* Allow power rails & SoC PLL to stabilize (150ms), then unmute audio amplifier cleanly */
     for (volatile uint32_t i = 0; i < 1080000; i++) {

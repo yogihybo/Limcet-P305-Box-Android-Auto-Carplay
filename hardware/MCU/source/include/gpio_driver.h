@@ -39,7 +39,8 @@ typedef enum {
     RELAY_AUX2          = 3,    /* GPIOC Pin 12: Aux Relay 2 (0x08006C8A) */
     RELAY_POWER_HOLD    = 4,    /* GPIOB Pin 4: Main System Power Hold (0x08006CA8) */
     RELAY_SOC_RESET_C14 = 5,    /* GPIOC Pin 14: SoC Hardware Reset Dispatcher (0x08006CC2) */
-    RELAY_SOC_RESET_B14 = 6,    /* GPIOB Pin 14: Direct ARK1668 Hardware Reset (0x08005A18) */
+    RELAY_SOC_RESET_B14 = 6,    /* GPIOB Pin 14: ARK1668 reset -- HIGH = held in reset, LOW = running
+                                 * (factory sequencer 0x08009164; findings section 41) */
     RELAY_OUT_PB5       = 7,    /* GPIOB Pin 5: Output (0x08006C00) */
     RELAY_OUT_PC15      = 8,    /* GPIOC Pin 15: Output (0x08006C1A) */
     RELAY_OUT_PB15      = 9     /* GPIOB Pin 15: Output (0x08006E86) */

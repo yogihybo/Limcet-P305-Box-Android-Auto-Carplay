@@ -100,9 +100,11 @@ void gpio_driver_init(void) {
 void gpio_set_run_mode_outputs(void) {
     /* Outputs at wake (0x08006CE0): PC14, PB4, PC12, PB3, PB2, PB5 high; PC13, PC15 low */
     GPIOC->BSRR = (1UL << 14) | (1UL << 12);                /* PC14=1, PC12=1 */
-    GPIOB->BSRR = (1UL << 4) | (1UL << 3) | (1UL << 2) | (1UL << 5) | (1UL << 14); /* PB4=1, PB3=1, PB2=1, PB5=1, PB14=1 */
+    GPIOB->BSRR = (1UL << 4) | (1UL << 3) | (1UL << 2) | (1UL << 5); /* PB4=1, PB3=1, PB2=1, PB5=1 */
     GPIOC->BRR  = (1UL << 13) | (1UL << 15);               /* PC13=0, PC15=0 */
-    GPIOB->BRR  = (1UL << 15);                              /* PB15=0 */
+    /* PB14/PB15 LOW = SoC out of reset (factory sequencer 0x08009164; section 41).
+     * main.c's gpio_hardware_init() has already done the 50 ms reset pulse. */
+    GPIOB->BRR  = (1UL << 14) | (1UL << 15);
 }
 
 void gpio_set_powerdown_outputs(void) {
@@ -111,6 +113,21 @@ void gpio_set_powerdown_outputs(void) {
     GPIOC->BRR  = (1UL << 14) | (1UL << 12) | (1UL << 13) | (1UL << 15); /* PC14=0, PC12=0, PC13=0, PC15=0 */
     GPIOB->BRR  = (1UL << 4) | (1UL << 3) | (1UL << 5);                  /* PB4=0, PB3=0, PB5=0 */
     GPIOB->BSRR = (1UL << 2) | (1UL << 14) | (1UL << 15);                /* PB2=1, PB14=1, PB15=1 */
+
+    /* Then every other pin: the factory's complete parked configuration, read
+     * live from the factory firmware on the bench (MCU_FIRMWARE_VERIFIED_FINDINGS.md
+     * section 41). Beyond the table above this releases I2C1 (PB6/PB7 to floating
+     * inputs), leaves PB0 floating and PB1 pulled up as inputs, and sets the
+     * factory's pulls on PA/PC -- so nothing is left driving or pulling against
+     * the vehicle while parked. ODR (levels / pull direction) first, then modes,
+     * so no pin passes through a wrong level. Wake is a system reset, which
+     * rebuilds the running configuration from scratch. */
+    GPIOA->ODR = 0x00002802UL;  GPIOB->ODR = 0x0000D006UL;
+    GPIOC->ODR = 0x00000000UL;  GPIOD->ODR = 0x00000004UL;  /* PD2 (ACC) keeps its pull-up */
+    GPIOA->CRL = 0x88444B88UL;  GPIOA->CRH = 0x388B84B4UL;
+    GPIOB->CRL = 0x44333384UL;  GPIOB->CRH = 0x33B8FF43UL;
+    GPIOC->CRL = 0x44484444UL;  GPIOC->CRH = 0x33334344UL;
+    GPIOD->CRL = 0x44444844UL;  GPIOD->CRH = 0x44444444UL;
 }
 
 void gpio_set_relay(gpio_relay_id_t relay_id, bool active) {

@@ -199,9 +199,10 @@ void uart_send_lcd_source(uint8_t mode) {
 }
 
 void uart_send_version_report(void) {
-    /* Real firmware version string reported to about screen / SoC: Limcet-V1.0-1302 */
-    static const uint8_t kMcuVersion[28] = "Limcet-V1.0-1302            ";
-    uart_send_packet(MCU_CMD_VERSION_REPORT, kMcuVersion, 28);
+    /* Exactly as the factory app sends it: CMD 0x7F, 16 bytes, no padding
+     * (bench capture, MCU_FIRMWARE_VERIFIED_FINDINGS.md section 40). */
+    static const uint8_t kMcuVersion[16] = { 'L','i','m','c','e','t','-','V','1','.','0','-','1','3','0','2' };
+    uart_send_packet(MCU_CMD_VERSION_REPORT, kMcuVersion, sizeof kMcuVersion);
 }
 
 void uart_send_steering_angle(int16_t angle_deci_degrees) {

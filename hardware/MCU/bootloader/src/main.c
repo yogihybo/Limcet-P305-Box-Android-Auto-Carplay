@@ -1,5 +1,40 @@
 #include "bootloader.h"
 
+/* Clock actually in use: HSI 8 MHz until clock_init() locks the PLL, or for
+ * good if the crystal doesn't start. The factory derives its baud rate the
+ * same way, from RCC_GetClocksFreq() inside USART_Init(). */
+static uint32_t s_hclk_hz = 8000000UL;
+static uint32_t s_pclk1_hz = 8000000UL;
+
+/* SysTick as a free-running 24-bit down-counter at HCLK/8, polled (no
+ * interrupt). millis() folds the elapsed ticks in on every call, so it only
+ * has to be called at least once per wrap: 1.86 s at 72 MHz, 16.7 s on HSI. */
+#define SYST_CSR  (*(volatile uint32_t *)0xE000E010UL)
+#define SYST_RVR  (*(volatile uint32_t *)0xE000E014UL)
+#define SYST_CVR  (*(volatile uint32_t *)0xE000E018UL)
+#define SYST_MAX  0x00FFFFFFUL
+
+static uint32_t s_tick_last;
+static uint32_t s_tick_frac;
+static uint32_t s_ms;
+
+static void millis_init(void) {
+    SYST_RVR = SYST_MAX;
+    SYST_CVR = 0;
+    SYST_CSR = 1UL;                 /* ENABLE, clock = HCLK/8, no interrupt */
+    s_tick_last = SYST_CVR;
+}
+
+uint32_t millis(void) {
+    uint32_t now = SYST_CVR;
+    uint32_t ticks_per_ms = s_hclk_hz / 8000UL;
+    s_tick_frac += (s_tick_last - now) & SYST_MAX;   /* counts down */
+    s_tick_last = now;
+    s_ms += s_tick_frac / ticks_per_ms;
+    s_tick_frac %= ticks_per_ms;
+    return s_ms;
+}
+
 void clock_init(void) {
     /* If SYSCLK is currently driven by PLL, switch back to HSI first */
     if ((RCC->CFGR & (3UL << 2)) == (2UL << 2)) {
@@ -52,6 +87,9 @@ void clock_init(void) {
     /* Switch SYSCLK to Main PLL */
     RCC->CFGR = (RCC->CFGR & ~3UL) | 2UL;
     while ((RCC->CFGR & (3UL << 2)) != (2UL << 2)) {}
+
+    s_hclk_hz = 72000000UL;
+    s_pclk1_hz = 36000000UL;
 }
 
 void update_gpio_rails_init(void) {
@@ -103,13 +141,9 @@ void uart_init(uint32_t baudrate) {
     GPIOA->CRL |=  (0x0BUL << 8) | (0x08UL << 12);
     GPIOA->ODR |=  (1UL << 3);
 
-    /* 36 MHz / 38400: USARTDIV = 36000000 / (16 * 38400) = 58.59375
-     * Mantissa = 58 (0x3A), Fraction = round(0.59375 * 16) = 10 (0x0A) -> BRR = 0x03AA */
-    if (baudrate == 38400) {
-        USART2->BRR = 0x03AA;
-    } else {
-        USART2->BRR = (36000000UL + (baudrate / 2)) / baudrate;
-    }
+    /* BRR = PCLK1 / baud, rounded: 0x3AA at 36 MHz (38,388 baud), 0xD0 on
+     * the 8 MHz HSI fallback (38,462 baud). */
+    USART2->BRR = (s_pclk1_hz + (baudrate / 2)) / baudrate;
 
     USART2->CR1 = (1UL << 13) | (1UL << 3) | (1UL << 2); /* UE, TE, RE */
 }
@@ -129,18 +163,18 @@ uint8_t uart_getc(void) {
 }
 
 bool uart_getc_timeout(uint8_t *out_char, uint32_t timeout_ms) {
-    uint32_t loops = timeout_ms * 9000;
-    while (loops--) {
+    uint32_t start = millis();
+    do {
         uint32_t sr = USART2->SR;
-        /* If Overrun, Noise, or Framing error occurred, clear by reading DR */
-        if (sr & 0x0E) {
-            (void)USART2->DR;
-        }
         if (sr & (1UL << 5)) {
+            /* RXNE: this DR read also clears any ORE/NE/FE flagged with it */
             *out_char = (uint8_t)(USART2->DR & 0xFF);
             return true;
         }
-    }
+        if (sr & 0x0EUL) {
+            (void)USART2->DR;       /* error without data: SR-then-DR read clears it */
+        }
+    } while ((millis() - start) < timeout_ms);
     return false;
 }
 
@@ -189,6 +223,7 @@ int main(void) {
     IWDG->KR = 0xAAAA;
 
     clock_init();
+    millis_init();
 
     IWDG->KR = 0xAAAA;
 
@@ -211,14 +246,18 @@ int main(void) {
     iwdg_init();
     uart_init(38400);
 
-    /* Process authentic 0x2E firmware update stream */
+    /* Process authentic 0x2E firmware update stream. It only returns when the
+     * host has gone quiet for good (a completed update resets from inside). */
     mcu_process_firmware_update();
 
-    /* If update loop exits without rebooting (e.g. timeout on header),
-     * set update magic and spin to allow IWDG reset into update mode */
-    *BOOTLOADER_MAGIC_ADDR = BOOTLOADER_MAGIC_VAL;
+    /* Give up like the factory (0x08001B56 / 0x08001EA4): clear the request
+     * and let the IWDG reset the MCU. The next boot runs the application, or
+     * comes straight back here if the 0x5AA5 flag says an update was cut
+     * short or the application is invalid -- never stranded in update mode
+     * just because a request was made. */
+    *BOOTLOADER_MAGIC_ADDR = 0;
     while (1) {
-        /* Allow watchdog to reset MCU back into update mode */
+        /* no IWDG refresh */
     }
 
     return 0;

@@ -34,7 +34,7 @@ LOAD build/update_protocol.o
                 0x08000000                g_pfnVectors
                 0x08000040                        . = ALIGN (0x4)
 
-.text           0x08000040      0xab8
+.text           0x08000040      0x8c4
                 0x08000040                        . = ALIGN (0x4)
  *(.text)
  *(.text*)
@@ -54,113 +54,124 @@ LOAD build/update_protocol.o
  .text.Reset_Handler
                 0x08000044       0x94 build/startup_stm32f105.o
                 0x08000044                Reset_Handler
+ .text.millis   0x080000d8       0x4c build/main.o
+                0x080000d8                millis
  .text.clock_init
-                0x080000d8       0xbc build/main.o
-                0x080000d8                clock_init
+                0x08000124       0xd8 build/main.o
+                0x08000124                clock_init
  .text.update_gpio_rails_init
-                0x08000194       0x60 build/main.o
-                0x08000194                update_gpio_rails_init
+                0x080001fc       0x60 build/main.o
+                0x080001fc                update_gpio_rails_init
  .text.iwdg_init
-                0x080001f4       0x24 build/main.o
-                0x080001f4                iwdg_init
+                0x0800025c       0x24 build/main.o
+                0x0800025c                iwdg_init
  .text.iwdg_feed
-                0x08000218       0x10 build/main.o
-                0x08000218                iwdg_feed
+                0x08000280       0x10 build/main.o
+                0x08000280                iwdg_feed
  .text.uart_init
-                0x08000228       0x60 build/main.o
-                0x08000228                uart_init
+                0x08000290       0x54 build/main.o
+                0x08000290                uart_init
  .text.uart_putc
-                0x08000288       0x20 build/main.o
-                0x08000288                uart_putc
+                0x080002e4       0x20 build/main.o
+                0x080002e4                uart_putc
  .text.uart_getc_timeout
-                0x080002a8       0x2c build/main.o
-                0x080002a8                uart_getc_timeout
+                0x08000304       0x38 build/main.o
+                0x08000304                uart_getc_timeout
  .text.is_app_valid
-                0x080002d4       0x1c build/main.o
-                0x080002d4                is_app_valid
+                0x0800033c       0x1c build/main.o
+                0x0800033c                is_app_valid
  .text.jump_to_application
-                0x080002f0       0x48 build/main.o
-                0x080002f0                jump_to_application
+                0x08000358       0x48 build/main.o
+                0x08000358                jump_to_application
  .text.startup.main
-                0x08000338       0x60 build/main.o
-                0x08000338                main
+                0x080003a0       0x7c build/main.o
+                0x080003a0                main
  .text.flash_wait_busy
-                0x08000398       0x18 build/update_protocol.o
+                0x0800041c       0x18 build/update_protocol.o
  .text.send_e4_status
-                0x080003b0       0x38 build/update_protocol.o
+                0x08000434       0x38 build/update_protocol.o
  .text.send_e2_status
-                0x080003e8       0x2a build/update_protocol.o
- *fill*         0x08000412        0x2 
+                0x0800046c       0x2a build/update_protocol.o
+ *fill*         0x08000496        0x2 
  .text.flash_unlock
-                0x08000414       0x18 build/update_protocol.o
-                0x08000414                flash_unlock
+                0x08000498       0x18 build/update_protocol.o
+                0x08000498                flash_unlock
  .text.flash_lock
-                0x0800042c       0x10 build/update_protocol.o
-                0x0800042c                flash_lock
+                0x080004b0       0x10 build/update_protocol.o
+                0x080004b0                flash_lock
  .text.flash_erase_page
-                0x0800043c       0x30 build/update_protocol.o
-                0x0800043c                flash_erase_page
+                0x080004c0       0x30 build/update_protocol.o
+                0x080004c0                flash_erase_page
  .text.flash_erase_app_pages
-                0x0800046c       0x24 build/update_protocol.o
-                0x0800046c                flash_erase_app_pages
+                0x080004f0       0x28 build/update_protocol.o
+                0x080004f0                flash_erase_app_pages
  .text.flash_write_halfword
-                0x08000490       0x2c build/update_protocol.o
-                0x08000490                flash_write_halfword
+                0x08000518       0x2c build/update_protocol.o
+                0x08000518                flash_write_halfword
  .text.flash_write_block
-                0x080004bc       0x22 build/update_protocol.o
-                0x080004bc                flash_write_block
- *fill*         0x080004de        0x2 
+                0x08000544       0x22 build/update_protocol.o
+                0x08000544                flash_write_block
+ *fill*         0x08000566        0x2 
  .text.mcu_process_firmware_update
-                0x080004e0      0x590 build/update_protocol.o
-                0x080004e0                mcu_process_firmware_update
+                0x08000568      0x314 build/update_protocol.o
+                0x08000568                mcu_process_firmware_update
  *(.rodata)
  *(.rodata*)
  .rodata.xinbas_magic.0
-                0x08000a70        0x6 build/update_protocol.o
+                0x0800087c        0x6 build/update_protocol.o
  .rodata.g_deobfuscation_table
-                0x08000a76       0x80 build/update_protocol.o
-                0x08000af8                        . = ALIGN (0x4)
- *fill*         0x08000af6        0x2 
-                0x08000af8                        _etext = .
-                0x08000af8                        _sidata = LOADADDR (.data)
+                0x08000882       0x80 build/update_protocol.o
+                0x08000904                        . = ALIGN (0x4)
+ *fill*         0x08000902        0x2 
+                0x08000904                        _etext = .
+                0x08000904                        _sidata = LOADADDR (.data)
 
-.glue_7         0x08000af8        0x0
- .glue_7        0x08000af8        0x0 linker stubs
+.glue_7         0x08000904        0x0
+ .glue_7        0x08000904        0x0 linker stubs
 
-.glue_7t        0x08000af8        0x0
- .glue_7t       0x08000af8        0x0 linker stubs
+.glue_7t        0x08000904        0x0
+ .glue_7t       0x08000904        0x0 linker stubs
 
-.vfp11_veneer   0x08000af8        0x0
- .vfp11_veneer  0x08000af8        0x0 linker stubs
+.vfp11_veneer   0x08000904        0x0
+ .vfp11_veneer  0x08000904        0x0 linker stubs
 
-.v4_bx          0x08000af8        0x0
- .v4_bx         0x08000af8        0x0 linker stubs
+.v4_bx          0x08000904        0x0
+ .v4_bx         0x08000904        0x0 linker stubs
 
-.iplt           0x08000af8        0x0
- .iplt          0x08000af8        0x0 build/startup_stm32f105.o
+.iplt           0x08000904        0x0
+ .iplt          0x08000904        0x0 build/startup_stm32f105.o
 
-.rel.dyn        0x08000af8        0x0
- .rel.iplt      0x08000af8        0x0 build/startup_stm32f105.o
+.rel.dyn        0x08000904        0x0
+ .rel.iplt      0x08000904        0x0 build/startup_stm32f105.o
 
-.data           0x20000000        0x0 load address 0x08000af8
+.data           0x20000000        0x8 load address 0x08000904
                 0x20000000                        . = ALIGN (0x4)
                 0x20000000                        _sdata = .
  *(.data)
  *(.data*)
-                0x20000000                        . = ALIGN (0x4)
-                0x20000000                        _edata = .
+ .data.s_pclk1_hz
+                0x20000000        0x4 build/main.o
+ .data.s_hclk_hz
+                0x20000004        0x4 build/main.o
+                0x20000008                        . = ALIGN (0x4)
+                0x20000008                        _edata = .
 
-.igot.plt       0x20000000        0x0 load address 0x08000af8
- .igot.plt      0x20000000        0x0 build/startup_stm32f105.o
+.igot.plt       0x20000008        0x0 load address 0x0800090c
+ .igot.plt      0x20000008        0x0 build/startup_stm32f105.o
 
-.bss            0x20000000        0x0 load address 0x08000af8
-                0x20000000                        . = ALIGN (0x4)
-                0x20000000                        _sbss = .
+.bss            0x20000008        0xc load address 0x0800090c
+                0x20000008                        . = ALIGN (0x4)
+                0x20000008                        _sbss = .
  *(.bss)
  *(.bss*)
+ .bss.s_ms      0x20000008        0x4 build/main.o
+ .bss.s_tick_frac
+                0x2000000c        0x4 build/main.o
+ .bss.s_tick_last
+                0x20000010        0x4 build/main.o
  *(COMMON)
-                0x20000000                        . = ALIGN (0x4)
-                0x20000000                        _ebss = .
+                0x20000014                        . = ALIGN (0x4)
+                0x20000014                        _ebss = .
 
 /DISCARD/
  *(.ARM.exidx*)

@@ -38,6 +38,16 @@
 #define UPDATE_STATUS_COMPLETE  0x02U
 
 #define BLOCK_PAYLOAD_SIZE      128U
+#define MAX_UPDATE_BLOCKS       ((APP_FLASH_END + 1UL - APP_FLASH_BASE) / BLOCK_PAYLOAD_SIZE)  /* 928 */
+
+/* Update-mode timing, measured on the bench against the factory bootloader
+ * (docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md section 38). */
+#define HEADER_PROMPT_MS        7000UL    /* E2 00 every 7.0 s while no E1 arrives */
+#define HEADER_GIVE_UP_MS       358000UL  /* then gives up, clears the request, resets */
+#define BLOCK_IDLE_MS           19600UL   /* re-request (E2 01 / E4) after 19.6 s of silence */
+#define BLOCK_GIVE_UP_MS        314000UL  /* no complete E3 frame for this long: give up.
+                                           * Derived (same 0x0FFFFFFF poll budget at the
+                                           * measured 19.6 s per 0x00FFFFFF polls), not measured */
 
 /* Flash Management */
 void flash_unlock(void);
@@ -49,6 +59,7 @@ bool flash_write_block(uint32_t address, const uint8_t *data, uint32_t length);
 
 /* Hardware Management */
 void clock_init(void);
+uint32_t millis(void);
 void update_gpio_rails_init(void);
 void iwdg_init(void);
 void iwdg_feed(void);

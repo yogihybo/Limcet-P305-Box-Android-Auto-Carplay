@@ -47,6 +47,7 @@ bool flash_erase_app_pages(void) {
     for (uint32_t page_addr = APP_FLASH_BASE; page_addr < APP_FLASH_END; page_addr += FLASH_PAGE_SIZE) {
         flash_erase_page(page_addr);
         iwdg_feed();
+        (void)millis();   /* keep the SysTick-based clock from wrapping unseen */
     }
     return true;
 }
@@ -102,13 +103,26 @@ static bool wait_for_e1_header(uint16_t *out_total_blocks) {
     uint8_t hi = 0, lo = 0;
     uint8_t xinbas_idx = 0;
     static const uint8_t xinbas_magic[6] = {'X', 'I', 'N', 'B', 'A', 'S'};
-    uint32_t timeout_loops = 5000000; /* ~5s timeout */
+    uint32_t start = millis();
+    uint32_t last_prompt = start;
 
-    while (timeout_loops--) {
+    for (;;) {
         iwdg_feed();
 
+        /* Factory 0x08001B3A-0x08001B5E: prompt the host with E2 00 while
+         * nothing arrives, and give up after a fixed budget. */
+        uint32_t now = millis();
+        if ((now - start) >= HEADER_GIVE_UP_MS) {
+            return false;
+        }
+        if ((now - last_prompt) >= HEADER_PROMPT_MS) {
+            send_e2_status(UPDATE_STATUS_REJECT);
+            last_prompt = now;
+            state = 0;
+        }
+
         uint8_t b;
-        if (!uart_getc_timeout(&b, 10)) {
+        if (!uart_getc_timeout(&b, 1)) {
             continue;
         }
 
@@ -154,8 +168,12 @@ static bool wait_for_e1_header(uint16_t *out_total_blocks) {
             case 5: /* Standard: Checksum */
                 {
                     uint8_t expected_chk = (uint8_t)(~(SOC_CMD_UPDATE_HEADER + 0x02 + hi + lo) & 0xFF);
-                    if (b == expected_chk) {
-                        *out_total_blocks = ((uint16_t)hi << 8) | lo;
+                    uint16_t n = ((uint16_t)hi << 8) | lo;
+                    /* Factory 0x08001AA8: a zero block count is answered E2 00 and the
+                     * wait goes on. Counts that can't fit the 116 KB region are refused too
+                     * (the factory would program past the end of flash and fault). */
+                    if (b == expected_chk && n != 0 && n <= MAX_UPDATE_BLOCKS) {
+                        *out_total_blocks = n;
                         send_e2_status(UPDATE_STATUS_READY);
                         return true;
                     }
@@ -193,8 +211,9 @@ static bool wait_for_e1_header(uint16_t *out_total_blocks) {
                         sum += xinbas_magic[i];
                     }
                     uint8_t expected_chk = (uint8_t)(~sum & 0xFF);
-                    if (b == expected_chk) {
-                        *out_total_blocks = ((uint16_t)hi << 8) | lo;
+                    uint16_t n = ((uint16_t)hi << 8) | lo;
+                    if (b == expected_chk && n != 0 && n <= MAX_UPDATE_BLOCKS) {
+                        *out_total_blocks = n;
                         send_e2_status(UPDATE_STATUS_READY);
                         return true;
                     }
@@ -208,9 +227,6 @@ static bool wait_for_e1_header(uint16_t *out_total_blocks) {
                 break;
         }
     }
-
-    send_e2_status(UPDATE_STATUS_REJECT);
-    return false;
 }
 
 bool mcu_process_firmware_update(void) {
@@ -219,7 +235,7 @@ bool mcu_process_firmware_update(void) {
     flash_unlock();
 
     /* Step 1: Wait for head unit CMD 0xE1 header */
-    if (!wait_for_e1_header(&total_blocks) || total_blocks == 0) {
+    if (!wait_for_e1_header(&total_blocks)) {
         flash_lock();
         return false;
     }
@@ -236,14 +252,36 @@ bool mcu_process_firmware_update(void) {
     uint8_t b_hi = 0, b_lo = 0;
     uint16_t payload_idx = 0;
     uint8_t running_chk = 0;
+    uint32_t last_byte = millis();
+    uint32_t last_frame = last_byte;
 
     while (expected_block < total_blocks) {
         iwdg_feed();
 
+        /* Factory 0x08001E76-0x08001EAC. After a stretch of silence, drop any
+         * partial frame and re-request: E2 01 ("go", restart at block 0) until
+         * the first block has been taken, then E4 (resend the next block).
+         * Without this a single lost frame leaves both ends waiting forever. */
+        uint32_t now = millis();
+        if ((now - last_frame) >= BLOCK_GIVE_UP_MS) {
+            flash_lock();
+            return false;
+        }
+        if ((now - last_byte) >= BLOCK_IDLE_MS) {
+            state = 0;
+            if (erased) {
+                send_e4_status(expected_block - 1);
+            } else {
+                send_e2_status(UPDATE_STATUS_READY);
+            }
+            last_byte = now;
+        }
+
         uint8_t b;
-        if (!uart_getc_timeout(&b, 100)) {
+        if (!uart_getc_timeout(&b, 1)) {
             continue;
         }
+        last_byte = millis();
 
         switch (state) {
             case 0: /* Sync byte */
@@ -300,12 +338,18 @@ bool mcu_process_firmware_update(void) {
                     uint8_t expected_chk = (uint8_t)(~running_chk & 0xFF);
                     uint16_t blk_num = ((uint16_t)b_hi << 8) | b_lo;
 
-                    if (b == expected_chk && blk_num == expected_block) {
+                    last_frame = millis();
+                    if (b != expected_chk) {
+                        /* Factory 0x08001E6A: a corrupt frame gets no reply; the idle
+                         * re-request above recovers. (Replying E2 00 here made the head
+                         * unit abandon the whole update.) */
+                    } else if (blk_num == expected_block) {
                         /* On first valid data block: erase app pages and set interrupted-update flag */
                         if (!erased) {
                             flash_erase_app_pages();
                             flash_write_halfword(UPDATE_FLAG_ADDR, UPDATE_FLAG_VAL);
                             erased = true;
+                            last_byte = millis();   /* the erase takes 1-2 s */
                         }
 
                         /* De-obfuscate payload: flash[i] = (~wire[i] + T[i % 128]) & 0xFF */
@@ -322,12 +366,10 @@ bool mcu_process_firmware_update(void) {
                         /* Send ACK for this block */
                         send_e4_status(expected_block - 1);
                     } else {
-                        /* Checksum mismatch or out-of-order block: report last successfully received block */
-                        if (expected_block > 0) {
-                            send_e4_status(expected_block - 1);
-                        } else {
-                            send_e2_status(UPDATE_STATUS_REJECT);
-                        }
+                        /* Factory 0x08001C72 / 0x08001EE0: a good frame for the wrong block
+                         * is ignored and answered with the last block taken, so the host
+                         * resends the one after it. */
+                        send_e4_status(expected_block - 1);
                     }
                     state = 0;
                 }

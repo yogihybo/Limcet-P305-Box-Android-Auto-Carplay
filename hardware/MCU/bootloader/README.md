@@ -42,6 +42,26 @@ update protocol and safety mechanisms matching the factory bootloader:
      sends `2E E2 01 02 1A` (done), clears `0x20004004 = 0`, locks flash, and spins until
      IWDG resets the MCU into normal boot.
 
+6. **Recovery when the host goes quiet** (timings measured on the bench against the
+   factory bootloader; `MCU_FIRMWARE_VERIFIED_FINDINGS.md` section 38):
+   - Waiting for the header: sends `2E E2 01 00 1C` every 7.0 s; after 358 s it gives up,
+     clears `0x20004004` and lets the IWDG reset the MCU, so the application runs again.
+   - During the transfer: after 19.6 s with no bytes it drops any partial frame and
+     re-requests -- `E2 01` before the first block (host restarts at block 0), `E4 <last>`
+     after it (host resends the next block). With no complete frame for 314 s it gives up
+     the same way; the `0x5AA5` flag then brings it straight back to update mode.
+   - A corrupt frame gets no reply (the re-request recovers); a good frame for the wrong
+     block is answered `E4 <last>`. Headers with a block count of 0 or more than 928
+     (116 KB) are answered `E2 00` and the wait continues.
+   - The baud rate is derived from the clock actually running, so the 8 MHz HSI fallback
+     still talks at 38,400.
+
+**Not reproduced from the factory:** if the application pages are write-protected, the
+factory erases the option bytes (keeping the readout-protection level) before the
+application erase. That path is deliberately left out -- getting it wrong on an RDP1 part
+mass-erases the whole chip, bootloader included -- so a write-protected part simply fails
+to update.
+
 **This is a write-only IAP receiver.** There is no memory-read,
 flash-dump, or diagnostic-readback function anywhere in this source --
 `update_protocol.c` exposes exactly `flash_unlock()`/`flash_lock()`/

@@ -174,7 +174,9 @@ def flash_firmware(port: str, baud: int, firmware_path: str, is_wire: bool = Fal
         acked = False
         for retry in range(5):
             ser.write(pkt)
-            cmd, data = read_frame(ser, timeout_s=1.0)
+            # Block 0 makes the bootloader erase all 58 application pages first
+            # (1-2 s, with USART2 not serviced), so give its reply longer.
+            cmd, data = read_frame(ser, timeout_s=5.0 if current_block == 0 else 1.0)
             if cmd == MCU_CMD_UPDATE_STATUS and len(data) >= 2:
                 last_idx = (data[0] << 8) | data[1]
                 if last_idx == current_block:

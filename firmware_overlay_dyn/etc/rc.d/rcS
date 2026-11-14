@@ -166,6 +166,16 @@ modprobe galcore registerMemBase=0xE0F00000 irqLine=32 contiguousSize=0x800000 p
 modprobe cfg80211
 modprobe rtl8811cu rtw_drv_log_level=2 rtw_country_code=US
 
+# 2026-11-14: tell custom_ui that rcS owns the BlueZ bring-up (further
+# down) and it's in progress. Created before custom_ui starts, removed when
+# the bring-up finishes (success or failure). custom_ui's
+# ensure_bluetooth_daemon_running() waits on this marker instead of a fixed
+# 8s: on a slow warm reboot it used to give up first and start its own
+# dbus-daemon/bluetoothd while rcS's hci-updown was still toggling the
+# adapter, leaving it half-configured until the BT watchdog repaired it a
+# minute or two later.
+touch /tmp/bt_bringup.running
+
 # --- Instant UI Launch & Auto-Respawn Supervisor ---
 # Launch custom_ui immediately so LVGL display initializes in <1 second.
 # Auto-respawn supervisor protects against transient voltage dips during engine crank.
@@ -333,6 +343,7 @@ modprobe rtl8811cu rtw_drv_log_level=2 rtw_country_code=US
 
 	/usr/sbin/bluetoothd -n >/tmp/bluetoothd.log 2>&1 &
 	echo "custom_ui rootfs: BlueZ bring-up complete."
+	rm -f /tmp/bt_bringup.running
 ) &
 
 # 2026-11-13: boot confirmation for U-Boot's `bootcheck` (boot-loop

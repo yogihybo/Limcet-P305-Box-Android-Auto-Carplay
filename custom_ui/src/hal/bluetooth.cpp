@@ -800,9 +800,26 @@ void ensure_bluetooth_daemon_running() {
         // real, less disruptive fix is to give rcS's own bring-up a real
         // chance to win first. Poll for up to 8s (40x200ms) before concluding BlueZ
         // genuinely isn't up (firmware upload over 115200 baud UART takes ~3.8s alone).
-        for (int i = 0; i < 40 && !blueZAlreadyActive; ++i) {
+        // 2026-11-14: wait on rcS's own "bring-up in progress" marker
+        // (firmware_overlay_dyn/etc/rc.d/rcS creates /tmp/bt_bringup.running
+        // before launching custom_ui and removes it when its BlueZ bring-up
+        // finishes) rather than a fixed 8s. Real report: Bluetooth sometimes
+        // took a minute or two to come back after a warm reboot -- the chip's
+        // reset + firmware upload + hci-updown retries can outlast 8s, at
+        // which point this function started its own dbus-daemon/bluetoothd
+        // while rcS was still bringing hci0 up, leaving the adapter
+        // half-configured until the BT watchdog repaired it. Without the
+        // marker (an older rcS), behavior is unchanged: 8s, then fall back.
+        struct stat marker {};
+        for (int i = 0; i < 150 && !blueZAlreadyActive; ++i) {  // 150 x 200ms = 30s cap
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
             blueZAlreadyActive = is_bluez_active();
+            bool rcs_in_progress = stat("/tmp/bt_bringup.running", &marker) == 0;
+            if (!rcs_in_progress && i >= 39) break;  // past the 8s window and rcS isn't (or is no longer) bringing BT up
+        }
+        if (!blueZAlreadyActive && stat("/tmp/bt_bringup.running", &marker) == 0) {
+            std::printf("%s [BT] rcS BlueZ bring-up still in progress after 30s -- taking over\n",
+                        core::log_timestamp().c_str());
         }
         if (blueZAlreadyActive) {
             std::printf("%s [BT] BlueZ became active while waiting -- rcS bring-up won the race, skipping duplicate bring-up\n",

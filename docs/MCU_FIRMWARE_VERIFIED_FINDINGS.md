@@ -4691,3 +4691,25 @@ The SoC kernel declares `Goodix-TS` at `0x5D` (7-bit), which is `0xBA` 8-bit, on
 **BD37033 audio processor: deliberately not reproduced.** The factory initialises it over I2C1 at `0x80` on variant 3 (`docs/1.6_BD37033.md` sections 17-21). On the Prado that path never worked in testing and caused problems with the screen colours, so the clean-room app does not touch it.
 
 **USART1: part of the audio subsystem; not reproduced.** The factory enables it TX-only (`CR1 = 0x2048`) on PA9, drained from a 250-byte ring (`0x200007F4+0x133`) by the TC interrupt (`0x08007DEC`). Its only writer, `0x0800A7AA`, sends `2E cmd len data chk` frames, the SoC protocol's framing, with commands `0x03` (8 B), `0x04` (7 B) and `0x71` (9 B). Its callers, `0x0800A824`, `0x0800AABA` and `0x0800AB28`, are reached only through a message-handler table at `0x0800D298`. That table sits directly after the audio module's handler table (`0x0800D278`, which includes the BD37033 init `0x0800A587`), which in turn follows the BD37033 register table (`0x0800D250`). So USART1 is very likely the link to an external audio module, part of the same sound subsystem that never worked on the Prado. The clean-room app leaves PA9 a floating input and doesn't implement it.
+
+### 44. Clean-room SoC command table reduced to the Prado factory's five commands (2026-11-15)
+
+The Prado factory app's SoC command table at `0x0800B98C` has exactly five `{cmd, handler}` entries:
+
+| Command | Handler |
+|---|---|
+| `0x81` | `0x0800643C` |
+| `0x82` | `0x080065D8` |
+| `0xA0` | `0x08006468` |
+| `0xFF` | `0x0800660E` |
+| `0xE1` | `0x0800665C` |
+
+The clean-room app also dispatched four commands taken from the DCn32 (Volvo) image:
+- `0x84` (audio route: `AT+AUDROUTE` plus PC13/PC2);
+- `0x85` (app protocol);
+- `0x87` (BT AT relay);
+- `0x88` (TEA challenge/response).
+
+`custom_ui`'s own notes record that captures on the car show the Prado MCU never answers `0x88`, and that `0x84` is a different vehicle variant's command. These four are now not dispatched, and their handlers and state are removed. `custom_ui`'s start-up `0x84 {00,03}` is therefore ignored, as the factory ignores it; before this it set PC13 low and PC2's output bit.
+
+Both builds compile cleanly. **Not bench-tested:** the end-to-end run planned to confirm it (section 40's routine with this build) was not completed.

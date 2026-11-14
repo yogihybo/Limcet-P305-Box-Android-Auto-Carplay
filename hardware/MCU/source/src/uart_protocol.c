@@ -462,48 +462,8 @@ static void shared_relay_dispatch(uint8_t state) {
  * SRAM structs, or two independent flags. Implemented here as a SEPARATE
  * local state field (not reusing McuSettings.flag_5e) to avoid conflating
  * two real values this session couldn't confirm are the same variable. */
-static uint8_t g_audio_route_state = 0;
-static uint8_t g_audio_route_shadow = 0;
-static uint8_t g_audio_route_gate = 0; /* real POR/bss default is 0, which
-                                          * means the dispatcher call fires
-                                          * immediately by default here --
-                                          * unlike id=0x11's own gate, which
-                                          * defaults closed. Real firmware
-                                          * behavior, not an inconsistency. */
+/* (CMD 0x84 audio-route state removed: not a Prado command, section 44.) */
 
-static void handle_audio_route(const UartPacket *p) {
-    if (p->len < 1) {
-        return;
-    }
-    /* Real firmware reads payload[1] (offset +3 in frame buffer).
-     * Support both 2-byte payloads (value at payload[1]) and 1-byte payloads (value at payload[0]). */
-    uint8_t value = (p->len >= 2) ? (p->payload[1] & 0x0F) : (p->payload[0] & 0x0F);
-    if (value >= 6) {
-        return;
-    }
-
-    g_audio_route_state = value;
-    if (g_audio_route_state == g_audio_route_shadow) {
-        return;
-    }
-    g_audio_route_shadow = g_audio_route_state;
-
-    if (value == 0) {
-        static const uint8_t kAudRoute1[] = "AT+AUDROUTE=1\r\n";
-        usart3_relay_send(kAudRoute1, sizeof(kAudRoute1) - 1);
-        if (g_audio_route_gate == 0) {
-            shared_relay_dispatch(0);
-        }
-    } else if (value == 3) {
-        static const uint8_t kAudRoute2[] = "AT+AUDROUTE=2\r\n";
-        usart3_relay_send(kAudRoute2, sizeof(kAudRoute2) - 1);
-        if (g_audio_route_gate == 0) {
-            shared_relay_dispatch(1);
-        }
-    }
-    /* value == 1,2,4,5: state stored above, no further action -- matches
-     * real firmware exactly. */
-}
 
 /* handle_diag_read_mem() (CMD 0x90) REMOVED 2026-08-30 -- see the
  * dispatch table's own comment below for the full explanation. This was
@@ -578,34 +538,11 @@ void USART3_IRQHandler(void) {
     }
 }
 
-static void handle_bt_at_relay(const UartPacket *p) {
-    if (p->len > 0) {
-        usart3_relay_send(p->payload, p->len);
-    }
-}
 
 /* 0x88: TEA-cipher anti-clone challenge/response. Real algorithm AND real key
  * confirmed via disassembly (see tea_crypto.h/.c for the full derivation,
  * including the real firmware's .data init-table trace that located the key
  * bytes in flash). */
-static void handle_crypto_challenge(const UartPacket *p) {
-    if (p->len < 8) {
-        return;
-    }
-    uint32_t v0 = ((uint32_t)p->payload[0] << 24) | ((uint32_t)p->payload[1] << 16) |
-                  ((uint32_t)p->payload[2] << 8)  |  (uint32_t)p->payload[3];
-    uint32_t v1 = ((uint32_t)p->payload[4] << 24) | ((uint32_t)p->payload[5] << 16) |
-                  ((uint32_t)p->payload[6] << 8)  |  (uint32_t)p->payload[7];
-
-    tea_decrypt_block(&v0, &v1, tea_real_key);
-
-    uint8_t reply[8];
-    reply[0] = (uint8_t)(v0 >> 24); reply[1] = (uint8_t)(v0 >> 16);
-    reply[2] = (uint8_t)(v0 >> 8);  reply[3] = (uint8_t)(v0);
-    reply[4] = (uint8_t)(v1 >> 24); reply[5] = (uint8_t)(v1 >> 16);
-    reply[6] = (uint8_t)(v1 >> 8);  reply[7] = (uint8_t)(v1);
-    uart_send_packet(MCU_CMD_CRYPTO_REPLY, reply, 8);
-}
 
 static McuSettings g_settings;
 
@@ -795,18 +732,7 @@ static void handle_reboot_bootloader(const UartPacket *p) {
  * (storing the 3 bytes) is implemented; the ACK below is a reasonable
  * protocol-consistent approximation (echo the command back), not a
  * byte-exact match to real hardware. */
-static uint8_t g_app_protocol_state[3];
 
-static void handle_app_protocol(const UartPacket *p) {
-    if (p->len < 3) {
-        return;
-    }
-    g_app_protocol_state[0] = p->payload[0];
-    g_app_protocol_state[1] = p->payload[1];
-    g_app_protocol_state[2] = p->payload[2];
-
-    uart_send_packet(SOC_CMD_APP_PROTOCOL, g_app_protocol_state, 3);
-}
 
 /* 0xFF: System State Reset. Real firmware (0x080088E8) is a sub-command
  * dispatch on payload[0] (values 0-9 are genuinely no-op there too; only
@@ -858,15 +784,17 @@ void uart_protocol_poll_mic_sense(void) {
     uart_send_composite_vehicle_status();
 }
 
+/* Exactly the Prado factory app's SoC command table (0x0800B98C: 0x81, 0x82,
+ * 0xA0, 0xFF, 0xE1; MCU_FIRMWARE_VERIFIED_FINDINGS.md section 44). CMD 0x84
+ * (audio route), 0x85, 0x87 (BT AT relay) and 0x88 (TEA challenge) are DCn32
+ * (Volvo) commands the Prado MCU ignores -- captures on the car show it never
+ * answers 0x88 -- so they are not dispatched; custom_ui's start-up 0x84 is
+ * ignored here exactly as the factory ignores it. */
 static const UartCmdDispatchEntry g_uart_cmd_table[] = {
     { SOC_CMD_INIT_HANDSHAKE,  {0}, handle_init_handshake },
     { SOC_CMD_APP_STATE,       {0}, handle_app_state },
-    { SOC_CMD_AUDIO_ROUTE,     {0}, handle_audio_route },
-    { SOC_CMD_BT_AT_RELAY,     {0}, handle_bt_at_relay },
-    { SOC_CMD_CRYPTO_CHALLENGE,{0}, handle_crypto_challenge },
     { SOC_CMD_SYNC_SETTINGS,   {0}, handle_sync_settings },
     { SOC_CMD_REBOOT_BOOTLDR,  {0}, handle_reboot_bootloader },
-    { SOC_CMD_APP_PROTOCOL,    {0}, handle_app_protocol },
     { SOC_CMD_SYSTEM_RESET,    {0}, handle_system_reset }
     /* SOC_CMD_DIAG_READ_MEM (0x90) REMOVED 2026-08-30 -- disproven, not
      * just unconfirmed. Directly read the real 9-entry (cmd,handler_ptr)

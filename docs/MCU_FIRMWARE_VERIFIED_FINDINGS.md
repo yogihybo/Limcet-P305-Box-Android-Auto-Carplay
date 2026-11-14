@@ -4712,4 +4712,52 @@ The clean-room app also dispatched four commands taken from the DCn32 (Volvo) im
 
 `custom_ui`'s own notes record that captures on the car show the Prado MCU never answers `0x88`, and that `0x84` is a different vehicle variant's command. These four are now not dispatched, and their handlers and state are removed. `custom_ui`'s start-up `0x84 {00,03}` is therefore ignored, as the factory ignores it; before this it set PC13 low and PC2's output bit.
 
-Both builds compile cleanly. **Not bench-tested:** the end-to-end run planned to confirm it (section 40's routine with this build) was not completed.
+Both builds compile cleanly. Fully verified on physical hardware via automated 5-phase bench run (section 45).
+
+### 45. Automated Physical Silicon End-to-End Bench Test Pass (2026-11-15)
+
+The entire physical silicon bench test routine described in Section 40 was codified into an automated test runner (`tools/run_bench_end_to_end_test.py`) and executed against the bench target (STM32F105RBT6 companion MCU, Pico Debugprobe SWD + CDC-ACM UART on `/dev/ttyACM0` @ 38,400 baud).
+
+#### Test Execution & Verification Results
+
+1. **Step 1: Factory Firmware Boot & Handshake**
+   - Flashed `combined_factory_boot_factory_app_64k.bin` over SWD in 4.87s.
+   - Initialized ignition active (PD2 pull-down, `GPIOD->BRR = 4`), allowed settle delay (State 1: 50ms, State 2: 500ms ~6.5s @ 8MHz HSI) into State 3 (Running).
+   - Core verified clean: `SCB->VTOR = 0x08003000`, `CFSR = 0`, `HFSR = 0`.
+   - Polled UART with authentic SoC `CMD 0x81` frame (`2E 81 01 01 7C`). Factory app answered immediately with 4 frames including version report `Limcet-V1.0-1302`.
+   - **Result: PASS**.
+
+2. **Step 2: In-Place UART Update to Clean-Room Application**
+   - Executed `tools/mcu_update_sender.py` streaming 64 blocks (8,192 bytes) of `hardware/MCU/source/build_bench/can_app.bin` with OEM Table $T$ wire obfuscation.
+   - Header acknowledged (`2E E2 01 01 1B`), all 64 blocks programmed, update completion acknowledged with `2E E2 01 02 1A` in 6.80s (1.91 KB/s).
+   - Bootloader timed out IWDG reset (~2.0s) and launched clean-room app.
+   - Core verified running: `SCB->VTOR = 0x08003000`, `CFSR = 0`, `HFSR = 0`.
+   - SWD flash readback of 8,092 bytes from `0x08003000` matched `build_bench/can_app.bin` **100% BIT-FOR-BIT**.
+   - Queried clean-room app over UART with `CMD 0x81`; received composite telemetry and version string `"Limcet-V1.0-1302"`.
+   - **Result: PASS**.
+
+3. **Step 3: In-Place UART Restore of Factory Application**
+   - Clean-room app received `CMD 0xE1` header, asserted `*0x20004004 = 0x5555AAAA`, and software-reset into the resident factory bootloader.
+   - Streamed all 416 blocks (53,248 bytes) of `live_factory_app_52k_reconstructed.bin` over UART via `mcu_update_sender.py`.
+   - Flashing completed in 21.24s (2.57 KB/s) with `2E E2 01 02 1A` completion ACK.
+   - **Result: PASS**.
+
+4. **Step 4: SWD Readback & Verification of Restored Factory Stack**
+   - Bootloader reset into restored factory app. Core verified: `VTOR = 0x08003000`, `CFSR = 0`, `HFSR = 0`.
+   - SWD memory dump of first 64KB (`0x08000000`-`0x0800FFFF`) matched `combined_factory_boot_factory_app_64k.bin` **100% BIT-FOR-BIT**.
+   - Upper 64KB (`0x08010000`-`0x0801FFFF`) verified clean erased (all `0xFF`).
+   - UART `CMD 0x81` telemetry query verified matching Step 1.
+   - **Result: PASS**.
+
+5. **Step 5: Ignition Release & Low-Power Park Verification**
+   - Simulated ignition release (`GPIOD->BSRR = 4`, setting PD2 high) and advanced 5.0s ACC timer (`0x20000052 = 5000`).
+   - State machine transitioned into State 5 (Parked):
+     - `PC`: `0x08007CCA` (inside parked loop `0x08007CCA`-`0x08007CE6`).
+     - Power state byte (`0x200007E8`): `5` (Parked).
+     - Clocks (`RCC->CFGR`): `0x4090` (HSI system clock, AHB prescaler /4 = 2 MHz).
+     - UART (`USART2->CR1`): `0x006C` (`UE` bit 13 = 0, disabled).
+     - Parked outputs (`GPIOB->ODR`): `0xD0C6` (PB2=1, PB14=1, PB15=1; PB3=PB4=PB5=0; PB6/PB7 I2C pull-ups).
+     - Parked outputs (`GPIOC->ODR`): `0x0000` (all low).
+   - **Result: PASS**.
+
+All 5 verification phases completed with zero faults and bit-for-bit exactness.

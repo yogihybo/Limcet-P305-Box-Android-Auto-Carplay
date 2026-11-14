@@ -14,6 +14,8 @@ ZIP_OUTPUT="${OUTPUT_DIR}/mcu_update_package.zip"
 
 CONFIG_FILE="${SCRIPT_DIR}/can_config_template.json"
 PRESET=""
+DO_OBFUSCATE=1
+DIRECT_PACKAGE=0
 
 print_usage() {
     cat << EOF
@@ -22,17 +24,19 @@ Usage: $(basename "$0") [OPTIONS]
 Options:
   -c, --config FILE       Path to custom CAN JSON config file
   -p, --preset PRESET     Vehicle preset (e.g. toyota_prado_150)
-  -i, --input BINARY      Input stock can_app.bin (default: hardware/MCU/can_app.bin)
+  -i, --input BINARY      Input application binary (default: hardware/MCU/can_app.bin)
   -o, --output-zip ZIP    Output zip file path
+  -d, --direct            Direct packaging (pre-compiled binary, skip python CAN patcher)
+  --no-obfuscate          Do not apply wire obfuscation (leave binary raw/plaintext)
   -h, --help              Show this help message
 
 Description:
-  Rebuilds can_app.bin with configured CAN bus codes and packages it with the
-  required auto_upgrade.txt trigger file into a ready-to-flash USB root structure.
+  Packages STM32 companion MCU application firmware with the auto_upgrade.txt
+  trigger file for USB flashing via the head unit's libMcuCenter.so daemon.
+  By default, applies the factory bootloader byte obfuscation transform:
+    wire[i] = ~(flash[i] - T[i % 128]) & 0xFF
 EOF
 }
-
-DIRECT_PACKAGE=0
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -54,6 +58,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         -d|--direct)
             DIRECT_PACKAGE=1
+            shift
+            ;;
+        --no-obfuscate)
+            DO_OBFUSCATE=0
             shift
             ;;
         -h|--help)
@@ -91,11 +99,6 @@ traffic on this vehicle, steering-wheel button presses could
 spuriously trigger the reverse-camera/parking-sensor handler while
 driving.
 
-There is also no known checksum/CRC covering the flash image itself
-(only the runtime UART wire-protocol has one) -- this tooling has not
-confirmed whether the resident bootloader validates the image any
-further than YMODEM's own per-block transport CRC.
-
 Do not flash this to a real vehicle without independently confirming
 both CAN IDs via a live capture on your specific Prado first. See
 docs/1.3.1_MCU_FIRMWARE_DECOMPILATION.md and docs/1.2_CANBUS.md.
@@ -115,20 +118,22 @@ if [[ ${DIRECT_PACKAGE} -eq 0 ]]; then
 else
     echo "Mode:           Direct Packaging (Pre-compiled Binary)"
 fi
+echo "Obfuscation:    $([[ ${DO_OBFUSCATE} -eq 1 ]] && echo 'Enabled (OEM bootloader wire format)' || echo 'Disabled (Raw plaintext)')"
 
 # Prepare staging directories
 rm -rf "${OUTPUT_DIR}"
 mkdir -p "${PACKAGE_DIR}"
 
+RAW_STAGING="${OUTPUT_DIR}/can_app_plain.bin"
 REBUILT_BIN="${PACKAGE_DIR}/can_app.bin"
 TRIGGER_FILE="${PACKAGE_DIR}/auto_upgrade.txt"
 
 if [[ ${DIRECT_PACKAGE} -eq 1 ]]; then
-    cp "${STOCK_BIN}" "${REBUILT_BIN}"
-    echo "[+] Copied pre-compiled binary: ${REBUILT_BIN}"
+    cp "${STOCK_BIN}" "${RAW_STAGING}"
+    echo "[+] Staged pre-compiled binary: ${RAW_STAGING}"
 else
     # Run Python rebuilder
-    REBUILD_ARGS=("python3" "${SCRIPT_DIR}/mcu_rebuild.py" "${STOCK_BIN}" "-o" "${REBUILT_BIN}")
+    REBUILD_ARGS=("python3" "${SCRIPT_DIR}/mcu_rebuild.py" "${STOCK_BIN}" "-o" "${RAW_STAGING}")
     if [[ -f "${CONFIG_FILE}" && -z "${PRESET}" ]]; then
         REBUILD_ARGS+=("--config" "${CONFIG_FILE}")
     fi
@@ -136,6 +141,14 @@ else
         REBUILD_ARGS+=("--preset" "${PRESET}")
     fi
     "${REBUILD_ARGS[@]}"
+fi
+
+# Apply obfuscation if enabled
+if [[ ${DO_OBFUSCATE} -eq 1 ]]; then
+    echo "[*] Applying OEM wire-obfuscation transform (table T @ 0x08001F72)..."
+    python3 "${SCRIPT_DIR}/mcu_obfuscate.py" --obfuscate "${RAW_STAGING}" -o "${REBUILT_BIN}"
+else
+    cp "${RAW_STAGING}" "${REBUILT_BIN}"
 fi
 
 # Create trigger file (0 bytes)
@@ -155,16 +168,12 @@ echo "[+] Update Package Created Successfully!"
 echo "    Staging Directory: ${PACKAGE_DIR}/"
 echo "    Files:"
 echo "      - ${PACKAGE_DIR}/auto_upgrade.txt ($(stat -c%s "${TRIGGER_FILE}") bytes)"
-echo "      - ${PACKAGE_DIR}/can_app.bin ($(stat -c%s "${REBUILT_BIN}") bytes, MD5: $(md5sum "${REBUILT_BIN}" | awk '{print $1}'))"
+echo "      - ${PACKAGE_DIR}/can_app.bin ($(stat -c%s "${REBUILT_BIN}") bytes, SHA256: $(sha256sum "${REBUILT_BIN}" | awk '{print $1}'))"
 echo "    Deployable ZIP:    ${ZIP_OUTPUT}"
-echo ""
-echo "!! WARNING: This flashes the companion STM32 MCU over YMODEM. A bad image"
-echo "!! can leave the CAN/steering-wheel-control subsystem non-functional or"
-echo "!! misbehaving until re-flashed with a known-good binary. Keep a copy of"
-echo "!! the original ${STOCK_BIN} before deploying a patched image."
 echo ""
 echo "Deployment Instructions:"
 echo "  1. Copy 'auto_upgrade.txt' and 'can_app.bin' to the ROOT of a FAT32 USB flash drive."
 echo "  2. Insert the USB drive into the CarPlay module USB port."
-echo "  3. The system will detect 'auto_upgrade.txt' and automatically flash the MCU via YMODEM."
+echo "  3. The system daemon libMcuCenter.so will detect 'auto_upgrade.txt' and flash"
+echo "     the STM32 MCU over /dev/ttyHS0 using the OEM 0x2E protocol (E1/E2/E3/E4)."
 echo "======================================================================"

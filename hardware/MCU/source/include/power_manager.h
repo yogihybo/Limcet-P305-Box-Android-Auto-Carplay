@@ -27,6 +27,7 @@ void power_manager_init(void);
 void power_manager_task(void);
 power_state_t power_manager_get_state(void);
 void power_manager_notify_can_activity(void);
+void power_manager_notify_uart_activity(void);
 void power_manager_feed_watchdog(void);
 
 #endif /* POWER_MANAGER_H */

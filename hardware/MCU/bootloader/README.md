@@ -2,35 +2,50 @@
 
 A clean-room reimplementation of a first-stage IAP (In-Application
 Programming) bootloader for the STM32F105RBT6 companion MCU, linked to
-run at `0x08000000`-`0x08003FFF` (below the application's own
-`0x08004000` base). This is **not** an extraction or dump of the real
-vendor bootloader that ships on actual hardware -- see the correction
-notice below before trusting anything about its real-world accuracy.
+run at `0x08000000`-`0x080027FF` (below Page 5's `0x08002800` flag page and
+the application's own `0x08003000` base).
 
 ---
 
-## What it actually does (verified against its own current source)
+## What it does (Section 36 Overhaul — Drop-in Factory Compatible)
 
-`src/main.c` -- the whole real control flow:
+`src/main.c` and `src/update_protocol.c` implement the exact, authentic OEM
+update protocol and safety mechanisms matching the factory bootloader:
 
-1. On boot, check a fixed SRAM cell (`BOOTLOADER_MAGIC_ADDR`,
-   `0x20004004`) for a magic cookie (`BOOTLOADER_MAGIC_VAL`,
-   `0x5555AAAA`), then immediately clear it.
-2. If the magic wasn't set and a valid-looking application image
-   already exists at `0x08004000` (plausible stack pointer + reset
-   vector, checked via `is_app_valid()`), jump straight there.
-3. Otherwise, initialize USART2 at 38400 baud and run
-   `ymodem_receive_and_flash()` (`src/ymodem.c`) -- a standard YMODEM
-   receiver (`SOH`/`STX`/`EOT` framing, CRC16) that erases the
-   application flash region and writes each received block via
-   `flash_write_page()`.
-4. On success, jump to the newly-flashed application. On failure,
-   trigger a system reset via `AIRCR` and try again from the top.
+1. **Clock Configuration**: 72 MHz clock tree (`CFGR2 = 0x00010644`, PLL2 *8,
+   PREDIV1 /5, PLL *9), with bounded HSE wait (~0x1000 polls) falling back to
+   8 MHz HSI on crystal failure.
+2. **Boot Checks**:
+   - Checks if update requested via SRAM magic (`*0x20004004 == 0x5555AAAA`) OR
+     interrupted-update flag in flash (`*(uint16_t *)0x08002FFE == 0x5AA5`).
+   - If neither and application initial stack pointer passes masked check
+     (`(SP & 0x2FFE0000) == 0x20000000` at `0x08003000`), performs settling delay,
+     writes authentication handshake (`*0x20004000 = 0x20141003`), relocates VTOR
+     to `0x08003000`, sets MSP, and jumps to application `Reset_Handler`.
+3. **OEM IAP Update Mode**:
+   - Configures power rails: asserts `PC14=1`, `PB4=1`, `PC12=0` to keep ARK1680 SoC
+     rails powered during flashing.
+   - Starts hardware IWDG watchdog (prescaler /128, reload `0x270`, ~2.0s timeout).
+   - Initializes USART2 at 38400 8N1 on PA2 (TX) / PA3 (RX).
+   - Listens for head unit's `CMD 0xE1` header (`2E E1 02 <total_blocks_hi> <total_blocks_lo> <chk>`)
+     or `2E E1 08 ... "XINBAS" <chk>`.
+   - Replies with `2E E2 01 01 1B` (Ready ACK).
+4. **Flashing & De-obfuscation**:
+   - On the first block: erases the 58 application pages (`0x08003000`–`0x0801FFFF`)
+     and programs `0x5AA5` to `0x08002FFE` (interrupted-update guard).
+   - Receives each 128-byte block (`2E E3 82 <block_hi> <block_lo> <data[128]> <chk>`).
+   - De-obfuscates payload using the 128-byte table `T` at `0x08001F72`:
+     `flash[i] = (~wire[i] + T[i % 128]) & 0xFF`.
+   - Programs de-obfuscated halfwords into flash and replies with `CMD 0xE4` status.
+5. **Completion**:
+   - When all blocks are written: erases Page 5 (`0x08002800`) to clear the `0x5AA5` flag,
+     sends `2E E2 01 02 1A` (done), clears `0x20004004 = 0`, locks flash, and spins until
+     IWDG resets the MCU into normal boot.
 
 **This is a write-only IAP receiver.** There is no memory-read,
 flash-dump, or diagnostic-readback function anywhere in this source --
-`ymodem.c` exposes exactly `flash_unlock()`/`flash_lock()`/
-`flash_erase_app_pages()`/`flash_write_page()`/the receive loop, and
+`update_protocol.c` exposes exactly `flash_unlock()`/`flash_lock()`/
+`flash_erase_app_pages()`/`update_process_packet()`/the receive loop, and
 nothing else. Structurally, this matches the real, disassembly-
 confirmed one-way push flow this project traced on the SoC side
 (`libMcuCenter.so`'s `sendYModemDatas()`/`onSendUpdateReadyTimer()` --

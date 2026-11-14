@@ -2,6 +2,7 @@
 #include "can_driver.h"
 #include "tea_crypto.h"
 #include "gpio_driver.h"
+#include "power_manager.h"
 
 static uint8_t g_rx_state = 0;
 static uint8_t g_rx_cmd = 0;
@@ -26,6 +27,7 @@ void USART2_IRQHandler(void) {
     /* Check RXNE or ORE: read SR followed by DR clears ORE cleanly */
     if (sr & ((1UL << 5) | (1UL << 3))) {
         uint8_t byte = (uint8_t)(USART2->DR & 0xFF);
+        power_manager_notify_uart_activity();
         
         /* Only process payload byte if RXNE is set (data is valid) */
         if (sr & (1UL << 5)) {
@@ -103,14 +105,25 @@ void uart_protocol_init(uint32_t baudrate) {
     GPIOA->CRL |=  (0x08UL << 12);
     GPIOA->ODR |=  (1UL << 3);
     
-    /* Configure Baud Rate (Assuming APB1 = 36 MHz) */
-    /* 36000000 / 38400 = 937.5 -> Mantissa = 937 (0x3A9), Fraction = 0.5 * 16 = 8 -> 0x3A98 */
-    if (baudrate == 38400) {
-        USART2->BRR = 0x03A98;
+    /* Configure Baud Rate: adapt dynamically to system clock (HSI 8 MHz vs PLL 72 MHz) */
+    uint32_t sws = (RCC->CFGR >> 2) & 3UL;
+    if (sws == 0) {
+        /* HSI 8 MHz clock: PCLK1 = 8 MHz (bench board without external 25MHz crystal) */
+        /* 8000000 / (16 * 38400) = 13.0208 -> Mantissa = 13 (0x0D), Fraction = 0 -> BRR = 0x00D0 */
+        if (baudrate == 38400) {
+            USART2->BRR = 0x00D0;
+        } else {
+            USART2->BRR = (8000000 + (baudrate / 2)) / baudrate;
+        }
     } else {
-        /* Standard calculation */
-        uint32_t pclk1 = 36000000;
-        USART2->BRR = (pclk1 + (baudrate / 2)) / baudrate;
+        /* PLL 72 MHz clock: PCLK1 = 36 MHz (vehicle board with 25MHz crystal) */
+        /* 36000000 / (16 * 38400) = 58.59375 -> Mantissa = 58 (0x3A), Fraction = 10 (0x0A) -> BRR = 0x03AA */
+        if (baudrate == 38400) {
+            USART2->BRR = 0x03AA;
+        } else {
+            uint32_t pclk1 = 36000000;
+            USART2->BRR = (pclk1 + (baudrate / 2)) / baudrate;
+        }
     }
     
     /* Enable Transmitter, Receiver, and RXNE Interrupt */
@@ -187,7 +200,8 @@ void uart_send_lcd_source(uint8_t mode) {
 }
 
 void uart_send_version_report(void) {
-    static const uint8_t kMcuVersion[28] = "DCn32-VOLVO-V2.10-20240909  ";
+    /* Real firmware version string reported to about screen / SoC: Limcet-V1.0-1302 */
+    static const uint8_t kMcuVersion[28] = "Limcet-V1.0-1302            ";
     uart_send_packet(MCU_CMD_VERSION_REPORT, kMcuVersion, 28);
 }
 
@@ -578,7 +592,7 @@ static void handle_crypto_challenge(const UartPacket *p) {
     reply[2] = (uint8_t)(v0 >> 8);  reply[3] = (uint8_t)(v0);
     reply[4] = (uint8_t)(v1 >> 24); reply[5] = (uint8_t)(v1 >> 16);
     reply[6] = (uint8_t)(v1 >> 8);  reply[7] = (uint8_t)(v1);
-    uart_send_packet(SOC_CMD_CRYPTO_CHALLENGE, reply, 8);
+    uart_send_packet(MCU_CMD_CRYPTO_REPLY, reply, 8);
 }
 
 static McuSettings g_settings;

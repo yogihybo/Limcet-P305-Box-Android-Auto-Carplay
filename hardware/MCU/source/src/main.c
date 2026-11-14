@@ -20,9 +20,16 @@ static void clock_init(void) {
     RCC->CR &= ~((1UL << 24) | (1UL << 26)); /* PLLON = 0, PLL2ON = 0 */
     while ((RCC->CR & ((1UL << 25) | (1UL << 27))) != 0) {} /* Wait for PLLRDY=0, PLL2RDY=0 */
 
-    /* Enable HSE (25.000 MHz crystal on STM32F105 Connectivity Line board) */
+    /* Enable HSE (25.000 MHz crystal on STM32F105 Connectivity Line board)
+     * with bounded timeout (~0x1000 loops) matching factory SetSysClockTo72 */
     RCC->CR |= (1UL << 16); /* HSEON */
-    while ((RCC->CR & (1UL << 17)) == 0) {} /* Wait for HSERDY */
+    uint32_t hse_counter = 0x1000;
+    while ((RCC->CR & (1UL << 17)) == 0 && --hse_counter) {} /* Wait for HSERDY */
+
+    if (hse_counter == 0) {
+        /* Crystal failed to start: stay on 8 MHz HSI safely rather than locking up */
+        return;
+    }
 
     /* FLASH Latency = 2 wait states + PRFTBE (prefetch buffer enable) for 72MHz (RM0008 §3.2.3) */
     *((volatile uint32_t *)0x40022000UL) = 0x12; /* FLASH_ACR: PRFTBE | 2WS */

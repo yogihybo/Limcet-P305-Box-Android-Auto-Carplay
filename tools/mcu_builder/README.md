@@ -17,9 +17,10 @@ This toolkit provides tools for analyzing, decompiling, patching, and rebuilding
 
 ## 1. Overview & Directory Structure
 
+- `mcu_obfuscate.py`: Obfuscates plaintext firmware images into the OEM bootloader wire format (`wire[i] = ~(flash[i] - T[i % 128]) & 0xFF`), and de-obfuscates wire captures.
 - `mcu_decompile.py`: Disassembler and structural analyzer for `can_app.bin`. Extracts vector tables, active IRQs, UART command dispatch table, CAN mode dispatch tables, and handler disassemblies.
 - `mcu_rebuild.py`: Firmware patcher and builder. Modifies CAN IDs, mode dispatch tables, and opcode bitmasks to customize vehicle CAN profiles (e.g. Toyota Prado SWC `0x3C4`).
-- `build_mcu_update.sh`: Automated script to rebuild the MCU firmware and package it with `auto_upgrade.txt` into a FAT32 USB-ready update package.
+- `build_mcu_update.sh`: Automated script to rebuild/stage MCU firmware, apply OEM wire obfuscation, and package with `auto_upgrade.txt` into a FAT32 USB-ready update package.
 - `can_config_template.json`: JSON configuration file mapping CAN IDs and button bitmasks.
 
 ---
@@ -49,7 +50,7 @@ until re-flashed with a known-good binary — keep a copy of the original
 1. Copy both `auto_upgrade.txt` and `can_app.bin` from `tools/mcu_builder/output/usb_root/` directly to the **ROOT directory** of a FAT32-formatted USB flash drive.
 2. Turn on the vehicle and wait for the CarPlay head unit to boot.
 3. Insert the USB drive into the module's USB port.
-4. The system daemon `libMcuCenter.so` detects `auto_upgrade.txt` and initiates YMODEM transfer over `/dev/ttyHS0` to reflash the STM32 MCU.
+4. The system daemon `libMcuCenter.so` detects `auto_upgrade.txt`, triggers MCU reboot into bootloader (`CMD 0xE1`), and transmits `can_app.bin` over `/dev/ttyHS0` using the OEM `0x2E` framed protocol (`E1`/`E2`/`E3`/`E4`). The bootloader de-obfuscates each byte and flashes the 116 KB application region.
 
 ---
 

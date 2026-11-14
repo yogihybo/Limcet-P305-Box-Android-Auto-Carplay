@@ -33,7 +33,105 @@ Exit status 0 = clean. Needs `capstone` (pip install capstone).
 Usage: python3 tools/verify_mcu_reconstruction.py
 """
 import importlib.util, os, re, struct, sys
-from capstone import Cs, CS_ARCH_ARM, CS_MODE_THUMB
+
+try:
+    from capstone import Cs, CS_ARCH_ARM, CS_MODE_THUMB
+    md = Cs(CS_ARCH_ARM, CS_MODE_THUMB)
+except ImportError:
+    try:
+        import ctypes, ctypes.util
+        libname = ctypes.util.find_library("capstone") or "libcapstone.so.4"
+        class CtypesCapstone:
+            def __init__(self, libpath):
+                self.lib = ctypes.CDLL(libpath)
+                self.CS_ARCH_ARM = 0
+                self.CS_MODE_THUMB = 16
+
+                class cs_insn(ctypes.Structure):
+                    _fields_ = [
+                        ("id", ctypes.c_uint),
+                        ("address", ctypes.c_uint64),
+                        ("size", ctypes.c_uint16),
+                        ("bytes", ctypes.c_uint8 * 16),
+                        ("mnemonic", ctypes.c_char * 32),
+                        ("op_str", ctypes.c_char * 160),
+                        ("detail", ctypes.c_void_p),
+                    ]
+                self.cs_insn = cs_insn
+                self.handle = ctypes.c_size_t()
+                ret = self.lib.cs_open(self.CS_ARCH_ARM, self.CS_MODE_THUMB, ctypes.byref(self.handle))
+                if ret != 0:
+                    raise RuntimeError(f"cs_open failed: {ret}")
+
+            def __del__(self):
+                if hasattr(self, "handle") and self.handle.value:
+                    self.lib.cs_close(ctypes.byref(self.handle))
+
+            class InsnWrapper:
+                def __init__(self, raw):
+                    self.address = raw.address
+                    self.size = raw.size
+                    self.mnemonic = raw.mnemonic.decode("ascii", errors="ignore")
+                    self.op_str = raw.op_str.decode("ascii", errors="ignore")
+
+            def disasm(self, code_bytes, address, count=0):
+                code = bytes(code_bytes)
+                insns_ptr = ctypes.POINTER(self.cs_insn)()
+                n = self.lib.cs_disasm(self.handle, code, len(code), address, count, ctypes.byref(insns_ptr))
+                if n == 0 or not insns_ptr:
+                    return []
+                res = [self.InsnWrapper(insns_ptr[i]) for i in range(n)]
+                self.lib.cs_free(insns_ptr, n)
+                return res
+
+        md = CtypesCapstone(libname)
+    except Exception:
+        import subprocess, tempfile
+
+        class ObjdumpDisassembler:
+            def __init__(self):
+                self._cache = {}
+
+            def _disasm_block(self, code_bytes, base_addr):
+                key = (code_bytes, base_addr)
+                if key in self._cache:
+                    return self._cache[key]
+                with tempfile.NamedTemporaryFile(delete=True) as f:
+                    f.write(code_bytes)
+                    f.flush()
+                    cmd = ["arm-linux-gnueabihf-objdump", "-b", "binary", "-m", "arm", "-M", "force-thumb",
+                           f"--adjust-vma={base_addr}", "-D", f.name]
+                    res = subprocess.run(cmd, capture_output=True, text=True)
+                out = []
+                for line in res.stdout.splitlines():
+                    line = line.strip()
+                    if not line or ":" not in line:
+                        continue
+                    parts = line.split(":", 1)
+                    try:
+                        addr = int(parts[0], 16)
+                    except ValueError:
+                        continue
+                    rest = parts[1].strip().split(None, 2)
+                    if len(rest) >= 2:
+                        raw_hex = rest[0].replace(" ", "")
+                        class Insn: pass
+                        insn = Insn()
+                        insn.address = addr
+                        insn.mnemonic = rest[1]
+                        insn.op_str = rest[2] if len(rest) > 2 else ""
+                        insn.size = len(raw_hex) // 2
+                        out.append(insn)
+                self._cache[key] = out
+                return out
+
+            def disasm(self, code_bytes, base_addr, count=0):
+                insns = self._disasm_block(bytes(code_bytes), base_addr)
+                if count > 0:
+                    return insns[:count]
+                return insns
+
+        md = ObjdumpDisassembler()
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DUMPS = os.path.join(ROOT, "hardware/MCU/live_dumps/vehicle_live_2026-09-14")
@@ -46,7 +144,6 @@ MNEM = set(("push pop bl blx b bx ldr ldrb ldrh ldrsb ldrsh str strb strh mov mo
             "mul muls udiv sdiv uxtb uxth sxtb sxth tst nop tbb tbh ldm ldmia stm stmia stmdb mvn mvns rsb rsbs "
             "bfi ubfx sbfx mla mls adr cpsid cpsie dsb isb dmb clz rev umull smull neg negs ldrd strd").split())
 COND = r"(eq|ne|cs|cc|hs|lo|mi|pl|vs|vc|hi|ls|ge|lt|gt|le|al)$"
-md = Cs(CS_ARCH_ARM, CS_MODE_THUMB)
 
 # Reconstructed loads whose literal no silicon-read ldr happens to share, each
 # checked by hand (section 35): the loaded value fits its use.
@@ -193,7 +290,10 @@ def check_branches_and_literals(img, raw, base):
         for i in md.disasm(img[o:o + 4], base + o, 1):
             if any(gap[o:o + i.size]) or not re.fullmatch(r"(b|bl|cbn?z|b" + COND[1:-2] + r")(\.w|\.n)?", i.mnemonic):
                 continue
-            t = int(i.op_str.split("#")[-1], 16) - base
+            m_addrs = re.findall(r"0x[0-9a-fA-F]+", i.op_str)
+            if not m_addrs:
+                continue
+            t = int(m_addrs[-1], 16) - base
             if 4 <= t < len(img) - 2 and any(gap[t - 2:t + 2]) and is32(hw(t - 2)) and not is32(hw(t - 4)):
                 bad.append(f"0x{base + o:08X}: silicon-read {i.mnemonic} to 0x{base + t:08X} lands on the second "
                            f"halfword of a reconstructed 32-bit instruction")
@@ -209,6 +309,8 @@ def main():
     for name, stem, tool, var, base in TARGETS:
         img = open(os.path.join(DUMPS, stem + "_reconstructed.bin"), "rb").read()
         raw = open(os.path.join(DUMPS, stem + "_raw.bin"), "rb").read()
+        if hasattr(md, "load_image"):
+            md.load_image(img, base)
         pmap = load_map(tool, var)
         ann = check_annotations(img, base, pmap)
         calls, nknown = check_calls(img, raw, base, pmap)

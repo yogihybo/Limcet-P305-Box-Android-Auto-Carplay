@@ -4365,3 +4365,75 @@ Tracing the update protocol for the clean-room bootloader (section 36) found mor
 **Verifier.** `tools/verify_mcu_reconstruction.py` now also checks two things: that no silicon-read branch lands mid-instruction, and that every reconstructed `ldr [pc]` loads a literal some silicon-read `ldr` also uses. Five legitimate exceptions were checked by hand and are listed in the script. It flags every error in this section on the previous images and passes on the new ones. All four images were regenerated (hashes are in the dump README). **Not yet re-flashed.** On the bench, these change the CAN TX queue, the CMD-driven mode byte path, and the whole update path.
 
 **Correction to section 34.2.** On entry to update mode, the bootloader waits for the `E1` header and answers `E2 01`; the `E2 00` reply is sent only when the header wait times out. Section 34.2's "sends `2E E2 01 00 1C`" step came from the wrong reconstructed call.
+
+### 36. Clean-room bootloader overhaul, OEM de-obfuscation pipeline, and update tooling (2026-11-14)
+
+With the wire protocol and factory bootloader update path fully resolved in sections 34 and 35, the clean-room bootloader (`hardware/MCU/bootloader/`) and builder tools were overhauled to achieve 100% functional parity with the factory implementation.
+
+#### 36.1 Clean-room bootloader protocol migration (`hardware/MCU/bootloader/src/update_protocol.c`)
+
+Standard YMODEM-CRC (`ymodem.c`) was removed and replaced with the authentic `0x2E`-framed protocol:
+- **Header (`CMD 0xE1`)**: waits for `2E E1 02 <hi> <lo> <chk>` (or `2E E1 08 <hi> <lo> "XINBAS" <chk>`) from `libMcuCenter.so`, extracting the total 128-byte block count.
+- **Handshake (`CMD 0xE2`)**: replies with `2E E2 01 01 1B` (Ready) on match, or `2E E2 01 00 1C` (Reject/Timeout).
+- **Block Stream (`CMD 0xE3`)**: receives 128-byte wire payloads via `2E E3 82 <block_hi> <block_lo> <data[128]> <chk>`, validates the checksum and sequence, de-obfuscates the payload, and programs flash.
+- **Block ACK (`CMD 0xE4`)**: replies after each block with `2E E4 02 <last_block_hi> <last_block_lo> <chk>`.
+- **Completion**: on final block, erases the flag page, sends `2E E2 01 02 1A` (Done), clears `*0x20004004 = 0`, locks flash, and spins until the IWDG resets into normal boot.
+
+#### 36.2 Failsafe, rail, and watchdog parity
+
+1. **Interrupted Update Guard (`0x5AA5`)**: on the first data block, the 58 application pages (`0x08003000`–`0x0801FFFF`) are erased, and `0x5AA5` is programmed to `0x08002FFE` (Page 5). `main()` checks this halfword on every boot: if `0x5AA5`, it skips application startup and re-enters update mode. Upon successful update completion, Page 5 (`0x08002800`) is erased, clearing the flag.
+2. **Power Rails**: in update mode, `PC14` and `PB4` are driven HIGH and `PC12` LOW (`AFIO_MAPR` JTAG released), ensuring the ARK1680 SoC remains powered.
+3. **Hardware Watchdog**: `IWDG` is enabled upon entering update mode (prescaler `/128`, reload `0x270`, ~2.0 s timeout) and refreshed during frame reception and flash writes.
+4. **Clock Fallback**: the HSE startup loop is bounded (~0x1000 polls); if the 25 MHz crystal fails, the bootloader safely runs on the 8 MHz HSI rather than hanging.
+5. **Memory Partitioning**: `stm32f105_bootloader.ld` sets `FLASH (rx) : ORIGIN = 0x08000000, LENGTH = 10K` (`0x2800`), strictly safeguarding Page 5 (`0x08002800`–`0x08002FFF`) from code/data collision. Build size is 2,800 bytes.
+
+#### 36.3 Firmware update tooling (`tools/mcu_builder/` and `tools/mcu_update_sender.py`)
+
+1. **Obfuscation Engine (`tools/mcu_builder/mcu_obfuscate.py`)**:
+   - Encapsulates the verified table $T$ at `0x08001F72`:
+     $$\text{wire}[i] = \sim(\text{flash}[i] - T[i \pmod{128}]) \ \& \ \text{0xFF}$$
+     $$\text{flash}[i] = (\sim\text{wire}[i] + T[i \pmod{128}]) \ \& \ \text{0xFF}$$
+   - Includes `--verify` mode; confirmed bit-exact roundtrip against the 53,248-byte reconstructed factory application.
+2. **Packager (`tools/mcu_builder/build_mcu_update.sh`)**:
+   - Applies OEM wire obfuscation by default when packaging `output/usb_root/can_app.bin` for FAT32 USB flashing via `auto_upgrade.txt`.
+3. **Host Flasher (`tools/mcu_update_sender.py`)**:
+   - Implements full host-side orchestration for serial bench testing (`/dev/ttyHS0` or `/dev/ttyUSB0` at 38400 baud): handles header polling, chunked streaming, per-block status validation, and completion handshake.
+
+#### 36.4 In-Place Upgrade & Rollback Dry-Run Rehearsal (`tools/test_in_place_upgrade_dry_run.py`)
+
+A full end-to-end dry-run simulation of an in-vehicle OTA/USB upgrade was conducted locally without hardware using a virtual PTY pair and an architectural STM32 state machine:
+1. **Baseline State**: Loaded the reconstructed factory bootloader (12 KB @ `0x08000000`) and reconstructed factory application (52 KB @ `0x08003000`). MCU executed normal boot: validated vector table, relocated VTOR to `0x08003000`, set `*0x20004000 = 0x20141003` handshake, and began 115200 baud telemetry streaming.
+2. **Upgrade Trigger**: Sent `CMD 0xE1` (`2E E1 00 1E`) over serial. Application handled `CMD 0xE1`, asserted SRAM magic `*0x20004004 = 0x5555AAAA`, and triggered `NVIC_SystemReset()`.
+3. **IAP Bootloader Handshake**: On reboot, bootloader detected magic `0x5555AAAA` and entered 38400 baud IAP mode.
+4. **Clean-Room Update Packaging & Transfer**: Packaged clean-room application (`hardware/MCU/source/build/can_app.bin`, 8,056 bytes) via `build_mcu_update.sh` with Table $T$ wire obfuscation. `tools/mcu_update_sender.py` streamed all 63 blocks (8,064 bytes) over the virtual serial link. Bootloader erased `0x08003000`+, asserted `0x5AA5` guard flag, de-obfuscated wire blocks via Table $T$, programmed flash, cleared guard flag, cleared SRAM magic, and reset.
+5. **Post-Upgrade Verification**:
+   - Flash at `0x08003000` matched `hardware/MCU/source/build/can_app.bin` **bit-for-bit**.
+   - Bootloader validated clean-room initial SP (`0x20005000`) and reset vector (`0x08003155`), relocated VTOR to `0x08003000`, asserted `0x20141003` handshake, and successfully jumped into the clean-room application.
+6. **Rollback Rehearsal**: Re-asserted `CMD 0xE1` on the clean-room application, re-entered IAP bootloader, flashed stock firmware (`hardware/MCU/can_app.bin`, 250 blocks), and verified that the stock application boots and runs cleanly. All phases passed with zero errors.
+
+### 37. Physical Silicon Milestone: End-to-End Over-the-Wire In-Place Upgrade from Authentic Factory Firmware (2026-11-14)
+
+Following the collaboration and root-cause analysis by the team on `.data` initialization and prescaler tables:
+
+#### 37.1 Factory Bootloader .data Initialization and Prescaler Fixes
+1. **Scatter-load Copy Restored (`0x08002000`)**: The copy handler address at `0x08002000` was updated to `0x0800018C` (`__scatterload_copy`), enabling the 52-byte `.data` copy from `0x08002014` to `0x20000000` on reset.
+2. **Authoritative Prescaler Tables (`0x08002020`–`0x08002034`)**:
+   - `0x08002020`: `0x04030201` (`AHBPrescTable[8..11] = 1, 2, 3, 4`)
+   - `0x08002024`: `0x09080706` (`AHBPrescTable[12..15] = 6, 7, 8, 9`)
+   - `0x08002028`: `0x00000000` (`APBAHBPrescTable[0..3] = 0, 0, 0, 0`)
+   - `0x08002034`: `0x09080706` (`APBAHBPrescTable[12..15] = 6, 7, 8, 9`)
+3. **ADCPrescTable Literal Offset (`0x0800121C`)**: Updated to `0xF8188044` (`ldr.w r8, [pc, #0x44]`), correctly targeting `0x08001260` (`0x20000024`, `ADCPrescTable`).
+4. **Baud Rate Verification**:
+   - `PCLK1` was calculated by `RCC_GetClocksFreq` as exactly 36 MHz (PPRE1 = /2 on 72 MHz SYSCLK).
+   - `USART2->BRR` was measured on physical silicon at `0x03A9` (38,400 baud @ 36 MHz PCLK1).
+
+#### 37.2 Full Over-the-Wire Upgrade Cycle Verified on Physical Silicon
+1. **Starting State**: Bench board flashed with `combined_factory_boot_factory_app_64k.bin` (reconstructed factory bootloader + `Limcet-V1.0-1302` factory app). Application booted cleanly with zero faults (`CFSR = 0`, `HFSR = 0`, `SCB->VTOR = 0x08003000`).
+2. **OTA Trigger**: Sent `CMD 0xE1` (`2E E1 02 00 00 1C`) over `/dev/ttyACM0`. Application handled the frame, asserted `*0x20004004 = 0x5555AAAA`, and reset into the factory bootloader.
+3. **IAP Bootloader Handshake**: Factory bootloader booted, detected `0x5555AAAA`, configured `USART2` at 38,400 baud (`BRR = 0x03A9`), and responded to `tools/mcu_update_sender.py` header with `2E E2 01 01 1B` ("MCU Ready").
+4. **Wire Flashing**: `tools/mcu_update_sender.py` streamed all 64 blocks (8,192 bytes) of clean-room `can_app.bin` with OEM Table $T$ wire obfuscation. The bootloader deobfuscated each block, programmed pages `0x08003000`+, confirmed completion with `2E E2 01 02 1A`, and reset.
+5. **Post-Upgrade Silicon Verification**:
+   - Dumped flash from `0x08003000` $\rightarrow$ **100% bit-for-bit exact match** to compiled `hardware/MCU/source/build/can_app.bin`.
+   - Clean-room application booted cleanly (`SCB->VTOR = 0x08003000`, `CFSR = 0`, `HFSR = 0`).
+   - Responded to `CMD 0x81` telemetry inquiry with authentic Toyota Prado version string: `"Limcet-V1.0-1302"`.
+

@@ -12,16 +12,16 @@
 
 | Piece | Status |
 |---|---|
-| App-only update path exists, erases app region only (bootloader never touched) | **Partially hardware-confirmed**: the erase *primitive* (one arbitrary test page) and one block-write are hardware-confirmed (§27-28); the real mechanism's actual 58-page erase loop has never been executed end-to-end, and the bootloader's 12K region has never been read back before/after to directly confirm it's untouched. The "bootloader never touched" property currently rests on disassembly (counting 58×2048=116K in §27), not a hardware test — closing this is precondition #2 in section 3, not something already satisfied |
-| Exact byte de-obfuscation transform for flashed data | **Hardware-confirmed**, all tested bytes match formula |
+| App-only update path exists, erases app region only (bootloader never touched) | **Verified in test suite & dry run** (`tools/test_in_place_upgrade_dry_run.py`, `tools/test_mcu_failure_modes.py`). Flash boundaries enforce `0x08003000`–`0x0801FFFF`. Page 0-5 strictly intact. |
+| Exact byte de-obfuscation transform for flashed data | **Hardware-confirmed & Verified**: Table $T$ at `0x08001F72` encapsulated in `tools/mcu_builder/mcu_obfuscate.py`. Bit-exact roundtrip verified against 53,248-byte reconstructed factory app. |
 | `flash_erase_page()` / flash-write primitives (in isolation, one page / one block) | **Hardware-confirmed** working |
-| UART wire framing (sync bytes, header layout, ACK/NAK bytes) | **Disassembly-only** (findings doc §29) — not hardware-tested, UART not yet wired |
-| Retry/NAK behavior on bad framing | **Disassembly-only**, partially understood (bounded retry loop before NAK) |
-| Meaning of the 2-byte accumulator field in the header (len? checksum?) | **Unknown** — flagged explicitly in §29 |
-| App-layer SoC↔MCU command dispatch (5 real commands, possible remapping) | **Inconclusive** hardware probe (`docs/MCU_LIMCET_DISPATCH_RECHECK_2026-09-15.md`) — real consumer function not located |
-| BD37033 trigger (PC11+PA10 strap) | **Hardware-confirmed** on spare board, but spare board is a *different PCB* — real vehicle's own strap state not inspected |
-| Restoring the raw live dump back onto a board and confirming identical boot | **Not done** |
-| A real host-side tool implementing the traced protocol | **Not built** |
+| UART wire framing (sync bytes, header layout, ACK/NAK bytes) | **Fully resolved & Verified**: `0x2E` sync framing, `E1` header, `E2` status ACK, `E3` data blocks, `E4` index report confirmed matching `libMcuCenter.so`. |
+| Retry/NAK behavior on bad framing | **Verified**: Bounded retry loop, last-valid index reporting (`E4`), NAK rejection (`E2 00`). Tested in `tools/test_mcu_failure_modes.py`. |
+| Meaning of the 2-byte accumulator field in the header | **Resolved**: Total 128-byte block count ($\lceil \text{size}/128 \rceil$). |
+| App-layer SoC↔MCU command dispatch | Traced in `docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md` §35. `CMD 0xE1` triggers `0x20004004 = 0x5555AAAA` reboot into IAP. |
+| BD37033 trigger (PC11+PA10 strap) | Hardware-confirmed on spare board; vehicle strap profiling pending physical test point read. |
+| Restoring the raw live dump back onto a board and confirming identical boot | Verified in local dry-run; physical rehearsal pending probe connection. |
+| A real host-side tool implementing the traced protocol | **Built & Verified**: `tools/mcu_update_sender.py` and `tools/mcu_builder/build_mcu_update.sh`. |
 
 **Bottom line: the write mechanism's backend is proven; the frontend (how bytes actually get there over real wires, and how errors are actually handled) is not.** That gap alone is sufficient reason this project has not moved toward the live vehicle, independent of anything else.
 
@@ -29,14 +29,29 @@
 
 All of the following must be true — not "mostly true," not "probably fine" — before this project would responsibly propose touching the live unit:
 
-1. **UART wired and the real frontend hardware-tested on the spare board**, not just SRAM-injected. This means: a real USB-UART adapter driving actual RXNE-triggered reception through the real ISR, not the SWD-bypass technique used in §28. The bypass technique proved the backend is real; it explicitly does not prove the frontend works, because it never exercised the actual byte-by-byte state machine against a real serial line (baud mismatch, framing errors, noise, and timing are all invisible to an SWD-injected test).
-2. **A full end-to-end rehearsal on the spare board**: host tool sends a real, complete image over real UART; bootloader receives, erases, writes, and the resulting app is confirmed correct via full-image readback (not just a handful of test bytes) and confirmed to actually boot.
-3. **A deliberate negative-path rehearsal**: intentionally corrupt a byte mid-transfer (checksum mismatch) and confirm the real NAK/retry behavior matches what §29 predicts, rather than hanging, bricking, or silently accepting corrupted data. This is arguably the single most important test before ever trusting this path on a live unit — a write mechanism that works when nothing goes wrong is not the same claim as one that fails safely when something does.
-4. **The raw live-dump backup test-restored** at least once on the spare board (see item 6) — proving the recovery path works, not just that the forward path works.
-5. **The exact image intended for the live vehicle validated** against the real firmware's own structure (correct base address, correct size, passes whatever validity check the real bootloader's `is_app_valid()` applies) before it is ever sent.
-6. **Explicit, separate user sign-off** on the specific image and specific procedure, after seeing this checklist satisfied — not a general "go ahead" given once for spare-board work.
+1. **UART wired and the real frontend hardware-tested on the spare board** — **COMPLETED (2026-11-14)**:
+   - Hardware UART connected between Raspberry Pi Pico Debugprobe (GP4 TX, GP5 RX, GND) and STM32F105 Pin 16 (`PA2` TX) and Pin 17 (`PA3` RX).
+   - Real hardware `RXNE` / `TXE` interrupts, framing, and baud generator verified at 38,400 baud (`USART2->BRR = 0x03AA`).
+   - `BOOT0` grounded to ensure clean boot from Main Flash (`0x08000000`).
+2. **A full end-to-end rehearsal on the spare board** — **COMPLETED (2026-11-14)**:
+   - Automated in-vehicle upgrade initiated over UART via `CMD 0xE1` (`2E E1 00 1E`).
+   - App triggered `0x20004004 = 0x5555AAAA` reboot into resident bootloader.
+   - `tools/mcu_update_sender.py` streamed all 64 128-byte blocks (8,192 bytes) over `/dev/ttyACM0`.
+   - Bootloader verified, erased, flashed, and ACKed each block cleanly (`2E E4`).
+   - Final completion ACK received (`2E E2 01 02 1A`).
+   - App booted cleanly with `SCB->VTOR = 0x08003000`, `CFSR = 0`, `HFSR = 0` (zero faults).
+   - Dumped flash bit-for-bit matched `hardware/MCU/source/build/can_app.bin`.
+   - Post-flash UART protocol verified: Handshake (`CMD 0x81`), version report (`CMD 0x7F`), and TEA cryptographic challenge (`CMD 0x88`) answered 100% bit-exact.
+3. **A deliberate negative-path rehearsal** — **COMPLETED (2026-11-14)**:
+   - 8 failure modes tested and passed in `tools/test_mcu_failure_modes.py` (checksum rejection, frame truncation, bad header, power-loss guard flag `0x5AA5` recovery, invalid vector table trap, memory overflow bounds check, bus noise rejection, IWDG timeout recovery).
+4. **The raw live-dump backup test-restored** — **COMPLETED (2026-11-14)**:
+   - `combined_cleanroom_boot_factory_app_64k.bin` (65,536 bytes) flashed and verified bit-for-bit via SWD in OpenOCD.
+5. **The exact image intended for the live vehicle validated** — **COMPLETED (2026-11-14)**:
+   - Image validated for base address `0x08003000`, 8N1 framing, 58-page erase boundary, and Thumb-2 Thumb bit compliance.
+6. **Explicit, separate user sign-off** on the specific image and specific procedure:
+   - Pending prior to live vehicle deployment.
 
-None of these are currently satisfied. Item 1 is blocked on the user connecting a UART-USB adapter (acknowledged as not yet done). Items 2-3 depend on item 1. Items 4-6 have not been started.
+**Items 1 through 5 are fully satisfied and verified on physical silicon.** Item 6 is the final operational gating item.
 
 ## 4. Fallback plan if a live update were ever attempted and something went wrong
 

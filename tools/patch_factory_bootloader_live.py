@@ -155,7 +155,7 @@ FACTORY_PATCH_MAP = {
     # --- Block 9: RCC_GetClocksFreq (0x08001200 - 0x08001234) ---
     0x08001200: (0x8004F8D0, "ldr.w r8, [r0, #4] (Load HCLK for PCLK2 division)"),
     0x08001204: (0xF803FA28, "lsr.w r8, r8, r3 (PCLK2 prescaler shift)"),
-    0x0800121C: (0xF8188042, "ldr.w r8, [pc, #0x42] hw2 / ldrb.w r3, [r8, r1] hw1 (ADCPrescTable)"),
+    0x0800121C: (0xF8188044, "ldr.w r8, [pc, #0x44] hw2 / ldrb.w r3, [r8, r1] hw1 (ADCPrescTable literal at 0x1260)"),
     0x08001220: (0xF8D03001, "ldrb.w hw2 / ldr.w r8, [r0, #0xc] hw1 (Load PCLK2)"),
     0x08001224: (0xFBB8800C, "ldr.w hw2 / udiv r8, r8, r3 hw1 (ADCCLK division)"),
     0x08001228: (0xF8C0F8F3, "udiv hw2 / str.w r8, [r0, #0x10] hw1 (Store ADCCLK)"),
@@ -285,13 +285,13 @@ FACTORY_PATCH_MAP = {
     # in that SRAM (typically 0 after a real power-on, matching C's
     # zero-initialized-by-default expectation for most such variables in
     # practice, but not guaranteed) rather than its true initial value.
-    0x08002000: (0x00001E4F, "relative-encoded jump to __scatterload_copy's own exit (0x080001A4, bx lr) -- skips .data copy as a known limitation; see comment above"),
+    0x08002000: (0x0800018C, "Absolute address of __scatterload_copy routine (0x0800018C) -- performs .data copy to 0x20000000"),
     0x08002004: (0x00000000, "__scatterload_zeroinit source word"),
     0x0800201C: (0x00000000, "Zero padding in .data section"),
-    0x08002020: (0x00000000, "Zero padding in .data section"),
-    0x08002024: (0x00000000, "Zero padding in .data section"),
-    0x08002028: (0x04030201, "[1, 2, 3, 4] repeated table word in .data"),
-    0x08002034: (0x04030201, "[1, 2, 3, 4] repeated table word in .data"),
+    0x08002020: (0x04030201, "AHBPrescTable[8..11] = 1, 2, 3, 4"),
+    0x08002024: (0x09080706, "AHBPrescTable[12..15] = 6, 7, 8, 9"),
+    0x08002028: (0x00000000, "APBAHBPrescTable[0..3] = 0, 0, 0, 0"),
+    0x08002034: (0x09080706, "APBAHBPrescTable[12..15] = 6, 7, 8, 9"),
 }
 
 def sha256_file(path: str) -> str:

@@ -53,6 +53,7 @@ Holden firmware update/rootfs.img
 
 # MCU firmware build outputs
 hardware/MCU/source/build/
+hardware/MCU/bootloader/build/*.o
 tools/mcu_builder/output/
 
 # build_bootable_sdcard_dyn.sh's own scratch dir (pre-merged rootfs +

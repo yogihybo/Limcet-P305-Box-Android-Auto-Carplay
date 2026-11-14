@@ -24,7 +24,7 @@ LDFLAGS   = $(MCU_FLAGS) -Tstm32f105_bootloader.ld -nostdlib -static -no-pie -Wl
 
 SRCS = src/startup_stm32f105.c \
        src/main.c \
-       src/ymodem.c
+       src/update_protocol.c
 
 OBJS = $(patsubst src/%.c, $(BUILD_DIR)/%.o, $(SRCS))
 

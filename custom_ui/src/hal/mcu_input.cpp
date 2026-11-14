@@ -641,6 +641,14 @@ void McuInputHal::run() {
                 static uint8_t s_lastLcdMode = 0;  // 0 = not yet seen
                 bool realChange = s_lastLcdMode != 0 && dir != s_lastLcdMode;
                 if (realChange && !inStartupGrace) {
+                    if (aftermarket) {
+                        // Re-assert aftermarket mode (mode=1) on the MCU so its touch
+                        // polling task is active (factory firmware's mode byte at 0x2000025A
+                        // gates touch polling: mode 1 polls touch, mode 2 disables touch;
+                        // see docs/MCU_FIRMWARE_VERIFIED_FINDINGS.md section 30.4).
+                        unsigned char mode1_payload[1] = {0x01};
+                        send_mcu_frame(fd_, 0x82, mode1_payload, 1);
+                    }
                     // 2026-09-04: async -- see mcu_aa_forward_worker()'s
                     // header comment. Must never block this thread.
                     mcu_aa_forward_worker().enqueue([aftermarket]() {

@@ -181,7 +181,9 @@ FACTORY_PATCH_MAP = {
 
     # --- Block 12: main() Download Check & Timeout Loop (0x08001800 - 0x08001834) ---
     0x08001800: (0xF89CF000, "bl 0x0800193c (Initialize packet buffer structure)"),
-    0x08001804: (0xF8A7F000, "bl 0x08001956 (Transmit handshake frame)"),
+    # 2026-11-14 (MCU_FIRMWARE_VERIFIED_FINDINGS.md sec. 35): was `bl 0x08001956` (send E2 00). 0x080019EC is otherwise never called, and it is the
+    # only writer of the total-block count (+0xC) that 0x08001C72 needs to finish an update.
+    0x08001804: (0xF8F2F000, "bl 0x080019ec (Wait for the host's E1 update header; replies E2 01)"),
     0x0800181C: (0x2000E012, "b.n #0x8001844 / movs r0, #0 (Post-download jump to app / init timeout counter)"),
     0x08001820: (0x80084920, "ldr r1, [pc, #0x80] / strh r0, [r1] (Store counter = 0)"),
     0x08001824: (0x481FE008, "b.n #0x8001838 / ldr r0, [pc, #0x7c] (Jump to loop check / loop body start)"),
@@ -189,10 +191,16 @@ FACTORY_PATCH_MAP = {
     0x08001834: (0xBF00D100, "bne.n #0x8001838 / nop (Check serial reception flag)"),
 
     # --- Block 13: YMODEM Frame Receiver & State Machine Table (0x08001A00 - 0x08001A34) ---
-    0x08001A00: (0xFA09F7FF, "bl 0x08000e16 (IWDG_ReloadCounter watchdog service)"),
-    0x08001A04: (0x21202000, "movs r0, #0 / movs r1, #0x20 (USART_FLAG_RXNE setup)"),
-    0x08001A1C: (0xF7FF48B3, "ldr r0, [pc, #0x2cc] / bl 0x0800171c hw1 (USART_ClearFlag RXNE)"),
-    0x08001A20: (0x2D15FE7D, "bl hw2 / cmp r5, #21 (Check state range)"),
+    # 2026-11-14 (MCU_FIRMWARE_VERIFIED_FINDINGS.md sec. 35): the silicon-read loop-back at
+    # 0x08001B60 is `b 0x08001a02`, so the loop body starts at 0x08001A02; the old words put a
+    # 32-bit bl at 0x08001A00, making that branch land mid-instruction. Now laid out like the
+    # silicon-read twin loop at 0x08001D8C (`b <loop-back>`, then bl IWDG_ReloadCounter, movs r1, #0x20).
+    0x08001A00: (0xF7FFE0AE, "b.n #0x8001b60 / bl 0x08000e16 hw1 (Enter loop; IWDG_ReloadCounter)"),
+    0x08001A04: (0x2120FA08, "bl hw2 / movs r1, #0x20 (USART_FLAG_RXNE setup)"),
+    # 2026-11-14 (MCU_FIRMWARE_VERIFIED_FINDINGS.md sec. 35): was ldr r0 -> 0x08003000 (not USART2) and bl USART_ClearITPendingBit;
+    # now the same USART2 / USART_ClearFlag pair as the silicon-read twin at 0x08001DA6-0x08001DAA.
+    0x08001A1C: (0xF7FF48B2, "ldr r0, [pc, #0x2c8] / bl 0x080016b6 hw1 (USART_ClearFlag RXNE)"),
+    0x08001A20: (0x2D15FE4A, "bl hw2 / cmp r5, #21 (Check state range)"),
     0x08001A24: (0x8086F200, "bhi.w #0x8001b34 (Default state reset branch)"),
     0x08001A28: (0xF005E8DF, "tbb [pc, r5] (State machine jump table dispatcher)"),
     0x08001A34: (0x84848484, "Jump table default case byte offsets [0x84, 0x84, 0x84, 0x84]"),
@@ -224,13 +232,17 @@ FACTORY_PATCH_MAP = {
     0x08001C34: (0x210173C1, "strb r1, [r0, #0xf] / movs r1, #1 (Store 0xE2 header byte & type 1)"),
 
     # --- Block 15: 128-Byte Payload Receiver & Checksum (0x08001E00 - 0x08001E34) ---
-    0x08001E00: (0x71C44837, "ldr r0, [pc, #0xdc] / strb r4, [r0, #7] (Store sequence number)"),
+    # 2026-11-14 (MCU_FIRMWARE_VERIFIED_FINDINGS.md sec. 35): literal offset corrected to the state struct at 0x08001EE8 (was 0xdc -> code).
+    0x08001E00: (0x71C44839, "ldr r0, [pc, #0xe4] / strb r4, [r0, #7] (Store sequence number)"),
     0x08001E04: (0x44207940, "ldrb r0, [r0, #5] / add r0, r4 (Update running checksum)"),
-    0x08001E1C: (0xE0292705, "movs r7, #5 / b.n #0x8001e74 (Advance to payload receive state 5)"),
-    0x08001E20: (0x7901482E, "ldr r0, [pc, #0xb8] / ldrb r1, [r0, #4] (Load payload counter)"),
-    0x08001E24: (0x0201EB00, "add.w r2, r0, r1 (Calculate buffer offset pointer)"),
-    0x08001E28: (0x482C7254, "strb r4, [r2, #9] / ldr r0, [pc, #0xb0] (Store payload byte)"),
-    0x08001E34: (0x49284829, "ldr r0, [pc, #0xa4] / ldr r1, [pc, #0xa0] (Load counter pointers)"),
+    # 2026-11-14 (MCU_FIRMWARE_VERIFIED_FINDINGS.md sec. 35): 0x08001E1C-0x08001E37: re-derived. The silicon-read tbb table at 0x08001DB8 puts state 5 at
+    # 0x08001E24 (not 0x08001E20), and the silicon-read 0x08001E2C `subs r0, #0x1d` needs r0 =
+    # state+0x1D (payload buffer). Old words loaded garbage literals and stored to state+9+i.
+    0x08001E1C: (0x71082000, "movs r0, #0 / strb r0, [r1, #4] (Reset payload index)"),
+    0x08001E20: (0xE0272705, "movs r7, #5 / b.n #0x8001e74 (Advance to payload receive state 5)"),
+    0x08001E24: (0x79014830, "ldr r0, [pc, #0xc0] / ldrb r1, [r0, #4] (Load payload counter)"),
+    0x08001E28: (0x5444301D, "adds r0, #0x1d / strb r4, [r0, r1] (Store payload byte)"),
+    0x08001E34: (0x46087148, "strb r0, [r1, #5] / mov r0, r1 (Store running checksum)"),
 
     # --- Block 16: Keil Scatter-Load Table & Initialized .data (0x08002000 - 0x08002034) ---
     # REVISED 2026-09-14 (docs/BOOTLOADER_HANG_TRACE_2026-09-14.md section 22):

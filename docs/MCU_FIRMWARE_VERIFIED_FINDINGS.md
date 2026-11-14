@@ -4283,7 +4283,7 @@ Neither error affects a normal boot. Section 28's bench test called the block pr
    - drives PC14 and PB4 high and PC12 low (`0x08001772`). These are the power-state outputs from §31, so the SoC side stays powered for the update;
    - sets up USART2 at 38400 8N1 on PA2/PA3 (`0x080018BC`);
    - starts the IWDG (`0x08001750`);
-   - sends `2E E2 01 00 1C`;
+   - waits for the head unit's `E1` header and answers `E2 01` (corrected in section 35; the reconstructed call sent `E2 00`);
    - unlocks flash;
    - runs the §27–29 protocol loop (`0x08001EB0`), refreshing the IWDG on each pass.
 
@@ -4325,3 +4325,43 @@ Its build output, `build/bootloader.bin` (1,368 bytes), is byte-identical to the
 | Pre-jump delay | ~65k-iteration busy-wait | None | Probably settling time; no known dependency. |
 
 The clean-room bootloader is fine for the bench's normal boot path, but it isn't a drop-in replacement for the factory one wherever updates are involved. Note also that `hardware/MCU/bootloader/README.md`'s "What it actually does" section still says `0x08004000` and describes a LOCK-bit guard; the source itself already has `0x08003000` and the unconditional unlock.
+
+### 35. Update-protocol trace from both ends; 15 more reconstruction errors fixed (2026-11-14)
+
+Tracing the update protocol for the clean-room bootloader (section 36) found more errors in both reconstructions. This time the work used the head unit's own sender in `libMcuCenter.so` (`MCUAdapter_BoxP300`, Ghidra plus `objdump`) as well as the bootloader.
+
+#### 35.1 The wire protocol (host side confirmed from `libMcuCenter.so`)
+
+**Framing.** Every frame is `2E cmd len data[len] chk`, with `chk = ~(cmd + len + data...) & 0xFF`. The checksum covers everything after `0x2E`. Sources: `makeMCUProtocol` at `0x31E60` and `getPackageCheckSum` at `0x31C18`.
+
+| Frame | Direction | Meaning |
+|---|---|---|
+| `E1 02 hi lo` | head unit → MCU | "Ready to update": the number of 128-byte blocks, `ceil(size/128)`. The head unit repeats it on a timer (`onSendUpdateReadyTimer`, `0x36598`). The app's CMD `0xE1` handler reacts by setting the SRAM magic and resetting into the bootloader. The bootloader also accepts `E1 08 hi lo "XINBAS"`. |
+| `E2 01 st` | MCU → head unit | `st=1`: go, and the head unit starts at block 0. `st=0`: fail or not ready. `st=2`: done; the head unit closes the file and replies `81 [01]`. |
+| `E3 82 hi lo data[128]` | head unit → MCU | Block `hi:lo`, padded with `0xFF`, file bytes sent unchanged |
+| `E4 02 hi lo` | MCU → head unit | Index of the last block received. The head unit sends block `hi:lo + 1`; if that is `>= total` it calls `setUpdateFailed`, which also happens once at the normal end, just before `E2 02`. |
+
+**The bootloader de-obfuscates each byte before programming it:** `flash[i] = (~wire[i] + T[i % 128]) & 0xFF`, with `T` the 128-byte table at `0x08001F72` (§28). An update file must therefore hold `wire = ~(image - T)`. A plain `.bin` from this project, or a DCn32 `can_app.bin` (linked at `0x08004000`), sent through the stock updater would be written garbled. The bootloader would survive, but the app would be invalid until a correct file is sent. There is no Limcet-format update file anywhere in this repo.
+
+#### 35.2 Bootloader errors fixed (11 words)
+
+| Address | Was | Now | Evidence |
+|---|---|---|---|
+| `0x08001804` | `bl 0x08001956` (send `E2 00`) | `bl 0x080019EC` (wait for the `E1` header) | `0x080019EC` is otherwise never called, and it is the only writer of the total-block count (`+0xC`) that `0x08001C72` compares against to finish. Without it, the update could never complete. |
+| `0x08001A00`-`07` | `bl` at `0x08001A00` | `b 0x08001B60; bl IWDG_ReloadCounter` at `0x08001A02; movs r1, #0x20` | The silicon-read loop-back `0x08001B60: b 0x08001A02` landed mid-instruction. Same layout as the silicon-read twin loop at `0x08001D8C`. |
+| `0x08001A1C`-`23` | `ldr r0, =0x08003000; bl USART_ClearITPendingBit` | `ldr r0, =USART2; bl USART_ClearFlag` | Silicon-read twin at `0x08001DA6`-`AA` |
+| `0x08001E00` | literal offset → code | → state struct (`0x08001EE8`) | — |
+| `0x08001E1C`-`2B`, `0x08001E34` | state 5 at `0x08001E20`, stores to `state+9+i`, garbage literals | state 4 ends `movs r0,#0; strb r0,[r1,#4]; movs r7,#5; b`; state 5 at `0x08001E24` stores to `state+0x1D+i`; `strb r0,[r1,#5]; mov r0,r1` | Silicon-read `tbb` table at `0x08001DB8` (state 5 = `0x08001E24`). Silicon `subs r0, #0x1d` at `0x08001E2C`. Same idiom as the silicon-read `0x08001CB8`. The exact original bytes of the state-4 tail can't be known; the reconstruction is functionally derived. |
+
+#### 35.3 Application errors fixed (4 literal offsets, each one pool word short)
+
+| Address | Was loading | Now | Effect of the error |
+|---|---|---|---|
+| `0x08003226` | `CAN1_BASE` | `0x20000270` | The CAN TX queue index was read from a reserved CAN register. The silicon-read code that follows increments and stores `0x20000270[+0x12C]`. |
+| `0x08004802` | code `0x00004770` | `EXTI_BASE` | `EXTI` register read-modify-write on a garbage address |
+| `0x08004A26` | code `0xE0074008` | `FLASH_BASE` | `FLASH_GetFlagStatus` read garbage |
+| `0x08006802` | code `0x0000BD1C` | `0x2000003B` | The flag check that gates setting mode byte `0x2000025A` to 2 (the §30.4 touch gate) read code. Same flag the silicon-read `0x080067F2` writes. |
+
+**Verifier.** `tools/verify_mcu_reconstruction.py` now also checks two things: that no silicon-read branch lands mid-instruction, and that every reconstructed `ldr [pc]` loads a literal some silicon-read `ldr` also uses. Five legitimate exceptions were checked by hand and are listed in the script. It flags every error in this section on the previous images and passes on the new ones. All four images were regenerated (hashes are in the dump README). **Not yet re-flashed.** On the bench, these change the CAN TX queue, the CMD-driven mode byte path, and the whole update path.
+
+**Correction to section 34.2.** On entry to update mode, the bootloader waits for the `E1` header and answers `E2 01`; the `E2 00` reply is sent only when the header wait times out. Section 34.2's "sends `2E E2 01 00 1C`" step came from the wrong reconstructed call.

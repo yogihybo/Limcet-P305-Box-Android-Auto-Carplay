@@ -40,7 +40,9 @@ FACTORY_APP_PATCH_MAP = {
     0x08003204: (0xF005B510, "push {r4, lr} / bl 0x08008ABA hw1 (SysTick_Handler tick caller)"),
     0x0800321C: (0x21000280, "add.w r2, r1, r0, lsl #2 hw2 / movs r1, #0 (CAN1_RX0_IRQHandler)"),
     0x08003220: (0xF0004837, "ldr r0, [pc, #0xdc] / bl 0x08004012 hw1 (Load CAN1_BASE & call CAN_Receive)"),
-    0x08003224: (0x4836FEF6, "bl 0x08004012 hw2 / ldr r0, [pc, #0xd8] (Load 0x200003A0 rx buffer)"),
+    # 2026-11-14: ldr at 0x08003226 now loads 0x20000270 -- the silicon-read code after it increments and stores 0x20000270[+0x12C]; it loaded CAN1_BASE
+    # (MCU_FIRMWARE_VERIFIED_FINDINGS.md sec. 35); was 0x4836FEF6
+    0x08003224: (0x4835FEF6, "bl 0x08004012 hw2 / ldr r0, [pc, #0xd8] (Load 0x200003A0 rx buffer)"),
     0x08003228: (0x012CF890, "ldrb.w r0, [r0, #0x12c] (Fetch rx tail index)"),
     0x08003234: (0xF8904608, "mov r0, r1 / ldrb.w r0, [r0, #0x12c] hw1 (Load and check queue limit)"),
 
@@ -157,7 +159,9 @@ FACTORY_APP_PATCH_MAP = {
     # =========================================================================
     # BLOCK 12: EXTI Software Interrupt & Line Flags (0x08004800 - 0x08004834)
     # =========================================================================
-    0x08004800: (0x49154770, "bx lr / ldr r1, [pc, #0x54] (EXTI_StructInit exit / EXTI_GenerateSWInterrupt)"),
+    # 2026-11-14: ldr at 0x08004802 now loads 0x40010400 -- EXTI_BASE, as loaded by the silicon-read twin at 0x0800480A; it loaded code (0x00004770)
+    # (MCU_FIRMWARE_VERIFIED_FINDINGS.md sec. 35); was 0x49154770
+    0x08004800: (0x49164770, "bx lr / ldr r1, [pc, #0x54] (EXTI_StructInit exit / EXTI_GenerateSWInterrupt)"),
     0x08004804: (0x68093110, "adds r1, #0x10 / ldr r1, [r1] (Calculate & read EXTI_SWIER)"),
     0x0800481C: (0xB10A400A, "ands r2, r1 / cbz r2, 0x08004824 (EXTI_GetFlagStatus check PR bit)"),
     0x08004820: (0xE0002001, "movs r0, #1 / b 0x08004826 (Return SET & exit)"),
@@ -172,7 +176,9 @@ FACTORY_APP_PATCH_MAP = {
     0x08004A04: (0xF44F6108, "str r0, [r1, #0x10] / mov.w r0, #0xb0000 hw1 (Trigger erase & prep timeout)"),
     0x08004A1C: (0x46206108, "str r0, [r1, #0x10] / mov r0, r4 (Clear FLASH_CR_MER & set return status)"),
     0x08004A20: (0x4601BD10, "pop {r4, pc} / mov r1, r0 (FLASH_EraseAllPages exit / FLASH_GetFlagStatus entry)"),
-    0x08004A24: (0x4A8E2000, "movs r0, #0 / ldr r2, [pc, #0x238] (Init status & load FLASH_R_BASE)"),
+    # 2026-11-14: ldr at 0x08004A26 now loads 0x40022000 -- FLASH_BASE (FLASH_GetFlagStatus reads FLASH->SR); it loaded code (0xE0074008)
+    # (MCU_FIRMWARE_VERIFIED_FINDINGS.md sec. 35); was 0x4A8E2000
+    0x08004A24: (0x4A8F2000, "movs r0, #0 / ldr r2, [pc, #0x238] (Init status & load FLASH_R_BASE)"),
     0x08004A28: (0x401168D2, "ldr r2, [r2, #0xc] / ands r1, r2 (Read FLASH_SR & test flag bit)"),
     0x08004A34: (0xBF004770, "bx lr / nop (FLASH_GetFlagStatus return)"),
 
@@ -334,7 +340,9 @@ FACTORY_APP_PATCH_MAP = {
     # =========================================================================
     # BLOCK 28: Reversing Camera State Filter & Host UART Forwarder (0x08006800 - 0x08006834)
     # =========================================================================
-    0x08006800: (0x48B5B968, "cbnz r0, #0x800681e / ldr r0, [pc, #0x2d4] (Check PDC low byte & load 0x2000003B)"),
+    # 2026-11-14: ldr at 0x08006802 now loads 0x2000003B -- the flag the silicon-read code above writes (0x080067F2); it loaded code (0x0000BD1C)
+    # (MCU_FIRMWARE_VERIFIED_FINDINGS.md sec. 35); was 0x48B5B968
+    0x08006800: (0x48B6B968, "cbnz r0, #0x800681e / ldr r0, [pc, #0x2d4] (Check PDC low byte & load 0x2000003B)"),
     0x08006804: (0x28017800, "ldrb r0, [r0] / cmp r0, #1 (Check reverse active flag == 1)"),
     0x0800681C: (0x2009FFA3, "bl #0x8007764 hw2 / movs r0, #9 (Finish I2C video mux cmd & check status 9)"),
     0x08006820: (0x2F24EBB0, "cmp.w r0, r4, asr #8 (Compare status high byte with 9)"),

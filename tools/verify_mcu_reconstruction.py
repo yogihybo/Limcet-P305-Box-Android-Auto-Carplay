@@ -22,6 +22,11 @@ sections 32-33):
    code calls must end the previous function (return, branch, nop pad) or be
    literal data, if it was reconstructed -- this caught a function whose
    epilogue and the next function's prologue were both missing (section 34).
+4. Branch-target check: no silicon-read branch may land on the second
+   halfword of a reconstructed 32-bit instruction (section 35).
+5. Literal check: a reconstructed `ldr rX, [pc, #imm]` must load a literal
+   that some silicon-read `ldr` also loads -- a wrong offset reads code or
+   a neighbouring literal (section 35).
 
 Exit status 0 = clean. Needs `capstone` (pip install capstone).
 
@@ -42,6 +47,16 @@ MNEM = set(("push pop bl blx b bx ldr ldrb ldrh ldrsb ldrsh str strb strh mov mo
             "bfi ubfx sbfx mla mls adr cpsid cpsie dsb isb dmb clz rev umull smull neg negs ldrd strd").split())
 COND = r"(eq|ne|cs|cc|hs|lo|mi|pl|vs|vc|hi|ls|ge|lt|gt|le|al)$"
 md = Cs(CS_ARCH_ARM, CS_MODE_THUMB)
+
+# Reconstructed loads whose literal no silicon-read ldr happens to share, each
+# checked by hand (section 35): the loaded value fits its use.
+REVIEWED_LITERALS = {
+    0x08003220: "CAN1_BASE for the CAN_Transmit call at 0x08003222",
+    0x08004E24: "GPIOA_BASE, first compare of GPIO_DeInit's port chain",
+    0x0800621E: "flash function-pointer table 0x0800B988 for the blx dispatch at 0x08006224",
+    0x08007620: "GPIOA_BASE for GPIO_Init (0x08004EE0)",
+    0x08007634: "GPIOB_BASE for GPIO_Init (0x08004EE0)",
+}
 
 
 def norm(m):
@@ -156,6 +171,39 @@ def check_calls(img, raw, base, pmap):
     return bad, len(known)
 
 
+def is32(h):
+    return (h >> 11) in (0x1D, 0x1E, 0x1F)
+
+
+def ldr_lit(addr, h):
+    """Address loaded by a 16-bit `ldr rX, [pc, #imm]`, else None."""
+    return ((addr + 4) & ~3) + (h & 0xFF) * 4 if (h & 0xF800) == 0x4800 else None
+
+
+def check_branches_and_literals(img, raw, base):
+    gap = [img[i] != raw[i] for i in range(len(img))]
+    hw = lambda o: img[o] | (img[o + 1] << 8)
+    bad, lits = [], set()
+    for o in range(0, len(img) - 3, 2):
+        if any(gap[o:o + 2]):
+            continue
+        a = ldr_lit(base + o, hw(o))
+        if a is not None:
+            lits.add(a)
+        for i in md.disasm(img[o:o + 4], base + o, 1):
+            if any(gap[o:o + i.size]) or not re.fullmatch(r"(b|bl|cbn?z|b" + COND[1:-2] + r")(\.w|\.n)?", i.mnemonic):
+                continue
+            t = int(i.op_str.split("#")[-1], 16) - base
+            if 4 <= t < len(img) - 2 and any(gap[t - 2:t + 2]) and is32(hw(t - 2)) and not is32(hw(t - 4)):
+                bad.append(f"0x{base + o:08X}: silicon-read {i.mnemonic} to 0x{base + t:08X} lands on the second "
+                           f"halfword of a reconstructed 32-bit instruction")
+    for o in range(0, len(img) - 1, 2):
+        a = ldr_lit(base + o, hw(o))
+        if a is not None and any(gap[o:o + 2]) and a not in lits and base + o not in REVIEWED_LITERALS:
+            bad.append(f"0x{base + o:08X}: reconstructed ldr loads 0x{a:08X}, which no silicon-read ldr uses")
+    return bad
+
+
 def main():
     failed = False
     for name, stem, tool, var, base in TARGETS:
@@ -164,6 +212,7 @@ def main():
         pmap = load_map(tool, var)
         ann = check_annotations(img, base, pmap)
         calls, nknown = check_calls(img, raw, base, pmap)
+        calls += check_branches_and_literals(img, raw, base)
         print(f"{name}: annotation check {len(ann)} flagged; call-target check {len(calls)} flagged "
               f"({nknown} silicon-read call targets)")
         for line in ann + calls:

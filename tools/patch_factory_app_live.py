@@ -331,9 +331,9 @@ FACTORY_APP_PATCH_MAP = {
     # =========================================================================
     # BLOCK 27: Channel 1 Command 0xA0 / 0xE1 Handlers & TBB Table (0x08006600 - 0x08006634)
     # =========================================================================
-    0x08006600: (0x22007008, "strb r0, [r1] / movs r2, #0 (Command 0xA0 state update & event param)"),
-    0x08006604: (0x46102101, "movs r1, #1 / mov r0, r2 (Command 0xA0 event type 1, channel 0)"),
-    0x0800661C: (0xF000E8DF, "tbb [pc, r0] (Command 0xE1 jump table for subcommands 0-5)"),
+    0x08006600: (0x22007008, "strb r0, [r1] / movs r2, #0 (CMD 0x82 handler, else branch: mode byte = 2 & event param; mirrors the silicon-read if branch at 0x080065E8)"),
+    0x08006604: (0x46102101, "movs r1, #1 / mov r0, r2 (CMD 0x82 handler: event 0x080078E4(0, 1, 0), as in the silicon-read if branch)"),
+    0x0800661C: (0xF000E8DF, "tbb [pc, r0] (CMD 0xFF handler 0x0800660E: subcommands 0-5, all to silicon-read exit stubs)"),
     0x08006620: (0x0E0D0C1C, "table entries [0x1c, 0x0c, 0x0d, 0x0e] (Offsets for cases 0, 1, 2, 3)"),
     0x08006624: (0x2807100F, "table [0x0f, 0x10] / cmp r0, #7 (Offsets for cases 4, 5 & Case 7 test)"),
     0x08006628: (0x2808D00C, "beq #0x8006644 / cmp r0, #8 (Case 7 branch & Case 8 test)"),

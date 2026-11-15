@@ -4781,3 +4781,55 @@ Bench observations that factory app timing was ~9x slow (settle sequence taking 
      - Start-up settle into State 3 reached in 1.93s wall clock (measured from reset; includes bootloader execution, jump to application, and the nominal 550ms settle).
      - Natural ACC release parks in 6.19s measured from release via the SWD polling loop (0.5s poll cadence + OpenOCD execution overhead ~0.4s per check); the raw 16-bit ACC missing timer increments 1:1 in real wall-clock milliseconds, confirming the authentic 5.0s ACC timeout (`0x08007C1C`) + 100ms settle delay (`0x08007CA4`).
      - Clean-boot parked `GPIOB->ODR` verified as `0x0000D006`.
+
+### 47. Pre-flash risk checks for a UART update of the car's MCU (2026-11-15)
+
+**Mass-erase safeguard.** Only `tools/flash_live_vehicle.sh` → `flash_live_safe.tcl` in the repo removes read protection (`stm32f1x unlock 0`), which mass-erases the genuine bootloader and app. It is guarded, and its pinned image hash is stale, so it currently refuses to run.
+
+Three bench scripts must not be pointed at the car, because they halt the MCU and write flash:
+- `run_bench_end_to_end_test.py`
+- `rigorous_factory_test.py`
+- `test_factory_restore.py`
+
+`tools/pico_stm32_vehicle_readonly.cfg` declares the target with no flash bank, so flash, unlock, option-byte and mass-erase commands don't exist through it. On the bench it read `FLASH_OBR`/`FLASH_WRPR` and SRAM without halting.
+
+**Reconstructed code on the SoC path.** The following are entirely silicon-read:
+- the SoC reset sequencer (`0x08009164`);
+- the PB14/PB15 setters;
+- the frame sender (`0x08006668`);
+- the CMD `0xE1` update handler (`0x0800665C`);
+- the CMD `0xA0` settings handler (`0x08006468`).
+
+The reconstructed words elsewhere on the path are bench-proven:
+
+| Area | Bench evidence |
+|---|---|
+| Clock (section 46) | PLL at 72 MHz |
+| USART2 set-up | UART works at 38,400 |
+| IWDG / handshake | App boots |
+| Power-down outputs and 5 s ACC threshold | Section 45 |
+| PB5 | Correct levels running and parked |
+| Wake re-clock (`0x08007C00`/`04`) | After a park: HSE/PLL2/PLL relocked, `CFGR = 0x001D440A`, USART2 re-enabled with `BRR = 0x3A9`; CMD `0x81` answered once the wake sequence completes, about 2-3 s after ignition-on |
+
+The PC15 setter (`0x08006C1A`) matches the silicon-read PC13 setter instruction for instruction apart from the mask, and its silicon-read reset half confirms the `0x8000` mask and GPIOC. On the bench PC15 stays low because Task 5 drives it high only on its reverse/video conditions (`0x200001BC+2`, or `+0x43` with power on).
+
+**CMD `0x82` and CMD `0xFF`** (factory image, ignition held on, mode byte read over SWD):
+
+| Command | Result |
+|---|---|
+| `0x82 {01}` | `0x2000025A = 01 04` |
+| `0x82 {00}` (reconstructed else branch) | `02 01` |
+| `0x82 {01}` | `01 04` |
+| `0xFF {01}`, `0xFF {7F}` | no change, no fault; app still answers CMD `0x81` |
+
+The `0x82` else branch's reconstructed words (`0x08006600`/`04`) mirror the silicon-read if branch. In CMD `0xFF` (`0x0800660E`), only subcommand `0x7F` acts, posting message `0xB` from silicon-read code. Every other value, including all six reconstructed jump-table entries, lands on identical silicon-read exit stubs. The patch-map labels that called these words "Command 0xA0" / "0xE1" are corrected.
+
+**Still needs the car (read-only, through `pico_stm32_vehicle_readonly.cfg`, no halt):**
+
+| Register | Address | What it shows |
+|---|---|---|
+| `FLASH_OBR` | `0x4002201C` | bit 1 = read protection active; expected set |
+| `FLASH_WRPR` | `0x40022020` | expected `0xFFFFFFFF`, no write protection on the app pages |
+| board variant | `0x200001F2` | the factory app's own decoded variant |
+| `GPIOC_IDR` / `GPIOA_IDR` | `0x40011008` / `0x40010808` | PC11 / PA10 straps |
+| power state | `0x200007E8` | — |

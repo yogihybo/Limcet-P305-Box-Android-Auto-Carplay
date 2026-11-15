@@ -300,6 +300,7 @@ def main():
         print(res.stderr, file=sys.stderr)
         raise RuntimeError("Restore mcu_update_sender failed!")
     print(f" [+] Factory app restore complete in {time.time() - t0:.2f}s")
+    print(" [+] Step 3 PASSED: Factory application streamed in-place over UART (readback in step 4).")
 
     # -------------------------------------------------------------------------
     # STEP 4: SWD Readback & Verification of Restored Factory Stack
@@ -359,7 +360,7 @@ def main():
     # -------------------------------------------------------------------------
     print("\n[STEP 5] Release ignition and verify factory low-power parked state...")
     release_ignition()
-    print(" [*] Ignition released. Waiting for 5.0s ACC timeout + park (~8s @ 8MHz HSI)...")
+    print(" [*] Ignition released. Waiting for 5.0s ACC timeout + 100 ms pre-park step...")
     assert wait_for_parked_state_5(15.0), "MCU failed to enter State 5 (Parked)!"
     print(" [+] MCU entered State 5 (Parked).")
 

@@ -172,7 +172,7 @@
 		 * backwards from its own purpose. The NAND "kernel" partition
 		 * itself was never the problem; this SD-first order only ever
 		 * existed because an earlier separate bootstockkernel command
-		 * got merged straight into this script (commit 0e8528f48) and
+		 * got merged straight into this script (commit d1cdea06f) and
 		 * happened to keep its own SD-only logic first. switchecc 2
 		 * just above already configures the correct ECC settings for
 		 * NAND kernel/rootfs reads (docs/DEVICE_TEST_CHECKLIST_2026-07-18.md),
@@ -270,7 +270,7 @@
 	 * a stock restoration. The real fix landed 2026-08-05 as a much more
 	 * surgical, isolation-tested change: the cyclic-DMA tasklet now runs
 	 * on HI softirq priority specifically (linux-arkmicro commit
-	 * 886e8b56c), rather than threading every non-threaded IRQ handler
+	 * 8fe7f359e), rather than threading every non-threaded IRQ handler
 	 * system-wide. Reverted to stock's exact bootargs now that the
 	 * targeted fix supersedes this broader hypothesis. */ \
 	"bootargs_common=console=ttyS0,115200n8 mem=180M earlyprintk=serial rootfstype=ext4 rootwait rw screen=0 user_debug=8\0" \

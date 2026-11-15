@@ -4907,8 +4907,9 @@ X comes from the reconstructed `ldr r0, [r0, #0x30]` at `0x08009006`, which read
 Read-only, through `pico_stm32_vehicle_readonly.cfg`, with no halt:
 
 ```
-openocd -f tools/pico_stm32_vehicle_readonly.cfg -c init \
-        -c "mdw 0x40006600 8" -c "mdw 0x40006640 4" -c shutdown
+python3 tools/vehicle_snapshot_readonly.py   # one attach: CAN filters first, then peripherals and SRAM
+# (equivalent minimal read: openocd -f tools/pico_stm32_vehicle_readonly.cfg -c init \
+#  -c "mdw 0x40006600 8" -c "mdw 0x40006640 4" -c shutdown)
 ```
 
 `0x40006640`/`44` = filter 0, `0x40006648`/`4C` = filter 1. These registers give both IDs directly. They also show what X really is.

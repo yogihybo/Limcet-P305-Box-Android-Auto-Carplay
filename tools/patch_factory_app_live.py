@@ -177,12 +177,24 @@ FACTORY_APP_PATCH_MAP = {
     0x08004A00: (0x0040F040, "orr r0, r0, #0x40 (FLASH_EraseAllPages set FLASH_CR_STRT)"),
     0x08004A04: (0xF44F6108, "str r0, [r1, #0x10] / mov.w r0, #0xb0000 hw1 (Trigger erase & prep timeout)"),
     0x08004A1C: (0x46206108, "str r0, [r1, #0x10] / mov r0, r4 (Clear FLASH_CR_MER & set return status)"),
-    0x08004A20: (0x4601BD10, "pop {r4, pc} / mov r1, r0 (FLASH_EraseAllPages exit / FLASH_GetFlagStatus entry)"),
+    # 2026-11-15: bytes taken from the factory bootloader's silicon-read copy of the same ST library code
+    # (0x080006A8; app and bootloader agree byte-for-byte on >=104 surrounding silicon bytes at a fixed offset,
+    # MCU_FIRMWARE_VERIFIED_FINDINGS.md section 48); was 0x4601BD10
+    0x08004A20: (0x2000BD10, "pop {r4, pc} / movs r0, #0 (end of previous FLASH fn; FLASH_GetReadOutProtectionStatus entry) [corrected from bootloader silicon]"),
     # 2026-11-14: ldr at 0x08004A26 now loads 0x40022000 -- FLASH_BASE (FLASH_GetFlagStatus reads FLASH->SR); it loaded code (0xE0074008)
     # (MCU_FIRMWARE_VERIFIED_FINDINGS.md sec. 35); was 0x4A8E2000
-    0x08004A24: (0x4A8F2000, "movs r0, #0 / ldr r2, [pc, #0x238] (Init status & load FLASH_R_BASE)"),
-    0x08004A28: (0x401168D2, "ldr r2, [r2, #0xc] / ands r1, r2 (Read FLASH_SR & test flag bit)"),
-    0x08004A34: (0xBF004770, "bx lr / nop (FLASH_GetFlagStatus return)"),
+    # 2026-11-15: bytes taken from the factory bootloader's silicon-read copy of the same ST library code
+    # (0x080006AC; app and bootloader agree byte-for-byte on >=104 surrounding silicon bytes at a fixed offset,
+    # MCU_FIRMWARE_VERIFIED_FINDINGS.md section 48); was 0x4A8F2000
+    0x08004A24: (0x69C9498F, "ldr r1, [pc, #0x23c] / ldr r1, [r1, #0x1c] hw1 (FLASH_GetReadOutProtectionStatus: read FLASH_OBR) [corrected from bootloader silicon]"),
+    # 2026-11-15: bytes taken from the factory bootloader's silicon-read copy of the same ST library code
+    # (0x080006B0; app and bootloader agree byte-for-byte on >=104 surrounding silicon bytes at a fixed offset,
+    # MCU_FIRMWARE_VERIFIED_FINDINGS.md section 48); was 0x401168D2
+    0x08004A28: (0x0102F001, "and r1, r1, #2 (FLASH_GetReadOutProtectionStatus: RDPRT bit) [corrected from bootloader silicon]"),
+    # 2026-11-15: bytes taken from the factory bootloader's silicon-read copy of the same ST library code
+    # (0x080006BC; app and bootloader agree byte-for-byte on >=104 surrounding silicon bytes at a fixed offset,
+    # MCU_FIRMWARE_VERIFIED_FINDINGS.md section 48); was 0xBF004770
+    0x08004A34: (0xB5304770, "bx lr / push {r4, r5, lr} (FLASH_GetReadOutProtectionStatus return; next FLASH fn entry) [corrected from bootloader silicon]"),
 
     # =========================================================================
     # BLOCK 14: Option Byte Write Protection Programming (0x08004C00 - 0x08004C34)
@@ -192,7 +204,10 @@ FACTORY_APP_PATCH_MAP = {
     0x08004C1C: (0x4605FE74, "bl 0x08004906 hw2 / mov r5, r0 (WRP1 wait complete & copy status)"),
     0x08004C20: (0xD10A2D04, "cmp r5, #4 / bne 0x08004C3A (Check WRP1 status & skip on error)"),
     0x08004C24: (0x0FFFF1B8, "cmp.w r8, #0xff (Check if WRP2 byte modified)"),
-    0x08004C28: (0x4810D007, "beq 0x08004C3A / ldr r0, [pc, #0x40] (Skip WRP2 / load OB_BASE)"),
+    # 2026-11-15: bytes taken from the factory bootloader's silicon-read copy of the same ST library code
+    # (0x080008B0; app and bootloader agree byte-for-byte on >=104 surrounding silicon bytes at a fixed offset,
+    # MCU_FIRMWARE_VERIFIED_FINDINGS.md section 48); was 0x4810D007
+    0x08004C28: (0x4811D007, "beq 0x08004C3A / ldr r0, [pc, #0x40] (Skip WRP2 / load OB_BASE) [corrected from bootloader silicon]"),
     0x08004C34: (0xFE67F7FF, "bl 0x08004906 (FLASH_WaitForLastOperation call for WRP2)"),
 
     # =========================================================================
@@ -243,7 +258,10 @@ FACTORY_APP_PATCH_MAP = {
     # =========================================================================
     # BLOCK 19: RCC DeInit & HSE Configuration (0x08005600 - 0x08005634)
     # =========================================================================
-    0x08005600: (0xF04F6008, "str r0, [r1] / mov.w r0, #0xff0000 hw1 (Reset RCC_CR & prep CIR mask)"),
+    # 2026-11-15: bytes taken from the factory bootloader's silicon-read copy of the same ST library code
+    # (0x08000E84; app and bootloader agree byte-for-byte on >=104 surrounding silicon bytes at a fixed offset,
+    # MCU_FIRMWARE_VERIFIED_FINDINGS.md section 48); was 0xF04F6008
+    0x08005600: (0xF44F6008, "str r0, [r1] / mov.w r0, #0xff0000 hw1 (Reset RCC_CR & prep CIR mask) [corrected from bootloader silicon]"),
     0x08005604: (0x6088007F, "mov.w hw2 / str r0, [r1, #8] (Clear all RCC interrupt flags in CIR)"),
     0x0800561C: (0xF4216809, "ldr r1, [r1] / bic.w r1, r1, #0x40000 hw1 (Clear HSEBYP bit)"),
     0x08005620: (0x60112180, "bic.w hw2 / str r1, [r2] (Store RCC_CR cleared HSE bits)"),
@@ -254,21 +272,42 @@ FACTORY_APP_PATCH_MAP = {
     # =========================================================================
     # BLOCK 20: RCC LSE, RTC Clock Source & CSS Security (0x08005800 - 0x08005834)
     # =========================================================================
-    0x08005800: (0xE004D10B, "bne 0x0800581A / b 0x0800580E (LSE mode dispatch check)"),
+    # 2026-11-15: bytes taken from the factory bootloader's silicon-read copy of the same ST library code
+    # (0x08001084; app and bootloader agree byte-for-byte on >=104 surrounding silicon bytes at a fixed offset,
+    # MCU_FIRMWARE_VERIFIED_FINDINGS.md section 48); was 0xE004D10B
+    0x08005800: (0xE004D10A, "bne 0x0800581A / b 0x0800580E (LSE mode dispatch check) [corrected from bootloader silicon]"),
     0x08005804: (0x4A6A2101, "movs r1, #1 / ldr r2, [pc, #0x1a8] (LSE_ON set bit & load RCC_BASE)"),
-    0x0800581C: (0x60084967, "ldr r1, [pc, #0x19c] / str r0, [r1] (RCC_LSICmd set LSION bitband)"),
-    0x08005820: (0xBF004770, "bx lr / nop (RCC_LSICmd return)"),
-    0x08005824: (0x6A114A62, "ldr r2, [pc, #0x188] / ldr r1, [r2, #0x20] (Load BDCR for RTC source)"),
-    0x08005828: (0x0100EA41, "orr.w r1, r1, r0 (Set RTCCLKSource selection bits)"),
+    # 2026-11-15: bytes taken from the factory bootloader's silicon-read copy of the same ST library code
+    # (0x080010A0; app and bootloader agree byte-for-byte on >=104 surrounding silicon bytes at a fixed offset,
+    # MCU_FIRMWARE_VERIFIED_FINDINGS.md section 48); was 0x60084967
+    0x0800581C: (0x496A4770, "bx lr / ldr r1, [pc, #0x1a8] (RCC_LSEConfig return; RCC_LSICmd loads LSION bit-band 0x42420480) [corrected from bootloader silicon]"),
+    # 2026-11-15: bytes taken from the factory bootloader's silicon-read copy of the same ST library code
+    # (0x080010A4; app and bootloader agree byte-for-byte on >=104 surrounding silicon bytes at a fixed offset,
+    # MCU_FIRMWARE_VERIFIED_FINDINGS.md section 48); was 0xBF004770
+    0x08005820: (0x47706008, "str r0, [r1] / bx lr (RCC_LSICmd) [corrected from bootloader silicon]"),
+    # 2026-11-15: bytes taken from the factory bootloader's silicon-read copy of the same ST library code
+    # (0x080010A8; app and bootloader agree byte-for-byte on >=104 surrounding silicon bytes at a fixed offset,
+    # MCU_FIRMWARE_VERIFIED_FINDINGS.md section 48); was 0x6A114A62
+    0x08005824: (0x6A094962, "ldr r1, [pc, #0x188] / ldr r1, [r1, #0x20] (RCC_RTCCLKConfig: read RCC_BDCR) [corrected from bootloader silicon]"),
+    # 2026-11-15: bytes taken from the factory bootloader's silicon-read copy of the same ST library code
+    # (0x080010AC; app and bootloader agree byte-for-byte on >=104 surrounding silicon bytes at a fixed offset,
+    # MCU_FIRMWARE_VERIFIED_FINDINGS.md section 48); was 0x0100EA41
+    0x08005828: (0x4A614301, "orrs r1, r0 / ldr r2, [pc, #0x184] (RCC_RTCCLKConfig: BDCR |= source) [corrected from bootloader silicon]"),
     0x08005834: (0x47706008, "str r0, [r1] / bx lr (RCC_ClockSecuritySystemCmd write CSSON)"),
 
     # =========================================================================
     # BLOCK 21: RCC Peripheral Clock Enabling & Control (0x08005A00 - 0x08005A34)
     # =========================================================================
     0x08005A00: (0x4B2D4302, "orrs r2, r0 / ldr r3, [pc, #0xb4] (RCC_APB2PeriphClockCmd read/set)"),
-    0x08005A04: (0x4770619A, "str r2, [r3, #0x18] / bx lr (RCC_APB2PeriphClockCmd store & exit)"),
+    # 2026-11-15: bytes taken from the factory bootloader's silicon-read copy of the same ST library code
+    # (0x08001288; app and bootloader agree byte-for-byte on >=104 surrounding silicon bytes at a fixed offset,
+    # MCU_FIRMWARE_VERIFIED_FINDINGS.md section 48); was 0x4770619A
+    0x08005A04: (0xE004619A, "str r2, [r3, #0x18] / bx lr (RCC_APB2PeriphClockCmd store & exit) [corrected from bootloader silicon]"),
     0x08005A1C: (0x61DA4B26, "ldr r3, [pc, #0x98] / str r2, [r3, #0x1c] (RCC_APB1PeriphClockCmd enable)"),
-    0x08005A20: (0x4A254770, "bx lr / ldr r2, [pc, #0x94] (RCC_APB1PeriphClockCmd exit & disable entry)"),
+    # 2026-11-15: bytes taken from the factory bootloader's silicon-read copy of the same ST library code
+    # (0x080012A4; app and bootloader agree byte-for-byte on >=104 surrounding silicon bytes at a fixed offset,
+    # MCU_FIRMWARE_VERIFIED_FINDINGS.md section 48); was 0x4A254770
+    0x08005A20: (0x4A25E004, "bx lr / ldr r2, [pc, #0x94] (RCC_APB1PeriphClockCmd exit & disable entry) [corrected from bootloader silicon]"),
     0x08005A24: (0x438269D2, "ldr r2, [r2, #0x1c] / bics r2, r0 (RCC_APB1PeriphClockCmd disable bic)"),
     0x08005A28: (0x61DA4B23, "ldr r3, [pc, #0x8c] / str r2, [r3, #0x1c] (RCC_APB1PeriphClockCmd store)"),
     0x08005A34: (0x4B204302, "orrs r2, r0 / ldr r3, [pc, #0x80] (RCC_AHBPeriphResetCmd read/set)"),
@@ -278,7 +317,10 @@ FACTORY_APP_PATCH_MAP = {
     # =========================================================================
     0x08005C00: (0x2032E008, "b 0x08005C14 / movs r0, #0x32 (USART_Init BRR oversampling else branch)"),
     0x08005C04: (0x1009EB00, "add.w r0, r0, sb, lsl #4 (USART_Init BRR 16x fractional calculation)"),
-    0x08005C1C: (0x5180F242, "movw r1, #0x2580 (USART_StructInit default baud 9600)"),
+    # 2026-11-15: bytes taken from the factory bootloader's silicon-read copy of the same ST library code
+    # (0x080014A0; app and bootloader agree byte-for-byte on >=104 surrounding silicon bytes at a fixed offset,
+    # MCU_FIRMWARE_VERIFIED_FINDINGS.md section 48); was 0x5180F242
+    0x08005C1C: (0x5116F44F, "movw r1, #0x2580 (USART_StructInit default baud 9600) [corrected from bootloader silicon]"),
     0x08005C20: (0x21006001, "str r1, [r0] / movs r1, #0 (Store baudrate & clear word length)"),
     0x08005C24: (0x80C18081, "strh r1, [r0, #4] / strh r1, [r0, #6] (StopBits 1, Parity None)"),
     0x08005C28: (0x210C8101, "strh r1, [r0, #8] / movs r1, #0xc (Store parity & set Mode Rx|Tx)"),
@@ -291,8 +333,14 @@ FACTORY_APP_PATCH_MAP = {
     0x08005E04: (0x0202F042, "orr.w r2, r2, #2 (USART_IrDACmd set IREN bit in CR3)"),
     0x08005E1C: (0x7F00F5B1, "cmp.w r1, #0x200 (USART_GetFlagStatus CTS check)"),
     0x08005E20: (0xBF00D100, "bne #0x8005e24 / nop (USART_GetFlagStatus CTS bypass)"),
-    0x08005E24: (0x420A8812, "ldrh r2, [r2] / tst r2, r1 (USART_GetFlagStatus read SR & test flag)"),
-    0x08005E28: (0x2001D001, "beq #0x8005e2e / movs r0, #1 (USART_GetFlagStatus branch RESET / return SET)"),
+    # 2026-11-15: bytes taken from the factory bootloader's silicon-read copy of the same ST library code
+    # (0x080016A8; app and bootloader agree byte-for-byte on >=104 surrounding silicon bytes at a fixed offset,
+    # MCU_FIRMWARE_VERIFIED_FINDINGS.md section 48); was 0x420A8812
+    0x08005E24: (0x400B8813, "ldrh r3, [r2] / ands r3, r1 (USART_GetFlagStatus: SR & flag) [corrected from bootloader silicon]"),
+    # 2026-11-15: bytes taken from the factory bootloader's silicon-read copy of the same ST library code
+    # (0x080016AC; app and bootloader agree byte-for-byte on >=104 surrounding silicon bytes at a fixed offset,
+    # MCU_FIRMWARE_VERIFIED_FINDINGS.md section 48); was 0x2001D001
+    0x08005E28: (0x2001B10B, "cbz r3, #0x8005e2e / movs r0, #1 (USART_GetFlagStatus) [corrected from bootloader silicon]"),
     0x08005E34: (0xF5B27200, "and.w r2, r1, #0x200 hw2 / cmp.w r2, #0x200 hw1 (USART_ClearFlag CTS mask check)"),
 
     # =========================================================================
@@ -304,7 +352,12 @@ FACTORY_APP_PATCH_MAP = {
     0x08006020: (0xFFF1F7FF, "bl #0x8006006 (bsp_init call device_table_init)"),
     0x08006024: (0xF8EAF000, "bl #0x80061fc (bsp_init call protocol module 1 init)"),
     0x08006028: (0xF900F000, "bl #0x800622c (bsp_init call CAN1 RX circular queue init)"),
-    0x08006034: (0xFBA6F003, "bl #0x8009784 (bsp_init call module 5 circular buffer init)"),
+    # 2026-11-15 (MCU_FIRMWARE_VERIFIED_FINDINGS.md section 48): bsp_init is a chain of module init calls.
+    # Was bl 0x08009784, a PB6 read helper with no other caller; 0x0800975A (42 bytes earlier, never
+    # called) is the I2C1 bus module init -- GPIOB clock on, PB6/PB7 floating input -- whose pin-mode
+    # sibling 0x08009790 is called from 4 places in the same driver. Semantic inference, not byte proof;
+    # behaviour is nearly identical (PB6/PB7 are floating inputs out of reset anyway). Was 0xFBA6F003
+    0x08006034: (0xFB91F003, "bl #0x800975a (bsp_init: I2C1 bus module GPIO init)"),
 
     # =========================================================================
     # BLOCK 25: Multi-Channel Dispatcher & Protocol Initialization (0x08006200 - 0x08006234)
@@ -577,11 +630,11 @@ FACTORY_APP_PATCH_MAP = {
     # --- BLOCK 52 (0x08009800 - 0x08009834): CAN_WaitFlag & Multi-Step Transfer Engine ---
     0x08009800: (0x4620D0F2, "beq #0x80097e8 / mov r0, r4 (Loop back or return status)"),
     0x08009804: (0xE8BDB2C0, "uxtb r0, r0 / pop.w {r4, r5, r6, r7, r8, pc} hw1 (Return from wait)"),
-    0x0800981C: (0x49B0FD6A, "bl #0x80052f2 hw2 / ldr r1, [pc, #0x2c0] (Flag literal load)"),
-    0x08009820: (0xF7FF4638, "mov r0, r7 / bl #0x80097d8 hw1 (Call CAN_WaitFlag)"),
-    0x08009824: (0xF04FFFD9, "bl #0x80097d8 hw2 / mov.w sb, #0 hw1 (Init transfer step = 0)"),
-    0x08009828: (0x28000900, "mov.w sb, #0 hw2 / cmp r0, #0 (Check wait result)"),
-    0x08009834: (0x21012600, "movs r6, #0 / movs r1, #1 (Init err=0 & prep next step)"),
+    0x0800981C: (0x2600FD82, "bl #0x8005322 hw2 (I2C_AcknowledgeConfig(I2Cx, ENABLE), as in sibling 0x080098CC) / movs r6, #0 (err = 0)"),
+    0x08009820: (0xF1B946B1, "mov sb, r6 (state = 0) / cmp.w sb, #0 hw1 (switch on transfer state)"),
+    0x08009824: (0xD0060F00, "cmp.w sb, #0 hw2 / beq #0x8009836 (state 0: GenerateSTART)"),
+    0x08009828: (0x0F01F1B9, "cmp.w sb, #1 (state 1: send address; silicon beq #0x8009852 follows)"),
+    0x08009834: (0x2101E020, "b #0x8009878 (state 2: data loop) / movs r1, #1 (state 0 entry: GenerateSTART ENABLE)"),
 
     # --- BLOCK 53 (0x08009A00 - 0x08009A34): CAN Transfer State Machine Cases 0 & 1 ---
     0x08009A00: (0x2701B908, "cbnz r0, #0x8009a06 / movs r7, #1 (Case 0 wait check & error code)"),
@@ -739,14 +792,14 @@ FACTORY_APP_PATCH_MAP = {
     0x0800BA1C: (0x00000622, "CAN ID 0x622 Body / Door Status & Camera Trigger (Handler 0x0800962D)"),
     0x0800BA20: (0x0800962D, "CAN ID 0x622 Secondary Camera / Door Trigger Handler (0x0800962C)"),
     0x0800BA24: (0x7FFFFFFF, "Master Audio Curve Step 0 [0x7FFFFF] (0 dB full scale)"),
-    0x0800BA28: (0xE77FFFFF, "Master Audio Curve Step 1-2 [0x7FFFFF, 0x7FE720]"),
-    0x0800BA34: (0xF57E904E, "Master Audio Curve Step 5-6 [0x7F4E90, 0x7EF590]"),
+    0x0800BA28: (0xF67FFFFF, "DSP blob cos table j=0..1 [0x7FFFFF, 0x7FF620]: floor(0x800000*cos(j*2pi/256)/16)*16, matches all 61 silicon entries"),
+    0x0800BA34: (0x097F3062, "DSP blob cos table j=4..5 [0x7F6230, 0x7F0990] (same formula)"),
 
     # =========================================================================
     # BLOCK 70: Audio DSP Scale & Filter Table (0x0800BC00 - 0x0800BC34)
     # =========================================================================
     0x0800BC00: (0x00110000, "Audio DSP Scale Step [0x00, 0x11, 0x00, 0x00]"),
-    0x0800BC04: (0x33000022, "Audio DSP Scale Step [0x22, 0x00, 0x00, 0x33]"),
+    0x0800BC04: (0x00002200, "DSP blob step sequence 0x001100, 0x002200, 0x003300 (silicon 0x004400, 0x005500, 0x006600 follow)"),
     0x0800BC1C: (0x00000000, "Zero padding in DSP filter table"),
     0x0800BC20: (0x00000000, "Zero padding in DSP filter table"),
     0x0800BC24: (0x00000000, "Zero padding in DSP filter table"),
@@ -768,10 +821,10 @@ FACTORY_APP_PATCH_MAP = {
     # BLOCK 72: Q14 Unity-Gain Biquad Filter Array (0x0800C000 - 0x0800C034)
     # =========================================================================
     0x0800C000: (0x00000000, "Biquad filter coefficient zero padding"),
-    0x0800C004: (0x00000000, "Biquad filter coefficient zero padding"),
+    0x0800C004: (0x00400000, "DSP blob biquad set: b0 = 0x400000 (period-5 passthrough sets {0,0,0,0x400000,0})"),
     0x0800C01C: (0x00000000, "Biquad filter coefficient zero padding"),
     0x0800C020: (0x00000000, "Biquad filter coefficient zero padding"),
-    0x0800C024: (0x00000000, "Biquad filter coefficient zero padding"),
+    0x0800C024: (0x00000040, "DSP blob biquad set: b0 = 0x400000 high byte (period-5 passthrough sets)"),
     0x0800C028: (0x00000000, "Biquad filter coefficient zero padding"),
     0x0800C034: (0x00000000, "Biquad filter coefficient zero padding"),
 
@@ -833,12 +886,12 @@ FACTORY_APP_PATCH_MAP = {
     # =========================================================================
     # BLOCK 78: 128-Point Equalization Curve (0x0800CC00 - 0x0800CC34)
     # =========================================================================
-    0x0800CC00: (0x0B07330A, "Equalization curve Point 6-7 [0x0A3307, 0x0B...]"),
-    0x0800CC04: (0x530DA6C3, "Equalization curve Point 7-8 [...C3A6, 0x0D53D0]"),
-    0x0800CC1C: (0xBD196E33, "Equalization curve Point 15-16 [...336E, 0x19BD...]"),
-    0x0800CC20: (0x3C471BD6, "Equalization curve Point 16-17 [...D6, 0x1B473C]"),
-    0x0800CC24: (0x1E91CF1C, "Equalization curve Point 18-19 [0x1CCF91, 0x1E...]"),
-    0x0800CC28: (0xDC1FCA56, "Equalization curve Point 19-20 [...56CA, 0x1FDCD0]"),
+    0x0800CC00: (0x0B00330A, "DSP blob sin table k=6..7 [0x0A3300, 0x0BC3A0]: floor(0x800000*sin((k+0.5)*2pi/512)/16)*16, matches all 117 silicon entries"),
+    0x0800CC04: (0x530DA0C3, "DSP blob sin table k=7..8 [...C3A0, 0x0D53D0]"),
+    0x0800CC1C: (0xBD196033, "DSP blob sin table k=15..16 [...3360, 0x19BD..]"),
+    0x0800CC20: (0x30471BC0, "DSP blob sin table k=16..17 [..C0, 0x1B4730]"),
+    0x0800CC24: (0x1E80CF1C, "DSP blob sin table k=18..19 [0x1CCF80, 0x1E..]"),
+    0x0800CC28: (0xDC1FC056, "DSP blob sin table k=19..20 [..56C0, 0x1FDCD0]"),
     0x0800CC34: (0xE8257067, "Equalization curve Point 23-24 [...6770, 0x25E840]"),
 
     # =========================================================================

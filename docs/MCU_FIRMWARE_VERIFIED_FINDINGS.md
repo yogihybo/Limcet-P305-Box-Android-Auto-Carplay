@@ -4833,3 +4833,87 @@ The `0x82` else branch's reconstructed words (`0x08006600`/`04`) mirror the sili
 | board variant | `0x200001F2` | the factory app's own decoded variant |
 | `GPIOC_IDR` / `GPIOA_IDR` | `0x40011008` / `0x40010808` | PC11 / PA10 straps |
 | power state | `0x200007E8` | — |
+
+### 48. Audit of the reconstructed factory app words; 33 corrected (2026-11-15)
+
+The factory app image is 95.8% silicon-read. The other 574 words (480 in code, 94 in data) were filled by disassembly. This audit rechecked every one of them before any UART update of the car. **33 words were wrong and are corrected** in `tools/patch_factory_app_live.py`. Two more can only be settled by a read-only register read on the car.
+
+**Checks used:**
+- **Bootloader silicon.** The factory bootloader carries its own silicon-read copies of the same ST library functions. Reconstructed library code was compared byte for byte against them.
+- **DCn32 images.** The Volvo and Acura images share the same library code and some tables.
+- **Sibling functions.** Reconstructed code was compared with silicon-read functions that come from the same source pattern.
+- **Structure.** Push/pop balance, branch targets, literal-pool loads, and calls against the 241 silicon-read call targets (`tools/verify_mcu_reconstruction.py`, 0 flagged).
+- **Formulas.** Generated tables were fitted to a formula over their silicon-read entries; a fit counts only if it reproduces every one of them.
+- **Patterns.** Periodic sections of the audio DSP blob were checked for repeats.
+
+The superseded September dumps (`live_dumps/superseded/`) hold non-`FF` bytes at the same gap positions, but they are extractor artifacts, e.g. `0x0800BA00 = 0xF0112B02` where a handler pointer belongs. They were not used.
+
+**Corrections:**
+
+| Words | Area | Was | Now | Evidence |
+|---|---|---|---|---|
+| 16 | ST library: FLASH_GetReadOutProtectionStatus (`0x08004A20`-`34`), OB WRP check (`0x08004C28`), RCC_DeInit / LSE / LSICmd / RTCCLKConfig (`0x08005600`, `5800`, `581C`-`5828`), RCC_APBxPeriphClockCmd exits (`0x08005A04`, `5A20`), USART_StructInit baud (`0x08005C1C`), USART_GetFlagStatus (`0x08005E24`/`28`) | plausible-looking but different code | the bootloader's silicon copy | identical library functions in bootloader silicon |
+| 1 | bsp_init (`0x08006034`) | `bl 0x08009784` (PB6 read helper, no other caller) | `bl 0x0800975A` (I2C1 bus GPIO init) | call-target and init-order analysis |
+| 5 | I2C master write helper `0x0800980A` (`0x0800981C`-`28`, `0x08009834`) | `bl GenerateSTART`, then wait-EV5 with an inverted test | `bl 0x08005322`, `err = 0`, `state = 0`, then the 3-way state switch | the silicon-read sibling `0x080098CC` has exactly this structure; silicon `beq 0x08009852` / `cmp.w sb,#2` / `bne` fit only this |
+| 2 | DSP blob cos table (`0x0800BA28`, `BA34`) | interpolated guesses (`0x7FE720`, `0x7F4E90`, `0x7EF590`) | `0x7FF620`, `0x7F6230`, `0x7F0990` | `floor(0x800000*cos(j*2pi/256)/16)*16` reproduces all 61 silicon entries |
+| 6 | DSP blob sin table (`0x0800CC00`-`CC28`) | interpolated guesses with non-zero low nibbles | e.g. `0x0A3300`, `0x0BC3A0`, `0x183360` | `floor(0x800000*sin((k+0.5)*2pi/512)/16)*16` reproduces all 117 silicon entries |
+| 1 | DSP blob step sequence (`0x0800BC04`) | `0x220000`, `0x333300` | `0x002200`, `0x003300` | silicon `0x001100 ... 0x004400 0x005500 0x006600` |
+| 2 | DSP blob biquad bank (`0x0800C004`, `C024`) | `0` | b0 = `0x400000` | period-5 passthrough sets `{0,0,0,0x400000,0}`; the reconstruction had muted two filters |
+
+**The I2C helper bug changed behaviour.** With the old words, a successful START went straight to STOP, so the factory app never sent anything as an I2C2 master. Its two callers are:
+- `0x0800A304`: the audio DSP download;
+- `0x0800A4C6`: BD37033 register writes.
+
+With the fix, the app makes these writes the way the genuine firmware does. The bench board has nothing on I2C2; it times out cleanly and the app keeps running.
+
+**The audio DSP blob.** `0x0800A2FA` calls the helper with:
+- I2C2 (`0x40005800`);
+- slave `0x30`;
+- source `0x0800BA24`;
+- length `0x1803`.
+
+So `0x0800BA24`-`0x0800D226` is one 6,147-byte download: a 3-byte header plus 2,048 24-bit words. The patch map's "zero padding" labels in this range were guesses. Most reconstructed words here are zeros inside zero runs, which is plausible but can't be proven. The 3 header bytes (`0x0800BA24`-`26`, still `FF FF FF`) are unknown.
+
+**Confirmed unchanged:**
+- The BD37033 attenuation table (`0x0800D228`) matches all four DCn32 images byte for byte.
+- The BCD volume steps (`0x0800D200`) run `0x38 0x39 0x40`.
+- The `0x080100` run (`0x0800C200`) is consistent.
+- The six CAN handler pointers are each referenced only from the dispatch table and land on function entries.
+
+**Open: two CAN IDs (needs the car).** The dispatch table at `0x0800B9F4` holds six `{id, handler}` pairs. The loop at `0x080090C0` (bound 6, silicon) calls the first match only.
+
+| # | ID | Handler |
+|---|---|---|
+| 0 | `0x396` | `0x080093D8` |
+| 1 | `0x025` | `0x080091E0` |
+| 2 | **`0x1D0` reconstructed** | `0x0800956A` (gear bits `Data[3] & 0x38`) |
+| 3 | `0x1D0` | `0x080092B6` |
+| 4 | `0x622` | `0x080095E4` |
+| 5 | **`0x622` reconstructed** | `0x0800962C` (3-frame debounce on `Data[5] & 0xF0`, posts events 1 and 5) |
+
+Entries 2 and 5 duplicate silicon entries 3 and 4. So in the reconstruction:
+- handler `0x080092B6` never runs;
+- handler `0x0800962C` never runs;
+- `0x1D0` frames reach `0x0800956A`.
+
+The true IDs are almost certainly different. The clean-room `vehicle_profiles.c` mapping of `0x1D0` to the `0x0800956A` logic came from this same reconstructed table.
+
+The factory programs these IDs into the CAN1 filters (16-bit list mode, each half = `STDID << 5`):
+- filter 0 = IDs 0-3;
+- filter 1 = IDs 4, 5, X, 4.
+
+X comes from the reconstructed `ldr r0, [r0, #0x30]` at `0x08009006`, which reads past the table and adds a harmless acceptance for ID `0x7FF`.
+
+Read-only, through `pico_stm32_vehicle_readonly.cfg`, with no halt:
+
+```
+openocd -f tools/pico_stm32_vehicle_readonly.cfg -c init \
+        -c "mdw 0x40006600 8" -c "mdw 0x40006640 4" -c shutdown
+```
+
+`0x40006640`/`44` = filter 0, `0x40006648`/`4C` = filter 1. These registers give both IDs directly. They also show what X really is.
+
+**Bench:** `tools/run_bench_end_to_end_test.py` passed all 5 phases with the corrected images. That covers factory stack, UART update to clean-room, UART restore to factory, bit-for-bit readback, and the parked state. SHA-256s:
+- app: `b5b99a7a9ee55009896d06c50c8c3a501ef2d553b9220ca45bd44355e8411f73`;
+- factory combo: `e17fc60298c4fd6aaa8b96a9bcc209af1708cc55e4d991d52dfa7cd01794c2e3`;
+- clean-room combo: `e75739544694137c59e63028168ed7d63ab1aba87b6a2e0b282b02a43912d637`.

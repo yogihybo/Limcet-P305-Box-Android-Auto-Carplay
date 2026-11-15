@@ -51,7 +51,9 @@ FACTORY_APP_PATCH_MAP = {
     # =========================================================================
     0x08003400: (0xF0406840, "ldr r0, [r0, #4] / orr r0, r0, #2 hw1 (RCC_CFGR SW[1:0] switch to PLL)"),
     0x08003404: (0x60480002, "orr hw2 / str r0, [r1, #4] (Write RCC_CFGR switch to PLL)"),
-    0x0800341C: (0xBD10FEF3, "bl 0x08003204 hw2 / pop {r4, pc} (SysTick_Config return)"),
+    # 2026-11-15: Veneer at 0x08003418 is CMSIS SetSysClock() called from SystemInit at 0x0800346E.
+    # Was 0xBD10FEF3 (bl 0x08003204 calling SysTick ISR); corrected to call 0x08003310 (SetSysClockTo72).
+    0x0800341C: (0xBD10FF79, "bl 0x08003310 hw2 / pop {r4, pc} (SetSysClock wrapper calling SetSysClockTo72; was 0xBD10FEF3 calling SysTick_Handler)"),
     0x08003420: (0x4850B510, "push {r4, lr} / ldr r0, [pc, #0x140] (SystemInit RCC_CR load)"),
     0x08003424: (0xF0406800, "ldr r0, [r0] / orr r0, r0, #1 hw1 (RCC_CR_HSION enable)"),
     0x08003428: (0x494E0001, "orr hw2 / ldr r1, [pc, #0x138] (Load RCC_CFGR literal)"),

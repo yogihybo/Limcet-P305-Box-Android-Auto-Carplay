@@ -4163,7 +4163,7 @@ Factory-screen touch being dead too, and a factory head-unit reset fixing it, me
 - Tasks are a 13-entry table at `0x080061C8`, registered by `add_task(fn, phase, period)` (`0x08005F8A`) in `0x08006044`. Relevant entries: **power state machine `0x08007C2C`, period 100 ticks**; **timer task `0x08008AC2` ("Task 6"), period 1 tick**; **touch task `0x0800A1BC`, period 25 ticks**.
 - The scheduler is cooperative: a due task runs from the main loop. If the loop is held up (blocking I2C/UART waits), runs are late or merged, so counters advanced by the timer task count **at most** one per millisecond.
 
-**Correction to `docs/1.6_BD37033.md`** ("Task 6 runs at ~100 Hz / 10 ms per tick"): nominally the tick is 1 ms, so its 4000-tick audio settle is nominally ~4 s. A ~100 Hz measured rate is plausible on the spare bench board, where every touch poll times out (no controller fitted) and slows the main loop, but it isn't the design rate. Section 30's millisecond figures (5 s ACC-off delay, 6 s touch hold-off, 20 ms touch poll) are nominal 1 ms-tick values.
+**Correction to `docs/1.6_BD37033.md`** ("Task 6 runs at ~100 Hz / 10 ms per tick"): the tick is nominally 1 ms, so its 4000-tick audio settle is nominally ~4 s. The bench measurement of ~100 Hz (111.1 Hz) was determined (section 46) to be caused by a reconstruction defect at `0x0800341C` in the factory app image which branched to `SysTick_Handler` instead of `SetSysClockTo72`, leaving the factory app running on 8 MHz HSI while SysTick reload was set for 72 MHz (`8 MHz / 72,000 = 111.1 Hz`). With `0x0800341C` corrected to call `0x08003310`, the factory app locks 72 MHz PLL and the 1 ms tick runs in true 1:1 wall clock time.
 
 #### 31.2 The power state machine (`0x08007C2C`, every 100 ms)
 
@@ -4231,7 +4231,7 @@ A working MCU-side clock therefore needs an MCU firmware change: start the RTC, 
 **The error** (one of ten; see section 33 for the full audit). Every reconstructed `BL` was cross-checked against the 241 call targets used from fully silicon-read code, trying first-halfword, second-halfword and both-halfword byte swaps. Exactly one mismatch: `0x08006C26` held `f7 fe 08 fa` instead of `fe f7 08 fa` -- a byte-swapped `BL 0x0800503A` (`GPIO_SetBits`). That's the same error class the bootloader reconstruction hit (`BOOTLOADER_HANG_TRACE_2026-09-14.md`). Effect: **on the bench, PC15 was never driven high; on the vehicle it is.** Fixed in `tools/patch_factory_app_live.py` (patch word for `0x08006C24`: `0xFEF748E5` -> `0xF7FE48E5`), the reconstruction regenerated (exactly two bytes changed; SHA-256 `8907395e...`), and both combined images re-spliced (bootloader halves unchanged). **Not yet re-flashed or re-verified on the spare board.** Other fill-error classes (non-`BL` instructions) can't be checked this generically; this scan only rules out further swapped calls.
 
 **Other bench-vs-vehicle differences that affect results:**
-- **No touch controller.** Every I2C touch read times out, slowing the cooperative main loop -- the likely source of the ~100 Hz "Task 6" rate (§31.1).
+- **No touch controller.** Touch polls time out without a panel fitted, but this does not throttle the 1 kHz SysTick timer, which was slow due to the 8 MHz HSI bug (section 46).
 - **No ACC input.** PD2 reads "off", so without the HIL suite's SRAM writes the board powers down ~5 s after boot. The suite's "CAN keep-alive" phase writes the power timer and ACC flag directly; it doesn't show that CAN traffic does so (§31.2).
 - **Watchdog frozen in debug.** The suite sets `DBGMCU_CR = 0x307`, which includes `DBG_IWDG_STOP`. A plain debug session on the vehicle doesn't, so a halt in the parked loop would let the IWDG reset the MCU (§31.3).
 - **No SoC on USART2.** No SoC-side traffic or CMD 0x82 from custom_ui.
@@ -4682,7 +4682,7 @@ Two deliberate differences:
 
 **Not verified:** real touches (no panel on the bench), the vehicle's strap variant, and the knob/encoder direction after the pull change in section 42. Those need the car.
 
-**What I2C2 really is.** In steady running, the factory sets I2C2 to **slave address `0xBA`** (`OAR1 = 0x40BA`), fast mode, with interrupts. Its event handler (`0x080032C8`) dispatches by variant: `0x0800B212` for 1/3, `0x0800B324` for 2. It serves registers `0x08`, `0x20` and `0x2B` from shadow buffers (`0x200000AC`/`B0`/`B4`), so the MCU re-presents the touch controller to another I2C master.
+**What I2C2 really is.** In steady running, the factory sets I2C2 to **slave address `0xBA`** (`OAR1 = 0x40BA`), fast mode, with interrupts. *(Note: register values captured in earlier steady-running dumps like `CR2 = 0x0708` [8 MHz FREQ] and `CCR = 0x8006` were bench artifacts of the `0x0800341C` 8 MHz HSI defect; on the vehicle with 36 MHz PCLK1 these scale to `CR2 = 0x0724` [36 MHz], etc. Unaffected: slave address `0xBA`, enabled peripherals, and interrupt vectors).* Its event handler (`0x080032C8`) dispatches by variant: `0x0800B212` for 1/3, `0x0800B324` for 2. It serves registers `0x08`, `0x20` and `0x2B` from shadow buffers (`0x200000AC`/`B0`/`B4`), so the MCU re-presents the touch controller to another I2C master.
 
 The SoC kernel declares `Goodix-TS` at `0x5D` (7-bit), which is `0xBA` 8-bit, on its I2C0 (`docs/1.1_HARDWARE_AND_SOC_REFERENCE.md`). That device "fails to ACK" on the project's kernel. It is very likely this MCU slave, not an unpopulated GT911.
 
@@ -4690,7 +4690,7 @@ The SoC kernel declares `Goodix-TS` at `0x5D` (7-bit), which is `0xBA` 8-bit, on
 
 **BD37033 audio processor: deliberately not reproduced.** The factory initialises it over I2C1 at `0x80` on variant 3 (`docs/1.6_BD37033.md` sections 17-21). On the Prado that path never worked in testing and caused problems with the screen colours, so the clean-room app does not touch it.
 
-**USART1: part of the audio subsystem; not reproduced.** The factory enables it TX-only (`CR1 = 0x2048`) on PA9, drained from a 250-byte ring (`0x200007F4+0x133`) by the TC interrupt (`0x08007DEC`). Its only writer, `0x0800A7AA`, sends `2E cmd len data chk` frames, the SoC protocol's framing, with commands `0x03` (8 B), `0x04` (7 B) and `0x71` (9 B). Its callers, `0x0800A824`, `0x0800AABA` and `0x0800AB28`, are reached only through a message-handler table at `0x0800D298`. That table sits directly after the audio module's handler table (`0x0800D278`, which includes the BD37033 init `0x0800A587`), which in turn follows the BD37033 register table (`0x0800D250`). So USART1 is very likely the link to an external audio module, part of the same sound subsystem that never worked on the Prado. The clean-room app leaves PA9 a floating input and doesn't implement it.
+**USART1: part of the audio subsystem; not reproduced.** The factory enables it TX-only (`CR1 = 0x2048`) on PA9 *(earlier dump `BRR = 0x1A1` [19,200 baud @ 8 MHz] scales to `0x753` at 36 MHz PCLK1)*, drained from a 250-byte ring (`0x200007F4+0x133`) by the TC interrupt (`0x08007DEC`). Its only writer, `0x0800A7AA`, sends `2E cmd len data chk` frames, the SoC protocol's framing, with commands `0x03` (8 B), `0x04` (7 B) and `0x71` (9 B). Its callers, `0x0800A824`, `0x0800AABA` and `0x0800AB28`, are reached only through a message-handler table at `0x0800D298`. That table sits directly after the audio module's handler table (`0x0800D278`, which includes the BD37033 init `0x0800A587`), which in turn follows the BD37033 register table (`0x0800D250`). So USART1 is very likely the link to an external audio module, part of the same sound subsystem that never worked on the Prado. The clean-room app leaves PA9 a floating input and doesn't implement it.
 
 ### 44. Clean-room SoC command table reduced to the Prado factory's five commands (2026-11-15)
 
@@ -4712,24 +4712,24 @@ The clean-room app also dispatched four commands taken from the DCn32 (Volvo) im
 
 `custom_ui`'s own notes record that captures on the car show the Prado MCU never answers `0x88`, and that `0x84` is a different vehicle variant's command. These four are now not dispatched, and their handlers and state are removed. `custom_ui`'s start-up `0x84 {00,03}` is therefore ignored, as the factory ignores it; before this it set PC13 low and PC2's output bit.
 
-Both builds compile cleanly. Fully verified on physical hardware via automated 5-phase bench run (section 45).
+Both builds compile cleanly. Bench build (`build_bench/can_app.bin`) verified in-place on physical hardware via automated 5-phase bench run (section 45); vehicle build compiles clean. Commands `0x84, 0x85, 0x87, 0x88` verified removed from dispatch table (passive UART rejection not explicitly fuzzed).
 
 ### 45. Automated Physical Silicon End-to-End Bench Test Pass (2026-11-15)
 
-The entire physical silicon bench test routine described in Section 40 was codified into an automated test runner (`tools/run_bench_end_to_end_test.py`) and executed against the bench target (STM32F105RBT6 companion MCU, Pico Debugprobe SWD + CDC-ACM UART on `/dev/ttyACM0` @ 38,400 baud).
+The physical silicon bench test routine described in Section 40 was codified into an automated test runner (`tools/run_bench_end_to_end_test.py`) and executed against the bench target (STM32F105RBT6 companion MCU, Pico Debugprobe SWD + CDC-ACM UART on `/dev/ttyACM0` @ 38,400 baud).
 
 #### Test Execution & Verification Results
 
 1. **Step 1: Factory Firmware Boot & Handshake**
-   - Flashed `combined_factory_boot_factory_app_64k.bin` over SWD in 4.87s.
-   - Initialized ignition active (PD2 pull-down, `GPIOD->BRR = 4`), allowed settle delay (State 1: 50ms, State 2: 500ms ~6.5s @ 8MHz HSI) into State 3 (Running).
+   - Flashed `combined_factory_boot_factory_app_64k.bin` over SWD in 4.81s.
+   - Initialized ignition active (PD2 pull-down, `GPIOD->BRR = 4`), allowed settle delay (State 1: 50ms, State 2: 500ms) into State 3 (Running) at 72 MHz.
    - Core verified clean: `SCB->VTOR = 0x08003000`, `CFSR = 0`, `HFSR = 0`.
-   - Polled UART with authentic SoC `CMD 0x81` frame (`2E 81 01 01 7C`). Factory app answered immediately with 4 frames including version report `Limcet-V1.0-1302`.
+   - Polled UART with authentic SoC `CMD 0x81` frame (`2E 81 01 01 7C`). Factory app answered immediately with 5 frames including version report `Limcet-V1.0-1302`.
    - **Result: PASS**.
 
 2. **Step 2: In-Place UART Update to Clean-Room Application**
    - Executed `tools/mcu_update_sender.py` streaming 64 blocks (8,192 bytes) of `hardware/MCU/source/build_bench/can_app.bin` with OEM Table $T$ wire obfuscation.
-   - Header acknowledged (`2E E2 01 01 1B`), all 64 blocks programmed, update completion acknowledged with `2E E2 01 02 1A` in 6.80s (1.91 KB/s).
+   - Header acknowledged (`2E E2 01 01 1B`), all 64 blocks programmed, update completion acknowledged with `2E E2 01 02 1A` in 6.84s (1.88 KB/s).
    - Bootloader timed out IWDG reset (~2.0s) and launched clean-room app.
    - Core verified running: `SCB->VTOR = 0x08003000`, `CFSR = 0`, `HFSR = 0`.
    - SWD flash readback of 8,092 bytes from `0x08003000` matched `build_bench/can_app.bin` **100% BIT-FOR-BIT**.
@@ -4739,7 +4739,7 @@ The entire physical silicon bench test routine described in Section 40 was codif
 3. **Step 3: In-Place UART Restore of Factory Application**
    - Clean-room app received `CMD 0xE1` header, asserted `*0x20004004 = 0x5555AAAA`, and software-reset into the resident factory bootloader.
    - Streamed all 416 blocks (53,248 bytes) of `live_factory_app_52k_reconstructed.bin` over UART via `mcu_update_sender.py`.
-   - Flashing completed in 21.24s (2.57 KB/s) with `2E E2 01 02 1A` completion ACK.
+   - Flashing completed in 21.15s (2.55 KB/s) with `2E E2 01 02 1A` completion ACK.
    - **Result: PASS**.
 
 4. **Step 4: SWD Readback & Verification of Restored Factory Stack**
@@ -4750,14 +4750,34 @@ The entire physical silicon bench test routine described in Section 40 was codif
    - **Result: PASS**.
 
 5. **Step 5: Ignition Release & Low-Power Park Verification**
-   - Simulated ignition release (`GPIOD->BSRR = 4`, setting PD2 high) and advanced 5.0s ACC timer (`0x20000052 = 5000`).
+   - Released ignition (`GPIOD->BSRR = 4`, setting PD2 high) without timer injection. Natural 5.0s ACC countdown observed in real wall clock time.
    - State machine transitioned into State 5 (Parked):
-     - `PC`: `0x08007CCA` (inside parked loop `0x08007CCA`-`0x08007CE6`).
+     - `PC`: `0x08007CD6` (inside parked loop `0x08007CCA`-`0x08007CE6`).
      - Power state byte (`0x200007E8`): `5` (Parked).
-     - Clocks (`RCC->CFGR`): `0x4090` (HSI system clock, AHB prescaler /4 = 2 MHz).
-     - UART (`USART2->CR1`): `0x006C` (`UE` bit 13 = 0, disabled).
-     - Parked outputs (`GPIOB->ODR`): `0xD0C6` (PB2=1, PB14=1, PB15=1; PB3=PB4=PB5=0; PB6/PB7 I2C pull-ups).
-     - Parked outputs (`GPIOC->ODR`): `0x0000` (all low).
+     - Clocks (`RCC->CFGR`): `0x001D4490` (HSI system clock, AHB prescaler /4 = 2 MHz).
+     - UART (`USART2->CR1`): `0x0000006C` (`UE` bit 13 = 0, disabled).
+     - Parked outputs (`GPIOB->ODR`): `0x0000D006` (PB2=1, PB14=1, PB15=1; PB3=PB4=PB5=0; PB6/PB7 floating inputs).
+     - Parked outputs (`GPIOC->ODR`): `0x00000000` (all low).
    - **Result: PASS**.
 
-All 5 verification phases completed with zero faults and bit-for-bit exactness.
+### 46. Resolution of Factory App Clock Setup Defect (0x0800341C) & Natural 72 MHz Timing (2026-11-15)
+
+Bench observations that factory app timing was ~9x slow (settle sequence taking ~6.5s instead of 550ms; 111 Hz Task 6 rate in `docs/1.6_BD37033.md`) were investigated via live `RCC` register reads on silicon and machine-code analysis of the raw vehicle dump:
+
+1. **Root Cause**:
+   - `SystemInit()` in the factory app (`0x08003420`) resets `RCC->CFGR` back to HSI, then calls a veneer at `0x08003418` right before writing `SCB->VTOR = 0x08003000`.
+   - That veneer was reconstructed in `tools/patch_factory_app_live.py:54` as `0xBD10FEF3` (`bl 0x08003204`), branching to `SysTick_Handler` instead of `SetSysClockTo72` at `0x08003310`.
+   - Consequently, `SetSysClockTo72` was never called, leaving the factory app permanently on the 8 MHz HSI while SysTick was configured for 72 MHz (`8 MHz / 72,000 = 111.1 Hz`).
+2. **The Fix**:
+   - Offset from `0x0800341A` (PC `0x0800341E`) to `0x08003310` is `-0x10E` (-270 bytes), encoded in Thumb-2 as `bl 0x08003310` $\to$ `0xBD10FF79`.
+   - Updated `tools/patch_factory_app_live.py:54` with `0xBD10FF79`.
+3. **Verifier Enhancement**:
+   - Updated `tools/verify_mcu_reconstruction.py` to flag any reconstructed `BL` targeting an exception/interrupt handler in the vector table.
+   - Tested: flags old image (`0x0800341A: reconstructed BL targets vector-table handler 0x08003204`), passes new image with 0 errors.
+4. **Physical Silicon Verification**:
+   - Re-flashed updated factory image on STM32F105:
+     - `RCC->CFGR` reads `0x001D440A` (PLL from HSE @ 72 MHz).
+     - `USART2->BRR` reads `0x03A9` (38,400 baud @ 36 MHz PCLK1).
+     - Start-up settle into State 3 reached in 1.93s wall clock (measured from reset; includes bootloader execution, jump to application, and the nominal 550ms settle).
+     - Natural ACC release parks in 6.19s measured from release via the SWD polling loop (0.5s poll cadence + OpenOCD execution overhead ~0.4s per check); the raw 16-bit ACC missing timer increments 1:1 in real wall-clock milliseconds, confirming the authentic 5.0s ACC timeout (`0x08007C1C`) + 100ms settle delay (`0x08007CA4`).
+     - Clean-boot parked `GPIOB->ODR` verified as `0x0000D006`.

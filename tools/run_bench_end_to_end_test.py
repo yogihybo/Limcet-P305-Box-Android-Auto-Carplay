@@ -94,13 +94,14 @@ def wait_for_vtor(expected_vtor=0x08003000, timeout_s=6.0):
 
 
 def wait_for_factory_state_3(timeout_s=10.0):
-    """Waits for factory app settle sequence (State 1: 50ms, State 2: 500ms ~6.5s @ 8MHz HSI) to reach State 3."""
+    """Waits for factory app settle sequence (State 1: 50ms, State 2: 500ms) to reach State 3."""
     t_end = time.time() + timeout_s
     while time.time() < t_end:
+        wake_factory_app()
         st = mrw(0x200007E8) & 0xFF
         if st == 3:
             return True
-        time.sleep(0.4)
+        time.sleep(0.3)
     return False
 
 
@@ -118,8 +119,8 @@ def wait_for_parked_state_5(timeout_s=15.0):
 
 
 def release_ignition():
-    """Switches PD2 to pull-up (GPIOD->BSRR = 4) and advances ACC timer to trigger park."""
-    run_ocd("init", "mww 0x40011410 4", "mww 0x20000050 0x13880000")
+    """Switches PD2 to pull-up (GPIOD->BSRR = 4) allowing natural 5.0s ACC timeout with zero timer injection."""
+    run_ocd("init", "mww 0x40011410 4")
 
 
 def query_cmd_81(timeout_s=1.0, retries=5):

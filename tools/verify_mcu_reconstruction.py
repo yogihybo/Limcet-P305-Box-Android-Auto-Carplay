@@ -239,6 +239,14 @@ def check_calls(img, raw, base, pmap):
     gap = [img[i] != raw[i] for i in range(len(img))]
     hw = lambda o: img[o] | (img[o + 1] << 8)
     hws = lambda o: img[o + 1] | (img[o] << 8)
+
+    # 1. Collect vector-table exception and interrupt handler entries
+    vectors = set()
+    for v in range(4, min(len(img), 0x150), 4):
+        w = struct.unpack_from("<I", img, v)[0]
+        if base <= (w & ~1) < base + len(img) and (w & 1):
+            vectors.add(w & ~1)
+
     known = set()
     for o in range(0, len(img) - 3, 2):
         if not any(gap[o:o + 4]):
@@ -250,6 +258,10 @@ def check_calls(img, raw, base, pmap):
         t0 = bl_target(base + o, hw(o), hw(o + 2))
         if not any(gap[o:o + 4]) or t0 in known:
             continue
+        # Flag reconstructed BLs targeting exception/interrupt handlers
+        if t0 is not None and t0 in vectors:
+            bad.append(f"0x{base + o:08X}: reconstructed BL targets vector-table handler 0x{t0:08X} "
+                       f"(vector handlers must not be called directly)")
         for h1, h2 in ((hws(o), hw(o + 2)), (hw(o), hws(o + 2)), (hws(o), hws(o + 2))):
             t = bl_target(base + o, h1, h2)
             if t in known:

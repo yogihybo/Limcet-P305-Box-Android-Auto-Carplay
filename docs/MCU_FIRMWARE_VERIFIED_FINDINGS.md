@@ -4918,3 +4918,24 @@ python3 tools/vehicle_snapshot_readonly.py   # one attach: CAN filters first, th
 - app: `b5b99a7a9ee55009896d06c50c8c3a501ef2d553b9220ca45bd44355e8411f73`;
 - factory combo: `e17fc60298c4fd6aaa8b96a9bcc209af1708cc55e4d991d52dfa7cd01794c2e3`;
 - clean-room combo: `e75739544694137c59e63028168ed7d63ab1aba87b6a2e0b282b02a43912d637`.
+
+### 49. Read-only snapshot tested on a read-protected bench board (2026-11-15)
+
+To rehearse the car read, the bench board ran the factory combo with RDP level 1 set (`stm32f1x lock 0`, `FLASH_OBR = 0x03FFFFFE`). The board was then power-cycled with the Pico idle, so the app booted with no debugger attached, as in the car. After that, `tools/vehicle_snapshot_readonly.py` ran exactly as it would on the car.
+
+**Result: the capture works.**
+- All registers and the 64 KB of SRAM were read; only flash reads are refused.
+- At the first reads the app was intact: VTOR `0x08003000`, the parked clock set-up and state 5. The CAN filter control registers were still live (`FMR = 0x2A1C0E00`, `FA1R = 0x00004003`).
+- The decode self-check passed.
+- `RCC_CSR` matched at start and end, so no reset happened during the roughly 2 s capture.
+
+**What the attach does to the MCU.** With a debugger connected, RDP1 blocks the CPU's own flash reads:
+1. The app took a HardFault partway through the capture (`ICSR` VECTACTIVE = 3).
+2. The IWDG (`PR = 5`, `RLR = 0x270`, about 2 s) then reset the chip (`RCC_CSR` IWDGRSTF set).
+3. The bootloader faulted on its first flash read (`CFSR = 0x00008200`, precise bus fault) and stayed in its HardFault loop at `0x08000210`.
+
+Only a power cycle clears this. Expect the same on the car: the MCU stops a moment after the attach and, after the watchdog reset, its pins are back at reset state. The head unit may go dark until the unit is power-cycled.
+
+The CAN filter-bank contents survive both the fault and the reset (section 48), so the capture holds either way.
+
+Recovery of the bench board: `stm32f1x unlock 0` (mass erase), then `tools/run_bench_end_to_end_test.py` reflashed the factory combo. All 5 phases passed.

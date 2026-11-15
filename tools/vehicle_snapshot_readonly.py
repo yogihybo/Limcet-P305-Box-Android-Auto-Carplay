@@ -4,9 +4,10 @@
 Uses tools/pico_stm32_vehicle_readonly.cfg (no flash bank: no erase, unlock or
 option-byte commands exist) and only issues memory reads -- no halt, no reset.
 Under RDP1 the debugger can still read SRAM and peripheral registers; only
-flash is blocked. Attaching may still stop the car's MCU (it can't fetch code
-while a debugger is attached), and its ~2 s IWDG can then reset peripheral
-registers, so everything runs in one OpenOCD call, most important first:
+flash is blocked. Attaching does stop the MCU: tested on an RDP1 bench board
+(findings section 49), the app HardFaults a moment after the attach, the ~2 s
+IWDG resets it, and the bootloader then sits in its HardFault loop until a power
+cycle. So everything runs in one OpenOCD call (~2 s), most important first:
 
   1. CAN1 filter banks + filter control (the two unknown dispatch-table IDs,
      findings section 48). Filter-bank contents survive a reset; the control
